@@ -3,6 +3,8 @@ import { Upload, FileText, X, CheckCircle, AlertCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
+import { useToast } from "@/components/ui/use-toast";
+import { n8nApi } from "@/services/n8nApi";
 
 interface UploadedFile {
   id: string;
@@ -10,11 +12,13 @@ interface UploadedFile {
   size: number;
   status: 'uploading' | 'completed' | 'error';
   progress: number;
+  n8nBatchId?: string;
 }
 
 const ResumeUpload = () => {
   const [files, setFiles] = useState<UploadedFile[]>([]);
   const [isDragOver, setIsDragOver] = useState(false);
+  const { toast } = useToast();
 
   const handleDragOver = useCallback((e: React.DragEvent) => {
     e.preventDefault();
@@ -41,7 +45,7 @@ const ResumeUpload = () => {
     }
   };
 
-  const processFiles = (fileList: File[]) => {
+  const processFiles = async (fileList: File[]) => {
     const newFiles: UploadedFile[] = fileList.map(file => ({
       id: Math.random().toString(36).substr(2, 9),
       name: file.name,
@@ -52,21 +56,45 @@ const ResumeUpload = () => {
 
     setFiles(prev => [...prev, ...newFiles]);
 
-    // Simulate upload progress
-    newFiles.forEach(file => {
-      const interval = setInterval(() => {
-        setFiles(prev => prev.map(f => {
-          if (f.id === file.id) {
-            if (f.progress >= 100) {
-              clearInterval(interval);
-              return { ...f, status: 'completed', progress: 100 };
-            }
-            return { ...f, progress: f.progress + 10 };
-          }
-          return f;
-        }));
-      }, 200);
-    });
+    try {
+      // Update progress to show upload starting
+      setFiles(prev => prev.map(f => 
+        newFiles.find(nf => nf.id === f.id) ? { ...f, progress: 25 } : f
+      ));
+
+      // Send files to n8n webhook
+      const response = await n8nApi.uploadResumes(fileList);
+      
+      setFiles(prev => prev.map(f => {
+        const newFile = newFiles.find(nf => nf.id === f.id);
+        if (newFile) {
+          return { 
+            ...f, 
+            status: 'completed', 
+            progress: 100,
+            n8nBatchId: response.batchId
+          };
+        }
+        return f;
+      }));
+
+      toast({
+        title: "Upload Successful",
+        description: `${fileList.length} resume(s) uploaded and sent for AI analysis.`,
+      });
+
+    } catch (error) {
+      setFiles(prev => prev.map(f => {
+        const newFile = newFiles.find(nf => nf.id === f.id);
+        return newFile ? { ...f, status: 'error', progress: 0 } : f;
+      }));
+
+      toast({
+        title: "Upload Failed",
+        description: error instanceof Error ? error.message : "Failed to upload resumes. Please try again.",
+        variant: "destructive",
+      });
+    }
   };
 
   const removeFile = (id: string) => {
