@@ -10,7 +10,8 @@ interface UploadedFile {
   id: string;
   name: string;
   size: number;
-  status: 'uploading' | 'completed' | 'error';
+  file: File;
+  status: 'ready' | 'uploading' | 'completed' | 'error';
   progress: number;
   n8nBatchId?: string;
 }
@@ -50,49 +51,50 @@ const ResumeUpload = () => {
       id: Math.random().toString(36).substr(2, 9),
       name: file.name,
       size: file.size,
-      status: 'uploading' as const,
-      progress: 0
+      file,
+      status: 'ready' as const,
+      progress: 0,
     }));
 
     setFiles(prev => [...prev, ...newFiles]);
 
+    toast({
+      title: "Files added",
+      description: `${fileList.length} resume(s) ready. Click Analyze Resumes to start.`,
+    });
+  };
+
+  const analyzeResumes = async () => {
+    const readyFiles = files.filter(f => f.status === 'ready');
+    if (readyFiles.length === 0) {
+      toast({ title: 'No files to analyze', description: 'Add resumes first.' });
+      return;
+    }
+
+    setFiles(prev => prev.map(f =>
+      readyFiles.some(r => r.id === f.id)
+        ? { ...f, status: 'uploading', progress: 25 }
+        : f
+    ));
+
     try {
-      // Update progress to show upload starting
-      setFiles(prev => prev.map(f => 
-        newFiles.find(nf => nf.id === f.id) ? { ...f, progress: 25 } : f
+      const response = await n8nApi.uploadResumes(readyFiles.map(f => f.file));
+      setFiles(prev => prev.map(f =>
+        readyFiles.some(r => r.id === f.id)
+          ? { ...f, status: 'completed', progress: 100, n8nBatchId: response.batchId }
+          : f
       ));
-
-      // Send files to n8n webhook
-      const response = await n8nApi.uploadResumes(fileList);
-      
-      setFiles(prev => prev.map(f => {
-        const newFile = newFiles.find(nf => nf.id === f.id);
-        if (newFile) {
-          return { 
-            ...f, 
-            status: 'completed', 
-            progress: 100,
-            n8nBatchId: response.batchId
-          };
-        }
-        return f;
-      }));
-
-      toast({
-        title: "Upload Successful",
-        description: `${fileList.length} resume(s) uploaded and sent for AI analysis.`,
-      });
-
+      toast({ title: 'Analysis triggered', description: `${readyFiles.length} resume(s) sent to AI analysis.` });
     } catch (error) {
-      setFiles(prev => prev.map(f => {
-        const newFile = newFiles.find(nf => nf.id === f.id);
-        return newFile ? { ...f, status: 'error', progress: 0 } : f;
-      }));
-
+      setFiles(prev => prev.map(f =>
+        readyFiles.some(r => r.id === f.id)
+          ? { ...f, status: 'error', progress: 0 }
+          : f
+      ));
       toast({
-        title: "Upload Failed",
-        description: error instanceof Error ? error.message : "Failed to upload resumes. Please try again.",
-        variant: "destructive",
+        title: 'Failed to analyze',
+        description: error instanceof Error ? error.message : 'Failed to send resumes. Please try again.',
+        variant: 'destructive',
       });
     }
   };
@@ -214,10 +216,10 @@ const ResumeUpload = () => {
                   ))}
                 </div>
                 
-                {files.some(f => f.status === 'completed') && (
+                {files.some(f => f.status === 'ready') && (
                   <div className="pt-4 border-t border-border">
-                    <Button className="w-full bg-gradient-primary hover:shadow-primary transition-all duration-300">
-                      Analyze Resumes ({files.filter(f => f.status === 'completed').length})
+                    <Button onClick={analyzeResumes} className="w-full bg-gradient-primary hover:shadow-primary transition-all duration-300">
+                      Analyze Resumes ({files.filter(f => f.status === 'ready').length})
                     </Button>
                   </div>
                 )}
