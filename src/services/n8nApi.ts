@@ -16,8 +16,9 @@ export const n8nApi = {
   async uploadResumes(files: File[]): Promise<UploadResponse> {
     const formData = new FormData();
     
-    files.forEach((file, index) => {
-      formData.append(`file_${index}`, file);
+    // Append all files using the same key for n8n binary array handling
+    files.forEach((file) => {
+      formData.append('Please_Upload_Your_Resume_Here', file);
     });
     
     // Add metadata
@@ -25,7 +26,18 @@ export const n8nApi = {
     formData.append('timestamp', new Date().toISOString());
     formData.append('source', 'resume-screening-app');
     
+    // Debug logging - print FormData contents
+    console.log('FormData contents before sending to n8n:');
+    for (const [key, value] of formData.entries()) {
+      if (value instanceof File) {
+        console.log(`${key}: ${value.name} (${value.size} bytes, ${value.type})`);
+      } else {
+        console.log(`${key}: ${value}`);
+      }
+    }
+    
     try {
+      console.log('Sending request to n8n webhook:', N8N_WEBHOOK_URL);
       const response = await fetch(N8N_WEBHOOK_URL, {
         method: 'POST',
         body: formData,
@@ -37,6 +49,7 @@ export const n8nApi = {
       }
       
       const result = await response.json();
+      console.log('Response from n8n:', result);
       
       if (!result.success) {
         throw new Error(result.message || 'Analysis failed');
