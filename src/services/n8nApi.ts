@@ -29,23 +29,26 @@ export const n8nApi = {
       const response = await fetch(N8N_WEBHOOK_URL, {
         method: 'POST',
         body: formData,
-        mode: 'no-cors',
       });
       
-      // With no-cors, the response is opaque. If parsing fails, assume success and inform the user to check n8n logs.
-      try {
-        const result = await response.json();
-        return result as UploadResponse;
-      } catch {
-        return {
-          success: true,
-          batchId: `opaque-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-          message: 'Request sent to n8n (opaque response). Check n8n execution logs.',
-        };
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`HTTP ${response.status}: ${errorText || 'Upload failed'}`);
       }
+      
+      const result = await response.json();
+      
+      if (!result.success) {
+        throw new Error(result.message || 'Analysis failed');
+      }
+      
+      return result as UploadResponse;
     } catch (error) {
       console.error('Error uploading to n8n:', error);
-      throw new Error(error instanceof Error ? error.message : 'Failed to upload files');
+      if (error instanceof Error) {
+        throw error;
+      }
+      throw new Error('Failed to upload files to analysis service');
     }
   }
 };
