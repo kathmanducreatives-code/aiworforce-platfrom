@@ -1,8 +1,11 @@
+import type { ResumeAnalysis } from "@/types/ResumeAnalysis";
+
 export interface UploadResponse {
   success: boolean;
   batchId: string;
   message: string;
   processedFiles?: string[];
+  analysisResults?: ResumeAnalysis[];
 }
 
 export interface N8nError {

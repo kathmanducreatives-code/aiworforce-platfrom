@@ -1,300 +1,326 @@
-import { useState } from "react";
-import { Card } from "@/components/ui/card";
+import React, { useState, useEffect } from "react";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Progress } from "@/components/ui/progress";
-import { 
-  FileText, 
-  Star, 
-  TrendingUp, 
-  Download, 
-  Eye, 
-  Filter,
-  Search,
-  BarChart3,
-  Users,
-  Clock
-} from "lucide-react";
 import { Input } from "@/components/ui/input";
-
-interface ResumeAnalysis {
-  id: string;
-  candidateName: string;
-  filename: string;
-  overallScore: number;
-  skillsMatch: number;
-  experienceMatch: number;
-  educationMatch: number;
-  status: 'excellent' | 'good' | 'fair' | 'poor';
-  keySkills: string[];
-  experience: string;
-  location: string;
-  analyzedAt: string;
-}
-
-const mockResumes: ResumeAnalysis[] = [
-  {
-    id: '1',
-    candidateName: 'Sarah Johnson',
-    filename: 'sarah_johnson_resume.pdf',
-    overallScore: 94,
-    skillsMatch: 96,
-    experienceMatch: 92,
-    educationMatch: 95,
-    status: 'excellent',
-    keySkills: ['React', 'TypeScript', 'Node.js', 'AWS', 'Python'],
-    experience: '5+ years Senior Developer',
-    location: 'San Francisco, CA',
-    analyzedAt: '2 minutes ago'
-  },
-  {
-    id: '2',
-    candidateName: 'Michael Chen',
-    filename: 'michael_chen_cv.pdf',
-    overallScore: 87,
-    skillsMatch: 89,
-    experienceMatch: 85,
-    educationMatch: 88,
-    status: 'excellent',
-    keySkills: ['JavaScript', 'React', 'MongoDB', 'Express', 'Docker'],
-    experience: '4 years Full Stack Developer',
-    location: 'New York, NY',
-    analyzedAt: '5 minutes ago'
-  },
-  {
-    id: '3',
-    candidateName: 'Emily Rodriguez',
-    filename: 'emily_rodriguez_resume.docx',
-    overallScore: 78,
-    skillsMatch: 82,
-    experienceMatch: 74,
-    educationMatch: 80,
-    status: 'good',
-    keySkills: ['Vue.js', 'PHP', 'MySQL', 'Laravel', 'Git'],
-    experience: '3 years Frontend Developer',
-    location: 'Austin, TX',
-    analyzedAt: '8 minutes ago'
-  },
-  {
-    id: '4',
-    candidateName: 'David Kim',
-    filename: 'david_kim_cv.pdf',
-    overallScore: 65,
-    skillsMatch: 70,
-    experienceMatch: 60,
-    educationMatch: 68,
-    status: 'fair',
-    keySkills: ['HTML', 'CSS', 'JavaScript', 'Bootstrap', 'jQuery'],
-    experience: '2 years Junior Developer',
-    location: 'Seattle, WA',
-    analyzedAt: '12 minutes ago'
-  }
-];
+import { Progress } from "@/components/ui/progress";
+import { useToast } from "@/components/ui/use-toast";
+import { supabase } from "@/integrations/supabase/client";
+import type { ResumeAnalysis } from "@/types/ResumeAnalysis";
+import { 
+  Search, 
+  FileText, 
+  TrendingUp, 
+  Users, 
+  CheckCircle,
+  AlertTriangle,
+  Clock,
+  Eye,
+  Download,
+  Filter,
+  ChevronDown,
+  ChevronUp,
+  RefreshCw
+} from "lucide-react";
 
 const Dashboard = () => {
-  const [resumes] = useState<ResumeAnalysis[]>(mockResumes);
-  const [searchTerm, setSearchTerm] = useState('');
-  const [selectedFilter, setSelectedFilter] = useState('all');
+  const [searchTerm, setSearchTerm] = useState("");
+  const [selectedFilter, setSelectedFilter] = useState("all");
+  const [resumeData, setResumeData] = useState<ResumeAnalysis[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [expandedJustifications, setExpandedJustifications] = useState<Set<string>>(new Set());
+  const { toast } = useToast();
 
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'excellent': return 'bg-accent text-accent-foreground';
-      case 'good': return 'bg-primary text-primary-foreground';
-      case 'fair': return 'bg-secondary text-secondary-foreground';
-      case 'poor': return 'bg-destructive text-destructive-foreground';
-      default: return 'bg-muted text-muted-foreground';
+  const fetchResumeData = async () => {
+    try {
+      console.log('Fetching resume analysis data...');
+      setLoading(true);
+      
+      const { data, error } = await supabase.functions.invoke('get-resume-analysis');
+      
+      if (error) {
+        throw new Error(`Failed to fetch resume data: ${error.message}`);
+      }
+
+      console.log('Fetched resume data:', data);
+      
+      if (data?.success && data?.data) {
+        setResumeData(data.data);
+      } else {
+        console.warn('No data received or unsuccessful response');
+        setResumeData([]);
+      }
+    } catch (error) {
+      console.error('Error fetching resume data:', error);
+      toast({
+        title: "Error",
+        description: "Failed to load resume analysis data. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setLoading(false);
     }
   };
 
-  const getScoreColor = (score: number) => {
-    if (score >= 90) return 'text-accent';
-    if (score >= 80) return 'text-primary';
-    if (score >= 70) return 'text-muted-foreground';
-    return 'text-destructive';
+  useEffect(() => {
+    fetchResumeData();
+  }, []);
+
+  const toggleJustification = (id: string) => {
+    setExpandedJustifications(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(id)) {
+        newSet.delete(id);
+      } else {
+        newSet.add(id);
+      }
+      return newSet;
+    });
   };
 
-  const filteredResumes = resumes.filter(resume => 
-    resume.candidateName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    resume.keySkills.some(skill => skill.toLowerCase().includes(searchTerm.toLowerCase()))
-  );
+  const getFactorColor = (factor: number) => {
+    if (factor >= 8) return 'text-green-600';
+    if (factor >= 6) return 'text-blue-600';
+    if (factor >= 4) return 'text-yellow-600';
+    return 'text-red-600';
+  };
 
-  return (
-    <section className="py-16 lg:py-24 bg-gradient-subtle">
-      <div className="container mx-auto px-4 sm:px-6 lg:px-8">
+  const getFactorBadgeColor = (factor: number) => {
+    if (factor >= 8) return 'bg-green-100 text-green-800';
+    if (factor >= 6) return 'bg-blue-100 text-blue-800';
+    if (factor >= 4) return 'bg-yellow-100 text-yellow-800';
+    return 'bg-red-100 text-red-800';
+  };
+
+  const filteredResumes = resumeData.filter(resume => {
+    const matchesSearch = 
+      resume.firstName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      resume.lastName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      resume.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      resume.resume.toLowerCase().includes(searchTerm.toLowerCase());
+    
+    return matchesSearch;
+  });
+
+  if (loading) {
+    return (
+      <section className="py-16 px-4 sm:px-6 lg:px-8 bg-background">
         <div className="max-w-7xl mx-auto">
-          {/* Header */}
-          <div className="text-center mb-12">
-            <h2 className="text-3xl lg:text-4xl font-bold text-foreground mb-4">
-              Resume Analysis Dashboard
-            </h2>
-            <p className="text-xl text-muted-foreground">
-              AI-powered insights and scoring for intelligent candidate selection
-            </p>
-          </div>
-
-          {/* Stats Cards */}
-          <div className="grid md:grid-cols-4 gap-6 mb-8">
-            <Card className="p-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm font-medium text-muted-foreground">Total Resumes</p>
-                  <p className="text-2xl font-bold text-foreground">24</p>
-                </div>
-                <FileText className="h-8 w-8 text-primary" />
-              </div>
-            </Card>
-            <Card className="p-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm font-medium text-muted-foreground">Excellent Matches</p>
-                  <p className="text-2xl font-bold text-accent">8</p>
-                </div>
-                <Star className="h-8 w-8 text-accent" />
-              </div>
-            </Card>
-            <Card className="p-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm font-medium text-muted-foreground">Avg Score</p>
-                  <p className="text-2xl font-bold text-foreground">81</p>
-                </div>
-                <TrendingUp className="h-8 w-8 text-primary" />
-              </div>
-            </Card>
-            <Card className="p-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm font-medium text-muted-foreground">Time Saved</p>
-                  <p className="text-2xl font-bold text-foreground">18h</p>
-                </div>
-                <Clock className="h-8 w-8 text-primary" />
-              </div>
-            </Card>
-          </div>
-
-          {/* Filters and Search */}
-          <Card className="p-6 mb-8">
-            <div className="flex flex-col md:flex-row gap-4 items-center justify-between">
-              <div className="flex flex-col sm:flex-row gap-4 w-full md:w-auto">
-                <div className="relative">
-                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
-                  <Input
-                    placeholder="Search candidates or skills..."
-                    value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
-                    className="pl-9 w-full md:w-80"
-                  />
-                </div>
-                <Button variant="outline" className="flex items-center gap-2">
-                  <Filter className="h-4 w-4" />
-                  Filters
-                </Button>
-              </div>
-              <div className="flex gap-2">
-                <Button variant="outline" className="flex items-center gap-2">
-                  <BarChart3 className="h-4 w-4" />
-                  Analytics
-                </Button>
-                <Button variant="outline" className="flex items-center gap-2">
-                  <Download className="h-4 w-4" />
-                  Export
-                </Button>
-              </div>
-            </div>
-          </Card>
-
-          {/* Resume Cards */}
-          <div className="grid gap-6">
-            {filteredResumes.map((resume) => (
-              <Card key={resume.id} className="p-6 hover:shadow-md transition-all duration-200">
-                <div className="grid lg:grid-cols-4 gap-6">
-                  {/* Candidate Info */}
-                  <div className="lg:col-span-2">
-                    <div className="flex items-start justify-between mb-4">
-                      <div>
-                        <h3 className="text-xl font-semibold text-foreground">{resume.candidateName}</h3>
-                        <p className="text-sm text-muted-foreground mb-2">{resume.filename}</p>
-                        <div className="flex items-center gap-4 text-sm text-muted-foreground">
-                          <span className="flex items-center gap-1">
-                            <Users className="h-4 w-4" />
-                            {resume.experience}
-                          </span>
-                          <span>{resume.location}</span>
-                        </div>
-                      </div>
-                      <Badge className={getStatusColor(resume.status)} variant="secondary">
-                        {resume.status.charAt(0).toUpperCase() + resume.status.slice(1)}
-                      </Badge>
-                    </div>
-                    
-                    {/* Skills */}
-                    <div className="mb-4">
-                      <p className="text-sm font-medium text-foreground mb-2">Key Skills</p>
-                      <div className="flex flex-wrap gap-2">
-                        {resume.keySkills.map((skill, index) => (
-                          <Badge key={index} variant="outline" className="text-xs">
-                            {skill}
-                          </Badge>
-                        ))}
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Scoring */}
-                  <div className="space-y-4">
-                    <div className="text-center">
-                      <div className={`text-3xl font-bold ${getScoreColor(resume.overallScore)}`}>
-                        {resume.overallScore}%
-                      </div>
-                      <p className="text-sm text-muted-foreground">Overall Match</p>
-                    </div>
-                    
-                    <div className="space-y-3">
-                      <div>
-                        <div className="flex justify-between text-xs mb-1">
-                          <span>Skills Match</span>
-                          <span>{resume.skillsMatch}%</span>
-                        </div>
-                        <Progress value={resume.skillsMatch} className="h-2" />
-                      </div>
-                      <div>
-                        <div className="flex justify-between text-xs mb-1">
-                          <span>Experience</span>
-                          <span>{resume.experienceMatch}%</span>
-                        </div>
-                        <Progress value={resume.experienceMatch} className="h-2" />
-                      </div>
-                      <div>
-                        <div className="flex justify-between text-xs mb-1">
-                          <span>Education</span>
-                          <span>{resume.educationMatch}%</span>
-                        </div>
-                        <Progress value={resume.educationMatch} className="h-2" />
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Actions */}
-                  <div className="flex flex-col justify-between">
-                    <div className="text-xs text-muted-foreground mb-4">
-                      Analyzed {resume.analyzedAt}
-                    </div>
-                    <div className="space-y-2">
-                      <Button className="w-full" size="sm">
-                        <Eye className="h-4 w-4 mr-2" />
-                        View Details
-                      </Button>
-                      <Button variant="outline" className="w-full" size="sm">
-                        <Download className="h-4 w-4 mr-2" />
-                        Download
-                      </Button>
-                    </div>
-                  </div>
-                </div>
-              </Card>
-            ))}
+          <div className="flex items-center justify-center py-12">
+            <RefreshCw className="h-8 w-8 animate-spin text-primary mr-2" />
+            <span className="text-lg text-muted-foreground">Loading resume analysis data...</span>
           </div>
         </div>
+      </section>
+    );
+  }
+
+  return (
+    <section className="py-16 px-4 sm:px-6 lg:px-8 bg-background">
+      <div className="max-w-7xl mx-auto">
+        <div className="mb-8 flex items-center justify-between">
+          <div>
+            <h2 className="text-3xl font-bold text-foreground mb-2">Resume Analysis Dashboard</h2>
+            <p className="text-muted-foreground">
+              Track and manage candidate applications with AI-powered insights
+            </p>
+          </div>
+          <Button onClick={fetchResumeData} variant="outline" size="sm">
+            <RefreshCw className="h-4 w-4 mr-2" />
+            Refresh
+          </Button>
+        </div>
+
+        {/* Statistics Cards */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+          <Card>
+            <CardContent className="flex items-center p-6">
+              <div className="flex items-center justify-center w-12 h-12 bg-blue-100 rounded-lg mr-4">
+                <FileText className="h-6 w-6 text-blue-600" />
+              </div>
+              <div>
+                <p className="text-sm font-medium text-muted-foreground">Total Resumes</p>
+                <p className="text-2xl font-bold text-foreground">{resumeData.length}</p>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardContent className="flex items-center p-6">
+              <div className="flex items-center justify-center w-12 h-12 bg-green-100 rounded-lg mr-4">
+                <CheckCircle className="h-6 w-6 text-green-600" />
+              </div>
+              <div>
+                <p className="text-sm font-medium text-muted-foreground">High Scores (8+)</p>
+                <p className="text-2xl font-bold text-foreground">
+                  {resumeData.filter(r => r.overallFactor >= 8).length}
+                </p>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardContent className="flex items-center p-6">
+              <div className="flex items-center justify-center w-12 h-12 bg-yellow-100 rounded-lg mr-4">
+                <AlertTriangle className="h-6 w-6 text-yellow-600" />
+              </div>
+              <div>
+                <p className="text-sm font-medium text-muted-foreground">High Risk</p>
+                <p className="text-2xl font-bold text-foreground">
+                  {resumeData.filter(r => r.riskFactor >= 7).length}
+                </p>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardContent className="flex items-center p-6">
+              <div className="flex items-center justify-center w-12 h-12 bg-purple-100 rounded-lg mr-4">
+                <TrendingUp className="h-6 w-6 text-purple-600" />
+              </div>
+              <div>
+                <p className="text-sm font-medium text-muted-foreground">Avg Overall Score</p>
+                <p className="text-2xl font-bold text-foreground">
+                  {resumeData.length > 0 ? 
+                    (resumeData.reduce((acc, r) => acc + r.overallFactor, 0) / resumeData.length).toFixed(1)
+                    : '0'
+                  }
+                </p>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Search Section */}
+        <div className="flex flex-col sm:flex-row gap-4 mb-8">
+          <div className="relative flex-1">
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
+            <Input
+              placeholder="Search by name, email, or resume title..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="pl-10"
+            />
+          </div>
+        </div>
+
+        {/* Resume Cards Grid */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          {filteredResumes.map((resume) => (
+            <Card key={resume.id} className="hover:shadow-lg transition-shadow">
+              <CardHeader className="pb-4">
+                <div className="flex items-start justify-between">
+                  <div>
+                    <CardTitle className="text-lg font-semibold text-foreground">
+                      {resume.firstName} {resume.lastName}
+                    </CardTitle>
+                    <p className="text-sm text-muted-foreground mt-1">{resume.resume}</p>
+                  </div>
+                  <Badge className={getFactorBadgeColor(resume.overallFactor)}>
+                    Score: {resume.overallFactor}/10
+                  </Badge>
+                </div>
+                <div className="flex items-center gap-4 text-sm text-muted-foreground">
+                  <span>{resume.email}</span>
+                  <span>•</span>
+                  <span>{resume.date}</span>
+                </div>
+              </CardHeader>
+
+              <CardContent className="space-y-4">
+                {/* Factor Scores */}
+                <div className="grid grid-cols-3 gap-4">
+                  <div>
+                    <p className="text-xs text-muted-foreground mb-1">Risk Factor</p>
+                    <div className="flex items-center gap-2">
+                      <Progress value={resume.riskFactor * 10} className="h-2" />
+                      <span className={`text-sm font-bold ${getFactorColor(resume.riskFactor)}`}>
+                        {resume.riskFactor}/10
+                      </span>
+                    </div>
+                  </div>
+                  <div>
+                    <p className="text-xs text-muted-foreground mb-1">Reward Factor</p>
+                    <div className="flex items-center gap-2">
+                      <Progress value={resume.rewardFactor * 10} className="h-2" />
+                      <span className={`text-sm font-bold ${getFactorColor(resume.rewardFactor)}`}>
+                        {resume.rewardFactor}/10
+                      </span>
+                    </div>
+                  </div>
+                  <div>
+                    <p className="text-xs text-muted-foreground mb-1">Overall Factor</p>
+                    <div className="flex items-center gap-2">
+                      <Progress value={resume.overallFactor * 10} className="h-2" />
+                      <span className={`text-sm font-bold ${getFactorColor(resume.overallFactor)}`}>
+                        {resume.overallFactor}/10
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Strengths & Weaknesses */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <p className="text-sm font-medium text-foreground mb-2 text-green-700">Strengths</p>
+                    <p className="text-sm text-muted-foreground bg-green-50 p-2 rounded">
+                      {resume.strengths || 'No strengths listed'}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-sm font-medium text-foreground mb-2 text-red-700">Weaknesses</p>
+                    <p className="text-sm text-muted-foreground bg-red-50 p-2 rounded">
+                      {resume.weaknesses || 'No weaknesses listed'}
+                    </p>
+                  </div>
+                </div>
+
+                {/* Justification */}
+                <div>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => toggleJustification(resume.id!)}
+                    className="p-0 h-auto font-medium text-foreground mb-2"
+                  >
+                    Justification
+                    {expandedJustifications.has(resume.id!) ? 
+                      <ChevronUp className="h-4 w-4 ml-1" /> : 
+                      <ChevronDown className="h-4 w-4 ml-1" />
+                    }
+                  </Button>
+                  {expandedJustifications.has(resume.id!) && (
+                    <p className="text-sm text-muted-foreground bg-muted p-3 rounded">
+                      {resume.justification || 'No justification provided'}
+                    </p>
+                  )}
+                </div>
+
+                {/* Action Buttons */}
+                <div className="flex gap-2 pt-4">
+                  <Button size="sm" variant="outline" className="flex-1">
+                    <Eye className="h-4 w-4 mr-2" />
+                    View Details
+                  </Button>
+                  <Button size="sm" variant="outline" className="flex-1">
+                    <Download className="h-4 w-4 mr-2" />
+                    Download
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+
+        {filteredResumes.length === 0 && (
+          <div className="text-center py-12">
+            <FileText className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+            <h3 className="text-lg font-medium text-foreground mb-2">No resumes found</h3>
+            <p className="text-muted-foreground">
+              {searchTerm ? "Try adjusting your search terms" : "Upload and analyze some resumes to get started"}
+            </p>
+          </div>
+        )}
       </div>
     </section>
   );

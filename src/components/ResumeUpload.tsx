@@ -5,6 +5,8 @@ import { Card } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { useToast } from "@/components/ui/use-toast";
 import { n8nApi } from "@/services/n8nApi";
+import { supabase } from "@/integrations/supabase/client";
+import type { ResumeAnalysis } from "@/types/ResumeAnalysis";
 
 interface UploadedFile {
   id: string;
@@ -71,21 +73,65 @@ const ResumeUpload = () => {
       return;
     }
 
+    console.log('Starting resume analysis...');
     setFiles(prev => prev.map(f =>
       readyFiles.some(r => r.id === f.id)
-        ? { ...f, status: 'uploading', progress: 25 }
+        ? { ...f, status: 'uploading', progress: 0 }
         : f
     ));
 
     try {
-      const response = await n8nApi.uploadResumes(readyFiles.map(f => f.file));
-      setFiles(prev => prev.map(f =>
-        readyFiles.some(r => r.id === f.id)
-          ? { ...f, status: 'completed', progress: 100, n8nBatchId: response.batchId }
+      // Simulate progress for upload phase
+      for (let progress = 0; progress <= 50; progress += 10) {
+        setFiles(prev => prev.map(f => 
+          readyFiles.some(rf => rf.id === f.id)
+            ? { ...f, progress }
+            : f
+        ));
+        await new Promise(resolve => setTimeout(resolve, 100));
+      }
+
+      // Send to n8n for AI analysis
+      console.log('Sending files to n8n for analysis...');
+      const analysisResponse = await n8nApi.uploadResumes(readyFiles.map(f => f.file));
+      console.log('Analysis response from n8n:', analysisResponse);
+
+      // Update progress
+      setFiles(prev => prev.map(f => 
+        readyFiles.some(rf => rf.id === f.id)
+          ? { ...f, progress: 75 }
           : f
       ));
-      toast({ title: 'Analysis triggered', description: `${readyFiles.length} resume(s) sent to AI analysis.` });
+
+      // Save analysis results to Google Sheets via Supabase
+      if (analysisResponse.analysisResults && analysisResponse.analysisResults.length > 0) {
+        console.log('Saving analysis results to Google Sheets...');
+        
+        const { data, error } = await supabase.functions.invoke('save-resume-analysis', {
+          body: {
+            analysisData: analysisResponse.analysisResults
+          }
+        });
+
+        if (error) {
+          throw new Error(`Failed to save analysis results: ${error.message}`);
+        }
+
+        console.log('Analysis results saved successfully:', data);
+      }
+
+      setFiles(prev => prev.map(f =>
+        readyFiles.some(r => r.id === f.id)
+          ? { ...f, status: 'completed', progress: 100, n8nBatchId: analysisResponse.batchId }
+          : f
+      ));
+
+      toast({ 
+        title: 'Analysis Complete', 
+        description: `Successfully analyzed ${readyFiles.length} resume(s) and saved results to database.` 
+      });
     } catch (error) {
+      console.error('Analysis failed:', error);
       setFiles(prev => prev.map(f =>
         readyFiles.some(r => r.id === f.id)
           ? { ...f, status: 'error', progress: 0 }
