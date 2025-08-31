@@ -58,6 +58,18 @@ serve(async (req) => {
     const rows = sheetsData.values || [];
     const dataRows = rows.slice(1); // Skip header row
 
+    // Helper function to convert risk/reward factors to numbers
+    const convertFactorToNumber = (factor: string): number => {
+      if (!factor) return 0;
+      const cleanFactor = factor.toLowerCase().trim();
+      if (cleanFactor.includes('high')) return 8;
+      if (cleanFactor.includes('medium')) return 5;
+      if (cleanFactor.includes('low')) return 2;
+      // Try to parse as number if it's already numeric
+      const numericValue = parseFloat(factor);
+      return isNaN(numericValue) ? 0 : numericValue;
+    };
+
     const analysisData = dataRows.map((row: any[], index: number) => ({
       id: `analysis-${index}`,
       date: row[0] || '',
@@ -67,9 +79,9 @@ serve(async (req) => {
       email: row[4] || '',
       strengths: row[5] || '',
       weaknesses: row[6] || '',
-      riskFactor: parseFloat(row[7]) || 0,
-      rewardFactor: parseFloat(row[8]) || 0,
-      overallFactor: parseFloat(row[9]) || 0,
+      riskFactor: convertFactorToNumber(row[7]),
+      rewardFactor: convertFactorToNumber(row[8]),
+      overallFactor: convertFactorToNumber(row[9]),
       justification: row[10] || '',
     }));
 
