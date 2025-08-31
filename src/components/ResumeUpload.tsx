@@ -104,12 +104,29 @@ const ResumeUpload = () => {
       ));
 
       // Save analysis results to Google Sheets via Supabase
-      if (analysisResponse.analysisResults && analysisResponse.analysisResults.length > 0) {
-        console.log('Saving analysis results to Google Sheets...');
+      if (analysisResponse.success) {
+        console.log('Preparing analysis data for Google Sheets...');
+        
+        // Convert n8n response to expected format
+        const analysisData = [{
+          date: new Date().toISOString().split('T')[0],
+          resume: readyFiles[0]?.name || 'Unknown',
+          firstName: analysisResponse.Name?.replace('=', '') || '',
+          lastName: '',
+          email: analysisResponse.email?.replace('=', '') || '',
+          strengths: analysisResponse.strengths?.replace('=', '') || '',
+          weaknesses: analysisResponse.weaknesses?.replace('=', '') || '',
+          riskFactor: analysisResponse.riskFactor?.replace('=', '') || '',
+          rewardFactor: analysisResponse.rewardFactor?.replace('=', '') || '',
+          overallFactor: analysisResponse.overallFactor?.replace('=', '') || '',
+          justification: analysisResponse.justification?.replace('=', '') || ''
+        }];
+
+        console.log('Invoking saveResumeAnalysis with data:', analysisData);
         
         const { data, error } = await supabase.functions.invoke('saveResumeAnalysis', {
           body: {
-            analysisData: analysisResponse.analysisResults
+            analysisData: analysisData
           }
         });
 

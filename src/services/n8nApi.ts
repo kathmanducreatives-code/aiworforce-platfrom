@@ -2,10 +2,19 @@ import type { ResumeAnalysis } from "@/types/ResumeAnalysis";
 
 export interface UploadResponse {
   success: boolean;
-  batchId: string;
-  message: string;
+  batchId?: string;
+  message?: string;
   processedFiles?: string[];
   analysisResults?: ResumeAnalysis[];
+  // n8n response fields
+  Name?: string;
+  email?: string;
+  strengths?: string;
+  weaknesses?: string;
+  riskFactor?: string;
+  rewardFactor?: string;
+  overallFactor?: string;
+  justification?: string;
 }
 
 export interface N8nError {
