@@ -40,8 +40,8 @@ port = 54329
 enabled = true
 port = 54330
 
-[functions.save-resume-analysis]
+[functions.saveResumeAnalysis]
 verify_jwt = false
 
-[functions.get-resume-analysis]
+[functions.getResumeAnalysis]
 verify_jwt = false

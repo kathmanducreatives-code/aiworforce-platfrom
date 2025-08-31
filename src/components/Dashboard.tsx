@@ -36,7 +36,7 @@ const Dashboard = () => {
       console.log('Fetching resume analysis data...');
       setLoading(true);
       
-      const { data, error } = await supabase.functions.invoke('get-resume-analysis');
+      const { data, error } = await supabase.functions.invoke('getResumeAnalysis');
       
       if (error) {
         throw new Error(`Failed to fetch resume data: ${error.message}`);

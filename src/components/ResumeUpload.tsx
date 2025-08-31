@@ -107,7 +107,7 @@ const ResumeUpload = () => {
       if (analysisResponse.analysisResults && analysisResponse.analysisResults.length > 0) {
         console.log('Saving analysis results to Google Sheets...');
         
-        const { data, error } = await supabase.functions.invoke('save-resume-analysis', {
+        const { data, error } = await supabase.functions.invoke('saveResumeAnalysis', {
           body: {
             analysisData: analysisResponse.analysisResults
           }
