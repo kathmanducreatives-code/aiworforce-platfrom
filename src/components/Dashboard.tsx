@@ -39,17 +39,52 @@ const Dashboard = () => {
       const { data, error } = await supabase.functions.invoke('getResumeAnalysis');
       
       if (error) {
+        console.error('Supabase function error:', error);
         throw new Error(`Failed to fetch resume data: ${error.message}`);
       }
 
-      console.log('Fetched resume data:', data);
-      
-      if (data?.success && data?.data) {
-        setResumeData(data.data);
-      } else {
-        console.warn('No data received or unsuccessful response');
+      console.log('Fetched resume data raw payload:', data);
+
+      // Normalize API response shape and values
+      const convertFactorToNumber = (factor: any): number => {
+        if (factor === null || factor === undefined) return 0;
+        const str = String(factor).toLowerCase().trim();
+        if (str.includes('high')) return 8;
+        if (str.includes('medium')) return 5;
+        if (str.includes('low')) return 2;
+        const n = Number(str);
+        return Number.isFinite(n) ? n : 0;
+      };
+
+      const rows = Array.isArray((data as any)?.data)
+        ? (data as any).data
+        : Array.isArray(data)
+          ? data
+          : [];
+
+      if (!Array.isArray(rows) || rows.length === 0) {
+        console.warn('No rows found in response:', data);
         setResumeData([]);
+        return;
       }
+
+      const normalized: ResumeAnalysis[] = rows.map((row: any, index: number) => ({
+        id: row.id ?? `analysis-${index}`,
+        date: row.date ?? '',
+        resume: row.resume ?? '',
+        firstName: row.firstName ?? row.first_name ?? '',
+        lastName: row.lastName ?? row.last_name ?? '',
+        email: row.email ?? '',
+        strengths: row.strengths ?? '',
+        weaknesses: row.weaknesses ?? '',
+        riskFactor: typeof row.riskFactor === 'number' ? row.riskFactor : convertFactorToNumber(row.riskFactor),
+        rewardFactor: typeof row.rewardFactor === 'number' ? row.rewardFactor : convertFactorToNumber(row.rewardFactor),
+        overallFactor: typeof row.overallFactor === 'number' ? row.overallFactor : convertFactorToNumber(row.overallFactor),
+        justification: row.justification ?? '',
+      }));
+
+      console.log(`Normalized ${normalized.length} resume rows`);
+      setResumeData(normalized);
     } catch (error) {
       console.error('Error fetching resume data:', error);
       toast({
