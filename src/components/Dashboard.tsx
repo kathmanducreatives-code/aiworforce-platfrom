@@ -4,7 +4,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Progress } from "@/components/ui/progress";
-import { useToast } from "@/components/ui/use-toast";
+import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import type { ResumeAnalysis } from "@/types/ResumeAnalysis";
 import { 
@@ -56,32 +56,49 @@ const Dashboard = () => {
         return Number.isFinite(n) ? n : 0;
       };
 
-      const rows = Array.isArray((data as any)?.data)
-        ? (data as any).data
-        : Array.isArray(data)
-          ? data
-          : [];
+      const payload = data as any;
+
+      // Extract rows from various possible shapes
+      let rows: any[] = [];
+      if (payload?.success === true && Array.isArray(payload.data)) {
+        rows = payload.data;
+      } else if (Array.isArray(payload?.data)) {
+        rows = payload.data;
+      } else if (Array.isArray(payload?.rows)) {
+        rows = payload.rows;
+      } else if (Array.isArray(payload)) {
+        rows = payload;
+      } else if (Array.isArray(payload?.data?.rows)) {
+        rows = payload.data.rows;
+      } else {
+        rows = [];
+      }
 
       if (!Array.isArray(rows) || rows.length === 0) {
-        console.warn('No rows found in response:', data);
+        console.warn('No rows found in response:', payload);
         setResumeData([]);
         return;
       }
 
-      const normalized: ResumeAnalysis[] = rows.map((row: any, index: number) => ({
-        id: row.id ?? `analysis-${index}`,
-        date: row.date ?? '',
-        resume: row.resume ?? '',
-        firstName: row.firstName ?? row.first_name ?? '',
-        lastName: row.lastName ?? row.last_name ?? '',
-        email: row.email ?? '',
-        strengths: row.strengths ?? '',
-        weaknesses: row.weaknesses ?? '',
-        riskFactor: typeof row.riskFactor === 'number' ? row.riskFactor : convertFactorToNumber(row.riskFactor),
-        rewardFactor: typeof row.rewardFactor === 'number' ? row.rewardFactor : convertFactorToNumber(row.rewardFactor),
-        overallFactor: typeof row.overallFactor === 'number' ? row.overallFactor : convertFactorToNumber(row.overallFactor),
-        justification: row.justification ?? '',
-      }));
+      const normalized: ResumeAnalysis[] = rows.map((row: any, index: number) => {
+        const rf = row.riskFactor ?? row.risk ?? row.Risk ?? row['Risk Factor'];
+        const rwf = row.rewardFactor ?? row.reward ?? row.Reward ?? row['Reward Factor'];
+        const of = row.overallFactor ?? row.overall ?? row.overall_score ?? row['Overall Score'];
+        return {
+          id: row.id ?? `analysis-${index}`,
+          date: row.date ?? row.Date ?? row.timestamp ?? '',
+          resume: row.resume ?? row.resumeTitle ?? row.resume_name ?? row.Resume ?? '',
+          firstName: row.firstName ?? row.first_name ?? row.FirstName ?? row['First Name'] ?? '',
+          lastName: row.lastName ?? row.last_name ?? row.LastName ?? row['Last Name'] ?? '',
+          email: row.email ?? row.Email ?? '',
+          strengths: row.strengths ?? row.Strengths ?? '',
+          weaknesses: row.weaknesses ?? row.Weaknesses ?? '',
+          riskFactor: typeof rf === 'number' ? rf : convertFactorToNumber(rf),
+          rewardFactor: typeof rwf === 'number' ? rwf : convertFactorToNumber(rwf),
+          overallFactor: typeof of === 'number' ? of : convertFactorToNumber(of),
+          justification: row.justification ?? row.reason ?? row.Justification ?? '',
+        };
+      });
 
       console.log(`Normalized ${normalized.length} resume rows`);
       setResumeData(normalized);
