@@ -1,14 +1,14 @@
 export interface ResumeAnalysis {
   id?: string;
-  date: string;
+  date?: string;
   resume: string;
-  firstName: string;
-  lastName: string;
+  candidateName: string;
   email: string;
   strengths: string;
   weaknesses: string;
   riskFactor: number;
   rewardFactor: number;
+  fitScore: number;
   overallFactor: number;
   justification: string;
 }

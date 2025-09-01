@@ -67,9 +67,6 @@ const Dashboard = () => {
       }
 
       const normalized: ResumeAnalysis[] = rows.map((row: any, index: number) => {
-        const candidateName: string = row.candidate_name || '';
-        const [firstName, ...rest] = candidateName.split(' ').filter(Boolean);
-        const lastName = rest.join(' ');
         const rf = row.risk_factor;
         const rwf = row.reward_factor;
         const fit = row.fit_score;
@@ -79,13 +76,13 @@ const Dashboard = () => {
           id: row.id ?? `analysis-${index}`,
           date: row.created_at ? new Date(row.created_at).toISOString().split('T')[0] : '',
           resume: row.resume ?? '',
-          firstName: firstName || '',
-          lastName: lastName || '',
+          candidateName: row.candidate_name || 'Unknown',
           email: row.email ?? '',
           strengths: row.strengths ?? '',
           weaknesses: row.weaknesses ?? '',
           riskFactor: typeof rf === 'number' ? rf : convertFactorToNumber(rf),
           rewardFactor: typeof rwf === 'number' ? rwf : convertFactorToNumber(rwf),
+          fitScore: typeof fit === 'number' ? fit : convertFactorToNumber(fit),
           overallFactor: typeof overall === 'number' ? overall : convertFactorToNumber(overall),
           justification: row.justification ?? '',
         };
@@ -137,8 +134,7 @@ const Dashboard = () => {
 
   const filteredResumes = resumeData.filter(resume => {
     const matchesSearch = 
-      resume.firstName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      resume.lastName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      resume.candidateName.toLowerCase().includes(searchTerm.toLowerCase()) ||
       resume.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
       resume.resume.toLowerCase().includes(searchTerm.toLowerCase());
     
@@ -196,7 +192,7 @@ const Dashboard = () => {
               <div>
                 <p className="text-sm font-medium text-muted-foreground">High Scores (8+)</p>
                 <p className="text-2xl font-bold text-foreground">
-                  {resumeData.filter(r => r.overallFactor >= 8).length}
+                  {resumeData.filter(r => r.fitScore >= 8).length}
                 </p>
               </div>
             </CardContent>
@@ -225,7 +221,7 @@ const Dashboard = () => {
                 <p className="text-sm font-medium text-muted-foreground">Avg Overall Score</p>
                 <p className="text-2xl font-bold text-foreground">
                   {resumeData.length > 0 ? 
-                    (resumeData.reduce((acc, r) => acc + r.overallFactor, 0) / resumeData.length).toFixed(1)
+                    (resumeData.reduce((acc, r) => acc + r.fitScore, 0) / resumeData.length).toFixed(1)
                     : '0'
                   }
                 </p>
@@ -255,12 +251,12 @@ const Dashboard = () => {
                 <div className="flex items-start justify-between">
                   <div>
                     <CardTitle className="text-lg font-semibold text-foreground">
-                      {resume.firstName} {resume.lastName}
+                      {resume.candidateName}
                     </CardTitle>
                     <p className="text-sm text-muted-foreground mt-1">{resume.resume}</p>
                   </div>
-                  <Badge className={getFactorBadgeColor(resume.overallFactor)}>
-                    Score: {resume.overallFactor}/10
+                  <Badge className={getFactorBadgeColor(resume.fitScore)}>
+                    Score: {resume.fitScore}/10
                   </Badge>
                 </div>
                 <div className="flex items-center gap-4 text-sm text-muted-foreground">

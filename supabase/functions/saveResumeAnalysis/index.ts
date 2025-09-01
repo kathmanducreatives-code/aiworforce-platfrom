@@ -44,15 +44,15 @@ serve(async (req) => {
 
     // Prepare data for Google Sheets
     const values = analysisData.map(item => [
-      item.date,
+      item.date || new Date().toISOString(),
       item.resume,
-      item.firstName,
-      item.lastName,
+      item.candidateName,
       item.email,
       item.strengths,
       item.weaknesses,
       item.riskFactor,
       item.rewardFactor,
+      item.fitScore,
       item.overallFactor,
       item.justification
     ]);
@@ -96,17 +96,16 @@ serve(async (req) => {
     };
 
     const dbRows = analysisData.map((item: any) => {
-      const candidateName = item.candidateName ?? [item.firstName, item.lastName].filter(Boolean).join(' ').trim();
       return {
         resume: item.resume ?? null,
-        candidate_name: candidateName || 'Unknown',
+        candidate_name: item.candidateName || 'Unknown',
         email: item.email ?? null,
         strengths: item.strengths ?? null,
         weaknesses: item.weaknesses ?? null,
         risk_factor: toNum(item.riskFactor),
         reward_factor: toNum(item.rewardFactor),
-        fit_score: toNum(item.fitScore ?? item.overallFactor),
-        overall_factor: toNum(item.overallFactor ?? item.fitScore),
+        fit_score: toNum(item.fitScore),
+        overall_factor: toNum(item.overallFactor),
         justification: item.justification ?? null,
       };
     });

@@ -7,13 +7,15 @@ export interface UploadResponse {
   processedFiles?: string[];
   analysisResults?: ResumeAnalysis[];
   // n8n response fields
-  Name?: string;
+  resume?: string;
+  candidateName?: string;
   email?: string;
   strengths?: string;
   weaknesses?: string;
-  riskFactor?: string;
-  rewardFactor?: string;
-  overallFactor?: string;
+  riskFactor?: number;
+  rewardFactor?: number;
+  fitScore?: number;
+  overallFactor?: number;
   justification?: string;
 }
 

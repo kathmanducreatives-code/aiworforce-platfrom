@@ -110,16 +110,16 @@ const ResumeUpload = () => {
         // Convert n8n response to expected format
         const analysisData = [{
           date: new Date().toISOString().split('T')[0],
-          resume: readyFiles[0]?.name || 'Unknown',
-          firstName: analysisResponse.Name?.replace('=', '') || '',
-          lastName: '',
-          email: analysisResponse.email?.replace('=', '') || '',
-          strengths: analysisResponse.strengths?.replace('=', '') || '',
-          weaknesses: analysisResponse.weaknesses?.replace('=', '') || '',
-          riskFactor: analysisResponse.riskFactor?.replace('=', '') || '',
-          rewardFactor: analysisResponse.rewardFactor?.replace('=', '') || '',
-          overallFactor: analysisResponse.overallFactor?.replace('=', '') || '',
-          justification: analysisResponse.justification?.replace('=', '') || ''
+          resume: analysisResponse.resume || readyFiles[0]?.name || 'Unknown',
+          candidateName: analysisResponse.candidateName || '',
+          email: analysisResponse.email || '',
+          strengths: analysisResponse.strengths || '',
+          weaknesses: analysisResponse.weaknesses || '',
+          riskFactor: Number(analysisResponse.riskFactor) || 0,
+          rewardFactor: Number(analysisResponse.rewardFactor) || 0,
+          fitScore: Number(analysisResponse.fitScore) || 0,
+          overallFactor: Number(analysisResponse.overallFactor) || 0,
+          justification: analysisResponse.justification || ''
         }];
 
         console.log('Invoking saveResumeAnalysis with data:', analysisData);
