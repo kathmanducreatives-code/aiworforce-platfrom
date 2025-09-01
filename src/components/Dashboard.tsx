@@ -36,7 +36,10 @@ const Dashboard = () => {
       console.log('Fetching resume analysis data...');
       setLoading(true);
       
-      const { data, error } = await supabase.functions.invoke('getResumeAnalysis');
+      const { data, error } = await supabase
+        .from('resume_analyses')
+        .select('*')
+        .order('created_at', { ascending: false });
       
       if (error) {
         console.error('Supabase function error:', error);
@@ -56,51 +59,39 @@ const Dashboard = () => {
         return Number.isFinite(n) ? n : 0;
       };
 
-      const payload = data as any;
-
-      // Extract rows from various possible shapes
-      let rows: any[] = [];
-      if (payload?.success === true && Array.isArray(payload.data)) {
-        rows = payload.data;
-      } else if (Array.isArray(payload?.data)) {
-        rows = payload.data;
-      } else if (Array.isArray(payload?.rows)) {
-        rows = payload.rows;
-      } else if (Array.isArray(payload)) {
-        rows = payload;
-      } else if (Array.isArray(payload?.data?.rows)) {
-        rows = payload.data.rows;
-      } else {
-        rows = [];
-      }
-
-      if (!Array.isArray(rows) || rows.length === 0) {
-        console.warn('No rows found in response:', payload);
+      const rows = Array.isArray(data) ? data : [];
+      if (rows.length === 0) {
+        console.warn('No rows in resume_analyses table yet.');
         setResumeData([]);
         return;
       }
 
       const normalized: ResumeAnalysis[] = rows.map((row: any, index: number) => {
-        const rf = row.riskFactor ?? row.risk ?? row.Risk ?? row['Risk Factor'];
-        const rwf = row.rewardFactor ?? row.reward ?? row.Reward ?? row['Reward Factor'];
-        const of = row.overallFactor ?? row.overall ?? row.overall_score ?? row['Overall Score'];
+        const candidateName: string = row.candidate_name || '';
+        const [firstName, ...rest] = candidateName.split(' ').filter(Boolean);
+        const lastName = rest.join(' ');
+        const rf = row.risk_factor;
+        const rwf = row.reward_factor;
+        const fit = row.fit_score;
+        const overall = row.overall_factor ?? fit;
+
         return {
           id: row.id ?? `analysis-${index}`,
-          date: row.date ?? row.Date ?? row.timestamp ?? '',
-          resume: row.resume ?? row.resumeTitle ?? row.resume_name ?? row.Resume ?? '',
-          firstName: row.firstName ?? row.first_name ?? row.FirstName ?? row['First Name'] ?? '',
-          lastName: row.lastName ?? row.last_name ?? row.LastName ?? row['Last Name'] ?? '',
-          email: row.email ?? row.Email ?? '',
-          strengths: row.strengths ?? row.Strengths ?? '',
-          weaknesses: row.weaknesses ?? row.Weaknesses ?? '',
+          date: row.created_at ? new Date(row.created_at).toISOString().split('T')[0] : '',
+          resume: row.resume ?? '',
+          firstName: firstName || '',
+          lastName: lastName || '',
+          email: row.email ?? '',
+          strengths: row.strengths ?? '',
+          weaknesses: row.weaknesses ?? '',
           riskFactor: typeof rf === 'number' ? rf : convertFactorToNumber(rf),
           rewardFactor: typeof rwf === 'number' ? rwf : convertFactorToNumber(rwf),
-          overallFactor: typeof of === 'number' ? of : convertFactorToNumber(of),
-          justification: row.justification ?? row.reason ?? row.Justification ?? '',
+          overallFactor: typeof overall === 'number' ? overall : convertFactorToNumber(overall),
+          justification: row.justification ?? '',
         };
       });
 
-      console.log(`Normalized ${normalized.length} resume rows`);
+      console.log(`Loaded ${normalized.length} rows from resume_analyses`);
       setResumeData(normalized);
     } catch (error) {
       console.error('Error fetching resume data:', error);

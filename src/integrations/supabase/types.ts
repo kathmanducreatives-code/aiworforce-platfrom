@@ -14,7 +14,51 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      resume_analyses: {
+        Row: {
+          candidate_name: string
+          created_at: string
+          email: string | null
+          fit_score: number | null
+          id: string
+          justification: string | null
+          overall_factor: number | null
+          resume: string | null
+          reward_factor: number | null
+          risk_factor: number | null
+          strengths: string | null
+          weaknesses: string | null
+        }
+        Insert: {
+          candidate_name: string
+          created_at?: string
+          email?: string | null
+          fit_score?: number | null
+          id?: string
+          justification?: string | null
+          overall_factor?: number | null
+          resume?: string | null
+          reward_factor?: number | null
+          risk_factor?: number | null
+          strengths?: string | null
+          weaknesses?: string | null
+        }
+        Update: {
+          candidate_name?: string
+          created_at?: string
+          email?: string | null
+          fit_score?: number | null
+          id?: string
+          justification?: string | null
+          overall_factor?: number | null
+          resume?: string | null
+          reward_factor?: number | null
+          risk_factor?: number | null
+          strengths?: string | null
+          weaknesses?: string | null
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never

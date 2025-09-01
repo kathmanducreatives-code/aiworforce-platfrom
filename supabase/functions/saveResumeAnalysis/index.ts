@@ -1,6 +1,6 @@
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
@@ -80,10 +80,48 @@ serve(async (req) => {
 
     console.log('Successfully saved analysis data to Google Sheets');
 
+    // Also persist results to Supabase database
+    const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+    const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+    const supabase = createClient(supabaseUrl, serviceKey);
+
+    const toNum = (v: any): number => {
+      if (v === null || v === undefined) return 0;
+      const s = String(v).toLowerCase().trim();
+      if (s.includes('high')) return 8;
+      if (s.includes('medium')) return 5;
+      if (s.includes('low')) return 2;
+      const n = Number(s);
+      return Number.isFinite(n) ? n : 0;
+    };
+
+    const dbRows = analysisData.map((item: any) => {
+      const candidateName = item.candidateName ?? [item.firstName, item.lastName].filter(Boolean).join(' ').trim();
+      return {
+        resume: item.resume ?? null,
+        candidate_name: candidateName || 'Unknown',
+        email: item.email ?? null,
+        strengths: item.strengths ?? null,
+        weaknesses: item.weaknesses ?? null,
+        risk_factor: toNum(item.riskFactor),
+        reward_factor: toNum(item.rewardFactor),
+        fit_score: toNum(item.fitScore ?? item.overallFactor),
+        overall_factor: toNum(item.overallFactor ?? item.fitScore),
+        justification: item.justification ?? null,
+      };
+    });
+
+    const { error: insertError } = await supabase.from('resume_analyses').insert(dbRows);
+    if (insertError) {
+      console.error('Failed to insert into resume_analyses:', insertError);
+    } else {
+      console.log(`Inserted ${dbRows.length} rows into resume_analyses`);
+    }
+
     return new Response(
       JSON.stringify({
         success: true,
-        message: `Successfully saved ${analysisData.length} analysis results to Google Sheets`,
+        message: `Successfully saved ${analysisData.length} analysis results to Google Sheets and database`,
       }),
       {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
