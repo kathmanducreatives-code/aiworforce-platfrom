@@ -325,7 +325,7 @@ const Dashboard = () => {
                     <p className="text-sm text-muted-foreground mt-1">{resume.resume}</p>
                   </div>
                   <Badge className={getFactorBadgeColor(resume.fitScore)}>
-                    {resume.fitScoreText || 'Unknown'}
+                    Score: {resume.fitScore}/10
                   </Badge>
                 </div>
                 <div className="flex items-center gap-4 text-sm text-muted-foreground">
@@ -351,10 +351,13 @@ const Dashboard = () => {
                     </Badge>
                   </div>
                   <div>
-                    <p className="text-xs font-medium text-muted-foreground mb-2">Overall Score</p>
-                    <Badge variant="outline" className={`${getScoreColor(resume.overallScore || 'Unknown')}`}>
-                      {resume.overallScore || 'Unknown'}
-                    </Badge>
+                    <p className="text-xs font-medium text-muted-foreground mb-1">Overall Score</p>
+                    <div className="flex items-center gap-2">
+                      <Progress value={resume.overallFactor * 10} className="h-2" />
+                      <span className={`text-sm font-bold ${getFactorColor(resume.overallFactor)}`}>
+                        {resume.overallFactor}/10
+                      </span>
+                    </div>
                   </div>
                 </div>
 
