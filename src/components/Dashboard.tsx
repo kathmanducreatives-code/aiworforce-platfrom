@@ -20,7 +20,8 @@ import {
   Filter,
   ChevronDown,
   ChevronUp,
-  RefreshCw
+  RefreshCw,
+  Trash2
 } from "lucide-react";
 
 const Dashboard = () => {
@@ -116,6 +117,42 @@ const Dashboard = () => {
       }
       return newSet;
     });
+  };
+
+  const handleDelete = async (resumeId: string) => {
+    // Optimistically remove from UI
+    const resumeToDelete = resumeData.find(r => r.id === resumeId);
+    if (!resumeToDelete) return;
+    
+    setResumeData(prev => prev.filter(r => r.id !== resumeId));
+    
+    try {
+      const { error } = await supabase
+        .from('resume_analyses')
+        .delete()
+        .eq('id', resumeId);
+      
+      if (error) {
+        throw new Error(error.message);
+      }
+      
+      toast({
+        title: "Success",
+        description: "Resume analysis deleted successfully.",
+      });
+    } catch (error) {
+      // Restore the item on error
+      setResumeData(prev => [...prev, resumeToDelete].sort((a, b) => 
+        new Date(b.date || 0).getTime() - new Date(a.date || 0).getTime()
+      ));
+      
+      console.error('Error deleting resume:', error);
+      toast({
+        title: "Error",
+        description: "Failed to delete resume analysis. Please try again.",
+        variant: "destructive",
+      });
+    }
   };
 
   const getFactorColor = (factor: number) => {
@@ -344,6 +381,14 @@ const Dashboard = () => {
                   <Button size="sm" variant="outline" className="flex-1">
                     <Download className="h-4 w-4 mr-2" />
                     Download
+                  </Button>
+                  <Button 
+                    size="sm" 
+                    variant="outline" 
+                    onClick={() => handleDelete(resume.id!)}
+                    className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                  >
+                    <Trash2 className="h-4 w-4" />
                   </Button>
                 </div>
               </CardContent>

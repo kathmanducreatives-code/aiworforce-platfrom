@@ -19,13 +19,13 @@ export type Database = {
           candidate_name: string
           created_at: string
           email: string | null
-          fit_score: number | null
+          fit_score: Json | null
           id: string
           justification: string | null
-          overall_factor: number | null
+          overall_factor: Json | null
           resume: string | null
-          reward_factor: number | null
-          risk_factor: number | null
+          reward_factor: Json | null
+          risk_factor: Json | null
           strengths: string | null
           weaknesses: string | null
         }
@@ -33,13 +33,13 @@ export type Database = {
           candidate_name: string
           created_at?: string
           email?: string | null
-          fit_score?: number | null
+          fit_score?: Json | null
           id?: string
           justification?: string | null
-          overall_factor?: number | null
+          overall_factor?: Json | null
           resume?: string | null
-          reward_factor?: number | null
-          risk_factor?: number | null
+          reward_factor?: Json | null
+          risk_factor?: Json | null
           strengths?: string | null
           weaknesses?: string | null
         }
@@ -47,13 +47,13 @@ export type Database = {
           candidate_name?: string
           created_at?: string
           email?: string | null
-          fit_score?: number | null
+          fit_score?: Json | null
           id?: string
           justification?: string | null
-          overall_factor?: number | null
+          overall_factor?: Json | null
           resume?: string | null
-          reward_factor?: number | null
-          risk_factor?: number | null
+          reward_factor?: Json | null
+          risk_factor?: Json | null
           strengths?: string | null
           weaknesses?: string | null
         }
