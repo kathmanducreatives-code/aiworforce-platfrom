@@ -49,15 +49,34 @@ const Dashboard = () => {
 
       console.log('Fetched resume data raw payload:', data);
 
-      // Normalize API response shape and values
-      const convertFactorToNumber = (factor: any): number => {
-        if (factor === null || factor === undefined) return 0;
-        const str = String(factor).toLowerCase().trim();
+      // Helper functions to parse JSON data
+      const parseFactorScore = (factor: any): string => {
+        if (!factor) return 'Unknown';
+        if (typeof factor === 'string') return factor;
+        if (typeof factor === 'object' && factor.score) return factor.score;
+        return 'Unknown';
+      };
+
+      const parseListData = (data: any): string[] => {
+        if (!data) return [];
+        if (typeof data === 'string') {
+          try {
+            const parsed = JSON.parse(data);
+            return Array.isArray(parsed) ? parsed : [data];
+          } catch {
+            return [data];
+          }
+        }
+        if (Array.isArray(data)) return data;
+        return [String(data)];
+      };
+
+      const convertScoreToNumber = (score: string): number => {
+        const str = score.toLowerCase().trim();
         if (str.includes('high')) return 8;
         if (str.includes('medium')) return 5;
         if (str.includes('low')) return 2;
-        const n = Number(str);
-        return Number.isFinite(n) ? n : 0;
+        return 5; // default to medium
       };
 
       const rows = Array.isArray(data) ? data : [];
@@ -68,10 +87,10 @@ const Dashboard = () => {
       }
 
       const normalized: ResumeAnalysis[] = rows.map((row: any, index: number) => {
-        const rf = row.risk_factor;
-        const rwf = row.reward_factor;
-        const fit = row.fit_score;
-        const overall = row.overall_factor ?? fit;
+        const riskScore = parseFactorScore(row.risk_factor);
+        const rewardScore = parseFactorScore(row.reward_factor);
+        const fitScore = parseFactorScore(row.fit_score);
+        const overallScore = parseFactorScore(row.overall_factor) || fitScore;
 
         return {
           id: row.id ?? `analysis-${index}`,
@@ -79,13 +98,18 @@ const Dashboard = () => {
           resume: row.resume ?? '',
           candidateName: row.candidate_name || 'Unknown',
           email: row.email ?? '',
-          strengths: row.strengths ?? '',
-          weaknesses: row.weaknesses ?? '',
-          riskFactor: typeof rf === 'number' ? rf : convertFactorToNumber(rf),
-          rewardFactor: typeof rwf === 'number' ? rwf : convertFactorToNumber(rwf),
-          fitScore: typeof fit === 'number' ? fit : convertFactorToNumber(fit),
-          overallFactor: typeof overall === 'number' ? overall : convertFactorToNumber(overall),
+          strengths: parseListData(row.strengths),
+          weaknesses: parseListData(row.weaknesses),
+          riskFactor: convertScoreToNumber(riskScore),
+          rewardFactor: convertScoreToNumber(rewardScore),
+          fitScore: convertScoreToNumber(fitScore),
+          overallFactor: convertScoreToNumber(overallScore),
           justification: row.justification ?? '',
+          // Store original score strings for display
+          riskScore,
+          rewardScore,
+          fitScoreText: fitScore,
+          overallScore,
         };
       });
 
@@ -167,6 +191,14 @@ const Dashboard = () => {
     if (factor >= 6) return 'bg-blue-100 text-blue-800';
     if (factor >= 4) return 'bg-yellow-100 text-yellow-800';
     return 'bg-red-100 text-red-800';
+  };
+
+  const getScoreColor = (score: string) => {
+    const lowerScore = score.toLowerCase();
+    if (lowerScore.includes('high')) return 'border-green-200 text-green-800 bg-green-50';
+    if (lowerScore.includes('medium')) return 'border-blue-200 text-blue-800 bg-blue-50';
+    if (lowerScore.includes('low')) return 'border-yellow-200 text-yellow-800 bg-yellow-50';
+    return 'border-gray-200 text-gray-600 bg-gray-50';
   };
 
   const filteredResumes = resumeData.filter(resume => {
@@ -293,7 +325,7 @@ const Dashboard = () => {
                     <p className="text-sm text-muted-foreground mt-1">{resume.resume}</p>
                   </div>
                   <Badge className={getFactorBadgeColor(resume.fitScore)}>
-                    Score: {resume.fitScore}/10
+                    {resume.fitScoreText || 'Unknown'}
                   </Badge>
                 </div>
                 <div className="flex items-center gap-4 text-sm text-muted-foreground">
@@ -307,47 +339,60 @@ const Dashboard = () => {
                 {/* Factor Scores */}
                 <div className="grid grid-cols-3 gap-4">
                   <div>
-                    <p className="text-xs text-muted-foreground mb-1">Risk Factor</p>
-                    <div className="flex items-center gap-2">
-                      <Progress value={resume.riskFactor * 10} className="h-2" />
-                      <span className={`text-sm font-bold ${getFactorColor(resume.riskFactor)}`}>
-                        {resume.riskFactor}/10
-                      </span>
-                    </div>
+                    <p className="text-xs font-medium text-muted-foreground mb-2">Risk Factor</p>
+                    <Badge variant="outline" className={`${getScoreColor(resume.riskScore || 'Unknown')}`}>
+                      {resume.riskScore || 'Unknown'}
+                    </Badge>
                   </div>
                   <div>
-                    <p className="text-xs text-muted-foreground mb-1">Reward Factor</p>
-                    <div className="flex items-center gap-2">
-                      <Progress value={resume.rewardFactor * 10} className="h-2" />
-                      <span className={`text-sm font-bold ${getFactorColor(resume.rewardFactor)}`}>
-                        {resume.rewardFactor}/10
-                      </span>
-                    </div>
+                    <p className="text-xs font-medium text-muted-foreground mb-2">Reward Factor</p>
+                    <Badge variant="outline" className={`${getScoreColor(resume.rewardScore || 'Unknown')}`}>
+                      {resume.rewardScore || 'Unknown'}
+                    </Badge>
                   </div>
                   <div>
-                    <p className="text-xs text-muted-foreground mb-1">Overall Factor</p>
-                    <div className="flex items-center gap-2">
-                      <Progress value={resume.overallFactor * 10} className="h-2" />
-                      <span className={`text-sm font-bold ${getFactorColor(resume.overallFactor)}`}>
-                        {resume.overallFactor}/10
-                      </span>
-                    </div>
+                    <p className="text-xs font-medium text-muted-foreground mb-2">Overall Score</p>
+                    <Badge variant="outline" className={`${getScoreColor(resume.overallScore || 'Unknown')}`}>
+                      {resume.overallScore || 'Unknown'}
+                    </Badge>
                   </div>
                 </div>
 
                 {/* Strengths & Weaknesses */}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
-                    <p className="text-sm font-medium text-foreground mb-2 text-green-700">Strengths</p>
-                    <p className="text-sm text-muted-foreground bg-green-50 p-2 rounded">
-                      {resume.strengths || 'No strengths listed'}
-                    </p>
+                    <p className="text-sm font-medium text-green-700 mb-3">Strengths</p>
+                    <div className="bg-green-50 p-3 rounded-lg">
+                      {resume.strengths && resume.strengths.length > 0 ? (
+                        <ul className="text-sm text-muted-foreground space-y-1">
+                          {resume.strengths.map((strength, index) => (
+                            <li key={index} className="flex items-start">
+                              <span className="text-green-600 mr-2">•</span>
+                              <span>{strength}</span>
+                            </li>
+                          ))}
+                        </ul>
+                      ) : (
+                        <p className="text-sm text-muted-foreground italic">No strengths listed</p>
+                      )}
+                    </div>
                   </div>
                   <div>
-                    <p className="text-sm font-medium text-foreground mb-2 text-red-700">Weaknesses</p>
-                    <p className="text-sm text-muted-foreground bg-red-50 p-2 rounded">
-                      {resume.weaknesses || 'No weaknesses listed'}
-                    </p>
+                    <p className="text-sm font-medium text-red-700 mb-3">Weaknesses</p>
+                    <div className="bg-red-50 p-3 rounded-lg">
+                      {resume.weaknesses && resume.weaknesses.length > 0 ? (
+                        <ul className="text-sm text-muted-foreground space-y-1">
+                          {resume.weaknesses.map((weakness, index) => (
+                            <li key={index} className="flex items-start">
+                              <span className="text-red-600 mr-2">•</span>
+                              <span>{weakness}</span>
+                            </li>
+                          ))}
+                        </ul>
+                      ) : (
+                        <p className="text-sm text-muted-foreground italic">No weaknesses listed</p>
+                      )}
+                    </div>
                   </div>
                 </div>
 

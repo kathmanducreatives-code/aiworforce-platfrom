@@ -4,13 +4,18 @@ export interface ResumeAnalysis {
   resume: string;
   candidateName: string;
   email: string;
-  strengths: string;
-  weaknesses: string;
+  strengths: string[];
+  weaknesses: string[];
   riskFactor: number;
   rewardFactor: number;
   fitScore: number;
   overallFactor: number;
   justification: string;
+  // New display fields for text scores
+  riskScore?: string;
+  rewardScore?: string;
+  fitScoreText?: string;
+  overallScore?: string;
 }
 
 export interface AnalysisResult {
