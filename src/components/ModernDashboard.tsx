@@ -285,56 +285,56 @@ const ModernDashboard = () => {
 
           {/* Statistics Cards */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-            <Card className="border-0 shadow-sm bg-white">
+            <Card className="border-0 shadow-sm bg-white hover:shadow-md transition-all duration-200 hover:-translate-y-1">
               <CardContent className="p-6">
                 <div className="flex items-center justify-between">
                   <div>
                     <p className="text-sm font-medium text-muted-foreground">Total Resumes</p>
                     <p className="text-3xl font-bold text-foreground mt-2">{stats.total}</p>
                   </div>
-                  <div className="h-12 w-12 bg-blue-50 rounded-xl flex items-center justify-center">
+                  <div className="h-12 w-12 bg-blue-50 rounded-xl flex items-center justify-center transition-colors hover:bg-blue-100">
                     <FileText className="h-6 w-6 text-blue-600" />
                   </div>
                 </div>
               </CardContent>
             </Card>
 
-            <Card className="border-0 shadow-sm bg-white">
+            <Card className="border-0 shadow-sm bg-white hover:shadow-md transition-all duration-200 hover:-translate-y-1">
               <CardContent className="p-6">
                 <div className="flex items-center justify-between">
                   <div>
                     <p className="text-sm font-medium text-muted-foreground">Analyzed</p>
                     <p className="text-3xl font-bold text-foreground mt-2">{stats.analyzed}</p>
                   </div>
-                  <div className="h-12 w-12 bg-emerald-50 rounded-xl flex items-center justify-center">
+                  <div className="h-12 w-12 bg-emerald-50 rounded-xl flex items-center justify-center transition-colors hover:bg-emerald-100">
                     <CheckCircle className="h-6 w-6 text-emerald-600" />
                   </div>
                 </div>
               </CardContent>
             </Card>
 
-            <Card className="border-0 shadow-sm bg-white">
+            <Card className="border-0 shadow-sm bg-white hover:shadow-md transition-all duration-200 hover:-translate-y-1">
               <CardContent className="p-6">
                 <div className="flex items-center justify-between">
                   <div>
                     <p className="text-sm font-medium text-muted-foreground">High Matches</p>
                     <p className="text-3xl font-bold text-foreground mt-2">{stats.highScore}</p>
                   </div>
-                  <div className="h-12 w-12 bg-amber-50 rounded-xl flex items-center justify-center">
+                  <div className="h-12 w-12 bg-amber-50 rounded-xl flex items-center justify-center transition-colors hover:bg-amber-100">
                     <TrendingUp className="h-6 w-6 text-amber-600" />
                   </div>
                 </div>
               </CardContent>
             </Card>
 
-            <Card className="border-0 shadow-sm bg-white">
+            <Card className="border-0 shadow-sm bg-white hover:shadow-md transition-all duration-200 hover:-translate-y-1">
               <CardContent className="p-6">
                 <div className="flex items-center justify-between">
                   <div>
                     <p className="text-sm font-medium text-muted-foreground">Avg Score</p>
                     <p className="text-3xl font-bold text-foreground mt-2">{stats.avgScore}</p>
                   </div>
-                  <div className="h-12 w-12 bg-purple-50 rounded-xl flex items-center justify-center">
+                  <div className="h-12 w-12 bg-purple-50 rounded-xl flex items-center justify-center transition-colors hover:bg-purple-100">
                     <Users className="h-6 w-6 text-purple-600" />
                   </div>
                 </div>
@@ -416,7 +416,7 @@ const ModernDashboard = () => {
               {paginatedResumes.map((resume) => (
                 <TableRow 
                   key={resume.id} 
-                  className="border-b border-border hover:bg-gray-50/50 cursor-pointer"
+                  className="border-b border-border hover:bg-gray-50/50 cursor-pointer transition-all duration-200 hover:shadow-sm animate-fade-in"
                   onClick={() => openDetailsPanel(resume)}
                 >
                   <TableCell onClick={(e) => e.stopPropagation()}>
@@ -475,17 +475,17 @@ const ModernDashboard = () => {
                           <MoreVertical className="h-4 w-4" />
                         </Button>
                       </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end" className="bg-white">
-                        <DropdownMenuItem className="gap-2">
+                      <DropdownMenuContent align="end" className="bg-white border border-border shadow-lg z-50 w-40">
+                        <DropdownMenuItem className="gap-2 hover:bg-gray-100 cursor-pointer">
                           <Eye className="h-4 w-4" />
                           View Details
                         </DropdownMenuItem>
-                        <DropdownMenuItem className="gap-2">
+                        <DropdownMenuItem className="gap-2 hover:bg-gray-100 cursor-pointer">
                           <Download className="h-4 w-4" />
                           Download Resume
                         </DropdownMenuItem>
                         <DropdownMenuItem 
-                          className="gap-2 text-red-600"
+                          className="gap-2 text-red-600 hover:bg-red-50 hover:text-red-700 cursor-pointer"
                           onClick={() => handleDelete(resume.id!)}
                         >
                           <Trash2 className="h-4 w-4" />
@@ -543,10 +543,10 @@ const ModernDashboard = () => {
 
       {/* Details Side Panel */}
       <Sheet open={isDetailsPanelOpen} onOpenChange={setIsDetailsPanelOpen}>
-        <SheetContent className="w-[600px] sm:w-[700px] bg-white p-0">
+        <SheetContent className="w-[600px] sm:w-[700px] bg-white p-0 flex flex-col overflow-hidden">
           {selectedCandidate && (
             <>
-              <SheetHeader className="p-6 border-b border-border">
+              <SheetHeader className="p-6 border-b border-border flex-shrink-0">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-3">
                     <div className="h-12 w-12 bg-primary/10 rounded-full flex items-center justify-center">
@@ -567,112 +567,114 @@ const ModernDashboard = () => {
                     variant="ghost"
                     size="sm"
                     onClick={() => setIsDetailsPanelOpen(false)}
-                    className="h-8 w-8 p-0"
+                    className="h-8 w-8 p-0 hover:bg-gray-100 transition-colors"
                   >
                     <X className="h-4 w-4" />
                   </Button>
                 </div>
               </SheetHeader>
 
-              <ScrollArea className="flex-1 p-6">
-                <div className="space-y-6">
-                  {/* Score Overview */}
-                  <div className="grid grid-cols-3 gap-4">
-                    <Card className="p-4 border-0 bg-gray-50">
-                      <div className="text-center">
-                        <p className="text-sm font-medium text-muted-foreground mb-2">Risk Factor</p>
-                        <Badge className={getRiskBadgeStyle(selectedCandidate.riskScore || 'Unknown')}>
-                          {selectedCandidate.riskScore || 'Unknown'}
-                        </Badge>
-                      </div>
-                    </Card>
-                    <Card className="p-4 border-0 bg-gray-50">
-                      <div className="text-center">
-                        <p className="text-sm font-medium text-muted-foreground mb-2">Reward Factor</p>
-                        <Badge className={getScoreBadgeStyle(selectedCandidate.rewardScore || 'Unknown')}>
-                          {selectedCandidate.rewardScore || 'Unknown'}
-                        </Badge>
-                      </div>
-                    </Card>
-                    <Card className="p-4 border-0 bg-gray-50">
-                      <div className="text-center">
-                        <p className="text-sm font-medium text-muted-foreground mb-2">Overall Score</p>
-                        <p className="text-2xl font-bold text-foreground">{selectedCandidate.overallFactor}/10</p>
-                      </div>
-                    </Card>
-                  </div>
+              <div className="flex-1 overflow-hidden">
+                <ScrollArea className="h-full">
+                  <div className="p-6 space-y-6">
+                    {/* Score Overview */}
+                    <div className="grid grid-cols-3 gap-4">
+                      <Card className="p-4 border-0 bg-gray-50 hover:bg-gray-100 transition-colors">
+                        <div className="text-center">
+                          <p className="text-sm font-medium text-muted-foreground mb-2">Risk Factor</p>
+                          <Badge className={getRiskBadgeStyle(selectedCandidate.riskScore || 'Unknown')}>
+                            {selectedCandidate.riskScore || 'Unknown'}
+                          </Badge>
+                        </div>
+                      </Card>
+                      <Card className="p-4 border-0 bg-gray-50 hover:bg-gray-100 transition-colors">
+                        <div className="text-center">
+                          <p className="text-sm font-medium text-muted-foreground mb-2">Reward Factor</p>
+                          <Badge className={getScoreBadgeStyle(selectedCandidate.rewardScore || 'Unknown')}>
+                            {selectedCandidate.rewardScore || 'Unknown'}
+                          </Badge>
+                        </div>
+                      </Card>
+                      <Card className="p-4 border-0 bg-gray-50 hover:bg-gray-100 transition-colors">
+                        <div className="text-center">
+                          <p className="text-sm font-medium text-muted-foreground mb-2">Overall Score</p>
+                          <p className="text-2xl font-bold text-foreground">{selectedCandidate.overallFactor}/10</p>
+                        </div>
+                      </Card>
+                    </div>
 
-                  {/* Strengths */}
-                  <div>
-                    <h3 className="font-semibold text-foreground mb-3 flex items-center gap-2">
-                      <CheckCircle className="h-5 w-5 text-emerald-600" />
-                      Strengths
-                    </h3>
-                    <div className="bg-emerald-50 border border-emerald-100 rounded-lg p-4">
-                      {selectedCandidate.strengths && selectedCandidate.strengths.length > 0 ? (
-                        <ul className="space-y-2">
-                          {selectedCandidate.strengths.map((strength, index) => (
-                            <li key={index} className="flex items-start gap-2 text-sm">
-                              <span className="text-emerald-600 mt-0.5">•</span>
-                              <span className="text-emerald-900">{strength}</span>
-                            </li>
-                          ))}
-                        </ul>
-                      ) : (
-                        <p className="text-sm text-emerald-700 italic">No strengths identified</p>
-                      )}
+                    {/* Strengths */}
+                    <div className="animate-fade-in">
+                      <h3 className="font-semibold text-foreground mb-3 flex items-center gap-2">
+                        <CheckCircle className="h-5 w-5 text-emerald-600" />
+                        Strengths
+                      </h3>
+                      <div className="bg-emerald-50 border border-emerald-100 rounded-lg p-4 hover:bg-emerald-100/50 transition-colors">
+                        {selectedCandidate.strengths && selectedCandidate.strengths.length > 0 ? (
+                          <ul className="space-y-3">
+                            {selectedCandidate.strengths.map((strength, index) => (
+                              <li key={index} className="flex items-start gap-3 text-sm animate-fade-in" style={{animationDelay: `${index * 0.1}s`}}>
+                                <span className="text-emerald-600 mt-1 text-xs">●</span>
+                                <span className="text-emerald-900 leading-relaxed">{strength}</span>
+                              </li>
+                            ))}
+                          </ul>
+                        ) : (
+                          <p className="text-sm text-emerald-700 italic">No strengths identified</p>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Weaknesses */}
+                    <div className="animate-fade-in">
+                      <h3 className="font-semibold text-foreground mb-3 flex items-center gap-2">
+                        <AlertTriangle className="h-5 w-5 text-red-600" />
+                        Areas for Improvement
+                      </h3>
+                      <div className="bg-red-50 border border-red-100 rounded-lg p-4 hover:bg-red-100/50 transition-colors">
+                        {selectedCandidate.weaknesses && selectedCandidate.weaknesses.length > 0 ? (
+                          <ul className="space-y-3">
+                            {selectedCandidate.weaknesses.map((weakness, index) => (
+                              <li key={index} className="flex items-start gap-3 text-sm animate-fade-in" style={{animationDelay: `${index * 0.1}s`}}>
+                                <span className="text-red-600 mt-1 text-xs">●</span>
+                                <span className="text-red-900 leading-relaxed">{weakness}</span>
+                              </li>
+                            ))}
+                          </ul>
+                        ) : (
+                          <p className="text-sm text-red-700 italic">No weaknesses identified</p>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* AI Justification */}
+                    <div className="animate-fade-in">
+                      <h3 className="font-semibold text-foreground mb-3">AI Analysis Summary</h3>
+                      <div className="bg-blue-50 border border-blue-100 rounded-lg p-4 hover:bg-blue-100/50 transition-colors">
+                        <p className="text-sm text-blue-900 leading-relaxed">
+                          {selectedCandidate.justification || 'No detailed analysis available'}
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* Action Buttons */}
+                    <div className="flex gap-3 pt-6 border-t border-border sticky bottom-0 bg-white">
+                      <Button className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white gap-2 transition-all hover:scale-105">
+                        <CheckCircle className="h-4 w-4" />
+                        Accept Candidate
+                      </Button>
+                      <Button variant="outline" className="flex-1 text-red-600 border-red-200 hover:bg-red-50 gap-2 transition-all hover:scale-105">
+                        <X className="h-4 w-4" />
+                        Reject
+                      </Button>
+                      <Button variant="outline" className="gap-2 transition-all hover:scale-105">
+                        <Download className="h-4 w-4" />
+                        Download
+                      </Button>
                     </div>
                   </div>
-
-                  {/* Weaknesses */}
-                  <div>
-                    <h3 className="font-semibold text-foreground mb-3 flex items-center gap-2">
-                      <AlertTriangle className="h-5 w-5 text-red-600" />
-                      Areas for Improvement
-                    </h3>
-                    <div className="bg-red-50 border border-red-100 rounded-lg p-4">
-                      {selectedCandidate.weaknesses && selectedCandidate.weaknesses.length > 0 ? (
-                        <ul className="space-y-2">
-                          {selectedCandidate.weaknesses.map((weakness, index) => (
-                            <li key={index} className="flex items-start gap-2 text-sm">
-                              <span className="text-red-600 mt-0.5">•</span>
-                              <span className="text-red-900">{weakness}</span>
-                            </li>
-                          ))}
-                        </ul>
-                      ) : (
-                        <p className="text-sm text-red-700 italic">No weaknesses identified</p>
-                      )}
-                    </div>
-                  </div>
-
-                  {/* AI Justification */}
-                  <div>
-                    <h3 className="font-semibold text-foreground mb-3">AI Analysis Summary</h3>
-                    <div className="bg-blue-50 border border-blue-100 rounded-lg p-4">
-                      <p className="text-sm text-blue-900 leading-relaxed">
-                        {selectedCandidate.justification || 'No detailed analysis available'}
-                      </p>
-                    </div>
-                  </div>
-
-                  {/* Action Buttons */}
-                  <div className="flex gap-3 pt-4 border-t border-border">
-                    <Button className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white gap-2">
-                      <CheckCircle className="h-4 w-4" />
-                      Accept Candidate
-                    </Button>
-                    <Button variant="outline" className="flex-1 text-red-600 border-red-200 hover:bg-red-50 gap-2">
-                      <X className="h-4 w-4" />
-                      Reject
-                    </Button>
-                    <Button variant="outline" className="gap-2">
-                      <Download className="h-4 w-4" />
-                      Download
-                    </Button>
-                  </div>
-                </div>
-              </ScrollArea>
+                </ScrollArea>
+              </div>
             </>
           )}
         </SheetContent>
