@@ -42,7 +42,7 @@ export const n8nApi = {
     
     // Add recruiter requirements if provided
     if (recruiterRequirements) {
-      formData.append('recruiterRequirements', recruiterRequirements);
+      formData.append('Recruiter Requirements', recruiterRequirements);
     }
     
     // Debug logging - print FormData contents
