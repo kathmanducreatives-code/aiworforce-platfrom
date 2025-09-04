@@ -543,7 +543,7 @@ const ModernDashboard = () => {
 
       {/* Details Side Panel */}
       <Sheet open={isDetailsPanelOpen} onOpenChange={setIsDetailsPanelOpen}>
-        <SheetContent className="w-[600px] sm:w-[700px] bg-white p-0 flex flex-col overflow-hidden">
+        <SheetContent className="w-full max-w-[500px] sm:max-w-[600px] lg:max-w-[700px] bg-white p-0 flex flex-col overflow-hidden">
           {selectedCandidate && (
             <>
               <SheetHeader className="p-6 border-b border-border flex-shrink-0">
