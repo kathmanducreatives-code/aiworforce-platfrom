@@ -3,6 +3,8 @@ import { Upload, FileText, X, CheckCircle, AlertCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
+import { Textarea } from "@/components/ui/textarea";
+import { Label } from "@/components/ui/label";
 import { useToast } from "@/components/ui/use-toast";
 import { n8nApi } from "@/services/n8nApi";
 import { supabase } from "@/integrations/supabase/client";
@@ -21,6 +23,7 @@ interface UploadedFile {
 const ResumeUpload = () => {
   const [files, setFiles] = useState<UploadedFile[]>([]);
   const [isDragOver, setIsDragOver] = useState(false);
+  const [recruiterRequirements, setRecruiterRequirements] = useState("");
   const { toast } = useToast();
 
   const handleDragOver = useCallback((e: React.DragEvent) => {
@@ -73,6 +76,15 @@ const ResumeUpload = () => {
       return;
     }
 
+    if (!recruiterRequirements.trim()) {
+      toast({ 
+        title: 'Recruiter Requirements Required', 
+        description: 'Please fill in the job requirements before analyzing resumes.',
+        variant: 'destructive'
+      });
+      return;
+    }
+
     console.log('Starting resume analysis...');
     setFiles(prev => prev.map(f =>
       readyFiles.some(r => r.id === f.id)
@@ -93,7 +105,7 @@ const ResumeUpload = () => {
 
       // Send to n8n for AI analysis
       console.log('Sending files to n8n for analysis...');
-      const analysisResponse = await n8nApi.uploadResumes(readyFiles.map(f => f.file));
+      const analysisResponse = await n8nApi.uploadResumes(readyFiles.map(f => f.file), recruiterRequirements);
       console.log('Analysis response from n8n:', analysisResponse);
 
       // Update progress
@@ -232,6 +244,26 @@ const ResumeUpload = () => {
               </div>
             </div>
 
+            {/* Recruiter Requirements Section */}
+            <div className="mt-8 space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="recruiter-requirements" className="text-base font-semibold text-foreground">
+                  Recruiter Requirements *
+                </Label>
+                <p className="text-sm text-muted-foreground">
+                  Describe the job requirements, qualifications, skills, education, and experience needed for this role.
+                </p>
+                <Textarea
+                  id="recruiter-requirements"
+                  placeholder="Enter job description, required skills, qualifications, education, experience, and any other requirements for this position..."
+                  value={recruiterRequirements}
+                  onChange={(e) => setRecruiterRequirements(e.target.value)}
+                  className="min-h-[120px] resize-none"
+                  required
+                />
+              </div>
+            </div>
+
             {/* File List */}
             {files.length > 0 && (
               <div className="mt-8 space-y-4">
@@ -281,7 +313,11 @@ const ResumeUpload = () => {
                 
                 {files.some(f => f.status === 'ready') && (
                   <div className="pt-4 border-t border-border">
-                    <Button onClick={analyzeResumes} className="w-full bg-gradient-primary hover:shadow-primary transition-all duration-300">
+                    <Button 
+                      onClick={analyzeResumes} 
+                      className="w-full bg-gradient-primary hover:shadow-primary transition-all duration-300"
+                      disabled={!recruiterRequirements.trim()}
+                    >
                       Analyze Resumes ({files.filter(f => f.status === 'ready').length})
                     </Button>
                   </div>

@@ -27,7 +27,7 @@ export interface N8nError {
 const N8N_WEBHOOK_URL = "https://prassidha.app.n8n.cloud/webhook/4406aa6a-f70a-4d82-b8cc-8c11418c43fe";
 
 export const n8nApi = {
-  async uploadResumes(files: File[]): Promise<UploadResponse> {
+  async uploadResumes(files: File[], recruiterRequirements?: string): Promise<UploadResponse> {
     const formData = new FormData();
     
     // Append all files using the same key for n8n binary array handling
@@ -39,6 +39,11 @@ export const n8nApi = {
     formData.append('fileCount', files.length.toString());
     formData.append('timestamp', new Date().toISOString());
     formData.append('source', 'resume-screening-app');
+    
+    // Add recruiter requirements if provided
+    if (recruiterRequirements) {
+      formData.append('recruiterRequirements', recruiterRequirements);
+    }
     
     // Debug logging - print FormData contents
     console.log('FormData contents before sending to n8n:');
