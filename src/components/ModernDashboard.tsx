@@ -452,15 +452,9 @@ const ModernDashboard = () => {
                     </Badge>
                   </TableCell>
                   <TableCell>
-                    <div className="flex items-center gap-2">
-                      <span className="font-semibold text-foreground">{resume.overallFactor}/10</span>
-                      <div className="w-16 bg-gray-100 rounded-full h-2">
-                        <div 
-                          className="bg-primary rounded-full h-2 transition-all"
-                          style={{ width: `${(resume.overallFactor / 10) * 100}%` }}
-                        />
-                      </div>
-                    </div>
+                    <Badge variant="outline" className={getScoreBadgeStyle(resume.overallScore || 'Unknown')}>
+                      {resume.overallScore || 'Unknown'}
+                    </Badge>
                   </TableCell>
                   <TableCell>
                     <span className="text-sm text-muted-foreground flex items-center gap-1">
