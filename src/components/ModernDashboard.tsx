@@ -106,6 +106,31 @@ const ModernDashboard = () => {
       const rows = Array.isArray(data) ? data : [];
       
       
+      // Helper function to extract score from JSON objects
+      const extractJSONScore = (factor: any): string => {
+        if (!factor) return 'Unknown';
+        
+        // If it's already a string, return it
+        if (typeof factor === 'string') return factor;
+        
+        // If it's a JSON object, extract the score field
+        if (typeof factor === 'object' && factor.score) {
+          return factor.score;
+        }
+        
+        // If it's a stringified JSON, parse it and extract score
+        try {
+          if (typeof factor === 'string') {
+            const parsed = JSON.parse(factor);
+            if (parsed.score) return parsed.score;
+          }
+        } catch {
+          // If parsing fails, return the original value
+        }
+        
+        return 'Unknown';
+      };
+
       const normalized: ResumeAnalysis[] = rows.map((row: any, index: number) => {
         const riskScore = parseFactorScore(row.risk_factor);
         const rewardScore = parseFactorScore(row.reward_factor);
@@ -125,8 +150,8 @@ const ModernDashboard = () => {
           fitScore: fitScore,
           overallFactor: overallScore,
           justification: row.justification ?? '',
-          riskScore: riskScore.toString(),
-          rewardScore: rewardScore.toString(),
+          riskScore: extractJSONScore(row.risk_factor),
+          rewardScore: extractJSONScore(row.reward_factor),
           fitScoreText: fitScore.toString(),
           overallScore: overallScore,
         };
