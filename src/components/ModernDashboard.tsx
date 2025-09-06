@@ -4,6 +4,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Progress } from "@/components/ui/progress";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import type { ResumeAnalysis } from "@/types/ResumeAnalysis";
@@ -75,11 +76,17 @@ const ModernDashboard = () => {
       }
 
       // Helper functions to parse JSON data
-      const parseFactorScore = (factor: any): string => {
-        if (!factor) return 'Unknown';
-        if (typeof factor === 'string') return factor;
-        if (typeof factor === 'object' && factor.score) return factor.score;
-        return 'Unknown';
+      const parseFactorScore = (factor: any): number => {
+        if (!factor) return 0;
+        
+        // Handle simple numeric values
+        if (typeof factor === 'number') return Math.max(0, Math.min(10, Math.round(factor)));
+        if (typeof factor === 'string') {
+          const num = parseFloat(factor);
+          return isNaN(num) ? 0 : Math.max(0, Math.min(10, Math.round(num)));
+        }
+        
+        return 0;
       };
 
       const parseListData = (data: any): string[] => {
@@ -96,24 +103,8 @@ const ModernDashboard = () => {
         return [String(data)];
       };
 
-      const convertScoreToNumber = (score: string): number => {
-        const str = score.toLowerCase().trim();
-        if (str.includes('high')) return 8;
-        if (str.includes('medium')) return 5;
-        if (str.includes('low')) return 2;
-        return 5;
-      };
-
       const rows = Array.isArray(data) ? data : [];
       
-      // Debug logging to see actual database values
-      console.log('Raw database rows:', rows);
-      if (rows.length > 0) {
-        console.log('First row overall_factor:', rows[0].overall_factor);
-        console.log('First row risk_factor:', rows[0].risk_factor);
-        console.log('First row reward_factor:', rows[0].reward_factor);
-        console.log('First row fit_score:', rows[0].fit_score);
-      }
       
       const normalized: ResumeAnalysis[] = rows.map((row: any, index: number) => {
         const riskScore = parseFactorScore(row.risk_factor);
@@ -129,15 +120,15 @@ const ModernDashboard = () => {
           email: row.email ?? '',
           strengths: parseListData(row.strengths),
           weaknesses: parseListData(row.weaknesses),
-          riskFactor: convertScoreToNumber(riskScore),
-          rewardFactor: convertScoreToNumber(rewardScore),
-          fitScore: convertScoreToNumber(fitScore),
-          overallFactor: convertScoreToNumber(overallScore),
+          riskFactor: riskScore,
+          rewardFactor: rewardScore,
+          fitScore: fitScore,
+          overallFactor: overallScore,
           justification: row.justification ?? '',
-          riskScore,
-          rewardScore,
-          fitScoreText: fitScore,
-          overallScore,
+          riskScore: riskScore.toString(),
+          rewardScore: rewardScore.toString(),
+          fitScoreText: fitScore.toString(),
+          overallScore: overallScore,
         };
       });
 
@@ -461,9 +452,15 @@ const ModernDashboard = () => {
                     </Badge>
                   </TableCell>
                   <TableCell>
-                    <Badge variant="outline" className={getScoreBadgeStyle(resume.overallScore || 'Unknown')}>
-                      {resume.overallScore || 'Unknown'}
-                    </Badge>
+                    <div className="flex items-center gap-3 min-w-[120px]">
+                      <Progress 
+                        value={(resume.overallScore || 0) * 10} 
+                        className="flex-1 h-2"
+                      />
+                      <span className="text-sm font-medium text-foreground min-w-[30px]">
+                        {resume.overallScore || 0}/10
+                      </span>
+                    </div>
                   </TableCell>
                   <TableCell>
                     <span className="text-sm text-muted-foreground flex items-center gap-1">

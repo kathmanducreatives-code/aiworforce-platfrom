@@ -50,7 +50,20 @@ const Dashboard = () => {
       console.log('Fetched resume data raw payload:', data);
 
       // Helper functions to parse JSON data
-      const parseFactorScore = (factor: any): string => {
+      const parseFactorScore = (factor: any): number => {
+        if (!factor) return 0;
+        
+        // Handle simple numeric values
+        if (typeof factor === 'number') return Math.max(0, Math.min(10, Math.round(factor)));
+        if (typeof factor === 'string') {
+          const num = parseFloat(factor);
+          return isNaN(num) ? 0 : Math.max(0, Math.min(10, Math.round(num)));
+        }
+        
+        return 0;
+      };
+
+      const parseFactorScoreText = (factor: any): string => {
         if (!factor) return 'Unknown';
         if (typeof factor === 'string') return factor;
         if (typeof factor === 'object' && factor.score) return factor.score;
@@ -69,14 +82,6 @@ const Dashboard = () => {
         }
         if (Array.isArray(data)) return data;
         return [String(data)];
-      };
-
-      const convertScoreToNumber = (score: string): number => {
-        const str = score.toLowerCase().trim();
-        if (str.includes('high')) return 8;
-        if (str.includes('medium')) return 5;
-        if (str.includes('low')) return 2;
-        return 5; // default to medium
       };
 
       const rows = Array.isArray(data) ? data : [];
@@ -100,16 +105,16 @@ const Dashboard = () => {
           email: row.email ?? '',
           strengths: parseListData(row.strengths),
           weaknesses: parseListData(row.weaknesses),
-          riskFactor: convertScoreToNumber(riskScore),
-          rewardFactor: convertScoreToNumber(rewardScore),
-          fitScore: convertScoreToNumber(fitScore),
-          overallFactor: convertScoreToNumber(overallScore),
+          riskFactor: riskScore,
+          rewardFactor: rewardScore,
+          fitScore: fitScore,
+          overallFactor: overallScore,
           justification: row.justification ?? '',
           // Store original score strings for display
-          riskScore,
-          rewardScore,
-          fitScoreText: fitScore,
-          overallScore,
+          riskScore: parseFactorScoreText(row.risk_factor),
+          rewardScore: parseFactorScoreText(row.reward_factor),
+          fitScoreText: parseFactorScoreText(row.fit_score),
+          overallScore: overallScore,
         };
       });
 

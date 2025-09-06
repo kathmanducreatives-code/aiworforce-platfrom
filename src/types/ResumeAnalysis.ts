@@ -15,7 +15,7 @@ export interface ResumeAnalysis {
   riskScore?: string;
   rewardScore?: string;
   fitScoreText?: string;
-  overallScore?: string;
+  overallScore?: number; // Changed from string to number for progress bar
 }
 
 export interface AnalysisResult {
