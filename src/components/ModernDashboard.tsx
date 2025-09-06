@@ -106,6 +106,15 @@ const ModernDashboard = () => {
 
       const rows = Array.isArray(data) ? data : [];
       
+      // Debug logging to see actual database values
+      console.log('Raw database rows:', rows);
+      if (rows.length > 0) {
+        console.log('First row overall_factor:', rows[0].overall_factor);
+        console.log('First row risk_factor:', rows[0].risk_factor);
+        console.log('First row reward_factor:', rows[0].reward_factor);
+        console.log('First row fit_score:', rows[0].fit_score);
+      }
+      
       const normalized: ResumeAnalysis[] = rows.map((row: any, index: number) => {
         const riskScore = parseFactorScore(row.risk_factor);
         const rewardScore = parseFactorScore(row.reward_factor);
