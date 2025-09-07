@@ -33,6 +33,19 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
   Table,
   TableBody,
   TableCell,
@@ -58,6 +71,11 @@ const ModernDashboard = () => {
   const [currentPage, setCurrentPage] = useState(1);
   const [selectedCandidate, setSelectedCandidate] = useState<ResumeAnalysis | null>(null);
   const [isDetailsPanelOpen, setIsDetailsPanelOpen] = useState(false);
+  const [filters, setFilters] = useState({
+    scoreRange: 'all',
+    rewardFactor: 'all',
+    dateRange: 'all'
+  });
   const { toast } = useToast();
 
   const itemsPerPage = 10;
@@ -262,7 +280,36 @@ const ModernDashboard = () => {
       resume.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
       resume.resume.toLowerCase().includes(searchTerm.toLowerCase());
     
-    return matchesSearch;
+    // Score filter
+    const matchesScore = filters.scoreRange === 'all' || (() => {
+      const score = resume.overallScore || 0;
+      switch (filters.scoreRange) {
+        case 'high': return score >= 8;
+        case 'medium': return score >= 4 && score < 8;
+        case 'low': return score < 4;
+        default: return true;
+      }
+    })();
+
+    // Reward factor filter
+    const matchesReward = filters.rewardFactor === 'all' || 
+      resume.rewardScore?.toLowerCase() === filters.rewardFactor.toLowerCase();
+
+    // Date filter
+    const matchesDate = filters.dateRange === 'all' || (() => {
+      const resumeDate = new Date(resume.date || '');
+      const today = new Date();
+      const daysDiff = Math.floor((today.getTime() - resumeDate.getTime()) / (1000 * 60 * 60 * 24));
+      
+      switch (filters.dateRange) {
+        case 'today': return daysDiff === 0;
+        case 'week': return daysDiff <= 7;
+        case 'month': return daysDiff <= 30;
+        default: return true;
+      }
+    })();
+    
+    return matchesSearch && matchesScore && matchesReward && matchesDate;
   });
 
   // Pagination
@@ -379,10 +426,81 @@ const ModernDashboard = () => {
                   className="pl-10 bg-white border-border"
                 />
               </div>
-              <Button variant="outline" size="sm" className="gap-2">
-                <Filter className="h-4 w-4" />
-                Filter
-              </Button>
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button variant="outline" size="sm" className="gap-2">
+                    <Filter className="h-4 w-4" />
+                    Filter
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-80 bg-white border border-border shadow-lg z-50">
+                  <div className="space-y-4">
+                    <h4 className="font-medium text-foreground">Filter Candidates</h4>
+                    
+                    <div className="space-y-2">
+                      <Label htmlFor="score-filter" className="text-sm font-medium text-foreground">
+                        Score Range
+                      </Label>
+                      <Select value={filters.scoreRange} onValueChange={(value) => setFilters(prev => ({ ...prev, scoreRange: value }))}>
+                        <SelectTrigger className="bg-white">
+                          <SelectValue placeholder="Select score range" />
+                        </SelectTrigger>
+                        <SelectContent className="bg-white border border-border shadow-lg z-50">
+                          <SelectItem value="all">All Scores</SelectItem>
+                          <SelectItem value="high">High (8-10)</SelectItem>
+                          <SelectItem value="medium">Medium (4-7)</SelectItem>
+                          <SelectItem value="low">Low (0-3)</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label htmlFor="reward-filter" className="text-sm font-medium text-foreground">
+                        Reward Factor
+                      </Label>
+                      <Select value={filters.rewardFactor} onValueChange={(value) => setFilters(prev => ({ ...prev, rewardFactor: value }))}>
+                        <SelectTrigger className="bg-white">
+                          <SelectValue placeholder="Select reward factor" />
+                        </SelectTrigger>
+                        <SelectContent className="bg-white border border-border shadow-lg z-50">
+                          <SelectItem value="all">All Levels</SelectItem>
+                          <SelectItem value="high">High</SelectItem>
+                          <SelectItem value="medium">Medium</SelectItem>
+                          <SelectItem value="low">Low</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label htmlFor="date-filter" className="text-sm font-medium text-foreground">
+                        Date Range
+                      </Label>
+                      <Select value={filters.dateRange} onValueChange={(value) => setFilters(prev => ({ ...prev, dateRange: value }))}>
+                        <SelectTrigger className="bg-white">
+                          <SelectValue placeholder="Select date range" />
+                        </SelectTrigger>
+                        <SelectContent className="bg-white border border-border shadow-lg z-50">
+                          <SelectItem value="all">All Time</SelectItem>
+                          <SelectItem value="today">Today</SelectItem>
+                          <SelectItem value="week">Last 7 Days</SelectItem>
+                          <SelectItem value="month">Last 30 Days</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    <div className="flex gap-2 pt-2">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => setFilters({ scoreRange: 'all', rewardFactor: 'all', dateRange: 'all' })}
+                        className="flex-1"
+                      >
+                        Clear Filters
+                      </Button>
+                    </div>
+                  </div>
+                </PopoverContent>
+              </Popover>
             </div>
 
             {selectedCandidates.size > 0 && (
