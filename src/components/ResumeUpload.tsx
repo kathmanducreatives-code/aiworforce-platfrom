@@ -24,7 +24,26 @@ const ResumeUpload = () => {
   const [files, setFiles] = useState<UploadedFile[]>([]);
   const [isDragOver, setIsDragOver] = useState(false);
   const [recruiterRequirements, setRecruiterRequirements] = useState("");
+  const [isTyping, setIsTyping] = useState(false);
   const { toast } = useToast();
+
+  // Typing timeout for glow effect
+  const typingTimeoutRef = useState<NodeJS.Timeout | null>(null);
+
+  const handleRequirementsChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    setRecruiterRequirements(e.target.value);
+    setIsTyping(true);
+    
+    // Clear existing timeout
+    if (typingTimeoutRef[0]) {
+      clearTimeout(typingTimeoutRef[0]);
+    }
+    
+    // Set new timeout to stop glow effect after 2 seconds of no typing
+    typingTimeoutRef[1](setTimeout(() => {
+      setIsTyping(false);
+    }, 2000));
+  };
 
   const handleDragOver = useCallback((e: React.DragEvent) => {
     e.preventDefault();
@@ -257,8 +276,20 @@ const ResumeUpload = () => {
                   id="recruiter-requirements"
                   placeholder="Enter job description, required skills, qualifications, education, experience, and any other requirements for this position..."
                   value={recruiterRequirements}
-                  onChange={(e) => setRecruiterRequirements(e.target.value)}
-                  className="min-h-[120px] resize-none"
+                  onChange={handleRequirementsChange}
+                  onFocus={() => setIsTyping(true)}
+                  onBlur={() => {
+                    if (typingTimeoutRef[0]) {
+                      clearTimeout(typingTimeoutRef[0]);
+                    }
+                    setIsTyping(false);
+                  }}
+                  className={`min-h-[120px] resize-none border-2 border-primary/20 transition-all duration-300
+                    ${isTyping 
+                      ? 'glow-typing border-primary/50' 
+                      : 'glow-default border-primary/30'
+                    } 
+                    hover:border-primary/40`}
                   required
                 />
               </div>

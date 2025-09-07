@@ -118,3 +118,44 @@ All colors MUST be HSL.
     @apply bg-background text-foreground;
   }
 }
+
+@layer utilities {
+  /* Dynamic glow animations for textarea */
+  @keyframes glow-pulse {
+    0% {
+      box-shadow: 0 0 15px rgba(99, 102, 241, 0.3), 0 0 30px rgba(99, 102, 241, 0.1);
+    }
+    50% {
+      box-shadow: 0 0 25px rgba(99, 102, 241, 0.5), 0 0 40px rgba(99, 102, 241, 0.2);
+    }
+    100% {
+      box-shadow: 0 0 15px rgba(99, 102, 241, 0.3), 0 0 30px rgba(99, 102, 241, 0.1);
+    }
+  }
+
+  @keyframes typing-glow {
+    0% {
+      box-shadow: 0 0 20px rgba(99, 102, 241, 0.4), 0 0 35px rgba(99, 102, 241, 0.2), 0 0 50px rgba(99, 102, 241, 0.1);
+    }
+    25% {
+      box-shadow: 0 0 25px rgba(16, 185, 129, 0.4), 0 0 40px rgba(16, 185, 129, 0.2), 0 0 55px rgba(16, 185, 129, 0.1);
+    }
+    50% {
+      box-shadow: 0 0 30px rgba(139, 92, 246, 0.4), 0 0 45px rgba(139, 92, 246, 0.2), 0 0 60px rgba(139, 92, 246, 0.1);
+    }
+    75% {
+      box-shadow: 0 0 25px rgba(16, 185, 129, 0.4), 0 0 40px rgba(16, 185, 129, 0.2), 0 0 55px rgba(16, 185, 129, 0.1);
+    }
+    100% {
+      box-shadow: 0 0 20px rgba(99, 102, 241, 0.4), 0 0 35px rgba(99, 102, 241, 0.2), 0 0 50px rgba(99, 102, 241, 0.1);
+    }
+  }
+
+  .glow-default {
+    animation: glow-pulse 3s ease-in-out infinite;
+  }
+
+  .glow-typing {
+    animation: typing-glow 2s ease-in-out infinite;
+  }
+}
