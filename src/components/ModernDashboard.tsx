@@ -619,7 +619,10 @@ const ModernDashboard = () => {
                         </Button>
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end" className="bg-white border border-border shadow-lg z-50 w-40">
-                        <DropdownMenuItem className="gap-2 hover:bg-gray-100 cursor-pointer">
+                        <DropdownMenuItem 
+                          className="gap-2 hover:bg-gray-100 cursor-pointer"
+                          onClick={() => openDetailsPanel(resume)}
+                        >
                           <Eye className="h-4 w-4" />
                           View Details
                         </DropdownMenuItem>
@@ -797,6 +800,23 @@ const ModernDashboard = () => {
                         <p className="text-sm text-blue-900 leading-relaxed">
                           {selectedCandidate.justification || 'No detailed analysis available'}
                         </p>
+                      </div>
+                    </div>
+
+                    {/* Resume Content */}
+                    <div className="animate-fade-in">
+                      <h3 className="font-semibold text-foreground mb-3 flex items-center gap-2">
+                        <FileText className="h-5 w-5 text-gray-600" />
+                        Resume Content
+                      </h3>
+                      <div className="bg-gray-50 border border-gray-200 rounded-lg p-4 max-h-60 overflow-y-auto">
+                        {selectedCandidate.resume ? (
+                          <pre className="text-sm text-gray-800 whitespace-pre-wrap font-mono leading-relaxed">
+                            {selectedCandidate.resume}
+                          </pre>
+                        ) : (
+                          <p className="text-sm text-gray-600 italic">No resume content available</p>
+                        )}
                       </div>
                     </div>
 
