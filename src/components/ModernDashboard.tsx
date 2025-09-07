@@ -253,6 +253,50 @@ const ModernDashboard = () => {
     }
   };
 
+  const handleDownloadResume = async (resume: ResumeAnalysis) => {
+    if (!resume.resume) {
+      toast({
+        title: "Error",
+        description: "No resume file available for download.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    try {
+      // Convert Google Drive share link to direct download link
+      let downloadUrl = resume.resume;
+      
+      // Check if it's a Google Drive link and convert it
+      if (resume.resume.includes('drive.google.com')) {
+        const fileIdMatch = resume.resume.match(/\/d\/([a-zA-Z0-9-_]+)/);
+        if (fileIdMatch) {
+          downloadUrl = `https://drive.google.com/uc?export=download&id=${fileIdMatch[1]}`;
+        }
+      }
+
+      // Create temporary link and trigger download
+      const link = document.createElement('a');
+      link.href = downloadUrl;
+      link.download = `${resume.candidateName}_Resume.pdf`;
+      link.target = '_blank';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+
+      toast({
+        title: "Download Started",
+        description: `Resume for ${resume.candidateName} is being downloaded.`,
+      });
+    } catch (error) {
+      toast({
+        title: "Download Failed",
+        description: "Failed to download resume. Please try again.",
+        variant: "destructive",
+      });
+    }
+  };
+
   const getScoreBadgeStyle = (score: string) => {
     const lowerScore = score.toLowerCase();
     if (lowerScore.includes('high')) return 'bg-emerald-100 text-emerald-800 border-emerald-200';
@@ -626,7 +670,10 @@ const ModernDashboard = () => {
                           <Eye className="h-4 w-4" />
                           View Details
                         </DropdownMenuItem>
-                        <DropdownMenuItem className="gap-2 hover:bg-gray-100 cursor-pointer">
+                        <DropdownMenuItem 
+                          className="gap-2 hover:bg-gray-100 cursor-pointer"
+                          onClick={() => handleDownloadResume(resume)}
+                        >
                           <Download className="h-4 w-4" />
                           Download Resume
                         </DropdownMenuItem>
