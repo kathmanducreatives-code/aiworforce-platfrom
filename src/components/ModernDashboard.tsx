@@ -803,19 +803,37 @@ const ModernDashboard = () => {
                       </div>
                     </div>
 
-                    {/* Resume Content */}
+                    {/* Resume Access */}
                     <div className="animate-fade-in">
                       <h3 className="font-semibold text-foreground mb-3 flex items-center gap-2">
                         <FileText className="h-5 w-5 text-gray-600" />
-                        Resume Content
+                        Resume Document
                       </h3>
-                      <div className="bg-gray-50 border border-gray-200 rounded-lg p-4 max-h-60 overflow-y-auto">
+                      <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-lg p-4 hover:from-blue-100 hover:to-indigo-100 transition-all duration-200">
                         {selectedCandidate.resume ? (
-                          <pre className="text-sm text-gray-800 whitespace-pre-wrap font-mono leading-relaxed">
-                            {selectedCandidate.resume}
-                          </pre>
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-3">
+                              <div className="h-10 w-10 bg-blue-100 rounded-lg flex items-center justify-center">
+                                <FileText className="h-5 w-5 text-blue-600" />
+                              </div>
+                              <div>
+                                <p className="font-medium text-gray-900">Resume Document</p>
+                                <p className="text-sm text-gray-600">View full resume in Google Drive</p>
+                              </div>
+                            </div>
+                            <Button
+                              onClick={() => window.open(selectedCandidate.resume, '_blank')}
+                              className="bg-blue-600 hover:bg-blue-700 text-white gap-2 transition-all hover:scale-105"
+                            >
+                              <ArrowUpRight className="h-4 w-4" />
+                              View Resume
+                            </Button>
+                          </div>
                         ) : (
-                          <p className="text-sm text-gray-600 italic">No resume content available</p>
+                          <div className="text-center py-4">
+                            <FileText className="h-8 w-8 text-gray-400 mx-auto mb-2" />
+                            <p className="text-sm text-gray-600">No resume document available</p>
+                          </div>
                         )}
                       </div>
                     </div>
