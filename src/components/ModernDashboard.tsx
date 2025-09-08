@@ -513,7 +513,7 @@ const ModernDashboard = () => {
                                        <Eye className="h-4 w-4" />
                                      </Button>
                                    </SheetTrigger>
-                                   <SheetContent side="right" className="w-[420px] sm:w-[580px] bg-gradient-to-br from-background via-background to-muted/30 border-l border-border/50">
+                                   <SheetContent side="right" className="w-[500px] sm:w-[700px] bg-gradient-to-br from-background via-background to-muted/30 border-l border-border/50">
                                      <SheetHeader className="pb-6 border-b border-border/50">
                                        <div className="flex items-center gap-3">
                                          <div className="p-2 bg-primary/10 rounded-lg">
