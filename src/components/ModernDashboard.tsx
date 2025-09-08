@@ -597,6 +597,42 @@ const ModernDashboard = () => {
                                             </div>
                                           </div>
                                         )}
+
+                                        {/* Resume Actions */}
+                                        <div>
+                                          <h4 className="font-semibold mb-3">Resume Document</h4>
+                                          <div className="flex gap-2">
+                                            <Button 
+                                              onClick={() => {
+                                                // Construct Google Drive view link from resume filename
+                                                const driveLink = `https://drive.google.com/file/d/${resume.resume}/view`;
+                                                window.open(driveLink, '_blank');
+                                              }}
+                                              className="flex-1 gap-2"
+                                              variant="outline"
+                                            >
+                                              <FileText className="h-4 w-4" />
+                                              View Resume
+                                              <ArrowUpRight className="h-3 w-3" />
+                                            </Button>
+                                            <Button 
+                                              onClick={() => {
+                                                const downloadLink = `https://drive.google.com/uc?export=download&id=${resume.resume}`;
+                                                window.open(downloadLink, '_blank');
+                                              }}
+                                              variant="outline"
+                                              size="sm"
+                                              className="px-3"
+                                            >
+                                              <Download className="h-4 w-4" />
+                                            </Button>
+                                          </div>
+                                          {resume.resume && (
+                                            <p className="text-xs text-muted-foreground mt-2">
+                                              File: {resume.resume.split('/').pop() || resume.resume}
+                                            </p>
+                                          )}
+                                        </div>
                                       </div>
                                     </ScrollArea>
                                   </SheetContent>
