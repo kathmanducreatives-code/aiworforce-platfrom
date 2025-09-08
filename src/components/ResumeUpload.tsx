@@ -7,6 +7,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/components/ui/use-toast";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { n8nApi } from "@/services/n8nApi";
 import { supabase } from "@/integrations/supabase/client";
 import type { ResumeAnalysis } from "@/types/ResumeAnalysis";
@@ -27,6 +28,7 @@ const ResumeUpload = () => {
   const [recruiterRequirements, setRecruiterRequirements] = useState("");
   const [recruitmentName, setRecruitmentName] = useState("");
   const [isTyping, setIsTyping] = useState(false);
+  const [showConfirmDialog, setShowConfirmDialog] = useState(false);
   const { toast } = useToast();
 
   // Typing timeout for glow effect
@@ -90,7 +92,7 @@ const ResumeUpload = () => {
     });
   };
 
-  const analyzeResumes = async () => {
+  const handleAnalyzeClick = () => {
     const readyFiles = files.filter(f => f.status === 'ready');
     if (readyFiles.length === 0) {
       toast({ title: 'No files to analyze', description: 'Add resumes first.' });
@@ -114,6 +116,13 @@ const ResumeUpload = () => {
       });
       return;
     }
+
+    setShowConfirmDialog(true);
+  };
+
+  const analyzeResumes = async () => {
+    const readyFiles = files.filter(f => f.status === 'ready');
+    setShowConfirmDialog(false);
 
     console.log('Starting resume analysis...');
     setFiles(prev => prev.map(f =>
@@ -372,9 +381,9 @@ const ResumeUpload = () => {
                 </div>
                 
                 {files.some(f => f.status === 'ready') && (
-                  <div className="pt-4 border-t border-border">
+                <div className="pt-4 border-t border-border">
                     <Button 
-                  onClick={analyzeResumes} 
+                  onClick={handleAnalyzeClick} 
                   className="w-full bg-gradient-primary hover:shadow-primary transition-all duration-300"
                   disabled={!recruiterRequirements.trim() || !recruitmentName.trim()}
                     >
@@ -385,6 +394,33 @@ const ResumeUpload = () => {
               </div>
             )}
           </Card>
+
+          <Dialog open={showConfirmDialog} onOpenChange={setShowConfirmDialog}>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>Confirm Analysis</DialogTitle>
+                <DialogDescription>
+                  You are about to analyze resumes for the recruitment:
+                </DialogDescription>
+              </DialogHeader>
+              <div className="py-4">
+                <div className="p-4 bg-muted/30 rounded-lg border">
+                  <h4 className="font-semibold text-lg text-foreground">{recruitmentName}</h4>
+                  <p className="text-sm text-muted-foreground mt-1">
+                    {files.filter(f => f.status === 'ready').length} resume(s) ready for analysis
+                  </p>
+                </div>
+              </div>
+              <DialogFooter>
+                <Button variant="outline" onClick={() => setShowConfirmDialog(false)}>
+                  Cancel
+                </Button>
+                <Button onClick={analyzeResumes} className="bg-gradient-primary">
+                  Confirm Analysis
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
         </div>
       </div>
     </section>
