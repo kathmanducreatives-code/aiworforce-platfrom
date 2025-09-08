@@ -507,136 +507,217 @@ const ModernDashboard = () => {
                             </TableCell>
                             <TableCell>
                               <div className="flex items-center gap-2">
-                                <Sheet>
-                                  <SheetTrigger asChild>
-                                    <Button size="sm" variant="ghost" className="h-8 w-8 p-0">
-                                      <Eye className="h-4 w-4" />
-                                    </Button>
-                                  </SheetTrigger>
-                                  <SheetContent side="right" className="w-[400px] sm:w-[540px]">
-                                    <SheetHeader>
-                                      <SheetTitle>Candidate Details</SheetTitle>
-                                      <SheetDescription>
-                                        Detailed analysis for {resume.candidateName}
-                                      </SheetDescription>
-                                    </SheetHeader>
-                                    <ScrollArea className="h-[calc(100vh-8rem)] mt-6">
-                                      <div className="space-y-6">
-                                        {/* Overall Score */}
-                                        <div>
-                                          <h4 className="font-semibold mb-3">Overall Assessment</h4>
-                                          <div className="space-y-3">
-                                            <div>
-                                              <div className="flex justify-between text-sm mb-1">
-                                                <span>Overall Score</span>
-                                                <span className="font-medium">{resume.overallScore}/10</span>
-                                              </div>
-                                              <Progress value={(resume.overallScore || 0) * 10} className="h-2" />
-                                            </div>
-                                            <div>
-                                              <div className="flex justify-between text-sm mb-1">
-                                                <span>Fit Score</span>
-                                                <span className="font-medium">{resume.fitScore}/10</span>
-                                              </div>
-                                              <Progress value={(resume.fitScore || 0) * 10} className="h-2" />
-                                            </div>
-                                          </div>
-                                        </div>
+                                 <Sheet>
+                                   <SheetTrigger asChild>
+                                     <Button size="sm" variant="ghost" className="h-8 w-8 p-0 hover:bg-primary/10 hover:text-primary transition-colors">
+                                       <Eye className="h-4 w-4" />
+                                     </Button>
+                                   </SheetTrigger>
+                                   <SheetContent side="right" className="w-[420px] sm:w-[580px] bg-gradient-to-br from-background via-background to-muted/30 border-l border-border/50">
+                                     <SheetHeader className="pb-6 border-b border-border/50">
+                                       <div className="flex items-center gap-3">
+                                         <div className="p-2 bg-primary/10 rounded-lg">
+                                           <Users className="h-5 w-5 text-primary" />
+                                         </div>
+                                         <div>
+                                           <SheetTitle className="text-xl font-bold bg-gradient-to-r from-foreground to-foreground/70 bg-clip-text text-transparent">
+                                             Candidate Profile
+                                           </SheetTitle>
+                                           <SheetDescription className="text-muted-foreground">
+                                             {resume.candidateName || 'Unknown Candidate'}
+                                           </SheetDescription>
+                                         </div>
+                                       </div>
+                                     </SheetHeader>
+                                     <ScrollArea className="h-[calc(100vh-9rem)] mt-6">
+                                       <div className="space-y-8 pr-4">
+                                         {/* Candidate Info Card */}
+                                         <div className="bg-gradient-to-br from-primary/5 to-primary/10 border border-primary/20 rounded-xl p-5 animate-fade-in">
+                                           <div className="flex items-center gap-3 mb-3">
+                                             <div className="p-2 bg-primary/20 rounded-lg">
+                                               <Mail className="h-4 w-4 text-primary" />
+                                             </div>
+                                             <div>
+                                               <h4 className="font-semibold text-foreground">{resume.candidateName}</h4>
+                                               {resume.email && (
+                                                 <p className="text-sm text-muted-foreground">{resume.email}</p>
+                                               )}
+                                             </div>
+                                           </div>
+                                           <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                                             <Calendar className="h-3 w-3" />
+                                             <span>Analyzed on {resume.date ? new Date(resume.date).toLocaleDateString() : 'Unknown date'}</span>
+                                           </div>
+                                         </div>
 
-                                        {/* Risk & Reward */}
-                                        <div>
-                                          <h4 className="font-semibold mb-3">Risk & Reward Analysis</h4>
-                                          <div className="grid grid-cols-2 gap-4">
-                                            <div className="text-center p-4 bg-red-50 rounded-lg">
-                                              <p className="text-sm text-red-600 font-medium">Risk Factor</p>
-                                              <p className="text-2xl font-bold text-red-700">{resume.riskFactor}/10</p>
-                                            </div>
-                                            <div className="text-center p-4 bg-green-50 rounded-lg">
-                                              <p className="text-sm text-green-600 font-medium">Reward Factor</p>
-                                              <p className="text-2xl font-bold text-green-700">{resume.rewardFactor}/10</p>
-                                            </div>
-                                          </div>
-                                        </div>
+                                         {/* Overall Assessment */}
+                                         <div className="animate-fade-in" style={{animationDelay: '0.1s'}}>
+                                           <h4 className="font-bold text-lg mb-4 flex items-center gap-2">
+                                             <TrendingUp className="h-5 w-5 text-primary" />
+                                             Overall Assessment
+                                           </h4>
+                                           <div className="space-y-4">
+                                             <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200/50 rounded-xl p-4 hover:shadow-md transition-all duration-300">
+                                               <div className="flex justify-between items-center mb-2">
+                                                 <span className="text-sm font-medium text-blue-700">Overall Score</span>
+                                                 <span className="text-lg font-bold text-blue-900">{resume.overallScore}/10</span>
+                                               </div>
+                                               <div className="relative">
+                                                 <Progress 
+                                                   value={(resume.overallScore || 0) * 10} 
+                                                   className="h-3 bg-blue-100 [&>div]:bg-gradient-to-r [&>div]:from-blue-500 [&>div]:to-indigo-600 [&>div]:animate-pulse" 
+                                                 />
+                                               </div>
+                                             </div>
+                                             <div className="bg-gradient-to-r from-emerald-50 to-green-50 border border-emerald-200/50 rounded-xl p-4 hover:shadow-md transition-all duration-300">
+                                               <div className="flex justify-between items-center mb-2">
+                                                 <span className="text-sm font-medium text-emerald-700">Fit Score</span>
+                                                 <span className="text-lg font-bold text-emerald-900">{resume.fitScore}/10</span>
+                                               </div>
+                                               <div className="relative">
+                                                 <Progress 
+                                                   value={(resume.fitScore || 0) * 10} 
+                                                   className="h-3 bg-emerald-100 [&>div]:bg-gradient-to-r [&>div]:from-emerald-500 [&>div]:to-green-600 [&>div]:animate-pulse" 
+                                                 />
+                                               </div>
+                                             </div>
+                                           </div>
+                                         </div>
 
-                                        {/* Strengths */}
-                                        {resume.strengths && resume.strengths.length > 0 && (
-                                          <div>
-                                            <h4 className="font-semibold mb-3 text-green-700">Strengths</h4>
-                                            <div className="space-y-2">
-                                              {resume.strengths.map((strength, idx) => (
-                                                <div key={idx} className="flex items-start gap-2">
-                                                  <CheckCircle className="h-4 w-4 text-green-500 mt-0.5 flex-shrink-0" />
-                                                  <span className="text-sm">{strength}</span>
-                                                </div>
-                                              ))}
-                                            </div>
-                                          </div>
-                                        )}
+                                         {/* Risk & Reward Analysis */}
+                                         <div className="animate-fade-in" style={{animationDelay: '0.2s'}}>
+                                           <h4 className="font-bold text-lg mb-4 flex items-center gap-2">
+                                             <AlertTriangle className="h-5 w-5 text-orange-500" />
+                                             Risk & Reward Analysis
+                                           </h4>
+                                           <div className="grid grid-cols-2 gap-4">
+                                             <div className="group bg-gradient-to-br from-red-50 via-red-50 to-red-100 border border-red-200/50 rounded-xl p-5 text-center hover:shadow-lg hover:scale-105 transition-all duration-300 cursor-pointer">
+                                               <div className="p-3 bg-red-100 rounded-full w-fit mx-auto mb-3 group-hover:bg-red-200 transition-colors">
+                                                 <AlertTriangle className="h-6 w-6 text-red-600" />
+                                               </div>
+                                               <p className="text-sm text-red-600 font-semibold mb-1">Risk Factor</p>
+                                               <p className="text-3xl font-bold text-red-700 group-hover:scale-110 transition-transform">{resume.riskFactor}/10</p>
+                                             </div>
+                                             <div className="group bg-gradient-to-br from-green-50 via-green-50 to-green-100 border border-green-200/50 rounded-xl p-5 text-center hover:shadow-lg hover:scale-105 transition-all duration-300 cursor-pointer">
+                                               <div className="p-3 bg-green-100 rounded-full w-fit mx-auto mb-3 group-hover:bg-green-200 transition-colors">
+                                                 <CheckCircle className="h-6 w-6 text-green-600" />
+                                               </div>
+                                               <p className="text-sm text-green-600 font-semibold mb-1">Reward Factor</p>
+                                               <p className="text-3xl font-bold text-green-700 group-hover:scale-110 transition-transform">{resume.rewardFactor}/10</p>
+                                             </div>
+                                           </div>
+                                         </div>
 
-                                        {/* Weaknesses */}
-                                        {resume.weaknesses && resume.weaknesses.length > 0 && (
-                                          <div>
-                                            <h4 className="font-semibold mb-3 text-red-700">Areas for Improvement</h4>
-                                            <div className="space-y-2">
-                                              {resume.weaknesses.map((weakness, idx) => (
-                                                <div key={idx} className="flex items-start gap-2">
-                                                  <AlertTriangle className="h-4 w-4 text-red-500 mt-0.5 flex-shrink-0" />
-                                                  <span className="text-sm">{weakness}</span>
-                                                </div>
-                                              ))}
-                                            </div>
-                                          </div>
-                                        )}
+                                         {/* Strengths */}
+                                         {resume.strengths && resume.strengths.length > 0 && (
+                                           <div className="animate-fade-in" style={{animationDelay: '0.3s'}}>
+                                             <h4 className="font-bold text-lg mb-4 flex items-center gap-2 text-green-700">
+                                               <CheckCircle className="h-5 w-5" />
+                                               Key Strengths
+                                             </h4>
+                                             <div className="bg-gradient-to-br from-green-50/50 to-emerald-50/50 border border-green-200/30 rounded-xl p-5">
+                                               <div className="space-y-3">
+                                                 {resume.strengths.map((strength, idx) => (
+                                                   <div 
+                                                     key={idx} 
+                                                     className="flex items-start gap-3 p-3 bg-white/60 rounded-lg hover:bg-white/80 transition-all duration-200 hover:shadow-sm animate-fade-in group"
+                                                     style={{animationDelay: `${0.4 + idx * 0.1}s`}}
+                                                   >
+                                                     <div className="p-1 bg-green-100 rounded-full group-hover:bg-green-200 transition-colors">
+                                                       <CheckCircle className="h-4 w-4 text-green-600" />
+                                                     </div>
+                                                     <span className="text-sm text-foreground font-medium flex-1">{strength}</span>
+                                                   </div>
+                                                 ))}
+                                               </div>
+                                             </div>
+                                           </div>
+                                         )}
 
-                                        {/* Justification */}
-                                        {resume.justification && (
-                                          <div>
-                                            <h4 className="font-semibold mb-3">AI Analysis</h4>
-                                            <div className="bg-muted/50 rounded-lg p-4">
-                                              <p className="text-sm leading-relaxed">{resume.justification}</p>
-                                            </div>
-                                          </div>
-                                        )}
+                                         {/* Areas for Improvement */}
+                                         {resume.weaknesses && resume.weaknesses.length > 0 && (
+                                           <div className="animate-fade-in" style={{animationDelay: '0.4s'}}>
+                                             <h4 className="font-bold text-lg mb-4 flex items-center gap-2 text-orange-700">
+                                               <AlertTriangle className="h-5 w-5" />
+                                               Areas for Improvement
+                                             </h4>
+                                             <div className="bg-gradient-to-br from-orange-50/50 to-red-50/50 border border-orange-200/30 rounded-xl p-5">
+                                               <div className="space-y-3">
+                                                 {resume.weaknesses.map((weakness, idx) => (
+                                                   <div 
+                                                     key={idx} 
+                                                     className="flex items-start gap-3 p-3 bg-white/60 rounded-lg hover:bg-white/80 transition-all duration-200 hover:shadow-sm animate-fade-in group"
+                                                     style={{animationDelay: `${0.5 + idx * 0.1}s`}}
+                                                   >
+                                                     <div className="p-1 bg-orange-100 rounded-full group-hover:bg-orange-200 transition-colors">
+                                                       <AlertTriangle className="h-4 w-4 text-orange-600" />
+                                                     </div>
+                                                     <span className="text-sm text-foreground font-medium flex-1">{weakness}</span>
+                                                   </div>
+                                                 ))}
+                                               </div>
+                                             </div>
+                                           </div>
+                                         )}
 
-                                        {/* Resume Actions */}
-                                        <div>
-                                          <h4 className="font-semibold mb-3">Resume Document</h4>
-                                          <div className="flex gap-2">
-                                            <Button 
-                                              onClick={() => {
-                                                // Construct Google Drive view link from resume filename
-                                                const driveLink = `https://drive.google.com/file/d/${resume.resume}/view`;
-                                                window.open(driveLink, '_blank');
-                                              }}
-                                              className="flex-1 gap-2"
-                                              variant="outline"
-                                            >
-                                              <FileText className="h-4 w-4" />
-                                              View Resume
-                                              <ArrowUpRight className="h-3 w-3" />
-                                            </Button>
-                                            <Button 
-                                              onClick={() => {
-                                                const downloadLink = `https://drive.google.com/uc?export=download&id=${resume.resume}`;
-                                                window.open(downloadLink, '_blank');
-                                              }}
-                                              variant="outline"
-                                              size="sm"
-                                              className="px-3"
-                                            >
-                                              <Download className="h-4 w-4" />
-                                            </Button>
-                                          </div>
-                                          {resume.resume && (
-                                            <p className="text-xs text-muted-foreground mt-2">
-                                              File: {resume.resume.split('/').pop() || resume.resume}
-                                            </p>
-                                          )}
-                                        </div>
-                                      </div>
-                                    </ScrollArea>
-                                  </SheetContent>
-                                </Sheet>
+                                         {/* AI Analysis */}
+                                         {resume.justification && (
+                                           <div className="animate-fade-in" style={{animationDelay: '0.5s'}}>
+                                             <h4 className="font-bold text-lg mb-4 flex items-center gap-2 text-purple-700">
+                                               <div className="p-1 bg-purple-100 rounded-full">
+                                                 <span className="text-xs font-bold text-purple-600">AI</span>
+                                               </div>
+                                               AI Analysis
+                                             </h4>
+                                             <div className="bg-gradient-to-br from-purple-50 to-indigo-50 border border-purple-200/50 rounded-xl p-5 hover:shadow-md transition-all duration-300">
+                                               <p className="text-sm leading-relaxed text-foreground/90">{resume.justification}</p>
+                                             </div>
+                                           </div>
+                                         )}
+
+                                         {/* Resume Actions */}
+                                         <div className="animate-fade-in" style={{animationDelay: '0.6s'}}>
+                                           <h4 className="font-bold text-lg mb-4 flex items-center gap-2">
+                                             <FileText className="h-5 w-5 text-blue-600" />
+                                             Resume Document
+                                           </h4>
+                                           <div className="bg-gradient-to-br from-blue-50 to-indigo-50 border border-blue-200/50 rounded-xl p-5">
+                                             <div className="flex gap-3 mb-3">
+                                               <Button 
+                                                 onClick={() => {
+                                                   const driveLink = `https://drive.google.com/file/d/${resume.resume}/view`;
+                                                   window.open(driveLink, '_blank');
+                                                 }}
+                                                 className="flex-1 gap-2 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white border-0 shadow-md hover:shadow-lg transition-all duration-300 hover:scale-105"
+                                               >
+                                                 <FileText className="h-4 w-4" />
+                                                 View Resume
+                                                 <ArrowUpRight className="h-3 w-3" />
+                                               </Button>
+                                               <Button 
+                                                 onClick={() => {
+                                                   const downloadLink = `https://drive.google.com/uc?export=download&id=${resume.resume}`;
+                                                   window.open(downloadLink, '_blank');
+                                                 }}
+                                                 variant="outline"
+                                                 size="sm"
+                                                 className="px-4 hover:bg-blue-50 hover:border-blue-300 transition-all duration-300 hover:scale-105"
+                                               >
+                                                 <Download className="h-4 w-4" />
+                                               </Button>
+                                             </div>
+                                             {resume.resume && (
+                                               <div className="flex items-center gap-2 text-xs text-muted-foreground bg-white/50 rounded-lg p-2">
+                                                 <FileText className="h-3 w-3" />
+                                                 <span>{resume.resume.split('/').pop() || resume.resume}</span>
+                                               </div>
+                                             )}
+                                           </div>
+                                         </div>
+                                       </div>
+                                     </ScrollArea>
+                                   </SheetContent>
+                                 </Sheet>
                                 
                                 <Button size="sm" variant="ghost" className="h-8 w-8 p-0">
                                   <Download className="h-4 w-4" />
