@@ -513,7 +513,7 @@ const ModernDashboard = () => {
                                        <Eye className="h-4 w-4" />
                                      </Button>
                                    </SheetTrigger>
-                                   <SheetContent side="right" className="w-[500px] sm:w-[700px] bg-gradient-to-br from-background via-background to-muted/30 border-l border-border/50">
+                                   <SheetContent side="right" className="w-[600px] sm:w-[45vw] bg-gradient-to-br from-background via-background to-muted/30 border-l border-border/50">
                                      <SheetHeader className="pb-6 border-b border-border/50">
                                        <div className="flex items-center gap-3">
                                          <div className="p-2 bg-primary/10 rounded-lg">
@@ -681,31 +681,20 @@ const ModernDashboard = () => {
                                              <FileText className="h-5 w-5 text-blue-600" />
                                              Resume Document
                                            </h4>
-                                           <div className="bg-gradient-to-br from-blue-50 to-indigo-50 border border-blue-200/50 rounded-xl p-5">
-                                             <div className="flex gap-3 mb-3">
-                                               <Button 
-                                                 onClick={() => {
-                                                   const driveLink = `https://drive.google.com/file/d/${resume.resume}/view`;
-                                                   window.open(driveLink, '_blank');
-                                                 }}
-                                                 className="flex-1 gap-2 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white border-0 shadow-md hover:shadow-lg transition-all duration-300 hover:scale-105"
-                                               >
-                                                 <FileText className="h-4 w-4" />
-                                                 View Resume
-                                                 <ArrowUpRight className="h-3 w-3" />
-                                               </Button>
-                                               <Button 
-                                                 onClick={() => {
-                                                   const downloadLink = `https://drive.google.com/uc?export=download&id=${resume.resume}`;
-                                                   window.open(downloadLink, '_blank');
-                                                 }}
-                                                 variant="outline"
-                                                 size="sm"
-                                                 className="px-4 hover:bg-blue-50 hover:border-blue-300 transition-all duration-300 hover:scale-105"
-                                               >
-                                                 <Download className="h-4 w-4" />
-                                               </Button>
-                                             </div>
+                                            <div className="bg-gradient-to-br from-blue-50 to-indigo-50 border border-blue-200/50 rounded-xl p-5">
+                                              <div className="mb-3">
+                                                <Button 
+                                                  onClick={() => {
+                                                    const driveLink = `https://drive.google.com/file/d/${resume.resume}/view`;
+                                                    window.open(driveLink, '_blank');
+                                                  }}
+                                                  className="w-full gap-2 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white border-0 shadow-md hover:shadow-lg transition-all duration-300 hover:scale-105"
+                                                >
+                                                  <FileText className="h-4 w-4" />
+                                                  View Resume
+                                                  <ArrowUpRight className="h-3 w-3" />
+                                                </Button>
+                                              </div>
                                              {resume.resume && (
                                                <div className="flex items-center gap-2 text-xs text-muted-foreground bg-white/50 rounded-lg p-2">
                                                  <FileText className="h-3 w-3" />
