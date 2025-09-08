@@ -5,6 +5,7 @@ import { Card } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
+import { Input } from "@/components/ui/input";
 import { useToast } from "@/components/ui/use-toast";
 import { n8nApi } from "@/services/n8nApi";
 import { supabase } from "@/integrations/supabase/client";
@@ -24,6 +25,7 @@ const ResumeUpload = () => {
   const [files, setFiles] = useState<UploadedFile[]>([]);
   const [isDragOver, setIsDragOver] = useState(false);
   const [recruiterRequirements, setRecruiterRequirements] = useState("");
+  const [recruitmentName, setRecruitmentName] = useState("");
   const [isTyping, setIsTyping] = useState(false);
   const { toast } = useToast();
 
@@ -104,6 +106,15 @@ const ResumeUpload = () => {
       return;
     }
 
+    if (!recruitmentName.trim()) {
+      toast({
+        title: 'Recruitment Name Required',
+        description: 'Please enter a name for this recruitment before analyzing resumes.',
+        variant: 'destructive'
+      });
+      return;
+    }
+
     console.log('Starting resume analysis...');
     setFiles(prev => prev.map(f =>
       readyFiles.some(r => r.id === f.id)
@@ -124,7 +135,7 @@ const ResumeUpload = () => {
 
       // Send to n8n for AI analysis
       console.log('Sending files to n8n for analysis...');
-      const analysisResponse = await n8nApi.uploadResumes(readyFiles.map(f => f.file), recruiterRequirements);
+      const analysisResponse = await n8nApi.uploadResumes(readyFiles.map(f => f.file), recruiterRequirements, recruitmentName);
       console.log('Analysis response from n8n:', analysisResponse);
 
       // Update progress
@@ -150,7 +161,8 @@ const ResumeUpload = () => {
           rewardFactor: Number(analysisResponse.rewardFactor) || 0,
           fitScore: Number(analysisResponse.fitScore) || 0,
           overallFactor: Number(analysisResponse.overallFactor) || 0,
-          justification: analysisResponse.justification || ''
+          justification: analysisResponse.justification || '',
+          recruitmentName: recruitmentName
         }];
 
         console.log('Invoking saveResumeAnalysis with data:', analysisData);
@@ -266,6 +278,23 @@ const ResumeUpload = () => {
             {/* Recruiter Requirements Section */}
             <div className="mt-8 space-y-4">
               <div className="space-y-2">
+                <Label htmlFor="recruitment-name" className="text-base font-semibold text-foreground">
+                  Recruitment Name *
+                </Label>
+                <p className="text-sm text-muted-foreground">
+                  Name this recruitment (e.g., "Software Developer", "Marketing Manager").
+                </p>
+                <Input
+                  id="recruitment-name"
+                  placeholder="e.g., Mechanical Engineer, Software Developer, Marketing Manager"
+                  value={recruitmentName}
+                  onChange={(e) => setRecruitmentName(e.target.value)}
+                  className="border-2 border-primary/20 transition-all duration-300 hover:border-primary/40 focus:border-primary/60"
+                  required
+                />
+              </div>
+              
+              <div className="space-y-2">
                 <Label htmlFor="recruiter-requirements" className="text-base font-semibold text-foreground">
                   Recruiter Requirements *
                 </Label>
@@ -345,9 +374,9 @@ const ResumeUpload = () => {
                 {files.some(f => f.status === 'ready') && (
                   <div className="pt-4 border-t border-border">
                     <Button 
-                      onClick={analyzeResumes} 
-                      className="w-full bg-gradient-primary hover:shadow-primary transition-all duration-300"
-                      disabled={!recruiterRequirements.trim()}
+                  onClick={analyzeResumes} 
+                  className="w-full bg-gradient-primary hover:shadow-primary transition-all duration-300"
+                  disabled={!recruiterRequirements.trim() || !recruitmentName.trim()}
                     >
                       Analyze Resumes ({files.filter(f => f.status === 'ready').length})
                     </Button>

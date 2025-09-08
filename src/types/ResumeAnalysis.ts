@@ -11,6 +11,7 @@ export interface ResumeAnalysis {
   fitScore: number;
   overallFactor: number;
   justification: string;
+  recruitmentName?: string;
   // New display fields for text scores
   riskScore?: string;
   rewardScore?: string;

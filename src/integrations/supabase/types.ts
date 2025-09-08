@@ -23,6 +23,7 @@ export type Database = {
           id: string
           justification: string | null
           overall_factor: Json | null
+          recruitment_name: string | null
           resume: string | null
           reward_factor: Json | null
           risk_factor: Json | null
@@ -37,6 +38,7 @@ export type Database = {
           id?: string
           justification?: string | null
           overall_factor?: Json | null
+          recruitment_name?: string | null
           resume?: string | null
           reward_factor?: Json | null
           risk_factor?: Json | null
@@ -51,6 +53,7 @@ export type Database = {
           id?: string
           justification?: string | null
           overall_factor?: Json | null
+          recruitment_name?: string | null
           resume?: string | null
           reward_factor?: Json | null
           risk_factor?: Json | null

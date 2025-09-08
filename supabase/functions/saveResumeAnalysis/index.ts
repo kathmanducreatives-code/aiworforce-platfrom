@@ -107,6 +107,7 @@ serve(async (req) => {
         fit_score: toNum(item.fitScore),
         overall_factor: toNum(item.overallFactor),
         justification: item.justification ?? null,
+        recruitment_name: item.recruitmentName ?? null,
       };
     });
 
