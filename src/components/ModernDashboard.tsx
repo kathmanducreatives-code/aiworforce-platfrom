@@ -213,7 +213,7 @@ const ModernDashboard = () => {
           fitScore: fitScore,
           overallFactor: overallScore,
           justification: row.justification ?? '',
-          recruitmentName: row.recruitment_name ?? 'Uncategorized',
+          recruitmentName: (row.recruitment_name ? String(row.recruitment_name).trim() : '') || 'Uncategorized',
           riskScore: extractJSONScore(row.risk_factor),
           rewardScore: extractJSONScore(row.reward_factor),
           fitScoreText: fitScore.toString(),

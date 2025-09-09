@@ -176,7 +176,8 @@ const ResumeUpload = () => {
           fitScore: Number(analysisResponse.fitScore) || 0,
           overallFactor: Number(analysisResponse.overallFactor) || 0,
           justification: analysisResponse.justification || '',
-          recruitmentName: recruitmentName
+          recruitmentName: recruitmentName.trim(),
+          recruitment_name: recruitmentName.trim(),
         }];
 
         console.log('Invoking saveResumeAnalysis with data:', analysisData);

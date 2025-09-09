@@ -105,6 +105,12 @@ serve(async (req) => {
 
     const dbRows = analysisData.map((item: any) => {
       console.log('Processing item for database:', item);
+      const computedRecruitmentName = (typeof item.recruitmentName === 'string' && item.recruitmentName.trim().length > 0)
+        ? item.recruitmentName.trim()
+        : (typeof item.recruitment_name === 'string' && item.recruitment_name.trim().length > 0)
+          ? item.recruitment_name.trim()
+          : 'Uncategorized';
+      console.log('Computed recruitment_name for item:', computedRecruitmentName);
       return {
         resume: item.resume ?? null,
         candidate_name: item.candidateName || 'Unknown',
@@ -116,9 +122,7 @@ serve(async (req) => {
         fit_score: toNum(item.fitScore),
         overall_factor: toNum(item.overallFactor),
         justification: item.justification ?? null,
-        recruitment_name: (typeof item.recruitmentName === 'string' && item.recruitmentName.trim().length > 0)
-          ? item.recruitmentName.trim()
-          : 'Uncategorized',
+        recruitment_name: computedRecruitmentName,
       };
     });
 
