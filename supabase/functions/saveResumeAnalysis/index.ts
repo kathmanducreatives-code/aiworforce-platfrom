@@ -89,8 +89,23 @@ serve(async (req) => {
     console.log('Successfully saved analysis data to Google Sheets');
 
     // Also persist results to Supabase database
-    const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
-    const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+    const supabaseUrl = Deno.env.get('SUPABASE_URL');
+    const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+    
+    if (!supabaseUrl || !serviceKey) {
+      console.error('Missing Supabase environment variables');
+      return new Response(
+        JSON.stringify({
+          success: false,
+          error: 'Supabase configuration missing',
+        }),
+        {
+          status: 500,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        }
+      );
+    }
+    
     const supabase = createClient(supabaseUrl, serviceKey);
 
     const toNum = (v: any): number => {
