@@ -1,173 +1,72 @@
-import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.57.2";
+
+const supabaseUrl = "https://zbwsbnqqpkvdhqwavjke.supabase.co"; // <-- your real Supabase URL
+const supabaseKey = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inpid3NibnFxcGt2ZGhxd2F2amtlIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc1NjUzODMzMSwiZXhwIjoyMDcyMTE0MzMxfQ.qk_UcRrjH7K5tknC8IpnCD_q1lWTHYZ6qqsFLwu5xnU"; // <-- your service role key
+const supabase = createClient(supabaseUrl, supabaseKey);
+
 const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
 serve(async (req) => {
-  // Handle CORS preflight requests
-  if (req.method === 'OPTIONS') {
+  if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
 
   try {
-    console.log('Save resume analysis function called');
-    
-    const { analysisData } = await req.json();
-    console.log('Analysis data received:', analysisData);
-    
-    // Log each item to see the structure
-    if (analysisData && Array.isArray(analysisData)) {
-      analysisData.forEach((item, index) => {
-        console.log(`Item ${index}:`, JSON.stringify(item, null, 2));
-        console.log(`Item ${index} recruitmentName:`, item.recruitmentName);
-      });
-    }
+    console.log("Save resume analysis function called");
 
-    if (!analysisData || !Array.isArray(analysisData)) {
-      throw new Error('Invalid analysis data provided');
-    }
+    const { resume, candidate_name, email, output = {}, recruitmentName, recruitment_name } =
+      await req.json();
 
-    const credentials = JSON.parse(Deno.env.get('GOOGLE_SHEETS_CREDENTIALS') || '{}');
-    console.log('Google Sheets credentials loaded');
+    const {
+      candidate_strengths = [],
+      candidate_weaknesses = [],
+      risk_factor = null,
+      reward_factor = null,
+      overall_fit_rating = null,
+      justification_for_rating = null,
+    } = output;
 
-    // Get access token for Google Sheets API
-    const tokenResponse = await fetch('https://oauth2.googleapis.com/token', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        client_id: credentials.client_id,
-        client_secret: credentials.client_secret,
-        refresh_token: credentials.refresh_token,
-        grant_type: 'refresh_token',
-      }),
-    });
+    // 🔑 Robust recruitment_name handling
+    const computedRecruitmentName =
+      typeof recruitmentName === "string" && recruitmentName.trim().length > 0
+        ? recruitmentName.trim()
+        : typeof recruitment_name === "string" && recruitment_name.trim().length > 0
+        ? recruitment_name.trim()
+        : "Uncategorized";
 
-    const tokenData = await tokenResponse.json();
-    console.log('Access token obtained');
-
-    // Prepare data for Google Sheets
-    const values = analysisData.map(item => [
-      item.date || new Date().toISOString(),
-      item.resume,
-      item.candidateName,
-      item.email,
-      item.strengths,
-      item.weaknesses,
-      item.riskFactor,
-      item.rewardFactor,
-      item.fitScore,
-      item.overallFactor,
-      item.justification
-    ]);
-
-    // Append data to Google Sheets
-    const sheetsResponse = await fetch(
-      `https://sheets.googleapis.com/v4/spreadsheets/${credentials.spreadsheet_id}/values/Sheet1:append?valueInputOption=USER_ENTERED`,
-      {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${tokenData.access_token}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          values: values,
-        }),
-      }
-    );
-
-    if (!sheetsResponse.ok) {
-      const error = await sheetsResponse.json().catch(() => ({}));
-      console.error('Google Sheets API error (continuing without Sheets save):', error);
-      // Continue even if Google Sheets append fails
-    }
-
-    console.log('Successfully saved analysis data to Google Sheets');
-
-    // Also persist results to Supabase database
-    const supabaseUrl = Deno.env.get('SUPABASE_URL');
-    const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
-    
-    if (!supabaseUrl || !serviceKey) {
-      console.error('Missing Supabase environment variables');
-      return new Response(
-        JSON.stringify({
-          success: false,
-          error: 'Supabase configuration missing',
-        }),
+    const { data, error } = await supabase
+      .from("resume_analyses")
+      .insert([
         {
-          status: 500,
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        }
-      );
-    }
-    
-    const supabase = createClient(supabaseUrl, serviceKey);
+          resume,
+          candidate_name: candidate_name || "Unknown",
+          email,
+          strengths: candidate_strengths.join("\n"),
+          weaknesses: candidate_weaknesses.join("\n"),
+          risk_factor,
+          reward_factor,
+          fit_score: { score: overall_fit_rating },
+          overall_factor: { explanation: justification_for_rating },
+          justification: justification_for_rating,
+          recruitment_name: computedRecruitmentName,
+        },
+      ])
+      .select();
 
-    const toNum = (v: any): number => {
-      if (v === null || v === undefined) return 0;
-      const s = String(v).toLowerCase().trim();
-      if (s.includes('high')) return 8;
-      if (s.includes('medium')) return 5;
-      if (s.includes('low')) return 2;
-      const n = Number(s);
-      return Number.isFinite(n) ? n : 0;
-    };
+    if (error) throw error;
 
-    const dbRows = analysisData.map((item: any) => {
-      console.log('Processing item for database:', item);
-      const computedRecruitmentName = (typeof item.recruitmentName === 'string' && item.recruitmentName.trim().length > 0)
-        ? item.recruitmentName.trim()
-        : (typeof item.recruitment_name === 'string' && item.recruitment_name.trim().length > 0)
-          ? item.recruitment_name.trim()
-          : 'Uncategorized';
-      console.log('Computed recruitment_name for item:', computedRecruitmentName);
-      return {
-        resume: item.resume ?? null,
-        candidate_name: item.candidateName || 'Unknown',
-        email: item.email ?? null,
-        strengths: item.strengths ?? null,
-        weaknesses: item.weaknesses ?? null,
-        risk_factor: toNum(item.riskFactor),
-        reward_factor: toNum(item.rewardFactor),
-        fit_score: toNum(item.fitScore),
-        overall_factor: toNum(item.overallFactor),
-        justification: item.justification ?? null,
-        recruitment_name: computedRecruitmentName,
-      };
+    return new Response(JSON.stringify({ success: true, data }), {
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
-
-    const { error: insertError } = await supabase.from('resume_analyses').insert(dbRows);
-    if (insertError) {
-      console.error('Failed to insert into resume_analyses:', insertError);
-    } else {
-      console.log(`Inserted ${dbRows.length} rows into resume_analyses`);
-    }
-
+  } catch (err) {
+    console.error("Error in save-resume-analysis function:", err);
     return new Response(
-      JSON.stringify({
-        success: true,
-        message: `Successfully saved ${analysisData.length} analysis results to Google Sheets and database`,
-      }),
-      {
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      }
-    );
-  } catch (error) {
-    console.error('Error in save-resume-analysis function:', error);
-    return new Response(
-      JSON.stringify({
-        success: false,
-        error: error.message,
-      }),
-      {
-        status: 500,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      }
+      JSON.stringify({ success: false, error: err.message }),
+      { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 500 },
     );
   }
 });
