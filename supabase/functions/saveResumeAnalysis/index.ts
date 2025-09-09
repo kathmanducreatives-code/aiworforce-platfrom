@@ -81,9 +81,9 @@ serve(async (req) => {
     );
 
     if (!sheetsResponse.ok) {
-      const error = await sheetsResponse.json();
-      console.error('Google Sheets API error:', error);
-      throw new Error(`Failed to save to Google Sheets: ${error.error?.message || 'Unknown error'}`);
+      const error = await sheetsResponse.json().catch(() => ({}));
+      console.error('Google Sheets API error (continuing without Sheets save):', error);
+      // Continue even if Google Sheets append fails
     }
 
     console.log('Successfully saved analysis data to Google Sheets');
@@ -116,7 +116,9 @@ serve(async (req) => {
         fit_score: toNum(item.fitScore),
         overall_factor: toNum(item.overallFactor),
         justification: item.justification ?? null,
-        recruitment_name: item.recruitmentName ?? 'Uncategorized',
+        recruitment_name: (typeof item.recruitmentName === 'string' && item.recruitmentName.trim().length > 0)
+          ? item.recruitmentName.trim()
+          : 'Uncategorized',
       };
     });
 
