@@ -28,6 +28,7 @@ const ResumeUpload = () => {
   const [recruiterRequirements, setRecruiterRequirements] = useState("");
   const [recruitmentName, setRecruitmentName] = useState("");
   const [isTyping, setIsTyping] = useState(false);
+  const [showRecruitmentNameDialog, setShowRecruitmentNameDialog] = useState(false);
   const [showConfirmDialog, setShowConfirmDialog] = useState(false);
   const { toast } = useToast();
 
@@ -108,15 +109,19 @@ const ResumeUpload = () => {
       return;
     }
 
+    setShowRecruitmentNameDialog(true);
+  };
+
+  const handleRecruitmentNameSubmit = () => {
     if (!recruitmentName.trim()) {
       toast({
         title: 'Recruitment Name Required',
-        description: 'Please enter a name for this recruitment before analyzing resumes.',
+        description: 'Please enter a name for this recruitment.',
         variant: 'destructive'
       });
       return;
     }
-
+    setShowRecruitmentNameDialog(false);
     setShowConfirmDialog(true);
   };
 
@@ -285,24 +290,7 @@ const ResumeUpload = () => {
             </div>
 
             {/* Recruiter Requirements Section */}
-            <div className="mt-8 space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="recruitment-name" className="text-base font-semibold text-foreground">
-                  Recruitment Name *
-                </Label>
-                <p className="text-sm text-muted-foreground">
-                  Name this recruitment (e.g., "Software Developer", "Marketing Manager").
-                </p>
-                <Input
-                  id="recruitment-name"
-                  placeholder="e.g., Mechanical Engineer, Software Developer, Marketing Manager"
-                  value={recruitmentName}
-                  onChange={(e) => setRecruitmentName(e.target.value)}
-                  className="border-2 border-primary/20 transition-all duration-300 hover:border-primary/40 focus:border-primary/60"
-                  required
-                />
-              </div>
-              
+            <div className="mt-8 space-y-4">              
               <div className="space-y-2">
                 <Label htmlFor="recruiter-requirements" className="text-base font-semibold text-foreground">
                   Recruiter Requirements *
@@ -385,7 +373,7 @@ const ResumeUpload = () => {
                     <Button 
                   onClick={handleAnalyzeClick} 
                   className="w-full bg-gradient-primary hover:shadow-primary transition-all duration-300"
-                  disabled={!recruiterRequirements.trim() || !recruitmentName.trim()}
+                  disabled={!recruiterRequirements.trim()}
                     >
                       Analyze Resumes ({files.filter(f => f.status === 'ready').length})
                     </Button>
@@ -394,6 +382,44 @@ const ResumeUpload = () => {
               </div>
             )}
           </Card>
+
+          <Dialog open={showRecruitmentNameDialog} onOpenChange={setShowRecruitmentNameDialog}>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>Enter Recruitment Name</DialogTitle>
+                <DialogDescription>
+                  Please provide a name for this recruitment position.
+                </DialogDescription>
+              </DialogHeader>
+              <div className="py-4">
+                <div className="space-y-2">
+                  <Label htmlFor="popup-recruitment-name" className="text-base font-semibold text-foreground">
+                    Recruitment Name *
+                  </Label>
+                  <Input
+                    id="popup-recruitment-name"
+                    placeholder="e.g., Doctor, Mechanical Engineer, Software Developer"
+                    value={recruitmentName}
+                    onChange={(e) => setRecruitmentName(e.target.value)}
+                    className="border-2 border-primary/20 transition-all duration-300 hover:border-primary/40 focus:border-primary/60"
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        handleRecruitmentNameSubmit();
+                      }
+                    }}
+                  />
+                </div>
+              </div>
+              <DialogFooter>
+                <Button variant="outline" onClick={() => setShowRecruitmentNameDialog(false)}>
+                  Cancel
+                </Button>
+                <Button onClick={handleRecruitmentNameSubmit} className="bg-gradient-primary">
+                  Continue
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
 
           <Dialog open={showConfirmDialog} onOpenChange={setShowConfirmDialog}>
             <DialogContent>
