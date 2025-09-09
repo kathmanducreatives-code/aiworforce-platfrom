@@ -8,6 +8,32 @@ import { Progress } from "@/components/ui/progress";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import type { ResumeAnalysis } from "@/types/ResumeAnalysis";
+
+// Function to generate consistent colors for recruitment names
+const getRecruitmentTagColor = (recruitmentName: string): string => {
+  if (!recruitmentName) return "bg-gray-100 text-gray-800 hover:bg-gray-200";
+  
+  // Simple hash function to generate consistent color based on string
+  let hash = 0;
+  for (let i = 0; i < recruitmentName.length; i++) {
+    hash = recruitmentName.charCodeAt(i) + ((hash << 5) - hash);
+  }
+  
+  const colors = [
+    "bg-blue-100 text-blue-800 hover:bg-blue-200",
+    "bg-green-100 text-green-800 hover:bg-green-200", 
+    "bg-purple-100 text-purple-800 hover:bg-purple-200",
+    "bg-orange-100 text-orange-800 hover:bg-orange-200",
+    "bg-pink-100 text-pink-800 hover:bg-pink-200",
+    "bg-indigo-100 text-indigo-800 hover:bg-indigo-200",
+    "bg-yellow-100 text-yellow-800 hover:bg-yellow-200",
+    "bg-teal-100 text-teal-800 hover:bg-teal-200",
+    "bg-red-100 text-red-800 hover:bg-red-200",
+    "bg-cyan-100 text-cyan-800 hover:bg-cyan-200"
+  ];
+  
+  return colors[Math.abs(hash) % colors.length];
+};
 import { 
   Search, 
   FileText, 
@@ -455,8 +481,17 @@ const ModernDashboard = () => {
                           <TableRow key={resume.id} className="hover:bg-muted/20 transition-colors">
                             <TableCell>
                               <div className="flex flex-col">
-                                <div className="font-medium text-foreground">
-                                  {resume.candidateName || 'Unknown Candidate'}
+                                <div className="flex items-center gap-2 mb-1">
+                                  <div className="font-medium text-foreground">
+                                    {resume.candidateName || 'Unknown Candidate'}
+                                  </div>
+                                  {resume.recruitmentName && (
+                                    <Badge 
+                                      className={`text-xs px-2 py-0.5 font-medium transition-colors ${getRecruitmentTagColor(resume.recruitmentName)}`}
+                                    >
+                                      {resume.recruitmentName}
+                                    </Badge>
+                                  )}
                                 </div>
                                 {resume.email && (
                                   <div className="flex items-center text-sm text-muted-foreground mt-1">
