@@ -17,6 +17,14 @@ serve(async (req) => {
     
     const { analysisData } = await req.json();
     console.log('Analysis data received:', analysisData);
+    
+    // Log each item to see the structure
+    if (analysisData && Array.isArray(analysisData)) {
+      analysisData.forEach((item, index) => {
+        console.log(`Item ${index}:`, JSON.stringify(item, null, 2));
+        console.log(`Item ${index} recruitmentName:`, item.recruitmentName);
+      });
+    }
 
     if (!analysisData || !Array.isArray(analysisData)) {
       throw new Error('Invalid analysis data provided');
@@ -96,6 +104,7 @@ serve(async (req) => {
     };
 
     const dbRows = analysisData.map((item: any) => {
+      console.log('Processing item for database:', item);
       return {
         resume: item.resume ?? null,
         candidate_name: item.candidateName || 'Unknown',
@@ -107,7 +116,7 @@ serve(async (req) => {
         fit_score: toNum(item.fitScore),
         overall_factor: toNum(item.overallFactor),
         justification: item.justification ?? null,
-        recruitment_name: item.recruitmentName ?? null,
+        recruitment_name: item.recruitmentName ?? 'Uncategorized',
       };
     });
 

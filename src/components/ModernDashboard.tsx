@@ -110,6 +110,40 @@ const ModernDashboard = () => {
 
   const itemsPerPage = 10;
 
+  const handleDeleteCandidate = async (candidateId: string) => {
+    try {
+      const { error } = await supabase
+        .from('resume_analyses')
+        .delete()
+        .eq('id', candidateId);
+
+      if (error) {
+        console.error('Error deleting candidate:', error);
+        toast({
+          title: 'Delete Failed',
+          description: 'Failed to delete candidate. Please try again.',
+          variant: 'destructive'
+        });
+        return;
+      }
+
+      // Remove from local state
+      setResumeData(prev => prev.filter(resume => resume.id !== candidateId));
+      
+      toast({
+        title: 'Candidate Deleted',
+        description: 'Candidate has been successfully removed.',
+      });
+    } catch (error) {
+      console.error('Error deleting candidate:', error);
+      toast({
+        title: 'Delete Failed',
+        description: 'An unexpected error occurred.',
+        variant: 'destructive'
+      });
+    }
+  };
+
   const fetchResumeData = async () => {
     try {
       setLoading(true);
@@ -753,12 +787,15 @@ const ModernDashboard = () => {
                                       <MoreVertical className="h-4 w-4" />
                                     </Button>
                                   </DropdownMenuTrigger>
-                                  <DropdownMenuContent align="end">
-                                    <DropdownMenuItem className="text-red-600">
-                                      <Trash2 className="h-4 w-4 mr-2" />
-                                      Delete
-                                    </DropdownMenuItem>
-                                  </DropdownMenuContent>
+                                   <DropdownMenuContent align="end">
+                                     <DropdownMenuItem 
+                                       className="text-red-600 cursor-pointer"
+                                       onClick={() => handleDeleteCandidate(resume.id!)}
+                                     >
+                                       <Trash2 className="h-4 w-4 mr-2" />
+                                       Delete
+                                     </DropdownMenuItem>
+                                   </DropdownMenuContent>
                                 </DropdownMenu>
                               </div>
                             </TableCell>
