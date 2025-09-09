@@ -158,4 +158,9 @@ All colors MUST be HSL.
   .glow-typing {
     animation: typing-glow 2s ease-in-out infinite;
   }
+
+  /* Hover scale utility */
+  .hover-scale {
+    @apply transition-transform duration-200 hover:scale-105;
+  }
 }
