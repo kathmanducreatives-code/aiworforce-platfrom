@@ -555,16 +555,16 @@ const ModernDashboard = () => {
                             <TableCell>
                               <div className="flex gap-2">
                                 <Badge 
-                                  variant={resume.riskFactor >= 7 ? "destructive" : resume.riskFactor >= 4 ? "secondary" : "outline"}
+                                  variant={resume.riskScore === "High" ? "destructive" : resume.riskScore === "Medium" ? "secondary" : "outline"}
                                   className="text-xs"
                                 >
-                                  Risk: {resume.riskFactor}/10
+                                  Risk: {resume.riskScore || 'Unknown'}
                                 </Badge>
                                 <Badge 
-                                  variant={resume.rewardFactor >= 7 ? "default" : "outline"}
+                                  variant={resume.rewardScore === "High" ? "default" : "outline"}
                                   className="text-xs"
                                 >
-                                  Reward: {resume.rewardFactor}/10
+                                  Reward: {resume.rewardScore || 'Unknown'}
                                 </Badge>
                               </div>
                             </TableCell>
@@ -664,15 +664,15 @@ const ModernDashboard = () => {
                                                <div className="p-3 bg-red-100 rounded-full w-fit mx-auto mb-3 group-hover:bg-red-200 transition-colors">
                                                  <AlertTriangle className="h-6 w-6 text-red-600" />
                                                </div>
-                                               <p className="text-sm text-red-600 font-semibold mb-1">Risk Factor</p>
-                                               <p className="text-3xl font-bold text-red-700 group-hover:scale-110 transition-transform">{resume.riskFactor}/10</p>
+                                                <p className="text-sm text-red-600 font-semibold mb-1">Risk Factor</p>
+                                                <p className="text-2xl font-bold text-red-700 group-hover:scale-110 transition-transform">{resume.riskScore || 'Unknown'}</p>
                                              </div>
                                              <div className="group bg-gradient-to-br from-green-50 via-green-50 to-green-100 border border-green-200/50 rounded-xl p-5 text-center hover:shadow-lg hover:scale-105 transition-all duration-300 cursor-pointer">
                                                <div className="p-3 bg-green-100 rounded-full w-fit mx-auto mb-3 group-hover:bg-green-200 transition-colors">
                                                  <CheckCircle className="h-6 w-6 text-green-600" />
                                                </div>
-                                               <p className="text-sm text-green-600 font-semibold mb-1">Reward Factor</p>
-                                               <p className="text-3xl font-bold text-green-700 group-hover:scale-110 transition-transform">{resume.rewardFactor}/10</p>
+                                                <p className="text-sm text-green-600 font-semibold mb-1">Reward Factor</p>
+                                                <p className="text-2xl font-bold text-green-700 group-hover:scale-110 transition-transform">{resume.rewardScore || 'Unknown'}</p>
                                              </div>
                                            </div>
                                          </div>
