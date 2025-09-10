@@ -452,7 +452,7 @@ const ModernDashboard = () => {
                                        <Eye className="h-4 w-4" />
                                      </Button>
                                    </SheetTrigger>
-                                    <SheetContent side="right" className="w-[35vw] min-w-[500px] max-w-[900px] bg-gradient-to-br from-background via-background/95 to-accent/5 border-l border-border/30 backdrop-blur-sm shadow-2xl">
+                                    <SheetContent side="right" className="w-[40vw] min-w-[500px] max-w-[900px] bg-gradient-to-br from-background via-background/95 to-accent/5 border-l border-border/30 backdrop-blur-sm shadow-2xl">
                                       <SheetHeader className="pb-8 border-b border-border/20 bg-gradient-to-r from-primary/5 to-accent/5 -mx-6 -mt-6 px-6 pt-6 mb-6 rounded-t-lg">
                                         <div className="flex items-center gap-4">
                                           <div className="p-3 bg-gradient-to-br from-primary/20 to-primary/10 rounded-xl shadow-sm border border-primary/20">
