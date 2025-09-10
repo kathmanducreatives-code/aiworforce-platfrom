@@ -541,14 +541,14 @@ const ModernDashboard = () => {
                                                   <AlertTriangle className="h-8 w-8 text-red-600" />
                                                 </div>
                                                  <p className="text-sm text-red-600 font-bold mb-3 uppercase tracking-wide">Risk Factor</p>
-                                                 <p className="text-3xl font-black text-red-700 group-hover:scale-110 transition-transform bg-red-100 rounded-xl py-2 px-4 inline-block">{resume.riskScore || 'Unknown'}</p>
+                                                 <p className="text-xl font-black text-red-700 group-hover:scale-110 transition-transform bg-red-100 rounded-xl py-2 px-4 inline-block">{resume.riskScore || 'Unknown'}</p>
                                               </div>
                                               <div className="group bg-gradient-to-br from-green-50 via-green-50/80 to-green-100/60 border border-green-200/40 rounded-2xl p-8 text-center hover:shadow-xl hover:scale-105 transition-all duration-300 cursor-pointer">
                                                 <div className="p-4 bg-gradient-to-br from-green-100 to-green-50 rounded-2xl w-fit mx-auto mb-6 group-hover:bg-green-200 transition-all duration-300 shadow-sm">
                                                   <CheckCircle className="h-8 w-8 text-green-600" />
                                                 </div>
                                                  <p className="text-sm text-green-600 font-bold mb-3 uppercase tracking-wide">Reward Factor</p>
-                                                 <p className="text-3xl font-black text-green-700 group-hover:scale-110 transition-transform bg-green-100 rounded-xl py-2 px-4 inline-block">{resume.rewardScore || 'Unknown'}</p>
+                                                 <p className="text-xl font-black text-green-700 group-hover:scale-110 transition-transform bg-green-100 rounded-xl py-2 px-4 inline-block">{resume.rewardScore || 'Unknown'}</p>
                                               </div>
                                             </div>
                                           </div>
