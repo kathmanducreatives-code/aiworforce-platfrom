@@ -582,100 +582,118 @@ const ModernDashboard = () => {
                                        <Eye className="h-4 w-4" />
                                      </Button>
                                    </SheetTrigger>
-                                   <SheetContent side="right" className="w-[800px] sm:w-[45vw] bg-gradient-to-br from-background via-background to-muted/30 border-l border-border/50">
-                                     <SheetHeader className="pb-6 border-b border-border/50">
-                                       <div className="flex items-center gap-3">
-                                         <div className="p-2 bg-primary/10 rounded-lg">
-                                           <Users className="h-5 w-5 text-primary" />
-                                         </div>
-                                         <div>
-                                           <SheetTitle className="text-xl font-bold bg-gradient-to-r from-foreground to-foreground/70 bg-clip-text text-transparent">
-                                             Candidate Profile
-                                           </SheetTitle>
-                                           <SheetDescription className="text-muted-foreground">
-                                             {resume.candidateName || 'Unknown Candidate'}
-                                           </SheetDescription>
-                                         </div>
-                                       </div>
-                                     </SheetHeader>
-                                     <ScrollArea className="h-[calc(100vh-9rem)] mt-6">
-                                       <div className="space-y-8 pr-4">
-                                         {/* Candidate Info Card */}
-                                         <div className="bg-gradient-to-br from-primary/5 to-primary/10 border border-primary/20 rounded-xl p-5 animate-fade-in">
-                                           <div className="flex items-center gap-3 mb-3">
-                                             <div className="p-2 bg-primary/20 rounded-lg">
-                                               <Mail className="h-4 w-4 text-primary" />
-                                             </div>
-                                             <div>
-                                               <h4 className="font-semibold text-foreground">{resume.candidateName}</h4>
-                                               {resume.email && (
-                                                 <p className="text-sm text-muted-foreground">{resume.email}</p>
-                                               )}
-                                             </div>
-                                           </div>
-                                           <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                                             <Calendar className="h-3 w-3" />
-                                             <span>Analyzed on {resume.date ? new Date(resume.date).toLocaleDateString() : 'Unknown date'}</span>
-                                           </div>
-                                         </div>
+                                    <SheetContent side="right" className="w-[35vw] min-w-[500px] max-w-[900px] bg-gradient-to-br from-background via-background/95 to-accent/5 border-l border-border/30 backdrop-blur-sm shadow-2xl">
+                                      <SheetHeader className="pb-8 border-b border-border/20 bg-gradient-to-r from-primary/5 to-accent/5 -mx-6 -mt-6 px-6 pt-6 mb-6 rounded-t-lg">
+                                        <div className="flex items-center gap-4">
+                                          <div className="p-3 bg-gradient-to-br from-primary/20 to-primary/10 rounded-xl shadow-sm border border-primary/20">
+                                            <Users className="h-6 w-6 text-primary" />
+                                          </div>
+                                          <div className="flex-1">
+                                            <SheetTitle className="text-2xl font-bold bg-gradient-to-r from-foreground via-primary to-foreground/80 bg-clip-text text-transparent mb-1">
+                                              Candidate Profile
+                                            </SheetTitle>
+                                            <SheetDescription className="text-muted-foreground/80 text-lg font-medium">
+                                              {resume.candidateName || 'Unknown Candidate'}
+                                            </SheetDescription>
+                                          </div>
+                                        </div>
+                                      </SheetHeader>
+                                      <ScrollArea className="h-[calc(100vh-12rem)] mt-2">
+                                        <div className="space-y-10 pr-6 pb-8">
+                                          {/* Candidate Info Card */}
+                                          <div className="bg-gradient-to-br from-primary/8 via-primary/5 to-accent/8 border border-primary/15 rounded-2xl p-6 animate-fade-in shadow-sm hover:shadow-md transition-all duration-300">
+                                            <div className="flex items-center gap-4 mb-4">
+                                              <div className="p-3 bg-gradient-to-br from-primary/20 via-primary/15 to-primary/10 rounded-xl shadow-sm">
+                                                <Mail className="h-5 w-5 text-primary" />
+                                              </div>
+                                              <div className="flex-1">
+                                                <h4 className="font-bold text-lg text-foreground mb-1">{resume.candidateName}</h4>
+                                                {resume.email && (
+                                                  <p className="text-sm text-muted-foreground/80 font-medium">{resume.email}</p>
+                                                )}
+                                              </div>
+                                            </div>
+                                            <div className="flex items-center gap-3 text-sm text-muted-foreground bg-background/50 rounded-lg p-3 border border-border/30">
+                                              <Calendar className="h-4 w-4 text-primary" />
+                                              <span className="font-medium">Analyzed on {resume.date ? new Date(resume.date).toLocaleDateString() : 'Unknown date'}</span>
+                                            </div>
+                                          </div>
 
-                                         {/* Overall Assessment */}
-                                         <div className="animate-fade-in" style={{animationDelay: '0.1s'}}>
-                                           <h4 className="font-bold text-lg mb-4 flex items-center gap-2">
-                                             <TrendingUp className="h-5 w-5 text-primary" />
-                                             Overall Assessment
-                                           </h4>
-                                           <div className="space-y-4">
-                                             <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200/50 rounded-xl p-4 hover:shadow-md transition-all duration-300">
-                                               <div className="flex justify-between items-center mb-2">
-                                                 <span className="text-sm font-medium text-blue-700">Overall Score</span>
-                                                 <span className="text-lg font-bold text-blue-900">{resume.overallScore}/10</span>
-                                               </div>
-                                               <div className="relative">
-                                                 <Progress 
-                                                   value={(resume.overallScore || 0) * 10} 
-                                                   className="h-3 bg-blue-100 [&>div]:bg-gradient-to-r [&>div]:from-blue-500 [&>div]:to-indigo-600 [&>div]:animate-pulse" 
-                                                 />
-                                               </div>
-                                             </div>
-                                             <div className="bg-gradient-to-r from-emerald-50 to-green-50 border border-emerald-200/50 rounded-xl p-4 hover:shadow-md transition-all duration-300">
-                                               <div className="flex justify-between items-center mb-2">
-                                                 <span className="text-sm font-medium text-emerald-700">Fit Score</span>
-                                                 <span className="text-lg font-bold text-emerald-900">{resume.fitScore}/10</span>
-                                               </div>
-                                               <div className="relative">
-                                                 <Progress 
-                                                   value={(resume.fitScore || 0) * 10} 
-                                                   className="h-3 bg-emerald-100 [&>div]:bg-gradient-to-r [&>div]:from-emerald-500 [&>div]:to-green-600 [&>div]:animate-pulse" 
-                                                 />
-                                               </div>
-                                             </div>
-                                           </div>
-                                         </div>
+                                          {/* Overall Assessment */}
+                                          <div className="animate-fade-in" style={{animationDelay: '0.1s'}}>
+                                            <h4 className="font-bold text-xl mb-6 flex items-center gap-3 text-primary">
+                                              <div className="p-2 bg-gradient-to-br from-primary/20 to-primary/10 rounded-xl">
+                                                <TrendingUp className="h-6 w-6 text-primary" />
+                                              </div>
+                                              Overall Assessment
+                                            </h4>
+                                            <div className="grid grid-cols-2 gap-6">
+                                              <div className="bg-gradient-to-br from-blue-50 via-indigo-50/80 to-blue-100/50 border border-blue-200/40 rounded-2xl p-6 hover:shadow-lg hover:scale-105 transition-all duration-300 group">
+                                                <div className="flex justify-between items-center mb-4">
+                                                  <span className="text-sm font-bold text-blue-700 uppercase tracking-wide">Overall Score</span>
+                                                  <div className="bg-blue-100 rounded-full px-3 py-1">
+                                                    <span className="text-xl font-black text-blue-900">{resume.overallScore}/10</span>
+                                                  </div>
+                                                </div>
+                                                <div className="relative">
+                                                  <Progress 
+                                                    value={(resume.overallScore || 0) * 10} 
+                                                    className="h-4 bg-blue-100 [&>div]:bg-gradient-to-r [&>div]:from-blue-500 [&>div]:to-indigo-600 [&>div]:shadow-sm [&>div]:transition-all [&>div]:duration-500 group-hover:[&>div]:shadow-md" 
+                                                  />
+                                                  <div className="absolute -top-2 left-0 w-full flex justify-between text-xs text-blue-600/70 font-medium">
+                                                    <span>0</span>
+                                                    <span>5</span>
+                                                    <span>10</span>
+                                                  </div>
+                                                </div>
+                                              </div>
+                                              <div className="bg-gradient-to-br from-emerald-50 via-green-50/80 to-emerald-100/50 border border-emerald-200/40 rounded-2xl p-6 hover:shadow-lg hover:scale-105 transition-all duration-300 group">
+                                                <div className="flex justify-between items-center mb-4">
+                                                  <span className="text-sm font-bold text-emerald-700 uppercase tracking-wide">Fit Score</span>
+                                                  <div className="bg-emerald-100 rounded-full px-3 py-1">
+                                                    <span className="text-xl font-black text-emerald-900">{resume.fitScore}/10</span>
+                                                  </div>
+                                                </div>
+                                                <div className="relative">
+                                                  <Progress 
+                                                    value={(resume.fitScore || 0) * 10} 
+                                                    className="h-4 bg-emerald-100 [&>div]:bg-gradient-to-r [&>div]:from-emerald-500 [&>div]:to-green-600 [&>div]:shadow-sm [&>div]:transition-all [&>div]:duration-500 group-hover:[&>div]:shadow-md" 
+                                                  />
+                                                  <div className="absolute -top-2 left-0 w-full flex justify-between text-xs text-emerald-600/70 font-medium">
+                                                    <span>0</span>
+                                                    <span>5</span>
+                                                    <span>10</span>
+                                                  </div>
+                                                </div>
+                                              </div>
+                                            </div>
+                                          </div>
 
-                                         {/* Risk & Reward Analysis */}
-                                         <div className="animate-fade-in" style={{animationDelay: '0.2s'}}>
-                                           <h4 className="font-bold text-lg mb-4 flex items-center gap-2">
-                                             <AlertTriangle className="h-5 w-5 text-orange-500" />
-                                             Risk & Reward Analysis
-                                           </h4>
-                                           <div className="grid grid-cols-2 gap-4">
-                                             <div className="group bg-gradient-to-br from-red-50 via-red-50 to-red-100 border border-red-200/50 rounded-xl p-5 text-center hover:shadow-lg hover:scale-105 transition-all duration-300 cursor-pointer">
-                                               <div className="p-3 bg-red-100 rounded-full w-fit mx-auto mb-3 group-hover:bg-red-200 transition-colors">
-                                                 <AlertTriangle className="h-6 w-6 text-red-600" />
-                                               </div>
-                                                <p className="text-sm text-red-600 font-semibold mb-1">Risk Factor</p>
-                                                <p className="text-2xl font-bold text-red-700 group-hover:scale-110 transition-transform">{resume.riskScore || 'Unknown'}</p>
-                                             </div>
-                                             <div className="group bg-gradient-to-br from-green-50 via-green-50 to-green-100 border border-green-200/50 rounded-xl p-5 text-center hover:shadow-lg hover:scale-105 transition-all duration-300 cursor-pointer">
-                                               <div className="p-3 bg-green-100 rounded-full w-fit mx-auto mb-3 group-hover:bg-green-200 transition-colors">
-                                                 <CheckCircle className="h-6 w-6 text-green-600" />
-                                               </div>
-                                                <p className="text-sm text-green-600 font-semibold mb-1">Reward Factor</p>
-                                                <p className="text-2xl font-bold text-green-700 group-hover:scale-110 transition-transform">{resume.rewardScore || 'Unknown'}</p>
-                                             </div>
-                                           </div>
-                                         </div>
+                                          {/* Risk & Reward Analysis */}
+                                          <div className="animate-fade-in" style={{animationDelay: '0.2s'}}>
+                                            <h4 className="font-bold text-xl mb-6 flex items-center gap-3 text-orange-600">
+                                              <div className="p-2 bg-gradient-to-br from-orange-100 to-orange-50 rounded-xl">
+                                                <AlertTriangle className="h-6 w-6 text-orange-600" />
+                                              </div>
+                                              Risk & Reward Analysis
+                                            </h4>
+                                            <div className="grid grid-cols-2 gap-6">
+                                              <div className="group bg-gradient-to-br from-red-50 via-red-50/80 to-red-100/60 border border-red-200/40 rounded-2xl p-8 text-center hover:shadow-xl hover:scale-105 transition-all duration-300 cursor-pointer">
+                                                <div className="p-4 bg-gradient-to-br from-red-100 to-red-50 rounded-2xl w-fit mx-auto mb-6 group-hover:bg-red-200 transition-all duration-300 shadow-sm">
+                                                  <AlertTriangle className="h-8 w-8 text-red-600" />
+                                                </div>
+                                                 <p className="text-sm text-red-600 font-bold mb-3 uppercase tracking-wide">Risk Factor</p>
+                                                 <p className="text-3xl font-black text-red-700 group-hover:scale-110 transition-transform bg-red-100 rounded-xl py-2 px-4 inline-block">{resume.riskScore || 'Unknown'}</p>
+                                              </div>
+                                              <div className="group bg-gradient-to-br from-green-50 via-green-50/80 to-green-100/60 border border-green-200/40 rounded-2xl p-8 text-center hover:shadow-xl hover:scale-105 transition-all duration-300 cursor-pointer">
+                                                <div className="p-4 bg-gradient-to-br from-green-100 to-green-50 rounded-2xl w-fit mx-auto mb-6 group-hover:bg-green-200 transition-all duration-300 shadow-sm">
+                                                  <CheckCircle className="h-8 w-8 text-green-600" />
+                                                </div>
+                                                 <p className="text-sm text-green-600 font-bold mb-3 uppercase tracking-wide">Reward Factor</p>
+                                                 <p className="text-3xl font-black text-green-700 group-hover:scale-110 transition-transform bg-green-100 rounded-xl py-2 px-4 inline-block">{resume.rewardScore || 'Unknown'}</p>
+                                              </div>
+                                            </div>
+                                          </div>
 
                                          {/* Strengths */}
                                          {resume.strengths && resume.strengths.length > 0 && (
