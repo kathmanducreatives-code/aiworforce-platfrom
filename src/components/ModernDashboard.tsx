@@ -412,10 +412,6 @@ const ModernDashboard = () => {
                                     <Mail className="h-3 w-3 mr-1" />
                                     {resume.email}
                                   </div>}
-                                <div className="text-xs text-muted-foreground mt-1 flex items-center">
-                                  <FileText className="h-3 w-3 mr-1" />
-                                  {resume.resume || 'Resume file'}
-                                </div>
                               </div>
                             </TableCell>
                             <TableCell>
