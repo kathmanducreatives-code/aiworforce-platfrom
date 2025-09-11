@@ -21,7 +21,7 @@ const getRecruitmentTagColor = (recruitmentName: string): string => {
   const colors = ["bg-blue-100 text-blue-800 hover:bg-blue-200", "bg-green-100 text-green-800 hover:bg-green-200", "bg-purple-100 text-purple-800 hover:bg-purple-200", "bg-orange-100 text-orange-800 hover:bg-orange-200", "bg-pink-100 text-pink-800 hover:bg-pink-200", "bg-indigo-100 text-indigo-800 hover:bg-indigo-200", "bg-yellow-100 text-yellow-800 hover:bg-yellow-200", "bg-teal-100 text-teal-800 hover:bg-teal-200", "bg-red-100 text-red-800 hover:bg-red-200", "bg-cyan-100 text-cyan-800 hover:bg-cyan-200"];
   return colors[Math.abs(hash) % colors.length];
 };
-import { Search, FileText, TrendingUp, Users, CheckCircle, AlertTriangle, RefreshCw, Filter, MoreVertical, Eye, Download, Trash2, X, Mail, Calendar, ArrowUpRight, Folder, ChevronRight } from "lucide-react";
+import { Search, FileText, TrendingUp, Users, CheckCircle, AlertTriangle, RefreshCw, Filter, MoreVertical, Eye, Download, Trash2, X, Mail, Calendar, ArrowUpRight, Folder, ChevronRight, ShieldAlert, ShieldCheck, Target, Trophy } from "lucide-react";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Label } from "@/components/ui/label";
@@ -325,129 +325,191 @@ const ModernDashboard = () => {
               </Popover>
             </div>
 
-            {/* Statistics Cards */}
-            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-              <Card className="bg-gradient-to-br from-blue-50 to-blue-100/50 border-0">
+            {/* Enhanced Statistics Cards */}
+            <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
+              <Card className="bg-gradient-to-br from-blue-500/10 via-blue-400/5 to-blue-300/10 border border-blue-200/20 shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-105 group">
                 <CardContent className="p-6">
                   <div className="flex items-center justify-between">
                     <div>
-                      <p className="text-sm font-medium text-blue-700">Total Candidates</p>
-                      <p className="text-2xl font-bold text-blue-900">{filteredResumes.length}</p>
+                      <p className="text-sm font-bold text-blue-700 uppercase tracking-wide mb-2">Total Candidates</p>
+                      <p className="text-3xl font-black text-blue-900 group-hover:scale-110 transition-transform">
+                        {filteredResumes.length}
+                      </p>
                     </div>
-                    <Users className="h-8 w-8 text-blue-600" />
+                    <div className="p-3 bg-gradient-to-br from-blue-500/20 to-blue-400/10 rounded-xl shadow-sm group-hover:shadow-md group-hover:scale-110 transition-all">
+                      <Users className="h-8 w-8 text-blue-600" />
+                    </div>
                   </div>
                 </CardContent>
               </Card>
               
-              <Card className="bg-gradient-to-br from-green-50 to-green-100/50 border-0">
+              <Card className="bg-gradient-to-br from-emerald-500/10 via-emerald-400/5 to-emerald-300/10 border border-emerald-200/20 shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-105 group">
                 <CardContent className="p-6">
                   <div className="flex items-center justify-between">
                     <div>
-                      <p className="text-sm font-medium text-green-700">High Scores</p>
-                      <p className="text-2xl font-bold text-green-900">
+                      <p className="text-sm font-bold text-emerald-700 uppercase tracking-wide mb-2">High Performers</p>
+                      <p className="text-3xl font-black text-emerald-900 group-hover:scale-110 transition-transform">
                         {filteredResumes.filter(r => (r.overallScore || 0) >= 8).length}
                       </p>
                     </div>
-                    <TrendingUp className="h-8 w-8 text-green-600" />
+                    <div className="p-3 bg-gradient-to-br from-emerald-500/20 to-emerald-400/10 rounded-xl shadow-sm group-hover:shadow-md group-hover:scale-110 transition-all">
+                      <Trophy className="h-8 w-8 text-emerald-600" />
+                    </div>
                   </div>
                 </CardContent>
               </Card>
               
-              <Card className="bg-gradient-to-br from-yellow-50 to-yellow-100/50 border-0">
+              <Card className="bg-gradient-to-br from-amber-500/10 via-amber-400/5 to-amber-300/10 border border-amber-200/20 shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-105 group">
                 <CardContent className="p-6">
                   <div className="flex items-center justify-between">
                     <div>
-                      <p className="text-sm font-medium text-yellow-700">High Risk</p>
-                      <p className="text-2xl font-bold text-yellow-900">
+                      <p className="text-sm font-bold text-amber-700 uppercase tracking-wide mb-2">High Risk</p>
+                      <p className="text-3xl font-black text-amber-900 group-hover:scale-110 transition-transform">
                         {filteredResumes.filter(r => (r.riskFactor || 0) >= 7).length}
                       </p>
                     </div>
-                    <AlertTriangle className="h-8 w-8 text-yellow-600" />
+                    <div className="p-3 bg-gradient-to-br from-amber-500/20 to-amber-400/10 rounded-xl shadow-sm group-hover:shadow-md group-hover:scale-110 transition-all">
+                      <ShieldAlert className="h-8 w-8 text-amber-600" />
+                    </div>
                   </div>
                 </CardContent>
               </Card>
               
-              <Card className="bg-gradient-to-br from-purple-50 to-purple-100/50 border-0">
+              <Card className="bg-gradient-to-br from-purple-500/10 via-purple-400/5 to-purple-300/10 border border-purple-200/20 shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-105 group">
                 <CardContent className="p-6">
                   <div className="flex items-center justify-between">
                     <div>
-                      <p className="text-sm font-medium text-purple-700">Avg Score</p>
-                      <p className="text-2xl font-bold text-purple-900">
+                      <p className="text-sm font-bold text-purple-700 uppercase tracking-wide mb-2">Average Score</p>
+                      <p className="text-3xl font-black text-purple-900 group-hover:scale-110 transition-transform">
                         {filteredResumes.length > 0 ? (filteredResumes.reduce((sum, r) => sum + (r.overallScore || 0), 0) / filteredResumes.length).toFixed(1) : '0.0'}
                       </p>
                     </div>
-                    <CheckCircle className="h-8 w-8 text-purple-600" />
+                    <div className="p-3 bg-gradient-to-br from-purple-500/20 to-purple-400/10 rounded-xl shadow-sm group-hover:shadow-md group-hover:scale-110 transition-all">
+                      <Target className="h-8 w-8 text-purple-600" />
+                    </div>
                   </div>
                 </CardContent>
               </Card>
             </div>
 
-            {/* Candidates Table */}
-            {filteredResumes.length > 0 ? <Card className="border-0 shadow-sm">
+            {/* Modern Candidates Table */}
+            {filteredResumes.length > 0 ? <Card className="border-0 shadow-lg rounded-2xl overflow-hidden bg-gradient-to-br from-background via-background/95 to-accent/5">
                 <CardContent className="p-0">
-                  <div className="rounded-lg overflow-hidden">
+                  <div className="rounded-2xl overflow-hidden">
                     <Table>
                       <TableHeader>
-                        <TableRow className="bg-muted/30">
-                          <TableHead className="font-semibold">Candidate</TableHead>
-                          <TableHead className="font-semibold">Overall Score</TableHead>
-                          <TableHead className="font-semibold">Risk/Reward</TableHead>
-                          <TableHead className="font-semibold">Date</TableHead>
-                          <TableHead className="font-semibold">Actions</TableHead>
+                        <TableRow className="bg-gradient-to-r from-muted/50 to-muted/30 hover:bg-muted/40 border-b-2 border-border/30">
+                          <TableHead className="font-bold text-foreground/80 py-4 px-6">Candidate</TableHead>
+                          <TableHead className="font-bold text-foreground/80 py-4 px-6">Overall Score</TableHead>
+                          <TableHead className="font-bold text-foreground/80 py-4 px-6">Risk/Reward</TableHead>
+                          <TableHead className="font-bold text-foreground/80 py-4 px-6">Date</TableHead>
+                          <TableHead className="font-bold text-foreground/80 py-4 px-6">Actions</TableHead>
                         </TableRow>
                       </TableHeader>
                       <TableBody>
-                        {filteredResumes.map((resume, index) => <TableRow key={resume.id} className="hover:bg-muted/20 transition-colors">
-                            <TableCell>
-                              <div className="flex flex-col">
-                                <div className="flex items-center gap-2 mb-1">
-                                  <div className="font-medium text-foreground">
-                                    {resume.candidateName || 'Unknown Candidate'}
+                        {filteredResumes.map((resume, index) => {
+                          const getRiskBadge = (riskScore: string) => {
+                            const risk = riskScore?.toLowerCase() || 'unknown';
+                            if (risk === 'high') return { color: 'bg-red-100 text-red-800 border-red-200/50', icon: ShieldAlert, iconColor: 'text-red-600' };
+                            if (risk === 'medium') return { color: 'bg-amber-100 text-amber-800 border-amber-200/50', icon: AlertTriangle, iconColor: 'text-amber-600' };
+                            if (risk === 'low') return { color: 'bg-green-100 text-green-800 border-green-200/50', icon: ShieldCheck, iconColor: 'text-green-600' };
+                            return { color: 'bg-gray-100 text-gray-800 border-gray-200/50', icon: ShieldAlert, iconColor: 'text-gray-600' };
+                          };
+                          
+                          const getRewardBadge = (rewardScore: string) => {
+                            const reward = rewardScore?.toLowerCase() || 'unknown';
+                            if (reward === 'high') return { color: 'bg-emerald-100 text-emerald-800 border-emerald-200/50', icon: Trophy, iconColor: 'text-emerald-600' };
+                            if (reward === 'medium') return { color: 'bg-blue-100 text-blue-800 border-blue-200/50', icon: Target, iconColor: 'text-blue-600' };
+                            if (reward === 'low') return { color: 'bg-slate-100 text-slate-800 border-slate-200/50', icon: Target, iconColor: 'text-slate-600' };
+                            return { color: 'bg-gray-100 text-gray-800 border-gray-200/50', icon: Target, iconColor: 'text-gray-600' };
+                          };
+                          
+                          const riskBadge = getRiskBadge(resume.riskScore || 'unknown');
+                          const rewardBadge = getRewardBadge(resume.rewardScore || 'unknown');
+                          
+                          return (
+                            <TableRow 
+                              key={resume.id} 
+                              className={`transition-all duration-200 hover:bg-primary/5 hover:shadow-md hover:scale-[1.01] ${
+                                index % 2 === 0 ? 'bg-background' : 'bg-muted/20'
+                              } border-b border-border/30 group`}
+                            >
+                              <TableCell className="py-4 px-6">
+                                <div className="flex flex-col">
+                                  <div className="flex items-center gap-3 mb-2">
+                                    <div className="font-semibold text-foreground text-base group-hover:text-primary transition-colors">
+                                      {resume.candidateName || 'Unknown Candidate'}
+                                    </div>
+                                    {resume.recruitmentName && <Badge className={`text-xs px-3 py-1 font-semibold rounded-full border transition-all hover:scale-105 ${getRecruitmentTagColor(resume.recruitmentName)} shadow-sm`}>
+                                        {resume.recruitmentName}
+                                      </Badge>}
                                   </div>
-                                  {resume.recruitmentName && <Badge className={`text-xs px-2 py-0.5 font-medium transition-colors ${getRecruitmentTagColor(resume.recruitmentName)}`}>
-                                      {resume.recruitmentName}
-                                    </Badge>}
+                                  {resume.email && <div className="flex items-center text-sm text-muted-foreground/80">
+                                      <Mail className="h-3 w-3 mr-2 text-primary/60" />
+                                      <span className="font-medium">{resume.email}</span>
+                                    </div>}
                                 </div>
-                                {resume.email && <div className="flex items-center text-sm text-muted-foreground mt-1">
-                                    <Mail className="h-3 w-3 mr-1" />
-                                    {resume.email}
-                                  </div>}
-                              </div>
-                            </TableCell>
-                            <TableCell>
-                              <div className="flex items-center gap-3">
-                                <div className="flex-1">
-                                  <Progress value={(resume.overallScore || 0) * 10} className="h-2" />
+                              </TableCell>
+                              <TableCell className="py-4 px-6">
+                                <div className="flex items-center gap-4">
+                                  <div className="flex-1 min-w-[120px]">
+                                    <div className="relative">
+                                      <Progress 
+                                        value={(resume.overallScore || 0) * 10} 
+                                        className="h-3 bg-gradient-to-r from-slate-100 to-slate-200 rounded-full shadow-inner" 
+                                      />
+                                      <div 
+                                        className="absolute top-0 left-0 h-3 rounded-full bg-gradient-to-r from-blue-500 via-purple-500 to-emerald-500 shadow-md transition-all duration-700 ease-out"
+                                        style={{
+                                          width: `${(resume.overallScore || 0) * 10}%`,
+                                          background: `linear-gradient(90deg, 
+                                            ${(resume.overallScore || 0) >= 8 ? '#10b981' : 
+                                              (resume.overallScore || 0) >= 6 ? '#3b82f6' : 
+                                              (resume.overallScore || 0) >= 4 ? '#f59e0b' : '#ef4444'
+                                            } 0%, 
+                                            ${(resume.overallScore || 0) >= 8 ? '#059669' : 
+                                              (resume.overallScore || 0) >= 6 ? '#2563eb' : 
+                                              (resume.overallScore || 0) >= 4 ? '#d97706' : '#dc2626'
+                                            } 100%)`
+                                        }}
+                                      />
+                                    </div>
+                                  </div>
+                                  <span className="text-sm font-bold text-foreground min-w-[3rem] bg-gradient-to-r from-primary/10 to-accent/10 px-3 py-1 rounded-full">
+                                    {resume.overallScore || 0}/10
+                                  </span>
                                 </div>
-                                <span className="text-sm font-medium min-w-[2rem]">
-                                  {resume.overallScore || 0}/10
-                                </span>
-                              </div>
-                            </TableCell>
-                            <TableCell>
-                              <div className="flex gap-2">
-                                <Badge variant={resume.riskScore === "High" ? "destructive" : resume.riskScore === "Medium" ? "secondary" : "outline"} className="text-xs">
-                                  Risk: {resume.riskScore || 'Unknown'}
-                                </Badge>
-                                <Badge variant={resume.rewardScore === "High" ? "default" : "outline"} className="text-xs">
-                                  Reward: {resume.rewardScore || 'Unknown'}
-                                </Badge>
-                              </div>
-                            </TableCell>
-                            <TableCell>
-                              <div className="flex items-center text-sm text-muted-foreground">
-                                <Calendar className="h-3 w-3 mr-1" />
-                                {resume.date ? new Date(resume.date).toLocaleDateString() : 'Unknown'}
-                              </div>
-                            </TableCell>
-                            <TableCell>
-                              <div className="flex items-center gap-2">
-                                 <Sheet>
-                                   <SheetTrigger asChild>
-                                     <Button size="sm" variant="ghost" className="h-8 w-8 p-0 hover:bg-primary/10 hover:text-primary transition-colors">
-                                       <Eye className="h-4 w-4" />
-                                     </Button>
-                                   </SheetTrigger>
+                              </TableCell>
+                              <TableCell className="py-4 px-6">
+                                <div className="flex flex-col gap-2">
+                                  <Badge className={`text-xs px-3 py-1.5 font-semibold rounded-full border shadow-sm transition-all hover:scale-105 flex items-center gap-1.5 w-fit ${riskBadge.color}`}>
+                                    <riskBadge.icon className={`h-3 w-3 ${riskBadge.iconColor}`} />
+                                    Risk: {resume.riskScore || 'Unknown'}
+                                  </Badge>
+                                  <Badge className={`text-xs px-3 py-1.5 font-semibold rounded-full border shadow-sm transition-all hover:scale-105 flex items-center gap-1.5 w-fit ${rewardBadge.color}`}>
+                                    <rewardBadge.icon className={`h-3 w-3 ${rewardBadge.iconColor}`} />
+                                    Reward: {resume.rewardScore || 'Unknown'}
+                                  </Badge>
+                                </div>
+                              </TableCell>
+                              <TableCell className="py-4 px-6">
+                                <div className="flex items-center text-sm text-muted-foreground bg-gradient-to-r from-muted/30 to-muted/20 px-3 py-2 rounded-lg">
+                                  <Calendar className="h-4 w-4 mr-2 text-primary/60" />
+                                  <span className="font-medium">{resume.date ? new Date(resume.date).toLocaleDateString() : 'Unknown'}</span>
+                                </div>
+                              </TableCell>
+                              <TableCell className="py-4 px-6">
+                                <div className="flex items-center gap-2">
+                                   <Sheet>
+                                     <SheetTrigger asChild>
+                                       <Button 
+                                         size="sm" 
+                                         className="h-9 w-9 p-0 bg-gradient-to-r from-primary/10 to-primary/20 hover:from-primary/20 hover:to-primary/30 border border-primary/20 hover:border-primary/30 shadow-sm hover:shadow-md transition-all duration-200 hover:scale-110 group" 
+                                         title="View Details"
+                                       >
+                                         <Eye className="h-4 w-4 text-primary group-hover:scale-110 transition-transform" />
+                                       </Button>
+                                     </SheetTrigger>
                                     <SheetContent side="right" className="w-[40vw] min-w-[500px] max-w-[900px] bg-gradient-to-br from-background via-background/95 to-accent/5 border-l border-border/30 backdrop-blur-sm shadow-2xl">
                                       <SheetHeader className="pb-8 border-b border-border/20 bg-gradient-to-r from-primary/5 to-accent/5 -mx-6 -mt-6 px-6 pt-6 mb-6 rounded-t-lg">
                                         <div className="flex items-center gap-4">
@@ -634,27 +696,44 @@ const ModernDashboard = () => {
                                    </SheetContent>
                                  </Sheet>
                                 
-                                <Button size="sm" variant="ghost" className="h-8 w-8 p-0">
-                                  <Download className="h-4 w-4" />
-                                </Button>
-                                
-                                <DropdownMenu>
-                                  <DropdownMenuTrigger asChild>
-                                    <Button size="sm" variant="ghost" className="h-8 w-8 p-0">
-                                      <MoreVertical className="h-4 w-4" />
-                                    </Button>
-                                  </DropdownMenuTrigger>
-                                   <DropdownMenuContent align="end">
-                                     <DropdownMenuItem className="text-red-600 cursor-pointer" onClick={() => handleDeleteCandidate(resume.id!)}>
-                                       <Trash2 className="h-4 w-4 mr-2" />
-                                       Delete
-                                     </DropdownMenuItem>
-                                   </DropdownMenuContent>
-                                </DropdownMenu>
-                              </div>
-                            </TableCell>
-                          </TableRow>)}
-                      </TableBody>
+                                   <Button 
+                                     size="sm" 
+                                     className="h-9 w-9 p-0 bg-gradient-to-r from-emerald-100/50 to-emerald-200/50 hover:from-emerald-200 hover:to-emerald-300 border border-emerald-300/50 hover:border-emerald-400/50 shadow-sm hover:shadow-md transition-all duration-200 hover:scale-110 group" 
+                                     title="Download Resume"
+                                     onClick={() => {
+                                       const driveLink = `https://drive.google.com/file/d/${resume.resume}/view`;
+                                       window.open(driveLink, '_blank');
+                                     }}
+                                   >
+                                     <Download className="h-4 w-4 text-emerald-700 group-hover:scale-110 transition-transform" />
+                                   </Button>
+                                 
+                                 <DropdownMenu>
+                                   <DropdownMenuTrigger asChild>
+                                     <Button 
+                                       size="sm" 
+                                       className="h-9 w-9 p-0 bg-gradient-to-r from-slate-100/50 to-slate-200/50 hover:from-slate-200 hover:to-slate-300 border border-slate-300/50 hover:border-slate-400/50 shadow-sm hover:shadow-md transition-all duration-200 hover:scale-110 group"
+                                       title="More Options"
+                                     >
+                                       <MoreVertical className="h-4 w-4 text-slate-700 group-hover:scale-110 transition-transform" />
+                                     </Button>
+                                   </DropdownMenuTrigger>
+                                    <DropdownMenuContent align="end" className="border border-border/50 shadow-lg">
+                                      <DropdownMenuItem 
+                                        className="text-red-600 hover:bg-red-50 hover:text-red-700 cursor-pointer transition-colors" 
+                                        onClick={() => handleDeleteCandidate(resume.id!)}
+                                      >
+                                        <Trash2 className="h-4 w-4 mr-2" />
+                                        Delete Candidate
+                                      </DropdownMenuItem>
+                                    </DropdownMenuContent>
+                                 </DropdownMenu>
+                               </div>
+                             </TableCell>
+                           </TableRow>
+                          );
+                        })}
+                       </TableBody>
                     </Table>
                   </div>
                 </CardContent>
