@@ -207,32 +207,52 @@ const ModernDashboard = () => {
     });
   }, [viewMode, selectedFolder, recruitmentFolders, resumeData, searchTerm, filters]);
   if (loading) {
-    return <div className="min-h-screen bg-white">
-        <div className="flex items-center justify-center py-16">
-          <RefreshCw className="h-8 w-8 animate-spin text-primary mr-3" />
-          <span className="text-lg text-muted-foreground">Loading candidates...</span>
+    return <div className="min-h-screen bg-gradient-to-br from-slate-50 to-white">
+        <div className="flex items-center justify-center py-20">
+          <div className="text-center">
+            <div className="relative">
+              <RefreshCw className="h-12 w-12 animate-spin text-cyan-500 mx-auto mb-4" />
+              <div className="absolute inset-0 h-12 w-12 bg-cyan-500/20 rounded-full animate-ping mx-auto" />
+            </div>
+            <h2 className="text-2xl font-bold bg-gradient-to-r from-slate-800 to-slate-600 bg-clip-text text-transparent mb-2">
+              Loading Candidates
+            </h2>
+            <p className="text-slate-600 font-medium">Analyzing resume data with AI precision...</p>
+          </div>
         </div>
       </div>;
   }
-  return <div className="min-h-screen bg-background">
-      <div className="max-w-7xl mx-auto px-6 py-8">
+  return <div className="min-h-screen bg-gradient-to-br from-slate-50 to-white">
+      <div className="max-w-7xl mx-auto px-6 py-12">
         {/* Header */}
-        <div className="mb-8">
-          <div className="flex items-center justify-between mb-8">
+        <div className="mb-12">
+          <div className="flex items-center justify-between mb-12">
             <div>
-              <h1 className="text-2xl font-semibold text-foreground">
+              <h1 className="text-4xl font-bold bg-gradient-to-r from-slate-800 to-slate-600 bg-clip-text text-transparent mb-3">
                 {viewMode === 'folders' && selectedFolder ? selectedFolder : 'Candidate Dashboard'}
               </h1>
-              <p className="text-muted-foreground mt-1 text-sm">
-                {viewMode === 'folders' && selectedFolder ? `${filteredResumes.length} candidates in ${selectedFolder}` : 'Manage and analyze candidate applications'}
+              <p className="text-slate-600 text-lg font-medium">
+                {viewMode === 'folders' && selectedFolder ? `${filteredResumes.length} candidates in ${selectedFolder}` : 'Manage and analyze candidate applications with AI precision'}
               </p>
             </div>
             <div className="flex gap-3">
-              <Button onClick={() => setViewMode(viewMode === 'all' ? 'folders' : 'all')} variant={viewMode === 'folders' ? 'secondary' : 'outline'} size="sm" className="gap-2">
+              <Button 
+                onClick={() => setViewMode(viewMode === 'all' ? 'folders' : 'all')} 
+                variant={viewMode === 'folders' ? 'default' : 'outline'} 
+                className={`gap-2 px-6 py-2 rounded-xl font-medium transition-all duration-200 ${
+                  viewMode === 'folders' 
+                    ? 'bg-gradient-to-r from-cyan-500 to-teal-500 text-white shadow-lg shadow-cyan-500/25 hover:shadow-xl hover:shadow-cyan-500/30 hover:scale-105' 
+                    : 'border-slate-200 hover:border-cyan-300 hover:bg-cyan-50 hover:text-cyan-700'
+                }`}
+              >
                 <Folder className="h-4 w-4" />
                 {viewMode === 'folders' ? 'Show All' : 'Folders'}
               </Button>
-              <Button onClick={fetchResumeData} variant="outline" size="sm" className="gap-2">
+              <Button 
+                onClick={fetchResumeData} 
+                variant="outline" 
+                className="gap-2 px-6 py-2 rounded-xl font-medium border-slate-200 hover:border-cyan-300 hover:bg-cyan-50 hover:text-cyan-700 transition-all duration-200"
+              >
                 <RefreshCw className="h-4 w-4" />
                 Refresh
               </Button>
@@ -240,21 +260,25 @@ const ModernDashboard = () => {
           </div>
 
           {/* Folder View */}
-          {viewMode === 'folders' && !selectedFolder && <div className="mb-8">
-              <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-                {Object.entries(recruitmentFolders).map(([folderName, candidates]) => <Card key={folderName} className="cursor-pointer hover:bg-muted/50 transition-colors" onClick={() => setSelectedFolder(folderName)}>
-                    <CardContent className="p-5">
-                      <div className="flex items-center gap-3">
-                        <div className="p-2 bg-muted rounded-md">
-                          <Folder className="h-4 w-4 text-muted-foreground" />
+          {viewMode === 'folders' && !selectedFolder && <div className="mb-12">
+              <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+                {Object.entries(recruitmentFolders).map(([folderName, candidates]) => <Card 
+                  key={folderName} 
+                  className="cursor-pointer group backdrop-blur-sm bg-white/80 border border-slate-200/50 shadow-lg hover:shadow-xl hover:shadow-cyan-500/10 transition-all duration-300 hover:scale-[1.02] hover:border-cyan-200 rounded-2xl" 
+                  onClick={() => setSelectedFolder(folderName)}
+                >
+                    <CardContent className="p-6">
+                      <div className="flex items-center gap-4">
+                        <div className="p-3 bg-gradient-to-br from-cyan-50 to-teal-50 rounded-xl group-hover:from-cyan-100 group-hover:to-teal-100 transition-all duration-300">
+                          <Folder className="h-5 w-5 text-cyan-600" />
                         </div>
                         <div className="flex-1">
-                          <h3 className="font-medium">{folderName}</h3>
-                          <p className="text-sm text-muted-foreground">
+                          <h3 className="font-semibold text-slate-800 group-hover:text-cyan-700 transition-colors">{folderName}</h3>
+                          <p className="text-sm text-slate-500 mt-1">
                             {candidates.length} candidate{candidates.length !== 1 ? 's' : ''}
                           </p>
                         </div>
-                        <ChevronRight className="h-4 w-4 text-muted-foreground" />
+                        <ChevronRight className="h-5 w-5 text-slate-400 group-hover:text-cyan-500 group-hover:translate-x-1 transition-all duration-300" />
                       </div>
                     </CardContent>
                   </Card>)}
@@ -271,8 +295,8 @@ const ModernDashboard = () => {
             </div>}
 
           {/* Search and Filter Bar */}
-          <div className={`${viewMode === 'folders' && !selectedFolder ? 'hidden' : ''} space-y-6`}>
-            <div className="flex flex-col sm:flex-row gap-4">
+          <div className={`${viewMode === 'folders' && !selectedFolder ? 'hidden' : ''} space-y-8`}>
+            <div className="flex flex-col sm:flex-row gap-6 mb-8">
               <div className="relative flex-1">
                 <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                 <Input placeholder="Search candidates, emails, or resume titles..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} className="pl-10" />
@@ -326,86 +350,152 @@ const ModernDashboard = () => {
             </div>
 
             {/* Statistics Cards */}
-            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4 mb-8">
-              <Card>
-                <CardContent className="p-4">
-                  <div className="flex items-center justify-between">
+            <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4 mb-12">
+              <Card className="backdrop-blur-sm bg-white/70 border-0 shadow-xl shadow-slate-200/50 rounded-2xl overflow-hidden group hover:shadow-2xl hover:shadow-cyan-500/10 transition-all duration-300">
+                <CardContent className="p-6 relative">
+                  <div className="absolute inset-0 bg-gradient-to-br from-cyan-50/50 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+                  <div className="relative flex items-center justify-between">
                     <div>
-                      <p className="text-sm font-medium text-muted-foreground mb-1">Total Candidates</p>
-                      <p className="text-xl font-semibold text-foreground">
+                      <p className="text-sm font-medium text-slate-500 mb-2">Total Candidates</p>
+                      <p className="text-3xl font-bold bg-gradient-to-r from-slate-800 to-slate-600 bg-clip-text text-transparent">
                         {filteredResumes.length}
                       </p>
                     </div>
-                    <div className="p-2 bg-muted rounded-md">
-                      <Users className="h-4 w-4 text-muted-foreground" />
+                    <div className="p-3 bg-gradient-to-br from-blue-50 to-cyan-50 rounded-xl group-hover:scale-110 transition-transform duration-300">
+                      <Users className="h-6 w-6 text-blue-600" />
                     </div>
                   </div>
                 </CardContent>
               </Card>
               
-              <Card>
-                <CardContent className="p-4">
-                  <div className="flex items-center justify-between">
+              <Card className="backdrop-blur-sm bg-white/70 border-0 shadow-xl shadow-slate-200/50 rounded-2xl overflow-hidden group hover:shadow-2xl hover:shadow-emerald-500/10 transition-all duration-300">
+                <CardContent className="p-6 relative">
+                  <div className="absolute inset-0 bg-gradient-to-br from-emerald-50/50 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+                  <div className="relative flex items-center justify-between">
                     <div>
-                      <p className="text-sm font-medium text-muted-foreground mb-1">High Performers</p>
-                      <p className="text-xl font-semibold text-foreground">
+                      <p className="text-sm font-medium text-slate-500 mb-2">High Performers</p>
+                      <p className="text-3xl font-bold bg-gradient-to-r from-emerald-600 to-teal-600 bg-clip-text text-transparent">
                         {filteredResumes.filter(r => (r.overallScore || 0) >= 8).length}
                       </p>
                     </div>
-                    <div className="p-2 bg-muted rounded-md">
-                      <Trophy className="h-4 w-4 text-muted-foreground" />
+                    <div className="p-3 bg-gradient-to-br from-emerald-50 to-teal-50 rounded-xl group-hover:scale-110 transition-transform duration-300">
+                      <Trophy className="h-6 w-6 text-emerald-600" />
                     </div>
                   </div>
                 </CardContent>
               </Card>
               
-              <Card>
-                <CardContent className="p-4">
-                  <div className="flex items-center justify-between">
+              <Card className="backdrop-blur-sm bg-white/70 border-0 shadow-xl shadow-slate-200/50 rounded-2xl overflow-hidden group hover:shadow-2xl hover:shadow-purple-500/10 transition-all duration-300">
+                <CardContent className="p-6 relative">
+                  <div className="absolute inset-0 bg-gradient-to-br from-purple-50/50 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+                  <div className="relative flex items-center justify-between">
                     <div>
-                      <p className="text-sm font-medium text-muted-foreground mb-1">Reviewed Today</p>
-                      <p className="text-xl font-semibold text-foreground">
+                      <p className="text-sm font-medium text-slate-500 mb-2">Reviewed Today</p>
+                      <p className="text-3xl font-bold bg-gradient-to-r from-purple-600 to-pink-600 bg-clip-text text-transparent">
                         {filteredResumes.filter(r => {
                           const today = new Date().toISOString().split('T')[0];
                           return r.date === today;
                         }).length}
                       </p>
                     </div>
-                    <div className="p-2 bg-muted rounded-md">
-                      <Calendar className="h-4 w-4 text-muted-foreground" />
+                    <div className="p-3 bg-gradient-to-br from-purple-50 to-pink-50 rounded-xl group-hover:scale-110 transition-transform duration-300">
+                      <Calendar className="h-6 w-6 text-purple-600" />
                     </div>
                   </div>
                 </CardContent>
               </Card>
               
-              <Card>
-                <CardContent className="p-4">
-                  <div className="flex items-center justify-between">
+              <Card className="backdrop-blur-sm bg-white/70 border-0 shadow-xl shadow-slate-200/50 rounded-2xl overflow-hidden group hover:shadow-2xl hover:shadow-amber-500/10 transition-all duration-300">
+                <CardContent className="p-6 relative">
+                  <div className="absolute inset-0 bg-gradient-to-br from-amber-50/50 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+                  <div className="relative flex items-center justify-between">
                     <div>
-                      <p className="text-sm font-medium text-muted-foreground mb-1">Average Score</p>
-                      <p className="text-xl font-semibold text-foreground">
+                      <p className="text-sm font-medium text-slate-500 mb-2">Average Score</p>
+                      <p className="text-3xl font-bold bg-gradient-to-r from-amber-600 to-orange-600 bg-clip-text text-transparent">
                         {filteredResumes.length > 0 ? (filteredResumes.reduce((sum, r) => sum + (r.overallScore || 0), 0) / filteredResumes.length).toFixed(1) : '0.0'}
                       </p>
                     </div>
-                    <div className="p-2 bg-muted rounded-md">
-                      <Target className="h-4 w-4 text-muted-foreground" />
+                    <div className="p-3 bg-gradient-to-br from-amber-50 to-orange-50 rounded-xl group-hover:scale-110 transition-transform duration-300">
+                      <Target className="h-6 w-6 text-amber-600" />
                     </div>
                   </div>
                 </CardContent>
               </Card>
             </div>
 
+            {/* Search and Filter Bar */}
+            <div className="flex flex-col sm:flex-row gap-6 mb-8">
+              <div className="relative flex-1">
+                <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 h-5 w-5 text-slate-400" />
+                <Input 
+                  placeholder="Search candidates, emails, or resume titles..." 
+                  value={searchTerm} 
+                  onChange={e => setSearchTerm(e.target.value)} 
+                  className="pl-12 h-12 rounded-2xl border-slate-200 bg-white/80 backdrop-blur-sm shadow-lg focus:border-cyan-300 focus:ring-cyan-100 text-slate-700 placeholder:text-slate-400"
+                />
+              </div>
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button 
+                    variant="outline" 
+                    className="gap-2 h-12 px-6 rounded-2xl border-slate-200 bg-white/80 backdrop-blur-sm shadow-lg hover:border-cyan-300 hover:bg-cyan-50 hover:text-cyan-700 transition-all duration-200"
+                  >
+                    <Filter className="h-5 w-5" />
+                    Filters
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-80 rounded-2xl border-slate-200 bg-white/95 backdrop-blur-sm shadow-2xl" align="end">
+                  <div className="space-y-6 p-2">
+                    <div>
+                      <Label className="text-sm font-semibold text-slate-700">Score Range</Label>
+                      <Select value={filters.scoreRange} onValueChange={value => setFilters({
+                      ...filters,
+                      scoreRange: value
+                    })}>
+                        <SelectTrigger className="mt-2 rounded-xl border-slate-200">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent className="rounded-xl border-slate-200">
+                          <SelectItem value="all">All Scores</SelectItem>
+                          <SelectItem value="high">High (8-10)</SelectItem>
+                          <SelectItem value="medium">Medium (4-7)</SelectItem>
+                          <SelectItem value="low">Low (0-3)</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div>
+                      <Label className="text-sm font-semibold text-slate-700">Date Range</Label>
+                      <Select value={filters.dateRange} onValueChange={value => setFilters({
+                      ...filters,
+                      dateRange: value
+                    })}>
+                        <SelectTrigger className="mt-2 rounded-xl border-slate-200">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent className="rounded-xl border-slate-200">
+                          <SelectItem value="all">All Time</SelectItem>
+                          <SelectItem value="today">Today</SelectItem>
+                          <SelectItem value="week">This Week</SelectItem>
+                          <SelectItem value="month">This Month</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+                </PopoverContent>
+              </Popover>
+            </div>
+
             {/* Candidates Table */}
-            {filteredResumes.length > 0 ? <Card>
+            {filteredResumes.length > 0 ? <Card className="backdrop-blur-sm bg-white/80 border-0 shadow-2xl shadow-slate-200/50 rounded-3xl overflow-hidden">
                 <CardContent className="p-0">
                   <Table>
                     <TableHeader>
-                      <TableRow className="border-b">
-                        <TableHead className="font-medium text-foreground py-3 px-4">Candidate</TableHead>
-                        <TableHead className="font-medium text-foreground py-3 px-4">Overall Score</TableHead>
-                        <TableHead className="font-medium text-foreground py-3 px-4">Risk/Reward</TableHead>
-                        <TableHead className="font-medium text-foreground py-3 px-4">Date</TableHead>
-                        <TableHead className="font-medium text-foreground py-3 px-4">Actions</TableHead>
+                      <TableRow className="border-b border-slate-100 bg-gradient-to-r from-slate-50 to-white">
+                        <TableHead className="font-semibold text-slate-700 py-6 px-6 text-left">Candidate</TableHead>
+                        <TableHead className="font-semibold text-slate-700 py-6 px-6 text-center">Overall Score</TableHead>
+                        <TableHead className="font-semibold text-slate-700 py-6 px-6 text-center">Risk/Reward</TableHead>
+                        <TableHead className="font-semibold text-slate-700 py-6 px-6 text-center">Date</TableHead>
+                        <TableHead className="font-semibold text-slate-700 py-6 px-6 text-center">Actions</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -429,68 +519,80 @@ const ModernDashboard = () => {
                         const riskBadge = getRiskBadge(resume.riskScore || 'unknown');
                         const rewardBadge = getRewardBadge(resume.rewardScore || 'unknown');
                         
-                        return (
-                          <TableRow 
-                            key={resume.id} 
-                            className={`hover:bg-muted/50 transition-colors ${
-                              index % 2 === 0 ? 'bg-background' : 'bg-muted/20'
-                            }`}
-                          >
-                            <TableCell className="py-4 px-4">
-                              <div className="flex flex-col">
-                                <div className="flex items-center gap-3 mb-1">
-                                  <div className="font-medium text-foreground">
-                                    {resume.candidateName || 'Unknown Candidate'}
-                                  </div>
-                                  {resume.recruitmentName && <Badge variant="secondary" className="text-xs">
-                                      {resume.recruitmentName}
-                                    </Badge>}
-                                </div>
-                                {resume.email && <div className="flex items-center text-sm text-muted-foreground">
-                                    <Mail className="h-3 w-3 mr-1" />
-                                    <span>{resume.email}</span>
-                                  </div>}
-                              </div>
-                            </TableCell>
-                            <TableCell className="py-4 px-4">
-                              <div className="flex items-center gap-3">
-                                <div className="flex-1 min-w-[100px]">
-                                  <Progress 
-                                    value={(resume.overallScore || 0) * 10} 
-                                    className="h-2" 
-                                  />
-                                </div>
-                                <span className="text-sm font-medium text-foreground min-w-[2.5rem]">
-                                  {resume.overallScore || 0}/10
-                                </span>
-                              </div>
-                            </TableCell>
-                            <TableCell className="py-4 px-4">
-                              <div className="flex flex-col gap-1">
-                                <Badge className={`text-xs px-2 py-1 font-medium rounded-md border flex items-center gap-1 w-fit ${riskBadge.color}`}>
-                                  <riskBadge.icon className="h-3 w-3" />
-                                  Risk: {resume.riskScore || 'Unknown'}
-                                </Badge>
-                                <Badge className={`text-xs px-2 py-1 font-medium rounded-md border flex items-center gap-1 w-fit ${rewardBadge.color}`}>
-                                  <rewardBadge.icon className="h-3 w-3" />
-                                  Reward: {resume.rewardScore || 'Unknown'}
-                                </Badge>
-                              </div>
-                            </TableCell>
-                            <TableCell className="py-4 px-4">
-                              <div className="flex items-center text-sm text-muted-foreground">
-                                <Calendar className="h-4 w-4 mr-2" />
-                                <span>{resume.date ? new Date(resume.date).toLocaleDateString() : 'Unknown'}</span>
-                              </div>
-                            </TableCell>
-                            <TableCell className="py-4 px-4">
-                              <div className="flex items-center gap-2">
-                                <Sheet>
-                                  <SheetTrigger asChild>
-                                    <Button size="sm" variant="outline" className="h-8 w-8 p-0" title="View Details">
-                                      <Eye className="h-4 w-4" />
-                                    </Button>
-                                  </SheetTrigger>
+                         return (
+                           <TableRow 
+                             key={resume.id} 
+                             className={`group hover:bg-gradient-to-r hover:from-cyan-50/30 hover:to-teal-50/30 transition-all duration-300 border-b border-slate-50 ${
+                               index % 2 === 0 ? 'bg-white' : 'bg-slate-50/30'
+                             }`}
+                           >
+                             <TableCell className="py-6 px-6">
+                               <div className="flex flex-col">
+                                 <div className="flex items-center gap-3 mb-2">
+                                   <div className="font-semibold text-slate-800 group-hover:text-cyan-700 transition-colors">
+                                     {resume.candidateName || 'Unknown Candidate'}
+                                   </div>
+                                   {resume.recruitmentName && <Badge 
+                                     className={`px-3 py-1 rounded-full text-xs font-medium border ${getRecruitmentTagColor(resume.recruitmentName)}`}
+                                   >
+                                       {resume.recruitmentName}
+                                     </Badge>}
+                                 </div>
+                                 {resume.email && <div className="flex items-center text-sm text-slate-500">
+                                     <Mail className="h-4 w-4 mr-2 text-slate-400" />
+                                     <span>{resume.email}</span>
+                                   </div>}
+                               </div>
+                             </TableCell>
+                             <TableCell className="py-6 px-6 text-center">
+                               <div className="flex items-center justify-center gap-3">
+                                 <div className="flex-1 min-w-[120px] max-w-[160px]">
+                                   <div className="relative">
+                                     <Progress 
+                                       value={(resume.overallScore || 0) * 10} 
+                                       className="h-3 bg-slate-100 rounded-full overflow-hidden"
+                                     />
+                                     <div 
+                                       className="absolute top-0 left-0 h-3 rounded-full bg-gradient-to-r from-cyan-500 to-teal-500 transition-all duration-300 ease-out"
+                                       style={{ width: `${Math.min(100, (resume.overallScore || 0) * 10)}%` }}
+                                     />
+                                   </div>
+                                 </div>
+                                 <span className="text-sm font-bold text-slate-800 min-w-[3rem] bg-slate-100 px-2 py-1 rounded-lg">
+                                   {resume.overallScore || 0}/10
+                                 </span>
+                               </div>
+                             </TableCell>
+                             <TableCell className="py-6 px-6 text-center">
+                               <div className="flex flex-col items-center gap-2">
+                                 <Badge className={`text-xs px-3 py-1.5 font-semibold rounded-full border-0 flex items-center gap-2 shadow-md ${riskBadge.color}`}>
+                                   <riskBadge.icon className="h-3.5 w-3.5" />
+                                   Risk: {resume.riskScore || 'Unknown'}
+                                 </Badge>
+                                 <Badge className={`text-xs px-3 py-1.5 font-semibold rounded-full border-0 flex items-center gap-2 shadow-md ${rewardBadge.color}`}>
+                                   <rewardBadge.icon className="h-3.5 w-3.5" />
+                                   Reward: {resume.rewardScore || 'Unknown'}
+                                 </Badge>
+                               </div>
+                             </TableCell>
+                             <TableCell className="py-6 px-6 text-center">
+                               <div className="flex items-center justify-center text-sm text-slate-600 bg-slate-50 rounded-xl px-3 py-2 font-medium">
+                                 <Calendar className="h-4 w-4 mr-2 text-slate-500" />
+                                 <span>{resume.date ? new Date(resume.date).toLocaleDateString() : 'Unknown'}</span>
+                               </div>
+                             </TableCell>
+                             <TableCell className="py-6 px-6 text-center">
+                               <div className="flex items-center justify-center gap-3">
+                                 <Sheet>
+                                   <SheetTrigger asChild>
+                                     <Button 
+                                       size="sm" 
+                                       className="h-9 w-9 p-0 rounded-xl bg-gradient-to-r from-cyan-500 to-teal-500 hover:from-cyan-600 hover:to-teal-600 text-white shadow-lg hover:shadow-xl hover:scale-105 transition-all duration-200" 
+                                       title="View Details"
+                                     >
+                                       <Eye className="h-4 w-4" />
+                                     </Button>
+                                   </SheetTrigger>
                                   <SheetContent side="right" className="w-[600px] max-w-[90vw]">
                                     <SheetHeader>
                                       <SheetTitle>Candidate Profile</SheetTitle>
@@ -595,26 +697,34 @@ const ModernDashboard = () => {
                                     </ScrollArea>
                                   </SheetContent>
                                 </Sheet>
-                                <DropdownMenu>
-                                  <DropdownMenuTrigger asChild>
-                                    <Button size="sm" variant="ghost" className="h-8 w-8 p-0">
-                                      <MoreVertical className="h-4 w-4" />
-                                    </Button>
-                                  </DropdownMenuTrigger>
-                                  <DropdownMenuContent align="end">
-                                    <DropdownMenuItem onClick={() => window.open(resume.resume, '_blank')}>
-                                      <Download className="h-4 w-4 mr-2" />
-                                      Download Resume
-                                    </DropdownMenuItem>
-                                    <DropdownMenuItem 
-                                      onClick={() => handleDeleteCandidate(resume.id)}
-                                      className="text-destructive focus:text-destructive"
-                                    >
-                                      <Trash2 className="h-4 w-4 mr-2" />
-                                      Delete
-                                    </DropdownMenuItem>
-                                  </DropdownMenuContent>
-                                </DropdownMenu>
+                                 <DropdownMenu>
+                                   <DropdownMenuTrigger asChild>
+                                     <Button 
+                                       size="sm" 
+                                       variant="outline" 
+                                       className="h-9 w-9 p-0 rounded-xl border-slate-200 hover:border-cyan-300 hover:bg-cyan-50 hover:text-cyan-600 transition-all duration-200" 
+                                       title="More Actions"
+                                     >
+                                       <MoreVertical className="h-4 w-4" />
+                                     </Button>
+                                   </DropdownMenuTrigger>
+                                   <DropdownMenuContent align="end" className="rounded-2xl border-slate-200 bg-white/95 backdrop-blur-sm shadow-2xl">
+                                     <DropdownMenuItem 
+                                       onClick={() => window.open(resume.resume, '_blank')}
+                                       className="rounded-xl hover:bg-slate-50 cursor-pointer"
+                                     >
+                                       <Download className="h-4 w-4 mr-3 text-slate-500" />
+                                       Download Resume
+                                     </DropdownMenuItem>
+                                     <DropdownMenuItem 
+                                       onClick={() => handleDeleteCandidate(resume.id)}
+                                       className="text-red-600 hover:bg-red-50 hover:text-red-700 rounded-xl cursor-pointer"
+                                     >
+                                       <Trash2 className="h-4 w-4 mr-3" />
+                                       Delete
+                                     </DropdownMenuItem>
+                                   </DropdownMenuContent>
+                                 </DropdownMenu>
                               </div>
                             </TableCell>
                           </TableRow>
