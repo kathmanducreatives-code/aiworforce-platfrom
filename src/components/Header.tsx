@@ -6,7 +6,7 @@ const Header = () => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
 
   return (
-    <header className="fixed top-0 left-0 right-0 z-50 backdrop-blur-md bg-slate-950/80 border-b border-white/10">
+    <header className="fixed top-0 left-0 right-0 z-50 backdrop-blur-md bg-white/90 border-b border-slate-200/50">
       <div className="container mx-auto px-6">
         <div className="flex items-center justify-between h-16">
           {/* Logo */}
@@ -14,20 +14,20 @@ const Header = () => {
             <div className="w-8 h-8 bg-gradient-to-br from-cyan-500 to-teal-500 rounded-lg flex items-center justify-center">
               <Atom className="w-5 h-5 text-white" />
             </div>
-            <span className="text-2xl font-bold bg-gradient-to-r from-white to-slate-200 bg-clip-text text-transparent">
+            <span className="text-2xl font-bold bg-gradient-to-r from-slate-800 to-slate-600 bg-clip-text text-transparent">
               AI Recruit
             </span>
           </div>
 
           {/* Navigation - Desktop */}
           <nav className="hidden md:flex items-center gap-8">
-            <a href="#features" className="text-slate-300 hover:text-cyan-400 font-medium transition-colors duration-200">
+            <a href="#features" className="text-slate-600 hover:text-cyan-600 font-medium transition-colors duration-200">
               Features
             </a>
-            <a href="#pricing" className="text-slate-300 hover:text-cyan-400 font-medium transition-colors duration-200">
+            <a href="#pricing" className="text-slate-600 hover:text-cyan-600 font-medium transition-colors duration-200">
               Pricing  
             </a>
-            <a href="#about" className="text-slate-300 hover:text-cyan-400 font-medium transition-colors duration-200">
+            <a href="#about" className="text-slate-600 hover:text-cyan-600 font-medium transition-colors duration-200">
               About
             </a>
           </nav>
@@ -44,7 +44,7 @@ const Header = () => {
 
           {/* Mobile Menu Button */}
           <button
-            className="md:hidden p-2 text-slate-300 hover:text-white"
+            className="md:hidden p-2 text-slate-600 hover:text-slate-800"
             onClick={() => setIsMenuOpen(!isMenuOpen)}
           >
             {isMenuOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
@@ -53,15 +53,15 @@ const Header = () => {
 
         {/* Mobile Menu */}
         {isMenuOpen && (
-          <div className="md:hidden py-4 border-t border-white/10">
+          <div className="md:hidden py-4 border-t border-slate-200/50">
             <nav className="flex flex-col gap-4">
-              <a href="#features" className="text-slate-300 hover:text-cyan-400 font-medium py-2">
+              <a href="#features" className="text-slate-600 hover:text-cyan-600 font-medium py-2">
                 Features
               </a>
-              <a href="#pricing" className="text-slate-300 hover:text-cyan-400 font-medium py-2">
+              <a href="#pricing" className="text-slate-600 hover:text-cyan-600 font-medium py-2">
                 Pricing
               </a>
-              <a href="#about" className="text-slate-300 hover:text-cyan-400 font-medium py-2">
+              <a href="#about" className="text-slate-600 hover:text-cyan-600 font-medium py-2">
                 About
               </a>
               <Button className="bg-gradient-to-r from-cyan-500 to-teal-500 hover:from-cyan-600 hover:to-teal-600 text-white font-semibold px-6 py-2 rounded-xl shadow-lg mt-2 w-fit">

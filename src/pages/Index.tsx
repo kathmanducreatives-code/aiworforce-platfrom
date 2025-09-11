@@ -5,7 +5,7 @@ import ModernDashboard from "@/components/ModernDashboard";
 
 const Index = () => {
   return (
-    <div className="min-h-screen bg-slate-950">
+    <div className="min-h-screen bg-white">
       <Header />
       <main>
         <HeroSection />
