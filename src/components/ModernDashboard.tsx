@@ -325,67 +325,70 @@ const ModernDashboard = () => {
               </Popover>
             </div>
 
-            {/* Enhanced Statistics Cards */}
-            <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
-              <Card className="bg-gradient-to-br from-blue-500/10 via-blue-400/5 to-blue-300/10 border border-blue-200/20 shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-105 group">
-                <CardContent className="p-6">
+            {/* Statistics Cards */}
+            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4 mb-8">
+              <Card>
+                <CardContent className="p-4">
                   <div className="flex items-center justify-between">
                     <div>
-                      <p className="text-sm font-bold text-blue-700 uppercase tracking-wide mb-2">Total Candidates</p>
-                      <p className="text-3xl font-black text-blue-900 group-hover:scale-110 transition-transform">
+                      <p className="text-sm font-medium text-muted-foreground mb-1">Total Candidates</p>
+                      <p className="text-xl font-semibold text-foreground">
                         {filteredResumes.length}
                       </p>
                     </div>
-                    <div className="p-3 bg-gradient-to-br from-blue-500/20 to-blue-400/10 rounded-xl shadow-sm group-hover:shadow-md group-hover:scale-110 transition-all">
-                      <Users className="h-8 w-8 text-blue-600" />
+                    <div className="p-2 bg-muted rounded-md">
+                      <Users className="h-4 w-4 text-muted-foreground" />
                     </div>
                   </div>
                 </CardContent>
               </Card>
               
-              <Card className="bg-gradient-to-br from-emerald-500/10 via-emerald-400/5 to-emerald-300/10 border border-emerald-200/20 shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-105 group">
-                <CardContent className="p-6">
+              <Card>
+                <CardContent className="p-4">
                   <div className="flex items-center justify-between">
                     <div>
-                      <p className="text-sm font-bold text-emerald-700 uppercase tracking-wide mb-2">High Performers</p>
-                      <p className="text-3xl font-black text-emerald-900 group-hover:scale-110 transition-transform">
+                      <p className="text-sm font-medium text-muted-foreground mb-1">High Performers</p>
+                      <p className="text-xl font-semibold text-foreground">
                         {filteredResumes.filter(r => (r.overallScore || 0) >= 8).length}
                       </p>
                     </div>
-                    <div className="p-3 bg-gradient-to-br from-emerald-500/20 to-emerald-400/10 rounded-xl shadow-sm group-hover:shadow-md group-hover:scale-110 transition-all">
-                      <Trophy className="h-8 w-8 text-emerald-600" />
+                    <div className="p-2 bg-muted rounded-md">
+                      <Trophy className="h-4 w-4 text-muted-foreground" />
                     </div>
                   </div>
                 </CardContent>
               </Card>
               
-              <Card className="bg-gradient-to-br from-amber-500/10 via-amber-400/5 to-amber-300/10 border border-amber-200/20 shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-105 group">
-                <CardContent className="p-6">
+              <Card>
+                <CardContent className="p-4">
                   <div className="flex items-center justify-between">
                     <div>
-                      <p className="text-sm font-bold text-amber-700 uppercase tracking-wide mb-2">High Risk</p>
-                      <p className="text-3xl font-black text-amber-900 group-hover:scale-110 transition-transform">
-                        {filteredResumes.filter(r => (r.riskFactor || 0) >= 7).length}
+                      <p className="text-sm font-medium text-muted-foreground mb-1">Reviewed Today</p>
+                      <p className="text-xl font-semibold text-foreground">
+                        {filteredResumes.filter(r => {
+                          const today = new Date().toISOString().split('T')[0];
+                          return r.date === today;
+                        }).length}
                       </p>
                     </div>
-                    <div className="p-3 bg-gradient-to-br from-amber-500/20 to-amber-400/10 rounded-xl shadow-sm group-hover:shadow-md group-hover:scale-110 transition-all">
-                      <ShieldAlert className="h-8 w-8 text-amber-600" />
+                    <div className="p-2 bg-muted rounded-md">
+                      <Calendar className="h-4 w-4 text-muted-foreground" />
                     </div>
                   </div>
                 </CardContent>
               </Card>
               
-              <Card className="bg-gradient-to-br from-purple-500/10 via-purple-400/5 to-purple-300/10 border border-purple-200/20 shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-105 group">
-                <CardContent className="p-6">
+              <Card>
+                <CardContent className="p-4">
                   <div className="flex items-center justify-between">
                     <div>
-                      <p className="text-sm font-bold text-purple-700 uppercase tracking-wide mb-2">Average Score</p>
-                      <p className="text-3xl font-black text-purple-900 group-hover:scale-110 transition-transform">
+                      <p className="text-sm font-medium text-muted-foreground mb-1">Average Score</p>
+                      <p className="text-xl font-semibold text-foreground">
                         {filteredResumes.length > 0 ? (filteredResumes.reduce((sum, r) => sum + (r.overallScore || 0), 0) / filteredResumes.length).toFixed(1) : '0.0'}
                       </p>
                     </div>
-                    <div className="p-3 bg-gradient-to-br from-purple-500/20 to-purple-400/10 rounded-xl shadow-sm group-hover:shadow-md group-hover:scale-110 transition-all">
-                      <Target className="h-8 w-8 text-purple-600" />
+                    <div className="p-2 bg-muted rounded-md">
+                      <Target className="h-4 w-4 text-muted-foreground" />
                     </div>
                   </div>
                 </CardContent>
