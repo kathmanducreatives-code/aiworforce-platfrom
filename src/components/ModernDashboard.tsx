@@ -214,21 +214,21 @@ const ModernDashboard = () => {
         </div>
       </div>;
   }
-  return <div className="min-h-screen bg-white">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+  return <div className="min-h-screen bg-background">
+      <div className="max-w-7xl mx-auto px-6 py-8">
         {/* Header */}
         <div className="mb-8">
-          <div className="flex items-center justify-between mb-6">
+          <div className="flex items-center justify-between mb-8">
             <div>
-              <h1 className="text-3xl font-bold text-foreground tracking-tight">
+              <h1 className="text-2xl font-semibold text-foreground">
                 {viewMode === 'folders' && selectedFolder ? selectedFolder : 'Candidate Dashboard'}
               </h1>
-              <p className="text-muted-foreground mt-2">
-                {viewMode === 'folders' && selectedFolder ? `Candidates in ${selectedFolder}` : 'Manage and analyze candidate applications with AI-powered insights'}
+              <p className="text-muted-foreground mt-1 text-sm">
+                {viewMode === 'folders' && selectedFolder ? `${filteredResumes.length} candidates in ${selectedFolder}` : 'Manage and analyze candidate applications'}
               </p>
             </div>
-            <div className="flex gap-2">
-              <Button onClick={() => setViewMode(viewMode === 'all' ? 'folders' : 'all')} variant={viewMode === 'folders' ? 'default' : 'outline'} size="sm" className="gap-2">
+            <div className="flex gap-3">
+              <Button onClick={() => setViewMode(viewMode === 'all' ? 'folders' : 'all')} variant={viewMode === 'folders' ? 'secondary' : 'outline'} size="sm" className="gap-2">
                 <Folder className="h-4 w-4" />
                 {viewMode === 'folders' ? 'Show All' : 'Folders'}
               </Button>
@@ -242,14 +242,14 @@ const ModernDashboard = () => {
           {/* Folder View */}
           {viewMode === 'folders' && !selectedFolder && <div className="mb-8">
               <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-                {Object.entries(recruitmentFolders).map(([folderName, candidates]) => <Card key={folderName} className="cursor-pointer hover:bg-accent/50 transition-colors border-0 shadow-sm" onClick={() => setSelectedFolder(folderName)}>
-                    <CardContent className="p-6">
+                {Object.entries(recruitmentFolders).map(([folderName, candidates]) => <Card key={folderName} className="cursor-pointer hover:bg-muted/50 transition-colors" onClick={() => setSelectedFolder(folderName)}>
+                    <CardContent className="p-5">
                       <div className="flex items-center gap-3">
-                        <div className="p-2 bg-primary/10 rounded-lg">
-                          <Folder className="h-5 w-5 text-primary" />
+                        <div className="p-2 bg-muted rounded-md">
+                          <Folder className="h-4 w-4 text-muted-foreground" />
                         </div>
                         <div className="flex-1">
-                          <h3 className="font-semibold text-lg">{folderName}</h3>
+                          <h3 className="font-medium">{folderName}</h3>
                           <p className="text-sm text-muted-foreground">
                             {candidates.length} candidate{candidates.length !== 1 ? 's' : ''}
                           </p>
@@ -275,11 +275,11 @@ const ModernDashboard = () => {
             <div className="flex flex-col sm:flex-row gap-4">
               <div className="relative flex-1">
                 <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                <Input placeholder="Search candidates, emails, or resume titles..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} className="pl-10 border-0 bg-muted/30 focus:bg-background" />
+                <Input placeholder="Search candidates, emails, or resume titles..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} className="pl-10" />
               </div>
               <Popover>
                 <PopoverTrigger asChild>
-                  <Button variant="outline" size="sm" className="gap-2 border-0 bg-muted/30">
+                  <Button variant="outline" size="sm" className="gap-2">
                     <Filter className="h-4 w-4" />
                     Filters
                   </Button>
@@ -392,360 +392,243 @@ const ModernDashboard = () => {
               </Card>
             </div>
 
-            {/* Modern Candidates Table */}
-            {filteredResumes.length > 0 ? <Card className="border-0 shadow-lg rounded-2xl overflow-hidden bg-gradient-to-br from-background via-background/95 to-accent/5">
+            {/* Candidates Table */}
+            {filteredResumes.length > 0 ? <Card>
                 <CardContent className="p-0">
-                  <div className="rounded-2xl overflow-hidden">
-                    <Table>
-                      <TableHeader>
-                        <TableRow className="bg-gradient-to-r from-muted/50 to-muted/30 hover:bg-muted/40 border-b-2 border-border/30">
-                          <TableHead className="font-bold text-foreground/80 py-4 px-6">Candidate</TableHead>
-                          <TableHead className="font-bold text-foreground/80 py-4 px-6">Overall Score</TableHead>
-                          <TableHead className="font-bold text-foreground/80 py-4 px-6">Risk/Reward</TableHead>
-                          <TableHead className="font-bold text-foreground/80 py-4 px-6">Date</TableHead>
-                          <TableHead className="font-bold text-foreground/80 py-4 px-6">Actions</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {filteredResumes.map((resume, index) => {
-                          const getRiskBadge = (riskScore: string) => {
-                            const risk = riskScore?.toLowerCase() || 'unknown';
-                            if (risk === 'high') return { color: 'bg-red-100 text-red-800 border-red-200/50', icon: ShieldAlert, iconColor: 'text-red-600' };
-                            if (risk === 'medium') return { color: 'bg-amber-100 text-amber-800 border-amber-200/50', icon: AlertTriangle, iconColor: 'text-amber-600' };
-                            if (risk === 'low') return { color: 'bg-green-100 text-green-800 border-green-200/50', icon: ShieldCheck, iconColor: 'text-green-600' };
-                            return { color: 'bg-gray-100 text-gray-800 border-gray-200/50', icon: ShieldAlert, iconColor: 'text-gray-600' };
-                          };
-                          
-                          const getRewardBadge = (rewardScore: string) => {
-                            const reward = rewardScore?.toLowerCase() || 'unknown';
-                            if (reward === 'high') return { color: 'bg-emerald-100 text-emerald-800 border-emerald-200/50', icon: Trophy, iconColor: 'text-emerald-600' };
-                            if (reward === 'medium') return { color: 'bg-blue-100 text-blue-800 border-blue-200/50', icon: Target, iconColor: 'text-blue-600' };
-                            if (reward === 'low') return { color: 'bg-slate-100 text-slate-800 border-slate-200/50', icon: Target, iconColor: 'text-slate-600' };
-                            return { color: 'bg-gray-100 text-gray-800 border-gray-200/50', icon: Target, iconColor: 'text-gray-600' };
-                          };
-                          
-                          const riskBadge = getRiskBadge(resume.riskScore || 'unknown');
-                          const rewardBadge = getRewardBadge(resume.rewardScore || 'unknown');
-                          
-                          return (
-                            <TableRow 
-                              key={resume.id} 
-                              className={`transition-all duration-200 hover:bg-primary/5 hover:shadow-md hover:scale-[1.01] ${
-                                index % 2 === 0 ? 'bg-background' : 'bg-muted/20'
-                              } border-b border-border/30 group`}
-                            >
-                              <TableCell className="py-4 px-6">
-                                <div className="flex flex-col">
-                                  <div className="flex items-center gap-3 mb-2">
-                                    <div className="font-semibold text-foreground text-base group-hover:text-primary transition-colors">
-                                      {resume.candidateName || 'Unknown Candidate'}
-                                    </div>
-                                    {resume.recruitmentName && <Badge className={`text-xs px-3 py-1 font-semibold rounded-full border transition-all hover:scale-105 ${getRecruitmentTagColor(resume.recruitmentName)} shadow-sm`}>
-                                        {resume.recruitmentName}
-                                      </Badge>}
+                  <Table>
+                    <TableHeader>
+                      <TableRow className="border-b">
+                        <TableHead className="font-medium text-foreground py-3 px-4">Candidate</TableHead>
+                        <TableHead className="font-medium text-foreground py-3 px-4">Overall Score</TableHead>
+                        <TableHead className="font-medium text-foreground py-3 px-4">Risk/Reward</TableHead>
+                        <TableHead className="font-medium text-foreground py-3 px-4">Date</TableHead>
+                        <TableHead className="font-medium text-foreground py-3 px-4">Actions</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {filteredResumes.map((resume, index) => {
+                        const getRiskBadge = (riskScore: string) => {
+                          const risk = riskScore?.toLowerCase() || 'unknown';
+                          if (risk === 'high') return { color: 'bg-red-50 text-red-700 border-red-200', icon: ShieldAlert };
+                          if (risk === 'medium') return { color: 'bg-amber-50 text-amber-700 border-amber-200', icon: AlertTriangle };
+                          if (risk === 'low') return { color: 'bg-green-50 text-green-700 border-green-200', icon: ShieldCheck };
+                          return { color: 'bg-gray-50 text-gray-700 border-gray-200', icon: ShieldAlert };
+                        };
+                        
+                        const getRewardBadge = (rewardScore: string) => {
+                          const reward = rewardScore?.toLowerCase() || 'unknown';
+                          if (reward === 'high') return { color: 'bg-emerald-50 text-emerald-700 border-emerald-200', icon: Trophy };
+                          if (reward === 'medium') return { color: 'bg-blue-50 text-blue-700 border-blue-200', icon: Target };
+                          if (reward === 'low') return { color: 'bg-slate-50 text-slate-700 border-slate-200', icon: Target };
+                          return { color: 'bg-gray-50 text-gray-700 border-gray-200', icon: Target };
+                        };
+                        
+                        const riskBadge = getRiskBadge(resume.riskScore || 'unknown');
+                        const rewardBadge = getRewardBadge(resume.rewardScore || 'unknown');
+                        
+                        return (
+                          <TableRow 
+                            key={resume.id} 
+                            className={`hover:bg-muted/50 transition-colors ${
+                              index % 2 === 0 ? 'bg-background' : 'bg-muted/20'
+                            }`}
+                          >
+                            <TableCell className="py-4 px-4">
+                              <div className="flex flex-col">
+                                <div className="flex items-center gap-3 mb-1">
+                                  <div className="font-medium text-foreground">
+                                    {resume.candidateName || 'Unknown Candidate'}
                                   </div>
-                                  {resume.email && <div className="flex items-center text-sm text-muted-foreground/80">
-                                      <Mail className="h-3 w-3 mr-2 text-primary/60" />
-                                      <span className="font-medium">{resume.email}</span>
-                                    </div>}
+                                  {resume.recruitmentName && <Badge variant="secondary" className="text-xs">
+                                      {resume.recruitmentName}
+                                    </Badge>}
                                 </div>
-                              </TableCell>
-                              <TableCell className="py-4 px-6">
-                                <div className="flex items-center gap-4">
-                                  <div className="flex-1 min-w-[120px]">
-                                    <div className="relative">
-                                      <Progress 
-                                        value={(resume.overallScore || 0) * 10} 
-                                        className="h-3 bg-gradient-to-r from-slate-100 to-slate-200 rounded-full shadow-inner" 
-                                      />
-                                      <div 
-                                        className="absolute top-0 left-0 h-3 rounded-full bg-gradient-to-r from-blue-500 via-purple-500 to-emerald-500 shadow-md transition-all duration-700 ease-out"
-                                        style={{
-                                          width: `${(resume.overallScore || 0) * 10}%`,
-                                          background: `linear-gradient(90deg, 
-                                            ${(resume.overallScore || 0) >= 8 ? '#10b981' : 
-                                              (resume.overallScore || 0) >= 6 ? '#3b82f6' : 
-                                              (resume.overallScore || 0) >= 4 ? '#f59e0b' : '#ef4444'
-                                            } 0%, 
-                                            ${(resume.overallScore || 0) >= 8 ? '#059669' : 
-                                              (resume.overallScore || 0) >= 6 ? '#2563eb' : 
-                                              (resume.overallScore || 0) >= 4 ? '#d97706' : '#dc2626'
-                                            } 100%)`
-                                        }}
-                                      />
-                                    </div>
-                                  </div>
-                                  <span className="text-sm font-bold text-foreground min-w-[3rem] bg-gradient-to-r from-primary/10 to-accent/10 px-3 py-1 rounded-full">
-                                    {resume.overallScore || 0}/10
-                                  </span>
+                                {resume.email && <div className="flex items-center text-sm text-muted-foreground">
+                                    <Mail className="h-3 w-3 mr-1" />
+                                    <span>{resume.email}</span>
+                                  </div>}
+                              </div>
+                            </TableCell>
+                            <TableCell className="py-4 px-4">
+                              <div className="flex items-center gap-3">
+                                <div className="flex-1 min-w-[100px]">
+                                  <Progress 
+                                    value={(resume.overallScore || 0) * 10} 
+                                    className="h-2" 
+                                  />
                                 </div>
-                              </TableCell>
-                              <TableCell className="py-4 px-6">
-                                <div className="flex flex-col gap-2">
-                                  <Badge className={`text-xs px-3 py-1.5 font-semibold rounded-full border shadow-sm transition-all hover:scale-105 flex items-center gap-1.5 w-fit ${riskBadge.color}`}>
-                                    <riskBadge.icon className={`h-3 w-3 ${riskBadge.iconColor}`} />
-                                    Risk: {resume.riskScore || 'Unknown'}
-                                  </Badge>
-                                  <Badge className={`text-xs px-3 py-1.5 font-semibold rounded-full border shadow-sm transition-all hover:scale-105 flex items-center gap-1.5 w-fit ${rewardBadge.color}`}>
-                                    <rewardBadge.icon className={`h-3 w-3 ${rewardBadge.iconColor}`} />
-                                    Reward: {resume.rewardScore || 'Unknown'}
-                                  </Badge>
-                                </div>
-                              </TableCell>
-                              <TableCell className="py-4 px-6">
-                                <div className="flex items-center text-sm text-muted-foreground bg-gradient-to-r from-muted/30 to-muted/20 px-3 py-2 rounded-lg">
-                                  <Calendar className="h-4 w-4 mr-2 text-primary/60" />
-                                  <span className="font-medium">{resume.date ? new Date(resume.date).toLocaleDateString() : 'Unknown'}</span>
-                                </div>
-                              </TableCell>
-                              <TableCell className="py-4 px-6">
-                                <div className="flex items-center gap-2">
-                                   <Sheet>
-                                     <SheetTrigger asChild>
-                                       <Button 
-                                         size="sm" 
-                                         className="h-9 w-9 p-0 bg-gradient-to-r from-primary/10 to-primary/20 hover:from-primary/20 hover:to-primary/30 border border-primary/20 hover:border-primary/30 shadow-sm hover:shadow-md transition-all duration-200 hover:scale-110 group" 
-                                         title="View Details"
-                                       >
-                                         <Eye className="h-4 w-4 text-primary group-hover:scale-110 transition-transform" />
-                                       </Button>
-                                     </SheetTrigger>
-                                    <SheetContent side="right" className="w-[40vw] min-w-[500px] max-w-[900px] bg-gradient-to-br from-background via-background/95 to-accent/5 border-l border-border/30 backdrop-blur-sm shadow-2xl">
-                                      <SheetHeader className="pb-8 border-b border-border/20 bg-gradient-to-r from-primary/5 to-accent/5 -mx-6 -mt-6 px-6 pt-6 mb-6 rounded-t-lg">
-                                        <div className="flex items-center gap-4">
-                                          <div className="p-3 bg-gradient-to-br from-primary/20 to-primary/10 rounded-xl shadow-sm border border-primary/20">
-                                            <Users className="h-6 w-6 text-primary" />
+                                <span className="text-sm font-medium text-foreground min-w-[2.5rem]">
+                                  {resume.overallScore || 0}/10
+                                </span>
+                              </div>
+                            </TableCell>
+                            <TableCell className="py-4 px-4">
+                              <div className="flex flex-col gap-1">
+                                <Badge className={`text-xs px-2 py-1 font-medium rounded-md border flex items-center gap-1 w-fit ${riskBadge.color}`}>
+                                  <riskBadge.icon className="h-3 w-3" />
+                                  Risk: {resume.riskScore || 'Unknown'}
+                                </Badge>
+                                <Badge className={`text-xs px-2 py-1 font-medium rounded-md border flex items-center gap-1 w-fit ${rewardBadge.color}`}>
+                                  <rewardBadge.icon className="h-3 w-3" />
+                                  Reward: {resume.rewardScore || 'Unknown'}
+                                </Badge>
+                              </div>
+                            </TableCell>
+                            <TableCell className="py-4 px-4">
+                              <div className="flex items-center text-sm text-muted-foreground">
+                                <Calendar className="h-4 w-4 mr-2" />
+                                <span>{resume.date ? new Date(resume.date).toLocaleDateString() : 'Unknown'}</span>
+                              </div>
+                            </TableCell>
+                            <TableCell className="py-4 px-4">
+                              <div className="flex items-center gap-2">
+                                <Sheet>
+                                  <SheetTrigger asChild>
+                                    <Button size="sm" variant="outline" className="h-8 w-8 p-0" title="View Details">
+                                      <Eye className="h-4 w-4" />
+                                    </Button>
+                                  </SheetTrigger>
+                                  <SheetContent side="right" className="w-[600px] max-w-[90vw]">
+                                    <SheetHeader>
+                                      <SheetTitle>Candidate Profile</SheetTitle>
+                                      <SheetDescription>
+                                        {resume.candidateName || 'Unknown Candidate'}
+                                      </SheetDescription>
+                                    </SheetHeader>
+                                    <ScrollArea className="h-[calc(100vh-8rem)] mt-6">
+                                      <div className="space-y-6">
+                                        {/* Candidate Info */}
+                                        <div className="border rounded-lg p-4">
+                                          <div className="flex items-center gap-3 mb-4">
+                                            <Mail className="h-5 w-5 text-muted-foreground" />
+                                            <div>
+                                              <h4 className="font-medium text-foreground">{resume.candidateName}</h4>
+                                              {resume.email && <p className="text-sm text-muted-foreground">{resume.email}</p>}
+                                            </div>
                                           </div>
-                                          <div className="flex-1">
-                                            <SheetTitle className="text-2xl font-bold bg-gradient-to-r from-foreground via-primary to-foreground/80 bg-clip-text text-transparent mb-1">
-                                              Candidate Profile
-                                            </SheetTitle>
-                                            <SheetDescription className="text-muted-foreground/80 text-lg font-medium">
-                                              {resume.candidateName || 'Unknown Candidate'}
-                                            </SheetDescription>
+                                          <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                                            <Calendar className="h-4 w-4" />
+                                            <span>Analyzed on {resume.date ? new Date(resume.date).toLocaleDateString() : 'Unknown date'}</span>
                                           </div>
                                         </div>
-                                      </SheetHeader>
-                                      <ScrollArea className="h-[calc(100vh-12rem)] mt-2">
-                                        <div className="space-y-10 pr-6 pb-8">
-                                          {/* Candidate Info Card */}
-                                          <div className="bg-gradient-to-br from-primary/8 via-primary/5 to-accent/8 border border-primary/15 rounded-2xl p-6 animate-fade-in shadow-sm hover:shadow-md transition-all duration-300">
-                                            <div className="flex items-center gap-4 mb-4">
-                                              <div className="p-3 bg-gradient-to-br from-primary/20 via-primary/15 to-primary/10 rounded-xl shadow-sm">
-                                                <Mail className="h-5 w-5 text-primary" />
-                                              </div>
-                                              <div className="flex-1">
-                                                <h4 className="font-bold text-lg text-foreground mb-1">{resume.candidateName}</h4>
-                                                {resume.email && <p className="text-sm text-muted-foreground/80 font-medium">{resume.email}</p>}
-                                              </div>
-                                            </div>
-                                            <div className="flex items-center gap-3 text-sm text-muted-foreground bg-background/50 rounded-lg p-3 border border-border/30">
-                                              <Calendar className="h-4 w-4 text-primary" />
-                                              <span className="font-medium">Analyzed on {resume.date ? new Date(resume.date).toLocaleDateString() : 'Unknown date'}</span>
-                                            </div>
-                                          </div>
 
-                                          {/* Overall Assessment */}
-                                          <div className="animate-fade-in" style={{
-                                    animationDelay: '0.1s'
-                                  }}>
-                                            <h4 className="font-bold text-xl mb-6 flex items-center gap-3 text-primary">
-                                              <div className="p-2 bg-gradient-to-br from-primary/20 to-primary/10 rounded-xl">
-                                                <TrendingUp className="h-6 w-6 text-primary" />
+                                        {/* Scores */}
+                                        <div className="space-y-4">
+                                          <h4 className="font-medium text-foreground">Assessment Scores</h4>
+                                          <div className="grid grid-cols-1 gap-4">
+                                            <div className="border rounded-lg p-4">
+                                              <div className="flex justify-between items-center mb-2">
+                                                <span className="text-sm font-medium">Overall Score</span>
+                                                <span className="text-sm font-medium">{resume.overallScore}/10</span>
                                               </div>
-                                              Overall Assessment
-                                            </h4>
-                                            <div className="grid grid-cols-2 gap-6">
-                                              <div className="bg-gradient-to-br from-blue-50 via-indigo-50/80 to-blue-100/50 border border-blue-200/40 rounded-2xl p-6 hover:shadow-lg hover:scale-105 transition-all duration-300 group">
-                                                <div className="flex justify-between items-center mb-4">
-                                                  <span className="text-sm font-bold text-blue-700 uppercase tracking-wide">Overall Score</span>
-                                                  <div className="bg-blue-100 rounded-full px-3 py-1">
-                                                    <span className="text-xl font-black text-blue-900">{resume.overallScore}/10</span>
-                                                  </div>
-                                                </div>
-                                                <div className="relative">
-                                                  <Progress value={(resume.overallScore || 0) * 10} className="h-4 bg-blue-100 [&>div]:bg-gradient-to-r [&>div]:from-blue-500 [&>div]:to-indigo-600 [&>div]:shadow-sm [&>div]:transition-all [&>div]:duration-500 group-hover:[&>div]:shadow-md" />
-                                                  
-                                                </div>
+                                              <Progress value={(resume.overallScore || 0) * 10} className="h-2" />
+                                            </div>
+                                            <div className="border rounded-lg p-4">
+                                              <div className="flex justify-between items-center mb-2">
+                                                <span className="text-sm font-medium">Fit Score</span>
+                                                <span className="text-sm font-medium">{resume.fitScore}/10</span>
                                               </div>
-                                              <div className="bg-gradient-to-br from-emerald-50 via-green-50/80 to-emerald-100/50 border border-emerald-200/40 rounded-2xl p-6 hover:shadow-lg hover:scale-105 transition-all duration-300 group">
-                                                <div className="flex justify-between items-center mb-4">
-                                                  <span className="text-sm font-bold text-emerald-700 uppercase tracking-wide">Fit Score</span>
-                                                  <div className="bg-emerald-100 rounded-full px-3 py-1">
-                                                    <span className="text-xl font-black text-emerald-900">{resume.fitScore}/10</span>
-                                                  </div>
-                                                </div>
-                                                <div className="relative">
-                                                  <Progress value={(resume.fitScore || 0) * 10} className="h-4 bg-emerald-100 [&>div]:bg-gradient-to-r [&>div]:from-emerald-500 [&>div]:to-green-600 [&>div]:shadow-sm [&>div]:transition-all [&>div]:duration-500 group-hover:[&>div]:shadow-md" />
-                                                  
-                                                </div>
-                                              </div>
+                                              <Progress value={(resume.fitScore || 0) * 10} className="h-2" />
                                             </div>
                                           </div>
+                                        </div>
 
-                                          {/* Risk & Reward Analysis */}
-                                          <div className="animate-fade-in" style={{
-                                    animationDelay: '0.2s'
-                                  }}>
-                                            <h4 className="font-bold text-xl mb-6 flex items-center gap-3 text-orange-600">
-                                              <div className="p-2 bg-gradient-to-br from-orange-100 to-orange-50 rounded-xl">
-                                                <AlertTriangle className="h-6 w-6 text-orange-600" />
-                                              </div>
-                                              Risk & Reward Analysis
-                                            </h4>
-                                            <div className="grid grid-cols-2 gap-6">
-                                              <div className="group bg-gradient-to-br from-red-50 via-red-50/80 to-red-100/60 border border-red-200/40 rounded-2xl p-8 text-center hover:shadow-xl hover:scale-105 transition-all duration-300 cursor-pointer">
-                                                <div className="p-4 bg-gradient-to-br from-red-100 to-red-50 rounded-2xl w-fit mx-auto mb-6 group-hover:bg-red-200 transition-all duration-300 shadow-sm">
-                                                  <AlertTriangle className="h-8 w-8 text-red-600" />
-                                                </div>
-                                                 <p className="text-sm text-red-600 font-bold mb-3 uppercase tracking-wide">Risk Factor</p>
-                                                 <p className="text-lg font-black text-red-700 group-hover:scale-110 transition-transform bg-red-100 rounded-xl py-2 px-4 inline-block">{resume.riskScore || 'Unknown'}</p>
-                                              </div>
-                                              <div className="group bg-gradient-to-br from-green-50 via-green-50/80 to-green-100/60 border border-green-200/40 rounded-2xl p-8 text-center hover:shadow-xl hover:scale-105 transition-all duration-300 cursor-pointer">
-                                                <div className="p-4 bg-gradient-to-br from-green-100 to-green-50 rounded-2xl w-fit mx-auto mb-6 group-hover:bg-green-200 transition-all duration-300 shadow-sm">
-                                                  <CheckCircle className="h-8 w-8 text-green-600" />
-                                                </div>
-                                                 <p className="text-sm text-green-600 font-bold mb-3 uppercase tracking-wide">Reward Factor</p>
-                                                 <p className="text-xl font-black text-green-700 group-hover:scale-110 transition-transform bg-green-100 rounded-xl py-2 px-4 inline-block">{resume.rewardScore || 'Unknown'}</p>
-                                              </div>
+                                        {/* Risk & Reward */}
+                                        <div className="space-y-4">
+                                          <h4 className="font-medium text-foreground">Risk & Reward Analysis</h4>
+                                          <div className="grid grid-cols-2 gap-4">
+                                            <div className="border rounded-lg p-4 text-center">
+                                              <AlertTriangle className="h-6 w-6 mx-auto mb-2 text-amber-500" />
+                                              <p className="text-sm text-muted-foreground mb-1">Risk Factor</p>
+                                              <p className="font-medium">{resume.riskScore || 'Unknown'}</p>
+                                            </div>
+                                            <div className="border rounded-lg p-4 text-center">
+                                              <CheckCircle className="h-6 w-6 mx-auto mb-2 text-green-500" />
+                                              <p className="text-sm text-muted-foreground mb-1">Reward Factor</p>
+                                              <p className="font-medium">{resume.rewardScore || 'Unknown'}</p>
                                             </div>
                                           </div>
+                                        </div>
 
-                                         {/* Strengths */}
-                                         {resume.strengths && resume.strengths.length > 0 && <div className="animate-fade-in" style={{
-                                    animationDelay: '0.3s'
-                                  }}>
-                                             <h4 className="font-bold text-lg mb-4 flex items-center gap-2 text-green-700">
-                                               <CheckCircle className="h-5 w-5" />
-                                               Key Strengths
-                                             </h4>
-                                             <div className="bg-gradient-to-br from-green-50/50 to-emerald-50/50 border border-green-200/30 rounded-xl p-5">
-                                               <div className="space-y-3">
-                                                 {resume.strengths.map((strength, idx) => <div key={idx} className="flex items-start gap-3 p-3 bg-white/60 rounded-lg hover:bg-white/80 transition-all duration-200 hover:shadow-sm animate-fade-in group" style={{
-                                          animationDelay: `${0.4 + idx * 0.1}s`
-                                        }}>
-                                                     <div className="p-1 bg-green-100 rounded-full group-hover:bg-green-200 transition-colors">
-                                                       <CheckCircle className="h-4 w-4 text-green-600" />
-                                                     </div>
-                                                     <span className="text-sm text-foreground font-medium flex-1">{strength}</span>
-                                                   </div>)}
-                                               </div>
-                                             </div>
-                                           </div>}
+                                        {/* Strengths & Weaknesses */}
+                                        {(resume.strengths?.length > 0 || resume.weaknesses?.length > 0) && (
+                                          <div className="space-y-4">
+                                            <h4 className="font-medium text-foreground">Analysis</h4>
+                                            <div className="grid grid-cols-1 gap-4">
+                                              {resume.strengths?.length > 0 && (
+                                                <div className="border rounded-lg p-4">
+                                                  <h5 className="font-medium text-green-700 mb-2">Strengths</h5>
+                                                  <ul className="text-sm text-muted-foreground space-y-1">
+                                                    {resume.strengths.map((strength, idx) => (
+                                                      <li key={idx}>• {strength}</li>
+                                                    ))}
+                                                  </ul>
+                                                </div>
+                                              )}
+                                              {resume.weaknesses?.length > 0 && (
+                                                <div className="border rounded-lg p-4">
+                                                  <h5 className="font-medium text-red-700 mb-2">Areas for Improvement</h5>
+                                                  <ul className="text-sm text-muted-foreground space-y-1">
+                                                    {resume.weaknesses.map((weakness, idx) => (
+                                                      <li key={idx}>• {weakness}</li>
+                                                    ))}
+                                                  </ul>
+                                                </div>
+                                              )}
+                                            </div>
+                                          </div>
+                                        )}
 
-                                         {/* Areas for Improvement */}
-                                         {resume.weaknesses && resume.weaknesses.length > 0 && <div className="animate-fade-in" style={{
-                                    animationDelay: '0.4s'
-                                  }}>
-                                             <h4 className="font-bold text-lg mb-4 flex items-center gap-2 text-orange-700">
-                                               <AlertTriangle className="h-5 w-5" />
-                                               Areas for Improvement
-                                             </h4>
-                                             <div className="bg-gradient-to-br from-orange-50/50 to-red-50/50 border border-orange-200/30 rounded-xl p-5">
-                                               <div className="space-y-3">
-                                                 {resume.weaknesses.map((weakness, idx) => <div key={idx} className="flex items-start gap-3 p-3 bg-white/60 rounded-lg hover:bg-white/80 transition-all duration-200 hover:shadow-sm animate-fade-in group" style={{
-                                          animationDelay: `${0.5 + idx * 0.1}s`
-                                        }}>
-                                                     <div className="p-1 bg-orange-100 rounded-full group-hover:bg-orange-200 transition-colors">
-                                                       <AlertTriangle className="h-4 w-4 text-orange-600" />
-                                                     </div>
-                                                     <span className="text-sm text-foreground font-medium flex-1">{weakness}</span>
-                                                   </div>)}
-                                               </div>
-                                             </div>
-                                           </div>}
-
-                                         {/* AI Analysis */}
-                                         {resume.justification && <div className="animate-fade-in" style={{
-                                    animationDelay: '0.5s'
-                                  }}>
-                                             <h4 className="font-bold text-lg mb-4 flex items-center gap-2 text-purple-700">
-                                               <div className="p-1 bg-purple-100 rounded-full">
-                                                 <span className="text-xs font-bold text-purple-600">AI</span>
-                                               </div>
-                                               AI Analysis
-                                             </h4>
-                                             <div className="bg-gradient-to-br from-purple-50 to-indigo-50 border border-purple-200/50 rounded-xl p-5 hover:shadow-md transition-all duration-300">
-                                               <p className="text-sm leading-relaxed text-foreground/90">{resume.justification}</p>
-                                             </div>
-                                           </div>}
-
-                                         {/* Resume Actions */}
-                                         <div className="animate-fade-in" style={{
-                                    animationDelay: '0.6s'
-                                  }}>
-                                           <h4 className="font-bold text-lg mb-4 flex items-center gap-2">
-                                             <FileText className="h-5 w-5 text-blue-600" />
-                                             Resume Document
-                                           </h4>
-                                            <div className="bg-gradient-to-br from-blue-50 to-indigo-50 border border-blue-200/50 rounded-xl p-5">
-                                              <div className="mb-3">
-                                                <Button onClick={() => {
-                                          const driveLink = `https://drive.google.com/file/d/${resume.resume}/view`;
-                                          window.open(driveLink, '_blank');
-                                        }} className="w-full gap-2 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white border-0 shadow-md hover:shadow-lg transition-all duration-300 hover:scale-105">
-                                                  <FileText className="h-4 w-4" />
-                                                  View Resume
-                                                  <ArrowUpRight className="h-3 w-3" />
-                                                </Button>
-                               </div>
-                                           </div>
-                                         </div>
-                                       </div>
-                                     </ScrollArea>
-                                   </SheetContent>
-                                 </Sheet>
-                                
-                                   <Button 
-                                     size="sm" 
-                                     className="h-9 w-9 p-0 bg-gradient-to-r from-emerald-100/50 to-emerald-200/50 hover:from-emerald-200 hover:to-emerald-300 border border-emerald-300/50 hover:border-emerald-400/50 shadow-sm hover:shadow-md transition-all duration-200 hover:scale-110 group" 
-                                     title="Download Resume"
-                                     onClick={() => {
-                                       const driveLink = `https://drive.google.com/file/d/${resume.resume}/view`;
-                                       window.open(driveLink, '_blank');
-                                     }}
-                                   >
-                                     <Download className="h-4 w-4 text-emerald-700 group-hover:scale-110 transition-transform" />
-                                   </Button>
-                                 
-                                 <DropdownMenu>
-                                   <DropdownMenuTrigger asChild>
-                                     <Button 
-                                       size="sm" 
-                                       className="h-9 w-9 p-0 bg-gradient-to-r from-slate-100/50 to-slate-200/50 hover:from-slate-200 hover:to-slate-300 border border-slate-300/50 hover:border-slate-400/50 shadow-sm hover:shadow-md transition-all duration-200 hover:scale-110 group"
-                                       title="More Options"
-                                     >
-                                       <MoreVertical className="h-4 w-4 text-slate-700 group-hover:scale-110 transition-transform" />
-                                     </Button>
-                                   </DropdownMenuTrigger>
-                                    <DropdownMenuContent align="end" className="border border-border/50 shadow-lg">
-                                      <DropdownMenuItem 
-                                        className="text-red-600 hover:bg-red-50 hover:text-red-700 cursor-pointer transition-colors" 
-                                        onClick={() => handleDeleteCandidate(resume.id!)}
-                                      >
-                                        <Trash2 className="h-4 w-4 mr-2" />
-                                        Delete Candidate
-                                      </DropdownMenuItem>
-                                    </DropdownMenuContent>
-                                 </DropdownMenu>
-                               </div>
-                             </TableCell>
-                           </TableRow>
-                          );
-                        })}
-                       </TableBody>
-                    </Table>
-                  </div>
+                                        {/* Justification */}
+                                        {resume.justification && (
+                                          <div className="space-y-2">
+                                            <h4 className="font-medium text-foreground">Justification</h4>
+                                            <div className="border rounded-lg p-4">
+                                              <p className="text-sm text-muted-foreground">{resume.justification}</p>
+                                            </div>
+                                          </div>
+                                        )}
+                                      </div>
+                                    </ScrollArea>
+                                  </SheetContent>
+                                </Sheet>
+                                <DropdownMenu>
+                                  <DropdownMenuTrigger asChild>
+                                    <Button size="sm" variant="ghost" className="h-8 w-8 p-0">
+                                      <MoreVertical className="h-4 w-4" />
+                                    </Button>
+                                  </DropdownMenuTrigger>
+                                  <DropdownMenuContent align="end">
+                                    <DropdownMenuItem onClick={() => window.open(resume.resume, '_blank')}>
+                                      <Download className="h-4 w-4 mr-2" />
+                                      Download Resume
+                                    </DropdownMenuItem>
+                                    <DropdownMenuItem 
+                                      onClick={() => handleDeleteCandidate(resume.id)}
+                                      className="text-destructive focus:text-destructive"
+                                    >
+                                      <Trash2 className="h-4 w-4 mr-2" />
+                                      Delete
+                                    </DropdownMenuItem>
+                                  </DropdownMenuContent>
+                                </DropdownMenu>
+                              </div>
+                            </TableCell>
+                          </TableRow>
+                        );
+                      })}
+                    </TableBody>
+                  </Table>
                 </CardContent>
-              </Card> : <Card className="border-0 shadow-sm">
+              </Card> : <Card>
                 <CardContent className="p-12 text-center">
                   <div className="flex flex-col items-center gap-4">
                     <div className="p-4 bg-muted/50 rounded-full">
                       <Users className="h-8 w-8 text-muted-foreground" />
                     </div>
                     <div>
-                      <h3 className="font-semibold text-lg">No candidates found</h3>
-                      <p className="text-muted-foreground">
+                      <h3 className="font-medium text-lg">No candidates found</h3>
+                      <p className="text-muted-foreground text-sm">
                         {searchTerm || filters.scoreRange !== 'all' || filters.dateRange !== 'all' ? 'Try adjusting your search or filter criteria' : 'Upload and analyze resumes to see candidate data here'}
                       </p>
                     </div>
