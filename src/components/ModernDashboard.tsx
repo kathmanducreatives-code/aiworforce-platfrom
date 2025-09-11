@@ -630,11 +630,7 @@ const ModernDashboard = () => {
                                                   View Resume
                                                   <ArrowUpRight className="h-3 w-3" />
                                                 </Button>
-                                              </div>
-                                             {resume.resume && <div className="flex items-center gap-2 text-xs text-muted-foreground bg-white/50 rounded-lg p-2">
-                                                 <FileText className="h-3 w-3" />
-                                                 <span>{resume.resume.split('/').pop() || resume.resume}</span>
-                                               </div>}
+                               </div>
                                            </div>
                                          </div>
                                        </div>
