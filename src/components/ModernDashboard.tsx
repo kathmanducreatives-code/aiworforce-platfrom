@@ -610,106 +610,138 @@ const ModernDashboard = () => {
                                        <Eye className="h-4 w-4" />
                                      </Button>
                                    </SheetTrigger>
-                                  <SheetContent side="right" className="w-[600px] max-w-[90vw]">
-                                    <SheetHeader>
-                                      <SheetTitle>Candidate Profile</SheetTitle>
-                                      <SheetDescription>
-                                        {resume.candidateName || 'Unknown Candidate'}
-                                      </SheetDescription>
-                                    </SheetHeader>
-                                    <ScrollArea className="h-[calc(100vh-8rem)] mt-6">
-                                      <div className="space-y-6">
-                                        {/* Candidate Info */}
-                                        <div className="border rounded-lg p-4">
-                                          <div className="flex items-center gap-3 mb-4">
-                                            <Mail className="h-5 w-5 text-muted-foreground" />
-                                            <div>
-                                              <h4 className="font-medium text-foreground">{resume.candidateName}</h4>
-                                              {resume.email && <p className="text-sm text-muted-foreground">{resume.email}</p>}
-                                            </div>
-                                          </div>
-                                          <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                                            <Calendar className="h-4 w-4" />
-                                            <span>Analyzed on {resume.date ? new Date(resume.date).toLocaleDateString() : 'Unknown date'}</span>
-                                          </div>
-                                        </div>
+                                   <SheetContent side="right" className="w-[45vw] max-w-[90vw] min-w-[600px]">
+                                     <SheetHeader className="animate-fade-in">
+                                       <SheetTitle className="text-2xl font-bold bg-gradient-to-r from-slate-800 to-slate-600 bg-clip-text text-transparent">
+                                         Candidate Profile
+                                       </SheetTitle>
+                                       <SheetDescription className="text-lg text-muted-foreground">
+                                         {resume.candidateName || 'Unknown Candidate'}
+                                       </SheetDescription>
+                                     </SheetHeader>
+                                     <ScrollArea className="h-[calc(100vh-8rem)] mt-8">
+                                       <div className="space-y-8 animate-fade-in">
+                                         {/* Candidate Info */}
+                                         <div className="border rounded-2xl p-6 bg-gradient-to-br from-white to-slate-50/50 shadow-lg hover:shadow-xl transition-all duration-300 animate-scale-in">
+                                           <div className="flex items-center gap-4 mb-6">
+                                             <div className="p-3 bg-gradient-to-br from-cyan-50 to-teal-50 rounded-xl">
+                                               <Mail className="h-6 w-6 text-cyan-600" />
+                                             </div>
+                                             <div>
+                                               <h4 className="text-xl font-bold text-foreground">{resume.candidateName}</h4>
+                                               {resume.email && <p className="text-sm text-muted-foreground mt-1">{resume.email}</p>}
+                                             </div>
+                                           </div>
+                                           <div className="flex items-center gap-3 text-sm text-muted-foreground">
+                                             <Calendar className="h-4 w-4" />
+                                             <span>Analyzed on {resume.date ? new Date(resume.date).toLocaleDateString() : 'Unknown date'}</span>
+                                           </div>
+                                         </div>
 
-                                        {/* Scores */}
-                                        <div className="space-y-4">
-                                          <h4 className="font-medium text-foreground">Assessment Scores</h4>
-                                          <div className="grid grid-cols-1 gap-4">
-                                            <div className="border rounded-lg p-4">
-                                              <div className="flex justify-between items-center mb-2">
-                                                <span className="text-sm font-medium">Overall Score</span>
-                                                <span className="text-sm font-medium">{resume.overallScore}/10</span>
-                                              </div>
-                                              <Progress value={(resume.overallScore || 0) * 10} className="h-2" />
-                                            </div>
-                                            <div className="border rounded-lg p-4">
-                                              <div className="flex justify-between items-center mb-2">
-                                                <span className="text-sm font-medium">Fit Score</span>
-                                                <span className="text-sm font-medium">{resume.fitScore}/10</span>
-                                              </div>
-                                              <Progress value={(resume.fitScore || 0) * 10} className="h-2" />
-                                            </div>
-                                          </div>
-                                        </div>
+                                         {/* Scores */}
+                                         <div className="space-y-6 animate-fade-in [animation-delay:200ms]">
+                                           <h4 className="text-lg font-bold text-foreground flex items-center gap-2">
+                                             <Target className="h-5 w-5 text-cyan-600" />
+                                             Assessment Scores
+                                           </h4>
+                                           <div className="grid grid-cols-1 gap-6">
+                                             <div className="border rounded-2xl p-6 bg-gradient-to-br from-cyan-50/50 to-white shadow-md hover:shadow-lg transition-all duration-300 hover:scale-[1.02]">
+                                               <div className="flex justify-between items-center mb-4">
+                                                 <span className="text-lg font-semibold text-slate-700">Overall Score</span>
+                                                 <span className="text-2xl font-bold text-cyan-600">{resume.overallScore}/10</span>
+                                               </div>
+                                               <Progress value={(resume.overallScore || 0) * 10} className="h-3 rounded-full" />
+                                             </div>
+                                             <div className="border rounded-2xl p-6 bg-gradient-to-br from-teal-50/50 to-white shadow-md hover:shadow-lg transition-all duration-300 hover:scale-[1.02]">
+                                               <div className="flex justify-between items-center mb-4">
+                                                 <span className="text-lg font-semibold text-slate-700">Fit Score</span>
+                                                 <span className="text-2xl font-bold text-teal-600">{resume.fitScore}/10</span>
+                                               </div>
+                                               <Progress value={(resume.fitScore || 0) * 10} className="h-3 rounded-full" />
+                                             </div>
+                                           </div>
+                                         </div>
 
-                                        {/* Risk & Reward */}
-                                        <div className="space-y-4">
-                                          <h4 className="font-medium text-foreground">Risk & Reward Analysis</h4>
-                                          <div className="grid grid-cols-2 gap-4">
-                                            <div className="border rounded-lg p-4 text-center">
-                                              <AlertTriangle className="h-6 w-6 mx-auto mb-2 text-amber-500" />
-                                              <p className="text-sm text-muted-foreground mb-1">Risk Factor</p>
-                                              <p className="font-medium">{resume.riskScore || 'Unknown'}</p>
-                                            </div>
-                                            <div className="border rounded-lg p-4 text-center">
-                                              <CheckCircle className="h-6 w-6 mx-auto mb-2 text-green-500" />
-                                              <p className="text-sm text-muted-foreground mb-1">Reward Factor</p>
-                                              <p className="font-medium">{resume.rewardScore || 'Unknown'}</p>
-                                            </div>
-                                          </div>
-                                        </div>
+                                         {/* Risk & Reward */}
+                                         <div className="space-y-6 animate-fade-in [animation-delay:400ms]">
+                                           <h4 className="text-lg font-bold text-foreground flex items-center gap-2">
+                                             <ShieldAlert className="h-5 w-5 text-amber-500" />
+                                             Risk & Reward Analysis
+                                           </h4>
+                                           <div className="grid grid-cols-2 gap-6">
+                                             <div className="border rounded-2xl p-6 text-center bg-gradient-to-br from-amber-50/50 to-white shadow-md hover:shadow-lg transition-all duration-300 hover:scale-[1.02]">
+                                               <div className="p-3 bg-gradient-to-br from-amber-100 to-orange-100 rounded-xl mx-auto mb-4 w-fit">
+                                                 <AlertTriangle className="h-8 w-8 text-amber-600" />
+                                               </div>
+                                               <p className="text-sm text-muted-foreground mb-2 font-medium">Risk Factor</p>
+                                               <p className="text-xl font-bold text-amber-700">{resume.riskScore || 'Unknown'}</p>
+                                             </div>
+                                             <div className="border rounded-2xl p-6 text-center bg-gradient-to-br from-green-50/50 to-white shadow-md hover:shadow-lg transition-all duration-300 hover:scale-[1.02]">
+                                               <div className="p-3 bg-gradient-to-br from-green-100 to-emerald-100 rounded-xl mx-auto mb-4 w-fit">
+                                                 <Trophy className="h-8 w-8 text-green-600" />
+                                               </div>
+                                               <p className="text-sm text-muted-foreground mb-2 font-medium">Reward Factor</p>
+                                               <p className="text-xl font-bold text-green-700">{resume.rewardScore || 'Unknown'}</p>
+                                             </div>
+                                           </div>
+                                         </div>
 
-                                        {/* Strengths & Weaknesses */}
-                                        {(resume.strengths?.length > 0 || resume.weaknesses?.length > 0) && (
-                                          <div className="space-y-4">
-                                            <h4 className="font-medium text-foreground">Analysis</h4>
-                                            <div className="grid grid-cols-1 gap-4">
-                                              {resume.strengths?.length > 0 && (
-                                                <div className="border rounded-lg p-4">
-                                                  <h5 className="font-medium text-green-700 mb-2">Strengths</h5>
-                                                  <ul className="text-sm text-muted-foreground space-y-1">
-                                                    {resume.strengths.map((strength, idx) => (
-                                                      <li key={idx}>• {strength}</li>
-                                                    ))}
-                                                  </ul>
-                                                </div>
-                                              )}
-                                              {resume.weaknesses?.length > 0 && (
-                                                <div className="border rounded-lg p-4">
-                                                  <h5 className="font-medium text-red-700 mb-2">Areas for Improvement</h5>
-                                                  <ul className="text-sm text-muted-foreground space-y-1">
-                                                    {resume.weaknesses.map((weakness, idx) => (
-                                                      <li key={idx}>• {weakness}</li>
-                                                    ))}
-                                                  </ul>
-                                                </div>
-                                              )}
-                                            </div>
-                                          </div>
-                                        )}
+                                         {/* Strengths & Weaknesses */}
+                                         {(resume.strengths?.length > 0 || resume.weaknesses?.length > 0) && (
+                                           <div className="space-y-6 animate-fade-in [animation-delay:600ms]">
+                                             <h4 className="text-lg font-bold text-foreground flex items-center gap-2">
+                                               <ShieldCheck className="h-5 w-5 text-green-600" />
+                                               Detailed Analysis
+                                             </h4>
+                                             <div className="grid grid-cols-1 gap-6">
+                                               {resume.strengths?.length > 0 && (
+                                                 <div className="border rounded-2xl p-6 bg-gradient-to-br from-green-50/50 to-white shadow-md hover:shadow-lg transition-all duration-300 hover:scale-[1.02]">
+                                                   <h5 className="text-lg font-bold text-green-700 mb-4 flex items-center gap-2">
+                                                     <CheckCircle className="h-5 w-5" />
+                                                     Strengths
+                                                   </h5>
+                                                   <ul className="text-sm text-slate-600 space-y-2 leading-relaxed">
+                                                     {resume.strengths.map((strength, idx) => (
+                                                       <li key={idx} className="flex items-start gap-2">
+                                                         <span className="text-green-500 mt-1">•</span>
+                                                         <span>{strength}</span>
+                                                       </li>
+                                                     ))}
+                                                   </ul>
+                                                 </div>
+                                               )}
+                                               {resume.weaknesses?.length > 0 && (
+                                                 <div className="border rounded-2xl p-6 bg-gradient-to-br from-red-50/50 to-white shadow-md hover:shadow-lg transition-all duration-300 hover:scale-[1.02]">
+                                                   <h5 className="text-lg font-bold text-red-700 mb-4 flex items-center gap-2">
+                                                     <AlertTriangle className="h-5 w-5" />
+                                                     Areas for Improvement
+                                                   </h5>
+                                                   <ul className="text-sm text-slate-600 space-y-2 leading-relaxed">
+                                                     {resume.weaknesses.map((weakness, idx) => (
+                                                       <li key={idx} className="flex items-start gap-2">
+                                                         <span className="text-red-500 mt-1">•</span>
+                                                         <span>{weakness}</span>
+                                                       </li>
+                                                     ))}
+                                                   </ul>
+                                                 </div>
+                                               )}
+                                             </div>
+                                           </div>
+                                         )}
 
-                                        {/* Justification */}
-                                        {resume.justification && (
-                                          <div className="space-y-2">
-                                            <h4 className="font-medium text-foreground">Justification</h4>
-                                            <div className="border rounded-lg p-4">
-                                              <p className="text-sm text-muted-foreground">{resume.justification}</p>
-                                            </div>
-                                          </div>
-                                        )}
+                                         {/* AI Analysis */}
+                                         {resume.justification && (
+                                           <div className="space-y-4 animate-fade-in [animation-delay:800ms]">
+                                             <h4 className="text-lg font-bold text-foreground flex items-center gap-2">
+                                               <ArrowUpRight className="h-5 w-5 text-purple-600" />
+                                               AI Analysis
+                                             </h4>
+                                             <div className="border rounded-2xl p-6 bg-gradient-to-br from-purple-50/50 to-white shadow-md hover:shadow-lg transition-all duration-300">
+                                               <p className="text-sm text-slate-600 leading-relaxed">{resume.justification}</p>
+                                             </div>
+                                           </div>
+                                         )}
                                       </div>
                                     </ScrollArea>
                                   </SheetContent>
