@@ -159,44 +159,8 @@ const ResumeUpload = () => {
           : f
       ));
 
-      // Save analysis results to Google Sheets via Supabase
-      if (analysisResponse.success) {
-        console.log('Preparing analysis data for Google Sheets...');
-        
-        // Generate unique request ID for tracing
-        const requestId = `req_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-        
-        // Convert n8n response to expected format
-        const analysisData = [{
-          date: new Date().toISOString().split('T')[0],
-          resume: analysisResponse.resume || readyFiles[0]?.name || 'Unknown',
-          candidateName: analysisResponse.candidateName || '',
-          email: analysisResponse.email || '',
-          strengths: analysisResponse.strengths || '',
-          weaknesses: analysisResponse.weaknesses || '',
-          riskFactor: Number(analysisResponse.riskFactor) || 0,
-          rewardFactor: Number(analysisResponse.rewardFactor) || 0,
-          fitScore: Number(analysisResponse.fitScore) || 0,
-          overallFactor: Number(analysisResponse.overallFactor) || 0,
-          justification: analysisResponse.justification || '',
-          recruitment_name: recruitmentName.trim(),
-          requestId: requestId
-        }];
-
-        console.log(`[${requestId}] Frontend sending analysis data:`, JSON.stringify(analysisData, null, 2));
-        
-        const { data, error } = await supabase.functions.invoke('saveResumeAnalysis', {
-          body: {
-            analysisData: analysisData
-          }
-        });
-
-        if (error) {
-          throw new Error(`Failed to save analysis results: ${error.message}`);
-        }
-
-        console.log('Analysis results saved successfully:', data);
-      }
+      // n8n handles all database insertion now
+      console.log('n8n will handle saving analysis results to database');
 
       setFiles(prev => prev.map(f =>
         readyFiles.some(r => r.id === f.id)
