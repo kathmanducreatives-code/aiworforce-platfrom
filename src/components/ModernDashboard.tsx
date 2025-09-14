@@ -737,8 +737,36 @@ const ModernDashboard = () => {
                                                <ArrowUpRight className="h-5 w-5 text-purple-600" />
                                                AI Analysis
                                              </h4>
-                                             <div className="border rounded-2xl p-6 bg-gradient-to-br from-purple-50/50 to-white shadow-md hover:shadow-lg transition-all duration-300">
-                                               <p className="text-sm text-slate-600 leading-relaxed">{resume.justification}</p>
+                                             <div className="relative border rounded-2xl p-6 bg-gradient-to-br from-purple-50/50 to-white shadow-md hover:shadow-lg transition-all duration-300 glow-default">
+                                               <div className="absolute inset-0 bg-gradient-to-r from-purple-500/10 via-cyan-500/10 to-purple-500/10 rounded-2xl animate-gradient bg-300% opacity-75"></div>
+                                               <div className="relative z-10">
+                                                 <p className="text-sm text-slate-600 leading-relaxed">{resume.justification}</p>
+                                               </div>
+                                             </div>
+                                           </div>
+                                         )}
+
+                                         {/* Resume View Button */}
+                                         {resume.resume && (
+                                           <div className="space-y-4 animate-fade-in [animation-delay:1000ms]">
+                                             <h4 className="text-lg font-bold text-foreground flex items-center gap-2">
+                                               <FileText className="h-5 w-5 text-blue-600" />
+                                               Resume Document
+                                             </h4>
+                                             <div className="border rounded-2xl p-6 bg-gradient-to-br from-blue-50/50 to-white shadow-md hover:shadow-lg transition-all duration-300">
+                                               <div className="flex items-center justify-between">
+                                                 <div>
+                                                   <p className="text-sm text-slate-600 mb-2">View the original resume document</p>
+                                                   <p className="text-xs text-muted-foreground">Click to open in a new tab</p>
+                                                 </div>
+                                                 <Button
+                                                   onClick={() => window.open(resume.resume, '_blank')}
+                                                   className="bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white shadow-lg hover:shadow-xl hover:scale-105 transition-all duration-200 gap-2"
+                                                 >
+                                                   <FileText className="h-4 w-4" />
+                                                   View Resume
+                                                 </Button>
+                                               </div>
                                              </div>
                                            </div>
                                          )}
