@@ -119,7 +119,106 @@ All colors MUST be HSL.
   }
 }
 
+/* Enable smooth scrolling globally */
+html {
+  scroll-behavior: smooth;
+}
+
+/* Enhanced scroll behavior for webkit browsers */
+@media (prefers-reduced-motion: no-preference) {
+  html {
+    scroll-behavior: smooth;
+  }
+}
+
 @layer utilities {
+  /* Premium entrance animations */
+  @keyframes fadeInUp {
+    from {
+      opacity: 0;
+      transform: translateY(30px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  @keyframes fadeInDown {
+    from {
+      opacity: 0;
+      transform: translateY(-20px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  @keyframes fadeInLeft {
+    from {
+      opacity: 0;
+      transform: translateX(-30px);
+    }
+    to {
+      opacity: 1;
+      transform: translateX(0);
+    }
+  }
+
+  @keyframes fadeInRight {
+    from {
+      opacity: 0;
+      transform: translateX(30px);
+    }
+    to {
+      opacity: 1;
+      transform: translateX(0);
+    }
+  }
+
+  @keyframes scaleIn {
+    from {
+      opacity: 0;
+      transform: scale(0.8);
+    }
+    to {
+      opacity: 1;
+      transform: scale(1);
+    }
+  }
+
+  @keyframes float {
+    0%, 100% { transform: translateY(0px); }
+    50% { transform: translateY(-10px); }
+  }
+
+  @keyframes pulse-glow {
+    0%, 100% {
+      box-shadow: 0 0 20px hsl(var(--primary) / 0.1);
+    }
+    50% {
+      box-shadow: 0 0 40px hsl(var(--primary) / 0.2);
+    }
+  }
+
+  @keyframes border-glow-travel {
+    0% {
+      background: linear-gradient(90deg, 
+        hsl(var(--primary)) 0%, 
+        hsl(var(--primary-light)) 50%, 
+        transparent 100%);
+      transform: translateX(-100%);
+    }
+    100% {
+      background: linear-gradient(90deg, 
+        transparent 0%, 
+        hsl(var(--primary)) 50%, 
+        hsl(var(--primary-light)) 100%);
+      transform: translateX(100%);
+    }
+  }
+
   /* Dynamic glow animations for textarea */
   @keyframes glow-pulse {
     0% {
@@ -151,6 +250,80 @@ All colors MUST be HSL.
     }
   }
 
+  @keyframes shimmer {
+    0% { transform: translateX(-100%); }
+    100% { transform: translateX(100%); }
+  }
+
+  @keyframes slideInFromTop {
+    from {
+      opacity: 0;
+      transform: translateY(-100%);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  @keyframes slideInFromBottom {
+    from {
+      opacity: 0;
+      transform: translateY(100%);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  /* Custom animations for AI style */
+  @keyframes gradient {
+    0%, 100% { background-position: 0% 50%; }
+    50% { background-position: 100% 50%; }
+  }
+
+  /* Animation Classes */
+  .animate-fade-in-up {
+    animation: fadeInUp 0.6s ease-out;
+  }
+
+  .animate-fade-in-down {
+    animation: fadeInDown 0.4s ease-out;
+  }
+
+  .animate-fade-in-left {
+    animation: fadeInLeft 0.5s ease-out;
+  }
+
+  .animate-fade-in-right {
+    animation: fadeInRight 0.5s ease-out;
+  }
+
+  .animate-scale-in {
+    animation: scaleIn 0.3s ease-out;
+  }
+
+  .animate-float {
+    animation: float 6s ease-in-out infinite;
+  }
+
+  .animate-pulse-glow {
+    animation: pulse-glow 2s ease-in-out infinite;
+  }
+
+  .animate-shimmer {
+    animation: shimmer 2s ease-in-out infinite;
+  }
+
+  .animate-slide-in-top {
+    animation: slideInFromTop 0.4s ease-out;
+  }
+
+  .animate-slide-in-bottom {
+    animation: slideInFromBottom 0.4s ease-out;
+  }
+
   .glow-default {
     animation: glow-pulse 3s ease-in-out infinite;
   }
@@ -159,23 +332,90 @@ All colors MUST be HSL.
     animation: typing-glow 2s ease-in-out infinite;
   }
 
-  /* Hover scale utility */
+  /* Enhanced hover and interaction animations */
   .hover-scale {
-    @apply transition-transform duration-200 hover:scale-105;
+    @apply transition-all duration-300 hover:scale-105;
   }
 
-  /* Custom animations for AI Fiesta style */
-  @keyframes gradient {
-    0%, 100% { background-position: 0% 50%; }
-    50% { background-position: 100% 50%; }
+  .hover-scale-sm {
+    @apply transition-all duration-200 hover:scale-[1.02];
   }
 
+  .hover-lift {
+    @apply transition-all duration-300 hover:-translate-y-1 hover:shadow-lg;
+  }
+
+  .hover-glow {
+    @apply transition-all duration-300 hover:shadow-lg hover:shadow-primary/25;
+  }
+
+  .hover-rotate {
+    @apply transition-transform duration-300 hover:rotate-6;
+  }
+
+  .group-hover-slide-right {
+    @apply transition-transform duration-300 group-hover:translate-x-1;
+  }
+
+  .group-hover-slide-up {
+    @apply transition-transform duration-300 group-hover:-translate-y-1;
+  }
+
+  /* Button press animation */
+  .active-scale {
+    @apply active:scale-95 transition-transform duration-100;
+  }
+
+  /* Stagger animation delays */
+  .animate-delay-100 {
+    animation-delay: 0.1s;
+  }
+
+  .animate-delay-200 {
+    animation-delay: 0.2s;
+  }
+
+  .animate-delay-300 {
+    animation-delay: 0.3s;
+  }
+
+  .animate-delay-500 {
+    animation-delay: 0.5s;
+  }
+
+  /* Modern gradient animations */
   .animate-gradient {
     animation: gradient 3s ease infinite;
     background-size: 200% 200%;
   }
 
+  .animate-gradient-slow {
+    animation: gradient 6s ease infinite;
+    background-size: 300% 300%;
+  }
+
   .bg-300\\% {
     background-size: 300%;
+  }
+
+  /* Glass morphism with subtle animation */
+  .glass-card {
+    @apply backdrop-blur-md bg-white/10 border border-white/20 transition-all duration-300;
+  }
+
+  .glass-card:hover {
+    @apply bg-white/20 border-white/30;
+  }
+
+  /* Intersection observer animation trigger */
+  .animate-on-scroll {
+    opacity: 0;
+    transform: translateY(30px);
+    transition: all 0.6s ease-out;
+  }
+
+  .animate-on-scroll.in-view {
+    opacity: 1;
+    transform: translateY(0);
   }
 }

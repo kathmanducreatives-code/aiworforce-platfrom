@@ -211,15 +211,15 @@ const ModernDashboard = () => {
   if (loading) {
     return <div className="min-h-screen bg-gradient-to-br from-slate-50 to-white">
         <div className="flex items-center justify-center py-20">
-          <div className="text-center">
+          <div className="text-center animate-fade-in-up">
             <div className="relative">
               <RefreshCw className="h-12 w-12 animate-spin text-cyan-500 mx-auto mb-4" />
               <div className="absolute inset-0 h-12 w-12 bg-cyan-500/20 rounded-full animate-ping mx-auto" />
             </div>
-            <h2 className="text-2xl font-bold bg-gradient-to-r from-slate-800 to-slate-600 bg-clip-text text-transparent mb-2">
+            <h2 className="text-2xl font-bold bg-gradient-to-r from-slate-800 to-slate-600 bg-clip-text text-transparent mb-2 animate-fade-in-up animate-delay-200">
               Loading Candidates
             </h2>
-            <p className="text-slate-600 font-medium">Analyzing resume data with AI precision...</p>
+            <p className="text-slate-600 font-medium animate-fade-in-up animate-delay-300">Analyzing resume data with AI precision...</p>
           </div>
         </div>
       </div>;

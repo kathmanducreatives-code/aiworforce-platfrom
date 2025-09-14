@@ -200,10 +200,10 @@ const ResumeUpload = () => {
   };
 
   return (
-    <section className="py-16 lg:py-24">
+    <section className="py-16 lg:py-24 animate-fade-in-up">
       <div className="container mx-auto px-4 sm:px-6 lg:px-8">
         <div className="max-w-4xl mx-auto">
-          <div className="text-center mb-12">
+          <div className="text-center mb-12 animate-fade-in-down">
             <h2 className="text-3xl lg:text-4xl font-bold text-foreground mb-4">
               Upload Your Resumes
             </h2>
@@ -212,12 +212,12 @@ const ResumeUpload = () => {
             </p>
           </div>
 
-          <Card className="p-8">
+          <Card className="p-8 animate-scale-in hover-lift transition-all duration-300">
             {/* Upload Area */}
             <div
-              className={`border-2 border-dashed rounded-xl p-12 text-center transition-all duration-200 ${
+              className={`border-2 border-dashed rounded-xl p-12 text-center transition-all duration-300 hover-glow ${
                 isDragOver 
-                  ? 'border-primary bg-primary/5' 
+                  ? 'border-primary bg-primary/5 animate-pulse-glow' 
                   : 'border-border hover:border-primary/50 hover:bg-muted/50'
               }`}
               onDragOver={handleDragOver}
@@ -225,10 +225,10 @@ const ResumeUpload = () => {
               onDrop={handleDrop}
             >
               <div className="space-y-4">
-                <div className="mx-auto w-16 h-16 bg-primary/10 rounded-full flex items-center justify-center">
+                <div className="mx-auto w-16 h-16 bg-primary/10 rounded-full flex items-center justify-center animate-float">
                   <Upload className="w-8 h-8 text-primary" />
                 </div>
-                <div>
+                <div className="animate-fade-in-up animate-delay-200">
                   <h3 className="text-lg font-semibold text-foreground mb-2">
                     Drop your resume files here
                   </h3>
@@ -244,14 +244,14 @@ const ResumeUpload = () => {
                     id="file-input"
                   />
                   <label htmlFor="file-input">
-                    <Button asChild>
+                    <Button asChild className="hover-scale active-scale">
                       <span className="cursor-pointer">
                         Browse Files
                       </span>
                     </Button>
                   </label>
                 </div>
-                <div className="text-sm text-muted-foreground">
+                <div className="text-sm text-muted-foreground animate-fade-in-up animate-delay-300">
                   Supports PDF, DOC, DOCX • Max 10MB per file
                 </div>
               </div>
@@ -291,13 +291,13 @@ const ResumeUpload = () => {
 
             {/* File List */}
             {files.length > 0 && (
-              <div className="mt-8 space-y-4">
+              <div className="mt-8 space-y-4 animate-fade-in-up">
                 <h4 className="font-semibold text-foreground">Uploaded Files ({files.length})</h4>
                 <div className="space-y-3">
-                  {files.map(file => (
-                    <div key={file.id} className="flex items-center space-x-4 p-4 bg-muted/30 rounded-lg">
+                  {files.map((file, index) => (
+                    <div key={file.id} className="flex items-center space-x-4 p-4 bg-muted/30 rounded-lg hover-scale-sm transition-all duration-300 animate-fade-in-left" style={{animationDelay: `${index * 0.1}s`}}>
                       <div className="flex-shrink-0">
-                        <FileText className="w-8 h-8 text-primary" />
+                        <FileText className="w-8 h-8 text-primary animate-pulse" />
                       </div>
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center justify-between mb-1">
@@ -306,16 +306,16 @@ const ResumeUpload = () => {
                           </p>
                           <div className="flex items-center space-x-2">
                             {file.status === 'completed' && (
-                              <CheckCircle className="w-5 h-5 text-accent" />
+                              <CheckCircle className="w-5 h-5 text-accent animate-scale-in" />
                             )}
                             {file.status === 'error' && (
-                              <AlertCircle className="w-5 h-5 text-destructive" />
+                              <AlertCircle className="w-5 h-5 text-destructive animate-wiggle" />
                             )}
                             <Button
                               variant="ghost"
                               size="sm"
                               onClick={() => removeFile(file.id)}
-                              className="h-8 w-8 p-0"
+                              className="h-8 w-8 p-0 hover-scale active-scale"
                             >
                               <X className="w-4 h-4" />
                             </Button>
@@ -337,13 +337,14 @@ const ResumeUpload = () => {
                 </div>
                 
                 {files.some(f => f.status === 'ready') && (
-                <div className="pt-4 border-t border-border">
+                <div className="pt-4 border-t border-border animate-fade-in-up animate-delay-300">
                     <Button 
                   onClick={handleAnalyzeClick} 
-                  className="w-full bg-gradient-primary hover:shadow-primary transition-all duration-300"
+                  className="w-full bg-gradient-primary hover:shadow-primary transition-all duration-300 hover-scale active-scale relative overflow-hidden group"
                   disabled={!recruiterRequirements.trim()}
                     >
-                      Analyze Resumes ({files.filter(f => f.status === 'ready').length})
+                      <span className="absolute inset-0 bg-gradient-to-r from-cyan-400 to-teal-400 opacity-0 group-hover:opacity-100 transition-opacity duration-300"></span>
+                      <span className="relative z-10">Analyze Resumes ({files.filter(f => f.status === 'ready').length})</span>
                     </Button>
                   </div>
                 )}
