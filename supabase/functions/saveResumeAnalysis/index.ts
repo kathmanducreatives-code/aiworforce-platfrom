@@ -17,7 +17,8 @@ serve(async (req) => {
     console.log('Save resume analysis function called');
     
     const { analysisData } = await req.json();
-    console.log('Received analysis data:', JSON.stringify(analysisData, null, 2));
+    const requestId = analysisData?.[0]?.requestId || `edge_${Date.now()}`;
+    console.log(`[${requestId}] Received analysis data:`, JSON.stringify(analysisData, null, 2));
 
     if (!analysisData || !Array.isArray(analysisData) || analysisData.length === 0) {
       throw new Error('Invalid analysis data: expected non-empty array');
@@ -28,13 +29,22 @@ serve(async (req) => {
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-    console.log('Processing', analysisData.length, 'analysis records...');
+    console.log(`[${requestId}] Processing`, analysisData.length, 'analysis records...');
 
-    // Transform and insert data
+    // Transform and insert data with hardened recruitment_name handling
     const recordsToInsert = analysisData.map((analysis: any) => {
-      console.log('Processing analysis record:', {
+      // Canonicalize and harden recruitment_name field
+      const rawRecruitmentName = analysis.recruitment_name || analysis.recruitmentName || '';
+      const cleanRecruitmentName = typeof rawRecruitmentName === 'string' 
+        ? rawRecruitmentName.trim() 
+        : String(rawRecruitmentName).trim();
+      const finalRecruitmentName = cleanRecruitmentName || null; // Convert empty strings to null
+      
+      console.log(`[${requestId}] Processing analysis record:`, {
         candidateName: analysis.candidateName,
-        recruitmentName: analysis.recruitmentName || analysis.recruitment_name,
+        rawRecruitmentName: rawRecruitmentName,
+        cleanRecruitmentName: cleanRecruitmentName,
+        finalRecruitmentName: finalRecruitmentName,
         email: analysis.email
       });
 
@@ -49,11 +59,11 @@ serve(async (req) => {
         fit_score: analysis.fitScore || 0,
         overall_factor: analysis.overallFactor || analysis.fitScore || 0,
         justification: analysis.justification || null,
-        recruitment_name: analysis.recruitmentName || analysis.recruitment_name || null
+        recruitment_name: finalRecruitmentName
       };
     });
 
-    console.log('Records to insert:', JSON.stringify(recordsToInsert, null, 2));
+    console.log(`[${requestId}] Records to insert:`, JSON.stringify(recordsToInsert, null, 2));
 
     // Insert into database
     const { data, error } = await supabase
@@ -62,12 +72,12 @@ serve(async (req) => {
       .select();
 
     if (error) {
-      console.error('Database insert error:', error);
+      console.error(`[${requestId}] Database insert error:`, error);
       throw new Error(`Failed to save analysis data: ${error.message}`);
     }
 
-    console.log('Successfully inserted', data?.length || 0, 'records');
-    console.log('Inserted records:', JSON.stringify(data, null, 2));
+    console.log(`[${requestId}] Successfully inserted`, data?.length || 0, 'records');
+    console.log(`[${requestId}] Inserted records:`, JSON.stringify(data, null, 2));
 
     return new Response(
       JSON.stringify({
@@ -80,7 +90,8 @@ serve(async (req) => {
       }
     );
   } catch (error) {
-    console.error('Error in save-resume-analysis function:', error);
+    const requestId = 'unknown';
+    console.error(`[${requestId}] Error in save-resume-analysis function:`, error);
     return new Response(
       JSON.stringify({
         success: false,

@@ -29,6 +29,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 const ModernDashboard = () => {
   const [searchTerm, setSearchTerm] = useState("");
   const [resumeData, setResumeData] = useState<ResumeAnalysis[]>([]);
@@ -141,7 +142,8 @@ const ModernDashboard = () => {
           riskScore: extractJSONScore(row.risk_factor),
           rewardScore: extractJSONScore(row.reward_factor),
           fitScoreText: fitScore.toString(),
-          overallScore: overallScore
+          overallScore: overallScore,
+          recruitment_name_raw: row.recruitment_name // Add raw value for debugging
         };
       });
       setResumeData(normalized);
@@ -532,11 +534,26 @@ const ModernDashboard = () => {
                                    <div className="font-semibold text-slate-800 group-hover:text-cyan-700 transition-colors">
                                      {resume.candidateName || 'Unknown Candidate'}
                                    </div>
-                                   {resume.recruitmentName && <Badge 
-                                     className={`px-3 py-1 rounded-full text-xs font-medium border ${getRecruitmentTagColor(resume.recruitmentName)}`}
-                                   >
-                                       {resume.recruitmentName}
-                                     </Badge>}
+                                    {resume.recruitmentName && (
+                                      <TooltipProvider>
+                                        <Tooltip>
+                                          <TooltipTrigger asChild>
+                                            <Badge 
+                                              className={`px-3 py-1 rounded-full text-xs font-medium border cursor-help ${getRecruitmentTagColor(resume.recruitmentName)}`}
+                                            >
+                                              {resume.recruitmentName}
+                                            </Badge>
+                                          </TooltipTrigger>
+                                          <TooltipContent>
+                                            <div className="text-xs">
+                                              <p><strong>Debug Info:</strong></p>
+                                              <p>Raw DB value: "{(resume as any).recruitment_name_raw || 'N/A'}"</p>
+                                              <p>Displayed: "{resume.recruitmentName}"</p>
+                                            </div>
+                                          </TooltipContent>
+                                        </Tooltip>
+                                      </TooltipProvider>
+                                    )}
                                  </div>
                                  {resume.email && <div className="flex items-center text-sm text-slate-500">
                                      <Mail className="h-4 w-4 mr-2 text-slate-400" />

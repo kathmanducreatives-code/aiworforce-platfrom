@@ -163,6 +163,9 @@ const ResumeUpload = () => {
       if (analysisResponse.success) {
         console.log('Preparing analysis data for Google Sheets...');
         
+        // Generate unique request ID for tracing
+        const requestId = `req_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+        
         // Convert n8n response to expected format
         const analysisData = [{
           date: new Date().toISOString().split('T')[0],
@@ -176,11 +179,11 @@ const ResumeUpload = () => {
           fitScore: Number(analysisResponse.fitScore) || 0,
           overallFactor: Number(analysisResponse.overallFactor) || 0,
           justification: analysisResponse.justification || '',
-          recruitmentName: recruitmentName.trim(),
           recruitment_name: recruitmentName.trim(),
+          requestId: requestId
         }];
 
-        console.log('Invoking saveResumeAnalysis with data:', analysisData);
+        console.log(`[${requestId}] Frontend sending analysis data:`, JSON.stringify(analysisData, null, 2));
         
         const { data, error } = await supabase.functions.invoke('saveResumeAnalysis', {
           body: {
