@@ -732,16 +732,53 @@ const ModernDashboard = () => {
 
                                          {/* AI Analysis */}
                                          {resume.justification && (
-                                           <div className="space-y-4 animate-fade-in [animation-delay:800ms]">
-                                             <h4 className="text-lg font-bold text-foreground flex items-center gap-2">
-                                               <ArrowUpRight className="h-5 w-5 text-purple-600" />
+                                           <div className="space-y-6 animate-fade-in [animation-delay:800ms]">
+                                             <h4 className="text-lg font-bold text-foreground flex items-center gap-3">
+                                               <div className="p-2 bg-gradient-to-br from-purple-100 to-pink-100 rounded-xl">
+                                                 <ArrowUpRight className="h-5 w-5 text-purple-600" />
+                                               </div>
                                                AI Analysis
                                              </h4>
-                                             <div className="relative border rounded-2xl p-6 bg-gradient-to-br from-purple-50/50 to-white shadow-md hover:shadow-lg transition-all duration-300 glow-default">
-                                               <div className="absolute inset-0 bg-gradient-to-r from-purple-500/10 via-cyan-500/10 to-purple-500/10 rounded-2xl animate-gradient bg-300% opacity-75"></div>
-                                               <div className="relative z-10">
-                                                 <p className="text-sm text-slate-600 leading-relaxed">{resume.justification}</p>
+                                             <div className="relative group">
+                                               {/* Animated background gradient */}
+                                               <div className="absolute inset-0 bg-gradient-to-r from-purple-500/20 via-pink-500/20 via-cyan-500/20 to-purple-500/20 rounded-3xl animate-gradient bg-300% blur-xl opacity-60 group-hover:opacity-80 transition-opacity duration-500"></div>
+                                               
+                                               {/* Main content container */}
+                                               <div className="relative border border-purple-200/50 rounded-3xl overflow-hidden bg-white/80 backdrop-blur-sm shadow-2xl shadow-purple-500/10 hover:shadow-purple-500/20 transition-all duration-500 group-hover:scale-[1.01]">
+                                                 
+                                                 {/* Top accent bar */}
+                                                 <div className="h-1 bg-gradient-to-r from-purple-500 via-pink-500 via-cyan-500 to-purple-500 animate-gradient bg-300%"></div>
+                                                 
+                                                 {/* Content area */}
+                                                 <div className="p-8">
+                                                   {/* Decorative elements */}
+                                                   <div className="absolute top-6 right-6 opacity-10">
+                                                     <div className="w-24 h-24 rounded-full bg-gradient-to-br from-purple-400 to-pink-400 animate-pulse"></div>
+                                                   </div>
+                                                   <div className="absolute bottom-6 left-6 opacity-5">
+                                                     <div className="w-16 h-16 rounded-lg bg-gradient-to-tr from-cyan-400 to-purple-400 rotate-12 animate-pulse [animation-delay:1s]"></div>
+                                                   </div>
+                                                   
+                                                   {/* AI Badge */}
+                                                   <div className="inline-flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-purple-100 to-pink-100 border border-purple-200/50 rounded-full mb-6">
+                                                     <div className="w-2 h-2 bg-gradient-to-r from-purple-500 to-pink-500 rounded-full animate-pulse"></div>
+                                                     <span className="text-xs font-semibold text-purple-700 tracking-wide uppercase">AI-Generated Insights</span>
+                                                   </div>
+                                                   
+                                                   {/* Analysis text */}
+                                                   <div className="relative z-10">
+                                                     <p className="text-base text-slate-700 leading-relaxed font-medium tracking-wide">
+                                                       {resume.justification}
+                                                     </p>
+                                                   </div>
+                                                   
+                                                   {/* Bottom decorative line */}
+                                                   <div className="mt-6 h-px bg-gradient-to-r from-transparent via-purple-300/50 to-transparent"></div>
+                                                 </div>
                                                </div>
+                                               
+                                               {/* Outer glow effect */}
+                                               <div className="absolute -inset-2 bg-gradient-to-r from-purple-500/10 via-pink-500/10 to-cyan-500/10 rounded-3xl blur-2xl opacity-0 group-hover:opacity-100 transition-opacity duration-700 -z-10"></div>
                                              </div>
                                            </div>
                                          )}
