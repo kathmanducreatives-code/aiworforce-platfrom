@@ -266,11 +266,13 @@ const ModernDashboard = () => {
               <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
                 {Object.entries(recruitmentFolders).map(([folderName, candidates]) => <Card 
                   key={folderName} 
-                  className="cursor-pointer group backdrop-blur-sm bg-white/80 border border-slate-200/50 shadow-lg hover:shadow-xl hover:shadow-cyan-500/10 transition-all duration-300 hover:scale-[1.02] hover:border-cyan-200 rounded-2xl" 
-                  onClick={() => setSelectedFolder(folderName)}
+                  className="group backdrop-blur-sm bg-white/80 border border-slate-200/50 shadow-lg hover:shadow-xl hover:shadow-cyan-500/10 transition-all duration-300 hover:scale-[1.02] hover:border-cyan-200 rounded-2xl overflow-hidden"
                 >
                     <CardContent className="p-6">
-                      <div className="flex items-center gap-4">
+                      <div 
+                        className="flex items-center gap-4 cursor-pointer"
+                        onClick={() => setSelectedFolder(folderName)}
+                      >
                         <div className="p-3 bg-gradient-to-br from-cyan-50 to-teal-50 rounded-xl group-hover:from-cyan-100 group-hover:to-teal-100 transition-all duration-300">
                           <Folder className="h-5 w-5 text-cyan-600" />
                         </div>
@@ -281,6 +283,29 @@ const ModernDashboard = () => {
                           </p>
                         </div>
                         <ChevronRight className="h-5 w-5 text-slate-400 group-hover:text-cyan-500 group-hover:translate-x-1 transition-all duration-300" />
+                      </div>
+                      
+                      {/* Email Sequence Button */}
+                      <div className="mt-4 pt-4 border-t border-slate-100">
+                        <Button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            toast({
+                              title: "Email Sequence",
+                              description: `Pushing ${candidates.length} candidates from ${folderName} to email sequence...`,
+                            });
+                          }}
+                          className="w-full bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-600 hover:to-teal-600 text-white shadow-lg shadow-emerald-500/25 hover:shadow-xl hover:shadow-emerald-500/30 transition-all duration-300 rounded-xl font-medium py-2.5 group/btn"
+                        >
+                          <div className="flex items-center justify-center gap-2">
+                            <Mail className="h-4 w-4 group-hover/btn:scale-110 transition-transform duration-200" />
+                            <span>Push to Email Sequence</span>
+                            <div className="flex items-center gap-1 ml-2 bg-white/20 rounded-full px-2 py-0.5 text-xs font-semibold">
+                              <Users className="h-3 w-3" />
+                              {candidates.length}
+                            </div>
+                          </div>
+                        </Button>
                       </div>
                     </CardContent>
                   </Card>)}
