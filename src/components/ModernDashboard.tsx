@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -31,6 +32,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 const ModernDashboard = () => {
+  const navigate = useNavigate();
   const [searchTerm, setSearchTerm] = useState("");
   const [resumeData, setResumeData] = useState<ResumeAnalysis[]>([]);
   const [loading, setLoading] = useState(true);
@@ -271,7 +273,7 @@ const ModernDashboard = () => {
                     <CardContent className="p-6">
                       <div 
                         className="flex items-center gap-4 cursor-pointer"
-                        onClick={() => setSelectedFolder(folderName)}
+                        onClick={() => navigate(`/folder/${encodeURIComponent(folderName)}`)}
                       >
                         <div className="p-3 bg-gradient-to-br from-cyan-50 to-teal-50 rounded-xl group-hover:from-cyan-100 group-hover:to-teal-100 transition-all duration-300">
                           <Folder className="h-5 w-5 text-cyan-600" />

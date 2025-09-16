@@ -1,0 +1,240 @@
+import { useParams, useNavigate } from "react-router-dom";
+import { ArrowLeft, Mail, Users, Clock, Send, Plus, Settings } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import Header from "@/components/Header";
+import { useState } from "react";
+import { toast } from "@/hooks/use-toast";
+
+const EmailSequenceSetup = () => {
+  const { folderName } = useParams();
+  const navigate = useNavigate();
+  const [sequenceName, setSequenceName] = useState("");
+  const [selectedTemplate, setSelectedTemplate] = useState("");
+
+  const emailTemplates = [
+    { id: "initial", name: "Initial Contact", description: "First outreach email to candidates" },
+    { id: "follow-up", name: "Follow-up", description: "Second contact after no response" },
+    { id: "interview", name: "Interview Invitation", description: "Invite qualified candidates for interview" },
+    { id: "custom", name: "Custom Template", description: "Create your own email template" }
+  ];
+
+  const handleCreateSequence = () => {
+    if (!sequenceName || !selectedTemplate) {
+      toast({
+        title: "Missing Information",
+        description: "Please fill in all required fields to create the email sequence.",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    toast({
+      title: "Email Sequence Created",
+      description: `Successfully created "${sequenceName}" for ${folderName} candidates.`,
+    });
+
+    // Navigate back to folder view after a short delay
+    setTimeout(() => {
+      navigate(`/folder/${encodeURIComponent(folderName || '')}`);
+    }, 2000);
+  };
+
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-emerald-50">
+      <Header />
+      
+      <div className="container mx-auto px-6 py-8 max-w-4xl animate-fade-in">
+        {/* Header Section */}
+        <div className="flex items-center gap-4 mb-8">
+          <Button
+            variant="ghost"
+            onClick={() => navigate(`/folder/${encodeURIComponent(folderName || '')}`)}
+            className="hover:bg-slate-100 hover:scale-105 transition-all duration-200 rounded-xl p-2"
+          >
+            <ArrowLeft className="h-5 w-5" />
+          </Button>
+          <div>
+            <h1 className="text-3xl font-bold text-slate-800 mb-2">
+              Email Sequence Setup
+            </h1>
+            <p className="text-slate-600">
+              Create an automated email sequence for <span className="font-semibold text-emerald-600">{folderName}</span> candidates
+            </p>
+          </div>
+        </div>
+
+        <div className="grid gap-6 lg:grid-cols-3">
+          {/* Main Setup Form */}
+          <div className="lg:col-span-2 space-y-6">
+            {/* Sequence Details */}
+            <Card className="backdrop-blur-sm bg-white/80 border border-slate-200/50 shadow-lg rounded-2xl">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2 text-slate-800">
+                  <Settings className="h-5 w-5 text-emerald-600" />
+                  Sequence Configuration
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div>
+                  <Label htmlFor="sequence-name" className="text-slate-700 font-medium">
+                    Sequence Name *
+                  </Label>
+                  <Input
+                    id="sequence-name"
+                    placeholder="e.g., AI Engineers Outreach 2024"
+                    value={sequenceName}
+                    onChange={(e) => setSequenceName(e.target.value)}
+                    className="mt-2 border-slate-200 focus:border-emerald-300 focus:ring-emerald-200"
+                  />
+                </div>
+
+                <div>
+                  <Label htmlFor="template-select" className="text-slate-700 font-medium">
+                    Email Template *
+                  </Label>
+                  <Select value={selectedTemplate} onValueChange={setSelectedTemplate}>
+                    <SelectTrigger className="mt-2 border-slate-200 focus:border-emerald-300 focus:ring-emerald-200">
+                      <SelectValue placeholder="Choose an email template" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {emailTemplates.map((template) => (
+                        <SelectItem key={template.id} value={template.id}>
+                          <div>
+                            <div className="font-medium">{template.name}</div>
+                            <div className="text-sm text-slate-500">{template.description}</div>
+                          </div>
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div>
+                  <Label htmlFor="subject-line" className="text-slate-700 font-medium">
+                    Subject Line
+                  </Label>
+                  <Input
+                    id="subject-line"
+                    placeholder="Exciting AI Engineering Opportunity at [Company]"
+                    className="mt-2 border-slate-200 focus:border-emerald-300 focus:ring-emerald-200"
+                  />
+                </div>
+
+                <div>
+                  <Label htmlFor="email-content" className="text-slate-700 font-medium">
+                    Email Content Preview
+                  </Label>
+                  <Textarea
+                    id="email-content"
+                    placeholder="Hi [Candidate Name], We came across your profile and are impressed by your AI/ML experience..."
+                    rows={6}
+                    className="mt-2 border-slate-200 focus:border-emerald-300 focus:ring-emerald-200"
+                  />
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Timing Settings */}
+            <Card className="backdrop-blur-sm bg-white/80 border border-slate-200/50 shadow-lg rounded-2xl">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2 text-slate-800">
+                  <Clock className="h-5 w-5 text-emerald-600" />
+                  Timing & Schedule
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <Label htmlFor="send-time" className="text-slate-700 font-medium">
+                      Send Time
+                    </Label>
+                    <Select>
+                      <SelectTrigger className="mt-2 border-slate-200 focus:border-emerald-300">
+                        <SelectValue placeholder="Select time" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="9am">9:00 AM</SelectItem>
+                        <SelectItem value="11am">11:00 AM</SelectItem>
+                        <SelectItem value="2pm">2:00 PM</SelectItem>
+                        <SelectItem value="4pm">4:00 PM</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div>
+                    <Label htmlFor="frequency" className="text-slate-700 font-medium">
+                      Frequency
+                    </Label>
+                    <Select>
+                      <SelectTrigger className="mt-2 border-slate-200 focus:border-emerald-300">
+                        <SelectValue placeholder="Select frequency" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="daily">Daily</SelectItem>
+                        <SelectItem value="weekly">Weekly</SelectItem>
+                        <SelectItem value="bi-weekly">Bi-weekly</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* Summary Sidebar */}
+          <div className="space-y-6">
+            <Card className="backdrop-blur-sm bg-white/80 border border-slate-200/50 shadow-lg rounded-2xl">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2 text-slate-800">
+                  <Users className="h-5 w-5 text-emerald-600" />
+                  Sequence Summary
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <span className="text-slate-600">Target Folder:</span>
+                  <span className="font-semibold text-emerald-600">{folderName}</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-slate-600">Recipients:</span>
+                  <span className="font-semibold">3 candidates</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-slate-600">Status:</span>
+                  <span className="font-semibold text-amber-600">Draft</span>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Action Buttons */}
+            <div className="space-y-3">
+              <Button
+                onClick={handleCreateSequence}
+                className="w-full bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-600 hover:to-teal-600 text-white shadow-lg shadow-emerald-500/25 hover:shadow-xl hover:shadow-emerald-500/30 transition-all duration-300 rounded-xl font-medium py-3 group"
+              >
+                <div className="flex items-center gap-2">
+                  <Send className="h-5 w-5 group-hover:scale-110 transition-transform duration-200" />
+                  Create & Start Sequence
+                </div>
+              </Button>
+
+              <Button
+                variant="outline"
+                className="w-full hover:bg-slate-50 hover:border-slate-300 transition-all duration-200 rounded-xl"
+              >
+                <Plus className="h-4 w-4 mr-2" />
+                Save as Draft
+              </Button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+export default EmailSequenceSetup;
