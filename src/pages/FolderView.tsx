@@ -126,10 +126,10 @@ const FolderView = () => {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-cyan-50">
+    <div className="min-h-screen w-full bg-gradient-to-br from-slate-50 via-white to-cyan-50">
       <Header />
       
-      <div className="container mx-auto px-6 py-8 animate-fade-in">
+      <main className="container mx-auto px-4 sm:px-6 py-8 pt-24 animate-fade-in max-w-7xl">
         {/* Header Section */}
         <div className="flex items-center justify-between mb-8">
           <div className="flex items-center gap-4">
@@ -275,10 +275,10 @@ const FolderView = () => {
                   </CardContent>
                 </Card>
               );
-            })}
+             })}
           </div>
         )}
-      </div>
+      </main>
     </div>
   );
 };
