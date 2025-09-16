@@ -15,6 +15,10 @@ const EmailSequenceSetup = () => {
   const navigate = useNavigate();
   const [sequenceName, setSequenceName] = useState("");
   const [selectedTemplate, setSelectedTemplate] = useState("");
+  const [subjectLine, setSubjectLine] = useState("");
+  const [emailContent, setEmailContent] = useState("");
+  const [sendTime, setSendTime] = useState("");
+  const [frequency, setFrequency] = useState("");
 
   const emailTemplates = [
     { id: "initial", name: "Initial Contact", description: "First outreach email to candidates" },
@@ -23,7 +27,7 @@ const EmailSequenceSetup = () => {
     { id: "custom", name: "Custom Template", description: "Create your own email template" }
   ];
 
-  const handleCreateSequence = () => {
+  const handleCreateSequence = async () => {
     if (!sequenceName || !selectedTemplate) {
       toast({
         title: "Missing Information",
@@ -33,15 +37,54 @@ const EmailSequenceSetup = () => {
       return;
     }
 
-    toast({
-      title: "Email Sequence Created",
-      description: `Successfully created "${sequenceName}" for ${folderName} candidates.`,
-    });
+    try {
+      // Prepare the payload with all form data
+      const payload = {
+        sequenceName,
+        selectedTemplate,
+        subjectLine,
+        emailContent,
+        sendTime,
+        frequency,
+        folderName,
+        timestamp: new Date().toISOString(),
+        status: "active"
+      };
 
-    // Navigate back to folder view after a short delay
-    setTimeout(() => {
-      navigate(`/folder/${encodeURIComponent(folderName || '')}`);
-    }, 2000);
+      // Send data to the webhook
+      const response = await fetch('https://prrasidha.app.n8n.cloud/webhook/a251b2f4-2dce-42a2-b3d9-caf544105748', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(payload)
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const result = await response.json();
+      console.log('Webhook response:', result);
+
+      toast({
+        title: "Email Sequence Created",
+        description: `Successfully created "${sequenceName}" for ${folderName} candidates and sent to webhook.`,
+      });
+
+      // Navigate back to folder view after a short delay
+      setTimeout(() => {
+        navigate(`/folder/${encodeURIComponent(folderName || '')}`);
+      }, 2000);
+
+    } catch (error) {
+      console.error('Error sending to webhook:', error);
+      toast({
+        title: "Error",
+        description: "Failed to create email sequence. Please try again.",
+        variant: "destructive"
+      });
+    }
   };
 
   return (
@@ -121,6 +164,8 @@ const EmailSequenceSetup = () => {
                   <Input
                     id="subject-line"
                     placeholder="Exciting AI Engineering Opportunity at [Company]"
+                    value={subjectLine}
+                    onChange={(e) => setSubjectLine(e.target.value)}
                     className="mt-2 border-slate-200 focus:border-emerald-300 focus:ring-emerald-200"
                   />
                 </div>
@@ -132,6 +177,8 @@ const EmailSequenceSetup = () => {
                   <Textarea
                     id="email-content"
                     placeholder="Hi [Candidate Name], We came across your profile and are impressed by your AI/ML experience..."
+                    value={emailContent}
+                    onChange={(e) => setEmailContent(e.target.value)}
                     rows={6}
                     className="mt-2 border-slate-200 focus:border-emerald-300 focus:ring-emerald-200"
                   />
@@ -153,7 +200,7 @@ const EmailSequenceSetup = () => {
                     <Label htmlFor="send-time" className="text-slate-700 font-medium">
                       Send Time
                     </Label>
-                    <Select>
+                    <Select value={sendTime} onValueChange={setSendTime}>
                       <SelectTrigger className="mt-2 border-slate-200 focus:border-emerald-300">
                         <SelectValue placeholder="Select time" />
                       </SelectTrigger>
@@ -169,7 +216,7 @@ const EmailSequenceSetup = () => {
                     <Label htmlFor="frequency" className="text-slate-700 font-medium">
                       Frequency
                     </Label>
-                    <Select>
+                    <Select value={frequency} onValueChange={setFrequency}>
                       <SelectTrigger className="mt-2 border-slate-200 focus:border-emerald-300">
                         <SelectValue placeholder="Select frequency" />
                       </SelectTrigger>
