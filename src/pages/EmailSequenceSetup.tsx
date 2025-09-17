@@ -51,17 +51,26 @@ const EmailSequenceSetup = () => {
         status: "active"
       };
 
-      // Send data to the webhook
+      console.log('Sending payload to webhook:', payload);
+
+      // Send data to the webhook with additional options to handle CORS
       const response = await fetch('https://prrasidha.app.n8n.cloud/webhook/a251b2f4-2dce-42a2-b3d9-caf544105748', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          'Accept': 'application/json',
         },
-        body: JSON.stringify(payload)
+        body: JSON.stringify(payload),
+        mode: 'cors',
       });
 
+      console.log('Response status:', response.status);
+      console.log('Response headers:', response.headers);
+
       if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
+        const errorText = await response.text();
+        console.error('Response error:', errorText);
+        throw new Error(`HTTP error! status: ${response.status}, message: ${errorText}`);
       }
 
       const result = await response.json();
@@ -79,9 +88,20 @@ const EmailSequenceSetup = () => {
 
     } catch (error) {
       console.error('Error sending to webhook:', error);
+      
+      // More detailed error message
+      let errorMessage = "Failed to create email sequence. ";
+      if (error instanceof Error) {
+        if (error.message.includes('Failed to fetch')) {
+          errorMessage += "Network error - please check your connection or webhook URL.";
+        } else {
+          errorMessage += error.message;
+        }
+      }
+      
       toast({
         title: "Error",
-        description: "Failed to create email sequence. Please try again.",
+        description: errorMessage,
         variant: "destructive"
       });
     }
