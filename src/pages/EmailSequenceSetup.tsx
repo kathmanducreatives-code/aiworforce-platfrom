@@ -7,8 +7,10 @@ import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import Header from "@/components/Header";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { toast } from "@/hooks/use-toast";
+import { supabase } from "@/integrations/supabase/client";
+import type { ResumeAnalysis } from "@/types/ResumeAnalysis";
 
 const EmailSequenceSetup = () => {
   const { folderName } = useParams();
@@ -19,6 +21,71 @@ const EmailSequenceSetup = () => {
   const [emailContent, setEmailContent] = useState("");
   const [sendTime, setSendTime] = useState("");
   const [frequency, setFrequency] = useState("");
+  const [candidates, setCandidates] = useState<ResumeAnalysis[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchCandidates = async () => {
+      try {
+        setLoading(true);
+        const { data, error } = await supabase
+          .from('resume_analyses')
+          .select('*')
+          .eq('recruitment_name', folderName)
+          .order('created_at', { ascending: false });
+
+        if (error) {
+          console.error('Error fetching candidates:', error);
+        } else {
+          // Map database fields to interface structure
+          const mappedCandidates = (data || []).map(item => {
+            // Parse JSON strings
+            const parseJsonString = (jsonStr: string | null): string[] => {
+              if (!jsonStr) return [];
+              try {
+                return JSON.parse(jsonStr);
+              } catch {
+                return [];
+              }
+            };
+
+            return {
+              id: item.id,
+              candidateName: item.candidate_name,
+              email: item.email || '',
+              resume: item.resume || '',
+              strengths: parseJsonString(item.strengths),
+              weaknesses: parseJsonString(item.weaknesses),
+              fitScore: typeof item.fit_score === 'number' ? item.fit_score : 
+                       (typeof item.fit_score === 'object' && item.fit_score !== null ? 
+                        (item.fit_score as any) || 0 : 0),
+              overallFactor: typeof item.overall_factor === 'number' ? item.overall_factor : 
+                            (typeof item.overall_factor === 'object' && item.overall_factor !== null ? 
+                             (item.overall_factor as any) || 0 : 0),
+              riskFactor: typeof item.risk_factor === 'number' ? item.risk_factor : 
+                         (typeof item.risk_factor === 'object' && item.risk_factor !== null ? 
+                          (item.risk_factor as any).score || 0 : 0),
+              rewardFactor: typeof item.reward_factor === 'number' ? item.reward_factor : 
+                           (typeof item.reward_factor === 'object' && item.reward_factor !== null ? 
+                            (item.reward_factor as any).score || 0 : 0),
+              justification: item.justification || '',
+              recruitmentName: item.recruitment_name || '',
+              date: item.created_at
+            } as ResumeAnalysis;
+          });
+          setCandidates(mappedCandidates);
+        }
+      } catch (error) {
+        console.error('Error:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    if (folderName) {
+      fetchCandidates();
+    }
+  }, [folderName]);
 
   const emailTemplates = [
     { id: "initial", name: "Initial Contact", description: "First outreach email to candidates" },
@@ -38,7 +105,13 @@ const EmailSequenceSetup = () => {
     }
 
     try {
-      // Prepare the payload with all form data
+      // Prepare the payload with all form data including candidate emails
+      const candidateEmails = candidates.map(candidate => ({
+        name: candidate.candidateName,
+        email: candidate.email,
+        fitScore: candidate.fitScore
+      }));
+
       const payload = {
         sequenceName,
         selectedTemplate,
@@ -47,6 +120,8 @@ const EmailSequenceSetup = () => {
         sendTime,
         frequency,
         folderName,
+        candidates: candidateEmails,
+        candidateCount: candidateEmails.length,
         timestamp: new Date().toISOString(),
         status: "active"
       };
@@ -268,7 +343,7 @@ const EmailSequenceSetup = () => {
                 </div>
                 <div className="flex items-center justify-between">
                   <span className="text-slate-600">Recipients:</span>
-                  <span className="font-semibold">3 candidates</span>
+                  <span className="font-semibold">{candidates.length} candidates</span>
                 </div>
                 <div className="flex items-center justify-between">
                   <span className="text-slate-600">Status:</span>
