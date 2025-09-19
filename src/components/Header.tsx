@@ -16,7 +16,7 @@ const Header = () => {
               <Atom className="w-5 h-5 text-white relative z-10 group-hover:animate-pulse" />
             </div>
             <span className="text-2xl font-bold bg-gradient-to-r from-slate-800 to-slate-600 bg-clip-text text-transparent group-hover:from-cyan-600 group-hover:to-teal-600 transition-all duration-300">
-              AI Recruit
+              ScreeningPilot
             </span>
           </div>
 
