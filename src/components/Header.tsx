@@ -30,7 +30,7 @@ const Header = () => {
 
           {/* Navigation - Desktop */}
           <nav className="hidden md:flex items-center gap-8">
-            <a href="#features" className="relative text-slate-600 hover:text-cyan-600 font-medium transition-all duration-300 group">
+            <a href="/features" className="relative text-slate-600 hover:text-cyan-600 font-medium transition-all duration-300 group">
               <span className="relative z-10">Features</span>
               <span className="absolute inset-x-0 bottom-0 h-0.5 bg-gradient-to-r from-cyan-500 to-teal-500 transform scale-x-0 group-hover:scale-x-100 transition-transform duration-300 origin-left"></span>
             </a>
@@ -61,7 +61,7 @@ const Header = () => {
         {isMenuOpen && (
           <div className="md:hidden py-4 border-t border-slate-200/50 animate-slide-down">
             <nav className="flex flex-col gap-4">
-              <a href="#features" className="text-slate-600 hover:text-cyan-600 font-medium py-2 transition-all duration-200 hover:translate-x-2 animate-fade-in-left animate-delay-100">
+              <a href="/features" className="text-slate-600 hover:text-cyan-600 font-medium py-2 transition-all duration-200 hover:translate-x-2 animate-fade-in-left animate-delay-100">
                 Features
               </a>
               <a href="#pricing" className="text-slate-600 hover:text-cyan-600 font-medium py-2 transition-all duration-200 hover:translate-x-2 animate-fade-in-left animate-delay-200">
