@@ -8,13 +8,13 @@ const Header = () => {
       <div className="container mx-auto px-6">
         <div className="flex items-center justify-between h-16">
           {/* Logo */}
-          <div className="flex items-center gap-3 group">
+          <a href="/" className="flex items-center gap-3 group">
             <div className="w-8 h-8 bg-gradient-to-br from-cyan-500 to-teal-500 rounded-lg flex items-center justify-center hover-scale overflow-hidden relative">
               <div className="absolute inset-0 bg-gradient-to-br from-cyan-400 to-teal-400 opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
               <Atom className="w-5 h-5 text-white relative z-10 group-hover:animate-pulse" />
             </div>
             <span className="text-2xl font-bold bg-gradient-to-r from-slate-800 to-slate-600 bg-clip-text text-transparent group-hover:from-cyan-600 group-hover:to-teal-600 transition-all duration-300">ScreeningPilot</span>
-          </div>
+          </a>
 
           {/* Navigation - Desktop */}
           <nav className="hidden md:flex items-center gap-8">
