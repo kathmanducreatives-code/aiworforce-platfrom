@@ -1,5 +1,6 @@
 import Header from "@/components/Header";
 import { Brain, Upload, Target, GitBranch } from "lucide-react";
+import { Button } from "@/components/ui/button";
 
 const Features = () => {
   const features = [
@@ -7,40 +8,45 @@ const Features = () => {
       icon: Brain,
       title: "AI-Powered Analysis",
       description: "Advanced machine learning algorithms analyze resumes with human-level accuracy, identifying key skills, experience, and qualifications instantly.",
-      gradient: "from-violet-500 to-purple-600"
+      gradient: "from-cyan-50 to-teal-50",
+      iconColor: "text-cyan-600"
     },
     {
       icon: Upload,
       title: "Bulk Resume Upload",
       description: "Upload multiple resumes at once. Our system processes hundreds of resumes simultaneously, saving you hours of manual work.",
-      gradient: "from-blue-500 to-cyan-600"
+      gradient: "from-teal-50 to-emerald-50",
+      iconColor: "text-teal-600"
     },
     {
       icon: Target,
       title: "Smart Candidate Scoring",
       description: "Automated scoring system ranks candidates based on job requirements, giving you a clear view of the best matches for each position.",
-      gradient: "from-emerald-500 to-teal-600"
+      gradient: "from-purple-50 to-pink-50",
+      iconColor: "text-purple-600"
     },
     {
       icon: GitBranch,
       title: "Pipeline Management",
       description: "Streamline your recruitment pipeline with intuitive candidate tracking, stage management, and automated workflow transitions.",
-      gradient: "from-orange-500 to-red-600"
+      gradient: "from-amber-50 to-orange-50",
+      iconColor: "text-amber-600"
     }
   ];
 
   return (
-    <div className="min-h-screen bg-white">
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-cyan-50">
       <Header />
-      <main className="pt-20">
+      
+      <main className="pt-24 pb-16">
         {/* Hero Section */}
-        <section className="py-20 bg-gradient-to-br from-slate-50 to-cyan-50/30">
+        <section className="py-20">
           <div className="container mx-auto px-6">
             <div className="text-center max-w-4xl mx-auto">
-              <h1 className="text-5xl md:text-6xl font-bold bg-gradient-to-r from-slate-800 to-slate-600 bg-clip-text text-transparent mb-6">
+              <h1 className="text-4xl md:text-6xl font-bold bg-gradient-to-r from-slate-800 via-cyan-600 to-teal-600 bg-clip-text text-transparent mb-6">
                 Powerful Features for Modern Recruitment
               </h1>
-              <p className="text-xl text-slate-600 mb-8 leading-relaxed">
+              <p className="text-xl text-slate-600 mb-12 leading-relaxed">
                 Discover all the tools and capabilities that make ScreeningPilot the ultimate solution for AI-powered resume screening and candidate management.
               </p>
             </div>
@@ -48,34 +54,28 @@ const Features = () => {
         </section>
 
         {/* Features Grid */}
-        <section className="py-24 bg-gradient-to-b from-white to-slate-50/50">
+        <section className="py-16">
           <div className="container mx-auto px-6">
-            <div className="grid md:grid-cols-2 gap-12 max-w-6xl mx-auto">
+            <div className="grid md:grid-cols-2 gap-8 max-w-6xl mx-auto">
               {features.map((feature, index) => (
                 <div
                   key={index}
-                  className="group relative p-10 bg-white rounded-3xl border border-slate-100 hover:border-slate-200 hover:shadow-2xl transition-all duration-500 hover:-translate-y-2 overflow-hidden"
+                  className="group backdrop-blur-sm bg-white/80 border border-slate-200/50 shadow-lg rounded-2xl p-8 hover:shadow-xl hover:border-cyan-300/50 transition-all duration-300 hover:-translate-y-1"
                 >
-                  {/* Background Gradient Effect */}
-                  <div className={`absolute inset-0 bg-gradient-to-br ${feature.gradient} opacity-0 group-hover:opacity-5 transition-opacity duration-500`} />
-                  
                   {/* Icon */}
-                  <div className={`relative w-20 h-20 bg-gradient-to-br ${feature.gradient} rounded-2xl flex items-center justify-center mb-8 group-hover:scale-110 group-hover:rotate-3 transition-all duration-500 shadow-lg`}>
-                    <feature.icon className="w-10 h-10 text-white" />
+                  <div className={`w-12 h-12 bg-gradient-to-br ${feature.gradient} rounded-xl flex items-center justify-center mb-6 group-hover:scale-110 group-hover:rotate-6 transition-transform duration-300`}>
+                    <feature.icon className={`w-6 h-6 ${feature.iconColor}`} />
                   </div>
                   
                   {/* Content */}
-                  <div className="relative">
-                    <h3 className="text-2xl font-bold text-slate-900 mb-4 group-hover:text-slate-800 transition-colors duration-300">
+                  <div>
+                    <h3 className={`text-xl font-semibold text-slate-900 mb-4 group-hover:${feature.iconColor.replace('text-', 'text-')} transition-colors`}>
                       {feature.title}
                     </h3>
-                    <p className="text-slate-600 leading-relaxed text-lg">
+                    <p className="text-slate-600 leading-relaxed">
                       {feature.description}
                     </p>
                   </div>
-
-                  {/* Decorative Element */}
-                  <div className={`absolute -top-2 -right-2 w-24 h-24 bg-gradient-to-br ${feature.gradient} rounded-full opacity-10 group-hover:opacity-20 transition-opacity duration-500`} />
                 </div>
               ))}
             </div>
@@ -83,18 +83,21 @@ const Features = () => {
         </section>
 
         {/* CTA Section */}
-        <section className="py-20 bg-gradient-to-r from-cyan-600 to-teal-600">
+        <section className="py-20 mt-16">
           <div className="container mx-auto px-6">
             <div className="text-center max-w-3xl mx-auto">
-              <h2 className="text-4xl font-bold text-white mb-6">
+              <h2 className="text-3xl md:text-4xl font-bold text-slate-800 mb-6">
                 Ready to Transform Your Recruitment Process?
               </h2>
-              <p className="text-xl text-cyan-100 mb-8">
+              <p className="text-xl text-slate-600 mb-8">
                 Join thousands of recruitment agencies already using ScreeningPilot to hire faster and smarter.
               </p>
-              <button className="bg-white text-cyan-600 px-8 py-4 rounded-xl font-semibold text-lg hover:bg-slate-50 transition-colors duration-300 shadow-lg hover:shadow-xl">
+              <Button 
+                size="lg" 
+                className="bg-gradient-to-r from-cyan-500 to-teal-500 hover:from-cyan-600 hover:to-teal-600 text-white shadow-2xl hover:shadow-cyan-500/25 transition-all duration-300 text-lg px-8 py-6 rounded-xl font-semibold border-0"
+              >
                 Start Free Trial
-              </button>
+              </Button>
             </div>
           </div>
         </section>
