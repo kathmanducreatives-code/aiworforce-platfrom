@@ -9,6 +9,7 @@ import Pricing from "./pages/Pricing";
 import NotFound from "./pages/NotFound";
 import FolderView from "./pages/FolderView";
 import EmailSequenceSetup from "./pages/EmailSequenceSetup";
+import GetDemo from "./pages/GetDemo";
 
 const queryClient = new QueryClient();
 
@@ -24,6 +25,7 @@ const App = () => (
           <Route path="/pricing" element={<Pricing />} />
           <Route path="/folder/:folderName" element={<FolderView />} />
           <Route path="/email-sequence/:folderName" element={<EmailSequenceSetup />} />
+          <Route path="/get-demo" element={<GetDemo />} />
           {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
           <Route path="*" element={<NotFound />} />
         </Routes>
