@@ -22,7 +22,7 @@ const Header = () => {
               <span className="relative z-10">Features</span>
               <span className="absolute inset-x-0 bottom-0 h-0.5 bg-gradient-to-r from-cyan-500 to-teal-500 transform scale-x-0 group-hover:scale-x-100 transition-transform duration-300 origin-left"></span>
             </a>
-            <a href="#pricing" className="relative text-slate-600 hover:text-cyan-600 font-medium transition-all duration-300 group">
+            <a href="/pricing" className="relative text-slate-600 hover:text-cyan-600 font-medium transition-all duration-300 group">
               <span className="relative z-10">Pricing</span>
               <span className="absolute inset-x-0 bottom-0 h-0.5 bg-gradient-to-r from-cyan-500 to-teal-500 transform scale-x-0 group-hover:scale-x-100 transition-transform duration-300 origin-left"></span>
             </a>
@@ -48,7 +48,7 @@ const Header = () => {
               <a href="/features" className="text-slate-600 hover:text-cyan-600 font-medium py-2 transition-all duration-200 hover:translate-x-2 animate-fade-in-left animate-delay-100">
                 Features
               </a>
-              <a href="#pricing" className="text-slate-600 hover:text-cyan-600 font-medium py-2 transition-all duration-200 hover:translate-x-2 animate-fade-in-left animate-delay-200">
+              <a href="/pricing" className="text-slate-600 hover:text-cyan-600 font-medium py-2 transition-all duration-200 hover:translate-x-2 animate-fade-in-left animate-delay-200">
                 Pricing
               </a>
               <a href="#about" className="text-slate-600 hover:text-cyan-600 font-medium py-2 transition-all duration-200 hover:translate-x-2 animate-fade-in-left animate-delay-300">

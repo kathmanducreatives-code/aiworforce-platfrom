@@ -5,6 +5,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import Index from "./pages/Index";
 import Features from "./pages/Features";
+import Pricing from "./pages/Pricing";
 import NotFound from "./pages/NotFound";
 import FolderView from "./pages/FolderView";
 import EmailSequenceSetup from "./pages/EmailSequenceSetup";
@@ -20,6 +21,7 @@ const App = () => (
         <Routes>
           <Route path="/" element={<Index />} />
           <Route path="/features" element={<Features />} />
+          <Route path="/pricing" element={<Pricing />} />
           <Route path="/folder/:folderName" element={<FolderView />} />
           <Route path="/email-sequence/:folderName" element={<EmailSequenceSetup />} />
           {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
