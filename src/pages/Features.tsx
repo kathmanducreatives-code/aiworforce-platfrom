@@ -1,80 +1,31 @@
 import Header from "@/components/Header";
-import { 
-  Brain, 
-  Upload, 
-  Target, 
-  Users, 
-  Zap, 
-  Search,
-  BarChart3,
-  Clock,
-  Shield,
-  Bot,
-  FileText,
-  TrendingUp
-} from "lucide-react";
+import { Brain, Upload, Target, GitBranch } from "lucide-react";
 
 const Features = () => {
   const features = [
     {
       icon: Brain,
       title: "AI-Powered Analysis",
-      description: "Advanced machine learning algorithms analyze resumes with human-level accuracy, identifying key skills, experience, and qualifications instantly."
+      description: "Advanced machine learning algorithms analyze resumes with human-level accuracy, identifying key skills, experience, and qualifications instantly.",
+      gradient: "from-violet-500 to-purple-600"
     },
     {
       icon: Upload,
       title: "Bulk Resume Upload",
-      description: "Upload multiple resumes at once. Our system processes hundreds of resumes simultaneously, saving you hours of manual work."
+      description: "Upload multiple resumes at once. Our system processes hundreds of resumes simultaneously, saving you hours of manual work.",
+      gradient: "from-blue-500 to-cyan-600"
     },
     {
       icon: Target,
       title: "Smart Candidate Scoring",
-      description: "Automated scoring system ranks candidates based on job requirements, giving you a clear view of the best matches for each position."
+      description: "Automated scoring system ranks candidates based on job requirements, giving you a clear view of the best matches for each position.",
+      gradient: "from-emerald-500 to-teal-600"
     },
     {
-      icon: Users,
-      title: "Team Collaboration",
-      description: "Share candidate profiles with your team, add comments, and make collaborative hiring decisions with built-in communication tools."
-    },
-    {
-      icon: Zap,
-      title: "Real-time Processing",
-      description: "Get instant results as soon as resumes are uploaded. No waiting time - see analysis and scores immediately."
-    },
-    {
-      icon: Search,
-      title: "Smart Matching",
-      description: "Intelligent matching algorithm compares candidates against job descriptions and requirements for precise fit assessment."
-    },
-    {
-      icon: BarChart3,
-      title: "Analytics Dashboard",
-      description: "Comprehensive analytics showing hiring trends, candidate quality metrics, and recruitment performance insights."
-    },
-    {
-      icon: Clock,
-      title: "Time Tracking",
-      description: "Monitor time saved per hire, track recruitment efficiency, and measure team productivity with detailed time analytics."
-    },
-    {
-      icon: Shield,
-      title: "Data Security",
-      description: "Enterprise-grade security with encrypted data storage, GDPR compliance, and secure candidate information handling."
-    },
-    {
-      icon: Bot,
-      title: "Automated Workflows",
-      description: "Set up automated email sequences, candidate notifications, and follow-up reminders to streamline your recruitment process."
-    },
-    {
-      icon: FileText,
-      title: "Custom Reports",
-      description: "Generate detailed reports on candidate pools, hiring metrics, and recruitment ROI with customizable templates."
-    },
-    {
-      icon: TrendingUp,
-      title: "Performance Insights",
-      description: "Track recruitment success rates, candidate quality improvements, and hiring velocity with actionable insights."
+      icon: GitBranch,
+      title: "Pipeline Management",
+      description: "Streamline your recruitment pipeline with intuitive candidate tracking, stage management, and automated workflow transitions.",
+      gradient: "from-orange-500 to-red-600"
     }
   ];
 
@@ -97,23 +48,34 @@ const Features = () => {
         </section>
 
         {/* Features Grid */}
-        <section className="py-20">
+        <section className="py-24 bg-gradient-to-b from-white to-slate-50/50">
           <div className="container mx-auto px-6">
-            <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-8">
+            <div className="grid md:grid-cols-2 gap-12 max-w-6xl mx-auto">
               {features.map((feature, index) => (
                 <div
                   key={index}
-                  className="group p-8 bg-white rounded-2xl border border-slate-200/50 hover:border-cyan-200 hover:shadow-xl transition-all duration-300 hover:-translate-y-1"
+                  className="group relative p-10 bg-white rounded-3xl border border-slate-100 hover:border-slate-200 hover:shadow-2xl transition-all duration-500 hover:-translate-y-2 overflow-hidden"
                 >
-                  <div className="w-14 h-14 bg-gradient-to-br from-cyan-500 to-teal-500 rounded-xl flex items-center justify-center mb-6 group-hover:scale-110 transition-transform duration-300">
-                    <feature.icon className="w-7 h-7 text-white" />
+                  {/* Background Gradient Effect */}
+                  <div className={`absolute inset-0 bg-gradient-to-br ${feature.gradient} opacity-0 group-hover:opacity-5 transition-opacity duration-500`} />
+                  
+                  {/* Icon */}
+                  <div className={`relative w-20 h-20 bg-gradient-to-br ${feature.gradient} rounded-2xl flex items-center justify-center mb-8 group-hover:scale-110 group-hover:rotate-3 transition-all duration-500 shadow-lg`}>
+                    <feature.icon className="w-10 h-10 text-white" />
                   </div>
-                  <h3 className="text-xl font-semibold text-slate-800 mb-4 group-hover:text-cyan-600 transition-colors duration-300">
-                    {feature.title}
-                  </h3>
-                  <p className="text-slate-600 leading-relaxed">
-                    {feature.description}
-                  </p>
+                  
+                  {/* Content */}
+                  <div className="relative">
+                    <h3 className="text-2xl font-bold text-slate-900 mb-4 group-hover:text-slate-800 transition-colors duration-300">
+                      {feature.title}
+                    </h3>
+                    <p className="text-slate-600 leading-relaxed text-lg">
+                      {feature.description}
+                    </p>
+                  </div>
+
+                  {/* Decorative Element */}
+                  <div className={`absolute -top-2 -right-2 w-24 h-24 bg-gradient-to-br ${feature.gradient} rounded-full opacity-10 group-hover:opacity-20 transition-opacity duration-500`} />
                 </div>
               ))}
             </div>
