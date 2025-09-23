@@ -41,8 +41,8 @@ const Pricing = () => {
     },
     {
       name: "Enterprise",
-      price: "Custom",
-      period: "$1,500+/month",
+      price: "$1,500",
+      period: "per month",
       description: "For large organizations with complex needs",
       icon: Rocket,
       features: [
