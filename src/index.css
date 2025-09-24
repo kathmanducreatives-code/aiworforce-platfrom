@@ -391,6 +391,14 @@ html {
     animation-delay: 1s;
   }
 
+  .animate-delay-1200 {
+    animation-delay: 1.2s;
+  }
+
+  .animate-delay-\\[1800ms\\] {
+    animation-delay: 1800ms;
+  }
+
   .animate-fill-forwards {
     animation-fill-mode: forwards;
   }

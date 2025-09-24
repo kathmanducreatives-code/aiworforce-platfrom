@@ -1,7 +1,29 @@
 import { Button } from "@/components/ui/button";
 import { ArrowRight, Zap, Brain, Target } from "lucide-react";
+import { useEffect, useState } from "react";
 
 const HeroSection = () => {
+  const [typedText, setTypedText] = useState("");
+  const [currentIndex, setCurrentIndex] = useState(0);
+  const [showCursor, setShowCursor] = useState(true);
+  const fullText = "AI Precision";
+
+  useEffect(() => {
+    if (currentIndex < fullText.length) {
+      const timeout = setTimeout(() => {
+        setTypedText(fullText.slice(0, currentIndex + 1));
+        setCurrentIndex(currentIndex + 1);
+      }, 120); // Typing speed
+      return () => clearTimeout(timeout);
+    } else {
+      // Blink cursor after typing is complete
+      const cursorInterval = setInterval(() => {
+        setShowCursor(prev => !prev);
+      }, 600);
+      return () => clearInterval(cursorInterval);
+    }
+  }, [currentIndex, fullText]);
+
   return (
     <section className="relative overflow-hidden bg-white min-h-screen flex items-center">
       {/* Subtle Background Elements */}
@@ -25,16 +47,30 @@ const HeroSection = () => {
             {/* Main Heading */}
             <div className="space-y-6">
               <h1 className="text-4xl md:text-6xl font-bold leading-tight tracking-tight">
-                <span className="block text-slate-900 mb-2 animate-fade-in opacity-0 animate-delay-200 animate-fill-forwards transform translate-y-8">Screen Resumes</span>
-                <span className="block bg-gradient-to-r from-cyan-600 via-teal-500 to-cyan-600 bg-clip-text text-transparent animate-fade-in opacity-0 animate-delay-500 animate-fill-forwards transform translate-y-8 hover:animate-pulse transition-all duration-300 hover:scale-105">
-                  10x Faster
-                </span>
-                <span className="block text-slate-800 mt-2 animate-fade-in opacity-0 animate-delay-700 animate-fill-forwards transform translate-y-8">with AI Precision</span>
+                <div className="block text-slate-900 mb-4 opacity-0 animate-fade-in animate-delay-300 animate-fill-forwards transform translate-y-8 hover:scale-105 transition-all duration-500 relative">
+                  <span className="inline-block animate-shimmer bg-gradient-to-r from-slate-900 via-slate-600 to-slate-900 bg-clip-text text-transparent bg-300%">Screen Resumes</span>
+                </div>
+                <div className="block mb-6 opacity-0 animate-fade-in animate-delay-700 animate-fill-forwards transform translate-y-8">
+                  <span className="inline-block bg-gradient-to-r from-cyan-500 via-teal-400 to-blue-500 bg-clip-text text-transparent animate-gradient-slow bg-300% hover:scale-110 transition-all duration-500 drop-shadow-2xl relative">
+                    <span className="absolute inset-0 bg-gradient-to-r from-cyan-500/20 via-teal-400/20 to-blue-500/20 blur-xl animate-pulse-glow"></span>
+                    <span className="relative z-10">10x Faster</span>
+                  </span>
+                </div>
+                <div className="block text-slate-800 opacity-0 animate-fade-in animate-delay-1200 animate-fill-forwards transform translate-y-8 relative">
+                  <span className="mr-3">with</span>
+                  <span className="relative inline-block">
+                    <span className="bg-gradient-to-r from-purple-600 via-blue-500 to-cyan-500 bg-clip-text text-transparent font-mono relative">
+                      {typedText}
+                      <span className={`inline-block w-0.5 h-12 ml-1 bg-gradient-to-b from-purple-500 to-cyan-500 ${showCursor ? 'opacity-100' : 'opacity-0'} transition-opacity duration-100 animate-pulse`}></span>
+                    </span>
+                    <span className="absolute inset-0 bg-gradient-to-r from-purple-500/10 via-blue-500/10 to-cyan-500/10 blur-lg animate-pulse"></span>
+                  </span>
+                </div>
               </h1>
               
-              <p className="text-lg text-slate-600 leading-relaxed max-w-2xl mx-auto animate-fade-in opacity-0 animate-delay-1000 animate-fill-forwards transform translate-y-4 hover:text-slate-500 transition-all duration-300">
-                Transform your hiring process with intelligent resume analysis. 
-                Find the perfect candidates in seconds, not hours.
+              <p className="text-lg text-slate-600 leading-relaxed max-w-2xl mx-auto opacity-0 animate-fade-in animate-delay-[1800ms] animate-fill-forwards transform translate-y-4 hover:text-slate-700 transition-all duration-500 relative">
+                <span className="relative z-10">Transform your hiring process with intelligent resume analysis. Find the perfect candidates in seconds, not hours.</span>
+                <span className="absolute inset-0 bg-gradient-to-r from-cyan-500/5 to-teal-500/5 blur-xl opacity-0 hover:opacity-100 transition-opacity duration-500"></span>
               </p>
             </div>
 
