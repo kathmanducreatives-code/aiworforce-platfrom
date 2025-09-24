@@ -383,6 +383,18 @@ html {
     animation-delay: 0.5s;
   }
 
+  .animate-delay-700 {
+    animation-delay: 0.7s;
+  }
+
+  .animate-delay-1000 {
+    animation-delay: 1s;
+  }
+
+  .animate-fill-forwards {
+    animation-fill-mode: forwards;
+  }
+
   /* Modern gradient animations */
   .animate-gradient {
     animation: gradient 3s ease infinite;

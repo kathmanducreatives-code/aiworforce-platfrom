@@ -24,15 +24,15 @@ const HeroSection = () => {
             
             {/* Main Heading */}
             <div className="space-y-6">
-              <h1 className="text-4xl md:text-6xl font-bold leading-tight tracking-tight animate-fade-in-up animate-delay-200">
-                <span className="block text-slate-900 mb-2">Screen Resumes</span>
-                <span className="block bg-gradient-to-r from-cyan-600 via-teal-500 to-cyan-600 bg-clip-text text-transparent animate-gradient-slow">
+              <h1 className="text-4xl md:text-6xl font-bold leading-tight tracking-tight">
+                <span className="block text-slate-900 mb-2 animate-fade-in opacity-0 animate-delay-200 animate-fill-forwards transform translate-y-8">Screen Resumes</span>
+                <span className="block bg-gradient-to-r from-cyan-600 via-teal-500 to-cyan-600 bg-clip-text text-transparent animate-fade-in opacity-0 animate-delay-500 animate-fill-forwards transform translate-y-8 hover:animate-pulse transition-all duration-300 hover:scale-105">
                   10x Faster
                 </span>
-                <span className="block text-slate-800 mt-2">with AI Precision</span>
+                <span className="block text-slate-800 mt-2 animate-fade-in opacity-0 animate-delay-700 animate-fill-forwards transform translate-y-8">with AI Precision</span>
               </h1>
               
-              <p className="text-lg text-slate-600 leading-relaxed max-w-2xl mx-auto animate-fade-in-up animate-delay-300">
+              <p className="text-lg text-slate-600 leading-relaxed max-w-2xl mx-auto animate-fade-in opacity-0 animate-delay-1000 animate-fill-forwards transform translate-y-4 hover:text-slate-500 transition-all duration-300">
                 Transform your hiring process with intelligent resume analysis. 
                 Find the perfect candidates in seconds, not hours.
               </p>
