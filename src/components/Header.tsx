@@ -1,9 +1,18 @@
 import { Button } from "@/components/ui/button";
-import { Menu, X, Atom, Zap, FileText, BarChart3, Users, Brain, Clock } from "lucide-react";
+import { Menu, X, Atom, Zap, FileText, BarChart3, Users, Brain, Clock, LogOut } from "lucide-react";
 import { useState } from "react";
+import { useNavigate } from "react-router-dom";
+import { useAuth } from "@/hooks/useAuth";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 const Header = () => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const { user, signOut } = useAuth();
+  const navigate = useNavigate();
+
+  const handleSignOut = async () => {
+    await signOut();
+    navigate('/auth');
+  };
   return <header className="fixed top-0 left-0 right-0 z-50 backdrop-blur-md bg-white/90 border-b border-slate-200/50">
       <div className="container mx-auto px-6">
         <div className="flex items-center justify-between h-16">
@@ -32,6 +41,20 @@ const Header = () => {
             </a>
           </nav>
 
+          {/* Auth Buttons */}
+          <div className="hidden md:flex items-center gap-3">
+            {user ? (
+              <Button variant="outline" onClick={handleSignOut} className="bg-white/80 hover:bg-white border-slate-200">
+                <LogOut className="w-4 h-4 mr-2" />
+                Sign Out
+              </Button>
+            ) : (
+              <Button onClick={() => navigate('/auth')} className="bg-gradient-to-r from-cyan-500 to-teal-500 hover:from-cyan-600 hover:to-teal-600 text-white">
+                Sign In
+              </Button>
+            )}
+          </div>
+
 
           {/* Mobile Menu Button */}
           <button className="md:hidden p-2 text-slate-600 hover:text-slate-800 hover:bg-slate-100 rounded-lg transition-all duration-200 active-scale" onClick={() => setIsMenuOpen(!isMenuOpen)}>
@@ -54,6 +77,20 @@ const Header = () => {
               <a href="/get-demo" className="text-slate-600 hover:text-cyan-600 font-medium py-2 transition-all duration-200 hover:translate-x-2 animate-fade-in-left animate-delay-300">
                 Get a Demo
               </a>
+              
+              {/* Mobile Auth Buttons */}
+              <div className="pt-4 border-t border-slate-200/50 mt-4">
+                {user ? (
+                  <Button variant="outline" onClick={handleSignOut} className="w-full bg-white/80 hover:bg-white border-slate-200">
+                    <LogOut className="w-4 h-4 mr-2" />
+                    Sign Out
+                  </Button>
+                ) : (
+                  <Button onClick={() => navigate('/auth')} className="w-full bg-gradient-to-r from-cyan-500 to-teal-500 hover:from-cyan-600 hover:to-teal-600 text-white">
+                    Sign In
+                  </Button>
+                )}
+              </div>
             </nav>
           </div>}
       </div>
