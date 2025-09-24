@@ -51,9 +51,9 @@ const HeroSection = () => {
                   <span className="inline-block text-slate-900">Screen Resumes</span>
                 </div>
                 <div className="block mb-6 opacity-0 animate-fade-in animate-delay-700 animate-fill-forwards transform translate-y-8">
-                  <span className="inline-block bg-gradient-to-r from-cyan-600 to-teal-500 bg-clip-text text-transparent hover:scale-110 transition-all duration-500 relative">
+                  <span className="inline-block text-cyan-600 hover:scale-110 transition-all duration-500 relative font-extrabold tracking-tight">
                     <span className="absolute inset-0 bg-gradient-to-r from-cyan-500/30 to-teal-500/30 blur-2xl animate-pulse"></span>
-                    <span className="relative z-10 font-extrabold tracking-tight">10x Faster</span>
+                    <span className="relative z-10">10x Faster</span>
                   </span>
                 </div>
                 <div className="block text-slate-800 opacity-0 animate-fade-in animate-delay-1200 animate-fill-forwards transform translate-y-8 relative">
