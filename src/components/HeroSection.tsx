@@ -51,19 +51,19 @@ const HeroSection = () => {
                   <span className="inline-block text-slate-900">Screen Resumes</span>
                 </div>
                 <div className="block mb-6 opacity-0 animate-fade-in animate-delay-700 animate-fill-forwards transform translate-y-8">
-                  <span className="inline-block bg-gradient-to-r from-cyan-500 via-teal-400 to-blue-500 bg-clip-text text-transparent animate-gradient-slow bg-300% hover:scale-110 transition-all duration-500 drop-shadow-2xl relative">
-                    <span className="absolute inset-0 bg-gradient-to-r from-cyan-500/20 via-teal-400/20 to-blue-500/20 blur-xl animate-pulse-glow"></span>
-                    <span className="relative z-10">10x Faster</span>
+                  <span className="inline-block bg-gradient-to-r from-cyan-600 to-teal-500 bg-clip-text text-transparent hover:scale-110 transition-all duration-500 relative">
+                    <span className="absolute inset-0 bg-gradient-to-r from-cyan-500/30 to-teal-500/30 blur-2xl animate-pulse"></span>
+                    <span className="relative z-10 font-extrabold tracking-tight">10x Faster</span>
                   </span>
                 </div>
                 <div className="block text-slate-800 opacity-0 animate-fade-in animate-delay-1200 animate-fill-forwards transform translate-y-8 relative">
-                  <span className="mr-3">with</span>
+                  <span className="mr-3 text-slate-700">with</span>
                   <span className="relative inline-block">
-                    <span className="bg-gradient-to-r from-purple-600 via-blue-500 to-cyan-500 bg-clip-text text-transparent font-mono relative">
+                    <span className="bg-gradient-to-r from-cyan-600 to-teal-500 bg-clip-text text-transparent font-mono relative tracking-wide">
                       {typedText}
-                      <span className={`inline-block w-0.5 h-12 ml-1 bg-gradient-to-b from-purple-500 to-cyan-500 ${showCursor ? 'opacity-100' : 'opacity-0'} transition-opacity duration-100 animate-pulse`}></span>
+                      <span className={`inline-block w-0.5 h-12 ml-1 bg-gradient-to-b from-cyan-500 to-teal-500 ${showCursor ? 'opacity-100' : 'opacity-0'} transition-opacity duration-100`}></span>
                     </span>
-                    <span className="absolute inset-0 bg-gradient-to-r from-purple-500/10 via-blue-500/10 to-cyan-500/10 blur-lg animate-pulse"></span>
+                    <span className="absolute inset-0 bg-gradient-to-r from-cyan-500/20 to-teal-500/20 blur-lg animate-pulse"></span>
                   </span>
                 </div>
               </h1>
