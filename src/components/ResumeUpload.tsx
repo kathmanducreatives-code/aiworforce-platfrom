@@ -159,8 +159,63 @@ const ResumeUpload = () => {
           : f
       ));
 
-      // n8n handles all database insertion now
-      console.log('n8n will handle saving analysis results to database');
+      // For now, we'll wait for n8n to process and save to database
+      // Check if the analysis results are available
+      console.log('Waiting for analysis results to be saved to database...');
+      
+      // Poll the database for new results for up to 30 seconds
+      let attempts = 0;
+      const maxAttempts = 30;
+      let newResults: ResumeAnalysis[] = [];
+      
+      while (attempts < maxAttempts && newResults.length === 0) {
+        await new Promise(resolve => setTimeout(resolve, 1000)); // Wait 1 second
+        
+        try {
+          const { data: checkData } = await supabase
+            .from('resume_analyses')
+            .select('*')
+            .eq('recruitment_name', recruitmentName)
+            .order('created_at', { ascending: false })
+            .limit(readyFiles.length);
+            
+          if (checkData && checkData.length > 0) {
+            // Check if these are new results (created in the last 2 minutes)
+            const twoMinutesAgo = new Date(Date.now() - 2 * 60 * 1000);
+            const recentResults = checkData.filter(result => 
+              new Date(result.created_at) > twoMinutesAgo
+            );
+            
+            // Transform to ResumeAnalysis format
+            newResults = recentResults.map((row: any) => ({
+              id: row.id,
+              date: row.created_at ? new Date(row.created_at).toISOString().split('T')[0] : '',
+              resume: row.resume || '',
+              candidateName: row.candidate_name || 'Unknown',
+              email: row.email || '',
+              strengths: row.strengths ? (Array.isArray(row.strengths) ? row.strengths : [row.strengths]) : [],
+              weaknesses: row.weaknesses ? (Array.isArray(row.weaknesses) ? row.weaknesses : [row.weaknesses]) : [],
+              riskFactor: typeof row.risk_factor === 'number' ? row.risk_factor : 0,
+              rewardFactor: typeof row.reward_factor === 'number' ? row.reward_factor : 0,
+              fitScore: typeof row.fit_score === 'number' ? row.fit_score : 0,
+              overallFactor: typeof row.overall_factor === 'number' ? row.overall_factor : 0,
+              justification: row.justification || '',
+              recruitmentName: row.recruitment_name || recruitmentName
+            }));
+          }
+        } catch (error) {
+          console.error('Error checking for analysis results:', error);
+        }
+        
+        attempts++;
+        console.log(`Checking for results... attempt ${attempts}/${maxAttempts}`);
+      }
+      
+      if (newResults.length > 0) {
+        console.log(`Found ${newResults.length} new analysis results in database`);
+      } else {
+        console.log('No new results found in database after waiting');
+      }
 
       setFiles(prev => prev.map(f =>
         readyFiles.some(r => r.id === f.id)
