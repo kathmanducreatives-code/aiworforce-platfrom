@@ -48,7 +48,7 @@ const HeroSection = () => {
             <div className="space-y-6">
               <h1 className="text-4xl md:text-6xl font-bold leading-tight tracking-tight">
                 <div className="block text-slate-900 mb-4 opacity-0 animate-fade-in animate-delay-300 animate-fill-forwards transform translate-y-8 hover:scale-105 transition-all duration-500 relative">
-                  <span className="inline-block animate-shimmer bg-gradient-to-r from-slate-900 via-slate-600 to-slate-900 bg-clip-text text-transparent bg-300%">Screen Resumes</span>
+                  <span className="inline-block text-slate-900">Screen Resumes</span>
                 </div>
                 <div className="block mb-6 opacity-0 animate-fade-in animate-delay-700 animate-fill-forwards transform translate-y-8">
                   <span className="inline-block bg-gradient-to-r from-cyan-500 via-teal-400 to-blue-500 bg-clip-text text-transparent animate-gradient-slow bg-300% hover:scale-110 transition-all duration-500 drop-shadow-2xl relative">
