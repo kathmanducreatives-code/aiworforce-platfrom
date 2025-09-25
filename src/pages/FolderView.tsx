@@ -129,67 +129,71 @@ const FolderView = () => {
     <div className="min-h-screen w-full bg-gradient-to-br from-slate-50 via-white to-cyan-50">
       <Header />
       
-      <main className="container mx-auto px-4 sm:px-6 py-8 pt-24 animate-fade-in max-w-7xl">
-        {/* Header Section */}
-        <div className="flex items-center justify-between mb-8">
-          <div className="flex items-center gap-4">
+      <main className="container mx-auto px-3 sm:px-6 py-4 sm:py-8 pt-20 sm:pt-24 animate-fade-in max-w-7xl">
+        {/* Header Section - Mobile Optimized */}
+        <div className="space-y-4 sm:space-y-6 mb-6 sm:mb-8">
+          {/* Top Row - Back Button and Title */}
+          <div className="flex items-start gap-3 sm:gap-4">
             <Button
               variant="ghost"
               onClick={() => navigate("/")}
-              className="hover:bg-slate-100 hover:scale-105 transition-all duration-200 rounded-xl p-2"
+              className="hover:bg-slate-100 hover:scale-105 transition-all duration-200 rounded-xl p-2 flex-shrink-0 mt-1"
             >
-              <ArrowLeft className="h-5 w-5" />
+              <ArrowLeft className="h-4 w-4 sm:h-5 sm:w-5" />
             </Button>
-            <div>
-              <h1 className="text-3xl font-bold text-slate-800 mb-2">
+            <div className="flex-1 min-w-0">
+              <h1 className="text-xl sm:text-2xl lg:text-3xl font-bold text-slate-800 mb-1 sm:mb-2 leading-tight">
                 {folderName} Candidates
               </h1>
-              <p className="text-slate-600">
-                {candidates.length} candidates in this recruitment folder
+              <p className="text-sm sm:text-base text-slate-600">
+                {candidates.length} candidate{candidates.length !== 1 ? 's' : ''} in this folder
               </p>
             </div>
           </div>
 
-          {/* Push to Email Sequence Button */}
+          {/* Push to Email Sequence Button - Mobile Optimized */}
           {candidates.length > 0 && (
-            <Button
-              onClick={() => navigate(`/email-sequence/${encodeURIComponent(folderName || '')}`)}
-              className="bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-600 hover:to-teal-600 text-white shadow-lg shadow-emerald-500/25 hover:shadow-xl hover:shadow-emerald-500/30 transition-all duration-300 rounded-xl font-medium px-6 py-3 group"
-            >
-              <div className="flex items-center gap-2">
-                <Mail className="h-5 w-5 group-hover:scale-110 transition-transform duration-200" />
-                <span>Push to Email Sequence</span>
-                <div className="flex items-center gap-1 ml-2 bg-white/20 rounded-full px-2 py-1 text-sm font-semibold">
-                  <Users className="h-4 w-4" />
-                  {candidates.length}
+            <div className="w-full">
+              <Button
+                onClick={() => navigate(`/email-sequence/${encodeURIComponent(folderName || '')}`)}
+                className="w-full sm:w-auto bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-600 hover:to-teal-600 text-white shadow-lg shadow-emerald-500/25 hover:shadow-xl hover:shadow-emerald-500/30 transition-all duration-300 rounded-xl font-medium px-4 sm:px-6 py-3 group"
+              >
+                <div className="flex items-center justify-center gap-2 text-sm sm:text-base">
+                  <Mail className="h-4 w-4 sm:h-5 sm:w-5 group-hover:scale-110 transition-transform duration-200" />
+                  <span className="hidden sm:inline">Push to Email Sequence</span>
+                  <span className="sm:hidden">Email Sequence</span>
+                  <div className="flex items-center gap-1 ml-2 bg-white/20 rounded-full px-2 py-1 text-xs sm:text-sm font-semibold">
+                    <Users className="h-3 w-3 sm:h-4 sm:w-4" />
+                    {candidates.length}
+                  </div>
                 </div>
-              </div>
-            </Button>
+              </Button>
+            </div>
           )}
         </div>
 
         {/* No candidates message */}
         {candidates.length === 0 ? (
-          <div className="text-center py-12">
-            <div className="bg-white rounded-2xl shadow-lg p-8 max-w-md mx-auto">
+          <div className="text-center py-8 sm:py-12 px-4">
+            <div className="bg-white rounded-2xl shadow-lg p-6 sm:p-8 max-w-md mx-auto">
               <div className="mb-4">
-                <Users className="h-16 w-16 text-slate-300 mx-auto mb-4" />
-                <h3 className="text-xl font-semibold text-slate-700 mb-2">No candidates found</h3>
-                <p className="text-slate-500">
+                <Users className="h-12 w-12 sm:h-16 sm:w-16 text-slate-300 mx-auto mb-4" />
+                <h3 className="text-lg sm:text-xl font-semibold text-slate-700 mb-2">No candidates found</h3>
+                <p className="text-sm sm:text-base text-slate-500">
                   No candidates have been analyzed for the "{folderName}" recruitment yet.
                 </p>
               </div>
               <Button 
                 onClick={() => navigate("/")}
                 variant="outline"
-                className="mt-4"
+                className="mt-4 w-full sm:w-auto"
               >
                 Back to Dashboard
               </Button>
             </div>
           </div>
         ) : (
-          <div className="grid gap-4 sm:gap-6 grid-cols-1 md:grid-cols-2 lg:grid-cols-3">
+          <div className="grid gap-3 sm:gap-4 lg:gap-6 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
             {candidates.map((candidate, index) => {
               const skills = extractSkills(candidate.strengths || []);
               const fitScore = candidate.fitScore || 0;
@@ -198,18 +202,18 @@ const FolderView = () => {
               return (
                 <Card 
                   key={candidate.id}
-                  className="group backdrop-blur-sm bg-white/80 border border-slate-200/50 shadow-lg hover:shadow-xl hover:shadow-cyan-500/10 transition-all duration-300 hover:scale-[1.02] hover:border-cyan-200 rounded-xl lg:rounded-2xl cursor-pointer"
+                  className="group backdrop-blur-sm bg-white/80 border border-slate-200/50 shadow-lg hover:shadow-xl hover:shadow-cyan-500/10 transition-all duration-300 hover:scale-[1.02] hover:border-cyan-200 rounded-xl cursor-pointer"
                   style={{ animationDelay: `${index * 100}ms` }}
                 >
-                  <CardContent className="p-4 sm:p-6">
+                  <CardContent className="p-4 sm:p-5 lg:p-6">
                     {/* Mobile-optimized header */}
-                    <div className="flex items-start justify-between mb-3 sm:mb-4">
+                    <div className="flex items-start justify-between mb-3 gap-2">
                       <div className="flex-1 min-w-0">
-                        <h3 className="font-semibold text-slate-800 text-base sm:text-lg mb-1 group-hover:text-cyan-600 transition-colors duration-200 truncate">
+                        <h3 className="font-semibold text-slate-800 text-base sm:text-lg mb-1 group-hover:text-cyan-600 transition-colors duration-200 truncate pr-2">
                           {candidate.candidateName}
                         </h3>
-                        <div className="flex items-center gap-2 mb-2">
-                          <Badge className={`${getStatusColor(fitScore)} text-xs font-medium`}>
+                        <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-2 mb-2">
+                          <Badge className={`${getStatusColor(fitScore)} text-xs font-medium w-fit`}>
                             {status}
                           </Badge>
                           <span className="text-xs text-slate-500 truncate">
@@ -217,7 +221,7 @@ const FolderView = () => {
                           </span>
                         </div>
                       </div>
-                      <div className="flex items-center gap-1 text-amber-500 flex-shrink-0 ml-2">
+                      <div className="flex items-center gap-1 text-amber-500 flex-shrink-0">
                         <Star className="h-4 w-4 fill-current" />
                         <span className="text-sm font-medium text-slate-700">
                           {fitScore}/10
@@ -226,7 +230,7 @@ const FolderView = () => {
                     </div>
 
                     {/* Essential info - always visible */}
-                    <div className="space-y-2 sm:space-y-3 mb-3 sm:mb-4">
+                    <div className="space-y-2 mb-3 sm:mb-4">
                       {candidate.email && (
                         <div className="flex items-center gap-2 text-slate-600 text-sm">
                           <User className="h-4 w-4 flex-shrink-0" />
@@ -240,18 +244,18 @@ const FolderView = () => {
                             {candidate.date ? formatDate(candidate.date) : 'Unknown'}
                           </span>
                         </div>
-                        <span className="text-xs text-slate-500">
+                        <span className="text-xs text-slate-500 whitespace-nowrap">
                           Overall: {candidate.overallFactor}/10
                         </span>
                       </div>
                     </div>
 
-                    {/* Skills section - collapsible on mobile */}
+                    {/* Skills section - mobile optimized */}
                     <div className="mb-3 sm:mb-4">
                       <p className="text-sm text-slate-600 mb-2">Key Skills</p>
                       {skills.length > 0 ? (
-                        <div className="flex flex-wrap gap-1.5 sm:gap-2 mb-2">
-                          {skills.slice(0, 3).map((skill, i) => (
+                        <div className="flex flex-wrap gap-1.5 mb-2">
+                          {skills.slice(0, 2).map((skill, i) => (
                             <span 
                               key={i}
                               className="px-2 py-1 bg-cyan-50 text-cyan-700 rounded-lg text-xs font-medium"
@@ -259,9 +263,9 @@ const FolderView = () => {
                               {skill}
                             </span>
                           ))}
-                          {skills.length > 3 && (
+                          {skills.length > 2 && (
                             <span className="px-2 py-1 bg-slate-50 text-slate-600 rounded-lg text-xs">
-                              +{skills.length - 3}
+                              +{skills.length - 2} more
                             </span>
                           )}
                         </div>
@@ -270,28 +274,28 @@ const FolderView = () => {
                       )}
                     </div>
 
-                    {/* Action buttons - optimized for mobile */}
+                    {/* Action buttons - mobile optimized */}
                     <div className="flex gap-2">
                       <Button
                         variant="outline" 
                         size="sm"
-                        className="flex-1 hover:bg-cyan-50 hover:border-cyan-200 hover:text-cyan-700 transition-all duration-200 text-xs sm:text-sm"
+                        className="flex-1 hover:bg-cyan-50 hover:border-cyan-200 hover:text-cyan-700 transition-all duration-200 text-xs"
                         onClick={(e) => {
                           e.stopPropagation();
                           window.open(candidate.resume, '_blank');
                         }}
                       >
-                        Resume
+                        <span className="truncate">Resume</span>
                       </Button>
                       <Button
                         size="sm"
-                        className="flex-1 bg-gradient-to-r from-cyan-500 to-blue-500 hover:from-cyan-600 hover:to-blue-600 text-white transition-all duration-200 text-xs sm:text-sm"
+                        className="flex-1 bg-gradient-to-r from-cyan-500 to-blue-500 hover:from-cyan-600 hover:to-blue-600 text-white transition-all duration-200 text-xs"
                         onClick={(e) => {
                           e.stopPropagation();
                           window.location.href = `mailto:${candidate.email}`;
                         }}
                       >
-                        Contact
+                        <span className="truncate">Contact</span>
                       </Button>
                     </div>
                   </CardContent>
