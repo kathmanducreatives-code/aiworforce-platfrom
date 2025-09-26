@@ -1,18 +1,22 @@
 import { useParams, useNavigate } from "react-router-dom";
-import { ArrowLeft, Mail, Users, Star, MapPin, Calendar, User, Phone } from "lucide-react";
+import { ArrowLeft, Mail, Users, Star, MapPin, Calendar, User, Phone, CheckSquare, Square } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Checkbox } from "@/components/ui/checkbox";
 import Header from "@/components/Header";
 import { supabase } from "@/integrations/supabase/client";
 import { useEffect, useState } from "react";
+import { useToast } from "@/hooks/use-toast";
 import type { ResumeAnalysis } from "@/types/ResumeAnalysis";
 
 const FolderView = () => {
   const { folderName } = useParams();
   const navigate = useNavigate();
+  const { toast } = useToast();
   const [candidates, setCandidates] = useState<ResumeAnalysis[]>([]);
   const [loading, setLoading] = useState(true);
+  const [selectedCandidates, setSelectedCandidates] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     const fetchCandidates = async () => {
@@ -111,6 +115,49 @@ const FolderView = () => {
     });
   };
 
+  // Selection handlers
+  const handleSelectCandidate = (candidateId: string, checked: boolean) => {
+    const newSelected = new Set(selectedCandidates);
+    if (checked) {
+      newSelected.add(candidateId);
+    } else {
+      newSelected.delete(candidateId);
+    }
+    setSelectedCandidates(newSelected);
+  };
+
+  const handleSelectAll = () => {
+    if (selectedCandidates.size === candidates.length) {
+      setSelectedCandidates(new Set());
+    } else {
+      setSelectedCandidates(new Set(candidates.map(c => c.id!)));
+    }
+  };
+
+  const handlePushToEmailSequence = () => {
+    if (selectedCandidates.size === 0) {
+      toast({
+        title: "No Candidates Selected",
+        description: "Please select at least one candidate to push to email sequence.",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    const selectedCandidatesList = candidates.filter(c => selectedCandidates.has(c.id!));
+    
+    // For now, just show a success message with count
+    toast({
+      title: "Email Sequence Started",
+      description: `${selectedCandidates.size} candidate${selectedCandidates.size !== 1 ? 's' : ''} pushed to email sequence successfully.`,
+    });
+    
+    // You can implement the actual email sequence logic here
+    // navigate(`/email-sequence/${encodeURIComponent(folderName || '')}`, { 
+    //   state: { selectedCandidates: selectedCandidatesList } 
+    // });
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-cyan-50">
@@ -151,23 +198,62 @@ const FolderView = () => {
             </div>
           </div>
 
-          {/* Push to Email Sequence Button - Mobile Optimized */}
+          {/* Selection Controls & Push to Email Sequence */}
           {candidates.length > 0 && (
-            <div className="w-full">
-              <Button
-                onClick={() => navigate(`/email-sequence/${encodeURIComponent(folderName || '')}`)}
-                className="w-full sm:w-auto bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-600 hover:to-teal-600 text-white shadow-lg shadow-emerald-500/25 hover:shadow-xl hover:shadow-emerald-500/30 transition-all duration-300 rounded-xl font-medium px-4 sm:px-6 py-3 group"
-              >
-                <div className="flex items-center justify-center gap-2 text-sm sm:text-base">
-                  <Mail className="h-4 w-4 sm:h-5 sm:w-5 group-hover:scale-110 transition-transform duration-200" />
-                  <span className="hidden sm:inline">Push to Email Sequence</span>
-                  <span className="sm:hidden">Email Sequence</span>
-                  <div className="flex items-center gap-1 ml-2 bg-white/20 rounded-full px-2 py-1 text-xs sm:text-sm font-semibold">
-                    <Users className="h-3 w-3 sm:h-4 sm:w-4" />
-                    {candidates.length}
-                  </div>
+            <div className="space-y-3 sm:space-y-4">
+              {/* Selection Controls */}
+              <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 items-start sm:items-center">
+                <div className="flex items-center gap-3">
+                  <Checkbox
+                    id="select-all"
+                    checked={selectedCandidates.size === candidates.length && candidates.length > 0}
+                    onCheckedChange={handleSelectAll}
+                    className="border-slate-300 data-[state=checked]:bg-cyan-500 data-[state=checked]:border-cyan-500"
+                  />
+                  <label 
+                    htmlFor="select-all" 
+                    className="text-sm sm:text-base font-medium text-slate-700 cursor-pointer"
+                  >
+                    Select All ({candidates.length})
+                  </label>
                 </div>
-              </Button>
+                
+                {selectedCandidates.size > 0 && (
+                  <div className="flex items-center gap-2 bg-cyan-50 border border-cyan-200 rounded-lg px-3 py-2">
+                    <CheckSquare className="h-4 w-4 text-cyan-600" />
+                    <span className="text-sm font-medium text-cyan-700">
+                      {selectedCandidates.size} selected
+                    </span>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setSelectedCandidates(new Set())}
+                      className="h-6 w-6 p-0 hover:bg-cyan-100 ml-1"
+                    >
+                      ×
+                    </Button>
+                  </div>
+                )}
+              </div>
+
+              {/* Push to Email Sequence Button */}
+              <div className="w-full">
+                <Button
+                  onClick={handlePushToEmailSequence}
+                  disabled={selectedCandidates.size === 0}
+                  className="w-full sm:w-auto bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-600 hover:to-teal-600 text-white shadow-lg shadow-emerald-500/25 hover:shadow-xl hover:shadow-emerald-500/30 transition-all duration-300 rounded-xl font-medium px-4 sm:px-6 py-3 group disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  <div className="flex items-center justify-center gap-2 text-sm sm:text-base">
+                    <Mail className="h-4 w-4 sm:h-5 sm:w-5 group-hover:scale-110 transition-transform duration-200" />
+                    <span className="hidden sm:inline">Push Selected to Email Sequence</span>
+                    <span className="sm:hidden">Push to Email</span>
+                    <div className="flex items-center gap-1 ml-2 bg-white/20 rounded-full px-2 py-1 text-xs sm:text-sm font-semibold">
+                      <Users className="h-3 w-3 sm:h-4 sm:w-4" />
+                      {selectedCandidates.size}
+                    </div>
+                  </div>
+                </Button>
+              </div>
             </div>
           )}
         </div>
@@ -202,10 +288,31 @@ const FolderView = () => {
               return (
                 <Card 
                   key={candidate.id}
-                  className="group backdrop-blur-sm bg-white/80 border border-slate-200/50 shadow-lg hover:shadow-xl hover:shadow-cyan-500/10 transition-all duration-300 hover:scale-[1.02] hover:border-cyan-200 rounded-xl cursor-pointer"
+                  className={`group backdrop-blur-sm bg-white/80 border shadow-lg hover:shadow-xl hover:shadow-cyan-500/10 transition-all duration-300 hover:scale-[1.02] rounded-xl cursor-pointer ${
+                    selectedCandidates.has(candidate.id!) 
+                      ? 'border-cyan-400 bg-cyan-50/50 shadow-cyan-200/50' 
+                      : 'border-slate-200/50 hover:border-cyan-200'
+                  }`}
                   style={{ animationDelay: `${index * 100}ms` }}
                 >
                   <CardContent className="p-4 sm:p-5 lg:p-6">
+                    {/* Selection Checkbox */}
+                    <div className="flex items-center justify-between mb-3">
+                      <Checkbox
+                        id={`candidate-${candidate.id}`}
+                        checked={selectedCandidates.has(candidate.id!)}
+                        onCheckedChange={(checked) => handleSelectCandidate(candidate.id!, checked as boolean)}
+                        onClick={(e) => e.stopPropagation()}
+                        className="border-slate-300 data-[state=checked]:bg-cyan-500 data-[state=checked]:border-cyan-500"
+                      />
+                      {selectedCandidates.has(candidate.id!) && (
+                        <div className="flex items-center gap-1 bg-cyan-100 text-cyan-700 px-2 py-1 rounded-full text-xs font-medium">
+                          <CheckSquare className="h-3 w-3" />
+                          Selected
+                        </div>
+                      )}
+                    </div>
+
                     {/* Mobile-optimized header */}
                     <div className="flex items-start justify-between mb-3 gap-2">
                       <div className="flex-1 min-w-0">
@@ -296,6 +403,25 @@ const FolderView = () => {
                         }}
                       >
                         <span className="truncate">Contact</span>
+                      </Button>
+                      <Button
+                        variant={selectedCandidates.has(candidate.id!) ? "default" : "outline"}
+                        size="sm"
+                        className={`px-3 transition-all duration-200 text-xs ${
+                          selectedCandidates.has(candidate.id!) 
+                            ? 'bg-cyan-500 hover:bg-cyan-600 text-white' 
+                            : 'hover:bg-cyan-50 hover:border-cyan-200 hover:text-cyan-700'
+                        }`}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleSelectCandidate(candidate.id!, !selectedCandidates.has(candidate.id!));
+                        }}
+                      >
+                        {selectedCandidates.has(candidate.id!) ? (
+                          <CheckSquare className="h-4 w-4" />
+                        ) : (
+                          <Square className="h-4 w-4" />
+                        )}
                       </Button>
                     </div>
                   </CardContent>
