@@ -30,6 +30,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 const ModernDashboard = () => {
   const navigate = useNavigate();
@@ -40,6 +41,8 @@ const ModernDashboard = () => {
   const [currentPage, setCurrentPage] = useState(1);
   const [selectedCandidate, setSelectedCandidate] = useState<ResumeAnalysis | null>(null);
   const [isDetailsPanelOpen, setIsDetailsPanelOpen] = useState(false);
+  const [selectedCandidateFullView, setSelectedCandidateFullView] = useState<ResumeAnalysis | null>(null);
+  const [isFullViewDialogOpen, setIsFullViewDialogOpen] = useState(false);
   const [viewMode, setViewMode] = useState<'all' | 'folders'>('all');
   const [selectedFolder, setSelectedFolder] = useState<string | null>(null);
   const [filters, setFilters] = useState({
@@ -226,6 +229,7 @@ const ModernDashboard = () => {
         </div>
       </div>;
   }
+
   return <div className="min-h-screen bg-gradient-to-br from-slate-50 to-white">
       <div className="max-w-7xl mx-auto px-6 py-12">
         {/* Header */}
@@ -357,6 +361,23 @@ const ModernDashboard = () => {
                       </Select>
                     </div>
                     <div>
+                      <Label className="text-sm font-medium">Reward Factor</Label>
+                      <Select value={filters.rewardFactor} onValueChange={value => setFilters({
+                      ...filters,
+                      rewardFactor: value
+                    })}>
+                        <SelectTrigger className="mt-1">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="all">All Rewards</SelectItem>
+                          <SelectItem value="high">High</SelectItem>
+                          <SelectItem value="medium">Medium</SelectItem>
+                          <SelectItem value="low">Low</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div>
                       <Label className="text-sm font-medium">Date Range</Label>
                       <Select value={filters.dateRange} onValueChange={value => setFilters({
                       ...filters,
@@ -378,219 +399,164 @@ const ModernDashboard = () => {
               </Popover>
             </div>
 
-            {/* Statistics Cards */}
-            <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4 mb-12">
-              <Card className="backdrop-blur-sm bg-white/70 border-0 shadow-xl shadow-slate-200/50 rounded-2xl overflow-hidden group hover:shadow-2xl hover:shadow-cyan-500/10 transition-all duration-300">
-                <CardContent className="p-6 relative">
-                  <div className="absolute inset-0 bg-gradient-to-br from-cyan-50/50 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
-                  <div className="relative flex items-center justify-between">
-                    <div>
-                      <p className="text-sm font-medium text-slate-500 mb-2">Total Candidates</p>
-                      <p className="text-3xl font-bold bg-gradient-to-r from-slate-800 to-slate-600 bg-clip-text text-transparent">
-                        {filteredResumes.length}
-                      </p>
-                    </div>
-                    <div className="p-3 bg-gradient-to-br from-blue-50 to-cyan-50 rounded-xl group-hover:scale-110 transition-transform duration-300">
+            {/* Summary Cards */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+              <Card className="backdrop-blur-sm bg-white/80 border border-slate-200/50 shadow-lg hover:shadow-xl transition-all duration-300 rounded-2xl overflow-hidden">
+                <CardContent className="p-6">
+                  <div className="flex items-center gap-4">
+                    <div className="p-3 bg-gradient-to-br from-blue-50 to-cyan-50 rounded-xl">
                       <Users className="h-6 w-6 text-blue-600" />
                     </div>
+                    <div>
+                      <p className="text-2xl font-bold text-slate-800">{filteredResumes.length}</p>
+                      <p className="text-sm text-slate-500 font-medium">Total Candidates</p>
+                    </div>
                   </div>
                 </CardContent>
               </Card>
-              
-              <Card className="backdrop-blur-sm bg-white/70 border-0 shadow-xl shadow-slate-200/50 rounded-2xl overflow-hidden group hover:shadow-2xl hover:shadow-emerald-500/10 transition-all duration-300">
-                <CardContent className="p-6 relative">
-                  <div className="absolute inset-0 bg-gradient-to-br from-emerald-50/50 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
-                  <div className="relative flex items-center justify-between">
-                    <div>
-                      <p className="text-sm font-medium text-slate-500 mb-2">High Performers</p>
-                      <p className="text-3xl font-bold bg-gradient-to-r from-emerald-600 to-teal-600 bg-clip-text text-transparent">
-                        {filteredResumes.filter(r => (r.overallScore || 0) >= 8).length}
-                      </p>
-                    </div>
-                    <div className="p-3 bg-gradient-to-br from-emerald-50 to-teal-50 rounded-xl group-hover:scale-110 transition-transform duration-300">
+              <Card className="backdrop-blur-sm bg-white/80 border border-slate-200/50 shadow-lg hover:shadow-xl transition-all duration-300 rounded-2xl overflow-hidden">
+                <CardContent className="p-6">
+                  <div className="flex items-center gap-4">
+                    <div className="p-3 bg-gradient-to-br from-emerald-50 to-green-50 rounded-xl">
                       <Trophy className="h-6 w-6 text-emerald-600" />
                     </div>
+                    <div>
+                      <p className="text-2xl font-bold text-slate-800">
+                        {filteredResumes.filter(r => (r.overallScore || 0) >= 8).length}
+                      </p>
+                      <p className="text-sm text-slate-500 font-medium">High Performers</p>
+                    </div>
                   </div>
                 </CardContent>
               </Card>
-              
-              <Card className="backdrop-blur-sm bg-white/70 border-0 shadow-xl shadow-slate-200/50 rounded-2xl overflow-hidden group hover:shadow-2xl hover:shadow-purple-500/10 transition-all duration-300">
-                <CardContent className="p-6 relative">
-                  <div className="absolute inset-0 bg-gradient-to-br from-purple-50/50 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
-                  <div className="relative flex items-center justify-between">
-                    <div>
-                      <p className="text-sm font-medium text-slate-500 mb-2">Reviewed Today</p>
-                      <p className="text-3xl font-bold bg-gradient-to-r from-purple-600 to-pink-600 bg-clip-text text-transparent">
-                        {filteredResumes.filter(r => {
-                          const today = new Date().toISOString().split('T')[0];
-                          return r.date === today;
-                        }).length}
-                      </p>
-                    </div>
-                    <div className="p-3 bg-gradient-to-br from-purple-50 to-pink-50 rounded-xl group-hover:scale-110 transition-transform duration-300">
+              <Card className="backdrop-blur-sm bg-white/80 border border-slate-200/50 shadow-lg hover:shadow-xl transition-all duration-300 rounded-2xl overflow-hidden">
+                <CardContent className="p-6">
+                  <div className="flex items-center gap-4">
+                    <div className="p-3 bg-gradient-to-br from-purple-50 to-pink-50 rounded-xl">
                       <Calendar className="h-6 w-6 text-purple-600" />
                     </div>
-                  </div>
-                </CardContent>
-              </Card>
-              
-              <Card className="backdrop-blur-sm bg-white/70 border-0 shadow-xl shadow-slate-200/50 rounded-2xl overflow-hidden group hover:shadow-2xl hover:shadow-amber-500/10 transition-all duration-300">
-                <CardContent className="p-6 relative">
-                  <div className="absolute inset-0 bg-gradient-to-br from-amber-50/50 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
-                  <div className="relative flex items-center justify-between">
                     <div>
-                      <p className="text-sm font-medium text-slate-500 mb-2">Average Score</p>
-                      <p className="text-3xl font-bold bg-gradient-to-r from-amber-600 to-orange-600 bg-clip-text text-transparent">
-                        {filteredResumes.length > 0 ? (filteredResumes.reduce((sum, r) => sum + (r.overallScore || 0), 0) / filteredResumes.length).toFixed(1) : '0.0'}
+                      <p className="text-2xl font-bold text-slate-800">
+                        {filteredResumes.filter(r => {
+                          const today = new Date().toDateString();
+                          const resumeDate = r.date ? new Date(r.date).toDateString() : '';
+                          return resumeDate === today;
+                        }).length}
                       </p>
+                      <p className="text-sm text-slate-500 font-medium">Reviewed Today</p>
                     </div>
-                    <div className="p-3 bg-gradient-to-br from-amber-50 to-orange-50 rounded-xl group-hover:scale-110 transition-transform duration-300">
-                      <Target className="h-6 w-6 text-amber-600" />
+                  </div>
+                </CardContent>
+              </Card>
+              <Card className="backdrop-blur-sm bg-white/80 border border-slate-200/50 shadow-lg hover:shadow-xl transition-all duration-300 rounded-2xl overflow-hidden">
+                <CardContent className="p-6">
+                  <div className="flex items-center gap-4">
+                    <div className="p-3 bg-gradient-to-br from-amber-50 to-yellow-50 rounded-xl">
+                      <TrendingUp className="h-6 w-6 text-amber-600" />
+                    </div>
+                    <div>
+                      <p className="text-2xl font-bold text-slate-800">
+                        {filteredResumes.length > 0 
+                          ? (filteredResumes.reduce((acc, r) => acc + (r.overallScore || 0), 0) / filteredResumes.length).toFixed(1)
+                          : '0'
+                        }
+                      </p>
+                      <p className="text-sm text-slate-500 font-medium">Average Score</p>
                     </div>
                   </div>
                 </CardContent>
               </Card>
             </div>
 
-            {/* Search and Filter Bar */}
-            <div className="flex flex-col sm:flex-row gap-6 mb-8">
-              <div className="relative flex-1">
-                <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 h-5 w-5 text-slate-400" />
-                <Input 
-                  placeholder="Search candidates, emails, or resume titles..." 
-                  value={searchTerm} 
-                  onChange={e => setSearchTerm(e.target.value)} 
-                  className="pl-12 h-12 rounded-2xl border-slate-200 bg-white/80 backdrop-blur-sm shadow-lg focus:border-cyan-300 focus:ring-cyan-100 text-slate-700 placeholder:text-slate-400"
-                />
-              </div>
-              <Popover>
-                <PopoverTrigger asChild>
-                  <Button 
-                    variant="outline" 
-                    className="gap-2 h-12 px-6 rounded-2xl border-slate-200 bg-white/80 backdrop-blur-sm shadow-lg hover:border-cyan-300 hover:bg-cyan-50 hover:text-cyan-700 transition-all duration-200"
-                  >
-                    <Filter className="h-5 w-5" />
-                    Filters
-                  </Button>
-                </PopoverTrigger>
-                <PopoverContent className="w-80 rounded-2xl border-slate-200 bg-white/95 backdrop-blur-sm shadow-2xl" align="end">
-                  <div className="space-y-6 p-2">
-                    <div>
-                      <Label className="text-sm font-semibold text-slate-700">Score Range</Label>
-                      <Select value={filters.scoreRange} onValueChange={value => setFilters({
-                      ...filters,
-                      scoreRange: value
-                    })}>
-                        <SelectTrigger className="mt-2 rounded-xl border-slate-200">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent className="rounded-xl border-slate-200">
-                          <SelectItem value="all">All Scores</SelectItem>
-                          <SelectItem value="high">High (8-10)</SelectItem>
-                          <SelectItem value="medium">Medium (4-7)</SelectItem>
-                          <SelectItem value="low">Low (0-3)</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <div>
-                      <Label className="text-sm font-semibold text-slate-700">Date Range</Label>
-                      <Select value={filters.dateRange} onValueChange={value => setFilters({
-                      ...filters,
-                      dateRange: value
-                    })}>
-                        <SelectTrigger className="mt-2 rounded-xl border-slate-200">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent className="rounded-xl border-slate-200">
-                          <SelectItem value="all">All Time</SelectItem>
-                          <SelectItem value="today">Today</SelectItem>
-                          <SelectItem value="week">This Week</SelectItem>
-                          <SelectItem value="month">This Month</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                  </div>
-                </PopoverContent>
-              </Popover>
-            </div>
-
-            {/* Mobile-Responsive Candidate Display */}
+            {/* Candidate List */}
             {filteredResumes.length > 0 ? (
               <>
                 {/* Desktop Table - Hidden on Mobile */}
-                <Card className="backdrop-blur-sm bg-white/80 border-0 shadow-2xl shadow-slate-200/50 rounded-3xl overflow-hidden hidden lg:block">
+                <Card className="hidden lg:block backdrop-blur-sm bg-white/80 border border-slate-200/50 shadow-lg rounded-2xl overflow-hidden">
                   <CardContent className="p-0">
                     <Table>
-                      <TableHeader>
-                        <TableRow className="border-b border-slate-100 bg-gradient-to-r from-slate-50 to-white">
-                          <TableHead className="font-semibold text-slate-700 py-6 px-6 text-left">Candidate</TableHead>
-                          <TableHead className="font-semibold text-slate-700 py-6 px-6 text-center">Overall Score</TableHead>
-                          <TableHead className="font-semibold text-slate-700 py-6 px-6 text-center">Risk/Reward</TableHead>
-                          <TableHead className="font-semibold text-slate-700 py-6 px-6 text-center">Date</TableHead>
-                          <TableHead className="font-semibold text-slate-700 py-6 px-6 text-center">Actions</TableHead>
+                      <TableHeader className="bg-gradient-to-r from-slate-50 to-white border-b border-slate-100">
+                        <TableRow className="hover:bg-transparent">
+                          <TableHead className="py-4 px-6 font-semibold text-slate-700">
+                            <Checkbox
+                              checked={selectedCandidates.size === filteredResumes.length && filteredResumes.length > 0}
+                              onCheckedChange={(checked) => {
+                                if (checked) {
+                                  setSelectedCandidates(new Set(filteredResumes.map(r => r.id!)));
+                                } else {
+                                  setSelectedCandidates(new Set());
+                                }
+                              }}
+                              className="border-slate-300 data-[state=checked]:bg-cyan-500 data-[state=checked]:border-cyan-500"
+                            />
+                          </TableHead>
+                          <TableHead className="py-4 px-6 font-semibold text-slate-700">Candidate</TableHead>
+                          <TableHead className="py-4 px-6 font-semibold text-slate-700 text-center">Score</TableHead>
+                          <TableHead className="py-4 px-6 font-semibold text-slate-700 text-center">Risk & Reward</TableHead>
+                          <TableHead className="py-4 px-6 font-semibold text-slate-700 text-center">Date</TableHead>
+                          <TableHead className="py-4 px-6 font-semibold text-slate-700 text-center">Actions</TableHead>
                         </TableRow>
                       </TableHeader>
                       <TableBody>
                         {filteredResumes.map((resume, index) => {
-                          const getRiskBadge = (riskScore: string) => {
-                            const risk = riskScore?.toLowerCase() || 'unknown';
-                            if (risk === 'high') return { color: 'bg-red-50 text-red-700 border-red-200', icon: ShieldAlert };
-                            if (risk === 'medium') return { color: 'bg-amber-50 text-amber-700 border-amber-200', icon: AlertTriangle };
-                            if (risk === 'low') return { color: 'bg-green-50 text-green-700 border-green-200', icon: ShieldCheck };
-                            return { color: 'bg-gray-50 text-gray-700 border-gray-200', icon: ShieldAlert };
-                          };
+                          const riskBadge = resume.riskScore?.toLowerCase() === 'high' 
+                            ? { color: 'bg-red-100 text-red-700', icon: AlertTriangle }
+                            : resume.riskScore?.toLowerCase() === 'medium'
+                            ? { color: 'bg-amber-100 text-amber-700', icon: ShieldAlert }
+                            : { color: 'bg-green-100 text-green-700', icon: ShieldCheck };
                           
-                          const getRewardBadge = (rewardScore: string) => {
-                            const reward = rewardScore?.toLowerCase() || 'unknown';
-                            if (reward === 'high') return { color: 'bg-emerald-50 text-emerald-700 border-emerald-200', icon: Trophy };
-                            if (reward === 'medium') return { color: 'bg-blue-50 text-blue-700 border-blue-200', icon: Target };
-                            if (reward === 'low') return { color: 'bg-slate-50 text-slate-700 border-slate-200', icon: Target };
-                            return { color: 'bg-gray-50 text-gray-700 border-gray-200', icon: Target };
-                          };
-                          
-                          const riskBadge = getRiskBadge(resume.riskScore || 'unknown');
-                          const rewardBadge = getRewardBadge(resume.rewardScore || 'unknown');
-                          
+                          const rewardBadge = resume.rewardScore?.toLowerCase() === 'high'
+                            ? { color: 'bg-emerald-100 text-emerald-700', icon: Trophy }
+                            : resume.rewardScore?.toLowerCase() === 'medium'
+                            ? { color: 'bg-blue-100 text-blue-700', icon: Target }
+                            : { color: 'bg-slate-100 text-slate-700', icon: Target };
+
                           return (
                             <TableRow 
-                              key={resume.id} 
-                              className={`group hover:bg-gradient-to-r hover:from-cyan-50/30 hover:to-teal-50/30 transition-all duration-300 border-b border-slate-50 ${
-                                index % 2 === 0 ? 'bg-white' : 'bg-slate-50/30'
-                              }`}
+                              key={resume.id}
+                              className="border-b border-slate-100 hover:bg-slate-50/50 transition-colors duration-200 group cursor-pointer"
+                              onClick={() => {
+                                setSelectedCandidate(resume);
+                                setIsDetailsPanelOpen(true);
+                              }}
                             >
                               <TableCell className="py-6 px-6">
-                                <div className="flex flex-col">
-                                  <div className="flex items-center gap-3 mb-2">
-                                    <div className="font-semibold text-slate-800 group-hover:text-cyan-700 transition-colors">
+                                <Checkbox
+                                  checked={selectedCandidates.has(resume.id!)}
+                                  onCheckedChange={(checked) => {
+                                    const newSelected = new Set(selectedCandidates);
+                                    if (checked) {
+                                      newSelected.add(resume.id!);
+                                    } else {
+                                      newSelected.delete(resume.id!);
+                                    }
+                                    setSelectedCandidates(newSelected);
+                                  }}
+                                  onClick={(e) => e.stopPropagation()}
+                                  className="border-slate-300 data-[state=checked]:bg-cyan-500 data-[state=checked]:border-cyan-500"
+                                />
+                              </TableCell>
+                              <TableCell className="py-6 px-6">
+                                <div className="flex items-center gap-4">
+                                  <div className="min-w-0 flex-1">
+                                    <div className="font-semibold text-slate-800 text-base mb-1">
                                       {resume.candidateName || 'Unknown Candidate'}
                                     </div>
+                                    <div className="text-sm text-slate-600 truncate">
+                                      {resume.email}
+                                    </div>
                                     {resume.recruitmentName && (
-                                      <TooltipProvider>
-                                        <Tooltip>
-                                          <TooltipTrigger asChild>
-                                            <Badge 
-                                              className={`px-3 py-1 rounded-full text-xs font-medium border cursor-help ${getRecruitmentTagColor(resume.recruitmentName)}`}
-                                            >
-                                              {resume.recruitmentName}
-                                            </Badge>
-                                          </TooltipTrigger>
-                                          <TooltipContent>
-                                            <div className="text-xs">
-                                              <p><strong>Debug Info:</strong></p>
-                                              <p>Raw DB value: "{(resume as any).recruitment_name_raw || 'N/A'}"</p>
-                                              <p>Displayed: "{resume.recruitmentName}"</p>
-                                            </div>
-                                          </TooltipContent>
-                                        </Tooltip>
-                                      </TooltipProvider>
+                                      <Badge 
+                                        className={`${getRecruitmentTagColor(resume.recruitmentName)} text-xs font-medium mt-2 cursor-pointer hover:scale-105 transition-transform duration-200`}
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          navigate(`/folder/${encodeURIComponent(resume.recruitmentName!)}`);
+                                        }}
+                                      >
+                                        {resume.recruitmentName}
+                                      </Badge>
                                     )}
                                   </div>
-                                  {resume.email && (
-                                    <div className="flex items-center text-sm text-slate-500">
-                                      <Mail className="h-4 w-4 mr-2 text-slate-400" />
-                                      <span>{resume.email}</span>
-                                    </div>
-                                  )}
                                 </div>
                               </TableCell>
                               <TableCell className="py-6 px-6 text-center">
@@ -632,219 +598,18 @@ const ModernDashboard = () => {
                               </TableCell>
                               <TableCell className="py-6 px-6 text-center">
                                 <div className="flex items-center justify-center gap-3">
-                                  <Sheet open={isDetailsPanelOpen && selectedCandidate?.id === resume.id} onOpenChange={(open) => {
-                                    if (!open) {
-                                      setIsDetailsPanelOpen(false);
-                                      setSelectedCandidate(null);
-                                    }
-                                  }}>
-                                    <SheetTrigger asChild>
-                                      <Button 
-                                        size="sm" 
-                                        className="h-9 w-9 p-0 rounded-xl bg-gradient-to-r from-cyan-500 to-teal-500 hover:from-cyan-600 hover:to-teal-600 text-white shadow-lg hover:shadow-xl hover:scale-105 transition-all duration-200" 
-                                        title="View Details"
-                                        onClick={() => {
-                                          setSelectedCandidate(resume);
-                                          setIsDetailsPanelOpen(true);
-                                        }}
-                                      >
-                                        <Eye className="h-4 w-4" />
-                                      </Button>
-                                    </SheetTrigger>
-                                    <SheetContent side="right" className="w-full sm:w-[45vw] sm:max-w-[90vw] sm:min-w-[400px] p-0">
-                                      <div className="h-full flex flex-col">
-                                        <SheetHeader className="p-4 sm:p-6 border-b bg-gradient-to-r from-slate-50 to-white">
-                                          <div className="flex items-center justify-between">
-                                            <div>
-                                              <SheetTitle className="text-lg sm:text-2xl font-bold bg-gradient-to-r from-slate-800 to-slate-600 bg-clip-text text-transparent">
-                                                Candidate Profile
-                                              </SheetTitle>
-                                              <SheetDescription className="text-sm sm:text-lg text-muted-foreground mt-1">
-                                                {resume.candidateName || 'Unknown Candidate'}
-                                              </SheetDescription>
-                                            </div>
-                                            <Button
-                                              variant="ghost"
-                                              size="sm"
-                                              className="h-8 w-8 p-0 rounded-full"
-                                              onClick={() => {
-                                                setIsDetailsPanelOpen(false);
-                                                setSelectedCandidate(null);
-                                              }}
-                                            >
-                                              <X className="h-4 w-4" />
-                                            </Button>
-                                          </div>
-                                        </SheetHeader>
-                                        
-                                        <ScrollArea className="flex-1 p-4 sm:p-6">
-                                          <div className="space-y-4 sm:space-y-8">
-                                            {/* Candidate Info - Mobile Optimized */}
-                                            <div className="border rounded-xl sm:rounded-2xl p-4 sm:p-6 bg-gradient-to-br from-white to-slate-50/50 shadow-lg">
-                                              <div className="flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4 mb-4 sm:mb-6">
-                                                <div className="p-2 sm:p-3 bg-gradient-to-br from-cyan-50 to-teal-50 rounded-lg sm:rounded-xl w-fit">
-                                                  <Mail className="h-5 w-5 sm:h-6 sm:w-6 text-cyan-600" />
-                                                </div>
-                                                <div className="min-w-0 flex-1">
-                                                  <h4 className="text-lg sm:text-xl font-bold text-foreground truncate">{resume.candidateName}</h4>
-                                                  {resume.email && <p className="text-sm text-muted-foreground mt-1 truncate">{resume.email}</p>}
-                                                </div>
-                                              </div>
-                                              <div className="flex items-center gap-2 sm:gap-3 text-xs sm:text-sm text-muted-foreground">
-                                                <Calendar className="h-3 w-3 sm:h-4 sm:w-4 flex-shrink-0" />
-                                                <span>Analyzed on {resume.date ? new Date(resume.date).toLocaleDateString() : 'Unknown date'}</span>
-                                              </div>
-                                            </div>
-
-                                            {/* Scores - Mobile Grid */}
-                                            <div className="space-y-4 sm:space-y-6">
-                                              <h4 className="text-base sm:text-lg font-bold text-foreground flex items-center gap-2">
-                                                <Target className="h-4 w-4 sm:h-5 sm:w-5 text-cyan-600" />
-                                                Assessment Scores
-                                              </h4>
-                                              <div className="grid grid-cols-1 gap-3 sm:gap-6">
-                                                <div className="border rounded-xl sm:rounded-2xl p-4 sm:p-6 bg-gradient-to-br from-cyan-50/50 to-white shadow-md">
-                                                  <div className="flex justify-between items-center mb-3 sm:mb-4">
-                                                    <span className="text-sm sm:text-lg font-semibold text-slate-700">Overall Score</span>
-                                                    <span className="text-xl sm:text-2xl font-bold text-cyan-600">{resume.overallScore}/10</span>
-                                                  </div>
-                                                  <Progress value={(resume.overallScore || 0) * 10} className="h-2 sm:h-3 rounded-full" />
-                                                </div>
-                                                <div className="border rounded-xl sm:rounded-2xl p-4 sm:p-6 bg-gradient-to-br from-teal-50/50 to-white shadow-md">
-                                                  <div className="flex justify-between items-center mb-3 sm:mb-4">
-                                                    <span className="text-sm sm:text-lg font-semibold text-slate-700">Fit Score</span>
-                                                    <span className="text-xl sm:text-2xl font-bold text-teal-600">{resume.fitScore}/10</span>
-                                                  </div>
-                                                  <Progress value={(resume.fitScore || 0) * 10} className="h-2 sm:h-3 rounded-full" />
-                                                </div>
-                                              </div>
-                                            </div>
-
-                                            {/* Risk & Reward - Mobile Stack */}
-                                            <div className="space-y-4 sm:space-y-6">
-                                              <h4 className="text-base sm:text-lg font-bold text-foreground flex items-center gap-2">
-                                                <ShieldAlert className="h-4 w-4 sm:h-5 sm:w-5 text-amber-500" />
-                                                Risk & Reward Analysis
-                                              </h4>
-                                              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-6">
-                                                <div className="border rounded-xl sm:rounded-2xl p-4 sm:p-6 text-center bg-gradient-to-br from-amber-50/50 to-white shadow-md">
-                                                  <div className="p-2 sm:p-3 bg-gradient-to-br from-amber-100 to-orange-100 rounded-lg sm:rounded-xl mx-auto mb-3 sm:mb-4 w-fit">
-                                                    <AlertTriangle className="h-6 w-6 sm:h-8 sm:w-8 text-amber-600" />
-                                                  </div>
-                                                  <p className="text-xs sm:text-sm text-muted-foreground mb-2 font-medium">Risk Factor</p>
-                                                  <p className="text-lg sm:text-xl font-bold text-amber-700">{resume.riskScore || 'Unknown'}</p>
-                                                </div>
-                                                <div className="border rounded-xl sm:rounded-2xl p-4 sm:p-6 text-center bg-gradient-to-br from-green-50/50 to-white shadow-md">
-                                                  <div className="p-2 sm:p-3 bg-gradient-to-br from-green-100 to-emerald-100 rounded-lg sm:rounded-xl mx-auto mb-3 sm:mb-4 w-fit">
-                                                    <Trophy className="h-6 w-6 sm:h-8 sm:w-8 text-green-600" />
-                                                  </div>
-                                                  <p className="text-xs sm:text-sm text-muted-foreground mb-2 font-medium">Reward Factor</p>
-                                                  <p className="text-lg sm:text-xl font-bold text-green-700">{resume.rewardScore || 'Unknown'}</p>
-                                                </div>
-                                              </div>
-                                            </div>
-
-                                            {/* Strengths & Weaknesses - Mobile Stack */}
-                                            {(resume.strengths?.length > 0 || resume.weaknesses?.length > 0) && (
-                                              <div className="space-y-4 sm:space-y-6">
-                                                <h4 className="text-base sm:text-lg font-bold text-foreground flex items-center gap-2">
-                                                  <ShieldCheck className="h-4 w-4 sm:h-5 sm:w-5 text-green-600" />
-                                                  Detailed Analysis
-                                                </h4>
-                                                <div className="space-y-3 sm:space-y-6">
-                                                  {resume.strengths?.length > 0 && (
-                                                    <div className="border rounded-xl sm:rounded-2xl p-4 sm:p-6 bg-gradient-to-br from-green-50/50 to-white shadow-md">
-                                                      <h5 className="text-sm sm:text-lg font-bold text-green-700 mb-3 sm:mb-4 flex items-center gap-2">
-                                                        <CheckCircle className="h-4 w-4 sm:h-5 sm:w-5" />
-                                                        Strengths
-                                                      </h5>
-                                                      <ul className="text-xs sm:text-sm text-slate-600 space-y-2 leading-relaxed">
-                                                        {resume.strengths.map((strength, idx) => (
-                                                          <li key={idx} className="flex items-start gap-2">
-                                                            <span className="text-green-500 mt-1 flex-shrink-0">•</span>
-                                                            <span>{strength}</span>
-                                                          </li>
-                                                        ))}
-                                                      </ul>
-                                                    </div>
-                                                  )}
-                                                  {resume.weaknesses?.length > 0 && (
-                                                    <div className="border rounded-xl sm:rounded-2xl p-4 sm:p-6 bg-gradient-to-br from-red-50/50 to-white shadow-md">
-                                                      <h5 className="text-sm sm:text-lg font-bold text-red-700 mb-3 sm:mb-4 flex items-center gap-2">
-                                                        <AlertTriangle className="h-4 w-4 sm:h-5 sm:w-5" />
-                                                        Areas for Improvement
-                                                      </h5>
-                                                      <ul className="text-xs sm:text-sm text-slate-600 space-y-2 leading-relaxed">
-                                                        {resume.weaknesses.map((weakness, idx) => (
-                                                          <li key={idx} className="flex items-start gap-2">
-                                                            <span className="text-red-500 mt-1 flex-shrink-0">•</span>
-                                                            <span>{weakness}</span>
-                                                          </li>
-                                                        ))}
-                                                      </ul>
-                                                    </div>
-                                                  )}
-                                                </div>
-                                              </div>
-                                            )}
-
-                                            {/* AI Analysis - Mobile Optimized */}
-                                            {resume.justification && (
-                                              <div className="space-y-4 sm:space-y-6">
-                                                <h4 className="text-base sm:text-lg font-bold text-foreground flex items-center gap-2 sm:gap-3">
-                                                  <div className="p-1.5 sm:p-2 bg-gradient-to-br from-purple-100 to-pink-100 rounded-lg sm:rounded-xl">
-                                                    <ArrowUpRight className="h-4 w-4 sm:h-5 sm:w-5 text-purple-600" />
-                                                  </div>
-                                                  AI Analysis
-                                                </h4>
-                                                
-                                                <div className="border rounded-xl sm:rounded-2xl p-4 sm:p-8 bg-white shadow-md">
-                                                  <div className="flex items-center gap-2 sm:gap-3 mb-3 sm:mb-6">
-                                                    <div className="w-2 h-2 sm:w-3 sm:h-3 bg-gradient-to-r from-purple-500 to-cyan-500 rounded-full animate-pulse"></div>
-                                                    <h5 className="text-sm sm:text-lg font-bold bg-gradient-to-r from-purple-600 to-cyan-600 bg-clip-text text-transparent">
-                                                      AI Analysis
-                                                    </h5>
-                                                  </div>
-                                                  
-                                                  <p className="text-xs sm:text-base text-slate-700 leading-relaxed font-medium">
-                                                    {resume.justification}
-                                                  </p>
-                                                  
-                                                  <div className="mt-4 sm:mt-6 h-px bg-gradient-to-r from-transparent via-purple-200 to-transparent"></div>
-                                                </div>
-                                              </div>
-                                            )}
-
-                                            {/* Resume View Button - Mobile Optimized */}
-                                            {resume.resume && (
-                                              <div className="space-y-3 sm:space-y-4">
-                                                <h4 className="text-base sm:text-lg font-bold text-foreground flex items-center gap-2">
-                                                  <FileText className="h-4 w-4 sm:h-5 sm:w-5 text-blue-600" />
-                                                  Resume Document
-                                                </h4>
-                                                <div className="border rounded-xl sm:rounded-2xl p-4 sm:p-6 bg-gradient-to-br from-blue-50/50 to-white shadow-md">
-                                                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-0">
-                                                    <div>
-                                                      <p className="text-xs sm:text-sm text-slate-600 mb-1 sm:mb-2">View the original resume document</p>
-                                                      <p className="text-xs text-muted-foreground">Click to open in a new tab</p>
-                                                    </div>
-                                                    <Button
-                                                      onClick={() => window.open(resume.resume, '_blank')}
-                                                      className="bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white shadow-lg hover:shadow-xl transition-all duration-200 gap-2 w-full sm:w-auto"
-                                                      size="sm"
-                                                    >
-                                                      <FileText className="h-3 w-3 sm:h-4 sm:w-4" />
-                                                      <span className="text-xs sm:text-sm">View Resume</span>
-                                                    </Button>
-                                                  </div>
-                                                </div>
-                                              </div>
-                                            )}
-                                          </div>
-                                        </ScrollArea>
-                                      </div>
-                                    </SheetContent>
-                                  </Sheet>
+                                  <Button 
+                                    size="sm" 
+                                    className="h-9 w-9 p-0 rounded-xl bg-gradient-to-r from-cyan-500 to-teal-500 hover:from-cyan-600 hover:to-teal-600 text-white shadow-lg hover:shadow-xl hover:scale-105 transition-all duration-200" 
+                                    title="View Full Details"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setSelectedCandidateFullView(resume);
+                                      setIsFullViewDialogOpen(true);
+                                    }}
+                                  >
+                                    <Eye className="h-4 w-4" />
+                                  </Button>
                                   <DropdownMenu>
                                     <DropdownMenuTrigger asChild>
                                       <Button 
@@ -852,20 +617,27 @@ const ModernDashboard = () => {
                                         variant="outline" 
                                         className="h-9 w-9 p-0 rounded-xl border-slate-200 hover:border-cyan-300 hover:bg-cyan-50 hover:text-cyan-600 transition-all duration-200" 
                                         title="More Actions"
+                                        onClick={(e) => e.stopPropagation()}
                                       >
                                         <MoreVertical className="h-4 w-4" />
                                       </Button>
                                     </DropdownMenuTrigger>
                                     <DropdownMenuContent align="end" className="rounded-2xl border-slate-200 bg-white/95 backdrop-blur-sm shadow-2xl">
                                       <DropdownMenuItem 
-                                        onClick={() => window.open(resume.resume, '_blank')}
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          window.open(resume.resume, '_blank');
+                                        }}
                                         className="rounded-xl hover:bg-slate-50 cursor-pointer"
                                       >
                                         <Download className="h-4 w-4 mr-3 text-slate-500" />
                                         Download Resume
                                       </DropdownMenuItem>
                                       <DropdownMenuItem 
-                                        onClick={() => handleDeleteCandidate(resume.id)}
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          handleDeleteCandidate(resume.id);
+                                        }}
                                         className="text-red-600 hover:bg-red-50 hover:text-red-700 rounded-xl cursor-pointer"
                                       >
                                         <Trash2 className="h-4 w-4 mr-3" />
@@ -889,11 +661,11 @@ const ModernDashboard = () => {
                     <Card 
                       key={resume.id}
                       className="backdrop-blur-sm bg-white/80 border border-slate-200/50 shadow-lg hover:shadow-xl hover:shadow-cyan-500/10 transition-all duration-300 rounded-xl cursor-pointer"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setSelectedCandidate(resume);
-                              setIsDetailsPanelOpen(true);
-                            }}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setSelectedCandidate(resume);
+                        setIsDetailsPanelOpen(true);
+                      }}
                     >
                       <CardContent className="p-4">
                         {/* Header Section - Name, Score, Recruitment Tag */}
@@ -974,10 +746,11 @@ const ModernDashboard = () => {
                               size="sm" 
                               variant="ghost" 
                               className="h-8 w-8 p-0 hover:bg-blue-100 hover:text-blue-600"
+                              title="Full Details"
                               onClick={(e) => {
                                 e.stopPropagation();
-                                setSelectedCandidate(resume);
-                                setIsDetailsPanelOpen(true);
+                                setSelectedCandidateFullView(resume);
+                                setIsFullViewDialogOpen(true);
                               }}
                             >
                               <Eye className="h-4 w-4" />
@@ -1040,6 +813,280 @@ const ModernDashboard = () => {
           </div>
         </div>
       </div>
+
+      {/* Quick Preview Sheet - Opens on row click */}
+      <Sheet open={isDetailsPanelOpen} onOpenChange={setIsDetailsPanelOpen}>
+        <SheetContent side="right" className="w-full sm:w-[45vw] sm:max-w-[90vw] sm:min-w-[400px] p-0">
+          <div className="h-full flex flex-col">
+            <SheetHeader className="p-4 sm:p-6 border-b bg-gradient-to-r from-slate-50 to-white">
+              <div className="flex items-center justify-between">
+                <div>
+                  <SheetTitle className="text-lg sm:text-2xl font-bold bg-gradient-to-r from-slate-800 to-slate-600 bg-clip-text text-transparent">
+                    Quick Preview
+                  </SheetTitle>
+                  <SheetDescription className="text-sm sm:text-lg text-muted-foreground mt-1">
+                    {selectedCandidate?.candidateName || 'Unknown Candidate'}
+                  </SheetDescription>
+                </div>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-8 w-8 p-0 rounded-full"
+                  onClick={() => setIsDetailsPanelOpen(false)}
+                >
+                  <X className="h-4 w-4" />
+                </Button>
+              </div>
+            </SheetHeader>
+            
+            <ScrollArea className="flex-1 p-4 sm:p-6">
+              {selectedCandidate && (
+                <div className="space-y-4 sm:space-y-6">
+                  {/* Basic Info */}
+                  <div className="border rounded-xl p-4 bg-gradient-to-br from-white to-slate-50/50 shadow-md">
+                    <div className="flex items-center gap-3 mb-4">
+                      <div className="p-2 bg-gradient-to-br from-cyan-50 to-teal-50 rounded-lg">
+                        <Mail className="h-5 w-5 text-cyan-600" />
+                      </div>
+                      <div>
+                        <h4 className="text-lg font-bold text-foreground">{selectedCandidate.candidateName}</h4>
+                        <p className="text-sm text-muted-foreground">{selectedCandidate.email}</p>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Scores */}
+                  <div className="space-y-3">
+                    <h4 className="text-base font-bold text-foreground flex items-center gap-2">
+                      <Target className="h-4 w-4 text-cyan-600" />
+                      Quick Scores
+                    </h4>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="border rounded-xl p-3 bg-gradient-to-br from-cyan-50/50 to-white shadow-sm">
+                        <div className="text-center">
+                          <span className="text-lg font-bold text-cyan-600">{selectedCandidate.overallScore}/10</span>
+                          <p className="text-xs text-slate-600">Overall</p>
+                        </div>
+                      </div>
+                      <div className="border rounded-xl p-3 bg-gradient-to-br from-teal-50/50 to-white shadow-sm">
+                        <div className="text-center">
+                          <span className="text-lg font-bold text-teal-600">{selectedCandidate.fitScore}/10</span>
+                          <p className="text-xs text-slate-600">Fit Score</p>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Risk/Reward */}
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="border rounded-xl p-3 text-center bg-gradient-to-br from-amber-50/50 to-white shadow-sm">
+                      <AlertTriangle className="h-6 w-6 text-amber-600 mx-auto mb-2" />
+                      <p className="text-xs text-muted-foreground mb-1">Risk</p>
+                      <p className="text-sm font-bold text-amber-700">{selectedCandidate.riskScore || 'Unknown'}</p>
+                    </div>
+                    <div className="border rounded-xl p-3 text-center bg-gradient-to-br from-green-50/50 to-white shadow-sm">
+                      <Trophy className="h-6 w-6 text-green-600 mx-auto mb-2" />
+                      <p className="text-xs text-muted-foreground mb-1">Reward</p>
+                      <p className="text-sm font-bold text-green-700">{selectedCandidate.rewardScore || 'Unknown'}</p>
+                    </div>
+                  </div>
+
+                  {/* Action Buttons */}
+                  <div className="space-y-3 pt-4 border-t">
+                    <Button
+                      onClick={() => {
+                        setIsDetailsPanelOpen(false);
+                        setSelectedCandidateFullView(selectedCandidate);
+                        setIsFullViewDialogOpen(true);
+                      }}
+                      className="w-full bg-gradient-to-r from-cyan-500 to-teal-500 hover:from-cyan-600 hover:to-teal-600 text-white"
+                    >
+                      <Eye className="h-4 w-4 mr-2" />
+                      View Full Analysis
+                    </Button>
+                    {selectedCandidate.resume && (
+                      <Button
+                        variant="outline"
+                        onClick={() => window.open(selectedCandidate.resume, '_blank')}
+                        className="w-full"
+                      >
+                        <FileText className="h-4 w-4 mr-2" />
+                        View Resume
+                      </Button>
+                    )}
+                  </div>
+                </div>
+              )}
+            </ScrollArea>
+          </div>
+        </SheetContent>
+      </Sheet>
+
+      {/* Full View Dialog - Opens on View button click */}
+      <Dialog open={isFullViewDialogOpen} onOpenChange={setIsFullViewDialogOpen}>
+        <DialogContent className="max-w-4xl w-full h-[90vh] p-0">
+          <div className="h-full flex flex-col">
+            <DialogHeader className="p-6 border-b bg-gradient-to-r from-slate-50 to-white">
+              <DialogTitle className="text-3xl font-bold bg-gradient-to-r from-slate-800 to-slate-600 bg-clip-text text-transparent">
+                Complete Candidate Analysis
+              </DialogTitle>
+              <DialogDescription className="text-lg text-muted-foreground mt-2">
+                {selectedCandidateFullView?.candidateName || 'Unknown Candidate'} - Comprehensive Resume Assessment
+              </DialogDescription>
+            </DialogHeader>
+            
+            <ScrollArea className="flex-1 p-6">
+              {selectedCandidateFullView && (
+                <div className="space-y-8">
+                  {/* Enhanced Header */}
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                    <div className="border rounded-2xl p-6 bg-gradient-to-br from-white to-slate-50/50 shadow-lg">
+                      <div className="flex items-center gap-4 mb-6">
+                        <div className="p-3 bg-gradient-to-br from-cyan-50 to-teal-50 rounded-xl">
+                          <Mail className="h-6 w-6 text-cyan-600" />
+                        </div>
+                        <div>
+                          <h3 className="text-2xl font-bold text-foreground">{selectedCandidateFullView.candidateName}</h3>
+                          <p className="text-muted-foreground">{selectedCandidateFullView.email}</p>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-3 text-sm text-muted-foreground">
+                        <Calendar className="h-4 w-4" />
+                        <span>Analyzed: {selectedCandidateFullView.date ? new Date(selectedCandidateFullView.date).toLocaleDateString() : 'Unknown'}</span>
+                      </div>
+                    </div>
+                    
+                    <div className="border rounded-2xl p-6 bg-gradient-to-br from-cyan-50/50 to-white shadow-lg">
+                      <h3 className="text-xl font-bold text-foreground mb-4">Assessment Overview</h3>
+                      <div className="space-y-4">
+                        <div>
+                          <div className="flex justify-between mb-2">
+                            <span className="font-semibold">Overall Score</span>
+                            <span className="text-2xl font-bold text-cyan-600">{selectedCandidateFullView.overallScore}/10</span>
+                          </div>
+                          <Progress value={(selectedCandidateFullView.overallScore || 0) * 10} className="h-3" />
+                        </div>
+                        <div>
+                          <div className="flex justify-between mb-2">
+                            <span className="font-semibold">Fit Score</span>
+                            <span className="text-xl font-bold text-teal-600">{selectedCandidateFullView.fitScore}/10</span>
+                          </div>
+                          <Progress value={(selectedCandidateFullView.fitScore || 0) * 10} className="h-3" />
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Risk & Reward Analysis */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div className="border rounded-2xl p-6 bg-gradient-to-br from-amber-50/50 to-white shadow-lg">
+                      <div className="flex items-center gap-3 mb-4">
+                        <div className="p-3 bg-gradient-to-br from-amber-100 to-orange-100 rounded-xl">
+                          <AlertTriangle className="h-6 w-6 text-amber-600" />
+                        </div>
+                        <div>
+                          <h3 className="text-xl font-bold text-amber-700">Risk Assessment</h3>
+                          <p className="text-2xl font-bold text-amber-800">{selectedCandidateFullView.riskScore || 'Unknown'}</p>
+                        </div>
+                      </div>
+                    </div>
+                    <div className="border rounded-2xl p-6 bg-gradient-to-br from-green-50/50 to-white shadow-lg">
+                      <div className="flex items-center gap-3 mb-4">
+                        <div className="p-3 bg-gradient-to-br from-green-100 to-emerald-100 rounded-xl">
+                          <Trophy className="h-6 w-6 text-green-600" />
+                        </div>
+                        <div>
+                          <h3 className="text-xl font-bold text-green-700">Reward Potential</h3>
+                          <p className="text-2xl font-bold text-green-800">{selectedCandidateFullView.rewardScore || 'Unknown'}</p>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Strengths & Weaknesses */}
+                  {(selectedCandidateFullView.strengths?.length > 0 || selectedCandidateFullView.weaknesses?.length > 0) && (
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                      {selectedCandidateFullView.strengths?.length > 0 && (
+                        <div className="border rounded-2xl p-6 bg-gradient-to-br from-green-50/50 to-white shadow-lg">
+                          <h3 className="text-xl font-bold text-green-700 mb-4 flex items-center gap-2">
+                            <CheckCircle className="h-6 w-6" />
+                            Key Strengths
+                          </h3>
+                          <ul className="space-y-3">
+                            {selectedCandidateFullView.strengths.map((strength, idx) => (
+                              <li key={idx} className="flex items-start gap-3">
+                                <div className="w-2 h-2 bg-green-500 rounded-full mt-2 flex-shrink-0"></div>
+                                <span className="text-slate-700">{strength}</span>
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
+                      {selectedCandidateFullView.weaknesses?.length > 0 && (
+                        <div className="border rounded-2xl p-6 bg-gradient-to-br from-red-50/50 to-white shadow-lg">
+                          <h3 className="text-xl font-bold text-red-700 mb-4 flex items-center gap-2">
+                            <AlertTriangle className="h-6 w-6" />
+                            Areas for Development
+                          </h3>
+                          <ul className="space-y-3">
+                            {selectedCandidateFullView.weaknesses.map((weakness, idx) => (
+                              <li key={idx} className="flex items-start gap-3">
+                                <div className="w-2 h-2 bg-red-500 rounded-full mt-2 flex-shrink-0"></div>
+                                <span className="text-slate-700">{weakness}</span>
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* AI Analysis */}
+                  {selectedCandidateFullView.justification && (
+                    <div className="border rounded-2xl p-8 bg-gradient-to-br from-purple-50/50 to-white shadow-lg">
+                      <div className="flex items-center gap-3 mb-6">
+                        <div className="p-3 bg-gradient-to-br from-purple-100 to-pink-100 rounded-xl">
+                          <ArrowUpRight className="h-6 w-6 text-purple-600" />
+                        </div>
+                        <h3 className="text-2xl font-bold bg-gradient-to-r from-purple-600 to-cyan-600 bg-clip-text text-transparent">
+                          AI Analysis & Justification
+                        </h3>
+                      </div>
+                      <div className="prose prose-slate max-w-none">
+                        <p className="text-slate-700 leading-relaxed text-lg">{selectedCandidateFullView.justification}</p>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Resume Access */}
+                  {selectedCandidateFullView.resume && (
+                    <div className="border rounded-2xl p-6 bg-gradient-to-br from-blue-50/50 to-white shadow-lg">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-3">
+                          <div className="p-3 bg-gradient-to-br from-blue-100 to-cyan-100 rounded-xl">
+                            <FileText className="h-6 w-6 text-blue-600" />
+                          </div>
+                          <div>
+                            <h3 className="text-xl font-bold text-blue-700">Resume Document</h3>
+                            <p className="text-muted-foreground">Access the original resume submission</p>
+                          </div>
+                        </div>
+                        <Button
+                          onClick={() => window.open(selectedCandidateFullView.resume, '_blank')}
+                          className="bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white shadow-lg hover:shadow-xl transition-all duration-200"
+                        >
+                          <FileText className="h-4 w-4 mr-2" />
+                          Open Resume
+                        </Button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+            </ScrollArea>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>;
 };
 export default ModernDashboard;
