@@ -1,8 +1,10 @@
 import { Button } from "@/components/ui/button";
 import { ArrowRight, Zap, Brain, Target } from "lucide-react";
 import { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 
 const HeroSection = () => {
+  const navigate = useNavigate();
   const [typedText, setTypedText] = useState("");
   const [currentIndex, setCurrentIndex] = useState(0);
   const [showCursor, setShowCursor] = useState(true);
@@ -77,7 +79,8 @@ const HeroSection = () => {
             {/* CTA Button */}
             <div className="flex justify-center animate-fade-in-up animate-delay-500">
               <Button 
-                size="lg" 
+                size="lg"
+                onClick={() => navigate('/get-demo')}
                 className="bg-gradient-to-r from-cyan-500 to-teal-500 hover:from-cyan-600 hover:to-teal-600 text-white shadow-2xl hover:shadow-cyan-500/25 transition-all duration-300 text-lg px-8 py-6 rounded-xl font-semibold hover-scale active-scale group border-0 relative overflow-hidden"
               >
                 <span className="absolute inset-0 bg-gradient-to-r from-cyan-400 to-teal-400 opacity-0 group-hover:opacity-100 transition-opacity duration-300"></span>
