@@ -925,8 +925,8 @@ const ModernDashboard = () => {
 
       {/* Full View Dialog - Opens on View button click */}
       <Dialog open={isFullViewDialogOpen} onOpenChange={setIsFullViewDialogOpen}>
-        <DialogContent className="max-w-7xl w-[95vw] max-h-[95vh] p-0 overflow-hidden animate-fade-in">
-          <div className="h-full flex flex-col max-h-[95vh]">
+        <DialogContent className="w-screen h-screen max-w-none m-0 p-0 overflow-hidden animate-fade-in rounded-none">
+          <div className="h-full flex flex-col">
             {/* Elegant Header with Gradient */}
             <div className="relative overflow-hidden border-b bg-gradient-to-br from-background via-background/95 to-primary/5">
               <div className="absolute inset-0 bg-grid-pattern opacity-5"></div>
@@ -1062,7 +1062,7 @@ const ModernDashboard = () => {
                           <div className="absolute inset-0 bg-gradient-to-br from-amber-500/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
                           <CardHeader className="relative pb-3">
                             <div className="flex items-center justify-between">
-                              <CardTitle className="text-lg font-semibold">Risk Level</CardTitle>
+                              <CardTitle className="text-lg font-semibold">Risk Factor</CardTitle>
                               <div className="p-2 bg-amber-500/10 rounded-lg">
                                 <ShieldAlert className="h-5 w-5 text-amber-600" />
                               </div>
@@ -1070,14 +1070,8 @@ const ModernDashboard = () => {
                           </CardHeader>
                           <CardContent className="relative space-y-3">
                             <div className="text-4xl font-bold text-amber-600">
-                              {selectedCandidateFullView.riskScore || 'N/A'}
+                              {selectedCandidateFullView.riskFactor}
                             </div>
-                            {typeof selectedCandidateFullView.riskFactor === 'number' && (
-                              <Progress 
-                                value={(selectedCandidateFullView.riskFactor || 0) * 10} 
-                                className="h-2.5 [&>div]:bg-amber-500 transition-all duration-500"
-                              />
-                            )}
                             <p className="text-sm text-muted-foreground">Assessment of potential concerns</p>
                           </CardContent>
                         </Card>
@@ -1095,14 +1089,8 @@ const ModernDashboard = () => {
                           </CardHeader>
                           <CardContent className="relative space-y-3">
                             <div className="text-4xl font-bold text-green-600">
-                              {selectedCandidateFullView.rewardScore || 'N/A'}
+                              {selectedCandidateFullView.rewardFactor}
                             </div>
-                            {typeof selectedCandidateFullView.rewardFactor === 'number' && (
-                              <Progress 
-                                value={(selectedCandidateFullView.rewardFactor || 0) * 10} 
-                                className="h-2.5 [&>div]:bg-green-500 transition-all duration-500"
-                              />
-                            )}
                             <p className="text-sm text-muted-foreground">Potential value and impact</p>
                           </CardContent>
                         </Card>
@@ -1277,69 +1265,43 @@ const ModernDashboard = () => {
                       <Card className="hover:shadow-lg transition-all duration-300">
                         <CardHeader>
                           <CardTitle className="flex items-center gap-2">
-                            <Users className="h-5 w-5 text-primary" />
+                            <FileText className="h-5 w-5 text-primary" />
                             Candidate Information
                           </CardTitle>
                         </CardHeader>
-                        <CardContent className="space-y-4">
-                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            <div className="p-4 bg-muted/50 rounded-lg space-y-1">
-                              <div className="text-sm font-medium text-muted-foreground">Full Name</div>
-                              <div className="text-base font-semibold text-foreground">{selectedCandidateFullView.candidateName}</div>
+                        <CardContent className="space-y-6">
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            <div className="space-y-2">
+                              <span className="text-sm font-medium text-muted-foreground">Full Name</span>
+                              <p className="text-lg font-semibold text-foreground">{selectedCandidateFullView.candidateName}</p>
                             </div>
-                            <div className="p-4 bg-muted/50 rounded-lg space-y-1">
-                              <div className="text-sm font-medium text-muted-foreground">Email Address</div>
-                              <div className="text-base font-semibold text-foreground">{selectedCandidateFullView.email}</div>
-                            </div>
-                            {selectedCandidateFullView.date && (
-                              <div className="p-4 bg-muted/50 rounded-lg space-y-1">
-                                <div className="text-sm font-medium text-muted-foreground">Analysis Date</div>
-                                <div className="text-base font-semibold text-foreground">
-                                  {new Date(selectedCandidateFullView.date).toLocaleDateString('en-US', { 
-                                    year: 'numeric', 
-                                    month: 'long', 
-                                    day: 'numeric' 
-                                  })}
-                                </div>
-                              </div>
-                            )}
-                            {selectedCandidateFullView.recruitmentName && (
-                              <div className="p-4 bg-muted/50 rounded-lg space-y-1">
-                                <div className="text-sm font-medium text-muted-foreground">Recruitment Campaign</div>
-                                <div className="text-base font-semibold text-foreground">{selectedCandidateFullView.recruitmentName}</div>
-                              </div>
-                            )}
-                          </div>
-                        </CardContent>
-                      </Card>
-
-                      {/* Full Assessment Overview */}
-                      <Card className="hover:shadow-lg transition-all duration-300">
-                        <CardHeader>
-                          <CardTitle className="flex items-center gap-2">
-                            <Target className="h-5 w-5 text-primary" />
-                            Complete Assessment Metrics
-                          </CardTitle>
-                        </CardHeader>
-                        <CardContent>
-                          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                            <div className="text-center p-6 bg-gradient-to-br from-primary/10 to-transparent rounded-xl border border-primary/20">
-                              <div className="text-3xl font-bold text-primary mb-2">{selectedCandidateFullView.overallScore}</div>
-                              <div className="text-sm text-muted-foreground">Overall</div>
-                            </div>
-                            <div className="text-center p-6 bg-gradient-to-br from-primary/10 to-transparent rounded-xl border border-primary/20">
-                              <div className="text-3xl font-bold text-primary mb-2">{selectedCandidateFullView.fitScore}</div>
-                              <div className="text-sm text-muted-foreground">Fit Score</div>
-                            </div>
-                            <div className="text-center p-6 bg-gradient-to-br from-amber-500/10 to-transparent rounded-xl border border-amber-500/20">
-                              <div className="text-3xl font-bold text-amber-600 mb-2">{selectedCandidateFullView.riskScore || 'N/A'}</div>
-                              <div className="text-sm text-muted-foreground">Risk</div>
-                            </div>
-                            <div className="text-center p-6 bg-gradient-to-br from-green-500/10 to-transparent rounded-xl border border-green-500/20">
-                              <div className="text-3xl font-bold text-green-600 mb-2">{selectedCandidateFullView.rewardScore || 'N/A'}</div>
-                              <div className="text-sm text-muted-foreground">Reward</div>
+                            <div className="space-y-2">
+                              <span className="text-sm font-medium text-muted-foreground">Email Address</span>
+                              <p className="text-lg font-semibold text-foreground">{selectedCandidateFullView.email}</p>
                             </div>
                           </div>
+                          {selectedCandidateFullView.date && (
+                            <div className="space-y-2 pt-4 border-t">
+                              <span className="text-sm font-medium text-muted-foreground">Analysis Date</span>
+                              <p className="text-base font-semibold text-foreground">
+                                {new Date(selectedCandidateFullView.date).toLocaleDateString('en-US', { 
+                                  year: 'numeric', 
+                                  month: 'long', 
+                                  day: 'numeric' 
+                                })}
+                              </p>
+                            </div>
+                          )}
+                          {selectedCandidateFullView.resume && (
+                            <div className="space-y-2 pt-4 border-t">
+                              <span className="text-sm font-medium text-muted-foreground">Resume Content</span>
+                              <div className="mt-3 p-6 bg-muted/30 rounded-xl border border-border/50">
+                                <p className="text-sm leading-relaxed whitespace-pre-wrap text-foreground/90">
+                                  {selectedCandidateFullView.resume}
+                                </p>
+                              </div>
+                            </div>
+                          )}
                         </CardContent>
                       </Card>
                     </TabsContent>
