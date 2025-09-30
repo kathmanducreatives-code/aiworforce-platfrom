@@ -925,88 +925,87 @@ const ModernDashboard = () => {
 
       {/* Full View Dialog - Opens on View button click */}
       <Dialog open={isFullViewDialogOpen} onOpenChange={setIsFullViewDialogOpen}>
-        <DialogContent className="w-screen h-screen max-w-none m-0 p-0 rounded-none">
-          <div className="h-screen flex flex-col overflow-hidden">
-            {/* Elegant Header with Gradient */}
-            <div className="relative overflow-hidden border-b bg-gradient-to-br from-background via-background/95 to-primary/5">
-              <div className="absolute inset-0 bg-grid-pattern opacity-5"></div>
-              <DialogHeader className="relative p-8 pb-6">
-                <div className="flex items-start justify-between gap-4 mb-4">
-                  <div className="flex-1 space-y-3 animate-fade-in-up">
-                    <DialogTitle className="text-4xl font-bold bg-gradient-to-r from-foreground via-foreground/90 to-foreground/70 bg-clip-text text-transparent">
-                      Complete Candidate Analysis
-                    </DialogTitle>
-                    <DialogDescription className="text-lg text-muted-foreground">
-                      Comprehensive AI-powered resume assessment and evaluation
-                    </DialogDescription>
+        <DialogContent className="w-screen h-screen max-w-none m-0 p-0 rounded-none flex flex-col">
+          {/* Fixed Header */}
+          <div className="flex-shrink-0 relative overflow-hidden border-b bg-gradient-to-br from-background via-background/95 to-primary/5">
+            <div className="absolute inset-0 bg-grid-pattern opacity-5"></div>
+            <DialogHeader className="relative p-8 pb-6">
+              <div className="flex items-start justify-between gap-4 mb-4">
+                <div className="flex-1 space-y-3 animate-fade-in-up">
+                  <DialogTitle className="text-4xl font-bold bg-gradient-to-r from-foreground via-foreground/90 to-foreground/70 bg-clip-text text-transparent">
+                    Complete Candidate Analysis
+                  </DialogTitle>
+                  <DialogDescription className="text-lg text-muted-foreground">
+                    Comprehensive AI-powered resume assessment and evaluation
+                  </DialogDescription>
+                </div>
+                {selectedCandidateFullView?.overallScore !== undefined && (
+                  <div className="flex items-center gap-3 px-6 py-4 bg-gradient-to-br from-primary/10 via-primary/5 to-transparent rounded-2xl border border-primary/20 shadow-lg animate-fade-in-up animate-delay-200">
+                    <div className="text-right">
+                      <div className="text-sm font-medium text-muted-foreground">Overall Score</div>
+                      <div className="text-3xl font-bold bg-gradient-to-r from-primary to-primary/70 bg-clip-text text-transparent">
+                        {selectedCandidateFullView.overallScore}<span className="text-xl">/10</span>
+                      </div>
+                    </div>
+                    <div className="w-16 h-16 relative">
+                      <svg className="w-16 h-16 transform -rotate-90">
+                        <circle cx="32" cy="32" r="28" stroke="currentColor" strokeWidth="4" fill="none" className="text-muted/20" />
+                        <circle 
+                          cx="32" cy="32" r="28" 
+                          stroke="currentColor" 
+                          strokeWidth="4" 
+                          fill="none" 
+                          strokeDasharray={`${(selectedCandidateFullView.overallScore / 10) * 175.93} 175.93`}
+                          className="text-primary transition-all duration-1000 ease-out"
+                          strokeLinecap="round"
+                        />
+                      </svg>
+                    </div>
                   </div>
-                  {selectedCandidateFullView?.overallScore !== undefined && (
-                    <div className="flex items-center gap-3 px-6 py-4 bg-gradient-to-br from-primary/10 via-primary/5 to-transparent rounded-2xl border border-primary/20 shadow-lg animate-fade-in-up animate-delay-200">
-                      <div className="text-right">
-                        <div className="text-sm font-medium text-muted-foreground">Overall Score</div>
-                        <div className="text-3xl font-bold bg-gradient-to-r from-primary to-primary/70 bg-clip-text text-transparent">
-                          {selectedCandidateFullView.overallScore}<span className="text-xl">/10</span>
-                        </div>
-                      </div>
-                      <div className="w-16 h-16 relative">
-                        <svg className="w-16 h-16 transform -rotate-90">
-                          <circle cx="32" cy="32" r="28" stroke="currentColor" strokeWidth="4" fill="none" className="text-muted/20" />
-                          <circle 
-                            cx="32" cy="32" r="28" 
-                            stroke="currentColor" 
-                            strokeWidth="4" 
-                            fill="none" 
-                            strokeDasharray={`${(selectedCandidateFullView.overallScore / 10) * 175.93} 175.93`}
-                            className="text-primary transition-all duration-1000 ease-out"
-                            strokeLinecap="round"
-                          />
-                        </svg>
-                      </div>
+                )}
+              </div>
+              
+              {/* Candidate Quick Info */}
+              {selectedCandidateFullView && (
+                <div className="flex flex-wrap items-center gap-4 pt-4 border-t border-border/50 animate-fade-in-up animate-delay-300">
+                  <div className="flex items-center gap-3 px-4 py-2 bg-background/60 backdrop-blur-sm rounded-xl border border-border/50">
+                    <div className="w-10 h-10 bg-gradient-to-br from-primary/20 to-primary/10 rounded-full flex items-center justify-center">
+                      <span className="text-sm font-bold text-primary">
+                        {selectedCandidateFullView.candidateName.charAt(0).toUpperCase()}
+                      </span>
+                    </div>
+                    <div>
+                      <div className="font-semibold text-foreground">{selectedCandidateFullView.candidateName}</div>
+                      <div className="text-sm text-muted-foreground">{selectedCandidateFullView.email}</div>
+                    </div>
+                  </div>
+                  {selectedCandidateFullView.date && (
+                    <div className="flex items-center gap-2 px-4 py-2 bg-background/60 backdrop-blur-sm rounded-xl border border-border/50">
+                      <Calendar className="h-4 w-4 text-muted-foreground" />
+                      <span className="text-sm font-medium text-muted-foreground">
+                        {new Date(selectedCandidateFullView.date).toLocaleDateString('en-US', { 
+                          year: 'numeric', 
+                          month: 'long', 
+                          day: 'numeric' 
+                        })}
+                      </span>
+                    </div>
+                  )}
+                  {selectedCandidateFullView.recruitmentName && (
+                    <div className="flex items-center gap-2 px-4 py-2 bg-background/60 backdrop-blur-sm rounded-xl border border-border/50">
+                      <Folder className="h-4 w-4 text-muted-foreground" />
+                      <span className="text-sm font-medium text-foreground">{selectedCandidateFullView.recruitmentName}</span>
                     </div>
                   )}
                 </div>
-                
-                {/* Candidate Quick Info */}
-                {selectedCandidateFullView && (
-                  <div className="flex flex-wrap items-center gap-4 pt-4 border-t border-border/50 animate-fade-in-up animate-delay-300">
-                    <div className="flex items-center gap-3 px-4 py-2 bg-background/60 backdrop-blur-sm rounded-xl border border-border/50">
-                      <div className="w-10 h-10 bg-gradient-to-br from-primary/20 to-primary/10 rounded-full flex items-center justify-center">
-                        <span className="text-sm font-bold text-primary">
-                          {selectedCandidateFullView.candidateName.charAt(0).toUpperCase()}
-                        </span>
-                      </div>
-                      <div>
-                        <div className="font-semibold text-foreground">{selectedCandidateFullView.candidateName}</div>
-                        <div className="text-sm text-muted-foreground">{selectedCandidateFullView.email}</div>
-                      </div>
-                    </div>
-                    {selectedCandidateFullView.date && (
-                      <div className="flex items-center gap-2 px-4 py-2 bg-background/60 backdrop-blur-sm rounded-xl border border-border/50">
-                        <Calendar className="h-4 w-4 text-muted-foreground" />
-                        <span className="text-sm font-medium text-muted-foreground">
-                          {new Date(selectedCandidateFullView.date).toLocaleDateString('en-US', { 
-                            year: 'numeric', 
-                            month: 'long', 
-                            day: 'numeric' 
-                          })}
-                        </span>
-                      </div>
-                    )}
-                    {selectedCandidateFullView.recruitmentName && (
-                      <div className="flex items-center gap-2 px-4 py-2 bg-background/60 backdrop-blur-sm rounded-xl border border-border/50">
-                        <Folder className="h-4 w-4 text-muted-foreground" />
-                        <span className="text-sm font-medium text-foreground">{selectedCandidateFullView.recruitmentName}</span>
-                      </div>
-                    )}
-                  </div>
-                )}
-              </DialogHeader>
-            </div>
+              )}
+            </DialogHeader>
+          </div>
             
-            {/* Main Content with Tabs */}
-            <div className="flex-1 overflow-auto">
-              {selectedCandidateFullView && (
-                <div className="p-8">
+          {/* Scrollable Content Area */}
+          <div className="flex-1 overflow-y-auto">
+            {selectedCandidateFullView && (
+              <div className="p-8">
                   <Tabs defaultValue="overview" className="w-full">
                     <TabsList className="grid w-full grid-cols-4 mb-8 h-auto p-1 bg-muted/50">
                       <TabsTrigger value="overview" className="gap-2 py-3 data-[state=active]:bg-background data-[state=active]:shadow-md">
@@ -1390,7 +1389,6 @@ const ModernDashboard = () => {
                 </div>
               )}
             </div>
-          </div>
         </DialogContent>
       </Dialog>
     </div>;
