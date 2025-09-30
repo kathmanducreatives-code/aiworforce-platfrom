@@ -925,8 +925,8 @@ const ModernDashboard = () => {
 
       {/* Full View Dialog - Opens on View button click */}
       <Dialog open={isFullViewDialogOpen} onOpenChange={setIsFullViewDialogOpen}>
-        <DialogContent className="w-screen h-screen max-w-none m-0 p-0 overflow-hidden animate-fade-in rounded-none">
-          <div className="h-full flex flex-col">
+        <DialogContent className="w-screen h-screen max-w-none m-0 p-0 rounded-none">
+          <div className="h-screen flex flex-col overflow-hidden">
             {/* Elegant Header with Gradient */}
             <div className="relative overflow-hidden border-b bg-gradient-to-br from-background via-background/95 to-primary/5">
               <div className="absolute inset-0 bg-grid-pattern opacity-5"></div>
@@ -1004,7 +1004,7 @@ const ModernDashboard = () => {
             </div>
             
             {/* Main Content with Tabs */}
-            <ScrollArea className="flex-1 pointer-events-auto">
+            <div className="flex-1 overflow-auto">
               {selectedCandidateFullView && (
                 <div className="p-8">
                   <Tabs defaultValue="overview" className="w-full">
@@ -1389,7 +1389,7 @@ const ModernDashboard = () => {
                   </Tabs>
                 </div>
               )}
-            </ScrollArea>
+            </div>
           </div>
         </DialogContent>
       </Dialog>
