@@ -23,6 +23,7 @@ const getRecruitmentTagColor = (recruitmentName: string): string => {
   return colors[Math.abs(hash) % colors.length];
 };
 import { Search, FileText, TrendingUp, Users, CheckCircle, AlertTriangle, RefreshCw, Filter, MoreVertical, Eye, Download, Trash2, X, Mail, Calendar, ArrowUpRight, Folder, ChevronRight, ShieldAlert, ShieldCheck, Target, Trophy } from "lucide-react";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Label } from "@/components/ui/label";
@@ -924,163 +925,506 @@ const ModernDashboard = () => {
 
       {/* Full View Dialog - Opens on View button click */}
       <Dialog open={isFullViewDialogOpen} onOpenChange={setIsFullViewDialogOpen}>
-        <DialogContent className="max-w-4xl w-full h-[90vh] p-0">
-          <div className="h-full flex flex-col">
-            <DialogHeader className="p-6 border-b bg-gradient-to-r from-slate-50 to-white">
-              <DialogTitle className="text-3xl font-bold bg-gradient-to-r from-slate-800 to-slate-600 bg-clip-text text-transparent">
-                Complete Candidate Analysis
-              </DialogTitle>
-              <DialogDescription className="text-lg text-muted-foreground mt-2">
-                {selectedCandidateFullView?.candidateName || 'Unknown Candidate'} - Comprehensive Resume Assessment
-              </DialogDescription>
-            </DialogHeader>
+        <DialogContent className="max-w-7xl w-[95vw] max-h-[95vh] p-0 overflow-hidden animate-fade-in">
+          <div className="h-full flex flex-col max-h-[95vh]">
+            {/* Elegant Header with Gradient */}
+            <div className="relative overflow-hidden border-b bg-gradient-to-br from-background via-background/95 to-primary/5">
+              <div className="absolute inset-0 bg-grid-pattern opacity-5"></div>
+              <DialogHeader className="relative p-8 pb-6">
+                <div className="flex items-start justify-between gap-4 mb-4">
+                  <div className="flex-1 space-y-3 animate-fade-in-up">
+                    <DialogTitle className="text-4xl font-bold bg-gradient-to-r from-foreground via-foreground/90 to-foreground/70 bg-clip-text text-transparent">
+                      Complete Candidate Analysis
+                    </DialogTitle>
+                    <DialogDescription className="text-lg text-muted-foreground">
+                      Comprehensive AI-powered resume assessment and evaluation
+                    </DialogDescription>
+                  </div>
+                  {selectedCandidateFullView?.overallScore !== undefined && (
+                    <div className="flex items-center gap-3 px-6 py-4 bg-gradient-to-br from-primary/10 via-primary/5 to-transparent rounded-2xl border border-primary/20 shadow-lg animate-fade-in-up animate-delay-200">
+                      <div className="text-right">
+                        <div className="text-sm font-medium text-muted-foreground">Overall Score</div>
+                        <div className="text-3xl font-bold bg-gradient-to-r from-primary to-primary/70 bg-clip-text text-transparent">
+                          {selectedCandidateFullView.overallScore}<span className="text-xl">/10</span>
+                        </div>
+                      </div>
+                      <div className="w-16 h-16 relative">
+                        <svg className="w-16 h-16 transform -rotate-90">
+                          <circle cx="32" cy="32" r="28" stroke="currentColor" strokeWidth="4" fill="none" className="text-muted/20" />
+                          <circle 
+                            cx="32" cy="32" r="28" 
+                            stroke="currentColor" 
+                            strokeWidth="4" 
+                            fill="none" 
+                            strokeDasharray={`${(selectedCandidateFullView.overallScore / 10) * 175.93} 175.93`}
+                            className="text-primary transition-all duration-1000 ease-out"
+                            strokeLinecap="round"
+                          />
+                        </svg>
+                      </div>
+                    </div>
+                  )}
+                </div>
+                
+                {/* Candidate Quick Info */}
+                {selectedCandidateFullView && (
+                  <div className="flex flex-wrap items-center gap-4 pt-4 border-t border-border/50 animate-fade-in-up animate-delay-300">
+                    <div className="flex items-center gap-3 px-4 py-2 bg-background/60 backdrop-blur-sm rounded-xl border border-border/50">
+                      <div className="w-10 h-10 bg-gradient-to-br from-primary/20 to-primary/10 rounded-full flex items-center justify-center">
+                        <span className="text-sm font-bold text-primary">
+                          {selectedCandidateFullView.candidateName.charAt(0).toUpperCase()}
+                        </span>
+                      </div>
+                      <div>
+                        <div className="font-semibold text-foreground">{selectedCandidateFullView.candidateName}</div>
+                        <div className="text-sm text-muted-foreground">{selectedCandidateFullView.email}</div>
+                      </div>
+                    </div>
+                    {selectedCandidateFullView.date && (
+                      <div className="flex items-center gap-2 px-4 py-2 bg-background/60 backdrop-blur-sm rounded-xl border border-border/50">
+                        <Calendar className="h-4 w-4 text-muted-foreground" />
+                        <span className="text-sm font-medium text-muted-foreground">
+                          {new Date(selectedCandidateFullView.date).toLocaleDateString('en-US', { 
+                            year: 'numeric', 
+                            month: 'long', 
+                            day: 'numeric' 
+                          })}
+                        </span>
+                      </div>
+                    )}
+                    {selectedCandidateFullView.recruitmentName && (
+                      <div className="flex items-center gap-2 px-4 py-2 bg-background/60 backdrop-blur-sm rounded-xl border border-border/50">
+                        <Folder className="h-4 w-4 text-muted-foreground" />
+                        <span className="text-sm font-medium text-foreground">{selectedCandidateFullView.recruitmentName}</span>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </DialogHeader>
+            </div>
             
-            <ScrollArea className="flex-1 p-6">
+            {/* Main Content with Tabs */}
+            <ScrollArea className="flex-1 pointer-events-auto">
               {selectedCandidateFullView && (
-                <div className="space-y-8">
-                  {/* Enhanced Header */}
-                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                    <div className="border rounded-2xl p-6 bg-gradient-to-br from-white to-slate-50/50 shadow-lg">
-                      <div className="flex items-center gap-4 mb-6">
-                        <div className="p-3 bg-gradient-to-br from-cyan-50 to-teal-50 rounded-xl">
-                          <Mail className="h-6 w-6 text-cyan-600" />
-                        </div>
-                        <div>
-                          <h3 className="text-2xl font-bold text-foreground">{selectedCandidateFullView.candidateName}</h3>
-                          <p className="text-muted-foreground">{selectedCandidateFullView.email}</p>
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-3 text-sm text-muted-foreground">
-                        <Calendar className="h-4 w-4" />
-                        <span>Analyzed: {selectedCandidateFullView.date ? new Date(selectedCandidateFullView.date).toLocaleDateString() : 'Unknown'}</span>
-                      </div>
-                    </div>
-                    
-                    <div className="border rounded-2xl p-6 bg-gradient-to-br from-cyan-50/50 to-white shadow-lg">
-                      <h3 className="text-xl font-bold text-foreground mb-4">Assessment Overview</h3>
-                      <div className="space-y-4">
-                        <div>
-                          <div className="flex justify-between mb-2">
-                            <span className="font-semibold">Overall Score</span>
-                            <span className="text-2xl font-bold text-cyan-600">{selectedCandidateFullView.overallScore}/10</span>
-                          </div>
-                          <Progress value={(selectedCandidateFullView.overallScore || 0) * 10} className="h-3" />
-                        </div>
-                        <div>
-                          <div className="flex justify-between mb-2">
-                            <span className="font-semibold">Fit Score</span>
-                            <span className="text-xl font-bold text-teal-600">{selectedCandidateFullView.fitScore}/10</span>
-                          </div>
-                          <Progress value={(selectedCandidateFullView.fitScore || 0) * 10} className="h-3" />
-                        </div>
-                      </div>
-                    </div>
-                  </div>
+                <div className="p-8">
+                  <Tabs defaultValue="overview" className="w-full">
+                    <TabsList className="grid w-full grid-cols-4 mb-8 h-auto p-1 bg-muted/50">
+                      <TabsTrigger value="overview" className="gap-2 py-3 data-[state=active]:bg-background data-[state=active]:shadow-md">
+                        <Target className="h-4 w-4" />
+                        <span className="hidden sm:inline">Overview</span>
+                      </TabsTrigger>
+                      <TabsTrigger value="assessment" className="gap-2 py-3 data-[state=active]:bg-background data-[state=active]:shadow-md">
+                        <TrendingUp className="h-4 w-4" />
+                        <span className="hidden sm:inline">Assessment</span>
+                      </TabsTrigger>
+                      <TabsTrigger value="details" className="gap-2 py-3 data-[state=active]:bg-background data-[state=active]:shadow-md">
+                        <FileText className="h-4 w-4" />
+                        <span className="hidden sm:inline">Details</span>
+                      </TabsTrigger>
+                      <TabsTrigger value="ai-insights" className="gap-2 py-3 data-[state=active]:bg-background data-[state=active]:shadow-md">
+                        <ArrowUpRight className="h-4 w-4" />
+                        <span className="hidden sm:inline">AI Insights</span>
+                      </TabsTrigger>
+                    </TabsList>
 
-                  {/* Risk & Reward Analysis */}
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <div className="border rounded-2xl p-6 bg-gradient-to-br from-amber-50/50 to-white shadow-lg">
-                      <div className="flex items-center gap-3 mb-4">
-                        <div className="p-3 bg-gradient-to-br from-amber-100 to-orange-100 rounded-xl">
-                          <AlertTriangle className="h-6 w-6 text-amber-600" />
-                        </div>
-                        <div>
-                          <h3 className="text-xl font-bold text-amber-700">Risk Assessment</h3>
-                          <p className="text-2xl font-bold text-amber-800">{selectedCandidateFullView.riskScore || 'Unknown'}</p>
-                        </div>
-                      </div>
-                    </div>
-                    <div className="border rounded-2xl p-6 bg-gradient-to-br from-green-50/50 to-white shadow-lg">
-                      <div className="flex items-center gap-3 mb-4">
-                        <div className="p-3 bg-gradient-to-br from-green-100 to-emerald-100 rounded-xl">
-                          <Trophy className="h-6 w-6 text-green-600" />
-                        </div>
-                        <div>
-                          <h3 className="text-xl font-bold text-green-700">Reward Potential</h3>
-                          <p className="text-2xl font-bold text-green-800">{selectedCandidateFullView.rewardScore || 'Unknown'}</p>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
+                    {/* Overview Tab */}
+                    <TabsContent value="overview" className="space-y-6 animate-fade-in">
+                      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                        {/* Fit Score Card */}
+                        <Card className="group hover:shadow-xl transition-all duration-300 border-border/50 hover:border-primary/30 overflow-hidden">
+                          <div className="absolute inset-0 bg-gradient-to-br from-primary/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
+                          <CardHeader className="relative pb-3">
+                            <div className="flex items-center justify-between">
+                              <CardTitle className="text-lg font-semibold">Fit Score</CardTitle>
+                              <div className="p-2 bg-primary/10 rounded-lg">
+                                <Target className="h-5 w-5 text-primary" />
+                              </div>
+                            </div>
+                          </CardHeader>
+                          <CardContent className="relative space-y-3">
+                            <div className="text-4xl font-bold text-primary">
+                              {selectedCandidateFullView.fitScore}<span className="text-2xl text-muted-foreground">/10</span>
+                            </div>
+                            <Progress 
+                              value={(selectedCandidateFullView.fitScore || 0) * 10} 
+                              className="h-2.5 transition-all duration-500"
+                            />
+                            <p className="text-sm text-muted-foreground">
+                              {selectedCandidateFullView.fitScore >= 8 ? 'Excellent match for the role' : 
+                               selectedCandidateFullView.fitScore >= 6 ? 'Good potential fit' : 
+                               selectedCandidateFullView.fitScore >= 4 ? 'Moderate alignment' : 'Needs consideration'}
+                            </p>
+                          </CardContent>
+                        </Card>
 
-                  {/* Strengths & Weaknesses */}
-                  {(selectedCandidateFullView.strengths?.length > 0 || selectedCandidateFullView.weaknesses?.length > 0) && (
-                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                      {selectedCandidateFullView.strengths?.length > 0 && (
-                        <div className="border rounded-2xl p-6 bg-gradient-to-br from-green-50/50 to-white shadow-lg">
-                          <h3 className="text-xl font-bold text-green-700 mb-4 flex items-center gap-2">
-                            <CheckCircle className="h-6 w-6" />
-                            Key Strengths
-                          </h3>
-                          <ul className="space-y-3">
-                            {selectedCandidateFullView.strengths.map((strength, idx) => (
-                              <li key={idx} className="flex items-start gap-3">
-                                <div className="w-2 h-2 bg-green-500 rounded-full mt-2 flex-shrink-0"></div>
-                                <span className="text-slate-700">{strength}</span>
-                              </li>
-                            ))}
-                          </ul>
-                        </div>
+                        {/* Risk Assessment Card */}
+                        <Card className="group hover:shadow-xl transition-all duration-300 border-border/50 hover:border-amber-500/30 overflow-hidden">
+                          <div className="absolute inset-0 bg-gradient-to-br from-amber-500/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
+                          <CardHeader className="relative pb-3">
+                            <div className="flex items-center justify-between">
+                              <CardTitle className="text-lg font-semibold">Risk Level</CardTitle>
+                              <div className="p-2 bg-amber-500/10 rounded-lg">
+                                <ShieldAlert className="h-5 w-5 text-amber-600" />
+                              </div>
+                            </div>
+                          </CardHeader>
+                          <CardContent className="relative space-y-3">
+                            <div className="text-4xl font-bold text-amber-600">
+                              {selectedCandidateFullView.riskScore || 'N/A'}
+                            </div>
+                            {typeof selectedCandidateFullView.riskFactor === 'number' && (
+                              <Progress 
+                                value={(selectedCandidateFullView.riskFactor || 0) * 10} 
+                                className="h-2.5 [&>div]:bg-amber-500 transition-all duration-500"
+                              />
+                            )}
+                            <p className="text-sm text-muted-foreground">Assessment of potential concerns</p>
+                          </CardContent>
+                        </Card>
+
+                        {/* Reward Potential Card */}
+                        <Card className="group hover:shadow-xl transition-all duration-300 border-border/50 hover:border-green-500/30 overflow-hidden">
+                          <div className="absolute inset-0 bg-gradient-to-br from-green-500/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
+                          <CardHeader className="relative pb-3">
+                            <div className="flex items-center justify-between">
+                              <CardTitle className="text-lg font-semibold">Reward Factor</CardTitle>
+                              <div className="p-2 bg-green-500/10 rounded-lg">
+                                <Trophy className="h-5 w-5 text-green-600" />
+                              </div>
+                            </div>
+                          </CardHeader>
+                          <CardContent className="relative space-y-3">
+                            <div className="text-4xl font-bold text-green-600">
+                              {selectedCandidateFullView.rewardScore || 'N/A'}
+                            </div>
+                            {typeof selectedCandidateFullView.rewardFactor === 'number' && (
+                              <Progress 
+                                value={(selectedCandidateFullView.rewardFactor || 0) * 10} 
+                                className="h-2.5 [&>div]:bg-green-500 transition-all duration-500"
+                              />
+                            )}
+                            <p className="text-sm text-muted-foreground">Potential value and impact</p>
+                          </CardContent>
+                        </Card>
+                      </div>
+
+                      {/* Quick Stats */}
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <Card className="hover:shadow-lg transition-all duration-300">
+                          <CardHeader>
+                            <CardTitle className="flex items-center gap-2">
+                              <CheckCircle className="h-5 w-5 text-green-600" />
+                              Quick Stats
+                            </CardTitle>
+                          </CardHeader>
+                          <CardContent className="space-y-3">
+                            <div className="flex justify-between items-center p-3 bg-muted/50 rounded-lg">
+                              <span className="text-sm font-medium text-muted-foreground">Strengths Identified</span>
+                              <Badge variant="secondary" className="font-semibold">
+                                {selectedCandidateFullView.strengths?.length || 0}
+                              </Badge>
+                            </div>
+                            <div className="flex justify-between items-center p-3 bg-muted/50 rounded-lg">
+                              <span className="text-sm font-medium text-muted-foreground">Development Areas</span>
+                              <Badge variant="secondary" className="font-semibold">
+                                {selectedCandidateFullView.weaknesses?.length || 0}
+                              </Badge>
+                            </div>
+                          </CardContent>
+                        </Card>
+
+                        {/* Resume Access */}
+                        {selectedCandidateFullView.resume && (
+                          <Card className="hover:shadow-lg transition-all duration-300 border-primary/20">
+                            <CardHeader>
+                              <CardTitle className="flex items-center gap-2">
+                                <FileText className="h-5 w-5 text-primary" />
+                                Resume Document
+                              </CardTitle>
+                            </CardHeader>
+                            <CardContent>
+                              <p className="text-sm text-muted-foreground mb-4">
+                                Access the original resume submission for detailed review
+                              </p>
+                              <Button
+                                onClick={() => window.open(selectedCandidateFullView.resume, '_blank')}
+                                className="w-full group/btn"
+                              >
+                                <FileText className="h-4 w-4 mr-2 group-hover/btn:scale-110 transition-transform" />
+                                Open Resume
+                              </Button>
+                            </CardContent>
+                          </Card>
+                        )}
+                      </div>
+                    </TabsContent>
+
+                    {/* Assessment Tab */}
+                    <TabsContent value="assessment" className="space-y-6 animate-fade-in">
+                      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                        {/* Strengths */}
+                        {selectedCandidateFullView.strengths?.length > 0 && (
+                          <Card className="hover:shadow-lg transition-all duration-300 overflow-hidden">
+                            <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-green-500 to-emerald-500"></div>
+                            <CardHeader>
+                              <CardTitle className="flex items-center gap-2 text-green-700">
+                                <div className="p-2 bg-green-100 rounded-lg">
+                                  <CheckCircle className="h-5 w-5" />
+                                </div>
+                                Key Strengths
+                              </CardTitle>
+                            </CardHeader>
+                            <CardContent>
+                              <div className="space-y-3">
+                                {selectedCandidateFullView.strengths.map((strength, idx) => (
+                                  <div 
+                                    key={idx} 
+                                    className="flex items-start gap-3 p-3 bg-green-50/50 rounded-lg hover:bg-green-50 transition-colors duration-200 group animate-fade-in-up"
+                                    style={{ animationDelay: `${idx * 50}ms` }}
+                                  >
+                                    <div className="w-6 h-6 bg-green-500 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5 group-hover:scale-110 transition-transform">
+                                      <CheckCircle className="h-4 w-4 text-white" />
+                                    </div>
+                                    <span className="text-sm text-slate-700 leading-relaxed">{strength}</span>
+                                  </div>
+                                ))}
+                              </div>
+                            </CardContent>
+                          </Card>
+                        )}
+
+                        {/* Weaknesses */}
+                        {selectedCandidateFullView.weaknesses?.length > 0 && (
+                          <Card className="hover:shadow-lg transition-all duration-300 overflow-hidden">
+                            <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-amber-500 to-orange-500"></div>
+                            <CardHeader>
+                              <CardTitle className="flex items-center gap-2 text-amber-700">
+                                <div className="p-2 bg-amber-100 rounded-lg">
+                                  <AlertTriangle className="h-5 w-5" />
+                                </div>
+                                Areas for Development
+                              </CardTitle>
+                            </CardHeader>
+                            <CardContent>
+                              <div className="space-y-3">
+                                {selectedCandidateFullView.weaknesses.map((weakness, idx) => (
+                                  <div 
+                                    key={idx} 
+                                    className="flex items-start gap-3 p-3 bg-amber-50/50 rounded-lg hover:bg-amber-50 transition-colors duration-200 group animate-fade-in-up"
+                                    style={{ animationDelay: `${idx * 50}ms` }}
+                                  >
+                                    <div className="w-6 h-6 bg-amber-500 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5 group-hover:scale-110 transition-transform">
+                                      <AlertTriangle className="h-4 w-4 text-white" />
+                                    </div>
+                                    <span className="text-sm text-slate-700 leading-relaxed">{weakness}</span>
+                                  </div>
+                                ))}
+                              </div>
+                            </CardContent>
+                          </Card>
+                        )}
+                      </div>
+
+                      {/* Score Breakdown */}
+                      <Card className="hover:shadow-lg transition-all duration-300">
+                        <CardHeader>
+                          <CardTitle className="flex items-center gap-2">
+                            <TrendingUp className="h-5 w-5 text-primary" />
+                            Score Breakdown & Analysis
+                          </CardTitle>
+                        </CardHeader>
+                        <CardContent className="space-y-6">
+                          <div className="space-y-4">
+                            <div className="space-y-2">
+                              <div className="flex justify-between items-center">
+                                <span className="text-sm font-medium text-foreground">Overall Score</span>
+                                <span className="text-lg font-bold text-primary">{selectedCandidateFullView.overallScore}/10</span>
+                              </div>
+                              <Progress value={(selectedCandidateFullView.overallScore || 0) * 10} className="h-3" />
+                            </div>
+                            <div className="space-y-2">
+                              <div className="flex justify-between items-center">
+                                <span className="text-sm font-medium text-foreground">Fit Score</span>
+                                <span className="text-lg font-bold text-primary">{selectedCandidateFullView.fitScore}/10</span>
+                              </div>
+                              <Progress value={(selectedCandidateFullView.fitScore || 0) * 10} className="h-3" />
+                            </div>
+                            {typeof selectedCandidateFullView.riskFactor === 'number' && (
+                              <div className="space-y-2">
+                                <div className="flex justify-between items-center">
+                                  <span className="text-sm font-medium text-foreground">Risk Factor</span>
+                                  <span className="text-lg font-bold text-amber-600">{selectedCandidateFullView.riskFactor}/10</span>
+                                </div>
+                                <Progress value={(selectedCandidateFullView.riskFactor || 0) * 10} className="h-3 [&>div]:bg-amber-500" />
+                              </div>
+                            )}
+                            {typeof selectedCandidateFullView.rewardFactor === 'number' && (
+                              <div className="space-y-2">
+                                <div className="flex justify-between items-center">
+                                  <span className="text-sm font-medium text-foreground">Reward Factor</span>
+                                  <span className="text-lg font-bold text-green-600">{selectedCandidateFullView.rewardFactor}/10</span>
+                                </div>
+                                <Progress value={(selectedCandidateFullView.rewardFactor || 0) * 10} className="h-3 [&>div]:bg-green-500" />
+                              </div>
+                            )}
+                          </div>
+                        </CardContent>
+                      </Card>
+                    </TabsContent>
+
+                    {/* Details Tab */}
+                    <TabsContent value="details" className="space-y-6 animate-fade-in">
+                      <Card className="hover:shadow-lg transition-all duration-300">
+                        <CardHeader>
+                          <CardTitle className="flex items-center gap-2">
+                            <Users className="h-5 w-5 text-primary" />
+                            Candidate Information
+                          </CardTitle>
+                        </CardHeader>
+                        <CardContent className="space-y-4">
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div className="p-4 bg-muted/50 rounded-lg space-y-1">
+                              <div className="text-sm font-medium text-muted-foreground">Full Name</div>
+                              <div className="text-base font-semibold text-foreground">{selectedCandidateFullView.candidateName}</div>
+                            </div>
+                            <div className="p-4 bg-muted/50 rounded-lg space-y-1">
+                              <div className="text-sm font-medium text-muted-foreground">Email Address</div>
+                              <div className="text-base font-semibold text-foreground">{selectedCandidateFullView.email}</div>
+                            </div>
+                            {selectedCandidateFullView.date && (
+                              <div className="p-4 bg-muted/50 rounded-lg space-y-1">
+                                <div className="text-sm font-medium text-muted-foreground">Analysis Date</div>
+                                <div className="text-base font-semibold text-foreground">
+                                  {new Date(selectedCandidateFullView.date).toLocaleDateString('en-US', { 
+                                    year: 'numeric', 
+                                    month: 'long', 
+                                    day: 'numeric' 
+                                  })}
+                                </div>
+                              </div>
+                            )}
+                            {selectedCandidateFullView.recruitmentName && (
+                              <div className="p-4 bg-muted/50 rounded-lg space-y-1">
+                                <div className="text-sm font-medium text-muted-foreground">Recruitment Campaign</div>
+                                <div className="text-base font-semibold text-foreground">{selectedCandidateFullView.recruitmentName}</div>
+                              </div>
+                            )}
+                          </div>
+                        </CardContent>
+                      </Card>
+
+                      {/* Full Assessment Overview */}
+                      <Card className="hover:shadow-lg transition-all duration-300">
+                        <CardHeader>
+                          <CardTitle className="flex items-center gap-2">
+                            <Target className="h-5 w-5 text-primary" />
+                            Complete Assessment Metrics
+                          </CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                            <div className="text-center p-6 bg-gradient-to-br from-primary/10 to-transparent rounded-xl border border-primary/20">
+                              <div className="text-3xl font-bold text-primary mb-2">{selectedCandidateFullView.overallScore}</div>
+                              <div className="text-sm text-muted-foreground">Overall</div>
+                            </div>
+                            <div className="text-center p-6 bg-gradient-to-br from-primary/10 to-transparent rounded-xl border border-primary/20">
+                              <div className="text-3xl font-bold text-primary mb-2">{selectedCandidateFullView.fitScore}</div>
+                              <div className="text-sm text-muted-foreground">Fit Score</div>
+                            </div>
+                            <div className="text-center p-6 bg-gradient-to-br from-amber-500/10 to-transparent rounded-xl border border-amber-500/20">
+                              <div className="text-3xl font-bold text-amber-600 mb-2">{selectedCandidateFullView.riskScore || 'N/A'}</div>
+                              <div className="text-sm text-muted-foreground">Risk</div>
+                            </div>
+                            <div className="text-center p-6 bg-gradient-to-br from-green-500/10 to-transparent rounded-xl border border-green-500/20">
+                              <div className="text-3xl font-bold text-green-600 mb-2">{selectedCandidateFullView.rewardScore || 'N/A'}</div>
+                              <div className="text-sm text-muted-foreground">Reward</div>
+                            </div>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    </TabsContent>
+
+                    {/* AI Insights Tab */}
+                    <TabsContent value="ai-insights" className="space-y-6 animate-fade-in">
+                      {selectedCandidateFullView.justification && (
+                        <Card className="hover:shadow-lg transition-all duration-300 overflow-hidden">
+                          <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-purple-500 via-pink-500 to-primary"></div>
+                          <CardHeader>
+                            <CardTitle className="flex items-center gap-3">
+                              <div className="p-3 bg-gradient-to-br from-purple-100 to-pink-100 rounded-xl">
+                                <ArrowUpRight className="h-6 w-6 text-purple-600" />
+                              </div>
+                              <div>
+                                <div className="text-2xl font-bold bg-gradient-to-r from-purple-600 to-primary bg-clip-text text-transparent">
+                                  AI-Powered Analysis
+                                </div>
+                                <div className="text-sm font-normal text-muted-foreground mt-1">
+                                  Comprehensive evaluation and recommendations
+                                </div>
+                              </div>
+                            </CardTitle>
+                          </CardHeader>
+                          <CardContent>
+                            <div className="prose prose-slate max-w-none">
+                              <div className="p-6 bg-gradient-to-br from-muted/30 to-transparent rounded-xl border border-border/50">
+                                <p className="text-base text-foreground leading-relaxed whitespace-pre-wrap">
+                                  {selectedCandidateFullView.justification}
+                                </p>
+                              </div>
+                            </div>
+                          </CardContent>
+                        </Card>
                       )}
-                      {selectedCandidateFullView.weaknesses?.length > 0 && (
-                        <div className="border rounded-2xl p-6 bg-gradient-to-br from-red-50/50 to-white shadow-lg">
-                          <h3 className="text-xl font-bold text-red-700 mb-4 flex items-center gap-2">
-                            <AlertTriangle className="h-6 w-6" />
-                            Areas for Development
-                          </h3>
-                          <ul className="space-y-3">
-                            {selectedCandidateFullView.weaknesses.map((weakness, idx) => (
-                              <li key={idx} className="flex items-start gap-3">
-                                <div className="w-2 h-2 bg-red-500 rounded-full mt-2 flex-shrink-0"></div>
-                                <span className="text-slate-700">{weakness}</span>
-                              </li>
-                            ))}
-                          </ul>
-                        </div>
-                      )}
-                    </div>
-                  )}
 
-                  {/* AI Analysis */}
-                  {selectedCandidateFullView.justification && (
-                    <div className="border rounded-2xl p-8 bg-gradient-to-br from-purple-50/50 to-white shadow-lg">
-                      <div className="flex items-center gap-3 mb-6">
-                        <div className="p-3 bg-gradient-to-br from-purple-100 to-pink-100 rounded-xl">
-                          <ArrowUpRight className="h-6 w-6 text-purple-600" />
-                        </div>
-                        <h3 className="text-2xl font-bold bg-gradient-to-r from-purple-600 to-cyan-600 bg-clip-text text-transparent">
-                          AI Analysis & Justification
-                        </h3>
-                      </div>
-                      <div className="prose prose-slate max-w-none">
-                        <p className="text-slate-700 leading-relaxed text-lg">{selectedCandidateFullView.justification}</p>
-                      </div>
-                    </div>
-                  )}
+                      {/* AI Insights Summary */}
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                        <Card className="hover:shadow-lg transition-all duration-300 border-green-500/20">
+                          <CardHeader className="pb-3">
+                            <CardTitle className="text-base flex items-center gap-2">
+                              <ShieldCheck className="h-5 w-5 text-green-600" />
+                              <span className="text-green-700">Strengths</span>
+                            </CardTitle>
+                          </CardHeader>
+                          <CardContent>
+                            <div className="text-4xl font-bold text-green-600 mb-2">
+                              {selectedCandidateFullView.strengths?.length || 0}
+                            </div>
+                            <p className="text-sm text-muted-foreground">Key strengths identified by AI</p>
+                          </CardContent>
+                        </Card>
 
-                  {/* Resume Access */}
-                  {selectedCandidateFullView.resume && (
-                    <div className="border rounded-2xl p-6 bg-gradient-to-br from-blue-50/50 to-white shadow-lg">
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-3">
-                          <div className="p-3 bg-gradient-to-br from-blue-100 to-cyan-100 rounded-xl">
-                            <FileText className="h-6 w-6 text-blue-600" />
-                          </div>
-                          <div>
-                            <h3 className="text-xl font-bold text-blue-700">Resume Document</h3>
-                            <p className="text-muted-foreground">Access the original resume submission</p>
-                          </div>
-                        </div>
-                        <Button
-                          onClick={() => window.open(selectedCandidateFullView.resume, '_blank')}
-                          className="bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white shadow-lg hover:shadow-xl transition-all duration-200"
-                        >
-                          <FileText className="h-4 w-4 mr-2" />
-                          Open Resume
-                        </Button>
+                        <Card className="hover:shadow-lg transition-all duration-300 border-amber-500/20">
+                          <CardHeader className="pb-3">
+                            <CardTitle className="text-base flex items-center gap-2">
+                              <AlertTriangle className="h-5 w-5 text-amber-600" />
+                              <span className="text-amber-700">Growth Areas</span>
+                            </CardTitle>
+                          </CardHeader>
+                          <CardContent>
+                            <div className="text-4xl font-bold text-amber-600 mb-2">
+                              {selectedCandidateFullView.weaknesses?.length || 0}
+                            </div>
+                            <p className="text-sm text-muted-foreground">Areas for development</p>
+                          </CardContent>
+                        </Card>
+
+                        <Card className="hover:shadow-lg transition-all duration-300 border-primary/20">
+                          <CardHeader className="pb-3">
+                            <CardTitle className="text-base flex items-center gap-2">
+                              <Trophy className="h-5 w-5 text-primary" />
+                              <span className="text-primary">Match Score</span>
+                            </CardTitle>
+                          </CardHeader>
+                          <CardContent>
+                            <div className="text-4xl font-bold text-primary mb-2">
+                              {((selectedCandidateFullView.overallScore || 0) * 10).toFixed(0)}%
+                            </div>
+                            <p className="text-sm text-muted-foreground">Overall compatibility</p>
+                          </CardContent>
+                        </Card>
                       </div>
-                    </div>
-                  )}
+                    </TabsContent>
+                  </Tabs>
                 </div>
               )}
             </ScrollArea>
