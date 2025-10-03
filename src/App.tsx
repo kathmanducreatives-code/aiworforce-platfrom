@@ -13,6 +13,7 @@ import EmailSequenceSetup from "./pages/EmailSequenceSetup";
 import GetDemo from "./pages/GetDemo";
 import Auth from "./pages/Auth";
 import DataDashboard from "./pages/DataDashboard";
+import ClientMetrics from "./pages/ClientMetrics";
 
 const queryClient = new QueryClient();
 
@@ -32,6 +33,7 @@ const App = () => (
             <Route path="/get-demo" element={<GetDemo />} />
             <Route path="/auth" element={<Auth />} />
             <Route path="/data-dashboard" element={<DataDashboard />} />
+            <Route path="/client-metrics" element={<ClientMetrics />} />
             {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
             <Route path="*" element={<NotFound />} />
           </Routes>

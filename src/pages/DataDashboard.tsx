@@ -338,6 +338,28 @@ const DataDashboard = () => {
           </Card>
         </div>
 
+        {/* Client-Centric Metrics Navigation Card */}
+        <Card className="backdrop-blur-sm bg-white/80 border border-slate-200/50 shadow-lg rounded-2xl mb-8 cursor-pointer hover:shadow-xl transition-all duration-300"
+          onClick={() => navigate('/client-metrics')}>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Award className="h-5 w-5 text-purple-500" />
+              Client-Centric Metrics
+            </CardTitle>
+            <CardDescription>View detailed performance metrics for all client relationships</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="flex items-center justify-between">
+              <p className="text-sm text-slate-600">
+                Track placements, time-to-fill, cost per hire, and more across all clients
+              </p>
+              <Button className="bg-gradient-to-r from-purple-500 to-purple-600 hover:from-purple-600 hover:to-purple-700">
+                View Client Metrics →
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+
         {/* Detailed Metrics Table */}
         <Card className="backdrop-blur-sm bg-white/80 border border-slate-200/50 shadow-lg rounded-2xl">
           <CardHeader>
