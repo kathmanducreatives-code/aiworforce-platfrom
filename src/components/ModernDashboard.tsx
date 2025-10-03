@@ -9,6 +9,7 @@ import { Progress } from "@/components/ui/progress";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import type { ResumeAnalysis } from "@/types/ResumeAnalysis";
+import { CandidateAnalysisDialog } from "@/components/CandidateAnalysisDialog";
 
 // Function to generate consistent colors for recruitment names
 const getRecruitmentTagColor = (recruitmentName: string): string => {
@@ -932,56 +933,48 @@ const ModernDashboard = () => {
       </Sheet>
 
       {/* Full View Dialog - Opens on View button click */}
-      <Dialog open={isFullViewDialogOpen} onOpenChange={setIsFullViewDialogOpen}>
-        <DialogContent className="w-screen h-screen max-w-none m-0 p-0 rounded-none flex flex-col bg-gradient-to-br from-slate-50 via-white to-cyan-50/30">
-          {/* Fixed Header with Futuristic Design */}
-          <div className="flex-shrink-0 relative overflow-hidden border-b border-cyan-200/30 bg-white/80 backdrop-blur-xl">
-            {/* Animated Background Elements */}
-            <div className="absolute inset-0 bg-[radial-gradient(circle_at_20%_50%,_rgba(6,182,212,0.08)_0%,_transparent_50%)]"></div>
-            <div className="absolute inset-0 bg-[radial-gradient(circle_at_80%_50%,_rgba(20,184,166,0.06)_0%,_transparent_50%)]"></div>
-            <div className="absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-cyan-400/50 to-transparent"></div>
+      <CandidateAnalysisDialog 
+        open={isFullViewDialogOpen} 
+        onOpenChange={setIsFullViewDialogOpen}
+        candidate={selectedCandidateFullView}
+      />
+        <DialogContent className="w-screen h-screen max-w-none m-0 p-0 rounded-none flex flex-col bg-gradient-to-br from-slate-50 to-slate-100/30">
+          {/* Premium Header */}
+          <div className="flex-shrink-0 relative border-b border-slate-200/60 bg-white/95 backdrop-blur-sm">
+            <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-primary/20 to-transparent"></div>
             
-            <DialogHeader className="relative p-8 pb-6">
-              <div className="flex items-start justify-between gap-4 mb-6">
-                <div className="flex-1 space-y-3 animate-fade-in-up">
-                  <DialogTitle className="text-5xl font-bold bg-gradient-to-r from-slate-800 via-cyan-700 to-teal-600 bg-clip-text text-transparent tracking-tight">
+            <DialogHeader className="relative px-8 py-6">
+              <div className="flex items-start justify-between gap-6">
+                <div className="flex-1 space-y-2">
+                  <DialogTitle className="text-3xl font-bold text-slate-900 tracking-tight">
                     Candidate Analysis
                   </DialogTitle>
-                  <DialogDescription className="text-lg text-slate-600 font-medium flex items-center gap-2">
-                    <div className="w-1.5 h-1.5 bg-cyan-500 rounded-full animate-pulse"></div>
-                    AI-Powered Comprehensive Resume Assessment
+                  <DialogDescription className="text-base text-slate-600 font-medium">
+                    Comprehensive AI-powered assessment and insights
                   </DialogDescription>
                 </div>
+                
                 {selectedCandidateFullView?.overallScore !== undefined && (
-                  <div className="relative group animate-fade-in-up animate-delay-200">
-                    {/* Glow Effect */}
-                    <div className="absolute inset-0 bg-gradient-to-br from-cyan-500/20 to-teal-500/20 rounded-2xl blur-xl group-hover:blur-2xl transition-all duration-300"></div>
-                    
-                    <div className="relative flex items-center gap-4 px-8 py-5 bg-gradient-to-br from-white via-cyan-50/50 to-teal-50/50 rounded-2xl border border-cyan-200/50 shadow-lg backdrop-blur-sm">
+                  <div className="relative bg-gradient-to-br from-white to-slate-50 rounded-xl border border-slate-200/60 p-5 shadow-sm">
+                    <div className="flex items-center gap-4">
                       <div className="text-right">
-                        <div className="text-sm font-semibold text-slate-600 uppercase tracking-wider">Overall Score</div>
-                        <div className="text-4xl font-bold bg-gradient-to-r from-cyan-600 to-teal-500 bg-clip-text text-transparent">
-                          {selectedCandidateFullView.overallScore}<span className="text-2xl opacity-60">/10</span>
+                        <div className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">Overall Score</div>
+                        <div className="text-3xl font-bold text-slate-900">
+                          {selectedCandidateFullView.overallScore}<span className="text-xl text-slate-500 font-medium">/10</span>
                         </div>
                       </div>
-                      <div className="w-20 h-20 relative">
-                        <svg className="w-20 h-20 transform -rotate-90">
-                          <circle cx="40" cy="40" r="34" stroke="currentColor" strokeWidth="5" fill="none" className="text-cyan-100" />
+                      <div className="w-16 h-16 relative">
+                        <svg className="w-16 h-16 transform -rotate-90">
+                          <circle cx="32" cy="32" r="28" stroke="currentColor" strokeWidth="4" fill="none" className="text-slate-200" />
                           <circle 
-                            cx="40" cy="40" r="34" 
-                            stroke="url(#scoreGradient)" 
-                            strokeWidth="5" 
+                            cx="32" cy="32" r="28" 
+                            stroke="hsl(var(--primary))" 
+                            strokeWidth="4" 
                             fill="none" 
-                            strokeDasharray={`${(selectedCandidateFullView.overallScore / 10) * 213.63} 213.63`}
-                            className="transition-all duration-1000 ease-out drop-shadow-[0_0_8px_rgba(6,182,212,0.6)]"
+                            strokeDasharray={`${(selectedCandidateFullView.overallScore / 10) * 175.93} 175.93`}
+                            className="transition-all duration-1000 ease-out"
                             strokeLinecap="round"
                           />
-                          <defs>
-                            <linearGradient id="scoreGradient" x1="0%" y1="0%" x2="100%" y2="100%">
-                              <stop offset="0%" stopColor="rgb(6, 182, 212)" />
-                              <stop offset="100%" stopColor="rgb(20, 184, 166)" />
-                            </linearGradient>
-                          </defs>
                         </svg>
                       </div>
                     </div>
@@ -989,45 +982,38 @@ const ModernDashboard = () => {
                 )}
               </div>
               
-              {/* Candidate Quick Info - Futuristic Cards */}
+              {/* Candidate Info Bar */}
               {selectedCandidateFullView && (
-                <div className="flex flex-wrap items-center gap-4 pt-6 border-t border-slate-200/50 animate-fade-in-up animate-delay-300">
-                  <div className="group relative">
-                    <div className="absolute inset-0 bg-gradient-to-r from-cyan-500/10 to-teal-500/10 rounded-xl blur opacity-0 group-hover:opacity-100 transition-all duration-300"></div>
-                    <div className="relative flex items-center gap-3 px-5 py-3 bg-white/90 backdrop-blur-sm rounded-xl border border-slate-200/50 shadow-sm hover:shadow-md hover:border-cyan-300/50 transition-all duration-300">
-                      <div className="w-12 h-12 bg-gradient-to-br from-cyan-500 to-teal-500 rounded-full flex items-center justify-center shadow-lg shadow-cyan-500/25">
-                        <span className="text-lg font-bold text-white">
-                          {selectedCandidateFullView.candidateName.charAt(0).toUpperCase()}
-                        </span>
-                      </div>
-                      <div>
-                        <div className="font-semibold text-slate-800">{selectedCandidateFullView.candidateName}</div>
-                        <div className="text-sm text-slate-500">{selectedCandidateFullView.email}</div>
-                      </div>
+                <div className="flex flex-wrap items-center gap-3 pt-5 mt-5 border-t border-slate-200/50">
+                  <div className="flex items-center gap-3 px-4 py-2.5 bg-slate-50 rounded-lg border border-slate-200/50">
+                    <div className="w-9 h-9 bg-gradient-to-br from-primary to-primary-dark rounded-full flex items-center justify-center shadow-sm">
+                      <span className="text-sm font-bold text-white">
+                        {selectedCandidateFullView.candidateName.charAt(0).toUpperCase()}
+                      </span>
+                    </div>
+                    <div className="text-left">
+                      <div className="font-semibold text-slate-900 text-sm">{selectedCandidateFullView.candidateName}</div>
+                      <div className="text-xs text-slate-500">{selectedCandidateFullView.email}</div>
                     </div>
                   </div>
+                  
                   {selectedCandidateFullView.date && (
-                    <div className="group relative">
-                      <div className="absolute inset-0 bg-gradient-to-r from-purple-500/10 to-pink-500/10 rounded-xl blur opacity-0 group-hover:opacity-100 transition-all duration-300"></div>
-                      <div className="relative flex items-center gap-2 px-5 py-3 bg-white/90 backdrop-blur-sm rounded-xl border border-slate-200/50 shadow-sm hover:shadow-md hover:border-purple-300/50 transition-all duration-300">
-                        <Calendar className="h-4 w-4 text-purple-600" />
-                        <span className="text-sm font-medium text-slate-700">
-                          {new Date(selectedCandidateFullView.date).toLocaleDateString('en-US', { 
-                            year: 'numeric', 
-                            month: 'long', 
-                            day: 'numeric' 
-                          })}
-                        </span>
-                      </div>
+                    <div className="flex items-center gap-2 px-4 py-2.5 bg-slate-50 rounded-lg border border-slate-200/50">
+                      <Calendar className="h-4 w-4 text-slate-600" />
+                      <span className="text-sm font-medium text-slate-700">
+                        {new Date(selectedCandidateFullView.date).toLocaleDateString('en-US', { 
+                          year: 'numeric', 
+                          month: 'short', 
+                          day: 'numeric' 
+                        })}
+                      </span>
                     </div>
                   )}
+                  
                   {selectedCandidateFullView.recruitmentName && (
-                    <div className="group relative">
-                      <div className="absolute inset-0 bg-gradient-to-r from-blue-500/10 to-indigo-500/10 rounded-xl blur opacity-0 group-hover:opacity-100 transition-all duration-300"></div>
-                      <div className="relative flex items-center gap-2 px-5 py-3 bg-white/90 backdrop-blur-sm rounded-xl border border-slate-200/50 shadow-sm hover:shadow-md hover:border-blue-300/50 transition-all duration-300">
-                        <Folder className="h-4 w-4 text-blue-600" />
-                        <span className="text-sm font-medium text-slate-700">{selectedCandidateFullView.recruitmentName}</span>
-                      </div>
+                    <div className="flex items-center gap-2 px-4 py-2.5 bg-slate-50 rounded-lg border border-slate-200/50">
+                      <Folder className="h-4 w-4 text-slate-600" />
+                      <span className="text-sm font-medium text-slate-700">{selectedCandidateFullView.recruitmentName}</span>
                     </div>
                   )}
                 </div>
@@ -1038,31 +1024,31 @@ const ModernDashboard = () => {
           {/* Scrollable Content Area */}
           <div className="flex-1 overflow-y-auto">
             {selectedCandidateFullView && (
-              <div className="p-8">
-                  <Tabs defaultValue="overview" className="w-full">
-                    <TabsList className="grid w-full grid-cols-3 mb-10 h-auto p-1.5 bg-white/80 backdrop-blur-sm border border-slate-200/50 shadow-lg rounded-2xl">
-                      <TabsTrigger 
-                        value="overview" 
-                        className="gap-2 py-4 rounded-xl data-[state=active]:bg-gradient-to-r data-[state=active]:from-cyan-500 data-[state=active]:to-teal-500 data-[state=active]:text-white data-[state=active]:shadow-lg data-[state=active]:shadow-cyan-500/25 transition-all duration-300 font-semibold"
-                      >
-                        <Target className="h-5 w-5" />
-                        <span>Overview</span>
-                      </TabsTrigger>
-                      <TabsTrigger 
-                        value="details" 
-                        className="gap-2 py-4 rounded-xl data-[state=active]:bg-gradient-to-r data-[state=active]:from-cyan-500 data-[state=active]:to-teal-500 data-[state=active]:text-white data-[state=active]:shadow-lg data-[state=active]:shadow-cyan-500/25 transition-all duration-300 font-semibold"
-                      >
-                        <FileText className="h-5 w-5" />
-                        <span>Details</span>
-                      </TabsTrigger>
-                      <TabsTrigger 
-                        value="ai-insights" 
-                        className="gap-2 py-4 rounded-xl data-[state=active]:bg-gradient-to-r data-[state=active]:from-cyan-500 data-[state=active]:to-teal-500 data-[state=active]:text-white data-[state=active]:shadow-lg data-[state=active]:shadow-cyan-500/25 transition-all duration-300 font-semibold"
-                      >
-                        <Brain className="h-5 w-5" />
-                        <span>AI Insights</span>
-                      </TabsTrigger>
-                    </TabsList>
+              <div className="p-8 max-w-[1400px] mx-auto">
+                <Tabs defaultValue="overview" className="w-full">
+                  <TabsList className="grid w-full grid-cols-3 mb-8 h-auto p-1 bg-white border border-slate-200 shadow-sm rounded-lg">
+                    <TabsTrigger 
+                      value="overview" 
+                      className="gap-2 py-3 rounded-md data-[state=active]:bg-slate-900 data-[state=active]:text-white data-[state=active]:shadow-sm transition-all duration-200 font-medium text-sm"
+                    >
+                      <Target className="h-4 w-4" />
+                      <span>Overview</span>
+                    </TabsTrigger>
+                    <TabsTrigger 
+                      value="details" 
+                      className="gap-2 py-3 rounded-md data-[state=active]:bg-slate-900 data-[state=active]:text-white data-[state=active]:shadow-sm transition-all duration-200 font-medium text-sm"
+                    >
+                      <FileText className="h-4 w-4" />
+                      <span>Details</span>
+                    </TabsTrigger>
+                    <TabsTrigger 
+                      value="ai-insights" 
+                      className="gap-2 py-3 rounded-md data-[state=active]:bg-slate-900 data-[state=active]:text-white data-[state=active]:shadow-sm transition-all duration-200 font-medium text-sm"
+                    >
+                      <Brain className="h-4 w-4" />
+                      <span>AI Insights</span>
+                    </TabsTrigger>
+                  </TabsList>
 
                     {/* Overview Tab */}
                     <TabsContent value="overview" className="space-y-8 animate-fade-in">
