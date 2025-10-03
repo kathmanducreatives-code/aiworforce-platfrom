@@ -146,16 +146,10 @@ const FolderView = () => {
 
     const selectedCandidatesList = candidates.filter(c => selectedCandidates.has(c.id!));
     
-    // For now, just show a success message with count
-    toast({
-      title: "Email Sequence Started",
-      description: `${selectedCandidates.size} candidate${selectedCandidates.size !== 1 ? 's' : ''} pushed to email sequence successfully.`,
+    // Navigate to email sequence setup page with selected candidates
+    navigate(`/email-sequence/${encodeURIComponent(folderName || '')}`, { 
+      state: { selectedCandidates: selectedCandidatesList } 
     });
-    
-    // You can implement the actual email sequence logic here
-    // navigate(`/email-sequence/${encodeURIComponent(folderName || '')}`, { 
-    //   state: { selectedCandidates: selectedCandidatesList } 
-    // });
   };
 
   if (loading) {
