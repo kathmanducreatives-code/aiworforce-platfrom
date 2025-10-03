@@ -22,7 +22,7 @@ const getRecruitmentTagColor = (recruitmentName: string): string => {
   const colors = ["bg-blue-100 text-blue-800 hover:bg-blue-200", "bg-green-100 text-green-800 hover:bg-green-200", "bg-purple-100 text-purple-800 hover:bg-purple-200", "bg-orange-100 text-orange-800 hover:bg-orange-200", "bg-pink-100 text-pink-800 hover:bg-pink-200", "bg-indigo-100 text-indigo-800 hover:bg-indigo-200", "bg-yellow-100 text-yellow-800 hover:bg-yellow-200", "bg-teal-100 text-teal-800 hover:bg-teal-200", "bg-red-100 text-red-800 hover:bg-red-200", "bg-cyan-100 text-cyan-800 hover:bg-cyan-200"];
   return colors[Math.abs(hash) % colors.length];
 };
-import { Search, FileText, TrendingUp, Users, CheckCircle, AlertTriangle, RefreshCw, Filter, MoreVertical, Eye, Download, Trash2, X, Mail, Calendar, ArrowUpRight, Folder, ChevronRight, ShieldAlert, ShieldCheck, Target, Trophy, Brain } from "lucide-react";
+import { Search, FileText, TrendingUp, Users, CheckCircle, AlertTriangle, RefreshCw, Filter, MoreVertical, Eye, Download, Trash2, X, Mail, Calendar, ArrowUpRight, Folder, ChevronRight, ShieldAlert, ShieldCheck, Target, Trophy, Brain, BarChart3 } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -245,6 +245,14 @@ const ModernDashboard = () => {
               </p>
             </div>
             <div className="flex gap-3">
+              <Button 
+                onClick={() => navigate('/data-dashboard')} 
+                variant="outline" 
+                className="gap-2 px-6 py-2 rounded-xl font-medium border-slate-200 hover:border-purple-300 hover:bg-purple-50 hover:text-purple-700 transition-all duration-200"
+              >
+                <BarChart3 className="h-4 w-4" />
+                Data Dashboard
+              </Button>
               <Button 
                 onClick={() => setViewMode(viewMode === 'all' ? 'folders' : 'all')} 
                 variant={viewMode === 'folders' ? 'default' : 'outline'} 

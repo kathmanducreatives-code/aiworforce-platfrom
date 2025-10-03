@@ -12,6 +12,7 @@ import FolderView from "./pages/FolderView";
 import EmailSequenceSetup from "./pages/EmailSequenceSetup";
 import GetDemo from "./pages/GetDemo";
 import Auth from "./pages/Auth";
+import DataDashboard from "./pages/DataDashboard";
 
 const queryClient = new QueryClient();
 
@@ -30,6 +31,7 @@ const App = () => (
             <Route path="/email-sequence/:folderName" element={<EmailSequenceSetup />} />
             <Route path="/get-demo" element={<GetDemo />} />
             <Route path="/auth" element={<Auth />} />
+            <Route path="/data-dashboard" element={<DataDashboard />} />
             {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
             <Route path="*" element={<NotFound />} />
           </Routes>
