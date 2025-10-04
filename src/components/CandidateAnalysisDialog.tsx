@@ -19,7 +19,7 @@ export const CandidateAnalysisDialog = ({ open, onOpenChange, candidate }: Candi
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-7xl w-[95vw] h-[90vh] p-0 gap-0 flex flex-col bg-background overflow-hidden">
+      <DialogContent className="max-w-none w-screen h-screen p-0 gap-0 flex flex-col bg-background overflow-hidden m-0 rounded-none">
         {/* Premium Header */}
         <div className="flex-shrink-0 relative border-b bg-card">
           <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-primary/20 to-transparent"></div>
