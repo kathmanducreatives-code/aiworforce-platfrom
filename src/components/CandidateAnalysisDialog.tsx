@@ -217,18 +217,10 @@ export const CandidateAnalysisDialog = ({ open, onOpenChange, candidate }: Candi
                         </div>
                       </CardHeader>
                       <CardContent className="pt-4 pb-5">
-                        <div className="space-y-2">
-                          {candidate.strengths.map((strength, idx) => (
-                            <div 
-                              key={idx} 
-                              className="flex items-start gap-2.5 p-3 bg-slate-50 rounded-lg hover:bg-slate-100 transition-colors duration-150"
-                            >
-                              <div className="w-5 h-5 bg-emerald-500 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
-                                <CheckCircle className="h-3 w-3 text-white" />
-                              </div>
-                              <span className="text-sm text-slate-700 leading-relaxed font-medium">{strength}</span>
-                            </div>
-                          ))}
+                        <div className="p-4 bg-slate-50 rounded-lg border border-slate-100">
+                          <p className="text-sm text-slate-700 leading-relaxed font-medium">
+                            {candidate.strengths.join('. ')}.
+                          </p>
                         </div>
                       </CardContent>
                     </Card>
@@ -254,18 +246,10 @@ export const CandidateAnalysisDialog = ({ open, onOpenChange, candidate }: Candi
                         </div>
                       </CardHeader>
                       <CardContent className="pt-4 pb-5">
-                        <div className="space-y-2">
-                          {candidate.weaknesses.map((weakness, idx) => (
-                            <div 
-                              key={idx} 
-                              className="flex items-start gap-2.5 p-3 bg-slate-50 rounded-lg hover:bg-slate-100 transition-colors duration-150"
-                            >
-                              <div className="w-5 h-5 bg-amber-500 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
-                                <AlertTriangle className="h-3 w-3 text-white" />
-                              </div>
-                              <span className="text-sm text-slate-700 leading-relaxed font-medium">{weakness}</span>
-                            </div>
-                          ))}
+                        <div className="p-4 bg-slate-50 rounded-lg border border-slate-100">
+                          <p className="text-sm text-slate-700 leading-relaxed font-medium">
+                            {candidate.weaknesses.join('. ')}.
+                          </p>
                         </div>
                       </CardContent>
                     </Card>
