@@ -388,26 +388,6 @@ export const CandidateAnalysisDialog = ({ open, onOpenChange, candidate }: Candi
                   )}
                 </div>
 
-                {/* Resume Content */}
-                {candidate.resume && (
-                  <Card className="bg-card border">
-                    <CardHeader className="pb-3 md:pb-4 pt-4 md:pt-5 border-b">
-                      <CardTitle className="flex items-center gap-2 md:gap-3 text-base md:text-lg font-bold text-foreground">
-                        <div className="p-1.5 md:p-2 bg-muted rounded-lg">
-                          <FileText className="h-4 w-4 md:h-5 md:w-5 text-muted-foreground" />
-                        </div>
-                        Resume Content
-                      </CardTitle>
-                    </CardHeader>
-                    <CardContent className="pt-4 md:pt-5 pb-4 md:pb-5">
-                      <div className="p-3 md:p-5 bg-muted rounded-lg border max-h-96 overflow-y-auto">
-                        <p className="text-xs md:text-sm leading-relaxed whitespace-pre-wrap text-foreground font-mono break-words">
-                          {candidate.resume}
-                        </p>
-                      </div>
-                    </CardContent>
-                  </Card>
-                )}
               </TabsContent>
 
               {/* AI Insights Tab */}
