@@ -169,8 +169,8 @@ export const CandidateAnalysisDialog = ({ open, onOpenChange, candidate }: Candi
                       </div>
                     </CardHeader>
                     <CardContent className="space-y-2 md:space-y-3 pb-4 md:pb-5">
-                      <div className="text-3xl md:text-4xl font-bold text-foreground">
-                        {candidate.riskFactor}
+                      <div className="text-3xl md:text-4xl font-bold text-foreground capitalize">
+                        {candidate.riskScore || candidate.riskFactor}
                       </div>
                       <p className="text-xs text-muted-foreground font-medium">Assessment of potential concerns</p>
                     </CardContent>
@@ -187,8 +187,8 @@ export const CandidateAnalysisDialog = ({ open, onOpenChange, candidate }: Candi
                       </div>
                     </CardHeader>
                     <CardContent className="space-y-2 md:space-y-3 pb-4 md:pb-5">
-                      <div className="text-3xl md:text-4xl font-bold text-foreground">
-                        {candidate.rewardFactor}
+                      <div className="text-3xl md:text-4xl font-bold text-foreground capitalize">
+                        {candidate.rewardScore || candidate.rewardFactor}
                       </div>
                       <p className="text-xs text-muted-foreground font-medium">Potential value and impact</p>
                     </CardContent>

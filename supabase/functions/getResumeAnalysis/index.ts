@@ -83,6 +83,8 @@ serve(async (req) => {
       rewardFactor: convertFactorToNumber(row[8]),
       overallFactor: convertFactorToNumber(row[9]),
       justification: row[10] || '',
+      riskScore: row[7] || '',
+      rewardScore: row[8] || '',
     }));
 
     console.log(`Successfully fetched ${analysisData.length} analysis results`);
