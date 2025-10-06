@@ -209,103 +209,173 @@ const DataDashboard = () => {
 
         {/* Top KPI Cards */}
         <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4 mb-8">
-          <Card className="backdrop-blur-sm bg-white/80 border border-slate-200/50 shadow-lg hover:shadow-xl transition-all duration-300 rounded-2xl overflow-hidden">
+          <Card className="backdrop-blur-sm bg-white/80 border border-slate-200/50 shadow-lg hover:shadow-xl transition-all duration-300 rounded-2xl overflow-hidden hover-lift animate-fade-in-up group">
             <CardHeader className="pb-3">
               <CardTitle className="text-sm font-medium text-slate-600 flex items-center gap-2">
-                <Users className="h-4 w-4 text-cyan-500" />
+                <div className="p-2 bg-cyan-50 rounded-lg group-hover:scale-110 transition-transform">
+                  <Users className="h-4 w-4 text-cyan-500" />
+                </div>
                 Total Candidates
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="text-3xl font-bold text-slate-800 mb-2">{metrics.totalCandidates}</div>
+              <div className="text-3xl font-bold bg-gradient-to-r from-cyan-600 to-cyan-500 bg-clip-text text-transparent mb-2">
+                {metrics.totalCandidates}
+              </div>
               <div className="flex gap-4 text-sm">
-                <div>
-                  <span className="text-slate-500">This week:</span>
-                  <span className="font-semibold text-cyan-600 ml-1">{metrics.candidatesThisWeek}</span>
+                <div className="flex items-center gap-1">
+                  <div className="w-2 h-2 rounded-full bg-cyan-500 animate-pulse" />
+                  <span className="text-slate-500">Week:</span>
+                  <span className="font-semibold text-cyan-600">{metrics.candidatesThisWeek}</span>
                 </div>
-                <div>
-                  <span className="text-slate-500">This month:</span>
-                  <span className="font-semibold text-teal-600 ml-1">{metrics.candidatesThisMonth}</span>
+                <div className="flex items-center gap-1">
+                  <div className="w-2 h-2 rounded-full bg-teal-500 animate-pulse" />
+                  <span className="text-slate-500">Month:</span>
+                  <span className="font-semibold text-teal-600">{metrics.candidatesThisMonth}</span>
                 </div>
               </div>
             </CardContent>
           </Card>
 
-          <Card className="backdrop-blur-sm bg-white/80 border border-slate-200/50 shadow-lg hover:shadow-xl transition-all duration-300 rounded-2xl overflow-hidden">
+          <Card className="backdrop-blur-sm bg-white/80 border border-slate-200/50 shadow-lg hover:shadow-xl transition-all duration-300 rounded-2xl overflow-hidden hover-lift animate-fade-in-up animate-delay-100 group">
             <CardHeader className="pb-3">
               <CardTitle className="text-sm font-medium text-slate-600 flex items-center gap-2">
-                <Target className="h-4 w-4 text-emerald-500" />
+                <div className="p-2 bg-emerald-50 rounded-lg group-hover:scale-110 transition-transform">
+                  <Target className="h-4 w-4 text-emerald-500" />
+                </div>
                 Average Fit Score
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="text-3xl font-bold text-slate-800 mb-2">{metrics.averageFitScore}%</div>
-              <div className="flex items-center gap-2">
-                <Progress value={metrics.averageFitScore} className="h-2" />
+              <div className="flex items-baseline gap-2 mb-2">
+                <div className="text-3xl font-bold bg-gradient-to-r from-emerald-600 to-emerald-500 bg-clip-text text-transparent">
+                  {metrics.averageFitScore}%
+                </div>
+                <TrendingUp className="h-5 w-5 text-emerald-500" />
               </div>
-              <p className="text-sm text-slate-500 mt-2">
-                {metrics.highQualityCandidates} high-quality candidates (75%+)
+              <Progress value={metrics.averageFitScore} className="h-2 mb-2" />
+              <p className="text-sm text-slate-500">
+                <span className="font-semibold text-emerald-600">{metrics.highQualityCandidates}</span> high-quality (75%+)
               </p>
             </CardContent>
           </Card>
 
-          <Card className="backdrop-blur-sm bg-white/80 border border-slate-200/50 shadow-lg hover:shadow-xl transition-all duration-300 rounded-2xl overflow-hidden">
+          <Card className="backdrop-blur-sm bg-white/80 border border-slate-200/50 shadow-lg hover:shadow-xl transition-all duration-300 rounded-2xl overflow-hidden hover-lift animate-fade-in-up animate-delay-200 group">
             <CardHeader className="pb-3">
               <CardTitle className="text-sm font-medium text-slate-600 flex items-center gap-2">
-                <Clock className="h-4 w-4 text-purple-500" />
+                <div className="p-2 bg-purple-50 rounded-lg group-hover:scale-110 transition-transform">
+                  <Clock className="h-4 w-4 text-purple-500 animate-pulse" />
+                </div>
                 Screening Efficiency
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="text-3xl font-bold text-slate-800 mb-2">{metrics.autoScreenedPercentage}%</div>
-              <p className="text-sm text-slate-500">Auto-screened candidates</p>
-              <p className="text-sm text-purple-600 font-medium mt-2">
-                Avg. time: {metrics.averageProcessingTime} min/candidate
-              </p>
+              <div className="text-3xl font-bold bg-gradient-to-r from-purple-600 to-purple-500 bg-clip-text text-transparent mb-2">
+                {metrics.autoScreenedPercentage}%
+              </div>
+              <p className="text-sm text-slate-500 mb-2">Auto-screened</p>
+              <div className="flex items-center gap-2 px-3 py-1.5 bg-purple-50 rounded-lg">
+                <Clock className="h-3.5 w-3.5 text-purple-600" />
+                <span className="text-sm font-medium text-purple-600">
+                  {metrics.averageProcessingTime} min/candidate
+                </span>
+              </div>
             </CardContent>
           </Card>
 
-          <Card className="backdrop-blur-sm bg-white/80 border border-slate-200/50 shadow-lg hover:shadow-xl transition-all duration-300 rounded-2xl overflow-hidden">
+          <Card className="backdrop-blur-sm bg-white/80 border border-slate-200/50 shadow-lg hover:shadow-xl transition-all duration-300 rounded-2xl overflow-hidden hover-lift animate-fade-in-up animate-delay-300 group">
             <CardHeader className="pb-3">
               <CardTitle className="text-sm font-medium text-slate-600 flex items-center gap-2">
-                <Mail className="h-4 w-4 text-blue-500" />
-                Engagement
+                <div className="p-2 bg-blue-50 rounded-lg group-hover:scale-110 transition-transform">
+                  <Mail className="h-4 w-4 text-blue-500" />
+                </div>
+                Engagement Rate
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="text-3xl font-bold text-slate-800 mb-2">{metrics.engagementRate}%</div>
-              <p className="text-sm text-slate-500">Email engagement rate</p>
-              <p className="text-sm text-blue-600 font-medium mt-2">
-                {metrics.candidatesInNurturing} in nurturing
-              </p>
+              <div className="flex items-baseline gap-2 mb-2">
+                <div className="text-3xl font-bold bg-gradient-to-r from-blue-600 to-blue-500 bg-clip-text text-transparent">
+                  {metrics.engagementRate}%
+                </div>
+                <TrendingUp className="h-5 w-5 text-blue-500" />
+              </div>
+              <p className="text-sm text-slate-500 mb-2">Email engagement</p>
+              <div className="flex items-center gap-2 px-3 py-1.5 bg-blue-50 rounded-lg">
+                <Users className="h-3.5 w-3.5 text-blue-600" />
+                <span className="text-sm font-medium text-blue-600">
+                  {metrics.candidatesInNurturing} in nurturing
+                </span>
+              </div>
             </CardContent>
           </Card>
         </div>
 
         {/* Pipeline Health & Stage Distribution */}
         <div className="grid gap-6 lg:grid-cols-2 mb-8">
-          <Card className="backdrop-blur-sm bg-white/80 border border-slate-200/50 shadow-lg rounded-2xl">
+          <Card className="backdrop-blur-sm bg-white/80 border border-slate-200/50 shadow-lg rounded-2xl animate-fade-in-up animate-delay-200 group">
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
-                <TrendingUp className="h-5 w-5 text-cyan-500" />
+                <div className="p-2 bg-cyan-50 rounded-lg group-hover:scale-110 transition-transform">
+                  <TrendingUp className="h-5 w-5 text-cyan-500" />
+                </div>
                 Pipeline Health
               </CardTitle>
               <CardDescription>Candidate distribution across stages</CardDescription>
             </CardHeader>
             <CardContent>
-              <div className="space-y-4">
-                {metrics.stageDistribution.map((stage, index) => (
-                  <div key={index}>
-                    <div className="flex items-center justify-between mb-2">
-                      <span className="text-sm font-medium text-slate-700">{stage.stage}</span>
-                      <div className="flex items-center gap-2">
-                        <span className="text-sm font-semibold text-slate-800">{stage.count}</span>
-                        <Badge variant="secondary" className="text-xs">{stage.percentage}%</Badge>
+              <div className="space-y-5">
+                {metrics.stageDistribution.map((stage, index) => {
+                  const colors = [
+                    { bg: 'bg-cyan-50', border: 'border-cyan-200', text: 'text-cyan-700', progress: 'bg-cyan-500' },
+                    { bg: 'bg-blue-50', border: 'border-blue-200', text: 'text-blue-700', progress: 'bg-blue-500' },
+                    { bg: 'bg-purple-50', border: 'border-purple-200', text: 'text-purple-700', progress: 'bg-purple-500' },
+                    { bg: 'bg-emerald-50', border: 'border-emerald-200', text: 'text-emerald-700', progress: 'bg-emerald-500' },
+                  ];
+                  const color = colors[index % colors.length];
+                  
+                  return (
+                    <div key={index} className={`p-4 rounded-lg border ${color.border} ${color.bg} hover:shadow-md transition-all duration-300 hover-scale-sm group/item`}>
+                      <div className="flex items-center justify-between mb-3">
+                        <span className="text-sm font-semibold text-slate-700 flex items-center gap-2">
+                          <div className={`w-3 h-3 rounded-full ${color.progress}`} />
+                          {stage.stage}
+                        </span>
+                        <div className="flex items-center gap-3">
+                          <span className={`text-2xl font-bold ${color.text} group-hover/item:scale-110 transition-transform`}>
+                            {stage.count}
+                          </span>
+                          <Badge variant="secondary" className={`text-xs font-semibold ${color.text} ${color.bg}`}>
+                            {stage.percentage}%
+                          </Badge>
+                        </div>
                       </div>
+                      <Progress value={stage.percentage} className="h-2" />
+                      <p className="text-xs text-slate-500 mt-2">
+                        {stage.count} {stage.count === 1 ? 'candidate' : 'candidates'}
+                      </p>
                     </div>
-                    <Progress value={stage.percentage} className="h-2" />
+                  );
+                })}
+              </div>
+              
+              {/* Pipeline Summary */}
+              <div className="mt-6 p-4 bg-gradient-to-r from-slate-50 to-slate-100 rounded-lg border border-slate-200">
+                <h4 className="text-sm font-semibold text-slate-700 mb-3 flex items-center gap-2">
+                  <Award className="h-4 w-4 text-slate-600" />
+                  Quick Summary
+                </h4>
+                <div className="grid grid-cols-2 gap-3 text-sm">
+                  <div>
+                    <span className="text-slate-500">Total in Pipeline:</span>
+                    <span className="font-bold text-slate-800 ml-2">{metrics.totalCandidates}</span>
                   </div>
-                ))}
+                  <div>
+                    <span className="text-slate-500">Top Candidates:</span>
+                    <span className="font-bold text-emerald-600 ml-2">
+                      {metrics.stageDistribution[3]?.count || 0}
+                    </span>
+                  </div>
+                </div>
               </div>
             </CardContent>
           </Card>

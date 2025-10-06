@@ -14,6 +14,7 @@ import GetDemo from "./pages/GetDemo";
 import Auth from "./pages/Auth";
 import DataDashboard from "./pages/DataDashboard";
 import ClientMetrics from "./pages/ClientMetrics";
+import ClientDetail from "./pages/ClientDetail";
 
 const queryClient = new QueryClient();
 
@@ -34,6 +35,7 @@ const App = () => (
             <Route path="/auth" element={<Auth />} />
             <Route path="/data-dashboard" element={<DataDashboard />} />
             <Route path="/client-metrics" element={<ClientMetrics />} />
+            <Route path="/client/:clientId" element={<ClientDetail />} />
             {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
             <Route path="*" element={<NotFound />} />
           </Routes>

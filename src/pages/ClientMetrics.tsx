@@ -2,12 +2,16 @@ import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, Building2, Clock, DollarSign, TrendingUp, Award } from "lucide-react";
+import { supabase } from "@/integrations/supabase/client";
+import { ArrowLeft, Building2, Clock, DollarSign, TrendingUp, Award, ExternalLink, Eye } from "lucide-react";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
+import { Skeleton } from "@/components/ui/skeleton";
+import { toast } from "@/hooks/use-toast";
 
 interface ClientMetric {
+  id: string;
   clientName: string;
   placements: number;
   avgTimeToFill: number;
@@ -17,59 +21,117 @@ interface ClientMetric {
 
 const ClientMetrics = () => {
   const navigate = useNavigate();
-  const [loading, setLoading] = useState(false);
-  const [clients, setClients] = useState<ClientMetric[]>([
-    {
-      clientName: "Tech Corp Solutions",
-      placements: 12,
-      avgTimeToFill: 21,
-      costPerHire: 3500,
-      activePositions: 5
-    },
-    {
-      clientName: "Digital Innovations Ltd",
-      placements: 8,
-      avgTimeToFill: 28,
-      costPerHire: 4200,
-      activePositions: 3
-    },
-    {
-      clientName: "Global Systems Inc",
-      placements: 15,
-      avgTimeToFill: 18,
-      costPerHire: 3200,
-      activePositions: 7
-    },
-    {
-      clientName: "Future Tech Partners",
-      placements: 6,
-      avgTimeToFill: 35,
-      costPerHire: 4800,
-      activePositions: 2
-    },
-    {
-      clientName: "Enterprise Solutions Group",
-      placements: 10,
-      avgTimeToFill: 24,
-      costPerHire: 3900,
-      activePositions: 4
+  const [loading, setLoading] = useState(true);
+  const [clients, setClients] = useState<ClientMetric[]>([]);
+
+  useEffect(() => {
+    fetchClientMetrics();
+  }, []);
+
+  const fetchClientMetrics = async () => {
+    try {
+      setLoading(true);
+      
+      // Fetch all clients
+      const { data: clientsData, error: clientsError } = await supabase
+        .from('clients')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+      if (clientsError) throw clientsError;
+
+      if (!clientsData || clientsData.length === 0) {
+        setLoading(false);
+        return;
+      }
+
+      // Fetch placements and active positions for each client
+      const clientMetrics = await Promise.all(
+        clientsData.map(async (client) => {
+          // Get placements count and metrics
+          const { data: placementsData, error: placementsError } = await supabase
+            .from('client_placements')
+            .select('time_to_fill_days, cost_per_hire')
+            .eq('client_id', client.id);
+
+          if (placementsError) throw placementsError;
+
+          // Get active positions count
+          const { count: activeCount, error: activeError } = await supabase
+            .from('client_active_positions')
+            .select('*', { count: 'exact', head: true })
+            .eq('client_id', client.id)
+            .eq('status', 'open');
+
+          if (activeError) throw activeError;
+
+          // Calculate metrics
+          const placements = placementsData?.length || 0;
+          const avgTimeToFill = placements > 0
+            ? Math.round(
+                placementsData.reduce((sum, p) => sum + (p.time_to_fill_days || 0), 0) / placements
+              )
+            : 0;
+          const costPerHire = placements > 0
+            ? Math.round(
+                placementsData.reduce((sum, p) => sum + (Number(p.cost_per_hire) || 0), 0) / placements
+              )
+            : 0;
+
+          return {
+            id: client.id,
+            clientName: client.client_name,
+            placements,
+            avgTimeToFill,
+            costPerHire,
+            activePositions: activeCount || 0,
+          };
+        })
+      );
+
+      setClients(clientMetrics);
+      setLoading(false);
+    } catch (error) {
+      console.error('Error fetching client metrics:', error);
+      toast({
+        title: "Error",
+        description: "Failed to load client metrics. Please try again.",
+        variant: "destructive",
+      });
+      setLoading(false);
     }
-  ]);
+  };
 
   const totalPlacements = clients.reduce((sum, client) => sum + client.placements, 0);
-  const avgTimeToFillAll = Math.round(
-    clients.reduce((sum, client) => sum + client.avgTimeToFill, 0) / clients.length
-  );
-  const avgCostPerHire = Math.round(
-    clients.reduce((sum, client) => sum + client.costPerHire, 0) / clients.length
-  );
+  const avgTimeToFillAll = clients.length > 0
+    ? Math.round(clients.reduce((sum, client) => sum + client.avgTimeToFill, 0) / clients.length)
+    : 0;
+  const avgCostPerHire = clients.length > 0
+    ? Math.round(clients.reduce((sum, client) => sum + client.costPerHire, 0) / clients.length)
+    : 0;
   const totalActivePositions = clients.reduce((sum, client) => sum + client.activePositions, 0);
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-slate-50 to-white">
+        <div className="max-w-7xl mx-auto px-6 py-12">
+          <Skeleton className="h-12 w-64 mb-8" />
+          <div className="grid gap-6 md:grid-cols-4 mb-8">
+            {[1, 2, 3, 4].map((i) => (
+              <Skeleton key={i} className="h-32" />
+            ))}
+          </div>
+          <Skeleton className="h-96" />
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 to-white">
       <div className="max-w-7xl mx-auto px-6 py-12">
         {/* Header */}
-        <div className="mb-12">
+        <div className="mb-12 animate-fade-in-down">
           <div className="flex items-center justify-between mb-8">
             <div>
               <div className="flex items-center gap-3 mb-3">
@@ -90,73 +152,106 @@ const ClientMetrics = () => {
                 Track performance and outcomes across all client relationships
               </p>
             </div>
+            <Button
+              onClick={fetchClientMetrics}
+              variant="outline"
+              className="gap-2"
+            >
+              <TrendingUp className="h-4 w-4" />
+              Refresh
+            </Button>
           </div>
         </div>
 
         {/* Top KPI Cards */}
         <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4 mb-8">
-          <Card className="backdrop-blur-sm bg-white/80 border border-slate-200/50 shadow-lg hover:shadow-xl transition-all duration-300 rounded-2xl overflow-hidden">
+          <Card className="backdrop-blur-sm bg-white/80 border border-slate-200/50 shadow-lg hover:shadow-xl transition-all duration-300 rounded-2xl overflow-hidden hover-lift animate-fade-in-up group">
             <CardHeader className="pb-3">
               <CardTitle className="text-sm font-medium text-slate-600 flex items-center gap-2">
-                <Award className="h-4 w-4 text-emerald-500" />
+                <div className="p-2 bg-emerald-50 rounded-lg group-hover:scale-110 transition-transform">
+                  <Award className="h-4 w-4 text-emerald-500" />
+                </div>
                 Total Placements
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="text-3xl font-bold text-slate-800 mb-2">{totalPlacements}</div>
-              <p className="text-sm text-slate-500">Across {clients.length} clients</p>
+              <div className="text-3xl font-bold bg-gradient-to-r from-emerald-600 to-emerald-500 bg-clip-text text-transparent mb-2">
+                {totalPlacements}
+              </div>
+              <p className="text-sm text-slate-500">Across {clients.length} client{clients.length !== 1 ? 's' : ''}</p>
               <div className="mt-3">
-                <Progress value={(totalPlacements / (clients.length * 15)) * 100} className="h-2" />
+                <Progress 
+                  value={clients.length > 0 ? (totalPlacements / (clients.length * 15)) * 100 : 0} 
+                  className="h-2" 
+                />
               </div>
             </CardContent>
           </Card>
 
-          <Card className="backdrop-blur-sm bg-white/80 border border-slate-200/50 shadow-lg hover:shadow-xl transition-all duration-300 rounded-2xl overflow-hidden">
+          <Card className="backdrop-blur-sm bg-white/80 border border-slate-200/50 shadow-lg hover:shadow-xl transition-all duration-300 rounded-2xl overflow-hidden hover-lift animate-fade-in-up animate-delay-100 group">
             <CardHeader className="pb-3">
               <CardTitle className="text-sm font-medium text-slate-600 flex items-center gap-2">
-                <Clock className="h-4 w-4 text-cyan-500" />
+                <div className="p-2 bg-cyan-50 rounded-lg group-hover:scale-110 transition-transform">
+                  <Clock className="h-4 w-4 text-cyan-500" />
+                </div>
                 Avg. Time-to-Fill
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="text-3xl font-bold text-slate-800 mb-2">{avgTimeToFillAll}</div>
-              <p className="text-sm text-slate-500">Days from opening to placement</p>
-              <div className="mt-3 flex items-center gap-2">
-                <TrendingUp className="h-4 w-4 text-emerald-500" />
-                <span className="text-sm font-medium text-emerald-600">12% faster than industry avg</span>
+              <div className="flex items-baseline gap-2 mb-2">
+                <div className="text-3xl font-bold bg-gradient-to-r from-cyan-600 to-cyan-500 bg-clip-text text-transparent">
+                  {avgTimeToFillAll}
+                </div>
+                <span className="text-sm text-slate-500">days</span>
+              </div>
+              <p className="text-sm text-slate-500 mb-2">Opening to placement</p>
+              <div className="flex items-center gap-2 px-3 py-1.5 bg-emerald-50 rounded-lg">
+                <TrendingUp className="h-3.5 w-3.5 text-emerald-600" />
+                <span className="text-sm font-medium text-emerald-600">Fast turnaround</span>
               </div>
             </CardContent>
           </Card>
 
-          <Card className="backdrop-blur-sm bg-white/80 border border-slate-200/50 shadow-lg hover:shadow-xl transition-all duration-300 rounded-2xl overflow-hidden">
+          <Card className="backdrop-blur-sm bg-white/80 border border-slate-200/50 shadow-lg hover:shadow-xl transition-all duration-300 rounded-2xl overflow-hidden hover-lift animate-fade-in-up animate-delay-200 group">
             <CardHeader className="pb-3">
               <CardTitle className="text-sm font-medium text-slate-600 flex items-center gap-2">
-                <DollarSign className="h-4 w-4 text-purple-500" />
+                <div className="p-2 bg-purple-50 rounded-lg group-hover:scale-110 transition-transform">
+                  <DollarSign className="h-4 w-4 text-purple-500" />
+                </div>
                 Avg. Cost Per Hire
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="text-3xl font-bold text-slate-800 mb-2">${avgCostPerHire.toLocaleString()}</div>
-              <p className="text-sm text-slate-500">Per successful placement</p>
-              <Badge className="mt-3 bg-purple-100 text-purple-700 hover:bg-purple-200">
-                Placeholder metric
-              </Badge>
+              <div className="text-3xl font-bold bg-gradient-to-r from-purple-600 to-purple-500 bg-clip-text text-transparent mb-2">
+                ${avgCostPerHire > 0 ? avgCostPerHire.toLocaleString() : 'N/A'}
+              </div>
+              <p className="text-sm text-slate-500">Per placement</p>
+              {avgCostPerHire === 0 && (
+                <Badge className="mt-3 bg-slate-100 text-slate-600">
+                  No data yet
+                </Badge>
+              )}
             </CardContent>
           </Card>
 
-          <Card className="backdrop-blur-sm bg-white/80 border border-slate-200/50 shadow-lg hover:shadow-xl transition-all duration-300 rounded-2xl overflow-hidden">
+          <Card className="backdrop-blur-sm bg-white/80 border border-slate-200/50 shadow-lg hover:shadow-xl transition-all duration-300 rounded-2xl overflow-hidden hover-lift animate-fade-in-up animate-delay-300 group">
             <CardHeader className="pb-3">
               <CardTitle className="text-sm font-medium text-slate-600 flex items-center gap-2">
-                <Building2 className="h-4 w-4 text-blue-500" />
+                <div className="p-2 bg-blue-50 rounded-lg group-hover:scale-110 transition-transform">
+                  <Building2 className="h-4 w-4 text-blue-500" />
+                </div>
                 Active Positions
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="text-3xl font-bold text-slate-800 mb-2">{totalActivePositions}</div>
-              <p className="text-sm text-slate-500">Currently being filled</p>
-              <div className="mt-3">
+              <div className="text-3xl font-bold bg-gradient-to-r from-blue-600 to-blue-500 bg-clip-text text-transparent mb-2">
+                {totalActivePositions}
+              </div>
+              <p className="text-sm text-slate-500 mb-2">Currently open</p>
+              <div className="flex items-center gap-2 px-3 py-1.5 bg-blue-50 rounded-lg">
+                <Building2 className="h-3.5 w-3.5 text-blue-600" />
                 <span className="text-sm font-medium text-blue-600">
-                  {clients.filter(c => c.activePositions > 0).length} clients with open roles
+                  {clients.filter(c => c.activePositions > 0).length} clients hiring
                 </span>
               </div>
             </CardContent>
@@ -164,77 +259,110 @@ const ClientMetrics = () => {
         </div>
 
         {/* Client Performance Table */}
-        <Card className="backdrop-blur-sm bg-white/80 border border-slate-200/50 shadow-lg rounded-2xl">
+        <Card className="backdrop-blur-sm bg-white/80 border border-slate-200/50 shadow-lg rounded-2xl animate-fade-in-up animate-delay-200">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <Building2 className="h-5 w-5 text-cyan-500" />
               Client Performance Overview
             </CardTitle>
-            <CardDescription>Detailed metrics for each client relationship</CardDescription>
+            <CardDescription>Click on any client to view detailed breakdown</CardDescription>
           </CardHeader>
           <CardContent>
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Client Name</TableHead>
-                  <TableHead className="text-center">Placements</TableHead>
-                  <TableHead className="text-center">Avg. Time-to-Fill</TableHead>
-                  <TableHead className="text-center">Cost Per Hire</TableHead>
-                  <TableHead className="text-center">Active Positions</TableHead>
-                  <TableHead className="text-center">Performance</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {clients.map((client, index) => (
-                  <TableRow key={index} className="hover:bg-slate-50">
-                    <TableCell className="font-medium">
-                      <div className="flex items-center gap-2">
-                        <Building2 className="h-4 w-4 text-slate-400" />
-                        {client.clientName}
-                      </div>
-                    </TableCell>
-                    <TableCell className="text-center">
-                      <span className="font-semibold text-emerald-600">{client.placements}</span>
-                    </TableCell>
-                    <TableCell className="text-center">
-                      <div className="flex items-center justify-center gap-1">
-                        <Clock className="h-3.5 w-3.5 text-slate-400" />
-                        <span className={client.avgTimeToFill <= 21 ? "text-emerald-600 font-medium" : "text-slate-600"}>
-                          {client.avgTimeToFill} days
-                        </span>
-                      </div>
-                    </TableCell>
-                    <TableCell className="text-center">
-                      <span className="font-medium text-slate-700">
-                        ${client.costPerHire.toLocaleString()}
-                      </span>
-                    </TableCell>
-                    <TableCell className="text-center">
-                      <Badge variant="outline" className={client.activePositions > 0 ? "border-blue-300 text-blue-700" : ""}>
-                        {client.activePositions}
-                      </Badge>
-                    </TableCell>
-                    <TableCell className="text-center">
-                      <Badge 
-                        className={
-                          client.avgTimeToFill <= 21 && client.placements >= 10
-                            ? "bg-emerald-100 text-emerald-700 hover:bg-emerald-200"
-                            : client.placements >= 8
-                            ? "bg-cyan-100 text-cyan-700 hover:bg-cyan-200"
-                            : "bg-slate-100 text-slate-700 hover:bg-slate-200"
-                        }
-                      >
-                        {client.avgTimeToFill <= 21 && client.placements >= 10
-                          ? "Excellent"
-                          : client.placements >= 8
-                          ? "Good"
-                          : "Developing"}
-                      </Badge>
-                    </TableCell>
+            {clients.length > 0 ? (
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Client Name</TableHead>
+                    <TableHead className="text-center">Placements</TableHead>
+                    <TableHead className="text-center">Avg. Time-to-Fill</TableHead>
+                    <TableHead className="text-center">Cost Per Hire</TableHead>
+                    <TableHead className="text-center">Active Positions</TableHead>
+                    <TableHead className="text-center">Performance</TableHead>
+                    <TableHead className="text-center">Actions</TableHead>
                   </TableRow>
-                ))}
-              </TableBody>
-            </Table>
+                </TableHeader>
+                <TableBody>
+                  {clients.map((client) => (
+                    <TableRow 
+                      key={client.id} 
+                      className="hover:bg-slate-50 cursor-pointer transition-colors group"
+                      onClick={() => navigate(`/client/${client.id}`)}
+                    >
+                      <TableCell className="font-medium">
+                        <div className="flex items-center gap-2">
+                          <div className="p-2 bg-slate-100 rounded-lg group-hover:bg-cyan-50 transition-colors">
+                            <Building2 className="h-4 w-4 text-slate-400 group-hover:text-cyan-500" />
+                          </div>
+                          <span className="group-hover:text-cyan-600 transition-colors">{client.clientName}</span>
+                        </div>
+                      </TableCell>
+                      <TableCell className="text-center">
+                        <span className="font-semibold text-emerald-600">{client.placements}</span>
+                      </TableCell>
+                      <TableCell className="text-center">
+                        <div className="flex items-center justify-center gap-1">
+                          <Clock className="h-3.5 w-3.5 text-slate-400" />
+                          <span className={client.avgTimeToFill <= 21 && client.avgTimeToFill > 0 ? "text-emerald-600 font-medium" : "text-slate-600"}>
+                            {client.avgTimeToFill > 0 ? `${client.avgTimeToFill} days` : 'N/A'}
+                          </span>
+                        </div>
+                      </TableCell>
+                      <TableCell className="text-center">
+                        <span className="font-medium text-slate-700">
+                          {client.costPerHire > 0 ? `$${client.costPerHire.toLocaleString()}` : 'N/A'}
+                        </span>
+                      </TableCell>
+                      <TableCell className="text-center">
+                        <Badge variant="outline" className={client.activePositions > 0 ? "border-blue-300 text-blue-700 bg-blue-50" : ""}>
+                          {client.activePositions}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="text-center">
+                        <Badge 
+                          className={
+                            client.avgTimeToFill <= 21 && client.placements >= 10
+                              ? "bg-emerald-100 text-emerald-700 hover:bg-emerald-200"
+                              : client.placements >= 8
+                              ? "bg-cyan-100 text-cyan-700 hover:bg-cyan-200"
+                              : client.placements > 0
+                              ? "bg-blue-100 text-blue-700 hover:bg-blue-200"
+                              : "bg-slate-100 text-slate-700 hover:bg-slate-200"
+                          }
+                        >
+                          {client.avgTimeToFill <= 21 && client.placements >= 10
+                            ? "Excellent"
+                            : client.placements >= 8
+                            ? "Good"
+                            : client.placements > 0
+                            ? "Developing"
+                            : "New"}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="text-center">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="gap-2 opacity-0 group-hover:opacity-100 transition-opacity"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            navigate(`/client/${client.id}`);
+                          }}
+                        >
+                          <Eye className="h-4 w-4" />
+                          View Details
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            ) : (
+              <div className="text-center py-12 text-slate-500">
+                <Building2 className="h-12 w-12 mx-auto mb-3 text-slate-300" />
+                <p className="mb-4">No clients found</p>
+                <p className="text-sm">Add clients to start tracking metrics</p>
+              </div>
+            )}
           </CardContent>
         </Card>
 

@@ -14,49 +14,192 @@ export type Database = {
   }
   public: {
     Tables: {
+      client_active_positions: {
+        Row: {
+          budget_range: string | null
+          client_id: string | null
+          created_at: string | null
+          id: string
+          position_level: string | null
+          position_title: string
+          posted_date: string
+          required_skills: string[] | null
+          status: string | null
+        }
+        Insert: {
+          budget_range?: string | null
+          client_id?: string | null
+          created_at?: string | null
+          id?: string
+          position_level?: string | null
+          position_title: string
+          posted_date: string
+          required_skills?: string[] | null
+          status?: string | null
+        }
+        Update: {
+          budget_range?: string | null
+          client_id?: string | null
+          created_at?: string | null
+          id?: string
+          position_level?: string | null
+          position_title?: string
+          posted_date?: string
+          required_skills?: string[] | null
+          status?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "client_active_positions_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      client_placements: {
+        Row: {
+          candidate_id: string | null
+          client_id: string | null
+          cost_per_hire: number | null
+          created_at: string | null
+          id: string
+          placement_date: string
+          position_opened_date: string | null
+          position_title: string
+          time_to_fill_days: number | null
+        }
+        Insert: {
+          candidate_id?: string | null
+          client_id?: string | null
+          cost_per_hire?: number | null
+          created_at?: string | null
+          id?: string
+          placement_date: string
+          position_opened_date?: string | null
+          position_title: string
+          time_to_fill_days?: number | null
+        }
+        Update: {
+          candidate_id?: string | null
+          client_id?: string | null
+          cost_per_hire?: number | null
+          created_at?: string | null
+          id?: string
+          placement_date?: string
+          position_opened_date?: string | null
+          position_title?: string
+          time_to_fill_days?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "client_placements_candidate_id_fkey"
+            columns: ["candidate_id"]
+            isOneToOne: false
+            referencedRelation: "resume_analyses"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "client_placements_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      clients: {
+        Row: {
+          client_name: string
+          contact_email: string | null
+          contact_name: string | null
+          created_at: string | null
+          id: string
+          industry: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          client_name: string
+          contact_email?: string | null
+          contact_name?: string | null
+          created_at?: string | null
+          id?: string
+          industry?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          client_name?: string
+          contact_email?: string | null
+          contact_name?: string | null
+          created_at?: string | null
+          id?: string
+          industry?: string | null
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
       resume_analyses: {
         Row: {
           candidate_name: string
           created_at: string
+          current_stage: string | null
           email: string | null
+          email_clicked: boolean | null
+          email_opened: boolean | null
           fit_score: Json | null
           id: string
           justification: string | null
+          nurturing_stage: string | null
           overall_factor: Json | null
+          processing_time_minutes: number | null
           recruitment_name: string | null
           resume: string | null
           reward_factor: Json | null
           risk_factor: Json | null
+          screening_type: string | null
           strengths: string | null
           weaknesses: string | null
         }
         Insert: {
           candidate_name: string
           created_at?: string
+          current_stage?: string | null
           email?: string | null
+          email_clicked?: boolean | null
+          email_opened?: boolean | null
           fit_score?: Json | null
           id?: string
           justification?: string | null
+          nurturing_stage?: string | null
           overall_factor?: Json | null
+          processing_time_minutes?: number | null
           recruitment_name?: string | null
           resume?: string | null
           reward_factor?: Json | null
           risk_factor?: Json | null
+          screening_type?: string | null
           strengths?: string | null
           weaknesses?: string | null
         }
         Update: {
           candidate_name?: string
           created_at?: string
+          current_stage?: string | null
           email?: string | null
+          email_clicked?: boolean | null
+          email_opened?: boolean | null
           fit_score?: Json | null
           id?: string
           justification?: string | null
+          nurturing_stage?: string | null
           overall_factor?: Json | null
+          processing_time_minutes?: number | null
           recruitment_name?: string | null
           resume?: string | null
           reward_factor?: Json | null
           risk_factor?: Json | null
+          screening_type?: string | null
           strengths?: string | null
           weaknesses?: string | null
         }
