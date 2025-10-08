@@ -272,11 +272,10 @@ export const CandidateAnalysisDialog = ({ open, onOpenChange, candidate }: Candi
                         </div>
                         <Button
                           onClick={() => window.open(candidate.resume, '_blank')}
-                          variant="outline"
-                          className="gap-2 w-full sm:w-auto flex-shrink-0"
+                          className="gap-2 w-full sm:w-auto flex-shrink-0 bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-600 hover:to-teal-600 text-white shadow-lg shadow-emerald-500/25 hover:shadow-xl hover:shadow-emerald-500/30 transition-all duration-300 rounded-xl font-medium px-4 py-2.5 group"
                           size="sm"
                         >
-                          <FileText className="h-3.5 w-3.5 md:h-4 md:w-4" />
+                          <FileText className="h-3.5 w-3.5 md:h-4 md:w-4 group-hover:scale-110 transition-transform duration-200" />
                           <span className="text-xs md:text-sm">Open Resume</span>
                         </Button>
                       </div>
