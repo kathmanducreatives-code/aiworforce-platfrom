@@ -196,31 +196,39 @@ export const CandidateAnalysisDialog = ({ open, onOpenChange, candidate }: Candi
                 </div>
 
                 {/* Strengths & Weaknesses Section */}
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 md:gap-4">
+                <div className="space-y-4 md:space-y-5">
                   {/* Strengths */}
                   {candidate.strengths?.length > 0 && (
-                    <Card className="bg-card border border-accent/20">
-                      <CardHeader className="pb-3 md:pb-4 pt-4 md:pt-5 border-b">
+                    <Card className="bg-card border border-accent/20 shadow-sm hover:shadow-md transition-shadow duration-200">
+                      <CardHeader className="pb-3 md:pb-4 pt-4 md:pt-5 border-b bg-gradient-to-r from-accent/5 via-accent/3 to-transparent">
                         <div className="flex items-center justify-between gap-2">
                           <div className="flex items-center gap-2 md:gap-3 min-w-0">
-                            <div className="p-1.5 md:p-2 bg-accent/10 rounded-lg flex-shrink-0">
-                              <CheckCircle className="h-4 w-4 md:h-5 md:w-5 text-accent" />
+                            <div className="p-2 md:p-2.5 bg-gradient-to-br from-emerald-500 to-teal-500 rounded-xl shadow-lg shadow-emerald-500/20 flex-shrink-0">
+                              <CheckCircle className="h-4 w-4 md:h-5 md:w-5 text-white" />
                             </div>
                             <div className="min-w-0">
-                              <CardTitle className="text-base md:text-lg font-bold text-foreground truncate">Key Strengths</CardTitle>
+                              <CardTitle className="text-base md:text-lg font-bold text-foreground">Key Strengths</CardTitle>
                               <p className="text-xs text-muted-foreground mt-0.5">Positive attributes identified</p>
                             </div>
                           </div>
-                          <Badge className="bg-accent/10 text-accent border-accent/30 hover:bg-accent/20 flex-shrink-0">
+                          <Badge className="bg-gradient-to-r from-emerald-500 to-teal-500 text-white border-0 shadow-md flex-shrink-0 px-3 py-1">
                             {candidate.strengths.length}
                           </Badge>
                         </div>
                       </CardHeader>
-                      <CardContent className="pt-3 md:pt-4 pb-4 md:pb-5">
-                        <div className="p-3 md:p-4 bg-muted rounded-lg border">
-                          <p className="text-xs md:text-sm text-foreground leading-relaxed font-medium">
-                            {candidate.strengths.join('. ')}.
-                          </p>
+                      <CardContent className="pt-4 md:pt-5 pb-4 md:pb-5">
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2.5 md:gap-3">
+                          {candidate.strengths.map((strength, idx) => (
+                            <div 
+                              key={idx} 
+                              className="flex items-start gap-2 p-3 md:p-3.5 bg-gradient-to-br from-accent/10 to-accent/5 rounded-xl border border-accent/20 hover:border-accent/40 hover:shadow-md transition-all duration-200 group"
+                            >
+                              <div className="w-5 h-5 bg-gradient-to-br from-emerald-500 to-teal-500 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5 shadow-sm group-hover:scale-110 transition-transform duration-200">
+                                <CheckCircle className="h-3 w-3 text-white" />
+                              </div>
+                              <span className="text-xs md:text-sm text-foreground leading-relaxed font-medium flex-1">{strength}</span>
+                            </div>
+                          ))}
                         </div>
                       </CardContent>
                     </Card>
@@ -228,28 +236,36 @@ export const CandidateAnalysisDialog = ({ open, onOpenChange, candidate }: Candi
 
                   {/* Weaknesses */}
                   {candidate.weaknesses?.length > 0 && (
-                    <Card className="bg-card border">
-                      <CardHeader className="pb-3 md:pb-4 pt-4 md:pt-5 border-b">
+                    <Card className="bg-card border border-amber-200/60 shadow-sm hover:shadow-md transition-shadow duration-200">
+                      <CardHeader className="pb-3 md:pb-4 pt-4 md:pt-5 border-b bg-gradient-to-r from-amber-50/50 via-amber-50/30 to-transparent">
                         <div className="flex items-center justify-between gap-2">
                           <div className="flex items-center gap-2 md:gap-3 min-w-0">
-                            <div className="p-1.5 md:p-2 bg-amber-500/10 rounded-lg flex-shrink-0">
-                              <AlertTriangle className="h-4 w-4 md:h-5 md:w-5 text-amber-600" />
+                            <div className="p-2 md:p-2.5 bg-gradient-to-br from-amber-500 to-orange-500 rounded-xl shadow-lg shadow-amber-500/20 flex-shrink-0">
+                              <AlertTriangle className="h-4 w-4 md:h-5 md:w-5 text-white" />
                             </div>
                             <div className="min-w-0">
-                              <CardTitle className="text-base md:text-lg font-bold text-foreground truncate">Development Areas</CardTitle>
+                              <CardTitle className="text-base md:text-lg font-bold text-foreground">Development Areas</CardTitle>
                               <p className="text-xs text-muted-foreground mt-0.5">Growth opportunities identified</p>
                             </div>
                           </div>
-                          <Badge className="bg-amber-500/10 text-amber-700 border-amber-200 hover:bg-amber-500/20 flex-shrink-0">
+                          <Badge className="bg-gradient-to-r from-amber-500 to-orange-500 text-white border-0 shadow-md flex-shrink-0 px-3 py-1">
                             {candidate.weaknesses.length}
                           </Badge>
                         </div>
                       </CardHeader>
-                      <CardContent className="pt-3 md:pt-4 pb-4 md:pb-5">
-                        <div className="p-3 md:p-4 bg-muted rounded-lg border">
-                          <p className="text-xs md:text-sm text-foreground leading-relaxed font-medium">
-                            {candidate.weaknesses.join('. ')}.
-                          </p>
+                      <CardContent className="pt-4 md:pt-5 pb-4 md:pb-5">
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2.5 md:gap-3">
+                          {candidate.weaknesses.map((weakness, idx) => (
+                            <div 
+                              key={idx} 
+                              className="flex items-start gap-2 p-3 md:p-3.5 bg-gradient-to-br from-amber-50 to-orange-50/50 rounded-xl border border-amber-200/60 hover:border-amber-300 hover:shadow-md transition-all duration-200 group"
+                            >
+                              <div className="w-5 h-5 bg-gradient-to-br from-amber-500 to-orange-500 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5 shadow-sm group-hover:scale-110 transition-transform duration-200">
+                                <AlertTriangle className="h-3 w-3 text-white" />
+                              </div>
+                              <span className="text-xs md:text-sm text-foreground leading-relaxed font-medium flex-1">{weakness}</span>
+                            </div>
+                          ))}
                         </div>
                       </CardContent>
                     </Card>
