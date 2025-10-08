@@ -107,23 +107,23 @@ export const CandidateAnalysisDialog = ({ open, onOpenChange, candidate }: Candi
               <TabsList className="grid w-full grid-cols-3 mb-4 md:mb-6 lg:mb-8 h-auto p-1 bg-muted border rounded-lg">
                 <TabsTrigger 
                   value="overview" 
-                  className="gap-1.5 md:gap-2 py-2 md:py-2.5 lg:py-3 rounded-md data-[state=active]:bg-accent data-[state=active]:text-accent-foreground transition-all duration-200 font-medium text-xs md:text-sm"
+                  className="gap-1.5 md:gap-2 py-2 md:py-2.5 lg:py-3 rounded-xl transition-all duration-300 font-medium text-xs md:text-sm group data-[state=active]:bg-gradient-to-r data-[state=active]:from-emerald-500 data-[state=active]:to-teal-500 data-[state=active]:text-white data-[state=active]:shadow-lg data-[state=active]:shadow-emerald-500/25 hover:shadow-xl hover:shadow-emerald-500/30"
                 >
-                  <Target className="h-3.5 w-3.5 md:h-4 md:w-4" />
+                  <Target className="h-3.5 w-3.5 md:h-4 md:w-4 group-hover:scale-110 transition-transform duration-200" />
                   <span className="hidden sm:inline">Overview</span>
                 </TabsTrigger>
                 <TabsTrigger 
                   value="details" 
-                  className="gap-1.5 md:gap-2 py-2 md:py-2.5 lg:py-3 rounded-md data-[state=active]:bg-accent data-[state=active]:text-accent-foreground transition-all duration-200 font-medium text-xs md:text-sm"
+                  className="gap-1.5 md:gap-2 py-2 md:py-2.5 lg:py-3 rounded-xl transition-all duration-300 font-medium text-xs md:text-sm group data-[state=active]:bg-gradient-to-r data-[state=active]:from-emerald-500 data-[state=active]:to-teal-500 data-[state=active]:text-white data-[state=active]:shadow-lg data-[state=active]:shadow-emerald-500/25 hover:shadow-xl hover:shadow-emerald-500/30"
                 >
-                  <FileText className="h-3.5 w-3.5 md:h-4 md:w-4" />
+                  <FileText className="h-3.5 w-3.5 md:h-4 md:w-4 group-hover:scale-110 transition-transform duration-200" />
                   <span className="hidden sm:inline">Details</span>
                 </TabsTrigger>
                 <TabsTrigger 
                   value="ai-insights" 
-                  className="gap-1.5 md:gap-2 py-2 md:py-2.5 lg:py-3 rounded-md data-[state=active]:bg-accent data-[state=active]:text-accent-foreground transition-all duration-200 font-medium text-xs md:text-sm"
+                  className="gap-1.5 md:gap-2 py-2 md:py-2.5 lg:py-3 rounded-xl transition-all duration-300 font-medium text-xs md:text-sm group data-[state=active]:bg-gradient-to-r data-[state=active]:from-emerald-500 data-[state=active]:to-teal-500 data-[state=active]:text-white data-[state=active]:shadow-lg data-[state=active]:shadow-emerald-500/25 hover:shadow-xl hover:shadow-emerald-500/30"
                 >
-                  <Brain className="h-3.5 w-3.5 md:h-4 md:w-4" />
+                  <Brain className="h-3.5 w-3.5 md:h-4 md:w-4 group-hover:scale-110 transition-transform duration-200" />
                   <span className="hidden sm:inline">AI Insights</span>
                 </TabsTrigger>
               </TabsList>
