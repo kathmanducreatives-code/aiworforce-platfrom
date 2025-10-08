@@ -36,7 +36,7 @@ export const CandidateAnalysisDialog = ({ open, onOpenChange, candidate }: Candi
               </div>
               
               {candidate.overallScore !== undefined && (
-                <div className="relative bg-card rounded-xl border p-4 shadow-sm">
+                <div className="relative bg-card rounded-xl border border-accent/20 p-4 shadow-sm">
                   <div className="flex items-center gap-3">
                     <div className="text-right">
                       <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1">Overall Score</div>
@@ -49,7 +49,7 @@ export const CandidateAnalysisDialog = ({ open, onOpenChange, candidate }: Candi
                         <circle cx="50%" cy="50%" r="40%" stroke="currentColor" strokeWidth="4" fill="none" className="text-border" />
                         <circle 
                           cx="50%" cy="50%" r="40%" 
-                          stroke="hsl(var(--primary))" 
+                          stroke="hsl(var(--accent))" 
                           strokeWidth="4" 
                           fill="none" 
                           strokeDasharray={`${(candidate.overallScore / 10) * 175.93} 175.93`}
@@ -66,8 +66,8 @@ export const CandidateAnalysisDialog = ({ open, onOpenChange, candidate }: Candi
             {/* Candidate Info Bar */}
             <div className="flex flex-wrap items-center gap-2 md:gap-3 pt-4 mt-4 border-t">
               <div className="flex items-center gap-2 md:gap-3 px-3 md:px-4 py-2 md:py-2.5 bg-muted rounded-lg border">
-                <div className="w-8 h-8 md:w-9 md:h-9 bg-gradient-primary rounded-full flex items-center justify-center shadow-sm">
-                  <span className="text-xs md:text-sm font-bold text-primary-foreground">
+                <div className="w-8 h-8 md:w-9 md:h-9 bg-accent rounded-full flex items-center justify-center shadow-sm">
+                  <span className="text-xs md:text-sm font-bold text-accent-foreground">
                     {candidate.candidateName.charAt(0).toUpperCase()}
                   </span>
                 </div>
@@ -107,21 +107,21 @@ export const CandidateAnalysisDialog = ({ open, onOpenChange, candidate }: Candi
               <TabsList className="grid w-full grid-cols-3 mb-4 md:mb-6 lg:mb-8 h-auto p-1 bg-muted border rounded-lg">
                 <TabsTrigger 
                   value="overview" 
-                  className="gap-1.5 md:gap-2 py-2 md:py-2.5 lg:py-3 rounded-md data-[state=active]:bg-primary data-[state=active]:text-primary-foreground transition-all duration-200 font-medium text-xs md:text-sm"
+                  className="gap-1.5 md:gap-2 py-2 md:py-2.5 lg:py-3 rounded-md data-[state=active]:bg-accent data-[state=active]:text-accent-foreground transition-all duration-200 font-medium text-xs md:text-sm"
                 >
                   <Target className="h-3.5 w-3.5 md:h-4 md:w-4" />
                   <span className="hidden sm:inline">Overview</span>
                 </TabsTrigger>
                 <TabsTrigger 
                   value="details" 
-                  className="gap-1.5 md:gap-2 py-2 md:py-2.5 lg:py-3 rounded-md data-[state=active]:bg-primary data-[state=active]:text-primary-foreground transition-all duration-200 font-medium text-xs md:text-sm"
+                  className="gap-1.5 md:gap-2 py-2 md:py-2.5 lg:py-3 rounded-md data-[state=active]:bg-accent data-[state=active]:text-accent-foreground transition-all duration-200 font-medium text-xs md:text-sm"
                 >
                   <FileText className="h-3.5 w-3.5 md:h-4 md:w-4" />
                   <span className="hidden sm:inline">Details</span>
                 </TabsTrigger>
                 <TabsTrigger 
                   value="ai-insights" 
-                  className="gap-1.5 md:gap-2 py-2 md:py-2.5 lg:py-3 rounded-md data-[state=active]:bg-primary data-[state=active]:text-primary-foreground transition-all duration-200 font-medium text-xs md:text-sm"
+                  className="gap-1.5 md:gap-2 py-2 md:py-2.5 lg:py-3 rounded-md data-[state=active]:bg-accent data-[state=active]:text-accent-foreground transition-all duration-200 font-medium text-xs md:text-sm"
                 >
                   <Brain className="h-3.5 w-3.5 md:h-4 md:w-4" />
                   <span className="hidden sm:inline">AI Insights</span>
@@ -133,12 +133,12 @@ export const CandidateAnalysisDialog = ({ open, onOpenChange, candidate }: Candi
                 {/* Score Metrics Grid */}
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-3 md:gap-4">
                   {/* Fit Score Card */}
-                  <Card className="bg-card border hover:shadow-md transition-all duration-200">
+                  <Card className="bg-card border border-accent/20 hover:shadow-md hover:border-accent/40 transition-all duration-200">
                     <CardHeader className="pb-3 pt-4 md:pt-5">
                       <div className="flex items-center justify-between">
                         <CardTitle className="text-xs md:text-sm font-semibold text-muted-foreground uppercase tracking-wide">Fit Score</CardTitle>
-                        <div className="p-1.5 md:p-2 bg-primary/10 rounded-lg">
-                          <Target className="h-3.5 w-3.5 md:h-4 md:w-4 text-primary" />
+                        <div className="p-1.5 md:p-2 bg-accent/10 rounded-lg">
+                          <Target className="h-3.5 w-3.5 md:h-4 md:w-4 text-accent" />
                         </div>
                       </div>
                     </CardHeader>
@@ -177,12 +177,12 @@ export const CandidateAnalysisDialog = ({ open, onOpenChange, candidate }: Candi
                   </Card>
 
                   {/* Reward Factor Card */}
-                  <Card className="bg-card border hover:shadow-md transition-all duration-200">
+                  <Card className="bg-card border border-accent/20 hover:shadow-md hover:border-accent/40 transition-all duration-200">
                     <CardHeader className="pb-3 pt-4 md:pt-5">
                       <div className="flex items-center justify-between">
                         <CardTitle className="text-xs md:text-sm font-semibold text-muted-foreground uppercase tracking-wide">Reward Factor</CardTitle>
-                        <div className="p-1.5 md:p-2 bg-emerald-500/10 rounded-lg">
-                          <Trophy className="h-3.5 w-3.5 md:h-4 md:w-4 text-emerald-600" />
+                        <div className="p-1.5 md:p-2 bg-accent/10 rounded-lg">
+                          <Trophy className="h-3.5 w-3.5 md:h-4 md:w-4 text-accent" />
                         </div>
                       </div>
                     </CardHeader>
@@ -199,19 +199,19 @@ export const CandidateAnalysisDialog = ({ open, onOpenChange, candidate }: Candi
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 md:gap-4">
                   {/* Strengths */}
                   {candidate.strengths?.length > 0 && (
-                    <Card className="bg-card border">
+                    <Card className="bg-card border border-accent/20">
                       <CardHeader className="pb-3 md:pb-4 pt-4 md:pt-5 border-b">
                         <div className="flex items-center justify-between gap-2">
                           <div className="flex items-center gap-2 md:gap-3 min-w-0">
-                            <div className="p-1.5 md:p-2 bg-emerald-500/10 rounded-lg flex-shrink-0">
-                              <CheckCircle className="h-4 w-4 md:h-5 md:w-5 text-emerald-600" />
+                            <div className="p-1.5 md:p-2 bg-accent/10 rounded-lg flex-shrink-0">
+                              <CheckCircle className="h-4 w-4 md:h-5 md:w-5 text-accent" />
                             </div>
                             <div className="min-w-0">
                               <CardTitle className="text-base md:text-lg font-bold text-foreground truncate">Key Strengths</CardTitle>
                               <p className="text-xs text-muted-foreground mt-0.5">Positive attributes identified</p>
                             </div>
                           </div>
-                          <Badge className="bg-emerald-500/10 text-emerald-700 border-emerald-200 hover:bg-emerald-500/20 flex-shrink-0">
+                          <Badge className="bg-accent/10 text-accent border-accent/30 hover:bg-accent/20 flex-shrink-0">
                             {candidate.strengths.length}
                           </Badge>
                         </div>
@@ -258,12 +258,12 @@ export const CandidateAnalysisDialog = ({ open, onOpenChange, candidate }: Candi
 
                 {/* Resume Access */}
                 {candidate.resume && (
-                  <Card className="bg-card border">
+                  <Card className="bg-card border border-accent/20">
                     <CardContent className="p-4 md:p-5">
                       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 md:gap-4">
                         <div className="flex items-center gap-2 md:gap-3 min-w-0">
-                          <div className="p-2 md:p-2.5 bg-primary/10 rounded-lg flex-shrink-0">
-                            <FileText className="h-4 w-4 md:h-5 md:w-5 text-primary" />
+                          <div className="p-2 md:p-2.5 bg-accent/10 rounded-lg flex-shrink-0">
+                            <FileText className="h-4 w-4 md:h-5 md:w-5 text-accent" />
                           </div>
                           <div className="min-w-0">
                             <div className="font-semibold text-foreground text-sm md:text-base">Resume Document</div>
@@ -288,11 +288,11 @@ export const CandidateAnalysisDialog = ({ open, onOpenChange, candidate }: Candi
               {/* Details Tab */}
               <TabsContent value="details" className="space-y-4 md:space-y-6 animate-fade-in-up">
                 {/* Candidate Information */}
-                <Card className="bg-card border">
+                <Card className="bg-card border border-accent/20">
                   <CardHeader className="pb-3 md:pb-4 pt-4 md:pt-5 border-b">
                     <CardTitle className="flex items-center gap-2 md:gap-3 text-base md:text-lg font-bold text-foreground">
-                      <div className="p-1.5 md:p-2 bg-primary/10 rounded-lg">
-                        <FileText className="h-4 w-4 md:h-5 md:w-5 text-primary" />
+                      <div className="p-1.5 md:p-2 bg-accent/10 rounded-lg">
+                        <FileText className="h-4 w-4 md:h-5 md:w-5 text-accent" />
                       </div>
                       Candidate Information
                     </CardTitle>
@@ -327,14 +327,14 @@ export const CandidateAnalysisDialog = ({ open, onOpenChange, candidate }: Candi
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 md:gap-4">
                   {/* Strengths Full List */}
                   {candidate.strengths?.length > 0 && (
-                    <Card className="bg-card border border-emerald-200/60 relative">
-                      <div className="absolute inset-x-0 top-0 h-0.5 bg-gradient-to-r from-emerald-500 to-teal-500"></div>
+                    <Card className="bg-card border border-accent/20 relative">
+                      <div className="absolute inset-x-0 top-0 h-0.5 bg-gradient-to-r from-accent to-accent"></div>
                       <CardHeader className="pt-4 md:pt-5 pb-3 md:pb-4 border-b">
                         <CardTitle className="flex items-center gap-2 md:gap-3 text-base md:text-lg font-bold">
-                          <div className="p-1.5 md:p-2 bg-emerald-500/10 rounded-lg">
-                            <CheckCircle className="h-4 w-4 md:h-5 md:w-5 text-emerald-600" />
+                          <div className="p-1.5 md:p-2 bg-accent/10 rounded-lg">
+                            <CheckCircle className="h-4 w-4 md:h-5 md:w-5 text-accent" />
                           </div>
-                          <span className="text-emerald-900">Key Strengths</span>
+                          <span className="text-foreground">Key Strengths</span>
                         </CardTitle>
                         <p className="text-xs text-muted-foreground mt-1.5 ml-8 md:ml-11">Positive attributes and capabilities</p>
                       </CardHeader>
@@ -343,9 +343,9 @@ export const CandidateAnalysisDialog = ({ open, onOpenChange, candidate }: Candi
                           {candidate.strengths.map((strength, idx) => (
                             <div 
                               key={idx} 
-                              className="flex items-start gap-2 md:gap-2.5 p-2.5 md:p-3.5 bg-emerald-50/50 rounded-lg border border-emerald-100 hover:bg-emerald-50 transition-colors duration-150"
+                              className="flex items-start gap-2 md:gap-2.5 p-2.5 md:p-3.5 bg-accent/5 rounded-lg border border-accent/20 hover:bg-accent/10 transition-colors duration-150"
                             >
-                              <div className="w-4 h-4 md:w-5 md:h-5 bg-emerald-500 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
+                              <div className="w-4 h-4 md:w-5 md:h-5 bg-accent rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
                                 <CheckCircle className="h-2.5 w-2.5 md:h-3 md:w-3 text-white" />
                               </div>
                               <span className="text-xs md:text-sm text-foreground leading-relaxed font-medium">{strength}</span>
@@ -394,12 +394,12 @@ export const CandidateAnalysisDialog = ({ open, onOpenChange, candidate }: Candi
               <TabsContent value="ai-insights" className="space-y-4 md:space-y-6 animate-fade-in-up">
                 {/* AI Analysis */}
                 {candidate.justification && (
-                  <Card className="bg-card border relative">
-                    <div className="absolute inset-x-0 top-0 h-0.5 bg-gradient-to-r from-primary via-primary-light to-primary"></div>
+                  <Card className="bg-card border border-accent/20 relative">
+                    <div className="absolute inset-x-0 top-0 h-0.5 bg-gradient-to-r from-accent via-accent to-accent"></div>
                     <CardHeader className="pt-5 md:pt-6 pb-3 md:pb-4 border-b">
                       <CardTitle className="flex items-center gap-3 md:gap-4">
-                        <div className="p-2 md:p-3 bg-primary/10 rounded-xl">
-                          <Brain className="h-5 w-5 md:h-6 md:w-6 text-primary" />
+                        <div className="p-2 md:p-3 bg-accent/10 rounded-xl">
+                          <Brain className="h-5 w-5 md:h-6 md:w-6 text-accent" />
                         </div>
                         <div>
                           <div className="text-lg md:text-xl font-bold text-foreground">
@@ -423,11 +423,11 @@ export const CandidateAnalysisDialog = ({ open, onOpenChange, candidate }: Candi
 
                 {/* AI Summary Cards */}
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 md:gap-4">
-                  <Card className="bg-card border relative">
-                    <div className="absolute inset-x-0 top-0 h-0.5 bg-emerald-500"></div>
+                  <Card className="bg-card border border-accent/20 relative">
+                    <div className="absolute inset-x-0 top-0 h-0.5 bg-accent"></div>
                     <CardHeader className="pb-2 md:pb-3 pt-4 md:pt-5">
                       <CardTitle className="text-xs md:text-sm flex items-center gap-2 font-semibold">
-                        <CheckCircle className="h-3.5 w-3.5 md:h-4 md:w-4 text-emerald-600" />
+                        <CheckCircle className="h-3.5 w-3.5 md:h-4 md:w-4 text-accent" />
                         <span className="text-muted-foreground uppercase tracking-wide">Strengths</span>
                       </CardTitle>
                     </CardHeader>
@@ -455,11 +455,11 @@ export const CandidateAnalysisDialog = ({ open, onOpenChange, candidate }: Candi
                     </CardContent>
                   </Card>
 
-                  <Card className="bg-card border relative">
-                    <div className="absolute inset-x-0 top-0 h-0.5 bg-primary"></div>
+                  <Card className="bg-card border border-accent/20 relative">
+                    <div className="absolute inset-x-0 top-0 h-0.5 bg-accent"></div>
                     <CardHeader className="pb-2 md:pb-3 pt-4 md:pt-5">
                       <CardTitle className="text-xs md:text-sm flex items-center gap-2 font-semibold">
-                        <TrendingUp className="h-3.5 w-3.5 md:h-4 md:w-4 text-primary" />
+                        <TrendingUp className="h-3.5 w-3.5 md:h-4 md:w-4 text-accent" />
                         <span className="text-muted-foreground uppercase tracking-wide">Overall Score</span>
                       </CardTitle>
                     </CardHeader>
