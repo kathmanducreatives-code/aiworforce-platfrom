@@ -736,12 +736,12 @@ const ModernDashboard = () => {
                               </TableCell>
                               <TableCell className="py-6 px-6 text-center">
                                 <div className="flex flex-col items-center gap-2">
-                                  <Badge className={`text-xs px-3 py-1.5 font-semibold rounded-full border-0 flex items-center gap-2 shadow-md ${riskBadge.color}`}>
-                                    <riskBadge.icon className="h-3.5 w-3.5" />
+                                  <Badge className={`text-xs px-3 py-1.5 font-semibold rounded-full border-0 flex items-center justify-center gap-2 shadow-md min-w-[9rem] transition-all duration-300 hover:scale-110 hover:shadow-xl hover:-translate-y-0.5 cursor-default ${riskBadge.color}`}>
+                                    <riskBadge.icon className="h-3.5 w-3.5 animate-pulse" />
                                     Risk: {resume.riskScore || 'Unknown'}
                                   </Badge>
-                                  <Badge className={`text-xs px-3 py-1.5 font-semibold rounded-full border-0 flex items-center gap-2 shadow-md ${rewardBadge.color}`}>
-                                    <rewardBadge.icon className="h-3.5 w-3.5" />
+                                  <Badge className={`text-xs px-3 py-1.5 font-semibold rounded-full border-0 flex items-center justify-center gap-2 shadow-md min-w-[9rem] transition-all duration-300 hover:scale-110 hover:shadow-xl hover:-translate-y-0.5 cursor-default ${rewardBadge.color}`}>
+                                    <rewardBadge.icon className="h-3.5 w-3.5 animate-pulse" />
                                     Reward: {resume.rewardScore || 'Unknown'}
                                   </Badge>
                                 </div>
