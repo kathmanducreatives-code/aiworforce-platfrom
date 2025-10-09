@@ -545,6 +545,18 @@ const ModernDashboard = () => {
                           Clear Selection
                         </Button>
                         <Button 
+                          onClick={() => {
+                            toast({
+                              title: "Email Sequence",
+                              description: `Pushing ${selectedCandidates.size} candidate${selectedCandidates.size > 1 ? 's' : ''} to email sequence...`,
+                            });
+                          }}
+                          className="gap-2 px-6 py-2 rounded-xl font-medium bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-600 hover:to-teal-600 text-white shadow-lg shadow-emerald-500/25 hover:shadow-xl hover:shadow-emerald-500/30 transition-all duration-200"
+                        >
+                          <Mail className="h-4 w-4" />
+                          Add to Email Sequence
+                        </Button>
+                        <Button 
                           onClick={handleBulkDelete}
                           className="gap-2 px-6 py-2 rounded-xl font-medium bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 text-white shadow-lg shadow-red-500/25 hover:shadow-xl hover:shadow-red-500/30 transition-all duration-200"
                         >
