@@ -695,15 +695,15 @@ const ModernDashboard = () => {
                               <TableCell className="py-6 px-6">
                                 <div className="flex items-center gap-4">
                                   <div className="min-w-0 flex-1">
-                                    <div className="font-semibold text-slate-800 text-base mb-1">
+                                    <div className="font-semibold text-slate-800 text-base leading-tight mb-1.5">
                                       {resume.candidateName || 'Unknown Candidate'}
                                     </div>
-                                    <div className="text-sm text-slate-600 truncate">
+                                    <div className="text-sm text-slate-600 leading-tight truncate mb-1.5">
                                       {resume.email}
                                     </div>
                                     {resume.recruitmentName && (
                                       <Badge 
-                                        className={`${getRecruitmentTagColor(resume.recruitmentName)} text-xs font-medium mt-2 cursor-pointer hover:scale-105 transition-transform duration-200`}
+                                        className={`${getRecruitmentTagColor(resume.recruitmentName)} text-xs font-medium mt-1.5 cursor-pointer hover:scale-105 transition-transform duration-200`}
                                         onClick={(e) => {
                                           e.stopPropagation();
                                           navigate(`/folder/${encodeURIComponent(resume.recruitmentName!)}`);
