@@ -1,9 +1,8 @@
 import { useParams, useNavigate } from "react-router-dom";
-import { ArrowLeft, Mail, Users, Clock, Send, Plus, Settings } from "lucide-react";
+import { ArrowLeft, Plus, Send, Clock, Users } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import Header from "@/components/Header";
@@ -11,18 +10,31 @@ import { useState, useEffect } from "react";
 import { toast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import type { ResumeAnalysis } from "@/types/ResumeAnalysis";
+import EmailStepCard, { EmailStep } from "@/components/email-sequence/EmailStepCard";
+import EmailEditor from "@/components/email-sequence/EmailEditor";
 
 const EmailSequenceSetup = () => {
   const { folderName } = useParams();
   const navigate = useNavigate();
   const [sequenceName, setSequenceName] = useState("");
-  const [selectedTemplate, setSelectedTemplate] = useState("");
-  const [subjectLine, setSubjectLine] = useState("");
-  const [emailContent, setEmailContent] = useState("");
-  const [sendTime, setSendTime] = useState("");
-  const [frequency, setFrequency] = useState("");
+  const [sendTime, setSendTime] = useState("9am");
+  const [companyName, setCompanyName] = useState("");
+  const [senderName, setSenderName] = useState("");
   const [candidates, setCandidates] = useState<ResumeAnalysis[]>([]);
   const [loading, setLoading] = useState(true);
+  
+  // Multi-step email management
+  const [emailSteps, setEmailSteps] = useState<EmailStep[]>([
+    {
+      id: '1',
+      stepNumber: 1,
+      subject: '',
+      content: '',
+      delayDays: 0,
+      delayUnit: 'days'
+    }
+  ]);
+  const [activeStepId, setActiveStepId] = useState<string>('1');
 
   useEffect(() => {
     const fetchCandidates = async () => {
@@ -37,9 +49,7 @@ const EmailSequenceSetup = () => {
         if (error) {
           console.error('Error fetching candidates:', error);
         } else {
-          // Map database fields to interface structure
           const mappedCandidates = (data || []).map(item => {
-            // Parse JSON strings
             const parseJsonString = (jsonStr: string | null): string[] => {
               if (!jsonStr) return [];
               try {
@@ -87,49 +97,107 @@ const EmailSequenceSetup = () => {
     }
   }, [folderName]);
 
-  const emailTemplates = [
-    { id: "initial", name: "Initial Contact", description: "First outreach email to candidates" },
-    { id: "follow-up", name: "Follow-up", description: "Second contact after no response" },
-    { id: "interview", name: "Interview Invitation", description: "Invite qualified candidates for interview" },
-    { id: "custom", name: "Custom Template", description: "Create your own email template" }
-  ];
+  const addStep = () => {
+    const newStepNumber = emailSteps.length + 1;
+    const newStep: EmailStep = {
+      id: Date.now().toString(),
+      stepNumber: newStepNumber,
+      subject: '',
+      content: '',
+      delayDays: newStepNumber === 1 ? 0 : 3,
+      delayUnit: 'days'
+    };
+    setEmailSteps([...emailSteps, newStep]);
+    setActiveStepId(newStep.id);
+  };
+
+  const deleteStep = (stepId: string) => {
+    if (emailSteps.length === 1) {
+      toast({
+        title: "Cannot Delete",
+        description: "You must have at least one email step.",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    const newSteps = emailSteps
+      .filter(s => s.id !== stepId)
+      .map((step, index) => ({ ...step, stepNumber: index + 1 }));
+    
+    setEmailSteps(newSteps);
+    
+    if (activeStepId === stepId) {
+      setActiveStepId(newSteps[0].id);
+    }
+  };
+
+  const updateStep = (stepId: string, field: keyof EmailStep, value: string | number) => {
+    setEmailSteps(steps =>
+      steps.map(step =>
+        step.id === stepId ? { ...step, [field]: value } : step
+      )
+    );
+  };
+
+  const updateActiveStepContent = (field: 'subject' | 'content', value: string) => {
+    updateStep(activeStepId, field, value);
+  };
 
   const handleCreateSequence = async () => {
-    if (!sequenceName || !selectedTemplate) {
+    // Validation
+    if (!sequenceName.trim()) {
       toast({
         title: "Missing Information",
-        description: "Please fill in all required fields to create the email sequence.",
+        description: "Please enter a sequence name.",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    const hasEmptySteps = emailSteps.some(step => !step.subject.trim() || !step.content.trim());
+    if (hasEmptySteps) {
+      toast({
+        title: "Incomplete Steps",
+        description: "All email steps must have a subject and content.",
         variant: "destructive"
       });
       return;
     }
 
     try {
-      // Prepare the payload with all form data including candidate emails
-      const candidateEmails = candidates.map(candidate => ({
+      const candidateData = candidates.map(candidate => ({
         name: candidate.candidateName,
         email: candidate.email,
-        fitScore: candidate.fitScore
+        fitScore: candidate.fitScore,
+        firstName: candidate.candidateName.split(' ')[0]
       }));
 
       const payload = {
         sequenceName,
-        selectedTemplate,
-        subjectLine,
-        emailContent,
-        sendTime,
-        frequency,
         folderName,
-        candidates: candidateEmails,
-        candidateCount: candidateEmails.length,
+        candidates: candidateData,
+        candidateCount: candidateData.length,
+        emailSteps: emailSteps.map(step => ({
+          stepNumber: step.stepNumber,
+          subject: step.subject,
+          content: step.content,
+          delayDays: step.delayUnit === 'hours' ? 0 : step.delayDays,
+          delayHours: step.delayUnit === 'hours' ? step.delayDays : 0
+        })),
+        globalSettings: {
+          sendTime,
+          timezone: "UTC",
+          companyName: companyName || "Your Company",
+          senderName: senderName || "Recruiter"
+        },
         timestamp: new Date().toISOString(),
         status: "active"
       };
 
       console.log('Sending payload to webhook:', payload);
 
-      // Send data to the webhook with additional options to handle CORS
-      const response = await fetch('https://ppprasidha.app.n8n.cloud/webhook/a251b2f4-2dce-42a2-b3d9-caf544105748', {
+      const response = await fetch('https://praasidha.app.n8n.cloud/webhook/a251b2f4-2dce-42a2-b3d9-caf544105748', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -139,12 +207,8 @@ const EmailSequenceSetup = () => {
         mode: 'cors',
       });
 
-      console.log('Response status:', response.status);
-      console.log('Response headers:', response.headers);
-
       if (!response.ok) {
         const errorText = await response.text();
-        console.error('Response error:', errorText);
         throw new Error(`HTTP error! status: ${response.status}, message: ${errorText}`);
       }
 
@@ -153,10 +217,9 @@ const EmailSequenceSetup = () => {
 
       toast({
         title: "Email Sequence Created",
-        description: `Successfully created "${sequenceName}" for ${folderName} candidates and sent to webhook.`,
+        description: `Successfully created "${sequenceName}" with ${emailSteps.length} email${emailSteps.length > 1 ? 's' : ''}.`,
       });
 
-      // Navigate back to folder view after a short delay
       setTimeout(() => {
         navigate(`/folder/${encodeURIComponent(folderName || '')}`);
       }, 2000);
@@ -164,11 +227,10 @@ const EmailSequenceSetup = () => {
     } catch (error) {
       console.error('Error sending to webhook:', error);
       
-      // More detailed error message
       let errorMessage = "Failed to create email sequence. ";
       if (error instanceof Error) {
         if (error.message.includes('Failed to fetch')) {
-          errorMessage += "Network error - please check your connection or webhook URL.";
+          errorMessage += "Network error - please check your connection.";
         } else {
           errorMessage += error.message;
         }
@@ -182,11 +244,13 @@ const EmailSequenceSetup = () => {
     }
   };
 
+  const activeStep = emailSteps.find(s => s.id === activeStepId) || null;
+
   return (
     <div className="min-h-screen w-full bg-gradient-to-br from-slate-50 via-white to-emerald-50">
       <Header />
       
-      <main className="container mx-auto px-4 sm:px-6 py-8 pt-24 max-w-4xl animate-fade-in">
+      <main className="container mx-auto px-4 sm:px-6 py-8 pt-24 max-w-7xl animate-fade-in">
         {/* Header Section */}
         <div className="flex items-center gap-4 mb-8">
           <Button
@@ -201,178 +265,130 @@ const EmailSequenceSetup = () => {
               Email Sequence Setup
             </h1>
             <p className="text-slate-600">
-              Create an automated email sequence for <span className="font-semibold text-emerald-600">{folderName}</span> candidates
+              Create multi-step email sequence for <span className="font-semibold text-emerald-600">{folderName}</span>
             </p>
           </div>
         </div>
 
-        <div className="grid gap-6 lg:grid-cols-3">
-          {/* Main Setup Form */}
-          <div className="lg:col-span-2 space-y-6">
-            {/* Sequence Details */}
-            <Card className="backdrop-blur-sm bg-white/80 border border-slate-200/50 shadow-lg rounded-2xl">
+        {/* Main Content - Two Column Layout */}
+        <div className="grid lg:grid-cols-[350px_1fr] gap-6">
+          {/* Left Panel - Step List */}
+          <div className="space-y-4">
+            <Card>
               <CardHeader>
-                <CardTitle className="flex items-center gap-2 text-slate-800">
-                  <Settings className="h-5 w-5 text-emerald-600" />
-                  Sequence Configuration
-                </CardTitle>
+                <CardTitle className="text-base">Email Steps</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                {emailSteps.map((step) => (
+                  <EmailStepCard
+                    key={step.id}
+                    step={step}
+                    isActive={step.id === activeStepId}
+                    onSelect={() => setActiveStepId(step.id)}
+                    onDelete={() => deleteStep(step.id)}
+                    onUpdate={(field, value) => updateStep(step.id, field, value)}
+                    showDelete={emailSteps.length > 1}
+                  />
+                ))}
+                
+                <Button
+                  variant="outline"
+                  className="w-full"
+                  onClick={addStep}
+                >
+                  <Plus className="h-4 w-4 mr-2" />
+                  Add Email Step
+                </Button>
+              </CardContent>
+            </Card>
+
+            {/* Sequence Settings */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-base">Sequence Settings</CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
                 <div>
-                  <Label htmlFor="sequence-name" className="text-slate-700 font-medium">
-                    Sequence Name *
-                  </Label>
+                  <Label htmlFor="sequence-name">Sequence Name *</Label>
                   <Input
                     id="sequence-name"
-                    placeholder="e.g., AI Engineers Outreach 2024"
+                    placeholder="e.g., AI Engineers Outreach"
                     value={sequenceName}
                     onChange={(e) => setSequenceName(e.target.value)}
-                    className="mt-2 border-slate-200 focus:border-emerald-300 focus:ring-emerald-200"
+                    className="mt-2"
                   />
                 </div>
 
                 <div>
-                  <Label htmlFor="template-select" className="text-slate-700 font-medium">
-                    Email Template *
-                  </Label>
-                  <Select value={selectedTemplate} onValueChange={setSelectedTemplate}>
-                    <SelectTrigger className="mt-2 border-slate-200 focus:border-emerald-300 focus:ring-emerald-200">
-                      <SelectValue placeholder="Choose an email template" />
+                  <Label htmlFor="company-name">Company Name</Label>
+                  <Input
+                    id="company-name"
+                    placeholder="Your Company"
+                    value={companyName}
+                    onChange={(e) => setCompanyName(e.target.value)}
+                    className="mt-2"
+                  />
+                </div>
+
+                <div>
+                  <Label htmlFor="sender-name">Sender Name</Label>
+                  <Input
+                    id="sender-name"
+                    placeholder="Your Name"
+                    value={senderName}
+                    onChange={(e) => setSenderName(e.target.value)}
+                    className="mt-2"
+                  />
+                </div>
+
+                <div>
+                  <Label htmlFor="send-time">Send Time</Label>
+                  <Select value={sendTime} onValueChange={setSendTime}>
+                    <SelectTrigger className="mt-2">
+                      <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      {emailTemplates.map((template) => (
-                        <SelectItem key={template.id} value={template.id}>
-                          <div>
-                            <div className="font-medium">{template.name}</div>
-                            <div className="text-sm text-slate-500">{template.description}</div>
-                          </div>
-                        </SelectItem>
-                      ))}
+                      <SelectItem value="9am">9:00 AM</SelectItem>
+                      <SelectItem value="11am">11:00 AM</SelectItem>
+                      <SelectItem value="2pm">2:00 PM</SelectItem>
+                      <SelectItem value="4pm">4:00 PM</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
 
-                <div>
-                  <Label htmlFor="subject-line" className="text-slate-700 font-medium">
-                    Subject Line
-                  </Label>
-                  <Input
-                    id="subject-line"
-                    placeholder="Exciting AI Engineering Opportunity at [Company]"
-                    value={subjectLine}
-                    onChange={(e) => setSubjectLine(e.target.value)}
-                    className="mt-2 border-slate-200 focus:border-emerald-300 focus:ring-emerald-200"
-                  />
-                </div>
-
-                <div>
-                  <Label htmlFor="email-content" className="text-slate-700 font-medium">
-                    Email Content Preview
-                  </Label>
-                  <Textarea
-                    id="email-content"
-                    placeholder="Hi [Candidate Name], We came across your profile and are impressed by your AI/ML experience..."
-                    value={emailContent}
-                    onChange={(e) => setEmailContent(e.target.value)}
-                    rows={6}
-                    className="mt-2 border-slate-200 focus:border-emerald-300 focus:ring-emerald-200"
-                  />
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* Timing Settings */}
-            <Card className="backdrop-blur-sm bg-white/80 border border-slate-200/50 shadow-lg rounded-2xl">
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2 text-slate-800">
-                  <Clock className="h-5 w-5 text-emerald-600" />
-                  Timing & Schedule
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <Label htmlFor="send-time" className="text-slate-700 font-medium">
-                      Send Time
-                    </Label>
-                    <Select value={sendTime} onValueChange={setSendTime}>
-                      <SelectTrigger className="mt-2 border-slate-200 focus:border-emerald-300">
-                        <SelectValue placeholder="Select time" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="9am">9:00 AM</SelectItem>
-                        <SelectItem value="11am">11:00 AM</SelectItem>
-                        <SelectItem value="2pm">2:00 PM</SelectItem>
-                        <SelectItem value="4pm">4:00 PM</SelectItem>
-                      </SelectContent>
-                    </Select>
+                <div className="pt-4 space-y-2">
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-muted-foreground flex items-center gap-2">
+                      <Users className="h-4 w-4" />
+                      Recipients:
+                    </span>
+                    <span className="font-semibold">{candidates.length}</span>
                   </div>
-                  <div>
-                    <Label htmlFor="frequency" className="text-slate-700 font-medium">
-                      Frequency
-                    </Label>
-                    <Select value={frequency} onValueChange={setFrequency}>
-                      <SelectTrigger className="mt-2 border-slate-200 focus:border-emerald-300">
-                        <SelectValue placeholder="Select frequency" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="daily">Daily</SelectItem>
-                        <SelectItem value="weekly">Weekly</SelectItem>
-                        <SelectItem value="bi-weekly">Bi-weekly</SelectItem>
-                      </SelectContent>
-                    </Select>
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-muted-foreground flex items-center gap-2">
+                      <Clock className="h-4 w-4" />
+                      Total Steps:
+                    </span>
+                    <span className="font-semibold">{emailSteps.length}</span>
                   </div>
                 </div>
+
+                <Button
+                  onClick={handleCreateSequence}
+                  className="w-full bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-600 hover:to-teal-600"
+                >
+                  <Send className="h-4 w-4 mr-2" />
+                  Create Sequence
+                </Button>
               </CardContent>
             </Card>
           </div>
 
-          {/* Summary Sidebar */}
-          <div className="space-y-6">
-            <Card className="backdrop-blur-sm bg-white/80 border border-slate-200/50 shadow-lg rounded-2xl">
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2 text-slate-800">
-                  <Users className="h-5 w-5 text-emerald-600" />
-                  Sequence Summary
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="flex items-center justify-between">
-                  <span className="text-slate-600">Target Folder:</span>
-                  <span className="font-semibold text-emerald-600">{folderName}</span>
-                </div>
-                <div className="flex items-center justify-between">
-                  <span className="text-slate-600">Recipients:</span>
-                  <span className="font-semibold">{candidates.length} candidates</span>
-                </div>
-                <div className="flex items-center justify-between">
-                  <span className="text-slate-600">Status:</span>
-                  <span className="font-semibold text-amber-600">Draft</span>
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* Action Buttons */}
-            <div className="space-y-3">
-              <Button
-                onClick={handleCreateSequence}
-                className="w-full bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-600 hover:to-teal-600 text-white shadow-lg shadow-emerald-500/25 hover:shadow-xl hover:shadow-emerald-500/30 transition-all duration-300 rounded-xl font-medium py-3 group"
-              >
-                <div className="flex items-center gap-2">
-                  <Send className="h-5 w-5 group-hover:scale-110 transition-transform duration-200" />
-                  Create & Start Sequence
-                </div>
-              </Button>
-
-              <Button
-                variant="outline"
-                className="w-full hover:bg-slate-50 hover:border-slate-300 transition-all duration-200 rounded-xl"
-              >
-                <Plus className="h-4 w-4 mr-2" />
-                Save as Draft
-              </Button>
-            </div>
-          </div>
+          {/* Right Panel - Email Editor */}
+          <EmailEditor
+            step={activeStep}
+            onUpdate={updateActiveStepContent}
+          />
         </div>
       </main>
     </div>
