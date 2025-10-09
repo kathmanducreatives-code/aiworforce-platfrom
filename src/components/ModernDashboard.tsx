@@ -47,6 +47,8 @@ const ModernDashboard = () => {
   const [isFullViewDialogOpen, setIsFullViewDialogOpen] = useState(false);
   const [viewMode, setViewMode] = useState<'all' | 'folders'>('all');
   const [selectedFolder, setSelectedFolder] = useState<string | null>(null);
+  const [isFolderDialogOpen, setIsFolderDialogOpen] = useState(false);
+  const [newFolderName, setNewFolderName] = useState("");
   const [filters, setFilters] = useState({
     scoreRange: 'all',
     rewardFactor: 'all',
@@ -124,6 +126,63 @@ const ModernDashboard = () => {
       });
     }
   };
+
+  const handleAddToEmailSequence = () => {
+    if (selectedCandidates.size === 0) return;
+    setIsFolderDialogOpen(true);
+  };
+
+  const handleFolderNameSubmit = async () => {
+    if (!newFolderName.trim()) {
+      toast({
+        title: 'Folder Name Required',
+        description: 'Please enter a folder name for the selected candidates.',
+        variant: 'destructive'
+      });
+      return;
+    }
+
+    try {
+      // Update the recruitment_name for all selected candidates
+      const candidateIds = Array.from(selectedCandidates);
+      const { error } = await supabase
+        .from('resume_analyses')
+        .update({ recruitment_name: newFolderName.trim() })
+        .in('id', candidateIds);
+
+      if (error) {
+        console.error('Error updating folder name:', error);
+        toast({
+          title: 'Update Failed',
+          description: 'Failed to assign candidates to folder. Please try again.',
+          variant: 'destructive'
+        });
+        return;
+      }
+
+      // Refresh data to show updated folder names
+      await fetchResumeData();
+      
+      toast({
+        title: 'Folder Created',
+        description: `${candidateIds.length} candidate${candidateIds.length > 1 ? 's' : ''} added to "${newFolderName}".`
+      });
+
+      // Close dialog and navigate to email sequence setup
+      setIsFolderDialogOpen(false);
+      setSelectedCandidates(new Set());
+      navigate(`/email-sequence/${encodeURIComponent(newFolderName.trim())}`);
+      setNewFolderName("");
+    } catch (error) {
+      console.error('Error:', error);
+      toast({
+        title: 'Error',
+        description: 'An unexpected error occurred.',
+        variant: 'destructive'
+      });
+    }
+  };
+
   const fetchResumeData = async () => {
     try {
       setLoading(true);
@@ -545,12 +604,7 @@ const ModernDashboard = () => {
                           Clear Selection
                         </Button>
                         <Button 
-                          onClick={() => {
-                            toast({
-                              title: "Email Sequence",
-                              description: `Pushing ${selectedCandidates.size} candidate${selectedCandidates.size > 1 ? 's' : ''} to email sequence...`,
-                            });
-                          }}
+                          onClick={handleAddToEmailSequence}
                           className="gap-2 px-6 py-2 rounded-xl font-medium bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-600 hover:to-teal-600 text-white shadow-lg shadow-emerald-500/25 hover:shadow-xl hover:shadow-emerald-500/30 transition-all duration-200"
                         >
                           <Mail className="h-4 w-4" />
@@ -1030,6 +1084,62 @@ const ModernDashboard = () => {
         onOpenChange={setIsFullViewDialogOpen}
         candidate={selectedCandidateFullView}
       />
+
+      {/* Folder Naming Dialog - Opens when adding candidates to email sequence */}
+      <Dialog open={isFolderDialogOpen} onOpenChange={setIsFolderDialogOpen}>
+        <DialogContent className="sm:max-w-md backdrop-blur-sm bg-white/95 border border-slate-200/50 shadow-2xl rounded-2xl">
+          <DialogHeader>
+            <DialogTitle className="text-2xl font-bold bg-gradient-to-r from-slate-800 to-slate-600 bg-clip-text text-transparent">
+              Name Your Candidate Group
+            </DialogTitle>
+            <DialogDescription className="text-slate-600">
+              Create a folder name for the {selectedCandidates.size} selected candidate{selectedCandidates.size > 1 ? 's' : ''}. This will help you organize and track your email sequences.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label htmlFor="folder-name" className="text-slate-700 font-medium">
+                Folder Name *
+              </Label>
+              <Input
+                id="folder-name"
+                placeholder="e.g., Senior AI Engineers Q1 2025"
+                value={newFolderName}
+                onChange={(e) => setNewFolderName(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    handleFolderNameSubmit();
+                  }
+                }}
+                className="border-slate-200 focus:border-emerald-300 focus:ring-emerald-200"
+                autoFocus
+              />
+              <p className="text-xs text-slate-500 mt-1">
+                Choose a descriptive name to easily identify this group later
+              </p>
+            </div>
+          </div>
+          <div className="flex justify-end gap-3">
+            <Button
+              variant="outline"
+              onClick={() => {
+                setIsFolderDialogOpen(false);
+                setNewFolderName("");
+              }}
+              className="rounded-xl hover:bg-slate-50"
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={handleFolderNameSubmit}
+              className="bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-600 hover:to-teal-600 text-white shadow-lg shadow-emerald-500/25 hover:shadow-xl hover:shadow-emerald-500/30 transition-all duration-200 rounded-xl"
+            >
+              <Folder className="h-4 w-4 mr-2" />
+              Continue to Email Setup
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>;
 };
 export default ModernDashboard;
