@@ -129,7 +129,7 @@ const EmailSequenceSetup = () => {
       console.log('Sending payload to webhook:', payload);
 
       // Send data to the webhook with additional options to handle CORS
-      const response = await fetch('https://praasidha.app.n8n.cloud/webhook/a251b2f4-2dce-42a2-b3d9-caf544105748', {
+      const response = await fetch('https://ppprasidha.app.n8n.cloud/webhook/a251b2f4-2dce-42a2-b3d9-caf544105748', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
