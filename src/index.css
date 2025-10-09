@@ -255,6 +255,20 @@ html {
     100% { transform: translateX(100%); }
   }
 
+  @keyframes premium-shine {
+    0% {
+      transform: translateX(-100%) skewX(-15deg);
+      opacity: 0;
+    }
+    50% {
+      opacity: 0.6;
+    }
+    100% {
+      transform: translateX(200%) skewX(-15deg);
+      opacity: 0;
+    }
+  }
+
   @keyframes slideInFromTop {
     from {
       opacity: 0;
@@ -314,6 +328,31 @@ html {
 
   .animate-shimmer {
     animation: shimmer 2s ease-in-out infinite;
+  }
+
+  .animate-premium-shine {
+    animation: premium-shine 3s ease-in-out infinite;
+  }
+
+  /* Premium shine effect for badges */
+  .badge-shine {
+    position: relative;
+    overflow: hidden;
+  }
+
+  .badge-shine::after {
+    content: '';
+    position: absolute;
+    top: -50%;
+    left: 0;
+    width: 50%;
+    height: 200%;
+    background: linear-gradient(90deg, 
+      transparent 0%, 
+      rgba(255, 255, 255, 0.3) 50%, 
+      transparent 100%
+    );
+    animation: premium-shine 3s ease-in-out infinite;
   }
 
   .animate-slide-in-top {
