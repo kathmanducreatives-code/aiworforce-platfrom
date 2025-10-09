@@ -382,24 +382,13 @@ const ModernDashboard = () => {
                 <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                 <Input placeholder="Search candidates, emails, or resume titles..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} className="pl-10" />
               </div>
-              <div className="flex gap-3">
-                {selectedCandidates.size > 0 && (
-                  <Button 
-                    onClick={handleBulkDelete}
-                    variant="destructive"
-                    className="gap-2 px-6 py-2 rounded-xl font-medium bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 text-white shadow-lg shadow-red-500/25 hover:shadow-xl hover:shadow-red-500/30 transition-all duration-200"
-                  >
-                    <Trash2 className="h-4 w-4" />
-                    Delete ({selectedCandidates.size})
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button variant="outline" size="sm" className="gap-2">
+                    <Filter className="h-4 w-4" />
+                    Filters
                   </Button>
-                )}
-                <Popover>
-                  <PopoverTrigger asChild>
-                    <Button variant="outline" size="sm" className="gap-2">
-                      <Filter className="h-4 w-4" />
-                      Filters
-                    </Button>
-                  </PopoverTrigger>
+                </PopoverTrigger>
                 <PopoverContent className="w-80" align="end">
                   <div className="space-y-4">
                     <div>
@@ -456,7 +445,6 @@ const ModernDashboard = () => {
                   </div>
                  </PopoverContent>
                </Popover>
-              </div>
             </div>
 
             {/* Summary Cards */}
@@ -527,6 +515,48 @@ const ModernDashboard = () => {
                 </CardContent>
               </Card>
             </div>
+
+            {/* Bulk Actions Bar - Appears when candidates are selected */}
+            {selectedCandidates.size > 0 && (
+              <div className="mb-4 animate-fade-in">
+                <Card className="backdrop-blur-sm bg-gradient-to-r from-cyan-50/80 to-teal-50/80 border-cyan-200/50 shadow-lg rounded-2xl overflow-hidden">
+                  <CardContent className="p-4">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-3">
+                        <div className="flex items-center justify-center h-10 w-10 rounded-full bg-cyan-500 text-white font-bold shadow-lg">
+                          {selectedCandidates.size}
+                        </div>
+                        <div>
+                          <p className="font-semibold text-slate-800">
+                            {selectedCandidates.size} {selectedCandidates.size === 1 ? 'candidate' : 'candidates'} selected
+                          </p>
+                          <p className="text-sm text-slate-600">
+                            Choose an action to apply to selected candidates
+                          </p>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-3">
+                        <Button
+                          onClick={() => setSelectedCandidates(new Set())}
+                          variant="outline"
+                          className="gap-2 px-4 py-2 rounded-xl font-medium border-slate-300 hover:border-slate-400 hover:bg-white transition-all duration-200"
+                        >
+                          <X className="h-4 w-4" />
+                          Clear Selection
+                        </Button>
+                        <Button 
+                          onClick={handleBulkDelete}
+                          className="gap-2 px-6 py-2 rounded-xl font-medium bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 text-white shadow-lg shadow-red-500/25 hover:shadow-xl hover:shadow-red-500/30 transition-all duration-200"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                          Delete Selected
+                        </Button>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              </div>
+            )}
 
             {/* Candidate List */}
             {filteredResumes.length > 0 ? (
