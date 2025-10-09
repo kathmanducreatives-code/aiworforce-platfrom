@@ -86,6 +86,44 @@ const ModernDashboard = () => {
       });
     }
   };
+
+  const handleBulkDelete = async () => {
+    if (selectedCandidates.size === 0) return;
+
+    try {
+      const candidateIds = Array.from(selectedCandidates);
+      const { error } = await supabase
+        .from('resume_analyses')
+        .delete()
+        .in('id', candidateIds);
+
+      if (error) {
+        console.error('Error deleting candidates:', error);
+        toast({
+          title: 'Bulk Delete Failed',
+          description: 'Failed to delete selected candidates. Please try again.',
+          variant: 'destructive'
+        });
+        return;
+      }
+
+      // Remove from local state
+      setResumeData(prev => prev.filter(resume => !selectedCandidates.has(resume.id!)));
+      setSelectedCandidates(new Set());
+      
+      toast({
+        title: 'Candidates Deleted',
+        description: `Successfully removed ${candidateIds.length} candidate${candidateIds.length > 1 ? 's' : ''}.`
+      });
+    } catch (error) {
+      console.error('Error deleting candidates:', error);
+      toast({
+        title: 'Bulk Delete Failed',
+        description: 'An unexpected error occurred.',
+        variant: 'destructive'
+      });
+    }
+  };
   const fetchResumeData = async () => {
     try {
       setLoading(true);
@@ -344,13 +382,24 @@ const ModernDashboard = () => {
                 <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                 <Input placeholder="Search candidates, emails, or resume titles..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} className="pl-10" />
               </div>
-              <Popover>
-                <PopoverTrigger asChild>
-                  <Button variant="outline" size="sm" className="gap-2">
-                    <Filter className="h-4 w-4" />
-                    Filters
+              <div className="flex gap-3">
+                {selectedCandidates.size > 0 && (
+                  <Button 
+                    onClick={handleBulkDelete}
+                    variant="destructive"
+                    className="gap-2 px-6 py-2 rounded-xl font-medium bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 text-white shadow-lg shadow-red-500/25 hover:shadow-xl hover:shadow-red-500/30 transition-all duration-200"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                    Delete ({selectedCandidates.size})
                   </Button>
-                </PopoverTrigger>
+                )}
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button variant="outline" size="sm" className="gap-2">
+                      <Filter className="h-4 w-4" />
+                      Filters
+                    </Button>
+                  </PopoverTrigger>
                 <PopoverContent className="w-80" align="end">
                   <div className="space-y-4">
                     <div>
@@ -405,8 +454,9 @@ const ModernDashboard = () => {
                       </Select>
                     </div>
                   </div>
-                </PopoverContent>
-              </Popover>
+                 </PopoverContent>
+               </Popover>
+              </div>
             </div>
 
             {/* Summary Cards */}
