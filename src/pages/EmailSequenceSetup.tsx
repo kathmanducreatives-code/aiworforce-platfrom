@@ -201,14 +201,13 @@ const EmailSequenceSetup = () => {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Accept': 'application/json',
         },
         body: JSON.stringify(payload),
-        mode: 'no-cors', // Handle CORS issues
       });
 
-      // Since we're using no-cors, we can't check response status or body
-      console.log('Webhook triggered successfully');
+      console.log('Webhook response:', response.status);
+      const result = await response.json();
+      console.log('Webhook result:', result);
 
       toast({
         title: "Email Sequence Created",
