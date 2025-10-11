@@ -18,6 +18,10 @@ const EmailSequenceSetup = () => {
   const navigate = useNavigate();
   const [sequenceName, setSequenceName] = useState("");
   const [sendTime, setSendTime] = useState("9am");
+  const [sendTimeEnd, setSendTimeEnd] = useState("");
+  const [timezone, setTimezone] = useState(
+    Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC"
+  );
   const [companyName, setCompanyName] = useState("");
   const [senderName, setSenderName] = useState("");
   const [candidates, setCandidates] = useState<ResumeAnalysis[]>([]);
@@ -268,7 +272,8 @@ const EmailSequenceSetup = () => {
               sender_name: sender,
               send_time_utc: sendTimeUTC,
               send_time: sendTime,
-              timezone: "UTC",
+              send_time_end: sendTimeEnd || null,
+              timezone: timezone,
               status: "pending",
               sequence_name: sequenceName,
               folder_name: folderName
@@ -430,19 +435,79 @@ const EmailSequenceSetup = () => {
                   />
                 </div>
 
-                <div>
-                  <Label htmlFor="send-time">Send Time</Label>
-                  <Select value={sendTime} onValueChange={setSendTime}>
-                    <SelectTrigger className="mt-2">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="9am">9:00 AM</SelectItem>
-                      <SelectItem value="11am">11:00 AM</SelectItem>
-                      <SelectItem value="2pm">2:00 PM</SelectItem>
-                      <SelectItem value="4pm">4:00 PM</SelectItem>
-                    </SelectContent>
-                  </Select>
+                <div className="pt-2">
+                  <h4 className="text-sm font-semibold mb-3 text-slate-700">Delivery Preferences</h4>
+                  
+                  <div className="space-y-4">
+                    <div>
+                      <Label htmlFor="send-time-start">Send Between (Start)</Label>
+                      <Select value={sendTime} onValueChange={setSendTime}>
+                        <SelectTrigger className="mt-2">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="6am">6:00 AM</SelectItem>
+                          <SelectItem value="7am">7:00 AM</SelectItem>
+                          <SelectItem value="8am">8:00 AM</SelectItem>
+                          <SelectItem value="9am">9:00 AM</SelectItem>
+                          <SelectItem value="10am">10:00 AM</SelectItem>
+                          <SelectItem value="11am">11:00 AM</SelectItem>
+                          <SelectItem value="12pm">12:00 PM</SelectItem>
+                          <SelectItem value="1pm">1:00 PM</SelectItem>
+                          <SelectItem value="2pm">2:00 PM</SelectItem>
+                          <SelectItem value="3pm">3:00 PM</SelectItem>
+                          <SelectItem value="4pm">4:00 PM</SelectItem>
+                          <SelectItem value="5pm">5:00 PM</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    <div>
+                      <Label htmlFor="send-time-end">Send Between (End - Optional)</Label>
+                      <Select value={sendTimeEnd} onValueChange={setSendTimeEnd}>
+                        <SelectTrigger className="mt-2">
+                          <SelectValue placeholder="No end time" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="">No end time</SelectItem>
+                          <SelectItem value="12pm">12:00 PM</SelectItem>
+                          <SelectItem value="1pm">1:00 PM</SelectItem>
+                          <SelectItem value="2pm">2:00 PM</SelectItem>
+                          <SelectItem value="3pm">3:00 PM</SelectItem>
+                          <SelectItem value="4pm">4:00 PM</SelectItem>
+                          <SelectItem value="5pm">5:00 PM</SelectItem>
+                          <SelectItem value="6pm">6:00 PM</SelectItem>
+                          <SelectItem value="7pm">7:00 PM</SelectItem>
+                          <SelectItem value="8pm">8:00 PM</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    <div>
+                      <Label htmlFor="timezone">Timezone</Label>
+                      <Select value={timezone} onValueChange={setTimezone}>
+                        <SelectTrigger className="mt-2">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="America/New_York">Eastern Time (ET)</SelectItem>
+                          <SelectItem value="America/Chicago">Central Time (CT)</SelectItem>
+                          <SelectItem value="America/Denver">Mountain Time (MT)</SelectItem>
+                          <SelectItem value="America/Los_Angeles">Pacific Time (PT)</SelectItem>
+                          <SelectItem value="America/Phoenix">Arizona Time (MST)</SelectItem>
+                          <SelectItem value="America/Anchorage">Alaska Time (AKT)</SelectItem>
+                          <SelectItem value="Pacific/Honolulu">Hawaii Time (HST)</SelectItem>
+                          <SelectItem value="UTC">UTC</SelectItem>
+                          <SelectItem value="Europe/London">London (GMT/BST)</SelectItem>
+                          <SelectItem value="Europe/Paris">Paris (CET/CEST)</SelectItem>
+                          <SelectItem value="Asia/Tokyo">Tokyo (JST)</SelectItem>
+                          <SelectItem value="Asia/Shanghai">Shanghai (CST)</SelectItem>
+                          <SelectItem value="Asia/Kolkata">India (IST)</SelectItem>
+                          <SelectItem value="Australia/Sydney">Sydney (AEDT/AEST)</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
                 </div>
 
                 <div className="pt-4 space-y-2">
