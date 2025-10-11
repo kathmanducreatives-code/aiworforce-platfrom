@@ -144,6 +144,57 @@ const EmailSequenceSetup = () => {
     updateStep(activeStepId, field, value);
   };
 
+  // Helper function to calculate send_time_utc for each step
+  const calculateSendTimeUTC = (stepNumber: number, baseDate: Date): string => {
+    const step = emailSteps.find(s => s.stepNumber === stepNumber);
+    if (!step) return baseDate.toISOString();
+
+    // Parse sendTime (e.g., "9am" -> 9)
+    const hour = parseInt(sendTime.replace(/[^0-9]/g, ''));
+    const isPM = sendTime.toLowerCase().includes('pm');
+    const hourIn24 = isPM && hour !== 12 ? hour + 12 : hour === 12 && !isPM ? 0 : hour;
+
+    // Start with base date
+    const sendDate = new Date(baseDate);
+    sendDate.setUTCHours(hourIn24, 0, 0, 0);
+
+    // For step 1, use the base date + sendTime
+    if (stepNumber === 1) {
+      return sendDate.toISOString();
+    }
+
+    // For step 2+, add delays from all previous steps
+    let totalDelayHours = 0;
+    for (let i = 1; i < stepNumber; i++) {
+      const prevStep = emailSteps.find(s => s.stepNumber === i);
+      if (prevStep) {
+        if (prevStep.delayUnit === 'hours') {
+          totalDelayHours += prevStep.delayDays;
+        } else {
+          totalDelayHours += prevStep.delayDays * 24;
+        }
+      }
+    }
+
+    sendDate.setUTCHours(sendDate.getUTCHours() + totalDelayHours);
+    return sendDate.toISOString();
+  };
+
+  // Helper function to replace tokens in text
+  const replaceTokens = (
+    text: string,
+    candidateName: string,
+    firstName: string,
+    company: string,
+    sender: string
+  ): string => {
+    return text
+      .replace(/\{\{firstName\}\}/g, firstName)
+      .replace(/\{\{candidateName\}\}/g, candidateName)
+      .replace(/\{\{companyName\}\}/g, company)
+      .replace(/\{\{senderName\}\}/g, sender);
+  };
+
   const handleCreateSequence = async () => {
     // Validation
     if (!sequenceName.trim()) {
@@ -166,57 +217,101 @@ const EmailSequenceSetup = () => {
     }
 
     try {
-      const candidateData = candidates.map(candidate => ({
-        name: candidate.candidateName,
-        email: candidate.email,
-        fitScore: candidate.fitScore,
-        firstName: candidate.candidateName.split(' ')[0]
-      }));
-
-      const payload = {
-        sequenceName,
-        folderName,
-        candidates: candidateData,
-        candidateCount: candidateData.length,
-        emailSteps: emailSteps.map(step => ({
-          stepNumber: step.stepNumber,
-          subject: step.subject,
-          content: step.content,
-          delayDays: step.delayUnit === 'hours' ? 0 : step.delayDays,
-          delayHours: step.delayUnit === 'hours' ? step.delayDays : 0
-        })),
-        globalSettings: {
-          sendTime,
-          timezone: "UTC",
-          companyName: companyName || "Your Company",
-          senderName: senderName || "Recruiter"
-        },
-        timestamp: new Date().toISOString(),
-        status: "active"
-      };
-
-      console.log('Sending payload to webhook:', payload);
-
-      const response = await fetch('https://ppprasidha.app.n8n.cloud/webhook/lovable-intake', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(payload),
-      });
-
-      console.log('Webhook response:', response.status);
-      const result = await response.json();
-      console.log('Webhook result:', result);
+      const company = companyName || "Your Company";
+      const sender = senderName || "Recruiter";
+      const baseDate = new Date();
+      
+      let successCount = 0;
+      let failureCount = 0;
+      const totalEmails = candidates.length * emailSteps.length;
 
       toast({
-        title: "Email Sequence Created",
-        description: `Successfully created "${sequenceName}" with ${emailSteps.length} email${emailSteps.length > 1 ? 's' : ''}.`,
+        title: "Scheduling Emails",
+        description: `Scheduling ${totalEmails} emails for ${candidates.length} candidate(s)...`,
       });
 
-      setTimeout(() => {
-        navigate(`/folder/${encodeURIComponent(folderName || '')}`);
-      }, 2000);
+      // Loop through each candidate
+      for (const candidate of candidates) {
+        const firstName = candidate.candidateName.split(' ')[0];
+        
+        // Loop through each email step
+        for (const step of emailSteps) {
+          try {
+            const sendTimeUTC = calculateSendTimeUTC(step.stepNumber, baseDate);
+            
+            // Replace tokens in subject and content
+            const personalizedSubject = replaceTokens(
+              step.subject,
+              candidate.candidateName,
+              firstName,
+              company,
+              sender
+            );
+            
+            const personalizedContent = replaceTokens(
+              step.content,
+              candidate.candidateName,
+              firstName,
+              company,
+              sender
+            );
+
+            // Create individual payload for this specific email
+            const individualPayload = {
+              candidate_name: candidate.candidateName,
+              candidate_email: candidate.email,
+              fit_score: candidate.fitScore || 0,
+              step_number: step.stepNumber,
+              subject: personalizedSubject,
+              content: personalizedContent,
+              company_name: company,
+              sender_name: sender,
+              send_time_utc: sendTimeUTC,
+              send_time: sendTime,
+              timezone: "UTC",
+              status: "pending",
+              sequence_name: sequenceName,
+              folder_name: folderName
+            };
+
+            console.log(`Sending email ${step.stepNumber} for ${candidate.candidateName}:`, individualPayload);
+
+            // Send POST request for this individual email
+            const response = await fetch('https://ppprasidha.app.n8n.cloud/webhook/lovable-intake', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify(individualPayload),
+            });
+
+            if (response.ok) {
+              successCount++;
+              console.log(`✓ Successfully scheduled email ${step.stepNumber} for ${candidate.candidateName}`);
+            } else {
+              failureCount++;
+              console.error(`✗ Failed to schedule email ${step.stepNumber} for ${candidate.candidateName}:`, response.status);
+            }
+          } catch (emailError) {
+            failureCount++;
+            console.error(`✗ Error scheduling email ${step.stepNumber} for ${candidate.candidateName}:`, emailError);
+          }
+        }
+      }
+
+      // Show final summary
+      if (successCount > 0) {
+        toast({
+          title: "Email Sequence Created",
+          description: `Successfully scheduled ${successCount} email${successCount !== 1 ? 's' : ''} for ${candidates.length} candidate${candidates.length !== 1 ? 's' : ''}.${failureCount > 0 ? ` ${failureCount} failed.` : ''}`,
+        });
+
+        setTimeout(() => {
+          navigate(`/folder/${encodeURIComponent(folderName || '')}`);
+        }, 2000);
+      } else {
+        throw new Error('All email scheduling requests failed');
+      }
 
     } catch (error) {
       console.error('Error sending to webhook:', error);
