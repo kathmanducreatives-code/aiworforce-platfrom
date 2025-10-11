@@ -262,21 +262,38 @@ const EmailSequenceSetup = () => {
 
             // Create individual payload for this specific email
             const individualPayload = {
+              // Candidate Information
               candidate_name: candidate.candidateName,
               candidate_email: candidate.email,
               fit_score: candidate.fitScore || 0,
+              
+              // Email Step Details
               step_number: step.stepNumber,
+              total_steps: emailSteps.length,
               subject: personalizedSubject,
               content: personalizedContent,
+              delay_days: step.delayDays,
+              delay_unit: step.delayUnit,
+              
+              // Global Settings
               company_name: company,
               sender_name: sender,
-              send_time_utc: sendTimeUTC,
               send_time: sendTime,
               send_time_end: sendTimeEnd || null,
               timezone: timezone,
+              
+              // Scheduling Information
+              send_time_utc: sendTimeUTC,
               status: "pending",
+              
+              // Sequence Metadata
               sequence_name: sequenceName,
-              folder_name: folderName
+              folder_name: folderName,
+              sequence_created_at: new Date().toISOString(),
+              
+              // Additional Context
+              recruitment_name: candidate.recruitmentName || folderName,
+              candidate_id: candidate.id
             };
 
             console.log(`Sending email ${step.stepNumber} for ${candidate.candidateName}:`, individualPayload);
