@@ -469,7 +469,6 @@ const EmailSequenceSetup = () => {
                           <SelectValue placeholder="No end time" />
                         </SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="">No end time</SelectItem>
                           <SelectItem value="12pm">12:00 PM</SelectItem>
                           <SelectItem value="1pm">1:00 PM</SelectItem>
                           <SelectItem value="2pm">2:00 PM</SelectItem>
