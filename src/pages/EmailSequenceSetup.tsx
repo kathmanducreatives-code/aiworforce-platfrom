@@ -232,25 +232,37 @@ const EmailSequenceSetup = () => {
       const sender = senderName || "Recruiter";
       const baseDate = startDate;
       
+      // Generate unique sequence ID
+      const sequenceId = `seq_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
+      
+      // Parse send time windows to standardized format (HH:mm)
+      const parseSendTime = (timeStr: string): string => {
+        const hour = parseInt(timeStr.replace(/[^0-9]/g, ''));
+        const isPM = timeStr.toLowerCase().includes('pm');
+        const hourIn24 = isPM && hour !== 12 ? hour + 12 : hour === 12 && !isPM ? 0 : hour;
+        return `${hourIn24.toString().padStart(2, '0')}:00`;
+      };
+      
+      const windowStart = parseSendTime(sendTime);
+      const windowEnd = sendTimeEnd ? parseSendTime(sendTimeEnd) : parseSendTime(sendTime);
+      
       let successCount = 0;
       let failureCount = 0;
-      const totalEmails = candidates.length * emailSteps.length;
 
       toast({
         title: "Scheduling Emails",
-        description: `Scheduling ${totalEmails} emails for ${candidates.length} candidate(s)...`,
+        description: `Scheduling email sequences for ${candidates.length} candidate(s)...`,
       });
 
-      // Loop through each candidate
+      // Loop through each candidate and send complete sequence
       for (const candidate of candidates) {
-        const firstName = candidate.candidateName.split(' ')[0];
-        
-        // Loop through each email step
-        for (const step of emailSteps) {
-          try {
+        try {
+          const firstName = candidate.candidateName.split(' ')[0];
+          
+          // Build all steps with personalized content
+          const steps = emailSteps.map((step) => {
             const sendTimeUTC = calculateSendTimeUTC(step.stepNumber, baseDate);
             
-            // Replace tokens in subject and content
             const personalizedSubject = replaceTokens(
               step.subject,
               candidate.candidateName,
@@ -267,73 +279,80 @@ const EmailSequenceSetup = () => {
               sender
             );
 
-            // Create individual payload for this specific email
-            const individualPayload = {
-              // Candidate Information
-              candidate_name: candidate.candidateName,
-              candidate_email: candidate.email,
-              fit_score: candidate.fitScore || 0,
-              
-              // Email Step Details
+            return {
               step_number: step.stepNumber,
-              total_steps: emailSteps.length,
               subject: personalizedSubject,
               content: personalizedContent,
               delay_days: step.delayDays,
               delay_unit: step.delayUnit,
-              
-              // Global Settings
-              company_name: company,
-              sender_name: sender,
-              send_time: sendTime,
-              send_time_end: sendTimeEnd || null,
-              timezone: timezone,
-              start_date: startDate.toISOString(),
-              
-              // Scheduling Information
-              send_time_utc: sendTimeUTC,
-              status: "pending",
-              
-              // Sequence Metadata
-              sequence_name: sequenceName,
-              folder_name: folderName,
-              sequence_created_at: new Date().toISOString(),
-              
-              // Additional Context
-              recruitment_name: candidate.recruitmentName || folderName,
-              candidate_id: candidate.id
+              send_time_utc: sendTimeUTC
             };
+          });
 
-            console.log(`Sending email ${step.stepNumber} for ${candidate.candidateName}:`, individualPayload);
+          // Create complete sequence payload with all steps
+          const sequencePayload = {
+            // Unique Identifiers
+            sequence_id: sequenceId,
+            candidate_id: candidate.id,
+            
+            // Candidate Information
+            candidate_name: candidate.candidateName,
+            candidate_email: candidate.email,
+            fit_score: candidate.fitScore || 0,
+            
+            // Sequence Metadata
+            sequence_name: sequenceName,
+            folder_name: folderName,
+            recruitment_name: candidate.recruitmentName || folderName,
+            
+            // All Email Steps
+            total_steps: emailSteps.length,
+            steps: steps,
+            
+            // Send Window Configuration
+            window_start: windowStart,
+            window_end: windowEnd,
+            timezone: timezone,
+            start_date: startDate.toISOString(),
+            
+            // Global Settings
+            company_name: company,
+            sender_name: sender,
+            
+            // Sequence Tracking
+            sequence_created_at: new Date().toISOString(),
+            status: "pending"
+          };
 
-            // Send POST request for this individual email
-            const response = await fetch('https://ppprasidha.app.n8n.cloud/webhook/lovable-intake', {
-              method: 'POST',
-              headers: {
-                'Content-Type': 'application/json',
-              },
-              body: JSON.stringify(individualPayload),
-            });
+          console.log(`Sending complete sequence for ${candidate.candidateName}:`, sequencePayload);
 
-            if (response.ok) {
-              successCount++;
-              console.log(`✓ Successfully scheduled email ${step.stepNumber} for ${candidate.candidateName}`);
-            } else {
-              failureCount++;
-              console.error(`✗ Failed to schedule email ${step.stepNumber} for ${candidate.candidateName}:`, response.status);
-            }
-          } catch (emailError) {
+          // Send POST request with complete sequence
+          const response = await fetch('https://ppprasidha.app.n8n.cloud/webhook/lovable-intake', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(sequencePayload),
+          });
+
+          if (response.ok) {
+            successCount++;
+            console.log(`✓ Successfully scheduled sequence for ${candidate.candidateName}`);
+          } else {
             failureCount++;
-            console.error(`✗ Error scheduling email ${step.stepNumber} for ${candidate.candidateName}:`, emailError);
+            console.error(`✗ Failed to schedule sequence for ${candidate.candidateName}:`, response.status);
           }
+        } catch (error) {
+          failureCount++;
+          console.error(`✗ Error scheduling sequence for ${candidate.candidateName}:`, error);
         }
       }
 
       // Show final summary
       if (successCount > 0) {
         toast({
-          title: "Email Sequence Created",
-          description: `Successfully scheduled ${successCount} email${successCount !== 1 ? 's' : ''} for ${candidates.length} candidate${candidates.length !== 1 ? 's' : ''}.${failureCount > 0 ? ` ${failureCount} failed.` : ''}`,
+          title: "Email Sequences Created",
+          description: `Successfully scheduled ${successCount} complete sequence${successCount !== 1 ? 's' : ''} with ${emailSteps.length} step${emailSteps.length !== 1 ? 's' : ''} each.${failureCount > 0 ? ` ${failureCount} failed.` : ''}`,
         });
 
         setTimeout(() => {
