@@ -25,11 +25,12 @@ export const CandidateAnalysisDialog = ({ open, onOpenChange, candidate }: Candi
 
     const handleScroll = () => {
       const scrollTop = scrollElement.scrollTop;
-      setIsScrollingDown(scrollTop > lastScrollTop.current && scrollTop > 20);
+      // Fade out when scrolling down past 10px
+      setIsScrollingDown(scrollTop > lastScrollTop.current && scrollTop > 10);
       lastScrollTop.current = scrollTop;
     };
 
-    scrollElement.addEventListener('scroll', handleScroll);
+    scrollElement.addEventListener('scroll', handleScroll, { passive: true });
     return () => scrollElement.removeEventListener('scroll', handleScroll);
   }, []);
 
@@ -122,7 +123,7 @@ export const CandidateAnalysisDialog = ({ open, onOpenChange, candidate }: Candi
         <div ref={scrollRef} className="flex-1 overflow-y-auto overflow-x-hidden">
           <div className="p-4 md:p-6 lg:p-8">
             <Tabs defaultValue="overview" className="w-full">
-              <TabsList className={`sticky top-0 z-10 grid w-full grid-cols-3 mb-4 md:mb-6 lg:mb-8 h-auto p-1 bg-muted border rounded-lg transition-opacity duration-300 ${isScrollingDown ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}>
+              <TabsList className={`sticky top-0 z-10 grid w-full grid-cols-3 mb-4 md:mb-6 lg:mb-8 h-auto p-1 bg-muted border rounded-lg transition-all duration-500 ease-in-out ${isScrollingDown ? 'opacity-0 -translate-y-2 pointer-events-none' : 'opacity-100 translate-y-0'}`}>
                 <TabsTrigger 
                   value="overview" 
                   className="gap-1.5 md:gap-2 py-2 md:py-2.5 lg:py-3 rounded-xl transition-all duration-300 font-medium text-xs md:text-sm group data-[state=active]:bg-gradient-to-r data-[state=active]:from-emerald-500 data-[state=active]:to-teal-500 data-[state=active]:text-white data-[state=active]:shadow-lg data-[state=active]:shadow-emerald-500/25 hover:shadow-xl hover:shadow-emerald-500/30"
