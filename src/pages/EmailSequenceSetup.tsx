@@ -288,6 +288,7 @@ const EmailSequenceSetup = () => {
               send_time: sendTime,
               send_time_end: sendTimeEnd || null,
               timezone: timezone,
+              start_date: startDate.toISOString(),
               
               // Scheduling Information
               send_time_utc: sendTimeUTC,
