@@ -21,8 +21,10 @@ const EmailSequenceSetup = () => {
   const { folderName } = useParams();
   const navigate = useNavigate();
   const [sequenceName, setSequenceName] = useState("");
-  const [sendTime, setSendTime] = useState("9am");
-  const [sendTimeEnd, setSendTimeEnd] = useState("");
+  const [sendTimeHour, setSendTimeHour] = useState("9");
+  const [sendTimePeriod, setSendTimePeriod] = useState("am");
+  const [sendTimeEndHour, setSendTimeEndHour] = useState("");
+  const [sendTimeEndPeriod, setSendTimeEndPeriod] = useState("pm");
   const [timezone, setTimezone] = useState(
     Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC"
   );
@@ -158,9 +160,9 @@ const EmailSequenceSetup = () => {
     const step = emailSteps.find(s => s.stepNumber === stepNumber);
     if (!step) return baseDate.toISOString();
 
-    // Parse sendTime (e.g., "9am" -> 9)
-    const hour = parseInt(sendTime.replace(/[^0-9]/g, ''));
-    const isPM = sendTime.toLowerCase().includes('pm');
+    // Parse sendTime from hour and period
+    const hour = parseInt(sendTimeHour);
+    const isPM = sendTimePeriod === 'pm';
     const hourIn24 = isPM && hour !== 12 ? hour + 12 : hour === 12 && !isPM ? 0 : hour;
 
     // Start with base date
@@ -236,15 +238,15 @@ const EmailSequenceSetup = () => {
       const sequenceId = `seq_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
       
       // Parse send time windows to standardized format (HH:mm)
-      const parseSendTime = (timeStr: string): string => {
-        const hour = parseInt(timeStr.replace(/[^0-9]/g, ''));
-        const isPM = timeStr.toLowerCase().includes('pm');
-        const hourIn24 = isPM && hour !== 12 ? hour + 12 : hour === 12 && !isPM ? 0 : hour;
+      const parseSendTime = (hour: string, period: string): string => {
+        const hourNum = parseInt(hour);
+        const isPM = period === 'pm';
+        const hourIn24 = isPM && hourNum !== 12 ? hourNum + 12 : hourNum === 12 && !isPM ? 0 : hourNum;
         return `${hourIn24.toString().padStart(2, '0')}:00`;
       };
       
-      const windowStart = parseSendTime(sendTime);
-      const windowEnd = sendTimeEnd ? parseSendTime(sendTimeEnd) : parseSendTime(sendTime);
+      const windowStart = parseSendTime(sendTimeHour, sendTimePeriod);
+      const windowEnd = sendTimeEndHour ? parseSendTime(sendTimeEndHour, sendTimeEndPeriod) : parseSendTime(sendTimeHour, sendTimePeriod);
       
       let successCount = 0;
       let failureCount = 0;
@@ -485,45 +487,70 @@ const EmailSequenceSetup = () => {
                   <div className="space-y-4">
                     <div>
                       <Label htmlFor="send-time-start">Send Between (Start)</Label>
-                      <Select value={sendTime} onValueChange={setSendTime}>
-                        <SelectTrigger className="mt-2">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="6am">6:00 AM</SelectItem>
-                          <SelectItem value="7am">7:00 AM</SelectItem>
-                          <SelectItem value="8am">8:00 AM</SelectItem>
-                          <SelectItem value="9am">9:00 AM</SelectItem>
-                          <SelectItem value="10am">10:00 AM</SelectItem>
-                          <SelectItem value="11am">11:00 AM</SelectItem>
-                          <SelectItem value="12pm">12:00 PM</SelectItem>
-                          <SelectItem value="1pm">1:00 PM</SelectItem>
-                          <SelectItem value="2pm">2:00 PM</SelectItem>
-                          <SelectItem value="3pm">3:00 PM</SelectItem>
-                          <SelectItem value="4pm">4:00 PM</SelectItem>
-                          <SelectItem value="5pm">5:00 PM</SelectItem>
-                        </SelectContent>
-                      </Select>
+                      <div className="flex gap-2 mt-2">
+                        <Select value={sendTimeHour} onValueChange={setSendTimeHour}>
+                          <SelectTrigger className="flex-1">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="1">1</SelectItem>
+                            <SelectItem value="2">2</SelectItem>
+                            <SelectItem value="3">3</SelectItem>
+                            <SelectItem value="4">4</SelectItem>
+                            <SelectItem value="5">5</SelectItem>
+                            <SelectItem value="6">6</SelectItem>
+                            <SelectItem value="7">7</SelectItem>
+                            <SelectItem value="8">8</SelectItem>
+                            <SelectItem value="9">9</SelectItem>
+                            <SelectItem value="10">10</SelectItem>
+                            <SelectItem value="11">11</SelectItem>
+                            <SelectItem value="12">12</SelectItem>
+                          </SelectContent>
+                        </Select>
+                        <Select value={sendTimePeriod} onValueChange={setSendTimePeriod}>
+                          <SelectTrigger className="w-24">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="am">AM</SelectItem>
+                            <SelectItem value="pm">PM</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
                     </div>
 
                     <div>
                       <Label htmlFor="send-time-end">Send Between (End - Optional)</Label>
-                      <Select value={sendTimeEnd} onValueChange={setSendTimeEnd}>
-                        <SelectTrigger className="mt-2">
-                          <SelectValue placeholder="No end time" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="12pm">12:00 PM</SelectItem>
-                          <SelectItem value="1pm">1:00 PM</SelectItem>
-                          <SelectItem value="2pm">2:00 PM</SelectItem>
-                          <SelectItem value="3pm">3:00 PM</SelectItem>
-                          <SelectItem value="4pm">4:00 PM</SelectItem>
-                          <SelectItem value="5pm">5:00 PM</SelectItem>
-                          <SelectItem value="6pm">6:00 PM</SelectItem>
-                          <SelectItem value="7pm">7:00 PM</SelectItem>
-                          <SelectItem value="8pm">8:00 PM</SelectItem>
-                        </SelectContent>
-                      </Select>
+                      <div className="flex gap-2 mt-2">
+                        <Select value={sendTimeEndHour} onValueChange={setSendTimeEndHour}>
+                          <SelectTrigger className="flex-1">
+                            <SelectValue placeholder="No end time" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="1">1</SelectItem>
+                            <SelectItem value="2">2</SelectItem>
+                            <SelectItem value="3">3</SelectItem>
+                            <SelectItem value="4">4</SelectItem>
+                            <SelectItem value="5">5</SelectItem>
+                            <SelectItem value="6">6</SelectItem>
+                            <SelectItem value="7">7</SelectItem>
+                            <SelectItem value="8">8</SelectItem>
+                            <SelectItem value="9">9</SelectItem>
+                            <SelectItem value="10">10</SelectItem>
+                            <SelectItem value="11">11</SelectItem>
+                            <SelectItem value="12">12</SelectItem>
+                          </SelectContent>
+                        </Select>
+                        <Select value={sendTimeEndPeriod} onValueChange={setSendTimeEndPeriod}>
+                          <SelectTrigger className="w-24">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="am">AM</SelectItem>
+                            <SelectItem value="pm">PM</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
                     </div>
 
                     <div>
