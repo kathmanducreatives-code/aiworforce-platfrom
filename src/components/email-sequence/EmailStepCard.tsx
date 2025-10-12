@@ -12,7 +12,7 @@ export interface EmailStep {
   subject: string;
   content: string;
   delayDays: number;
-  delayUnit: 'days' | 'hours';
+  delayUnit: 'days' | 'hours' | 'minutes';
 }
 
 interface EmailStepCardProps {
@@ -94,12 +94,13 @@ const EmailStepCard = ({ step, isActive, onSelect, onDelete, onUpdate, showDelet
                 <Label className="text-xs">Unit</Label>
                 <Select 
                   value={step.delayUnit} 
-                  onValueChange={(value) => onUpdate('delayUnit', value as 'days' | 'hours')}
+                  onValueChange={(value) => onUpdate('delayUnit', value as 'days' | 'hours' | 'minutes')}
                 >
                   <SelectTrigger className="h-8 text-sm">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
+                    <SelectItem value="minutes">Minutes</SelectItem>
                     <SelectItem value="hours">Hours</SelectItem>
                     <SelectItem value="days">Days</SelectItem>
                   </SelectContent>
