@@ -104,7 +104,7 @@ export const CandidateAnalysisDialog = ({ open, onOpenChange, candidate }: Candi
         <div className="flex-1 overflow-y-auto overflow-x-hidden">
           <div className="p-4 md:p-6 lg:p-8">
             <Tabs defaultValue="overview" className="w-full">
-              <TabsList className="grid w-full grid-cols-3 mb-4 md:mb-6 lg:mb-8 h-auto p-1 bg-muted border rounded-lg">
+              <TabsList className="sticky top-0 z-10 grid w-full grid-cols-3 mb-4 md:mb-6 lg:mb-8 h-auto p-1 bg-muted border rounded-lg">
                 <TabsTrigger 
                   value="overview" 
                   className="gap-1.5 md:gap-2 py-2 md:py-2.5 lg:py-3 rounded-xl transition-all duration-300 font-medium text-xs md:text-sm group data-[state=active]:bg-gradient-to-r data-[state=active]:from-emerald-500 data-[state=active]:to-teal-500 data-[state=active]:text-white data-[state=active]:shadow-lg data-[state=active]:shadow-emerald-500/25 hover:shadow-xl hover:shadow-emerald-500/30"
