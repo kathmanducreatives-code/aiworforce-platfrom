@@ -1,10 +1,14 @@
 import { useParams, useNavigate } from "react-router-dom";
-import { ArrowLeft, Plus, Send, Clock, Users } from "lucide-react";
+import { ArrowLeft, Plus, Send, Clock, Users, CalendarIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Calendar } from "@/components/ui/calendar";
+import { format } from "date-fns";
+import { cn } from "@/lib/utils";
 import Header from "@/components/Header";
 import { useState, useEffect } from "react";
 import { toast } from "@/hooks/use-toast";
@@ -24,6 +28,7 @@ const EmailSequenceSetup = () => {
   );
   const [companyName, setCompanyName] = useState("");
   const [senderName, setSenderName] = useState("");
+  const [startDate, setStartDate] = useState<Date>(new Date());
   const [candidates, setCandidates] = useState<ResumeAnalysis[]>([]);
   const [loading, setLoading] = useState(true);
   
@@ -168,19 +173,21 @@ const EmailSequenceSetup = () => {
     }
 
     // For step 2+, add delays from all previous steps
-    let totalDelayHours = 0;
+    let totalDelayMinutes = 0;
     for (let i = 1; i < stepNumber; i++) {
       const prevStep = emailSteps.find(s => s.stepNumber === i);
       if (prevStep) {
-        if (prevStep.delayUnit === 'hours') {
-          totalDelayHours += prevStep.delayDays;
+        if (prevStep.delayUnit === 'minutes') {
+          totalDelayMinutes += prevStep.delayDays;
+        } else if (prevStep.delayUnit === 'hours') {
+          totalDelayMinutes += prevStep.delayDays * 60;
         } else {
-          totalDelayHours += prevStep.delayDays * 24;
+          totalDelayMinutes += prevStep.delayDays * 24 * 60;
         }
       }
     }
 
-    sendDate.setUTCHours(sendDate.getUTCHours() + totalDelayHours);
+    sendDate.setUTCMinutes(sendDate.getUTCMinutes() + totalDelayMinutes);
     return sendDate.toISOString();
   };
 
@@ -223,7 +230,7 @@ const EmailSequenceSetup = () => {
     try {
       const company = companyName || "Your Company";
       const sender = senderName || "Recruiter";
-      const baseDate = new Date();
+      const baseDate = startDate;
       
       let successCount = 0;
       let failureCount = 0;
@@ -522,6 +529,34 @@ const EmailSequenceSetup = () => {
                           <SelectItem value="Australia/Sydney">Sydney (AEDT/AEST)</SelectItem>
                         </SelectContent>
                       </Select>
+                    </div>
+
+                    <div>
+                      <Label htmlFor="start-date">Start Date</Label>
+                      <Popover>
+                        <PopoverTrigger asChild>
+                          <Button
+                            variant="outline"
+                            className={cn(
+                              "w-full justify-start text-left font-normal mt-2",
+                              !startDate && "text-muted-foreground"
+                            )}
+                          >
+                            <CalendarIcon className="mr-2 h-4 w-4" />
+                            {startDate ? format(startDate, "PPP") : <span>Pick a date</span>}
+                          </Button>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-auto p-0" align="start">
+                          <Calendar
+                            mode="single"
+                            selected={startDate}
+                            onSelect={(date) => date && setStartDate(date)}
+                            disabled={(date) => date < new Date(new Date().setHours(0, 0, 0, 0))}
+                            initialFocus
+                            className={cn("p-3 pointer-events-auto")}
+                          />
+                        </PopoverContent>
+                      </Popover>
                     </div>
                   </div>
                 </div>
