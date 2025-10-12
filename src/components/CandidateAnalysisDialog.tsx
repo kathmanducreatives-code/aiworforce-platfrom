@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useRef, useState, useEffect } from "react";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -15,6 +15,24 @@ interface CandidateAnalysisDialogProps {
 }
 
 export const CandidateAnalysisDialog = ({ open, onOpenChange, candidate }: CandidateAnalysisDialogProps) => {
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const [isScrollingDown, setIsScrollingDown] = useState(false);
+  const lastScrollTop = useRef(0);
+
+  useEffect(() => {
+    const scrollElement = scrollRef.current;
+    if (!scrollElement) return;
+
+    const handleScroll = () => {
+      const scrollTop = scrollElement.scrollTop;
+      setIsScrollingDown(scrollTop > lastScrollTop.current && scrollTop > 20);
+      lastScrollTop.current = scrollTop;
+    };
+
+    scrollElement.addEventListener('scroll', handleScroll);
+    return () => scrollElement.removeEventListener('scroll', handleScroll);
+  }, []);
+
   if (!candidate) return null;
 
   return (
@@ -101,10 +119,10 @@ export const CandidateAnalysisDialog = ({ open, onOpenChange, candidate }: Candi
         </div>
           
         {/* Scrollable Content Area */}
-        <div className="flex-1 overflow-y-auto overflow-x-hidden">
+        <div ref={scrollRef} className="flex-1 overflow-y-auto overflow-x-hidden">
           <div className="p-4 md:p-6 lg:p-8">
             <Tabs defaultValue="overview" className="w-full">
-              <TabsList className="sticky top-0 z-10 grid w-full grid-cols-3 mb-4 md:mb-6 lg:mb-8 h-auto p-1 bg-muted border rounded-lg">
+              <TabsList className={`sticky top-0 z-10 grid w-full grid-cols-3 mb-4 md:mb-6 lg:mb-8 h-auto p-1 bg-muted border rounded-lg transition-opacity duration-300 ${isScrollingDown ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}>
                 <TabsTrigger 
                   value="overview" 
                   className="gap-1.5 md:gap-2 py-2 md:py-2.5 lg:py-3 rounded-xl transition-all duration-300 font-medium text-xs md:text-sm group data-[state=active]:bg-gradient-to-r data-[state=active]:from-emerald-500 data-[state=active]:to-teal-500 data-[state=active]:text-white data-[state=active]:shadow-lg data-[state=active]:shadow-emerald-500/25 hover:shadow-xl hover:shadow-emerald-500/30"
