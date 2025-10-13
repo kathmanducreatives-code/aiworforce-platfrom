@@ -44,7 +44,7 @@ export const CandidateAnalysisDialog = ({ open, onOpenChange, candidate }: Candi
       <DialogContent className="max-w-none w-screen h-screen p-0 gap-0 flex flex-col bg-background overflow-hidden m-0 rounded-none">
         {/* Clean, Minimal Header */}
         <div className="flex-shrink-0 border-b bg-background">
-          <DialogHeader className="px-8 py-8">
+          <DialogHeader className="px-8 lg:px-16 xl:px-24 py-8">
             <div className="flex items-start justify-between gap-8">
               {/* Candidate Info */}
               <div className="flex-1 space-y-6">
@@ -96,7 +96,7 @@ export const CandidateAnalysisDialog = ({ open, onOpenChange, candidate }: Candi
           
         {/* Scrollable Content Area */}
         <div ref={scrollRef} className="flex-1 overflow-y-auto overflow-x-hidden bg-muted/20">
-          <div className="max-w-6xl mx-auto px-8 py-12">
+          <div className="max-w-7xl xl:max-w-screen-xl 2xl:max-w-screen-2xl mx-auto px-8 lg:px-16 xl:px-24 py-12">
             <Tabs defaultValue="overview" className="w-full">
               <TabsList className="inline-flex h-11 items-center justify-center rounded-lg bg-muted/30 p-1 text-muted-foreground mb-12">
                 <TabsTrigger 
