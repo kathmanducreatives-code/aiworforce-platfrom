@@ -49,11 +49,11 @@ export const CandidateAnalysisDialog = ({ open, onOpenChange, candidate }: Candi
               {/* Candidate Info */}
               <div className="flex-1 space-y-6">
                 <div className="space-y-2">
-                  <DialogTitle className="text-2xl font-semibold bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent tracking-tight">
+                  <DialogTitle className="text-2xl font-semibold bg-gradient-to-r from-cyan-600 to-teal-600 bg-clip-text text-transparent tracking-tight">
                     {candidate.candidateName}
                   </DialogTitle>
                   <DialogDescription className="text-base text-muted-foreground flex items-center gap-2">
-                    <span className="w-1.5 h-1.5 rounded-full bg-accent"></span>
+                    <span className="w-1.5 h-1.5 rounded-full bg-cyan-500 animate-pulse"></span>
                     {candidate.email}
                   </DialogDescription>
                 </div>
@@ -85,7 +85,7 @@ export const CandidateAnalysisDialog = ({ open, onOpenChange, candidate }: Candi
               {candidate.overallScore !== undefined && (
                 <div className="flex flex-col items-end gap-1">
                   <div className="text-sm font-medium text-muted-foreground">Overall Score</div>
-                  <div className="text-5xl font-semibold bg-gradient-to-br from-primary to-accent bg-clip-text text-transparent">
+                  <div className="text-5xl font-semibold bg-gradient-to-br from-cyan-600 to-teal-600 bg-clip-text text-transparent">
                     {candidate.overallScore}<span className="text-2xl text-muted-foreground">/10</span>
                   </div>
                 </div>
@@ -101,19 +101,19 @@ export const CandidateAnalysisDialog = ({ open, onOpenChange, candidate }: Candi
               <TabsList className="inline-flex h-11 items-center justify-center rounded-lg bg-muted/30 p-1 text-muted-foreground mb-12">
                 <TabsTrigger 
                   value="overview" 
-                  className="inline-flex items-center justify-center whitespace-nowrap rounded-md px-6 py-2 text-sm font-medium transition-all data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-sm"
+                  className="inline-flex items-center justify-center whitespace-nowrap rounded-md px-6 py-2 text-sm font-medium transition-all data-[state=active]:bg-gradient-to-r data-[state=active]:from-cyan-500 data-[state=active]:to-teal-500 data-[state=active]:text-white data-[state=active]:shadow-sm hover:bg-cyan-50"
                 >
                   Overview
                 </TabsTrigger>
                 <TabsTrigger 
                   value="details" 
-                  className="inline-flex items-center justify-center whitespace-nowrap rounded-md px-6 py-2 text-sm font-medium transition-all data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-sm"
+                  className="inline-flex items-center justify-center whitespace-nowrap rounded-md px-6 py-2 text-sm font-medium transition-all data-[state=active]:bg-gradient-to-r data-[state=active]:from-cyan-500 data-[state=active]:to-teal-500 data-[state=active]:text-white data-[state=active]:shadow-sm hover:bg-cyan-50"
                 >
                   Details
                 </TabsTrigger>
                 <TabsTrigger 
                   value="ai-insights" 
-                  className="inline-flex items-center justify-center whitespace-nowrap rounded-md px-6 py-2 text-sm font-medium transition-all data-[state=active]:bg-accent data-[state=active]:text-accent-foreground data-[state=active]:shadow-sm"
+                  className="inline-flex items-center justify-center whitespace-nowrap rounded-md px-6 py-2 text-sm font-medium transition-all data-[state=active]:bg-gradient-to-r data-[state=active]:from-cyan-500 data-[state=active]:to-teal-500 data-[state=active]:text-white data-[state=active]:shadow-sm hover:bg-cyan-50"
                 >
                   AI Insights
                 </TabsTrigger>
@@ -124,19 +124,19 @@ export const CandidateAnalysisDialog = ({ open, onOpenChange, candidate }: Candi
                 {/* Score Metrics Grid */}
                 <div className="grid grid-cols-3 gap-6">
                   {/* Fit Score Card */}
-                  <Card className="bg-background border-accent/30 hover:border-accent/50 hover:shadow-lg hover:shadow-accent/10 transition-all duration-300 group bg-gradient-to-br from-accent/5 to-transparent">
+                  <Card className="bg-background border-cyan-300/30 hover:border-cyan-400/50 hover:shadow-lg hover:shadow-cyan-500/10 transition-all duration-300 group bg-gradient-to-br from-cyan-50/50 to-transparent animate-fade-in-up hover-lift">
                     <CardHeader className="pb-6">
                       <div className="flex items-center gap-3 mb-6">
-                        <div className="p-2.5 bg-accent/10 rounded-lg group-hover:bg-accent/20 transition-colors">
-                          <Target className="h-5 w-5 text-accent" />
+                        <div className="p-2.5 bg-cyan-100/50 rounded-lg group-hover:bg-cyan-200/50 transition-all duration-300 group-hover:scale-110">
+                          <Target className="h-5 w-5 text-cyan-600" />
                         </div>
                         <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
-                          <span className="w-1.5 h-1.5 rounded-full bg-accent"></span>
+                          <span className="w-1.5 h-1.5 rounded-full bg-cyan-500 animate-pulse"></span>
                           Fit Score
                         </CardTitle>
                       </div>
                       <div className="space-y-4">
-                        <div className="text-5xl font-semibold text-accent">
+                        <div className="text-5xl font-semibold bg-gradient-to-r from-cyan-600 to-teal-600 bg-clip-text text-transparent">
                           {candidate.fitScore}<span className="text-2xl text-muted-foreground">/10</span>
                         </div>
                         <Progress 
@@ -155,14 +155,14 @@ export const CandidateAnalysisDialog = ({ open, onOpenChange, candidate }: Candi
                   </Card>
 
                   {/* Risk Factor Card */}
-                  <Card className="bg-background border-destructive/30 hover:border-destructive/50 hover:shadow-lg hover:shadow-destructive/10 transition-all duration-300 group bg-gradient-to-br from-destructive/5 to-transparent">
+                  <Card className="bg-background border-destructive/30 hover:border-destructive/50 hover:shadow-lg hover:shadow-destructive/10 transition-all duration-300 group bg-gradient-to-br from-destructive/5 to-transparent animate-fade-in-up animate-delay-100 hover-lift">
                     <CardHeader className="pb-6">
                       <div className="flex items-center gap-3 mb-6">
-                        <div className="p-2.5 bg-destructive/10 rounded-lg group-hover:bg-destructive/20 transition-colors">
+                        <div className="p-2.5 bg-destructive/10 rounded-lg group-hover:bg-destructive/20 transition-all duration-300 group-hover:scale-110">
                           <ShieldAlert className="h-5 w-5 text-destructive" />
                         </div>
                         <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
-                          <span className="w-1.5 h-1.5 rounded-full bg-destructive"></span>
+                          <span className="w-1.5 h-1.5 rounded-full bg-destructive animate-pulse"></span>
                           Risk Factor
                         </CardTitle>
                       </div>
@@ -176,18 +176,18 @@ export const CandidateAnalysisDialog = ({ open, onOpenChange, candidate }: Candi
                   </Card>
 
                   {/* Reward Factor Card */}
-                  <Card className="bg-background border-primary/30 hover:border-primary/50 hover:shadow-lg hover:shadow-primary/10 transition-all duration-300 group bg-gradient-to-br from-primary/5 to-transparent">
+                  <Card className="bg-background border-teal-300/30 hover:border-teal-400/50 hover:shadow-lg hover:shadow-teal-500/10 transition-all duration-300 group bg-gradient-to-br from-teal-50/50 to-transparent animate-fade-in-up animate-delay-200 hover-lift">
                     <CardHeader className="pb-6">
                       <div className="flex items-center gap-3 mb-6">
-                        <div className="p-2.5 bg-primary/10 rounded-lg group-hover:bg-primary/20 transition-colors">
-                          <Trophy className="h-5 w-5 text-primary" />
+                        <div className="p-2.5 bg-teal-100/50 rounded-lg group-hover:bg-teal-200/50 transition-all duration-300 group-hover:scale-110">
+                          <Trophy className="h-5 w-5 text-teal-600" />
                         </div>
                         <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
-                          <span className="w-1.5 h-1.5 rounded-full bg-primary"></span>
+                          <span className="w-1.5 h-1.5 rounded-full bg-teal-500 animate-pulse"></span>
                           Reward Factor
                         </CardTitle>
                       </div>
-                      <div className="text-5xl font-semibold text-primary capitalize">
+                      <div className="text-5xl font-semibold bg-gradient-to-r from-teal-600 to-cyan-600 bg-clip-text text-transparent capitalize">
                         {candidate.rewardScore || candidate.rewardFactor}
                       </div>
                     </CardHeader>
@@ -202,27 +202,27 @@ export const CandidateAnalysisDialog = ({ open, onOpenChange, candidate }: Candi
                   {/* Strengths */}
                   {candidate.strengths?.length > 0 && (
                     <Collapsible open={strengthsOpen} onOpenChange={setStrengthsOpen}>
-                      <Card className="bg-background border-accent/30 hover:border-accent/50 transition-all duration-300 overflow-hidden bg-gradient-to-br from-accent/5 to-transparent">
+                      <Card className="bg-background border-cyan-300/30 hover:border-cyan-400/50 transition-all duration-300 overflow-hidden bg-gradient-to-br from-cyan-50/30 to-teal-50/30 animate-fade-in-up animate-delay-300 hover-lift">
                         <CollapsibleTrigger className="w-full">
-                          <CardHeader className="cursor-pointer hover:bg-accent/10 transition-colors">
+                          <CardHeader className="cursor-pointer hover:bg-cyan-50/50 transition-colors duration-300">
                             <div className="flex items-center justify-between">
                               <div className="flex items-center gap-4">
-                                <div className="p-2.5 bg-accent/10 rounded-lg">
-                                  <CheckCircle className="h-5 w-5 text-accent" />
+                                <div className="p-2.5 bg-cyan-100/50 rounded-lg group-hover:scale-110 transition-transform duration-300">
+                                  <CheckCircle className="h-5 w-5 text-cyan-600" />
                                 </div>
                                 <div className="text-left">
-                                  <CardTitle className="text-lg font-semibold text-accent flex items-center gap-2">
-                                    <span className="w-1 h-6 rounded-full bg-accent"></span>
+                                  <CardTitle className="text-lg font-semibold bg-gradient-to-r from-cyan-600 to-teal-600 bg-clip-text text-transparent flex items-center gap-2">
+                                    <span className="w-1 h-6 rounded-full bg-gradient-to-b from-cyan-500 to-teal-500"></span>
                                     Key Strengths
                                   </CardTitle>
                                   <p className="text-sm text-muted-foreground mt-1">Positive attributes identified</p>
                                 </div>
                               </div>
                               <div className="flex items-center gap-3">
-                                <Badge variant="outline" className="text-sm px-3 py-1 border-accent/30 text-accent">
+                                <Badge variant="outline" className="text-sm px-3 py-1 border-cyan-300/50 text-cyan-700 bg-cyan-50/50">
                                   {candidate.strengths.length}
                                 </Badge>
-                                <ChevronDown className={`h-5 w-5 text-accent transition-transform duration-300 ${strengthsOpen ? 'rotate-180' : ''}`} />
+                                <ChevronDown className={`h-5 w-5 text-cyan-600 transition-transform duration-300 ${strengthsOpen ? 'rotate-180' : ''}`} />
                               </div>
                             </div>
                           </CardHeader>
@@ -241,12 +241,12 @@ export const CandidateAnalysisDialog = ({ open, onOpenChange, candidate }: Candi
                   {/* Development Areas */}
                   {candidate.weaknesses?.length > 0 && (
                     <Collapsible open={weaknessesOpen} onOpenChange={setWeaknessesOpen}>
-                      <Card className="bg-background border-destructive/30 hover:border-destructive/50 transition-all duration-300 overflow-hidden bg-gradient-to-br from-destructive/5 to-transparent">
+                      <Card className="bg-background border-destructive/30 hover:border-destructive/50 transition-all duration-300 overflow-hidden bg-gradient-to-br from-destructive/5 to-transparent animate-fade-in-up animate-delay-500 hover-lift">
                         <CollapsibleTrigger className="w-full">
-                          <CardHeader className="cursor-pointer hover:bg-destructive/10 transition-colors">
+                          <CardHeader className="cursor-pointer hover:bg-destructive/10 transition-colors duration-300">
                             <div className="flex items-center justify-between">
                               <div className="flex items-center gap-4">
-                                <div className="p-2.5 bg-destructive/10 rounded-lg">
+                                <div className="p-2.5 bg-destructive/10 rounded-lg group-hover:scale-110 transition-transform duration-300">
                                   <AlertTriangle className="h-5 w-5 text-destructive" />
                                 </div>
                                 <div className="text-left">
@@ -280,7 +280,7 @@ export const CandidateAnalysisDialog = ({ open, onOpenChange, candidate }: Candi
 
                 {/* Resume Access */}
                 {candidate.resume && (
-                  <Card className="bg-background border hover:border-foreground/20 transition-all duration-300">
+                  <Card className="bg-background border-cyan-300/30 hover:border-cyan-400/50 transition-all duration-300 animate-fade-in-up animate-delay-700 hover-lift">
                     <CardContent className="p-8">
                       <div className="flex items-center justify-between">
                         <div className="flex items-center gap-4">
@@ -294,9 +294,10 @@ export const CandidateAnalysisDialog = ({ open, onOpenChange, candidate }: Candi
                         </div>
                         <Button
                           onClick={() => window.open(candidate.resume, '_blank')}
-                          className="bg-gradient-primary hover:opacity-90 text-primary-foreground transition-opacity"
+                          className="bg-gradient-to-r from-cyan-500 to-teal-500 hover:from-cyan-600 hover:to-teal-600 text-white shadow-lg hover:shadow-cyan-500/25 transition-all duration-300 relative overflow-hidden group"
                         >
-                          Open Resume
+                          <span className="absolute inset-0 bg-gradient-to-r from-cyan-400 to-teal-400 opacity-0 group-hover:opacity-100 transition-opacity duration-300"></span>
+                          <span className="relative z-10">Open Resume</span>
                         </Button>
                       </div>
                     </CardContent>
