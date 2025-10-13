@@ -49,10 +49,11 @@ export const CandidateAnalysisDialog = ({ open, onOpenChange, candidate }: Candi
               {/* Candidate Info */}
               <div className="flex-1 space-y-6">
                 <div className="space-y-2">
-                  <DialogTitle className="text-2xl font-semibold text-foreground tracking-tight">
+                  <DialogTitle className="text-2xl font-semibold bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent tracking-tight">
                     {candidate.candidateName}
                   </DialogTitle>
-                  <DialogDescription className="text-base text-muted-foreground">
+                  <DialogDescription className="text-base text-muted-foreground flex items-center gap-2">
+                    <span className="w-1.5 h-1.5 rounded-full bg-accent"></span>
                     {candidate.email}
                   </DialogDescription>
                 </div>
@@ -84,7 +85,7 @@ export const CandidateAnalysisDialog = ({ open, onOpenChange, candidate }: Candi
               {candidate.overallScore !== undefined && (
                 <div className="flex flex-col items-end gap-1">
                   <div className="text-sm font-medium text-muted-foreground">Overall Score</div>
-                  <div className="text-5xl font-semibold text-foreground">
+                  <div className="text-5xl font-semibold bg-gradient-to-br from-primary to-accent bg-clip-text text-transparent">
                     {candidate.overallScore}<span className="text-2xl text-muted-foreground">/10</span>
                   </div>
                 </div>
@@ -97,22 +98,22 @@ export const CandidateAnalysisDialog = ({ open, onOpenChange, candidate }: Candi
         <div ref={scrollRef} className="flex-1 overflow-y-auto overflow-x-hidden bg-muted/20">
           <div className="max-w-6xl mx-auto px-8 py-12">
             <Tabs defaultValue="overview" className="w-full">
-              <TabsList className="inline-flex h-11 items-center justify-center rounded-lg bg-muted p-1 text-muted-foreground mb-12">
+              <TabsList className="inline-flex h-11 items-center justify-center rounded-lg bg-muted/30 p-1 text-muted-foreground mb-12">
                 <TabsTrigger 
                   value="overview" 
-                  className="inline-flex items-center justify-center whitespace-nowrap rounded-md px-6 py-2 text-sm font-medium transition-all data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm"
+                  className="inline-flex items-center justify-center whitespace-nowrap rounded-md px-6 py-2 text-sm font-medium transition-all data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-sm"
                 >
                   Overview
                 </TabsTrigger>
                 <TabsTrigger 
                   value="details" 
-                  className="inline-flex items-center justify-center whitespace-nowrap rounded-md px-6 py-2 text-sm font-medium transition-all data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm"
+                  className="inline-flex items-center justify-center whitespace-nowrap rounded-md px-6 py-2 text-sm font-medium transition-all data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-sm"
                 >
                   Details
                 </TabsTrigger>
                 <TabsTrigger 
                   value="ai-insights" 
-                  className="inline-flex items-center justify-center whitespace-nowrap rounded-md px-6 py-2 text-sm font-medium transition-all data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm"
+                  className="inline-flex items-center justify-center whitespace-nowrap rounded-md px-6 py-2 text-sm font-medium transition-all data-[state=active]:bg-accent data-[state=active]:text-accent-foreground data-[state=active]:shadow-sm"
                 >
                   AI Insights
                 </TabsTrigger>
@@ -123,16 +124,19 @@ export const CandidateAnalysisDialog = ({ open, onOpenChange, candidate }: Candi
                 {/* Score Metrics Grid */}
                 <div className="grid grid-cols-3 gap-6">
                   {/* Fit Score Card */}
-                  <Card className="bg-background border hover:border-foreground/20 transition-all duration-300 group">
+                  <Card className="bg-background border-accent/30 hover:border-accent/50 hover:shadow-lg hover:shadow-accent/10 transition-all duration-300 group bg-gradient-to-br from-accent/5 to-transparent">
                     <CardHeader className="pb-6">
                       <div className="flex items-center gap-3 mb-6">
-                        <div className="p-2.5 bg-muted rounded-lg group-hover:bg-foreground/5 transition-colors">
-                          <Target className="h-5 w-5 text-muted-foreground" />
+                        <div className="p-2.5 bg-accent/10 rounded-lg group-hover:bg-accent/20 transition-colors">
+                          <Target className="h-5 w-5 text-accent" />
                         </div>
-                        <CardTitle className="text-sm font-medium text-muted-foreground">Fit Score</CardTitle>
+                        <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
+                          <span className="w-1.5 h-1.5 rounded-full bg-accent"></span>
+                          Fit Score
+                        </CardTitle>
                       </div>
                       <div className="space-y-4">
-                        <div className="text-5xl font-semibold text-foreground">
+                        <div className="text-5xl font-semibold text-accent">
                           {candidate.fitScore}<span className="text-2xl text-muted-foreground">/10</span>
                         </div>
                         <Progress 
@@ -151,15 +155,18 @@ export const CandidateAnalysisDialog = ({ open, onOpenChange, candidate }: Candi
                   </Card>
 
                   {/* Risk Factor Card */}
-                  <Card className="bg-background border hover:border-foreground/20 transition-all duration-300 group">
+                  <Card className="bg-background border-destructive/30 hover:border-destructive/50 hover:shadow-lg hover:shadow-destructive/10 transition-all duration-300 group bg-gradient-to-br from-destructive/5 to-transparent">
                     <CardHeader className="pb-6">
                       <div className="flex items-center gap-3 mb-6">
-                        <div className="p-2.5 bg-muted rounded-lg group-hover:bg-foreground/5 transition-colors">
-                          <ShieldAlert className="h-5 w-5 text-muted-foreground" />
+                        <div className="p-2.5 bg-destructive/10 rounded-lg group-hover:bg-destructive/20 transition-colors">
+                          <ShieldAlert className="h-5 w-5 text-destructive" />
                         </div>
-                        <CardTitle className="text-sm font-medium text-muted-foreground">Risk Factor</CardTitle>
+                        <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
+                          <span className="w-1.5 h-1.5 rounded-full bg-destructive"></span>
+                          Risk Factor
+                        </CardTitle>
                       </div>
-                      <div className="text-5xl font-semibold text-foreground capitalize">
+                      <div className="text-5xl font-semibold text-destructive capitalize">
                         {candidate.riskScore || candidate.riskFactor}
                       </div>
                     </CardHeader>
@@ -169,15 +176,18 @@ export const CandidateAnalysisDialog = ({ open, onOpenChange, candidate }: Candi
                   </Card>
 
                   {/* Reward Factor Card */}
-                  <Card className="bg-background border hover:border-foreground/20 transition-all duration-300 group">
+                  <Card className="bg-background border-primary/30 hover:border-primary/50 hover:shadow-lg hover:shadow-primary/10 transition-all duration-300 group bg-gradient-to-br from-primary/5 to-transparent">
                     <CardHeader className="pb-6">
                       <div className="flex items-center gap-3 mb-6">
-                        <div className="p-2.5 bg-muted rounded-lg group-hover:bg-foreground/5 transition-colors">
-                          <Trophy className="h-5 w-5 text-muted-foreground" />
+                        <div className="p-2.5 bg-primary/10 rounded-lg group-hover:bg-primary/20 transition-colors">
+                          <Trophy className="h-5 w-5 text-primary" />
                         </div>
-                        <CardTitle className="text-sm font-medium text-muted-foreground">Reward Factor</CardTitle>
+                        <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
+                          <span className="w-1.5 h-1.5 rounded-full bg-primary"></span>
+                          Reward Factor
+                        </CardTitle>
                       </div>
-                      <div className="text-5xl font-semibold text-foreground capitalize">
+                      <div className="text-5xl font-semibold text-primary capitalize">
                         {candidate.rewardScore || candidate.rewardFactor}
                       </div>
                     </CardHeader>
@@ -192,24 +202,27 @@ export const CandidateAnalysisDialog = ({ open, onOpenChange, candidate }: Candi
                   {/* Strengths */}
                   {candidate.strengths?.length > 0 && (
                     <Collapsible open={strengthsOpen} onOpenChange={setStrengthsOpen}>
-                      <Card className="bg-background border hover:border-foreground/20 transition-all duration-300 overflow-hidden">
+                      <Card className="bg-background border-accent/30 hover:border-accent/50 transition-all duration-300 overflow-hidden bg-gradient-to-br from-accent/5 to-transparent">
                         <CollapsibleTrigger className="w-full">
-                          <CardHeader className="cursor-pointer hover:bg-muted/50 transition-colors">
+                          <CardHeader className="cursor-pointer hover:bg-accent/10 transition-colors">
                             <div className="flex items-center justify-between">
                               <div className="flex items-center gap-4">
-                                <div className="p-2.5 bg-muted rounded-lg">
-                                  <CheckCircle className="h-5 w-5 text-muted-foreground" />
+                                <div className="p-2.5 bg-accent/10 rounded-lg">
+                                  <CheckCircle className="h-5 w-5 text-accent" />
                                 </div>
                                 <div className="text-left">
-                                  <CardTitle className="text-lg font-semibold text-foreground">Key Strengths</CardTitle>
+                                  <CardTitle className="text-lg font-semibold text-accent flex items-center gap-2">
+                                    <span className="w-1 h-6 rounded-full bg-accent"></span>
+                                    Key Strengths
+                                  </CardTitle>
                                   <p className="text-sm text-muted-foreground mt-1">Positive attributes identified</p>
                                 </div>
                               </div>
                               <div className="flex items-center gap-3">
-                                <Badge variant="outline" className="text-sm px-3 py-1">
+                                <Badge variant="outline" className="text-sm px-3 py-1 border-accent/30 text-accent">
                                   {candidate.strengths.length}
                                 </Badge>
-                                <ChevronDown className={`h-5 w-5 text-muted-foreground transition-transform duration-300 ${strengthsOpen ? 'rotate-180' : ''}`} />
+                                <ChevronDown className={`h-5 w-5 text-accent transition-transform duration-300 ${strengthsOpen ? 'rotate-180' : ''}`} />
                               </div>
                             </div>
                           </CardHeader>
@@ -228,24 +241,27 @@ export const CandidateAnalysisDialog = ({ open, onOpenChange, candidate }: Candi
                   {/* Development Areas */}
                   {candidate.weaknesses?.length > 0 && (
                     <Collapsible open={weaknessesOpen} onOpenChange={setWeaknessesOpen}>
-                      <Card className="bg-background border hover:border-foreground/20 transition-all duration-300 overflow-hidden">
+                      <Card className="bg-background border-destructive/30 hover:border-destructive/50 transition-all duration-300 overflow-hidden bg-gradient-to-br from-destructive/5 to-transparent">
                         <CollapsibleTrigger className="w-full">
-                          <CardHeader className="cursor-pointer hover:bg-muted/50 transition-colors">
+                          <CardHeader className="cursor-pointer hover:bg-destructive/10 transition-colors">
                             <div className="flex items-center justify-between">
                               <div className="flex items-center gap-4">
-                                <div className="p-2.5 bg-muted rounded-lg">
-                                  <AlertTriangle className="h-5 w-5 text-muted-foreground" />
+                                <div className="p-2.5 bg-destructive/10 rounded-lg">
+                                  <AlertTriangle className="h-5 w-5 text-destructive" />
                                 </div>
                                 <div className="text-left">
-                                  <CardTitle className="text-lg font-semibold text-foreground">Development Areas</CardTitle>
+                                  <CardTitle className="text-lg font-semibold text-destructive flex items-center gap-2">
+                                    <span className="w-1 h-6 rounded-full bg-destructive"></span>
+                                    Development Areas
+                                  </CardTitle>
                                   <p className="text-sm text-muted-foreground mt-1">Growth opportunities identified</p>
                                 </div>
                               </div>
                               <div className="flex items-center gap-3">
-                                <Badge variant="outline" className="text-sm px-3 py-1">
+                                <Badge variant="outline" className="text-sm px-3 py-1 border-destructive/30 text-destructive">
                                   {candidate.weaknesses.length}
                                 </Badge>
-                                <ChevronDown className={`h-5 w-5 text-muted-foreground transition-transform duration-300 ${weaknessesOpen ? 'rotate-180' : ''}`} />
+                                <ChevronDown className={`h-5 w-5 text-destructive transition-transform duration-300 ${weaknessesOpen ? 'rotate-180' : ''}`} />
                               </div>
                             </div>
                           </CardHeader>
@@ -278,8 +294,7 @@ export const CandidateAnalysisDialog = ({ open, onOpenChange, candidate }: Candi
                         </div>
                         <Button
                           onClick={() => window.open(candidate.resume, '_blank')}
-                          variant="outline"
-                          className="hover:bg-muted transition-colors"
+                          className="bg-gradient-primary hover:opacity-90 text-primary-foreground transition-opacity"
                         >
                           Open Resume
                         </Button>
@@ -389,14 +404,17 @@ export const CandidateAnalysisDialog = ({ open, onOpenChange, candidate }: Candi
               <TabsContent value="ai-insights" className="space-y-12">
                 {/* AI Analysis */}
                 {candidate.justification && (
-                  <Card className="bg-background border hover:border-foreground/20 transition-all duration-300">
-                    <CardHeader className="pb-6">
+                  <Card className="bg-background border-accent/30 hover:border-accent/50 transition-all duration-300 relative overflow-hidden bg-gradient-to-br from-accent/5 via-primary/5 to-transparent">
+                    <div className="absolute top-0 right-0 w-40 h-40 bg-accent/10 rounded-full blur-3xl"></div>
+                    <div className="absolute bottom-0 left-0 w-40 h-40 bg-primary/10 rounded-full blur-3xl"></div>
+                    <CardHeader className="pb-6 relative">
                       <div className="flex items-center gap-3">
-                        <div className="p-2.5 bg-muted rounded-lg">
-                          <Brain className="h-5 w-5 text-muted-foreground" />
+                        <div className="p-2.5 bg-gradient-to-br from-accent/20 to-primary/20 rounded-lg">
+                          <Brain className="h-5 w-5 text-accent" />
                         </div>
                         <div>
-                          <CardTitle className="text-lg font-semibold text-foreground">
+                          <CardTitle className="text-lg font-semibold bg-gradient-to-r from-accent to-primary bg-clip-text text-transparent flex items-center gap-2">
+                            <span className="w-1 h-6 rounded-full bg-gradient-to-b from-accent to-primary"></span>
                             AI-Powered Analysis
                           </CardTitle>
                           <p className="text-sm text-muted-foreground mt-1">
@@ -405,8 +423,8 @@ export const CandidateAnalysisDialog = ({ open, onOpenChange, candidate }: Candi
                         </div>
                       </div>
                     </CardHeader>
-                    <CardContent>
-                      <div className="p-6 bg-muted/50 rounded-lg">
+                    <CardContent className="relative">
+                      <div className="p-6 bg-gradient-to-br from-accent/5 to-primary/5 rounded-lg border border-accent/20">
                         <p className="text-base text-foreground leading-relaxed whitespace-pre-wrap">
                           {candidate.justification}
                         </p>
@@ -417,51 +435,60 @@ export const CandidateAnalysisDialog = ({ open, onOpenChange, candidate }: Candi
 
                 {/* AI Summary Cards */}
                 <div className="grid grid-cols-3 gap-6">
-                  <Card className="bg-background border hover:border-foreground/20 transition-all duration-300">
+                  <Card className="bg-background border-accent/30 hover:border-accent/50 hover:shadow-lg hover:shadow-accent/10 transition-all duration-300 bg-gradient-to-br from-accent/5 to-transparent">
                     <CardHeader className="pb-6">
                       <div className="flex items-center gap-3">
-                        <div className="p-2.5 bg-muted rounded-lg">
-                          <CheckCircle className="h-5 w-5 text-muted-foreground" />
+                        <div className="p-2.5 bg-accent/10 rounded-lg">
+                          <CheckCircle className="h-5 w-5 text-accent" />
                         </div>
-                        <CardTitle className="text-sm font-medium text-muted-foreground">Strengths</CardTitle>
+                        <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
+                          <span className="w-1.5 h-1.5 rounded-full bg-accent"></span>
+                          Strengths
+                        </CardTitle>
                       </div>
                     </CardHeader>
                     <CardContent>
-                      <div className="text-5xl font-semibold text-foreground mb-2">
+                      <div className="text-5xl font-semibold text-accent mb-2">
                         {candidate.strengths?.length || 0}
                       </div>
                       <p className="text-sm text-muted-foreground">Key strengths identified</p>
                     </CardContent>
                   </Card>
 
-                  <Card className="bg-background border hover:border-foreground/20 transition-all duration-300">
+                  <Card className="bg-background border-destructive/30 hover:border-destructive/50 hover:shadow-lg hover:shadow-destructive/10 transition-all duration-300 bg-gradient-to-br from-destructive/5 to-transparent">
                     <CardHeader className="pb-6">
                       <div className="flex items-center gap-3">
-                        <div className="p-2.5 bg-muted rounded-lg">
-                          <AlertTriangle className="h-5 w-5 text-muted-foreground" />
+                        <div className="p-2.5 bg-destructive/10 rounded-lg">
+                          <AlertTriangle className="h-5 w-5 text-destructive" />
                         </div>
-                        <CardTitle className="text-sm font-medium text-muted-foreground">Growth Areas</CardTitle>
+                        <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
+                          <span className="w-1.5 h-1.5 rounded-full bg-destructive"></span>
+                          Growth Areas
+                        </CardTitle>
                       </div>
                     </CardHeader>
                     <CardContent>
-                      <div className="text-5xl font-semibold text-foreground mb-2">
+                      <div className="text-5xl font-semibold text-destructive mb-2">
                         {candidate.weaknesses?.length || 0}
                       </div>
                       <p className="text-sm text-muted-foreground">Areas for development</p>
                     </CardContent>
                   </Card>
 
-                  <Card className="bg-background border hover:border-foreground/20 transition-all duration-300">
+                  <Card className="bg-background border-primary/30 hover:border-primary/50 hover:shadow-lg hover:shadow-primary/10 transition-all duration-300 bg-gradient-to-br from-primary/5 to-transparent">
                     <CardHeader className="pb-6">
                       <div className="flex items-center gap-3">
-                        <div className="p-2.5 bg-muted rounded-lg">
-                          <TrendingUp className="h-5 w-5 text-muted-foreground" />
+                        <div className="p-2.5 bg-primary/10 rounded-lg">
+                          <TrendingUp className="h-5 w-5 text-primary" />
                         </div>
-                        <CardTitle className="text-sm font-medium text-muted-foreground">Overall Score</CardTitle>
+                        <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
+                          <span className="w-1.5 h-1.5 rounded-full bg-primary"></span>
+                          Overall Score
+                        </CardTitle>
                       </div>
                     </CardHeader>
                     <CardContent>
-                      <div className="text-5xl font-semibold text-foreground mb-2">
+                      <div className="text-5xl font-semibold text-primary mb-2">
                         {candidate.overallScore}<span className="text-2xl text-muted-foreground">/10</span>
                       </div>
                       <p className="text-sm text-muted-foreground">Comprehensive rating</p>
