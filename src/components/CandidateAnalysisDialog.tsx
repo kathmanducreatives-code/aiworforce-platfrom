@@ -96,8 +96,8 @@ export const CandidateAnalysisDialog = ({ open, onOpenChange, candidate }: Candi
           
         {/* Scrollable Content Area */}
         <div ref={scrollRef} className="flex-1 overflow-y-auto overflow-x-hidden bg-muted/20">
-          <div className="max-w-7xl xl:max-w-screen-xl 2xl:max-w-screen-2xl mx-auto px-8 lg:px-16 xl:px-24 py-12">
-            <Tabs defaultValue="overview" className="w-full">
+          <div className="w-full h-full px-6 lg:px-12 py-8">
+            <Tabs defaultValue="overview" className="w-full h-full">
               <TabsList className="inline-flex h-11 items-center justify-center rounded-lg bg-muted/30 p-1 text-muted-foreground mb-12">
                 <TabsTrigger 
                   value="overview" 
