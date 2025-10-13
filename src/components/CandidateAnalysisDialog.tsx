@@ -6,8 +6,15 @@ import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
-import { Calendar, Folder, FileText, Target, ShieldAlert, Trophy, CheckCircle, AlertTriangle, Brain, TrendingUp, ChevronDown } from "lucide-react";
-import type { ResumeAnalysis } from "@/types/ResumeAnalysis";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Textarea } from "@/components/ui/textarea";
+import { Label } from "@/components/ui/label";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { Calendar, Folder, FileText, Target, ShieldAlert, Trophy, CheckCircle, AlertTriangle, Brain, TrendingUp, ChevronDown, Eye, Mail, X, BarChart3 } from "lucide-react";
+import { formatDistanceToNow } from 'date-fns';
+import { supabase } from "@/integrations/supabase/client";
+import { useToast } from "@/hooks/use-toast";
+import type { ResumeAnalysis, CandidateStatus, TimelineEvent, CandidateNote } from "@/types/ResumeAnalysis";
 
 interface CandidateAnalysisDialogProps {
   open: boolean;
@@ -21,6 +28,217 @@ export const CandidateAnalysisDialog = ({ open, onOpenChange, candidate }: Candi
   const lastScrollTop = useRef(0);
   const [strengthsOpen, setStrengthsOpen] = useState(true);
   const [weaknessesOpen, setWeaknessesOpen] = useState(true);
+  const { toast } = useToast();
+  
+  // Status tracking
+  const [currentStatus, setCurrentStatus] = useState<CandidateStatus>('new');
+  
+  // Timeline & Notes
+  const [timeline, setTimeline] = useState<TimelineEvent[]>([]);
+  const [notes, setNotes] = useState<CandidateNote[]>([]);
+  const [newNote, setNewNote] = useState("");
+  
+  // Comparison data
+  const [comparisonData, setComparisonData] = useState({
+    avgFitScore: 0,
+    avgOverallScore: 0,
+    percentileRank: 0,
+    totalCandidates: 0,
+    higherScoringCount: 0,
+    folderAvgScore: 0
+  });
+
+  // Status config helper
+  const getStatusConfig = (status: CandidateStatus) => {
+    const configs = {
+      new: { label: 'New', color: 'bg-blue-100 text-blue-700 border-blue-300', icon: <FileText className="h-3 w-3" /> },
+      reviewing: { label: 'Reviewing', color: 'bg-purple-100 text-purple-700 border-purple-300', icon: <Eye className="h-3 w-3" /> },
+      contacted: { label: 'Contacted', color: 'bg-yellow-100 text-yellow-700 border-yellow-300', icon: <Mail className="h-3 w-3" /> },
+      interview_scheduled: { label: 'Interview Scheduled', color: 'bg-indigo-100 text-indigo-700 border-indigo-300', icon: <Calendar className="h-3 w-3" /> },
+      interviewed: { label: 'Interviewed', color: 'bg-teal-100 text-teal-700 border-teal-300', icon: <CheckCircle className="h-3 w-3" /> },
+      offer_extended: { label: 'Offer Extended', color: 'bg-green-100 text-green-700 border-green-300', icon: <Trophy className="h-3 w-3" /> },
+      hired: { label: 'Hired', color: 'bg-emerald-100 text-emerald-700 border-emerald-300', icon: <CheckCircle className="h-3 w-3" /> },
+      rejected: { label: 'Rejected', color: 'bg-red-100 text-red-700 border-red-300', icon: <X className="h-3 w-3" /> }
+    };
+    return configs[status] || configs.new;
+  };
+
+  // Fetch comparison data
+  useEffect(() => {
+    if (!candidate?.id || !open) return;
+    
+    const fetchComparisonData = async () => {
+      try {
+        const { data: allCandidates, error } = await supabase
+          .from('resume_analyses')
+          .select('fit_score, overall_factor, recruitment_name');
+        
+        if (error) throw error;
+        
+        const totalCount = allCandidates.length;
+        const avgFit = allCandidates.reduce((sum, c) => {
+          const fitScore = typeof c.fit_score === 'object' ? (c.fit_score as any)?.score || 0 : c.fit_score || 0;
+          return sum + fitScore;
+        }, 0) / totalCount;
+        
+        const avgOverall = allCandidates.reduce((sum, c) => {
+          const overallScore = typeof c.overall_factor === 'object' ? (c.overall_factor as any)?.score || 0 : c.overall_factor || 0;
+          return sum + overallScore;
+        }, 0) / totalCount;
+        
+        const higherScoring = allCandidates.filter(c => {
+          const score = typeof c.overall_factor === 'object' ? (c.overall_factor as any)?.score || 0 : c.overall_factor || 0;
+          return score > (candidate.overallScore || 0);
+        }).length;
+        
+        const percentile = Math.round((1 - higherScoring / totalCount) * 100);
+        
+        let folderAvg = 0;
+        if (candidate.recruitmentName) {
+          const folderCandidates = allCandidates.filter(c => c.recruitment_name === candidate.recruitmentName);
+          folderAvg = folderCandidates.reduce((sum, c) => {
+            const score = typeof c.overall_factor === 'object' ? (c.overall_factor as any)?.score || 0 : c.overall_factor || 0;
+            return sum + score;
+          }, 0) / (folderCandidates.length || 1);
+        }
+        
+        setComparisonData({
+          avgFitScore: Math.round(avgFit * 10) / 10,
+          avgOverallScore: Math.round(avgOverall * 10) / 10,
+          percentileRank: percentile,
+          totalCandidates: totalCount,
+          higherScoringCount: higherScoring,
+          folderAvgScore: Math.round(folderAvg * 10) / 10
+        });
+      } catch (error) {
+        console.error('Error fetching comparison data:', error);
+      }
+    };
+    
+    fetchComparisonData();
+  }, [candidate, open]);
+
+  // Fetch timeline and notes
+  useEffect(() => {
+    if (!candidate?.id || !open) return;
+    
+    const events: TimelineEvent[] = [];
+    
+    if (candidate.date) {
+      events.push({
+        id: '1',
+        type: 'resume_uploaded',
+        title: 'Resume Submitted',
+        description: 'Candidate uploaded their resume for review',
+        timestamp: candidate.date
+      });
+      
+      events.push({
+        id: '2',
+        type: 'analysis_completed',
+        title: 'AI Analysis Completed',
+        description: `Overall score: ${candidate.overallScore}/10`,
+        timestamp: candidate.date
+      });
+    }
+    
+    if (candidate.status && candidate.statusUpdatedAt) {
+      events.push({
+        id: `status-${candidate.status}`,
+        type: 'status_change',
+        title: 'Status Updated',
+        description: `Changed to ${getStatusConfig(candidate.status).label}`,
+        timestamp: candidate.statusUpdatedAt
+      });
+    }
+    
+    events.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+    setTimeline(events);
+    
+    fetchNotes();
+  }, [candidate, open]);
+
+  const fetchNotes = async () => {
+    if (!candidate?.id) return;
+    
+    try {
+      const { data, error } = await supabase
+        .from('candidate_notes')
+        .select('*')
+        .eq('candidate_id', candidate.id)
+        .order('created_at', { ascending: false });
+      
+      if (error) throw error;
+      setNotes(data || []);
+    } catch (error) {
+      console.error('Error fetching notes:', error);
+    }
+  };
+
+  const handleStatusChange = async (newStatus: CandidateStatus) => {
+    if (!candidate?.id) return;
+    
+    try {
+      const { error } = await supabase
+        .from('resume_analyses')
+        .update({ 
+          status: newStatus,
+          status_updated_at: new Date().toISOString()
+        })
+        .eq('id', candidate.id);
+      
+      if (error) throw error;
+      
+      setCurrentStatus(newStatus);
+      toast({
+        title: "Status Updated",
+        description: `Candidate status changed to ${getStatusConfig(newStatus).label}`,
+        className: "bg-emerald-50 border-emerald-200"
+      });
+    } catch (error) {
+      toast({
+        title: "Update Failed",
+        description: "Failed to update status. Please try again.",
+        variant: "destructive"
+      });
+    }
+  };
+
+  const handleAddNote = async () => {
+    if (!newNote.trim() || !candidate?.id) return;
+    
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      
+      const { data, error } = await supabase
+        .from('candidate_notes')
+        .insert({
+          candidate_id: candidate.id,
+          content: newNote.trim(),
+          created_by: user?.id,
+          created_by_name: user?.email?.split('@')[0] || 'Team Member'
+        })
+        .select()
+        .single();
+      
+      if (error) throw error;
+      
+      setNotes([data, ...notes]);
+      setNewNote("");
+      
+      toast({
+        title: "Note Added",
+        description: "Your comment has been saved successfully.",
+        className: "bg-emerald-50 border-emerald-200"
+      });
+    } catch (error) {
+      toast({
+        title: "Failed to Add Note",
+        description: "Please try again.",
+        variant: "destructive"
+      });
+    }
+  };
 
   useEffect(() => {
     const scrollElement = scrollRef.current;
@@ -28,7 +246,6 @@ export const CandidateAnalysisDialog = ({ open, onOpenChange, candidate }: Candi
 
     const handleScroll = () => {
       const scrollTop = scrollElement.scrollTop;
-      // Fade out when scrolling down past 10px
       setIsScrollingDown(scrollTop > lastScrollTop.current && scrollTop > 10);
       lastScrollTop.current = scrollTop;
     };
@@ -36,6 +253,12 @@ export const CandidateAnalysisDialog = ({ open, onOpenChange, candidate }: Candi
     scrollElement.addEventListener('scroll', handleScroll, { passive: true });
     return () => scrollElement.removeEventListener('scroll', handleScroll);
   }, []);
+  
+  useEffect(() => {
+    if (candidate?.status) {
+      setCurrentStatus(candidate.status);
+    }
+  }, [candidate]);
 
   if (!candidate) return null;
 
@@ -56,6 +279,69 @@ export const CandidateAnalysisDialog = ({ open, onOpenChange, candidate }: Candi
                     <span className="w-1.5 h-1.5 rounded-full bg-cyan-500 animate-pulse"></span>
                     {candidate.email}
                   </DialogDescription>
+                </div>
+                
+                {/* Status Selector */}
+                <div className="flex items-center gap-3">
+                  <span className="text-sm font-medium text-muted-foreground">Status:</span>
+                  <Select value={currentStatus} onValueChange={(value) => handleStatusChange(value as CandidateStatus)}>
+                    <SelectTrigger className={`w-[200px] ${getStatusConfig(currentStatus).color} border-2`}>
+                      <div className="flex items-center gap-2">
+                        {getStatusConfig(currentStatus).icon}
+                        <SelectValue />
+                      </div>
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="new">
+                        <div className="flex items-center gap-2">
+                          <FileText className="h-4 w-4" />
+                          New
+                        </div>
+                      </SelectItem>
+                      <SelectItem value="reviewing">
+                        <div className="flex items-center gap-2">
+                          <Eye className="h-4 w-4" />
+                          Reviewing
+                        </div>
+                      </SelectItem>
+                      <SelectItem value="contacted">
+                        <div className="flex items-center gap-2">
+                          <Mail className="h-4 w-4" />
+                          Contacted
+                        </div>
+                      </SelectItem>
+                      <SelectItem value="interview_scheduled">
+                        <div className="flex items-center gap-2">
+                          <Calendar className="h-4 w-4" />
+                          Interview Scheduled
+                        </div>
+                      </SelectItem>
+                      <SelectItem value="interviewed">
+                        <div className="flex items-center gap-2">
+                          <CheckCircle className="h-4 w-4" />
+                          Interviewed
+                        </div>
+                      </SelectItem>
+                      <SelectItem value="offer_extended">
+                        <div className="flex items-center gap-2">
+                          <Trophy className="h-4 w-4" />
+                          Offer Extended
+                        </div>
+                      </SelectItem>
+                      <SelectItem value="hired">
+                        <div className="flex items-center gap-2">
+                          <CheckCircle className="h-4 w-4" />
+                          Hired
+                        </div>
+                      </SelectItem>
+                      <SelectItem value="rejected">
+                        <div className="flex items-center gap-2">
+                          <X className="h-4 w-4" />
+                          Rejected
+                        </div>
+                      </SelectItem>
+                    </SelectContent>
+                  </Select>
                 </div>
                 
                 <div className="flex items-center gap-4 text-sm text-muted-foreground">
@@ -85,8 +371,8 @@ export const CandidateAnalysisDialog = ({ open, onOpenChange, candidate }: Candi
               {candidate.overallScore !== undefined && (
                 <div className="flex flex-col items-end gap-1">
                   <div className="text-sm font-medium text-muted-foreground">Overall Score</div>
-                  <div className="text-5xl font-semibold bg-gradient-to-br from-cyan-600 to-teal-600 bg-clip-text text-transparent">
-                    {candidate.overallScore}<span className="text-2xl text-muted-foreground">/10</span>
+                  <div className="text-4xl font-semibold bg-gradient-to-br from-cyan-600 to-teal-600 bg-clip-text text-transparent">
+                    {candidate.overallScore}<span className="text-xl text-muted-foreground">/10</span>
                   </div>
                 </div>
               )}
@@ -106,10 +392,10 @@ export const CandidateAnalysisDialog = ({ open, onOpenChange, candidate }: Candi
                   Overview
                 </TabsTrigger>
                 <TabsTrigger 
-                  value="details" 
+                  value="timeline" 
                   className="inline-flex items-center justify-center whitespace-nowrap rounded-md px-6 py-2 text-sm font-medium transition-all data-[state=active]:bg-gradient-to-r data-[state=active]:from-cyan-500 data-[state=active]:to-teal-500 data-[state=active]:text-white data-[state=active]:shadow-sm hover:bg-cyan-50"
                 >
-                  Details
+                  Timeline & Notes
                 </TabsTrigger>
                 <TabsTrigger 
                   value="ai-insights" 
@@ -136,8 +422,8 @@ export const CandidateAnalysisDialog = ({ open, onOpenChange, candidate }: Candi
                         </CardTitle>
                       </div>
                       <div className="space-y-4">
-                        <div className="text-5xl font-semibold bg-gradient-to-r from-cyan-600 to-teal-600 bg-clip-text text-transparent">
-                          {candidate.fitScore}<span className="text-2xl text-muted-foreground">/10</span>
+                        <div className="text-4xl font-bold bg-gradient-to-r from-cyan-600 to-teal-600 bg-clip-text text-transparent">
+                          {candidate.fitScore}<span className="text-xl text-muted-foreground">/10</span>
                         </div>
                         <Progress 
                           value={(candidate.fitScore || 0) * 10} 
@@ -166,7 +452,7 @@ export const CandidateAnalysisDialog = ({ open, onOpenChange, candidate }: Candi
                           Risk Factor
                         </CardTitle>
                       </div>
-                      <div className="text-5xl font-semibold text-destructive capitalize">
+                      <div className="text-4xl font-bold text-destructive capitalize">
                         {candidate.riskScore || candidate.riskFactor}
                       </div>
                     </CardHeader>
@@ -187,7 +473,7 @@ export const CandidateAnalysisDialog = ({ open, onOpenChange, candidate }: Candi
                           Reward Factor
                         </CardTitle>
                       </div>
-                      <div className="text-5xl font-semibold bg-gradient-to-r from-teal-600 to-cyan-600 bg-clip-text text-transparent capitalize">
+                      <div className="text-4xl font-bold bg-gradient-to-r from-teal-600 to-cyan-600 bg-clip-text text-transparent capitalize">
                         {candidate.rewardScore || candidate.rewardFactor}
                       </div>
                     </CardHeader>
@@ -196,6 +482,111 @@ export const CandidateAnalysisDialog = ({ open, onOpenChange, candidate }: Candi
                     </CardContent>
                   </Card>
                 </div>
+
+                {/* Comparison Chart */}
+                <Card className="bg-background border-primary/30 hover:border-primary/50 transition-all duration-300 bg-gradient-to-br from-primary/5 to-transparent animate-fade-in-up animate-delay-300">
+                  <CardHeader className="pb-6">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-3">
+                        <div className="p-2.5 bg-primary/10 rounded-lg">
+                          <BarChart3 className="h-5 w-5 text-primary" />
+                        </div>
+                        <div>
+                          <CardTitle className="text-lg font-semibold bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent">
+                            Comparative Performance
+                          </CardTitle>
+                          <p className="text-sm text-muted-foreground mt-1">
+                            How this candidate compares to {comparisonData.totalCandidates} others
+                          </p>
+                        </div>
+                      </div>
+                      <Badge className="bg-primary/10 text-primary border-primary/30">
+                        {comparisonData.percentileRank}th Percentile
+                      </Badge>
+                    </div>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="space-y-6">
+                      <div className="space-y-4">
+                        {/* This Candidate */}
+                        <div className="space-y-2">
+                          <div className="flex items-center justify-between text-sm">
+                            <span className="font-medium text-foreground">This Candidate</span>
+                            <span className="text-lg font-semibold text-primary">
+                              {candidate.overallScore}/10
+                            </span>
+                          </div>
+                          <div className="relative h-8 bg-muted rounded-full overflow-hidden">
+                            <div 
+                              className="absolute inset-y-0 left-0 bg-gradient-to-r from-cyan-500 to-teal-500 rounded-full transition-all duration-1000 flex items-center justify-end pr-3"
+                              style={{ width: `${(candidate.overallScore || 0) * 10}%` }}
+                            >
+                              <span className="text-xs font-medium text-white">●</span>
+                            </div>
+                          </div>
+                        </div>
+                        
+                        {/* Average Candidate */}
+                        <div className="space-y-2">
+                          <div className="flex items-center justify-between text-sm">
+                            <span className="font-medium text-muted-foreground">Average Candidate</span>
+                            <span className="text-lg font-semibold text-muted-foreground">
+                              {comparisonData.avgOverallScore}/10
+                            </span>
+                          </div>
+                          <div className="relative h-6 bg-muted rounded-full overflow-hidden">
+                            <div 
+                              className="absolute inset-y-0 left-0 bg-slate-400 rounded-full transition-all duration-1000"
+                              style={{ width: `${comparisonData.avgOverallScore * 10}%` }}
+                            />
+                          </div>
+                        </div>
+                        
+                        {/* Folder Average (if applicable) */}
+                        {candidate.recruitmentName && comparisonData.folderAvgScore > 0 && (
+                          <div className="space-y-2">
+                            <div className="flex items-center justify-between text-sm">
+                              <span className="font-medium text-muted-foreground">
+                                Folder Average ({candidate.recruitmentName})
+                              </span>
+                              <span className="text-lg font-semibold text-muted-foreground">
+                                {comparisonData.folderAvgScore}/10
+                              </span>
+                            </div>
+                            <div className="relative h-6 bg-muted rounded-full overflow-hidden">
+                              <div 
+                                className="absolute inset-y-0 left-0 bg-purple-400 rounded-full transition-all duration-1000"
+                                style={{ width: `${comparisonData.folderAvgScore * 10}%` }}
+                              />
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                      
+                      {/* Stats Grid */}
+                      <div className="grid grid-cols-3 gap-4 pt-4 border-t">
+                        <div className="text-center">
+                          <div className="text-2xl font-bold text-primary">
+                            {comparisonData.percentileRank}th
+                          </div>
+                          <div className="text-xs text-muted-foreground mt-1">Percentile Rank</div>
+                        </div>
+                        <div className="text-center">
+                          <div className="text-2xl font-bold text-cyan-600">
+                            {comparisonData.totalCandidates - comparisonData.higherScoringCount - 1}
+                          </div>
+                          <div className="text-xs text-muted-foreground mt-1">Ranked Below</div>
+                        </div>
+                        <div className="text-center">
+                          <div className="text-2xl font-bold text-teal-600">
+                            {comparisonData.higherScoringCount}
+                          </div>
+                          <div className="text-xs text-muted-foreground mt-1">Ranked Above</div>
+                        </div>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
 
                 {/* Strengths & Weaknesses Section */}
                 <div className="space-y-6">
@@ -305,100 +696,172 @@ export const CandidateAnalysisDialog = ({ open, onOpenChange, candidate }: Candi
                 )}
               </TabsContent>
 
-              {/* Details Tab */}
-              <TabsContent value="details" className="space-y-12">
-                {/* Candidate Information */}
-                <Card className="bg-background border hover:border-foreground/20 transition-all duration-300">
+              {/* Timeline & Notes Tab */}
+              <TabsContent value="timeline" className="space-y-8">
+                {/* Activity Timeline */}
+                <Card className="bg-background border-cyan-300/30 hover:border-cyan-400/50 transition-all duration-300">
+                  <CardHeader className="pb-6">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-3">
+                        <div className="p-2.5 bg-cyan-100/50 rounded-lg">
+                          <Calendar className="h-5 w-5 text-cyan-600" />
+                        </div>
+                        <div>
+                          <CardTitle className="text-lg font-semibold text-foreground">
+                            Activity Timeline
+                          </CardTitle>
+                          <p className="text-sm text-muted-foreground mt-1">
+                            Complete candidate journey and interactions
+                          </p>
+                        </div>
+                      </div>
+                      <Badge variant="outline" className="text-sm">
+                        {timeline.length} events
+                      </Badge>
+                    </div>
+                  </CardHeader>
+                  <CardContent>
+                    <ScrollArea className="h-[400px] pr-4">
+                      <div className="space-y-4">
+                        {timeline.map((event, index) => (
+                          <div key={event.id} className="flex gap-4 relative">
+                            {/* Timeline connector line */}
+                            {index !== timeline.length - 1 && (
+                              <div className="absolute left-[19px] top-10 w-0.5 h-[calc(100%+16px)] bg-gradient-to-b from-cyan-300 to-transparent" />
+                            )}
+                            
+                            {/* Event icon */}
+                            <div className={`
+                              flex-shrink-0 w-10 h-10 rounded-full flex items-center justify-center z-10
+                              ${event.type === 'status_change' ? 'bg-blue-100 text-blue-600' : ''}
+                              ${event.type === 'note_added' ? 'bg-purple-100 text-purple-600' : ''}
+                              ${event.type === 'email_sent' ? 'bg-green-100 text-green-600' : ''}
+                              ${event.type === 'resume_uploaded' ? 'bg-cyan-100 text-cyan-600' : ''}
+                              ${event.type === 'analysis_completed' ? 'bg-teal-100 text-teal-600' : ''}
+                            `}>
+                              {event.type === 'status_change' && <Target className="h-5 w-5" />}
+                              {event.type === 'note_added' && <FileText className="h-5 w-5" />}
+                              {event.type === 'email_sent' && <Mail className="h-5 w-5" />}
+                              {event.type === 'resume_uploaded' && <FileText className="h-5 w-5" />}
+                              {event.type === 'analysis_completed' && <Brain className="h-5 w-5" />}
+                            </div>
+                            
+                            {/* Event content */}
+                            <div className="flex-1 pb-6">
+                              <div className="flex items-start justify-between gap-4">
+                                <div className="flex-1">
+                                  <h4 className="text-base font-semibold text-foreground mb-1">
+                                    {event.title}
+                                  </h4>
+                                  <p className="text-sm text-muted-foreground mb-2">
+                                    {event.description}
+                                  </p>
+                                  {event.userName && (
+                                    <p className="text-xs text-muted-foreground">
+                                      by {event.userName}
+                                    </p>
+                                  )}
+                                </div>
+                                <span className="text-xs text-muted-foreground whitespace-nowrap">
+                                  {formatDistanceToNow(new Date(event.timestamp), { addSuffix: true })}
+                                </span>
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </ScrollArea>
+                  </CardContent>
+                </Card>
+                
+                {/* Notes & Comments Section */}
+                <Card className="bg-background border-purple-300/30 hover:border-purple-400/50 transition-all duration-300">
                   <CardHeader className="pb-6">
                     <div className="flex items-center gap-3">
-                      <div className="p-2.5 bg-muted rounded-lg">
-                        <FileText className="h-5 w-5 text-muted-foreground" />
+                      <div className="p-2.5 bg-purple-100/50 rounded-lg">
+                        <FileText className="h-5 w-5 text-purple-600" />
                       </div>
-                      <CardTitle className="text-lg font-semibold text-foreground">Candidate Information</CardTitle>
+                      <div>
+                        <CardTitle className="text-lg font-semibold text-foreground">
+                          Team Notes & Comments
+                        </CardTitle>
+                        <p className="text-sm text-muted-foreground mt-1">
+                          Collaborative feedback and observations
+                        </p>
+                      </div>
                     </div>
                   </CardHeader>
                   <CardContent className="space-y-6">
-                    <div className="space-y-2">
-                      <span className="text-sm font-medium text-muted-foreground">Full Name</span>
-                      <p className="text-base text-foreground">{candidate.candidateName}</p>
-                    </div>
-                    <div className="space-y-2">
-                      <span className="text-sm font-medium text-muted-foreground">Email Address</span>
-                      <p className="text-base text-foreground">{candidate.email}</p>
-                    </div>
-                    {candidate.date && (
-                      <div className="space-y-2">
-                        <span className="text-sm font-medium text-muted-foreground">Analysis Date</span>
-                        <p className="text-base text-foreground">
-                          {new Date(candidate.date).toLocaleDateString('en-US', { 
-                            year: 'numeric', 
-                            month: 'long', 
-                            day: 'numeric' 
-                          })}
-                        </p>
+                    {/* Existing Notes */}
+                    <ScrollArea className="max-h-[300px]">
+                      <div className="space-y-4">
+                        {notes.map((note) => (
+                          <div 
+                            key={note.id} 
+                            className="border-l-4 border-purple-400 bg-purple-50/50 p-4 rounded-r-lg hover:bg-purple-50 transition-colors"
+                          >
+                            <div className="flex items-start justify-between mb-2">
+                              <div className="flex items-center gap-2">
+                                <div className="w-8 h-8 rounded-full bg-purple-200 flex items-center justify-center text-sm font-semibold text-purple-700">
+                                  {note.created_by_name.charAt(0).toUpperCase()}
+                                </div>
+                                <div>
+                                  <p className="text-sm font-semibold text-foreground">
+                                    {note.created_by_name}
+                                  </p>
+                                  <p className="text-xs text-muted-foreground">
+                                    {formatDistanceToNow(new Date(note.created_at), { addSuffix: true })}
+                                  </p>
+                                </div>
+                              </div>
+                            </div>
+                            <p className="text-sm text-foreground leading-relaxed">
+                              {note.content}
+                            </p>
+                          </div>
+                        ))}
+                        
+                        {notes.length === 0 && (
+                          <div className="text-center py-8">
+                            <FileText className="h-12 w-12 text-muted-foreground/30 mx-auto mb-3" />
+                            <p className="text-sm text-muted-foreground">
+                              No notes yet. Add the first comment below.
+                            </p>
+                          </div>
+                        )}
                       </div>
-                    )}
+                    </ScrollArea>
+                    
+                    {/* Add New Note */}
+                    <div className="space-y-3 pt-4 border-t">
+                      <Label htmlFor="new-note" className="text-sm font-medium">
+                        Add a note
+                      </Label>
+                      <div className="flex gap-3">
+                        <Textarea
+                          id="new-note"
+                          placeholder="Share your thoughts about this candidate..."
+                          value={newNote}
+                          onChange={(e) => setNewNote(e.target.value)}
+                          className="flex-1 min-h-[100px] resize-none"
+                        />
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <p className="text-xs text-muted-foreground">
+                          Notes are visible to all team members
+                        </p>
+                        <Button 
+                          onClick={handleAddNote}
+                          disabled={!newNote.trim()}
+                          className="bg-gradient-to-r from-purple-500 to-purple-600 hover:from-purple-600 hover:to-purple-700 text-white"
+                        >
+                          <FileText className="h-4 w-4 mr-2" />
+                          Add Note
+                        </Button>
+                      </div>
+                    </div>
                   </CardContent>
                 </Card>
-
-                {/* Detailed Analysis */}
-                <div className="grid grid-cols-2 gap-8">
-                  {/* Strengths Full List */}
-                  {candidate.strengths?.length > 0 && (
-                    <Card className="bg-background border hover:border-foreground/20 transition-all duration-300">
-                      <CardHeader className="pb-6">
-                        <div className="flex items-center gap-3 mb-2">
-                          <div className="p-2.5 bg-muted rounded-lg">
-                            <CheckCircle className="h-5 w-5 text-muted-foreground" />
-                          </div>
-                          <CardTitle className="text-lg font-semibold text-foreground">Key Strengths</CardTitle>
-                        </div>
-                        <p className="text-sm text-muted-foreground">Positive attributes and capabilities</p>
-                      </CardHeader>
-                      <CardContent>
-                        <div className="space-y-3">
-                          {candidate.strengths.map((strength, idx) => (
-                            <div 
-                              key={idx} 
-                              className="flex items-start gap-3 p-4 bg-muted/50 hover:bg-muted rounded-lg transition-colors"
-                            >
-                              <CheckCircle className="h-4 w-4 text-muted-foreground mt-0.5 flex-shrink-0" />
-                              <span className="text-sm text-foreground leading-relaxed">{strength}</span>
-                            </div>
-                          ))}
-                        </div>
-                      </CardContent>
-                    </Card>
-                  )}
-
-                  {/* Development Areas Full List */}
-                  {candidate.weaknesses?.length > 0 && (
-                    <Card className="bg-background border hover:border-foreground/20 transition-all duration-300">
-                      <CardHeader className="pb-6">
-                        <div className="flex items-center gap-3 mb-2">
-                          <div className="p-2.5 bg-muted rounded-lg">
-                            <AlertTriangle className="h-5 w-5 text-muted-foreground" />
-                          </div>
-                          <CardTitle className="text-lg font-semibold text-foreground">Development Areas</CardTitle>
-                        </div>
-                        <p className="text-sm text-muted-foreground">Growth opportunities and considerations</p>
-                      </CardHeader>
-                      <CardContent>
-                        <div className="space-y-3">
-                          {candidate.weaknesses.map((weakness, idx) => (
-                            <div 
-                              key={idx} 
-                              className="flex items-start gap-3 p-4 bg-muted/50 hover:bg-muted rounded-lg transition-colors"
-                            >
-                              <AlertTriangle className="h-4 w-4 text-muted-foreground mt-0.5 flex-shrink-0" />
-                              <span className="text-sm text-foreground leading-relaxed">{weakness}</span>
-                            </div>
-                          ))}
-                        </div>
-                      </CardContent>
-                    </Card>
-                  )}
-                </div>
               </TabsContent>
 
               {/* AI Insights Tab */}

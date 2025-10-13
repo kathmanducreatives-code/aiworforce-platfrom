@@ -1,3 +1,32 @@
+export type CandidateStatus = 
+  | 'new' 
+  | 'reviewing' 
+  | 'contacted' 
+  | 'interview_scheduled' 
+  | 'interviewed' 
+  | 'offer_extended' 
+  | 'hired' 
+  | 'rejected';
+
+export interface TimelineEvent {
+  id: string;
+  type: 'status_change' | 'note_added' | 'email_sent' | 'resume_uploaded' | 'analysis_completed';
+  title: string;
+  description: string;
+  timestamp: string;
+  userId?: string;
+  userName?: string;
+}
+
+export interface CandidateNote {
+  id: string;
+  candidate_id: string;
+  content: string;
+  created_at: string;
+  created_by: string;
+  created_by_name: string;
+}
+
 export interface ResumeAnalysis {
   id?: string;
   date?: string;
@@ -16,7 +45,14 @@ export interface ResumeAnalysis {
   riskScore?: string;
   rewardScore?: string;
   fitScoreText?: string;
-  overallScore?: number; // Changed from string to number for progress bar
+  overallScore?: number;
+  // Status tracking
+  status?: CandidateStatus;
+  statusUpdatedAt?: string;
+  statusUpdatedBy?: string;
+  // Timeline and notes
+  timeline?: TimelineEvent[];
+  notes?: CandidateNote[];
 }
 
 export interface AnalysisResult {

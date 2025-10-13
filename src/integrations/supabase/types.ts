@@ -14,6 +14,44 @@ export type Database = {
   }
   public: {
     Tables: {
+      candidate_notes: {
+        Row: {
+          candidate_id: string | null
+          content: string
+          created_at: string | null
+          created_by: string | null
+          created_by_name: string | null
+          id: string
+          updated_at: string | null
+        }
+        Insert: {
+          candidate_id?: string | null
+          content: string
+          created_at?: string | null
+          created_by?: string | null
+          created_by_name?: string | null
+          id?: string
+          updated_at?: string | null
+        }
+        Update: {
+          candidate_id?: string | null
+          content?: string
+          created_at?: string | null
+          created_by?: string | null
+          created_by_name?: string | null
+          id?: string
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "candidate_notes_candidate_id_fkey"
+            columns: ["candidate_id"]
+            isOneToOne: false
+            referencedRelation: "resume_analyses"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       client_active_positions: {
         Row: {
           budget_range: string | null
@@ -158,6 +196,9 @@ export type Database = {
           reward_factor: Json | null
           risk_factor: Json | null
           screening_type: string | null
+          status: string | null
+          status_updated_at: string | null
+          status_updated_by: string | null
           strengths: string | null
           weaknesses: string | null
         }
@@ -179,6 +220,9 @@ export type Database = {
           reward_factor?: Json | null
           risk_factor?: Json | null
           screening_type?: string | null
+          status?: string | null
+          status_updated_at?: string | null
+          status_updated_by?: string | null
           strengths?: string | null
           weaknesses?: string | null
         }
@@ -200,8 +244,95 @@ export type Database = {
           reward_factor?: Json | null
           risk_factor?: Json | null
           screening_type?: string | null
+          status?: string | null
+          status_updated_at?: string | null
+          status_updated_by?: string | null
           strengths?: string | null
           weaknesses?: string | null
+        }
+        Relationships: []
+      }
+      scheduled_emails: {
+        Row: {
+          candidate_email: string
+          candidate_id: string | null
+          candidate_name: string
+          company_name: string | null
+          content: string | null
+          created_at: string | null
+          delay_days: number | null
+          fit_score: number | null
+          folder_name: string | null
+          id: string
+          recruitment_name: string | null
+          scheduled_send_time: string | null
+          send_time: string | null
+          send_time_end: string | null
+          send_time_utc: string
+          sender_name: string | null
+          sequence_created_at: string | null
+          sequence_name: string | null
+          status: string | null
+          step_number: number
+          subject: string | null
+          timezone: string | null
+          user_timezone: string | null
+          window_end: string | null
+          window_start: string | null
+        }
+        Insert: {
+          candidate_email: string
+          candidate_id?: string | null
+          candidate_name: string
+          company_name?: string | null
+          content?: string | null
+          created_at?: string | null
+          delay_days?: number | null
+          fit_score?: number | null
+          folder_name?: string | null
+          id?: string
+          recruitment_name?: string | null
+          scheduled_send_time?: string | null
+          send_time?: string | null
+          send_time_end?: string | null
+          send_time_utc: string
+          sender_name?: string | null
+          sequence_created_at?: string | null
+          sequence_name?: string | null
+          status?: string | null
+          step_number: number
+          subject?: string | null
+          timezone?: string | null
+          user_timezone?: string | null
+          window_end?: string | null
+          window_start?: string | null
+        }
+        Update: {
+          candidate_email?: string
+          candidate_id?: string | null
+          candidate_name?: string
+          company_name?: string | null
+          content?: string | null
+          created_at?: string | null
+          delay_days?: number | null
+          fit_score?: number | null
+          folder_name?: string | null
+          id?: string
+          recruitment_name?: string | null
+          scheduled_send_time?: string | null
+          send_time?: string | null
+          send_time_end?: string | null
+          send_time_utc?: string
+          sender_name?: string | null
+          sequence_created_at?: string | null
+          sequence_name?: string | null
+          status?: string | null
+          step_number?: number
+          subject?: string | null
+          timezone?: string | null
+          user_timezone?: string | null
+          window_end?: string | null
+          window_start?: string | null
         }
         Relationships: []
       }
