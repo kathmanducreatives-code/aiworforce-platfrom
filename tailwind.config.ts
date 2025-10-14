@@ -28,7 +28,9 @@ export default {
 					DEFAULT: 'hsl(var(--primary))',
 					foreground: 'hsl(var(--primary-foreground))',
 					light: 'hsl(var(--primary-light))',
-					dark: 'hsl(var(--primary-dark))'
+					dark: 'hsl(var(--primary-dark))',
+					100: 'hsl(var(--primary-100))',
+					200: 'hsl(var(--primary-200))'
 				},
 				secondary: {
 					DEFAULT: 'hsl(var(--secondary))',
@@ -44,7 +46,8 @@ export default {
 				},
 				accent: {
 					DEFAULT: 'hsl(var(--accent))',
-					foreground: 'hsl(var(--accent-foreground))'
+					foreground: 'hsl(var(--accent-foreground))',
+					secondary: 'hsl(var(--accent-secondary))'
 				},
 				popover: {
 					DEFAULT: 'hsl(var(--popover))',
@@ -63,18 +66,42 @@ export default {
 					'accent-foreground': 'hsl(var(--sidebar-accent-foreground))',
 					border: 'hsl(var(--sidebar-border))',
 					ring: 'hsl(var(--sidebar-ring))'
+				},
+				success: 'hsl(var(--success))',
+				warning: 'hsl(var(--warning))',
+				error: 'hsl(var(--error))',
+				info: 'hsl(var(--info))',
+				gray: {
+					50: 'hsl(var(--gray-50))',
+					100: 'hsl(var(--gray-100))',
+					200: 'hsl(var(--gray-200))',
+					300: 'hsl(var(--gray-300))',
+					400: 'hsl(var(--gray-400))',
+					500: 'hsl(var(--gray-500))',
+					600: 'hsl(var(--gray-600))',
+					700: 'hsl(var(--gray-700))',
+					800: 'hsl(var(--gray-800))',
+					900: 'hsl(var(--gray-900))'
 				}
 			},
 			backgroundImage: {
 				'gradient-primary': 'var(--gradient-primary)',
 				'gradient-hero': 'var(--gradient-hero)',
-				'gradient-subtle': 'var(--gradient-subtle)'
+				'gradient-subtle': 'var(--gradient-subtle)',
+				'gradient-teal-cyan': 'var(--gradient-teal-cyan)',
+				'gradient-mesh': 'var(--gradient-mesh)',
+				'gradient-shimmer': 'var(--gradient-shimmer)'
 			},
 			boxShadow: {
+				'xs': 'var(--shadow-xs)',
 				'sm': 'var(--shadow-sm)',
 				'md': 'var(--shadow-md)',
 				'lg': 'var(--shadow-lg)',
-				'primary': 'var(--shadow-primary)'
+				'xl': 'var(--shadow-xl)',
+				'2xl': 'var(--shadow-2xl)',
+				'primary': 'var(--shadow-primary)',
+				'primary-lg': 'var(--shadow-primary-lg)',
+				'glow': 'var(--shadow-glow)'
 			},
 			transitionTimingFunction: {
 				'smooth': 'var(--transition-smooth)'
@@ -172,7 +199,15 @@ export default {
 				'pulse-glow': 'pulse-glow 2s ease-in-out infinite',
 				'shimmer': 'shimmer 2s ease-in-out infinite',
 				'bounce-soft': 'bounce-soft 2s ease-in-out infinite',
-				'wiggle': 'wiggle 1s ease-in-out infinite'
+				'wiggle': 'wiggle 1s ease-in-out infinite',
+				'shimmer-sweep': 'shimmer-sweep 2s infinite',
+				'glow-pulse-teal': 'glow-pulse-teal 2s ease-in-out infinite',
+				'tilt': 'tilt 0.5s ease-in-out',
+				'magnetic-hover': 'magnetic-hover 0.8s ease-in-out',
+				'ripple': 'ripple 0.6s ease-out',
+				'bounce-in': 'bounce-in 2s ease-in-out infinite',
+				'slide-fade-up': 'slide-fade-up 0.6s cubic-bezier(0.16, 1, 0.3, 1)',
+				'scale-pulse': 'scale-pulse 2s ease-in-out infinite'
 			},
 			backgroundSize: {
 				'300%': '300%'
