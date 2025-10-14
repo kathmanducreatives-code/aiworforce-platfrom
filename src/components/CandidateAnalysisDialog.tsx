@@ -269,7 +269,7 @@ export const CandidateAnalysisDialog = ({ open, onOpenChange, candidate }: Candi
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-none w-screen h-screen p-0 gap-0 flex flex-col bg-background overflow-hidden m-0 rounded-none">
         {/* Clean, Minimal Header */}
-        <div className={`flex-shrink-0 border-b bg-background transition-all duration-300 ${showHeader ? 'opacity-100 translate-y-0' : 'opacity-0 -translate-y-full pointer-events-none'}`}>
+        <div className={`fixed top-0 left-0 right-0 z-50 border-b bg-background transition-transform duration-300 ${showHeader ? 'translate-y-0' : '-translate-y-full'}`}>
           <DialogHeader className="px-8 lg:px-16 xl:px-24 py-8">
             <div className="flex items-start justify-between gap-8">
               {/* Candidate Info */}
