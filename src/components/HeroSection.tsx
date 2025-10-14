@@ -23,12 +23,10 @@ const HeroSection = () => {
             <h1 className="text-5xl md:text-6xl lg:text-7xl font-bold text-slate-900 leading-[1.2]">
               AI-Powered Resume<br />
               <span className="relative inline-block group">
-                <span className="absolute inset-0 bg-gradient-to-r from-teal-500 to-cyan-500 blur-2xl opacity-30 animate-glow-pulse-teal" />
-                <span className="relative bg-gradient-to-r from-teal-500 via-cyan-500 to-teal-500 bg-clip-text text-transparent animate-gradient-x bg-[length:200%_100%] group-hover:scale-105 transition-transform duration-300">
-                  <span className="inline-block animate-shimmer-text">Screening</span>
+                <span className="absolute inset-0 bg-gradient-to-r from-teal-500 to-cyan-500 blur-2xl opacity-20 animate-glow-pulse-teal" />
+                <span className="relative bg-gradient-to-r from-teal-600 via-cyan-600 to-teal-600 bg-clip-text text-transparent bg-[length:200%_100%] animate-gradient-x">
+                  Screening
                 </span>
-                {/* Shimmer overlay effect */}
-                <span className="absolute inset-0 bg-gradient-to-r from-transparent via-white to-transparent opacity-0 group-hover:opacity-30 animate-shimmer-sweep pointer-events-none" />
               </span>{" "}That<br />
               Actually Works.
             </h1>
