@@ -290,7 +290,7 @@ export const CandidateAnalysisDialog = ({ open, onOpenChange, candidate }: Candi
           <DialogHeader className={`px-8 lg:px-16 xl:px-24 transition-all duration-300 ${showHeader ? 'py-8' : 'py-3'}`}>
             <div className="flex items-center justify-between gap-8">
               {/* Mini Mode - Always visible */}
-              <div className="flex items-center gap-6 min-w-0">
+              <div className="flex items-center gap-6 min-w-0 flex-1">
                 <DialogTitle className={`font-semibold bg-gradient-to-r from-cyan-600 to-teal-600 bg-clip-text text-transparent tracking-tight transition-all duration-300 truncate ${showHeader ? 'text-2xl' : 'text-lg'}`}>
                   {candidate.candidateName}
                 </DialogTitle>
@@ -303,6 +303,16 @@ export const CandidateAnalysisDialog = ({ open, onOpenChange, candidate }: Candi
                   </div>
                 )}
               </div>
+
+              {/* Close Button - Always visible */}
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => onOpenChange(false)}
+                className="flex-shrink-0 h-10 w-10 rounded-full hover:bg-destructive/10 hover:text-destructive transition-colors"
+              >
+                <X className="h-5 w-5" />
+              </Button>
 
               {/* Full Header Content - Hidden in mini mode */}
               <div className={`flex-1 transition-all duration-300 ${showHeader ? 'opacity-100 max-h-[500px]' : 'opacity-0 max-h-0 overflow-hidden'}`}>
