@@ -247,16 +247,23 @@ export const CandidateAnalysisDialog = ({ open, onOpenChange, candidate }: Candi
 
     const handleScroll = () => {
       const scrollTop = scrollElement.scrollTop;
-      const scrollingDown = scrollTop > lastScrollTop.current && scrollTop > 50;
+      const scrollDelta = scrollTop - lastScrollTop.current;
       
+      // Only trigger changes if there's meaningful scroll movement (at least 10px)
+      if (Math.abs(scrollDelta) < 10) {
+        return;
+      }
+      
+      const scrollingDown = scrollDelta > 0;
       setIsScrollingDown(scrollingDown);
       
-      // Show header when scrolling up or at top, hide when scrolling down
-      if (scrollTop < 50) {
+      // Show header when at top (within 80px) or scrolling up
+      // Hide header when scrolling down and past threshold
+      if (scrollTop < 80) {
         setShowHeader(true);
       } else if (scrollingDown) {
         setShowHeader(false);
-      } else if (scrollTop < lastScrollTop.current) {
+      } else {
         setShowHeader(true);
       }
       
