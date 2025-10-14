@@ -25,6 +25,7 @@ interface CandidateAnalysisDialogProps {
 export const CandidateAnalysisDialog = ({ open, onOpenChange, candidate }: CandidateAnalysisDialogProps) => {
   const scrollRef = useRef<HTMLDivElement>(null);
   const [isScrollingDown, setIsScrollingDown] = useState(false);
+  const [showHeader, setShowHeader] = useState(true);
   const lastScrollTop = useRef(0);
   const [strengthsOpen, setStrengthsOpen] = useState(true);
   const [weaknessesOpen, setWeaknessesOpen] = useState(true);
@@ -246,7 +247,9 @@ export const CandidateAnalysisDialog = ({ open, onOpenChange, candidate }: Candi
 
     const handleScroll = () => {
       const scrollTop = scrollElement.scrollTop;
-      setIsScrollingDown(scrollTop > lastScrollTop.current && scrollTop > 10);
+      const scrollingDown = scrollTop > lastScrollTop.current && scrollTop > 50;
+      setIsScrollingDown(scrollingDown);
+      setShowHeader(!scrollingDown || scrollTop < 50);
       lastScrollTop.current = scrollTop;
     };
 
@@ -266,7 +269,7 @@ export const CandidateAnalysisDialog = ({ open, onOpenChange, candidate }: Candi
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-none w-screen h-screen p-0 gap-0 flex flex-col bg-background overflow-hidden m-0 rounded-none">
         {/* Clean, Minimal Header */}
-        <div className="flex-shrink-0 border-b bg-background">
+        <div className={`flex-shrink-0 border-b bg-background transition-all duration-300 ${showHeader ? 'opacity-100 translate-y-0' : 'opacity-0 -translate-y-full pointer-events-none'}`}>
           <DialogHeader className="px-8 lg:px-16 xl:px-24 py-8">
             <div className="flex items-start justify-between gap-8">
               {/* Candidate Info */}
