@@ -279,7 +279,7 @@ export const CandidateAnalysisDialog = ({ open, onOpenChange, candidate }: Candi
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-none w-screen h-screen p-0 gap-0 flex flex-col bg-background overflow-hidden m-0 rounded-none">
         {/* Collapsing Header with Mini Mode */}
-        <div className={`sticky top-0 z-50 border-b bg-background/95 backdrop-blur-sm transition-all duration-300 ${showHeader ? 'h-auto' : 'h-16'}`}>
+        <div className="sticky top-0 z-50 border-b bg-background/95 backdrop-blur-sm">
           <DialogHeader className={`px-8 lg:px-16 xl:px-24 transition-all duration-300 ${showHeader ? 'py-8' : 'py-3'}`}>
             <div className="flex items-center justify-between gap-8">
               {/* Mini Mode - Always visible */}
@@ -288,7 +288,7 @@ export const CandidateAnalysisDialog = ({ open, onOpenChange, candidate }: Candi
                   {candidate.candidateName}
                 </DialogTitle>
                 {!showHeader && candidate.overallScore !== undefined && (
-                  <div className="flex items-center gap-2 px-3 py-1 bg-gradient-to-br from-cyan-50 to-teal-50 dark:from-cyan-950/30 dark:to-teal-950/30 rounded-full border border-cyan-200 dark:border-cyan-800">
+                  <div className="flex items-center gap-2 px-3 py-1 bg-gradient-to-br from-cyan-50 to-teal-50 dark:from-cyan-950/30 dark:to-teal-950/30 rounded-full border border-cyan-200 dark:border-cyan-800 transition-opacity duration-300">
                     <span className="text-sm font-medium text-muted-foreground">Score:</span>
                     <span className="text-lg font-semibold bg-gradient-to-br from-cyan-600 to-teal-600 bg-clip-text text-transparent">
                       {candidate.overallScore}/10
@@ -298,7 +298,7 @@ export const CandidateAnalysisDialog = ({ open, onOpenChange, candidate }: Candi
               </div>
 
               {/* Full Header Content - Hidden in mini mode */}
-              <div className={`flex-1 transition-all duration-300 ${showHeader ? 'opacity-100' : 'opacity-0 h-0 overflow-hidden'}`}>
+              <div className={`flex-1 transition-all duration-300 ${showHeader ? 'opacity-100 max-h-[500px]' : 'opacity-0 max-h-0 overflow-hidden'}`}>
                 <div className="flex items-start justify-between gap-8">
                   {/* Candidate Info */}
                   <div className="flex-1 space-y-6">
