@@ -237,14 +237,15 @@ const EmailSequenceSetup = () => {
       // Generate unique sequence ID
       const sequenceId = `seq_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
       
-      // Helper to format time in 12-hour format with AM/PM
-      const formatTo12Hour = (hour: string, period: string): string => {
+      // Helper to format time in "DD MMMM, h:mm AM/PM" format
+      const formatTimeWithDate = (date: Date, hour: string, period: string): string => {
         const hourNum = parseInt(hour);
-        return `${hourNum}:00 ${period.toUpperCase()}`;
+        const day = format(date, 'dd MMMM');
+        return `${day}, ${hourNum}:00 ${period.toUpperCase()}`;
       };
       
-      const windowStart = formatTo12Hour(sendTimeHour, sendTimePeriod);
-      const windowEnd = sendTimeEndHour ? formatTo12Hour(sendTimeEndHour, sendTimeEndPeriod) : formatTo12Hour(sendTimeHour, sendTimePeriod);
+      const windowStart = formatTimeWithDate(baseDate, sendTimeHour, sendTimePeriod);
+      const windowEnd = sendTimeEndHour ? formatTimeWithDate(baseDate, sendTimeEndHour, sendTimeEndPeriod) : formatTimeWithDate(baseDate, sendTimeHour, sendTimePeriod);
       
       let successCount = 0;
       let failureCount = 0;
