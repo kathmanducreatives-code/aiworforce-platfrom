@@ -20,19 +20,21 @@ const HeroSection = () => {
             </div>
             
             {/* Heading */}
-            <h1 className="text-4xl md:text-5xl lg:text-6xl font-bold text-slate-900 leading-[1.2]">
+            <h1 className="text-5xl md:text-6xl lg:text-7xl font-bold text-slate-900 leading-[1.2]">
               AI-Powered Resume<br />
-              <span className="relative inline-block">
+              <span className="relative inline-block group">
                 <span className="absolute inset-0 bg-gradient-to-r from-teal-500 to-cyan-500 blur-2xl opacity-30 animate-glow-pulse-teal" />
-                <span className="relative bg-gradient-to-r from-teal-500 to-cyan-500 bg-clip-text text-transparent animate-gradient-x">
-                  Screening
+                <span className="relative bg-gradient-to-r from-teal-500 via-cyan-500 to-teal-500 bg-clip-text text-transparent animate-gradient-x bg-[length:200%_100%] group-hover:scale-105 transition-transform duration-300">
+                  <span className="inline-block animate-shimmer-text">Screening</span>
                 </span>
+                {/* Shimmer overlay effect */}
+                <span className="absolute inset-0 bg-gradient-to-r from-transparent via-white to-transparent opacity-0 group-hover:opacity-30 animate-shimmer-sweep pointer-events-none" />
               </span>{" "}That<br />
               Actually Works.
             </h1>
             
             {/* Description */}
-            <p className="text-base md:text-lg text-slate-600 max-w-xl mx-auto md:mx-0">
+            <p className="text-lg md:text-xl text-slate-600 max-w-xl mx-auto md:mx-0">
               Screen hundreds of resumes in minutes with 95% AI accuracy. Get detailed candidate insights, smart matching, and data-driven hiring decisions—all from one platform.
             </p>
             
