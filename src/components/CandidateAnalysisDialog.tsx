@@ -209,24 +209,16 @@ export const CandidateAnalysisDialog = ({ open, onOpenChange, candidate }: Candi
     if (!newNote.trim() || !candidate?.id) return;
     
     try {
-      const { data: { user }, error: authError } = await supabase.auth.getUser();
-      
-      if (authError || !user) {
-        toast({
-          title: "Authentication Required",
-          description: "Please sign in to add notes.",
-          variant: "destructive"
-        });
-        return;
-      }
+      // Try to get user if authenticated, but don't require it
+      const { data: { user } } = await supabase.auth.getUser();
       
       const { data, error } = await supabase
         .from('candidate_notes')
         .insert({
           candidate_id: candidate.id,
           content: newNote.trim(),
-          created_by: user.id,
-          created_by_name: user.email?.split('@')[0] || 'Team Member'
+          created_by: user?.id || null,
+          created_by_name: user?.email?.split('@')[0] || 'Team Member'
         })
         .select()
         .single();
@@ -248,7 +240,7 @@ export const CandidateAnalysisDialog = ({ open, onOpenChange, candidate }: Candi
       console.error('Failed to add note:', error);
       toast({
         title: "Failed to Add Note",
-        description: "Please make sure you're signed in and try again.",
+        description: "Please try again.",
         variant: "destructive"
       });
     }
