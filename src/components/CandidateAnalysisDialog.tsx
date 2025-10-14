@@ -268,117 +268,134 @@ export const CandidateAnalysisDialog = ({ open, onOpenChange, candidate }: Candi
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-none w-screen h-screen p-0 gap-0 flex flex-col bg-background overflow-hidden m-0 rounded-none">
-        {/* Clean, Minimal Header */}
-        <div className={`fixed top-0 left-0 right-0 z-50 border-b bg-background transition-transform duration-300 ${showHeader ? 'translate-y-0' : '-translate-y-full'}`}>
-          <DialogHeader className="px-8 lg:px-16 xl:px-24 py-8">
-            <div className="flex items-start justify-between gap-8">
-              {/* Candidate Info */}
-              <div className="flex-1 space-y-6">
-                <div className="space-y-2">
-                  <DialogTitle className="text-2xl font-semibold bg-gradient-to-r from-cyan-600 to-teal-600 bg-clip-text text-transparent tracking-tight">
-                    {candidate.candidateName}
-                  </DialogTitle>
-                  <DialogDescription className="text-base text-muted-foreground flex items-center gap-2">
-                    <span className="w-1.5 h-1.5 rounded-full bg-cyan-500 animate-pulse"></span>
-                    {candidate.email}
-                  </DialogDescription>
-                </div>
-                
-                {/* Status Selector */}
-                <div className="flex items-center gap-3">
-                  <span className="text-sm font-medium text-muted-foreground">Status:</span>
-                  <Select value={currentStatus} onValueChange={(value) => handleStatusChange(value as CandidateStatus)}>
-                    <SelectTrigger className={`w-[200px] ${getStatusConfig(currentStatus).color} border-2`}>
-                      <div className="flex items-center gap-2">
-                        {getStatusConfig(currentStatus).icon}
-                        <SelectValue />
-                      </div>
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="new">
-                        <div className="flex items-center gap-2">
-                          <FileText className="h-4 w-4" />
-                          New
-                        </div>
-                      </SelectItem>
-                      <SelectItem value="reviewing">
-                        <div className="flex items-center gap-2">
-                          <Eye className="h-4 w-4" />
-                          Reviewing
-                        </div>
-                      </SelectItem>
-                      <SelectItem value="contacted">
-                        <div className="flex items-center gap-2">
-                          <Mail className="h-4 w-4" />
-                          Contacted
-                        </div>
-                      </SelectItem>
-                      <SelectItem value="interview_scheduled">
+        {/* Collapsing Header with Mini Mode */}
+        <div className={`sticky top-0 z-50 border-b bg-background/95 backdrop-blur-sm transition-all duration-300 ${showHeader ? 'h-auto' : 'h-16'}`}>
+          <DialogHeader className={`px-8 lg:px-16 xl:px-24 transition-all duration-300 ${showHeader ? 'py-8' : 'py-3'}`}>
+            <div className="flex items-center justify-between gap-8">
+              {/* Mini Mode - Always visible */}
+              <div className="flex items-center gap-6 min-w-0">
+                <DialogTitle className={`font-semibold bg-gradient-to-r from-cyan-600 to-teal-600 bg-clip-text text-transparent tracking-tight transition-all duration-300 truncate ${showHeader ? 'text-2xl' : 'text-lg'}`}>
+                  {candidate.candidateName}
+                </DialogTitle>
+                {!showHeader && candidate.overallScore !== undefined && (
+                  <div className="flex items-center gap-2 px-3 py-1 bg-gradient-to-br from-cyan-50 to-teal-50 dark:from-cyan-950/30 dark:to-teal-950/30 rounded-full border border-cyan-200 dark:border-cyan-800">
+                    <span className="text-sm font-medium text-muted-foreground">Score:</span>
+                    <span className="text-lg font-semibold bg-gradient-to-br from-cyan-600 to-teal-600 bg-clip-text text-transparent">
+                      {candidate.overallScore}/10
+                    </span>
+                  </div>
+                )}
+              </div>
+
+              {/* Full Header Content - Hidden in mini mode */}
+              <div className={`flex-1 transition-all duration-300 ${showHeader ? 'opacity-100' : 'opacity-0 h-0 overflow-hidden'}`}>
+                <div className="flex items-start justify-between gap-8">
+                  {/* Candidate Info */}
+                  <div className="flex-1 space-y-6">
+                    <div className="space-y-2">
+                      <DialogDescription className="text-base text-muted-foreground flex items-center gap-2">
+                        <span className="w-1.5 h-1.5 rounded-full bg-cyan-500 animate-pulse"></span>
+                        {candidate.email}
+                      </DialogDescription>
+                    </div>
+                    
+                    {/* Status Selector */}
+                    <div className="flex items-center gap-3">
+                      <span className="text-sm font-medium text-muted-foreground">Status:</span>
+                      <Select value={currentStatus} onValueChange={(value) => handleStatusChange(value as CandidateStatus)}>
+                        <SelectTrigger className={`w-[200px] ${getStatusConfig(currentStatus).color} border-2`}>
+                          <div className="flex items-center gap-2">
+                            {getStatusConfig(currentStatus).icon}
+                            <SelectValue />
+                          </div>
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="new">
+                            <div className="flex items-center gap-2">
+                              <FileText className="h-4 w-4" />
+                              New
+                            </div>
+                          </SelectItem>
+                          <SelectItem value="reviewing">
+                            <div className="flex items-center gap-2">
+                              <Eye className="h-4 w-4" />
+                              Reviewing
+                            </div>
+                          </SelectItem>
+                          <SelectItem value="contacted">
+                            <div className="flex items-center gap-2">
+                              <Mail className="h-4 w-4" />
+                              Contacted
+                            </div>
+                          </SelectItem>
+                          <SelectItem value="interview_scheduled">
+                            <div className="flex items-center gap-2">
+                              <Calendar className="h-4 w-4" />
+                              Interview Scheduled
+                            </div>
+                          </SelectItem>
+                          <SelectItem value="interviewed">
+                            <div className="flex items-center gap-2">
+                              <CheckCircle className="h-4 w-4" />
+                              Interviewed
+                            </div>
+                          </SelectItem>
+                          <SelectItem value="offer_extended">
+                            <div className="flex items-center gap-2">
+                              <Trophy className="h-4 w-4" />
+                              Offer Extended
+                            </div>
+                          </SelectItem>
+                          <SelectItem value="hired">
+                            <div className="flex items-center gap-2">
+                              <CheckCircle className="h-4 w-4" />
+                              Hired
+                            </div>
+                          </SelectItem>
+                          <SelectItem value="rejected">
+                            <div className="flex items-center gap-2">
+                              <X className="h-4 w-4" />
+                              Rejected
+                            </div>
+                          </SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    
+                    <div className="flex items-center gap-4 text-sm text-muted-foreground">
+                      {candidate.date && (
                         <div className="flex items-center gap-2">
                           <Calendar className="h-4 w-4" />
-                          Interview Scheduled
+                          <span>
+                            {new Date(candidate.date).toLocaleDateString('en-US', { 
+                              year: 'numeric', 
+                              month: 'short', 
+                              day: 'numeric' 
+                            })}
+                          </span>
                         </div>
-                      </SelectItem>
-                      <SelectItem value="interviewed">
+                      )}
+                      
+                      {candidate.recruitmentName && (
                         <div className="flex items-center gap-2">
-                          <CheckCircle className="h-4 w-4" />
-                          Interviewed
+                          <Folder className="h-4 w-4" />
+                          <span>{candidate.recruitmentName}</span>
                         </div>
-                      </SelectItem>
-                      <SelectItem value="offer_extended">
-                        <div className="flex items-center gap-2">
-                          <Trophy className="h-4 w-4" />
-                          Offer Extended
-                        </div>
-                      </SelectItem>
-                      <SelectItem value="hired">
-                        <div className="flex items-center gap-2">
-                          <CheckCircle className="h-4 w-4" />
-                          Hired
-                        </div>
-                      </SelectItem>
-                      <SelectItem value="rejected">
-                        <div className="flex items-center gap-2">
-                          <X className="h-4 w-4" />
-                          Rejected
-                        </div>
-                      </SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                
-                <div className="flex items-center gap-4 text-sm text-muted-foreground">
-                  {candidate.date && (
-                    <div className="flex items-center gap-2">
-                      <Calendar className="h-4 w-4" />
-                      <span>
-                        {new Date(candidate.date).toLocaleDateString('en-US', { 
-                          year: 'numeric', 
-                          month: 'short', 
-                          day: 'numeric' 
-                        })}
-                      </span>
+                      )}
                     </div>
-                  )}
+                  </div>
                   
-                  {candidate.recruitmentName && (
-                    <div className="flex items-center gap-2">
-                      <Folder className="h-4 w-4" />
-                      <span>{candidate.recruitmentName}</span>
+                  {/* Overall Score - Full mode */}
+                  {candidate.overallScore !== undefined && (
+                    <div className="flex flex-col items-end gap-1">
+                      <div className="text-sm font-medium text-muted-foreground">Overall Score</div>
+                      <div className="text-4xl font-semibold bg-gradient-to-br from-cyan-600 to-teal-600 bg-clip-text text-transparent">
+                        {candidate.overallScore}<span className="text-xl text-muted-foreground">/10</span>
+                      </div>
                     </div>
                   )}
                 </div>
               </div>
-              
-              {/* Overall Score */}
-              {candidate.overallScore !== undefined && (
-                <div className="flex flex-col items-end gap-1">
-                  <div className="text-sm font-medium text-muted-foreground">Overall Score</div>
-                  <div className="text-4xl font-semibold bg-gradient-to-br from-cyan-600 to-teal-600 bg-clip-text text-transparent">
-                    {candidate.overallScore}<span className="text-xl text-muted-foreground">/10</span>
-                  </div>
-                </div>
-              )}
             </div>
           </DialogHeader>
         </div>
