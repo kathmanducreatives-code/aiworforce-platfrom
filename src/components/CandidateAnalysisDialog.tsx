@@ -845,11 +845,11 @@ export const CandidateAnalysisDialog = ({ open, onOpenChange, candidate }: Candi
                         {notes.map((note) => (
                           <div 
                             key={note.id} 
-                            className="border-l-4 border-purple-400 bg-purple-50/50 p-4 rounded-r-lg hover:bg-purple-50 transition-colors"
+                            className="border-l-4 border-purple-400 bg-purple-50/50 dark:bg-purple-950/20 p-4 rounded-r-lg hover:bg-purple-50 dark:hover:bg-purple-950/30 transition-colors"
                           >
                             <div className="flex items-start justify-between mb-2">
                               <div className="flex items-center gap-2">
-                                <div className="w-8 h-8 rounded-full bg-purple-200 flex items-center justify-center text-sm font-semibold text-purple-700">
+                                <div className="w-8 h-8 rounded-full bg-purple-200 dark:bg-purple-800 flex items-center justify-center text-sm font-semibold text-purple-700 dark:text-purple-200">
                                   {note.created_by_name.charAt(0).toUpperCase()}
                                 </div>
                                 <div>
@@ -880,27 +880,25 @@ export const CandidateAnalysisDialog = ({ open, onOpenChange, candidate }: Candi
                     </ScrollArea>
                     
                     {/* Add New Note */}
-                    <div className="space-y-3 pt-4 border-t">
-                      <Label htmlFor="new-note" className="text-sm font-medium">
+                    <div className="space-y-4 pt-6 border-t border-purple-200 dark:border-purple-800">
+                      <Label htmlFor="new-note" className="text-base font-semibold text-foreground">
                         Add a note
                       </Label>
-                      <div className="flex gap-3">
-                        <Textarea
-                          id="new-note"
-                          placeholder="Share your thoughts about this candidate..."
-                          value={newNote}
-                          onChange={(e) => setNewNote(e.target.value)}
-                          className="flex-1 min-h-[100px] resize-none"
-                        />
-                      </div>
-                      <div className="flex items-center justify-between">
-                        <p className="text-xs text-muted-foreground">
+                      <Textarea
+                        id="new-note"
+                        placeholder="Share your thoughts about this candidate..."
+                        value={newNote}
+                        onChange={(e) => setNewNote(e.target.value)}
+                        className="min-h-[120px] resize-none border-purple-200 dark:border-purple-800 focus:border-purple-400 dark:focus:border-purple-600 focus:ring-purple-400 dark:focus:ring-purple-600"
+                      />
+                      <div className="flex items-center justify-between gap-4">
+                        <p className="text-xs text-muted-foreground flex-1">
                           Notes are visible to all team members
                         </p>
                         <Button 
                           onClick={handleAddNote}
                           disabled={!newNote.trim()}
-                          className="bg-gradient-to-r from-purple-500 to-purple-600 hover:from-purple-600 hover:to-purple-700 text-white"
+                          className="bg-gradient-to-r from-purple-500 to-purple-600 hover:from-purple-600 hover:to-purple-700 text-white shadow-lg disabled:opacity-50 disabled:cursor-not-allowed px-6"
                         >
                           <FileText className="h-4 w-4 mr-2" />
                           Add Note
