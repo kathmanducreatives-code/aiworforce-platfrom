@@ -21,14 +21,25 @@ const HeroSection = () => {
             
             {/* Heading */}
             <h1 className="text-5xl md:text-6xl lg:text-7xl font-bold text-slate-900 leading-[1.2]">
-              AI-Powered Resume<br />
-              <span className="relative inline-block group">
+              <span className="inline-block animate-fade-in-up opacity-0 [animation-delay:100ms] [animation-fill-mode:forwards]">
+                AI-Powered Resume
+              </span>
+              <br />
+              <span className="relative inline-block group animate-fade-in-up opacity-0 [animation-delay:300ms] [animation-fill-mode:forwards]">
                 <span className="absolute inset-0 bg-gradient-to-r from-teal-500 to-cyan-500 blur-2xl opacity-20 animate-glow-pulse-teal" />
-                <span className="relative bg-gradient-to-r from-teal-600 via-cyan-600 to-teal-600 bg-clip-text text-transparent bg-[length:200%_100%] animate-gradient-x">
-                  Screening
+                <span className="relative bg-gradient-to-r from-teal-600 via-cyan-600 to-teal-600 bg-clip-text text-transparent bg-[length:200%_100%] animate-gradient-x group-hover:scale-110 transition-transform duration-300">
+                  <span className="inline-block animate-[float_3s_ease-in-out_infinite]">Screening</span>
                 </span>
-              </span>{" "}That<br />
-              Actually Works.
+                {/* Shimmer effect */}
+                <span className="absolute inset-0 bg-gradient-to-r from-transparent via-white to-transparent opacity-0 animate-shimmer-sweep pointer-events-none" />
+              </span>{" "}
+              <span className="inline-block animate-fade-in-up opacity-0 [animation-delay:500ms] [animation-fill-mode:forwards]">
+                That
+              </span>
+              <br />
+              <span className="inline-block animate-fade-in-up opacity-0 [animation-delay:700ms] [animation-fill-mode:forwards] hover:text-teal-600 transition-colors duration-300">
+                Actually Works.
+              </span>
             </h1>
             
             {/* Description */}
