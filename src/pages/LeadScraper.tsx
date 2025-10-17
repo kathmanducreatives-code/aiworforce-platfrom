@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -8,7 +9,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { leadScraperApi, type LeadScraperFormData } from "@/services/leadScraperApi";
-import { Search, RefreshCw, ExternalLink, Loader2, Filter, ArrowUpDown, Download } from "lucide-react";
+import { Search, RefreshCw, ExternalLink, Loader2, Filter, ArrowUpDown, Download, ArrowLeft } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 interface LinkedInLead {
@@ -24,6 +25,7 @@ interface LinkedInLead {
 }
 
 export default function LeadScraper() {
+  const navigate = useNavigate();
   const { toast } = useToast();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
@@ -209,6 +211,14 @@ export default function LeadScraper() {
     <div className="min-h-screen bg-background">
       <div className="container mx-auto px-4 py-8">
         <div className="mb-8">
+          <Button 
+            variant="ghost" 
+            onClick={() => navigate(-1)}
+            className="mb-4"
+          >
+            <ArrowLeft className="h-4 w-4 mr-2" />
+            Back
+          </Button>
           <h1 className="text-4xl font-bold mb-2">LinkedIn Lead Scraper</h1>
           <p className="text-muted-foreground">Extract candidate data from LinkedIn based on your search criteria</p>
         </div>
