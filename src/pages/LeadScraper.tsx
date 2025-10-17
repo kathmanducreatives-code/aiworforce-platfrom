@@ -8,7 +8,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { leadScraperApi, type LeadScraperFormData } from "@/services/leadScraperApi";
-import { Search, RefreshCw, ExternalLink, Loader2, Filter, ArrowUpDown } from "lucide-react";
+import { Search, RefreshCw, ExternalLink, Loader2, Filter, ArrowUpDown, Download } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 interface LinkedInLead {
@@ -38,6 +38,8 @@ export default function LeadScraper() {
     location: "",
     keywords: [],
     experienceLevel: "",
+    industry: "",
+    numberOfLeads: 10,
   });
 
   // Fetch leads from Supabase
@@ -116,6 +118,8 @@ export default function LeadScraper() {
         location: "",
         keywords: [],
         experienceLevel: "",
+        industry: "",
+        numberOfLeads: 10,
       });
     } catch (error) {
       console.error('Error submitting lead scraper request:', error);
@@ -167,6 +171,40 @@ export default function LeadScraper() {
     }
   };
 
+  const downloadCSV = () => {
+    // Create CSV headers
+    const headers = ['Name', 'Job Title', 'Company', 'Location', 'Experience Level', 'Email', 'LinkedIn URL', 'Scraped Date'];
+    
+    // Create CSV rows
+    const rows = filteredAndSortedLeads.map(lead => [
+      lead.candidate_name,
+      lead.job_title || '',
+      lead.company || '',
+      lead.location || '',
+      lead.experience_level || '',
+      lead.contact_email || '',
+      lead.linkedin_url || '',
+      new Date(lead.scraped_at).toLocaleDateString()
+    ]);
+
+    // Combine headers and rows
+    const csvContent = [
+      headers.join(','),
+      ...rows.map(row => row.map(cell => `"${cell}"`).join(','))
+    ].join('\n');
+
+    // Create blob and download
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    const url = URL.createObjectURL(blob);
+    link.setAttribute('href', url);
+    link.setAttribute('download', `linkedin_leads_${new Date().toISOString().split('T')[0]}.csv`);
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
   return (
     <div className="min-h-screen bg-background">
       <div className="container mx-auto px-4 py-8">
@@ -183,7 +221,7 @@ export default function LeadScraper() {
           </CardHeader>
           <CardContent>
             <form onSubmit={handleSubmit} className="space-y-4">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                 <div className="space-y-2">
                   <Label htmlFor="jobTitle">Job Title *</Label>
                   <Input
@@ -203,6 +241,16 @@ export default function LeadScraper() {
                     value={formData.location}
                     onChange={(e) => setFormData({ ...formData, location: e.target.value })}
                     required
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="industry">Industry</Label>
+                  <Input
+                    id="industry"
+                    placeholder="e.g., Technology, Healthcare"
+                    value={formData.industry}
+                    onChange={(e) => setFormData({ ...formData, industry: e.target.value })}
                   />
                 </div>
 
@@ -233,6 +281,19 @@ export default function LeadScraper() {
                     </SelectContent>
                   </Select>
                 </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="numberOfLeads">Number of Leads</Label>
+                  <Input
+                    id="numberOfLeads"
+                    type="number"
+                    min="1"
+                    max="100"
+                    placeholder="e.g., 10"
+                    value={formData.numberOfLeads}
+                    onChange={(e) => setFormData({ ...formData, numberOfLeads: parseInt(e.target.value) || 10 })}
+                  />
+                </div>
               </div>
 
               <Button type="submit" disabled={isSubmitting} className="w-full md:w-auto">
@@ -261,6 +322,15 @@ export default function LeadScraper() {
                 <CardDescription>All LinkedIn leads extracted from your searches</CardDescription>
               </div>
               <div className="flex gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={downloadCSV}
+                  disabled={filteredAndSortedLeads.length === 0}
+                >
+                  <Download className="h-4 w-4 mr-2" />
+                  Download CSV
+                </Button>
                 <Button
                   variant="outline"
                   size="sm"

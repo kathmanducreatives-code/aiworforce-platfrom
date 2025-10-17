@@ -3,6 +3,8 @@ export interface LeadScraperFormData {
   location: string;
   keywords: string[];
   experienceLevel: string;
+  industry: string;
+  numberOfLeads: number;
 }
 
 export interface LeadScraperResponse {
@@ -29,6 +31,8 @@ export const leadScraperApi = {
           location: formData.location,
           keywords: formData.keywords,
           experience_level: formData.experienceLevel,
+          industry: formData.industry,
+          number_of_leads: formData.numberOfLeads,
           timestamp: new Date().toISOString(),
           source: 'screening-pilot-lead-scraper',
         }),
