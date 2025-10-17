@@ -177,6 +177,54 @@ export type Database = {
         }
         Relationships: []
       }
+      linkedin_leads: {
+        Row: {
+          candidate_name: string
+          company: string | null
+          contact_email: string | null
+          created_at: string
+          experience_level: string | null
+          id: string
+          job_title: string | null
+          keywords: string[] | null
+          linkedin_url: string | null
+          location: string | null
+          scraped_at: string
+          search_criteria: Json | null
+          updated_at: string
+        }
+        Insert: {
+          candidate_name: string
+          company?: string | null
+          contact_email?: string | null
+          created_at?: string
+          experience_level?: string | null
+          id?: string
+          job_title?: string | null
+          keywords?: string[] | null
+          linkedin_url?: string | null
+          location?: string | null
+          scraped_at?: string
+          search_criteria?: Json | null
+          updated_at?: string
+        }
+        Update: {
+          candidate_name?: string
+          company?: string | null
+          contact_email?: string | null
+          created_at?: string
+          experience_level?: string | null
+          id?: string
+          job_title?: string | null
+          keywords?: string[] | null
+          linkedin_url?: string | null
+          location?: string | null
+          scraped_at?: string
+          search_criteria?: Json | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
       resume_analyses: {
         Row: {
           candidate_name: string
