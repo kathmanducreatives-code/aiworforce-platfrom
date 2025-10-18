@@ -178,6 +178,7 @@ export const LeadTable = ({ leads, isLoading, onDownloadCSV }: LeadTableProps) =
                 </Button>
               </TableHead>
               <TableHead>Location</TableHead>
+              <TableHead>Email</TableHead>
               <TableHead>Experience</TableHead>
               <TableHead className="text-right">Actions</TableHead>
             </TableRow>
@@ -193,6 +194,7 @@ export const LeadTable = ({ leads, isLoading, onDownloadCSV }: LeadTableProps) =
                 <TableCell>{lead.job_title || "—"}</TableCell>
                 <TableCell>{lead.company || "—"}</TableCell>
                 <TableCell className="text-muted-foreground">{lead.location || "—"}</TableCell>
+                <TableCell className="text-muted-foreground">{lead.contact_email || "—"}</TableCell>
                 <TableCell>
                   {lead.experience_level ? (
                     <Badge variant="secondary" className="capitalize">
