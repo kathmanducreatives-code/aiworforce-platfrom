@@ -17,7 +17,7 @@ export interface LeadScraperResponse {
 const N8N_LEAD_SCRAPER_WEBHOOK_URL = "https://ppprasidha.app.n8n.cloud/webhook/0734cc78-0bcd-4690-84d8-7193e36fc604";
 
 export const leadScraperApi = {
-  async scrapeLeads(formData: LeadScraperFormData): Promise<LeadScraperResponse> {
+  async scrapeLeads(formData: LeadScraperFormData, sessionId?: string): Promise<LeadScraperResponse> {
     try {
       console.log('Sending lead scraper request to n8n:', formData);
       
@@ -27,6 +27,7 @@ export const leadScraperApi = {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
+          session_id: sessionId,
           job_title: formData.jobTitle,
           location: formData.location,
           keywords: formData.keywords,

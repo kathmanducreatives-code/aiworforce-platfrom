@@ -191,6 +191,7 @@ export type Database = {
           location: string | null
           scraped_at: string
           search_criteria: Json | null
+          session_id: string | null
           updated_at: string
         }
         Insert: {
@@ -206,6 +207,7 @@ export type Database = {
           location?: string | null
           scraped_at?: string
           search_criteria?: Json | null
+          session_id?: string | null
           updated_at?: string
         }
         Update: {
@@ -221,9 +223,18 @@ export type Database = {
           location?: string | null
           scraped_at?: string
           search_criteria?: Json | null
+          session_id?: string | null
           updated_at?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "linkedin_leads_session_id_fkey"
+            columns: ["session_id"]
+            isOneToOne: false
+            referencedRelation: "scraping_sessions"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       resume_analyses: {
         Row: {
@@ -381,6 +392,36 @@ export type Database = {
           user_timezone?: string | null
           window_end?: string | null
           window_start?: string | null
+        }
+        Relationships: []
+      }
+      scraping_sessions: {
+        Row: {
+          completed_at: string | null
+          created_at: string | null
+          id: string
+          search_criteria: Json
+          status: string | null
+          total_leads: number | null
+          user_id: string | null
+        }
+        Insert: {
+          completed_at?: string | null
+          created_at?: string | null
+          id?: string
+          search_criteria: Json
+          status?: string | null
+          total_leads?: number | null
+          user_id?: string | null
+        }
+        Update: {
+          completed_at?: string | null
+          created_at?: string | null
+          id?: string
+          search_criteria?: Json
+          status?: string | null
+          total_leads?: number | null
+          user_id?: string | null
         }
         Relationships: []
       }
