@@ -45,6 +45,7 @@ type SortOrder = "asc" | "desc";
 export const LeadTable = ({ leads, isLoading, onDownloadCSV }: LeadTableProps) => {
   const [searchTerm, setSearchTerm] = useState("");
   const [experienceFilter, setExperienceFilter] = useState("all");
+  const [showEmailOnly, setShowEmailOnly] = useState(false);
   const [sortField, setSortField] = useState<SortField>("scraped_at");
   const [sortOrder, setSortOrder] = useState<SortOrder>("desc");
 
@@ -67,7 +68,9 @@ export const LeadTable = ({ leads, isLoading, onDownloadCSV }: LeadTableProps) =
       const matchesExperience =
         experienceFilter === "all" || lead.experience_level === experienceFilter;
 
-      return matchesSearch && matchesExperience;
+      const matchesEmail = !showEmailOnly || (lead.contact_email && lead.contact_email.trim() !== "");
+
+      return matchesSearch && matchesExperience && matchesEmail;
     })
     .sort((a, b) => {
       const aValue = a[sortField] || "";
@@ -114,7 +117,7 @@ export const LeadTable = ({ leads, isLoading, onDownloadCSV }: LeadTableProps) =
           className="max-w-md"
         />
         
-        <div className="flex gap-2 items-center">
+        <div className="flex gap-2 items-center flex-wrap">
           <Select value={experienceFilter} onValueChange={setExperienceFilter}>
             <SelectTrigger className="w-[180px] bg-background">
               <SelectValue placeholder="Experience Level" />
@@ -127,6 +130,16 @@ export const LeadTable = ({ leads, isLoading, onDownloadCSV }: LeadTableProps) =
               <SelectItem value="lead">Lead/Principal</SelectItem>
             </SelectContent>
           </Select>
+
+          <Button
+            onClick={() => setShowEmailOnly(!showEmailOnly)}
+            variant={showEmailOnly ? "default" : "outline"}
+            size="sm"
+            className="gap-2"
+          >
+            <Mail className="w-4 h-4" />
+            {showEmailOnly ? "Showing Email Only" : "Show Email Only"}
+          </Button>
           
           <Button
             onClick={onDownloadCSV}
