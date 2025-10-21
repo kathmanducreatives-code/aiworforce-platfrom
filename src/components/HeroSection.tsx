@@ -22,26 +22,23 @@ const HeroSection = () => {
             {/* Heading */}
             <h1 className="text-5xl md:text-6xl lg:text-7xl font-bold text-slate-900 leading-[1.2]">
               <span className="inline-block animate-fade-in-up opacity-0 [animation-delay:100ms] [animation-fill-mode:forwards]">
-                Automate the Discovery
+                The All-in-One
               </span>
               <br />
               <span className="inline-block animate-fade-in-up opacity-0 [animation-delay:300ms] [animation-fill-mode:forwards]">
-                of{" "}
+                Recruitment Platform
               </span>
-              <span className="relative inline-block group animate-fade-in-up opacity-0 [animation-delay:400ms] [animation-fill-mode:forwards]">
+              <br />
+              <span className="inline-block animate-fade-in-up opacity-0 [animation-delay:500ms] [animation-fill-mode:forwards]">
+                Built on{" "}
+              </span>
+              <span className="relative inline-block group animate-fade-in-up opacity-0 [animation-delay:600ms] [animation-fill-mode:forwards]">
                 <span className="absolute inset-0 bg-gradient-to-r from-teal-500 to-cyan-500 blur-2xl opacity-20 animate-glow-pulse-teal" />
                 <span className="relative text-teal-600 drop-shadow-[0_0_12px_rgba(20,184,166,0.6)] group-hover:scale-110 transition-transform duration-300">
-                  <span className="inline-block animate-[float_3s_ease-in-out_infinite]">Passive Talent</span>
+                  <span className="inline-block animate-[float_3s_ease-in-out_infinite]">Intelligence</span>
                 </span>
                 {/* Shimmer effect */}
                 <span className="absolute inset-0 bg-gradient-to-r from-transparent via-teal-200/30 to-transparent opacity-0 animate-shimmer-sweep pointer-events-none" />
-              </span>
-              <br />
-              <span className="inline-block animate-fade-in-up opacity-0 [animation-delay:600ms] [animation-fill-mode:forwards]">
-                & Get{" "}
-              </span>
-              <span className="inline-block animate-fade-in-up opacity-0 [animation-delay:700ms] [animation-fill-mode:forwards] hover:text-teal-600 transition-colors duration-300">
-                Verified Intelligence
               </span>
             </h1>
             
