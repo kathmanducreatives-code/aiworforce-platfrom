@@ -1,34 +1,34 @@
 import Header from "@/components/Header";
-import { Brain, Upload, Target, GitBranch } from "lucide-react";
+import { Search, Brain, GitBranch, Mail } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 const Features = () => {
   const features = [
     {
-      icon: Brain,
-      title: "AI-Powered Analysis",
-      description: "Advanced machine learning algorithms analyze resumes with human-level accuracy, identifying key skills, experience, and qualifications instantly.",
+      icon: Search,
+      title: "Passive Talent Discovery",
+      description: "Automatically discover top passive candidates who aren't actively job hunting. Our AI scours multiple channels to find the perfect matches for your roles.",
       gradient: "from-cyan-50 to-teal-50",
       iconColor: "text-cyan-600"
     },
     {
-      icon: Upload,
-      title: "Bulk Resume Upload",
-      description: "Upload multiple resumes at once. Our system processes hundreds of resumes simultaneously, saving you hours of manual work.",
+      icon: Brain,
+      title: "Deep Search Intelligence",
+      description: "Get verified candidate intelligence instantly. Advanced AI analyzes profiles, experience, and qualifications to deliver actionable insights for faster, smarter placements.",
       gradient: "from-teal-50 to-emerald-50",
       iconColor: "text-teal-600"
     },
     {
-      icon: Target,
-      title: "Smart Candidate Scoring",
-      description: "Automated scoring system ranks candidates based on job requirements, giving you a clear view of the best matches for each position.",
+      icon: GitBranch,
+      title: "Smart CRM & Pipeline",
+      description: "Manage every candidate relationship in one intelligent system. Track touchpoints, organize pipelines, and nurture relationships with automated workflows.",
       gradient: "from-purple-50 to-pink-50",
       iconColor: "text-purple-600"
     },
     {
-      icon: GitBranch,
-      title: "Pipeline Management",
-      description: "Streamline your recruitment pipeline with intuitive candidate tracking, stage management, and automated workflow transitions.",
+      icon: Mail,
+      title: "Automated Nurturing",
+      description: "Build lasting relationships with automated, personalized outreach sequences. Stay top-of-mind with candidates through intelligent, timed communications.",
       gradient: "from-amber-50 to-orange-50",
       iconColor: "text-amber-600"
     }
@@ -56,10 +56,10 @@ const Features = () => {
               </div>
               
               <h1 className="text-4xl md:text-6xl font-bold bg-gradient-to-r from-slate-800 via-cyan-600 to-teal-600 bg-clip-text text-transparent mb-8 animate-fade-in-up">
-                Powerful Features for Modern Recruitment
+                The Only CRM Built for Recruiting Excellence
               </h1>
               <p className="text-xl text-slate-600 mb-12 leading-relaxed animate-fade-in-up" style={{animationDelay: '0.2s'}}>
-                Discover all the tools and capabilities that make ScreeningPilot the ultimate solution for AI-powered resume screening and candidate management.
+                From passive talent discovery to automated nurturing — everything you need to make faster, smarter placements in one powerful platform.
               </p>
 
               {/* Stats Grid */}
@@ -136,9 +136,9 @@ const Features = () => {
             
             <div className="grid md:grid-cols-3 gap-6 max-w-5xl mx-auto">
               {[
-                { title: "Save Time", value: "90%", description: "Reduction in screening time", color: "from-cyan-500 to-blue-500" },
-                { title: "Improve Quality", value: "85%", description: "Better candidate matches", color: "from-teal-500 to-emerald-500" },
-                { title: "Reduce Costs", value: "70%", description: "Lower hiring expenses", color: "from-purple-500 to-pink-500" }
+                { title: "Faster Placements", value: "90%", description: "Reduction in time-to-hire", color: "from-cyan-500 to-blue-500" },
+                { title: "Higher Quality", value: "85%", description: "Better candidate matches", color: "from-teal-500 to-emerald-500" },
+                { title: "Verified Intelligence", value: "100%", description: "Accurate candidate data", color: "from-purple-500 to-pink-500" }
               ].map((benefit, index) => (
                 <div key={index} className="group text-center p-6 rounded-xl bg-white/60 backdrop-blur-sm border border-slate-200/50 hover:bg-white/80 hover:shadow-xl transition-all duration-300 animate-fade-in-up" style={{animationDelay: `${0.2 * index}s`}}>
                   <div className={`text-4xl font-bold bg-gradient-to-r ${benefit.color} bg-clip-text text-transparent mb-2 group-hover:scale-110 transition-transform duration-300`}>
@@ -163,10 +163,10 @@ const Features = () => {
               </div>
               
               <h2 className="text-3xl md:text-4xl font-bold text-slate-800 mb-6 animate-fade-in-up">
-                Ready to Transform Your Recruitment Process?
+                Ready to Discover Passive Talent on Autopilot?
               </h2>
               <p className="text-xl text-slate-600 mb-8 animate-fade-in-up" style={{animationDelay: '0.1s'}}>
-                Join thousands of recruitment agencies already using ScreeningPilot to hire faster and smarter.
+                Join leading recruiters who are making faster, smarter placements with verified candidate intelligence.
               </p>
               
               <div className="flex flex-col sm:flex-row gap-4 justify-center items-center animate-fade-in-up" style={{animationDelay: '0.2s'}}>

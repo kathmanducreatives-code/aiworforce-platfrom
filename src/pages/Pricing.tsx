@@ -9,13 +9,13 @@ const Pricing = () => {
       name: "Starter",
       price: "$400",
       period: "per month",
-      description: "Perfect for small businesses getting started",
+      description: "Perfect for solo recruiters discovering passive talent",
       icon: Zap,
       features: [
         "1 user seat",
-        "Unlimited resume screening",
-        "Basic dashboard",
-        "AI-powered analysis",
+        "Passive talent discovery",
+        "Verified candidate intelligence",
+        "Basic CRM & pipeline",
         "Email support"
       ],
       popular: false,
@@ -25,15 +25,15 @@ const Pricing = () => {
       name: "Growth",
       price: "$800",
       period: "per month",
-      description: "Recommended for growing teams and HR departments",
+      description: "Recommended for growing recruiting teams",
       icon: Crown,
       features: [
         "3 user seats",
-        "Unlimited resume screening",
-        "Full pipeline automation",
-        "Email nurturing & sequences",
-        "Folder/tags management",
-        "Basic analytics",
+        "Advanced passive talent discovery",
+        "Deep search intelligence",
+        "Smart CRM & pipeline automation",
+        "Automated nurturing sequences",
+        "Candidate relationship management",
         "Priority support"
       ],
       popular: true,
@@ -43,16 +43,16 @@ const Pricing = () => {
       name: "Enterprise",
       price: "$1,500",
       period: "per month",
-      description: "For large organizations with complex needs",
+      description: "For large agencies with high-volume placement needs",
       icon: Rocket,
       features: [
         "Unlimited user seats",
-        "Unlimited screening & automation",
-        "Advanced analytics",
-        "Priority support & onboarding",
-        "Custom integrations",
-        "Dedicated account manager",
+        "Unlimited passive talent discovery",
+        "Priority verified intelligence",
+        "Advanced CRM & analytics",
         "White-label solution",
+        "Dedicated account manager",
+        "Custom integrations",
         "API access"
       ],
       popular: false,
@@ -72,7 +72,7 @@ const Pricing = () => {
               Choose Your Plan
             </h1>
             <p className="text-xl text-slate-600 max-w-2xl mx-auto">
-              Scale your recruitment process with our flexible pricing plans designed for teams of all sizes
+              Scale your passive talent discovery and automated nurturing with flexible pricing built for recruiting teams
             </p>
           </div>
 

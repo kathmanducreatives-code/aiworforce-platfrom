@@ -16,35 +16,38 @@ const HeroSection = () => {
             {/* Badge */}
             <div className="inline-flex items-center gap-2 px-4 py-2 bg-teal-50 border border-teal-200 rounded-full text-sm text-teal-700">
               <div className="w-2 h-2 rounded-full bg-teal-500 animate-pulse" />
-              <span>Trusted by 500+ Companies</span>
+              <span>The Only CRM Built for Recruiters</span>
             </div>
             
             {/* Heading */}
             <h1 className="text-5xl md:text-6xl lg:text-7xl font-bold text-slate-900 leading-[1.2]">
               <span className="inline-block animate-fade-in-up opacity-0 [animation-delay:100ms] [animation-fill-mode:forwards]">
-                AI-Powered Resume
+                Automate the Discovery
               </span>
               <br />
-              <span className="relative inline-block group animate-fade-in-up opacity-0 [animation-delay:300ms] [animation-fill-mode:forwards]">
+              <span className="inline-block animate-fade-in-up opacity-0 [animation-delay:300ms] [animation-fill-mode:forwards]">
+                of{" "}
+              </span>
+              <span className="relative inline-block group animate-fade-in-up opacity-0 [animation-delay:400ms] [animation-fill-mode:forwards]">
                 <span className="absolute inset-0 bg-gradient-to-r from-teal-500 to-cyan-500 blur-2xl opacity-20 animate-glow-pulse-teal" />
                 <span className="relative text-teal-600 drop-shadow-[0_0_12px_rgba(20,184,166,0.6)] group-hover:scale-110 transition-transform duration-300">
-                  <span className="inline-block animate-[float_3s_ease-in-out_infinite]">Screening</span>
+                  <span className="inline-block animate-[float_3s_ease-in-out_infinite]">Passive Talent</span>
                 </span>
                 {/* Shimmer effect */}
                 <span className="absolute inset-0 bg-gradient-to-r from-transparent via-teal-200/30 to-transparent opacity-0 animate-shimmer-sweep pointer-events-none" />
-              </span>{" "}
-              <span className="inline-block animate-fade-in-up opacity-0 [animation-delay:500ms] [animation-fill-mode:forwards]">
-                That
               </span>
               <br />
+              <span className="inline-block animate-fade-in-up opacity-0 [animation-delay:600ms] [animation-fill-mode:forwards]">
+                & Get{" "}
+              </span>
               <span className="inline-block animate-fade-in-up opacity-0 [animation-delay:700ms] [animation-fill-mode:forwards] hover:text-teal-600 transition-colors duration-300">
-                Actually Works.
+                Verified Intelligence
               </span>
             </h1>
             
             {/* Description */}
             <p className="text-lg md:text-xl text-slate-600 max-w-xl mx-auto md:mx-0">
-              Screen hundreds of resumes in minutes with 95% AI accuracy. Get detailed candidate insights, smart matching, and data-driven hiring decisions—all from one platform.
+              From sourcing to nurturing — automate your entire recruiting workflow. Discover top candidates, gain deep insights, and manage every relationship in one AI-powered system.
             </p>
             
             {/* CTA Button */}
