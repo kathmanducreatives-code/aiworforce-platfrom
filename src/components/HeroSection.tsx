@@ -46,8 +46,6 @@ const HeroSection = () => {
                 <span className="relative bg-gradient-to-r from-teal-600 via-cyan-600 to-teal-600 bg-clip-text text-transparent drop-shadow-[0_0_20px_rgba(20,184,166,0.8)] animate-pulse-glow group-hover:scale-105 transition-transform duration-300">
                   Intelligence
                 </span>
-                {/* Enhanced shimmer effect */}
-                <span className="absolute inset-0 bg-gradient-to-r from-transparent via-white/50 to-transparent opacity-0 animate-shimmer-sweep pointer-events-none" />
               </span>
             </h1>
             
