@@ -260,10 +260,10 @@ const ResumeUpload = () => {
         <div className="max-w-4xl mx-auto">
           <div className="text-center mb-12 animate-fade-in-down">
             <h2 className="text-3xl lg:text-4xl font-bold text-foreground mb-4">
-              Upload Your Resumes
+              Add Candidates to Intelligence Pipeline
             </h2>
             <p className="text-xl text-muted-foreground">
-              Drag and drop multiple resume files or click to browse. Supports PDF, DOC, and DOCX formats.
+              Upload resumes to analyze candidate profiles and add them to your centralized intelligence pipeline. Our AI cross-references multiple sources to deliver verified insights.
             </p>
           </div>
 

@@ -1,36 +1,53 @@
 import Header from "@/components/Header";
-import { Search, Brain, GitBranch, Mail } from "lucide-react";
+import { Search, Brain, GitBranch, Mail, TrendingUp, CheckCircle, Zap, ShieldCheck, Database } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 const Features = () => {
   const features = [
     {
       icon: Search,
-      title: "Passive Talent Discovery",
-      description: "Automatically discover top passive candidates who aren't actively job hunting. Our AI scours multiple channels to find the perfect matches for your roles.",
-      gradient: "from-cyan-50 to-teal-50",
-      iconColor: "text-cyan-600"
+      title: "Precision Sourcing Engine",
+      description: "Automates the search for passive candidates on LinkedIn and other professional sites. Eliminates manual list building — recruiters stop spending time on repetitive searching and list compilation.",
+      benefit: "Eliminates Manual List Building",
+      gradient: "from-blue-500 to-cyan-500",
+      iconBg: "bg-blue-50",
+      iconColor: "text-blue-600"
     },
     {
       icon: Brain,
-      title: "Deep Search Intelligence",
-      description: "Get verified candidate intelligence instantly. Advanced AI analyzes profiles, experience, and qualifications to deliver actionable insights for faster, smarter placements.",
-      gradient: "from-teal-50 to-emerald-50",
-      iconColor: "text-teal-600"
-    },
-    {
-      icon: GitBranch,
-      title: "Smart CRM & Pipeline",
-      description: "Manage every candidate relationship in one intelligent system. Track touchpoints, organize pipelines, and nurture relationships with automated workflows.",
-      gradient: "from-purple-50 to-pink-50",
+      title: "Deep Profile Intelligence",
+      description: "Cross-references scraped profiles across multiple online sources (social, patents, publications) and delivers AI-vetted analysis. Provides verified conversation angles — ensuring first outreach is highly personalized and informed.",
+      benefit: "Verified Conversation Angles",
+      gradient: "from-purple-500 to-pink-500",
+      iconBg: "bg-purple-50",
       iconColor: "text-purple-600"
     },
     {
+      icon: GitBranch,
+      title: "Centralized CRM & Pipeline",
+      description: "A dedicated system for managing both candidate and client relationships, deal flow, and specific follow-up statuses. Creates a single source of truth — all candidate history, client notes, and recruitment progress tracked in one place.",
+      benefit: "Single Source of Truth",
+      gradient: "from-teal-500 to-green-500",
+      iconBg: "bg-teal-50",
+      iconColor: "text-teal-600"
+    },
+    {
       icon: Mail,
-      title: "Automated Nurturing",
-      description: "Build lasting relationships with automated, personalized outreach sequences. Stay top-of-mind with candidates through intelligent, timed communications.",
-      gradient: "from-amber-50 to-orange-50",
-      iconColor: "text-amber-600"
+      title: "Customizable Email Nurturing",
+      description: "Allows for both high-volume sequences (for general roles) and highly personalized, single-touch emails (for niche roles). Maintains relationships at scale — ensuring no lead goes cold through automation or strategic manual check-ins.",
+      benefit: "Relationships at Scale",
+      gradient: "from-orange-500 to-red-500",
+      iconBg: "bg-orange-50",
+      iconColor: "text-orange-600"
+    },
+    {
+      icon: TrendingUp,
+      title: "Recruiting Agency Data Dashboard",
+      description: "Visual metrics on placements, time-to-fill, source efficiency, and follow-up status. Enables data-driven growth — agency owners can quickly view KPIs and make strategic decisions to scale the business.",
+      benefit: "Data-Driven Growth",
+      gradient: "from-indigo-500 to-blue-500",
+      iconBg: "bg-indigo-50",
+      iconColor: "text-indigo-600"
     }
   ];
 
@@ -56,29 +73,28 @@ const Features = () => {
               </div>
               
               <h1 className="text-4xl md:text-6xl font-bold bg-gradient-to-r from-slate-800 via-cyan-600 to-teal-600 bg-clip-text text-transparent mb-8 animate-fade-in-up">
-                The Only CRM Built for Recruiting Excellence
+                The Only CRM Built for <span className="bg-gradient-to-r from-teal-600 to-cyan-600 bg-clip-text text-transparent">Recruiting Excellence</span>
               </h1>
               <p className="text-xl text-slate-600 mb-12 leading-relaxed animate-fade-in-up" style={{animationDelay: '0.2s'}}>
-                From passive talent discovery to automated nurturing — everything you need to make faster, smarter placements in one powerful platform.
+                Automate passive talent discovery, deliver verified candidate intelligence, and manage every relationship in one AI-powered system. Built specifically for recruiting agencies who want to make faster, smarter placements.
               </p>
 
               {/* Stats Grid */}
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-6 max-w-2xl mx-auto mb-16">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-8 max-w-4xl mx-auto mb-16">
                 <div className="text-center animate-fade-in-up" style={{animationDelay: '0.3s'}}>
-                  <div className="text-2xl font-bold bg-gradient-to-r from-cyan-600 to-teal-600 bg-clip-text text-transparent mb-1">10x</div>
-                  <div className="text-slate-500 text-sm">Faster Screening</div>
+                  <div className="text-4xl font-bold bg-gradient-to-r from-teal-600 to-cyan-600 bg-clip-text text-transparent mb-2">90%</div>
+                  <div className="text-slate-600 font-medium">Faster Sourcing</div>
+                  <div className="text-sm text-slate-500 mt-1">Time saved on manual searching</div>
                 </div>
                 <div className="text-center animate-fade-in-up" style={{animationDelay: '0.4s'}}>
-                  <div className="text-2xl font-bold bg-gradient-to-r from-teal-600 to-emerald-600 bg-clip-text text-transparent mb-1">95%</div>
-                  <div className="text-slate-500 text-sm">Accuracy Rate</div>
+                  <div className="text-4xl font-bold bg-gradient-to-r from-teal-600 to-cyan-600 bg-clip-text text-transparent mb-2">100%</div>
+                  <div className="text-slate-600 font-medium">Verified Intelligence</div>
+                  <div className="text-sm text-slate-500 mt-1">Cross-referenced data accuracy</div>
                 </div>
                 <div className="text-center animate-fade-in-up" style={{animationDelay: '0.5s'}}>
-                  <div className="text-2xl font-bold bg-gradient-to-r from-purple-600 to-pink-600 bg-clip-text text-transparent mb-1">24/7</div>
-                  <div className="text-slate-500 text-sm">Processing</div>
-                </div>
-                <div className="text-center animate-fade-in-up" style={{animationDelay: '0.6s'}}>
-                  <div className="text-2xl font-bold bg-gradient-to-r from-amber-600 to-orange-600 bg-clip-text text-transparent mb-1">∞</div>
-                  <div className="text-slate-500 text-sm">Scalability</div>
+                  <div className="text-4xl font-bold bg-gradient-to-r from-teal-600 to-cyan-600 bg-clip-text text-transparent mb-2">3x</div>
+                  <div className="text-slate-600 font-medium">More Pipeline</div>
+                  <div className="text-sm text-slate-500 mt-1">Relationship management capacity</div>
                 </div>
               </div>
             </div>
@@ -92,33 +108,34 @@ const Features = () => {
               {features.map((feature, index) => (
                 <div
                   key={index}
-                  className="group relative backdrop-blur-sm bg-white/80 border border-slate-200/50 shadow-lg rounded-2xl p-8 hover:shadow-2xl hover:border-cyan-300/50 transition-all duration-500 hover:-translate-y-2 animate-fade-in-up overflow-hidden"
+                  className="group relative bg-white rounded-2xl p-8 shadow-lg hover:shadow-2xl transition-all duration-300 hover:-translate-y-2 border border-slate-100 animate-fade-in-up"
                   style={{animationDelay: `${0.1 * index}s`}}
                 >
-                  {/* Animated background gradient */}
-                  <div className={`absolute inset-0 bg-gradient-to-br ${feature.gradient.replace('50', '10')} opacity-0 group-hover:opacity-100 transition-opacity duration-500`}></div>
-                  
-                  {/* Floating decoration */}
-                  <div className={`absolute -top-2 -right-2 w-16 h-16 bg-gradient-to-br ${feature.gradient} rounded-full opacity-10 group-hover:opacity-20 group-hover:scale-110 transition-all duration-500`}></div>
-                  
-                  {/* Icon */}
-                  <div className={`relative w-14 h-14 bg-gradient-to-br ${feature.gradient} rounded-xl flex items-center justify-center mb-6 group-hover:scale-110 group-hover:rotate-6 transition-transform duration-500 shadow-lg group-hover:shadow-xl`}>
-                    <feature.icon className={`w-7 h-7 ${feature.iconColor} group-hover:text-white transition-colors duration-300`} />
+                  {/* Icon Container */}
+                  <div className={`inline-flex p-4 rounded-xl ${feature.iconBg} mb-6 group-hover:scale-110 transition-transform duration-300`}>
+                    <feature.icon className={`h-8 w-8 ${feature.iconColor}`} />
                   </div>
                   
-                  {/* Content */}
-                  <div className="relative">
-                    <h3 className={`text-xl font-semibold text-slate-900 mb-4 group-hover:${feature.iconColor} transition-colors duration-300`}>
-                      {feature.title}
-                    </h3>
-                    <p className="text-slate-600 leading-relaxed group-hover:text-slate-700 transition-colors duration-300">
-                      {feature.description}
-                    </p>
+                  {/* Title */}
+                  <h3 className="text-2xl font-bold text-slate-900 mb-4">
+                    {feature.title}
+                  </h3>
+                  
+                  {/* Description */}
+                  <p className="text-slate-600 mb-4 leading-relaxed">
+                    {feature.description}
+                  </p>
+                  
+                  {/* Benefit Badge */}
+                  <div className="inline-flex items-center gap-2 px-3 py-1 bg-teal-50 border border-teal-200 rounded-full text-sm text-teal-700 font-medium">
+                    <CheckCircle className="h-4 w-4" />
+                    {feature.benefit}
                   </div>
-
-                  {/* Hover glow effect */}
-                  <div className={`absolute inset-0 rounded-2xl opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none`} 
-                       style={{boxShadow: `0 0 60px ${feature.gradient.includes('cyan') ? 'rgba(6, 182, 212, 0.3)' : feature.gradient.includes('teal') ? 'rgba(20, 184, 166, 0.3)' : feature.gradient.includes('purple') ? 'rgba(147, 51, 234, 0.3)' : 'rgba(245, 158, 11, 0.3)'}`}}></div>
+                  
+                  {/* Hover gradient border effect */}
+                  <div className={`absolute inset-0 rounded-2xl opacity-0 group-hover:opacity-100 transition-opacity duration-300 bg-gradient-to-r ${feature.gradient} p-[2px] -z-10`}>
+                    <div className="w-full h-full bg-white rounded-2xl"></div>
+                  </div>
                 </div>
               ))}
             </div>
@@ -134,20 +151,62 @@ const Features = () => {
               </h2>
             </div>
             
-            <div className="grid md:grid-cols-3 gap-6 max-w-5xl mx-auto">
-              {[
-                { title: "Faster Placements", value: "90%", description: "Reduction in time-to-hire", color: "from-cyan-500 to-blue-500" },
-                { title: "Higher Quality", value: "85%", description: "Better candidate matches", color: "from-teal-500 to-emerald-500" },
-                { title: "Verified Intelligence", value: "100%", description: "Accurate candidate data", color: "from-purple-500 to-pink-500" }
-              ].map((benefit, index) => (
-                <div key={index} className="group text-center p-6 rounded-xl bg-white/60 backdrop-blur-sm border border-slate-200/50 hover:bg-white/80 hover:shadow-xl transition-all duration-300 animate-fade-in-up" style={{animationDelay: `${0.2 * index}s`}}>
-                  <div className={`text-4xl font-bold bg-gradient-to-r ${benefit.color} bg-clip-text text-transparent mb-2 group-hover:scale-110 transition-transform duration-300`}>
-                    {benefit.value}
+            <div className="grid md:grid-cols-2 gap-8 max-w-5xl mx-auto">
+              <div className="bg-gradient-to-br from-teal-50 to-cyan-50 rounded-2xl p-8 border border-teal-100 animate-fade-in-up" style={{animationDelay: '0.1s'}}>
+                <div className="flex items-start gap-4">
+                  <div className="p-3 bg-white rounded-xl shadow-sm">
+                    <Zap className="h-6 w-6 text-teal-600" />
                   </div>
-                  <h3 className="text-lg font-semibold text-slate-800 mb-2">{benefit.title}</h3>
-                  <p className="text-slate-600 text-sm">{benefit.description}</p>
+                  <div>
+                    <h3 className="text-xl font-bold text-slate-900 mb-2">Passive Talent at Scale</h3>
+                    <p className="text-slate-700">
+                      Automatically discover high-quality passive candidates who aren't actively job hunting. Build targeted lists in minutes, not hours.
+                    </p>
+                  </div>
                 </div>
-              ))}
+              </div>
+              
+              <div className="bg-gradient-to-br from-purple-50 to-pink-50 rounded-2xl p-8 border border-purple-100 animate-fade-in-up" style={{animationDelay: '0.2s'}}>
+                <div className="flex items-start gap-4">
+                  <div className="p-3 bg-white rounded-xl shadow-sm">
+                    <ShieldCheck className="h-6 w-6 text-purple-600" />
+                  </div>
+                  <div>
+                    <h3 className="text-xl font-bold text-slate-900 mb-2">Verified Intelligence</h3>
+                    <p className="text-slate-700">
+                      Cross-reference profiles across multiple sources. Get AI-vetted insights and personalized conversation starters for every outreach.
+                    </p>
+                  </div>
+                </div>
+              </div>
+              
+              <div className="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-2xl p-8 border border-blue-100 animate-fade-in-up" style={{animationDelay: '0.3s'}}>
+                <div className="flex items-start gap-4">
+                  <div className="p-3 bg-white rounded-xl shadow-sm">
+                    <Database className="h-6 w-6 text-blue-600" />
+                  </div>
+                  <div>
+                    <h3 className="text-xl font-bold text-slate-900 mb-2">True CRM for Recruiting</h3>
+                    <p className="text-slate-700">
+                      Manage candidates AND clients in one place. Track every interaction, note, and deal stage without losing critical information.
+                    </p>
+                  </div>
+                </div>
+              </div>
+              
+              <div className="bg-gradient-to-br from-orange-50 to-red-50 rounded-2xl p-8 border border-orange-100 animate-fade-in-up" style={{animationDelay: '0.4s'}}>
+                <div className="flex items-start gap-4">
+                  <div className="p-3 bg-white rounded-xl shadow-sm">
+                    <TrendingUp className="h-6 w-6 text-orange-600" />
+                  </div>
+                  <div>
+                    <h3 className="text-xl font-bold text-slate-900 mb-2">Data-Driven Decisions</h3>
+                    <p className="text-slate-700">
+                      View real-time KPIs on placements, time-to-fill, and source efficiency. Make strategic decisions to scale your recruiting business.
+                    </p>
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
         </section>
@@ -163,10 +222,10 @@ const Features = () => {
               </div>
               
               <h2 className="text-3xl md:text-4xl font-bold text-slate-800 mb-6 animate-fade-in-up">
-                Ready to Discover Passive Talent on Autopilot?
+                Ready to Transform Your Recruiting Agency?
               </h2>
               <p className="text-xl text-slate-600 mb-8 animate-fade-in-up" style={{animationDelay: '0.1s'}}>
-                Join leading recruiters who are making faster, smarter placements with verified candidate intelligence.
+                Join hundreds of recruiting agencies using ScreeningPilot to automate passive talent discovery, deliver verified intelligence, and make faster placements.
               </p>
               
               <div className="flex flex-col sm:flex-row gap-4 justify-center items-center animate-fade-in-up" style={{animationDelay: '0.2s'}}>

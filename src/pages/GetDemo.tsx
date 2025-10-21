@@ -41,7 +41,7 @@ const GetDemo = () => {
               See ScreeningPilot in Action
             </h1>
             <p className="text-xl text-slate-600 leading-relaxed">
-              Book a live demo and discover how our AI-powered CRM automates passive talent discovery and delivers verified candidate intelligence for faster placements.
+              Book a live demo and discover how our CRM automates passive talent discovery, delivers verified candidate intelligence, and helps you make faster, smarter placements with less manual work.
             </p>
           </div>
 

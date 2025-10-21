@@ -300,6 +300,27 @@ html {
     100% { transform: translateX(100%); }
   }
 
+  @keyframes intelligence-pulse {
+    0%, 100% {
+      box-shadow: 0 0 15px rgba(168, 85, 247, 0.3), 0 0 30px rgba(168, 85, 247, 0.1);
+    }
+    50% {
+      box-shadow: 0 0 25px rgba(168, 85, 247, 0.5), 0 0 40px rgba(168, 85, 247, 0.2);
+    }
+  }
+
+  @keyframes verified-check {
+    0% { transform: scale(0); opacity: 0; }
+    50% { transform: scale(1.2); }
+    100% { transform: scale(1); opacity: 1; }
+  }
+
+  @keyframes feature-card-hover {
+    0% { transform: translateY(0) scale(1); }
+    50% { transform: translateY(-4px) scale(1.02); }
+    100% { transform: translateY(-8px) scale(1.02); }
+  }
+
   @keyframes premium-shine {
     0% {
       transform: translateX(-100%) skewX(-15deg);
@@ -373,6 +394,29 @@ html {
 
   .animate-shimmer {
     animation: shimmer 2s ease-in-out infinite;
+  }
+
+  .animate-intelligence-pulse {
+    animation: intelligence-pulse 2s ease-in-out infinite;
+  }
+
+  .animate-verified-check {
+    animation: verified-check 0.4s ease-out;
+  }
+
+  .animate-feature-card-hover {
+    animation: feature-card-hover 0.3s ease-out forwards;
+  }
+
+  /* Intelligence badge styling */
+  .intelligence-badge {
+    @apply inline-flex items-center gap-2 px-3 py-1 rounded-full;
+    @apply bg-purple-50 border border-purple-200 text-purple-700;
+    @apply text-sm font-medium;
+  }
+
+  .intelligence-badge.verified {
+    @apply bg-green-50 border-green-200 text-green-700;
   }
 
   .animate-premium-shine {

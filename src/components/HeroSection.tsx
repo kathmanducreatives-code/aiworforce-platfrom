@@ -16,7 +16,7 @@ const HeroSection = () => {
             {/* Badge */}
             <div className="inline-flex items-center gap-2 px-4 py-2 bg-teal-50 border border-teal-200 rounded-full text-sm text-teal-700">
               <div className="w-2 h-2 rounded-full bg-teal-500 animate-pulse" />
-              <span>The Only CRM Built for Recruiters</span>
+              <span>Automated Passive Talent Discovery</span>
             </div>
             
             {/* Heading */}

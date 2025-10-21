@@ -1,5 +1,5 @@
 import Header from "@/components/Header";
-import { Check, Zap, Crown, Rocket } from "lucide-react";
+import { Check, Zap, Crown, Rocket, Building, TrendingUp } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 
@@ -9,51 +9,54 @@ const Pricing = () => {
       name: "Starter",
       price: "$400",
       period: "per month",
-      description: "Perfect for solo recruiters discovering passive talent",
-      icon: Zap,
+      description: "Perfect for solo recruiters and small agencies getting started",
+      icon: Rocket,
       features: [
         "1 user seat",
-        "Passive talent discovery",
-        "Verified candidate intelligence",
-        "Basic CRM & pipeline",
+        "Basic Precision Sourcing (50 searches/month)",
+        "Profile Intelligence with basic cross-referencing",
+        "Essential CRM & Pipeline management",
+        "Pre-built email nurturing templates",
+        "Basic reporting dashboard",
         "Email support"
       ],
       popular: false,
-      gradient: "from-blue-500 to-purple-500"
+      gradient: "from-blue-500 to-cyan-500"
     },
     {
       name: "Growth",
       price: "$800",
       period: "per month",
-      description: "Recommended for growing recruiting teams",
-      icon: Crown,
+      description: "Ideal for growing agencies ready to scale operations",
+      icon: TrendingUp,
       features: [
         "3 user seats",
-        "Advanced passive talent discovery",
-        "Deep search intelligence",
-        "Smart CRM & pipeline automation",
-        "Automated nurturing sequences",
-        "Candidate relationship management",
-        "Priority support"
+        "Advanced Precision Sourcing (unlimited searches)",
+        "Deep Profile Intelligence with full AI vetting",
+        "Smart CRM & Pipeline with automation",
+        "Custom Email Nurturing (high-volume + personalized)",
+        "Advanced analytics & KPI tracking",
+        "Priority support",
+        "API access"
       ],
       popular: true,
-      gradient: "from-cyan-500 to-teal-500"
+      gradient: "from-teal-500 to-green-500"
     },
     {
       name: "Enterprise",
       price: "$1,500",
       period: "per month",
-      description: "For large agencies with high-volume placement needs",
-      icon: Rocket,
+      description: "For established agencies demanding maximum performance",
+      icon: Building,
       features: [
         "Unlimited user seats",
-        "Unlimited passive talent discovery",
-        "Priority verified intelligence",
-        "Advanced CRM & analytics",
-        "White-label solution",
+        "Priority Sourcing with real-time monitoring",
+        "Premium Intelligence with patent & publication tracking",
+        "Full CRM suite with custom workflows",
+        "White-label email nurturing",
+        "Custom reporting & data export",
         "Dedicated account manager",
-        "Custom integrations",
-        "API access"
+        "Custom integrations & SSO"
       ],
       popular: false,
       gradient: "from-purple-500 to-pink-500"
@@ -71,8 +74,8 @@ const Pricing = () => {
             <h1 className="text-4xl md:text-6xl font-bold bg-gradient-to-r from-slate-800 via-cyan-600 to-teal-600 bg-clip-text text-transparent mb-6">
               Choose Your Plan
             </h1>
-            <p className="text-xl text-slate-600 max-w-2xl mx-auto">
-              Scale your passive talent discovery and automated nurturing with flexible pricing built for recruiting teams
+            <p className="text-xl text-slate-600 max-w-3xl mx-auto">
+              Choose the plan that fits your recruiting agency's needs. All plans include our core CRM features: passive talent discovery, verified intelligence, pipeline management, email nurturing, and data dashboards.
             </p>
           </div>
 

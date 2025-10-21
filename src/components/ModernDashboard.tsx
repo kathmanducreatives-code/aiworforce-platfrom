@@ -336,10 +336,10 @@ const ModernDashboard = () => {
           <div className="flex items-center justify-between mb-12">
             <div>
               <h1 className="text-4xl font-bold bg-gradient-to-r from-slate-800 to-slate-600 bg-clip-text text-transparent mb-3">
-                {viewMode === 'folders' && selectedFolder ? selectedFolder : 'Candidate Dashboard'}
+                {viewMode === 'folders' && selectedFolder ? selectedFolder : 'Candidate Intelligence Hub'}
               </h1>
               <p className="text-slate-600 text-lg font-medium">
-                {viewMode === 'folders' && selectedFolder ? `${filteredResumes.length} candidates in ${selectedFolder}` : 'Manage and analyze candidate applications with AI precision'}
+                {viewMode === 'folders' && selectedFolder ? `${filteredResumes.length} candidates in ${selectedFolder}` : 'Manage verified candidate intelligence and pipeline status with AI precision'}
               </p>
             </div>
             <div className="flex gap-3">
