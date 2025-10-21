@@ -25,20 +25,29 @@ const HeroSection = () => {
                 The All-in-One
               </span>
               <br />
-              <span className="inline-block animate-fade-in-up opacity-0 [animation-delay:300ms] [animation-fill-mode:forwards]">
-                Recruitment Platform
+              <span className="relative inline-block group animate-fade-in-up opacity-0 [animation-delay:300ms] [animation-fill-mode:forwards]">
+                <span className="absolute inset-0 bg-gradient-to-r from-teal-500 to-cyan-500 blur-2xl opacity-20 animate-glow-pulse-teal" />
+                <span className="relative bg-gradient-to-r from-teal-600 via-cyan-600 to-teal-600 bg-clip-text text-transparent drop-shadow-[0_0_20px_rgba(20,184,166,0.6)] animate-pulse-glow">
+                  Recruitment
+                </span>
+                {/* Shimmer effect */}
+                <span className="absolute inset-0 bg-gradient-to-r from-transparent via-white/40 to-transparent opacity-0 animate-shimmer-sweep pointer-events-none" />
+              </span>
+              {" "}
+              <span className="inline-block animate-fade-in-up opacity-0 [animation-delay:400ms] [animation-fill-mode:forwards]">
+                Platform
               </span>
               <br />
               <span className="inline-block animate-fade-in-up opacity-0 [animation-delay:500ms] [animation-fill-mode:forwards]">
                 Built on{" "}
               </span>
               <span className="relative inline-block group animate-fade-in-up opacity-0 [animation-delay:600ms] [animation-fill-mode:forwards]">
-                <span className="absolute inset-0 bg-gradient-to-r from-teal-500 to-cyan-500 blur-2xl opacity-20 animate-glow-pulse-teal" />
-                <span className="relative text-teal-600 drop-shadow-[0_0_12px_rgba(20,184,166,0.6)] group-hover:scale-110 transition-transform duration-300">
-                  <span className="inline-block animate-[float_3s_ease-in-out_infinite]">Intelligence</span>
+                <span className="absolute inset-0 bg-gradient-to-r from-teal-500 to-cyan-500 blur-3xl opacity-30 animate-glow-pulse-teal" />
+                <span className="relative bg-gradient-to-r from-teal-600 via-cyan-600 to-teal-600 bg-clip-text text-transparent drop-shadow-[0_0_20px_rgba(20,184,166,0.8)] animate-pulse-glow group-hover:scale-105 transition-transform duration-300">
+                  Intelligence
                 </span>
-                {/* Shimmer effect */}
-                <span className="absolute inset-0 bg-gradient-to-r from-transparent via-teal-200/30 to-transparent opacity-0 animate-shimmer-sweep pointer-events-none" />
+                {/* Enhanced shimmer effect */}
+                <span className="absolute inset-0 bg-gradient-to-r from-transparent via-white/50 to-transparent opacity-0 animate-shimmer-sweep pointer-events-none" />
               </span>
             </h1>
             
