@@ -16,6 +16,7 @@ import DataDashboard from "./pages/DataDashboard";
 import ClientMetrics from "./pages/ClientMetrics";
 import ClientDetail from "./pages/ClientDetail";
 import LeadScraper from "./pages/LeadScraper";
+import DeepSearch from "./pages/DeepSearch";
 
 const queryClient = new QueryClient();
 
@@ -38,6 +39,7 @@ const App = () => (
             <Route path="/client-metrics" element={<ClientMetrics />} />
             <Route path="/client/:clientId" element={<ClientDetail />} />
             <Route path="/lead-scraper" element={<LeadScraper />} />
+            <Route path="/deep-search" element={<DeepSearch />} />
             {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
             <Route path="*" element={<NotFound />} />
           </Routes>

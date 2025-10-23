@@ -35,6 +35,10 @@ const Header = () => {
               <span className="relative z-10">Lead Scraper</span>
               <span className="absolute inset-x-0 bottom-0 h-0.5 bg-gradient-to-r from-cyan-500 to-teal-500 transform scale-x-0 group-hover:scale-x-100 transition-transform duration-300 origin-left"></span>
             </a>
+            <a href="/deep-search" className="relative text-slate-600 hover:text-cyan-600 font-medium transition-all duration-300 group">
+              <span className="relative z-10">Deep Search</span>
+              <span className="absolute inset-x-0 bottom-0 h-0.5 bg-gradient-to-r from-cyan-500 to-teal-500 transform scale-x-0 group-hover:scale-x-100 transition-transform duration-300 origin-left"></span>
+            </a>
             <a href="/pricing" className="relative text-slate-600 hover:text-cyan-600 font-medium transition-all duration-300 group">
               <span className="relative z-10">Pricing</span>
               <span className="absolute inset-x-0 bottom-0 h-0.5 bg-gradient-to-r from-cyan-500 to-teal-500 transform scale-x-0 group-hover:scale-x-100 transition-transform duration-300 origin-left"></span>
@@ -77,6 +81,9 @@ const Header = () => {
               </a>
               <a href="/lead-scraper" className="text-slate-600 hover:text-cyan-600 font-medium py-2 transition-all duration-200 hover:translate-x-2 animate-fade-in-left animate-delay-150">
                 Lead Scraper
+              </a>
+              <a href="/deep-search" className="text-slate-600 hover:text-cyan-600 font-medium py-2 transition-all duration-200 hover:translate-x-2 animate-fade-in-left animate-delay-175">
+                Deep Search
               </a>
               <a href="/pricing" className="text-slate-600 hover:text-cyan-600 font-medium py-2 transition-all duration-200 hover:translate-x-2 animate-fade-in-left animate-delay-200">
                 Pricing
