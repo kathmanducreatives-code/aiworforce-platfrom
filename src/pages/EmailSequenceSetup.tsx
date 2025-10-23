@@ -328,7 +328,7 @@ const EmailSequenceSetup = () => {
           console.log(`Sending complete sequence for ${candidate.candidateName}:`, sequencePayload);
 
           // Send POST request with complete sequence
-          const response = await fetch('https://ppprasidha.app.n8n.cloud/webhook/lovable-intake', {
+          const response = await fetch('https://praaasidha.app.n8n.cloud/webhook/lovable-intake', {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',

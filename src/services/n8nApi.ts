@@ -24,7 +24,7 @@ export interface N8nError {
   message: string;
 }
 
-const N8N_WEBHOOK_URL = "https://ppprasidha.app.n8n.cloud/webhook/4406aa6a-f70a-4d82-b8cc-8c11418c43fe";
+const N8N_WEBHOOK_URL = "https://praaasidha.app.n8n.cloud/webhook/4406aa6a-f70a-4d82-b8cc-8c11418c43fe";
 
 export const n8nApi = {
   async uploadResumes(files: File[], recruiterRequirements?: string, recruitmentName?: string): Promise<UploadResponse> {
