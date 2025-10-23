@@ -177,6 +177,71 @@ export type Database = {
         }
         Relationships: []
       }
+      deep_search_results: {
+        Row: {
+          ai_confidence_level: number | null
+          ai_summary: string | null
+          candidate_id: string | null
+          candidate_name: string
+          company: string | null
+          company_match_notes: string | null
+          created_at: string | null
+          fit_score: number | null
+          id: string
+          ideal_roles: string[] | null
+          linkedin_url: string | null
+          raw_analysis: Json | null
+          status: string | null
+          strengths: string[] | null
+          updated_at: string | null
+          weaknesses: string[] | null
+        }
+        Insert: {
+          ai_confidence_level?: number | null
+          ai_summary?: string | null
+          candidate_id?: string | null
+          candidate_name: string
+          company?: string | null
+          company_match_notes?: string | null
+          created_at?: string | null
+          fit_score?: number | null
+          id?: string
+          ideal_roles?: string[] | null
+          linkedin_url?: string | null
+          raw_analysis?: Json | null
+          status?: string | null
+          strengths?: string[] | null
+          updated_at?: string | null
+          weaknesses?: string[] | null
+        }
+        Update: {
+          ai_confidence_level?: number | null
+          ai_summary?: string | null
+          candidate_id?: string | null
+          candidate_name?: string
+          company?: string | null
+          company_match_notes?: string | null
+          created_at?: string | null
+          fit_score?: number | null
+          id?: string
+          ideal_roles?: string[] | null
+          linkedin_url?: string | null
+          raw_analysis?: Json | null
+          status?: string | null
+          strengths?: string[] | null
+          updated_at?: string | null
+          weaknesses?: string[] | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "deep_search_results_candidate_id_fkey"
+            columns: ["candidate_id"]
+            isOneToOne: false
+            referencedRelation: "linkedin_leads"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       linkedin_leads: {
         Row: {
           candidate_name: string

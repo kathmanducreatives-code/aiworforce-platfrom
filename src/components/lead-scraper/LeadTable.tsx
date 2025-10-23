@@ -1,5 +1,9 @@
 import { useState } from "react";
-import { ArrowUpDown, Download, ExternalLink, Mail } from "lucide-react";
+import { ArrowUpDown, Download, ExternalLink, Mail, Brain } from "lucide-react";
+import { useToast } from "@/hooks/use-toast";
+import { deepSearchApi } from "@/services/deepSearchApi";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { DeepSearchResults } from "./DeepSearchResults";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -48,6 +52,43 @@ export const LeadTable = ({ leads, isLoading, onDownloadCSV }: LeadTableProps) =
   const [showEmailOnly, setShowEmailOnly] = useState(false);
   const [sortField, setSortField] = useState<SortField>("scraped_at");
   const [sortOrder, setSortOrder] = useState<SortOrder>("desc");
+  const [selectedCandidateId, setSelectedCandidateId] = useState<string | null>(null);
+  const [runningDeepSearch, setRunningDeepSearch] = useState<Set<string>>(new Set());
+  const { toast } = useToast();
+
+  const handleRunDeepSearch = async (lead: LinkedInLead) => {
+    try {
+      setRunningDeepSearch(prev => new Set(prev).add(lead.id));
+      
+      await deepSearchApi.runDeepSearch({
+        candidateId: lead.id,
+        candidateName: lead.candidate_name,
+        linkedinUrl: lead.linkedin_url || undefined,
+        company: lead.company || undefined,
+      });
+
+      toast({
+        title: "Deep Search Initiated",
+        description: `AI analysis started for ${lead.candidate_name}. Results will appear shortly.`,
+      });
+
+      // Open the dialog to show results
+      setSelectedCandidateId(lead.id);
+    } catch (error) {
+      console.error('Error running deep search:', error);
+      toast({
+        title: "Deep Search Failed",
+        description: error instanceof Error ? error.message : "Failed to initiate deep search",
+        variant: "destructive",
+      });
+    } finally {
+      setRunningDeepSearch(prev => {
+        const next = new Set(prev);
+        next.delete(lead.id);
+        return next;
+      });
+    }
+  };
 
   const toggleSort = (field: SortField) => {
     if (sortField === field) {
@@ -218,23 +259,35 @@ export const LeadTable = ({ leads, isLoading, onDownloadCSV }: LeadTableProps) =
                   )}
                 </TableCell>
                 <TableCell className="text-right">
-                  {lead.linkedin_url && (
+                  <div className="flex items-center justify-end gap-2">
                     <Button
-                      variant="ghost"
+                      variant="outline"
                       size="sm"
-                      asChild
-                      className="gap-1 hover:text-primary"
+                      onClick={() => handleRunDeepSearch(lead)}
+                      disabled={runningDeepSearch.has(lead.id)}
+                      className="gap-1 hover:bg-primary/10 hover:text-primary border-primary/30"
                     >
-                      <a
-                        href={lead.linkedin_url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                      >
-                        <ExternalLink className="w-4 h-4" />
-                        View
-                      </a>
+                      <Brain className="w-4 h-4" />
+                      {runningDeepSearch.has(lead.id) ? "Running..." : "Deep Search"}
                     </Button>
-                  )}
+                    {lead.linkedin_url && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        asChild
+                        className="gap-1 hover:text-primary"
+                      >
+                        <a
+                          href={lead.linkedin_url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                        >
+                          <ExternalLink className="w-4 h-4" />
+                          View
+                        </a>
+                      </Button>
+                    )}
+                  </div>
                 </TableCell>
               </TableRow>
             ))}
@@ -245,6 +298,21 @@ export const LeadTable = ({ leads, isLoading, onDownloadCSV }: LeadTableProps) =
       <div className="text-sm text-muted-foreground text-center py-2">
         Showing {filteredAndSortedLeads.length} of {leads.length} leads
       </div>
+
+      {/* Deep Search Results Dialog */}
+      <Dialog open={!!selectedCandidateId} onOpenChange={(open) => !open && setSelectedCandidateId(null)}>
+        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Brain className="h-5 w-5 text-primary" />
+              Deep Search Results
+            </DialogTitle>
+          </DialogHeader>
+          {selectedCandidateId && (
+            <DeepSearchResults candidateId={selectedCandidateId} />
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };
