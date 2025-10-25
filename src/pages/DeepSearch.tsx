@@ -38,12 +38,15 @@ export default function DeepSearch() {
   const [searchTerm, setSearchTerm] = useState("");
   const [analyzedCandidates, setAnalyzedCandidates] = useState<Set<string>>(new Set());
   const [showResults, setShowResults] = useState(false);
+  const [viewMode, setViewMode] = useState<"select" | "analyzed">("select");
+  const [allAnalyzedResults, setAllAnalyzedResults] = useState<any[]>([]);
   const { toast } = useToast();
 
   useEffect(() => {
     fetchCandidates();
+    fetchAnalyzedResults();
     
-    // Subscribe to real-time updates for deep search results
+    // Subscribe to real-time updates for deep search analysis
     const channel = supabase
       .channel('deep-search-updates')
       .on(
@@ -51,13 +54,11 @@ export default function DeepSearch() {
         {
           event: 'INSERT',
           schema: 'public',
-          table: 'deep_search_results',
+          table: 'deep_search_analysis',
         },
         (payload) => {
           console.log('New deep search result:', payload);
-          if (payload.new && payload.new.candidate_id) {
-            setAnalyzedCandidates(prev => new Set(prev).add(payload.new.candidate_id));
-          }
+          fetchAnalyzedResults();
         }
       )
       .subscribe();
@@ -89,15 +90,6 @@ export default function DeepSearch() {
       if (resumeError) throw resumeError;
       setResumeCandidates(resumeData || []);
 
-      // Fetch existing deep search results
-      const { data: resultsData, error: resultsError } = await supabase
-        .from('deep_search_results')
-        .select('candidate_id');
-
-      if (resultsError) throw resultsError;
-      if (resultsData) {
-        setAnalyzedCandidates(new Set(resultsData.map(r => r.candidate_id)));
-      }
     } catch (error) {
       console.error('Error fetching candidates:', error);
       toast({
@@ -107,6 +99,25 @@ export default function DeepSearch() {
       });
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchAnalyzedResults = async () => {
+    try {
+      const { data, error } = await (supabase as any)
+        .from('deep_search_analysis')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+      setAllAnalyzedResults(data || []);
+    } catch (error) {
+      console.error('Error fetching analyzed results:', error);
+      toast({
+        title: "Error",
+        description: "Failed to load analyzed candidates",
+        variant: "destructive",
+      });
     }
   };
 
@@ -156,7 +167,9 @@ export default function DeepSearch() {
       });
 
       setShowResults(true);
+      setViewMode("analyzed");
       setSelectedCandidates(new Set());
+      fetchAnalyzedResults();
     } catch (error) {
       console.error('Error running deep search:', error);
       toast({
@@ -217,35 +230,48 @@ export default function DeepSearch() {
             </div>
             
             <div className="flex items-center gap-4">
-              <Badge variant="secondary" className="px-4 py-2 text-sm">
-                <Users className="w-4 h-4 mr-2" />
-                {selectedCandidates.size} selected
-              </Badge>
-              <Button
-                onClick={handleRunDeepSearch}
-                disabled={selectedCandidates.size === 0 || processing}
-                size="lg"
-                className="gap-2 bg-gradient-to-r from-primary to-cyan-500 hover:opacity-90"
-              >
-                {processing ? (
-                  <>
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                    Processing...
-                  </>
-                ) : (
-                  <>
-                    <Sparkles className="w-4 h-4" />
-                    Run Deep Search
-                  </>
-                )}
-              </Button>
+              <Tabs value={viewMode} onValueChange={(v) => setViewMode(v as any)} className="w-auto">
+                <TabsList>
+                  <TabsTrigger value="select">Select Candidates</TabsTrigger>
+                  <TabsTrigger value="analyzed">
+                    View Analyzed ({allAnalyzedResults.length})
+                  </TabsTrigger>
+                </TabsList>
+              </Tabs>
+              
+              {viewMode === "select" && (
+                <>
+                  <Badge variant="secondary" className="px-4 py-2 text-sm">
+                    <Users className="w-4 h-4 mr-2" />
+                    {selectedCandidates.size} selected
+                  </Badge>
+                  <Button
+                    onClick={handleRunDeepSearch}
+                    disabled={selectedCandidates.size === 0 || processing}
+                    size="lg"
+                    className="gap-2 bg-gradient-to-r from-primary to-cyan-500 hover:opacity-90"
+                  >
+                    {processing ? (
+                      <>
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                        Processing...
+                      </>
+                    ) : (
+                      <>
+                        <Sparkles className="w-4 h-4" />
+                        Run Deep Search
+                      </>
+                    )}
+                  </Button>
+                </>
+              )}
             </div>
           </div>
         </div>
       </div>
 
       <div className="container mx-auto px-4 py-8">
-        {!showResults ? (
+        {viewMode === "select" ? (
           <Card className="border-primary/20 bg-card/50 backdrop-blur-sm">
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
@@ -408,34 +434,33 @@ export default function DeepSearch() {
           </Card>
         ) : (
           <div className="space-y-6">
-            <div className="flex items-center justify-between">
-              <h2 className="text-2xl font-bold flex items-center gap-2">
-                <Brain className="h-6 w-6 text-primary" />
-                Analysis Results
-              </h2>
-              <Button
-                onClick={() => setShowResults(false)}
-                variant="outline"
-              >
-                Select More Candidates
-              </Button>
-            </div>
-
-            {Array.from(analyzedCandidates).map((candidateId) => (
-              <div key={candidateId} className="space-y-4">
-                <DeepSearchResults candidateId={candidateId} />
-              </div>
-            ))}
-
-            {analyzedCandidates.size === 0 && (
+            {allAnalyzedResults.length === 0 ? (
               <Card className="border-primary/20 bg-card/50 backdrop-blur-sm">
                 <CardContent className="py-12 text-center">
-                  <Loader2 className="h-12 w-12 animate-spin text-primary mx-auto mb-4" />
-                  <p className="text-muted-foreground">
-                    Waiting for analysis results...
+                  <Brain className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+                  <p className="text-muted-foreground">No analyzed candidates yet</p>
+                  <p className="text-sm text-muted-foreground/70 mt-2">
+                    Select candidates and run deep search to see AI-powered insights
                   </p>
                 </CardContent>
               </Card>
+            ) : (
+              allAnalyzedResults.map((result) => (
+                <div key={result.id} className="space-y-4">
+                  <Card className="border-primary/20 bg-card/50 backdrop-blur-sm">
+                    <CardHeader>
+                      <CardTitle className="flex items-center gap-2">
+                        <Brain className="h-5 w-5 text-primary" />
+                        {result.candidate_name}
+                      </CardTitle>
+                      <CardDescription>
+                        Analyzed on {new Date(result.created_at).toLocaleDateString()}
+                      </CardDescription>
+                    </CardHeader>
+                  </Card>
+                  <DeepSearchResults candidateId={result.id} />
+                </div>
+              ))
             )}
           </div>
         )}
