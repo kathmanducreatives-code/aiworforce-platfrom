@@ -11,7 +11,7 @@ export interface DeepSearchResponse {
   searchId?: string;
 }
 
-const DEEP_SEARCH_WEBHOOK_URL = "https://praaasidha.app.n8n.cloud/webhook/deep-search";
+const DEEP_SEARCH_WEBHOOK_URL = "https://praaasidha.app.n8n.cloud/webhook/fbfee0ec-1bdf-45ca-bc81-0ce7fe2366bf";
 
 export const deepSearchApi = {
   async runDeepSearch(request: DeepSearchRequest): Promise<DeepSearchResponse> {
