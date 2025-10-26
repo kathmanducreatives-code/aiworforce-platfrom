@@ -4,12 +4,12 @@ import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
-import { Brain, Loader2, Users, FileText, Search, Sparkles } from "lucide-react";
+import { Brain, Loader2, Users, FileText, Search, Sparkles, TrendingUp, CheckCircle2, Filter } from "lucide-react";
 import { deepSearchApi } from "@/services/deepSearchApi";
-import { DeepSearchResults } from "@/components/lead-scraper/DeepSearchResults";
 import { Input } from "@/components/ui/input";
+import { CandidateCard } from "@/components/lead-scraper/CandidateCard";
+import { AnalyzedCandidateCard } from "@/components/lead-scraper/AnalyzedCandidateCard";
 
 interface LinkedInCandidate {
   id: string;
@@ -40,6 +40,7 @@ export default function DeepSearch() {
   const [showResults, setShowResults] = useState(false);
   const [viewMode, setViewMode] = useState<"select" | "analyzed">("select");
   const [allAnalyzedResults, setAllAnalyzedResults] = useState<any[]>([]);
+  const [activeTab, setActiveTab] = useState<"linkedin" | "resume">("linkedin");
   const { toast } = useToast();
 
   useEffect(() => {
@@ -209,229 +210,217 @@ export default function DeepSearch() {
     );
   }
 
+  const totalCandidates = linkedInCandidates.length + resumeCandidates.length;
+  const totalAnalyzed = allAnalyzedResults.length;
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-background via-background to-primary/5">
+      {/* Decorative background elements */}
+      <div className="fixed inset-0 overflow-hidden pointer-events-none">
+        <div className="absolute top-20 left-10 w-72 h-72 bg-primary/5 rounded-full blur-3xl" />
+        <div className="absolute bottom-20 right-10 w-96 h-96 bg-cyan-500/5 rounded-full blur-3xl" />
+      </div>
+
       {/* Header */}
-      <div className="border-b border-border/50 bg-card/30 backdrop-blur-sm sticky top-0 z-10">
+      <div className="border-b border-border/50 bg-card/30 backdrop-blur-lg sticky top-0 z-10 shadow-sm">
         <div className="container mx-auto px-4 py-6">
-          <div className="flex items-center justify-between">
+          {/* Top row - Logo and Title */}
+          <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-3">
-              <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-primary to-cyan-500 flex items-center justify-center">
-                <Brain className="w-7 h-7 text-white" />
+              <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-primary to-cyan-500 flex items-center justify-center shadow-lg shadow-primary/25 animate-pulse-glow">
+                <Brain className="w-8 h-8 text-white" />
               </div>
               <div>
-                <h1 className="text-3xl font-bold bg-gradient-to-r from-primary to-cyan-500 bg-clip-text text-transparent">
-                  Deep Search
+                <h1 className="text-3xl font-bold bg-gradient-to-r from-primary via-cyan-500 to-primary bg-clip-text text-transparent animate-fade-in-down">
+                  Deep Search AI
                 </h1>
                 <p className="text-muted-foreground text-sm">
-                  AI-powered candidate intelligence analysis
+                  Advanced candidate intelligence powered by AI
                 </p>
               </div>
             </div>
-            
-            <div className="flex items-center gap-4">
-              <Tabs value={viewMode} onValueChange={(v) => setViewMode(v as any)} className="w-auto">
-                <TabsList>
-                  <TabsTrigger value="select">Select Candidates</TabsTrigger>
-                  <TabsTrigger value="analyzed">
-                    View Analyzed ({allAnalyzedResults.length})
-                  </TabsTrigger>
-                </TabsList>
-              </Tabs>
-              
-              {viewMode === "select" && (
-                <>
-                  <Badge variant="secondary" className="px-4 py-2 text-sm">
-                    <Users className="w-4 h-4 mr-2" />
-                    {selectedCandidates.size} selected
-                  </Badge>
-                  <Button
-                    onClick={handleRunDeepSearch}
-                    disabled={selectedCandidates.size === 0 || processing}
-                    size="lg"
-                    className="gap-2 bg-gradient-to-r from-primary to-cyan-500 hover:opacity-90"
-                  >
-                    {processing ? (
-                      <>
-                        <Loader2 className="w-4 h-4 animate-spin" />
-                        Processing...
-                      </>
-                    ) : (
-                      <>
-                        <Sparkles className="w-4 h-4" />
-                        Run Deep Search
-                      </>
-                    )}
-                  </Button>
-                </>
-              )}
-            </div>
           </div>
+
+          {/* Stats Bar */}
+          <div className="grid grid-cols-3 gap-4 mb-4">
+            <Card className="border-border/50 bg-card/50 backdrop-blur-sm">
+              <CardContent className="p-3 flex items-center gap-3">
+                <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center">
+                  <Users className="w-5 h-5 text-primary" />
+                </div>
+                <div>
+                  <p className="text-2xl font-bold">{totalCandidates}</p>
+                  <p className="text-xs text-muted-foreground">Total Candidates</p>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card className="border-border/50 bg-card/50 backdrop-blur-sm">
+              <CardContent className="p-3 flex items-center gap-3">
+                <div className="w-10 h-10 rounded-lg bg-cyan-500/10 flex items-center justify-center">
+                  <CheckCircle2 className="w-5 h-5 text-cyan-500" />
+                </div>
+                <div>
+                  <p className="text-2xl font-bold">{selectedCandidates.size}</p>
+                  <p className="text-xs text-muted-foreground">Selected for Analysis</p>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card className="border-border/50 bg-card/50 backdrop-blur-sm">
+              <CardContent className="p-3 flex items-center gap-3">
+                <div className="w-10 h-10 rounded-lg bg-green-500/10 flex items-center justify-center">
+                  <TrendingUp className="w-5 h-5 text-green-500" />
+                </div>
+                <div>
+                  <p className="text-2xl font-bold">{totalAnalyzed}</p>
+                  <p className="text-xs text-muted-foreground">Analyzed Profiles</p>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* View Toggle */}
+          <Tabs value={viewMode} onValueChange={(v) => setViewMode(v as any)} className="w-full">
+            <TabsList className="grid w-full grid-cols-2 h-12">
+              <TabsTrigger value="select" className="gap-2 text-base">
+                <Filter className="w-4 h-4" />
+                Select Candidates
+              </TabsTrigger>
+              <TabsTrigger value="analyzed" className="gap-2 text-base">
+                <Brain className="w-4 h-4" />
+                Analyzed Results ({totalAnalyzed})
+              </TabsTrigger>
+            </TabsList>
+          </Tabs>
         </div>
       </div>
 
-      <div className="container mx-auto px-4 py-8">
+      <div className="container mx-auto px-4 py-8 relative">
         {viewMode === "select" ? (
-          <Card className="border-primary/20 bg-card/50 backdrop-blur-sm">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Search className="h-5 w-5 text-primary" />
-                Select Candidates for Analysis
-              </CardTitle>
-              <CardDescription>
-                Choose candidates from LinkedIn scraper or resume screener to run AI-powered deep search analysis
-              </CardDescription>
-              
-              <div className="pt-4">
-                <Input
-                  placeholder="Search candidates by name, company, or role..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="max-w-md"
-                />
-              </div>
-            </CardHeader>
-
-            <CardContent>
-              <Tabs defaultValue="linkedin" className="w-full">
-                <TabsList className="grid w-full grid-cols-2 mb-6">
-                  <TabsTrigger value="linkedin" className="gap-2">
-                    <Users className="w-4 h-4" />
-                    LinkedIn Candidates ({filteredLinkedInCandidates.length})
-                  </TabsTrigger>
-                  <TabsTrigger value="resume" className="gap-2">
-                    <FileText className="w-4 h-4" />
-                    Resume Candidates ({filteredResumeCandidates.length})
-                  </TabsTrigger>
-                </TabsList>
-
-                <TabsContent value="linkedin" className="space-y-3">
-                  {filteredLinkedInCandidates.length === 0 ? (
-                    <div className="text-center py-12">
-                      <Users className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
-                      <p className="text-muted-foreground">No LinkedIn candidates found</p>
+          <div className="space-y-6">
+            {/* Search and Filter Bar */}
+            <Card className="border-primary/20 bg-card/50 backdrop-blur-sm">
+              <CardContent className="p-4">
+                <div className="flex flex-col md:flex-row gap-4">
+                  <div className="flex-1">
+                    <div className="relative">
+                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                      <Input
+                        placeholder="Search by name, company, role..."
+                        value={searchTerm}
+                        onChange={(e) => setSearchTerm(e.target.value)}
+                        className="pl-10"
+                      />
                     </div>
-                  ) : (
-                    filteredLinkedInCandidates.map((candidate) => (
-                      <Card
-                        key={candidate.id}
-                        className={`border transition-all ${
-                          selectedCandidates.has(candidate.id)
-                            ? 'border-primary bg-primary/5'
-                            : 'border-border/50 hover:border-primary/50'
-                        }`}
-                      >
-                        <CardContent className="p-4">
-                          <div className="flex items-start gap-4">
-                            <Checkbox
-                              checked={selectedCandidates.has(candidate.id)}
-                              onCheckedChange={(checked) =>
-                                handleSelectCandidate(candidate.id, checked as boolean)
-                              }
-                              className="mt-1"
-                            />
-                            
-                            <div className="flex-1">
-                              <div className="flex items-start justify-between mb-2">
-                                <div>
-                                  <h3 className="font-semibold text-lg">{candidate.candidate_name}</h3>
-                                  <p className="text-muted-foreground text-sm">
-                                    {candidate.job_title || "No title"} {candidate.company && `at ${candidate.company}`}
-                                  </p>
-                                </div>
-                                {analyzedCandidates.has(candidate.id) && (
-                                  <Badge variant="secondary" className="gap-1">
-                                    <Brain className="w-3 h-3" />
-                                    Analyzed
-                                  </Badge>
-                                )}
-                              </div>
-                              
-                              <div className="flex gap-2 mt-2">
-                                {candidate.experience_level && (
-                                  <Badge variant="outline" className="capitalize">
-                                    {candidate.experience_level}
-                                  </Badge>
-                                )}
-                                {candidate.linkedin_url && (
-                                  <Badge variant="outline">LinkedIn Profile</Badge>
-                                )}
-                              </div>
-                            </div>
-                          </div>
-                        </CardContent>
-                      </Card>
-                    ))
-                  )}
-                </TabsContent>
+                  </div>
+                  <div className="flex gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        const allIds = new Set([
+                          ...(activeTab === 'linkedin' ? filteredLinkedInCandidates : filteredResumeCandidates).map(c => c.id)
+                        ]);
+                        setSelectedCandidates(allIds);
+                      }}
+                    >
+                      Select All
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setSelectedCandidates(new Set())}
+                    >
+                      Clear
+                    </Button>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
 
-                <TabsContent value="resume" className="space-y-3">
-                  {filteredResumeCandidates.length === 0 ? (
-                    <div className="text-center py-12">
-                      <FileText className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
-                      <p className="text-muted-foreground">No resume candidates found</p>
-                    </div>
-                  ) : (
-                    filteredResumeCandidates.map((candidate) => (
-                      <Card
+            {/* Source Tabs */}
+            <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as any)} className="w-full">
+              <TabsList className="grid w-full grid-cols-2 mb-6">
+                <TabsTrigger value="linkedin" className="gap-2">
+                  <Users className="w-4 h-4" />
+                  LinkedIn ({filteredLinkedInCandidates.length})
+                </TabsTrigger>
+                <TabsTrigger value="resume" className="gap-2">
+                  <FileText className="w-4 h-4" />
+                  Resume ({filteredResumeCandidates.length})
+                </TabsTrigger>
+              </TabsList>
+
+              <TabsContent value="linkedin" className="space-y-0">
+                {filteredLinkedInCandidates.length === 0 ? (
+                  <Card className="border-dashed border-2 bg-card/30 backdrop-blur-sm">
+                    <CardContent className="text-center py-16">
+                      <Users className="w-16 h-16 text-muted-foreground/50 mx-auto mb-4" />
+                      <h3 className="text-xl font-semibold mb-2">No LinkedIn Candidates</h3>
+                      <p className="text-muted-foreground max-w-md mx-auto">
+                        {searchTerm 
+                          ? "No candidates match your search. Try adjusting your filters."
+                          : "Import candidates from LinkedIn to get started with AI-powered analysis."}
+                      </p>
+                    </CardContent>
+                  </Card>
+                ) : (
+                  <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    {filteredLinkedInCandidates.map((candidate) => (
+                      <CandidateCard
                         key={candidate.id}
-                        className={`border transition-all ${
-                          selectedCandidates.has(candidate.id)
-                            ? 'border-primary bg-primary/5'
-                            : 'border-border/50 hover:border-primary/50'
-                        }`}
-                      >
-                        <CardContent className="p-4">
-                          <div className="flex items-start gap-4">
-                            <Checkbox
-                              checked={selectedCandidates.has(candidate.id)}
-                              onCheckedChange={(checked) =>
-                                handleSelectCandidate(candidate.id, checked as boolean)
-                              }
-                              className="mt-1"
-                            />
-                            
-                            <div className="flex-1">
-                              <div className="flex items-start justify-between mb-2">
-                                <div>
-                                  <h3 className="font-semibold text-lg">{candidate.candidate_name}</h3>
-                                  <p className="text-muted-foreground text-sm">
-                                    {candidate.recruitment_name || "General recruitment"}
-                                  </p>
-                                </div>
-                                {analyzedCandidates.has(candidate.id) && (
-                                  <Badge variant="secondary" className="gap-1">
-                                    <Brain className="w-3 h-3" />
-                                    Analyzed
-                                  </Badge>
-                                )}
-                              </div>
-                              
-                              <div className="flex gap-2 mt-2">
-                                {candidate.fit_score && (
-                                  <Badge variant="outline">
-                                    Fit Score: {getFitScore(candidate.fit_score)}
-                                  </Badge>
-                                )}
-                                {candidate.current_stage && (
-                                  <Badge variant="outline" className="capitalize">
-                                    {candidate.current_stage.replace(/_/g, ' ')}
-                                  </Badge>
-                                )}
-                                {candidate.email && (
-                                  <Badge variant="outline">Email Available</Badge>
-                                )}
-                              </div>
-                            </div>
-                          </div>
-                        </CardContent>
-                      </Card>
-                    ))
-                  )}
-                </TabsContent>
-              </Tabs>
-            </CardContent>
-          </Card>
+                        id={candidate.id}
+                        name={candidate.candidate_name}
+                        title={candidate.job_title}
+                        company={candidate.company}
+                        experienceLevel={candidate.experience_level}
+                        linkedinUrl={candidate.linkedin_url}
+                        isSelected={selectedCandidates.has(candidate.id)}
+                        isAnalyzed={analyzedCandidates.has(candidate.id)}
+                        onSelect={handleSelectCandidate}
+                        type="linkedin"
+                      />
+                    ))}
+                  </div>
+                )}
+              </TabsContent>
+
+              <TabsContent value="resume" className="space-y-0">
+                {filteredResumeCandidates.length === 0 ? (
+                  <Card className="border-dashed border-2 bg-card/30 backdrop-blur-sm">
+                    <CardContent className="text-center py-16">
+                      <FileText className="w-16 h-16 text-muted-foreground/50 mx-auto mb-4" />
+                      <h3 className="text-xl font-semibold mb-2">No Resume Candidates</h3>
+                      <p className="text-muted-foreground max-w-md mx-auto">
+                        {searchTerm 
+                          ? "No candidates match your search. Try adjusting your filters."
+                          : "Upload resumes to start screening candidates with AI assistance."}
+                      </p>
+                    </CardContent>
+                  </Card>
+                ) : (
+                  <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    {filteredResumeCandidates.map((candidate) => (
+                      <CandidateCard
+                        key={candidate.id}
+                        id={candidate.id}
+                        name={candidate.candidate_name}
+                        recruitmentName={candidate.recruitment_name}
+                        email={candidate.email}
+                        fitScore={getFitScore(candidate.fit_score)}
+                        currentStage={candidate.current_stage}
+                        isSelected={selectedCandidates.has(candidate.id)}
+                        isAnalyzed={analyzedCandidates.has(candidate.id)}
+                        onSelect={handleSelectCandidate}
+                        type="resume"
+                      />
+                    ))}
+                  </div>
+                )}
+              </TabsContent>
+            </Tabs>
+          </div>
         ) : (
           <div className="space-y-6">
             {allAnalyzedResults.length === 0 ? (
@@ -445,23 +434,81 @@ export default function DeepSearch() {
                 </CardContent>
               </Card>
             ) : (
-              allAnalyzedResults.map((result) => (
-                <div key={result.id} className="space-y-4">
-                  <Card className="border-primary/20 bg-card/50 backdrop-blur-sm">
-                    <CardHeader>
-                      <CardTitle className="flex items-center gap-2">
-                        <Brain className="h-5 w-5 text-primary" />
-                        {result.candidate_name}
-                      </CardTitle>
-                      <CardDescription>
-                        Analyzed on {new Date(result.created_at).toLocaleDateString()}
-                      </CardDescription>
-                    </CardHeader>
-                  </Card>
-                  <DeepSearchResults candidateId={result.id} />
+              <>
+                <div className="flex items-center justify-between mb-4">
+                  <h2 className="text-2xl font-bold flex items-center gap-2">
+                    <Brain className="w-6 h-6 text-primary" />
+                    Analysis Results
+                  </h2>
+                  <Badge variant="secondary" className="px-4 py-2">
+                    {allAnalyzedResults.length} Candidate{allAnalyzedResults.length !== 1 ? 's' : ''} Analyzed
+                  </Badge>
                 </div>
-              ))
+                
+                <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+                  {allAnalyzedResults.map((result) => (
+                    <AnalyzedCandidateCard
+                      key={result.id}
+                      {...result}
+                    />
+                  ))}
+                </div>
+              </>
             )}
+          </div>
+        )}
+
+        {/* Floating Action Panel */}
+        {viewMode === "select" && selectedCandidates.size > 0 && (
+          <div className="fixed bottom-0 left-0 right-0 z-20 animate-slide-in-bottom">
+            <div className="container mx-auto px-4 py-4">
+              <Card className="border-2 border-primary shadow-2xl shadow-primary/25 bg-card backdrop-blur-lg">
+                <CardContent className="p-4">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-4">
+                      <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-primary to-cyan-500 flex items-center justify-center">
+                        <CheckCircle2 className="w-6 h-6 text-white" />
+                      </div>
+                      <div>
+                        <p className="font-semibold text-lg">
+                          {selectedCandidates.size} Candidate{selectedCandidates.size !== 1 ? 's' : ''} Selected
+                        </p>
+                        <p className="text-sm text-muted-foreground">
+                          Ready for AI-powered deep search analysis
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-3">
+                      <Button
+                        variant="outline"
+                        onClick={() => setSelectedCandidates(new Set())}
+                      >
+                        Clear Selection
+                      </Button>
+                      <Button
+                        onClick={handleRunDeepSearch}
+                        disabled={processing}
+                        size="lg"
+                        className="gap-2 bg-gradient-to-r from-primary to-cyan-500 hover:opacity-90 shadow-lg shadow-primary/25"
+                      >
+                        {processing ? (
+                          <>
+                            <Loader2 className="w-5 h-5 animate-spin" />
+                            Analyzing...
+                          </>
+                        ) : (
+                          <>
+                            <Sparkles className="w-5 h-5" />
+                            Run Deep Search
+                          </>
+                        )}
+                      </Button>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
           </div>
         )}
       </div>
