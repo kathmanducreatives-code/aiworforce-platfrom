@@ -284,150 +284,151 @@ const DataDashboard = () => {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-white">
-      <div className="max-w-7xl mx-auto px-6 py-12">
+    <div className="min-h-screen bg-gradient-to-br from-background via-slate-50/30 to-background">
+      <div className="max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-8 py-8 lg:py-12">
         {/* Header */}
-        <div className="mb-12">
-          <div className="flex items-center justify-between mb-8">
+        <div className="mb-10">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => navigate('/')}
+            className="gap-2 hover:bg-primary/10 hover:text-primary mb-6 -ml-2"
+          >
+            <ArrowLeft className="h-4 w-4" />
+            Back to Dashboard
+          </Button>
+          <div className="flex items-center gap-4 mb-3">
+            <div className="p-3 bg-gradient-to-br from-primary to-cyan-500 rounded-xl shadow-lg">
+              <BarChart3 className="h-7 w-7 text-white" />
+            </div>
             <div>
-              <div className="flex items-center gap-3 mb-3">
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => navigate('/')}
-                  className="gap-2 hover:bg-cyan-50 hover:text-cyan-700"
-                >
-                  <ArrowLeft className="h-4 w-4" />
-                  Back to Dashboard
-                </Button>
-              </div>
-              <h1 className="text-4xl font-bold bg-gradient-to-r from-slate-800 to-slate-600 bg-clip-text text-transparent mb-3">
+              <h1 className="text-3xl lg:text-4xl font-bold text-foreground mb-1">
                 Data Analytics
               </h1>
-              <p className="text-slate-600 text-lg font-medium">
-                Comprehensive insights into your recruitment pipeline
+              <p className="text-muted-foreground text-base">
+                Comprehensive recruitment insights and performance metrics
               </p>
             </div>
           </div>
         </div>
 
-        {/* Top KPI Cards */}
-        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4 mb-8">
-          <Card className="backdrop-blur-sm bg-white/80 border border-slate-200/50 shadow-lg hover:shadow-xl transition-all duration-300 rounded-2xl overflow-hidden hover-lift animate-fade-in-up group">
+        {/* Overview KPIs */}
+        <div className="grid gap-4 sm:gap-6 grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 mb-8 animate-fade-in">
+          <Card className="border-border/50 bg-card/50 backdrop-blur-sm shadow-sm hover:shadow-md transition-all duration-300 hover-scale group">
             <CardHeader className="pb-3">
-              <CardTitle className="text-sm font-medium text-slate-600 flex items-center gap-2">
-                <div className="p-2 bg-cyan-50 rounded-lg group-hover:scale-110 transition-transform">
-                  <Users className="h-4 w-4 text-cyan-500" />
+              <CardTitle className="text-xs font-medium text-muted-foreground flex items-center gap-2">
+                <div className="p-1.5 bg-primary/10 rounded-lg">
+                  <Users className="h-3.5 w-3.5 text-primary" />
                 </div>
                 Total Candidates
               </CardTitle>
             </CardHeader>
-            <CardContent>
-              <div className="text-3xl font-bold bg-gradient-to-r from-cyan-600 to-cyan-500 bg-clip-text text-transparent mb-2">
+            <CardContent className="space-y-2">
+              <div className="text-2xl lg:text-3xl font-bold text-foreground">
                 {metrics.totalCandidates}
               </div>
-              <div className="flex gap-4 text-sm">
+              <div className="flex gap-3 text-xs">
                 <div className="flex items-center gap-1">
-                  <div className="w-2 h-2 rounded-full bg-cyan-500 animate-pulse" />
-                  <span className="text-slate-500">Week:</span>
-                  <span className="font-semibold text-cyan-600">{metrics.candidatesThisWeek}</span>
+                  <div className="w-1.5 h-1.5 rounded-full bg-primary" />
+                  <span className="text-muted-foreground">Week:</span>
+                  <span className="font-semibold text-foreground">{metrics.candidatesThisWeek}</span>
                 </div>
                 <div className="flex items-center gap-1">
-                  <div className="w-2 h-2 rounded-full bg-teal-500 animate-pulse" />
-                  <span className="text-slate-500">Month:</span>
-                  <span className="font-semibold text-teal-600">{metrics.candidatesThisMonth}</span>
+                  <div className="w-1.5 h-1.5 rounded-full bg-cyan-500" />
+                  <span className="text-muted-foreground">Month:</span>
+                  <span className="font-semibold text-foreground">{metrics.candidatesThisMonth}</span>
                 </div>
               </div>
             </CardContent>
           </Card>
 
-          <Card className="backdrop-blur-sm bg-white/80 border border-slate-200/50 shadow-lg hover:shadow-xl transition-all duration-300 rounded-2xl overflow-hidden hover-lift animate-fade-in-up animate-delay-100 group">
+          <Card className="border-border/50 bg-card/50 backdrop-blur-sm shadow-sm hover:shadow-md transition-all duration-300 hover-scale group">
             <CardHeader className="pb-3">
-              <CardTitle className="text-sm font-medium text-slate-600 flex items-center gap-2">
-                <div className="p-2 bg-emerald-50 rounded-lg group-hover:scale-110 transition-transform">
-                  <Target className="h-4 w-4 text-emerald-500" />
+              <CardTitle className="text-xs font-medium text-muted-foreground flex items-center gap-2">
+                <div className="p-1.5 bg-emerald-500/10 rounded-lg">
+                  <Target className="h-3.5 w-3.5 text-emerald-500" />
                 </div>
-                Average Fit Score
+                Avg Fit Score
               </CardTitle>
             </CardHeader>
-            <CardContent>
-              <div className="flex items-baseline gap-2 mb-2">
-                <div className="text-3xl font-bold bg-gradient-to-r from-emerald-600 to-emerald-500 bg-clip-text text-transparent">
+            <CardContent className="space-y-2">
+              <div className="flex items-baseline gap-2">
+                <div className="text-2xl lg:text-3xl font-bold text-foreground">
                   {metrics.averageFitScore}%
                 </div>
-                <TrendingUp className="h-5 w-5 text-emerald-500" />
+                <TrendingUp className="h-4 w-4 text-emerald-500" />
               </div>
-              <Progress value={metrics.averageFitScore} className="h-2 mb-2" />
-              <p className="text-sm text-slate-500">
-                <span className="font-semibold text-emerald-600">{metrics.highQualityCandidates}</span> high-quality (75%+)
+              <Progress value={metrics.averageFitScore} className="h-1.5" />
+              <p className="text-xs text-muted-foreground">
+                <span className="font-semibold text-emerald-600">{metrics.highQualityCandidates}</span> high-quality
               </p>
             </CardContent>
           </Card>
 
-          <Card className="backdrop-blur-sm bg-white/80 border border-slate-200/50 shadow-lg hover:shadow-xl transition-all duration-300 rounded-2xl overflow-hidden hover-lift animate-fade-in-up animate-delay-200 group">
+          <Card className="border-border/50 bg-card/50 backdrop-blur-sm shadow-sm hover:shadow-md transition-all duration-300 hover-scale group">
             <CardHeader className="pb-3">
-              <CardTitle className="text-sm font-medium text-slate-600 flex items-center gap-2">
-                <div className="p-2 bg-purple-50 rounded-lg group-hover:scale-110 transition-transform">
-                  <Clock className="h-4 w-4 text-purple-500 animate-pulse" />
+              <CardTitle className="text-xs font-medium text-muted-foreground flex items-center gap-2">
+                <div className="p-1.5 bg-purple-500/10 rounded-lg">
+                  <Clock className="h-3.5 w-3.5 text-purple-500" />
                 </div>
                 Screening Efficiency
               </CardTitle>
             </CardHeader>
-            <CardContent>
-              <div className="text-3xl font-bold bg-gradient-to-r from-purple-600 to-purple-500 bg-clip-text text-transparent mb-2">
+            <CardContent className="space-y-2">
+              <div className="text-2xl lg:text-3xl font-bold text-foreground">
                 {metrics.autoScreenedPercentage}%
               </div>
-              <p className="text-sm text-slate-500 mb-2">Auto-screened</p>
-              <div className="flex items-center gap-2 px-3 py-1.5 bg-purple-50 rounded-lg">
-                <Clock className="h-3.5 w-3.5 text-purple-600" />
-                <span className="text-sm font-medium text-purple-600">
+              <p className="text-xs text-muted-foreground">Auto-screened</p>
+              <div className="flex items-center gap-2 px-2 py-1 bg-purple-500/5 rounded">
+                <Clock className="h-3 w-3 text-purple-600" />
+                <span className="text-xs font-medium text-purple-600">
                   {metrics.averageProcessingTime} min/candidate
                 </span>
               </div>
             </CardContent>
           </Card>
 
-          <Card className="backdrop-blur-sm bg-white/80 border border-slate-200/50 shadow-lg hover:shadow-xl transition-all duration-300 rounded-2xl overflow-hidden hover-lift animate-fade-in-up animate-delay-300 group">
+          <Card className="border-border/50 bg-card/50 backdrop-blur-sm shadow-sm hover:shadow-md transition-all duration-300 hover-scale group">
             <CardHeader className="pb-3">
-              <CardTitle className="text-sm font-medium text-slate-600 flex items-center gap-2">
-                <div className="p-2 bg-blue-50 rounded-lg group-hover:scale-110 transition-transform">
-                  <Mail className="h-4 w-4 text-blue-500" />
+              <CardTitle className="text-xs font-medium text-muted-foreground flex items-center gap-2">
+                <div className="p-1.5 bg-blue-500/10 rounded-lg">
+                  <Mail className="h-3.5 w-3.5 text-blue-500" />
                 </div>
-                Engagement Rate
+                Engagement
               </CardTitle>
             </CardHeader>
-            <CardContent>
-              <div className="flex items-baseline gap-2 mb-2">
-                <div className="text-3xl font-bold bg-gradient-to-r from-blue-600 to-blue-500 bg-clip-text text-transparent">
+            <CardContent className="space-y-2">
+              <div className="flex items-baseline gap-2">
+                <div className="text-2xl lg:text-3xl font-bold text-foreground">
                   {metrics.engagementRate}%
                 </div>
-                <TrendingUp className="h-5 w-5 text-blue-500" />
+                <TrendingUp className="h-4 w-4 text-blue-500" />
               </div>
-              <p className="text-sm text-slate-500 mb-2">Email engagement</p>
-              <div className="flex items-center gap-2 px-3 py-1.5 bg-blue-50 rounded-lg">
-                <Users className="h-3.5 w-3.5 text-blue-600" />
-                <span className="text-sm font-medium text-blue-600">
-                  {metrics.candidatesInNurturing} in nurturing
+              <p className="text-xs text-muted-foreground">Email engagement</p>
+              <div className="flex items-center gap-2 px-2 py-1 bg-blue-500/5 rounded">
+                <Users className="h-3 w-3 text-blue-600" />
+                <span className="text-xs font-medium text-blue-600">
+                  {metrics.candidatesInNurturing} nurturing
                 </span>
               </div>
             </CardContent>
           </Card>
         </div>
 
-        {/* Pipeline Health & Stage Distribution */}
-        <div className="grid gap-6 lg:grid-cols-2 mb-8">
-          <Card className="backdrop-blur-sm bg-white/80 border border-slate-200/50 shadow-lg rounded-2xl animate-fade-in-up animate-delay-200 group">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <div className="p-2 bg-cyan-50 rounded-lg group-hover:scale-110 transition-transform">
-                  <TrendingUp className="h-5 w-5 text-cyan-500" />
+        {/* Pipeline Health & Risk Factors */}
+        <div className="grid gap-4 sm:gap-6 lg:grid-cols-2 mb-8">
+          <Card className="border-border/50 bg-card/50 backdrop-blur-sm shadow-sm">
+            <CardHeader className="pb-4">
+              <CardTitle className="text-lg flex items-center gap-2">
+                <div className="p-2 bg-primary/10 rounded-lg">
+                  <TrendingUp className="h-4 w-4 text-primary" />
                 </div>
                 Pipeline Health
               </CardTitle>
-              <CardDescription>Candidate distribution across stages</CardDescription>
+              <CardDescription className="text-xs">Distribution across stages</CardDescription>
             </CardHeader>
             <CardContent>
-              <div className="space-y-5">
+              <div className="space-y-3">
                 {metrics.stageDistribution.map((stage, index) => {
                   const colors = [
                     { bg: 'bg-cyan-50', border: 'border-cyan-200', text: 'text-cyan-700', progress: 'bg-cyan-500' },
@@ -438,44 +439,37 @@ const DataDashboard = () => {
                   const color = colors[index % colors.length];
                   
                   return (
-                    <div key={index} className={`p-4 rounded-lg border ${color.border} ${color.bg} hover:shadow-md transition-all duration-300 hover-scale-sm group/item`}>
-                      <div className="flex items-center justify-between mb-3">
-                        <span className="text-sm font-semibold text-slate-700 flex items-center gap-2">
-                          <div className={`w-3 h-3 rounded-full ${color.progress}`} />
+                    <div key={index} className={`p-3 rounded-lg border ${color.border} ${color.bg} hover:shadow-sm transition-all`}>
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="text-xs font-semibold text-foreground flex items-center gap-2">
+                          <div className={`w-2 h-2 rounded-full ${color.progress}`} />
                           {stage.stage}
                         </span>
-                        <div className="flex items-center gap-3">
-                          <span className={`text-2xl font-bold ${color.text} group-hover/item:scale-110 transition-transform`}>
+                        <div className="flex items-center gap-2">
+                          <span className={`text-xl font-bold ${color.text}`}>
                             {stage.count}
                           </span>
-                          <Badge variant="secondary" className={`text-xs font-semibold ${color.text} ${color.bg}`}>
+                          <Badge variant="secondary" className={`text-[10px] px-1.5 py-0.5 ${color.text} ${color.bg}`}>
                             {stage.percentage}%
                           </Badge>
                         </div>
                       </div>
-                      <Progress value={stage.percentage} className="h-2" />
-                      <p className="text-xs text-slate-500 mt-2">
-                        {stage.count} {stage.count === 1 ? 'candidate' : 'candidates'}
-                      </p>
+                      <Progress value={stage.percentage} className="h-1.5" />
                     </div>
                   );
                 })}
               </div>
               
               {/* Pipeline Summary */}
-              <div className="mt-6 p-4 bg-gradient-to-r from-slate-50 to-slate-100 rounded-lg border border-slate-200">
-                <h4 className="text-sm font-semibold text-slate-700 mb-3 flex items-center gap-2">
-                  <Award className="h-4 w-4 text-slate-600" />
-                  Quick Summary
-                </h4>
-                <div className="grid grid-cols-2 gap-3 text-sm">
+              <div className="mt-4 p-3 bg-muted/50 rounded-lg border border-border/50">
+                <div className="grid grid-cols-2 gap-3 text-xs">
                   <div>
-                    <span className="text-slate-500">Total in Pipeline:</span>
-                    <span className="font-bold text-slate-800 ml-2">{metrics.totalCandidates}</span>
+                    <span className="text-muted-foreground">Total:</span>
+                    <span className="font-bold text-foreground ml-1">{metrics.totalCandidates}</span>
                   </div>
                   <div>
-                    <span className="text-slate-500">Top Candidates:</span>
-                    <span className="font-bold text-emerald-600 ml-2">
+                    <span className="text-muted-foreground">Top:</span>
+                    <span className="font-bold text-emerald-600 ml-1">
                       {metrics.stageDistribution[3]?.count || 0}
                     </span>
                   </div>
@@ -484,28 +478,30 @@ const DataDashboard = () => {
             </CardContent>
           </Card>
 
-          <Card className="backdrop-blur-sm bg-white/80 border border-slate-200/50 shadow-lg rounded-2xl">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <AlertTriangle className="h-5 w-5 text-orange-500" />
-                Top Risk Factors
+          <Card className="border-border/50 bg-card/50 backdrop-blur-sm shadow-sm">
+            <CardHeader className="pb-4">
+              <CardTitle className="text-lg flex items-center gap-2">
+                <div className="p-2 bg-orange-500/10 rounded-lg">
+                  <AlertTriangle className="h-4 w-4 text-orange-500" />
+                </div>
+                Risk Factors
               </CardTitle>
-              <CardDescription>Common reasons for candidate concerns</CardDescription>
+              <CardDescription className="text-xs">Common candidate concerns</CardDescription>
             </CardHeader>
             <CardContent>
               {metrics.topRejectionReasons.length > 0 ? (
-                <div className="space-y-3">
+                <div className="space-y-2">
                   {metrics.topRejectionReasons.map((reason, index) => (
-                    <div key={index} className="flex items-center justify-between p-3 bg-slate-50 rounded-lg">
-                      <span className="text-sm text-slate-700 flex-1">{reason.reason}</span>
-                      <Badge variant="outline" className="ml-2">{reason.count}</Badge>
+                    <div key={index} className="flex items-center justify-between p-2.5 bg-muted/30 rounded-lg hover:bg-muted/50 transition-colors">
+                      <span className="text-xs text-foreground flex-1 line-clamp-1">{reason.reason}</span>
+                      <Badge variant="outline" className="ml-2 text-[10px] px-1.5 py-0.5">{reason.count}</Badge>
                     </div>
                   ))}
                 </div>
               ) : (
-                <div className="text-center py-8 text-slate-500">
-                  <CheckCircle className="h-12 w-12 mx-auto mb-3 text-emerald-500" />
-                  <p className="text-sm">No high-risk candidates detected</p>
+                <div className="text-center py-6 text-muted-foreground">
+                  <CheckCircle className="h-10 w-10 mx-auto mb-2 text-emerald-500" />
+                  <p className="text-xs">No high-risk candidates</p>
                 </div>
               )}
             </CardContent>
@@ -513,361 +509,360 @@ const DataDashboard = () => {
         </div>
 
         {/* CRM Insights Section */}
-        <div className="mb-12">
-          <div className="flex items-center gap-3 mb-6">
-            <div className="p-3 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-xl shadow-lg">
-              <BarChart3 className="h-6 w-6 text-white" />
-            </div>
-            <div>
-              <h2 className="text-2xl font-bold text-slate-800">CRM Insights</h2>
-              <p className="text-slate-600">Comprehensive recruitment CRM metrics</p>
-            </div>
+        <div className="mb-8">
+          <div className="mb-6 pb-4 border-b border-border/50">
+            <h2 className="text-xl font-bold text-foreground mb-1">CRM Insights</h2>
+            <p className="text-sm text-muted-foreground">Comprehensive recruitment performance metrics</p>
           </div>
 
           {/* Client Metrics */}
-          <div className="mb-8">
-            <h3 className="text-lg font-semibold text-slate-700 mb-4 flex items-center gap-2">
-              <Building2 className="h-5 w-5 text-indigo-500" />
+          <div className="mb-6">
+            <h3 className="text-sm font-semibold text-foreground mb-3 flex items-center gap-2">
+              <Building2 className="h-4 w-4 text-indigo-500" />
               Client Metrics
             </h3>
-            <div className="grid gap-6 md:grid-cols-3">
-              <Card className="backdrop-blur-sm bg-white/80 border border-slate-200/50 shadow-lg hover:shadow-xl transition-all duration-300 rounded-2xl group">
-                <CardHeader className="pb-3">
-                  <CardTitle className="text-sm font-medium text-slate-600 flex items-center gap-2">
-                    <div className="p-2 bg-indigo-50 rounded-lg group-hover:scale-110 transition-transform">
-                      <Building2 className="h-4 w-4 text-indigo-500" />
+            <div className="grid gap-4 sm:grid-cols-3">
+              <Card className="border-border/50 bg-card/50 backdrop-blur-sm shadow-sm hover:shadow-md transition-all hover-scale">
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-xs font-medium text-muted-foreground flex items-center gap-2">
+                    <div className="p-1.5 bg-indigo-500/10 rounded-lg">
+                      <Building2 className="h-3.5 w-3.5 text-indigo-500" />
                     </div>
                     Total Clients
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <div className="text-3xl font-bold bg-gradient-to-r from-indigo-600 to-indigo-500 bg-clip-text text-transparent">
+                  <div className="text-2xl font-bold text-foreground">
                     {metrics.totalClients}
                   </div>
-                  <p className="text-sm text-slate-500 mt-2">Active: {metrics.activeClients}</p>
+                  <p className="text-xs text-muted-foreground mt-1">Active: {metrics.activeClients}</p>
                 </CardContent>
               </Card>
 
-              <Card className="backdrop-blur-sm bg-white/80 border border-slate-200/50 shadow-lg hover:shadow-xl transition-all duration-300 rounded-2xl group">
-                <CardHeader className="pb-3">
-                  <CardTitle className="text-sm font-medium text-slate-600 flex items-center gap-2">
-                    <div className="p-2 bg-emerald-50 rounded-lg group-hover:scale-110 transition-transform">
-                      <CheckCircle className="h-4 w-4 text-emerald-500" />
+              <Card className="border-border/50 bg-card/50 backdrop-blur-sm shadow-sm hover:shadow-md transition-all hover-scale">
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-xs font-medium text-muted-foreground flex items-center gap-2">
+                    <div className="p-1.5 bg-emerald-500/10 rounded-lg">
+                      <CheckCircle className="h-3.5 w-3.5 text-emerald-500" />
                     </div>
                     Active Clients
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <div className="text-3xl font-bold bg-gradient-to-r from-emerald-600 to-emerald-500 bg-clip-text text-transparent">
+                  <div className="text-2xl font-bold text-foreground">
                     {metrics.activeClients}
                   </div>
-                  <p className="text-sm text-slate-500 mt-2">
+                  <p className="text-xs text-muted-foreground mt-1">
                     {metrics.totalClients > 0 ? Math.round((metrics.activeClients / metrics.totalClients) * 100) : 0}% of total
                   </p>
                 </CardContent>
               </Card>
 
-              <Card className="backdrop-blur-sm bg-white/80 border border-slate-200/50 shadow-lg hover:shadow-xl transition-all duration-300 rounded-2xl group">
-                <CardHeader className="pb-3">
-                  <CardTitle className="text-sm font-medium text-slate-600 flex items-center gap-2">
-                    <div className="p-2 bg-purple-50 rounded-lg group-hover:scale-110 transition-transform">
-                      <Award className="h-4 w-4 text-purple-500" />
+              <Card className="border-border/50 bg-card/50 backdrop-blur-sm shadow-sm hover:shadow-md transition-all hover-scale">
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-xs font-medium text-muted-foreground flex items-center gap-2">
+                    <div className="p-1.5 bg-purple-500/10 rounded-lg">
+                      <Award className="h-3.5 w-3.5 text-purple-500" />
                     </div>
                     Placements Per Client
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <div className="text-3xl font-bold bg-gradient-to-r from-purple-600 to-purple-500 bg-clip-text text-transparent">
+                  <div className="text-2xl font-bold text-foreground">
                     {metrics.placementsPerClient}
                   </div>
-                  <p className="text-sm text-slate-500 mt-2">Average placements</p>
+                  <p className="text-xs text-muted-foreground mt-1">Average placements</p>
                 </CardContent>
               </Card>
             </div>
           </div>
 
           {/* Recruiter Activity */}
-          <div className="mb-8">
-            <h3 className="text-lg font-semibold text-slate-700 mb-4 flex items-center gap-2">
-              <Send className="h-5 w-5 text-blue-500" />
+          <div className="mb-6">
+            <h3 className="text-sm font-semibold text-foreground mb-3 flex items-center gap-2">
+              <Send className="h-4 w-4 text-blue-500" />
               Recruiter Activity
             </h3>
-            <div className="grid gap-6 md:grid-cols-3">
-              <Card className="backdrop-blur-sm bg-white/80 border border-slate-200/50 shadow-lg hover:shadow-xl transition-all duration-300 rounded-2xl group">
-                <CardHeader className="pb-3">
-                  <CardTitle className="text-sm font-medium text-slate-600 flex items-center gap-2">
-                    <div className="p-2 bg-blue-50 rounded-lg group-hover:scale-110 transition-transform">
-                      <Mail className="h-4 w-4 text-blue-500" />
+            <div className="grid gap-4 sm:grid-cols-3">
+              <Card className="border-border/50 bg-card/50 backdrop-blur-sm shadow-sm hover:shadow-md transition-all hover-scale">
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-xs font-medium text-muted-foreground flex items-center gap-2">
+                    <div className="p-1.5 bg-blue-500/10 rounded-lg">
+                      <Mail className="h-3.5 w-3.5 text-blue-500" />
                     </div>
-                    Total Emails Sent
+                    Emails Sent
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <div className="text-3xl font-bold bg-gradient-to-r from-blue-600 to-blue-500 bg-clip-text text-transparent">
+                  <div className="text-2xl font-bold text-foreground">
                     {metrics.totalEmailsSent}
                   </div>
-                  <p className="text-sm text-slate-500 mt-2">Across all campaigns</p>
+                  <p className="text-xs text-muted-foreground mt-1">All campaigns</p>
                 </CardContent>
               </Card>
 
-              <Card className="backdrop-blur-sm bg-white/80 border border-slate-200/50 shadow-lg hover:shadow-xl transition-all duration-300 rounded-2xl group">
-                <CardHeader className="pb-3">
-                  <CardTitle className="text-sm font-medium text-slate-600 flex items-center gap-2">
-                    <div className="p-2 bg-cyan-50 rounded-lg group-hover:scale-110 transition-transform">
-                      <MessagesSquare className="h-4 w-4 text-cyan-500" />
+              <Card className="border-border/50 bg-card/50 backdrop-blur-sm shadow-sm hover:shadow-md transition-all hover-scale">
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-xs font-medium text-muted-foreground flex items-center gap-2">
+                    <div className="p-1.5 bg-cyan-500/10 rounded-lg">
+                      <MessagesSquare className="h-3.5 w-3.5 text-cyan-500" />
                     </div>
-                    Replies Received
+                    Replies
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <div className="text-3xl font-bold bg-gradient-to-r from-cyan-600 to-cyan-500 bg-clip-text text-transparent">
+                  <div className="text-2xl font-bold text-foreground">
                     {metrics.emailRepliesReceived}
                   </div>
-                  <p className="text-sm text-slate-500 mt-2">Candidate responses</p>
+                  <p className="text-xs text-muted-foreground mt-1">Candidate responses</p>
                 </CardContent>
               </Card>
 
-              <Card className="backdrop-blur-sm bg-white/80 border border-slate-200/50 shadow-lg hover:shadow-xl transition-all duration-300 rounded-2xl group">
-                <CardHeader className="pb-3">
-                  <CardTitle className="text-sm font-medium text-slate-600 flex items-center gap-2">
-                    <div className="p-2 bg-teal-50 rounded-lg group-hover:scale-110 transition-transform">
-                      <UserCheck className="h-4 w-4 text-teal-500" />
+              <Card className="border-border/50 bg-card/50 backdrop-blur-sm shadow-sm hover:shadow-md transition-all hover-scale">
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-xs font-medium text-muted-foreground flex items-center gap-2">
+                    <div className="p-1.5 bg-teal-500/10 rounded-lg">
+                      <UserCheck className="h-3.5 w-3.5 text-teal-500" />
                     </div>
-                    Meetings Booked
+                    Meetings
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <div className="text-3xl font-bold bg-gradient-to-r from-teal-600 to-teal-500 bg-clip-text text-transparent">
+                  <div className="text-2xl font-bold text-foreground">
                     {metrics.meetingsBooked}
                   </div>
-                  <p className="text-sm text-slate-500 mt-2">Scheduled interviews</p>
+                  <p className="text-xs text-muted-foreground mt-1">Interviews scheduled</p>
                 </CardContent>
               </Card>
             </div>
           </div>
 
           {/* Conversion Rate */}
-          <div className="mb-8">
-            <h3 className="text-lg font-semibold text-slate-700 mb-4 flex items-center gap-2">
-              <TrendingUp className="h-5 w-5 text-emerald-500" />
+          <div className="mb-6">
+            <h3 className="text-sm font-semibold text-foreground mb-3 flex items-center gap-2">
+              <TrendingUp className="h-4 w-4 text-emerald-500" />
               Conversion Rate
             </h3>
-            <div className="grid gap-6 lg:grid-cols-3">
-              <Card className="backdrop-blur-sm bg-white/80 border border-slate-200/50 shadow-lg hover:shadow-xl transition-all duration-300 rounded-2xl group">
-                <CardHeader className="pb-3">
-                  <CardTitle className="text-sm font-medium text-slate-600 flex items-center gap-2">
-                    <div className="p-2 bg-amber-50 rounded-lg group-hover:scale-110 transition-transform">
-                      <Target className="h-4 w-4 text-amber-500" />
+            <div className="grid gap-4 sm:grid-cols-3">
+              <Card className="border-border/50 bg-card/50 backdrop-blur-sm shadow-sm hover:shadow-md transition-all hover-scale">
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-xs font-medium text-muted-foreground flex items-center gap-2">
+                    <div className="p-1.5 bg-amber-500/10 rounded-lg">
+                      <Target className="h-3.5 w-3.5 text-amber-500" />
                     </div>
                     Screening → Interview
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <div className="text-3xl font-bold bg-gradient-to-r from-amber-600 to-amber-500 bg-clip-text text-transparent mb-2">
+                  <div className="text-2xl font-bold text-foreground mb-2">
                     {metrics.screeningToInterviewRate}%
                   </div>
-                  <Progress value={metrics.screeningToInterviewRate} className="h-2" />
+                  <Progress value={metrics.screeningToInterviewRate} className="h-1.5" />
                 </CardContent>
               </Card>
 
-              <Card className="backdrop-blur-sm bg-white/80 border border-slate-200/50 shadow-lg hover:shadow-xl transition-all duration-300 rounded-2xl group">
-                <CardHeader className="pb-3">
-                  <CardTitle className="text-sm font-medium text-slate-600 flex items-center gap-2">
-                    <div className="p-2 bg-green-50 rounded-lg group-hover:scale-110 transition-transform">
-                      <UserCheck className="h-4 w-4 text-green-500" />
+              <Card className="border-border/50 bg-card/50 backdrop-blur-sm shadow-sm hover:shadow-md transition-all hover-scale">
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-xs font-medium text-muted-foreground flex items-center gap-2">
+                    <div className="p-1.5 bg-green-500/10 rounded-lg">
+                      <UserCheck className="h-3.5 w-3.5 text-green-500" />
                     </div>
                     Interview → Placement
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <div className="text-3xl font-bold bg-gradient-to-r from-green-600 to-green-500 bg-clip-text text-transparent mb-2">
+                  <div className="text-2xl font-bold text-foreground mb-2">
                     {metrics.interviewToPlacementRate}%
                   </div>
-                  <Progress value={metrics.interviewToPlacementRate} className="h-2" />
+                  <Progress value={metrics.interviewToPlacementRate} className="h-1.5" />
                 </CardContent>
               </Card>
 
-              <Card className="backdrop-blur-sm bg-white/80 border border-slate-200/50 shadow-lg hover:shadow-xl transition-all duration-300 rounded-2xl group">
-                <CardHeader className="pb-3">
-                  <CardTitle className="text-sm font-medium text-slate-600 flex items-center gap-2">
-                    <div className="p-2 bg-emerald-50 rounded-lg group-hover:scale-110 transition-transform">
-                      <Award className="h-4 w-4 text-emerald-500" />
+              <Card className="border-border/50 bg-card/50 backdrop-blur-sm shadow-sm hover:shadow-md transition-all hover-scale">
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-xs font-medium text-muted-foreground flex items-center gap-2">
+                    <div className="p-1.5 bg-emerald-500/10 rounded-lg">
+                      <Award className="h-3.5 w-3.5 text-emerald-500" />
                     </div>
                     Overall Conversion
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <div className="text-3xl font-bold bg-gradient-to-r from-emerald-600 to-emerald-500 bg-clip-text text-transparent mb-2">
+                  <div className="text-2xl font-bold text-foreground mb-2">
                     {metrics.overallConversionRate}%
                   </div>
-                  <Progress value={metrics.overallConversionRate} className="h-2" />
+                  <Progress value={metrics.overallConversionRate} className="h-1.5" />
                 </CardContent>
               </Card>
             </div>
           </div>
 
           {/* AI Efficiency */}
-          <div className="mb-8">
-            <h3 className="text-lg font-semibold text-slate-700 mb-4 flex items-center gap-2">
-              <Zap className="h-5 w-5 text-yellow-500" />
+          <div className="mb-6">
+            <h3 className="text-sm font-semibold text-foreground mb-3 flex items-center gap-2">
+              <Zap className="h-4 w-4 text-yellow-500" />
               AI Efficiency
             </h3>
-            <div className="grid gap-6 md:grid-cols-2">
-              <Card className="backdrop-blur-sm bg-white/80 border border-slate-200/50 shadow-lg hover:shadow-xl transition-all duration-300 rounded-2xl group">
-                <CardHeader className="pb-3">
-                  <CardTitle className="text-sm font-medium text-slate-600 flex items-center gap-2">
-                    <div className="p-2 bg-yellow-50 rounded-lg group-hover:scale-110 transition-transform">
-                      <Clock className="h-4 w-4 text-yellow-500" />
+            <div className="grid gap-4 sm:grid-cols-2">
+              <Card className="border-border/50 bg-card/50 backdrop-blur-sm shadow-sm hover:shadow-md transition-all hover-scale">
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-xs font-medium text-muted-foreground flex items-center gap-2">
+                    <div className="p-1.5 bg-yellow-500/10 rounded-lg">
+                      <Clock className="h-3.5 w-3.5 text-yellow-500" />
                     </div>
-                    Avg. Time Saved Per Candidate
+                    Time Saved/Candidate
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <div className="text-3xl font-bold bg-gradient-to-r from-yellow-600 to-yellow-500 bg-clip-text text-transparent mb-2">
+                  <div className="text-2xl font-bold text-foreground mb-1">
                     {metrics.avgScreeningTimeSaved} min
                   </div>
-                  <p className="text-sm text-slate-500">
-                    Total saved: {Math.round((metrics.avgScreeningTimeSaved * metrics.totalCandidates) / 60)} hours
+                  <p className="text-xs text-muted-foreground">
+                    Total: {Math.round((metrics.avgScreeningTimeSaved * metrics.totalCandidates) / 60)} hours
                   </p>
                 </CardContent>
               </Card>
 
-              <Card className="backdrop-blur-sm bg-white/80 border border-slate-200/50 shadow-lg hover:shadow-xl transition-all duration-300 rounded-2xl group">
-                <CardHeader className="pb-3">
-                  <CardTitle className="text-sm font-medium text-slate-600 flex items-center gap-2">
-                    <div className="p-2 bg-orange-50 rounded-lg group-hover:scale-110 transition-transform">
-                      <Target className="h-4 w-4 text-orange-500" />
+              <Card className="border-border/50 bg-card/50 backdrop-blur-sm shadow-sm hover:shadow-md transition-all hover-scale">
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-xs font-medium text-muted-foreground flex items-center gap-2">
+                    <div className="p-1.5 bg-orange-500/10 rounded-lg">
+                      <Target className="h-3.5 w-3.5 text-orange-500" />
                     </div>
-                    AI Accuracy Rate
+                    AI Accuracy
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <div className="text-3xl font-bold bg-gradient-to-r from-orange-600 to-orange-500 bg-clip-text text-transparent mb-2">
+                  <div className="text-2xl font-bold text-foreground mb-2">
                     {metrics.aiAccuracyRate}%
                   </div>
-                  <Progress value={metrics.aiAccuracyRate} className="h-2" />
+                  <Progress value={metrics.aiAccuracyRate} className="h-1.5" />
                 </CardContent>
               </Card>
             </div>
           </div>
 
           {/* Engagement Rate */}
-          <div className="mb-8">
-            <h3 className="text-lg font-semibold text-slate-700 mb-4 flex items-center gap-2">
-              <Mail className="h-5 w-5 text-pink-500" />
+          <div className="mb-6">
+            <h3 className="text-sm font-semibold text-foreground mb-3 flex items-center gap-2">
+              <Mail className="h-4 w-4 text-pink-500" />
               Email Engagement
             </h3>
-            <div className="grid gap-6 md:grid-cols-2">
-              <Card className="backdrop-blur-sm bg-white/80 border border-slate-200/50 shadow-lg hover:shadow-xl transition-all duration-300 rounded-2xl group">
-                <CardHeader className="pb-3">
-                  <CardTitle className="text-sm font-medium text-slate-600 flex items-center gap-2">
-                    <div className="p-2 bg-pink-50 rounded-lg group-hover:scale-110 transition-transform">
-                      <Mail className="h-4 w-4 text-pink-500" />
+            <div className="grid gap-4 sm:grid-cols-2">
+              <Card className="border-border/50 bg-card/50 backdrop-blur-sm shadow-sm hover:shadow-md transition-all hover-scale">
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-xs font-medium text-muted-foreground flex items-center gap-2">
+                    <div className="p-1.5 bg-pink-500/10 rounded-lg">
+                      <Mail className="h-3.5 w-3.5 text-pink-500" />
                     </div>
-                    Overall Open Rate
+                    Open Rate
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <div className="text-3xl font-bold bg-gradient-to-r from-pink-600 to-pink-500 bg-clip-text text-transparent mb-2">
+                  <div className="text-2xl font-bold text-foreground mb-2">
                     {metrics.overallEmailOpenRate}%
                   </div>
-                  <Progress value={metrics.overallEmailOpenRate} className="h-2" />
-                  <p className="text-sm text-slate-500 mt-2">Across all sequences</p>
+                  <Progress value={metrics.overallEmailOpenRate} className="h-1.5" />
+                  <p className="text-xs text-muted-foreground mt-1">All sequences</p>
                 </CardContent>
               </Card>
 
-              <Card className="backdrop-blur-sm bg-white/80 border border-slate-200/50 shadow-lg hover:shadow-xl transition-all duration-300 rounded-2xl group">
-                <CardHeader className="pb-3">
-                  <CardTitle className="text-sm font-medium text-slate-600 flex items-center gap-2">
-                    <div className="p-2 bg-rose-50 rounded-lg group-hover:scale-110 transition-transform">
-                      <MessagesSquare className="h-4 w-4 text-rose-500" />
+              <Card className="border-border/50 bg-card/50 backdrop-blur-sm shadow-sm hover:shadow-md transition-all hover-scale">
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-xs font-medium text-muted-foreground flex items-center gap-2">
+                    <div className="p-1.5 bg-rose-500/10 rounded-lg">
+                      <MessagesSquare className="h-3.5 w-3.5 text-rose-500" />
                     </div>
-                    Overall Reply Rate
+                    Reply Rate
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <div className="text-3xl font-bold bg-gradient-to-r from-rose-600 to-rose-500 bg-clip-text text-transparent mb-2">
+                  <div className="text-2xl font-bold text-foreground mb-2">
                     {metrics.overallEmailReplyRate}%
                   </div>
-                  <Progress value={metrics.overallEmailReplyRate} className="h-2" />
-                  <p className="text-sm text-slate-500 mt-2">Reply & click-through</p>
+                  <Progress value={metrics.overallEmailReplyRate} className="h-1.5" />
+                  <p className="text-xs text-muted-foreground mt-1">Click-through</p>
                 </CardContent>
               </Card>
             </div>
           </div>
         </div>
 
-        {/* Client-Centric Metrics Navigation Card */}
-        <Card className="backdrop-blur-sm bg-white/80 border border-slate-200/50 shadow-lg rounded-2xl mb-8 cursor-pointer hover:shadow-xl transition-all duration-300"
+        {/* Client-Centric Metrics Navigation */}
+        <Card className="border-border/50 bg-card/50 backdrop-blur-sm shadow-sm mb-8 cursor-pointer hover:shadow-md transition-all hover-scale"
           onClick={() => navigate('/client-metrics')}>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Award className="h-5 w-5 text-purple-500" />
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base flex items-center gap-2">
+              <div className="p-2 bg-purple-500/10 rounded-lg">
+                <Award className="h-4 w-4 text-purple-500" />
+              </div>
               Client-Centric Metrics
             </CardTitle>
-            <CardDescription>View detailed performance metrics for all client relationships</CardDescription>
+            <CardDescription className="text-xs">Detailed client relationship performance</CardDescription>
           </CardHeader>
           <CardContent>
             <div className="flex items-center justify-between">
-              <p className="text-sm text-slate-600">
-                Track placements, time-to-fill, cost per hire, and more across all clients
+              <p className="text-sm text-muted-foreground">
+                Track placements, time-to-fill, and cost per hire
               </p>
-              <Button className="bg-gradient-to-r from-purple-500 to-purple-600 hover:from-purple-600 hover:to-purple-700">
-                View Client Metrics →
+              <Button size="sm" className="bg-gradient-to-r from-primary to-cyan-500 hover:from-primary/90 hover:to-cyan-600">
+                View Details →
               </Button>
             </div>
           </CardContent>
         </Card>
 
-        {/* Detailed Metrics Table */}
-        <Card className="backdrop-blur-sm bg-white/80 border border-slate-200/50 shadow-lg rounded-2xl">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Award className="h-5 w-5 text-cyan-500" />
+        {/* Performance Summary Table */}
+        <Card className="border-border/50 bg-card/50 backdrop-blur-sm shadow-sm">
+          <CardHeader className="pb-4">
+            <CardTitle className="text-lg flex items-center gap-2">
+              <div className="p-2 bg-primary/10 rounded-lg">
+                <Award className="h-4 w-4 text-primary" />
+              </div>
               Performance Summary
             </CardTitle>
-            <CardDescription>Key performance indicators at a glance</CardDescription>
+            <CardDescription className="text-xs">Key indicators at a glance</CardDescription>
           </CardHeader>
           <CardContent>
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Metric</TableHead>
-                  <TableHead>Value</TableHead>
-                  <TableHead>Status</TableHead>
+                  <TableHead className="text-xs">Metric</TableHead>
+                  <TableHead className="text-xs">Value</TableHead>
+                  <TableHead className="text-xs">Status</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 <TableRow>
-                  <TableCell className="font-medium">Candidates Screened (Week)</TableCell>
-                  <TableCell>{metrics.candidatesThisWeek}</TableCell>
+                  <TableCell className="text-sm font-medium">Candidates (Week)</TableCell>
+                  <TableCell className="text-sm">{metrics.candidatesThisWeek}</TableCell>
                   <TableCell>
-                    <Badge className="bg-emerald-100 text-emerald-700 hover:bg-emerald-200">Active</Badge>
+                    <Badge variant="secondary" className="bg-emerald-500/10 text-emerald-700 hover:bg-emerald-500/20 text-xs">Active</Badge>
                   </TableCell>
                 </TableRow>
                 <TableRow>
-                  <TableCell className="font-medium">Candidates Screened (Month)</TableCell>
-                  <TableCell>{metrics.candidatesThisMonth}</TableCell>
+                  <TableCell className="text-sm font-medium">Candidates (Month)</TableCell>
+                  <TableCell className="text-sm">{metrics.candidatesThisMonth}</TableCell>
                   <TableCell>
-                    <Badge className="bg-cyan-100 text-cyan-700 hover:bg-cyan-200">On Track</Badge>
+                    <Badge variant="secondary" className="bg-cyan-500/10 text-cyan-700 hover:bg-cyan-500/20 text-xs">On Track</Badge>
                   </TableCell>
                 </TableRow>
                 <TableRow>
-                  <TableCell className="font-medium">High-Quality Rate</TableCell>
-                  <TableCell>
+                  <TableCell className="text-sm font-medium">High-Quality Rate</TableCell>
+                  <TableCell className="text-sm">
                     {metrics.totalCandidates > 0 
                       ? Math.round((metrics.highQualityCandidates / metrics.totalCandidates) * 100) 
                       : 0}%
                   </TableCell>
                   <TableCell>
-                    <Badge className="bg-purple-100 text-purple-700 hover:bg-purple-200">Excellent</Badge>
+                    <Badge variant="secondary" className="bg-purple-500/10 text-purple-700 hover:bg-purple-500/20 text-xs">Excellent</Badge>
                   </TableCell>
                 </TableRow>
                 <TableRow>
-                  <TableCell className="font-medium">Automation Rate</TableCell>
-                  <TableCell>{metrics.autoScreenedPercentage}%</TableCell>
+                  <TableCell className="text-sm font-medium">Automation Rate</TableCell>
+                  <TableCell className="text-sm">{metrics.autoScreenedPercentage}%</TableCell>
                   <TableCell>
-                    <Badge className="bg-teal-100 text-teal-700 hover:bg-teal-200">Optimal</Badge>
+                    <Badge variant="secondary" className="bg-teal-500/10 text-teal-700 hover:bg-teal-500/20 text-xs">Optimal</Badge>
                   </TableCell>
                 </TableRow>
               </TableBody>
