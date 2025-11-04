@@ -250,29 +250,36 @@ export const CandidateAnalysisDialog = ({ open, onOpenChange, candidate }: Candi
     const scrollElement = scrollRef.current;
     if (!scrollElement) return;
 
+    let ticking = false;
+
     const handleScroll = () => {
-      const scrollTop = scrollElement.scrollTop;
-      const scrollDelta = scrollTop - lastScrollTop.current;
-      
-      // Only trigger changes if there's meaningful scroll movement (at least 10px)
-      if (Math.abs(scrollDelta) < 10) {
-        return;
+      if (!ticking) {
+        window.requestAnimationFrame(() => {
+          const scrollTop = scrollElement.scrollTop;
+          const scrollDelta = scrollTop - lastScrollTop.current;
+          
+          // Only trigger changes if there's meaningful scroll movement (at least 5px)
+          if (Math.abs(scrollDelta) >= 5) {
+            const scrollingDown = scrollDelta > 0;
+            setIsScrollingDown(scrollingDown);
+            
+            // Show header when at top (within 100px) or scrolling up
+            // Hide header when scrolling down and past threshold
+            if (scrollTop < 100) {
+              setShowHeader(true);
+            } else if (scrollingDown) {
+              setShowHeader(false);
+            } else {
+              setShowHeader(true);
+            }
+            
+            lastScrollTop.current = scrollTop;
+          }
+          
+          ticking = false;
+        });
+        ticking = true;
       }
-      
-      const scrollingDown = scrollDelta > 0;
-      setIsScrollingDown(scrollingDown);
-      
-      // Show header when at top (within 80px) or scrolling up
-      // Hide header when scrolling down and past threshold
-      if (scrollTop < 80) {
-        setShowHeader(true);
-      } else if (scrollingDown) {
-        setShowHeader(false);
-      } else {
-        setShowHeader(true);
-      }
-      
-      lastScrollTop.current = scrollTop;
     };
 
     scrollElement.addEventListener('scroll', handleScroll, { passive: true });
