@@ -289,30 +289,30 @@ export const CandidateAnalysisDialog = ({ open, onOpenChange, candidate }: Candi
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-none w-screen h-screen p-0 gap-0 flex flex-col bg-background overflow-hidden m-0 rounded-none">
+      <DialogContent className="max-w-none w-full h-screen p-0 gap-0 flex flex-col bg-background overflow-hidden m-0 sm:rounded-none">
         {/* Collapsing Header with Mini Mode */}
         <div className="sticky top-0 z-50 border-b bg-background/95 backdrop-blur-sm">
-          <DialogHeader className={`px-8 lg:px-16 xl:px-24 transition-all duration-300 ${showHeader ? 'py-8' : 'py-3'} relative`}>
+          <DialogHeader className={`px-4 sm:px-6 lg:px-16 xl:px-24 transition-all duration-300 ${showHeader ? 'py-4 sm:py-8' : 'py-3'} relative`}>
             {/* Close Button - Top Right */}
             <Button
               variant="ghost"
               size="icon"
               onClick={() => onOpenChange(false)}
-              className="absolute top-4 right-4 h-10 w-10 rounded-full hover:bg-destructive/10 hover:text-destructive transition-colors z-50"
+              className="absolute top-2 right-2 sm:top-4 sm:right-4 h-8 w-8 sm:h-10 sm:w-10 rounded-full hover:bg-destructive/10 hover:text-destructive transition-colors z-50"
             >
-              <X className="h-5 w-5" />
+              <X className="h-4 w-4 sm:h-5 sm:w-5" />
             </Button>
 
-            <div className="flex items-center justify-between gap-8 pr-12">
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 sm:gap-8 pr-10 sm:pr-12">
               {/* Mini Mode - Always visible */}
-              <div className="flex items-center gap-6 min-w-0">
-                <DialogTitle className={`font-semibold bg-gradient-to-r from-cyan-600 to-teal-600 bg-clip-text text-transparent tracking-tight transition-all duration-300 truncate ${showHeader ? 'text-2xl' : 'text-lg'}`}>
+              <div className="flex items-center gap-3 sm:gap-6 min-w-0 flex-1">
+                <DialogTitle className={`font-semibold bg-gradient-to-r from-cyan-600 to-teal-600 bg-clip-text text-transparent tracking-tight transition-all duration-300 truncate ${showHeader ? 'text-lg sm:text-2xl' : 'text-base sm:text-lg'}`}>
                   {candidate.candidateName}
                 </DialogTitle>
                 {!showHeader && candidate.overallScore !== undefined && (
-                  <div className="flex items-center gap-2 px-3 py-1 bg-gradient-to-br from-cyan-50 to-teal-50 dark:from-cyan-950/30 dark:to-teal-950/30 rounded-full border border-cyan-200 dark:border-cyan-800 transition-opacity duration-300">
-                    <span className="text-sm font-medium text-muted-foreground">Score:</span>
-                    <span className="text-lg font-semibold bg-gradient-to-br from-cyan-600 to-teal-600 bg-clip-text text-transparent">
+                  <div className="flex items-center gap-2 px-2 sm:px-3 py-1 bg-gradient-to-br from-cyan-50 to-teal-50 dark:from-cyan-950/30 dark:to-teal-950/30 rounded-full border border-cyan-200 dark:border-cyan-800 transition-opacity duration-300">
+                    <span className="text-xs sm:text-sm font-medium text-muted-foreground">Score:</span>
+                    <span className="text-base sm:text-lg font-semibold bg-gradient-to-br from-cyan-600 to-teal-600 bg-clip-text text-transparent">
                       {candidate.overallScore}/10
                     </span>
                   </div>
@@ -320,22 +320,22 @@ export const CandidateAnalysisDialog = ({ open, onOpenChange, candidate }: Candi
               </div>
 
               {/* Full Header Content - Hidden in mini mode */}
-              <div className={`flex-1 transition-all duration-300 ${showHeader ? 'opacity-100 max-h-[500px]' : 'opacity-0 max-h-0 overflow-hidden'}`}>
-                <div className="flex items-start justify-between gap-8">
+              <div className={`w-full transition-all duration-300 ${showHeader ? 'opacity-100 max-h-[500px]' : 'opacity-0 max-h-0 overflow-hidden'}`}>
+                <div className="flex flex-col sm:flex-row items-start justify-between gap-4 sm:gap-8">
                   {/* Candidate Info */}
-                  <div className="flex-1 space-y-6">
+                  <div className="flex-1 space-y-4 sm:space-y-6 w-full">
                     <div className="space-y-2">
-                      <DialogDescription className="text-base text-muted-foreground flex items-center gap-2">
+                      <DialogDescription className="text-sm sm:text-base text-muted-foreground flex items-center gap-2">
                         <span className="w-1.5 h-1.5 rounded-full bg-cyan-500 animate-pulse"></span>
-                        {candidate.email}
+                        <span className="truncate">{candidate.email}</span>
                       </DialogDescription>
                     </div>
                     
                     {/* Status Selector */}
-                    <div className="flex items-center gap-3">
+                    <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3">
                       <span className="text-sm font-medium text-muted-foreground">Status:</span>
                       <Select value={currentStatus} onValueChange={(value) => handleStatusChange(value as CandidateStatus)}>
-                        <SelectTrigger className={`w-[200px] ${getStatusConfig(currentStatus).color} border-2`}>
+                        <SelectTrigger className={`w-full sm:w-[200px] ${getStatusConfig(currentStatus).color} border-2`}>
                           <div className="flex items-center gap-2">
                             {getStatusConfig(currentStatus).icon}
                             <SelectValue />
@@ -394,10 +394,10 @@ export const CandidateAnalysisDialog = ({ open, onOpenChange, candidate }: Candi
                       </Select>
                     </div>
                     
-                    <div className="flex items-center gap-4 text-sm text-muted-foreground">
+                    <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4 text-xs sm:text-sm text-muted-foreground">
                       {candidate.date && (
                         <div className="flex items-center gap-2">
-                          <Calendar className="h-4 w-4" />
+                          <Calendar className="h-3 w-3 sm:h-4 sm:w-4" />
                           <span>
                             {new Date(candidate.date).toLocaleDateString('en-US', { 
                               year: 'numeric', 
@@ -410,8 +410,8 @@ export const CandidateAnalysisDialog = ({ open, onOpenChange, candidate }: Candi
                       
                       {candidate.recruitmentName && (
                         <div className="flex items-center gap-2">
-                          <Folder className="h-4 w-4" />
-                          <span>{candidate.recruitmentName}</span>
+                          <Folder className="h-3 w-3 sm:h-4 sm:w-4" />
+                          <span className="truncate">{candidate.recruitmentName}</span>
                         </div>
                       )}
                     </div>
@@ -419,10 +419,10 @@ export const CandidateAnalysisDialog = ({ open, onOpenChange, candidate }: Candi
                   
                   {/* Overall Score - Full mode */}
                   {candidate.overallScore !== undefined && (
-                    <div className="flex flex-col items-end gap-1">
-                      <div className="text-sm font-medium text-muted-foreground">Overall Score</div>
-                      <div className="text-4xl font-semibold bg-gradient-to-br from-cyan-600 to-teal-600 bg-clip-text text-transparent">
-                        {candidate.overallScore}<span className="text-xl text-muted-foreground">/10</span>
+                    <div className="flex flex-col sm:items-end gap-1">
+                      <div className="text-xs sm:text-sm font-medium text-muted-foreground">Overall Score</div>
+                      <div className="text-2xl sm:text-4xl font-semibold bg-gradient-to-br from-cyan-600 to-teal-600 bg-clip-text text-transparent">
+                        {candidate.overallScore}<span className="text-base sm:text-xl text-muted-foreground">/10</span>
                       </div>
                     </div>
                   )}
@@ -434,33 +434,34 @@ export const CandidateAnalysisDialog = ({ open, onOpenChange, candidate }: Candi
           
         {/* Scrollable Content Area */}
         <div ref={scrollRef} className="flex-1 overflow-y-auto overflow-x-hidden bg-muted/20">
-          <div className="w-full h-full px-6 lg:px-12 py-8">
+          <div className="w-full h-full px-4 sm:px-6 lg:px-12 py-4 sm:py-8">
             <Tabs defaultValue="overview" className="w-full h-full">
-              <TabsList className="inline-flex h-11 items-center justify-center rounded-lg bg-muted/30 p-1 text-muted-foreground mb-12">
+              <TabsList className="inline-flex h-10 sm:h-11 items-center justify-center rounded-lg bg-muted/30 p-1 text-muted-foreground mb-6 sm:mb-12 w-full sm:w-auto overflow-x-auto">
                 <TabsTrigger 
                   value="overview" 
-                  className="inline-flex items-center justify-center whitespace-nowrap rounded-md px-6 py-2 text-sm font-medium transition-all data-[state=active]:bg-gradient-to-r data-[state=active]:from-cyan-500 data-[state=active]:to-teal-500 data-[state=active]:text-white data-[state=active]:shadow-sm hover:bg-cyan-50"
+                  className="inline-flex items-center justify-center whitespace-nowrap rounded-md px-3 sm:px-6 py-2 text-xs sm:text-sm font-medium transition-all data-[state=active]:bg-gradient-to-r data-[state=active]:from-cyan-500 data-[state=active]:to-teal-500 data-[state=active]:text-white data-[state=active]:shadow-sm hover:bg-cyan-50 flex-1 sm:flex-initial"
                 >
                   Overview
                 </TabsTrigger>
                 <TabsTrigger 
                   value="timeline" 
-                  className="inline-flex items-center justify-center whitespace-nowrap rounded-md px-6 py-2 text-sm font-medium transition-all data-[state=active]:bg-gradient-to-r data-[state=active]:from-cyan-500 data-[state=active]:to-teal-500 data-[state=active]:text-white data-[state=active]:shadow-sm hover:bg-cyan-50"
+                  className="inline-flex items-center justify-center whitespace-nowrap rounded-md px-3 sm:px-6 py-2 text-xs sm:text-sm font-medium transition-all data-[state=active]:bg-gradient-to-r data-[state=active]:from-cyan-500 data-[state=active]:to-teal-500 data-[state=active]:text-white data-[state=active]:shadow-sm hover:bg-cyan-50 flex-1 sm:flex-initial"
                 >
-                  Timeline & Notes
+                  <span className="hidden sm:inline">Timeline & Notes</span>
+                  <span className="sm:hidden">Timeline</span>
                 </TabsTrigger>
                 <TabsTrigger 
                   value="ai-insights" 
-                  className="inline-flex items-center justify-center whitespace-nowrap rounded-md px-6 py-2 text-sm font-medium transition-all data-[state=active]:bg-gradient-to-r data-[state=active]:from-cyan-500 data-[state=active]:to-teal-500 data-[state=active]:text-white data-[state=active]:shadow-sm hover:bg-cyan-50"
+                  className="inline-flex items-center justify-center whitespace-nowrap rounded-md px-3 sm:px-6 py-2 text-xs sm:text-sm font-medium transition-all data-[state=active]:bg-gradient-to-r data-[state=active]:from-cyan-500 data-[state=active]:to-teal-500 data-[state=active]:text-white data-[state=active]:shadow-sm hover:bg-cyan-50 flex-1 sm:flex-initial"
                 >
                   AI Insights
                 </TabsTrigger>
               </TabsList>
 
               {/* Overview Tab */}
-              <TabsContent value="overview" className="space-y-12">
+              <TabsContent value="overview" className="space-y-6 sm:space-y-12">
                 {/* Score Metrics Grid */}
-                <div className="grid grid-cols-3 gap-6">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
                   {/* Fit Score Card */}
                   <Card className="bg-background border-cyan-300/30 hover:border-cyan-400/50 hover:shadow-lg hover:shadow-cyan-500/10 transition-all duration-300 group bg-gradient-to-br from-cyan-50/50 to-transparent animate-fade-in-up hover-lift">
                     <CardHeader className="pb-6">
@@ -616,24 +617,24 @@ export const CandidateAnalysisDialog = ({ open, onOpenChange, candidate }: Candi
                       </div>
                       
                       {/* Stats Grid */}
-                      <div className="grid grid-cols-3 gap-4 pt-4 border-t">
+                      <div className="grid grid-cols-3 gap-2 sm:gap-4 pt-4 border-t">
                         <div className="text-center">
-                          <div className="text-2xl font-bold text-primary">
+                          <div className="text-lg sm:text-2xl font-bold text-primary">
                             {comparisonData.percentileRank}th
                           </div>
-                          <div className="text-xs text-muted-foreground mt-1">Percentile Rank</div>
+                          <div className="text-[10px] sm:text-xs text-muted-foreground mt-1">Percentile</div>
                         </div>
                         <div className="text-center">
-                          <div className="text-2xl font-bold text-cyan-600">
+                          <div className="text-lg sm:text-2xl font-bold text-cyan-600">
                             {comparisonData.totalCandidates - comparisonData.higherScoringCount - 1}
                           </div>
-                          <div className="text-xs text-muted-foreground mt-1">Ranked Below</div>
+                          <div className="text-[10px] sm:text-xs text-muted-foreground mt-1">Below</div>
                         </div>
                         <div className="text-center">
-                          <div className="text-2xl font-bold text-teal-600">
+                          <div className="text-lg sm:text-2xl font-bold text-teal-600">
                             {comparisonData.higherScoringCount}
                           </div>
-                          <div className="text-xs text-muted-foreground mt-1">Ranked Above</div>
+                          <div className="text-[10px] sm:text-xs text-muted-foreground mt-1">Above</div>
                         </div>
                       </div>
                     </div>
