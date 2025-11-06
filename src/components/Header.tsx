@@ -13,51 +13,50 @@ const Header = () => {
     await signOut();
     navigate('/auth');
   };
-  return <header className="fixed top-0 left-0 right-0 z-50 backdrop-blur-md bg-white/90 border-b border-slate-200/50">
+  return <header className="fixed top-0 left-0 right-0 z-50 backdrop-blur-lg bg-white/80 border-b border-border/50 shadow-sm">
       <div className="container mx-auto px-6">
         <div className="flex items-center justify-between h-16">
           {/* Logo */}
           <a href="/" className="flex items-center gap-3 group">
-            <div className="w-8 h-8 bg-gradient-to-br from-cyan-500 to-teal-500 rounded-lg flex items-center justify-center hover-scale overflow-hidden relative">
-              <div className="absolute inset-0 bg-gradient-to-br from-cyan-400 to-teal-400 opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
-              <Atom className="w-5 h-5 text-white relative z-10 group-hover:animate-pulse" />
+            <div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center transition-all duration-300 group-hover:scale-105 group-hover:shadow-primary">
+              <Atom className="w-5 h-5 text-white" />
             </div>
-            <span className="text-2xl font-bold bg-gradient-to-r from-slate-800 to-slate-600 bg-clip-text text-transparent group-hover:from-cyan-600 group-hover:to-teal-600 transition-all duration-300">ScreeningPilot</span>
+            <span className="text-2xl font-bold text-foreground group-hover:text-primary transition-colors duration-300">ScreeningPilot</span>
           </a>
 
           {/* Navigation - Desktop */}
           <nav className="hidden md:flex items-center gap-8">
-            <a href="/features" className="relative text-slate-600 hover:text-cyan-600 font-medium transition-all duration-300 group">
+            <a href="/features" className="relative text-muted-foreground hover:text-primary font-medium transition-colors duration-200 group">
               <span className="relative z-10">Features</span>
-              <span className="absolute inset-x-0 bottom-0 h-0.5 bg-gradient-to-r from-cyan-500 to-teal-500 transform scale-x-0 group-hover:scale-x-100 transition-transform duration-300 origin-left"></span>
+              <span className="absolute inset-x-0 -bottom-1 h-0.5 bg-primary transform scale-x-0 group-hover:scale-x-100 transition-transform duration-200 origin-left"></span>
             </a>
-            <a href="/lead-scraper" className="relative text-slate-600 hover:text-cyan-600 font-medium transition-all duration-300 group">
+            <a href="/lead-scraper" className="relative text-muted-foreground hover:text-primary font-medium transition-colors duration-200 group">
               <span className="relative z-10">Lead Scraper</span>
-              <span className="absolute inset-x-0 bottom-0 h-0.5 bg-gradient-to-r from-cyan-500 to-teal-500 transform scale-x-0 group-hover:scale-x-100 transition-transform duration-300 origin-left"></span>
+              <span className="absolute inset-x-0 -bottom-1 h-0.5 bg-primary transform scale-x-0 group-hover:scale-x-100 transition-transform duration-200 origin-left"></span>
             </a>
-            <a href="/deep-search" className="relative text-slate-600 hover:text-cyan-600 font-medium transition-all duration-300 group">
+            <a href="/deep-search" className="relative text-muted-foreground hover:text-primary font-medium transition-colors duration-200 group">
               <span className="relative z-10">Deep Search</span>
-              <span className="absolute inset-x-0 bottom-0 h-0.5 bg-gradient-to-r from-cyan-500 to-teal-500 transform scale-x-0 group-hover:scale-x-100 transition-transform duration-300 origin-left"></span>
+              <span className="absolute inset-x-0 -bottom-1 h-0.5 bg-primary transform scale-x-0 group-hover:scale-x-100 transition-transform duration-200 origin-left"></span>
             </a>
-            <a href="/pricing" className="relative text-slate-600 hover:text-cyan-600 font-medium transition-all duration-300 group">
+            <a href="/pricing" className="relative text-muted-foreground hover:text-primary font-medium transition-colors duration-200 group">
               <span className="relative z-10">Pricing</span>
-              <span className="absolute inset-x-0 bottom-0 h-0.5 bg-gradient-to-r from-cyan-500 to-teal-500 transform scale-x-0 group-hover:scale-x-100 transition-transform duration-300 origin-left"></span>
+              <span className="absolute inset-x-0 -bottom-1 h-0.5 bg-primary transform scale-x-0 group-hover:scale-x-100 transition-transform duration-200 origin-left"></span>
             </a>
-            <a href="/get-demo" className="relative text-slate-600 hover:text-cyan-600 font-medium transition-all duration-300 group">
+            <a href="/get-demo" className="relative text-muted-foreground hover:text-primary font-medium transition-colors duration-200 group">
               <span className="relative z-10">Get a Demo</span>
-              <span className="absolute inset-x-0 bottom-0 h-0.5 bg-gradient-to-r from-cyan-500 to-teal-500 transform scale-x-0 group-hover:scale-x-100 transition-transform duration-300 origin-left"></span>
+              <span className="absolute inset-x-0 -bottom-1 h-0.5 bg-primary transform scale-x-0 group-hover:scale-x-100 transition-transform duration-200 origin-left"></span>
             </a>
           </nav>
 
           {/* Auth Buttons */}
           <div className="hidden md:flex items-center gap-3">
             {user ? (
-              <Button variant="outline" onClick={handleSignOut} className="bg-white/80 hover:bg-white border-slate-200">
+              <Button variant="outline" onClick={handleSignOut}>
                 <LogOut className="w-4 h-4 mr-2" />
                 Sign Out
               </Button>
             ) : (
-              <Button onClick={() => navigate('/auth')} className="bg-gradient-to-r from-cyan-500 to-teal-500 hover:from-cyan-600 hover:to-teal-600 text-white">
+              <Button onClick={() => navigate('/auth')}>
                 Sign In
               </Button>
             )}
@@ -65,7 +64,7 @@ const Header = () => {
 
 
           {/* Mobile Menu Button */}
-          <button className="md:hidden p-2 text-slate-600 hover:text-slate-800 hover:bg-slate-100 rounded-lg transition-all duration-200 active-scale" onClick={() => setIsMenuOpen(!isMenuOpen)}>
+          <button className="md:hidden p-2 text-muted-foreground hover:text-foreground hover:bg-accent/50 rounded-lg transition-all duration-200" onClick={() => setIsMenuOpen(!isMenuOpen)}>
             <div className="relative w-6 h-6">
               <Menu className={`w-6 h-6 absolute transition-all duration-300 ${isMenuOpen ? 'opacity-0 rotate-180' : 'opacity-100 rotate-0'}`} />
               <X className={`w-6 h-6 absolute transition-all duration-300 ${isMenuOpen ? 'opacity-100 rotate-0' : 'opacity-0 -rotate-180'}`} />
@@ -74,33 +73,33 @@ const Header = () => {
         </div>
 
         {/* Mobile Menu */}
-        {isMenuOpen && <div className="md:hidden py-4 border-t border-slate-200/50 animate-slide-down">
+        {isMenuOpen && <div className="md:hidden py-4 border-t border-border/50 animate-slide-down">
             <nav className="flex flex-col gap-4">
-              <a href="/features" className="text-slate-600 hover:text-cyan-600 font-medium py-2 transition-all duration-200 hover:translate-x-2 animate-fade-in-left animate-delay-100">
+              <a href="/features" className="text-muted-foreground hover:text-primary font-medium py-2 transition-all duration-200">
                 Features
               </a>
-              <a href="/lead-scraper" className="text-slate-600 hover:text-cyan-600 font-medium py-2 transition-all duration-200 hover:translate-x-2 animate-fade-in-left animate-delay-150">
+              <a href="/lead-scraper" className="text-muted-foreground hover:text-primary font-medium py-2 transition-all duration-200">
                 Lead Scraper
               </a>
-              <a href="/deep-search" className="text-slate-600 hover:text-cyan-600 font-medium py-2 transition-all duration-200 hover:translate-x-2 animate-fade-in-left animate-delay-175">
+              <a href="/deep-search" className="text-muted-foreground hover:text-primary font-medium py-2 transition-all duration-200">
                 Deep Search
               </a>
-              <a href="/pricing" className="text-slate-600 hover:text-cyan-600 font-medium py-2 transition-all duration-200 hover:translate-x-2 animate-fade-in-left animate-delay-200">
+              <a href="/pricing" className="text-muted-foreground hover:text-primary font-medium py-2 transition-all duration-200">
                 Pricing
               </a>
-              <a href="/get-demo" className="text-slate-600 hover:text-cyan-600 font-medium py-2 transition-all duration-200 hover:translate-x-2 animate-fade-in-left animate-delay-300">
+              <a href="/get-demo" className="text-muted-foreground hover:text-primary font-medium py-2 transition-all duration-200">
                 Get a Demo
               </a>
               
               {/* Mobile Auth Buttons */}
-              <div className="pt-4 border-t border-slate-200/50 mt-4">
+              <div className="pt-4 border-t border-border/50 mt-4">
                 {user ? (
-                  <Button variant="outline" onClick={handleSignOut} className="w-full bg-white/80 hover:bg-white border-slate-200">
+                  <Button variant="outline" onClick={handleSignOut} className="w-full">
                     <LogOut className="w-4 h-4 mr-2" />
                     Sign Out
                   </Button>
                 ) : (
-                  <Button onClick={() => navigate('/auth')} className="w-full bg-gradient-to-r from-cyan-500 to-teal-500 hover:from-cyan-600 hover:to-teal-600 text-white">
+                  <Button onClick={() => navigate('/auth')} className="w-full">
                     Sign In
                   </Button>
                 )}

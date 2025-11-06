@@ -34,15 +34,15 @@ export const IntelligenceBadge = ({
     <Badge 
       className={`
         ${sizeClasses[size]} 
-        ${getStatusColor() === 'green' ? 'bg-green-50 border-green-200 text-green-700' : ''}
-        ${getStatusColor() === 'yellow' ? 'bg-yellow-50 border-yellow-200 text-yellow-700' : ''}
-        ${getStatusColor() === 'gray' ? 'bg-gray-50 border-gray-200 text-gray-700' : ''}
-        inline-flex items-center gap-2 animate-verified-check
+        ${getStatusColor() === 'green' ? 'bg-success/10 border-success/30 text-success' : ''}
+        ${getStatusColor() === 'yellow' ? 'bg-warning/10 border-warning/30 text-warning' : ''}
+        ${getStatusColor() === 'gray' ? 'bg-muted border-border text-muted-foreground' : ''}
+        inline-flex items-center gap-2 font-medium
       `}
     >
       {getIcon()}
       <span>Intelligence: {score}/10</span>
-      {verificationStatus === 'verified' && <span className="font-bold">✓</span>}
+      {verificationStatus === 'verified' && <span className="font-semibold">✓</span>}
     </Badge>
   );
 };

@@ -313,32 +313,32 @@ const ModernDashboard = () => {
     });
   }, [viewMode, selectedFolder, recruitmentFolders, resumeData, searchTerm, filters]);
   if (loading) {
-    return <div className="min-h-screen bg-gradient-to-br from-slate-50 to-white">
+    return <div className="min-h-screen bg-gradient-to-br from-background via-muted/30 to-background">
         <div className="flex items-center justify-center py-20">
           <div className="text-center animate-fade-in-up">
             <div className="relative">
-              <RefreshCw className="h-12 w-12 animate-spin text-cyan-500 mx-auto mb-4" />
-              <div className="absolute inset-0 h-12 w-12 bg-cyan-500/20 rounded-full animate-ping mx-auto" />
+              <RefreshCw className="h-12 w-12 animate-spin text-primary mx-auto mb-4" />
+              <div className="absolute inset-0 h-12 w-12 bg-primary/10 rounded-full animate-ping mx-auto" />
             </div>
-            <h2 className="text-2xl font-bold bg-gradient-to-r from-slate-800 to-slate-600 bg-clip-text text-transparent mb-2 animate-fade-in-up animate-delay-200">
+            <h2 className="text-2xl font-bold text-foreground mb-2">
               Loading Candidates
             </h2>
-            <p className="text-slate-600 font-medium animate-fade-in-up animate-delay-300">Analyzing resume data with AI precision...</p>
+            <p className="text-muted-foreground font-medium">Analyzing resume data with AI precision...</p>
           </div>
         </div>
       </div>;
   }
 
-  return <div className="min-h-screen bg-gradient-to-br from-slate-50 to-white">
+  return <div className="min-h-screen bg-gradient-to-br from-background via-muted/30 to-background">
       <div className="max-w-7xl mx-auto px-6 py-12">
         {/* Header */}
         <div className="mb-12">
           <div className="flex items-center justify-between mb-12">
             <div>
-              <h1 className="text-4xl font-bold bg-gradient-to-r from-slate-800 to-slate-600 bg-clip-text text-transparent mb-3">
+              <h1 className="text-4xl font-bold text-foreground mb-3">
                 {viewMode === 'folders' && selectedFolder ? selectedFolder : 'Candidate Intelligence Hub'}
               </h1>
-              <p className="text-slate-600 text-lg font-medium">
+              <p className="text-muted-foreground text-lg font-medium">
                 {viewMode === 'folders' && selectedFolder ? `${filteredResumes.length} candidates in ${selectedFolder}` : 'Manage verified candidate intelligence and pipeline status with AI precision'}
               </p>
             </div>
@@ -346,7 +346,7 @@ const ModernDashboard = () => {
               <Button 
                 onClick={() => navigate('/data-dashboard')} 
                 variant="outline" 
-                className="gap-2 px-6 py-2 rounded-xl font-medium border-slate-200 hover:border-purple-300 hover:bg-purple-50 hover:text-purple-700 transition-all duration-200"
+                className="gap-2"
               >
                 <BarChart3 className="h-4 w-4" />
                 Data Dashboard
@@ -354,11 +354,7 @@ const ModernDashboard = () => {
               <Button 
                 onClick={() => setViewMode(viewMode === 'all' ? 'folders' : 'all')} 
                 variant={viewMode === 'folders' ? 'default' : 'outline'} 
-                className={`gap-2 px-6 py-2 rounded-xl font-medium transition-all duration-200 ${
-                  viewMode === 'folders' 
-                    ? 'bg-gradient-to-r from-cyan-500 to-teal-500 text-white shadow-lg shadow-cyan-500/25 hover:shadow-xl hover:shadow-cyan-500/30 hover:scale-105' 
-                    : 'border-slate-200 hover:border-cyan-300 hover:bg-cyan-50 hover:text-cyan-700'
-                }`}
+                className="gap-2"
               >
                 <Folder className="h-4 w-4" />
                 {viewMode === 'folders' ? 'Show All' : 'Folders'}
@@ -366,7 +362,7 @@ const ModernDashboard = () => {
               <Button 
                 onClick={fetchResumeData} 
                 variant="outline" 
-                className="gap-2 px-6 py-2 rounded-xl font-medium border-slate-200 hover:border-cyan-300 hover:bg-cyan-50 hover:text-cyan-700 transition-all duration-200"
+                className="gap-2"
               >
                 <RefreshCw className="h-4 w-4" />
                 Refresh
@@ -379,27 +375,25 @@ const ModernDashboard = () => {
               <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
                 {Object.entries(recruitmentFolders).map(([folderName, candidates]) => <Card 
                   key={folderName} 
-                  className="group backdrop-blur-sm bg-white/80 border border-slate-200/50 shadow-lg hover:shadow-xl hover:shadow-cyan-500/10 transition-all duration-300 hover:scale-[1.02] hover:border-cyan-200 rounded-2xl overflow-hidden"
+                  className="group hover:shadow-lg hover:border-primary/30 transition-all duration-200 cursor-pointer"
+                  onClick={() => navigate(`/folder/${encodeURIComponent(folderName)}`)}
                 >
                     <CardContent className="p-6">
-                      <div 
-                        className="flex items-center gap-4 cursor-pointer"
-                        onClick={() => navigate(`/folder/${encodeURIComponent(folderName)}`)}
-                      >
-                        <div className="p-3 bg-gradient-to-br from-cyan-50 to-teal-50 rounded-xl group-hover:from-cyan-100 group-hover:to-teal-100 transition-all duration-300">
-                          <Folder className="h-5 w-5 text-cyan-600" />
+                      <div className="flex items-center gap-4">
+                        <div className="p-3 bg-primary/10 rounded-xl group-hover:bg-primary/20 transition-colors">
+                          <Folder className="h-5 w-5 text-primary" />
                         </div>
                         <div className="flex-1">
-                          <h3 className="font-semibold text-slate-800 group-hover:text-cyan-700 transition-colors">{folderName}</h3>
-                          <p className="text-sm text-slate-500 mt-1">
+                          <h3 className="font-semibold text-foreground group-hover:text-primary transition-colors">{folderName}</h3>
+                          <p className="text-sm text-muted-foreground mt-1">
                             {candidates.length} candidate{candidates.length !== 1 ? 's' : ''}
                           </p>
                         </div>
-                        <ChevronRight className="h-5 w-5 text-slate-400 group-hover:text-cyan-500 group-hover:translate-x-1 transition-all duration-300" />
+                        <ChevronRight className="h-5 w-5 text-muted-foreground group-hover:text-primary group-hover:translate-x-1 transition-all" />
                       </div>
                       
                       {/* Email Sequence Button */}
-                      <div className="mt-4 pt-4 border-t border-slate-100">
+                      <div className="mt-4 pt-4 border-t border-border">
                         <Button
                           onClick={(e) => {
                             e.stopPropagation();
@@ -408,16 +402,16 @@ const ModernDashboard = () => {
                               description: `Pushing ${candidates.length} candidates from ${folderName} to email sequence...`,
                             });
                           }}
-                          className="w-full bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-600 hover:to-teal-600 text-white shadow-lg shadow-emerald-500/25 hover:shadow-xl hover:shadow-emerald-500/30 transition-all duration-300 rounded-xl font-medium py-2.5 group/btn"
+                          variant="accent"
+                          className="w-full"
                         >
-                          <div className="flex items-center justify-center gap-2">
-                            <Mail className="h-4 w-4 group-hover/btn:scale-110 transition-transform duration-200" />
-                            <span>Push to Email Sequence</span>
-                            <div className="flex items-center gap-1 ml-2 bg-white/20 rounded-full px-2 py-0.5 text-xs font-semibold">
-                              <Users className="h-3 w-3" />
-                              {candidates.length}
-                            </div>
-                          </div>
+                          <Mail className="h-4 w-4 mr-2" />
+                          Push to Email Sequence
+                          <Badge variant="secondary" className="ml-2">
+                            {candidates.length}
+                          </Badge>
+                        </Button>
+                      </div>
                         </Button>
                       </div>
                     </CardContent>

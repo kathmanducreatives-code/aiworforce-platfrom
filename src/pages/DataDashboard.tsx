@@ -274,10 +274,10 @@ const DataDashboard = () => {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-50 to-white flex items-center justify-center">
+      <div className="min-h-screen bg-gradient-to-br from-background via-muted/30 to-background flex items-center justify-center">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-cyan-500 mx-auto mb-4" />
-          <p className="text-slate-600">Loading analytics...</p>
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4" />
+          <p className="text-muted-foreground">Loading analytics...</p>
         </div>
       </div>
     );
@@ -298,7 +298,7 @@ const DataDashboard = () => {
             Back to Dashboard
           </Button>
           <div className="flex items-center gap-4 mb-3">
-            <div className="p-3 bg-gradient-to-br from-primary to-cyan-500 rounded-xl shadow-lg">
+            <div className="p-3 bg-primary rounded-xl shadow-md">
               <BarChart3 className="h-7 w-7 text-white" />
             </div>
             <div>
@@ -314,7 +314,7 @@ const DataDashboard = () => {
 
         {/* Overview KPIs */}
         <div className="grid gap-4 sm:gap-6 grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 mb-8 animate-fade-in">
-          <Card className="border-border/50 bg-card/50 backdrop-blur-sm shadow-sm hover:shadow-md transition-all duration-300 hover-scale group">
+          <Card className="border-border/50 bg-card shadow-sm hover:shadow-md transition-all duration-200">
             <CardHeader className="pb-3">
               <CardTitle className="text-xs font-medium text-muted-foreground flex items-center gap-2">
                 <div className="p-1.5 bg-primary/10 rounded-lg">
@@ -334,7 +334,7 @@ const DataDashboard = () => {
                   <span className="font-semibold text-foreground">{metrics.candidatesThisWeek}</span>
                 </div>
                 <div className="flex items-center gap-1">
-                  <div className="w-1.5 h-1.5 rounded-full bg-cyan-500" />
+                  <div className="w-1.5 h-1.5 rounded-full bg-accent" />
                   <span className="text-muted-foreground">Month:</span>
                   <span className="font-semibold text-foreground">{metrics.candidatesThisMonth}</span>
                 </div>
@@ -342,11 +342,11 @@ const DataDashboard = () => {
             </CardContent>
           </Card>
 
-          <Card className="border-border/50 bg-card/50 backdrop-blur-sm shadow-sm hover:shadow-md transition-all duration-300 hover-scale group">
+          <Card className="border-border/50 bg-card shadow-sm hover:shadow-md transition-all duration-200">
             <CardHeader className="pb-3">
               <CardTitle className="text-xs font-medium text-muted-foreground flex items-center gap-2">
-                <div className="p-1.5 bg-emerald-500/10 rounded-lg">
-                  <Target className="h-3.5 w-3.5 text-emerald-500" />
+                <div className="p-1.5 bg-success/10 rounded-lg">
+                  <Target className="h-3.5 w-3.5 text-success" />
                 </div>
                 Avg Fit Score
               </CardTitle>
@@ -356,20 +356,20 @@ const DataDashboard = () => {
                 <div className="text-2xl lg:text-3xl font-bold text-foreground">
                   {metrics.averageFitScore}%
                 </div>
-                <TrendingUp className="h-4 w-4 text-emerald-500" />
+                <TrendingUp className="h-4 w-4 text-success" />
               </div>
               <Progress value={metrics.averageFitScore} className="h-1.5" />
               <p className="text-xs text-muted-foreground">
-                <span className="font-semibold text-emerald-600">{metrics.highQualityCandidates}</span> high-quality
+                <span className="font-semibold text-success">{metrics.highQualityCandidates}</span> high-quality
               </p>
             </CardContent>
           </Card>
 
-          <Card className="border-border/50 bg-card/50 backdrop-blur-sm shadow-sm hover:shadow-md transition-all duration-300 hover-scale group">
+          <Card className="border-border/50 bg-card shadow-sm hover:shadow-md transition-all duration-200">
             <CardHeader className="pb-3">
               <CardTitle className="text-xs font-medium text-muted-foreground flex items-center gap-2">
-                <div className="p-1.5 bg-purple-500/10 rounded-lg">
-                  <Clock className="h-3.5 w-3.5 text-purple-500" />
+                <div className="p-1.5 bg-accent-secondary/10 rounded-lg">
+                  <Clock className="h-3.5 w-3.5 text-accent-secondary" />
                 </div>
                 Screening Efficiency
               </CardTitle>
@@ -379,20 +379,20 @@ const DataDashboard = () => {
                 {metrics.autoScreenedPercentage}%
               </div>
               <p className="text-xs text-muted-foreground">Auto-screened</p>
-              <div className="flex items-center gap-2 px-2 py-1 bg-purple-500/5 rounded">
-                <Clock className="h-3 w-3 text-purple-600" />
-                <span className="text-xs font-medium text-purple-600">
+              <div className="flex items-center gap-2 px-2 py-1 bg-accent-secondary/5 rounded">
+                <Clock className="h-3 w-3 text-accent-secondary" />
+                <span className="text-xs font-medium" style={{color: 'hsl(var(--accent-secondary))'}}>
                   {metrics.averageProcessingTime} min/candidate
                 </span>
               </div>
             </CardContent>
           </Card>
 
-          <Card className="border-border/50 bg-card/50 backdrop-blur-sm shadow-sm hover:shadow-md transition-all duration-300 hover-scale group">
+          <Card className="border-border/50 bg-card shadow-sm hover:shadow-md transition-all duration-200">
             <CardHeader className="pb-3">
               <CardTitle className="text-xs font-medium text-muted-foreground flex items-center gap-2">
-                <div className="p-1.5 bg-blue-500/10 rounded-lg">
-                  <Mail className="h-3.5 w-3.5 text-blue-500" />
+                <div className="p-1.5 bg-accent/10 rounded-lg">
+                  <Mail className="h-3.5 w-3.5 text-accent" />
                 </div>
                 Engagement
               </CardTitle>
@@ -402,12 +402,12 @@ const DataDashboard = () => {
                 <div className="text-2xl lg:text-3xl font-bold text-foreground">
                   {metrics.engagementRate}%
                 </div>
-                <TrendingUp className="h-4 w-4 text-blue-500" />
+                <TrendingUp className="h-4 w-4 text-accent" />
               </div>
               <p className="text-xs text-muted-foreground">Email engagement</p>
-              <div className="flex items-center gap-2 px-2 py-1 bg-blue-500/5 rounded">
-                <Users className="h-3 w-3 text-blue-600" />
-                <span className="text-xs font-medium text-blue-600">
+              <div className="flex items-center gap-2 px-2 py-1 bg-accent/5 rounded">
+                <Users className="h-3 w-3 text-accent" />
+                <span className="text-xs font-medium text-accent">
                   {metrics.candidatesInNurturing} nurturing
                 </span>
               </div>
@@ -417,7 +417,7 @@ const DataDashboard = () => {
 
         {/* Pipeline Health & Risk Factors */}
         <div className="grid gap-4 sm:gap-6 lg:grid-cols-2 mb-8">
-          <Card className="border-border/50 bg-card/50 backdrop-blur-sm shadow-sm">
+          <Card className="border-border/50 bg-card shadow-sm">
             <CardHeader className="pb-4">
               <CardTitle className="text-lg flex items-center gap-2">
                 <div className="p-2 bg-primary/10 rounded-lg">
@@ -431,10 +431,10 @@ const DataDashboard = () => {
               <div className="space-y-3">
                 {metrics.stageDistribution.map((stage, index) => {
                   const colors = [
-                    { bg: 'bg-cyan-50', border: 'border-cyan-200', text: 'text-cyan-700', progress: 'bg-cyan-500' },
-                    { bg: 'bg-blue-50', border: 'border-blue-200', text: 'text-blue-700', progress: 'bg-blue-500' },
-                    { bg: 'bg-purple-50', border: 'border-purple-200', text: 'text-purple-700', progress: 'bg-purple-500' },
-                    { bg: 'bg-emerald-50', border: 'border-emerald-200', text: 'text-emerald-700', progress: 'bg-emerald-500' },
+                    { bg: 'bg-primary/5', border: 'border-primary/20', text: 'text-primary', progress: 'bg-primary' },
+                    { bg: 'bg-accent/5', border: 'border-accent/20', text: 'text-accent', progress: 'bg-accent' },
+                    { bg: 'bg-accent-secondary/5', border: 'border-accent-secondary/20', text: 'text-accent-secondary', progress: 'bg-accent-secondary' },
+                    { bg: 'bg-success/5', border: 'border-success/20', text: 'text-success', progress: 'bg-success' },
                   ];
                   const color = colors[index % colors.length];
                   

@@ -88,7 +88,7 @@ export default {
 				'gradient-primary': 'var(--gradient-primary)',
 				'gradient-hero': 'var(--gradient-hero)',
 				'gradient-subtle': 'var(--gradient-subtle)',
-				'gradient-teal-cyan': 'var(--gradient-teal-cyan)',
+				'gradient-indigo-purple': 'var(--gradient-indigo-purple)',
 				'gradient-mesh': 'var(--gradient-mesh)',
 				'gradient-shimmer': 'var(--gradient-shimmer)'
 			},
@@ -165,8 +165,8 @@ export default {
 					'50%': { transform: 'translateY(-10px)' }
 				},
 				'pulse-glow': {
-					'0%, 100%': { boxShadow: '0 0 20px hsl(var(--primary) / 0.1)' },
-					'50%': { boxShadow: '0 0 40px hsl(var(--primary) / 0.3)' }
+					'0%, 100%': { boxShadow: '0 0 15px hsl(var(--primary) / 0.15)' },
+					'50%': { boxShadow: '0 0 25px hsl(var(--primary) / 0.25)' }
 				},
 				'shimmer': {
 					'0%': { transform: 'translateX(-100%)' },
@@ -209,7 +209,7 @@ export default {
 				'gradient': 'gradient 6s ease infinite',
 				'gradient-slow': 'gradient 8s ease infinite',
 				'float': 'float 6s ease-in-out infinite',
-				'pulse-glow': 'pulse-glow 2s ease-in-out infinite',
+				'pulse-glow': 'pulse-glow 3s ease-in-out infinite',
 				'shimmer': 'shimmer 2s ease-in-out infinite',
 				'bounce-soft': 'bounce-soft 2s ease-in-out infinite',
 				'wiggle': 'wiggle 1s ease-in-out infinite',
