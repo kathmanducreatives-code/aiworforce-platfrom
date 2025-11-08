@@ -329,7 +329,8 @@ const ModernDashboard = () => {
       </div>;
   }
 
-  return <div className="min-h-screen bg-gradient-to-br from-background via-muted/30 to-background">
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-background via-muted/30 to-background">
       <div className="max-w-7xl mx-auto px-6 py-12">
         {/* Header */}
         <div className="mb-12">
@@ -410,8 +411,6 @@ const ModernDashboard = () => {
                           <Badge variant="secondary" className="ml-2">
                             {candidates.length}
                           </Badge>
-                        </Button>
-                      </div>
                         </Button>
                       </div>
                     </CardContent>
@@ -1134,6 +1133,7 @@ const ModernDashboard = () => {
           </div>
         </DialogContent>
       </Dialog>
-    </div>;
+    </div>
+  );
 };
 export default ModernDashboard;
