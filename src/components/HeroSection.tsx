@@ -3,10 +3,15 @@ import InteractiveResumeMockup from "./InteractiveResumeMockup";
 
 const HeroSection = () => {
   return (
-    <section className="relative min-h-[90vh] bg-background overflow-hidden">
-      {/* Subtle background mesh */}
-      <div className="absolute top-0 left-0 w-[600px] h-[600px] bg-[radial-gradient(circle,_hsl(243_75%_59%_/_0.04)_0%,_transparent_70%)] blur-[80px] pointer-events-none" />
-      <div className="absolute bottom-0 right-0 w-[500px] h-[500px] bg-[radial-gradient(circle,_hsl(262_83%_58%_/_0.03)_0%,_transparent_70%)] blur-[80px] pointer-events-none" />
+    <section className="relative min-h-[90vh] bg-gradient-to-br from-background via-background to-muted/20 overflow-hidden">
+      {/* Futuristic background effects */}
+      <div className="absolute inset-0 bg-gradient-mesh opacity-60" />
+      <div className="absolute top-0 left-0 w-[800px] h-[800px] bg-[radial-gradient(circle,_hsl(170_100%_50%_/_0.15)_0%,_transparent_70%)] blur-[120px] pointer-events-none animate-pulse-glow" />
+      <div className="absolute bottom-0 right-0 w-[600px] h-[600px] bg-[radial-gradient(circle,_hsl(180_100%_45%_/_0.12)_0%,_transparent_70%)] blur-[100px] pointer-events-none" />
+      <div className="absolute inset-0" style={{
+        backgroundImage: 'radial-gradient(circle at 2px 2px, rgba(0,255,198,0.15) 1px, transparent 0)',
+        backgroundSize: '40px 40px'
+      }} />
       
       {/* Main content */}
       <div className="relative container mx-auto px-4 md:px-8 py-20 md:py-24">
@@ -14,32 +19,32 @@ const HeroSection = () => {
           {/* Left Column - Content */}
           <div className="text-center md:text-left space-y-8">
             {/* Badge */}
-            <div className="inline-flex items-center gap-2 px-4 py-2 bg-primary/5 border border-primary/20 rounded-full text-sm text-primary font-medium">
-              <div className="w-2 h-2 rounded-full bg-primary" />
+            <div className="inline-flex items-center gap-2 px-4 py-2 bg-primary/10 border border-primary/40 rounded-full text-sm text-primary font-bold shadow-glow animate-pulse-glow">
+              <div className="w-2 h-2 rounded-full bg-primary animate-pulse" />
               <span>Automated Passive Talent Discovery</span>
             </div>
             
             {/* Heading */}
-            <h1 className="text-5xl md:text-6xl lg:text-7xl font-bold text-foreground leading-[1.2]">
-              <span className="inline-block">
+            <h1 className="text-5xl md:text-6xl lg:text-7xl font-extrabold text-foreground leading-[1.2]">
+              <span className="inline-block drop-shadow-[0_0_10px_rgba(0,255,198,0.2)]">
                 The All-in-One
               </span>
               <br />
               <span className="relative inline-block">
-                <span className="bg-gradient-to-r from-primary via-accent-secondary to-primary bg-clip-text text-transparent">
+                <span className="bg-gradient-primary bg-clip-text text-transparent drop-shadow-[0_0_25px_rgba(0,255,198,0.6)]">
                   Recruitment
                 </span>
               </span>
               {" "}
-              <span className="inline-block">
+              <span className="inline-block drop-shadow-[0_0_10px_rgba(0,255,198,0.2)]">
                 Platform
               </span>
               <br />
-              <span className="inline-block">
+              <span className="inline-block drop-shadow-[0_0_10px_rgba(0,255,198,0.2)]">
                 Built on{" "}
               </span>
               <span className="relative inline-block">
-                <span className="bg-gradient-to-r from-primary via-accent to-accent-secondary bg-clip-text text-transparent font-extrabold">
+                <span className="bg-gradient-primary bg-clip-text text-transparent drop-shadow-[0_0_30px_rgba(0,255,198,0.7)] animate-pulse-glow">
                   Intelligence
                 </span>
               </span>
@@ -52,13 +57,15 @@ const HeroSection = () => {
             
             {/* CTA Button */}
             <div className="space-y-4">
-              <button className="group relative px-8 py-4 bg-accent
-                                text-white text-base font-semibold rounded-lg
-                                hover:bg-accent/90 hover:shadow-lg
-                                transition-all duration-200 w-full md:w-auto
-                                flex items-center justify-center gap-2">
-                Get Started Now
-                <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
+              <button className="group relative px-8 py-4 bg-gradient-primary
+                                text-primary-foreground text-base font-bold rounded-lg
+                                shadow-glow hover:shadow-primary-lg hover:scale-105
+                                transition-all duration-300 w-full md:w-auto
+                                flex items-center justify-center gap-2 overflow-hidden
+                                animate-pulse-glow">
+                <span className="relative z-10">Get Started Now</span>
+                <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform relative z-10" />
+                <div className="absolute inset-0 bg-gradient-shimmer animate-shimmer opacity-50" />
               </button>
               
               {/* Trust element */}
