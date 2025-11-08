@@ -267,13 +267,13 @@ const ResumeUpload = () => {
             </p>
           </div>
 
-          <Card className="p-8 animate-scale-in hover-lift transition-all duration-300">
+          <Card className="p-8 animate-scale-in transition-all duration-300 backdrop-blur-sm">
             {/* Upload Area */}
             <div
-              className={`border-2 border-dashed rounded-xl p-12 text-center transition-all duration-300 hover-glow ${
+              className={`border-2 border-dashed rounded-xl p-12 text-center transition-all duration-300 ${
                 isDragOver 
-                  ? 'border-primary bg-primary/5 animate-pulse-glow' 
-                  : 'border-border hover:border-primary/50 hover:bg-muted/50'
+                  ? 'border-primary bg-primary/10 shadow-glow' 
+                  : 'border-primary/20 hover:border-primary/50 hover:bg-card/50 hover:shadow-primary'
               }`}
               onDragOver={handleDragOver}
               onDragLeave={handleDragLeave}
@@ -333,12 +333,12 @@ const ResumeUpload = () => {
                     }
                     setIsTyping(false);
                   }}
-                  className={`min-h-[120px] resize-none border-2 border-primary/20 transition-all duration-300
+                  className={`min-h-[120px] resize-none border-2 transition-all duration-300 bg-card/50 backdrop-blur-sm
                     ${isTyping 
-                      ? 'glow-typing border-primary/50' 
-                      : 'glow-default border-primary/30'
+                      ? 'border-primary shadow-glow' 
+                      : 'border-primary/20'
                     } 
-                    hover:border-primary/40`}
+                    hover:border-primary/50 focus:border-primary`}
                   required
                 />
               </div>
@@ -350,9 +350,9 @@ const ResumeUpload = () => {
                 <h4 className="font-semibold text-foreground">Uploaded Files ({files.length})</h4>
                 <div className="space-y-3">
                   {files.map((file, index) => (
-                    <div key={file.id} className="flex items-center space-x-4 p-4 bg-muted/30 rounded-lg hover-scale-sm transition-all duration-300 animate-fade-in-left" style={{animationDelay: `${index * 0.1}s`}}>
+                    <div key={file.id} className="flex items-center space-x-4 p-4 bg-card/30 backdrop-blur-sm border border-primary/10 rounded-lg hover:border-primary/30 hover:shadow-primary transition-all duration-300 animate-fade-in-left" style={{animationDelay: `${index * 0.1}s`}}>
                       <div className="flex-shrink-0">
-                        <FileText className="w-8 h-8 text-primary animate-pulse" />
+                        <FileText className="w-8 h-8 text-primary" />
                       </div>
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center justify-between mb-1">
@@ -392,14 +392,14 @@ const ResumeUpload = () => {
                 </div>
                 
                 {files.some(f => f.status === 'ready') && (
-                <div className="pt-4 border-t border-border animate-fade-in-up animate-delay-300">
+                <div className="pt-4 border-t border-primary/20 animate-fade-in-up animate-delay-300">
                     <Button 
                   onClick={handleAnalyzeClick} 
-                  className="w-full bg-gradient-primary hover:shadow-primary transition-all duration-300 hover-scale active-scale relative overflow-hidden group"
+                  className="w-full"
                   disabled={!recruiterRequirements.trim()}
+                  variant="default"
                     >
-                      <span className="absolute inset-0 bg-gradient-to-r from-cyan-400 to-teal-400 opacity-0 group-hover:opacity-100 transition-opacity duration-300"></span>
-                      <span className="relative z-10">Analyze Resumes ({files.filter(f => f.status === 'ready').length})</span>
+                      <span>Analyze Resumes ({files.filter(f => f.status === 'ready').length})</span>
                     </Button>
                   </div>
                 )}
@@ -425,7 +425,7 @@ const ResumeUpload = () => {
                     placeholder="e.g., Doctor, Mechanical Engineer, Software Developer"
                     value={recruitmentName}
                     onChange={(e) => setRecruitmentName(e.target.value)}
-                    className="border-2 border-primary/20 transition-all duration-300 hover:border-primary/40 focus:border-primary/60"
+                    className="border-2 border-primary/20 transition-all duration-300 hover:border-primary/50 focus:border-primary bg-card/50 backdrop-blur-sm"
                     onKeyDown={(e) => {
                       if (e.key === 'Enter') {
                         handleRecruitmentNameSubmit();

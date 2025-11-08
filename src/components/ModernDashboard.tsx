@@ -11,16 +11,24 @@ import { supabase } from "@/integrations/supabase/client";
 import type { ResumeAnalysis } from "@/types/ResumeAnalysis";
 import { CandidateAnalysisDialog } from "@/components/CandidateAnalysisDialog";
 
-// Function to generate consistent colors for recruitment names
+// Function to generate consistent colors for recruitment names with teal theme
 const getRecruitmentTagColor = (recruitmentName: string): string => {
-  if (!recruitmentName) return "bg-gray-100 text-gray-800 hover:bg-gray-200";
+  if (!recruitmentName) return "bg-muted/30 text-muted-foreground border border-border/50";
 
+  // All tags use teal theme with varying opacity for consistency
+  const colors = [
+    "bg-primary/10 text-primary border border-primary/30 hover:bg-primary/20",
+    "bg-primary/15 text-primary border border-primary/40 hover:bg-primary/25",
+    "bg-accent/10 text-accent border border-accent/30 hover:bg-accent/20",
+    "bg-primary/20 text-primary border border-primary/50 hover:bg-primary/30",
+  ];
+  
   // Simple hash function to generate consistent color based on string
   let hash = 0;
   for (let i = 0; i < recruitmentName.length; i++) {
     hash = recruitmentName.charCodeAt(i) + ((hash << 5) - hash);
   }
-  const colors = ["bg-blue-100 text-blue-800 hover:bg-blue-200", "bg-green-100 text-green-800 hover:bg-green-200", "bg-purple-100 text-purple-800 hover:bg-purple-200", "bg-orange-100 text-orange-800 hover:bg-orange-200", "bg-pink-100 text-pink-800 hover:bg-pink-200", "bg-indigo-100 text-indigo-800 hover:bg-indigo-200", "bg-yellow-100 text-yellow-800 hover:bg-yellow-200", "bg-teal-100 text-teal-800 hover:bg-teal-200", "bg-red-100 text-red-800 hover:bg-red-200", "bg-cyan-100 text-cyan-800 hover:bg-cyan-200"];
+  
   return colors[Math.abs(hash) % colors.length];
 };
 import { Search, FileText, TrendingUp, Users, CheckCircle, AlertTriangle, RefreshCw, Filter, MoreVertical, Eye, Download, Trash2, X, Mail, Calendar, ArrowUpRight, Folder, ChevronRight, ShieldAlert, ShieldCheck, Target, Trophy, Brain, BarChart3 } from "lucide-react";
@@ -313,7 +321,7 @@ const ModernDashboard = () => {
     });
   }, [viewMode, selectedFolder, recruitmentFolders, resumeData, searchTerm, filters]);
   if (loading) {
-    return <div className="min-h-screen bg-gradient-to-br from-background via-muted/30 to-background">
+    return <div className="min-h-screen bg-background">
         <div className="flex items-center justify-center py-20">
           <div className="text-center animate-fade-in-up">
             <div className="relative">
@@ -330,7 +338,7 @@ const ModernDashboard = () => {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-background via-muted/30 to-background">
+    <div className="min-h-screen bg-background">
       <div className="max-w-7xl mx-auto px-6 py-12">
         {/* Header */}
         <div className="mb-12">
@@ -376,12 +384,12 @@ const ModernDashboard = () => {
               <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
                 {Object.entries(recruitmentFolders).map(([folderName, candidates]) => <Card 
                   key={folderName} 
-                  className="group hover:shadow-lg hover:border-primary/30 transition-all duration-200 cursor-pointer"
+                  className="group hover:shadow-primary hover:border-primary/50 transition-all duration-300 cursor-pointer backdrop-blur-sm"
                   onClick={() => navigate(`/folder/${encodeURIComponent(folderName)}`)}
                 >
                     <CardContent className="p-6">
                       <div className="flex items-center gap-4">
-                        <div className="p-3 bg-primary/10 rounded-xl group-hover:bg-primary/20 transition-colors">
+                        <div className="p-3 bg-primary/10 rounded-xl group-hover:bg-primary/20 transition-all duration-300 group-hover:shadow-glow">
                           <Folder className="h-5 w-5 text-primary" />
                         </div>
                         <div className="flex-1">
@@ -398,12 +406,9 @@ const ModernDashboard = () => {
                         <Button
                           onClick={(e) => {
                             e.stopPropagation();
-                            toast({
-                              title: "Email Sequence",
-                              description: `Pushing ${candidates.length} candidates from ${folderName} to email sequence...`,
-                            });
+                            navigate(`/email-sequence/${encodeURIComponent(folderName)}`);
                           }}
-                          variant="accent"
+                          variant="default"
                           className="w-full"
                         >
                           <Mail className="h-4 w-4 mr-2" />
@@ -501,67 +506,67 @@ const ModernDashboard = () => {
 
             {/* Summary Cards */}
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-              <Card className="backdrop-blur-sm bg-white/80 border border-slate-200/50 shadow-lg hover:shadow-xl transition-all duration-300 rounded-2xl overflow-hidden">
+              <Card className="backdrop-blur-sm transition-all duration-300">
                 <CardContent className="p-6">
                   <div className="flex items-center gap-4">
-                    <div className="p-3 bg-gradient-to-br from-blue-50 to-cyan-50 rounded-xl">
-                      <Users className="h-6 w-6 text-blue-600" />
+                    <div className="p-3 bg-primary/10 rounded-xl">
+                      <Users className="h-6 w-6 text-primary" />
                     </div>
                     <div>
-                      <p className="text-2xl font-bold text-slate-800">{filteredResumes.length}</p>
-                      <p className="text-sm text-slate-500 font-medium">Total Candidates</p>
+                      <p className="text-2xl font-bold text-foreground">{filteredResumes.length}</p>
+                      <p className="text-sm text-muted-foreground font-medium">Total Candidates</p>
                     </div>
                   </div>
                 </CardContent>
               </Card>
-              <Card className="backdrop-blur-sm bg-white/80 border border-slate-200/50 shadow-lg hover:shadow-xl transition-all duration-300 rounded-2xl overflow-hidden">
+              <Card className="backdrop-blur-sm transition-all duration-300">
                 <CardContent className="p-6">
                   <div className="flex items-center gap-4">
-                    <div className="p-3 bg-gradient-to-br from-emerald-50 to-green-50 rounded-xl">
-                      <Trophy className="h-6 w-6 text-emerald-600" />
+                    <div className="p-3 bg-success/10 rounded-xl">
+                      <Trophy className="h-6 w-6 text-success" />
                     </div>
                     <div>
-                      <p className="text-2xl font-bold text-slate-800">
+                      <p className="text-2xl font-bold text-foreground">
                         {filteredResumes.filter(r => (r.overallScore || 0) >= 8).length}
                       </p>
-                      <p className="text-sm text-slate-500 font-medium">High Performers</p>
+                      <p className="text-sm text-muted-foreground font-medium">High Performers</p>
                     </div>
                   </div>
                 </CardContent>
               </Card>
-              <Card className="backdrop-blur-sm bg-white/80 border border-slate-200/50 shadow-lg hover:shadow-xl transition-all duration-300 rounded-2xl overflow-hidden">
+              <Card className="backdrop-blur-sm transition-all duration-300">
                 <CardContent className="p-6">
                   <div className="flex items-center gap-4">
-                    <div className="p-3 bg-gradient-to-br from-purple-50 to-pink-50 rounded-xl">
-                      <Calendar className="h-6 w-6 text-purple-600" />
+                    <div className="p-3 bg-accent/10 rounded-xl">
+                      <Calendar className="h-6 w-6 text-accent" />
                     </div>
                     <div>
-                      <p className="text-2xl font-bold text-slate-800">
+                      <p className="text-2xl font-bold text-foreground">
                         {filteredResumes.filter(r => {
                           const today = new Date().toDateString();
                           const resumeDate = r.date ? new Date(r.date).toDateString() : '';
                           return resumeDate === today;
                         }).length}
                       </p>
-                      <p className="text-sm text-slate-500 font-medium">Reviewed Today</p>
+                      <p className="text-sm text-muted-foreground font-medium">Reviewed Today</p>
                     </div>
                   </div>
                 </CardContent>
               </Card>
-              <Card className="backdrop-blur-sm bg-white/80 border border-slate-200/50 shadow-lg hover:shadow-xl transition-all duration-300 rounded-2xl overflow-hidden">
+              <Card className="backdrop-blur-sm transition-all duration-300">
                 <CardContent className="p-6">
                   <div className="flex items-center gap-4">
-                    <div className="p-3 bg-gradient-to-br from-amber-50 to-yellow-50 rounded-xl">
-                      <TrendingUp className="h-6 w-6 text-amber-600" />
+                    <div className="p-3 bg-primary/10 rounded-xl">
+                      <TrendingUp className="h-6 w-6 text-primary" />
                     </div>
                     <div>
-                      <p className="text-2xl font-bold text-slate-800">
+                      <p className="text-2xl font-bold text-foreground">
                         {filteredResumes.length > 0 
                           ? (filteredResumes.reduce((acc, r) => acc + (r.overallScore || 0), 0) / filteredResumes.length).toFixed(1)
                           : '0'
                         }
                       </p>
-                      <p className="text-sm text-slate-500 font-medium">Average Score</p>
+                      <p className="text-sm text-muted-foreground font-medium">Average Score</p>
                     </div>
                   </div>
                 </CardContent>
@@ -571,18 +576,18 @@ const ModernDashboard = () => {
             {/* Bulk Actions Bar - Appears when candidates are selected */}
             {selectedCandidates.size > 0 && (
               <div className="mb-4 animate-fade-in">
-                <Card className="backdrop-blur-sm bg-gradient-to-r from-cyan-50/80 to-teal-50/80 border-cyan-200/50 shadow-lg rounded-2xl overflow-hidden">
+                <Card className="backdrop-blur-sm bg-primary/5 border-primary/30">
                   <CardContent className="p-4">
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-3">
-                        <div className="flex items-center justify-center h-10 w-10 rounded-full bg-cyan-500 text-white font-bold shadow-lg">
+                        <div className="flex items-center justify-center h-10 w-10 rounded-full bg-primary text-primary-foreground font-bold shadow-glow">
                           {selectedCandidates.size}
                         </div>
                         <div>
-                          <p className="font-semibold text-slate-800">
+                          <p className="font-semibold text-foreground">
                             {selectedCandidates.size} {selectedCandidates.size === 1 ? 'candidate' : 'candidates'} selected
                           </p>
-                          <p className="text-sm text-slate-600">
+                          <p className="text-sm text-muted-foreground">
                             Choose an action to apply to selected candidates
                           </p>
                         </div>
@@ -591,21 +596,23 @@ const ModernDashboard = () => {
                         <Button
                           onClick={() => setSelectedCandidates(new Set())}
                           variant="outline"
-                          className="gap-2 px-4 py-2 rounded-xl font-medium border-slate-300 hover:border-slate-400 hover:bg-white transition-all duration-200"
+                          className="gap-2"
                         >
                           <X className="h-4 w-4" />
                           Clear Selection
                         </Button>
                         <Button 
                           onClick={handleAddToEmailSequence}
-                          className="gap-2 px-6 py-2 rounded-xl font-medium bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-600 hover:to-teal-600 text-white shadow-lg shadow-emerald-500/25 hover:shadow-xl hover:shadow-emerald-500/30 transition-all duration-200"
+                          variant="default"
+                          className="gap-2"
                         >
                           <Mail className="h-4 w-4" />
                           Add to Email Sequence
                         </Button>
                         <Button 
                           onClick={handleBulkDelete}
-                          className="gap-2 px-6 py-2 rounded-xl font-medium bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 text-white shadow-lg shadow-red-500/25 hover:shadow-xl hover:shadow-red-500/30 transition-all duration-200"
+                          variant="destructive"
+                          className="gap-2"
                         >
                           <Trash2 className="h-4 w-4" />
                           Delete Selected
@@ -621,12 +628,12 @@ const ModernDashboard = () => {
             {filteredResumes.length > 0 ? (
               <>
                 {/* Desktop Table - Hidden on Mobile */}
-                <Card className="hidden lg:block backdrop-blur-sm bg-white/80 border border-slate-200/50 shadow-lg rounded-2xl overflow-hidden">
+                <Card className="hidden lg:block backdrop-blur-sm">
                   <CardContent className="p-0">
                     <Table>
-                      <TableHeader className="bg-gradient-to-r from-slate-50 to-white border-b border-slate-100">
+                      <TableHeader className="bg-muted/30 border-b border-border">
                         <TableRow className="hover:bg-transparent">
-                          <TableHead className="py-4 px-6 font-semibold text-slate-700">
+                          <TableHead className="py-4 px-6 font-semibold text-foreground">
                             <Checkbox
                               checked={selectedCandidates.size === filteredResumes.length && filteredResumes.length > 0}
                               onCheckedChange={(checked) => {
@@ -636,34 +643,34 @@ const ModernDashboard = () => {
                                   setSelectedCandidates(new Set());
                                 }
                               }}
-                              className="border-slate-300 data-[state=checked]:bg-cyan-500 data-[state=checked]:border-cyan-500"
+                              className="border-primary/50 data-[state=checked]:bg-primary data-[state=checked]:border-primary"
                             />
                           </TableHead>
-                          <TableHead className="py-4 px-6 font-semibold text-slate-700">Candidate</TableHead>
-                          <TableHead className="py-4 px-6 font-semibold text-slate-700 text-center">Score</TableHead>
-                          <TableHead className="py-4 px-6 font-semibold text-slate-700 text-center">Risk & Reward</TableHead>
-                          <TableHead className="py-4 px-6 font-semibold text-slate-700 text-center">Date</TableHead>
-                          <TableHead className="py-4 px-6 font-semibold text-slate-700 text-center">Actions</TableHead>
+                          <TableHead className="py-4 px-6 font-semibold text-foreground">Candidate</TableHead>
+                          <TableHead className="py-4 px-6 font-semibold text-foreground text-center">Score</TableHead>
+                          <TableHead className="py-4 px-6 font-semibold text-foreground text-center">Risk & Reward</TableHead>
+                          <TableHead className="py-4 px-6 font-semibold text-foreground text-center">Date</TableHead>
+                          <TableHead className="py-4 px-6 font-semibold text-foreground text-center">Actions</TableHead>
                         </TableRow>
                       </TableHeader>
                       <TableBody>
                         {filteredResumes.map((resume, index) => {
                           const riskBadge = resume.riskScore?.toLowerCase() === 'high' 
-                            ? { color: 'bg-red-100 text-red-700', icon: AlertTriangle }
+                            ? { color: 'bg-error/10 text-error border-error/30', icon: AlertTriangle }
                             : resume.riskScore?.toLowerCase() === 'medium'
-                            ? { color: 'bg-amber-100 text-amber-700', icon: ShieldAlert }
-                            : { color: 'bg-green-100 text-green-700', icon: ShieldCheck };
+                            ? { color: 'bg-warning/10 text-warning border-warning/30', icon: ShieldAlert }
+                            : { color: 'bg-success/10 text-success border-success/30', icon: ShieldCheck };
                           
                           const rewardBadge = resume.rewardScore?.toLowerCase() === 'high'
-                            ? { color: 'bg-emerald-100 text-emerald-700', icon: Trophy }
+                            ? { color: 'bg-success/10 text-success border-success/30', icon: Trophy }
                             : resume.rewardScore?.toLowerCase() === 'medium'
-                            ? { color: 'bg-blue-100 text-blue-700', icon: Target }
-                            : { color: 'bg-slate-100 text-slate-700', icon: Target };
+                            ? { color: 'bg-primary/10 text-primary border-primary/30', icon: Target }
+                            : { color: 'bg-muted/30 text-muted-foreground border-border', icon: Target };
 
                           return (
                             <TableRow 
                               key={resume.id}
-                              className="border-b border-slate-100 hover:bg-slate-50/50 transition-colors duration-200 group cursor-pointer"
+                              className="border-b border-border hover:bg-muted/20 transition-colors duration-200 group cursor-pointer"
                               onClick={() => {
                                 setSelectedCandidate(resume);
                                 setIsDetailsPanelOpen(true);
@@ -682,16 +689,16 @@ const ModernDashboard = () => {
                                     setSelectedCandidates(newSelected);
                                   }}
                                   onClick={(e) => e.stopPropagation()}
-                                  className="border-slate-300 data-[state=checked]:bg-cyan-500 data-[state=checked]:border-cyan-500"
+                                  className="border-primary/50 data-[state=checked]:bg-primary data-[state=checked]:border-primary"
                                 />
                               </TableCell>
                               <TableCell className="py-6 px-6">
                                 <div className="flex items-center gap-4">
                                   <div className="min-w-0 flex-1">
-                                    <div className="font-semibold text-slate-800 text-base leading-tight mb-1.5">
+                                    <div className="font-semibold text-foreground text-base leading-tight mb-1.5">
                                       {resume.candidateName || 'Unknown Candidate'}
                                     </div>
-                                    <div className="text-sm text-slate-600 leading-tight truncate mb-1.5">
+                                    <div className="text-sm text-muted-foreground leading-tight truncate mb-1.5">
                                       {resume.email}
                                     </div>
                                     {resume.recruitmentName && (
@@ -714,34 +721,30 @@ const ModernDashboard = () => {
                                     <div className="relative">
                                       <Progress 
                                         value={(resume.overallScore || 0) * 10} 
-                                        className="h-3 bg-slate-100 rounded-full overflow-hidden"
-                                      />
-                                      <div 
-                                        className="absolute top-0 left-0 h-3 rounded-full bg-gradient-to-r from-cyan-500 to-teal-500 transition-all duration-300 ease-out"
-                                        style={{ width: `${Math.min(100, (resume.overallScore || 0) * 10)}%` }}
+                                        className="h-3 bg-muted rounded-full overflow-hidden"
                                       />
                                     </div>
                                   </div>
-                                  <span className="text-sm font-bold text-slate-800 min-w-[3rem] bg-slate-100 px-2 py-1 rounded-lg">
+                                  <span className="text-sm font-bold text-foreground min-w-[3rem] bg-muted px-2 py-1 rounded-lg">
                                     {resume.overallScore || 0}/10
                                   </span>
                                 </div>
                               </TableCell>
                               <TableCell className="py-6 px-6 text-center">
                                 <div className="flex flex-col items-center gap-2">
-                                  <Badge className={`badge-shine text-xs px-3 py-1.5 font-semibold rounded-full border-0 flex items-center justify-center gap-2 min-w-[9rem] transition-all duration-300 hover:scale-110 hover:-translate-y-0.5 cursor-default ${riskBadge.color}`}>
+                                  <Badge className={`text-xs px-3 py-1.5 font-semibold rounded-full border flex items-center justify-center gap-2 min-w-[9rem] transition-all duration-300 hover:scale-105 cursor-default ${riskBadge.color}`}>
                                     <riskBadge.icon className="h-3.5 w-3.5" />
                                     Risk: {resume.riskScore || 'Unknown'}
                                   </Badge>
-                                  <Badge className={`badge-shine text-xs px-3 py-1.5 font-semibold rounded-full border-0 flex items-center justify-center gap-2 min-w-[9rem] transition-all duration-300 hover:scale-110 hover:-translate-y-0.5 cursor-default ${rewardBadge.color}`}>
+                                  <Badge className={`text-xs px-3 py-1.5 font-semibold rounded-full border flex items-center justify-center gap-2 min-w-[9rem] transition-all duration-300 hover:scale-105 cursor-default ${rewardBadge.color}`}>
                                     <rewardBadge.icon className="h-3.5 w-3.5" />
                                     Reward: {resume.rewardScore || 'Unknown'}
                                   </Badge>
                                 </div>
                               </TableCell>
                               <TableCell className="py-6 px-6 text-center">
-                                <div className="flex items-center justify-center text-sm text-slate-600 bg-slate-50 rounded-xl px-3 py-2 font-medium">
-                                  <Calendar className="h-4 w-4 mr-2 text-slate-500" />
+                                <div className="flex items-center justify-center text-sm text-muted-foreground bg-muted/30 rounded-xl px-3 py-2 font-medium">
+                                  <Calendar className="h-4 w-4 mr-2" />
                                   <span>{resume.date ? new Date(resume.date).toLocaleDateString() : 'Unknown'}</span>
                                 </div>
                               </TableCell>
@@ -749,7 +752,8 @@ const ModernDashboard = () => {
                                 <div className="flex items-center justify-center gap-3">
                                   <Button 
                                     size="sm" 
-                                    className="h-9 w-9 p-0 rounded-xl bg-gradient-to-r from-cyan-500 to-teal-500 hover:from-cyan-600 hover:to-teal-600 text-white shadow-lg hover:shadow-xl hover:scale-105 transition-all duration-200" 
+                                    variant="default"
+                                    className="h-9 w-9 p-0" 
                                     title="View Full Details"
                                     onClick={(e) => {
                                       e.stopPropagation();
@@ -764,22 +768,22 @@ const ModernDashboard = () => {
                                       <Button 
                                         size="sm" 
                                         variant="outline" 
-                                        className="h-9 w-9 p-0 rounded-xl border-slate-200 hover:border-cyan-300 hover:bg-cyan-50 hover:text-cyan-600 transition-all duration-200" 
+                                        className="h-9 w-9 p-0" 
                                         title="More Actions"
                                         onClick={(e) => e.stopPropagation()}
                                       >
                                         <MoreVertical className="h-4 w-4" />
                                       </Button>
                                     </DropdownMenuTrigger>
-                                    <DropdownMenuContent align="end" className="rounded-2xl border-slate-200 bg-white/95 backdrop-blur-sm shadow-2xl">
+                                    <DropdownMenuContent align="end" className="backdrop-blur-sm">
                                       <DropdownMenuItem 
                                         onClick={(e) => {
                                           e.stopPropagation();
                                           window.open(resume.resume, '_blank');
                                         }}
-                                        className="rounded-xl hover:bg-slate-50 cursor-pointer"
+                                        className="cursor-pointer"
                                       >
-                                        <Download className="h-4 w-4 mr-3 text-slate-500" />
+                                        <Download className="h-4 w-4 mr-3" />
                                         Download Resume
                                       </DropdownMenuItem>
                                       <DropdownMenuItem 
@@ -787,7 +791,7 @@ const ModernDashboard = () => {
                                           e.stopPropagation();
                                           handleDeleteCandidate(resume.id);
                                         }}
-                                        className="text-red-600 hover:bg-red-50 hover:text-red-700 rounded-xl cursor-pointer"
+                                        className="text-error cursor-pointer"
                                       >
                                         <Trash2 className="h-4 w-4 mr-3" />
                                         Delete
@@ -809,7 +813,7 @@ const ModernDashboard = () => {
                   {filteredResumes.map((resume, index) => (
                     <Card 
                       key={resume.id}
-                      className="backdrop-blur-sm bg-white/80 border border-slate-200/50 shadow-lg hover:shadow-xl hover:shadow-cyan-500/10 transition-all duration-300 rounded-xl cursor-pointer"
+                      className="backdrop-blur-sm hover:shadow-primary transition-all duration-300 cursor-pointer"
                       onClick={(e) => {
                         e.stopPropagation();
                         setSelectedCandidate(resume);
@@ -820,10 +824,10 @@ const ModernDashboard = () => {
                         {/* Header Section - Name, Score, Recruitment Tag */}
                         <div className="flex items-start justify-between mb-3">
                           <div className="flex-1 min-w-0">
-                            <h3 className="font-semibold text-slate-800 text-base mb-1 truncate">
+                            <h3 className="font-semibold text-foreground text-base mb-1 truncate">
                               {resume.candidateName || 'Unknown Candidate'}
                             </h3>
-                            <p className="text-sm text-slate-600 truncate mb-2">
+                            <p className="text-sm text-muted-foreground truncate mb-2">
                               {resume.email}
                             </p>
                             {resume.recruitmentName && (
@@ -841,15 +845,15 @@ const ModernDashboard = () => {
                           <div className="flex flex-col items-end gap-1 flex-shrink-0 ml-2">
                             <Badge 
                               className={`${
-                                (resume.overallScore ?? 0) >= 8 ? 'bg-green-100 text-green-800' :
-                                (resume.overallScore ?? 0) >= 6 ? 'bg-blue-100 text-blue-800' :
-                                (resume.overallScore ?? 0) >= 4 ? 'bg-yellow-100 text-yellow-800' :
-                                'bg-red-100 text-red-800'
-                              } text-sm font-bold px-2 py-1`}
+                                (resume.overallScore ?? 0) >= 8 ? 'bg-success/10 text-success border-success/30' :
+                                (resume.overallScore ?? 0) >= 6 ? 'bg-primary/10 text-primary border-primary/30' :
+                                (resume.overallScore ?? 0) >= 4 ? 'bg-warning/10 text-warning border-warning/30' :
+                                'bg-error/10 text-error border-error/30'
+                              } text-sm font-bold px-2 py-1 border`}
                             >
                               {resume.overallScore ?? 0}/10
                             </Badge>
-                            <span className="text-xs text-slate-500">
+                            <span className="text-xs text-muted-foreground">
                               Fit: {resume.fitScore}/10
                             </span>
                           </div>
@@ -860,10 +864,10 @@ const ModernDashboard = () => {
                           <Badge 
                             variant="outline" 
                             className={`text-xs px-2 py-1 ${
-                              (resume.riskScore?.toLowerCase() || '') === 'high' ? 'border-red-200 text-red-700 bg-red-50' :
-                              (resume.riskScore?.toLowerCase() || '') === 'medium' ? 'border-amber-200 text-amber-700 bg-amber-50' :
-                              (resume.riskScore?.toLowerCase() || '') === 'low' ? 'border-green-200 text-green-700 bg-green-50' :
-                              'border-gray-200 text-gray-700 bg-gray-50'
+                              (resume.riskScore?.toLowerCase() || '') === 'high' ? 'border-error/30 text-error bg-error/10' :
+                              (resume.riskScore?.toLowerCase() || '') === 'medium' ? 'border-warning/30 text-warning bg-warning/10' :
+                              (resume.riskScore?.toLowerCase() || '') === 'low' ? 'border-success/30 text-success bg-success/10' :
+                              'border-border text-muted-foreground bg-muted/30'
                             }`}
                           >
                             Risk: {resume.riskScore || 'Unknown'}
@@ -871,10 +875,10 @@ const ModernDashboard = () => {
                           <Badge 
                             variant="outline" 
                             className={`text-xs px-2 py-1 ${
-                              (resume.rewardScore?.toLowerCase() || '') === 'high' ? 'border-emerald-200 text-emerald-700 bg-emerald-50' :
-                              (resume.rewardScore?.toLowerCase() || '') === 'medium' ? 'border-blue-200 text-blue-700 bg-blue-50' :
-                              (resume.rewardScore?.toLowerCase() || '') === 'low' ? 'border-slate-200 text-slate-700 bg-slate-50' :
-                              'border-gray-200 text-gray-700 bg-gray-50'
+                              (resume.rewardScore?.toLowerCase() || '') === 'high' ? 'border-success/30 text-success bg-success/10' :
+                              (resume.rewardScore?.toLowerCase() || '') === 'medium' ? 'border-primary/30 text-primary bg-primary/10' :
+                              (resume.rewardScore?.toLowerCase() || '') === 'low' ? 'border-border text-muted-foreground bg-muted/30' :
+                              'border-border text-muted-foreground bg-muted/30'
                             }`}
                           >
                             Reward: {resume.rewardScore || 'Unknown'}
@@ -882,8 +886,8 @@ const ModernDashboard = () => {
                         </div>
 
                         {/* Bottom Section - Date and Actions */}
-                        <div className="flex items-center justify-between pt-3 border-t border-slate-100">
-                          <span className="text-sm text-slate-500 flex items-center gap-1">
+                        <div className="flex items-center justify-between pt-3 border-t border-border">
+                          <span className="text-sm text-muted-foreground flex items-center gap-1">
                             <Calendar className="h-3 w-3" />
                             {resume.date ? new Date(resume.date).toLocaleDateString('en-US', { 
                               month: 'short', 
@@ -894,7 +898,7 @@ const ModernDashboard = () => {
                             <Button 
                               size="sm" 
                               variant="ghost" 
-                              className="h-8 w-8 p-0 hover:bg-blue-100 hover:text-blue-600"
+                              className="h-8 w-8 p-0"
                               title="Full Details"
                               onClick={(e) => {
                                 e.stopPropagation();
@@ -925,7 +929,7 @@ const ModernDashboard = () => {
                                     e.stopPropagation();
                                     handleDeleteCandidate(resume.id!);
                                   }}
-                                  className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                                  className="text-error"
                                 >
                                   <Trash2 className="h-4 w-4 mr-2" />
                                   Delete
@@ -967,10 +971,10 @@ const ModernDashboard = () => {
       <Sheet open={isDetailsPanelOpen} onOpenChange={setIsDetailsPanelOpen}>
         <SheetContent side="right" className="w-full sm:w-[45vw] sm:max-w-[90vw] sm:min-w-[400px] p-0">
           <div className="h-full flex flex-col">
-            <SheetHeader className="p-4 sm:p-6 border-b bg-gradient-to-r from-slate-50 to-white">
+            <SheetHeader className="p-4 sm:p-6 border-b border-border bg-muted/30">
               <div className="flex items-center justify-between">
                 <div>
-                  <SheetTitle className="text-lg sm:text-2xl font-bold bg-gradient-to-r from-slate-800 to-slate-600 bg-clip-text text-transparent">
+                  <SheetTitle className="text-lg sm:text-2xl font-bold text-foreground">
                     Quick Preview
                   </SheetTitle>
                   <SheetDescription className="text-sm sm:text-lg text-muted-foreground mt-1">
@@ -992,10 +996,10 @@ const ModernDashboard = () => {
               {selectedCandidate && (
                 <div className="space-y-4 sm:space-y-6">
                   {/* Basic Info */}
-                  <div className="border rounded-xl p-4 bg-gradient-to-br from-white to-slate-50/50 shadow-md">
+                  <div className="border border-primary/20 rounded-xl p-4 bg-card/50 backdrop-blur-sm">
                     <div className="flex items-center gap-3 mb-4">
-                      <div className="p-2 bg-gradient-to-br from-cyan-50 to-teal-50 rounded-lg">
-                        <Mail className="h-5 w-5 text-cyan-600" />
+                      <div className="p-2 bg-primary/10 rounded-lg">
+                        <Mail className="h-5 w-5 text-primary" />
                       </div>
                       <div>
                         <h4 className="text-lg font-bold text-foreground">{selectedCandidate.candidateName}</h4>
@@ -1007,20 +1011,20 @@ const ModernDashboard = () => {
                   {/* Scores */}
                   <div className="space-y-3">
                     <h4 className="text-base font-bold text-foreground flex items-center gap-2">
-                      <Target className="h-4 w-4 text-cyan-600" />
+                      <Target className="h-4 w-4 text-primary" />
                       Quick Scores
                     </h4>
                     <div className="grid grid-cols-2 gap-3">
-                      <div className="border rounded-xl p-3 bg-gradient-to-br from-cyan-50/50 to-white shadow-sm">
+                      <div className="border border-primary/20 rounded-xl p-3 bg-card/50 backdrop-blur-sm">
                         <div className="text-center">
-                          <span className="text-lg font-bold text-cyan-600">{selectedCandidate.overallScore}/10</span>
-                          <p className="text-xs text-slate-600">Overall</p>
+                          <span className="text-lg font-bold text-primary">{selectedCandidate.overallScore}/10</span>
+                          <p className="text-xs text-muted-foreground">Overall</p>
                         </div>
                       </div>
-                      <div className="border rounded-xl p-3 bg-gradient-to-br from-teal-50/50 to-white shadow-sm">
+                      <div className="border border-primary/20 rounded-xl p-3 bg-card/50 backdrop-blur-sm">
                         <div className="text-center">
-                          <span className="text-lg font-bold text-teal-600">{selectedCandidate.fitScore}/10</span>
-                          <p className="text-xs text-slate-600">Fit Score</p>
+                          <span className="text-lg font-bold text-primary">{selectedCandidate.fitScore}/10</span>
+                          <p className="text-xs text-muted-foreground">Fit Score</p>
                         </div>
                       </div>
                     </div>
@@ -1028,27 +1032,28 @@ const ModernDashboard = () => {
 
                   {/* Risk/Reward */}
                   <div className="grid grid-cols-2 gap-3">
-                    <div className="border rounded-xl p-3 text-center bg-gradient-to-br from-amber-50/50 to-white shadow-sm">
-                      <AlertTriangle className="h-6 w-6 text-amber-600 mx-auto mb-2" />
+                    <div className="border border-warning/30 rounded-xl p-3 text-center bg-warning/5 backdrop-blur-sm">
+                      <AlertTriangle className="h-6 w-6 text-warning mx-auto mb-2" />
                       <p className="text-xs text-muted-foreground mb-1">Risk</p>
-                      <p className="text-sm font-bold text-amber-700">{selectedCandidate.riskScore || 'Unknown'}</p>
+                      <p className="text-sm font-bold text-warning">{selectedCandidate.riskScore || 'Unknown'}</p>
                     </div>
-                    <div className="border rounded-xl p-3 text-center bg-gradient-to-br from-green-50/50 to-white shadow-sm">
-                      <Trophy className="h-6 w-6 text-green-600 mx-auto mb-2" />
+                    <div className="border border-success/30 rounded-xl p-3 text-center bg-success/5 backdrop-blur-sm">
+                      <Trophy className="h-6 w-6 text-success mx-auto mb-2" />
                       <p className="text-xs text-muted-foreground mb-1">Reward</p>
-                      <p className="text-sm font-bold text-green-700">{selectedCandidate.rewardScore || 'Unknown'}</p>
+                      <p className="text-sm font-bold text-success">{selectedCandidate.rewardScore || 'Unknown'}</p>
                     </div>
                   </div>
 
                   {/* Action Buttons */}
-                  <div className="space-y-3 pt-4 border-t">
+                  <div className="space-y-3 pt-4 border-t border-border">
                     <Button
                       onClick={() => {
                         setIsDetailsPanelOpen(false);
                         setSelectedCandidateFullView(selectedCandidate);
                         setIsFullViewDialogOpen(true);
                       }}
-                      className="w-full bg-gradient-to-r from-cyan-500 to-teal-500 hover:from-cyan-600 hover:to-teal-600 text-white"
+                      variant="default"
+                      className="w-full"
                     >
                       <Eye className="h-4 w-4 mr-2" />
                       View Full Analysis
@@ -1080,18 +1085,18 @@ const ModernDashboard = () => {
 
       {/* Folder Naming Dialog - Opens when adding candidates to email sequence */}
       <Dialog open={isFolderDialogOpen} onOpenChange={setIsFolderDialogOpen}>
-        <DialogContent className="sm:max-w-md backdrop-blur-sm bg-white/95 border border-slate-200/50 shadow-2xl rounded-2xl">
+        <DialogContent className="sm:max-w-md backdrop-blur-sm">
           <DialogHeader>
-            <DialogTitle className="text-2xl font-bold bg-gradient-to-r from-slate-800 to-slate-600 bg-clip-text text-transparent">
+            <DialogTitle className="text-2xl font-bold text-foreground">
               Name Your Candidate Group
             </DialogTitle>
-            <DialogDescription className="text-slate-600">
+            <DialogDescription className="text-muted-foreground">
               Create a folder name for the {selectedCandidates.size} selected candidate{selectedCandidates.size > 1 ? 's' : ''}. This will help you organize and track your email sequences.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-4">
             <div className="space-y-2">
-              <Label htmlFor="folder-name" className="text-slate-700 font-medium">
+              <Label htmlFor="folder-name" className="text-foreground font-medium">
                 Folder Name *
               </Label>
               <Input
@@ -1104,10 +1109,10 @@ const ModernDashboard = () => {
                     handleFolderNameSubmit();
                   }
                 }}
-                className="border-slate-200 focus:border-emerald-300 focus:ring-emerald-200"
+                className="border-primary/20 focus:border-primary bg-card/50 backdrop-blur-sm"
                 autoFocus
               />
-              <p className="text-xs text-slate-500 mt-1">
+              <p className="text-xs text-muted-foreground mt-1">
                 Choose a descriptive name to easily identify this group later
               </p>
             </div>
@@ -1119,13 +1124,12 @@ const ModernDashboard = () => {
                 setIsFolderDialogOpen(false);
                 setNewFolderName("");
               }}
-              className="rounded-xl hover:bg-slate-50"
             >
               Cancel
             </Button>
             <Button
               onClick={handleFolderNameSubmit}
-              className="bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-600 hover:to-teal-600 text-white shadow-lg shadow-emerald-500/25 hover:shadow-xl hover:shadow-emerald-500/30 transition-all duration-200 rounded-xl"
+              variant="default"
             >
               <Folder className="h-4 w-4 mr-2" />
               Continue to Email Setup
