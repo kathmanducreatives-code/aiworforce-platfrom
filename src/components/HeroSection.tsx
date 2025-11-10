@@ -6,10 +6,10 @@ const HeroSection = () => {
     <section className="relative min-h-[90vh] bg-gradient-to-br from-background via-background to-muted/20 overflow-hidden">
       {/* Futuristic background effects */}
       <div className="absolute inset-0 bg-gradient-mesh opacity-60" />
-      <div className="absolute top-0 left-0 w-[800px] h-[800px] bg-[radial-gradient(circle,_hsl(170_100%_50%_/_0.15)_0%,_transparent_70%)] blur-[120px] pointer-events-none animate-pulse-glow" />
-      <div className="absolute bottom-0 right-0 w-[600px] h-[600px] bg-[radial-gradient(circle,_hsl(180_100%_45%_/_0.12)_0%,_transparent_70%)] blur-[100px] pointer-events-none" />
+      <div className="absolute top-0 left-0 w-[800px] h-[800px] bg-[radial-gradient(circle,_hsl(153_75%_53%_/_0.12)_0%,_transparent_70%)] blur-[120px] pointer-events-none animate-pulse-glow" />
+      <div className="absolute bottom-0 right-0 w-[600px] h-[600px] bg-[radial-gradient(circle,_hsl(153_65%_48%_/_0.10)_0%,_transparent_70%)] blur-[100px] pointer-events-none" />
       <div className="absolute inset-0" style={{
-        backgroundImage: 'radial-gradient(circle at 2px 2px, rgba(0,255,198,0.15) 1px, transparent 0)',
+        backgroundImage: 'radial-gradient(circle at 2px 2px, rgba(62,207,142,0.12) 1px, transparent 0)',
         backgroundSize: '40px 40px'
       }} />
       
@@ -26,25 +26,25 @@ const HeroSection = () => {
             
             {/* Heading */}
             <h1 className="text-5xl md:text-6xl lg:text-7xl font-extrabold text-foreground leading-[1.2]">
-              <span className="inline-block drop-shadow-[0_0_10px_rgba(0,255,198,0.2)]">
+              <span className="inline-block drop-shadow-[0_0_10px_rgba(62,207,142,0.15)]">
                 The All-in-One
               </span>
               <br />
               <span className="relative inline-block">
-                <span className="bg-gradient-primary bg-clip-text text-transparent drop-shadow-[0_0_25px_rgba(0,255,198,0.6)]">
+                <span className="bg-gradient-primary bg-clip-text text-transparent drop-shadow-[0_0_25px_rgba(62,207,142,0.5)]">
                   Recruitment
                 </span>
               </span>
               {" "}
-              <span className="inline-block drop-shadow-[0_0_10px_rgba(0,255,198,0.2)]">
+              <span className="inline-block drop-shadow-[0_0_10px_rgba(62,207,142,0.15)]">
                 Platform
               </span>
               <br />
-              <span className="inline-block drop-shadow-[0_0_10px_rgba(0,255,198,0.2)]">
+              <span className="inline-block drop-shadow-[0_0_10px_rgba(62,207,142,0.15)]">
                 Built on{" "}
               </span>
               <span className="relative inline-block">
-                <span className="bg-gradient-primary bg-clip-text text-transparent drop-shadow-[0_0_30px_rgba(0,255,198,0.7)] animate-pulse-glow">
+                <span className="bg-gradient-primary bg-clip-text text-transparent drop-shadow-[0_0_30px_rgba(62,207,142,0.6)] animate-pulse-glow">
                   Intelligence
                 </span>
               </span>

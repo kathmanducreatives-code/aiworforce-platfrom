@@ -8,51 +8,51 @@ All colors MUST be HSL.
 
 @layer base {
   :root {
-    /* Futuristic Theme - Teal Green & Deep Black */
-    --glass-bg: rgba(0, 255, 198, 0.05);
-    --glass-border: rgba(0, 255, 198, 0.1);
+    /* Supabase-Inspired Theme - Emerald Green & Deep Black */
+    --glass-bg: rgba(62, 207, 142, 0.05);
+    --glass-border: rgba(62, 207, 142, 0.1);
     --shadow-premium: 0 8px 32px rgba(0, 0, 0, 0.6);
-    --shadow-glow: 0 0 30px rgba(0, 255, 198, 0.4);
-    --background: 0 0% 4%;
-    --foreground: 0 0% 92%;
+    --shadow-glow: 0 0 30px rgba(62, 207, 142, 0.4);
+    --background: 0 0% 3%;
+    --foreground: 0 0% 95%;
 
-    --card: 0 0% 6%;
-    --card-foreground: 0 0% 92%;
+    --card: 0 0% 5%;
+    --card-foreground: 0 0% 95%;
 
-    --popover: 0 0% 6%;
-    --popover-foreground: 0 0% 92%;
+    --popover: 0 0% 5%;
+    --popover-foreground: 0 0% 95%;
 
-    /* Vibrant Teal/Cyan Primary */
-    --primary: 170 100% 50%;
-    --primary-foreground: 0 0% 5%;
-    --primary-light: 170 100% 65%;
-    --primary-dark: 165 90% 48%;
-    --primary-100: 170 100% 95%;
-    --primary-200: 170 100% 85%;
+    /* Supabase Emerald Green Primary */
+    --primary: 153 75% 53%;
+    --primary-foreground: 0 0% 3%;
+    --primary-light: 153 75% 65%;
+    --primary-dark: 153 75% 40%;
+    --primary-100: 153 75% 95%;
+    --primary-200: 153 75% 85%;
 
     /* Accent Colors */
-    --accent: 180 100% 45%;
-    --accent-foreground: 0 0% 5%;
-    --accent-secondary: 175 95% 50%;
+    --accent: 153 75% 53%;
+    --accent-foreground: 0 0% 3%;
+    --accent-secondary: 153 65% 48%;
 
-    --secondary: 0 0% 12%;
-    --secondary-foreground: 0 0% 92%;
+    --secondary: 0 0% 10%;
+    --secondary-foreground: 0 0% 95%;
 
-    --muted: 0 0% 12%;
-    --muted-foreground: 0 0% 69%;
+    --muted: 0 0% 10%;
+    --muted-foreground: 0 0% 65%;
 
     /* Semantic Colors */
-    --success: 170 100% 50%;
+    --success: 153 75% 53%;
     --warning: 38 92% 50%;
     --error: 0 84% 60%;
-    --info: 180 100% 45%;
+    --info: 153 75% 53%;
 
     --destructive: 0 84% 60%;
     --destructive-foreground: 0 0% 92%;
 
     --border: 0 0% 15%;
-    --input: 0 0% 12%;
-    --ring: 170 100% 50%;
+    --input: 0 0% 10%;
+    --ring: 153 75% 53%;
 
     --radius: 0.75rem;
 
@@ -68,29 +68,29 @@ All colors MUST be HSL.
     --gray-800: 210 15% 20%;
     --gray-900: 210 20% 11%;
 
-    /* Futuristic Teal Glow Gradients */
-    --gradient-primary: linear-gradient(135deg, hsl(170 100% 50%), hsl(165 90% 48%));
-    --gradient-hero: linear-gradient(135deg, hsl(170 100% 50%), hsl(175 95% 50%), hsl(180 100% 45%));
-    --gradient-subtle: linear-gradient(180deg, hsl(0 0% 4%), hsl(0 0% 8%));
-    --gradient-indigo-purple: linear-gradient(120deg, hsl(170 100% 50%), hsl(180 100% 45%));
-    --gradient-mesh: radial-gradient(at 40% 20%, hsl(170 100% 50% / 0.12) 0px, transparent 50%),
-                     radial-gradient(at 80% 0%, hsl(165 90% 48% / 0.10) 0px, transparent 50%),
-                     radial-gradient(at 0% 50%, hsl(180 100% 45% / 0.08) 0px, transparent 50%);
+    /* Supabase Emerald Green Gradients */
+    --gradient-primary: linear-gradient(135deg, hsl(153 75% 53%), hsl(153 75% 40%));
+    --gradient-hero: linear-gradient(135deg, hsl(153 75% 53%), hsl(153 65% 48%), hsl(153 75% 45%));
+    --gradient-subtle: linear-gradient(180deg, hsl(0 0% 3%), hsl(0 0% 6%));
+    --gradient-indigo-purple: linear-gradient(120deg, hsl(153 75% 53%), hsl(153 65% 48%));
+    --gradient-mesh: radial-gradient(at 40% 20%, hsl(153 75% 53% / 0.10) 0px, transparent 50%),
+                     radial-gradient(at 80% 0%, hsl(153 75% 40% / 0.08) 0px, transparent 50%),
+                     radial-gradient(at 0% 50%, hsl(153 65% 48% / 0.06) 0px, transparent 50%);
     --gradient-shimmer: linear-gradient(90deg, 
                         transparent 0%, 
-                        hsl(170 100% 50% / 0.4) 50%, 
+                        hsl(153 75% 53% / 0.4) 50%, 
                         transparent 100%);
     
-    /* Teal Glow Shadow System */
+    /* Emerald Green Shadow System */
     --shadow-xs: 0 1px 2px 0 hsl(0 0% 0% / 0.5);
     --shadow-sm: 0 1px 3px 0 hsl(0 0% 0% / 0.6), 0 1px 2px -1px hsl(0 0% 0% / 0.6);
     --shadow-md: 0 4px 6px -1px hsl(0 0% 0% / 0.6), 0 2px 4px -2px hsl(0 0% 0% / 0.6);
     --shadow-lg: 0 10px 15px -3px hsl(0 0% 0% / 0.7), 0 4px 6px -4px hsl(0 0% 0% / 0.7);
     --shadow-xl: 0 20px 25px -5px hsl(0 0% 0% / 0.8), 0 8px 10px -6px hsl(0 0% 0% / 0.8);
     --shadow-2xl: 0 25px 50px -12px hsl(0 0% 0% / 0.9);
-    --shadow-primary: 0 0 20px hsl(170 100% 50% / 0.4), 0 0 40px hsl(170 100% 50% / 0.2);
-    --shadow-primary-lg: 0 0 30px hsl(170 100% 50% / 0.5), 0 0 60px hsl(170 100% 50% / 0.25);
-    --shadow-glow: 0 0 25px hsl(170 100% 50% / 0.5), 0 0 50px hsl(170 100% 50% / 0.25), 0 0 75px hsl(170 100% 50% / 0.1);
+    --shadow-primary: 0 0 20px hsl(153 75% 53% / 0.35), 0 0 40px hsl(153 75% 53% / 0.15);
+    --shadow-primary-lg: 0 0 30px hsl(153 75% 53% / 0.45), 0 0 60px hsl(153 75% 53% / 0.2);
+    --shadow-glow: 0 0 25px hsl(153 75% 53% / 0.4), 0 0 50px hsl(153 75% 53% / 0.2), 0 0 75px hsl(153 75% 53% / 0.08);
     
     --transition-smooth: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 
@@ -114,8 +114,8 @@ All colors MUST be HSL.
     --popover: 0 0% 6%;
     --popover-foreground: 0 0% 92%;
 
-    --primary: 170 100% 50%;
-    --primary-foreground: 0 0% 5%;
+    --primary: 153 75% 53%;
+    --primary-foreground: 0 0% 3%;
     --primary-light: 170 100% 65%;
     --primary-dark: 165 90% 48%;
 
@@ -132,16 +132,16 @@ All colors MUST be HSL.
     --destructive-foreground: 0 0% 92%;
 
     --border: 0 0% 15%;
-    --input: 0 0% 12%;
-    --ring: 170 100% 50%;
-    --sidebar-background: 0 0% 6%;
-    --sidebar-foreground: 0 0% 92%;
-    --sidebar-primary: 170 100% 50%;
-    --sidebar-primary-foreground: 0 0% 5%;
+    --input: 0 0% 10%;
+    --ring: 153 75% 53%;
+    --sidebar-background: 0 0% 5%;
+    --sidebar-foreground: 0 0% 95%;
+    --sidebar-primary: 153 75% 53%;
+    --sidebar-primary-foreground: 0 0% 3%;
     --sidebar-accent: 0 0% 12%;
     --sidebar-accent-foreground: 0 0% 92%;
     --sidebar-border: 0 0% 15%;
-    --sidebar-ring: 170 100% 50%;
+    --sidebar-ring: 153 75% 53%;
   }
 }
 
@@ -236,10 +236,10 @@ html {
 
   @keyframes pulse-glow {
     0%, 100% {
-      box-shadow: 0 0 20px hsl(170 100% 50% / 0.4), 0 0 40px hsl(170 100% 50% / 0.2);
+      box-shadow: 0 0 20px hsl(153 75% 53% / 0.35), 0 0 40px hsl(153 75% 53% / 0.15);
     }
     50% {
-      box-shadow: 0 0 30px hsl(170 100% 50% / 0.6), 0 0 60px hsl(170 100% 50% / 0.3);
+      box-shadow: 0 0 30px hsl(153 75% 53% / 0.5), 0 0 60px hsl(153 75% 53% / 0.25);
     }
   }
 

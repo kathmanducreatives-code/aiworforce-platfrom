@@ -21,28 +21,28 @@ const Header = () => {
             <div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center transition-all duration-300 group-hover:scale-110 group-hover:shadow-glow animate-pulse-glow">
               <Brain className="w-5 h-5 text-primary-foreground" />
             </div>
-            <span className="text-2xl font-bold text-primary group-hover:drop-shadow-[0_0_10px_rgba(0,255,198,0.6)] transition-all duration-300">ScreeningPilot</span>
+            <span className="text-2xl font-bold text-primary group-hover:drop-shadow-[0_0_10px_rgba(62,207,142,0.6)] transition-all duration-300">ScreeningPilot</span>
           </a>
 
           {/* Navigation - Desktop */}
           <nav className="hidden md:flex items-center gap-8">
-            <a href="/features" className="relative text-muted-foreground hover:text-primary font-bold transition-all duration-300 hover:drop-shadow-[0_0_8px_rgba(0,255,198,0.4)] group">
+            <a href="/features" className="relative text-muted-foreground hover:text-primary font-bold transition-all duration-300 hover:drop-shadow-[0_0_8px_rgba(62,207,142,0.4)] group">
               <span className="relative z-10">Features</span>
               <span className="absolute inset-x-0 -bottom-1 h-0.5 bg-gradient-primary shadow-glow transform scale-x-0 group-hover:scale-x-100 transition-transform duration-300 origin-left"></span>
             </a>
-            <a href="/lead-scraper" className="relative text-muted-foreground hover:text-primary font-bold transition-all duration-300 hover:drop-shadow-[0_0_8px_rgba(0,255,198,0.4)] group">
+            <a href="/lead-scraper" className="relative text-muted-foreground hover:text-primary font-bold transition-all duration-300 hover:drop-shadow-[0_0_8px_rgba(62,207,142,0.4)] group">
               <span className="relative z-10">Lead Scraper</span>
               <span className="absolute inset-x-0 -bottom-1 h-0.5 bg-gradient-primary shadow-glow transform scale-x-0 group-hover:scale-x-100 transition-transform duration-300 origin-left"></span>
             </a>
-            <a href="/deep-search" className="relative text-muted-foreground hover:text-primary font-bold transition-all duration-300 hover:drop-shadow-[0_0_8px_rgba(0,255,198,0.4)] group">
+            <a href="/deep-search" className="relative text-muted-foreground hover:text-primary font-bold transition-all duration-300 hover:drop-shadow-[0_0_8px_rgba(62,207,142,0.4)] group">
               <span className="relative z-10">Deep Search</span>
               <span className="absolute inset-x-0 -bottom-1 h-0.5 bg-gradient-primary shadow-glow transform scale-x-0 group-hover:scale-x-100 transition-transform duration-300 origin-left"></span>
             </a>
-            <a href="/pricing" className="relative text-muted-foreground hover:text-primary font-bold transition-all duration-300 hover:drop-shadow-[0_0_8px_rgba(0,255,198,0.4)] group">
+            <a href="/pricing" className="relative text-muted-foreground hover:text-primary font-bold transition-all duration-300 hover:drop-shadow-[0_0_8px_rgba(62,207,142,0.4)] group">
               <span className="relative z-10">Pricing</span>
               <span className="absolute inset-x-0 -bottom-1 h-0.5 bg-gradient-primary shadow-glow transform scale-x-0 group-hover:scale-x-100 transition-transform duration-300 origin-left"></span>
             </a>
-            <a href="/get-demo" className="relative text-muted-foreground hover:text-primary font-bold transition-all duration-300 hover:drop-shadow-[0_0_8px_rgba(0,255,198,0.4)] group">
+            <a href="/get-demo" className="relative text-muted-foreground hover:text-primary font-bold transition-all duration-300 hover:drop-shadow-[0_0_8px_rgba(62,207,142,0.4)] group">
               <span className="relative z-10">Get a Demo</span>
               <span className="absolute inset-x-0 -bottom-1 h-0.5 bg-gradient-primary shadow-glow transform scale-x-0 group-hover:scale-x-100 transition-transform duration-300 origin-left"></span>
             </a>
