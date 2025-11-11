@@ -1,11 +1,12 @@
 import { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
-import { Brain, Loader2, Users, FileText, Search, Sparkles, TrendingUp, CheckCircle2, Filter } from "lucide-react";
+import { Brain, Loader2, Users, FileText, Search, Sparkles, TrendingUp, CheckCircle2, Filter, ArrowLeft } from "lucide-react";
 import { deepSearchApi } from "@/services/deepSearchApi";
 import { Input } from "@/components/ui/input";
 import { CandidateCard } from "@/components/lead-scraper/CandidateCard";
@@ -30,6 +31,7 @@ interface ResumeCandidate {
 }
 
 export default function DeepSearch() {
+  const navigate = useNavigate();
   const [linkedInCandidates, setLinkedInCandidates] = useState<LinkedInCandidate[]>([]);
   const [resumeCandidates, setResumeCandidates] = useState<ResumeCandidate[]>([]);
   const [selectedCandidates, setSelectedCandidates] = useState<Set<string>>(new Set());
@@ -227,6 +229,14 @@ export default function DeepSearch() {
           {/* Top row - Logo and Title */}
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-3">
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => navigate(-1)}
+                className="hover:bg-primary/10"
+              >
+                <ArrowLeft className="w-5 h-5" />
+              </Button>
               <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-primary to-cyan-500 flex items-center justify-center shadow-lg shadow-primary/25 animate-pulse-glow">
                 <Brain className="w-8 h-8 text-white" />
               </div>
