@@ -68,17 +68,15 @@ All colors MUST be HSL.
     --gray-800: 210 15% 20%;
     --gray-900: 210 20% 11%;
 
-    /* Supabase Emerald Green Gradients */
+    /* Supabase Emerald Green Gradients - Simplified */
     --gradient-primary: linear-gradient(135deg, hsl(153 75% 53%), hsl(153 75% 40%));
-    --gradient-hero: linear-gradient(135deg, hsl(153 75% 53%), hsl(153 65% 48%), hsl(153 75% 45%));
+    --gradient-hero: linear-gradient(135deg, hsl(153 75% 53%), hsl(153 65% 48%));
     --gradient-subtle: linear-gradient(180deg, hsl(0 0% 3%), hsl(0 0% 6%));
     --gradient-indigo-purple: linear-gradient(120deg, hsl(153 75% 53%), hsl(153 65% 48%));
-    --gradient-mesh: radial-gradient(at 40% 20%, hsl(153 75% 53% / 0.10) 0px, transparent 50%),
-                     radial-gradient(at 80% 0%, hsl(153 75% 40% / 0.08) 0px, transparent 50%),
-                     radial-gradient(at 0% 50%, hsl(153 65% 48% / 0.06) 0px, transparent 50%);
+    --gradient-mesh: radial-gradient(at 40% 20%, hsl(153 75% 53% / 0.05) 0px, transparent 50%);
     --gradient-shimmer: linear-gradient(90deg, 
                         transparent 0%, 
-                        hsl(153 75% 53% / 0.4) 50%, 
+                        hsl(153 75% 53% / 0.2) 50%, 
                         transparent 100%);
     
     /* Emerald Green Shadow System */
@@ -88,9 +86,9 @@ All colors MUST be HSL.
     --shadow-lg: 0 10px 15px -3px hsl(0 0% 0% / 0.7), 0 4px 6px -4px hsl(0 0% 0% / 0.7);
     --shadow-xl: 0 20px 25px -5px hsl(0 0% 0% / 0.8), 0 8px 10px -6px hsl(0 0% 0% / 0.8);
     --shadow-2xl: 0 25px 50px -12px hsl(0 0% 0% / 0.9);
-    --shadow-primary: 0 0 20px hsl(153 75% 53% / 0.35), 0 0 40px hsl(153 75% 53% / 0.15);
-    --shadow-primary-lg: 0 0 30px hsl(153 75% 53% / 0.45), 0 0 60px hsl(153 75% 53% / 0.2);
-    --shadow-glow: 0 0 25px hsl(153 75% 53% / 0.4), 0 0 50px hsl(153 75% 53% / 0.2), 0 0 75px hsl(153 75% 53% / 0.08);
+    --shadow-primary: 0 0 15px hsl(153 75% 53% / 0.25);
+    --shadow-primary-lg: 0 0 20px hsl(153 75% 53% / 0.3);
+    --shadow-glow: 0 0 20px hsl(153 75% 53% / 0.3);
     
     --transition-smooth: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 
@@ -153,10 +151,6 @@ All colors MUST be HSL.
   body {
     @apply bg-background text-foreground;
     font-family: 'Inter', 'Satoshi', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
-    background-image: 
-      repeating-linear-gradient(0deg, transparent, transparent 49px, hsl(0 0% 8%) 49px, hsl(0 0% 8%) 50px),
-      repeating-linear-gradient(90deg, transparent, transparent 49px, hsl(0 0% 8%) 49px, hsl(0 0% 8%) 50px);
-    background-size: 50px 50px;
   }
 }
 
@@ -236,10 +230,10 @@ html {
 
   @keyframes pulse-glow {
     0%, 100% {
-      box-shadow: 0 0 20px hsl(153 75% 53% / 0.35), 0 0 40px hsl(153 75% 53% / 0.15);
+      box-shadow: 0 0 15px hsl(153 75% 53% / 0.2);
     }
     50% {
-      box-shadow: 0 0 30px hsl(153 75% 53% / 0.5), 0 0 60px hsl(153 75% 53% / 0.25);
+      box-shadow: 0 0 20px hsl(153 75% 53% / 0.3);
     }
   }
 
@@ -269,34 +263,22 @@ html {
     }
   }
 
-  /* Dynamic glow animations for textarea */
+  /* Dynamic glow animations - Simplified */
   @keyframes glow-pulse {
-    0% {
-      box-shadow: 0 0 15px rgba(99, 102, 241, 0.3), 0 0 30px rgba(99, 102, 241, 0.1);
+    0%, 100% {
+      box-shadow: 0 0 12px rgba(99, 102, 241, 0.2);
     }
     50% {
-      box-shadow: 0 0 25px rgba(99, 102, 241, 0.5), 0 0 40px rgba(99, 102, 241, 0.2);
-    }
-    100% {
-      box-shadow: 0 0 15px rgba(99, 102, 241, 0.3), 0 0 30px rgba(99, 102, 241, 0.1);
+      box-shadow: 0 0 18px rgba(99, 102, 241, 0.3);
     }
   }
 
   @keyframes typing-glow {
-    0% {
-      box-shadow: 0 0 20px rgba(99, 102, 241, 0.4), 0 0 35px rgba(99, 102, 241, 0.2), 0 0 50px rgba(99, 102, 241, 0.1);
-    }
-    25% {
-      box-shadow: 0 0 25px rgba(16, 185, 129, 0.4), 0 0 40px rgba(16, 185, 129, 0.2), 0 0 55px rgba(16, 185, 129, 0.1);
+    0%, 100% {
+      box-shadow: 0 0 15px rgba(99, 102, 241, 0.25);
     }
     50% {
-      box-shadow: 0 0 30px rgba(139, 92, 246, 0.4), 0 0 45px rgba(139, 92, 246, 0.2), 0 0 60px rgba(139, 92, 246, 0.1);
-    }
-    75% {
-      box-shadow: 0 0 25px rgba(16, 185, 129, 0.4), 0 0 40px rgba(16, 185, 129, 0.2), 0 0 55px rgba(16, 185, 129, 0.1);
-    }
-    100% {
-      box-shadow: 0 0 20px rgba(99, 102, 241, 0.4), 0 0 35px rgba(99, 102, 241, 0.2), 0 0 50px rgba(99, 102, 241, 0.1);
+      box-shadow: 0 0 20px rgba(16, 185, 129, 0.25);
     }
   }
 
@@ -307,10 +289,10 @@ html {
 
   @keyframes intelligence-pulse {
     0%, 100% {
-      box-shadow: 0 0 15px rgba(168, 85, 247, 0.3), 0 0 30px rgba(168, 85, 247, 0.1);
+      box-shadow: 0 0 12px rgba(168, 85, 247, 0.2);
     }
     50% {
-      box-shadow: 0 0 25px rgba(168, 85, 247, 0.5), 0 0 40px rgba(168, 85, 247, 0.2);
+      box-shadow: 0 0 18px rgba(168, 85, 247, 0.3);
     }
   }
 
@@ -394,7 +376,7 @@ html {
   }
 
   .animate-pulse-glow {
-    animation: pulse-glow 2s ease-in-out infinite;
+    animation: pulse-glow 4s ease-in-out infinite;
   }
 
   .animate-shimmer {

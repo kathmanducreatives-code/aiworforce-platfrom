@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { ArrowLeft, History } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -18,32 +18,55 @@ export default function LeadScraper() {
   const [isFetchingLeads, setIsFetchingLeads] = useState(true);
   const [historyOpen, setHistoryOpen] = useState(false);
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
+  const lastToastTime = useRef(0);
+  const pendingLeads = useRef<LinkedInLead[]>([]);
+
+  // Debounced toast notification - max 1 per 5 seconds
+  const showToast = useCallback(() => {
+    const now = Date.now();
+    if (now - lastToastTime.current > 5000) {
+      const count = pendingLeads.current.length;
+      if (count > 0) {
+        toast({
+          title: `${count} New Lead${count > 1 ? 's' : ''} Discovered! 🎉`,
+          description: count === 1 
+            ? `${pendingLeads.current[0].candidate_name} has been added.`
+            : `${count} candidates have been added to your leads.`,
+        });
+        pendingLeads.current = [];
+        lastToastTime.current = now;
+      }
+    }
+  }, []);
+
+  // Batch lead updates
+  const handleNewLead = useCallback((payload: any) => {
+    const newLead = payload.new as LinkedInLead;
+    pendingLeads.current.push(newLead);
+    
+    setLeads((prev) => [newLead, ...prev]);
+    
+    // Debounced toast
+    showToast();
+  }, [showToast]);
 
   useEffect(() => {
     fetchLeads();
 
-    // Set up realtime subscription for new leads
+    // Optimized realtime subscription
     const channel = supabase
       .channel("linkedin-leads-changes")
       .on(
         "postgres_changes",
         { event: "INSERT", schema: "public", table: "linkedin_leads" },
-        (payload) => {
-          console.log("New lead received:", payload);
-          setLeads((prev) => [payload.new as LinkedInLead, ...prev]);
-          
-          toast({
-            title: "New Lead Discovered! 🎉",
-            description: `${(payload.new as LinkedInLead).candidate_name} has been added to your leads.`,
-          });
-        }
+        handleNewLead
       )
       .subscribe();
 
     return () => {
       supabase.removeChannel(channel);
     };
-  }, []);
+  }, [handleNewLead]);
 
   const fetchLeads = async (sessionId?: string) => {
     try {
@@ -228,7 +251,7 @@ export default function LeadScraper() {
         </div>
 
         {/* Results Section */}
-        <div className="rounded-xl border border-border/50 bg-card/50 backdrop-blur-sm p-6 shadow-xl">
+        <div className="rounded-xl border border-border/50 bg-card/50 p-6 shadow-xl">
           <div className="flex items-center justify-between mb-6">
             <div>
               <h2 className="text-2xl font-bold">Discovered Leads</h2>

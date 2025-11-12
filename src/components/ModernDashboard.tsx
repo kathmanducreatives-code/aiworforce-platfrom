@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -66,7 +66,7 @@ const ModernDashboard = () => {
     toast
   } = useToast();
   const itemsPerPage = 10;
-  const handleDeleteCandidate = async (candidateId: string) => {
+  const handleDeleteCandidate = useCallback(async (candidateId: string) => {
     try {
       const {
         error
@@ -95,9 +95,9 @@ const ModernDashboard = () => {
         variant: 'destructive'
       });
     }
-  };
+  }, [toast]);
 
-  const handleBulkDelete = async () => {
+  const handleBulkDelete = useCallback(async () => {
     if (selectedCandidates.size === 0) return;
 
     try {
@@ -133,14 +133,14 @@ const ModernDashboard = () => {
         variant: 'destructive'
       });
     }
-  };
+  }, [selectedCandidates, toast]);
 
-  const handleAddToEmailSequence = () => {
+  const handleAddToEmailSequence = useCallback(() => {
     if (selectedCandidates.size === 0) return;
     setIsFolderDialogOpen(true);
-  };
+  }, [selectedCandidates]);
 
-  const handleFolderNameSubmit = async () => {
+  const handleFolderNameSubmit = useCallback(async () => {
     if (!newFolderName.trim()) {
       toast({
         title: 'Folder Name Required',
@@ -189,7 +189,7 @@ const ModernDashboard = () => {
         variant: 'destructive'
       });
     }
-  };
+  }, [newFolderName, selectedCandidates, navigate, toast]);
 
   const fetchResumeData = async () => {
     try {
@@ -273,7 +273,7 @@ const ModernDashboard = () => {
   useEffect(() => {
     fetchResumeData();
   }, []);
-  const recruitmentFolders = React.useMemo(() => {
+  const recruitmentFolders = useMemo(() => {
     const folders = resumeData.reduce((acc, resume) => {
       const folderName = resume.recruitmentName || 'Uncategorized';
       if (!acc[folderName]) {
@@ -284,7 +284,7 @@ const ModernDashboard = () => {
     }, {} as Record<string, ResumeAnalysis[]>);
     return folders;
   }, [resumeData]);
-  const filteredResumes = React.useMemo(() => {
+  const filteredResumes = useMemo(() => {
     let filtered = viewMode === 'folders' && selectedFolder ? recruitmentFolders[selectedFolder] || [] : resumeData;
     return filtered.filter(resume => {
       const matchesSearch = resume.candidateName.toLowerCase().includes(searchTerm.toLowerCase()) || resume.email.toLowerCase().includes(searchTerm.toLowerCase()) || resume.resume.toLowerCase().includes(searchTerm.toLowerCase());
@@ -384,7 +384,7 @@ const ModernDashboard = () => {
               <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
                 {Object.entries(recruitmentFolders).map(([folderName, candidates]) => <Card 
                   key={folderName} 
-                  className="group hover:shadow-primary hover:border-primary/50 transition-all duration-300 cursor-pointer backdrop-blur-sm"
+                  className="group hover:shadow-primary hover:border-primary/50 transition-all duration-300 cursor-pointer"
                   onClick={() => navigate(`/folder/${encodeURIComponent(folderName)}`)}
                 >
                     <CardContent className="p-6">
