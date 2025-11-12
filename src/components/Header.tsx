@@ -18,10 +18,10 @@ const Header = () => {
         <div className="flex items-center justify-between h-16">
           {/* Logo */}
           <a href="/" className="flex items-center gap-3 group">
-            <div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center transition-all duration-300 group-hover:scale-110 group-hover:shadow-glow animate-pulse-glow">
+            <div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center transition-all duration-300 group-hover:scale-110 group-hover:shadow-glow">
               <Brain className="w-5 h-5 text-primary-foreground" />
             </div>
-            <span className="text-2xl font-bold text-primary group-hover:drop-shadow-[0_0_10px_rgba(62,207,142,0.6)] transition-all duration-300">ScreeningPilot</span>
+            <span className="text-2xl font-bold text-primary group-hover:text-primary-light transition-colors duration-300">ScreeningPilot</span>
           </a>
 
           {/* Navigation - Desktop */}

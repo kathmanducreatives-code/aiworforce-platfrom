@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
@@ -44,12 +44,34 @@ export default function DeepSearch() {
   const [allAnalyzedResults, setAllAnalyzedResults] = useState<any[]>([]);
   const [activeTab, setActiveTab] = useState<"linkedin" | "resume">("linkedin");
   const { toast } = useToast();
+  const lastAnalysisToastTime = useRef(0);
+
+  // Debounced analysis fetch
+  const debouncedFetchAnalysis = useCallback(() => {
+    const now = Date.now();
+    if (now - lastAnalysisToastTime.current > 3000) {
+      fetchAnalyzedResults();
+      toast({
+        title: "Analysis Complete! ✨",
+        description: "New deep search results are available.",
+      });
+      lastAnalysisToastTime.current = now;
+    } else {
+      // Just fetch without toast if too frequent
+      fetchAnalyzedResults();
+    }
+  }, []);
+
+  const handleAnalysisUpdate = useCallback((payload: any) => {
+    console.log('New deep search result:', payload);
+    debouncedFetchAnalysis();
+  }, [debouncedFetchAnalysis]);
 
   useEffect(() => {
     fetchCandidates();
     fetchAnalyzedResults();
     
-    // Subscribe to real-time updates for deep search analysis
+    // Optimized realtime subscription
     const channel = supabase
       .channel('deep-search-updates')
       .on(
@@ -59,17 +81,14 @@ export default function DeepSearch() {
           schema: 'public',
           table: 'deep_search_analysis',
         },
-        (payload) => {
-          console.log('New deep search result:', payload);
-          fetchAnalyzedResults();
-        }
+        handleAnalysisUpdate
       )
       .subscribe();
 
     return () => {
       supabase.removeChannel(channel);
     };
-  }, []);
+  }, [handleAnalysisUpdate]);
 
   const fetchCandidates = async () => {
     try {
@@ -124,7 +143,7 @@ export default function DeepSearch() {
     }
   };
 
-  const handleSelectCandidate = (candidateId: string, checked: boolean) => {
+  const handleSelectCandidate = useCallback((candidateId: string, checked: boolean) => {
     setSelectedCandidates(prev => {
       const next = new Set(prev);
       if (checked) {
@@ -134,9 +153,9 @@ export default function DeepSearch() {
       }
       return next;
     });
-  };
+  }, []);
 
-  const handleRunDeepSearch = async () => {
+  const handleRunDeepSearch = useCallback(async () => {
     if (selectedCandidates.size === 0) {
       toast({
         title: "No candidates selected",
@@ -183,23 +202,30 @@ export default function DeepSearch() {
     } finally {
       setProcessing(false);
     }
-  };
+  }, [selectedCandidates, linkedInCandidates, resumeCandidates, toast]);
 
-  const filteredLinkedInCandidates = linkedInCandidates.filter(c =>
-    c.candidate_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    c.company?.toLowerCase().includes(searchTerm.toLowerCase())
+  // Memoize filtered candidates to prevent unnecessary recalculations
+  const filteredLinkedInCandidates = useMemo(() => 
+    linkedInCandidates.filter(c =>
+      c.candidate_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      c.company?.toLowerCase().includes(searchTerm.toLowerCase())
+    ),
+    [linkedInCandidates, searchTerm]
   );
 
-  const filteredResumeCandidates = resumeCandidates.filter(c =>
-    c.candidate_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    c.recruitment_name?.toLowerCase().includes(searchTerm.toLowerCase())
+  const filteredResumeCandidates = useMemo(() =>
+    resumeCandidates.filter(c =>
+      c.candidate_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      c.recruitment_name?.toLowerCase().includes(searchTerm.toLowerCase())
+    ),
+    [resumeCandidates, searchTerm]
   );
 
-  const getFitScore = (fitScore: any): number => {
+  const getFitScore = useCallback((fitScore: any): number => {
     if (typeof fitScore === 'number') return fitScore;
     if (typeof fitScore === 'object' && fitScore?.score) return fitScore.score;
     return 0;
-  };
+  }, []);
 
   if (loading) {
     return (
@@ -237,7 +263,7 @@ export default function DeepSearch() {
               >
                 <ArrowLeft className="w-5 h-5" />
               </Button>
-              <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-primary to-cyan-500 flex items-center justify-center shadow-lg shadow-primary/25 animate-pulse-glow">
+              <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-primary to-primary-dark flex items-center justify-center shadow-lg shadow-primary/20">
                 <Brain className="w-8 h-8 text-white" />
               </div>
               <div>
