@@ -386,7 +386,7 @@ const EmailSequenceSetup = () => {
   const activeStep = emailSteps.find(s => s.id === activeStepId) || null;
 
   return (
-    <div className="min-h-screen w-full bg-gradient-to-br from-slate-50 via-white to-emerald-50">
+    <div className="min-h-screen w-full bg-background">
       <Header />
       
       <main className="container mx-auto px-4 sm:px-6 py-8 pt-24 max-w-7xl animate-fade-in">
