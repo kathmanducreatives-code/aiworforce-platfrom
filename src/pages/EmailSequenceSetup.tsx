@@ -395,16 +395,16 @@ const EmailSequenceSetup = () => {
           <Button
             variant="ghost"
             onClick={() => navigate(`/folder/${encodeURIComponent(folderName || '')}`)}
-            className="hover:bg-slate-100 hover:scale-105 transition-all duration-200 rounded-xl p-2"
+            className="hover:bg-accent hover:scale-105 transition-all duration-200 rounded-xl p-2"
           >
             <ArrowLeft className="h-5 w-5" />
           </Button>
           <div>
-            <h1 className="text-3xl font-bold text-slate-800 mb-2">
+            <h1 className="text-3xl font-bold text-foreground mb-2">
               Email Sequence Setup
             </h1>
-            <p className="text-slate-600">
-              Create multi-step email sequence for <span className="font-semibold text-emerald-600">{folderName}</span>
+            <p className="text-muted-foreground">
+              Create multi-step email sequence for <span className="font-semibold text-primary">{folderName}</span>
             </p>
           </div>
         </div>
@@ -481,7 +481,7 @@ const EmailSequenceSetup = () => {
                 </div>
 
                 <div className="pt-2">
-                  <h4 className="text-sm font-semibold mb-3 text-slate-700">Delivery Preferences</h4>
+                  <h4 className="text-sm font-semibold mb-3 text-foreground">Delivery Preferences</h4>
                   
                   <div className="space-y-4">
                     <div>
@@ -626,7 +626,7 @@ const EmailSequenceSetup = () => {
 
                 <Button
                   onClick={handleCreateSequence}
-                  className="w-full bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-600 hover:to-teal-600"
+                  className="w-full"
                 >
                   <Send className="h-4 w-4 mr-2" />
                   Create Sequence
