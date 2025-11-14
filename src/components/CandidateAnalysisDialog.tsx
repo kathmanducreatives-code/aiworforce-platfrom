@@ -52,14 +52,14 @@ export const CandidateAnalysisDialog = ({ open, onOpenChange, candidate }: Candi
   // Status config helper
   const getStatusConfig = (status: CandidateStatus) => {
     const configs = {
-      new: { label: 'New', color: 'bg-blue-100 text-blue-700 border-blue-300', icon: <FileText className="h-3 w-3" /> },
-      reviewing: { label: 'Reviewing', color: 'bg-purple-100 text-purple-700 border-purple-300', icon: <Eye className="h-3 w-3" /> },
-      contacted: { label: 'Contacted', color: 'bg-yellow-100 text-yellow-700 border-yellow-300', icon: <Mail className="h-3 w-3" /> },
-      interview_scheduled: { label: 'Interview Scheduled', color: 'bg-indigo-100 text-indigo-700 border-indigo-300', icon: <Calendar className="h-3 w-3" /> },
-      interviewed: { label: 'Interviewed', color: 'bg-teal-100 text-teal-700 border-teal-300', icon: <CheckCircle className="h-3 w-3" /> },
-      offer_extended: { label: 'Offer Extended', color: 'bg-green-100 text-green-700 border-green-300', icon: <Trophy className="h-3 w-3" /> },
-      hired: { label: 'Hired', color: 'bg-emerald-100 text-emerald-700 border-emerald-300', icon: <CheckCircle className="h-3 w-3" /> },
-      rejected: { label: 'Rejected', color: 'bg-red-100 text-red-700 border-red-300', icon: <X className="h-3 w-3" /> }
+      new: { label: 'New', color: 'bg-primary/10 text-primary border-primary/30', icon: <FileText className="h-3 w-3" /> },
+      reviewing: { label: 'Reviewing', color: 'bg-secondary/10 text-secondary-foreground border-secondary/30', icon: <Eye className="h-3 w-3" /> },
+      contacted: { label: 'Contacted', color: 'bg-warning/10 text-warning border-warning/30', icon: <Mail className="h-3 w-3" /> },
+      interview_scheduled: { label: 'Interview Scheduled', color: 'bg-accent/10 text-accent-foreground border-accent/30', icon: <Calendar className="h-3 w-3" /> },
+      interviewed: { label: 'Interviewed', color: 'bg-primary/10 text-primary border-primary/30', icon: <CheckCircle className="h-3 w-3" /> },
+      offer_extended: { label: 'Offer Extended', color: 'bg-success/10 text-success border-success/30', icon: <Trophy className="h-3 w-3" /> },
+      hired: { label: 'Hired', color: 'bg-success/10 text-success border-success/30', icon: <CheckCircle className="h-3 w-3" /> },
+      rejected: { label: 'Rejected', color: 'bg-destructive/10 text-destructive border-destructive/30', icon: <X className="h-3 w-3" /> }
     };
     return configs[status] || configs.new;
   };
@@ -194,7 +194,7 @@ export const CandidateAnalysisDialog = ({ open, onOpenChange, candidate }: Candi
       toast({
         title: "Status Updated",
         description: `Candidate status changed to ${getStatusConfig(newStatus).label}`,
-        className: "bg-emerald-50 border-emerald-200"
+        className: "bg-success/10 border-success/30"
       });
     } catch (error) {
       toast({
@@ -234,7 +234,7 @@ export const CandidateAnalysisDialog = ({ open, onOpenChange, candidate }: Candi
       toast({
         title: "Note Added",
         description: "Your comment has been saved successfully.",
-        className: "bg-emerald-50 border-emerald-200"
+        className: "bg-success/10 border-success/30"
       });
     } catch (error) {
       console.error('Failed to add note:', error);
@@ -313,13 +313,13 @@ export const CandidateAnalysisDialog = ({ open, onOpenChange, candidate }: Candi
             <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 sm:gap-8 pr-10 sm:pr-12">
               {/* Mini Mode - Always visible */}
               <div className="flex items-center gap-3 sm:gap-6 min-w-0 flex-1">
-                <DialogTitle className={`font-semibold bg-gradient-to-r from-cyan-600 to-teal-600 bg-clip-text text-transparent tracking-tight transition-all duration-300 truncate ${showHeader ? 'text-lg sm:text-2xl' : 'text-base sm:text-lg'}`}>
+                <DialogTitle className={`font-semibold text-primary tracking-tight transition-all duration-300 truncate ${showHeader ? 'text-lg sm:text-2xl' : 'text-base sm:text-lg'}`}>
                   {candidate.candidateName}
                 </DialogTitle>
                 {!showHeader && candidate.overallScore !== undefined && (
-                  <div className="flex items-center gap-2 px-2 sm:px-3 py-1 bg-gradient-to-br from-cyan-50 to-teal-50 dark:from-cyan-950/30 dark:to-teal-950/30 rounded-full border border-cyan-200 dark:border-cyan-800 transition-opacity duration-300">
+                  <div className="flex items-center gap-2 px-2 sm:px-3 py-1 bg-primary/5 rounded-full border border-primary/20 transition-opacity duration-300">
                     <span className="text-xs sm:text-sm font-medium text-muted-foreground">Score:</span>
-                    <span className="text-base sm:text-lg font-semibold bg-gradient-to-br from-cyan-600 to-teal-600 bg-clip-text text-transparent">
+                    <span className="text-base sm:text-lg font-semibold text-primary">
                       {candidate.overallScore}/10
                     </span>
                   </div>
@@ -333,7 +333,7 @@ export const CandidateAnalysisDialog = ({ open, onOpenChange, candidate }: Candi
                   <div className="flex-1 space-y-4 sm:space-y-6 w-full">
                     <div className="space-y-2">
                       <DialogDescription className="text-sm sm:text-base text-muted-foreground flex items-center gap-2">
-                        <span className="w-1.5 h-1.5 rounded-full bg-cyan-500 animate-pulse"></span>
+                        <span className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse"></span>
                         <span className="truncate">{candidate.email}</span>
                       </DialogDescription>
                     </div>
@@ -428,7 +428,7 @@ export const CandidateAnalysisDialog = ({ open, onOpenChange, candidate }: Candi
                   {candidate.overallScore !== undefined && (
                     <div className="flex flex-col sm:items-end gap-1">
                       <div className="text-xs sm:text-sm font-medium text-muted-foreground">Overall Score</div>
-                      <div className="text-2xl sm:text-4xl font-semibold bg-gradient-to-br from-cyan-600 to-teal-600 bg-clip-text text-transparent">
+                      <div className="text-2xl sm:text-4xl font-semibold text-primary">
                         {candidate.overallScore}<span className="text-base sm:text-xl text-muted-foreground">/10</span>
                       </div>
                     </div>
@@ -446,20 +446,20 @@ export const CandidateAnalysisDialog = ({ open, onOpenChange, candidate }: Candi
               <TabsList className="inline-flex h-10 sm:h-11 items-center justify-center rounded-lg bg-muted/30 p-1 text-muted-foreground mb-6 sm:mb-12 w-full sm:w-auto overflow-x-auto">
                 <TabsTrigger 
                   value="overview" 
-                  className="inline-flex items-center justify-center whitespace-nowrap rounded-md px-3 sm:px-6 py-2 text-xs sm:text-sm font-medium transition-all data-[state=active]:bg-gradient-to-r data-[state=active]:from-cyan-500 data-[state=active]:to-teal-500 data-[state=active]:text-white data-[state=active]:shadow-sm hover:bg-cyan-50 flex-1 sm:flex-initial"
+                  className="inline-flex items-center justify-center whitespace-nowrap rounded-md px-3 sm:px-6 py-2 text-xs sm:text-sm font-medium transition-all data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-sm hover:bg-accent flex-1 sm:flex-initial"
                 >
                   Overview
                 </TabsTrigger>
                 <TabsTrigger 
                   value="timeline" 
-                  className="inline-flex items-center justify-center whitespace-nowrap rounded-md px-3 sm:px-6 py-2 text-xs sm:text-sm font-medium transition-all data-[state=active]:bg-gradient-to-r data-[state=active]:from-cyan-500 data-[state=active]:to-teal-500 data-[state=active]:text-white data-[state=active]:shadow-sm hover:bg-cyan-50 flex-1 sm:flex-initial"
+                  className="inline-flex items-center justify-center whitespace-nowrap rounded-md px-3 sm:px-6 py-2 text-xs sm:text-sm font-medium transition-all data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-sm hover:bg-accent flex-1 sm:flex-initial"
                 >
                   <span className="hidden sm:inline">Timeline & Notes</span>
                   <span className="sm:hidden">Timeline</span>
                 </TabsTrigger>
                 <TabsTrigger 
                   value="ai-insights" 
-                  className="inline-flex items-center justify-center whitespace-nowrap rounded-md px-3 sm:px-6 py-2 text-xs sm:text-sm font-medium transition-all data-[state=active]:bg-gradient-to-r data-[state=active]:from-cyan-500 data-[state=active]:to-teal-500 data-[state=active]:text-white data-[state=active]:shadow-sm hover:bg-cyan-50 flex-1 sm:flex-initial"
+                  className="inline-flex items-center justify-center whitespace-nowrap rounded-md px-3 sm:px-6 py-2 text-xs sm:text-sm font-medium transition-all data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-sm hover:bg-accent flex-1 sm:flex-initial"
                 >
                   AI Insights
                 </TabsTrigger>
@@ -470,19 +470,19 @@ export const CandidateAnalysisDialog = ({ open, onOpenChange, candidate }: Candi
                 {/* Score Metrics Grid */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
                   {/* Fit Score Card */}
-                  <Card className="bg-background border-cyan-300/30 hover:border-cyan-400/50 hover:shadow-lg hover:shadow-cyan-500/10 transition-all duration-300 group bg-gradient-to-br from-cyan-50/50 to-transparent animate-fade-in-up hover-lift">
+                  <Card className="bg-card border-primary/30 hover:border-primary/50 hover:shadow-lg hover:shadow-primary/10 transition-all duration-300 group bg-gradient-to-br from-primary/5 to-transparent animate-fade-in-up hover-lift">
                     <CardHeader className="pb-6">
                       <div className="flex items-center gap-3 mb-6">
-                        <div className="p-2.5 bg-cyan-100/50 rounded-lg group-hover:bg-cyan-200/50 transition-all duration-300 group-hover:scale-110">
-                          <Target className="h-5 w-5 text-cyan-600" />
+                        <div className="p-2.5 bg-primary/10 rounded-lg group-hover:bg-primary/20 transition-all duration-300 group-hover:scale-110">
+                          <Target className="h-5 w-5 text-primary" />
                         </div>
                         <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
-                          <span className="w-1.5 h-1.5 rounded-full bg-cyan-500 animate-pulse"></span>
+                          <span className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse"></span>
                           Fit Score
                         </CardTitle>
                       </div>
                       <div className="space-y-4">
-                        <div className="text-4xl font-bold bg-gradient-to-r from-cyan-600 to-teal-600 bg-clip-text text-transparent">
+                        <div className="text-4xl font-bold text-primary">
                           {candidate.fitScore}<span className="text-xl text-muted-foreground">/10</span>
                         </div>
                         <Progress 
@@ -501,7 +501,7 @@ export const CandidateAnalysisDialog = ({ open, onOpenChange, candidate }: Candi
                   </Card>
 
                   {/* Risk Factor Card */}
-                  <Card className="bg-background border-destructive/30 hover:border-destructive/50 hover:shadow-lg hover:shadow-destructive/10 transition-all duration-300 group bg-gradient-to-br from-destructive/5 to-transparent animate-fade-in-up animate-delay-100 hover-lift">
+                  <Card className="bg-card border-destructive/30 hover:border-destructive/50 hover:shadow-lg hover:shadow-destructive/10 transition-all duration-300 group bg-gradient-to-br from-destructive/5 to-transparent animate-fade-in-up animate-delay-100 hover-lift">
                     <CardHeader className="pb-6">
                       <div className="flex items-center gap-3 mb-6">
                         <div className="p-2.5 bg-destructive/10 rounded-lg group-hover:bg-destructive/20 transition-all duration-300 group-hover:scale-110">
@@ -522,18 +522,18 @@ export const CandidateAnalysisDialog = ({ open, onOpenChange, candidate }: Candi
                   </Card>
 
                   {/* Reward Factor Card */}
-                  <Card className="bg-background border-teal-300/30 hover:border-teal-400/50 hover:shadow-lg hover:shadow-teal-500/10 transition-all duration-300 group bg-gradient-to-br from-teal-50/50 to-transparent animate-fade-in-up animate-delay-200 hover-lift">
+                  <Card className="bg-card border-accent/30 hover:border-accent/50 hover:shadow-lg hover:shadow-accent/10 transition-all duration-300 group bg-gradient-to-br from-accent/5 to-transparent animate-fade-in-up animate-delay-200 hover-lift">
                     <CardHeader className="pb-6">
                       <div className="flex items-center gap-3 mb-6">
-                        <div className="p-2.5 bg-teal-100/50 rounded-lg group-hover:bg-teal-200/50 transition-all duration-300 group-hover:scale-110">
-                          <Trophy className="h-5 w-5 text-teal-600" />
+                        <div className="p-2.5 bg-accent/10 rounded-lg group-hover:bg-accent/20 transition-all duration-300 group-hover:scale-110">
+                          <Trophy className="h-5 w-5 text-accent-foreground" />
                         </div>
                         <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
-                          <span className="w-1.5 h-1.5 rounded-full bg-teal-500 animate-pulse"></span>
+                          <span className="w-1.5 h-1.5 rounded-full bg-accent animate-pulse"></span>
                           Reward Factor
                         </CardTitle>
                       </div>
-                      <div className="text-4xl font-bold bg-gradient-to-r from-teal-600 to-cyan-600 bg-clip-text text-transparent capitalize">
+                      <div className="text-4xl font-bold text-accent-foreground capitalize">
                         {candidate.rewardScore || candidate.rewardFactor}
                       </div>
                     </CardHeader>
@@ -578,10 +578,10 @@ export const CandidateAnalysisDialog = ({ open, onOpenChange, candidate }: Candi
                           </div>
                           <div className="relative h-8 bg-muted rounded-full overflow-hidden">
                             <div 
-                              className="absolute inset-y-0 left-0 bg-gradient-to-r from-cyan-500 to-teal-500 rounded-full transition-all duration-1000 flex items-center justify-end pr-3"
+                              className="absolute inset-y-0 left-0 bg-primary rounded-full transition-all duration-1000 flex items-center justify-end pr-3"
                               style={{ width: `${(candidate.overallScore || 0) * 10}%` }}
                             >
-                              <span className="text-xs font-medium text-white">●</span>
+                              <span className="text-xs font-medium text-primary-foreground">●</span>
                             </div>
                           </div>
                         </div>
@@ -596,7 +596,7 @@ export const CandidateAnalysisDialog = ({ open, onOpenChange, candidate }: Candi
                           </div>
                           <div className="relative h-6 bg-muted rounded-full overflow-hidden">
                             <div 
-                              className="absolute inset-y-0 left-0 bg-slate-400 rounded-full transition-all duration-1000"
+                              className="absolute inset-y-0 left-0 bg-muted-foreground/50 rounded-full transition-all duration-1000"
                               style={{ width: `${comparisonData.avgOverallScore * 10}%` }}
                             />
                           </div>
@@ -615,7 +615,7 @@ export const CandidateAnalysisDialog = ({ open, onOpenChange, candidate }: Candi
                             </div>
                             <div className="relative h-6 bg-muted rounded-full overflow-hidden">
                               <div 
-                                className="absolute inset-y-0 left-0 bg-purple-400 rounded-full transition-all duration-1000"
+                                className="absolute inset-y-0 left-0 bg-secondary rounded-full transition-all duration-1000"
                                 style={{ width: `${comparisonData.folderAvgScore * 10}%` }}
                               />
                             </div>
@@ -632,13 +632,13 @@ export const CandidateAnalysisDialog = ({ open, onOpenChange, candidate }: Candi
                           <div className="text-[10px] sm:text-xs text-muted-foreground mt-1">Percentile</div>
                         </div>
                         <div className="text-center">
-                          <div className="text-lg sm:text-2xl font-bold text-cyan-600">
+                          <div className="text-lg sm:text-2xl font-bold text-primary">
                             {comparisonData.totalCandidates - comparisonData.higherScoringCount - 1}
                           </div>
                           <div className="text-[10px] sm:text-xs text-muted-foreground mt-1">Below</div>
                         </div>
                         <div className="text-center">
-                          <div className="text-lg sm:text-2xl font-bold text-teal-600">
+                          <div className="text-lg sm:text-2xl font-bold text-accent-foreground">
                             {comparisonData.higherScoringCount}
                           </div>
                           <div className="text-[10px] sm:text-xs text-muted-foreground mt-1">Above</div>
@@ -653,27 +653,27 @@ export const CandidateAnalysisDialog = ({ open, onOpenChange, candidate }: Candi
                   {/* Strengths */}
                   {candidate.strengths?.length > 0 && (
                     <Collapsible open={strengthsOpen} onOpenChange={setStrengthsOpen}>
-                      <Card className="bg-background border-cyan-300/30 hover:border-cyan-400/50 transition-all duration-300 overflow-hidden bg-gradient-to-br from-cyan-50/30 to-teal-50/30 animate-fade-in-up animate-delay-300 hover-lift">
+                      <Card className="bg-card border-primary/30 hover:border-primary/50 transition-all duration-300 overflow-hidden bg-gradient-to-br from-primary/5 to-transparent animate-fade-in-up animate-delay-300 hover-lift">
                         <CollapsibleTrigger className="w-full">
-                          <CardHeader className="cursor-pointer hover:bg-cyan-50/50 transition-colors duration-300">
+                          <CardHeader className="cursor-pointer hover:bg-accent transition-colors duration-300">
                             <div className="flex items-center justify-between">
                               <div className="flex items-center gap-4">
-                                <div className="p-2.5 bg-cyan-100/50 rounded-lg group-hover:scale-110 transition-transform duration-300">
-                                  <CheckCircle className="h-5 w-5 text-cyan-600" />
+                                <div className="p-2.5 bg-primary/10 rounded-lg group-hover:scale-110 transition-transform duration-300">
+                                  <CheckCircle className="h-5 w-5 text-primary" />
                                 </div>
                                 <div className="text-left">
-                                  <CardTitle className="text-lg font-semibold bg-gradient-to-r from-cyan-600 to-teal-600 bg-clip-text text-transparent flex items-center gap-2">
-                                    <span className="w-1 h-6 rounded-full bg-gradient-to-b from-cyan-500 to-teal-500"></span>
+                                  <CardTitle className="text-lg font-semibold text-primary flex items-center gap-2">
+                                    <span className="w-1 h-6 rounded-full bg-primary"></span>
                                     Key Strengths
                                   </CardTitle>
                                   <p className="text-sm text-muted-foreground mt-1">Positive attributes identified</p>
                                 </div>
                               </div>
                               <div className="flex items-center gap-3">
-                                <Badge variant="outline" className="text-sm px-3 py-1 border-cyan-300/50 text-cyan-700 bg-cyan-50/50">
+                                <Badge variant="outline" className="text-sm px-3 py-1 border-primary/30 text-primary">
                                   {candidate.strengths.length}
                                 </Badge>
-                                <ChevronDown className={`h-5 w-5 text-cyan-600 transition-transform duration-300 ${strengthsOpen ? 'rotate-180' : ''}`} />
+                                <ChevronDown className={`h-5 w-5 text-primary transition-transform duration-300 ${strengthsOpen ? 'rotate-180' : ''}`} />
                               </div>
                             </div>
                           </CardHeader>
@@ -731,7 +731,7 @@ export const CandidateAnalysisDialog = ({ open, onOpenChange, candidate }: Candi
 
                 {/* Resume Access */}
                 {candidate.resume && (
-                  <Card className="bg-background border-cyan-300/30 hover:border-cyan-400/50 transition-all duration-300 animate-fade-in-up animate-delay-700 hover-lift">
+                  <Card className="bg-card border-primary/30 hover:border-primary/50 transition-all duration-300 animate-fade-in-up animate-delay-700 hover-lift">
                     <CardContent className="p-8">
                       <div className="flex items-center justify-between">
                         <div className="flex items-center gap-4">
@@ -743,12 +743,8 @@ export const CandidateAnalysisDialog = ({ open, onOpenChange, candidate }: Candi
                             <p className="text-sm text-muted-foreground mt-1">Original submission for detailed review</p>
                           </div>
                         </div>
-                        <Button
-                          onClick={() => window.open(candidate.resume, '_blank')}
-                          className="bg-gradient-to-r from-cyan-500 to-teal-500 hover:from-cyan-600 hover:to-teal-600 text-white shadow-lg hover:shadow-cyan-500/25 transition-all duration-300 relative overflow-hidden group"
-                        >
-                          <span className="absolute inset-0 bg-gradient-to-r from-cyan-400 to-teal-400 opacity-0 group-hover:opacity-100 transition-opacity duration-300"></span>
-                          <span className="relative z-10">Open Resume</span>
+                        <Button className="bg-primary hover:bg-primary/90 text-primary-foreground shadow-lg transition-all duration-300" onClick={() => window.open(candidate.resume, '_blank')}>
+                          Open Resume
                         </Button>
                       </div>
                     </CardContent>
@@ -759,12 +755,12 @@ export const CandidateAnalysisDialog = ({ open, onOpenChange, candidate }: Candi
               {/* Timeline & Notes Tab */}
               <TabsContent value="timeline" className="space-y-8">
                 {/* Activity Timeline */}
-                <Card className="bg-background border-cyan-300/30 hover:border-cyan-400/50 transition-all duration-300">
+                <Card className="bg-card border-primary/30 hover:border-primary/50 transition-all duration-300">
                   <CardHeader className="pb-6">
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-3">
-                        <div className="p-2.5 bg-cyan-100/50 rounded-lg">
-                          <Calendar className="h-5 w-5 text-cyan-600" />
+                        <div className="p-2.5 bg-primary/10 rounded-lg">
+                          <Calendar className="h-5 w-5 text-primary" />
                         </div>
                         <div>
                           <CardTitle className="text-lg font-semibold text-foreground">
@@ -793,11 +789,11 @@ export const CandidateAnalysisDialog = ({ open, onOpenChange, candidate }: Candi
                             {/* Event icon */}
                             <div className={`
                               flex-shrink-0 w-10 h-10 rounded-full flex items-center justify-center z-10
-                              ${event.type === 'status_change' ? 'bg-blue-100 text-blue-600' : ''}
-                              ${event.type === 'note_added' ? 'bg-purple-100 text-purple-600' : ''}
-                              ${event.type === 'email_sent' ? 'bg-green-100 text-green-600' : ''}
-                              ${event.type === 'resume_uploaded' ? 'bg-cyan-100 text-cyan-600' : ''}
-                              ${event.type === 'analysis_completed' ? 'bg-teal-100 text-teal-600' : ''}
+                              ${event.type === 'status_change' ? 'bg-primary/10 text-primary' : ''}
+                              ${event.type === 'note_added' ? 'bg-secondary/10 text-secondary-foreground' : ''}
+                              ${event.type === 'email_sent' ? 'bg-success/10 text-success' : ''}
+                              ${event.type === 'resume_uploaded' ? 'bg-accent/10 text-accent-foreground' : ''}
+                              ${event.type === 'analysis_completed' ? 'bg-primary/10 text-primary' : ''}
                             `}>
                               {event.type === 'status_change' && <Target className="h-5 w-5" />}
                               {event.type === 'note_added' && <FileText className="h-5 w-5" />}
