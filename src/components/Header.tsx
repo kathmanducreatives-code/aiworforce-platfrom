@@ -3,10 +3,13 @@ import { Menu, X, Atom, Zap, FileText, BarChart3, Users, Brain, Clock, LogOut } 
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
+import { useClient } from "@/contexts/ClientContext";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+
 const Header = () => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const { user, signOut } = useAuth();
+  const { client } = useClient();
   const navigate = useNavigate();
 
   const handleSignOut = async () => {
@@ -18,10 +21,16 @@ const Header = () => {
         <div className="flex items-center justify-between h-16">
           {/* Logo */}
           <a href="/" className="flex items-center gap-3 group">
-            <div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center transition-all duration-300 group-hover:scale-110 group-hover:shadow-glow">
-              <Brain className="w-5 h-5 text-primary-foreground" />
-            </div>
-            <span className="text-2xl font-bold text-primary group-hover:text-primary-light transition-colors duration-300">ScreeningPilot</span>
+            {client?.logo_url ? (
+              <img src={client.logo_url} alt={client.company_display_name || client.client_name} className="h-8 w-auto transition-all duration-300 group-hover:scale-110" />
+            ) : (
+              <div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center transition-all duration-300 group-hover:scale-110 group-hover:shadow-glow">
+                <Brain className="w-5 h-5 text-primary-foreground" />
+              </div>
+            )}
+            <span className="text-2xl font-bold text-primary group-hover:text-primary-light transition-colors duration-300">
+              {client ? (client.company_display_name || client.client_name) : 'ScreeningPilot'}
+            </span>
           </a>
 
           {/* Navigation - Desktop */}
