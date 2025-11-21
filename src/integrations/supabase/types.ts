@@ -177,6 +177,51 @@ export type Database = {
         }
         Relationships: []
       }
+      deep_search_analysis: {
+        Row: {
+          candidate_name: string | null
+          certifications: Json | null
+          created_at: string | null
+          current_role_and_company: string | null
+          education: Json | null
+          experience_summary: string | null
+          id: string
+          key_skills: Json | null
+          languages: Json | null
+          overall_fit_rating: number | null
+          recruiter_insight: string | null
+          soft_skills_and_traits: string | null
+        }
+        Insert: {
+          candidate_name?: string | null
+          certifications?: Json | null
+          created_at?: string | null
+          current_role_and_company?: string | null
+          education?: Json | null
+          experience_summary?: string | null
+          id?: string
+          key_skills?: Json | null
+          languages?: Json | null
+          overall_fit_rating?: number | null
+          recruiter_insight?: string | null
+          soft_skills_and_traits?: string | null
+        }
+        Update: {
+          candidate_name?: string | null
+          certifications?: Json | null
+          created_at?: string | null
+          current_role_and_company?: string | null
+          education?: Json | null
+          experience_summary?: string | null
+          id?: string
+          key_skills?: Json | null
+          languages?: Json | null
+          overall_fit_rating?: number | null
+          recruiter_insight?: string | null
+          soft_skills_and_traits?: string | null
+        }
+        Relationships: []
+      }
       deep_search_results: {
         Row: {
           ai_confidence_level: number | null
