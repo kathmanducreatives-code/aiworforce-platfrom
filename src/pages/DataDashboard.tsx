@@ -288,15 +288,6 @@ const DataDashboard = () => {
       <div className="max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-8 py-8 lg:py-12">
         {/* Header */}
         <div className="mb-10">
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => navigate('/')}
-            className="gap-2 hover:bg-primary/10 hover:text-primary mb-6 -ml-2"
-          >
-            <ArrowLeft className="h-4 w-4" />
-            Back to Dashboard
-          </Button>
           <div className="flex items-center gap-4 mb-3">
             <div className="p-3 bg-primary rounded-xl shadow-md">
               <BarChart3 className="h-7 w-7 text-white" />
