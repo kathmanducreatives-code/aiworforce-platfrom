@@ -8,7 +8,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel,
 
 const Header = () => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
-  const { user, signOut } = useAuth();
+  const { user, profile, signOut } = useAuth();
   const { client } = useClient();
   const navigate = useNavigate();
 
@@ -21,24 +21,13 @@ const Header = () => {
         <div className="flex items-center justify-between h-16">
           {/* Logo */}
           <a href="/" className="flex items-center gap-3 group">
-            {user && client ? (
+            {user && profile?.logo_url ? (
               <div className="flex flex-col items-start gap-1">
-                {client.logo_url ? (
-                  <img 
-                    src={client.logo_url} 
-                    alt={client.company_display_name || client.client_name} 
-                    className="h-10 w-auto transition-all duration-300 group-hover:scale-105" 
-                  />
-                ) : (
-                  <div className="flex items-center gap-2">
-                    <div className="w-10 h-10 bg-primary rounded-lg flex items-center justify-center transition-all duration-300 group-hover:scale-105 group-hover:shadow-glow">
-                      <Brain className="w-6 h-6 text-primary-foreground" />
-                    </div>
-                    <span className="text-xl font-bold text-primary">
-                      {client.company_display_name || client.client_name}
-                    </span>
-                  </div>
-                )}
+                <img 
+                  src={profile.logo_url} 
+                  alt={profile.full_name || 'Client logo'} 
+                  className="h-10 w-auto transition-all duration-300 group-hover:scale-105" 
+                />
                 <span className="text-xs text-muted-foreground">Powered by ScreeningPilot</span>
               </div>
             ) : (
