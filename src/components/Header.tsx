@@ -21,16 +21,36 @@ const Header = () => {
         <div className="flex items-center justify-between h-16">
           {/* Logo */}
           <a href="/" className="flex items-center gap-3 group">
-            {client?.logo_url ? (
-              <img src={client.logo_url} alt={client.company_display_name || client.client_name} className="h-8 w-auto transition-all duration-300 group-hover:scale-110" />
-            ) : (
-              <div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center transition-all duration-300 group-hover:scale-110 group-hover:shadow-glow">
-                <Brain className="w-5 h-5 text-primary-foreground" />
+            {user && client ? (
+              <div className="flex flex-col items-start gap-1">
+                {client.logo_url ? (
+                  <img 
+                    src={client.logo_url} 
+                    alt={client.company_display_name || client.client_name} 
+                    className="h-10 w-auto transition-all duration-300 group-hover:scale-105" 
+                  />
+                ) : (
+                  <div className="flex items-center gap-2">
+                    <div className="w-10 h-10 bg-primary rounded-lg flex items-center justify-center transition-all duration-300 group-hover:scale-105 group-hover:shadow-glow">
+                      <Brain className="w-6 h-6 text-primary-foreground" />
+                    </div>
+                    <span className="text-xl font-bold text-primary">
+                      {client.company_display_name || client.client_name}
+                    </span>
+                  </div>
+                )}
+                <span className="text-xs text-muted-foreground">Powered by ScreeningPilot</span>
               </div>
+            ) : (
+              <>
+                <div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center transition-all duration-300 group-hover:scale-110 group-hover:shadow-glow">
+                  <Brain className="w-5 h-5 text-primary-foreground" />
+                </div>
+                <span className="text-2xl font-bold text-primary group-hover:text-primary-light transition-colors duration-300">
+                  ScreeningPilot
+                </span>
+              </>
             )}
-            <span className="text-2xl font-bold text-primary group-hover:text-primary-light transition-colors duration-300">
-              {client ? (client.company_display_name || client.client_name) : 'ScreeningPilot'}
-            </span>
           </a>
 
           {/* Navigation - Desktop */}
