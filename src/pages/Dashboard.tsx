@@ -3,8 +3,10 @@ import { useNavigate } from "react-router-dom";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
-import { Upload, Users, BarChart3, TrendingUp, Folder, ArrowRight, Brain } from "lucide-react";
+import { TrendingUp, Folder, Brain, Users } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
+import ResumeUpload from "@/components/ResumeUpload";
+import ModernDashboard from "@/components/ModernDashboard";
 
 const Dashboard = () => {
   const navigate = useNavigate();
@@ -65,33 +67,6 @@ const Dashboard = () => {
     }
   };
 
-  const quickActions = [
-    {
-      title: "Resume Screener",
-      description: "Upload and analyze new candidates with AI precision",
-      icon: Upload,
-      action: "Add Candidates",
-      path: "/screening",
-      color: "bg-primary/10 text-primary border-primary/30",
-    },
-    {
-      title: "Candidate Intelligence",
-      description: "Manage your candidate pipeline and insights",
-      icon: Users,
-      action: "View Candidates",
-      path: "/candidates",
-      color: "bg-accent/10 text-accent border-accent/30",
-      badge: metrics.totalCandidates,
-    },
-    {
-      title: "Analytics & Insights",
-      description: "Deep dive into recruitment data and metrics",
-      icon: BarChart3,
-      action: "View Analytics",
-      path: "/analytics",
-      color: "bg-secondary/10 text-secondary border-secondary/30",
-    },
-  ];
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-background via-muted/20 to-background">
@@ -169,68 +144,15 @@ const Dashboard = () => {
           </Card>
         </div>
 
-        {/* Quick Actions */}
+        {/* Resume Screener Section */}
         <div className="mb-12">
-          <h2 className="text-2xl font-bold text-foreground mb-6">Quick Actions</h2>
-          <div className="grid gap-6 md:grid-cols-3 animate-fade-in-up animate-delay-200">
-            {quickActions.map((action, index) => (
-              <Card
-                key={index}
-                className="group cursor-pointer border-2 hover:border-primary/50 hover:shadow-xl transition-all duration-300 bg-card/50 backdrop-blur-sm"
-                onClick={() => navigate(action.path)}
-              >
-                <CardContent className="p-6">
-                  <div className="flex items-start justify-between mb-4">
-                    <div className={`p-3 rounded-xl ${action.color} border transition-all duration-300 group-hover:scale-110`}>
-                      <action.icon className="h-6 w-6" />
-                    </div>
-                    {action.badge !== undefined && (
-                      <span className="px-3 py-1 bg-primary/10 text-primary text-sm font-semibold rounded-full">
-                        {action.badge}
-                      </span>
-                    )}
-                  </div>
-                  <h3 className="text-lg font-semibold text-foreground mb-2 group-hover:text-primary transition-colors">
-                    {action.title}
-                  </h3>
-                  <p className="text-sm text-muted-foreground mb-4">
-                    {action.description}
-                  </p>
-                  <Button
-                    variant="ghost"
-                    className="w-full justify-between group-hover:bg-primary/10 group-hover:text-primary transition-all"
-                  >
-                    <span>{action.action}</span>
-                    <ArrowRight className="h-4 w-4 group-hover:translate-x-1 transition-transform" />
-                  </Button>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
+          <ResumeUpload />
         </div>
 
-        {/* Recent Activity Preview */}
-        <Card className="border-border/50 bg-card/50 backdrop-blur-sm">
-          <CardHeader>
-            <CardTitle className="flex items-center justify-between">
-              <span>Recent Activity</span>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => navigate("/candidates")}
-                className="gap-2"
-              >
-                View All
-                <ArrowRight className="h-4 w-4" />
-              </Button>
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p className="text-muted-foreground text-center py-8">
-              Your recent candidate uploads and activities will appear here
-            </p>
-          </CardContent>
-        </Card>
+        {/* Candidate Intelligence Section */}
+        <div>
+          <ModernDashboard />
+        </div>
       </div>
     </div>
   );
