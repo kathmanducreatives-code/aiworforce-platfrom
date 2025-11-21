@@ -149,30 +149,45 @@ export type Database = {
       }
       clients: {
         Row: {
+          accent_color: string | null
           client_name: string
+          company_display_name: string | null
           contact_email: string | null
           contact_name: string | null
           created_at: string | null
           id: string
           industry: string | null
+          logo_url: string | null
+          primary_color: string | null
+          secondary_color: string | null
           updated_at: string | null
         }
         Insert: {
+          accent_color?: string | null
           client_name: string
+          company_display_name?: string | null
           contact_email?: string | null
           contact_name?: string | null
           created_at?: string | null
           id?: string
           industry?: string | null
+          logo_url?: string | null
+          primary_color?: string | null
+          secondary_color?: string | null
           updated_at?: string | null
         }
         Update: {
+          accent_color?: string | null
           client_name?: string
+          company_display_name?: string | null
           contact_email?: string | null
           contact_name?: string | null
           created_at?: string | null
           id?: string
           industry?: string | null
+          logo_url?: string | null
+          primary_color?: string | null
+          secondary_color?: string | null
           updated_at?: string | null
         }
         Relationships: []
@@ -342,6 +357,44 @@ export type Database = {
             columns: ["session_id"]
             isOneToOne: false
             referencedRelation: "scraping_sessions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      profiles: {
+        Row: {
+          client_id: string | null
+          created_at: string | null
+          full_name: string | null
+          id: string
+          role: string | null
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          client_id?: string | null
+          created_at?: string | null
+          full_name?: string | null
+          id?: string
+          role?: string | null
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          client_id?: string | null
+          created_at?: string | null
+          full_name?: string | null
+          id?: string
+          role?: string | null
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "profiles_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
             referencedColumns: ["id"]
           },
         ]
@@ -540,7 +593,19 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      get_client_branding: {
+        Args: { client_uuid: string }
+        Returns: {
+          accent_color: string
+          client_name: string
+          company_display_name: string
+          id: string
+          logo_url: string
+          primary_color: string
+          secondary_color: string
+        }[]
+      }
+      get_user_client_id: { Args: { user_uuid: string }; Returns: string }
     }
     Enums: {
       [_ in never]: never
