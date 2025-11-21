@@ -26,7 +26,7 @@ const Header = () => {
                 <img 
                   src={profile.logo_url} 
                   alt={profile.full_name || 'Client logo'} 
-                  className="h-10 w-auto transition-all duration-300 group-hover:scale-105" 
+                  className="h-12 w-auto transition-all duration-300 group-hover:scale-105" 
                 />
                 <span className="text-xs text-muted-foreground">Powered by ScreeningPilot</span>
               </div>
