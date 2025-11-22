@@ -7,17 +7,21 @@ import { Progress } from "@/components/ui/progress";
 
 interface DeepSearchAnalysis {
   id: string;
+  candidate_id: string | null;
   candidate_name: string;
-  overall_fit_rating: number;
-  experience_summary: string;
-  key_skills: any;
-  soft_skills_and_traits: string;
-  current_role_and_company: string;
-  education: any;
-  certifications: any;
-  languages: any;
-  recruiter_insight: string;
+  linkedin_url: string | null;
+  company: string | null;
+  fit_score: number | null;
+  ai_confidence_level: number | null;
+  ai_summary: string | null;
+  strengths: string[] | null;
+  weaknesses: string[] | null;
+  ideal_roles: string[] | null;
+  company_match_notes: string | null;
+  status: string | null;
+  raw_analysis: any;
   created_at: string;
+  updated_at: string;
 }
 
 interface DeepSearchResultsProps {
@@ -39,12 +43,13 @@ export const DeepSearchResults = ({ candidateId }: DeepSearchResultsProps) => {
         {
           event: '*',
           schema: 'public',
-          table: 'deep_search_analysis',
+          table: 'deep_search_results',
         },
         (payload) => {
           console.log('Deep search update:', payload);
-          if (payload.new) {
-            setResult(payload.new as DeepSearchAnalysis);
+          const newData = payload.new as DeepSearchAnalysis;
+          if (newData && newData.id === candidateId) {
+            setResult(newData);
             setLoading(false);
           }
         }
@@ -58,11 +63,10 @@ export const DeepSearchResults = ({ candidateId }: DeepSearchResultsProps) => {
 
   const fetchDeepSearchResult = async () => {
     try {
-      const { data, error } = await (supabase as any)
-        .from('deep_search_analysis')
+      const { data, error } = await supabase
+        .from('deep_search_results')
         .select('*')
-        .order('created_at', { ascending: false })
-        .limit(1)
+        .eq('id', candidateId)
         .maybeSingle();
 
       if (error) throw error;
@@ -75,14 +79,16 @@ export const DeepSearchResults = ({ candidateId }: DeepSearchResultsProps) => {
     }
   };
 
-  const getScoreColor = (score: number) => {
+  const getScoreColor = (score: number | null) => {
+    if (!score) return "text-muted-foreground";
     if (score >= 80) return "text-green-500";
     if (score >= 60) return "text-blue-500";
     if (score >= 40) return "text-yellow-500";
     return "text-red-500";
   };
 
-  const getScoreGradient = (score: number) => {
+  const getScoreGradient = (score: number | null) => {
+    if (!score) return "from-muted to-muted-foreground";
     if (score >= 80) return "from-green-500 to-emerald-500";
     if (score >= 60) return "from-blue-500 to-cyan-500";
     if (score >= 40) return "from-yellow-500 to-orange-500";
@@ -123,188 +129,153 @@ export const DeepSearchResults = ({ candidateId }: DeepSearchResultsProps) => {
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Gauge className="h-5 w-5 text-primary" />
-            Overall Fit Rating
+            Overall Fit Score
           </CardTitle>
         </CardHeader>
         <CardContent>
           <div className="space-y-4">
             <div className="flex items-center justify-between">
-              <span className={`text-6xl font-bold ${getScoreColor(result.overall_fit_rating || 0)}`}>
-                {result.overall_fit_rating || 0}
+              <span className={`text-6xl font-bold ${getScoreColor(result.fit_score)}`}>
+                {result.fit_score || 0}
               </span>
               <span className="text-muted-foreground text-sm">out of 100</span>
             </div>
             <div className="relative h-3 rounded-full bg-secondary overflow-hidden">
               <div
-                className={`h-full bg-gradient-to-r ${getScoreGradient(result.overall_fit_rating || 0)} transition-all duration-1000 ease-out`}
-                style={{ width: `${result.overall_fit_rating || 0}%` }}
+                className={`h-full bg-gradient-to-r ${getScoreGradient(result.fit_score)} transition-all duration-1000 ease-out`}
+                style={{ width: `${result.fit_score || 0}%` }}
               />
             </div>
+            {result.ai_confidence_level && (
+              <div className="mt-4 text-sm text-muted-foreground">
+                AI Confidence: {result.ai_confidence_level}%
+              </div>
+            )}
           </div>
         </CardContent>
       </Card>
 
-      {/* Current Role & Company */}
-      {result.current_role_and_company && (
+      {/* Company & LinkedIn */}
+      {(result.company || result.linkedin_url) && (
         <Card className="border-primary/20 bg-card/50 backdrop-blur-sm">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <Building2 className="h-5 w-5 text-primary" />
-              Current Role & Company
+              Professional Information
             </CardTitle>
           </CardHeader>
-          <CardContent>
-            <p className="text-foreground/90 leading-relaxed">
-              {result.current_role_and_company}
-            </p>
+          <CardContent className="space-y-2">
+            {result.company && (
+              <p className="text-foreground/90"><strong>Company:</strong> {result.company}</p>
+            )}
+            {result.linkedin_url && (
+              <a 
+                href={result.linkedin_url} 
+                target="_blank" 
+                rel="noopener noreferrer"
+                className="text-primary hover:underline inline-block"
+              >
+                View LinkedIn Profile →
+              </a>
+            )}
           </CardContent>
         </Card>
       )}
 
-      {/* Experience Summary */}
-      {result.experience_summary && (
+      {/* AI Summary */}
+      {result.ai_summary && (
         <Card className="border-primary/20 bg-card/50 backdrop-blur-sm">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <Brain className="h-5 w-5 text-primary" />
-              Experience Summary
+              AI Analysis Summary
             </CardTitle>
           </CardHeader>
           <CardContent>
             <p className="text-foreground/90 leading-relaxed whitespace-pre-wrap">
-              {result.experience_summary}
+              {result.ai_summary}
             </p>
           </CardContent>
         </Card>
       )}
 
-      {/* Key Skills */}
-      {result.key_skills && (
-        <Card className="border-primary/20 bg-card/50 backdrop-blur-sm">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Target className="h-5 w-5 text-primary" />
-              Key Skills
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="flex flex-wrap gap-2">
-              {Array.isArray(result.key_skills) ? (
-                result.key_skills.map((skill: string, idx: number) => (
-                  <Badge key={idx} variant="secondary" className="px-3 py-1">
-                    {skill}
-                  </Badge>
-                ))
-              ) : (
-                <p className="text-foreground/80">{JSON.stringify(result.key_skills)}</p>
-              )}
-            </div>
-          </CardContent>
-        </Card>
-      )}
-
-      {/* Soft Skills and Traits */}
-      {result.soft_skills_and_traits && (
+      {/* Strengths */}
+      {result.strengths && result.strengths.length > 0 && (
         <Card className="border-green-500/20 bg-card/50 backdrop-blur-sm">
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-green-500">
               <TrendingUp className="h-5 w-5" />
-              Soft Skills & Traits
+              Strengths
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <p className="text-foreground/80 leading-relaxed">
-              {result.soft_skills_and_traits}
-            </p>
+            <ul className="space-y-2">
+              {result.strengths.map((strength: string, idx: number) => (
+                <li key={idx} className="flex items-start gap-2">
+                  <span className="text-green-500 mt-1">✓</span>
+                  <span className="text-foreground/90">{strength}</span>
+                </li>
+              ))}
+            </ul>
           </CardContent>
         </Card>
       )}
 
-      {/* Education & Certifications */}
-      <div className="grid md:grid-cols-2 gap-6">
-        {result.education && (
-          <Card className="border-primary/20 bg-card/50 backdrop-blur-sm">
-            <CardHeader>
-              <CardTitle>Education</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="text-foreground/80">
-                {Array.isArray(result.education) ? (
-                  <ul className="space-y-2">
-                    {result.education.map((edu: any, idx: number) => (
-                      <li key={idx} className="flex items-start gap-2">
-                        <span className="text-primary mt-1">•</span>
-                        <span>{typeof edu === 'string' ? edu : JSON.stringify(edu)}</span>
-                      </li>
-                    ))}
-                  </ul>
-                ) : (
-                  <p>{JSON.stringify(result.education)}</p>
-                )}
-              </div>
-            </CardContent>
-          </Card>
-        )}
+      {/* Weaknesses */}
+      {result.weaknesses && result.weaknesses.length > 0 && (
+        <Card className="border-red-500/20 bg-card/50 backdrop-blur-sm">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-red-500">
+              <TrendingDown className="h-5 w-5" />
+              Areas for Development
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <ul className="space-y-2">
+              {result.weaknesses.map((weakness: string, idx: number) => (
+                <li key={idx} className="flex items-start gap-2">
+                  <span className="text-red-500 mt-1">•</span>
+                  <span className="text-foreground/80">{weakness}</span>
+                </li>
+              ))}
+            </ul>
+          </CardContent>
+        </Card>
+      )}
 
-        {result.certifications && (
-          <Card className="border-primary/20 bg-card/50 backdrop-blur-sm">
-            <CardHeader>
-              <CardTitle>Certifications</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="text-foreground/80">
-                {Array.isArray(result.certifications) ? (
-                  <ul className="space-y-2">
-                    {result.certifications.map((cert: any, idx: number) => (
-                      <li key={idx} className="flex items-start gap-2">
-                        <span className="text-primary mt-1">•</span>
-                        <span>{typeof cert === 'string' ? cert : JSON.stringify(cert)}</span>
-                      </li>
-                    ))}
-                  </ul>
-                ) : (
-                  <p>{JSON.stringify(result.certifications)}</p>
-                )}
-              </div>
-            </CardContent>
-          </Card>
-        )}
-      </div>
-
-      {/* Languages */}
-      {result.languages && (
+      {/* Ideal Roles */}
+      {result.ideal_roles && result.ideal_roles.length > 0 && (
         <Card className="border-primary/20 bg-card/50 backdrop-blur-sm">
           <CardHeader>
-            <CardTitle>Languages</CardTitle>
+            <CardTitle className="flex items-center gap-2">
+              <Target className="h-5 w-5 text-primary" />
+              Ideal Roles
+            </CardTitle>
           </CardHeader>
           <CardContent>
             <div className="flex flex-wrap gap-2">
-              {Array.isArray(result.languages) ? (
-                result.languages.map((lang: any, idx: number) => (
-                  <Badge key={idx} variant="outline" className="px-3 py-1">
-                    {typeof lang === 'string' ? lang : JSON.stringify(lang)}
-                  </Badge>
-                ))
-              ) : (
-                <p className="text-foreground/80">{JSON.stringify(result.languages)}</p>
-              )}
+              {result.ideal_roles.map((role: string, idx: number) => (
+                <Badge key={idx} variant="secondary" className="px-3 py-1">
+                  {role}
+                </Badge>
+              ))}
             </div>
           </CardContent>
         </Card>
       )}
 
-      {/* Recruiter Insight */}
-      {result.recruiter_insight && (
+      {/* Company Match Notes */}
+      {result.company_match_notes && (
         <Card className="border-primary/20 bg-card/50 backdrop-blur-sm">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
-              <Brain className="h-5 w-5 text-primary" />
-              Recruiter Insight
+              <Building2 className="h-5 w-5 text-primary" />
+              Company Match Notes
             </CardTitle>
           </CardHeader>
           <CardContent>
             <p className="text-foreground/90 leading-relaxed whitespace-pre-wrap">
-              {result.recruiter_insight}
+              {result.company_match_notes}
             </p>
           </CardContent>
         </Card>
