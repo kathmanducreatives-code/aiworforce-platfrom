@@ -243,13 +243,16 @@ export type Database = {
           ai_summary: string | null
           candidate_id: string | null
           candidate_name: string
+          certifications: Json | null
           company: string | null
           company_match_notes: string | null
           created_at: string | null
+          education: Json | null
           fit_score: number | null
           id: string
           ideal_roles: string[] | null
           linkedin_url: string | null
+          profile_picture_url: string | null
           raw_analysis: Json | null
           status: string | null
           strengths: string[] | null
@@ -261,13 +264,16 @@ export type Database = {
           ai_summary?: string | null
           candidate_id?: string | null
           candidate_name: string
+          certifications?: Json | null
           company?: string | null
           company_match_notes?: string | null
           created_at?: string | null
+          education?: Json | null
           fit_score?: number | null
           id?: string
           ideal_roles?: string[] | null
           linkedin_url?: string | null
+          profile_picture_url?: string | null
           raw_analysis?: Json | null
           status?: string | null
           strengths?: string[] | null
@@ -279,13 +285,16 @@ export type Database = {
           ai_summary?: string | null
           candidate_id?: string | null
           candidate_name?: string
+          certifications?: Json | null
           company?: string | null
           company_match_notes?: string | null
           created_at?: string | null
+          education?: Json | null
           fit_score?: number | null
           id?: string
           ideal_roles?: string[] | null
           linkedin_url?: string | null
+          profile_picture_url?: string | null
           raw_analysis?: Json | null
           status?: string | null
           strengths?: string[] | null
