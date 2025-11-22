@@ -14,30 +14,32 @@ import {
 interface AnalyzedCandidateCardProps {
   id: string;
   candidate_name: string;
-  overall_fit_rating: number;
-  experience_summary: string;
-  key_skills: any;
+  fit_score: number | null;
+  ai_summary: string | null;
+  strengths: string[] | null;
   created_at: string;
 }
 
 export const AnalyzedCandidateCard = ({
   id,
   candidate_name,
-  overall_fit_rating,
-  experience_summary,
-  key_skills,
+  fit_score,
+  ai_summary,
+  strengths,
   created_at
 }: AnalyzedCandidateCardProps) => {
   const [showFullAnalysis, setShowFullAnalysis] = useState(false);
 
-  const getScoreColor = (score: number) => {
+  const getScoreColor = (score: number | null) => {
+    if (!score) return "text-muted-foreground";
     if (score >= 80) return "text-green-600";
     if (score >= 60) return "text-blue-600";
     if (score >= 40) return "text-yellow-600";
     return "text-red-600";
   };
 
-  const getScoreBgColor = (score: number) => {
+  const getScoreBgColor = (score: number | null) => {
+    if (!score) return "bg-muted/50 border-muted";
     if (score >= 80) return "bg-green-50 border-green-200";
     if (score >= 60) return "bg-blue-50 border-blue-200";
     if (score >= 40) return "bg-yellow-50 border-yellow-200";
@@ -64,8 +66,8 @@ export const AnalyzedCandidateCard = ({
     });
   };
 
-  const topSkills = Array.isArray(key_skills) 
-    ? key_skills.slice(0, 3) 
+  const topSkills = Array.isArray(strengths) 
+    ? strengths.slice(0, 3) 
     : [];
 
   return (
@@ -90,10 +92,10 @@ export const AnalyzedCandidateCard = ({
             </div>
 
             {/* Fit Score Badge */}
-            <div className={`flex flex-col items-center justify-center px-4 py-2 rounded-xl border-2 ${getScoreBgColor(overall_fit_rating)}`}>
-              <Gauge className={`w-5 h-5 mb-1 ${getScoreColor(overall_fit_rating)}`} />
-              <div className={`text-2xl font-bold ${getScoreColor(overall_fit_rating)}`}>
-                {overall_fit_rating}
+            <div className={`flex flex-col items-center justify-center px-4 py-2 rounded-xl border-2 ${getScoreBgColor(fit_score)}`}>
+              <Gauge className={`w-5 h-5 mb-1 ${getScoreColor(fit_score)}`} />
+              <div className={`text-2xl font-bold ${getScoreColor(fit_score)}`}>
+                {fit_score || 0}
               </div>
               <div className="text-xs text-muted-foreground">Fit Score</div>
             </div>
@@ -102,14 +104,14 @@ export const AnalyzedCandidateCard = ({
 
         <CardContent className="space-y-4">
           {/* Experience Summary */}
-          {experience_summary && (
+          {ai_summary && (
             <div>
               <h4 className="text-sm font-semibold mb-2 flex items-center gap-2">
                 <Brain className="w-4 h-4 text-primary" />
                 Key Highlights
               </h4>
               <p className="text-sm text-muted-foreground line-clamp-2">
-                {experience_summary}
+                {ai_summary}
               </p>
             </div>
           )}
@@ -126,9 +128,9 @@ export const AnalyzedCandidateCard = ({
                     {skill}
                   </Badge>
                 ))}
-                {Array.isArray(key_skills) && key_skills.length > 3 && (
+                {Array.isArray(strengths) && strengths.length > 3 && (
                   <Badge variant="outline" className="text-xs">
-                    +{key_skills.length - 3} more
+                    +{strengths.length - 3} more
                   </Badge>
                 )}
               </div>

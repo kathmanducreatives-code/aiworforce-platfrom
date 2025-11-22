@@ -79,7 +79,7 @@ export default function DeepSearch() {
         {
           event: 'INSERT',
           schema: 'public',
-          table: 'deep_search_analysis',
+          table: 'deep_search_results',
         },
         handleAnalysisUpdate
       )
@@ -126,8 +126,8 @@ export default function DeepSearch() {
 
   const fetchAnalyzedResults = async () => {
     try {
-      const { data, error } = await (supabase as any)
-        .from('deep_search_analysis')
+      const { data, error } = await supabase
+        .from('deep_search_results')
         .select('*')
         .order('created_at', { ascending: false });
 
