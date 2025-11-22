@@ -26,19 +26,35 @@ const N8N_LEAD_SCRAPER_WEBHOOK_URL = "https://prasidha123aa.app.n8n.cloud/webhoo
 export const leadScraperApi = {
   async scrapeLeads(formData: LeadScraperFormData, sessionId?: string): Promise<LeadScraperResponse> {
     try {
-      console.log('Sending lead scraper request to n8n:', formData);
+      const payload = {
+        ...formData,
+        session_id: sessionId,
+        timestamp: new Date().toISOString(),
+        source: 'screening-pilot-lead-scraper',
+      };
+      
+      console.log('=== WEBHOOK PAYLOAD DEBUG ===');
+      console.log('Full payload being sent:', payload);
+      console.log('Array fields with values:', {
+        currentCompanies: payload.currentCompanies,
+        currentJobTitles: payload.currentJobTitles,
+        functionIds: payload.functionIds,
+        locations: payload.locations,
+        pastCompanies: payload.pastCompanies,
+        pastJobTitles: payload.pastJobTitles,
+        schools: payload.schools,
+        seniorityLevelIds: payload.seniorityLevelIds,
+        yearsAtCurrentCompanyIds: payload.yearsAtCurrentCompanyIds,
+        yearsOfExperienceIds: payload.yearsOfExperienceIds,
+      });
+      console.log('===========================');
       
       const response = await fetch(N8N_LEAD_SCRAPER_WEBHOOK_URL, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({
-          ...formData,
-          session_id: sessionId,
-          timestamp: new Date().toISOString(),
-          source: 'screening-pilot-lead-scraper',
-        }),
+        body: JSON.stringify(payload),
       });
 
       if (!response.ok) {

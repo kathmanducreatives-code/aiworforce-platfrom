@@ -64,10 +64,12 @@ export const SearchForm = ({ onSubmit, isLoading }: SearchFormProps) => {
     const value = inputs[inputField].trim();
     const currentArray = formData[field] as string[];
     if (value && Array.isArray(currentArray) && !currentArray.includes(value)) {
-      setFormData({
+      const updatedFormData = {
         ...formData,
         [field]: [...currentArray, value],
-      });
+      };
+      console.log(`Added "${value}" to ${field}:`, updatedFormData[field]);
+      setFormData(updatedFormData);
       setInputs({ ...inputs, [inputField]: "" });
     }
   };
@@ -81,6 +83,13 @@ export const SearchForm = ({ onSubmit, isLoading }: SearchFormProps) => {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    console.log('Form data being submitted:', formData);
+    console.log('Non-empty fields:', Object.entries(formData).filter(([key, value]) => {
+      if (Array.isArray(value)) return value.length > 0;
+      if (typeof value === 'string') return value.trim() !== '';
+      if (typeof value === 'boolean') return value;
+      return value > 0;
+    }));
     onSubmit(formData);
   };
 
