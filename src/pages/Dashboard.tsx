@@ -77,7 +77,7 @@ const Dashboard = () => {
             <img 
               src={profile.logo_url} 
               alt="Client Logo" 
-              className="h-24 w-auto mb-6" 
+              className="h-32 w-auto mb-6" 
             />
           )}
           <p className="text-xl text-muted-foreground">
