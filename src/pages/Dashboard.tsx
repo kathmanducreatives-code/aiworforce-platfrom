@@ -7,7 +7,6 @@ import { TrendingUp, Folder, Brain, Users } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import ResumeUpload from "@/components/ResumeUpload";
 import ModernDashboard from "@/components/ModernDashboard";
-import hr20Logo from "@/assets/hr20-asia-logo.png";
 
 const Dashboard = () => {
   const navigate = useNavigate();
@@ -74,11 +73,13 @@ const Dashboard = () => {
       <div className="max-w-7xl mx-auto px-6 py-12">
         {/* Welcome Header */}
         <div className="mb-12 animate-fade-in">
-          <img 
-            src={hr20Logo} 
-            alt="HR20 Asia Logo" 
-            className="h-24 w-auto mb-6" 
-          />
+          {profile?.logo_url && (
+            <img 
+              src={profile.logo_url} 
+              alt="Client Logo" 
+              className="h-24 w-auto mb-6" 
+            />
+          )}
           <p className="text-xl text-muted-foreground">
             Your AI-powered recruitment command center
           </p>
