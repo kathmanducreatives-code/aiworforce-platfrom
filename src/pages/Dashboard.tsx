@@ -73,9 +73,17 @@ const Dashboard = () => {
       <div className="max-w-7xl mx-auto px-6 py-12">
         {/* Welcome Header */}
         <div className="mb-12 animate-fade-in">
-          <h1 className="text-4xl font-bold text-foreground mb-3">
-            Welcome back{profile?.full_name ? `, ${profile.full_name}` : ''}! 👋
-          </h1>
+          {profile?.logo_url ? (
+            <img 
+              src={profile.logo_url} 
+              alt="Client logo" 
+              className="h-16 w-auto mb-3" 
+            />
+          ) : (
+            <h1 className="text-4xl font-bold text-foreground mb-3">
+              ScreeningPilot
+            </h1>
+          )}
           <p className="text-xl text-muted-foreground">
             Your AI-powered recruitment command center
           </p>
