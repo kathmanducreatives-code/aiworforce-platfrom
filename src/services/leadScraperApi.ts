@@ -1,10 +1,17 @@
 export interface LeadScraperFormData {
-  jobTitle: string;
-  location: string;
-  keywords: string[];
-  experienceLevel: string;
-  industry: string;
-  numberOfLeads: number;
+  currentCompanies: string[];
+  currentJobTitles: string[];
+  functionIds: string[];
+  locations: string[];
+  maxItems: number;
+  pastCompanies: string[];
+  pastJobTitles: string[];
+  recentlyChangedJobs: boolean;
+  schools: string[];
+  searchQuery: string;
+  seniorityLevelIds: string[];
+  yearsAtCurrentCompanyIds: string[];
+  yearsOfExperienceIds: string[];
 }
 
 export interface LeadScraperResponse {
@@ -28,12 +35,19 @@ export const leadScraperApi = {
         },
         body: JSON.stringify({
           session_id: sessionId,
-          job_title: formData.jobTitle,
-          location: formData.location,
-          keywords: formData.keywords,
-          experience_level: formData.experienceLevel,
-          industry: formData.industry,
-          number_of_leads: formData.numberOfLeads,
+          currentCompanies: formData.currentCompanies,
+          currentJobTitles: formData.currentJobTitles,
+          functionIds: formData.functionIds,
+          locations: formData.locations,
+          maxItems: formData.maxItems,
+          pastCompanies: formData.pastCompanies,
+          pastJobTitles: formData.pastJobTitles,
+          recentlyChangedJobs: formData.recentlyChangedJobs,
+          schools: formData.schools,
+          searchQuery: formData.searchQuery,
+          seniorityLevelIds: formData.seniorityLevelIds,
+          yearsAtCurrentCompanyIds: formData.yearsAtCurrentCompanyIds,
+          yearsOfExperienceIds: formData.yearsOfExperienceIds,
           timestamp: new Date().toISOString(),
           source: 'screening-pilot-lead-scraper',
         }),

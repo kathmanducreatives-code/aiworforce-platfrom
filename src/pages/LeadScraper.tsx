@@ -116,7 +116,7 @@ export default function LeadScraper() {
 
       toast({
         title: "Scraping Initiated! 🚀",
-        description: `Searching for ${formData.numberOfLeads} ${formData.jobTitle} candidates in ${formData.location}`,
+        description: `Searching for up to ${formData.maxItems} candidates${formData.searchQuery ? ` matching "${formData.searchQuery}"` : ''}`,
       });
 
       // Update session to completed (in real implementation, this would be done by the webhook)

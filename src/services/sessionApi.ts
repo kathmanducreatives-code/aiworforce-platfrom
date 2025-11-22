@@ -1,14 +1,8 @@
 import { supabase } from "@/integrations/supabase/client";
+import type { SearchFormData } from "@/components/lead-scraper/SearchForm";
 
 export interface SessionData {
-  search_criteria: {
-    jobTitle: string;
-    location: string;
-    keywords: string[];
-    experienceLevel: string;
-    industry: string;
-    numberOfLeads: number;
-  };
+  search_criteria: SearchFormData;
   status?: string;
 }
 
@@ -17,7 +11,7 @@ export const sessionApi = {
     const { data: session, error } = await supabase
       .from("scraping_sessions")
       .insert({
-        search_criteria: data.search_criteria,
+        search_criteria: data.search_criteria as any,
         status: data.status || "pending",
         total_leads: 0,
       })
@@ -29,9 +23,14 @@ export const sessionApi = {
   },
 
   async updateSession(sessionId: string, updates: Partial<SessionData> & { total_leads?: number; completed_at?: string }) {
+    const updateData: any = { ...updates };
+    if (updateData.search_criteria) {
+      updateData.search_criteria = updateData.search_criteria as any;
+    }
+    
     const { data, error } = await supabase
       .from("scraping_sessions")
-      .update(updates)
+      .update(updateData)
       .eq("id", sessionId)
       .select()
       .single();
