@@ -83,16 +83,44 @@ export const SearchForm = ({ onSubmit, isLoading }: SearchFormProps) => {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    console.log('Form data being submitted:', formData);
-    console.log('Non-empty fields:', Object.entries(formData).filter(([key, value]) => {
+
+    // Ensure any pending input values are included in the arrays before submitting
+    const buildArray = (
+      field: keyof SearchFormData,
+      inputKey: keyof typeof inputs
+    ) => {
+      const current = (formData[field] as string[]) || [];
+      const pending = inputs[inputKey].trim();
+      if (pending && !current.includes(pending)) {
+        return [...current, pending];
+      }
+      return current;
+    };
+
+    const finalData: SearchFormData = {
+      ...formData,
+      currentCompanies: buildArray("currentCompanies", "currentCompany"),
+      currentJobTitles: buildArray("currentJobTitles", "currentJobTitle"),
+      functionIds: buildArray("functionIds", "functionId"),
+      locations: buildArray("locations", "location"),
+      pastCompanies: buildArray("pastCompanies", "pastCompany"),
+      pastJobTitles: buildArray("pastJobTitles", "pastJobTitle"),
+      schools: buildArray("schools", "school"),
+      seniorityLevelIds: buildArray("seniorityLevelIds", "seniorityLevel"),
+      yearsAtCurrentCompanyIds: buildArray("yearsAtCurrentCompanyIds", "yearsAtCompany"),
+      yearsOfExperienceIds: buildArray("yearsOfExperienceIds", "yearsOfExperience"),
+    };
+
+    console.log('Form data being submitted (with pending inputs):', finalData);
+    console.log('Non-empty fields:', Object.entries(finalData).filter(([key, value]) => {
       if (Array.isArray(value)) return value.length > 0;
       if (typeof value === 'string') return value.trim() !== '';
       if (typeof value === 'boolean') return value;
       return value > 0;
     }));
-    onSubmit(formData);
-  };
 
+    onSubmit(finalData);
+  };
   const renderArrayInput = (
     label: string,
     field: keyof SearchFormData,
