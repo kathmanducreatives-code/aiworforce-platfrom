@@ -859,6 +859,10 @@ export type Database = {
         }[]
       }
       get_user_client_id: { Args: { user_uuid: string }; Returns: string }
+      is_room_member: {
+        Args: { _room_id: string; _user_id: string }
+        Returns: boolean
+      }
     }
     Enums: {
       candidate_source: "resume_screening" | "deep_search" | "linkedin_scraper"
