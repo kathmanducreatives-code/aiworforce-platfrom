@@ -29,6 +29,11 @@ const Sidebar = ({ isCollapsed, onToggle, onCollaborationToggle, showCollaborati
     { to: "/deep-search", icon: Brain, label: "Deep Search" },
   ];
 
+  const handleCollaborationClick = (e: React.MouseEvent) => {
+    e.preventDefault();
+    onCollaborationToggle?.();
+  };
+
   return (
     <aside 
       className={`fixed left-0 top-0 h-screen bg-card/95 backdrop-blur-md border-r border-border/50 flex flex-col transition-all duration-300 shadow-lg z-40 ${
@@ -91,22 +96,31 @@ const Sidebar = ({ isCollapsed, onToggle, onCollaborationToggle, showCollaborati
             )}
           </NavLink>
         ))}
+        
+        {/* Collaboration Button */}
+        <button
+          onClick={handleCollaborationClick}
+          className={`group flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 relative w-full ${
+            showCollaboration
+              ? "bg-gradient-to-r from-primary to-primary/90 text-primary-foreground shadow-lg shadow-primary/25"
+              : "text-muted-foreground hover:bg-muted/80 hover:text-foreground hover:translate-x-1"
+          } ${isCollapsed ? 'justify-center' : ''}`}
+          title={isCollapsed ? "Collaboration" : undefined}
+        >
+          {showCollaboration && !isCollapsed && (
+            <div className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-8 bg-primary-foreground rounded-r-full" />
+          )}
+          <MessageSquare className={`h-5 w-5 flex-shrink-0 transition-transform duration-200 ${
+            !showCollaboration && 'group-hover:scale-110'
+          }`} />
+          {!isCollapsed && (
+            <span className="font-medium tracking-wide">Collaboration</span>
+          )}
+        </button>
       </nav>
 
       {/* Footer */}
-      <div className="p-4 border-t border-border/50 space-y-2">
-        <Button
-          onClick={onCollaborationToggle}
-          variant={showCollaboration ? "default" : "ghost"}
-          className={`w-full gap-3 transition-all duration-200 ${
-            isCollapsed ? 'justify-center px-0' : 'justify-start'
-          } ${showCollaboration ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground hover:bg-muted/80'}`}
-          title={isCollapsed ? "Collaboration" : undefined}
-        >
-          <MessageSquare className="h-5 w-5 flex-shrink-0" />
-          {!isCollapsed && <span className="font-medium">Collaboration</span>}
-        </Button>
-        
+      <div className="p-4 border-t border-border/50">
         <Button
           onClick={handleSignOut}
           variant="ghost"
