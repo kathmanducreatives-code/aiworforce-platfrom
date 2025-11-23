@@ -26,16 +26,29 @@ const N8N_LEAD_SCRAPER_WEBHOOK_URL = "https://prasidha123aa.app.n8n.cloud/webhoo
 export const leadScraperApi = {
   async scrapeLeads(formData: LeadScraperFormData, sessionId?: string): Promise<LeadScraperResponse> {
     try {
+      // Build explicit payload to ensure all fields are present with the correct keys
       const payload = {
-        ...formData,
+        currentCompanies: formData.currentCompanies ?? [],
+        currentJobTitles: formData.currentJobTitles ?? [],
+        functionIds: formData.functionIds ?? [],
+        locations: formData.locations ?? [],
+        maxItems: formData.maxItems ?? 0,
+        pastCompanies: formData.pastCompanies ?? [],
+        pastJobTitles: formData.pastJobTitles ?? [],
+        recentlyChangedJobs: formData.recentlyChangedJobs ?? false,
+        schools: formData.schools ?? [],
+        searchQuery: formData.searchQuery ?? "",
+        seniorityLevelIds: formData.seniorityLevelIds ?? [],
+        yearsAtCurrentCompanyIds: formData.yearsAtCurrentCompanyIds ?? [],
+        yearsOfExperienceIds: formData.yearsOfExperienceIds ?? [],
         session_id: sessionId,
         timestamp: new Date().toISOString(),
-        source: 'screening-pilot-lead-scraper',
+        source: "screening-pilot-lead-scrape",
       };
       
-      console.log('=== WEBHOOK PAYLOAD DEBUG ===');
-      console.log('Full payload being sent:', payload);
-      console.log('Array fields with values:', {
+      console.log("=== WEBHOOK PAYLOAD DEBUG ===");
+      console.log("Full payload being sent:", payload);
+      console.log("Array fields with values:", {
         currentCompanies: payload.currentCompanies,
         currentJobTitles: payload.currentJobTitles,
         functionIds: payload.functionIds,
@@ -47,7 +60,7 @@ export const leadScraperApi = {
         yearsAtCurrentCompanyIds: payload.yearsAtCurrentCompanyIds,
         yearsOfExperienceIds: payload.yearsOfExperienceIds,
       });
-      console.log('===========================');
+      console.log("===========================");
       
       const response = await fetch(N8N_LEAD_SCRAPER_WEBHOOK_URL, {
         method: 'POST',
