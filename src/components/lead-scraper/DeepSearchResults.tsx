@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Loader2, Brain, TrendingUp, TrendingDown, Target, Building2, Gauge } from "lucide-react";
+import { Loader2, Brain, TrendingUp, TrendingDown, Target, Building2, Gauge, GraduationCap, Award } from "lucide-react";
 import { Progress } from "@/components/ui/progress";
 
 interface DeepSearchAnalysis {
@@ -18,6 +18,8 @@ interface DeepSearchAnalysis {
   weaknesses: string[] | null;
   ideal_roles: string[] | null;
   company_match_notes: string | null;
+  education: any;
+  certifications: any;
   status: string | null;
   raw_analysis: any;
   created_at: string;
@@ -177,6 +179,92 @@ export const DeepSearchResults = ({ candidateId }: DeepSearchResultsProps) => {
               >
                 View LinkedIn Profile →
               </a>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Education */}
+      {result.education && (
+        <Card className="border-primary/20 bg-card/50 backdrop-blur-sm">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <GraduationCap className="h-5 w-5 text-primary" />
+              Education
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            {Array.isArray(result.education) ? (
+              <div className="space-y-4">
+                {result.education.map((edu: any, idx: number) => (
+                  <div key={idx} className="border-l-2 border-primary/30 pl-4">
+                    {edu.degree && (
+                      <p className="font-semibold text-foreground">{edu.degree}</p>
+                    )}
+                    {edu.institution && (
+                      <p className="text-foreground/80">{edu.institution}</p>
+                    )}
+                    {edu.year && (
+                      <p className="text-sm text-muted-foreground">{edu.year}</p>
+                    )}
+                    {edu.field && (
+                      <p className="text-sm text-foreground/70">Field: {edu.field}</p>
+                    )}
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="text-foreground/90 whitespace-pre-wrap">
+                {typeof result.education === 'string' 
+                  ? result.education 
+                  : JSON.stringify(result.education, null, 2)}
+              </p>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Certifications */}
+      {result.certifications && (
+        <Card className="border-primary/20 bg-card/50 backdrop-blur-sm">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Award className="h-5 w-5 text-primary" />
+              Certifications
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            {Array.isArray(result.certifications) ? (
+              <div className="space-y-3">
+                {result.certifications.map((cert: any, idx: number) => (
+                  <div key={idx} className="flex items-start gap-3 p-3 rounded-lg bg-secondary/50">
+                    <Award className="h-4 w-4 text-primary mt-0.5 flex-shrink-0" />
+                    <div className="flex-1">
+                      {typeof cert === 'string' ? (
+                        <p className="text-foreground/90">{cert}</p>
+                      ) : (
+                        <>
+                          {cert.name && (
+                            <p className="font-semibold text-foreground">{cert.name}</p>
+                          )}
+                          {cert.issuer && (
+                            <p className="text-sm text-foreground/80">{cert.issuer}</p>
+                          )}
+                          {cert.year && (
+                            <p className="text-sm text-muted-foreground">{cert.year}</p>
+                          )}
+                        </>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="text-foreground/90 whitespace-pre-wrap">
+                {typeof result.certifications === 'string' 
+                  ? result.certifications 
+                  : JSON.stringify(result.certifications, null, 2)}
+              </p>
             )}
           </CardContent>
         </Card>
