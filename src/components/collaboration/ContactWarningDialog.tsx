@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { ContactHistory, CandidateSource } from "@/types/Collaboration";
 import { checkContactHistory } from "@/services/candidateService";
+import { supabase } from "@/integrations/supabase/client";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -41,7 +42,21 @@ const ContactWarningDialog = ({
 
   const loadHistory = async () => {
     const data = await checkContactHistory(candidateSource, candidateId);
-    setHistory(data);
+    if (data && data.contacted_by) {
+      // Fetch the profile for the contacted_by user
+      const { data: profileData } = await supabase
+        .from("profiles")
+        .select("full_name")
+        .eq("user_id", data.contacted_by)
+        .single();
+      
+      setHistory({
+        ...data,
+        profile: profileData ? { full_name: profileData.full_name } : undefined
+      });
+    } else {
+      setHistory(data);
+    }
   };
 
   if (!history) return null;
@@ -57,7 +72,8 @@ const ContactWarningDialog = ({
           <AlertDialogDescription className="space-y-2">
             <p>
               <strong>{candidateName}</strong> was already contacted{' '}
-              {formatDistanceToNow(new Date(history.contacted_at), { addSuffix: true })}.
+              {formatDistanceToNow(new Date(history.contacted_at), { addSuffix: true })}
+              {history.profile?.full_name && ` by ${history.profile.full_name}`}.
             </p>
             
             {history.contact_method && (

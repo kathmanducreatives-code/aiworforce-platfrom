@@ -22,8 +22,13 @@ const MessageList = ({ messages }: MessageListProps) => {
     <div className="p-4 space-y-4">
       {messages.map((message) => {
         const isOwn = message.user_id === user?.id;
-        const userName = 'Team Member'; // TODO: Fetch from profiles
-        const initials = 'TM';
+        const userName = message.profile?.full_name || 'Team Member';
+        const initials = userName
+          .split(' ')
+          .map(n => n[0])
+          .join('')
+          .toUpperCase()
+          .slice(0, 2) || 'TM';
 
         return (
           <div
@@ -31,6 +36,7 @@ const MessageList = ({ messages }: MessageListProps) => {
             className={`flex gap-3 ${isOwn ? 'flex-row-reverse' : 'flex-row'}`}
           >
             <Avatar className="h-8 w-8 flex-shrink-0">
+              <AvatarImage src={message.profile?.logo_url} />
               <AvatarFallback className="text-xs">{initials}</AvatarFallback>
             </Avatar>
 

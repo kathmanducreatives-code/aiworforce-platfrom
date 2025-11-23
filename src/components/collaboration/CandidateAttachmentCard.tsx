@@ -4,9 +4,13 @@ import { fetchUnifiedCandidate, checkContactHistory, recordContact } from "@/ser
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { AlertCircle, ExternalLink, MessageSquare, Tag, Phone } from "lucide-react";
+import { Textarea } from "@/components/ui/textarea";
+import { ExternalLink, MessageSquare, Tag, Phone, Edit2, Save } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { supabase } from "@/integrations/supabase/client";
 import ContactWarningDialog from "./ContactWarningDialog";
+import CandidateComments from "./CandidateComments";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 
 interface CandidateAttachmentCardProps {
   attachment: CandidateAttachment;
@@ -18,6 +22,9 @@ const CandidateAttachmentCard = ({ attachment, roomId }: CandidateAttachmentCard
   const [candidate, setCandidate] = useState<UnifiedCandidate | null>(null);
   const [showWarning, setShowWarning] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [showComments, setShowComments] = useState(false);
+  const [editingNotes, setEditingNotes] = useState(false);
+  const [notes, setNotes] = useState(attachment.custom_notes || "");
 
   useEffect(() => {
     loadCandidate();
@@ -60,6 +67,27 @@ const CandidateAttachmentCard = ({ attachment, roomId }: CandidateAttachmentCard
       });
     }
     setShowWarning(false);
+  };
+
+  const handleSaveNotes = async () => {
+    const { error } = await supabase
+      .from("collaboration_candidate_attachments")
+      .update({ custom_notes: notes })
+      .eq("id", attachment.id);
+
+    if (error) {
+      toast({
+        title: "Error",
+        description: "Failed to save notes",
+        variant: "destructive",
+      });
+    } else {
+      setEditingNotes(false);
+      toast({
+        title: "Notes saved",
+        description: "Your notes have been updated",
+      });
+    }
   };
 
   if (loading || !candidate) {
@@ -123,6 +151,55 @@ const CandidateAttachmentCard = ({ attachment, roomId }: CandidateAttachmentCard
                 ))}
               </div>
             )}
+
+            {attachment.custom_notes && (
+              <div className="mt-3 space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-medium">Notes</span>
+                  {!editingNotes && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setEditingNotes(true)}
+                      className="h-6 px-2"
+                    >
+                      <Edit2 className="h-3 w-3 mr-1" />
+                      Edit
+                    </Button>
+                  )}
+                </div>
+                {editingNotes ? (
+                  <div className="space-y-2">
+                    <Textarea
+                      value={notes}
+                      onChange={(e) => setNotes(e.target.value)}
+                      className="min-h-[60px] text-xs"
+                    />
+                    <div className="flex gap-2">
+                      <Button size="sm" onClick={handleSaveNotes} className="h-7 text-xs">
+                        <Save className="h-3 w-3 mr-1" />
+                        Save
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => {
+                          setEditingNotes(false);
+                          setNotes(attachment.custom_notes || "");
+                        }}
+                        className="h-7 text-xs"
+                      >
+                        Cancel
+                      </Button>
+                    </div>
+                  </div>
+                ) : (
+                  <p className="text-xs text-muted-foreground whitespace-pre-wrap">
+                    {attachment.custom_notes}
+                  </p>
+                )}
+              </div>
+            )}
           </div>
 
           <div className="flex flex-col gap-1">
@@ -147,11 +224,17 @@ const CandidateAttachmentCard = ({ attachment, roomId }: CandidateAttachmentCard
           </div>
         </div>
 
-        {attachment.custom_notes && (
-          <p className="text-xs text-muted-foreground mt-2 line-clamp-2">
-            {attachment.custom_notes}
-          </p>
-        )}
+        <Collapsible open={showComments} onOpenChange={setShowComments} className="mt-3">
+          <CollapsibleTrigger asChild>
+            <Button variant="ghost" size="sm" className="w-full h-7 text-xs">
+              <MessageSquare className="h-3 w-3 mr-2" />
+              {showComments ? "Hide Comments" : "Show Comments"}
+            </Button>
+          </CollapsibleTrigger>
+          <CollapsibleContent>
+            <CandidateComments attachmentId={attachment.id} />
+          </CollapsibleContent>
+        </Collapsible>
       </Card>
 
       <ContactWarningDialog
