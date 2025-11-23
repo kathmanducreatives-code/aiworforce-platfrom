@@ -192,6 +192,247 @@ export type Database = {
         }
         Relationships: []
       }
+      collaboration_candidate_attachments: {
+        Row: {
+          attached_at: string | null
+          attached_by: string | null
+          candidate_id: string
+          candidate_source: Database["public"]["Enums"]["candidate_source"]
+          custom_notes: string | null
+          fit_score: number | null
+          id: string
+          room_id: string
+        }
+        Insert: {
+          attached_at?: string | null
+          attached_by?: string | null
+          candidate_id: string
+          candidate_source: Database["public"]["Enums"]["candidate_source"]
+          custom_notes?: string | null
+          fit_score?: number | null
+          id?: string
+          room_id: string
+        }
+        Update: {
+          attached_at?: string | null
+          attached_by?: string | null
+          candidate_id?: string
+          candidate_source?: Database["public"]["Enums"]["candidate_source"]
+          custom_notes?: string | null
+          fit_score?: number | null
+          id?: string
+          room_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "collaboration_candidate_attachments_room_id_fkey"
+            columns: ["room_id"]
+            isOneToOne: false
+            referencedRelation: "collaboration_rooms"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      collaboration_candidate_comments: {
+        Row: {
+          attachment_id: string
+          comment: string
+          created_at: string | null
+          id: string
+          updated_at: string | null
+          user_id: string | null
+        }
+        Insert: {
+          attachment_id: string
+          comment: string
+          created_at?: string | null
+          id?: string
+          updated_at?: string | null
+          user_id?: string | null
+        }
+        Update: {
+          attachment_id?: string
+          comment?: string
+          created_at?: string | null
+          id?: string
+          updated_at?: string | null
+          user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "collaboration_candidate_comments_attachment_id_fkey"
+            columns: ["attachment_id"]
+            isOneToOne: false
+            referencedRelation: "collaboration_candidate_attachments"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      collaboration_candidate_tags: {
+        Row: {
+          attachment_id: string
+          created_at: string | null
+          created_by: string | null
+          id: string
+          tag: string
+        }
+        Insert: {
+          attachment_id: string
+          created_at?: string | null
+          created_by?: string | null
+          id?: string
+          tag: string
+        }
+        Update: {
+          attachment_id?: string
+          created_at?: string | null
+          created_by?: string | null
+          id?: string
+          tag?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "collaboration_candidate_tags_attachment_id_fkey"
+            columns: ["attachment_id"]
+            isOneToOne: false
+            referencedRelation: "collaboration_candidate_attachments"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      collaboration_contact_history: {
+        Row: {
+          candidate_id: string
+          candidate_source: Database["public"]["Enums"]["candidate_source"]
+          contact_method: string | null
+          contacted_at: string | null
+          contacted_by: string | null
+          id: string
+          notes: string | null
+        }
+        Insert: {
+          candidate_id: string
+          candidate_source: Database["public"]["Enums"]["candidate_source"]
+          contact_method?: string | null
+          contacted_at?: string | null
+          contacted_by?: string | null
+          id?: string
+          notes?: string | null
+        }
+        Update: {
+          candidate_id?: string
+          candidate_source?: Database["public"]["Enums"]["candidate_source"]
+          contact_method?: string | null
+          contacted_at?: string | null
+          contacted_by?: string | null
+          id?: string
+          notes?: string | null
+        }
+        Relationships: []
+      }
+      collaboration_messages: {
+        Row: {
+          content: string
+          created_at: string | null
+          id: string
+          is_deleted: boolean | null
+          mentions: string[] | null
+          room_id: string
+          updated_at: string | null
+          user_id: string | null
+        }
+        Insert: {
+          content: string
+          created_at?: string | null
+          id?: string
+          is_deleted?: boolean | null
+          mentions?: string[] | null
+          room_id: string
+          updated_at?: string | null
+          user_id?: string | null
+        }
+        Update: {
+          content?: string
+          created_at?: string | null
+          id?: string
+          is_deleted?: boolean | null
+          mentions?: string[] | null
+          room_id?: string
+          updated_at?: string | null
+          user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "collaboration_messages_room_id_fkey"
+            columns: ["room_id"]
+            isOneToOne: false
+            referencedRelation: "collaboration_rooms"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      collaboration_room_members: {
+        Row: {
+          id: string
+          joined_at: string | null
+          last_seen_at: string | null
+          room_id: string
+          user_id: string
+        }
+        Insert: {
+          id?: string
+          joined_at?: string | null
+          last_seen_at?: string | null
+          room_id: string
+          user_id: string
+        }
+        Update: {
+          id?: string
+          joined_at?: string | null
+          last_seen_at?: string | null
+          room_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "collaboration_room_members_room_id_fkey"
+            columns: ["room_id"]
+            isOneToOne: false
+            referencedRelation: "collaboration_rooms"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      collaboration_rooms: {
+        Row: {
+          created_at: string | null
+          created_by: string | null
+          description: string | null
+          id: string
+          is_archived: boolean | null
+          name: string
+          updated_at: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          created_by?: string | null
+          description?: string | null
+          id?: string
+          is_archived?: boolean | null
+          name: string
+          updated_at?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          created_by?: string | null
+          description?: string | null
+          id?: string
+          is_archived?: boolean | null
+          name?: string
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
       deep_search_analysis: {
         Row: {
           candidate_name: string | null
@@ -620,7 +861,7 @@ export type Database = {
       get_user_client_id: { Args: { user_uuid: string }; Returns: string }
     }
     Enums: {
-      [_ in never]: never
+      candidate_source: "resume_screening" | "deep_search" | "linkedin_scraper"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -747,6 +988,8 @@ export type CompositeTypes<
 
 export const Constants = {
   public: {
-    Enums: {},
+    Enums: {
+      candidate_source: ["resume_screening", "deep_search", "linkedin_scraper"],
+    },
   },
 } as const
