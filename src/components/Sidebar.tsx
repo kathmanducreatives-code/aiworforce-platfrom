@@ -1,16 +1,19 @@
-import { LayoutDashboard, BarChart3, Search, Brain, LogOut, Menu, X } from "lucide-react";
+import { LayoutDashboard, BarChart3, Search, Brain, LogOut, Menu, X, MessageSquare } from "lucide-react";
 import { NavLink } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { Badge } from "@/components/ui/badge";
 
 interface SidebarProps {
   isCollapsed: boolean;
   onToggle: () => void;
+  onCollaborationToggle?: () => void;
+  showCollaboration?: boolean;
 }
 
-const Sidebar = ({ isCollapsed, onToggle }: SidebarProps) => {
+const Sidebar = ({ isCollapsed, onToggle, onCollaborationToggle, showCollaboration }: SidebarProps) => {
   const { signOut, profile } = useAuth();
   const navigate = useNavigate();
 
@@ -91,7 +94,19 @@ const Sidebar = ({ isCollapsed, onToggle }: SidebarProps) => {
       </nav>
 
       {/* Footer */}
-      <div className="p-4 border-t border-border/50">
+      <div className="p-4 border-t border-border/50 space-y-2">
+        <Button
+          onClick={onCollaborationToggle}
+          variant={showCollaboration ? "default" : "ghost"}
+          className={`w-full gap-3 transition-all duration-200 ${
+            isCollapsed ? 'justify-center px-0' : 'justify-start'
+          } ${showCollaboration ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground hover:bg-muted/80'}`}
+          title={isCollapsed ? "Collaboration" : undefined}
+        >
+          <MessageSquare className="h-5 w-5 flex-shrink-0" />
+          {!isCollapsed && <span className="font-medium">Collaboration</span>}
+        </Button>
+        
         <Button
           onClick={handleSignOut}
           variant="ghost"
