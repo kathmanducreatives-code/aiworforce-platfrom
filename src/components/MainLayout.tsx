@@ -9,12 +9,16 @@ const MainLayout = ({ children }: MainLayoutProps) => {
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
 
   return (
-    <div className="flex min-h-screen w-full bg-background">
+    <div className="min-h-screen w-full bg-background">
       <Sidebar 
         isCollapsed={isSidebarCollapsed} 
         onToggle={() => setIsSidebarCollapsed(!isSidebarCollapsed)} 
       />
-      <main className="flex-1 overflow-auto">
+      <main 
+        className={`min-h-screen overflow-auto transition-all duration-300 ${
+          isSidebarCollapsed ? 'ml-16' : 'ml-64'
+        }`}
+      >
         {children}
       </main>
     </div>
