@@ -11,6 +11,8 @@ import {
 } from "@/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { Search, Plus } from "lucide-react";
@@ -29,6 +31,7 @@ const AttachCandidateDialog = ({ open, onOpenChange, roomId, onAttached }: Attac
   const [candidates, setCandidates] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   const [activeTab, setActiveTab] = useState<CandidateSource>('resume_screening');
+  const [notes, setNotes] = useState("");
 
   const searchCandidates = async (source: CandidateSource) => {
     setLoading(true);
@@ -68,6 +71,7 @@ const AttachCandidateDialog = ({ open, onOpenChange, roomId, onAttached }: Attac
           candidate_source: activeTab,
           candidate_id: candidateId,
           attached_by: user.id,
+          custom_notes: notes || null,
         });
 
       if (error) throw error;
@@ -77,6 +81,7 @@ const AttachCandidateDialog = ({ open, onOpenChange, roomId, onAttached }: Attac
         description: "Candidate has been added to the room",
       });
 
+      setNotes("");
       onAttached();
       onOpenChange(false);
     } catch (error: any) {
@@ -113,19 +118,32 @@ const AttachCandidateDialog = ({ open, onOpenChange, roomId, onAttached }: Attac
             <TabsTrigger value="linkedin_scraper">LinkedIn</TabsTrigger>
           </TabsList>
 
-          <div className="mt-4 flex gap-2">
-            <div className="relative flex-1">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-              <Input
-                placeholder="Search by name..."
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                className="pl-9"
+          <div className="mt-4 space-y-4">
+            <div className="flex gap-2">
+              <div className="relative flex-1">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <Input
+                  placeholder="Search by name..."
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  className="pl-9"
+                />
+              </div>
+              <Button onClick={() => searchCandidates(activeTab)} disabled={loading}>
+                Search
+              </Button>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="notes">Notes (Optional)</Label>
+              <Textarea
+                id="notes"
+                value={notes}
+                onChange={(e) => setNotes(e.target.value)}
+                placeholder="Add initial notes about the candidate..."
+                className="min-h-[80px]"
               />
             </div>
-            <Button onClick={() => searchCandidates(activeTab)} disabled={loading}>
-              Search
-            </Button>
           </div>
 
           <TabsContent value={activeTab} className="mt-4 space-y-2 max-h-96 overflow-y-auto">

@@ -9,6 +9,7 @@ import MessageList from "./MessageList";
 import MessageInput from "./MessageInput";
 import AttachCandidateDialog from "./AttachCandidateDialog";
 import CandidateAttachmentCard from "./CandidateAttachmentCard";
+import RoomMembersPanel from "./RoomMembersPanel";
 
 interface RoomViewProps {
   room: CollaborationRoom;
@@ -37,7 +38,19 @@ const RoomView = ({ room, onBack }: RoomViewProps) => {
       .order('created_at', { ascending: true });
 
     if (!error && data) {
-      setMessages(data as CollaborationMessage[]);
+      // Fetch profiles separately
+      const userIds = data.map(m => m.user_id).filter(Boolean);
+      const { data: profiles } = await supabase
+        .from("profiles")
+        .select("user_id, full_name, logo_url")
+        .in("user_id", userIds);
+
+      const profileMap = new Map(profiles?.map(p => [p.user_id, p]) || []);
+      
+      setMessages(data.map(msg => ({
+        ...msg,
+        profile: msg.user_id ? profileMap.get(msg.user_id) : undefined
+      })) as CollaborationMessage[]);
     }
   };
 
@@ -68,8 +81,8 @@ const RoomView = ({ room, onBack }: RoomViewProps) => {
           table: 'collaboration_messages',
           filter: `room_id=eq.${room.id}`,
         },
-        (payload) => {
-          setMessages((prev) => [...prev, payload.new as CollaborationMessage]);
+        () => {
+          fetchMessages();
         }
       )
       .subscribe();
@@ -136,14 +149,17 @@ const RoomView = ({ room, onBack }: RoomViewProps) => {
             <p className="text-xs text-muted-foreground">{room.description}</p>
           )}
         </div>
-        <Button
-          variant="ghost"
-          size="icon"
-          onClick={() => setShowAttachDialog(true)}
-          className="h-8 w-8"
-        >
-          <Paperclip className="h-4 w-4" />
-        </Button>
+        <div className="flex gap-2">
+          <RoomMembersPanel roomId={room.id} />
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setShowAttachDialog(true)}
+          >
+            <Paperclip className="h-4 w-4 mr-2" />
+            Attach
+          </Button>
+        </div>
       </div>
 
       {/* Attachments */}
