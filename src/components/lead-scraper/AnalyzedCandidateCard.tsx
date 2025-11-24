@@ -7,9 +7,8 @@ import { DeepSearchResults } from "./DeepSearchResults";
 import {
   Dialog,
   DialogContent,
-  DialogHeader,
-  DialogTitle,
 } from "@/components/ui/dialog";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 
 interface AnalyzedCandidateCardProps {
   id: string;
@@ -18,6 +17,7 @@ interface AnalyzedCandidateCardProps {
   ai_summary: string | null;
   strengths: string[] | null;
   created_at: string;
+  profile_picture_url?: string | null;
 }
 
 export const AnalyzedCandidateCard = ({
@@ -26,7 +26,8 @@ export const AnalyzedCandidateCard = ({
   fit_score,
   ai_summary,
   strengths,
-  created_at
+  created_at,
+  profile_picture_url
 }: AnalyzedCandidateCardProps) => {
   const [showFullAnalysis, setShowFullAnalysis] = useState(false);
 
@@ -76,10 +77,13 @@ export const AnalyzedCandidateCard = ({
         <CardHeader className="pb-3">
           <div className="flex items-start justify-between gap-4">
             <div className="flex items-start gap-3 flex-1 min-w-0">
-              {/* Avatar */}
-              <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-primary to-cyan-500 flex items-center justify-center text-white font-bold text-sm flex-shrink-0">
-                {getInitials(candidate_name)}
-              </div>
+              {/* Avatar with Profile Picture */}
+              <Avatar className="w-14 h-14 border-2 border-primary/20 shadow-lg">
+                <AvatarImage src={profile_picture_url || undefined} alt={candidate_name} />
+                <AvatarFallback className="bg-gradient-to-br from-primary to-cyan-500 text-white font-bold text-sm">
+                  {getInitials(candidate_name)}
+                </AvatarFallback>
+              </Avatar>
               
               <div className="flex-1 min-w-0">
                 <CardTitle className="text-lg truncate group-hover:text-primary transition-colors">
@@ -148,16 +152,15 @@ export const AnalyzedCandidateCard = ({
         </CardContent>
       </Card>
 
-      {/* Full Analysis Dialog */}
+      {/* Full Analysis Dialog - Full Screen */}
       <Dialog open={showFullAnalysis} onOpenChange={setShowFullAnalysis}>
-        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle className="text-2xl flex items-center gap-2">
-              <Brain className="w-6 h-6 text-primary" />
-              Deep Search Analysis: {candidate_name}
-            </DialogTitle>
-          </DialogHeader>
-          <DeepSearchResults candidateId={id} />
+        <DialogContent className="w-screen h-screen max-w-none m-0 p-0 rounded-none animate-fade-in">
+          <DeepSearchResults 
+            candidateId={id} 
+            candidateName={candidate_name}
+            profilePictureUrl={profile_picture_url}
+            onClose={() => setShowFullAnalysis(false)}
+          />
         </DialogContent>
       </Dialog>
     </>
