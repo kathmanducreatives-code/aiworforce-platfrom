@@ -69,93 +69,154 @@ const Dashboard = () => {
 
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-background via-muted/20 to-background">
-      <div className="max-w-7xl mx-auto px-6 py-12">
-        {/* Welcome Header */}
-        <div className="mb-12 animate-fade-in">
-          {profile?.logo_url && (
-            <img 
-              src={profile.logo_url} 
-              alt="Client Logo" 
-              className="h-32 w-auto mb-6" 
-            />
-          )}
-          <p className="text-xl text-muted-foreground">
-            Your AI-powered recruitment command center
-          </p>
+    <div className="min-h-screen bg-background">
+      <div className="max-w-7xl mx-auto px-8 py-6">
+        {/* Minimal Header */}
+        <div className="mb-8 flex items-center justify-between">
+          <div className="flex items-center gap-4">
+            {profile?.logo_url && (
+              <img 
+                src={profile.logo_url} 
+                alt="Client Logo" 
+                className="h-16 w-auto" 
+              />
+            )}
+            <div>
+              <h1 className="text-2xl font-semibold text-foreground">Dashboard</h1>
+              <p className="text-sm text-muted-foreground">
+                {new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center gap-3">
+            <Button
+              onClick={() => navigate('/screening')}
+              size="sm"
+              className="bg-primary hover:bg-primary/90"
+            >
+              + New Candidate
+            </Button>
+          </div>
         </div>
 
-        {/* KPI Cards */}
-        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4 mb-12 animate-fade-in-up">
-          <Card className="border-border/50 bg-card/50 backdrop-blur-sm hover:shadow-lg transition-all duration-300">
+        {/* KPI Cards - Minimal */}
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4 mb-8">
+          <Card className="bg-card border border-border shadow-sm hover:shadow-md transition-shadow duration-200">
             <CardHeader className="pb-3">
-              <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
-                <Users className="h-4 w-4 text-primary" />
+              <CardTitle className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
                 Total Candidates
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="text-3xl font-bold text-foreground mb-1">
-                {loading ? "..." : metrics.totalCandidates}
+              <div className="flex items-baseline gap-2">
+                <div className="text-4xl font-bold text-foreground">
+                  {loading ? "..." : metrics.totalCandidates}
+                </div>
+                <div className="text-sm text-success">
+                  +{metrics.candidatesThisWeek}
+                </div>
               </div>
-              <p className="text-xs text-muted-foreground">
-                +{metrics.candidatesThisWeek} this week
-              </p>
+              <p className="text-xs text-muted-foreground mt-1">this week</p>
             </CardContent>
           </Card>
 
-          <Card className="border-border/50 bg-card/50 backdrop-blur-sm hover:shadow-lg transition-all duration-300">
+          <Card className="bg-card border border-border shadow-sm hover:shadow-md transition-shadow duration-200">
             <CardHeader className="pb-3">
-              <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
-                <TrendingUp className="h-4 w-4 text-success" />
+              <CardTitle className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
                 Avg Fit Score
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="text-3xl font-bold text-foreground mb-1">
-                {loading ? "..." : `${metrics.avgFitScore}%`}
+              <div className="flex items-baseline gap-2">
+                <div className="text-4xl font-bold text-foreground">
+                  {loading ? "..." : `${metrics.avgFitScore}%`}
+                </div>
               </div>
-              <p className="text-xs text-success">Quality candidates</p>
+              <p className="text-xs text-muted-foreground mt-1">quality rate</p>
             </CardContent>
           </Card>
 
-          <Card className="border-border/50 bg-card/50 backdrop-blur-sm hover:shadow-lg transition-all duration-300">
+          <Card className="bg-card border border-border shadow-sm hover:shadow-md transition-shadow duration-200">
             <CardHeader className="pb-3">
-              <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
-                <Folder className="h-4 w-4 text-accent" />
+              <CardTitle className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
                 Active Recruitments
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="text-3xl font-bold text-foreground mb-1">
-                {loading ? "..." : metrics.activeRecruitments}
+              <div className="flex items-baseline gap-2">
+                <div className="text-4xl font-bold text-foreground">
+                  {loading ? "..." : metrics.activeRecruitments}
+                </div>
               </div>
-              <p className="text-xs text-muted-foreground">Open positions</p>
+              <p className="text-xs text-muted-foreground mt-1">open positions</p>
             </CardContent>
           </Card>
 
-          <Card className="border-border/50 bg-card/50 backdrop-blur-sm hover:shadow-lg transition-all duration-300">
+          <Card className="bg-card border border-border shadow-sm hover:shadow-md transition-shadow duration-200">
             <CardHeader className="pb-3">
-              <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
-                <Brain className="h-4 w-4 text-secondary" />
-                AI Powered
+              <CardTitle className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                AI Automation
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="text-3xl font-bold text-foreground mb-1">100%</div>
-              <p className="text-xs text-muted-foreground">Automation rate</p>
+              <div className="flex items-baseline gap-2">
+                <div className="text-4xl font-bold text-foreground">100%</div>
+              </div>
+              <p className="text-xs text-muted-foreground mt-1">powered</p>
             </CardContent>
           </Card>
         </div>
 
-        {/* Resume Screener Section */}
-        <div className="mb-12">
-          <ResumeUpload />
+        {/* Quick Actions */}
+        <div className="mb-8">
+          <div className="flex items-center gap-3">
+            <Button
+              onClick={() => navigate('/screening')}
+              variant="outline"
+              size="sm"
+              className="border-border hover:bg-muted"
+            >
+              Upload Resume
+            </Button>
+            <Button
+              onClick={() => navigate('/lead-scraper')}
+              variant="outline"
+              size="sm"
+              className="border-border hover:bg-muted"
+            >
+              Start Scraping
+            </Button>
+            <Button
+              onClick={() => navigate('/deep-search')}
+              variant="outline"
+              size="sm"
+              className="border-border hover:bg-muted"
+            >
+              Deep Search
+            </Button>
+            <Button
+              onClick={() => navigate('/candidates')}
+              variant="ghost"
+              size="sm"
+              className="ml-auto text-primary hover:text-primary/80"
+            >
+              View All Candidates →
+            </Button>
+          </div>
         </div>
 
-        {/* Candidate Intelligence Section */}
-        <div>
-          <ModernDashboard />
+        {/* Recent Activity */}
+        <div className="mb-8">
+          <h2 className="text-lg font-medium text-foreground mb-4">Recent Activity</h2>
+          <Card className="bg-card border border-border shadow-sm">
+            <CardContent className="p-0">
+              {loading ? (
+                <div className="p-6 text-center text-muted-foreground">Loading...</div>
+              ) : (
+                <ResumeUpload />
+              )}
+            </CardContent>
+          </Card>
         </div>
       </div>
     </div>
