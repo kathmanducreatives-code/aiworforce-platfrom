@@ -339,7 +339,7 @@ const ModernDashboard = () => {
 
   return (
     <div className="min-h-screen bg-background">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 py-4 sm:py-8 lg:py-12">
+      <div className="max-w-7xl mx-auto px-0 sm:px-6 py-0 sm:py-8 lg:py-12">
         {/* Header */}
         <div className="mb-6 sm:mb-12">
           <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-6 sm:mb-12">
