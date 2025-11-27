@@ -205,24 +205,24 @@ export default function LeadScraper() {
         <div className="absolute bottom-20 left-20 w-96 h-96 bg-cyan-500/5 rounded-full blur-3xl" />
       </div>
 
-      <div className="relative container mx-auto px-4 py-8">
+      <div className="relative container mx-auto px-4 py-4 sm:py-8">
         {/* Header */}
-        <div className="mb-8">
-          <div className="flex items-center justify-between mb-4">
-            <div className="flex items-center gap-4">
+        <div className="mb-6 sm:mb-8">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-4">
+            <div className="flex items-center gap-3 sm:gap-4 w-full sm:w-auto">
               <Button
                 variant="ghost"
                 size="icon"
                 onClick={() => navigate(-1)}
-                className="hover:bg-primary/10"
+                className="hover:bg-primary/10 flex-shrink-0"
               >
                 <ArrowLeft className="w-5 h-5" />
               </Button>
-              <div>
-                <h1 className="text-4xl font-bold bg-gradient-to-r from-primary via-cyan-500 to-primary bg-clip-text text-transparent">
+              <div className="flex-1">
+                <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold bg-gradient-to-r from-primary via-cyan-500 to-primary bg-clip-text text-transparent">
                   LinkedIn Lead Scraper
                 </h1>
-                <p className="text-muted-foreground mt-1">
+                <p className="text-muted-foreground mt-1 text-sm sm:text-base">
                   Discover and connect with top talent
                 </p>
               </div>
@@ -231,10 +231,11 @@ export default function LeadScraper() {
             <Button
               onClick={() => setHistoryOpen(true)}
               variant="outline"
-              className="gap-2 hover:bg-primary/5 hover:border-primary/50 transition-all"
+              className="gap-2 hover:bg-primary/5 hover:border-primary/50 transition-all w-full sm:w-auto"
+              size="sm"
             >
               <History className="w-4 h-4" />
-              History
+              <span className="hidden sm:inline">History</span>
               <span className="ml-1 px-2 py-0.5 rounded-full bg-primary/10 text-primary text-xs font-semibold">
                 {leads.length}
               </span>
@@ -251,11 +252,11 @@ export default function LeadScraper() {
         </div>
 
         {/* Results Section */}
-        <div className="rounded-xl border border-border/50 bg-card/50 p-6 shadow-xl">
-          <div className="flex items-center justify-between mb-6">
+        <div className="rounded-xl border border-border/50 bg-card/50 p-4 sm:p-6 shadow-xl">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-0 mb-4 sm:mb-6">
             <div>
-              <h2 className="text-2xl font-bold">Discovered Leads</h2>
-              <p className="text-sm text-muted-foreground mt-1">
+              <h2 className="text-xl sm:text-2xl font-bold">Discovered Leads</h2>
+              <p className="text-xs sm:text-sm text-muted-foreground mt-1">
                 {leads.length} lead{leads.length !== 1 ? "s" : ""} found
               </p>
             </div>

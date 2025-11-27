@@ -5,6 +5,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Button } from "@/components/ui/button";
 import { Plus, ArrowLeft } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
+import { useIsMobile } from "@/hooks/use-mobile";
 import RoomList from "./RoomList";
 import RoomView from "./RoomView";
 import CreateRoomDialog from "./CreateRoomDialog";
@@ -15,6 +16,7 @@ interface CollaborationHubProps {
 
 const CollaborationHub = ({ onClose }: CollaborationHubProps) => {
   const { user } = useAuth();
+  const isMobile = useIsMobile();
   const [rooms, setRooms] = useState<CollaborationRoom[]>([]);
   const [activeRoom, setActiveRoom] = useState<CollaborationRoom | null>(null);
   const [showCreateDialog, setShowCreateDialog] = useState(false);
@@ -53,7 +55,7 @@ const CollaborationHub = ({ onClose }: CollaborationHubProps) => {
   };
 
   return (
-    <div className="fixed left-64 top-0 h-screen w-96 bg-card/95 backdrop-blur-md border-l border-border/50 shadow-lg z-30 flex flex-col">
+    <div className={`fixed ${isMobile ? 'left-0 right-0 w-full' : 'left-64 w-96'} top-0 h-screen bg-card/95 backdrop-blur-md border-l border-border/50 shadow-lg z-30 flex flex-col`}>
       {/* Header */}
       <div className="p-4 border-b border-border/50 flex items-center justify-between">
         <div className="flex items-center gap-2">

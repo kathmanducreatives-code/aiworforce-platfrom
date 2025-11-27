@@ -339,31 +339,33 @@ const ModernDashboard = () => {
 
   return (
     <div className="min-h-screen bg-background">
-      <div className="max-w-7xl mx-auto px-6 py-12">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 py-4 sm:py-8 lg:py-12">
         {/* Header */}
-        <div className="mb-12">
-          <div className="flex items-center justify-between mb-12">
+        <div className="mb-6 sm:mb-12">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-6 sm:mb-12">
             <div>
-              <h1 className="text-4xl font-bold text-foreground mb-3">
+              <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-foreground mb-2 sm:mb-3">
                 {viewMode === 'folders' && selectedFolder ? selectedFolder : 'Candidate Intelligence Hub'}
               </h1>
-              <p className="text-muted-foreground text-lg font-medium">
+              <p className="text-muted-foreground text-sm sm:text-base lg:text-lg font-medium">
                 {viewMode === 'folders' && selectedFolder ? `${filteredResumes.length} candidates in ${selectedFolder}` : 'Manage verified candidate intelligence and pipeline status with AI precision'}
               </p>
             </div>
-            <div className="flex gap-3">
+            <div className="flex flex-wrap gap-2 sm:gap-3 w-full sm:w-auto">
               <Button 
                 onClick={() => navigate('/data-dashboard')} 
                 variant="outline" 
-                className="gap-2"
+                className="gap-2 flex-1 sm:flex-none"
+                size="sm"
               >
                 <BarChart3 className="h-4 w-4" />
-                Data Dashboard
+                <span className="hidden sm:inline">Data Dashboard</span>
               </Button>
               <Button 
                 onClick={() => setViewMode(viewMode === 'all' ? 'folders' : 'all')} 
                 variant={viewMode === 'folders' ? 'default' : 'outline'} 
-                className="gap-2"
+                className="gap-2 flex-1 sm:flex-none"
+                size="sm"
               >
                 <Folder className="h-4 w-4" />
                 {viewMode === 'folders' ? 'Show All' : 'Folders'}
@@ -371,17 +373,18 @@ const ModernDashboard = () => {
               <Button 
                 onClick={fetchResumeData} 
                 variant="outline" 
-                className="gap-2"
+                className="gap-2 flex-1 sm:flex-none"
+                size="sm"
               >
                 <RefreshCw className="h-4 w-4" />
-                Refresh
+                <span className="hidden sm:inline">Refresh</span>
               </Button>
             </div>
           </div>
 
           {/* Folder View */}
-          {viewMode === 'folders' && !selectedFolder && <div className="mb-12">
-              <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+          {viewMode === 'folders' && !selectedFolder && <div className="mb-8 sm:mb-12">
+              <div className="grid gap-4 sm:gap-6 grid-cols-1 md:grid-cols-2 lg:grid-cols-3">
                 {Object.entries(recruitmentFolders).map(([folderName, candidates]) => <Card 
                   key={folderName} 
                   className="group hover:shadow-primary hover:border-primary/50 transition-all duration-300 cursor-pointer"
