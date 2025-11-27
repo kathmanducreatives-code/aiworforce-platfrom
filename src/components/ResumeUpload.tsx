@@ -255,22 +255,22 @@ const ResumeUpload = () => {
   };
 
   return (
-    <section className="py-16 lg:py-24 bg-background animate-fade-in-up">
+    <section className="py-8 sm:py-12 lg:py-16 bg-background animate-fade-in-up">
       <div className="container mx-auto px-4 sm:px-6 lg:px-8">
         <div className="max-w-4xl mx-auto">
-          <div className="text-center mb-12 animate-fade-in-down">
-            <h2 className="text-3xl lg:text-4xl font-bold text-foreground mb-4">
+          <div className="text-center mb-8 sm:mb-12 animate-fade-in-down">
+            <h2 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-foreground mb-3 sm:mb-4">
               Add Candidates to Intelligence Pipeline
             </h2>
-            <p className="text-xl text-muted-foreground">
+            <p className="text-base sm:text-lg lg:text-xl text-muted-foreground">
               Upload resumes to analyze candidate profiles and add them to your centralized intelligence pipeline. Our AI cross-references multiple sources to deliver verified insights.
             </p>
           </div>
 
-          <Card className="p-8 animate-scale-in transition-all duration-300 backdrop-blur-sm">
+          <Card className="p-4 sm:p-6 lg:p-8 animate-scale-in transition-all duration-300 backdrop-blur-sm">
             {/* Upload Area */}
             <div
-              className={`border-2 border-dashed rounded-xl p-12 text-center transition-all duration-300 ${
+              className={`border-2 border-dashed rounded-xl p-6 sm:p-8 lg:p-12 text-center transition-all duration-300 ${
                 isDragOver 
                   ? 'border-primary bg-primary/10 shadow-glow' 
                   : 'border-primary/20 hover:border-primary/50 hover:bg-card/50 hover:shadow-primary'

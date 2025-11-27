@@ -11,9 +11,10 @@ interface SidebarProps {
   onToggle: () => void;
   onCollaborationToggle?: () => void;
   showCollaboration?: boolean;
+  isMobile?: boolean;
 }
 
-const Sidebar = ({ isCollapsed, onToggle, onCollaborationToggle, showCollaboration }: SidebarProps) => {
+const Sidebar = ({ isCollapsed, onToggle, onCollaborationToggle, showCollaboration, isMobile = false }: SidebarProps) => {
   const { signOut, profile } = useAuth();
   const navigate = useNavigate();
 
@@ -36,8 +37,8 @@ const Sidebar = ({ isCollapsed, onToggle, onCollaborationToggle, showCollaborati
 
   return (
     <aside 
-      className={`fixed left-0 top-0 h-screen bg-card border-r border-border flex flex-col transition-all duration-300 z-40 ${
-        isCollapsed ? 'w-16' : 'w-64'
+      className={`${isMobile ? 'relative' : 'fixed left-0 top-0'} h-screen bg-card ${!isMobile && 'border-r border-border'} flex flex-col transition-all duration-300 ${!isMobile && 'z-40'} ${
+        isCollapsed && !isMobile ? 'w-16' : 'w-64'
       }`}
     >
       {/* Header with hamburger */}
