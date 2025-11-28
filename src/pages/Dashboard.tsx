@@ -82,8 +82,8 @@ const Dashboard = () => {
               />
             )}
             <div>
-              <h1 className="text-xl sm:text-2xl font-semibold text-neutral-900">Dashboard</h1>
-              <p className="text-xs sm:text-sm text-neutral-600">
+              <h1 className="text-xl sm:text-2xl font-semibold text-foreground">Dashboard</h1>
+              <p className="text-xs sm:text-sm text-muted-foreground">
                 {new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}
               </p>
             </div>
@@ -91,7 +91,7 @@ const Dashboard = () => {
           <Button
             onClick={() => navigate('/screening')}
             size="sm"
-            className="bg-primary hover:bg-primary/90 w-full sm:w-auto"
+            className="bg-primary hover:bg-primary/90 text-primary-foreground shadow-glow w-full sm:w-auto"
           >
             + New Candidate
           </Button>
@@ -99,76 +99,76 @@ const Dashboard = () => {
 
         {/* KPI Cards */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-          <Card className="p-4 sm:p-6">
+          <Card className="p-4 sm:p-6 bg-card border-border hover:border-primary/50 transition-all duration-300 hover:shadow-primary">
             <div className="flex items-center gap-3 mb-3 sm:mb-4">
-              <div className="p-2 bg-neutral-100 rounded-lg">
-                <Users className="h-4 w-4 sm:h-5 sm:w-5 text-neutral-600" />
+              <div className="p-2 bg-primary/10 rounded-lg border border-primary/20">
+                <Users className="h-4 w-4 sm:h-5 sm:w-5 text-primary" />
               </div>
-              <span className="text-xs sm:text-sm font-medium text-neutral-500 uppercase tracking-wide">Total Candidates</span>
+              <span className="text-xs sm:text-sm font-medium text-muted-foreground uppercase tracking-wide">Total Candidates</span>
             </div>
-            <div className="text-3xl sm:text-4xl font-bold text-neutral-900">{loading ? "..." : metrics.totalCandidates}</div>
-            <div className="text-xs text-success mt-1">+{metrics.candidatesThisWeek} this week</div>
+            <div className="text-3xl sm:text-4xl font-bold text-foreground">{loading ? "..." : metrics.totalCandidates}</div>
+            <div className="text-xs text-primary mt-1">+{metrics.candidatesThisWeek} this week</div>
           </Card>
 
-          <Card className="p-4 sm:p-6">
+          <Card className="p-4 sm:p-6 bg-card border-border hover:border-primary/50 transition-all duration-300 hover:shadow-primary">
             <div className="flex items-center gap-3 mb-3 sm:mb-4">
-              <div className="p-2 bg-neutral-100 rounded-lg">
-                <TrendingUp className="h-4 w-4 sm:h-5 sm:w-5 text-neutral-600" />
+              <div className="p-2 bg-primary/10 rounded-lg border border-primary/20">
+                <TrendingUp className="h-4 w-4 sm:h-5 sm:w-5 text-primary" />
               </div>
-              <span className="text-xs sm:text-sm font-medium text-neutral-500 uppercase tracking-wide">Avg Fit Score</span>
+              <span className="text-xs sm:text-sm font-medium text-muted-foreground uppercase tracking-wide">Avg Fit Score</span>
             </div>
-            <div className="text-3xl sm:text-4xl font-bold text-neutral-900">{loading ? "..." : `${metrics.avgFitScore}%`}</div>
-            <div className="text-xs text-neutral-500 mt-1">quality rate</div>
+            <div className="text-3xl sm:text-4xl font-bold text-foreground">{loading ? "..." : `${metrics.avgFitScore}%`}</div>
+            <div className="text-xs text-muted-foreground mt-1">quality rate</div>
           </Card>
 
-          <Card className="p-4 sm:p-6">
+          <Card className="p-4 sm:p-6 bg-card border-border hover:border-primary/50 transition-all duration-300 hover:shadow-primary">
             <div className="flex items-center gap-3 mb-3 sm:mb-4">
-              <div className="p-2 bg-neutral-100 rounded-lg">
-                <Folder className="h-4 w-4 sm:h-5 sm:w-5 text-neutral-600" />
+              <div className="p-2 bg-primary/10 rounded-lg border border-primary/20">
+                <Folder className="h-4 w-4 sm:h-5 sm:w-5 text-primary" />
               </div>
-              <span className="text-xs sm:text-sm font-medium text-neutral-500 uppercase tracking-wide">Active Roles</span>
+              <span className="text-xs sm:text-sm font-medium text-muted-foreground uppercase tracking-wide">Active Roles</span>
             </div>
-            <div className="text-3xl sm:text-4xl font-bold text-neutral-900">{loading ? "..." : metrics.activeRecruitments}</div>
-            <div className="text-xs text-neutral-500 mt-1">open positions</div>
+            <div className="text-3xl sm:text-4xl font-bold text-foreground">{loading ? "..." : metrics.activeRecruitments}</div>
+            <div className="text-xs text-muted-foreground mt-1">open positions</div>
           </Card>
 
-          <Card className="p-4 sm:p-6">
+          <Card className="p-4 sm:p-6 bg-card border-border hover:border-primary/50 transition-all duration-300 hover:shadow-primary">
             <div className="flex items-center gap-3 mb-3 sm:mb-4">
-              <div className="p-2 bg-neutral-100 rounded-lg">
-                <Brain className="h-4 w-4 sm:h-5 sm:w-5 text-neutral-600" />
+              <div className="p-2 bg-primary/10 rounded-lg border border-primary/20">
+                <Brain className="h-4 w-4 sm:h-5 sm:w-5 text-primary" />
               </div>
-              <span className="text-xs sm:text-sm font-medium text-neutral-500 uppercase tracking-wide">AI Screening</span>
+              <span className="text-xs sm:text-sm font-medium text-muted-foreground uppercase tracking-wide">AI Screening</span>
             </div>
-            <div className="text-3xl sm:text-4xl font-bold text-neutral-900">100%</div>
-            <div className="text-xs text-neutral-500 mt-1">powered</div>
+            <div className="text-3xl sm:text-4xl font-bold text-foreground">100%</div>
+            <div className="text-xs text-muted-foreground mt-1">powered</div>
           </Card>
         </div>
 
         {/* Quick Actions */}
         <div className="flex flex-col sm:flex-row gap-3 mb-6">
-          <Button onClick={() => navigate('/screening')} variant="outline" className="w-full sm:w-auto" size="sm">
+          <Button onClick={() => navigate('/screening')} variant="outline" className="w-full sm:w-auto border-primary/30 hover:bg-primary/10 hover:border-primary" size="sm">
             Upload Resume
           </Button>
-          <Button onClick={() => navigate('/lead-scraper')} variant="outline" className="w-full sm:w-auto" size="sm">
+          <Button onClick={() => navigate('/lead-scraper')} variant="outline" className="w-full sm:w-auto border-primary/30 hover:bg-primary/10 hover:border-primary" size="sm">
             Start Scraping
           </Button>
-          <Button onClick={() => navigate('/deep-search')} variant="outline" className="w-full sm:w-auto" size="sm">
+          <Button onClick={() => navigate('/deep-search')} variant="outline" className="w-full sm:w-auto border-primary/30 hover:bg-primary/10 hover:border-primary" size="sm">
             Deep Search
           </Button>
-          <Button onClick={() => navigate('/candidates')} variant="ghost" className="w-full sm:w-auto sm:ml-auto text-primary" size="sm">
+          <Button onClick={() => navigate('/candidates')} variant="ghost" className="w-full sm:w-auto sm:ml-auto text-primary hover:bg-primary/10" size="sm">
             View All →
           </Button>
         </div>
 
         {/* Recent Activity */}
         <div className="mb-6">
-          <h2 className="text-base sm:text-lg font-medium text-neutral-900 mb-4">Recent Activity</h2>
-          <Card className="p-0">
+          <h2 className="text-base sm:text-lg font-medium text-foreground mb-4">Recent Activity</h2>
+          <Card className="p-0 bg-card border-border">
             {loading ? (
-              <div className="p-6 text-center text-neutral-500">Loading...</div>
+              <div className="p-6 text-center text-muted-foreground">Loading...</div>
             ) : (
               <div className="p-4 sm:p-6">
-                <p className="text-sm text-neutral-600">Upload resumes or start scraping to see recent candidates here.</p>
+                <p className="text-sm text-muted-foreground">Upload resumes or start scraping to see recent candidates here.</p>
               </div>
             )}
           </Card>
