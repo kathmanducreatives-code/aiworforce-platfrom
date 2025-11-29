@@ -213,7 +213,7 @@ export default function LeadScraper() {
               <Button
                 variant="ghost"
                 size="icon"
-                onClick={() => navigate(-1)}
+                onClick={() => navigate("/dashboard")}
                 className="hover:bg-primary/10 flex-shrink-0"
               >
                 <ArrowLeft className="w-5 h-5" />
