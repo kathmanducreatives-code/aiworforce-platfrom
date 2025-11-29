@@ -854,11 +854,11 @@ export const CandidateAnalysisDialog = ({ open, onOpenChange, candidate }: Candi
                         {notes.map((note) => (
                           <div 
                             key={note.id} 
-                            className="border-l-4 border-purple-400 bg-purple-50/50 dark:bg-purple-950/20 p-4 rounded-r-lg hover:bg-purple-50 dark:hover:bg-purple-950/30 transition-colors"
+                            className="border-l-4 border-primary bg-card/50 p-4 rounded-r-lg hover:bg-card/70 transition-colors"
                           >
                             <div className="flex items-start justify-between mb-2">
                               <div className="flex items-center gap-2">
-                                <div className="w-8 h-8 rounded-full bg-purple-200 dark:bg-purple-800 flex items-center justify-center text-sm font-semibold text-purple-700 dark:text-purple-200">
+                                <div className="w-8 h-8 rounded-full bg-primary/20 flex items-center justify-center text-sm font-semibold text-primary">
                                   {note.created_by_name.charAt(0).toUpperCase()}
                                 </div>
                                 <div>
