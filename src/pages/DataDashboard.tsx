@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { supabase } from "@/integrations/supabase/client";
-import { Users, Target, TrendingUp, Clock, Award, Send, Brain, BarChart3, Search, Mail, CheckCircle, AlertTriangle } from "lucide-react";
+import { Users, Target, TrendingUp, Clock, Award, Send, Brain, BarChart3, Search, Mail, CheckCircle, AlertTriangle, ArrowLeft } from "lucide-react";
 import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 
 interface DashboardMetrics {
   totalCandidates: number;
@@ -225,6 +226,14 @@ const DataDashboard = () => {
         {/* Header */}
         <div className="mb-8">
           <div className="flex items-center gap-3 mb-3">
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => window.location.href = '/dashboard'}
+              className="hover:bg-primary/10"
+            >
+              <ArrowLeft className="h-5 w-5" />
+            </Button>
             <div className="p-3 bg-primary/10 rounded-xl border border-primary/20">
               <BarChart3 className="h-7 w-7 text-primary" />
             </div>

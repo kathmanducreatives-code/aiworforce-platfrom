@@ -150,15 +150,26 @@ const ClientDetail = () => {
       <div className="max-w-7xl mx-auto px-6 py-12">
         {/* Header */}
         <div className="mb-12 animate-fade-in-down">
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => navigate('/client-metrics')}
-            className="gap-2 hover:bg-cyan-50 hover:text-cyan-700 mb-4"
-          >
-            <ArrowLeft className="h-4 w-4" />
-            Back to Client Metrics
-          </Button>
+          <div className="flex gap-2 mb-4">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => navigate('/dashboard')}
+              className="gap-2 hover:bg-cyan-50 hover:text-cyan-700"
+            >
+              <ArrowLeft className="h-4 w-4" />
+              Back to Dashboard
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => navigate('/client-metrics')}
+              className="gap-2 hover:bg-cyan-50 hover:text-cyan-700"
+            >
+              <ArrowLeft className="h-4 w-4" />
+              Back to Client Metrics
+            </Button>
+          </div>
 
           <div className="flex items-start justify-between">
             <div>

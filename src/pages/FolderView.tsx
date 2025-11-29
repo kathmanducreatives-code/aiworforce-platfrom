@@ -177,7 +177,7 @@ const FolderView = () => {
           <div className="flex items-start gap-3 sm:gap-4">
             <Button
               variant="ghost"
-              onClick={() => navigate("/")}
+              onClick={() => navigate("/dashboard")}
               className="hover:bg-slate-100 hover:scale-105 transition-all duration-200 rounded-xl p-2 flex-shrink-0 mt-1"
             >
               <ArrowLeft className="h-4 w-4 sm:h-5 sm:w-5" />
@@ -264,7 +264,7 @@ const FolderView = () => {
                 </p>
               </div>
               <Button 
-                onClick={() => navigate("/")}
+                onClick={() => navigate("/dashboard")}
                 variant="outline"
                 className="mt-4 w-full sm:w-auto"
               >

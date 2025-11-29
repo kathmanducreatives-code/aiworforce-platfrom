@@ -392,13 +392,22 @@ const EmailSequenceSetup = () => {
       <main className="container mx-auto px-4 sm:px-6 py-8 pt-24 max-w-7xl animate-fade-in">
         {/* Header Section */}
         <div className="flex items-center gap-4 mb-8">
-          <Button
-            variant="ghost"
-            onClick={() => navigate(`/folder/${encodeURIComponent(folderName || '')}`)}
-            className="hover:bg-accent hover:scale-105 transition-all duration-200 rounded-xl p-2"
-          >
-            <ArrowLeft className="h-5 w-5" />
-          </Button>
+          <div className="flex gap-2">
+            <Button
+              variant="ghost"
+              onClick={() => navigate("/dashboard")}
+              className="hover:bg-accent hover:scale-105 transition-all duration-200 rounded-xl p-2"
+            >
+              <ArrowLeft className="h-5 w-5" />
+            </Button>
+            <Button
+              variant="ghost"
+              onClick={() => navigate(`/folder/${encodeURIComponent(folderName || '')}`)}
+              className="hover:bg-accent hover:scale-105 transition-all duration-200 rounded-xl p-2"
+            >
+              <ArrowLeft className="h-5 w-5" />
+            </Button>
+          </div>
           <div>
             <h1 className="text-3xl font-bold text-foreground mb-2">
               Email Sequence Setup

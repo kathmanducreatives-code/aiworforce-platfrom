@@ -258,7 +258,7 @@ export default function DeepSearch() {
               <Button
                 variant="ghost"
                 size="icon"
-                onClick={() => navigate(-1)}
+                onClick={() => navigate("/dashboard")}
                 className="hover:bg-primary/10"
               >
                 <ArrowLeft className="w-5 h-5" />
