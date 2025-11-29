@@ -76,7 +76,7 @@ const Dashboard = () => {
               <img 
                 src={profile.logo_url} 
                 alt="Client Logo" 
-                className="h-12 sm:h-16 w-auto" 
+                className="h-16 sm:h-24 w-auto" 
               />
             )}
             <div>
