@@ -112,6 +112,74 @@ export const DeepSearchResults = ({ candidateId, candidateName, profilePictureUr
       .slice(0, 2);
   };
 
+  // Helper to render single education object
+  const renderEducationItem = (edu: any, idx: number) => (
+    <div key={idx} className="relative pl-6 border-l-2 border-primary/30">
+      <div className="absolute w-3 h-3 bg-primary rounded-full -left-[7px] top-1"></div>
+      {(edu.degree || edu.degree_name) && (
+        <p className="font-bold text-lg text-foreground">
+          {edu.degree || edu.degree_name}
+        </p>
+      )}
+      {(edu.institution || edu.school) && (
+        <p className="text-foreground/90 mt-2 font-medium">
+          {edu.institution || edu.school}
+        </p>
+      )}
+      {(edu.field || edu.field_of_study) && (
+        <p className="text-sm text-foreground/80 mt-2">
+          <span className="font-semibold text-primary">Field:</span> {edu.field || edu.field_of_study}
+        </p>
+      )}
+      {(edu.year || edu.duration) && (
+        <p className="text-sm text-muted-foreground mt-1 font-medium">
+          {edu.year || edu.duration}
+        </p>
+      )}
+      {edu.description && (
+        <p className="text-sm text-foreground/70 mt-3 leading-relaxed">
+          {edu.description}
+        </p>
+      )}
+      {edu.activities && (
+        <p className="text-sm text-foreground/60 mt-2">
+          <span className="font-semibold text-primary">Activities:</span> {edu.activities}
+        </p>
+      )}
+    </div>
+  );
+
+  // Helper to render single certification object
+  const renderCertificationItem = (cert: any, idx: number) => (
+    <div key={idx} className="flex items-start gap-3 p-4 rounded-xl bg-card/50 border border-primary/20 hover:border-primary/40 transition-all hover:shadow-lg">
+      <Award className="h-5 w-5 text-primary mt-0.5 flex-shrink-0" />
+      <div className="flex-1 min-w-0">
+        {typeof cert === 'string' ? (
+          <p className="text-foreground font-semibold">{cert}</p>
+        ) : (
+          <>
+            {cert.name && (
+              <p className="font-bold text-foreground text-base">{cert.name}</p>
+            )}
+            {cert.issuer && (
+              <p className="text-sm text-foreground/80 mt-1 font-medium">{cert.issuer}</p>
+            )}
+            {(cert.year || cert.date || cert.issue_date) && (
+              <p className="text-sm text-muted-foreground mt-1">
+                {cert.year || cert.date || cert.issue_date}
+              </p>
+            )}
+            {cert.credential_id && (
+              <p className="text-xs text-muted-foreground mt-2">
+                <span className="font-semibold">ID:</span> {cert.credential_id}
+              </p>
+            )}
+          </>
+        )}
+      </div>
+    </div>
+  );
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-screen bg-background">
@@ -277,31 +345,15 @@ export const DeepSearchResults = ({ candidateId, candidateName, profilePictureUr
                 <CardContent>
                   {Array.isArray(result.education) ? (
                     <div className="space-y-6">
-                      {result.education.map((edu: any, idx: number) => (
-                        <div key={idx} className="relative pl-6 border-l-2 border-primary/30">
-                          <div className="absolute w-3 h-3 bg-primary rounded-full -left-[7px] top-1"></div>
-                          {edu.degree && (
-                            <p className="font-semibold text-lg text-foreground">{edu.degree}</p>
-                          )}
-                          {edu.institution && (
-                            <p className="text-foreground/80 mt-1">{edu.institution}</p>
-                          )}
-                          {edu.field && (
-                            <p className="text-sm text-foreground/70 mt-1">Field: {edu.field}</p>
-                          )}
-                          {edu.year && (
-                            <p className="text-sm text-muted-foreground mt-1">{edu.year}</p>
-                          )}
-                        </div>
-                      ))}
+                      {result.education.map((edu: any, idx: number) => renderEducationItem(edu, idx))}
                     </div>
-                  ) : (
-                    <p className="text-foreground/90 whitespace-pre-wrap">
-                      {typeof result.education === 'string' 
-                        ? result.education 
-                        : JSON.stringify(result.education, null, 2)}
-                    </p>
-                  )}
+                  ) : typeof result.education === 'string' ? (
+                    <p className="text-foreground/90 leading-relaxed">{result.education}</p>
+                  ) : typeof result.education === 'object' ? (
+                    <div className="space-y-6">
+                      {renderEducationItem(result.education, 0)}
+                    </div>
+                  ) : null}
                 </CardContent>
               </Card>
             )}
@@ -318,36 +370,15 @@ export const DeepSearchResults = ({ candidateId, candidateName, profilePictureUr
                 <CardContent>
                   {Array.isArray(result.certifications) ? (
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      {result.certifications.map((cert: any, idx: number) => (
-                        <div key={idx} className="flex items-start gap-3 p-4 rounded-xl bg-secondary/30 border border-border/50 hover:border-primary/50 transition-colors">
-                          <Award className="h-5 w-5 text-primary mt-0.5 flex-shrink-0" />
-                          <div className="flex-1 min-w-0">
-                            {typeof cert === 'string' ? (
-                              <p className="text-foreground/90 font-medium">{cert}</p>
-                            ) : (
-                              <>
-                                {cert.name && (
-                                  <p className="font-semibold text-foreground">{cert.name}</p>
-                                )}
-                                {cert.issuer && (
-                                  <p className="text-sm text-foreground/80 mt-1">{cert.issuer}</p>
-                                )}
-                                {cert.year && (
-                                  <p className="text-sm text-muted-foreground mt-1">{cert.year}</p>
-                                )}
-                              </>
-                            )}
-                          </div>
-                        </div>
-                      ))}
+                      {result.certifications.map((cert: any, idx: number) => renderCertificationItem(cert, idx))}
                     </div>
-                  ) : (
-                    <p className="text-foreground/90 whitespace-pre-wrap">
-                      {typeof result.certifications === 'string' 
-                        ? result.certifications 
-                        : JSON.stringify(result.certifications, null, 2)}
-                    </p>
-                  )}
+                  ) : typeof result.certifications === 'string' ? (
+                    <p className="text-foreground/90 leading-relaxed">{result.certifications}</p>
+                  ) : typeof result.certifications === 'object' ? (
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      {renderCertificationItem(result.certifications, 0)}
+                    </div>
+                  ) : null}
                 </CardContent>
               </Card>
             )}
