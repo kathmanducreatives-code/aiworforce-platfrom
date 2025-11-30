@@ -472,7 +472,7 @@ export const DeepSearchResults = ({ candidateId, candidateName, profilePictureUr
             </Card>
 
             {/* Action Buttons */}
-            <Card className="border-primary/20 bg-card/80 backdrop-blur-xl shadow-xl">
+            <Card className="border-primary/20 bg-card/80 backdrop-blur-xl shadow-xl sticky top-6">
               <CardHeader>
                 <CardTitle className="text-lg">Actions</CardTitle>
               </CardHeader>
