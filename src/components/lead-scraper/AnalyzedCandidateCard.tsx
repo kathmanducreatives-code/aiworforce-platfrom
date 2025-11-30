@@ -154,7 +154,7 @@ export const AnalyzedCandidateCard = ({
 
       {/* Full Analysis Dialog - Full Screen */}
       <Dialog open={showFullAnalysis} onOpenChange={setShowFullAnalysis}>
-        <DialogContent className="w-screen h-screen max-w-none m-0 p-0 rounded-none animate-fade-in">
+        <DialogContent className="w-screen max-w-none m-0 p-0 rounded-none animate-fade-in max-h-screen overflow-y-auto">
           <DeepSearchResults 
             candidateId={id} 
             candidateName={candidate_name}
