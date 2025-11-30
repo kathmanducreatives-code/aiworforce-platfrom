@@ -273,7 +273,7 @@ export const DeepSearchResults = ({ candidateId, candidateName, profilePictureUr
           <div className="lg:col-span-2 space-y-8">
             {/* AI Summary */}
             {result.ai_summary && (
-              <Card className="border-primary/20 bg-card/80 backdrop-blur-xl shadow-xl">
+              <Card className="border-primary/40 bg-card/80 backdrop-blur-xl shadow-[0_0_30px_rgba(62,207,142,0.2)] hover:shadow-[0_0_40px_rgba(62,207,142,0.3)] transition-shadow duration-300 ring-1 ring-primary/20">
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2 text-xl">
                     <Brain className="h-6 w-6 text-primary" />
