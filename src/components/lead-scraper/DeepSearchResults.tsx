@@ -290,19 +290,23 @@ export const DeepSearchResults = ({ candidateId, candidateName, profilePictureUr
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               {/* Strengths */}
               {result.strengths && result.strengths.length > 0 && (
-                <Card className="border-green-500/20 bg-gradient-to-br from-green-500/5 to-transparent backdrop-blur-xl shadow-xl">
+                <Card className="border-primary/30 bg-gradient-to-br from-primary/10 to-transparent backdrop-blur-xl shadow-xl hover:shadow-2xl transition-shadow">
                   <CardHeader>
-                    <CardTitle className="flex items-center gap-2 text-green-600">
-                      <TrendingUp className="h-5 w-5" />
+                    <CardTitle className="flex items-center gap-2 text-primary">
+                      <TrendingUp className="h-6 w-6" />
                       Key Strengths
                     </CardTitle>
                   </CardHeader>
                   <CardContent>
-                    <ul className="space-y-3">
+                    <ul className="space-y-4">
                       {result.strengths.map((strength, index) => (
-                        <li key={index} className="flex items-start gap-3">
-                          <span className="text-green-500 mt-0.5 text-lg">✓</span>
-                          <span className="text-foreground/90 flex-1">{strength}</span>
+                        <li key={index} className="flex items-start gap-3 p-3 rounded-lg bg-card/50 border border-primary/20 hover:border-primary/40 transition-all">
+                          <div className="w-6 h-6 rounded-full bg-primary/20 flex items-center justify-center flex-shrink-0 mt-0.5">
+                            <span className="text-primary font-bold text-sm">✓</span>
+                          </div>
+                          <span className="text-foreground leading-relaxed flex-1">
+                            {strength}
+                          </span>
                         </li>
                       ))}
                     </ul>
@@ -312,19 +316,23 @@ export const DeepSearchResults = ({ candidateId, candidateName, profilePictureUr
 
               {/* Weaknesses */}
               {result.weaknesses && result.weaknesses.length > 0 && (
-                <Card className="border-red-500/20 bg-gradient-to-br from-red-500/5 to-transparent backdrop-blur-xl shadow-xl">
+                <Card className="border-muted-foreground/20 bg-gradient-to-br from-muted/10 to-transparent backdrop-blur-xl shadow-xl hover:shadow-2xl transition-shadow">
                   <CardHeader>
-                    <CardTitle className="flex items-center gap-2 text-red-600">
-                      <TrendingDown className="h-5 w-5" />
+                    <CardTitle className="flex items-center gap-2 text-muted-foreground">
+                      <TrendingDown className="h-6 w-6" />
                       Areas for Development
                     </CardTitle>
                   </CardHeader>
                   <CardContent>
-                    <ul className="space-y-3">
+                    <ul className="space-y-4">
                       {result.weaknesses.map((weakness, index) => (
-                        <li key={index} className="flex items-start gap-3">
-                          <span className="text-red-500 mt-0.5 text-lg">•</span>
-                          <span className="text-foreground/90 flex-1">{weakness}</span>
+                        <li key={index} className="flex items-start gap-3 p-3 rounded-lg bg-card/50 border border-muted/20 hover:border-muted/40 transition-all">
+                          <div className="w-6 h-6 rounded-full bg-muted/20 flex items-center justify-center flex-shrink-0 mt-0.5">
+                            <span className="text-muted-foreground font-bold text-sm">→</span>
+                          </div>
+                          <span className="text-foreground/80 leading-relaxed flex-1">
+                            {weakness}
+                          </span>
                         </li>
                       ))}
                     </ul>
