@@ -130,7 +130,7 @@ export const DeepSearchResults = ({ candidateId, candidateName, profilePictureUr
   }
 
   return (
-    <div className="h-screen overflow-y-auto bg-gradient-to-br from-background via-background to-primary/5">
+    <div className="min-h-screen bg-gradient-to-br from-background via-background to-primary/5">
       {/* Close Button */}
       <Button
         variant="ghost"
