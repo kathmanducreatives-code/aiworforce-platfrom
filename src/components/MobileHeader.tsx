@@ -22,17 +22,19 @@ const MobileHeader = () => {
   ];
 
   return (
-    <header className="fixed top-0 left-0 right-0 z-50 bg-card border-b border-border">
+    <header className="fixed top-0 left-0 right-0 z-50 bg-card/95 backdrop-blur-xl border-b border-border/50 shadow-lg">
       {/* Logo/Brand Section */}
-      <div className="px-4 py-3 border-b border-border">
+      <div className="px-4 py-3 border-b border-border/50">
         {profile?.logo_url ? (
           <img 
             src={profile.logo_url} 
             alt="Client logo" 
-            className="h-8 w-auto" 
+            className="h-8 w-auto hover:scale-105 transition-transform" 
           />
         ) : (
-          <h2 className="text-lg font-semibold text-foreground">ScreeningPilot</h2>
+          <h2 className="text-lg font-semibold bg-gradient-to-r from-primary via-cyan-500 to-primary bg-clip-text text-transparent">
+            ScreeningPilot
+          </h2>
         )}
       </div>
 
@@ -45,10 +47,10 @@ const MobileHeader = () => {
               to={item.to}
               end={item.to === "/"}
               className={({ isActive }) =>
-                `flex items-center gap-2 px-4 py-2.5 rounded-lg transition-all duration-200 whitespace-nowrap min-w-fit ${
+                `flex items-center gap-2 px-4 py-2.5 rounded-lg transition-all duration-300 whitespace-nowrap min-w-fit ${
                   isActive
-                    ? "bg-primary text-primary-foreground"
-                    : "text-muted-foreground hover:bg-muted hover:text-foreground"
+                    ? "bg-primary text-primary-foreground shadow-[0_0_15px_rgba(62,207,142,0.2)]"
+                    : "text-muted-foreground hover:bg-primary/10 hover:text-primary"
                 }`
               }
             >
@@ -65,7 +67,7 @@ const MobileHeader = () => {
             onClick={handleSignOut}
             variant="ghost"
             size="sm"
-            className="flex items-center gap-2 px-4 py-2.5 text-muted-foreground hover:text-foreground whitespace-nowrap min-w-fit ml-auto"
+            className="flex items-center gap-2 px-4 py-2.5 text-muted-foreground hover:text-primary hover:bg-primary/10 whitespace-nowrap min-w-fit ml-auto transition-all duration-300"
           >
             <LogOut className="h-4 w-4 flex-shrink-0" />
             <span className="text-sm font-medium">Sign Out</span>

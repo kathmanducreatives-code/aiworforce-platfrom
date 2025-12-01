@@ -342,13 +342,13 @@ const ModernDashboard = () => {
       <div className="max-w-7xl mx-auto px-0 sm:px-6 py-0 sm:py-8 lg:py-12">
         {/* Header */}
         <div className="mb-6 sm:mb-12">
-          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-6 sm:mb-12">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-6 sm:mb-12 animate-fade-in-up">
             <div>
-              <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-foreground mb-2 sm:mb-3">
+              <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold bg-gradient-to-r from-primary via-cyan-500 to-primary bg-clip-text text-transparent mb-2 sm:mb-3">
                 {viewMode === 'folders' && selectedFolder ? selectedFolder : 'Candidate Intelligence Hub'}
               </h1>
               <p className="text-muted-foreground text-sm sm:text-base lg:text-lg font-medium">
-                {viewMode === 'folders' && selectedFolder ? `${filteredResumes.length} candidates in ${selectedFolder}` : 'Manage verified candidate intelligence and pipeline status with AI precision'}
+                {viewMode === 'folders' && selectedFolder ? `${filteredResumes.length} candidates in ${selectedFolder}` : 'Manage verified candidate intelligence and pipeline status'}
               </p>
             </div>
             <div className="flex flex-wrap gap-2 sm:gap-3 w-full sm:w-auto">
@@ -387,7 +387,7 @@ const ModernDashboard = () => {
               <div className="grid gap-4 sm:gap-6 grid-cols-1 md:grid-cols-2 lg:grid-cols-3">
                 {Object.entries(recruitmentFolders).map(([folderName, candidates]) => <Card 
                   key={folderName} 
-                  className="group hover:shadow-primary hover:border-primary/50 transition-all duration-300 cursor-pointer"
+                  className="group bg-card/50 backdrop-blur-sm border-border/30 hover:shadow-[0_0_25px_rgba(62,207,142,0.2)] hover:border-primary/50 transition-all duration-300 cursor-pointer animate-fade-in-up"
                   onClick={() => navigate(`/folder/${encodeURIComponent(folderName)}`)}
                 >
                     <CardContent className="p-6">

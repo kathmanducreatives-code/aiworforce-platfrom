@@ -252,10 +252,12 @@ export default function LeadScraper() {
         </div>
 
         {/* Results Section */}
-        <div className="rounded-xl border border-border/50 bg-card/50 p-4 sm:p-6 shadow-xl">
+        <div className="rounded-xl border border-border/30 bg-card/50 backdrop-blur-sm p-4 sm:p-6 shadow-[0_0_30px_rgba(0,0,0,0.5)] hover:border-primary/30 transition-all duration-300">
           <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-0 mb-4 sm:mb-6">
             <div>
-              <h2 className="text-xl sm:text-2xl font-bold">Discovered Leads</h2>
+              <h2 className="text-xl sm:text-2xl font-bold bg-gradient-to-r from-primary to-cyan-500 bg-clip-text text-transparent">
+                Discovered Leads
+              </h2>
               <p className="text-xs sm:text-sm text-muted-foreground mt-1">
                 {leads.length} lead{leads.length !== 1 ? "s" : ""} found
               </p>
