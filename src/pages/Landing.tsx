@@ -3,7 +3,6 @@ import { Button } from "@/components/ui/button";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import { useEffect } from "react";
-import logoImage from "@/assets/hr20-asia-logo.png";
 import InteractiveResumeMockup from "@/components/InteractiveResumeMockup";
 
 const Landing = () => {
@@ -24,11 +23,6 @@ const Landing = () => {
         <div className="max-w-7xl mx-auto grid lg:grid-cols-2 gap-12 items-center">
           {/* Left side: Text content */}
           <div className="space-y-8 text-center lg:text-left">
-            <img 
-              src={logoImage} 
-              alt="HR20 Asia" 
-              className="h-24 w-auto mx-auto lg:mx-0 mb-8"
-            />
             <h1 className="text-5xl font-bold text-foreground">
               AI-Powered Recruitment Platform
             </h1>
