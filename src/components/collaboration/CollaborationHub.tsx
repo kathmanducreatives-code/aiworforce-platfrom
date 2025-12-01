@@ -55,7 +55,7 @@ const CollaborationHub = ({ onClose }: CollaborationHubProps) => {
   };
 
   return (
-    <div className={`fixed ${isMobile ? 'left-0 right-0 w-full' : 'left-64 w-96'} top-0 h-screen bg-card/95 backdrop-blur-md border-l border-border/50 shadow-lg z-30 flex flex-col`}>
+    <div className={`fixed ${isMobile ? 'left-0 right-0 w-full' : 'left-64 w-96'} top-0 h-screen bg-card/95 backdrop-blur-xl border-l border-border/50 shadow-[0_0_30px_rgba(0,0,0,0.5)] z-30 flex flex-col`}>
       {/* Header */}
       <div className="p-4 border-b border-border/50 flex items-center justify-between">
         <div className="flex items-center gap-2">
@@ -63,18 +63,20 @@ const CollaborationHub = ({ onClose }: CollaborationHubProps) => {
             variant="ghost"
             size="icon"
             onClick={onClose}
-            className="h-8 w-8"
+            className="h-8 w-8 hover:bg-primary/10 hover:text-primary transition-all"
           >
             <ArrowLeft className="h-4 w-4" />
           </Button>
-          <h2 className="text-lg font-semibold text-foreground">Collaboration</h2>
+          <h2 className="text-lg font-semibold bg-gradient-to-r from-primary via-cyan-500 to-primary bg-clip-text text-transparent">
+            Collaboration
+          </h2>
         </div>
         {!activeRoom && (
           <Button
             variant="ghost"
             size="icon"
             onClick={() => setShowCreateDialog(true)}
-            className="h-8 w-8"
+            className="h-8 w-8 hover:bg-primary/10 hover:text-primary hover:shadow-[0_0_15px_rgba(62,207,142,0.15)] transition-all"
           >
             <Plus className="h-4 w-4" />
           </Button>

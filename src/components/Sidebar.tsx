@@ -37,22 +37,24 @@ const Sidebar = ({ isCollapsed, onToggle, onCollaborationToggle, showCollaborati
 
   return (
     <aside 
-      className={`${isMobile ? 'relative' : 'fixed left-0 top-0'} h-screen bg-card ${!isMobile && 'border-r border-border'} flex flex-col transition-all duration-300 ${!isMobile && 'z-40'} ${
+      className={`${isMobile ? 'relative' : 'fixed left-0 top-0'} h-screen bg-card/95 backdrop-blur-xl ${!isMobile && 'border-r border-border/50 shadow-[0_0_30px_rgba(0,0,0,0.5)]'} flex flex-col transition-all duration-300 ${!isMobile && 'z-40'} ${
         isCollapsed && !isMobile ? 'w-16' : 'w-64'
       }`}
     >
       {/* Header with hamburger */}
-      <div className="p-5 border-b border-border flex items-center justify-between min-h-[72px]">
+      <div className="p-5 border-b border-border/50 flex items-center justify-between min-h-[72px]">
         {!isCollapsed && (
           <div className="flex-1">
             {profile?.logo_url ? (
               <img 
                 src={profile.logo_url} 
                 alt="Client logo" 
-                className="h-12 w-auto" 
+                className="h-12 w-auto hover:scale-105 transition-transform duration-300" 
               />
             ) : (
-              <h2 className="text-xl font-bold text-foreground tracking-tight">ScreeningPilot</h2>
+              <h2 className="text-xl font-bold bg-gradient-to-r from-primary via-cyan-500 to-primary bg-clip-text text-transparent tracking-tight">
+                ScreeningPilot
+              </h2>
             )}
           </div>
         )}
@@ -60,7 +62,7 @@ const Sidebar = ({ isCollapsed, onToggle, onCollaborationToggle, showCollaborati
           onClick={onToggle}
           variant="ghost"
           size="icon"
-          className="h-9 w-9 hover:bg-muted transition-colors"
+          className="h-9 w-9 hover:bg-primary/10 hover:text-primary transition-all"
         >
           {isCollapsed ? <Menu className="h-5 w-5" /> : <X className="h-5 w-5" />}
         </Button>
@@ -74,10 +76,10 @@ const Sidebar = ({ isCollapsed, onToggle, onCollaborationToggle, showCollaborati
             to={item.to}
             end={item.to === "/"}
             className={({ isActive }) =>
-              `group flex items-center gap-3 px-4 py-2.5 rounded-lg transition-all duration-200 relative ${
+              `group flex items-center gap-3 px-4 py-2.5 rounded-lg transition-all duration-300 relative ${
                 isActive
-                  ? "bg-primary text-primary-foreground"
-                  : "text-muted-foreground hover:bg-muted hover:text-foreground"
+                  ? "bg-primary text-primary-foreground shadow-[0_0_20px_rgba(62,207,142,0.2)]"
+                  : "text-muted-foreground hover:bg-primary/10 hover:text-primary hover:shadow-[0_0_15px_rgba(62,207,142,0.15)]"
               } ${isCollapsed ? 'justify-center' : ''}`
             }
             title={isCollapsed ? item.label : undefined}
@@ -85,9 +87,9 @@ const Sidebar = ({ isCollapsed, onToggle, onCollaborationToggle, showCollaborati
             {({ isActive }) => (
               <>
                 {isActive && !isCollapsed && (
-                  <div className="absolute left-0 top-1/2 -translate-y-1/2 w-0.5 h-6 bg-primary-foreground rounded-r" />
+                  <div className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-8 bg-primary-foreground rounded-r shadow-glow animate-pulse-glow" />
                 )}
-                <item.icon className="h-5 w-5 flex-shrink-0" />
+                <item.icon className="h-5 w-5 flex-shrink-0 group-hover:scale-110 transition-transform" />
                 {!isCollapsed && (
                   <span className="font-medium">{item.label}</span>
                 )}
@@ -99,17 +101,17 @@ const Sidebar = ({ isCollapsed, onToggle, onCollaborationToggle, showCollaborati
         {/* Collaboration Button */}
         <button
           onClick={handleCollaborationClick}
-          className={`group flex items-center gap-3 px-4 py-2.5 rounded-lg transition-all duration-200 relative w-full ${
+          className={`group flex items-center gap-3 px-4 py-2.5 rounded-lg transition-all duration-300 relative w-full ${
             showCollaboration
-              ? "bg-primary text-primary-foreground"
-              : "text-muted-foreground hover:bg-muted hover:text-foreground"
+              ? "bg-primary text-primary-foreground shadow-[0_0_20px_rgba(62,207,142,0.2)]"
+              : "text-muted-foreground hover:bg-primary/10 hover:text-primary hover:shadow-[0_0_15px_rgba(62,207,142,0.15)]"
           } ${isCollapsed ? 'justify-center' : ''}`}
           title={isCollapsed ? "Collaboration" : undefined}
         >
           {showCollaboration && !isCollapsed && (
-            <div className="absolute left-0 top-1/2 -translate-y-1/2 w-0.5 h-6 bg-primary-foreground rounded-r" />
+            <div className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-8 bg-primary-foreground rounded-r shadow-glow animate-pulse-glow" />
           )}
-          <MessageSquare className="h-5 w-5 flex-shrink-0" />
+          <MessageSquare className="h-5 w-5 flex-shrink-0 group-hover:scale-110 transition-transform" />
           {!isCollapsed && (
             <span className="font-medium">Collaboration</span>
           )}
@@ -117,11 +119,11 @@ const Sidebar = ({ isCollapsed, onToggle, onCollaborationToggle, showCollaborati
       </nav>
 
       {/* Footer */}
-      <div className="p-4 border-t border-border">
+      <div className="p-4 border-t border-border/50">
         <Button
           onClick={handleSignOut}
           variant="ghost"
-          className={`w-full gap-3 text-muted-foreground hover:text-foreground hover:bg-muted transition-colors ${
+          className={`w-full gap-3 text-muted-foreground hover:text-primary hover:bg-primary/10 hover:shadow-[0_0_15px_rgba(62,207,142,0.15)] transition-all duration-300 ${
             isCollapsed ? 'justify-center px-0' : 'justify-start'
           }`}
           title={isCollapsed ? "Sign Out" : undefined}

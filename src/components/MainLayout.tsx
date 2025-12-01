@@ -2,6 +2,7 @@ import { ReactNode, useState } from "react";
 import Sidebar from "./Sidebar";
 import MobileHeader from "./MobileHeader";
 import CollaborationHub from "./collaboration/CollaborationHub";
+import AuthenticatedBackground from "./AuthenticatedBackground";
 import { useIsMobile } from "@/hooks/use-mobile";
 
 interface MainLayoutProps {
@@ -14,7 +15,10 @@ const MainLayout = ({ children }: MainLayoutProps) => {
   const [showCollaboration, setShowCollaboration] = useState(false);
 
   return (
-    <div className="min-h-screen w-full bg-background">
+    <div className="min-h-screen w-full bg-background relative">
+      {/* Premium Background Effects */}
+      <AuthenticatedBackground />
+      
       {/* Desktop Sidebar */}
       {!isMobile && (
         <Sidebar 
@@ -33,7 +37,7 @@ const MainLayout = ({ children }: MainLayoutProps) => {
       )}
       
       <main 
-        className={`min-h-screen overflow-auto transition-all duration-300 ${
+        className={`min-h-screen overflow-auto transition-all duration-300 relative z-10 ${
           isMobile ? 'ml-0 pt-[120px]' : isSidebarCollapsed ? 'ml-16' : 'ml-64'
         }`}
       >

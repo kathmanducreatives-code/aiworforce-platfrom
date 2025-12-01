@@ -166,6 +166,24 @@ html {
   }
 }
 
+/* Premium Utility Classes for Authenticated Experience */
+@layer utilities {
+  /* Premium glassmorphism card */
+  .glass-card-premium {
+    @apply bg-card/50 backdrop-blur-sm border border-border/30 shadow-lg;
+  }
+
+  /* Premium glow hover effect */
+  .glow-hover {
+    @apply transition-all duration-300 hover:shadow-[0_0_25px_rgba(62,207,142,0.2)] hover:border-primary/50;
+  }
+
+  /* Gradient heading text */
+  .gradient-heading {
+    @apply bg-gradient-to-r from-primary via-cyan-500 to-primary bg-clip-text text-transparent;
+  }
+}
+
 @layer utilities {
   /* Premium entrance animations */
   @keyframes fadeInUp {
