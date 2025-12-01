@@ -28,9 +28,9 @@ const Landing = () => {
       
       <Header />
       
-      <main className="relative z-10">
+      <main className="relative z-10 pt-20">
         {/* Hero Section */}
-        <section className="flex items-center justify-center min-h-[calc(100vh-4rem)] px-6 py-12">
+        <section className="flex items-center justify-center min-h-screen px-6 py-20">
           <div className="max-w-7xl mx-auto grid lg:grid-cols-2 gap-12 items-center">
             {/* Left side: Animated Text Content */}
             <div className="space-y-8 text-center lg:text-left animate-fade-in-up">
