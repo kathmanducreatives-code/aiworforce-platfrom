@@ -21,7 +21,11 @@ const CandidateComments = ({ attachmentId }: CandidateCommentsProps) => {
 
   useEffect(() => {
     fetchComments();
-    subscribeToComments();
+    const cleanup = subscribeToComments();
+    
+    return () => {
+      cleanup();
+    };
   }, [attachmentId]);
 
   const fetchComments = async () => {
