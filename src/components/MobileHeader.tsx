@@ -1,11 +1,16 @@
-import { LayoutDashboard, BarChart3, Search, Brain, LogOut } from "lucide-react";
+import { LayoutDashboard, BarChart3, Search, Brain, LogOut, MessageSquare } from "lucide-react";
 import { NavLink } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 
-const MobileHeader = () => {
+interface MobileHeaderProps {
+  onCollaborationToggle?: () => void;
+  showCollaboration?: boolean;
+}
+
+const MobileHeader = ({ onCollaborationToggle, showCollaboration }: MobileHeaderProps) => {
   const { signOut, profile } = useAuth();
   const navigate = useNavigate();
 
@@ -24,7 +29,7 @@ const MobileHeader = () => {
   return (
     <header className="fixed top-0 left-0 right-0 z-50 bg-card/95 backdrop-blur-xl border-b border-border/50 shadow-lg">
       {/* Logo/Brand Section */}
-      <div className="px-4 py-3 border-b border-border/50">
+      <div className="px-4 py-3 border-b border-border/50 flex items-center justify-between">
         {profile?.logo_url ? (
           <img 
             src={profile.logo_url} 
@@ -36,6 +41,20 @@ const MobileHeader = () => {
             ScreeningPilot
           </h2>
         )}
+        
+        {/* Collaboration Toggle */}
+        <Button
+          onClick={onCollaborationToggle}
+          variant="ghost"
+          size="icon"
+          className={`h-9 w-9 transition-all duration-300 ${
+            showCollaboration 
+              ? "bg-primary text-primary-foreground shadow-[0_0_15px_rgba(62,207,142,0.3)]" 
+              : "text-muted-foreground hover:bg-primary/10 hover:text-primary"
+          }`}
+        >
+          <MessageSquare className="h-5 w-5" />
+        </Button>
       </div>
 
       {/* Navigation Section */}

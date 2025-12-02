@@ -25,8 +25,13 @@ const RoomView = ({ room, onBack }: RoomViewProps) => {
   useEffect(() => {
     fetchMessages();
     fetchAttachments();
-    subscribeToMessages();
-    subscribeToAttachments();
+    const cleanupMessages = subscribeToMessages();
+    const cleanupAttachments = subscribeToAttachments();
+    
+    return () => {
+      cleanupMessages();
+      cleanupAttachments();
+    };
   }, [room.id]);
 
   const fetchMessages = async () => {

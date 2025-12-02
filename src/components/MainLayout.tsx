@@ -30,7 +30,12 @@ const MainLayout = ({ children }: MainLayoutProps) => {
       )}
 
       {/* Mobile Header */}
-      {isMobile && <MobileHeader />}
+      {isMobile && (
+        <MobileHeader 
+          onCollaborationToggle={() => setShowCollaboration(!showCollaboration)}
+          showCollaboration={showCollaboration}
+        />
+      )}
       
       {showCollaboration && (
         <CollaborationHub onClose={() => setShowCollaboration(false)} />
