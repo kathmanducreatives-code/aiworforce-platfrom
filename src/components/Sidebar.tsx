@@ -1,4 +1,4 @@
-import { LayoutDashboard, BarChart3, Search, Brain, LogOut, Menu, X, MessageSquare } from "lucide-react";
+import { LayoutDashboard, BarChart3, Search, Brain, LogOut, Menu, X, MessageSquare, Calendar } from "lucide-react";
 import { NavLink } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import { useNavigate } from "react-router-dom";
@@ -28,6 +28,7 @@ const Sidebar = ({ isCollapsed, onToggle, onCollaborationToggle, showCollaborati
     { to: "/analytics", icon: BarChart3, label: "Analytics" },
     { to: "/lead-scraper", icon: Search, label: "Lead Scraper" },
     { to: "/deep-search", icon: Brain, label: "Deep Search" },
+    { to: "/interview-scheduler", icon: Calendar, label: "Interviews" },
   ];
 
   const handleCollaborationClick = (e: React.MouseEvent) => {
