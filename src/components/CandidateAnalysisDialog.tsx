@@ -533,7 +533,7 @@ export const CandidateAnalysisDialog = ({ open, onOpenChange, candidate }: Candi
                           Reward Factor
                         </CardTitle>
                       </div>
-                      <div className="text-4xl font-bold text-accent-foreground capitalize">
+                      <div className="text-4xl font-bold text-foreground capitalize">
                         {candidate.rewardScore || candidate.rewardFactor}
                       </div>
                     </CardHeader>
