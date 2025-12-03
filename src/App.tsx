@@ -22,6 +22,9 @@ import ClientMetrics from "./pages/ClientMetrics";
 import ClientDetail from "./pages/ClientDetail";
 import LeadScraper from "./pages/LeadScraper";
 import DeepSearch from "./pages/DeepSearch";
+import InterviewScheduler from "./pages/InterviewScheduler";
+import InterviewSettings from "./pages/InterviewSettings";
+import BookInterview from "./pages/BookInterview";
 import ProtectedRoute from "./components/ProtectedRoute";
 import MainLayout from "./components/MainLayout";
 
@@ -124,6 +127,25 @@ const App = () => (
                     </MainLayout>
                   </ProtectedRoute>
                 } />
+                
+                <Route path="/interview-scheduler" element={
+                  <ProtectedRoute>
+                    <MainLayout>
+                      <InterviewScheduler />
+                    </MainLayout>
+                  </ProtectedRoute>
+                } />
+                
+                <Route path="/interview-scheduler/settings" element={
+                  <ProtectedRoute>
+                    <MainLayout>
+                      <InterviewSettings />
+                    </MainLayout>
+                  </ProtectedRoute>
+                } />
+
+                {/* Public booking page - no auth required */}
+                <Route path="/book/:token" element={<BookInterview />} />
 
                 {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
                 <Route path="*" element={<NotFound />} />

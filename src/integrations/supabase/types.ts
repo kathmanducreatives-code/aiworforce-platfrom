@@ -552,6 +552,259 @@ export type Database = {
           },
         ]
       }
+      interview_availability: {
+        Row: {
+          created_at: string | null
+          day_of_week: number
+          end_time: string
+          id: string
+          is_active: boolean | null
+          start_time: string
+          timezone: string
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          day_of_week: number
+          end_time: string
+          id?: string
+          is_active?: boolean | null
+          start_time: string
+          timezone?: string
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          created_at?: string | null
+          day_of_week?: number
+          end_time?: string
+          id?: string
+          is_active?: boolean | null
+          start_time?: string
+          timezone?: string
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
+      interview_reminders: {
+        Row: {
+          error_message: string | null
+          id: string
+          interview_id: string
+          reminder_type: Database["public"]["Enums"]["reminder_type"]
+          sent_at: string | null
+          status: string | null
+        }
+        Insert: {
+          error_message?: string | null
+          id?: string
+          interview_id: string
+          reminder_type: Database["public"]["Enums"]["reminder_type"]
+          sent_at?: string | null
+          status?: string | null
+        }
+        Update: {
+          error_message?: string | null
+          id?: string
+          interview_id?: string
+          reminder_type?: Database["public"]["Enums"]["reminder_type"]
+          sent_at?: string | null
+          status?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "interview_reminders_interview_id_fkey"
+            columns: ["interview_id"]
+            isOneToOne: false
+            referencedRelation: "interviews"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      interview_slots: {
+        Row: {
+          booking_token: string | null
+          created_at: string | null
+          end_time: string
+          id: string
+          interview_type_id: string
+          recruiter_id: string
+          start_time: string
+          status: Database["public"]["Enums"]["slot_status"]
+          updated_at: string | null
+        }
+        Insert: {
+          booking_token?: string | null
+          created_at?: string | null
+          end_time: string
+          id?: string
+          interview_type_id: string
+          recruiter_id: string
+          start_time: string
+          status?: Database["public"]["Enums"]["slot_status"]
+          updated_at?: string | null
+        }
+        Update: {
+          booking_token?: string | null
+          created_at?: string | null
+          end_time?: string
+          id?: string
+          interview_type_id?: string
+          recruiter_id?: string
+          start_time?: string
+          status?: Database["public"]["Enums"]["slot_status"]
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "interview_slots_interview_type_id_fkey"
+            columns: ["interview_type_id"]
+            isOneToOne: false
+            referencedRelation: "interview_types"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      interview_types: {
+        Row: {
+          buffer_minutes: number | null
+          created_at: string | null
+          created_by: string | null
+          description: string | null
+          duration_minutes: number
+          id: string
+          is_active: boolean | null
+          location_type: Database["public"]["Enums"]["interview_location_type"]
+          meeting_link_template: string | null
+          name: string
+          updated_at: string | null
+        }
+        Insert: {
+          buffer_minutes?: number | null
+          created_at?: string | null
+          created_by?: string | null
+          description?: string | null
+          duration_minutes?: number
+          id?: string
+          is_active?: boolean | null
+          location_type?: Database["public"]["Enums"]["interview_location_type"]
+          meeting_link_template?: string | null
+          name: string
+          updated_at?: string | null
+        }
+        Update: {
+          buffer_minutes?: number | null
+          created_at?: string | null
+          created_by?: string | null
+          description?: string | null
+          duration_minutes?: number
+          id?: string
+          is_active?: boolean | null
+          location_type?: Database["public"]["Enums"]["interview_location_type"]
+          meeting_link_template?: string | null
+          name?: string
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
+      interviews: {
+        Row: {
+          cancellation_reason: string | null
+          cancelled_at: string | null
+          candidate_email: string
+          candidate_id: string | null
+          candidate_name: string
+          candidate_source:
+            | Database["public"]["Enums"]["candidate_source"]
+            | null
+          created_at: string | null
+          duration_minutes: number
+          feedback: string | null
+          id: string
+          interview_type_id: string | null
+          location: string | null
+          meeting_link: string | null
+          notes: string | null
+          recruiter_id: string | null
+          reminder_15min_sent: boolean | null
+          reminder_1h_sent: boolean | null
+          reminder_24h_sent: boolean | null
+          scheduled_at: string
+          slot_id: string | null
+          status: Database["public"]["Enums"]["interview_status"]
+          updated_at: string | null
+        }
+        Insert: {
+          cancellation_reason?: string | null
+          cancelled_at?: string | null
+          candidate_email: string
+          candidate_id?: string | null
+          candidate_name: string
+          candidate_source?:
+            | Database["public"]["Enums"]["candidate_source"]
+            | null
+          created_at?: string | null
+          duration_minutes?: number
+          feedback?: string | null
+          id?: string
+          interview_type_id?: string | null
+          location?: string | null
+          meeting_link?: string | null
+          notes?: string | null
+          recruiter_id?: string | null
+          reminder_15min_sent?: boolean | null
+          reminder_1h_sent?: boolean | null
+          reminder_24h_sent?: boolean | null
+          scheduled_at: string
+          slot_id?: string | null
+          status?: Database["public"]["Enums"]["interview_status"]
+          updated_at?: string | null
+        }
+        Update: {
+          cancellation_reason?: string | null
+          cancelled_at?: string | null
+          candidate_email?: string
+          candidate_id?: string | null
+          candidate_name?: string
+          candidate_source?:
+            | Database["public"]["Enums"]["candidate_source"]
+            | null
+          created_at?: string | null
+          duration_minutes?: number
+          feedback?: string | null
+          id?: string
+          interview_type_id?: string | null
+          location?: string | null
+          meeting_link?: string | null
+          notes?: string | null
+          recruiter_id?: string | null
+          reminder_15min_sent?: boolean | null
+          reminder_1h_sent?: boolean | null
+          reminder_24h_sent?: boolean | null
+          scheduled_at?: string
+          slot_id?: string | null
+          status?: Database["public"]["Enums"]["interview_status"]
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "interviews_interview_type_id_fkey"
+            columns: ["interview_type_id"]
+            isOneToOne: false
+            referencedRelation: "interview_types"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "interviews_slot_id_fkey"
+            columns: ["slot_id"]
+            isOneToOne: false
+            referencedRelation: "interview_slots"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       linkedin_leads: {
         Row: {
           candidate_name: string
@@ -866,6 +1119,15 @@ export type Database = {
     }
     Enums: {
       candidate_source: "resume_screening" | "deep_search" | "linkedin_scraper"
+      interview_location_type: "video" | "phone" | "in_person"
+      interview_status:
+        | "scheduled"
+        | "completed"
+        | "cancelled"
+        | "no_show"
+        | "rescheduled"
+      reminder_type: "24h" | "1h" | "15min"
+      slot_status: "available" | "booked" | "blocked"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -994,6 +1256,16 @@ export const Constants = {
   public: {
     Enums: {
       candidate_source: ["resume_screening", "deep_search", "linkedin_scraper"],
+      interview_location_type: ["video", "phone", "in_person"],
+      interview_status: [
+        "scheduled",
+        "completed",
+        "cancelled",
+        "no_show",
+        "rescheduled",
+      ],
+      reminder_type: ["24h", "1h", "15min"],
+      slot_status: ["available", "booked", "blocked"],
     },
   },
 } as const
