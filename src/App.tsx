@@ -25,6 +25,7 @@ import DeepSearch from "./pages/DeepSearch";
 import InterviewScheduler from "./pages/InterviewScheduler";
 import InterviewSettings from "./pages/InterviewSettings";
 import BookInterview from "./pages/BookInterview";
+import GoogleOAuthCallback from "./pages/GoogleOAuthCallback";
 import ProtectedRoute from "./components/ProtectedRoute";
 import MainLayout from "./components/MainLayout";
 
@@ -146,6 +147,13 @@ const App = () => (
 
                 {/* Public booking page - no auth required */}
                 <Route path="/book/:token" element={<BookInterview />} />
+
+                {/* OAuth callback - protected */}
+                <Route path="/oauth/google/callback" element={
+                  <ProtectedRoute>
+                    <GoogleOAuthCallback />
+                  </ProtectedRoute>
+                } />
 
                 {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
                 <Route path="*" element={<NotFound />} />
