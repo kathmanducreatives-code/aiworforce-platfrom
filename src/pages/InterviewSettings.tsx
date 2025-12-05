@@ -5,6 +5,7 @@ import { useInterviews } from '@/hooks/useInterviews';
 import { useAvailability } from '@/hooks/useAvailability';
 import AvailabilityCalendar from '@/components/interview/AvailabilityCalendar';
 import InterviewTypeManager from '@/components/interview/InterviewTypeManager';
+import GoogleCalendarConnect from '@/components/interview/GoogleCalendarConnect';
 
 const InterviewSettings = () => {
   const navigate = useNavigate();
@@ -43,9 +44,14 @@ const InterviewSettings = () => {
               Interview Settings
             </h1>
             <p className="text-muted-foreground">
-              Configure your availability and interview types
+              Configure your availability, interview types, and calendar integration
             </p>
           </div>
+        </div>
+
+        {/* Google Calendar Integration */}
+        <div className="mb-6">
+          <GoogleCalendarConnect />
         </div>
 
         {/* Settings Grid */}
