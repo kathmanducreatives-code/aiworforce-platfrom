@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { Mail, Plus, Clock, Users, Send, Pause, Play, Trash2, ArrowLeft } from "lucide-react";
+import { Mail, Plus, Clock, Users, Send, Trash2, ArrowLeft, Eye, ChevronDown, ChevronUp } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -18,6 +18,21 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/components/ui/collapsible";
+
+interface SequenceEmail {
+  id: string;
+  candidate_name: string;
+  candidate_email: string;
+  step_number: number;
+  subject: string;
+  status: string;
+  send_time_utc: string;
+}
 
 interface SequenceGroup {
   sequence_name: string;
@@ -26,7 +41,9 @@ interface SequenceGroup {
   pending_count: number;
   sent_count: number;
   created_at: string;
-  status: string;
+  unique_candidates: number;
+  total_steps: number;
+  emails: SequenceEmail[];
 }
 
 const EmailSequences = () => {
@@ -34,6 +51,7 @@ const EmailSequences = () => {
   const [sequences, setSequences] = useState<SequenceGroup[]>([]);
   const [loading, setLoading] = useState(true);
   const [folders, setFolders] = useState<string[]>([]);
+  const [expandedSequence, setExpandedSequence] = useState<string | null>(null);
 
   useEffect(() => {
     fetchSequences();
@@ -45,8 +63,8 @@ const EmailSequences = () => {
       setLoading(true);
       const { data, error } = await supabase
         .from('scheduled_emails')
-        .select('sequence_name, folder_name, status, created_at')
-        .order('created_at', { ascending: false });
+        .select('*')
+        .order('sequence_created_at', { ascending: false });
 
       if (error) throw error;
 
@@ -60,19 +78,42 @@ const EmailSequences = () => {
             total_emails: 0,
             pending_count: 0,
             sent_count: 0,
-            created_at: email.created_at || new Date().toISOString(),
-            status: 'active'
+            created_at: email.sequence_created_at || email.created_at || new Date().toISOString(),
+            unique_candidates: 0,
+            total_steps: 0,
+            emails: []
           };
         }
         acc[key].total_emails++;
         if (email.status === 'pending') acc[key].pending_count++;
         if (email.status === 'sent') acc[key].sent_count++;
+        acc[key].emails.push({
+          id: email.id,
+          candidate_name: email.candidate_name,
+          candidate_email: email.candidate_email,
+          step_number: email.step_number,
+          subject: email.subject || '',
+          status: email.status || 'pending',
+          send_time_utc: email.send_time_utc
+        });
         return acc;
       }, {});
+
+      // Calculate unique candidates and max steps per sequence
+      Object.values(grouped).forEach(seq => {
+        const uniqueCandidates = new Set(seq.emails.map(e => e.candidate_email));
+        seq.unique_candidates = uniqueCandidates.size;
+        seq.total_steps = Math.max(...seq.emails.map(e => e.step_number), 0);
+      });
 
       setSequences(Object.values(grouped));
     } catch (error) {
       console.error('Error fetching sequences:', error);
+      toast({
+        title: "Error",
+        description: "Failed to load sequences.",
+        variant: "destructive"
+      });
     } finally {
       setLoading(false);
     }
@@ -119,14 +160,37 @@ const EmailSequences = () => {
     }
   };
 
+  const handleMarkAsSent = async (emailId: string) => {
+    try {
+      const { error } = await supabase
+        .from('scheduled_emails')
+        .update({ status: 'sent' })
+        .eq('id', emailId);
+
+      if (error) throw error;
+
+      toast({ title: "Marked as sent" });
+      fetchSequences();
+    } catch (error) {
+      console.error('Error updating status:', error);
+    }
+  };
+
   const getStatusBadge = (seq: SequenceGroup) => {
-    if (seq.sent_count === seq.total_emails) {
+    if (seq.sent_count === seq.total_emails && seq.total_emails > 0) {
       return <Badge variant="secondary" className="bg-primary/20 text-primary">Completed</Badge>;
     }
     if (seq.pending_count > 0) {
       return <Badge variant="secondary" className="bg-yellow-500/20 text-yellow-500">In Progress</Badge>;
     }
     return <Badge variant="secondary">Draft</Badge>;
+  };
+
+  const getEmailStatusBadge = (status: string) => {
+    if (status === 'sent') {
+      return <Badge variant="secondary" className="bg-primary/20 text-primary text-xs">Sent</Badge>;
+    }
+    return <Badge variant="secondary" className="bg-yellow-500/20 text-yellow-500 text-xs">Pending</Badge>;
   };
 
   return (
@@ -249,61 +313,116 @@ const EmailSequences = () => {
             ) : (
               <div className="space-y-3">
                 {sequences.map((seq, idx) => (
-                  <div
+                  <Collapsible
                     key={idx}
-                    className="flex items-center justify-between p-4 rounded-lg border border-border hover:bg-muted/50 transition-colors"
+                    open={expandedSequence === seq.sequence_name}
+                    onOpenChange={(open) => setExpandedSequence(open ? seq.sequence_name : null)}
                   >
-                    <div className="flex items-center gap-4">
-                      <div className="p-2 rounded-lg bg-primary/10">
-                        <Mail className="h-5 w-5 text-primary" />
-                      </div>
-                      <div>
+                    <div className="rounded-lg border border-border hover:bg-muted/30 transition-colors">
+                      <div className="flex items-center justify-between p-4">
+                        <div className="flex items-center gap-4">
+                          <div className="p-2 rounded-lg bg-primary/10">
+                            <Mail className="h-5 w-5 text-primary" />
+                          </div>
+                          <div>
+                            <div className="flex items-center gap-2">
+                              <span className="font-medium">{seq.sequence_name}</span>
+                              {getStatusBadge(seq)}
+                            </div>
+                            <div className="flex items-center gap-4 text-sm text-muted-foreground mt-1">
+                              <span className="flex items-center gap-1">
+                                <Users className="h-3 w-3" />
+                                {seq.unique_candidates} candidates
+                              </span>
+                              <span>•</span>
+                              <span>{seq.total_steps} steps</span>
+                              <span>•</span>
+                              <span>{seq.sent_count}/{seq.total_emails} sent</span>
+                              <span>•</span>
+                              <span>{format(new Date(seq.created_at), 'MMM d, yyyy')}</span>
+                            </div>
+                          </div>
+                        </div>
+                        
                         <div className="flex items-center gap-2">
-                          <span className="font-medium">{seq.sequence_name}</span>
-                          {getStatusBadge(seq)}
-                        </div>
-                        <div className="flex items-center gap-4 text-sm text-muted-foreground mt-1">
-                          <span className="flex items-center gap-1">
-                            <Users className="h-3 w-3" />
-                            {seq.folder_name}
-                          </span>
-                          <span>•</span>
-                          <span>{seq.total_emails} emails</span>
-                          <span>•</span>
-                          <span>{seq.sent_count} sent</span>
-                          <span>•</span>
-                          <span>{format(new Date(seq.created_at), 'MMM d, yyyy')}</span>
+                          <CollapsibleTrigger asChild>
+                            <Button variant="ghost" size="icon">
+                              {expandedSequence === seq.sequence_name ? (
+                                <ChevronUp className="h-4 w-4" />
+                              ) : (
+                                <ChevronDown className="h-4 w-4" />
+                              )}
+                            </Button>
+                          </CollapsibleTrigger>
+                          
+                          <AlertDialog>
+                            <AlertDialogTrigger asChild>
+                              <Button variant="ghost" size="icon" className="text-destructive hover:text-destructive">
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            </AlertDialogTrigger>
+                            <AlertDialogContent>
+                              <AlertDialogHeader>
+                                <AlertDialogTitle>Delete Sequence?</AlertDialogTitle>
+                                <AlertDialogDescription>
+                                  This will delete all scheduled emails in "{seq.sequence_name}". This action cannot be undone.
+                                </AlertDialogDescription>
+                              </AlertDialogHeader>
+                              <AlertDialogFooter>
+                                <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                <AlertDialogAction
+                                  onClick={() => handleDeleteSequence(seq.sequence_name)}
+                                  className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                                >
+                                  Delete
+                                </AlertDialogAction>
+                              </AlertDialogFooter>
+                            </AlertDialogContent>
+                          </AlertDialog>
                         </div>
                       </div>
+                      
+                      <CollapsibleContent>
+                        <div className="border-t border-border p-4 bg-muted/20">
+                          <p className="text-sm font-medium mb-3">Scheduled Emails</p>
+                          <div className="space-y-2 max-h-64 overflow-y-auto">
+                            {seq.emails
+                              .sort((a, b) => a.candidate_name.localeCompare(b.candidate_name) || a.step_number - b.step_number)
+                              .map((email) => (
+                              <div
+                                key={email.id}
+                                className="flex items-center justify-between p-3 rounded-lg bg-background border border-border/50"
+                              >
+                                <div className="flex-1 min-w-0">
+                                  <div className="flex items-center gap-2">
+                                    <span className="font-medium text-sm truncate">{email.candidate_name}</span>
+                                    <Badge variant="outline" className="text-xs">Step {email.step_number}</Badge>
+                                    {getEmailStatusBadge(email.status)}
+                                  </div>
+                                  <p className="text-xs text-muted-foreground truncate mt-1">
+                                    {email.subject}
+                                  </p>
+                                  <p className="text-xs text-muted-foreground">
+                                    Scheduled: {format(new Date(email.send_time_utc), 'MMM d, yyyy h:mm a')}
+                                  </p>
+                                </div>
+                                {email.status === 'pending' && (
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() => handleMarkAsSent(email.id)}
+                                    className="text-xs"
+                                  >
+                                    Mark Sent
+                                  </Button>
+                                )}
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      </CollapsibleContent>
                     </div>
-                    
-                    <div className="flex items-center gap-2">
-                      <AlertDialog>
-                        <AlertDialogTrigger asChild>
-                          <Button variant="ghost" size="icon" className="text-destructive hover:text-destructive">
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
-                        </AlertDialogTrigger>
-                        <AlertDialogContent>
-                          <AlertDialogHeader>
-                            <AlertDialogTitle>Delete Sequence?</AlertDialogTitle>
-                            <AlertDialogDescription>
-                              This will delete all scheduled emails in "{seq.sequence_name}". This action cannot be undone.
-                            </AlertDialogDescription>
-                          </AlertDialogHeader>
-                          <AlertDialogFooter>
-                            <AlertDialogCancel>Cancel</AlertDialogCancel>
-                            <AlertDialogAction
-                              onClick={() => handleDeleteSequence(seq.sequence_name)}
-                              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                            >
-                              Delete
-                            </AlertDialogAction>
-                          </AlertDialogFooter>
-                        </AlertDialogContent>
-                      </AlertDialog>
-                    </div>
-                  </div>
+                  </Collapsible>
                 ))}
               </div>
             )}
