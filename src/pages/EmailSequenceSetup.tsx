@@ -229,13 +229,30 @@ const EmailSequenceSetup = () => {
       return;
     }
 
+    // Check if any candidate has no email
+    const candidatesWithoutEmail = candidates.filter(c => !c.email);
+    if (candidatesWithoutEmail.length > 0) {
+      toast({
+        title: "Missing Email Addresses",
+        description: `${candidatesWithoutEmail.length} candidate(s) don't have email addresses and will be skipped.`,
+        variant: "destructive"
+      });
+    }
+
+    const validCandidates = candidates.filter(c => c.email);
+    if (validCandidates.length === 0) {
+      toast({
+        title: "No Valid Candidates",
+        description: "No candidates with email addresses found.",
+        variant: "destructive"
+      });
+      return;
+    }
+
     try {
       const company = companyName || "Your Company";
       const sender = senderName || "Recruiter";
       const baseDate = startDate;
-      
-      // Generate unique sequence ID
-      const sequenceId = `seq_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
       
       // Helper to format time in "DD MMMM, h:mm AM/PM" format
       const formatTimeWithDate = (date: Date, hour: string, period: string): string => {
@@ -246,133 +263,112 @@ const EmailSequenceSetup = () => {
       
       const windowStart = formatTimeWithDate(baseDate, sendTimeHour, sendTimePeriod);
       const windowEnd = sendTimeEndHour ? formatTimeWithDate(baseDate, sendTimeEndHour, sendTimeEndPeriod) : formatTimeWithDate(baseDate, sendTimeHour, sendTimePeriod);
-      
-      let successCount = 0;
-      let failureCount = 0;
+      const sequenceCreatedAt = new Date().toISOString();
 
       toast({
         title: "Scheduling Emails",
-        description: `Scheduling email sequences for ${candidates.length} candidate(s)...`,
+        description: `Scheduling email sequences for ${validCandidates.length} candidate(s)...`,
       });
 
-      // Loop through each candidate and send complete sequence
-      for (const candidate of candidates) {
-        try {
-          const firstName = candidate.candidateName.split(' ')[0];
+      // Build all email records for batch insert
+      const emailRecords: Array<{
+        candidate_id: string;
+        candidate_name: string;
+        candidate_email: string;
+        fit_score: number;
+        sequence_name: string;
+        folder_name: string;
+        recruitment_name: string;
+        step_number: number;
+        subject: string;
+        content: string;
+        delay_days: number;
+        send_time_utc: string;
+        window_start: string;
+        window_end: string;
+        timezone: string;
+        company_name: string;
+        sender_name: string;
+        sequence_created_at: string;
+        status: string;
+      }> = [];
+
+      for (const candidate of validCandidates) {
+        const firstName = candidate.candidateName.split(' ')[0];
+        
+        for (const step of emailSteps) {
+          const sendTimeUTC = calculateSendTimeUTC(step.stepNumber, baseDate);
           
-          // Build all steps with personalized content
-          const steps = emailSteps.map((step) => {
-            const sendTimeUTC = calculateSendTimeUTC(step.stepNumber, baseDate);
-            
-            const personalizedSubject = replaceTokens(
-              step.subject,
-              candidate.candidateName,
-              firstName,
-              company,
-              sender
-            );
-            
-            const personalizedContent = replaceTokens(
-              step.content,
-              candidate.candidateName,
-              firstName,
-              company,
-              sender
-            );
+          const personalizedSubject = replaceTokens(
+            step.subject,
+            candidate.candidateName,
+            firstName,
+            company,
+            sender
+          );
+          
+          const personalizedContent = replaceTokens(
+            step.content,
+            candidate.candidateName,
+            firstName,
+            company,
+            sender
+          );
 
-            return {
-              step_number: step.stepNumber,
-              subject: personalizedSubject,
-              content: personalizedContent,
-              delay_days: step.delayDays,
-              delay_unit: step.delayUnit,
-              send_time_utc: sendTimeUTC
-            };
-          });
-
-          // Create complete sequence payload with all steps
-          const sequencePayload = {
-            // Unique Identifiers
-            sequence_id: sequenceId,
+          emailRecords.push({
             candidate_id: candidate.id,
-            
-            // Candidate Information
             candidate_name: candidate.candidateName,
             candidate_email: candidate.email,
-            fit_score: candidate.fitScore || 0,
-            
-            // Sequence Metadata
+            fit_score: typeof candidate.fitScore === 'number' ? candidate.fitScore : 0,
             sequence_name: sequenceName,
-            folder_name: folderName,
-            recruitment_name: candidate.recruitmentName || folderName,
-            
-            // All Email Steps
-            total_steps: emailSteps.length,
-            steps: steps,
-            
-            // Send Window Configuration
+            folder_name: folderName || '',
+            recruitment_name: candidate.recruitmentName || folderName || '',
+            step_number: step.stepNumber,
+            subject: personalizedSubject,
+            content: personalizedContent,
+            delay_days: step.delayDays,
+            send_time_utc: sendTimeUTC,
             window_start: windowStart,
             window_end: windowEnd,
             timezone: timezone,
-            start_date: startDate.toISOString(),
-            
-            // Global Settings
             company_name: company,
             sender_name: sender,
-            
-            // Sequence Tracking
-            sequence_created_at: new Date().toISOString(),
-            status: "pending"
-          };
-
-          console.log(`Sending complete sequence for ${candidate.candidateName}:`, sequencePayload);
-
-          // Send POST request with complete sequence
-          const response = await fetch('https://prasiiidha.app.n8n.cloud/webhook/lovable-intake', {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify(sequencePayload),
+            sequence_created_at: sequenceCreatedAt,
+            status: 'pending'
           });
-
-          if (response.ok) {
-            successCount++;
-            console.log(`✓ Successfully scheduled sequence for ${candidate.candidateName}`);
-          } else {
-            failureCount++;
-            console.error(`✗ Failed to schedule sequence for ${candidate.candidateName}:`, response.status);
-          }
-        } catch (error) {
-          failureCount++;
-          console.error(`✗ Error scheduling sequence for ${candidate.candidateName}:`, error);
         }
       }
 
-      // Show final summary
-      if (successCount > 0) {
-        toast({
-          title: "Email Sequences Created",
-          description: `Successfully scheduled ${successCount} complete sequence${successCount !== 1 ? 's' : ''} with ${emailSteps.length} step${emailSteps.length !== 1 ? 's' : ''} each.${failureCount > 0 ? ` ${failureCount} failed.` : ''}`,
-        });
+      console.log(`Inserting ${emailRecords.length} email records to database...`);
 
-        setTimeout(() => {
-          navigate(`/folder/${encodeURIComponent(folderName || '')}`);
-        }, 2000);
-      } else {
-        throw new Error('All email scheduling requests failed');
+      // Insert all records to Supabase
+      const { data, error } = await supabase
+        .from('scheduled_emails')
+        .insert(emailRecords)
+        .select();
+
+      if (error) {
+        console.error('Supabase insert error:', error);
+        throw new Error(error.message);
       }
 
+      console.log(`✓ Successfully inserted ${data?.length || 0} email records`);
+
+      toast({
+        title: "Email Sequences Created",
+        description: `Successfully scheduled ${validCandidates.length} sequence${validCandidates.length !== 1 ? 's' : ''} with ${emailSteps.length} step${emailSteps.length !== 1 ? 's' : ''} each (${emailRecords.length} total emails).`,
+      });
+
+      setTimeout(() => {
+        navigate('/email-sequences');
+      }, 1500);
+
     } catch (error) {
-      console.error('Error sending to webhook:', error);
+      console.error('Error creating sequence:', error);
       
       let errorMessage = "Failed to create email sequence. ";
       if (error instanceof Error) {
-        if (error.message.includes('Failed to fetch')) {
-          errorMessage += "Network error - please check your connection.";
-        } else {
-          errorMessage += error.message;
-        }
+        errorMessage += error.message;
       }
       
       toast({
