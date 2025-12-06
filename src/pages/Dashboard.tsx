@@ -6,6 +6,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { TrendingUp, Folder, Brain, Users } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import ModernDashboard from "@/components/ModernDashboard";
+import WeeklyActivityChart from "@/components/dashboard/WeeklyActivityChart";
 
 const Dashboard = () => {
   const navigate = useNavigate();
@@ -159,6 +160,9 @@ const Dashboard = () => {
             View Analytics →
           </Button>
         </div>
+
+        {/* Weekly Activity Chart & Recent Activity */}
+        <WeeklyActivityChart />
       </div>
 
       {/* Candidate Intelligence Hub - Seamlessly Integrated */}
