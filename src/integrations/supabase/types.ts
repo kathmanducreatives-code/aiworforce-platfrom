@@ -552,6 +552,44 @@ export type Database = {
           },
         ]
       }
+      email_tracking: {
+        Row: {
+          event_type: string
+          id: string
+          ip_address: string | null
+          link_url: string | null
+          scheduled_email_id: string | null
+          tracked_at: string
+          user_agent: string | null
+        }
+        Insert: {
+          event_type: string
+          id?: string
+          ip_address?: string | null
+          link_url?: string | null
+          scheduled_email_id?: string | null
+          tracked_at?: string
+          user_agent?: string | null
+        }
+        Update: {
+          event_type?: string
+          id?: string
+          ip_address?: string | null
+          link_url?: string | null
+          scheduled_email_id?: string | null
+          tracked_at?: string
+          user_agent?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "email_tracking_scheduled_email_id_fkey"
+            columns: ["scheduled_email_id"]
+            isOneToOne: false
+            referencedRelation: "scheduled_emails"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       google_calendar_tokens: {
         Row: {
           access_token: string
