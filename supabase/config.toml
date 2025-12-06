@@ -51,3 +51,9 @@ verify_jwt = false
 
 [functions.google-calendar-events]
 verify_jwt = true
+
+[functions.send-scheduled-emails]
+verify_jwt = false
+
+[functions.email-tracking]
+verify_jwt = false

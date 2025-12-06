@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { Mail, Plus, Clock, Users, Send, Trash2, ArrowLeft, Eye, ChevronDown, ChevronUp } from "lucide-react";
+import { Mail, Plus, Clock, Users, Send, Trash2, ArrowLeft, ChevronDown, ChevronUp, Eye, MousePointer, Play, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -32,6 +32,8 @@ interface SequenceEmail {
   subject: string;
   status: string;
   send_time_utc: string;
+  opens: number;
+  clicks: number;
 }
 
 interface SequenceGroup {
@@ -44,6 +46,8 @@ interface SequenceGroup {
   unique_candidates: number;
   total_steps: number;
   emails: SequenceEmail[];
+  total_opens: number;
+  total_clicks: number;
 }
 
 const EmailSequences = () => {
@@ -52,6 +56,7 @@ const EmailSequences = () => {
   const [loading, setLoading] = useState(true);
   const [folders, setFolders] = useState<string[]>([]);
   const [expandedSequence, setExpandedSequence] = useState<string | null>(null);
+  const [sendingEmails, setSendingEmails] = useState(false);
 
   useEffect(() => {
     fetchSequences();
@@ -61,16 +66,39 @@ const EmailSequences = () => {
   const fetchSequences = async () => {
     try {
       setLoading(true);
-      const { data, error } = await supabase
+      
+      // Fetch emails
+      const { data: emailsData, error: emailsError } = await supabase
         .from('scheduled_emails')
         .select('*')
         .order('sequence_created_at', { ascending: false });
 
-      if (error) throw error;
+      if (emailsError) throw emailsError;
+
+      // Fetch tracking data
+      const { data: trackingData, error: trackingError } = await supabase
+        .from('email_tracking')
+        .select('scheduled_email_id, event_type');
+
+      if (trackingError) {
+        console.error('Error fetching tracking:', trackingError);
+      }
+
+      // Create tracking lookup
+      const trackingByEmail: Record<string, { opens: number; clicks: number }> = {};
+      (trackingData || []).forEach(t => {
+        if (!trackingByEmail[t.scheduled_email_id]) {
+          trackingByEmail[t.scheduled_email_id] = { opens: 0, clicks: 0 };
+        }
+        if (t.event_type === 'open') trackingByEmail[t.scheduled_email_id].opens++;
+        if (t.event_type === 'click') trackingByEmail[t.scheduled_email_id].clicks++;
+      });
 
       // Group by sequence_name
-      const grouped = (data || []).reduce((acc: Record<string, SequenceGroup>, email) => {
+      const grouped = (emailsData || []).reduce((acc: Record<string, SequenceGroup>, email) => {
         const key = email.sequence_name || 'Unnamed';
+        const emailTracking = trackingByEmail[email.id] || { opens: 0, clicks: 0 };
+        
         if (!acc[key]) {
           acc[key] = {
             sequence_name: email.sequence_name || 'Unnamed',
@@ -81,12 +109,17 @@ const EmailSequences = () => {
             created_at: email.sequence_created_at || email.created_at || new Date().toISOString(),
             unique_candidates: 0,
             total_steps: 0,
-            emails: []
+            emails: [],
+            total_opens: 0,
+            total_clicks: 0
           };
         }
         acc[key].total_emails++;
         if (email.status === 'pending') acc[key].pending_count++;
         if (email.status === 'sent') acc[key].sent_count++;
+        acc[key].total_opens += emailTracking.opens;
+        acc[key].total_clicks += emailTracking.clicks;
+        
         acc[key].emails.push({
           id: email.id,
           candidate_name: email.candidate_name,
@@ -94,7 +127,9 @@ const EmailSequences = () => {
           step_number: email.step_number,
           subject: email.subject || '',
           status: email.status || 'pending',
-          send_time_utc: email.send_time_utc
+          send_time_utc: email.send_time_utc,
+          opens: emailTracking.opens,
+          clicks: emailTracking.clicks
         });
         return acc;
       }, {});
@@ -176,6 +211,36 @@ const EmailSequences = () => {
     }
   };
 
+  const handleSendPendingEmails = async () => {
+    try {
+      setSendingEmails(true);
+      toast({
+        title: "Processing",
+        description: "Sending pending emails...",
+      });
+
+      const { data, error } = await supabase.functions.invoke('send-scheduled-emails');
+
+      if (error) throw error;
+
+      toast({
+        title: "Emails Processed",
+        description: `Sent: ${data?.sent || 0}, Failed: ${data?.failed || 0}`,
+      });
+
+      fetchSequences();
+    } catch (error: any) {
+      console.error('Error sending emails:', error);
+      toast({
+        title: "Error",
+        description: error.message || "Failed to send emails.",
+        variant: "destructive"
+      });
+    } finally {
+      setSendingEmails(false);
+    }
+  };
+
   const getStatusBadge = (seq: SequenceGroup) => {
     if (seq.sent_count === seq.total_emails && seq.total_emails > 0) {
       return <Badge variant="secondary" className="bg-primary/20 text-primary">Completed</Badge>;
@@ -189,6 +254,9 @@ const EmailSequences = () => {
   const getEmailStatusBadge = (status: string) => {
     if (status === 'sent') {
       return <Badge variant="secondary" className="bg-primary/20 text-primary text-xs">Sent</Badge>;
+    }
+    if (status === 'failed') {
+      return <Badge variant="secondary" className="bg-destructive/20 text-destructive text-xs">Failed</Badge>;
     }
     return <Badge variant="secondary" className="bg-yellow-500/20 text-yellow-500 text-xs">Pending</Badge>;
   };
@@ -211,10 +279,31 @@ const EmailSequences = () => {
               <p className="text-muted-foreground">Manage your automated email campaigns</p>
             </div>
           </div>
+          <div className="flex gap-2">
+            <Button
+              variant="outline"
+              onClick={fetchSequences}
+              disabled={loading}
+            >
+              <RefreshCw className={`h-4 w-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
+              Refresh
+            </Button>
+            <Button
+              onClick={handleSendPendingEmails}
+              disabled={sendingEmails || sequences.reduce((acc, s) => acc + s.pending_count, 0) === 0}
+            >
+              {sendingEmails ? (
+                <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+              ) : (
+                <Play className="h-4 w-4 mr-2" />
+              )}
+              Send Pending Emails
+            </Button>
+          </div>
         </div>
 
         {/* Stats Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
+        <div className="grid grid-cols-1 md:grid-cols-5 gap-4 mb-8">
           <Card>
             <CardContent className="p-6">
               <div className="flex items-center gap-4">
@@ -222,7 +311,7 @@ const EmailSequences = () => {
                   <Mail className="h-6 w-6 text-primary" />
                 </div>
                 <div>
-                  <p className="text-sm text-muted-foreground">Total Sequences</p>
+                  <p className="text-sm text-muted-foreground">Sequences</p>
                   <p className="text-2xl font-bold">{sequences.length}</p>
                 </div>
               </div>
@@ -236,7 +325,7 @@ const EmailSequences = () => {
                   <Clock className="h-6 w-6 text-yellow-500" />
                 </div>
                 <div>
-                  <p className="text-sm text-muted-foreground">Pending Emails</p>
+                  <p className="text-sm text-muted-foreground">Pending</p>
                   <p className="text-2xl font-bold">
                     {sequences.reduce((acc, s) => acc + s.pending_count, 0)}
                   </p>
@@ -252,9 +341,41 @@ const EmailSequences = () => {
                   <Send className="h-6 w-6 text-primary" />
                 </div>
                 <div>
-                  <p className="text-sm text-muted-foreground">Emails Sent</p>
+                  <p className="text-sm text-muted-foreground">Sent</p>
                   <p className="text-2xl font-bold">
                     {sequences.reduce((acc, s) => acc + s.sent_count, 0)}
+                  </p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardContent className="p-6">
+              <div className="flex items-center gap-4">
+                <div className="p-3 rounded-lg bg-blue-500/10">
+                  <Eye className="h-6 w-6 text-blue-500" />
+                </div>
+                <div>
+                  <p className="text-sm text-muted-foreground">Opens</p>
+                  <p className="text-2xl font-bold">
+                    {sequences.reduce((acc, s) => acc + s.total_opens, 0)}
+                  </p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardContent className="p-6">
+              <div className="flex items-center gap-4">
+                <div className="p-3 rounded-lg bg-purple-500/10">
+                  <MousePointer className="h-6 w-6 text-purple-500" />
+                </div>
+                <div>
+                  <p className="text-sm text-muted-foreground">Clicks</p>
+                  <p className="text-2xl font-bold">
+                    {sequences.reduce((acc, s) => acc + s.total_clicks, 0)}
                   </p>
                 </div>
               </div>
@@ -338,8 +459,24 @@ const EmailSequences = () => {
                               <span>{seq.total_steps} steps</span>
                               <span>•</span>
                               <span>{seq.sent_count}/{seq.total_emails} sent</span>
-                              <span>•</span>
-                              <span>{format(new Date(seq.created_at), 'MMM d, yyyy')}</span>
+                              {seq.total_opens > 0 && (
+                                <>
+                                  <span>•</span>
+                                  <span className="flex items-center gap-1 text-blue-500">
+                                    <Eye className="h-3 w-3" />
+                                    {seq.total_opens}
+                                  </span>
+                                </>
+                              )}
+                              {seq.total_clicks > 0 && (
+                                <>
+                                  <span>•</span>
+                                  <span className="flex items-center gap-1 text-purple-500">
+                                    <MousePointer className="h-3 w-3" />
+                                    {seq.total_clicks}
+                                  </span>
+                                </>
+                              )}
                             </div>
                           </div>
                         </div>
@@ -394,10 +531,22 @@ const EmailSequences = () => {
                                 className="flex items-center justify-between p-3 rounded-lg bg-background border border-border/50"
                               >
                                 <div className="flex-1 min-w-0">
-                                  <div className="flex items-center gap-2">
+                                  <div className="flex items-center gap-2 flex-wrap">
                                     <span className="font-medium text-sm truncate">{email.candidate_name}</span>
                                     <Badge variant="outline" className="text-xs">Step {email.step_number}</Badge>
                                     {getEmailStatusBadge(email.status)}
+                                    {email.opens > 0 && (
+                                      <span className="flex items-center gap-1 text-xs text-blue-500">
+                                        <Eye className="h-3 w-3" />
+                                        {email.opens}
+                                      </span>
+                                    )}
+                                    {email.clicks > 0 && (
+                                      <span className="flex items-center gap-1 text-xs text-purple-500">
+                                        <MousePointer className="h-3 w-3" />
+                                        {email.clicks}
+                                      </span>
+                                    )}
                                   </div>
                                   <p className="text-xs text-muted-foreground truncate mt-1">
                                     {email.subject}
