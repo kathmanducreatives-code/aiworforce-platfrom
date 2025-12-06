@@ -15,6 +15,7 @@ import Pricing from "./pages/Pricing";
 import NotFound from "./pages/NotFound";
 import FolderView from "./pages/FolderView";
 import EmailSequenceSetup from "./pages/EmailSequenceSetup";
+import EmailSequences from "./pages/EmailSequences";
 import GetDemo from "./pages/GetDemo";
 import Auth from "./pages/Auth";
 import DataDashboard from "./pages/DataDashboard";
@@ -125,6 +126,14 @@ const App = () => (
                   <ProtectedRoute>
                     <MainLayout>
                       <DeepSearch />
+                    </MainLayout>
+                  </ProtectedRoute>
+                } />
+                
+                <Route path="/email-sequences" element={
+                  <ProtectedRoute>
+                    <MainLayout>
+                      <EmailSequences />
                     </MainLayout>
                   </ProtectedRoute>
                 } />
