@@ -268,6 +268,7 @@ export default function LeadScraper() {
             leads={leads}
             isLoading={isFetchingLeads}
             onDownloadCSV={downloadCSV}
+            onLeadDeleted={fetchLeads}
           />
         </div>
       </div>

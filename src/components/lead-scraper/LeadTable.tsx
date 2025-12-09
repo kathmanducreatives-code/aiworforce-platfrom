@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { ArrowUpDown, Download, ExternalLink, Mail, Brain } from "lucide-react";
+import { ArrowUpDown, Download, ExternalLink, Mail, Brain, Trash2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { deepSearchApi } from "@/services/deepSearchApi";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -7,6 +7,7 @@ import { DeepSearchResults } from "./DeepSearchResults";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
+import { supabase } from "@/integrations/supabase/client";
 import {
   Table,
   TableBody,
@@ -23,6 +24,17 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 
 export interface LinkedInLead {
   id: string;
@@ -41,12 +53,13 @@ interface LeadTableProps {
   leads: LinkedInLead[];
   isLoading: boolean;
   onDownloadCSV: () => void;
+  onLeadDeleted?: () => void;
 }
 
 type SortField = "candidate_name" | "job_title" | "company" | "scraped_at";
 type SortOrder = "asc" | "desc";
 
-export const LeadTable = ({ leads, isLoading, onDownloadCSV }: LeadTableProps) => {
+export const LeadTable = ({ leads, isLoading, onDownloadCSV, onLeadDeleted }: LeadTableProps) => {
   const [searchTerm, setSearchTerm] = useState("");
   const [experienceFilter, setExperienceFilter] = useState("all");
   const [showEmailOnly, setShowEmailOnly] = useState(false);
@@ -54,7 +67,36 @@ export const LeadTable = ({ leads, isLoading, onDownloadCSV }: LeadTableProps) =
   const [sortOrder, setSortOrder] = useState<SortOrder>("desc");
   const [selectedCandidateId, setSelectedCandidateId] = useState<string | null>(null);
   const [runningDeepSearch, setRunningDeepSearch] = useState<Set<string>>(new Set());
+  const [deletingLead, setDeletingLead] = useState<string | null>(null);
   const { toast } = useToast();
+
+  const handleDeleteLead = async (leadId: string, leadName: string) => {
+    try {
+      setDeletingLead(leadId);
+      const { error } = await supabase
+        .from('linkedin_leads')
+        .delete()
+        .eq('id', leadId);
+
+      if (error) throw error;
+
+      toast({
+        title: "Lead Deleted",
+        description: `${leadName} has been removed.`,
+      });
+
+      onLeadDeleted?.();
+    } catch (error) {
+      console.error('Error deleting lead:', error);
+      toast({
+        title: "Error",
+        description: "Failed to delete lead",
+        variant: "destructive",
+      });
+    } finally {
+      setDeletingLead(null);
+    }
+  };
 
   const handleRunDeepSearch = async (lead: LinkedInLead) => {
     try {
@@ -287,6 +329,35 @@ export const LeadTable = ({ leads, isLoading, onDownloadCSV }: LeadTableProps) =
                         </a>
                       </Button>
                     )}
+                    <AlertDialog>
+                      <AlertDialogTrigger asChild>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="gap-1 hover:text-destructive hover:bg-destructive/10"
+                          disabled={deletingLead === lead.id}
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </Button>
+                      </AlertDialogTrigger>
+                      <AlertDialogContent>
+                        <AlertDialogHeader>
+                          <AlertDialogTitle>Delete Lead</AlertDialogTitle>
+                          <AlertDialogDescription>
+                            Are you sure you want to delete {lead.candidate_name}? This action cannot be undone.
+                          </AlertDialogDescription>
+                        </AlertDialogHeader>
+                        <AlertDialogFooter>
+                          <AlertDialogCancel>Cancel</AlertDialogCancel>
+                          <AlertDialogAction
+                            onClick={() => handleDeleteLead(lead.id, lead.candidate_name)}
+                            className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                          >
+                            Delete
+                          </AlertDialogAction>
+                        </AlertDialogFooter>
+                      </AlertDialogContent>
+                    </AlertDialog>
                   </div>
                 </TableCell>
               </TableRow>

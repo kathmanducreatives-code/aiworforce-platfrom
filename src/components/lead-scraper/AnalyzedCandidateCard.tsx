@@ -1,14 +1,27 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Brain, ChevronRight, Gauge } from "lucide-react";
+import { Brain, ChevronRight, Gauge, Trash2 } from "lucide-react";
 import { useState } from "react";
 import { DeepSearchResults } from "./DeepSearchResults";
 import {
   Dialog,
   DialogContent,
 } from "@/components/ui/dialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { supabase } from "@/integrations/supabase/client";
+import { useToast } from "@/hooks/use-toast";
 
 interface AnalyzedCandidateCardProps {
   id: string;
@@ -18,6 +31,7 @@ interface AnalyzedCandidateCardProps {
   strengths: string[] | null;
   created_at: string;
   profile_picture_url?: string | null;
+  onDeleted?: () => void;
 }
 
 export const AnalyzedCandidateCard = ({
@@ -27,9 +41,40 @@ export const AnalyzedCandidateCard = ({
   ai_summary,
   strengths,
   created_at,
-  profile_picture_url
+  profile_picture_url,
+  onDeleted
 }: AnalyzedCandidateCardProps) => {
   const [showFullAnalysis, setShowFullAnalysis] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const { toast } = useToast();
+
+  const handleDelete = async () => {
+    try {
+      setIsDeleting(true);
+      const { error } = await supabase
+        .from('deep_search_results')
+        .delete()
+        .eq('id', id);
+
+      if (error) throw error;
+
+      toast({
+        title: "Analysis Deleted",
+        description: `${candidate_name}'s analysis has been removed.`,
+      });
+
+      onDeleted?.();
+    } catch (error) {
+      console.error('Error deleting analysis:', error);
+      toast({
+        title: "Error",
+        description: "Failed to delete analysis",
+        variant: "destructive",
+      });
+    } finally {
+      setIsDeleting(false);
+    }
+  };
 
   const getScoreColor = (score: number | null) => {
     if (!score) return "text-muted-foreground";
@@ -141,14 +186,45 @@ export const AnalyzedCandidateCard = ({
             </div>
           )}
 
-          {/* View Full Analysis Button */}
-          <Button 
-            onClick={() => setShowFullAnalysis(true)}
-            className="w-full mt-2 bg-gradient-to-r from-primary to-cyan-500 hover:opacity-90 group"
-          >
-            View Full Analysis
-            <ChevronRight className="w-4 h-4 ml-2 group-hover:translate-x-1 transition-transform" />
-          </Button>
+          {/* Action Buttons */}
+          <div className="flex gap-2 mt-2">
+            <Button 
+              onClick={() => setShowFullAnalysis(true)}
+              className="flex-1 bg-gradient-to-r from-primary to-cyan-500 hover:opacity-90 group"
+            >
+              View Full Analysis
+              <ChevronRight className="w-4 h-4 ml-2 group-hover:translate-x-1 transition-transform" />
+            </Button>
+            <AlertDialog>
+              <AlertDialogTrigger asChild>
+                <Button
+                  variant="outline"
+                  size="icon"
+                  className="hover:text-destructive hover:border-destructive hover:bg-destructive/10"
+                  disabled={isDeleting}
+                >
+                  <Trash2 className="w-4 h-4" />
+                </Button>
+              </AlertDialogTrigger>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Delete Analysis</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    Are you sure you want to delete {candidate_name}'s analysis? This action cannot be undone.
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>Cancel</AlertDialogCancel>
+                  <AlertDialogAction
+                    onClick={handleDelete}
+                    className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                  >
+                    Delete
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
+          </div>
         </CardContent>
       </Card>
 
