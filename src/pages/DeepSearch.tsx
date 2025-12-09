@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { Brain, Loader2, Users, FileText, Search, Sparkles, TrendingUp, CheckCircle2, Filter, ArrowLeft } from "lucide-react";
@@ -11,6 +11,7 @@ import { deepSearchApi } from "@/services/deepSearchApi";
 import { Input } from "@/components/ui/input";
 import { CandidateCard } from "@/components/lead-scraper/CandidateCard";
 import { AnalyzedCandidateCard } from "@/components/lead-scraper/AnalyzedCandidateCard";
+import { SavedSearches } from "@/components/lead-scraper/SavedSearches";
 
 interface LinkedInCandidate {
   id: string;
@@ -19,6 +20,7 @@ interface LinkedInCandidate {
   company: string | null;
   linkedin_url: string | null;
   experience_level: string | null;
+  session_id: string | null;
 }
 
 interface ResumeCandidate {
@@ -43,6 +45,9 @@ export default function DeepSearch() {
   const [viewMode, setViewMode] = useState<"select" | "analyzed">("select");
   const [allAnalyzedResults, setAllAnalyzedResults] = useState<any[]>([]);
   const [activeTab, setActiveTab] = useState<"linkedin" | "resume">("linkedin");
+  const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
+  const [activeSessionName, setActiveSessionName] = useState<string | null>(null);
+  const [refreshTrigger, setRefreshTrigger] = useState(0);
   const { toast } = useToast();
   const lastAnalysisToastTime = useRef(0);
 
@@ -83,6 +88,18 @@ export default function DeepSearch() {
         },
         handleAnalysisUpdate
       )
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'linkedin_leads',
+        },
+        () => {
+          fetchCandidates();
+          setRefreshTrigger((prev) => prev + 1);
+        }
+      )
       .subscribe();
 
     return () => {
@@ -90,18 +107,42 @@ export default function DeepSearch() {
     };
   }, [handleAnalysisUpdate]);
 
-  const fetchCandidates = async () => {
+  const fetchCandidates = async (sessionId?: string | null) => {
     try {
       setLoading(true);
       
       // Fetch LinkedIn candidates
-      const { data: linkedInData, error: linkedInError } = await supabase
+      let linkedInQuery = supabase
         .from('linkedin_leads')
-        .select('id, candidate_name, job_title, company, linkedin_url, experience_level')
+        .select('id, candidate_name, job_title, company, linkedin_url, experience_level, session_id')
         .order('scraped_at', { ascending: false });
+
+      if (sessionId) {
+        linkedInQuery = linkedInQuery.eq('session_id', sessionId);
+        
+        // Also fetch session name
+        const { data: sessionData } = await supabase
+          .from("scraping_sessions")
+          .select("name, search_criteria")
+          .eq("id", sessionId)
+          .maybeSingle();
+        
+        if (sessionData) {
+          setActiveSessionName(
+            sessionData.name || 
+            (sessionData.search_criteria as any)?.searchQuery || 
+            "Untitled Search"
+          );
+        }
+      } else {
+        setActiveSessionName(null);
+      }
+
+      const { data: linkedInData, error: linkedInError } = await linkedInQuery;
 
       if (linkedInError) throw linkedInError;
       setLinkedInCandidates(linkedInData || []);
+      setActiveSessionId(sessionId || null);
 
       // Fetch resume candidates
       const { data: resumeData, error: resumeError } = await supabase
@@ -334,128 +375,157 @@ export default function DeepSearch() {
 
       <div className="container mx-auto px-4 py-8 relative">
         {viewMode === "select" ? (
-          <div className="space-y-6">
-            {/* Search and Filter Bar */}
-            <Card className="border-primary/20 bg-card/50 backdrop-blur-sm">
-              <CardContent className="p-4">
-                <div className="flex flex-col md:flex-row gap-4">
-                  <div className="flex-1">
-                    <div className="relative">
-                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                      <Input
-                        placeholder="Search by name, company, role..."
-                        value={searchTerm}
-                        onChange={(e) => setSearchTerm(e.target.value)}
-                        className="pl-10"
-                      />
+          <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
+            {/* Left Sidebar - Saved Searches */}
+            <div className="lg:col-span-1">
+              <SavedSearches
+                activeSessionId={activeSessionId}
+                onSessionSelect={fetchCandidates}
+                refreshTrigger={refreshTrigger}
+              />
+            </div>
+
+            {/* Main Content */}
+            <div className="lg:col-span-3 space-y-6">
+              {/* Search and Filter Bar */}
+              <Card className="border-primary/20 bg-card/50 backdrop-blur-sm">
+                <CardContent className="p-4">
+                  <div className="flex flex-col md:flex-row gap-4">
+                    <div className="flex-1">
+                      <div className="relative">
+                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                        <Input
+                          placeholder="Search by name, company, role..."
+                          value={searchTerm}
+                          onChange={(e) => setSearchTerm(e.target.value)}
+                          className="pl-10"
+                        />
+                      </div>
+                    </div>
+                    <div className="flex gap-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                          const allIds = new Set([
+                            ...(activeTab === 'linkedin' ? filteredLinkedInCandidates : filteredResumeCandidates).map(c => c.id)
+                          ]);
+                          setSelectedCandidates(allIds);
+                        }}
+                      >
+                        Select All
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setSelectedCandidates(new Set())}
+                      >
+                        Clear
+                      </Button>
                     </div>
                   </div>
-                  <div className="flex gap-2">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => {
-                        const allIds = new Set([
-                          ...(activeTab === 'linkedin' ? filteredLinkedInCandidates : filteredResumeCandidates).map(c => c.id)
-                        ]);
-                        setSelectedCandidates(allIds);
-                      }}
-                    >
-                      Select All
-                    </Button>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => setSelectedCandidates(new Set())}
-                    >
-                      Clear
-                    </Button>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
+                  {activeSessionName && (
+                    <div className="mt-3 flex items-center gap-2">
+                      <Badge variant="secondary" className="text-sm">
+                        Viewing: {activeSessionName}
+                      </Badge>
+                      <Button
+                        variant="link"
+                        size="sm"
+                        className="text-xs text-primary h-auto p-0"
+                        onClick={() => fetchCandidates(null)}
+                      >
+                        View All
+                      </Button>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
 
-            {/* Source Tabs */}
-            <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as any)} className="w-full">
-              <TabsList className="grid w-full grid-cols-2 mb-6">
-                <TabsTrigger value="linkedin" className="gap-2">
-                  <Users className="w-4 h-4" />
-                  LinkedIn ({filteredLinkedInCandidates.length})
-                </TabsTrigger>
-                <TabsTrigger value="resume" className="gap-2">
-                  <FileText className="w-4 h-4" />
-                  Resume ({filteredResumeCandidates.length})
-                </TabsTrigger>
-              </TabsList>
+              {/* Source Tabs */}
+              <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as any)} className="w-full">
+                <TabsList className="grid w-full grid-cols-2 mb-6">
+                  <TabsTrigger value="linkedin" className="gap-2">
+                    <Users className="w-4 h-4" />
+                    LinkedIn ({filteredLinkedInCandidates.length})
+                  </TabsTrigger>
+                  <TabsTrigger value="resume" className="gap-2">
+                    <FileText className="w-4 h-4" />
+                    Resume ({filteredResumeCandidates.length})
+                  </TabsTrigger>
+                </TabsList>
 
-              <TabsContent value="linkedin" className="space-y-0">
-                {filteredLinkedInCandidates.length === 0 ? (
-                  <Card className="border-dashed border-2 bg-card/30 backdrop-blur-sm">
-                    <CardContent className="text-center py-16">
-                      <Users className="w-16 h-16 text-muted-foreground/50 mx-auto mb-4" />
-                      <h3 className="text-xl font-semibold mb-2">No LinkedIn Candidates</h3>
-                      <p className="text-muted-foreground max-w-md mx-auto">
-                        {searchTerm 
-                          ? "No candidates match your search. Try adjusting your filters."
-                          : "Import candidates from LinkedIn to get started with AI-powered analysis."}
-                      </p>
-                    </CardContent>
-                  </Card>
-                ) : (
-                  <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
-                    {filteredLinkedInCandidates.map((candidate) => (
-                      <CandidateCard
-                        key={candidate.id}
-                        id={candidate.id}
-                        name={candidate.candidate_name}
-                        title={candidate.job_title}
-                        company={candidate.company}
-                        experienceLevel={candidate.experience_level}
-                        linkedinUrl={candidate.linkedin_url}
-                        isSelected={selectedCandidates.has(candidate.id)}
-                        isAnalyzed={analyzedCandidates.has(candidate.id)}
-                        onSelect={handleSelectCandidate}
-                        type="linkedin"
-                      />
-                    ))}
-                  </div>
-                )}
-              </TabsContent>
+                <TabsContent value="linkedin" className="space-y-0">
+                  {filteredLinkedInCandidates.length === 0 ? (
+                    <Card className="border-dashed border-2 bg-card/30 backdrop-blur-sm">
+                      <CardContent className="text-center py-16">
+                        <Users className="w-16 h-16 text-muted-foreground/50 mx-auto mb-4" />
+                        <h3 className="text-xl font-semibold mb-2">No LinkedIn Candidates</h3>
+                        <p className="text-muted-foreground max-w-md mx-auto">
+                          {searchTerm 
+                            ? "No candidates match your search. Try adjusting your filters."
+                            : activeSessionName 
+                              ? "No candidates in this search folder."
+                              : "Import candidates from LinkedIn to get started with AI-powered analysis."}
+                        </p>
+                      </CardContent>
+                    </Card>
+                  ) : (
+                    <div className="grid md:grid-cols-2 xl:grid-cols-3 gap-4">
+                      {filteredLinkedInCandidates.map((candidate) => (
+                        <CandidateCard
+                          key={candidate.id}
+                          id={candidate.id}
+                          name={candidate.candidate_name}
+                          title={candidate.job_title}
+                          company={candidate.company}
+                          experienceLevel={candidate.experience_level}
+                          linkedinUrl={candidate.linkedin_url}
+                          isSelected={selectedCandidates.has(candidate.id)}
+                          isAnalyzed={analyzedCandidates.has(candidate.id)}
+                          onSelect={handleSelectCandidate}
+                          type="linkedin"
+                        />
+                      ))}
+                    </div>
+                  )}
+                </TabsContent>
 
-              <TabsContent value="resume" className="space-y-0">
-                {filteredResumeCandidates.length === 0 ? (
-                  <Card className="border-dashed border-2 bg-card/30 backdrop-blur-sm">
-                    <CardContent className="text-center py-16">
-                      <FileText className="w-16 h-16 text-muted-foreground/50 mx-auto mb-4" />
-                      <h3 className="text-xl font-semibold mb-2">No Resume Candidates</h3>
-                      <p className="text-muted-foreground max-w-md mx-auto">
-                        {searchTerm 
-                          ? "No candidates match your search. Try adjusting your filters."
-                          : "Upload resumes to start screening candidates with AI assistance."}
-                      </p>
-                    </CardContent>
-                  </Card>
-                ) : (
-                  <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
-                    {filteredResumeCandidates.map((candidate) => (
-                      <CandidateCard
-                        key={candidate.id}
-                        id={candidate.id}
-                        name={candidate.candidate_name}
-                        recruitmentName={candidate.recruitment_name}
-                        email={candidate.email}
-                        fitScore={getFitScore(candidate.fit_score)}
-                        currentStage={candidate.current_stage}
-                        isSelected={selectedCandidates.has(candidate.id)}
-                        isAnalyzed={analyzedCandidates.has(candidate.id)}
-                        onSelect={handleSelectCandidate}
-                        type="resume"
-                      />
-                    ))}
-                  </div>
-                )}
-              </TabsContent>
-            </Tabs>
+                <TabsContent value="resume" className="space-y-0">
+                  {filteredResumeCandidates.length === 0 ? (
+                    <Card className="border-dashed border-2 bg-card/30 backdrop-blur-sm">
+                      <CardContent className="text-center py-16">
+                        <FileText className="w-16 h-16 text-muted-foreground/50 mx-auto mb-4" />
+                        <h3 className="text-xl font-semibold mb-2">No Resume Candidates</h3>
+                        <p className="text-muted-foreground max-w-md mx-auto">
+                          {searchTerm 
+                            ? "No candidates match your search. Try adjusting your filters."
+                            : "Upload resumes to start screening candidates with AI assistance."}
+                        </p>
+                      </CardContent>
+                    </Card>
+                  ) : (
+                    <div className="grid md:grid-cols-2 xl:grid-cols-3 gap-4">
+                      {filteredResumeCandidates.map((candidate) => (
+                        <CandidateCard
+                          key={candidate.id}
+                          id={candidate.id}
+                          name={candidate.candidate_name}
+                          recruitmentName={candidate.recruitment_name}
+                          email={candidate.email}
+                          fitScore={getFitScore(candidate.fit_score)}
+                          currentStage={candidate.current_stage}
+                          isSelected={selectedCandidates.has(candidate.id)}
+                          isAnalyzed={analyzedCandidates.has(candidate.id)}
+                          onSelect={handleSelectCandidate}
+                          type="resume"
+                        />
+                      ))}
+                    </div>
+                  )}
+                </TabsContent>
+              </Tabs>
+            </div>
           </div>
         ) : (
           <div className="space-y-6">
