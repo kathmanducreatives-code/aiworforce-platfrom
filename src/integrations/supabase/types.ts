@@ -1140,6 +1140,7 @@ export type Database = {
           completed_at: string | null
           created_at: string | null
           id: string
+          name: string | null
           search_criteria: Json
           status: string | null
           total_leads: number | null
@@ -1149,6 +1150,7 @@ export type Database = {
           completed_at?: string | null
           created_at?: string | null
           id?: string
+          name?: string | null
           search_criteria: Json
           status?: string | null
           total_leads?: number | null
@@ -1158,6 +1160,7 @@ export type Database = {
           completed_at?: string | null
           created_at?: string | null
           id?: string
+          name?: string | null
           search_criteria?: Json
           status?: string | null
           total_leads?: number | null

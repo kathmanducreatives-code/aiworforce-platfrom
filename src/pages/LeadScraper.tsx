@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback, useRef } from "react";
 import { useNavigate } from "react-router-dom";
-import { ArrowLeft, History } from "lucide-react";
+import { ArrowLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { toast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
@@ -9,15 +9,19 @@ import { sessionApi } from "@/services/sessionApi";
 import { StatsCards } from "@/components/lead-scraper/StatsCards";
 import { SearchForm, type SearchFormData } from "@/components/lead-scraper/SearchForm";
 import { LeadTable, type LinkedInLead } from "@/components/lead-scraper/LeadTable";
-import { HistoryPanel } from "@/components/lead-scraper/HistoryPanel";
+import { SavedSearches } from "@/components/lead-scraper/SavedSearches";
+import { NameSearchDialog } from "@/components/lead-scraper/NameSearchDialog";
 
 export default function LeadScraper() {
   const navigate = useNavigate();
   const [leads, setLeads] = useState<LinkedInLead[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [isFetchingLeads, setIsFetchingLeads] = useState(true);
-  const [historyOpen, setHistoryOpen] = useState(false);
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
+  const [activeSessionName, setActiveSessionName] = useState<string | null>(null);
+  const [nameDialogOpen, setNameDialogOpen] = useState(false);
+  const [pendingFormData, setPendingFormData] = useState<SearchFormData | null>(null);
+  const [refreshTrigger, setRefreshTrigger] = useState(0);
   const lastToastTime = useRef(0);
   const pendingLeads = useRef<LinkedInLead[]>([]);
 
@@ -42,13 +46,17 @@ export default function LeadScraper() {
   // Batch lead updates
   const handleNewLead = useCallback((payload: any) => {
     const newLead = payload.new as LinkedInLead;
-    pendingLeads.current.push(newLead);
     
-    setLeads((prev) => [newLead, ...prev]);
+    // Only add to current view if it matches the active session or we're viewing all
+    if (!activeSessionId || newLead.session_id === activeSessionId) {
+      pendingLeads.current.push(newLead);
+      setLeads((prev) => [newLead, ...prev]);
+      showToast();
+    }
     
-    // Debounced toast
-    showToast();
-  }, [showToast]);
+    // Refresh saved searches to update counts
+    setRefreshTrigger((prev) => prev + 1);
+  }, [showToast, activeSessionId]);
 
   useEffect(() => {
     fetchLeads();
@@ -68,7 +76,7 @@ export default function LeadScraper() {
     };
   }, [handleNewLead]);
 
-  const fetchLeads = async (sessionId?: string) => {
+  const fetchLeads = async (sessionId?: string | null) => {
     try {
       setIsFetchingLeads(true);
       let query = supabase
@@ -78,15 +86,30 @@ export default function LeadScraper() {
 
       if (sessionId) {
         query = query.eq("session_id", sessionId);
+        
+        // Also fetch session name
+        const { data: sessionData } = await supabase
+          .from("scraping_sessions")
+          .select("name, search_criteria")
+          .eq("id", sessionId)
+          .maybeSingle();
+        
+        if (sessionData) {
+          setActiveSessionName(
+            sessionData.name || 
+            (sessionData.search_criteria as any)?.searchQuery || 
+            "Untitled Search"
+          );
+        }
+      } else {
+        setActiveSessionName(null);
       }
 
       const { data, error } = await query;
 
       if (error) throw error;
       setLeads(data || []);
-      if (sessionId) {
-        setActiveSessionId(sessionId);
-      }
+      setActiveSessionId(sessionId || null);
     } catch (error) {
       console.error("Error fetching leads:", error);
       toast({
@@ -99,35 +122,57 @@ export default function LeadScraper() {
     }
   };
 
-  const handleSubmit = async (formData: SearchFormData) => {
+  const handleFormSubmit = (formData: SearchFormData) => {
+    setPendingFormData(formData);
+    setNameDialogOpen(true);
+  };
+
+  const handleStartScraping = async (searchName: string) => {
+    if (!pendingFormData) return;
+
     try {
       setIsLoading(true);
 
-      // Create a new scraping session
-      const session = await sessionApi.createSession({
-        search_criteria: formData,
-        status: "processing",
-      });
+      // Create a new scraping session with the name
+      const { data: session, error: sessionError } = await supabase
+        .from("scraping_sessions")
+        .insert({
+          search_criteria: pendingFormData as any,
+          status: "processing",
+          total_leads: 0,
+          name: searchName,
+        })
+        .select()
+        .single();
+
+      if (sessionError) throw sessionError;
 
       console.log("Created session:", session);
 
       // Trigger the scraping webhook
-      await leadScraperApi.scrapeLeads(formData, session.id);
+      await leadScraperApi.scrapeLeads(pendingFormData, session.id);
 
       toast({
         title: "Scraping Initiated! 🚀",
-        description: `Searching for up to ${formData.maxItems} candidates${formData.searchQuery ? ` matching "${formData.searchQuery}"` : ''}`,
+        description: `Searching for up to ${pendingFormData.maxItems} candidates. Results will be saved in "${searchName}"`,
       });
 
       // Update session to completed (in real implementation, this would be done by the webhook)
       setTimeout(async () => {
-        await sessionApi.updateSession(session.id, {
-          status: "completed",
-          completed_at: new Date().toISOString(),
-        });
+        await supabase
+          .from("scraping_sessions")
+          .update({
+            status: "completed",
+            completed_at: new Date().toISOString(),
+          })
+          .eq("id", session.id);
       }, 2000);
 
       setActiveSessionId(session.id);
+      setActiveSessionName(searchName);
+      fetchLeads(session.id);
+      setNameDialogOpen(false);
+      setPendingFormData(null);
     } catch (error) {
       console.error("Error initiating scraping:", error);
       toast({
@@ -185,7 +230,7 @@ export default function LeadScraper() {
     const url = window.URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `linkedin-leads-${new Date().toISOString().split("T")[0]}.csv`;
+    a.download = `linkedin-leads-${activeSessionName || "all"}-${new Date().toISOString().split("T")[0]}.csv`;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
@@ -208,77 +253,88 @@ export default function LeadScraper() {
       <div className="relative container mx-auto px-4 py-4 sm:py-8">
         {/* Header */}
         <div className="mb-6 sm:mb-8">
-          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-4">
-            <div className="flex items-center gap-3 sm:gap-4 w-full sm:w-auto">
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={() => navigate("/dashboard")}
-                className="hover:bg-primary/10 flex-shrink-0"
-              >
-                <ArrowLeft className="w-5 h-5" />
-              </Button>
-              <div className="flex-1">
-                <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold bg-gradient-to-r from-primary via-cyan-500 to-primary bg-clip-text text-transparent">
-                  LinkedIn Lead Scraper
-                </h1>
-                <p className="text-muted-foreground mt-1 text-sm sm:text-base">
-                  Discover and connect with top talent
-                </p>
-              </div>
-            </div>
-
+          <div className="flex items-center gap-3 sm:gap-4">
             <Button
-              onClick={() => setHistoryOpen(true)}
-              variant="outline"
-              className="gap-2 hover:bg-primary/5 hover:border-primary/50 transition-all w-full sm:w-auto"
-              size="sm"
+              variant="ghost"
+              size="icon"
+              onClick={() => navigate("/dashboard")}
+              className="hover:bg-primary/10 flex-shrink-0"
             >
-              <History className="w-4 h-4" />
-              <span className="hidden sm:inline">History</span>
-              <span className="ml-1 px-2 py-0.5 rounded-full bg-primary/10 text-primary text-xs font-semibold">
-                {leads.length}
-              </span>
+              <ArrowLeft className="w-5 h-5" />
             </Button>
+            <div className="flex-1">
+              <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold bg-gradient-to-r from-primary via-cyan-500 to-primary bg-clip-text text-transparent">
+                LinkedIn Lead Scraper
+              </h1>
+              <p className="text-muted-foreground mt-1 text-sm sm:text-base">
+                Discover and connect with top talent
+              </p>
+            </div>
           </div>
         </div>
 
         {/* Stats Cards */}
         <StatsCards />
 
-        {/* Search Form */}
-        <div className="mb-8">
-          <SearchForm onSubmit={handleSubmit} isLoading={isLoading} />
-        </div>
-
-        {/* Results Section */}
-        <div className="rounded-xl border border-border/30 bg-card/50 backdrop-blur-sm p-4 sm:p-6 shadow-[0_0_30px_rgba(0,0,0,0.5)] hover:border-primary/30 transition-all duration-300">
-          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-0 mb-4 sm:mb-6">
-            <div>
-              <h2 className="text-xl sm:text-2xl font-bold bg-gradient-to-r from-primary to-cyan-500 bg-clip-text text-transparent">
-                Discovered Leads
-              </h2>
-              <p className="text-xs sm:text-sm text-muted-foreground mt-1">
-                {leads.length} lead{leads.length !== 1 ? "s" : ""} found
-              </p>
-            </div>
+        {/* Main Layout - Two Columns */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 lg:gap-8">
+          {/* Left Column - Saved Searches */}
+          <div className="lg:col-span-1">
+            <SavedSearches
+              activeSessionId={activeSessionId}
+              onSessionSelect={fetchLeads}
+              refreshTrigger={refreshTrigger}
+            />
           </div>
 
-          <LeadTable
-            leads={leads}
-            isLoading={isFetchingLeads}
-            onDownloadCSV={downloadCSV}
-            onLeadDeleted={fetchLeads}
-          />
+          {/* Right Column - Search Form & Results */}
+          <div className="lg:col-span-2 space-y-6">
+            {/* Search Form */}
+            <SearchForm onSubmit={handleFormSubmit} isLoading={isLoading} />
+
+            {/* Results Section */}
+            <div className="rounded-xl border border-border/30 bg-card/50 backdrop-blur-sm p-4 sm:p-6 shadow-[0_0_30px_rgba(0,0,0,0.5)] hover:border-primary/30 transition-all duration-300">
+              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-0 mb-4 sm:mb-6">
+                <div>
+                  <h2 className="text-xl sm:text-2xl font-bold bg-gradient-to-r from-primary to-cyan-500 bg-clip-text text-transparent">
+                    {activeSessionName ? activeSessionName : "All Leads"}
+                  </h2>
+                  <p className="text-xs sm:text-sm text-muted-foreground mt-1">
+                    {leads.length} lead{leads.length !== 1 ? "s" : ""} found
+                    {activeSessionId && (
+                      <Button
+                        variant="link"
+                        size="sm"
+                        className="text-xs text-primary ml-2 h-auto p-0"
+                        onClick={() => fetchLeads(null)}
+                      >
+                        View All
+                      </Button>
+                    )}
+                  </p>
+                </div>
+              </div>
+
+              <LeadTable
+                leads={leads}
+                isLoading={isFetchingLeads}
+                onDownloadCSV={downloadCSV}
+                onLeadDeleted={() => {
+                  fetchLeads(activeSessionId);
+                  setRefreshTrigger((prev) => prev + 1);
+                }}
+              />
+            </div>
+          </div>
         </div>
       </div>
 
-      {/* History Panel */}
-      <HistoryPanel
-        open={historyOpen}
-        onOpenChange={setHistoryOpen}
-        onSessionSelect={fetchLeads}
-        activeSessionId={activeSessionId}
+      {/* Name Search Dialog */}
+      <NameSearchDialog
+        open={nameDialogOpen}
+        onOpenChange={setNameDialogOpen}
+        onConfirm={handleStartScraping}
+        isLoading={isLoading}
       />
     </div>
   );
