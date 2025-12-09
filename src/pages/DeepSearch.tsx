@@ -486,6 +486,7 @@ export default function DeepSearch() {
                     <AnalyzedCandidateCard
                       key={result.id}
                       {...result}
+                      onDeleted={fetchAnalyzedResults}
                     />
                   ))}
                 </div>
