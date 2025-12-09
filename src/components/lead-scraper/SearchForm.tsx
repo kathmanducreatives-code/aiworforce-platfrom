@@ -1,28 +1,17 @@
 import { useState } from "react";
-import { Search, Building2, Briefcase, GraduationCap, Clock, X } from "lucide-react";
+import { Search, Building2, Briefcase, MapPin, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
-import { Switch } from "@/components/ui/switch";
-import { Separator } from "@/components/ui/separator";
 
 export interface SearchFormData {
   currentCompanies: string[];
   currentJobTitles: string[];
-  functionIds: string[];
   locations: string[];
   maxItems: number;
-  pastCompanies: string[];
-  pastJobTitles: string[];
-  recentlyChangedJobs: boolean;
-  schools: string[];
   searchQuery: string;
-  seniorityLevelIds: string[];
-  yearsAtCurrentCompanyIds: string[];
-  yearsOfExperienceIds: string[];
 }
 
 interface SearchFormProps {
@@ -34,42 +23,25 @@ export const SearchForm = ({ onSubmit, isLoading }: SearchFormProps) => {
   const [formData, setFormData] = useState<SearchFormData>({
     currentCompanies: [],
     currentJobTitles: [],
-    functionIds: [],
     locations: [],
     maxItems: 50,
-    pastCompanies: [],
-    pastJobTitles: [],
-    recentlyChangedJobs: false,
-    schools: [],
     searchQuery: "",
-    seniorityLevelIds: [],
-    yearsAtCurrentCompanyIds: [],
-    yearsOfExperienceIds: [],
   });
   
   const [inputs, setInputs] = useState({
     currentCompany: "",
     currentJobTitle: "",
-    functionId: "",
     location: "",
-    pastCompany: "",
-    pastJobTitle: "",
-    school: "",
-    seniorityLevel: "",
-    yearsAtCompany: "",
-    yearsOfExperience: "",
   });
 
   const handleAddItem = (field: keyof SearchFormData, inputField: keyof typeof inputs) => {
     const value = inputs[inputField].trim();
     const currentArray = formData[field] as string[];
     if (value && Array.isArray(currentArray) && !currentArray.includes(value)) {
-      const updatedFormData = {
+      setFormData({
         ...formData,
         [field]: [...currentArray, value],
-      };
-      console.log(`Added "${value}" to ${field}:`, updatedFormData[field]);
-      setFormData(updatedFormData);
+      });
       setInputs({ ...inputs, [inputField]: "" });
     }
   };
@@ -84,11 +56,7 @@ export const SearchForm = ({ onSubmit, isLoading }: SearchFormProps) => {
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
 
-    // Ensure any pending input values are included in the arrays before submitting
-    const buildArray = (
-      field: keyof SearchFormData,
-      inputKey: keyof typeof inputs
-    ) => {
+    const buildArray = (field: keyof SearchFormData, inputKey: keyof typeof inputs) => {
       const current = (formData[field] as string[]) || [];
       const pending = inputs[inputKey].trim();
       if (pending && !current.includes(pending)) {
@@ -101,26 +69,13 @@ export const SearchForm = ({ onSubmit, isLoading }: SearchFormProps) => {
       ...formData,
       currentCompanies: buildArray("currentCompanies", "currentCompany"),
       currentJobTitles: buildArray("currentJobTitles", "currentJobTitle"),
-      functionIds: buildArray("functionIds", "functionId"),
       locations: buildArray("locations", "location"),
-      pastCompanies: buildArray("pastCompanies", "pastCompany"),
-      pastJobTitles: buildArray("pastJobTitles", "pastJobTitle"),
-      schools: buildArray("schools", "school"),
-      seniorityLevelIds: buildArray("seniorityLevelIds", "seniorityLevel"),
-      yearsAtCurrentCompanyIds: buildArray("yearsAtCurrentCompanyIds", "yearsAtCompany"),
-      yearsOfExperienceIds: buildArray("yearsOfExperienceIds", "yearsOfExperience"),
     };
 
-    console.log('Form data being submitted (with pending inputs):', finalData);
-    console.log('Non-empty fields:', Object.entries(finalData).filter(([key, value]) => {
-      if (Array.isArray(value)) return value.length > 0;
-      if (typeof value === 'string') return value.trim() !== '';
-      if (typeof value === 'boolean') return value;
-      return value > 0;
-    }));
-
+    console.log('Form data being submitted:', finalData);
     onSubmit(finalData);
   };
+
   const renderArrayInput = (
     label: string,
     field: keyof SearchFormData,
@@ -155,7 +110,7 @@ export const SearchForm = ({ onSubmit, isLoading }: SearchFormProps) => {
           +
         </Button>
       </div>
-      {Array.isArray(formData[field]) && formData[field].length > 0 && (
+      {Array.isArray(formData[field]) && (formData[field] as string[]).length > 0 && (
         <div className="flex flex-wrap gap-2">
           {(formData[field] as string[]).map((item) => (
             <Badge
@@ -182,165 +137,68 @@ export const SearchForm = ({ onSubmit, isLoading }: SearchFormProps) => {
       
       <CardContent>
         <form onSubmit={handleSubmit} className="space-y-6">
-          {/* Basic Search */}
-          <div className="space-y-4">
-            <div className="space-y-3">
-              <Label htmlFor="searchQuery" className="text-sm font-medium flex items-center gap-2">
-                <Search className="w-4 h-4" />
-                Search Query
-              </Label>
-              <Input
-                id="searchQuery"
-                placeholder="Enter search keywords..."
-                value={formData.searchQuery}
-                onChange={(e) => setFormData({ ...formData, searchQuery: e.target.value })}
-                className="transition-all duration-200 focus:ring-2 focus:ring-primary/20"
-              />
-            </div>
+          {/* Search Query */}
+          <div className="space-y-3">
+            <Label htmlFor="searchQuery" className="text-sm font-medium flex items-center gap-2">
+              <Search className="w-4 h-4" />
+              Search Query
+            </Label>
+            <Input
+              id="searchQuery"
+              placeholder="Enter search keywords..."
+              value={formData.searchQuery}
+              onChange={(e) => setFormData({ ...formData, searchQuery: e.target.value })}
+              className="transition-all duration-200 focus:ring-2 focus:ring-primary/20"
+            />
+          </div>
 
-            <div className="space-y-3">
-              <Label htmlFor="maxItems" className="text-sm font-medium">
-                Maximum Results: {formData.maxItems}
-              </Label>
-              <input
-                type="range"
-                id="maxItems"
-                min="10"
-                max="500"
-                step="10"
-                value={formData.maxItems}
-                onChange={(e) => setFormData({ ...formData, maxItems: parseInt(e.target.value) })}
-                className="w-full h-2 bg-secondary rounded-lg appearance-none cursor-pointer accent-primary"
-              />
-              <div className="flex justify-between text-xs text-muted-foreground">
-                <span>10</span>
-                <span>500</span>
-              </div>
+          {/* Max Items */}
+          <div className="space-y-3">
+            <Label htmlFor="maxItems" className="text-sm font-medium">
+              Maximum Results: {formData.maxItems}
+            </Label>
+            <input
+              type="range"
+              id="maxItems"
+              min="10"
+              max="500"
+              step="10"
+              value={formData.maxItems}
+              onChange={(e) => setFormData({ ...formData, maxItems: parseInt(e.target.value) })}
+              className="w-full h-2 bg-secondary rounded-lg appearance-none cursor-pointer accent-primary"
+            />
+            <div className="flex justify-between text-xs text-muted-foreground">
+              <span>10</span>
+              <span>500</span>
             </div>
           </div>
 
-          <Separator />
+          {/* Current Companies */}
+          {renderArrayInput(
+            "Current Companies",
+            "currentCompanies",
+            "currentCompany",
+            "e.g. Google, Microsoft",
+            <Building2 className="w-4 h-4" />
+          )}
 
-          {/* Advanced Filters */}
-          <Tabs defaultValue="location" className="w-full">
-            <TabsList className="grid w-full grid-cols-4 lg:grid-cols-5">
-              <TabsTrigger value="location" className="text-xs">Location</TabsTrigger>
-              <TabsTrigger value="job" className="text-xs">Job</TabsTrigger>
-              <TabsTrigger value="company" className="text-xs">Company</TabsTrigger>
-              <TabsTrigger value="experience" className="text-xs">Experience</TabsTrigger>
-              <TabsTrigger value="education" className="text-xs">Education</TabsTrigger>
-            </TabsList>
+          {/* Current Job Titles */}
+          {renderArrayInput(
+            "Current Job Titles",
+            "currentJobTitles",
+            "currentJobTitle",
+            "e.g. Software Engineer",
+            <Briefcase className="w-4 h-4" />
+          )}
 
-            <TabsContent value="location" className="space-y-4 mt-4">
-              {renderArrayInput(
-                "Locations",
-                "locations",
-                "location",
-                "e.g. San Francisco, CA",
-                <Search className="w-4 h-4" />
-              )}
-            </TabsContent>
-
-            <TabsContent value="job" className="space-y-4 mt-4">
-              {renderArrayInput(
-                "Current Job Titles",
-                "currentJobTitles",
-                "currentJobTitle",
-                "e.g. Software Engineer",
-                <Briefcase className="w-4 h-4" />
-              )}
-              
-              {renderArrayInput(
-                "Past Job Titles",
-                "pastJobTitles",
-                "pastJobTitle",
-                "e.g. Junior Developer",
-                <Briefcase className="w-4 h-4" />
-              )}
-              
-              {renderArrayInput(
-                "Function IDs",
-                "functionIds",
-                "functionId",
-                "e.g. Engineering, Sales",
-                <Briefcase className="w-4 h-4" />
-              )}
-              
-              {renderArrayInput(
-                "Seniority Level IDs",
-                "seniorityLevelIds",
-                "seniorityLevel",
-                "e.g. Entry, Mid, Senior",
-                <Briefcase className="w-4 h-4" />
-              )}
-            </TabsContent>
-
-            <TabsContent value="company" className="space-y-4 mt-4">
-              {renderArrayInput(
-                "Current Companies",
-                "currentCompanies",
-                "currentCompany",
-                "e.g. Google, Microsoft",
-                <Building2 className="w-4 h-4" />
-              )}
-              
-              {renderArrayInput(
-                "Past Companies",
-                "pastCompanies",
-                "pastCompany",
-                "e.g. Apple, Amazon",
-                <Building2 className="w-4 h-4" />
-              )}
-            </TabsContent>
-
-            <TabsContent value="experience" className="space-y-4 mt-4">
-              {renderArrayInput(
-                "Years of Experience IDs",
-                "yearsOfExperienceIds",
-                "yearsOfExperience",
-                "e.g. 1-3, 3-5, 5-10",
-                <Clock className="w-4 h-4" />
-              )}
-              
-              {renderArrayInput(
-                "Years at Current Company IDs",
-                "yearsAtCurrentCompanyIds",
-                "yearsAtCompany",
-                "e.g. 0-1, 1-2, 2-5",
-                <Clock className="w-4 h-4" />
-              )}
-
-              <div className="flex items-center justify-between p-4 bg-accent/20 rounded-lg">
-                <div className="space-y-0.5">
-                  <Label htmlFor="recentlyChangedJobs" className="text-sm font-medium">
-                    Recently Changed Jobs
-                  </Label>
-                  <p className="text-xs text-muted-foreground">
-                    Filter candidates who recently changed positions
-                  </p>
-                </div>
-                <Switch
-                  id="recentlyChangedJobs"
-                  checked={formData.recentlyChangedJobs}
-                  onCheckedChange={(checked) => 
-                    setFormData({ ...formData, recentlyChangedJobs: checked })
-                  }
-                />
-              </div>
-            </TabsContent>
-
-            <TabsContent value="education" className="space-y-4 mt-4">
-              {renderArrayInput(
-                "Schools",
-                "schools",
-                "school",
-                "e.g. Stanford, MIT",
-                <GraduationCap className="w-4 h-4" />
-              )}
-            </TabsContent>
-          </Tabs>
-
-          <Separator />
+          {/* Locations */}
+          {renderArrayInput(
+            "Locations",
+            "locations",
+            "location",
+            "e.g. San Francisco, CA",
+            <MapPin className="w-4 h-4" />
+          )}
 
           <Button
             type="submit"
