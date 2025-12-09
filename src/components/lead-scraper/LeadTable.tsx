@@ -47,6 +47,7 @@ export interface LinkedInLead {
   experience_level: string | null;
   keywords: string[] | null;
   scraped_at: string;
+  session_id: string | null;
 }
 
 interface LeadTableProps {
