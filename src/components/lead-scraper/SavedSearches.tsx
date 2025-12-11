@@ -139,12 +139,12 @@ export const SavedSearches = ({
 
   if (isLoading) {
     return (
-      <div className="rounded-xl border border-border/30 bg-card/50 backdrop-blur-sm p-6">
+      <div className="rounded-xl border border-border bg-card p-6">
         <div className="flex items-center gap-2 mb-4">
           <Folder className="w-5 h-5 text-primary" />
-          <h2 className="text-lg font-semibold">Saved Searches</h2>
+          <h2 className="text-lg font-semibold text-foreground">Saved Searches</h2>
         </div>
-        <div className="flex items-center justify-center py-8">
+        <div className="flex items-center justify-center py-12">
           <div className="w-6 h-6 border-2 border-primary/30 border-t-primary rounded-full animate-spin" />
         </div>
       </div>
@@ -152,35 +152,38 @@ export const SavedSearches = ({
   }
 
   return (
-    <div className="rounded-xl border border-border/30 bg-card/50 backdrop-blur-sm p-4 sm:p-6 shadow-[0_0_30px_rgba(0,0,0,0.5)] hover:border-primary/30 transition-all duration-300">
+    <div className="rounded-xl border border-border bg-card p-6 h-fit">
       <div className="flex items-center justify-between mb-4">
         <div className="flex items-center gap-2">
           <Folder className="w-5 h-5 text-primary" />
-          <h2 className="text-lg font-semibold">Saved Searches</h2>
-          <Badge variant="secondary" className="ml-2">
-            {sessions.length}
-          </Badge>
+          <h2 className="text-lg font-semibold text-foreground">Saved Searches</h2>
         </div>
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={() => onSessionSelect(null)}
-          className={!activeSessionId ? "bg-primary/10 text-primary" : ""}
-        >
-          View All
-        </Button>
+        <Badge variant="secondary" className="text-xs">
+          {sessions.length}
+        </Badge>
       </div>
 
+      <Button
+        variant={!activeSessionId ? "default" : "outline"}
+        size="sm"
+        onClick={() => onSessionSelect(null)}
+        className="w-full mb-4 h-9"
+      >
+        View All Leads
+      </Button>
+
       {sessions.length === 0 ? (
-        <div className="flex flex-col items-center justify-center py-8 text-center">
-          <Folder className="w-12 h-12 text-muted-foreground mb-4" />
-          <h3 className="text-base font-medium mb-2">No saved searches yet</h3>
-          <p className="text-sm text-muted-foreground">
-            Start a new search to see your results organized here
+        <div className="flex flex-col items-center justify-center py-10 text-center">
+          <div className="w-12 h-12 rounded-full bg-muted flex items-center justify-center mb-3">
+            <Folder className="w-6 h-6 text-muted-foreground" />
+          </div>
+          <h3 className="text-sm font-medium text-foreground mb-1">No saved searches</h3>
+          <p className="text-xs text-muted-foreground">
+            Start a search to see results here
           </p>
         </div>
       ) : (
-        <ScrollArea className="h-[300px] sm:h-[400px]">
+        <ScrollArea className="h-[380px]">
           <div className="space-y-2 pr-2">
             {sessions.map((session) => {
               const isExpanded = expandedSessions.has(session.id);
@@ -196,12 +199,12 @@ export const SavedSearches = ({
                     className={`rounded-lg border transition-all duration-200 ${
                       isActive
                         ? "border-primary bg-primary/5"
-                        : "border-border/50 hover:border-primary/30 bg-card/30"
+                        : "border-border hover:border-primary/40"
                     }`}
                   >
                     <div className="flex items-center gap-2 p-3">
                       <CollapsibleTrigger asChild>
-                        <Button variant="ghost" size="icon" className="h-6 w-6 flex-shrink-0">
+                        <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0">
                           {isExpanded ? (
                             <ChevronDown className="w-4 h-4" />
                           ) : (
@@ -216,18 +219,18 @@ export const SavedSearches = ({
                       >
                         <div className="flex items-center gap-2">
                           {isActive ? (
-                            <FolderOpen className="w-4 h-4 text-primary flex-shrink-0" />
+                            <FolderOpen className="w-4 h-4 text-primary shrink-0" />
                           ) : (
-                            <Folder className="w-4 h-4 text-muted-foreground flex-shrink-0" />
+                            <Folder className="w-4 h-4 text-muted-foreground shrink-0" />
                           )}
-                          <span className="font-medium text-sm truncate">
+                          <span className="font-medium text-sm truncate text-foreground">
                             {getSessionName(session)}
                           </span>
                         </div>
                       </div>
 
-                      <div className="flex items-center gap-2 flex-shrink-0">
-                        <Badge variant="secondary" className="text-xs">
+                      <div className="flex items-center gap-1.5 shrink-0">
+                        <Badge variant="secondary" className="text-xs h-6 px-2">
                           <Users className="w-3 h-3 mr-1" />
                           {session.total_leads}
                         </Badge>
@@ -237,7 +240,7 @@ export const SavedSearches = ({
                             <Button
                               variant="ghost"
                               size="icon"
-                              className="h-7 w-7 text-muted-foreground hover:text-destructive"
+                              className="h-7 w-7 text-muted-foreground hover:text-destructive hover:bg-destructive/10"
                               onClick={(e) => e.stopPropagation()}
                             >
                               <Trash2 className="w-3.5 h-3.5" />
@@ -265,8 +268,8 @@ export const SavedSearches = ({
                     </div>
 
                     <CollapsibleContent>
-                      <div className="px-3 pb-3 pt-1 border-t border-border/30">
-                        <div className="flex items-center gap-4 text-xs text-muted-foreground">
+                      <div className="px-3 pb-3 pt-0 border-t border-border">
+                        <div className="flex items-center gap-3 text-xs text-muted-foreground pt-3">
                           <div className="flex items-center gap-1">
                             <Calendar className="w-3 h-3" />
                             <span>
@@ -277,7 +280,7 @@ export const SavedSearches = ({
                           </div>
                           <Badge
                             variant={session.status === "completed" ? "default" : "secondary"}
-                            className="text-xs capitalize"
+                            className="text-xs h-5 capitalize"
                           >
                             {session.status}
                           </Badge>
@@ -285,7 +288,7 @@ export const SavedSearches = ({
                         <Button
                           variant="outline"
                           size="sm"
-                          className="w-full mt-3"
+                          className="w-full mt-3 h-8"
                           onClick={() => onSessionSelect(session.id)}
                         >
                           View Leads

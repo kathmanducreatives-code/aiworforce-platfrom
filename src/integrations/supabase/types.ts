@@ -888,6 +888,7 @@ export type Database = {
           keywords: string[] | null
           linkedin_url: string | null
           location: string | null
+          profile_picture: string | null
           scraped_at: string
           search_criteria: Json | null
           session_id: string | null
@@ -904,6 +905,7 @@ export type Database = {
           keywords?: string[] | null
           linkedin_url?: string | null
           location?: string | null
+          profile_picture?: string | null
           scraped_at?: string
           search_criteria?: Json | null
           session_id?: string | null
@@ -920,6 +922,7 @@ export type Database = {
           keywords?: string[] | null
           linkedin_url?: string | null
           location?: string | null
+          profile_picture?: string | null
           scraped_at?: string
           search_criteria?: Json | null
           session_id?: string | null
