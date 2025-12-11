@@ -27,6 +27,7 @@ interface ScrapingSession {
   status: string;
   created_at: string;
   completed_at: string | null;
+  actual_lead_count?: number;
 }
 
 interface SavedSearchesProps {
@@ -43,11 +44,12 @@ export const SavedSearches = ({
   const [sessions, setSessions] = useState<ScrapingSession[]>([]);
   const [expandedSessions, setExpandedSessions] = useState<Set<string>>(new Set());
   const [isLoading, setIsLoading] = useState(true);
+  const [unassignedCount, setUnassignedCount] = useState(0);
 
   useEffect(() => {
     fetchSessions();
     
-    const channel = supabase
+    const sessionsChannel = supabase
       .channel("saved-searches-updates")
       .on(
         "postgres_changes",
@@ -56,21 +58,66 @@ export const SavedSearches = ({
       )
       .subscribe();
 
+    const leadsChannel = supabase
+      .channel("leads-count-updates")
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "linkedin_leads" },
+        () => fetchSessions()
+      )
+      .subscribe();
+
     return () => {
-      supabase.removeChannel(channel);
+      supabase.removeChannel(sessionsChannel);
+      supabase.removeChannel(leadsChannel);
     };
   }, [refreshTrigger]);
 
   const fetchSessions = async () => {
     setIsLoading(true);
-    const { data, error } = await supabase
+    
+    // Fetch sessions
+    const { data: sessionsData, error: sessionsError } = await supabase
       .from("scraping_sessions")
       .select("*")
       .order("created_at", { ascending: false });
 
-    if (!error && data) {
-      setSessions(data as ScrapingSession[]);
+    if (sessionsError || !sessionsData) {
+      setIsLoading(false);
+      return;
     }
+
+    // Fetch actual lead counts per session
+    const { data: leadCounts, error: leadsError } = await supabase
+      .from("linkedin_leads")
+      .select("session_id");
+
+    if (!leadsError && leadCounts) {
+      // Count leads per session
+      const countMap: Record<string, number> = {};
+      let unassigned = 0;
+      
+      leadCounts.forEach((lead) => {
+        if (lead.session_id) {
+          countMap[lead.session_id] = (countMap[lead.session_id] || 0) + 1;
+        } else {
+          unassigned++;
+        }
+      });
+
+      setUnassignedCount(unassigned);
+
+      // Merge counts with sessions
+      const sessionsWithCounts = sessionsData.map((session) => ({
+        ...session,
+        actual_lead_count: countMap[session.id] || 0,
+      }));
+
+      setSessions(sessionsWithCounts as ScrapingSession[]);
+    } else {
+      setSessions(sessionsData as ScrapingSession[]);
+    }
+    
     setIsLoading(false);
   };
 
@@ -167,10 +214,19 @@ export const SavedSearches = ({
         variant={!activeSessionId ? "default" : "outline"}
         size="sm"
         onClick={() => onSessionSelect(null)}
-        className="w-full mb-4 h-9"
+        className="w-full mb-3 h-9"
       >
         View All Leads
       </Button>
+
+      {unassignedCount > 0 && (
+        <div className="mb-4 p-2 rounded-lg border border-border bg-muted/30 flex items-center justify-between">
+          <span className="text-xs text-muted-foreground">Unassigned leads</span>
+          <Badge variant="outline" className="text-xs">
+            {unassignedCount}
+          </Badge>
+        </div>
+      )}
 
       {sessions.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-10 text-center">
@@ -232,7 +288,7 @@ export const SavedSearches = ({
                       <div className="flex items-center gap-1.5 shrink-0">
                         <Badge variant="secondary" className="text-xs h-6 px-2">
                           <Users className="w-3 h-3 mr-1" />
-                          {session.total_leads}
+                          {session.actual_lead_count ?? session.total_leads}
                         </Badge>
                         
                         <AlertDialog>
@@ -250,7 +306,7 @@ export const SavedSearches = ({
                             <AlertDialogHeader>
                               <AlertDialogTitle>Delete Search?</AlertDialogTitle>
                               <AlertDialogDescription>
-                                This will permanently delete "{getSessionName(session)}" and all {session.total_leads} leads in it. This action cannot be undone.
+                                This will permanently delete "{getSessionName(session)}" and all {session.actual_lead_count ?? session.total_leads} leads in it. This action cannot be undone.
                               </AlertDialogDescription>
                             </AlertDialogHeader>
                             <AlertDialogFooter>
