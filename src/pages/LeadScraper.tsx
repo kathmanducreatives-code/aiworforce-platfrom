@@ -243,69 +243,69 @@ export default function LeadScraper() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-background via-background to-primary/5">
-      {/* Decorative background elements */}
+    <div className="min-h-screen bg-background">
+      {/* Subtle background gradient */}
       <div className="fixed inset-0 overflow-hidden pointer-events-none">
-        <div className="absolute top-20 right-20 w-96 h-96 bg-primary/5 rounded-full blur-3xl" />
-        <div className="absolute bottom-20 left-20 w-96 h-96 bg-cyan-500/5 rounded-full blur-3xl" />
+        <div className="absolute top-0 right-0 w-[600px] h-[600px] bg-primary/3 rounded-full blur-3xl" />
+        <div className="absolute bottom-0 left-0 w-[400px] h-[400px] bg-cyan-500/3 rounded-full blur-3xl" />
       </div>
 
-      <div className="relative container mx-auto px-4 py-4 sm:py-8">
+      <div className="relative container mx-auto px-4 py-6 max-w-7xl">
         {/* Header */}
-        <div className="mb-6 sm:mb-8">
-          <div className="flex items-center gap-3 sm:gap-4">
+        <header className="mb-8">
+          <div className="flex items-center gap-4">
             <Button
               variant="ghost"
               size="icon"
               onClick={() => navigate("/dashboard")}
-              className="hover:bg-primary/10 flex-shrink-0"
+              className="h-10 w-10 rounded-xl hover:bg-primary/10 transition-colors"
             >
               <ArrowLeft className="w-5 h-5" />
             </Button>
-            <div className="flex-1">
-              <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold bg-gradient-to-r from-primary via-cyan-500 to-primary bg-clip-text text-transparent">
+            <div>
+              <h1 className="text-2xl sm:text-3xl font-bold text-foreground">
                 LinkedIn Lead Scraper
               </h1>
-              <p className="text-muted-foreground mt-1 text-sm sm:text-base">
+              <p className="text-muted-foreground text-sm mt-0.5">
                 Discover and connect with top talent
               </p>
             </div>
           </div>
-        </div>
+        </header>
 
         {/* Stats Cards */}
         <StatsCards />
 
-        {/* Main Layout - Two Columns */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 lg:gap-8">
+        {/* Main Content Grid */}
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
           {/* Left Column - Saved Searches */}
-          <div className="lg:col-span-1">
+          <aside className="lg:col-span-4 xl:col-span-3">
             <SavedSearches
               activeSessionId={activeSessionId}
               onSessionSelect={fetchLeads}
               refreshTrigger={refreshTrigger}
             />
-          </div>
+          </aside>
 
           {/* Right Column - Search Form & Results */}
-          <div className="lg:col-span-2 space-y-6">
+          <main className="lg:col-span-8 xl:col-span-9 space-y-6">
             {/* Search Form */}
             <SearchForm onSubmit={handleFormSubmit} isLoading={isLoading} />
 
             {/* Results Section */}
-            <div className="rounded-xl border border-border/30 bg-card/50 backdrop-blur-sm p-4 sm:p-6 shadow-[0_0_30px_rgba(0,0,0,0.5)] hover:border-primary/30 transition-all duration-300">
-              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-0 mb-4 sm:mb-6">
+            <section className="rounded-xl border border-border bg-card p-6">
+              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-6">
                 <div>
-                  <h2 className="text-xl sm:text-2xl font-bold bg-gradient-to-r from-primary to-cyan-500 bg-clip-text text-transparent">
+                  <h2 className="text-xl font-semibold text-foreground">
                     {activeSessionName ? activeSessionName : "All Leads"}
                   </h2>
-                  <p className="text-xs sm:text-sm text-muted-foreground mt-1">
+                  <p className="text-sm text-muted-foreground mt-1">
                     {leads.length} lead{leads.length !== 1 ? "s" : ""} found
                     {activeSessionId && (
                       <Button
                         variant="link"
                         size="sm"
-                        className="text-xs text-primary ml-2 h-auto p-0"
+                        className="text-sm text-primary ml-2 h-auto p-0"
                         onClick={() => fetchLeads(null)}
                       >
                         View All
@@ -324,8 +324,8 @@ export default function LeadScraper() {
                   setRefreshTrigger((prev) => prev + 1);
                 }}
               />
-            </div>
-          </div>
+            </section>
+          </main>
         </div>
       </div>
 

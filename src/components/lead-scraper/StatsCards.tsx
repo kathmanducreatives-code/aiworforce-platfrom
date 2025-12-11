@@ -1,22 +1,21 @@
 import { useEffect, useState } from "react";
 import { Users, Clock, TrendingUp } from "lucide-react";
-import { Card, CardContent } from "@/components/ui/card";
 import { supabase } from "@/integrations/supabase/client";
 
 interface StatCardProps {
   icon: React.ReactNode;
   label: string;
   value: number;
-  gradient: string;
+  suffix?: string;
 }
 
-const StatCard = ({ icon, label, value, gradient }: StatCardProps) => {
+const StatCard = ({ icon, label, value, suffix }: StatCardProps) => {
   const [displayValue, setDisplayValue] = useState(0);
 
   useEffect(() => {
     let start = 0;
     const end = value;
-    const duration = 1000;
+    const duration = 800;
     const increment = end / (duration / 16);
 
     const timer = setInterval(() => {
@@ -33,22 +32,19 @@ const StatCard = ({ icon, label, value, gradient }: StatCardProps) => {
   }, [value]);
 
   return (
-    <Card className="relative overflow-hidden border-border/50 bg-card/50 backdrop-blur-sm hover:shadow-lg transition-all duration-300">
-      <div className={`absolute inset-0 opacity-5 ${gradient}`} />
-      <CardContent className="p-6">
-        <div className="flex items-center justify-between">
-          <div>
-            <p className="text-sm text-muted-foreground font-medium">{label}</p>
-            <h3 className="text-3xl font-bold mt-2 bg-gradient-to-br from-foreground to-muted-foreground bg-clip-text text-transparent">
-              {displayValue.toLocaleString()}
-            </h3>
-          </div>
-          <div className={`p-3 rounded-xl ${gradient}`}>
-            {icon}
-          </div>
+    <div className="rounded-xl border border-border bg-card p-5">
+      <div className="flex items-center justify-between">
+        <div>
+          <p className="text-sm text-muted-foreground font-medium">{label}</p>
+          <h3 className="text-3xl font-bold mt-1.5 text-foreground">
+            {displayValue.toLocaleString()}{suffix}
+          </h3>
         </div>
-      </CardContent>
-    </Card>
+        <div className="h-12 w-12 rounded-xl bg-primary/10 flex items-center justify-center">
+          {icon}
+        </div>
+      </div>
+    </div>
   );
 };
 
@@ -110,24 +106,22 @@ export const StatsCards = () => {
   }, []);
 
   return (
-    <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+    <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
       <StatCard
-        icon={<Users className="w-6 h-6 text-white" />}
+        icon={<Users className="w-5 h-5 text-primary" />}
         label="Total Leads"
         value={totalLeads}
-        gradient="bg-gradient-to-br from-primary to-cyan-500"
       />
       <StatCard
-        icon={<Clock className="w-6 h-6 text-white" />}
+        icon={<Clock className="w-5 h-5 text-primary" />}
         label="Recent Scrapes"
         value={recentScrapes}
-        gradient="bg-gradient-to-br from-purple-500 to-pink-500"
       />
       <StatCard
-        icon={<TrendingUp className="w-6 h-6 text-white" />}
+        icon={<TrendingUp className="w-5 h-5 text-primary" />}
         label="Success Rate"
         value={successRate}
-        gradient="bg-gradient-to-br from-emerald-500 to-teal-500"
+        suffix="%"
       />
     </div>
   );
