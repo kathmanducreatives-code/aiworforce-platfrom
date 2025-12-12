@@ -24,6 +24,12 @@ export default function LeadScraper() {
   const [refreshTrigger, setRefreshTrigger] = useState(0);
   const lastToastTime = useRef(0);
   const pendingLeads = useRef<LinkedInLead[]>([]);
+  const activeSessionIdRef = useRef<string | null>(null);
+
+  // Keep ref in sync with state
+  useEffect(() => {
+    activeSessionIdRef.current = activeSessionId;
+  }, [activeSessionId]);
 
   // Debounced toast notification - max 1 per 5 seconds
   const showToast = useCallback(() => {
@@ -43,12 +49,13 @@ export default function LeadScraper() {
     }
   }, []);
 
-  // Batch lead updates
+  // Batch lead updates - uses ref to avoid dependency on activeSessionId
   const handleNewLead = useCallback((payload: any) => {
     const newLead = payload.new as LinkedInLead;
     
     // Only add to current view if it matches the active session or we're viewing all
-    if (!activeSessionId || newLead.session_id === activeSessionId) {
+    const currentSessionId = activeSessionIdRef.current;
+    if (!currentSessionId || newLead.session_id === currentSessionId) {
       pendingLeads.current.push(newLead);
       setLeads((prev) => [newLead, ...prev]);
       showToast();
@@ -56,12 +63,15 @@ export default function LeadScraper() {
     
     // Refresh saved searches to update counts
     setRefreshTrigger((prev) => prev + 1);
-  }, [showToast, activeSessionId]);
+  }, [showToast]);
 
+  // Initial load - only runs once on mount
   useEffect(() => {
     fetchLeads();
+  }, []);
 
-    // Optimized realtime subscription
+  // Realtime subscription - stable dependency since handleNewLead no longer depends on activeSessionId
+  useEffect(() => {
     const channel = supabase
       .channel("linkedin-leads-changes")
       .on(
