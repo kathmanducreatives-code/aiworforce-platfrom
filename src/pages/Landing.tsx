@@ -18,7 +18,7 @@ const Landing = () => {
   // Redirect authenticated users to dashboard
   useEffect(() => {
     if (user) {
-      navigate('/');
+      navigate('/dashboard');
     }
   }, [user, navigate]);
 

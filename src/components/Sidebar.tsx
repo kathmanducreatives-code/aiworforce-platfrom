@@ -20,11 +20,11 @@ const Sidebar = ({ isCollapsed, onToggle, onCollaborationToggle, showCollaborati
 
   const handleSignOut = async () => {
     await signOut();
-    navigate("/landing");
+    navigate("/");
   };
 
   const navItems = [
-    { to: "/", icon: LayoutDashboard, label: "Dashboard" },
+    { to: "/dashboard", icon: LayoutDashboard, label: "Dashboard" },
     { to: "/analytics", icon: BarChart3, label: "Analytics" },
     { to: "/lead-scraper", icon: Search, label: "Lead Scraper" },
     { to: "/deep-search", icon: Brain, label: "Deep Search" },
@@ -76,7 +76,7 @@ const Sidebar = ({ isCollapsed, onToggle, onCollaborationToggle, showCollaborati
           <NavLink
             key={item.to}
             to={item.to}
-            end={item.to === "/"}
+            end={item.to === "/dashboard"}
             className={({ isActive }) =>
               `group flex items-center gap-3 px-4 py-2.5 rounded-lg transition-all duration-300 relative ${
                 isActive

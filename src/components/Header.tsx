@@ -14,13 +14,13 @@ const Header = () => {
 
   const handleSignOut = async () => {
     await signOut();
-    navigate('/landing');
+    navigate('/');
   };
   return <header className="fixed top-0 left-0 right-0 z-50 backdrop-blur-xl bg-background/90 border-b border-primary/20 shadow-primary">
       <div className="container mx-auto px-6">
         <div className="flex items-center justify-between h-16">
           {/* Logo */}
-          <a href={user ? "/" : "/landing"} className="flex items-center gap-3 group">
+          <a href={user ? "/dashboard" : "/"} className="flex items-center gap-3 group">
             {user && profile?.logo_url ? (
               <div className="flex flex-col items-start gap-1">
                 <img 
