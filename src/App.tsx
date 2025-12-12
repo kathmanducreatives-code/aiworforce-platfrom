@@ -43,14 +43,14 @@ const App = () => (
             <BrowserRouter>
               <Routes>
                 {/* Public Routes */}
-                <Route path="/landing" element={<Landing />} />
+                <Route path="/" element={<Landing />} />
                 <Route path="/auth" element={<Auth />} />
                 <Route path="/features" element={<Features />} />
                 <Route path="/pricing" element={<Pricing />} />
                 <Route path="/get-demo" element={<GetDemo />} />
 
                 {/* Protected Routes with MainLayout */}
-                <Route path="/" element={
+                <Route path="/dashboard" element={
                   <ProtectedRoute>
                     <MainLayout>
                       <Dashboard />

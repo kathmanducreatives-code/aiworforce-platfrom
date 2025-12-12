@@ -37,9 +37,9 @@ const Auth = () => {
           description: "You have been logged in successfully.",
         });
         
-        navigate('/');
+        navigate('/dashboard');
       } else {
-        const redirectUrl = `${window.location.origin}/`;
+        const redirectUrl = `${window.location.origin}/dashboard`;
         
         const { error } = await supabase.auth.signUp({
           email,
@@ -74,7 +74,7 @@ const Auth = () => {
     <div className="min-h-screen bg-gradient-to-br from-background via-background to-primary/5 flex items-center justify-center p-4">
       <Button
         variant="ghost"
-        onClick={() => navigate('/landing')}
+        onClick={() => navigate('/')}
         className="absolute top-4 left-4 flex items-center gap-2 text-muted-foreground hover:text-foreground"
       >
         <ArrowLeft className="w-4 h-4" />
