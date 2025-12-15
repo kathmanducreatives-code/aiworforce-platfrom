@@ -24,7 +24,7 @@ import ClientDetail from "./pages/ClientDetail";
 import LeadScraper from "./pages/LeadScraper";
 import DeepSearch from "./pages/DeepSearch";
 import InterviewScheduler from "./pages/InterviewScheduler";
-import InterviewSettings from "./pages/InterviewSettings";
+// InterviewSettings removed - simplified interview feature
 import BookInterview from "./pages/BookInterview";
 import GoogleOAuthCallback from "./pages/GoogleOAuthCallback";
 import ProtectedRoute from "./components/ProtectedRoute";
@@ -146,13 +146,6 @@ const App = () => (
                   </ProtectedRoute>
                 } />
                 
-                <Route path="/interview-scheduler/settings" element={
-                  <ProtectedRoute>
-                    <MainLayout>
-                      <InterviewSettings />
-                    </MainLayout>
-                  </ProtectedRoute>
-                } />
 
                 {/* Public booking page - no auth required */}
                 <Route path="/book/:token" element={<BookInterview />} />
