@@ -44,8 +44,8 @@ const InterviewScheduler = () => {
     setIsNotesDialogOpen(true);
   };
 
-  const handleScheduleInterview = async (interviewData: Partial<Interview>) => {
-    const result = await scheduleInterview(interviewData);
+  const handleScheduleInterview = async (interviewData: Partial<Interview>, sendEmailInvite: boolean) => {
+    const result = await scheduleInterview(interviewData, sendEmailInvite);
     
     // Sync with Google Calendar if connected
     if (result && isCalendarConnected) {

@@ -136,7 +136,7 @@ export function useInterviews() {
     }
   };
 
-  const scheduleInterview = async (interview: Partial<Interview>) => {
+  const scheduleInterview = async (interview: Partial<Interview>, sendEmailInvite: boolean = true) => {
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error('Not authenticated');
@@ -162,11 +162,55 @@ export function useInterviews() {
         .single();
 
       if (error) throw error;
-      
-      toast({
-        title: 'Success',
-        description: 'Interview scheduled successfully',
-      });
+
+      // Send email invite if requested
+      if (sendEmailInvite && interview.candidate_email) {
+        try {
+          // Get recruiter profile for name
+          const { data: profile } = await supabase
+            .from('profiles')
+            .select('full_name')
+            .eq('user_id', user.id)
+            .single();
+
+          const { error: emailError } = await supabase.functions.invoke('send-interview-invite', {
+            body: {
+              candidateName: interview.candidate_name,
+              candidateEmail: interview.candidate_email,
+              scheduledAt: interview.scheduled_at,
+              durationMinutes: interview.duration_minutes || 30,
+              meetingLink: interview.meeting_link,
+              recruiterName: profile?.full_name || 'Recruiting Team',
+            },
+          });
+
+          if (emailError) {
+            console.error('Error sending interview invite email:', emailError);
+            toast({
+              title: 'Interview Scheduled',
+              description: 'Interview was scheduled but email invite failed to send',
+              variant: 'default',
+            });
+          } else {
+            toast({
+              title: 'Success',
+              description: 'Interview scheduled and invite sent to candidate',
+            });
+          }
+        } catch (emailErr) {
+          console.error('Error invoking email function:', emailErr);
+          toast({
+            title: 'Interview Scheduled',
+            description: 'Interview was scheduled but email invite failed to send',
+            variant: 'default',
+          });
+        }
+      } else {
+        toast({
+          title: 'Success',
+          description: 'Interview scheduled successfully',
+        });
+      }
       
       await fetchInterviews();
       return data as Interview;
