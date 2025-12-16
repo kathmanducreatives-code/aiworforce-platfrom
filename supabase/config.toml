@@ -57,3 +57,6 @@ verify_jwt = false
 
 [functions.email-tracking]
 verify_jwt = false
+
+[functions.send-interview-invite]
+verify_jwt = false

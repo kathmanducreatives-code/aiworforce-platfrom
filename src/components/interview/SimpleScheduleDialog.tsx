@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { format } from 'date-fns';
-import { Calendar as CalendarIcon, Clock, Video, User, Mail, Link } from 'lucide-react';
+import { Calendar as CalendarIcon, Clock, Video, User, Mail, Send } from 'lucide-react';
 import {
   Dialog,
   DialogContent,
@@ -13,6 +13,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Calendar } from '@/components/ui/calendar';
+import { Checkbox } from '@/components/ui/checkbox';
 import {
   Select,
   SelectContent,
@@ -31,7 +32,7 @@ import { cn } from '@/lib/utils';
 interface SimpleScheduleDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onSchedule: (interview: Partial<Interview>) => Promise<Interview | null>;
+  onSchedule: (interview: Partial<Interview>, sendEmailInvite: boolean) => Promise<Interview | null>;
   candidate?: {
     id: string;
     name: string;
@@ -76,6 +77,7 @@ const SimpleScheduleDialog = ({
   const [candidateEmail, setCandidateEmail] = useState(candidate?.email || '');
   const [meetingLink, setMeetingLink] = useState('');
   const [notes, setNotes] = useState('');
+  const [sendEmailInvite, setSendEmailInvite] = useState(true);
   const [isScheduling, setIsScheduling] = useState(false);
 
   const handleSchedule = async () => {
@@ -99,7 +101,7 @@ const SimpleScheduleDialog = ({
         status: 'scheduled',
       };
 
-      const result = await onSchedule(interview);
+      const result = await onSchedule(interview, sendEmailInvite);
       if (result) {
         onOpenChange(false);
         // Reset form
@@ -110,6 +112,7 @@ const SimpleScheduleDialog = ({
         setCandidateEmail('');
         setMeetingLink('');
         setNotes('');
+        setSendEmailInvite(true);
       }
     } finally {
       setIsScheduling(false);
@@ -243,6 +246,22 @@ const SimpleScheduleDialog = ({
               placeholder="Any additional notes for this interview..."
               rows={2}
             />
+          </div>
+
+          {/* Send Email Invite Checkbox */}
+          <div className="flex items-center space-x-3 pt-2 border-t border-border">
+            <Checkbox
+              id="sendEmailInvite"
+              checked={sendEmailInvite}
+              onCheckedChange={(checked) => setSendEmailInvite(checked as boolean)}
+            />
+            <Label
+              htmlFor="sendEmailInvite"
+              className="flex items-center gap-2 text-sm font-normal cursor-pointer"
+            >
+              <Send className="h-4 w-4 text-primary" />
+              Send email invitation to candidate
+            </Label>
           </div>
         </div>
 
