@@ -46,6 +46,32 @@ const formatDuration = (minutes: number): string => {
   return `${hours} hour${hours > 1 ? 's' : ''} ${remainingMinutes} minutes`;
 };
 
+const generateGoogleCalendarLink = (
+  title: string,
+  startDate: string,
+  durationMinutes: number,
+  description: string,
+  location?: string
+): string => {
+  const start = new Date(startDate);
+  const end = new Date(start.getTime() + durationMinutes * 60000);
+  
+  // Format: YYYYMMDDTHHMMSSZ
+  const formatGoogleDate = (date: Date) => 
+    date.toISOString().replace(/[-:]/g, '').replace(/\.\d{3}/, '');
+  
+  const params = new URLSearchParams({
+    action: 'TEMPLATE',
+    text: title,
+    dates: `${formatGoogleDate(start)}/${formatGoogleDate(end)}`,
+    details: description,
+  });
+  
+  if (location) params.append('location', location);
+  
+  return `https://calendar.google.com/calendar/render?${params.toString()}`;
+};
+
 const handler = async (req: Request): Promise<Response> => {
   // Handle CORS preflight requests
   if (req.method === "OPTIONS") {
@@ -70,9 +96,20 @@ const handler = async (req: Request): Promise<Response> => {
     const formattedDuration = formatDuration(durationMinutes);
     const senderName = companyName || recruiterName || "ScreeningPilot";
 
+    // Generate Google Calendar link
+    const calendarTitle = `Interview with ${companyName || recruiterName || 'ScreeningPilot'}`;
+    const calendarDescription = `Interview scheduled for ${candidateName}${meetingLink ? `\n\nMeeting Link: ${meetingLink}` : ''}`;
+    const googleCalendarLink = generateGoogleCalendarLink(
+      calendarTitle,
+      scheduledAt,
+      durationMinutes,
+      calendarDescription,
+      meetingLink
+    );
+
     const meetingButtonHtml = meetingLink
       ? `
-        <div style="margin: 30px 0;">
+        <div style="margin: 20px 0;">
           <a href="${meetingLink}" 
              style="background-color: #3ECF8E; color: #000; padding: 14px 28px; text-decoration: none; border-radius: 8px; font-weight: 600; display: inline-block;">
             Join Meeting
@@ -89,6 +126,16 @@ const handler = async (req: Request): Promise<Response> => {
           </p>
         </div>
       `;
+
+    const googleCalendarButtonHtml = `
+      <div style="margin: 20px 0; text-align: center;">
+        <a href="${googleCalendarLink}" 
+           target="_blank"
+           style="background-color: #1a73e8; color: #fff; padding: 12px 24px; text-decoration: none; border-radius: 8px; font-weight: 600; display: inline-block;">
+          📅 Add to Google Calendar
+        </a>
+      </div>
+    `;
 
     const emailHtml = `
       <!DOCTYPE html>
@@ -132,6 +179,8 @@ const handler = async (req: Request): Promise<Response> => {
                 <p style="color: #fff; font-size: 18px; font-weight: 600; margin: 0;">${formattedDuration}</p>
               </div>
             </div>
+            
+            ${googleCalendarButtonHtml}
             
             ${meetingButtonHtml}
             
