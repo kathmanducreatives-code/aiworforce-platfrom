@@ -12,10 +12,12 @@ import RoomView from "./RoomView";
 import CreateRoomDialog from "./CreateRoomDialog";
 
 interface CollaborationHubProps {
+  isOpen: boolean;
   onClose: () => void;
+  isSidebarCollapsed?: boolean;
 }
 
-const CollaborationHub = ({ onClose }: CollaborationHubProps) => {
+const CollaborationHub = ({ isOpen, onClose, isSidebarCollapsed = false }: CollaborationHubProps) => {
   const { user } = useAuth();
   const isMobile = useIsMobile();
   const { toast } = useToast();
@@ -65,8 +67,17 @@ const CollaborationHub = ({ onClose }: CollaborationHubProps) => {
     setShowCreateDialog(false);
   };
 
+  // Calculate left position based on sidebar state
+  const leftPosition = isMobile ? 'left-0' : isSidebarCollapsed ? 'left-16' : 'left-64';
+  
   return (
-    <div className={`fixed ${isMobile ? 'left-0 right-0 w-full' : 'left-64 w-96'} top-0 h-screen bg-card/95 backdrop-blur-xl border-l border-border/50 shadow-[0_0_30px_rgba(0,0,0,0.5)] z-30 flex flex-col`}>
+    <div 
+      className={`fixed ${isMobile ? 'right-0 w-full' : 'w-96'} ${leftPosition} top-0 h-screen bg-card/95 backdrop-blur-xl border-l border-border/50 shadow-[0_0_30px_rgba(0,0,0,0.5)] z-50 flex flex-col transition-all duration-300 ease-in-out ${
+        isOpen 
+          ? 'translate-x-0 opacity-100' 
+          : '-translate-x-full opacity-0 pointer-events-none'
+      }`}
+    >
       {/* Header */}
       <div className="p-4 border-b border-border/50 flex items-center justify-between">
         <div className="flex items-center gap-2">
