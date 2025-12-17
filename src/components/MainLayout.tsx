@@ -37,9 +37,11 @@ const MainLayout = ({ children }: MainLayoutProps) => {
         />
       )}
       
-      {showCollaboration && (
-        <CollaborationHub onClose={() => setShowCollaboration(false)} />
-      )}
+      <CollaborationHub 
+        isOpen={showCollaboration}
+        onClose={() => setShowCollaboration(false)} 
+        isSidebarCollapsed={isSidebarCollapsed}
+      />
       
       <main 
         className={`min-h-screen overflow-auto transition-all duration-300 relative z-10 ${
