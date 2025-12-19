@@ -1,4 +1,5 @@
-import { ReactNode, useState } from "react";
+import { ReactNode, useState, useEffect } from "react";
+import { useLocation } from "react-router-dom";
 import Sidebar from "./Sidebar";
 import MobileHeader from "./MobileHeader";
 import CollaborationHub from "./collaboration/CollaborationHub";
@@ -11,8 +12,14 @@ interface MainLayoutProps {
 
 const MainLayout = ({ children }: MainLayoutProps) => {
   const isMobile = useIsMobile();
+  const location = useLocation();
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [showCollaboration, setShowCollaboration] = useState(false);
+
+  // Auto-close collaboration panel when navigating to a different page
+  useEffect(() => {
+    setShowCollaboration(false);
+  }, [location.pathname]);
 
   return (
     <div className="min-h-screen w-full bg-background relative">
@@ -25,6 +32,7 @@ const MainLayout = ({ children }: MainLayoutProps) => {
           isCollapsed={isSidebarCollapsed} 
           onToggle={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
           onCollaborationToggle={() => setShowCollaboration(!showCollaboration)}
+          onCloseCollaboration={() => setShowCollaboration(false)}
           showCollaboration={showCollaboration}
         />
       )}

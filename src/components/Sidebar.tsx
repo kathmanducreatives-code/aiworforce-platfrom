@@ -10,11 +10,12 @@ interface SidebarProps {
   isCollapsed: boolean;
   onToggle: () => void;
   onCollaborationToggle?: () => void;
+  onCloseCollaboration?: () => void;
   showCollaboration?: boolean;
   isMobile?: boolean;
 }
 
-const Sidebar = ({ isCollapsed, onToggle, onCollaborationToggle, showCollaboration, isMobile = false }: SidebarProps) => {
+const Sidebar = ({ isCollapsed, onToggle, onCollaborationToggle, onCloseCollaboration, showCollaboration, isMobile = false }: SidebarProps) => {
   const { signOut, profile } = useAuth();
   const navigate = useNavigate();
 
@@ -77,6 +78,7 @@ const Sidebar = ({ isCollapsed, onToggle, onCollaborationToggle, showCollaborati
             key={item.to}
             to={item.to}
             end={item.to === "/dashboard"}
+            onClick={() => onCloseCollaboration?.()}
             className={({ isActive }) =>
               `group flex items-center gap-3 px-4 py-2.5 rounded-lg transition-all duration-300 relative ${
                 isActive
