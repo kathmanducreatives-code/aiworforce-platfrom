@@ -43,14 +43,15 @@ const RoomView = ({ room, onBack }: RoomViewProps) => {
       .order('created_at', { ascending: true });
 
     if (!error && data) {
-      // Fetch profiles separately
-      const userIds = data.map(m => m.user_id).filter(Boolean);
+      // Fetch profiles using security definer function to bypass RLS
       const { data: profiles } = await supabase
-        .from("profiles")
-        .select("user_id, full_name, logo_url")
-        .in("user_id", userIds);
+        .rpc('get_room_member_profiles', { room_uuid: room.id });
 
-      const profileMap = new Map(profiles?.map(p => [p.user_id, p]) || []);
+      const profileMap = new Map(
+        profiles?.map((p: { user_id: string; full_name: string | null; logo_url: string | null }) => 
+          [p.user_id, p]
+        ) || []
+      );
       
       setMessages(data.map(msg => ({
         ...msg,

@@ -1188,6 +1188,14 @@ export type Database = {
           secondary_color: string
         }[]
       }
+      get_room_member_profiles: {
+        Args: { room_uuid: string }
+        Returns: {
+          full_name: string
+          logo_url: string
+          user_id: string
+        }[]
+      }
       get_user_client_id: { Args: { user_uuid: string }; Returns: string }
       is_room_member: {
         Args: { _room_id: string; _user_id: string }
