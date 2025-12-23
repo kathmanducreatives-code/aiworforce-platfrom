@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
+import { z } from "zod";
 import {
   Dialog,
   DialogContent,
@@ -15,6 +16,18 @@ import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 
+const roomSchema = z.object({
+  name: z.string()
+    .trim()
+    .min(1, "Room name is required")
+    .max(100, "Room name must be less than 100 characters"),
+  description: z.string()
+    .trim()
+    .max(500, "Description must be less than 500 characters")
+    .optional()
+    .transform(val => val || undefined),
+});
+
 interface CreateRoomDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -28,17 +41,32 @@ const CreateRoomDialog = ({ open, onOpenChange, onCreated }: CreateRoomDialogPro
   const [description, setDescription] = useState("");
   const [loading, setLoading] = useState(false);
 
-  const handleCreate = async () => {
-    if (!user || !name.trim()) return;
+  const [errors, setErrors] = useState<{ name?: string; description?: string }>({});
 
+  const handleCreate = async () => {
+    if (!user) return;
+
+    // Validate input
+    const result = roomSchema.safeParse({ name, description });
+    if (!result.success) {
+      const fieldErrors: { name?: string; description?: string } = {};
+      result.error.errors.forEach((err) => {
+        if (err.path[0] === 'name') fieldErrors.name = err.message;
+        if (err.path[0] === 'description') fieldErrors.description = err.message;
+      });
+      setErrors(fieldErrors);
+      return;
+    }
+
+    setErrors({});
     setLoading(true);
     try {
       // Create room
       const { data: room, error: roomError } = await supabase
         .from('collaboration_rooms')
         .insert({
-          name: name.trim(),
-          description: description.trim() || null,
+          name: result.data.name,
+          description: result.data.description || null,
           created_by: user.id,
         })
         .select()
@@ -93,8 +121,15 @@ const CreateRoomDialog = ({ open, onOpenChange, onCreated }: CreateRoomDialogPro
               id="name"
               placeholder="e.g., Senior Developer Search"
               value={name}
-              onChange={(e) => setName(e.target.value)}
+              onChange={(e) => {
+                setName(e.target.value);
+                if (errors.name) setErrors(prev => ({ ...prev, name: undefined }));
+              }}
+              className={errors.name ? "border-destructive" : ""}
             />
+            {errors.name && (
+              <p className="text-sm text-destructive">{errors.name}</p>
+            )}
           </div>
 
           <div className="space-y-2">
@@ -103,9 +138,16 @@ const CreateRoomDialog = ({ open, onOpenChange, onCreated }: CreateRoomDialogPro
               id="description"
               placeholder="Brief description of what this room is for"
               value={description}
-              onChange={(e) => setDescription(e.target.value)}
+              onChange={(e) => {
+                setDescription(e.target.value);
+                if (errors.description) setErrors(prev => ({ ...prev, description: undefined }));
+              }}
+              className={errors.description ? "border-destructive" : ""}
               rows={3}
             />
+            {errors.description && (
+              <p className="text-sm text-destructive">{errors.description}</p>
+            )}
           </div>
         </div>
 

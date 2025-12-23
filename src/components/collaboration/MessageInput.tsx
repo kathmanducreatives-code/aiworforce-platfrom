@@ -13,12 +13,16 @@ const MessageInput = ({ onSend }: MessageInputProps) => {
   const handleSend = () => {
     if (!content.trim()) return;
 
-    // Extract mentions (simple implementation)
+    // Extract mentions - handles names with dots, hyphens, underscores
     const mentions: string[] = [];
-    const mentionRegex = /@(\w+)/g;
+    const mentionRegex = /@([\w.-]+)/g;
     let match;
     while ((match = mentionRegex.exec(content)) !== null) {
-      mentions.push(match[1]);
+      // Sanitize and validate mention
+      const mention = match[1].slice(0, 50); // Limit length
+      if (mention && !mentions.includes(mention)) {
+        mentions.push(mention);
+      }
     }
 
     onSend(content.trim(), mentions);
