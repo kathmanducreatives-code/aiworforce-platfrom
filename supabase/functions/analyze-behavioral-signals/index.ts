@@ -27,13 +27,14 @@ serve(async (req) => {
 
     const supabase = createClient(SUPABASE_URL!, SUPABASE_SERVICE_ROLE_KEY!);
 
-    // Get session with candidate info
+    // Get session with candidate info and role context
     const { data: session, error: sessionError } = await supabase
       .from('adaptive_screening_sessions')
       .select(`
         *,
         resume_analyses:candidate_id (
-          candidate_name
+          candidate_name,
+          recruitment_name
         )
       `)
       .eq('id', session_id)
@@ -46,6 +47,8 @@ serve(async (req) => {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
+
+    const roleName = session.resume_analyses?.recruitment_name || null;
 
     // Get conversation logs
     const { data: conversationLogs } = await supabase
@@ -67,10 +70,32 @@ serve(async (req) => {
       .select('scenario_prompt, category, name')
       .eq('is_active', true);
 
-    // Build payload for n8n webhook
+    // Calculate category breakdown from conversation logs
+    const { data: logsWithScenarios } = await supabase
+      .from('screening_conversation_logs')
+      .select(`
+        *,
+        screening_scenarios (
+          category,
+          name
+        )
+      `)
+      .eq('session_id', session_id)
+      .eq('role', 'assistant');
+
+    const categoryBreakdown: Record<string, number> = {};
+    (logsWithScenarios || []).forEach((log: any) => {
+      if (log.screening_scenarios?.category) {
+        const cat = log.screening_scenarios.category;
+        categoryBreakdown[cat] = (categoryBreakdown[cat] || 0) + 1;
+      }
+    });
+
+    // Build payload for n8n webhook with role context and category breakdown
     const payload = {
       session_id: session_id,
       candidate_name: session.resume_analyses?.candidate_name || 'Unknown',
+      role_position: roleName,
       transcript: conversationLogs.map((log: any) => ({
         role: log.role,
         content: log.content,
@@ -82,6 +107,7 @@ serve(async (req) => {
         category: s.category,
         prompt: s.scenario_prompt,
       })) || [],
+      category_breakdown: categoryBreakdown,
     };
 
     console.log('Sending transcript to n8n for behavioral analysis:', session_id);

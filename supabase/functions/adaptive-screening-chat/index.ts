@@ -72,10 +72,10 @@ serve(async (req) => {
 });
 
 async function handleStartSession(supabase: any, token: string) {
-  // Validate token and get session
+  // Validate token and get session with role context
   const { data: session, error: sessionError } = await supabase
     .from('adaptive_screening_sessions')
-    .select('*, resume_analyses(candidate_name)')
+    .select('*, resume_analyses(candidate_name, recruitment_name)')
     .eq('access_token', token)
     .single();
 
@@ -108,10 +108,12 @@ async function handleStartSession(supabase: any, token: string) {
   }
 
   const candidateName = session.resume_analyses?.candidate_name || 'there';
+  const roleName = session.resume_analyses?.recruitment_name || null;
 
   return new Response(JSON.stringify({
     session_id: session.id,
     candidate_name: candidateName,
+    role_name: roleName,
     session_status: session.session_status,
     consent_given: session.candidate_consent_given,
     scenario_count: session.scenario_count,
@@ -202,16 +204,18 @@ ${firstScenario?.scenario_prompt || 'Imagine you join a new team and notice that
 }
 
 async function handleChat(supabase: any, sessionId: string, userMessage: string) {
-  // Get session and conversation history
+  // Get session and conversation history with role context
   const { data: session } = await supabase
     .from('adaptive_screening_sessions')
-    .select('*')
+    .select('*, resume_analyses(recruitment_name)')
     .eq('id', sessionId)
     .single();
 
   if (!session) {
     throw new Error('Session not found');
   }
+
+  const roleName = session.resume_analyses?.recruitment_name || null;
 
   const { data: conversationLogs } = await supabase
     .from('screening_conversation_logs')
@@ -238,7 +242,7 @@ async function handleChat(supabase: any, sessionId: string, userMessage: string)
 
   // Build conversation history for AI
   const messages = [
-    { role: 'system', content: buildSystemPrompt(scenarios, session.current_scenario_index) },
+    { role: 'system', content: buildSystemPrompt(scenarios, session.current_scenario_index, roleName) },
     ...(conversationLogs || []).map((log: any) => ({
       role: log.role === 'assistant' ? 'assistant' : 'user',
       content: log.content,
@@ -350,13 +354,18 @@ async function handleChat(supabase: any, sessionId: string, userMessage: string)
   });
 }
 
-function buildSystemPrompt(scenarios: any[], currentIndex: number): string {
+function buildSystemPrompt(scenarios: any[], currentIndex: number, roleName?: string | null): string {
   const currentScenario = scenarios?.[currentIndex];
+  
+  const roleContext = roleName 
+    ? `\n\nCANDIDATE CONTEXT: This candidate is being screened for a "${roleName}" position. Tailor your follow-up questions and probing to be relevant to this role.`
+    : '';
+  
   const scenarioContext = currentScenario 
-    ? `\n\nCURRENT SCENARIO (${currentIndex + 1} of ${scenarios.length}):\n"${currentScenario.scenario_prompt}"\n\nPossible follow-up questions to probe deeper:\n${(currentScenario.follow_up_prompts || []).map((q: string) => `- ${q}`).join('\n')}`
+    ? `\n\nCURRENT SCENARIO (${currentIndex + 1} of ${scenarios.length}):\nCategory: ${currentScenario.category}\n"${currentScenario.scenario_prompt}"\n\nPossible follow-up questions to probe deeper:\n${(currentScenario.follow_up_prompts || []).map((q: string) => `- ${q}`).join('\n')}`
     : '';
 
-  return SYSTEM_PROMPT + scenarioContext;
+  return SYSTEM_PROMPT + roleContext + scenarioContext;
 }
 
 async function shouldProgressToNextScenario(logs: any[], currentIndex: number): Promise<boolean> {

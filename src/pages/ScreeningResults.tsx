@@ -16,13 +16,24 @@ import {
   Clock, 
   Eye,
   Users,
-  TrendingUp,
   AlertCircle,
-  RefreshCw
+  RefreshCw,
+  UserPlus,
+  Calendar,
+  Play,
+  Hourglass
 } from "lucide-react";
-import { format } from "date-fns";
+import { format, isToday, isThisWeek, isThisMonth, parseISO } from "date-fns";
 import { useNavigate } from "react-router-dom";
 import type { BehavioralRiskLevel, ScreeningSessionStatus } from "@/types/AdaptiveScreening";
+import CreateScreeningDialog from "@/components/screening/CreateScreeningDialog";
+import SessionDetailDialog from "@/components/screening/SessionDetailDialog";
+import ScenarioCategoryBadges from "@/components/screening/ScenarioCategoryBadges";
+
+interface CategoryCount {
+  category: 'ambiguity' | 'accountability' | 'time_pressure' | 'competing_priorities' | 'conflict_resolution';
+  count: number;
+}
 
 interface ScreeningSessionRow {
   id: string;
@@ -39,6 +50,7 @@ interface ScreeningSessionRow {
   recruitment_name?: string;
   overall_risk_level?: BehavioralRiskLevel;
   risk_summary?: string;
+  categories?: CategoryCount[];
 }
 
 const ScreeningResults = () => {
@@ -48,12 +60,18 @@ const ScreeningResults = () => {
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [riskFilter, setRiskFilter] = useState<string>("all");
+  const [dateFilter, setDateFilter] = useState<string>("all");
+  const [roleFilter, setRoleFilter] = useState<string>("all");
   const [stats, setStats] = useState({
     total: 0,
     completed: 0,
     inProgress: 0,
     highRisk: 0,
   });
+  const [showCreateDialog, setShowCreateDialog] = useState(false);
+  const [selectedSessionId, setSelectedSessionId] = useState<string | null>(null);
+  const [showDetailDialog, setShowDetailDialog] = useState(false);
+  const [uniqueRoles, setUniqueRoles] = useState<string[]>([]);
 
   useEffect(() => {
     fetchSessions();
@@ -82,6 +100,44 @@ const ScreeningResults = () => {
 
       if (sessionsError) throw sessionsError;
 
+      // Fetch scenario categories for each session
+      const sessionIds = (sessionsData || []).map((s: any) => s.id);
+      
+      let categoryMap: Record<string, CategoryCount[]> = {};
+      
+      if (sessionIds.length > 0) {
+        const { data: logsData } = await supabase
+          .from('screening_conversation_logs')
+          .select(`
+            session_id,
+            screening_scenarios (
+              category
+            )
+          `)
+          .in('session_id', sessionIds)
+          .eq('role', 'assistant');
+
+        // Group categories by session
+        (logsData || []).forEach((log: any) => {
+          if (log.screening_scenarios?.category) {
+            if (!categoryMap[log.session_id]) {
+              categoryMap[log.session_id] = [];
+            }
+            const existing = categoryMap[log.session_id].find(
+              c => c.category === log.screening_scenarios.category
+            );
+            if (existing) {
+              existing.count++;
+            } else {
+              categoryMap[log.session_id].push({
+                category: log.screening_scenarios.category,
+                count: 1,
+              });
+            }
+          }
+        });
+      }
+
       const formattedSessions: ScreeningSessionRow[] = (sessionsData || []).map((session: any) => ({
         id: session.id,
         candidate_id: session.candidate_id,
@@ -97,9 +153,18 @@ const ScreeningResults = () => {
         recruitment_name: session.resume_analyses?.recruitment_name,
         overall_risk_level: session.screening_behavioral_analysis?.[0]?.overall_risk_level,
         risk_summary: session.screening_behavioral_analysis?.[0]?.risk_summary,
+        categories: categoryMap[session.id] || [],
       }));
 
       setSessions(formattedSessions);
+
+      // Extract unique roles
+      const roles = [...new Set(
+        formattedSessions
+          .map(s => s.recruitment_name)
+          .filter((r): r is string => !!r)
+      )];
+      setUniqueRoles(roles);
 
       // Calculate stats
       setStats({
@@ -125,8 +190,18 @@ const ScreeningResults = () => {
     
     const matchesStatus = statusFilter === 'all' || session.session_status === statusFilter;
     const matchesRisk = riskFilter === 'all' || session.overall_risk_level === riskFilter;
+    const matchesRole = roleFilter === 'all' || session.recruitment_name === roleFilter;
+    
+    // Date filter
+    let matchesDate = true;
+    if (dateFilter !== 'all' && session.invited_at) {
+      const date = parseISO(session.invited_at);
+      if (dateFilter === 'today') matchesDate = isToday(date);
+      else if (dateFilter === 'week') matchesDate = isThisWeek(date);
+      else if (dateFilter === 'month') matchesDate = isThisMonth(date);
+    }
 
-    return matchesSearch && matchesStatus && matchesRisk;
+    return matchesSearch && matchesStatus && matchesRisk && matchesRole && matchesDate;
   });
 
   const getStatusBadge = (status: ScreeningSessionStatus) => {
@@ -143,6 +218,48 @@ const ScreeningResults = () => {
         return <Badge className="bg-orange-500/20 text-orange-400 border-orange-500/30">Abandoned</Badge>;
       default:
         return <Badge variant="secondary">{status}</Badge>;
+    }
+  };
+
+  const getProgressBadge = (session: ScreeningSessionRow) => {
+    switch (session.session_status) {
+      case 'completed':
+        return (
+          <Badge className="bg-green-500/20 text-green-400 border-green-500/30">
+            <CheckCircle className="w-3 h-3 mr-1" />
+            Complete
+          </Badge>
+        );
+      case 'in_progress':
+        return (
+          <Badge className="bg-blue-500/20 text-blue-400 border-blue-500/30">
+            <Play className="w-3 h-3 mr-1" />
+            {session.current_scenario_index + 1}/{session.scenario_count}
+          </Badge>
+        );
+      case 'invited':
+        return (
+          <Badge className="bg-yellow-500/20 text-yellow-400 border-yellow-500/30">
+            <Hourglass className="w-3 h-3 mr-1" />
+            Not Started
+          </Badge>
+        );
+      case 'expired':
+        return (
+          <Badge className="bg-slate-500/20 text-slate-400 border-slate-500/30">
+            <Clock className="w-3 h-3 mr-1" />
+            Expired
+          </Badge>
+        );
+      case 'abandoned':
+        return (
+          <Badge className="bg-orange-500/20 text-orange-400 border-orange-500/30">
+            <AlertCircle className="w-3 h-3 mr-1" />
+            Abandoned
+          </Badge>
+        );
+      default:
+        return null;
     }
   };
 
@@ -174,8 +291,9 @@ const ScreeningResults = () => {
     }
   };
 
-  const viewCandidateDetails = (candidateId: string) => {
-    navigate(`/candidates?selected=${candidateId}`);
+  const handleRowClick = (sessionId: string) => {
+    setSelectedSessionId(sessionId);
+    setShowDetailDialog(true);
   };
 
   return (
@@ -187,10 +305,16 @@ const ScreeningResults = () => {
             Adaptive Stress-Based Screening™ results and insights
           </p>
         </div>
-        <Button onClick={fetchSessions} variant="outline" size="sm">
-          <RefreshCw className="w-4 h-4 mr-2" />
-          Refresh
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button onClick={fetchSessions} variant="outline" size="sm">
+            <RefreshCw className="w-4 h-4 mr-2" />
+            Refresh
+          </Button>
+          <Button onClick={() => setShowCreateDialog(true)}>
+            <UserPlus className="w-4 h-4 mr-2" />
+            Create Screening
+          </Button>
+        </div>
       </div>
 
       {/* Stats Cards */}
@@ -254,6 +378,18 @@ const ScreeningResults = () => {
                 className="pl-10"
               />
             </div>
+            <Select value={dateFilter} onValueChange={setDateFilter}>
+              <SelectTrigger className="w-full md:w-36">
+                <Calendar className="w-4 h-4 mr-2 text-muted-foreground" />
+                <SelectValue placeholder="Date" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Time</SelectItem>
+                <SelectItem value="today">Today</SelectItem>
+                <SelectItem value="week">This Week</SelectItem>
+                <SelectItem value="month">This Month</SelectItem>
+              </SelectContent>
+            </Select>
             <Select value={statusFilter} onValueChange={setStatusFilter}>
               <SelectTrigger className="w-full md:w-40">
                 <SelectValue placeholder="Status" />
@@ -277,6 +413,19 @@ const ScreeningResults = () => {
                 <SelectItem value="high">High Risk</SelectItem>
               </SelectContent>
             </Select>
+            {uniqueRoles.length > 0 && (
+              <Select value={roleFilter} onValueChange={setRoleFilter}>
+                <SelectTrigger className="w-full md:w-48">
+                  <SelectValue placeholder="Role/Position" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Positions</SelectItem>
+                  {uniqueRoles.map(role => (
+                    <SelectItem key={role} value={role}>{role}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
           </div>
         </CardContent>
       </Card>
@@ -301,8 +450,15 @@ const ScreeningResults = () => {
               <Brain className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
               <p className="text-muted-foreground">No screening sessions found</p>
               <p className="text-sm text-muted-foreground mt-1">
-                Invite candidates to screening from the Candidates page
+                Click "Create Screening" to invite a candidate
               </p>
+              <Button 
+                onClick={() => setShowCreateDialog(true)} 
+                className="mt-4"
+              >
+                <UserPlus className="w-4 h-4 mr-2" />
+                Create Screening
+              </Button>
             </div>
           ) : (
             <Table>
@@ -310,7 +466,8 @@ const ScreeningResults = () => {
                 <TableRow>
                   <TableHead>Candidate</TableHead>
                   <TableHead>Position</TableHead>
-                  <TableHead>Status</TableHead>
+                  <TableHead>Categories</TableHead>
+                  <TableHead>Progress</TableHead>
                   <TableHead>Risk Level</TableHead>
                   <TableHead>Invited</TableHead>
                   <TableHead>Actions</TableHead>
@@ -318,7 +475,11 @@ const ScreeningResults = () => {
               </TableHeader>
               <TableBody>
                 {filteredSessions.map((session) => (
-                  <TableRow key={session.id}>
+                  <TableRow 
+                    key={session.id}
+                    className="cursor-pointer hover:bg-muted/50 transition-colors"
+                    onClick={() => handleRowClick(session.id)}
+                  >
                     <TableCell>
                       <div>
                         <p className="font-medium">{session.candidate_name || 'Unknown'}</p>
@@ -330,7 +491,15 @@ const ScreeningResults = () => {
                         {session.recruitment_name || '—'}
                       </span>
                     </TableCell>
-                    <TableCell>{getStatusBadge(session.session_status)}</TableCell>
+                    <TableCell>
+                      <ScenarioCategoryBadges 
+                        categories={session.categories || []} 
+                        showCounts={session.session_status === 'completed'}
+                      />
+                    </TableCell>
+                    <TableCell>
+                      {getProgressBadge(session)}
+                    </TableCell>
                     <TableCell>
                       {session.session_status === 'completed' ? (
                         getRiskBadge(session.overall_risk_level) || (
@@ -349,7 +518,10 @@ const ScreeningResults = () => {
                       <Button
                         variant="ghost"
                         size="sm"
-                        onClick={() => viewCandidateDetails(session.candidate_id)}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleRowClick(session.id);
+                        }}
                       >
                         <Eye className="w-4 h-4 mr-1" />
                         View
@@ -362,6 +534,20 @@ const ScreeningResults = () => {
           )}
         </CardContent>
       </Card>
+
+      {/* Create Screening Dialog */}
+      <CreateScreeningDialog
+        open={showCreateDialog}
+        onOpenChange={setShowCreateDialog}
+        onSuccess={fetchSessions}
+      />
+
+      {/* Session Detail Dialog */}
+      <SessionDetailDialog
+        open={showDetailDialog}
+        onOpenChange={setShowDetailDialog}
+        sessionId={selectedSessionId}
+      />
     </div>
   );
 };
