@@ -28,6 +28,8 @@ import BookInterview from "./pages/BookInterview";
 import GoogleOAuthCallback from "./pages/GoogleOAuthCallback";
 import ProtectedRoute from "./components/ProtectedRoute";
 import MainLayout from "./components/MainLayout";
+import AdaptiveScreening from "./pages/AdaptiveScreening";
+import ScreeningResults from "./pages/ScreeningResults";
 
 const queryClient = new QueryClient();
 
@@ -145,8 +147,17 @@ const App = () => (
                   </ProtectedRoute>
                 } />
                 
-                {/* Public booking page - no auth required */}
+                <Route path="/behavioral-screening" element={
+                  <ProtectedRoute>
+                    <MainLayout>
+                      <ScreeningResults />
+                    </MainLayout>
+                  </ProtectedRoute>
+                } />
+
+                {/* Public pages - no auth required */}
                 <Route path="/book/:token" element={<BookInterview />} />
+                <Route path="/screening/:token" element={<AdaptiveScreening />} />
 
                 {/* OAuth callback - protected */}
                 <Route path="/oauth/google/callback" element={
