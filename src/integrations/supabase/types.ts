@@ -876,6 +876,69 @@ export type Database = {
           },
         ]
       }
+      job_postings: {
+        Row: {
+          benefits: string[] | null
+          company_name: string
+          created_at: string | null
+          description: string
+          experience_level: string | null
+          id: string
+          job_type: string
+          location: string
+          posted_boards: Json | null
+          remote_option: string | null
+          requirements: string[] | null
+          salary_currency: string | null
+          salary_max: number | null
+          salary_min: number | null
+          status: string | null
+          title: string
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          benefits?: string[] | null
+          company_name: string
+          created_at?: string | null
+          description: string
+          experience_level?: string | null
+          id?: string
+          job_type?: string
+          location: string
+          posted_boards?: Json | null
+          remote_option?: string | null
+          requirements?: string[] | null
+          salary_currency?: string | null
+          salary_max?: number | null
+          salary_min?: number | null
+          status?: string | null
+          title: string
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          benefits?: string[] | null
+          company_name?: string
+          created_at?: string | null
+          description?: string
+          experience_level?: string | null
+          id?: string
+          job_type?: string
+          location?: string
+          posted_boards?: Json | null
+          remote_option?: string | null
+          requirements?: string[] | null
+          salary_currency?: string | null
+          salary_max?: number | null
+          salary_min?: number | null
+          status?: string | null
+          title?: string
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
       linkedin_leads: {
         Row: {
           candidate_name: string
