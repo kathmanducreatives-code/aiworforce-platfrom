@@ -10,12 +10,14 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Calendar, Folder, FileText, Target, ShieldAlert, Trophy, CheckCircle, AlertTriangle, Brain, TrendingUp, ChevronDown, Eye, Mail, X, BarChart3 } from "lucide-react";
+import { Calendar, Folder, FileText, Target, ShieldAlert, Trophy, CheckCircle, AlertTriangle, Brain, TrendingUp, ChevronDown, Eye, Mail, X, BarChart3, Activity } from "lucide-react";
 import { formatDistanceToNow } from 'date-fns';
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import type { ResumeAnalysis, CandidateStatus, TimelineEvent, CandidateNote } from "@/types/ResumeAnalysis";
-
+import type { ScreeningBehavioralAnalysis } from "@/types/AdaptiveScreening";
+import BehavioralAnalysisCard from "@/components/screening/BehavioralAnalysisCard";
+import ScreeningInviteDialog from "@/components/screening/ScreeningInviteDialog";
 interface CandidateAnalysisDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -48,6 +50,12 @@ export const CandidateAnalysisDialog = ({ open, onOpenChange, candidate }: Candi
     higherScoringCount: 0,
     folderAvgScore: 0
   });
+  
+  // Behavioral Screening
+  const [behavioralAnalysis, setBehavioralAnalysis] = useState<ScreeningBehavioralAnalysis | null>(null);
+  const [conversationLogs, setConversationLogs] = useState<any[]>([]);
+  const [screeningStatus, setScreeningStatus] = useState<string>('not_invited');
+  const [showInviteDialog, setShowInviteDialog] = useState(false);
 
   // Status config helper
   const getStatusConfig = (status: CandidateStatus) => {
@@ -117,7 +125,54 @@ export const CandidateAnalysisDialog = ({ open, onOpenChange, candidate }: Candi
     };
     
     fetchComparisonData();
+    fetchBehavioralScreening();
   }, [candidate, open]);
+
+  // Fetch behavioral screening data
+  const fetchBehavioralScreening = async () => {
+    if (!candidate?.id) return;
+    
+    try {
+      // Get screening session
+      const { data: sessions } = await supabase
+        .from('adaptive_screening_sessions')
+        .select('*')
+        .eq('candidate_id', candidate.id)
+        .order('created_at', { ascending: false })
+        .limit(1);
+      
+      if (sessions && sessions.length > 0) {
+        const session = sessions[0];
+        setScreeningStatus(session.session_status);
+        
+        if (session.session_status === 'completed') {
+          // Get behavioral analysis
+          const { data: analysis } = await supabase
+            .from('screening_behavioral_analysis')
+            .select('*')
+            .eq('session_id', session.id)
+            .single();
+          
+          if (analysis) {
+            setBehavioralAnalysis(analysis as unknown as ScreeningBehavioralAnalysis);
+          }
+          
+          // Get conversation logs
+          const { data: logs } = await supabase
+            .from('screening_conversation_logs')
+            .select('*')
+            .eq('session_id', session.id)
+            .order('message_index', { ascending: true });
+          
+          if (logs) {
+            setConversationLogs(logs);
+          }
+        }
+      }
+    } catch (error) {
+      console.error('Error fetching behavioral screening:', error);
+    }
+  };
 
   // Fetch timeline and notes
   useEffect(() => {
@@ -451,6 +506,13 @@ export const CandidateAnalysisDialog = ({ open, onOpenChange, candidate }: Candi
                   Overview
                 </TabsTrigger>
                 <TabsTrigger 
+                  value="behavioral" 
+                  className="inline-flex items-center justify-center whitespace-nowrap rounded-md px-3 sm:px-6 py-2 text-xs sm:text-sm font-medium transition-all data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-sm hover:bg-accent flex-1 sm:flex-initial"
+                >
+                  <Activity className="w-4 h-4 mr-1 sm:mr-2" />
+                  <span className="hidden sm:inline">Behavioral</span>
+                </TabsTrigger>
+                <TabsTrigger 
                   value="timeline" 
                   className="inline-flex items-center justify-center whitespace-nowrap rounded-md px-3 sm:px-6 py-2 text-xs sm:text-sm font-medium transition-all data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-sm hover:bg-accent flex-1 sm:flex-initial"
                 >
@@ -752,6 +814,67 @@ export const CandidateAnalysisDialog = ({ open, onOpenChange, candidate }: Candi
                 )}
               </TabsContent>
 
+              {/* Behavioral Screening Tab */}
+              <TabsContent value="behavioral" className="space-y-6">
+                {screeningStatus === 'not_invited' ? (
+                  <Card className="bg-card/50 border-primary/30">
+                    <CardContent className="pt-6 text-center py-12">
+                      <Activity className="w-16 h-16 text-primary/30 mx-auto mb-4" />
+                      <h3 className="text-xl font-semibold mb-2">No Behavioral Screening Yet</h3>
+                      <p className="text-muted-foreground mb-6 max-w-md mx-auto">
+                        Invite this candidate to complete an Adaptive Stress-Based Screening™ assessment 
+                        to evaluate their behavioral patterns under realistic workplace scenarios.
+                      </p>
+                      <Button onClick={() => setShowInviteDialog(true)} size="lg">
+                        <Activity className="w-4 h-4 mr-2" />
+                        Send Screening Invite
+                      </Button>
+                    </CardContent>
+                  </Card>
+                ) : screeningStatus === 'invited' ? (
+                  <Card className="bg-yellow-500/10 border-yellow-500/30">
+                    <CardContent className="pt-6 text-center py-12">
+                      <Activity className="w-16 h-16 text-yellow-500/50 mx-auto mb-4" />
+                      <Badge className="bg-yellow-500/20 text-yellow-400 border-yellow-500/30 mb-4">
+                        Invite Sent
+                      </Badge>
+                      <h3 className="text-xl font-semibold mb-2">Waiting for Candidate</h3>
+                      <p className="text-muted-foreground max-w-md mx-auto">
+                        The candidate has been invited but hasn't started the screening yet.
+                      </p>
+                    </CardContent>
+                  </Card>
+                ) : screeningStatus === 'in_progress' ? (
+                  <Card className="bg-blue-500/10 border-blue-500/30">
+                    <CardContent className="pt-6 text-center py-12">
+                      <Activity className="w-16 h-16 text-blue-500/50 mx-auto mb-4 animate-pulse" />
+                      <Badge className="bg-blue-500/20 text-blue-400 border-blue-500/30 mb-4">
+                        In Progress
+                      </Badge>
+                      <h3 className="text-xl font-semibold mb-2">Screening In Progress</h3>
+                      <p className="text-muted-foreground max-w-md mx-auto">
+                        The candidate is currently completing their behavioral screening.
+                      </p>
+                    </CardContent>
+                  </Card>
+                ) : screeningStatus === 'completed' && behavioralAnalysis ? (
+                  <BehavioralAnalysisCard 
+                    analysis={behavioralAnalysis} 
+                    conversationLogs={conversationLogs}
+                  />
+                ) : (
+                  <Card className="bg-card/50 border-border">
+                    <CardContent className="pt-6 text-center py-12">
+                      <Activity className="w-16 h-16 text-muted-foreground/30 mx-auto mb-4" />
+                      <h3 className="text-xl font-semibold mb-2">Screening Completed</h3>
+                      <p className="text-muted-foreground max-w-md mx-auto">
+                        The behavioral analysis is being processed. Please check back soon.
+                      </p>
+                    </CardContent>
+                  </Card>
+                )}
+              </TabsContent>
+
               {/* Timeline & Notes Tab */}
               <TabsContent value="timeline" className="space-y-8">
                 {/* Activity Timeline */}
@@ -1018,6 +1141,15 @@ export const CandidateAnalysisDialog = ({ open, onOpenChange, candidate }: Candi
           </div>
         </div>
       </DialogContent>
+      
+      {/* Screening Invite Dialog */}
+      <ScreeningInviteDialog
+        open={showInviteDialog}
+        onOpenChange={setShowInviteDialog}
+        candidateId={candidate.id}
+        candidateName={candidate.candidateName}
+        candidateEmail={candidate.email}
+      />
     </Dialog>
   );
 };

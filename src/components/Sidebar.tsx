@@ -1,4 +1,4 @@
-import { LayoutDashboard, BarChart3, Search, Brain, LogOut, Menu, X, MessageSquare, Calendar, Mail } from "lucide-react";
+import { LayoutDashboard, BarChart3, Search, Brain, LogOut, Menu, X, MessageSquare, Calendar, Mail, Activity } from "lucide-react";
 import { NavLink } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import { useNavigate } from "react-router-dom";
@@ -27,6 +27,7 @@ const Sidebar = ({ isCollapsed, onToggle, onCollaborationToggle, onCloseCollabor
   const navItems = [
     { to: "/dashboard", icon: LayoutDashboard, label: "Dashboard" },
     { to: "/analytics", icon: BarChart3, label: "Analytics" },
+    { to: "/behavioral-screening", icon: Activity, label: "Behavioral Screening" },
     { to: "/lead-scraper", icon: Search, label: "Lead Scraper" },
     { to: "/deep-search", icon: Brain, label: "Deep Search" },
     { to: "/interview-scheduler", icon: Calendar, label: "Interviews" },
