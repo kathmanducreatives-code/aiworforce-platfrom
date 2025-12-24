@@ -14,6 +14,65 @@ export type Database = {
   }
   public: {
     Tables: {
+      adaptive_screening_sessions: {
+        Row: {
+          access_token: string
+          candidate_consent_given: boolean | null
+          candidate_id: string | null
+          completed_at: string | null
+          consent_given_at: string | null
+          created_at: string | null
+          current_scenario_index: number | null
+          expires_at: string | null
+          id: string
+          invited_at: string | null
+          scenario_count: number | null
+          session_status: Database["public"]["Enums"]["screening_session_status"]
+          started_at: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          access_token?: string
+          candidate_consent_given?: boolean | null
+          candidate_id?: string | null
+          completed_at?: string | null
+          consent_given_at?: string | null
+          created_at?: string | null
+          current_scenario_index?: number | null
+          expires_at?: string | null
+          id?: string
+          invited_at?: string | null
+          scenario_count?: number | null
+          session_status?: Database["public"]["Enums"]["screening_session_status"]
+          started_at?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          access_token?: string
+          candidate_consent_given?: boolean | null
+          candidate_id?: string | null
+          completed_at?: string | null
+          consent_given_at?: string | null
+          created_at?: string | null
+          current_scenario_index?: number | null
+          expires_at?: string | null
+          id?: string
+          invited_at?: string | null
+          scenario_count?: number | null
+          session_status?: Database["public"]["Enums"]["screening_session_status"]
+          started_at?: string | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "adaptive_screening_sessions_candidate_id_fkey"
+            columns: ["candidate_id"]
+            isOneToOne: false
+            referencedRelation: "resume_analyses"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       candidate_notes: {
         Row: {
           candidate_id: string | null
@@ -1060,6 +1119,7 @@ export type Database = {
           resume: string | null
           reward_factor: Json | null
           risk_factor: Json | null
+          screening_status: string | null
           screening_type: string | null
           status: string | null
           status_updated_at: string | null
@@ -1084,6 +1144,7 @@ export type Database = {
           resume?: string | null
           reward_factor?: Json | null
           risk_factor?: Json | null
+          screening_status?: string | null
           screening_type?: string | null
           status?: string | null
           status_updated_at?: string | null
@@ -1108,6 +1169,7 @@ export type Database = {
           resume?: string | null
           reward_factor?: Json | null
           risk_factor?: Json | null
+          screening_status?: string | null
           screening_type?: string | null
           status?: string | null
           status_updated_at?: string | null
@@ -1234,6 +1296,183 @@ export type Database = {
         }
         Relationships: []
       }
+      screening_behavioral_analysis: {
+        Row: {
+          ai_confidence_score: number | null
+          analysis_completed_at: string | null
+          candidate_id: string
+          clarity_evidence: Json | null
+          clarity_score: number | null
+          consistency_evidence: Json | null
+          consistency_score: number | null
+          created_at: string | null
+          emotional_evidence: Json | null
+          emotional_regulation_score: number | null
+          green_flags: Json | null
+          id: string
+          overall_risk_level:
+            | Database["public"]["Enums"]["behavioral_risk_level"]
+            | null
+          ownership_evidence: Json | null
+          ownership_score: number | null
+          red_flags: Json | null
+          risk_summary: string | null
+          session_id: string
+          updated_at: string | null
+        }
+        Insert: {
+          ai_confidence_score?: number | null
+          analysis_completed_at?: string | null
+          candidate_id: string
+          clarity_evidence?: Json | null
+          clarity_score?: number | null
+          consistency_evidence?: Json | null
+          consistency_score?: number | null
+          created_at?: string | null
+          emotional_evidence?: Json | null
+          emotional_regulation_score?: number | null
+          green_flags?: Json | null
+          id?: string
+          overall_risk_level?:
+            | Database["public"]["Enums"]["behavioral_risk_level"]
+            | null
+          ownership_evidence?: Json | null
+          ownership_score?: number | null
+          red_flags?: Json | null
+          risk_summary?: string | null
+          session_id: string
+          updated_at?: string | null
+        }
+        Update: {
+          ai_confidence_score?: number | null
+          analysis_completed_at?: string | null
+          candidate_id?: string
+          clarity_evidence?: Json | null
+          clarity_score?: number | null
+          consistency_evidence?: Json | null
+          consistency_score?: number | null
+          created_at?: string | null
+          emotional_evidence?: Json | null
+          emotional_regulation_score?: number | null
+          green_flags?: Json | null
+          id?: string
+          overall_risk_level?:
+            | Database["public"]["Enums"]["behavioral_risk_level"]
+            | null
+          ownership_evidence?: Json | null
+          ownership_score?: number | null
+          red_flags?: Json | null
+          risk_summary?: string | null
+          session_id?: string
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "screening_behavioral_analysis_candidate_id_fkey"
+            columns: ["candidate_id"]
+            isOneToOne: false
+            referencedRelation: "resume_analyses"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "screening_behavioral_analysis_session_id_fkey"
+            columns: ["session_id"]
+            isOneToOne: true
+            referencedRelation: "adaptive_screening_sessions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      screening_conversation_logs: {
+        Row: {
+          behavioral_signals_detected: Json | null
+          content: string
+          created_at: string | null
+          id: string
+          message_index: number
+          response_time_seconds: number | null
+          role: string
+          scenario_id: string | null
+          session_id: string
+        }
+        Insert: {
+          behavioral_signals_detected?: Json | null
+          content: string
+          created_at?: string | null
+          id?: string
+          message_index: number
+          response_time_seconds?: number | null
+          role: string
+          scenario_id?: string | null
+          session_id: string
+        }
+        Update: {
+          behavioral_signals_detected?: Json | null
+          content?: string
+          created_at?: string | null
+          id?: string
+          message_index?: number
+          response_time_seconds?: number | null
+          role?: string
+          scenario_id?: string | null
+          session_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "screening_conversation_logs_scenario_id_fkey"
+            columns: ["scenario_id"]
+            isOneToOne: false
+            referencedRelation: "screening_scenarios"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "screening_conversation_logs_session_id_fkey"
+            columns: ["session_id"]
+            isOneToOne: false
+            referencedRelation: "adaptive_screening_sessions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      screening_scenarios: {
+        Row: {
+          category: Database["public"]["Enums"]["scenario_category"]
+          created_at: string | null
+          difficulty_level: number | null
+          follow_up_prompts: Json | null
+          id: string
+          is_active: boolean | null
+          name: string
+          scenario_prompt: string
+          target_signals: Json | null
+          updated_at: string | null
+        }
+        Insert: {
+          category: Database["public"]["Enums"]["scenario_category"]
+          created_at?: string | null
+          difficulty_level?: number | null
+          follow_up_prompts?: Json | null
+          id?: string
+          is_active?: boolean | null
+          name: string
+          scenario_prompt: string
+          target_signals?: Json | null
+          updated_at?: string | null
+        }
+        Update: {
+          category?: Database["public"]["Enums"]["scenario_category"]
+          created_at?: string | null
+          difficulty_level?: number | null
+          follow_up_prompts?: Json | null
+          id?: string
+          is_active?: boolean | null
+          name?: string
+          scenario_prompt?: string
+          target_signals?: Json | null
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
@@ -1266,6 +1505,7 @@ export type Database = {
       }
     }
     Enums: {
+      behavioral_risk_level: "low" | "medium" | "high"
       candidate_source: "resume_screening" | "deep_search" | "linkedin_scraper"
       interview_location_type: "video" | "phone" | "in_person"
       interview_status:
@@ -1275,6 +1515,18 @@ export type Database = {
         | "no_show"
         | "rescheduled"
       reminder_type: "24h" | "1h" | "15min"
+      scenario_category:
+        | "ambiguity"
+        | "accountability"
+        | "competing_priorities"
+        | "time_pressure"
+        | "conflict_resolution"
+      screening_session_status:
+        | "invited"
+        | "in_progress"
+        | "completed"
+        | "expired"
+        | "abandoned"
       slot_status: "available" | "booked" | "blocked"
     }
     CompositeTypes: {
@@ -1403,6 +1655,7 @@ export type CompositeTypes<
 export const Constants = {
   public: {
     Enums: {
+      behavioral_risk_level: ["low", "medium", "high"],
       candidate_source: ["resume_screening", "deep_search", "linkedin_scraper"],
       interview_location_type: ["video", "phone", "in_person"],
       interview_status: [
@@ -1413,6 +1666,20 @@ export const Constants = {
         "rescheduled",
       ],
       reminder_type: ["24h", "1h", "15min"],
+      scenario_category: [
+        "ambiguity",
+        "accountability",
+        "competing_priorities",
+        "time_pressure",
+        "conflict_resolution",
+      ],
+      screening_session_status: [
+        "invited",
+        "in_progress",
+        "completed",
+        "expired",
+        "abandoned",
+      ],
       slot_status: ["available", "booked", "blocked"],
     },
   },
