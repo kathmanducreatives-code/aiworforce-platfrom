@@ -8,7 +8,7 @@ import { Progress } from "@/components/ui/progress";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
-import { Send, Brain, Clock, CheckCircle, AlertCircle, Loader2 } from "lucide-react";
+import { Send, Brain, Clock, CheckCircle, AlertCircle, Loader2, Play } from "lucide-react";
 import type { ScreeningChatMessage } from "@/types/AdaptiveScreening";
 
 const AdaptiveScreening = () => {
@@ -19,6 +19,7 @@ const AdaptiveScreening = () => {
   const [candidateName, setCandidateName] = useState<string>("");
   const [consentGiven, setConsentGiven] = useState(false);
   const [consentChecked, setConsentChecked] = useState(false);
+  const [readyToStart, setReadyToStart] = useState(false);
   const [messages, setMessages] = useState<ScreeningChatMessage[]>([]);
   const [inputValue, setInputValue] = useState("");
   const [isSending, setIsSending] = useState(false);
@@ -110,8 +111,33 @@ const AdaptiveScreening = () => {
       if (funcError) throw funcError;
 
       setConsentGiven(true);
-      setSessionStatus('in_progress');
       setTotalScenarios(data.total_scenarios);
+      // Show the "Ready to Start" screen instead of immediately starting chat
+      setReadyToStart(true);
+
+    } catch (err: any) {
+      console.error('Failed to record consent:', err);
+      toast.error('Failed to process consent. Please try again.');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const startScreening = async () => {
+    if (!sessionId) return;
+
+    try {
+      setIsLoading(true);
+
+      // Get the first scenario/welcome message from the edge function
+      const { data, error: funcError } = await supabase.functions.invoke('adaptive-screening-chat', {
+        body: { action: 'begin', session_id: sessionId },
+      });
+
+      if (funcError) throw funcError;
+
+      setReadyToStart(false);
+      setSessionStatus('in_progress');
 
       // Add welcome message
       setMessages([{
@@ -121,8 +147,12 @@ const AdaptiveScreening = () => {
         timestamp: new Date(),
       }]);
 
+      if (data.total_scenarios) {
+        setTotalScenarios(data.total_scenarios);
+      }
+
     } catch (err: any) {
-      console.error('Failed to record consent:', err);
+      console.error('Failed to start screening:', err);
       toast.error('Failed to start screening. Please try again.');
     } finally {
       setIsLoading(false);
@@ -239,6 +269,54 @@ const AdaptiveScreening = () => {
     );
   }
 
+  // New "Ready to Start" screen with prominent button
+  if (readyToStart) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 flex items-center justify-center p-4">
+        <Card className="max-w-lg w-full bg-slate-800/50 border-slate-700">
+          <CardContent className="pt-8 pb-8 text-center">
+            <div className="w-20 h-20 bg-primary/20 rounded-full flex items-center justify-center mx-auto mb-6">
+              <Brain className="w-10 h-10 text-primary" />
+            </div>
+            <h1 className="text-3xl font-bold text-white mb-4">
+              You're Ready, {candidateName}!
+            </h1>
+            <p className="text-slate-400 mb-3 max-w-md mx-auto">
+              Click the button below to begin your adaptive screening conversation.
+            </p>
+            <p className="text-slate-500 text-sm mb-8 max-w-md mx-auto">
+              Take your time with each response—there are no time limits. 
+              You'll go through {totalScenarios} workplace scenarios.
+            </p>
+            
+            <Button 
+              onClick={startScreening}
+              disabled={isLoading}
+              size="lg"
+              className="px-12 py-6 text-lg font-semibold bg-primary hover:bg-primary/90 shadow-lg shadow-primary/25"
+            >
+              {isLoading ? (
+                <>
+                  <Loader2 className="w-5 h-5 mr-3 animate-spin" />
+                  Starting...
+                </>
+              ) : (
+                <>
+                  <Play className="w-5 h-5 mr-3" />
+                  Start Screening
+                </>
+              )}
+            </Button>
+
+            <p className="text-xs text-slate-600 mt-6">
+              Estimated time: 10-15 minutes
+            </p>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
   if (!consentGiven) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 flex items-center justify-center p-4">
@@ -296,10 +374,10 @@ const AdaptiveScreening = () => {
               {isLoading ? (
                 <>
                   <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                  Starting...
+                  Processing...
                 </>
               ) : (
-                'Begin Screening'
+                'Continue'
               )}
             </Button>
           </CardContent>

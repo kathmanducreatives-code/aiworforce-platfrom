@@ -53,6 +53,8 @@ serve(async (req) => {
       return await handleChat(supabase, session_id, message);
     } else if (action === 'consent') {
       return await handleConsent(supabase, session_id);
+    } else if (action === 'begin') {
+      return await handleBeginScreening(supabase, session_id);
     }
 
     return new Response(JSON.stringify({ error: 'Invalid action' }), {
@@ -119,14 +121,12 @@ async function handleStartSession(supabase: any, token: string) {
 }
 
 async function handleConsent(supabase: any, sessionId: string) {
-  // Update session with consent
+  // Update session with consent (but don't start yet - wait for "begin" action)
   const { error: updateError } = await supabase
     .from('adaptive_screening_sessions')
     .update({
       candidate_consent_given: true,
       consent_given_at: new Date().toISOString(),
-      session_status: 'in_progress',
-      started_at: new Date().toISOString(),
     })
     .eq('id', sessionId);
 
@@ -134,19 +134,53 @@ async function handleConsent(supabase: any, sessionId: string) {
     throw new Error('Failed to record consent');
   }
 
-  // Get scenarios for this session
+  // Get scenario count
+  const { data: scenarios } = await supabase
+    .from('screening_scenarios')
+    .select('id')
+    .eq('is_active', true)
+    .limit(3);
+
+  return new Response(JSON.stringify({
+    success: true,
+    total_scenarios: scenarios?.length || 3,
+  }), {
+    headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+  });
+}
+
+async function handleBeginScreening(supabase: any, sessionId: string) {
+  // Start the session and present the first scenario
+  const { error: updateError } = await supabase
+    .from('adaptive_screening_sessions')
+    .update({
+      session_status: 'in_progress',
+      started_at: new Date().toISOString(),
+    })
+    .eq('id', sessionId);
+
+  if (updateError) {
+    throw new Error('Failed to start screening session');
+  }
+
+  // Get the first scenario
   const { data: scenarios } = await supabase
     .from('screening_scenarios')
     .select('*')
     .eq('is_active', true)
+    .order('difficulty_level', { ascending: true })
     .limit(3);
 
-  // Generate welcome message
-  const welcomeMessage = `Thank you for agreeing to participate! I'm going to present you with a few workplace scenarios and ask how you would handle them. There are no right or wrong answers—I'm interested in understanding your thought process and approach.
+  const firstScenario = scenarios?.[0];
 
-Take your time with each response. When you're ready, I'll share the first scenario.
+  // Generate welcome message with first scenario
+  const welcomeMessage = `Great! Let's begin.
 
-Let me know when you're ready to begin!`;
+I'm going to present you with ${scenarios?.length || 3} workplace scenarios and ask how you would handle them. There are no right or wrong answers—I'm interested in understanding your thought process and approach.
+
+Here's your first scenario:
+
+${firstScenario?.scenario_prompt || 'Imagine you join a new team and notice that a process everyone follows seems inefficient. What would you do?'}`;
 
   // Log the welcome message
   await supabase.from('screening_conversation_logs').insert({
@@ -154,6 +188,7 @@ Let me know when you're ready to begin!`;
     message_index: 0,
     role: 'assistant',
     content: welcomeMessage,
+    scenario_id: firstScenario?.id,
   });
 
   return new Response(JSON.stringify({
