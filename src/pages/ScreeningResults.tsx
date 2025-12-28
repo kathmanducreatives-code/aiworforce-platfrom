@@ -21,7 +21,8 @@ import {
   UserPlus,
   Calendar,
   Play,
-  Hourglass
+  Hourglass,
+  FileText
 } from "lucide-react";
 import { format, isToday, isThisWeek, isThisMonth, parseISO } from "date-fns";
 import { useNavigate } from "react-router-dom";
@@ -306,6 +307,10 @@ const ScreeningResults = () => {
           </p>
         </div>
         <div className="flex items-center gap-2">
+          <Button onClick={() => navigate("/behavioral-screening/templates")} variant="outline" size="sm">
+            <FileText className="w-4 h-4 mr-2" />
+            Manage Templates
+          </Button>
           <Button onClick={fetchSessions} variant="outline" size="sm">
             <RefreshCw className="w-4 h-4 mr-2" />
             Refresh
