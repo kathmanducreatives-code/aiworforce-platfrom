@@ -29,6 +29,7 @@ export type Database = {
           scenario_count: number | null
           session_status: Database["public"]["Enums"]["screening_session_status"]
           started_at: string | null
+          template_id: string | null
           updated_at: string | null
         }
         Insert: {
@@ -45,6 +46,7 @@ export type Database = {
           scenario_count?: number | null
           session_status?: Database["public"]["Enums"]["screening_session_status"]
           started_at?: string | null
+          template_id?: string | null
           updated_at?: string | null
         }
         Update: {
@@ -61,6 +63,7 @@ export type Database = {
           scenario_count?: number | null
           session_status?: Database["public"]["Enums"]["screening_session_status"]
           started_at?: string | null
+          template_id?: string | null
           updated_at?: string | null
         }
         Relationships: [
@@ -69,6 +72,13 @@ export type Database = {
             columns: ["candidate_id"]
             isOneToOne: false
             referencedRelation: "resume_analyses"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "adaptive_screening_sessions_template_id_fkey"
+            columns: ["template_id"]
+            isOneToOne: false
+            referencedRelation: "screening_templates"
             referencedColumns: ["id"]
           },
         ]
@@ -1469,6 +1479,93 @@ export type Database = {
           name?: string
           scenario_prompt?: string
           target_signals?: Json | null
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
+      screening_template_questions: {
+        Row: {
+          category: string
+          created_at: string | null
+          difficulty_level: number | null
+          follow_up_prompts: Json | null
+          id: string
+          is_custom: boolean | null
+          question_text: string
+          scenario_id: string | null
+          sort_order: number | null
+          template_id: string | null
+        }
+        Insert: {
+          category: string
+          created_at?: string | null
+          difficulty_level?: number | null
+          follow_up_prompts?: Json | null
+          id?: string
+          is_custom?: boolean | null
+          question_text: string
+          scenario_id?: string | null
+          sort_order?: number | null
+          template_id?: string | null
+        }
+        Update: {
+          category?: string
+          created_at?: string | null
+          difficulty_level?: number | null
+          follow_up_prompts?: Json | null
+          id?: string
+          is_custom?: boolean | null
+          question_text?: string
+          scenario_id?: string | null
+          sort_order?: number | null
+          template_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "screening_template_questions_scenario_id_fkey"
+            columns: ["scenario_id"]
+            isOneToOne: false
+            referencedRelation: "screening_scenarios"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "screening_template_questions_template_id_fkey"
+            columns: ["template_id"]
+            isOneToOne: false
+            referencedRelation: "screening_templates"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      screening_templates: {
+        Row: {
+          created_at: string | null
+          created_by: string | null
+          description: string | null
+          id: string
+          is_default: boolean | null
+          name: string
+          role_focus: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          created_by?: string | null
+          description?: string | null
+          id?: string
+          is_default?: boolean | null
+          name: string
+          role_focus?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          created_by?: string | null
+          description?: string | null
+          id?: string
+          is_default?: boolean | null
+          name?: string
+          role_focus?: string | null
           updated_at?: string | null
         }
         Relationships: []

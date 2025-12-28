@@ -30,7 +30,8 @@ import ProtectedRoute from "./components/ProtectedRoute";
 import MainLayout from "./components/MainLayout";
 import AdaptiveScreening from "./pages/AdaptiveScreening";
 import ScreeningResults from "./pages/ScreeningResults";
-
+import ScreeningTemplates from "./pages/ScreeningTemplates";
+import TemplateEditor from "./pages/TemplateEditor";
 const queryClient = new QueryClient();
 
 const App = () => (
@@ -151,6 +152,22 @@ const App = () => (
                   <ProtectedRoute>
                     <MainLayout>
                       <ScreeningResults />
+                    </MainLayout>
+                  </ProtectedRoute>
+                } />
+                
+                <Route path="/behavioral-screening/templates" element={
+                  <ProtectedRoute>
+                    <MainLayout>
+                      <ScreeningTemplates />
+                    </MainLayout>
+                  </ProtectedRoute>
+                } />
+                
+                <Route path="/behavioral-screening/templates/:id" element={
+                  <ProtectedRoute>
+                    <MainLayout>
+                      <TemplateEditor />
                     </MainLayout>
                   </ProtectedRoute>
                 } />

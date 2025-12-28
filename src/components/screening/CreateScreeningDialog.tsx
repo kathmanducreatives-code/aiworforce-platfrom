@@ -7,8 +7,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Switch } from "@/components/ui/switch";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
-import { Brain, Mail, Loader2, Copy, Check, Search, UserPlus } from "lucide-react";
+import { Brain, Mail, Loader2, Copy, Check, Search, UserPlus, ChevronLeft, ChevronRight, FileText } from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { TemplateSelector } from "./TemplateSelector";
 
 interface Candidate {
   id: string;
@@ -23,6 +24,8 @@ interface CreateScreeningDialogProps {
   onSuccess?: () => void;
 }
 
+type Step = "template" | "candidate" | "configure";
+
 const CreateScreeningDialog = ({
   open,
   onOpenChange,
@@ -31,22 +34,26 @@ const CreateScreeningDialog = ({
   const [isLoading, setIsLoading] = useState(false);
   const [candidates, setCandidates] = useState<Candidate[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
+  const [selectedTemplateId, setSelectedTemplateId] = useState<string | null>(null);
   const [selectedCandidate, setSelectedCandidate] = useState<Candidate | null>(null);
   const [scenarioCount, setScenarioCount] = useState("3");
   const [expiresInDays, setExpiresInDays] = useState("7");
   const [sendEmail, setSendEmail] = useState(true);
   const [generatedUrl, setGeneratedUrl] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+  const [currentStep, setCurrentStep] = useState<Step>("template");
 
   useEffect(() => {
     if (open) {
       fetchCandidates();
     } else {
       // Reset state on close
+      setSelectedTemplateId(null);
       setSelectedCandidate(null);
       setGeneratedUrl(null);
       setCopied(false);
       setSearchQuery("");
+      setCurrentStep("template");
     }
   }, [open]);
 
@@ -83,6 +90,7 @@ const CreateScreeningDialog = ({
       const { data, error } = await supabase.functions.invoke('generate-screening-invite', {
         body: {
           candidate_id: selectedCandidate.id,
+          template_id: selectedTemplateId,
           scenario_count: parseInt(scenarioCount),
           expires_in_days: parseInt(expiresInDays),
           send_email: sendEmail && !!selectedCandidate.email,
@@ -130,6 +138,28 @@ const CreateScreeningDialog = ({
     onOpenChange(false);
   };
 
+  const goToNextStep = () => {
+    if (currentStep === "template") setCurrentStep("candidate");
+    else if (currentStep === "candidate") setCurrentStep("configure");
+  };
+
+  const goToPrevStep = () => {
+    if (currentStep === "configure") setCurrentStep("candidate");
+    else if (currentStep === "candidate") setCurrentStep("template");
+  };
+
+  const canProceed = () => {
+    if (currentStep === "template") return !!selectedTemplateId;
+    if (currentStep === "candidate") return !!selectedCandidate;
+    return true;
+  };
+
+  const getStepNumber = () => {
+    if (currentStep === "template") return 1;
+    if (currentStep === "candidate") return 2;
+    return 3;
+  };
+
   return (
     <Dialog open={open} onOpenChange={handleClose}>
       <DialogContent className="sm:max-w-lg">
@@ -139,7 +169,14 @@ const CreateScreeningDialog = ({
             Create Behavioral Screening
           </DialogTitle>
           <DialogDescription>
-            Select a candidate and configure the screening session
+            {generatedUrl 
+              ? "Your screening link is ready"
+              : `Step ${getStepNumber()} of 3: ${
+                  currentStep === "template" ? "Select Template" :
+                  currentStep === "candidate" ? "Select Candidate" :
+                  "Configure & Generate"
+                }`
+            }
           </DialogDescription>
         </DialogHeader>
 
@@ -164,8 +201,24 @@ const CreateScreeningDialog = ({
           </div>
         ) : (
           <div className="space-y-4">
-            {/* Candidate Selection */}
-            {!selectedCandidate ? (
+            {/* Step 1: Template Selection */}
+            {currentStep === "template" && (
+              <div className="space-y-3">
+                <Label className="flex items-center gap-2">
+                  <FileText className="w-4 h-4" />
+                  Select Screening Template
+                </Label>
+                <ScrollArea className="h-64">
+                  <TemplateSelector
+                    selectedTemplateId={selectedTemplateId}
+                    onSelect={setSelectedTemplateId}
+                  />
+                </ScrollArea>
+              </div>
+            )}
+
+            {/* Step 2: Candidate Selection */}
+            {currentStep === "candidate" && (
               <div className="space-y-3">
                 <Label>Select Candidate</Label>
                 <div className="relative">
@@ -188,7 +241,11 @@ const CreateScreeningDialog = ({
                         <button
                           key={candidate.id}
                           onClick={() => setSelectedCandidate(candidate)}
-                          className="w-full text-left p-3 rounded-lg hover:bg-muted/50 transition-colors"
+                          className={`w-full text-left p-3 rounded-lg transition-colors ${
+                            selectedCandidate?.id === candidate.id
+                              ? "bg-primary/10 border border-primary/20"
+                              : "hover:bg-muted/50"
+                          }`}
                         >
                           <p className="font-medium">{candidate.candidate_name}</p>
                           <p className="text-sm text-muted-foreground">
@@ -200,7 +257,10 @@ const CreateScreeningDialog = ({
                   </div>
                 </ScrollArea>
               </div>
-            ) : (
+            )}
+
+            {/* Step 3: Configuration */}
+            {currentStep === "configure" && selectedCandidate && (
               <>
                 {/* Selected Candidate Display */}
                 <div className="p-3 bg-primary/10 rounded-lg border border-primary/20">
@@ -211,9 +271,6 @@ const CreateScreeningDialog = ({
                         {selectedCandidate.email || 'No email'} • {selectedCandidate.recruitment_name || 'No position'}
                       </p>
                     </div>
-                    <Button variant="ghost" size="sm" onClick={() => setSelectedCandidate(null)}>
-                      Change
-                    </Button>
                   </div>
                 </div>
 
@@ -273,25 +330,45 @@ const CreateScreeningDialog = ({
           {generatedUrl ? (
             <Button onClick={handleClose}>Done</Button>
           ) : (
-            <>
-              <Button variant="outline" onClick={handleClose}>Cancel</Button>
-              <Button 
-                onClick={handleGenerate} 
-                disabled={isLoading || !selectedCandidate}
+            <div className="flex w-full justify-between">
+              <Button
+                variant="outline"
+                onClick={currentStep === "template" ? handleClose : goToPrevStep}
               >
-                {isLoading ? (
-                  <>
-                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                    Generating...
-                  </>
+                {currentStep === "template" ? (
+                  "Cancel"
                 ) : (
                   <>
-                    <Brain className="w-4 h-4 mr-2" />
-                    Generate Invite
+                    <ChevronLeft className="w-4 h-4 mr-1" />
+                    Back
                   </>
                 )}
               </Button>
-            </>
+              
+              {currentStep === "configure" ? (
+                <Button 
+                  onClick={handleGenerate} 
+                  disabled={isLoading}
+                >
+                  {isLoading ? (
+                    <>
+                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                      Generating...
+                    </>
+                  ) : (
+                    <>
+                      <Brain className="w-4 h-4 mr-2" />
+                      Generate Invite
+                    </>
+                  )}
+                </Button>
+              ) : (
+                <Button onClick={goToNextStep} disabled={!canProceed()}>
+                  Next
+                  <ChevronRight className="w-4 h-4 ml-1" />
+                </Button>
+              )}
+            </div>
           )}
         </DialogFooter>
       </DialogContent>
