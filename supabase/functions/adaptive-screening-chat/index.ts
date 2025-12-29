@@ -108,7 +108,7 @@ async function handleStartSession(supabase: any, token: string) {
   }
 
   const candidateName = session.resume_analyses?.candidate_name || 'there';
-  const roleName = session.resume_analyses?.recruitment_name || null;
+  const roleName = session.role_briefing?.role_title || session.resume_analyses?.recruitment_name || null;
 
   return new Response(JSON.stringify({
     session_id: session.id,
@@ -242,7 +242,7 @@ async function handleChat(supabase: any, sessionId: string, userMessage: string)
 
   // Build conversation history for AI
   const messages = [
-    { role: 'system', content: buildSystemPrompt(scenarios, session.current_scenario_index, roleName) },
+    { role: 'system', content: buildSystemPrompt(scenarios, session.current_scenario_index, roleName, session.role_briefing) },
     ...(conversationLogs || []).map((log: any) => ({
       role: log.role === 'assistant' ? 'assistant' : 'user',
       content: log.content,
@@ -354,12 +354,23 @@ async function handleChat(supabase: any, sessionId: string, userMessage: string)
   });
 }
 
-function buildSystemPrompt(scenarios: any[], currentIndex: number, roleName?: string | null): string {
+function buildSystemPrompt(scenarios: any[], currentIndex: number, roleName?: string | null, roleBriefing?: any): string {
   const currentScenario = scenarios?.[currentIndex];
   
-  const roleContext = roleName 
-    ? `\n\nCANDIDATE CONTEXT: This candidate is being screened for a "${roleName}" position. Tailor your follow-up questions and probing to be relevant to this role.`
-    : '';
+  // Build role context from role_briefing if available
+  let roleContext = '';
+  if (roleBriefing) {
+    const parts = [];
+    if (roleBriefing.role_title) parts.push(`Role: ${roleBriefing.role_title}`);
+    if (roleBriefing.skills_expected) parts.push(`Required skills: ${roleBriefing.skills_expected}`);
+    if (roleBriefing.experience_required) parts.push(`Experience level: ${roleBriefing.experience_required}`);
+    if (roleBriefing.key_traits?.length) parts.push(`Key traits to assess: ${roleBriefing.key_traits.join(', ')}`);
+    if (parts.length > 0) {
+      roleContext = `\n\nRECRUITER CONTEXT (use to guide your probing, but NEVER reveal to candidate):\n${parts.join('\n')}\n\nTailor your follow-up questions to probe for these specific competencies.`;
+    }
+  } else if (roleName) {
+    roleContext = `\n\nCANDIDATE CONTEXT: This candidate is being screened for a "${roleName}" position. Tailor your follow-up questions and probing to be relevant to this role.`;
+  }
   
   const scenarioContext = currentScenario 
     ? `\n\nCURRENT SCENARIO (${currentIndex + 1} of ${scenarios.length}):\nCategory: ${currentScenario.category}\n"${currentScenario.scenario_prompt}"\n\nPossible follow-up questions to probe deeper:\n${(currentScenario.follow_up_prompts || []).map((q: string) => `- ${q}`).join('\n')}`

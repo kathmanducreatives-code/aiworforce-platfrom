@@ -26,6 +26,8 @@ export type Database = {
           expires_at: string | null
           id: string
           invited_at: string | null
+          role_briefing: Json | null
+          scenario_config: Json | null
           scenario_count: number | null
           session_status: Database["public"]["Enums"]["screening_session_status"]
           started_at: string | null
@@ -43,6 +45,8 @@ export type Database = {
           expires_at?: string | null
           id?: string
           invited_at?: string | null
+          role_briefing?: Json | null
+          scenario_config?: Json | null
           scenario_count?: number | null
           session_status?: Database["public"]["Enums"]["screening_session_status"]
           started_at?: string | null
@@ -60,6 +64,8 @@ export type Database = {
           expires_at?: string | null
           id?: string
           invited_at?: string | null
+          role_briefing?: Json | null
+          scenario_config?: Json | null
           scenario_count?: number | null
           session_status?: Database["public"]["Enums"]["screening_session_status"]
           started_at?: string | null
