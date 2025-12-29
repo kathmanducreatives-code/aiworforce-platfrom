@@ -10,6 +10,9 @@ const SUPABASE_URL = Deno.env.get('SUPABASE_URL');
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
 const RESEND_API_KEY = Deno.env.get('RESEND_API_KEY');
 
+// n8n webhook URL for screening backend
+const N8N_WEBHOOK_URL = 'https://siraa.app.n8n.cloud/webhook/screening';
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
@@ -74,10 +77,107 @@ serve(async (req) => {
       });
     }
 
-    // Create new screening session
+    // Fetch template data if template_id is provided
+    let templateData = null;
+    if (template_id) {
+      const { data: template } = await supabase
+        .from('screening_templates')
+        .select('id, name, description, role_focus')
+        .eq('id', template_id)
+        .single();
+      
+      const { data: questions } = await supabase
+        .from('screening_template_questions')
+        .select('id, category, question_text, follow_up_prompts, difficulty_level')
+        .eq('template_id', template_id)
+        .order('sort_order');
+      
+      if (template) {
+        templateData = { ...template, questions: questions || [] };
+      }
+    }
+
+    // Build payload for n8n webhook
     const expiresAt = new Date();
     expiresAt.setDate(expiresAt.getDate() + expires_in_days);
 
+    const webhookPayload = {
+      action: 'create_screening',
+      timestamp: new Date().toISOString(),
+      candidate: {
+        id: candidate.id,
+        name: candidate.candidate_name,
+        email: candidate.email,
+        position: candidate.recruitment_name,
+        resume: candidate.resume,
+        strengths: candidate.strengths,
+        weaknesses: candidate.weaknesses,
+      },
+      role_briefing: role_briefing,
+      template: templateData,
+      scenario_config: scenario_config,
+      settings: {
+        expires_in_days: expires_in_days,
+        expires_at: expiresAt.toISOString(),
+        send_email: send_email && !!candidate.email,
+        scenario_count: scenario_count,
+      },
+    };
+
+    console.log('Calling n8n webhook with payload:', JSON.stringify(webhookPayload, null, 2));
+
+    // Call n8n webhook and wait for response (30 second timeout)
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 30000);
+
+    try {
+      const webhookResponse = await fetch(N8N_WEBHOOK_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(webhookPayload),
+        signal: controller.signal,
+      });
+
+      clearTimeout(timeoutId);
+
+      if (!webhookResponse.ok) {
+        const errorText = await webhookResponse.text();
+        console.error('n8n webhook failed:', webhookResponse.status, errorText);
+        return new Response(JSON.stringify({ 
+          error: 'Backend processing failed. Please try again.',
+          details: errorText,
+          status_code: webhookResponse.status,
+        }), {
+          status: 502,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+
+      const webhookResult = await webhookResponse.json();
+      console.log('n8n webhook success:', webhookResult);
+
+    } catch (fetchError) {
+      clearTimeout(timeoutId);
+      if (fetchError.name === 'AbortError') {
+        console.error('n8n webhook timed out after 30 seconds');
+        return new Response(JSON.stringify({ 
+          error: 'Backend processing timed out. Please try again.',
+        }), {
+          status: 504,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+      console.error('n8n webhook network error:', fetchError);
+      return new Response(JSON.stringify({ 
+        error: 'Failed to connect to backend. Please check your connection.',
+        details: fetchError.message,
+      }), {
+        status: 503,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    // n8n webhook succeeded - now create the session in Supabase
     const { data: newSession, error: sessionError } = await supabase
       .from('adaptive_screening_sessions')
       .insert({
