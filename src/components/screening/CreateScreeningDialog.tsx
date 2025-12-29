@@ -150,6 +150,8 @@ const CreateScreeningDialog = ({
     c.recruitment_name?.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
+  const [loadingMessage, setLoadingMessage] = useState<string>("");
+
   const handleGenerate = async () => {
     if (!selectedCandidate) {
       toast.error('Please select a candidate');
@@ -158,6 +160,7 @@ const CreateScreeningDialog = ({
 
     try {
       setIsLoading(true);
+      setLoadingMessage("Syncing with backend...");
 
       const { data, error } = await supabase.functions.invoke('generate-screening-invite', {
         body: {
@@ -171,8 +174,23 @@ const CreateScreeningDialog = ({
         },
       });
 
-      if (error) throw error;
+      if (error) {
+        // Handle specific error types from edge function
+        const errorData = error.message ? JSON.parse(error.message) : error;
+        
+        if (errorData?.error?.includes('timed out')) {
+          toast.error('Backend processing timed out. Please try again.');
+        } else if (errorData?.error?.includes('Backend processing failed')) {
+          toast.error('Backend processing failed. Please try again.');
+        } else if (errorData?.error?.includes('Failed to connect')) {
+          toast.error('Failed to connect to backend. Please check your connection.');
+        } else {
+          throw error;
+        }
+        return;
+      }
 
+      setLoadingMessage("Generating invite...");
       setGeneratedUrl(data.screening_url);
 
       if (data.existing) {
@@ -192,6 +210,7 @@ const CreateScreeningDialog = ({
       toast.error('Failed to generate screening invite');
     } finally {
       setIsLoading(false);
+      setLoadingMessage("");
     }
   };
 
@@ -440,7 +459,7 @@ const CreateScreeningDialog = ({
                   {isLoading ? (
                     <>
                       <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                      Generating...
+                      {loadingMessage || "Processing..."}
                     </>
                   ) : (
                     <>
