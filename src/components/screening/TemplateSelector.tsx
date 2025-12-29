@@ -1,11 +1,14 @@
 import { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Label } from "@/components/ui/label";
-import { Star, FileText } from "lucide-react";
+import { Star, FileText, Eye, Copy } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
+import { toast } from "sonner";
 
 interface Template {
   id: string;
@@ -20,6 +23,7 @@ interface Template {
 interface TemplateSelectorProps {
   selectedTemplateId: string | null;
   onSelect: (templateId: string) => void;
+  onPreview?: (templateId: string) => void;
 }
 
 const categoryColors: Record<string, string> = {
@@ -38,9 +42,11 @@ const categoryLabels: Record<string, string> = {
   conflict_resolution: "Conflict Resolution",
 };
 
-export function TemplateSelector({ selectedTemplateId, onSelect }: TemplateSelectorProps) {
+export function TemplateSelector({ selectedTemplateId, onSelect, onPreview }: TemplateSelectorProps) {
+  const navigate = useNavigate();
   const [templates, setTemplates] = useState<Template[]>([]);
   const [loading, setLoading] = useState(true);
+  const [duplicating, setDuplicating] = useState<string | null>(null);
 
   useEffect(() => {
     fetchTemplates();
@@ -96,11 +102,76 @@ export function TemplateSelector({ selectedTemplateId, onSelect }: TemplateSelec
     }
   };
 
+  const handleDuplicate = async (templateId: string, templateName: string, e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    
+    setDuplicating(templateId);
+    try {
+      // Get the template
+      const { data: template, error: templateError } = await supabase
+        .from("screening_templates")
+        .select("*")
+        .eq("id", templateId)
+        .single();
+
+      if (templateError) throw templateError;
+
+      // Create a copy
+      const { data: newTemplate, error: insertError } = await supabase
+        .from("screening_templates")
+        .insert({
+          name: `${template.name} (Copy)`,
+          description: template.description,
+          role_focus: template.role_focus,
+          is_default: false,
+        })
+        .select()
+        .single();
+
+      if (insertError) throw insertError;
+
+      // Copy questions
+      const { data: questions, error: questionsError } = await supabase
+        .from("screening_template_questions")
+        .select("*")
+        .eq("template_id", templateId);
+
+      if (questionsError) throw questionsError;
+
+      if (questions && questions.length > 0) {
+        const newQuestions = questions.map(q => ({
+          template_id: newTemplate.id,
+          question_text: q.question_text,
+          category: q.category,
+          difficulty_level: q.difficulty_level,
+          follow_up_prompts: q.follow_up_prompts,
+          scenario_id: q.scenario_id,
+          sort_order: q.sort_order,
+          is_custom: true,
+        }));
+
+        await supabase.from("screening_template_questions").insert(newQuestions);
+      }
+
+      toast.success("Template duplicated! Redirecting to editor...");
+      
+      // Navigate to edit the new template
+      navigate(`/behavioral-screening/templates/${newTemplate.id}`);
+      
+    } catch (error) {
+      console.error("Error duplicating template:", error);
+      toast.error("Failed to duplicate template");
+    } finally {
+      setDuplicating(null);
+    }
+  };
+
   if (loading) {
     return (
       <div className="space-y-3">
         {[1, 2].map((i) => (
-          <Skeleton key={i} className="h-24 w-full" />
+          <Skeleton key={i} className="h-28 w-full" />
         ))}
       </div>
     );
@@ -126,7 +197,7 @@ export function TemplateSelector({ selectedTemplateId, onSelect }: TemplateSelec
             id={template.id}
             className="peer sr-only"
           />
-          <Label htmlFor={template.id} className="cursor-pointer">
+          <Label htmlFor={template.id} className="cursor-pointer block">
             <Card className={`transition-all ${
               selectedTemplateId === template.id 
                 ? "border-primary ring-2 ring-primary/20" 
@@ -151,7 +222,7 @@ export function TemplateSelector({ selectedTemplateId, onSelect }: TemplateSelec
                     {template.description}
                   </p>
                 )}
-                <div className="flex items-center justify-between">
+                <div className="flex items-center justify-between mb-3">
                   <span className="text-sm text-muted-foreground">
                     {template.question_count} questions
                   </span>
@@ -171,6 +242,37 @@ export function TemplateSelector({ selectedTemplateId, onSelect }: TemplateSelec
                       </Badge>
                     )}
                   </div>
+                </div>
+                
+                {/* Action buttons */}
+                <div className="flex gap-2 pt-2 border-t">
+                  {onPreview && (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      className="flex-1"
+                      onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        onPreview(template.id);
+                      }}
+                    >
+                      <Eye className="w-4 h-4 mr-1" />
+                      Preview
+                    </Button>
+                  )}
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="flex-1"
+                    disabled={duplicating === template.id}
+                    onClick={(e) => handleDuplicate(template.id, template.name, e)}
+                  >
+                    <Copy className="w-4 h-4 mr-1" />
+                    {duplicating === template.id ? "Duplicating..." : "Duplicate & Edit"}
+                  </Button>
                 </div>
               </CardContent>
             </Card>

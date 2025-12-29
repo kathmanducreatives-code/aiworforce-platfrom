@@ -16,7 +16,15 @@ serve(async (req) => {
   }
 
   try {
-    const { candidate_id, scenario_count = 3, expires_in_days = 7, send_email = true } = await req.json();
+    const { 
+      candidate_id, 
+      template_id = null,
+      role_briefing = null,
+      scenario_config = null,
+      scenario_count = 3, 
+      expires_in_days = 7, 
+      send_email = true 
+    } = await req.json();
 
     if (!candidate_id) {
       return new Response(JSON.stringify({ error: 'candidate_id is required' }), {
@@ -24,6 +32,8 @@ serve(async (req) => {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
+    
+    console.log('Creating screening with context:', { template_id, role_briefing: !!role_briefing, scenario_config: !!scenario_config });
 
     const supabase = createClient(SUPABASE_URL!, SUPABASE_SERVICE_ROLE_KEY!);
 
@@ -72,8 +82,11 @@ serve(async (req) => {
       .from('adaptive_screening_sessions')
       .insert({
         candidate_id: candidate_id,
+        template_id: template_id,
         scenario_count: scenario_count,
         expires_at: expiresAt.toISOString(),
+        role_briefing: role_briefing,
+        scenario_config: scenario_config,
       })
       .select()
       .single();
