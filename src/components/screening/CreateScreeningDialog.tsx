@@ -27,7 +27,7 @@ interface CreateScreeningDialogProps {
   onSuccess?: () => void;
 }
 
-type Step = "role_briefing" | "template" | "scenario_coverage" | "candidate";
+type Step = "role_briefing" | "template" | "scenario_coverage" | "send_invite";
 
 const DEFAULT_ROLE_BRIEFING: RoleBriefing = {
   role_title: "",
@@ -67,10 +67,11 @@ const CreateScreeningDialog = ({
   // Step 3: Scenario Coverage
   const [scenarioConfig, setScenarioConfig] = useState<ScenarioConfig>(DEFAULT_SCENARIO_CONFIG);
   
-  // Step 4: Candidate Selection
+  // Step 4: Send Invite (after webhook success)
   const [selectedCandidate, setSelectedCandidate] = useState<Candidate | null>(null);
   const [expiresInDays, setExpiresInDays] = useState("7");
   const [sendEmail, setSendEmail] = useState(true);
+  const [webhookSynced, setWebhookSynced] = useState(false);
   
   // Result
   const [generatedUrl, setGeneratedUrl] = useState<string | null>(null);
@@ -91,6 +92,7 @@ const CreateScreeningDialog = ({
       setCopied(false);
       setSearchQuery("");
       setCurrentStep("role_briefing");
+      setWebhookSynced(false);
     }
   }, [open]);
 
@@ -152,6 +154,73 @@ const CreateScreeningDialog = ({
 
   const [loadingMessage, setLoadingMessage] = useState<string>("");
 
+  // Sync screening setup to n8n webhook (Step 3 → Step 4)
+  const handleSyncToBackend = async () => {
+    if (!selectedTemplateId) {
+      toast.error('Please select a template first');
+      return;
+    }
+
+    try {
+      setIsLoading(true);
+      setLoadingMessage("Syncing with backend...");
+
+      // Fetch template data for the webhook
+      const { data: template } = await supabase
+        .from('screening_templates')
+        .select('id, name, description')
+        .eq('id', selectedTemplateId)
+        .single();
+
+      const { data: questions } = await supabase
+        .from('screening_template_questions')
+        .select('id, category, question_text, follow_up_prompts, difficulty_level')
+        .eq('template_id', selectedTemplateId)
+        .order('sort_order');
+
+      const webhookPayload = {
+        action: 'create_screening',
+        timestamp: new Date().toISOString(),
+        role_briefing: roleBriefing.role_title ? roleBriefing : null,
+        template: template ? { ...template, questions: questions || [] } : null,
+        scenario_config: scenarioConfig,
+        settings: {
+          expires_in_days: parseInt(expiresInDays),
+        },
+      };
+
+      const webhookResponse = await fetch('https://siraa.app.n8n.cloud/webhook/screening', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(webhookPayload),
+      });
+
+      if (!webhookResponse.ok) {
+        const errorText = await webhookResponse.text();
+        console.error('Webhook failed:', webhookResponse.status, errorText);
+        toast.error('Backend processing failed. Please try again.');
+        return;
+      }
+
+      console.log('Webhook synced successfully');
+      setWebhookSynced(true);
+      setCurrentStep("send_invite");
+      toast.success('Screening setup synced successfully!');
+
+    } catch (err: any) {
+      console.error('Failed to sync with backend:', err);
+      if (err.name === 'TypeError' && err.message.includes('fetch')) {
+        toast.error('Failed to connect to backend. Please check your connection.');
+      } else {
+        toast.error('Backend processing failed. Please try again.');
+      }
+    } finally {
+      setIsLoading(false);
+      setLoadingMessage("");
+    }
+  };
+
+  // Generate invite and create session (Step 4)
   const handleGenerate = async () => {
     if (!selectedCandidate) {
       toast.error('Please select a candidate');
@@ -160,7 +229,7 @@ const CreateScreeningDialog = ({
 
     try {
       setIsLoading(true);
-      setLoadingMessage("Syncing with backend...");
+      setLoadingMessage("Generating invite...");
 
       const { data, error } = await supabase.functions.invoke('generate-screening-invite', {
         body: {
@@ -171,26 +240,14 @@ const CreateScreeningDialog = ({
           scenario_count: scenarioConfig.total_limit,
           expires_in_days: parseInt(expiresInDays),
           send_email: sendEmail && !!selectedCandidate.email,
+          skip_webhook: true, // Already synced in Step 3
         },
       });
 
       if (error) {
-        // Handle specific error types from edge function
-        const errorData = error.message ? JSON.parse(error.message) : error;
-        
-        if (errorData?.error?.includes('timed out')) {
-          toast.error('Backend processing timed out. Please try again.');
-        } else if (errorData?.error?.includes('Backend processing failed')) {
-          toast.error('Backend processing failed. Please try again.');
-        } else if (errorData?.error?.includes('Failed to connect')) {
-          toast.error('Failed to connect to backend. Please check your connection.');
-        } else {
-          throw error;
-        }
-        return;
+        throw error;
       }
 
-      setLoadingMessage("Generating invite...");
       setGeneratedUrl(data.screening_url);
 
       if (data.existing) {
@@ -234,11 +291,11 @@ const CreateScreeningDialog = ({
   const goToNextStep = () => {
     if (currentStep === "role_briefing") setCurrentStep("template");
     else if (currentStep === "template") setCurrentStep("scenario_coverage");
-    else if (currentStep === "scenario_coverage") setCurrentStep("candidate");
+    // Step 3 → 4 is handled by handleSyncToBackend
   };
 
   const goToPrevStep = () => {
-    if (currentStep === "candidate") setCurrentStep("scenario_coverage");
+    if (currentStep === "send_invite") setCurrentStep("scenario_coverage");
     else if (currentStep === "scenario_coverage") setCurrentStep("template");
     else if (currentStep === "template") setCurrentStep("role_briefing");
   };
@@ -247,7 +304,7 @@ const CreateScreeningDialog = ({
     if (currentStep === "role_briefing") return true; // Optional step
     if (currentStep === "template") return !!selectedTemplateId;
     if (currentStep === "scenario_coverage") return scenarioConfig.total_limit > 0;
-    if (currentStep === "candidate") return !!selectedCandidate;
+    if (currentStep === "send_invite") return !!selectedCandidate;
     return true;
   };
 
@@ -263,7 +320,7 @@ const CreateScreeningDialog = ({
       case "role_briefing": return "Role Briefing";
       case "template": return "Select Template";
       case "scenario_coverage": return "Scenario Coverage";
-      case "candidate": return "Select Candidate & Generate";
+      case "send_invite": return "Send Invite";
     }
   };
 
@@ -272,7 +329,7 @@ const CreateScreeningDialog = ({
       case "role_briefing": return <Briefcase className="w-4 h-4" />;
       case "template": return <FileText className="w-4 h-4" />;
       case "scenario_coverage": return <Sliders className="w-4 h-4" />;
-      case "candidate": return <UserPlus className="w-4 h-4" />;
+      case "send_invite": return <Mail className="w-4 h-4" />;
     }
   };
 
@@ -339,9 +396,17 @@ const CreateScreeningDialog = ({
                 />
               )}
 
-              {/* Step 4: Candidate Selection */}
-              {currentStep === "candidate" && (
+              {/* Step 4: Send Invite */}
+              {currentStep === "send_invite" && (
                 <div className="space-y-4">
+                  {/* Success indicator */}
+                  <div className="p-3 bg-green-500/10 border border-green-500/20 rounded-lg">
+                    <p className="text-sm text-green-600 dark:text-green-400 flex items-center gap-2">
+                      <Check className="w-4 h-4" />
+                      Screening setup synced with backend
+                    </p>
+                  </div>
+
                   {/* Candidate Search */}
                   <div className="space-y-3">
                     <Label>Select Candidate</Label>
@@ -451,7 +516,7 @@ const CreateScreeningDialog = ({
                 )}
               </Button>
               
-              {currentStep === "candidate" ? (
+              {currentStep === "send_invite" ? (
                 <Button 
                   onClick={handleGenerate} 
                   disabled={isLoading || !selectedCandidate}
@@ -465,6 +530,23 @@ const CreateScreeningDialog = ({
                     <>
                       <Brain className="w-4 h-4 mr-2" />
                       Generate Invite
+                    </>
+                  )}
+                </Button>
+              ) : currentStep === "scenario_coverage" ? (
+                <Button 
+                  onClick={handleSyncToBackend} 
+                  disabled={isLoading || !canProceed()}
+                >
+                  {isLoading ? (
+                    <>
+                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                      {loadingMessage || "Syncing..."}
+                    </>
+                  ) : (
+                    <>
+                      Next
+                      <ChevronRight className="w-4 h-4 ml-1" />
                     </>
                   )}
                 </Button>
