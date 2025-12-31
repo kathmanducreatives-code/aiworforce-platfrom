@@ -1,4 +1,5 @@
 import Header from "@/components/Header";
+import Footer from "@/components/landing/Footer";
 import { Button } from "@/components/ui/button";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
@@ -8,7 +9,7 @@ import TypewriterText from "@/components/landing/TypewriterText";
 import AnimatedCounter from "@/components/landing/AnimatedCounter";
 import FeatureCard from "@/components/landing/FeatureCard";
 import BackgroundEffects from "@/components/landing/BackgroundEffects";
-import { Sparkles, Brain, Zap, Users, Target, TrendingUp, ArrowRight, ChevronDown } from "lucide-react";
+import { Sparkles, Brain, Zap, Users, Target, TrendingUp, ArrowRight, ChevronDown, Quote, CheckCircle, ShieldCheck, Clock, Headphones } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 
 const Landing = () => {
@@ -220,7 +221,92 @@ const Landing = () => {
             </div>
           </div>
         </section>
+
+        {/* Testimonials Section */}
+        <section className="py-20 px-6 border-t border-border/50">
+          <div className="max-w-7xl mx-auto">
+            <div className="text-center mb-16">
+              <Badge variant="outline" className="border-primary/30 text-primary mb-4">
+                <Quote className="w-3 h-3 mr-2" />
+                What Our Customers Say
+              </Badge>
+              <h2 className="text-3xl md:text-4xl font-bold text-foreground mb-4">
+                Trusted by Leading Agencies
+              </h2>
+            </div>
+
+            <div className="grid md:grid-cols-3 gap-8">
+              {[
+                {
+                  quote: "ScreeningPilot cut our time-to-fill by 60%. The AI screening is incredibly accurate and saves us hours every day.",
+                  author: "Sarah Chen",
+                  role: "Founder, TechTalent Partners",
+                  rating: 5
+                },
+                {
+                  quote: "The deep search feature helped us find passive candidates we never would have discovered otherwise. Game changer.",
+                  author: "Michael Rodriguez",
+                  role: "Managing Director, Elite Recruiters",
+                  rating: 5
+                },
+                {
+                  quote: "Finally, a CRM built for recruiters. The automation features have tripled our pipeline capacity.",
+                  author: "Emily Watson",
+                  role: "CEO, NextGen Staffing",
+                  rating: 5
+                }
+              ].map((testimonial, index) => (
+                <div 
+                  key={index}
+                  className="glass-card-premium glow-hover rounded-2xl p-8 animate-fade-in-up"
+                  style={{animationDelay: `${0.1 * index}s`}}
+                >
+                  <div className="flex gap-1 mb-4">
+                    {[...Array(testimonial.rating)].map((_, i) => (
+                      <Sparkles key={i} className="w-4 h-4 text-primary fill-primary" />
+                    ))}
+                  </div>
+                  <p className="text-muted-foreground mb-6 italic">"{testimonial.quote}"</p>
+                  <div>
+                    <p className="text-foreground font-semibold">{testimonial.author}</p>
+                    <p className="text-primary text-sm">{testimonial.role}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </section>
+
+        {/* Why Choose Us Section */}
+        <section className="py-20 px-6 border-t border-border/50">
+          <div className="max-w-7xl mx-auto">
+            <div className="text-center mb-16">
+              <h2 className="text-3xl md:text-4xl font-bold text-foreground mb-4">
+                Why Recruiters Choose Us
+              </h2>
+            </div>
+
+            <div className="grid md:grid-cols-4 gap-6">
+              {[
+                { icon: ShieldCheck, title: "Enterprise Security", desc: "SOC 2 compliant with end-to-end encryption" },
+                { icon: Clock, title: "24/7 Availability", desc: "Always-on platform with 99.9% uptime" },
+                { icon: Headphones, title: "Priority Support", desc: "Dedicated success managers for all plans" },
+                { icon: CheckCircle, title: "14-Day Free Trial", desc: "No credit card required to get started" }
+              ].map((item, index) => (
+                <div key={index} className="text-center animate-fade-in-up" style={{animationDelay: `${0.1 * index}s`}}>
+                  <div className="w-14 h-14 rounded-xl bg-primary/10 flex items-center justify-center mx-auto mb-4">
+                    <item.icon className="w-7 h-7 text-primary" />
+                  </div>
+                  <h3 className="text-lg font-bold text-foreground mb-2">{item.title}</h3>
+                  <p className="text-muted-foreground text-sm">{item.desc}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+        </section>
       </main>
+
+      <Footer />
     </div>
   );
 };

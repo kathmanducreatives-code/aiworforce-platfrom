@@ -1,16 +1,17 @@
 import { useEffect, useState, useCallback, useRef } from "react";
 import { useNavigate } from "react-router-dom";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, Sparkles, Users, TrendingUp, Search as SearchIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import { toast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { leadScraperApi } from "@/services/leadScraperApi";
-import { sessionApi } from "@/services/sessionApi";
 import { StatsCards } from "@/components/lead-scraper/StatsCards";
 import { SearchForm, type SearchFormData } from "@/components/lead-scraper/SearchForm";
 import { LeadTable, type LinkedInLead } from "@/components/lead-scraper/LeadTable";
 import { SavedSearches } from "@/components/lead-scraper/SavedSearches";
 import { NameSearchDialog } from "@/components/lead-scraper/NameSearchDialog";
+import PremiumBackground from "@/components/landing/PremiumBackground";
 
 export default function LeadScraper() {
   const navigate = useNavigate();
@@ -253,14 +254,10 @@ export default function LeadScraper() {
   };
 
   return (
-    <div className="min-h-screen bg-background">
-      {/* Subtle background gradient */}
-      <div className="fixed inset-0 overflow-hidden pointer-events-none">
-        <div className="absolute top-0 right-0 w-[600px] h-[600px] bg-primary/3 rounded-full blur-3xl" />
-        <div className="absolute bottom-0 left-0 w-[400px] h-[400px] bg-cyan-500/3 rounded-full blur-3xl" />
-      </div>
+    <div className="min-h-screen bg-background relative overflow-hidden">
+      <PremiumBackground />
 
-      <div className="relative container mx-auto px-4 py-6 max-w-7xl">
+      <div className="relative z-10 container mx-auto px-4 py-6 max-w-7xl">
         {/* Header */}
         <header className="mb-8">
           <div className="flex items-center gap-4">
@@ -272,13 +269,18 @@ export default function LeadScraper() {
             >
               <ArrowLeft className="w-5 h-5" />
             </Button>
-            <div>
-              <h1 className="text-2xl sm:text-3xl font-bold text-foreground">
-                LinkedIn Lead Scraper
-              </h1>
-              <p className="text-muted-foreground text-sm mt-0.5">
-                Discover and connect with top talent
-              </p>
+            <div className="flex items-center gap-3">
+              <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-primary to-primary-dark flex items-center justify-center shadow-lg shadow-primary/20">
+                <SearchIcon className="w-6 h-6 text-primary-foreground" />
+              </div>
+              <div>
+                <h1 className="text-2xl sm:text-3xl font-bold gradient-heading">
+                  LinkedIn Lead Scraper
+                </h1>
+                <p className="text-muted-foreground text-sm mt-0.5">
+                  Discover and connect with top talent
+                </p>
+              </div>
             </div>
           </div>
         </header>
@@ -303,7 +305,7 @@ export default function LeadScraper() {
             <SearchForm onSubmit={handleFormSubmit} isLoading={isLoading} />
 
             {/* Results Section */}
-            <section className="rounded-xl border border-border bg-card p-6">
+            <section className="rounded-xl border border-border/50 bg-card/50 backdrop-blur-sm p-6 glow-hover">
               <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-6">
                 <div>
                   <h2 className="text-xl font-semibold text-foreground">

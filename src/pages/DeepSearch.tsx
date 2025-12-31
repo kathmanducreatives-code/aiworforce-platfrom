@@ -12,6 +12,7 @@ import { Input } from "@/components/ui/input";
 import { CandidateCard } from "@/components/lead-scraper/CandidateCard";
 import { AnalyzedCandidateCard } from "@/components/lead-scraper/AnalyzedCandidateCard";
 import { SavedSearches } from "@/components/lead-scraper/SavedSearches";
+import PremiumBackground from "@/components/landing/PremiumBackground";
 
 interface LinkedInCandidate {
   id: string;
@@ -283,15 +284,11 @@ export default function DeepSearch() {
   const totalAnalyzed = allAnalyzedResults.length;
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-background via-background to-primary/5">
-      {/* Decorative background elements */}
-      <div className="fixed inset-0 overflow-hidden pointer-events-none">
-        <div className="absolute top-20 left-10 w-72 h-72 bg-primary/5 rounded-full blur-3xl" />
-        <div className="absolute bottom-20 right-10 w-96 h-96 bg-cyan-500/5 rounded-full blur-3xl" />
-      </div>
+    <div className="min-h-screen bg-background relative overflow-hidden">
+      <PremiumBackground />
 
       {/* Header */}
-      <div className="border-b border-border/50 bg-card/30 backdrop-blur-lg sticky top-0 z-10 shadow-sm">
+      <div className="border-b border-border/50 bg-card/30 backdrop-blur-lg sticky top-0 z-10 shadow-sm relative">
         <div className="container mx-auto px-4 py-6">
           {/* Top row - Logo and Title */}
           <div className="flex items-center justify-between mb-4">
