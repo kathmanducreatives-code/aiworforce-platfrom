@@ -189,7 +189,7 @@ const CreateScreeningDialog = ({
         },
       };
 
-      const webhookResponse = await fetch('https://siraa.app.n8n.cloud/webhook/screening', {
+      const webhookResponse = await fetch('https://n8n.prasidha.me/webhook/screening', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(webhookPayload),

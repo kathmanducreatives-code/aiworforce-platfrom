@@ -11,7 +11,7 @@ const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
 const RESEND_API_KEY = Deno.env.get('RESEND_API_KEY');
 
 // n8n webhook URL for screening backend
-const N8N_WEBHOOK_URL = 'https://siraa.app.n8n.cloud/webhook/screening';
+const N8N_WEBHOOK_URL = 'https://n8n.prasidha.me/webhook/screening';
 
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
