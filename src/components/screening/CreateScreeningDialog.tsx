@@ -189,7 +189,7 @@ const CreateScreeningDialog = ({
         },
       };
 
-      const webhookResponse = await fetch('https://n8n.prasidha.me/webhook/screening', {
+      const webhookResponse = await fetch('https://n8n.prasidha.me/webhook/behavioral-screening', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(webhookPayload),
