@@ -13,7 +13,7 @@ export interface LeadScraperResponse {
 }
 
 // n8n webhook URL for LinkedIn Lead Scraper
-const N8N_LEAD_SCRAPER_WEBHOOK_URL = "https://siraa.app.n8n.cloud/webhook/4e7f4a2b-3994-4dcd-945b-48f388139049";
+const N8N_LEAD_SCRAPER_WEBHOOK_URL = "https://n8n.prasidha.me/webhook/4e7f4a2b-3994-4dcd-945b-48f388139049";
 
 export const leadScraperApi = {
   async scrapeLeads(formData: LeadScraperFormData, sessionId?: string): Promise<LeadScraperResponse> {
