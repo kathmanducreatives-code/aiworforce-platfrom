@@ -1,8 +1,7 @@
 import { useEffect, useState, useCallback, useRef } from "react";
 import { useNavigate } from "react-router-dom";
-import { ArrowLeft, Sparkles, Users, TrendingUp, Search as SearchIcon } from "lucide-react";
+import { ArrowLeft, Search as SearchIcon, PanelLeftClose, PanelLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { toast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { leadScraperApi } from "@/services/leadScraperApi";
@@ -11,10 +10,12 @@ import { SearchForm, type SearchFormData } from "@/components/lead-scraper/Searc
 import { LeadTable, type LinkedInLead } from "@/components/lead-scraper/LeadTable";
 import { SavedSearches } from "@/components/lead-scraper/SavedSearches";
 import { NameSearchDialog } from "@/components/lead-scraper/NameSearchDialog";
-import PremiumBackground from "@/components/landing/PremiumBackground";
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
+import { useIsMobile } from "@/hooks/use-mobile";
 
 export default function LeadScraper() {
   const navigate = useNavigate();
+  const isMobile = useIsMobile();
   const [leads, setLeads] = useState<LinkedInLead[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [isFetchingLeads, setIsFetchingLeads] = useState(true);
@@ -23,6 +24,7 @@ export default function LeadScraper() {
   const [nameDialogOpen, setNameDialogOpen] = useState(false);
   const [pendingFormData, setPendingFormData] = useState<SearchFormData | null>(null);
   const [refreshTrigger, setRefreshTrigger] = useState(0);
+  const [showSavedSearches, setShowSavedSearches] = useState(true);
   const lastToastTime = useRef(0);
   const pendingLeads = useRef<LinkedInLead[]>([]);
   const activeSessionIdRef = useRef<string | null>(null);
@@ -253,13 +255,37 @@ export default function LeadScraper() {
     });
   };
 
-  return (
-    <div className="min-h-screen bg-background relative overflow-hidden">
-      <PremiumBackground />
+  // Mobile/Tablet: Sheet for Saved Searches
+  const SavedSearchesMobile = () => (
+    <Sheet>
+      <SheetTrigger asChild>
+        <Button variant="outline" size="sm" className="gap-2">
+          <PanelLeft className="w-4 h-4" />
+          Saved Searches
+        </Button>
+      </SheetTrigger>
+      <SheetContent side="left" className="w-80 p-0">
+        <SheetHeader className="p-4 border-b">
+          <SheetTitle>Saved Searches</SheetTitle>
+        </SheetHeader>
+        <div className="p-4">
+          <SavedSearches
+            activeSessionId={activeSessionId}
+            onSessionSelect={(id) => {
+              fetchLeads(id);
+            }}
+            refreshTrigger={refreshTrigger}
+          />
+        </div>
+      </SheetContent>
+    </Sheet>
+  );
 
-      <div className="relative z-10 container mx-auto px-4 py-6 max-w-7xl">
-        {/* Header */}
-        <header className="mb-8">
+  return (
+    <div className="w-full px-6 py-6">
+      {/* Header */}
+      <header className="mb-6">
+        <div className="flex items-center justify-between">
           <div className="flex items-center gap-4">
             <Button
               variant="ghost"
@@ -270,75 +296,103 @@ export default function LeadScraper() {
               <ArrowLeft className="w-5 h-5" />
             </Button>
             <div className="flex items-center gap-3">
-              <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-primary to-primary-dark flex items-center justify-center shadow-lg shadow-primary/20">
+              <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-primary to-primary/70 flex items-center justify-center shadow-lg shadow-primary/20">
                 <SearchIcon className="w-6 h-6 text-primary-foreground" />
               </div>
               <div>
-                <h1 className="text-2xl sm:text-3xl font-bold gradient-heading">
+                <h1 className="text-2xl font-bold text-foreground">
                   LinkedIn Lead Scraper
                 </h1>
-                <p className="text-muted-foreground text-sm mt-0.5">
+                <p className="text-muted-foreground text-sm">
                   Discover and connect with top talent
                 </p>
               </div>
             </div>
           </div>
-        </header>
+          
+          {/* Mobile: Show sheet trigger / Desktop: Show toggle */}
+          <div className="flex items-center gap-2">
+            {isMobile ? (
+              <SavedSearchesMobile />
+            ) : (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setShowSavedSearches(!showSavedSearches)}
+                className="gap-2"
+              >
+                {showSavedSearches ? (
+                  <>
+                    <PanelLeftClose className="w-4 h-4" />
+                    <span className="hidden sm:inline">Hide Searches</span>
+                  </>
+                ) : (
+                  <>
+                    <PanelLeft className="w-4 h-4" />
+                    <span className="hidden sm:inline">Show Searches</span>
+                  </>
+                )}
+              </Button>
+            )}
+          </div>
+        </div>
+      </header>
 
-        {/* Stats Cards */}
-        <StatsCards />
+      {/* Stats Cards */}
+      <StatsCards />
 
-        {/* Main Content Grid */}
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-          {/* Left Column - Saved Searches */}
-          <aside className="lg:col-span-4 xl:col-span-3">
+      {/* Main Content - Flex Layout */}
+      <div className="flex gap-6">
+        {/* Left Column - Saved Searches (Desktop Only, Collapsible) */}
+        {!isMobile && showSavedSearches && (
+          <aside className="w-72 shrink-0 transition-all duration-300">
             <SavedSearches
               activeSessionId={activeSessionId}
               onSessionSelect={fetchLeads}
               refreshTrigger={refreshTrigger}
             />
           </aside>
+        )}
 
-          {/* Right Column - Search Form & Results */}
-          <main className="lg:col-span-8 xl:col-span-9 space-y-6">
-            {/* Search Form */}
-            <SearchForm onSubmit={handleFormSubmit} isLoading={isLoading} />
+        {/* Right Column - Search Form & Results */}
+        <main className="flex-1 min-w-0 space-y-6">
+          {/* Search Form */}
+          <SearchForm onSubmit={handleFormSubmit} isLoading={isLoading} />
 
-            {/* Results Section */}
-            <section className="rounded-xl border border-border/50 bg-card/50 backdrop-blur-sm p-6 glow-hover">
-              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-6">
-                <div>
-                  <h2 className="text-xl font-semibold text-foreground">
-                    {activeSessionName ? activeSessionName : "All Leads"}
-                  </h2>
-                  <p className="text-sm text-muted-foreground mt-1">
-                    {leads.length} lead{leads.length !== 1 ? "s" : ""} found
-                    {activeSessionId && (
-                      <Button
-                        variant="link"
-                        size="sm"
-                        className="text-sm text-primary ml-2 h-auto p-0"
-                        onClick={() => fetchLeads(null)}
-                      >
-                        View All
-                      </Button>
-                    )}
-                  </p>
-                </div>
+          {/* Results Section */}
+          <section className="rounded-xl border border-border/50 bg-card/80 backdrop-blur-sm p-6">
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-6">
+              <div>
+                <h2 className="text-xl font-semibold text-foreground">
+                  {activeSessionName ? activeSessionName : "All Leads"}
+                </h2>
+                <p className="text-sm text-muted-foreground mt-1">
+                  {leads.length} lead{leads.length !== 1 ? "s" : ""} found
+                  {activeSessionId && (
+                    <Button
+                      variant="link"
+                      size="sm"
+                      className="text-sm text-primary ml-2 h-auto p-0"
+                      onClick={() => fetchLeads(null)}
+                    >
+                      View All
+                    </Button>
+                  )}
+                </p>
               </div>
+            </div>
 
-              <LeadTable
-                leads={leads}
-                isLoading={isFetchingLeads}
-                onDownloadCSV={downloadCSV}
-                onLeadDeleted={() => {
-                  fetchLeads(activeSessionId);
-                  setRefreshTrigger((prev) => prev + 1);
-                }}
-              />
-            </section>
-          </main>
-        </div>
+            <LeadTable
+              leads={leads}
+              isLoading={isFetchingLeads}
+              onDownloadCSV={downloadCSV}
+              onLeadDeleted={() => {
+                fetchLeads(activeSessionId);
+                setRefreshTrigger((prev) => prev + 1);
+              }}
+            />
+          </section>
+        </main>
       </div>
 
       {/* Name Search Dialog */}

@@ -241,9 +241,9 @@ export const LeadTable = ({ leads, isLoading, onDownloadCSV, onLeadDeleted }: Le
         </div>
       </div>
 
-      {/* Table */}
-      <div className="rounded-lg border border-border overflow-hidden">
-        <Table>
+      {/* Table with horizontal scroll */}
+      <div className="rounded-lg border border-border overflow-x-auto">
+        <Table className="min-w-[800px]">
           <TableHeader>
             <TableRow className="hover:bg-transparent bg-muted/30">
               <TableHead className="h-11">

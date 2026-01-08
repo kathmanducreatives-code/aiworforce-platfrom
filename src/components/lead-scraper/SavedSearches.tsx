@@ -199,11 +199,11 @@ export const SavedSearches = ({
   }
 
   return (
-    <div className="rounded-xl border border-border bg-card p-6 h-fit">
-      <div className="flex items-center justify-between mb-4">
+    <div className="rounded-xl border border-border/50 bg-card/80 backdrop-blur-sm p-4 h-fit">
+      <div className="flex items-center justify-between mb-3">
         <div className="flex items-center gap-2">
-          <Folder className="w-5 h-5 text-primary" />
-          <h2 className="text-lg font-semibold text-foreground">Saved Searches</h2>
+          <Folder className="w-4 h-4 text-primary" />
+          <h2 className="text-base font-semibold text-foreground">Saved Searches</h2>
         </div>
         <Badge variant="secondary" className="text-xs">
           {sessions.length}
@@ -239,8 +239,8 @@ export const SavedSearches = ({
           </p>
         </div>
       ) : (
-        <ScrollArea className="h-[380px]">
-          <div className="space-y-2 pr-2">
+        <ScrollArea className="h-[320px]">
+          <div className="space-y-1.5 pr-2">
             {sessions.map((session) => {
               const isExpanded = expandedSessions.has(session.id);
               const isActive = activeSessionId === session.id;

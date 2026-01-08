@@ -10,11 +10,21 @@ interface MainLayoutProps {
   children: ReactNode;
 }
 
+// Routes that benefit from collapsed sidebar for more screen space
+const DATA_HEAVY_ROUTES = ['/lead-scraper', '/deep-search', '/candidates'];
+
 const MainLayout = ({ children }: MainLayoutProps) => {
   const isMobile = useIsMobile();
   const location = useLocation();
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [showCollaboration, setShowCollaboration] = useState(false);
+
+  // Auto-collapse sidebar on data-heavy routes for more screen space
+  useEffect(() => {
+    if (DATA_HEAVY_ROUTES.includes(location.pathname)) {
+      setIsSidebarCollapsed(true);
+    }
+  }, [location.pathname]);
 
   // Auto-close collaboration panel when navigating to a different page
   useEffect(() => {

@@ -1029,6 +1029,7 @@ export type Database = {
           profile_picture: string | null
           scraped_at: string
           search_criteria: Json | null
+          search_id: string | null
           session_id: string | null
           updated_at: string
         }
@@ -1046,6 +1047,7 @@ export type Database = {
           profile_picture?: string | null
           scraped_at?: string
           search_criteria?: Json | null
+          search_id?: string | null
           session_id?: string | null
           updated_at?: string
         }
@@ -1063,6 +1065,7 @@ export type Database = {
           profile_picture?: string | null
           scraped_at?: string
           search_criteria?: Json | null
+          search_id?: string | null
           session_id?: string | null
           updated_at?: string
         }

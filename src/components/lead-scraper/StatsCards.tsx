@@ -32,15 +32,15 @@ const StatCard = ({ icon, label, value, suffix }: StatCardProps) => {
   }, [value]);
 
   return (
-    <div className="rounded-xl border border-border bg-card p-5">
+    <div className="rounded-xl border border-border/50 bg-card/80 backdrop-blur-sm p-5 hover:border-primary/30 transition-colors">
       <div className="flex items-center justify-between">
-        <div>
+        <div className="min-w-0">
           <p className="text-sm text-muted-foreground font-medium">{label}</p>
-          <h3 className="text-3xl font-bold mt-1.5 text-foreground">
+          <h3 className="text-2xl sm:text-3xl font-bold mt-1.5 text-foreground tabular-nums">
             {displayValue.toLocaleString()}{suffix}
           </h3>
         </div>
-        <div className="h-12 w-12 rounded-xl bg-primary/10 flex items-center justify-center">
+        <div className="h-10 w-10 sm:h-12 sm:w-12 rounded-xl bg-primary/10 flex items-center justify-center shrink-0">
           {icon}
         </div>
       </div>
