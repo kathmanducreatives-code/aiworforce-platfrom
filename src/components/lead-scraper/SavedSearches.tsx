@@ -199,51 +199,57 @@ export const SavedSearches = ({
   }
 
   return (
-    <div className="rounded-xl border border-border/50 bg-card/80 backdrop-blur-sm p-4 h-fit">
-      <div className="flex items-center justify-between mb-3">
+    <div className="rounded-xl border border-border/50 bg-card/80 backdrop-blur-sm shadow-sm h-fit transition-all duration-200 hover:shadow-md">
+      {/* Header */}
+      <div className="flex items-center justify-between p-4 border-b border-border/30">
         <div className="flex items-center gap-2">
-          <Folder className="w-4 h-4 text-primary" />
-          <h2 className="text-base font-semibold text-foreground">Saved Searches</h2>
+          <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center">
+            <Folder className="w-4 h-4 text-primary" />
+          </div>
+          <h2 className="text-sm font-semibold text-foreground">Saved Searches</h2>
         </div>
-        <Badge variant="secondary" className="text-xs">
+        <Badge variant="secondary" className="text-xs font-medium">
           {sessions.length}
         </Badge>
       </div>
 
-      <Button
-        variant={!activeSessionId ? "default" : "outline"}
-        size="sm"
-        onClick={() => onSessionSelect(null)}
-        className="w-full mb-3 h-9"
-      >
-        View All Leads
-      </Button>
+      <div className="p-3">
+        <Button
+          variant={!activeSessionId ? "default" : "outline"}
+          size="sm"
+          onClick={() => onSessionSelect(null)}
+          className="w-full h-9 text-sm font-medium transition-all duration-200"
+        >
+          View All Leads
+        </Button>
+      </div>
 
       {unassignedCount > 0 && (
-        <div className="mb-4 p-2 rounded-lg border border-border bg-muted/30 flex items-center justify-between">
+        <div className="mx-3 mb-3 p-2.5 rounded-lg border border-amber-500/20 bg-amber-500/5 flex items-center justify-between">
           <span className="text-xs text-muted-foreground">Unassigned leads</span>
-          <Badge variant="outline" className="text-xs">
+          <Badge variant="outline" className="text-xs border-amber-500/30 text-amber-600">
             {unassignedCount}
           </Badge>
         </div>
       )}
 
       {sessions.length === 0 ? (
-        <div className="flex flex-col items-center justify-center py-10 text-center">
-          <div className="w-12 h-12 rounded-full bg-muted flex items-center justify-center mb-3">
-            <Folder className="w-6 h-6 text-muted-foreground" />
+        <div className="flex flex-col items-center justify-center py-8 px-4 text-center">
+          <div className="w-12 h-12 rounded-full bg-muted/50 flex items-center justify-center mb-3">
+            <Folder className="w-6 h-6 text-muted-foreground/60" />
           </div>
           <h3 className="text-sm font-medium text-foreground mb-1">No saved searches</h3>
-          <p className="text-xs text-muted-foreground">
+          <p className="text-xs text-muted-foreground leading-relaxed">
             Start a search to see results here
           </p>
         </div>
       ) : (
-        <ScrollArea className="h-[320px]">
-          <div className="space-y-1.5 pr-2">
+        <ScrollArea className="h-[280px]">
+          <div className="space-y-1.5 px-3 pb-3">
             {sessions.map((session) => {
               const isExpanded = expandedSessions.has(session.id);
               const isActive = activeSessionId === session.id;
+              const sessionName = getSessionName(session);
 
               return (
                 <Collapsible
@@ -252,42 +258,52 @@ export const SavedSearches = ({
                   onOpenChange={() => toggleExpanded(session.id)}
                 >
                   <div
-                    className={`rounded-lg border transition-all duration-200 ${
+                    className={`rounded-lg border transition-all duration-200 overflow-hidden ${
                       isActive
-                        ? "border-primary bg-primary/5"
-                        : "border-border hover:border-primary/40"
+                        ? "border-primary/50 bg-primary/5 shadow-sm"
+                        : "border-border/50 hover:border-primary/30 hover:bg-muted/30"
                     }`}
                   >
-                    <div className="flex items-center gap-2 p-3">
+                    <div className="flex items-center gap-2 p-2.5">
                       <CollapsibleTrigger asChild>
-                        <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0">
+                        <Button 
+                          variant="ghost" 
+                          size="icon" 
+                          className="h-6 w-6 shrink-0 hover:bg-muted/50"
+                        >
                           {isExpanded ? (
-                            <ChevronDown className="w-4 h-4" />
+                            <ChevronDown className="w-3.5 h-3.5" />
                           ) : (
-                            <ChevronRight className="w-4 h-4" />
+                            <ChevronRight className="w-3.5 h-3.5" />
                           )}
                         </Button>
                       </CollapsibleTrigger>
 
                       <div
-                        className="flex-1 min-w-0 cursor-pointer"
+                        className="flex-1 min-w-0 cursor-pointer group"
                         onClick={() => onSessionSelect(session.id)}
                       >
                         <div className="flex items-center gap-2">
                           {isActive ? (
                             <FolderOpen className="w-4 h-4 text-primary shrink-0" />
                           ) : (
-                            <Folder className="w-4 h-4 text-muted-foreground shrink-0" />
+                            <Folder className="w-4 h-4 text-muted-foreground group-hover:text-primary/70 shrink-0 transition-colors" />
                           )}
-                          <span className="font-medium text-sm truncate text-foreground">
-                            {getSessionName(session)}
+                          <span 
+                            className="font-medium text-xs text-foreground truncate max-w-[120px]"
+                            title={sessionName}
+                          >
+                            {sessionName}
                           </span>
                         </div>
                       </div>
 
-                      <div className="flex items-center gap-1.5 shrink-0">
-                        <Badge variant="secondary" className="text-xs h-6 px-2">
-                          <Users className="w-3 h-3 mr-1" />
+                      <div className="flex items-center gap-1 shrink-0">
+                        <Badge 
+                          variant="secondary" 
+                          className="text-[10px] h-5 px-1.5 font-medium tabular-nums"
+                        >
+                          <Users className="w-2.5 h-2.5 mr-0.5" />
                           {session.actual_lead_count ?? session.total_leads}
                         </Badge>
                         
@@ -296,17 +312,17 @@ export const SavedSearches = ({
                             <Button
                               variant="ghost"
                               size="icon"
-                              className="h-7 w-7 text-muted-foreground hover:text-destructive hover:bg-destructive/10"
+                              className="h-6 w-6 text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"
                               onClick={(e) => e.stopPropagation()}
                             >
-                              <Trash2 className="w-3.5 h-3.5" />
+                              <Trash2 className="w-3 h-3" />
                             </Button>
                           </AlertDialogTrigger>
                           <AlertDialogContent>
                             <AlertDialogHeader>
                               <AlertDialogTitle>Delete Search?</AlertDialogTitle>
                               <AlertDialogDescription>
-                                This will permanently delete "{getSessionName(session)}" and all {session.actual_lead_count ?? session.total_leads} leads in it. This action cannot be undone.
+                                This will permanently delete "{sessionName}" and all {session.actual_lead_count ?? session.total_leads} leads in it. This action cannot be undone.
                               </AlertDialogDescription>
                             </AlertDialogHeader>
                             <AlertDialogFooter>
@@ -324,8 +340,8 @@ export const SavedSearches = ({
                     </div>
 
                     <CollapsibleContent>
-                      <div className="px-3 pb-3 pt-0 border-t border-border">
-                        <div className="flex items-center gap-3 text-xs text-muted-foreground pt-3">
+                      <div className="px-2.5 pb-2.5 pt-0 border-t border-border/30">
+                        <div className="flex items-center gap-2 text-[10px] text-muted-foreground pt-2.5 flex-wrap">
                           <div className="flex items-center gap-1">
                             <Calendar className="w-3 h-3" />
                             <span>
@@ -336,7 +352,7 @@ export const SavedSearches = ({
                           </div>
                           <Badge
                             variant={session.status === "completed" ? "default" : "secondary"}
-                            className="text-xs h-5 capitalize"
+                            className="text-[10px] h-4 capitalize"
                           >
                             {session.status}
                           </Badge>
@@ -344,7 +360,7 @@ export const SavedSearches = ({
                         <Button
                           variant="outline"
                           size="sm"
-                          className="w-full mt-3 h-8"
+                          className="w-full mt-2.5 h-7 text-xs"
                           onClick={() => onSessionSelect(session.id)}
                         >
                           View Leads

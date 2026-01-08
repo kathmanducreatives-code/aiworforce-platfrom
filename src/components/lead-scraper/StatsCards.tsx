@@ -32,15 +32,15 @@ const StatCard = ({ icon, label, value, suffix }: StatCardProps) => {
   }, [value]);
 
   return (
-    <div className="rounded-xl border border-border/50 bg-card/80 backdrop-blur-sm p-5 hover:border-primary/30 transition-colors">
-      <div className="flex items-center justify-between">
-        <div className="min-w-0">
-          <p className="text-sm text-muted-foreground font-medium">{label}</p>
-          <h3 className="text-2xl sm:text-3xl font-bold mt-1.5 text-foreground tabular-nums">
+    <div className="rounded-xl border border-border/50 bg-card/80 backdrop-blur-sm p-4 lg:p-5 hover:border-primary/30 hover:shadow-md transition-all duration-200 group">
+      <div className="flex items-center justify-between gap-3">
+        <div className="min-w-0 flex-1">
+          <p className="text-xs lg:text-sm text-muted-foreground font-medium truncate">{label}</p>
+          <h3 className="text-xl sm:text-2xl lg:text-3xl font-bold mt-1 text-foreground tabular-nums">
             {displayValue.toLocaleString()}{suffix}
           </h3>
         </div>
-        <div className="h-10 w-10 sm:h-12 sm:w-12 rounded-xl bg-primary/10 flex items-center justify-center shrink-0">
+        <div className="h-9 w-9 sm:h-10 sm:w-10 lg:h-12 lg:w-12 rounded-xl bg-primary/10 flex items-center justify-center shrink-0 group-hover:bg-primary/15 transition-colors">
           {icon}
         </div>
       </div>
@@ -106,19 +106,19 @@ export const StatsCards = () => {
   }, []);
 
   return (
-    <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
+    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 lg:gap-4">
       <StatCard
-        icon={<Users className="w-5 h-5 text-primary" />}
+        icon={<Users className="w-4 h-4 lg:w-5 lg:h-5 text-primary" />}
         label="Total Leads"
         value={totalLeads}
       />
       <StatCard
-        icon={<Clock className="w-5 h-5 text-primary" />}
+        icon={<Clock className="w-4 h-4 lg:w-5 lg:h-5 text-primary" />}
         label="Recent Scrapes"
         value={recentScrapes}
       />
       <StatCard
-        icon={<TrendingUp className="w-5 h-5 text-primary" />}
+        icon={<TrendingUp className="w-4 h-4 lg:w-5 lg:h-5 text-primary" />}
         label="Success Rate"
         value={successRate}
         suffix="%"

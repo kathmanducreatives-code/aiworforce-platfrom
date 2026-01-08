@@ -282,28 +282,28 @@ export default function LeadScraper() {
   );
 
   return (
-    <div className="w-full px-6 py-6">
+    <div className="w-full px-4 sm:px-6 lg:px-8 py-4 sm:py-6 max-w-[1800px] mx-auto">
       {/* Header */}
       <header className="mb-6">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-4">
+        <div className="flex items-center justify-between gap-4">
+          <div className="flex items-center gap-3 sm:gap-4 min-w-0">
             <Button
               variant="ghost"
               size="icon"
               onClick={() => navigate("/dashboard")}
-              className="h-10 w-10 rounded-xl hover:bg-primary/10 transition-colors"
+              className="h-9 w-9 sm:h-10 sm:w-10 rounded-xl hover:bg-primary/10 transition-all duration-200 shrink-0"
             >
-              <ArrowLeft className="w-5 h-5" />
+              <ArrowLeft className="w-4 h-4 sm:w-5 sm:h-5" />
             </Button>
-            <div className="flex items-center gap-3">
-              <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-primary to-primary/70 flex items-center justify-center shadow-lg shadow-primary/20">
-                <SearchIcon className="w-6 h-6 text-primary-foreground" />
+            <div className="flex items-center gap-3 min-w-0">
+              <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl bg-gradient-to-br from-primary to-primary/70 flex items-center justify-center shadow-lg shadow-primary/20 shrink-0">
+                <SearchIcon className="w-5 h-5 sm:w-6 sm:h-6 text-primary-foreground" />
               </div>
-              <div>
-                <h1 className="text-2xl font-bold text-foreground">
+              <div className="min-w-0">
+                <h1 className="text-lg sm:text-2xl font-bold text-foreground truncate">
                   LinkedIn Lead Scraper
                 </h1>
-                <p className="text-muted-foreground text-sm">
+                <p className="text-muted-foreground text-xs sm:text-sm hidden sm:block">
                   Discover and connect with top talent
                 </p>
               </div>
@@ -311,7 +311,7 @@ export default function LeadScraper() {
           </div>
           
           {/* Mobile: Show sheet trigger / Desktop: Show toggle */}
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 shrink-0">
             {isMobile ? (
               <SavedSearchesMobile />
             ) : (
@@ -319,17 +319,17 @@ export default function LeadScraper() {
                 variant="outline"
                 size="sm"
                 onClick={() => setShowSavedSearches(!showSavedSearches)}
-                className="gap-2"
+                className="gap-2 h-9 transition-all duration-200 hover:bg-primary/5 hover:border-primary/30"
               >
                 {showSavedSearches ? (
                   <>
                     <PanelLeftClose className="w-4 h-4" />
-                    <span className="hidden sm:inline">Hide Searches</span>
+                    <span className="hidden lg:inline">Hide Searches</span>
                   </>
                 ) : (
                   <>
                     <PanelLeft className="w-4 h-4" />
-                    <span className="hidden sm:inline">Show Searches</span>
+                    <span className="hidden lg:inline">Show Searches</span>
                   </>
                 )}
               </Button>
@@ -339,40 +339,44 @@ export default function LeadScraper() {
       </header>
 
       {/* Stats Cards */}
-      <StatsCards />
+      <div className="mb-6">
+        <StatsCards />
+      </div>
 
       {/* Main Content - Flex Layout */}
-      <div className="flex gap-6">
+      <div className="flex gap-4 lg:gap-6">
         {/* Left Column - Saved Searches (Desktop Only, Collapsible) */}
         {!isMobile && showSavedSearches && (
-          <aside className="w-72 shrink-0 transition-all duration-300">
-            <SavedSearches
-              activeSessionId={activeSessionId}
-              onSessionSelect={fetchLeads}
-              refreshTrigger={refreshTrigger}
-            />
+          <aside className="w-64 xl:w-72 shrink-0 transition-all duration-300 ease-in-out">
+            <div className="sticky top-6">
+              <SavedSearches
+                activeSessionId={activeSessionId}
+                onSessionSelect={fetchLeads}
+                refreshTrigger={refreshTrigger}
+              />
+            </div>
           </aside>
         )}
 
         {/* Right Column - Search Form & Results */}
-        <main className="flex-1 min-w-0 space-y-6">
+        <main className="flex-1 min-w-0 space-y-4 lg:space-y-6">
           {/* Search Form */}
           <SearchForm onSubmit={handleFormSubmit} isLoading={isLoading} />
 
           {/* Results Section */}
-          <section className="rounded-xl border border-border/50 bg-card/80 backdrop-blur-sm p-6">
-            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-6">
-              <div>
-                <h2 className="text-xl font-semibold text-foreground">
+          <section className="rounded-xl border border-border/50 bg-card/80 backdrop-blur-sm shadow-sm transition-all duration-200 hover:shadow-md overflow-hidden">
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 p-4 lg:p-6 border-b border-border/30">
+              <div className="min-w-0">
+                <h2 className="text-lg lg:text-xl font-semibold text-foreground truncate">
                   {activeSessionName ? activeSessionName : "All Leads"}
                 </h2>
-                <p className="text-sm text-muted-foreground mt-1">
+                <p className="text-xs sm:text-sm text-muted-foreground mt-0.5">
                   {leads.length} lead{leads.length !== 1 ? "s" : ""} found
                   {activeSessionId && (
                     <Button
                       variant="link"
                       size="sm"
-                      className="text-sm text-primary ml-2 h-auto p-0"
+                      className="text-xs sm:text-sm text-primary ml-2 h-auto p-0 hover:underline"
                       onClick={() => fetchLeads(null)}
                     >
                       View All
@@ -382,15 +386,17 @@ export default function LeadScraper() {
               </div>
             </div>
 
-            <LeadTable
-              leads={leads}
-              isLoading={isFetchingLeads}
-              onDownloadCSV={downloadCSV}
-              onLeadDeleted={() => {
-                fetchLeads(activeSessionId);
-                setRefreshTrigger((prev) => prev + 1);
-              }}
-            />
+            <div className="p-4 lg:p-6">
+              <LeadTable
+                leads={leads}
+                isLoading={isFetchingLeads}
+                onDownloadCSV={downloadCSV}
+                onLeadDeleted={() => {
+                  fetchLeads(activeSessionId);
+                  setRefreshTrigger((prev) => prev + 1);
+                }}
+              />
+            </div>
           </section>
         </main>
       </div>
