@@ -130,7 +130,7 @@ export const SearchForm = ({ onSubmit, isLoading }: SearchFormProps) => {
   );
 
   return (
-    <div className="rounded-xl border border-border bg-card p-6">
+    <div className="rounded-xl border border-border/50 bg-card/80 backdrop-blur-sm p-6 hover:border-primary/20 transition-colors">
       <h2 className="text-xl font-semibold text-foreground mb-6">
         Search Filters
       </h2>
