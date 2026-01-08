@@ -194,20 +194,20 @@ export const LeadTable = ({ leads, isLoading, onDownloadCSV, onLeadDeleted }: Le
   return (
     <div className="space-y-4">
       {/* Filter Bar */}
-      <div className="flex flex-col sm:flex-row gap-3">
-        <div className="relative flex-1">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+      <div className="flex flex-col lg:flex-row gap-3">
+        <div className="relative flex-1 min-w-0">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
           <Input
             placeholder="Search by name, job title, or company..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            className="h-10 pl-9 bg-background border-border"
+            className="h-9 lg:h-10 pl-9 bg-background/50 border-border/50 focus:border-primary/50 transition-colors text-sm"
           />
         </div>
         
-        <div className="flex gap-2 flex-wrap sm:flex-nowrap">
+        <div className="flex gap-2 flex-wrap sm:flex-nowrap shrink-0">
           <Select value={experienceFilter} onValueChange={setExperienceFilter}>
-            <SelectTrigger className="h-10 w-full sm:w-[160px] bg-background border-border">
+            <SelectTrigger className="h-9 lg:h-10 w-full sm:w-[140px] bg-background/50 border-border/50 text-sm">
               <SelectValue placeholder="Experience" />
             </SelectTrigger>
             <SelectContent className="bg-card border-border z-50">
@@ -223,9 +223,9 @@ export const LeadTable = ({ leads, isLoading, onDownloadCSV, onLeadDeleted }: Le
             onClick={() => setShowEmailOnly(!showEmailOnly)}
             variant={showEmailOnly ? "default" : "outline"}
             size="sm"
-            className="h-10 gap-2 whitespace-nowrap"
+            className="h-9 lg:h-10 gap-1.5 whitespace-nowrap text-xs lg:text-sm transition-all duration-200"
           >
-            <Mail className="w-4 h-4" />
+            <Mail className="w-3.5 h-3.5" />
             <span className="hidden sm:inline">{showEmailOnly ? "Email Only" : "All"}</span>
           </Button>
           
@@ -233,144 +233,166 @@ export const LeadTable = ({ leads, isLoading, onDownloadCSV, onLeadDeleted }: Le
             onClick={onDownloadCSV}
             variant="outline"
             size="sm"
-            className="h-10 gap-2 whitespace-nowrap"
+            className="h-9 lg:h-10 gap-1.5 whitespace-nowrap text-xs lg:text-sm hover:bg-primary/5 hover:border-primary/30 transition-all duration-200"
           >
-            <Download className="w-4 h-4" />
+            <Download className="w-3.5 h-3.5" />
             <span className="hidden sm:inline">Export</span>
           </Button>
         </div>
       </div>
 
-      {/* Table with horizontal scroll */}
-      <div className="rounded-lg border border-border overflow-x-auto">
-        <Table className="min-w-[800px]">
-          <TableHeader>
-            <TableRow className="hover:bg-transparent bg-muted/30">
-              <TableHead className="h-11">
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => toggleSort("candidate_name")}
-                  className="gap-1 h-8 px-2 -ml-2 hover:bg-transparent font-medium"
+      {/* Table with responsive scroll */}
+      <div className="rounded-lg border border-border/50 bg-background/30 overflow-hidden">
+        <div className="overflow-x-auto scrollbar-thin">
+          <Table className="min-w-[700px]">
+            <TableHeader>
+              <TableRow className="hover:bg-transparent bg-muted/20 border-b border-border/30">
+                <TableHead className="h-10 lg:h-11 w-[180px]">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => toggleSort("candidate_name")}
+                    className="gap-1 h-7 px-1.5 -ml-1.5 hover:bg-muted/50 font-medium text-xs"
+                  >
+                    Name
+                    <ArrowUpDown className="w-3 h-3" />
+                  </Button>
+                </TableHead>
+                <TableHead className="h-10 lg:h-11 w-[160px]">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => toggleSort("job_title")}
+                    className="gap-1 h-7 px-1.5 -ml-1.5 hover:bg-muted/50 font-medium text-xs"
+                  >
+                    Job Title
+                    <ArrowUpDown className="w-3 h-3" />
+                  </Button>
+                </TableHead>
+                <TableHead className="h-10 lg:h-11 w-[140px]">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => toggleSort("company")}
+                    className="gap-1 h-7 px-1.5 -ml-1.5 hover:bg-muted/50 font-medium text-xs"
+                  >
+                    Company
+                    <ArrowUpDown className="w-3 h-3" />
+                  </Button>
+                </TableHead>
+                <TableHead className="h-10 lg:h-11 hidden lg:table-cell w-[120px] text-xs font-medium">Location</TableHead>
+                <TableHead className="h-10 lg:h-11 hidden md:table-cell w-[160px] text-xs font-medium">Email</TableHead>
+                <TableHead className="h-10 lg:h-11 hidden xl:table-cell w-[100px] text-xs font-medium">Experience</TableHead>
+                <TableHead className="h-10 lg:h-11 text-right w-[140px] text-xs font-medium">Actions</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {filteredAndSortedLeads.map((lead) => (
+                <TableRow
+                  key={lead.id}
+                  className="hover:bg-muted/20 transition-colors border-b border-border/20 last:border-0"
                 >
-                  Name
-                  <ArrowUpDown className="w-3 h-3" />
-                </Button>
-              </TableHead>
-              <TableHead className="h-11">
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => toggleSort("job_title")}
-                  className="gap-1 h-8 px-2 -ml-2 hover:bg-transparent font-medium"
-                >
-                  Job Title
-                  <ArrowUpDown className="w-3 h-3" />
-                </Button>
-              </TableHead>
-              <TableHead className="h-11">
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => toggleSort("company")}
-                  className="gap-1 h-8 px-2 -ml-2 hover:bg-transparent font-medium"
-                >
-                  Company
-                  <ArrowUpDown className="w-3 h-3" />
-                </Button>
-              </TableHead>
-              <TableHead className="h-11 hidden lg:table-cell">Location</TableHead>
-              <TableHead className="h-11 hidden md:table-cell">Email</TableHead>
-              <TableHead className="h-11 hidden xl:table-cell">Experience</TableHead>
-              <TableHead className="h-11 text-right">Actions</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {filteredAndSortedLeads.map((lead) => (
-              <TableRow
-                key={lead.id}
-                className="hover:bg-muted/30 transition-colors"
-              >
-                <TableCell className="font-medium py-3">{lead.candidate_name}</TableCell>
-                <TableCell className="py-3">{lead.job_title || "—"}</TableCell>
-                <TableCell className="py-3">{lead.company || "—"}</TableCell>
-                <TableCell className="py-3 text-muted-foreground hidden lg:table-cell">{lead.location || "—"}</TableCell>
-                <TableCell className="py-3 text-muted-foreground hidden md:table-cell">{lead.contact_email || "—"}</TableCell>
-                <TableCell className="py-3 hidden xl:table-cell">
-                  {lead.experience_level ? (
-                    <Badge variant="secondary" className="capitalize text-xs">
-                      {lead.experience_level}
-                    </Badge>
-                  ) : (
-                    "—"
-                  )}
-                </TableCell>
-                <TableCell className="py-3 text-right">
-                  <div className="flex items-center justify-end gap-1">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => handleRunDeepSearch(lead)}
-                      disabled={runningDeepSearch.has(lead.id)}
-                      className="h-8 gap-1.5 text-xs"
-                    >
-                      <Brain className="w-3.5 h-3.5" />
-                      <span className="hidden sm:inline">{runningDeepSearch.has(lead.id) ? "Running..." : "Deep Search"}</span>
-                    </Button>
-                    {lead.linkedin_url && (
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        asChild
-                        className="h-8 w-8 p-0"
-                      >
-                        <a
-                          href={lead.linkedin_url}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                        >
-                          <ExternalLink className="w-3.5 h-3.5" />
-                        </a>
-                      </Button>
+                  <TableCell className="font-medium py-2.5 lg:py-3 text-sm">
+                    <span className="truncate block max-w-[160px]" title={lead.candidate_name}>
+                      {lead.candidate_name}
+                    </span>
+                  </TableCell>
+                  <TableCell className="py-2.5 lg:py-3 text-sm text-muted-foreground">
+                    <span className="truncate block max-w-[140px]" title={lead.job_title || ""}>
+                      {lead.job_title || "—"}
+                    </span>
+                  </TableCell>
+                  <TableCell className="py-2.5 lg:py-3 text-sm text-muted-foreground">
+                    <span className="truncate block max-w-[120px]" title={lead.company || ""}>
+                      {lead.company || "—"}
+                    </span>
+                  </TableCell>
+                  <TableCell className="py-2.5 lg:py-3 text-sm text-muted-foreground hidden lg:table-cell">
+                    <span className="truncate block max-w-[100px]" title={lead.location || ""}>
+                      {lead.location || "—"}
+                    </span>
+                  </TableCell>
+                  <TableCell className="py-2.5 lg:py-3 text-sm text-muted-foreground hidden md:table-cell">
+                    <span className="truncate block max-w-[140px]" title={lead.contact_email || ""}>
+                      {lead.contact_email || "—"}
+                    </span>
+                  </TableCell>
+                  <TableCell className="py-2.5 lg:py-3 hidden xl:table-cell">
+                    {lead.experience_level ? (
+                      <Badge variant="secondary" className="capitalize text-[10px] lg:text-xs">
+                        {lead.experience_level}
+                      </Badge>
+                    ) : (
+                      <span className="text-sm text-muted-foreground">—</span>
                     )}
-                    <AlertDialog>
-                      <AlertDialogTrigger asChild>
+                  </TableCell>
+                  <TableCell className="py-2.5 lg:py-3 text-right">
+                    <div className="flex items-center justify-end gap-0.5 lg:gap-1">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => handleRunDeepSearch(lead)}
+                        disabled={runningDeepSearch.has(lead.id)}
+                        className="h-7 lg:h-8 gap-1 text-[10px] lg:text-xs px-2 lg:px-2.5 hover:bg-primary/5 hover:border-primary/30 transition-all duration-200"
+                      >
+                        <Brain className="w-3 h-3 lg:w-3.5 lg:h-3.5" />
+                        <span className="hidden xl:inline">{runningDeepSearch.has(lead.id) ? "Running..." : "Deep Search"}</span>
+                      </Button>
+                      {lead.linkedin_url && (
                         <Button
                           variant="ghost"
                           size="sm"
-                          className="h-8 w-8 p-0 hover:text-destructive hover:bg-destructive/10"
-                          disabled={deletingLead === lead.id}
+                          asChild
+                          className="h-7 lg:h-8 w-7 lg:w-8 p-0 hover:bg-primary/10 transition-colors"
                         >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </Button>
-                      </AlertDialogTrigger>
-                      <AlertDialogContent>
-                        <AlertDialogHeader>
-                          <AlertDialogTitle>Delete Lead</AlertDialogTitle>
-                          <AlertDialogDescription>
-                            Are you sure you want to delete {lead.candidate_name}? This action cannot be undone.
-                          </AlertDialogDescription>
-                        </AlertDialogHeader>
-                        <AlertDialogFooter>
-                          <AlertDialogCancel>Cancel</AlertDialogCancel>
-                          <AlertDialogAction
-                            onClick={() => handleDeleteLead(lead.id, lead.candidate_name)}
-                            className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                          <a
+                            href={lead.linkedin_url}
+                            target="_blank"
+                            rel="noopener noreferrer"
                           >
-                            Delete
-                          </AlertDialogAction>
-                        </AlertDialogFooter>
-                      </AlertDialogContent>
-                    </AlertDialog>
-                  </div>
-                </TableCell>
-              </TableRow>
-            ))}
-          </TableBody>
-        </Table>
+                            <ExternalLink className="w-3 h-3 lg:w-3.5 lg:h-3.5" />
+                          </a>
+                        </Button>
+                      )}
+                      <AlertDialog>
+                        <AlertDialogTrigger asChild>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-7 lg:h-8 w-7 lg:w-8 p-0 hover:text-destructive hover:bg-destructive/10 transition-colors"
+                            disabled={deletingLead === lead.id}
+                          >
+                            <Trash2 className="w-3 h-3 lg:w-3.5 lg:h-3.5" />
+                          </Button>
+                        </AlertDialogTrigger>
+                        <AlertDialogContent>
+                          <AlertDialogHeader>
+                            <AlertDialogTitle>Delete Lead</AlertDialogTitle>
+                            <AlertDialogDescription>
+                              Are you sure you want to delete {lead.candidate_name}? This action cannot be undone.
+                            </AlertDialogDescription>
+                          </AlertDialogHeader>
+                          <AlertDialogFooter>
+                            <AlertDialogCancel>Cancel</AlertDialogCancel>
+                            <AlertDialogAction
+                              onClick={() => handleDeleteLead(lead.id, lead.candidate_name)}
+                              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                            >
+                              Delete
+                            </AlertDialogAction>
+                          </AlertDialogFooter>
+                        </AlertDialogContent>
+                      </AlertDialog>
+                    </div>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </div>
       </div>
 
-      <p className="text-sm text-muted-foreground text-center">
+      <p className="text-xs lg:text-sm text-muted-foreground text-center py-2">
         Showing {filteredAndSortedLeads.length} of {leads.length} leads
       </p>
 
