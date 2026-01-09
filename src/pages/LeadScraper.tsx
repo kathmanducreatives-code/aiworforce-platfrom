@@ -10,6 +10,7 @@ import { SearchForm, type SearchFormData } from "@/components/lead-scraper/Searc
 import { LeadTable, type LinkedInLead } from "@/components/lead-scraper/LeadTable";
 import { SavedSearches } from "@/components/lead-scraper/SavedSearches";
 import { NameSearchDialog } from "@/components/lead-scraper/NameSearchDialog";
+import { ScrapingLoadingState } from "@/components/lead-scraper/ScrapingLoadingState";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { useIsMobile } from "@/hooks/use-mobile";
 
@@ -19,6 +20,7 @@ export default function LeadScraper() {
   const [leads, setLeads] = useState<LinkedInLead[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [isFetchingLeads, setIsFetchingLeads] = useState(true);
+  const [isScrapingActive, setIsScrapingActive] = useState(false);
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
   const [activeSessionName, setActiveSessionName] = useState<string | null>(null);
   const [nameDialogOpen, setNameDialogOpen] = useState(false);
@@ -28,7 +30,7 @@ export default function LeadScraper() {
   const lastToastTime = useRef(0);
   const pendingLeads = useRef<LinkedInLead[]>([]);
   const activeSessionIdRef = useRef<string | null>(null);
-
+  const scrapingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   // Keep ref in sync with state
   useEffect(() => {
     activeSessionIdRef.current = activeSessionId;
@@ -62,6 +64,13 @@ export default function LeadScraper() {
       pendingLeads.current.push(newLead);
       setLeads((prev) => [newLead, ...prev]);
       showToast();
+      
+      // Turn off scraping loading state when first lead arrives
+      setIsScrapingActive(false);
+      if (scrapingTimeoutRef.current) {
+        clearTimeout(scrapingTimeoutRef.current);
+        scrapingTimeoutRef.current = null;
+      }
     }
     
     // Refresh saved searches to update counts
@@ -181,11 +190,22 @@ export default function LeadScraper() {
           .eq("id", session.id);
       }, 2000);
 
+      // Set active session and clear current leads for fresh view
       setActiveSessionId(session.id);
       setActiveSessionName(searchName);
-      fetchLeads(session.id);
+      setLeads([]); // Clear leads for this new session
+      setIsScrapingActive(true); // Show scraping loading state
       setNameDialogOpen(false);
       setPendingFormData(null);
+      
+      // Safety timeout - turn off scraping state after 3 minutes if no leads arrive
+      if (scrapingTimeoutRef.current) {
+        clearTimeout(scrapingTimeoutRef.current);
+      }
+      scrapingTimeoutRef.current = setTimeout(() => {
+        setIsScrapingActive(false);
+      }, 180000); // 3 minutes
+      
     } catch (error) {
       console.error("Error initiating scraping:", error);
       toast({
@@ -193,10 +213,20 @@ export default function LeadScraper() {
         title: "Error",
         description: error instanceof Error ? error.message : "Failed to start scraping. Please try again.",
       });
+      setIsScrapingActive(false);
     } finally {
       setIsLoading(false);
     }
   };
+  
+  // Cleanup timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (scrapingTimeoutRef.current) {
+        clearTimeout(scrapingTimeoutRef.current);
+      }
+    };
+  }, []);
 
   const downloadCSV = () => {
     if (leads.length === 0) {
@@ -387,15 +417,23 @@ export default function LeadScraper() {
             </div>
 
             <div className="p-4 lg:p-6">
-              <LeadTable
-                leads={leads}
-                isLoading={isFetchingLeads}
-                onDownloadCSV={downloadCSV}
-                onLeadDeleted={() => {
-                  fetchLeads(activeSessionId);
-                  setRefreshTrigger((prev) => prev + 1);
-                }}
-              />
+              {isScrapingActive && leads.length === 0 ? (
+                <ScrapingLoadingState
+                  searchName={activeSessionName || undefined}
+                  leadsFound={leads.length}
+                  onCancel={() => setIsScrapingActive(false)}
+                />
+              ) : (
+                <LeadTable
+                  leads={leads}
+                  isLoading={isFetchingLeads}
+                  onDownloadCSV={downloadCSV}
+                  onLeadDeleted={() => {
+                    fetchLeads(activeSessionId);
+                    setRefreshTrigger((prev) => prev + 1);
+                  }}
+                />
+              )}
             </div>
           </section>
         </main>
