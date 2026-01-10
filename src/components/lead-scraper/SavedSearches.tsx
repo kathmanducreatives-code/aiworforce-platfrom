@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Folder, FolderOpen, ChevronDown, ChevronRight, Users, Trash2, Calendar } from "lucide-react";
+import { Folder, FolderOpen, ChevronDown, ChevronRight, Users, Trash2, Calendar, Pencil, UserMinus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -15,6 +15,16 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { supabase } from "@/integrations/supabase/client";
 import { formatDistanceToNow } from "date-fns";
 import { toast } from "@/hooks/use-toast";
@@ -45,6 +55,9 @@ export const SavedSearches = ({
   const [expandedSessions, setExpandedSessions] = useState<Set<string>>(new Set());
   const [isLoading, setIsLoading] = useState(true);
   const [unassignedCount, setUnassignedCount] = useState(0);
+  const [renameDialogOpen, setRenameDialogOpen] = useState(false);
+  const [sessionToRename, setSessionToRename] = useState<ScrapingSession | null>(null);
+  const [newName, setNewName] = useState("");
 
   useEffect(() => {
     fetchSessions();
@@ -173,6 +186,63 @@ export const SavedSearches = ({
       onSessionSelect(null);
     }
     fetchSessions();
+  };
+
+  const handleDeleteLeadsOnly = async (sessionId: string, leadCount: number) => {
+    const { error } = await supabase
+      .from("linkedin_leads")
+      .delete()
+      .eq("session_id", sessionId);
+
+    if (error) {
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: "Failed to delete leads. Please try again.",
+      });
+      return;
+    }
+
+    toast({
+      title: "Leads Deleted",
+      description: `${leadCount} leads have been removed from this folder.`,
+    });
+
+    fetchSessions();
+  };
+
+  const handleRenameSession = async () => {
+    if (!sessionToRename || !newName.trim()) return;
+
+    const { error } = await supabase
+      .from("scraping_sessions")
+      .update({ name: newName.trim() })
+      .eq("id", sessionToRename.id);
+
+    if (error) {
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: "Failed to rename folder. Please try again.",
+      });
+      return;
+    }
+
+    toast({
+      title: "Folder Renamed",
+      description: `Folder has been renamed to "${newName.trim()}".`,
+    });
+
+    setRenameDialogOpen(false);
+    setSessionToRename(null);
+    setNewName("");
+    fetchSessions();
+  };
+
+  const openRenameDialog = (session: ScrapingSession) => {
+    setSessionToRename(session);
+    setNewName(getSessionName(session));
+    setRenameDialogOpen(true);
   };
 
   const getSessionName = (session: ScrapingSession) => {
@@ -357,14 +427,61 @@ export const SavedSearches = ({
                             {session.status}
                           </Badge>
                         </div>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          className="w-full mt-2.5 h-7 text-xs"
-                          onClick={() => onSessionSelect(session.id)}
-                        >
-                          View Leads
-                        </Button>
+                        
+                        {/* Action Buttons */}
+                        <div className="flex flex-col gap-1.5 mt-2.5">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="w-full h-7 text-xs"
+                            onClick={() => onSessionSelect(session.id)}
+                          >
+                            View Leads
+                          </Button>
+                          
+                          <div className="flex gap-1.5">
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="flex-1 h-7 text-xs gap-1"
+                              onClick={() => openRenameDialog(session)}
+                            >
+                              <Pencil className="w-3 h-3" />
+                              Rename
+                            </Button>
+                            
+                            <AlertDialog>
+                              <AlertDialogTrigger asChild>
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  className="flex-1 h-7 text-xs gap-1 text-amber-600 hover:text-amber-700 hover:bg-amber-50 border-amber-200"
+                                  disabled={(session.actual_lead_count ?? session.total_leads) === 0}
+                                >
+                                  <UserMinus className="w-3 h-3" />
+                                  Clear Leads
+                                </Button>
+                              </AlertDialogTrigger>
+                              <AlertDialogContent>
+                                <AlertDialogHeader>
+                                  <AlertDialogTitle>Clear All Leads?</AlertDialogTitle>
+                                  <AlertDialogDescription>
+                                    This will permanently delete all {session.actual_lead_count ?? session.total_leads} leads from "{sessionName}". The folder will remain but will be empty. This action cannot be undone.
+                                  </AlertDialogDescription>
+                                </AlertDialogHeader>
+                                <AlertDialogFooter>
+                                  <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                  <AlertDialogAction
+                                    onClick={() => handleDeleteLeadsOnly(session.id, session.actual_lead_count ?? session.total_leads)}
+                                    className="bg-amber-600 hover:bg-amber-700"
+                                  >
+                                    Clear Leads
+                                  </AlertDialogAction>
+                                </AlertDialogFooter>
+                              </AlertDialogContent>
+                            </AlertDialog>
+                          </div>
+                        </div>
                       </div>
                     </CollapsibleContent>
                   </div>
@@ -374,6 +491,43 @@ export const SavedSearches = ({
           </div>
         </ScrollArea>
       )}
+
+      {/* Rename Dialog */}
+      <Dialog open={renameDialogOpen} onOpenChange={setRenameDialogOpen}>
+        <DialogContent className="sm:max-w-[400px]">
+          <DialogHeader>
+            <DialogTitle>Rename Folder</DialogTitle>
+            <DialogDescription>
+              Enter a new name for this search folder.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="py-4">
+            <Label htmlFor="folder-name" className="text-sm font-medium">
+              Folder Name
+            </Label>
+            <Input
+              id="folder-name"
+              value={newName}
+              onChange={(e) => setNewName(e.target.value)}
+              placeholder="Enter folder name..."
+              className="mt-2"
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  handleRenameSession();
+                }
+              }}
+            />
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setRenameDialogOpen(false)}>
+              Cancel
+            </Button>
+            <Button onClick={handleRenameSession} disabled={!newName.trim()}>
+              Rename
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };
