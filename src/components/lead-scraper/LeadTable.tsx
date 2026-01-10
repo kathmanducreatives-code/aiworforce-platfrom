@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { ArrowUpDown, Download, ExternalLink, Mail, Brain, Trash2, Search } from "lucide-react";
+import { ArrowUpDown, Download, ExternalLink, Mail, Brain, Trash2, Search, MoreHorizontal } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { deepSearchApi } from "@/services/deepSearchApi";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -35,6 +35,13 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
 export interface LinkedInLead {
   id: string;
@@ -69,6 +76,7 @@ export const LeadTable = ({ leads, isLoading, onDownloadCSV, onLeadDeleted }: Le
   const [selectedCandidateId, setSelectedCandidateId] = useState<string | null>(null);
   const [runningDeepSearch, setRunningDeepSearch] = useState<Set<string>>(new Set());
   const [deletingLead, setDeletingLead] = useState<string | null>(null);
+  const [leadToDelete, setLeadToDelete] = useState<{ id: string; name: string } | null>(null);
   const { toast } = useToast();
 
   const handleDeleteLead = async (leadId: string, leadName: string) => {
@@ -327,7 +335,7 @@ export const LeadTable = ({ leads, isLoading, onDownloadCSV, onLeadDeleted }: Le
                     )}
                   </TableCell>
                   <TableCell className="py-2.5 lg:py-3 text-right">
-                    <div className="flex items-center justify-end gap-0.5 lg:gap-1">
+                    <div className="flex items-center justify-end gap-1">
                       <Button
                         variant="outline"
                         size="sm"
@@ -338,51 +346,53 @@ export const LeadTable = ({ leads, isLoading, onDownloadCSV, onLeadDeleted }: Le
                         <Brain className="w-3 h-3 lg:w-3.5 lg:h-3.5" />
                         <span className="hidden xl:inline">{runningDeepSearch.has(lead.id) ? "Running..." : "Deep Search"}</span>
                       </Button>
-                      {lead.linkedin_url && (
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          asChild
-                          className="h-7 lg:h-8 w-7 lg:w-8 p-0 hover:bg-primary/10 transition-colors"
-                        >
-                          <a
-                            href={lead.linkedin_url}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                          >
-                            <ExternalLink className="w-3 h-3 lg:w-3.5 lg:h-3.5" />
-                          </a>
-                        </Button>
-                      )}
-                      <AlertDialog>
-                        <AlertDialogTrigger asChild>
+                      
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
                           <Button
                             variant="ghost"
                             size="sm"
-                            className="h-7 lg:h-8 w-7 lg:w-8 p-0 hover:text-destructive hover:bg-destructive/10 transition-colors"
+                            className="h-7 lg:h-8 w-7 lg:w-8 p-0 hover:bg-muted transition-colors"
+                          >
+                            <MoreHorizontal className="w-4 h-4" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end" className="w-48">
+                          {lead.linkedin_url && (
+                            <DropdownMenuItem asChild>
+                              <a
+                                href={lead.linkedin_url}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="flex items-center gap-2 cursor-pointer"
+                              >
+                                <ExternalLink className="w-4 h-4" />
+                                View LinkedIn Profile
+                              </a>
+                            </DropdownMenuItem>
+                          )}
+                          {lead.contact_email && (
+                            <DropdownMenuItem asChild>
+                              <a
+                                href={`mailto:${lead.contact_email}`}
+                                className="flex items-center gap-2 cursor-pointer"
+                              >
+                                <Mail className="w-4 h-4" />
+                                Send Email
+                              </a>
+                            </DropdownMenuItem>
+                          )}
+                          {(lead.linkedin_url || lead.contact_email) && <DropdownMenuSeparator />}
+                          <DropdownMenuItem
+                            onClick={() => setLeadToDelete({ id: lead.id, name: lead.candidate_name })}
+                            className="text-destructive focus:text-destructive focus:bg-destructive/10 cursor-pointer"
                             disabled={deletingLead === lead.id}
                           >
-                            <Trash2 className="w-3 h-3 lg:w-3.5 lg:h-3.5" />
-                          </Button>
-                        </AlertDialogTrigger>
-                        <AlertDialogContent>
-                          <AlertDialogHeader>
-                            <AlertDialogTitle>Delete Lead</AlertDialogTitle>
-                            <AlertDialogDescription>
-                              Are you sure you want to delete {lead.candidate_name}? This action cannot be undone.
-                            </AlertDialogDescription>
-                          </AlertDialogHeader>
-                          <AlertDialogFooter>
-                            <AlertDialogCancel>Cancel</AlertDialogCancel>
-                            <AlertDialogAction
-                              onClick={() => handleDeleteLead(lead.id, lead.candidate_name)}
-                              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                            >
-                              Delete
-                            </AlertDialogAction>
-                          </AlertDialogFooter>
-                        </AlertDialogContent>
-                      </AlertDialog>
+                            <Trash2 className="w-4 h-4 mr-2" />
+                            Delete Lead
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
                     </div>
                   </TableCell>
                 </TableRow>
@@ -410,6 +420,32 @@ export const LeadTable = ({ leads, isLoading, onDownloadCSV, onLeadDeleted }: Le
           )}
         </DialogContent>
       </Dialog>
+
+      {/* Delete Lead Confirmation Dialog */}
+      <AlertDialog open={!!leadToDelete} onOpenChange={(open) => !open && setLeadToDelete(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Lead</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete {leadToDelete?.name}? This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                if (leadToDelete) {
+                  handleDeleteLead(leadToDelete.id, leadToDelete.name);
+                  setLeadToDelete(null);
+                }
+              }}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 };
