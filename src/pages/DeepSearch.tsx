@@ -6,13 +6,23 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
-import { Brain, Loader2, Users, FileText, Search, Sparkles, TrendingUp, CheckCircle2, Filter, ArrowLeft } from "lucide-react";
+import { Brain, Loader2, Users, FileText, Search, Sparkles, TrendingUp, CheckCircle2, Filter, ArrowLeft, Target, X } from "lucide-react";
 import { deepSearchApi } from "@/services/deepSearchApi";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { Label } from "@/components/ui/label";
 import { CandidateCard } from "@/components/lead-scraper/CandidateCard";
 import { AnalyzedCandidateCard } from "@/components/lead-scraper/AnalyzedCandidateCard";
 import { SavedSearches } from "@/components/lead-scraper/SavedSearches";
 import PremiumBackground from "@/components/landing/PremiumBackground";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 
 interface LinkedInCandidate {
   id: string;
@@ -49,6 +59,8 @@ export default function DeepSearch() {
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
   const [activeSessionName, setActiveSessionName] = useState<string | null>(null);
   const [refreshTrigger, setRefreshTrigger] = useState(0);
+  const [showPromptDialog, setShowPromptDialog] = useState(false);
+  const [evaluationPrompt, setEvaluationPrompt] = useState("");
   const { toast } = useToast();
   const lastAnalysisToastTime = useRef(0);
 
@@ -197,7 +209,7 @@ export default function DeepSearch() {
     });
   }, []);
 
-  const handleRunDeepSearch = useCallback(async () => {
+  const openPromptDialog = useCallback(() => {
     if (selectedCandidates.size === 0) {
       toast({
         title: "No candidates selected",
@@ -206,9 +218,13 @@ export default function DeepSearch() {
       });
       return;
     }
+    setShowPromptDialog(true);
+  }, [selectedCandidates.size, toast]);
 
+  const handleRunDeepSearch = useCallback(async () => {
     try {
       setProcessing(true);
+      setShowPromptDialog(false);
       const allCandidates = [...linkedInCandidates, ...resumeCandidates];
       
       for (const candidateId of selectedCandidates) {
@@ -222,6 +238,7 @@ export default function DeepSearch() {
           candidateName: candidate.candidate_name,
           linkedinUrl: isLinkedIn ? (candidate as LinkedInCandidate).linkedin_url || undefined : undefined,
           company: isLinkedIn ? (candidate as LinkedInCandidate).company || undefined : undefined,
+          evaluationPrompt: evaluationPrompt.trim() || undefined,
         });
       }
 
@@ -233,6 +250,7 @@ export default function DeepSearch() {
       setShowResults(true);
       setViewMode("analyzed");
       setSelectedCandidates(new Set());
+      setEvaluationPrompt("");
       fetchAnalyzedResults();
     } catch (error) {
       console.error('Error running deep search:', error);
@@ -244,7 +262,7 @@ export default function DeepSearch() {
     } finally {
       setProcessing(false);
     }
-  }, [selectedCandidates, linkedInCandidates, resumeCandidates, toast]);
+  }, [selectedCandidates, linkedInCandidates, resumeCandidates, evaluationPrompt, toast]);
 
   // Memoize filtered candidates to prevent unnecessary recalculations
   const filteredLinkedInCandidates = useMemo(() => 
@@ -591,7 +609,7 @@ export default function DeepSearch() {
                         Clear Selection
                       </Button>
                       <Button
-                        onClick={handleRunDeepSearch}
+                        onClick={openPromptDialog}
                         disabled={processing}
                         size="lg"
                         className="gap-2 bg-gradient-to-r from-primary to-cyan-500 hover:opacity-90 shadow-lg shadow-primary/25"
@@ -615,6 +633,93 @@ export default function DeepSearch() {
             </div>
           </div>
         )}
+
+        {/* Evaluation Prompt Dialog */}
+        <Dialog open={showPromptDialog} onOpenChange={setShowPromptDialog}>
+          <DialogContent className="sm:max-w-[550px]">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2 text-xl">
+                <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-primary to-cyan-500 flex items-center justify-center">
+                  <Target className="w-5 h-5 text-white" />
+                </div>
+                Customize Your Search
+              </DialogTitle>
+              <DialogDescription className="text-base pt-2">
+                Tell us what specific skills or qualities you're looking for in these {selectedCandidates.size} candidate{selectedCandidates.size !== 1 ? 's' : ''}.
+              </DialogDescription>
+            </DialogHeader>
+            
+            <div className="py-4 space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="evaluation-prompt" className="text-sm font-medium">
+                  Evaluation Criteria (Optional)
+                </Label>
+                <Textarea
+                  id="evaluation-prompt"
+                  placeholder="e.g., Looking for strong leadership experience, expertise in React and Node.js, experience with agile methodologies, ability to work in fast-paced startup environments..."
+                  value={evaluationPrompt}
+                  onChange={(e) => setEvaluationPrompt(e.target.value)}
+                  className="min-h-[120px] resize-none"
+                />
+                <p className="text-xs text-muted-foreground">
+                  This helps our AI focus on what matters most to you when analyzing candidates.
+                </p>
+              </div>
+
+              {/* Quick Suggestions */}
+              <div className="space-y-2">
+                <Label className="text-xs text-muted-foreground">Quick suggestions:</Label>
+                <div className="flex flex-wrap gap-2">
+                  {[
+                    "Leadership skills",
+                    "Technical expertise",
+                    "Startup experience",
+                    "Team management",
+                    "Problem solving"
+                  ].map((suggestion) => (
+                    <Button
+                      key={suggestion}
+                      variant="outline"
+                      size="sm"
+                      className="h-7 text-xs hover:bg-primary/10 hover:border-primary/30"
+                      onClick={() => setEvaluationPrompt(prev => 
+                        prev ? `${prev}, ${suggestion.toLowerCase()}` : suggestion
+                      )}
+                    >
+                      + {suggestion}
+                    </Button>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            <DialogFooter className="gap-2 sm:gap-0">
+              <Button
+                variant="outline"
+                onClick={() => setShowPromptDialog(false)}
+              >
+                Cancel
+              </Button>
+              <Button
+                onClick={handleRunDeepSearch}
+                disabled={processing}
+                className="gap-2 bg-gradient-to-r from-primary to-cyan-500 hover:opacity-90"
+              >
+                {processing ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    Analyzing...
+                  </>
+                ) : (
+                  <>
+                    <Brain className="w-4 h-4" />
+                    Start Deep Search
+                  </>
+                )}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       </div>
     </div>
   );

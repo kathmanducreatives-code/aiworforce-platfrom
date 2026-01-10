@@ -3,6 +3,7 @@ export interface DeepSearchRequest {
   candidateName: string;
   linkedinUrl?: string;
   company?: string;
+  evaluationPrompt?: string;
 }
 
 export interface DeepSearchResponse {
@@ -28,6 +29,7 @@ export const deepSearchApi = {
           candidate_name: request.candidateName,
           linkedin_url: request.linkedinUrl,
           company: request.company,
+          evaluation_prompt: request.evaluationPrompt,
           timestamp: new Date().toISOString(),
         }),
       });
