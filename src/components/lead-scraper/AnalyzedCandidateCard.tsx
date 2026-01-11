@@ -1,7 +1,8 @@
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Brain, ChevronRight, Gauge, Trash2 } from "lucide-react";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { Brain, ChevronRight, Gauge, Trash2, RefreshCw, Clock, Star } from "lucide-react";
 import { useState } from "react";
 import { DeepSearchResults } from "./DeepSearchResults";
 import {
@@ -22,6 +23,7 @@ import {
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
+import { formatDistanceToNow } from "date-fns";
 
 interface AnalyzedCandidateCardProps {
   id: string;
@@ -86,10 +88,18 @@ export const AnalyzedCandidateCard = ({
 
   const getScoreBgColor = (score: number | null) => {
     if (!score) return "bg-muted/50 border-muted";
-    if (score >= 80) return "bg-green-50 border-green-200";
-    if (score >= 60) return "bg-blue-50 border-blue-200";
-    if (score >= 40) return "bg-yellow-50 border-yellow-200";
-    return "bg-red-50 border-red-200";
+    if (score >= 80) return "bg-green-500/10 border-green-500/30";
+    if (score >= 60) return "bg-blue-500/10 border-blue-500/30";
+    if (score >= 40) return "bg-yellow-500/10 border-yellow-500/30";
+    return "bg-red-500/10 border-red-500/30";
+  };
+
+  const getScoreLabel = (score: number | null) => {
+    if (!score) return "Not Rated";
+    if (score >= 80) return "Excellent";
+    if (score >= 60) return "Good";
+    if (score >= 40) return "Fair";
+    return "Low";
   };
 
   const getInitials = (name: string) => {
@@ -101,29 +111,25 @@ export const AnalyzedCandidateCard = ({
       .slice(0, 2);
   };
 
-  const formatDate = (dateString: string) => {
-    const date = new Date(dateString);
-    return date.toLocaleDateString('en-US', { 
-      month: 'short', 
-      day: 'numeric', 
-      year: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit'
-    });
-  };
-
   const topSkills = Array.isArray(strengths) 
     ? strengths.slice(0, 3) 
     : [];
 
   return (
-    <>
-      <Card className="group border-2 border-border/50 hover:border-primary/50 bg-card/50 backdrop-blur-sm transition-all duration-300 hover:shadow-lg hover:-translate-y-1">
-        <CardHeader className="pb-3">
-          <div className="flex items-start justify-between gap-4">
-            <div className="flex items-start gap-3 flex-1 min-w-0">
-              {/* Avatar with Profile Picture */}
-              <Avatar className="w-14 h-14 border-2 border-primary/20 shadow-lg">
+    <TooltipProvider delayDuration={300}>
+      <>
+        <Card 
+          className="group relative border-2 border-border/50 hover:border-primary/40 bg-card/50 backdrop-blur-sm transition-all duration-300 hover:shadow-xl hover:-translate-y-1 overflow-hidden"
+          role="article"
+          aria-label={`Analysis for ${candidate_name}`}
+        >
+          {/* Top gradient bar */}
+          <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-primary via-cyan-500 to-primary opacity-60 group-hover:opacity-100 transition-opacity" />
+
+          <CardHeader className="pb-3 pt-5">
+            <div className="flex items-start gap-4">
+              {/* Avatar */}
+              <Avatar className="w-14 h-14 border-2 border-primary/20 shadow-lg ring-2 ring-background">
                 <AvatarImage src={profile_picture_url || undefined} alt={candidate_name} />
                 <AvatarFallback className="bg-gradient-to-br from-primary to-cyan-500 text-white font-bold text-sm">
                   {getInitials(candidate_name)}
@@ -131,114 +137,155 @@ export const AnalyzedCandidateCard = ({
               </Avatar>
               
               <div className="flex-1 min-w-0">
-                <CardTitle className="text-lg truncate group-hover:text-primary transition-colors">
+                <h3 className="text-lg font-semibold truncate group-hover:text-primary transition-colors">
                   {candidate_name}
-                </CardTitle>
-                <p className="text-xs text-muted-foreground mt-1">
-                  Analyzed {formatDate(created_at)}
+                </h3>
+                <div className="flex items-center gap-2 mt-1 text-xs text-muted-foreground">
+                  <Clock className="w-3 h-3" />
+                  <span>
+                    Analyzed {formatDistanceToNow(new Date(created_at), { addSuffix: true })}
+                  </span>
+                </div>
+              </div>
+
+              {/* Fit Score Badge - Compact */}
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <div className={`flex flex-col items-center justify-center px-3 py-2 rounded-xl border-2 ${getScoreBgColor(fit_score)} transition-all cursor-help`}>
+                    <div className={`text-2xl font-bold ${getScoreColor(fit_score)}`}>
+                      {fit_score || 0}
+                    </div>
+                    <div className="text-[10px] text-muted-foreground font-medium uppercase tracking-wide">
+                      Fit
+                    </div>
+                  </div>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <div className="flex items-center gap-2">
+                    <Gauge className="w-4 h-4" />
+                    <span>{getScoreLabel(fit_score)} Match</span>
+                  </div>
+                </TooltipContent>
+              </Tooltip>
+            </div>
+          </CardHeader>
+
+          <CardContent className="space-y-4">
+            {/* AI Summary - Truncated */}
+            {ai_summary && (
+              <div className="space-y-2">
+                <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
+                  <Brain className="w-4 h-4 text-primary" />
+                  <span>Key Insights</span>
+                </div>
+                <p className="text-sm text-foreground/80 line-clamp-2 leading-relaxed">
+                  {ai_summary}
                 </p>
               </div>
-            </div>
+            )}
 
-            {/* Fit Score Badge */}
-            <div className={`flex flex-col items-center justify-center px-4 py-2 rounded-xl border-2 ${getScoreBgColor(fit_score)}`}>
-              <Gauge className={`w-5 h-5 mb-1 ${getScoreColor(fit_score)}`} />
-              <div className={`text-2xl font-bold ${getScoreColor(fit_score)}`}>
-                {fit_score || 0}
+            {/* Top Skills - Horizontal scroll */}
+            {topSkills.length > 0 && (
+              <div className="space-y-2">
+                <div className="flex items-center gap-2 text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                  <Star className="w-3 h-3 text-primary" />
+                  <span>Top Skills</span>
+                </div>
+                <div className="flex flex-wrap gap-1.5">
+                  {topSkills.map((skill: string, idx: number) => (
+                    <Badge 
+                      key={idx} 
+                      variant="secondary" 
+                      className="text-xs bg-primary/10 text-primary border-primary/20 hover:bg-primary/20 transition-colors"
+                    >
+                      {skill}
+                    </Badge>
+                  ))}
+                  {Array.isArray(strengths) && strengths.length > 3 && (
+                    <Badge variant="outline" className="text-xs">
+                      +{strengths.length - 3}
+                    </Badge>
+                  )}
+                </div>
               </div>
-              <div className="text-xs text-muted-foreground">Fit Score</div>
-            </div>
-          </div>
-        </CardHeader>
+            )}
 
-        <CardContent className="space-y-4">
-          {/* Experience Summary */}
-          {ai_summary && (
-            <div>
-              <h4 className="text-sm font-semibold mb-2 flex items-center gap-2">
-                <Brain className="w-4 h-4 text-primary" />
-                Key Highlights
-              </h4>
-              <p className="text-sm text-muted-foreground line-clamp-2">
-                {ai_summary}
-              </p>
-            </div>
-          )}
-
-          {/* Top Skills */}
-          {topSkills.length > 0 && (
-            <div>
-              <h4 className="text-xs font-semibold mb-2 text-muted-foreground">
-                TOP SKILLS
-              </h4>
-              <div className="flex flex-wrap gap-2">
-                {topSkills.map((skill: string, idx: number) => (
-                  <Badge key={idx} variant="secondary" className="text-xs">
-                    {skill}
-                  </Badge>
-                ))}
-                {Array.isArray(strengths) && strengths.length > 3 && (
-                  <Badge variant="outline" className="text-xs">
-                    +{strengths.length - 3} more
-                  </Badge>
-                )}
-              </div>
-            </div>
-          )}
-
-          {/* Action Buttons */}
-          <div className="flex gap-2 mt-2">
-            <Button 
-              onClick={() => setShowFullAnalysis(true)}
-              className="flex-1 bg-gradient-to-r from-primary to-cyan-500 hover:opacity-90 group"
-            >
-              View Full Analysis
-              <ChevronRight className="w-4 h-4 ml-2 group-hover:translate-x-1 transition-transform" />
-            </Button>
-            <AlertDialog>
-              <AlertDialogTrigger asChild>
-                <Button
-                  variant="outline"
-                  size="icon"
-                  className="hover:text-destructive hover:border-destructive hover:bg-destructive/10"
-                  disabled={isDeleting}
-                >
-                  <Trash2 className="w-4 h-4" />
-                </Button>
-              </AlertDialogTrigger>
-              <AlertDialogContent>
-                <AlertDialogHeader>
-                  <AlertDialogTitle>Delete Analysis</AlertDialogTitle>
-                  <AlertDialogDescription>
-                    Are you sure you want to delete {candidate_name}'s analysis? This action cannot be undone.
-                  </AlertDialogDescription>
-                </AlertDialogHeader>
-                <AlertDialogFooter>
-                  <AlertDialogCancel>Cancel</AlertDialogCancel>
-                  <AlertDialogAction
-                    onClick={handleDelete}
-                    className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            {/* Action Buttons */}
+            <div className="flex gap-2 pt-2">
+              <Button 
+                onClick={() => setShowFullAnalysis(true)}
+                className="flex-1 bg-gradient-to-r from-primary to-cyan-500 hover:opacity-90 group/btn shadow-lg shadow-primary/20"
+                aria-label={`View full analysis for ${candidate_name}`}
+              >
+                <span>View Analysis</span>
+                <ChevronRight className="w-4 h-4 ml-1 group-hover/btn:translate-x-1 transition-transform" />
+              </Button>
+              
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    className="hover:bg-primary/10 hover:border-primary/30 hover:text-primary"
+                    aria-label="Re-analyze candidate"
                   >
-                    Delete
-                  </AlertDialogAction>
-                </AlertDialogFooter>
-              </AlertDialogContent>
-            </AlertDialog>
-          </div>
-        </CardContent>
-      </Card>
+                    <RefreshCw className="w-4 h-4" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>Re-analyze</TooltipContent>
+              </Tooltip>
 
-      {/* Full Analysis Dialog - Full Screen */}
-      <Dialog open={showFullAnalysis} onOpenChange={setShowFullAnalysis}>
-        <DialogContent className="w-screen max-w-none m-0 p-0 rounded-none animate-fade-in max-h-screen overflow-y-auto">
-          <DeepSearchResults 
-            candidateId={id} 
-            candidateName={candidate_name}
-            profilePictureUrl={profile_picture_url}
-            onClose={() => setShowFullAnalysis(false)}
-          />
-        </DialogContent>
-      </Dialog>
-    </>
+              <AlertDialog>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <AlertDialogTrigger asChild>
+                      <Button
+                        variant="outline"
+                        size="icon"
+                        className="hover:text-destructive hover:border-destructive hover:bg-destructive/10"
+                        disabled={isDeleting}
+                        aria-label={`Delete analysis for ${candidate_name}`}
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </Button>
+                    </AlertDialogTrigger>
+                  </TooltipTrigger>
+                  <TooltipContent>Delete</TooltipContent>
+                </Tooltip>
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>Delete Analysis</AlertDialogTitle>
+                    <AlertDialogDescription>
+                      Are you sure you want to delete {candidate_name}'s analysis? This action cannot be undone.
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel>Cancel</AlertDialogCancel>
+                    <AlertDialogAction
+                      onClick={handleDelete}
+                      className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                    >
+                      Delete
+                    </AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Full Analysis Dialog */}
+        <Dialog open={showFullAnalysis} onOpenChange={setShowFullAnalysis}>
+          <DialogContent className="w-screen max-w-none m-0 p-0 rounded-none animate-fade-in max-h-screen overflow-y-auto">
+            <DeepSearchResults 
+              candidateId={id} 
+              candidateName={candidate_name}
+              profilePictureUrl={profile_picture_url}
+              onClose={() => setShowFullAnalysis(false)}
+            />
+          </DialogContent>
+        </Dialog>
+      </>
+    </TooltipProvider>
   );
 };

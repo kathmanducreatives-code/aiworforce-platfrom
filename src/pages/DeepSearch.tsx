@@ -6,7 +6,12 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
-import { Brain, Loader2, Users, FileText, Search, Sparkles, TrendingUp, CheckCircle2, Filter, ArrowLeft, Target, X } from "lucide-react";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { 
+  Brain, Loader2, Users, FileText, Search, Sparkles, TrendingUp, 
+  CheckCircle2, Filter, ArrowLeft, Target, X, Keyboard, SortAsc,
+  ChevronDown, LayoutGrid, List
+} from "lucide-react";
 import { deepSearchApi } from "@/services/deepSearchApi";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -23,6 +28,21 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 interface LinkedInCandidate {
   id: string;
@@ -43,6 +63,8 @@ interface ResumeCandidate {
   current_stage: string | null;
 }
 
+type SortOption = 'name-asc' | 'name-desc' | 'date-asc' | 'date-desc' | 'score-desc' | 'score-asc';
+
 export default function DeepSearch() {
   const navigate = useNavigate();
   const [linkedInCandidates, setLinkedInCandidates] = useState<LinkedInCandidate[]>([]);
@@ -61,8 +83,43 @@ export default function DeepSearch() {
   const [refreshTrigger, setRefreshTrigger] = useState(0);
   const [showPromptDialog, setShowPromptDialog] = useState(false);
   const [evaluationPrompt, setEvaluationPrompt] = useState("");
+  const [analyzedSortBy, setAnalyzedSortBy] = useState<SortOption>('date-desc');
+  const [showKeyboardHints, setShowKeyboardHints] = useState(false);
+  const searchInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
   const lastAnalysisToastTime = useRef(0);
+
+  // Keyboard shortcuts
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Ctrl/Cmd + A to select all
+      if ((e.ctrlKey || e.metaKey) && e.key === 'a' && viewMode === 'select') {
+        e.preventDefault();
+        const allIds = new Set([
+          ...(activeTab === 'linkedin' ? filteredLinkedInCandidates : filteredResumeCandidates).map(c => c.id)
+        ]);
+        setSelectedCandidates(allIds);
+        toast({ title: `Selected ${allIds.size} candidates` });
+      }
+      // Ctrl/Cmd + F to focus search
+      if ((e.ctrlKey || e.metaKey) && e.key === 'f') {
+        e.preventDefault();
+        searchInputRef.current?.focus();
+      }
+      // Ctrl/Cmd + Enter to run deep search
+      if ((e.ctrlKey || e.metaKey) && e.key === 'Enter' && selectedCandidates.size > 0) {
+        e.preventDefault();
+        openPromptDialog();
+      }
+      // Escape to clear selection
+      if (e.key === 'Escape' && selectedCandidates.size > 0) {
+        setSelectedCandidates(new Set());
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [viewMode, activeTab, selectedCandidates.size]);
 
   // Debounced analysis fetch
   const debouncedFetchAnalysis = useCallback(() => {
@@ -75,7 +132,6 @@ export default function DeepSearch() {
       });
       lastAnalysisToastTime.current = now;
     } else {
-      // Just fetch without toast if too frequent
       fetchAnalyzedResults();
     }
   }, []);
@@ -89,7 +145,6 @@ export default function DeepSearch() {
     fetchCandidates();
     fetchAnalyzedResults();
     
-    // Optimized realtime subscription
     const channel = supabase
       .channel('deep-search-updates')
       .on(
@@ -124,7 +179,6 @@ export default function DeepSearch() {
     try {
       setLoading(true);
       
-      // Fetch LinkedIn candidates
       let linkedInQuery = supabase
         .from('linkedin_leads')
         .select('id, candidate_name, job_title, company, linkedin_url, experience_level, session_id')
@@ -133,7 +187,6 @@ export default function DeepSearch() {
       if (sessionId) {
         linkedInQuery = linkedInQuery.eq('session_id', sessionId);
         
-        // Also fetch session name
         const { data: sessionData } = await supabase
           .from("scraping_sessions")
           .select("name, search_criteria")
@@ -157,7 +210,6 @@ export default function DeepSearch() {
       setLinkedInCandidates(linkedInData || []);
       setActiveSessionId(sessionId || null);
 
-      // Fetch resume candidates
       const { data: resumeData, error: resumeError } = await supabase
         .from('resume_analyses')
         .select('id, candidate_name, email, recruitment_name, fit_score, current_stage')
@@ -264,11 +316,12 @@ export default function DeepSearch() {
     }
   }, [selectedCandidates, linkedInCandidates, resumeCandidates, evaluationPrompt, toast]);
 
-  // Memoize filtered candidates to prevent unnecessary recalculations
+  // Memoized filtered candidates
   const filteredLinkedInCandidates = useMemo(() => 
     linkedInCandidates.filter(c =>
       c.candidate_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      c.company?.toLowerCase().includes(searchTerm.toLowerCase())
+      c.company?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      c.job_title?.toLowerCase().includes(searchTerm.toLowerCase())
     ),
     [linkedInCandidates, searchTerm]
   );
@@ -281,18 +334,45 @@ export default function DeepSearch() {
     [resumeCandidates, searchTerm]
   );
 
+  // Sorted analyzed results
+  const sortedAnalyzedResults = useMemo(() => {
+    const results = [...allAnalyzedResults];
+    switch (analyzedSortBy) {
+      case 'name-asc':
+        return results.sort((a, b) => a.candidate_name.localeCompare(b.candidate_name));
+      case 'name-desc':
+        return results.sort((a, b) => b.candidate_name.localeCompare(a.candidate_name));
+      case 'date-asc':
+        return results.sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
+      case 'date-desc':
+        return results.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+      case 'score-desc':
+        return results.sort((a, b) => (b.fit_score || 0) - (a.fit_score || 0));
+      case 'score-asc':
+        return results.sort((a, b) => (a.fit_score || 0) - (b.fit_score || 0));
+      default:
+        return results;
+    }
+  }, [allAnalyzedResults, analyzedSortBy]);
+
   const getFitScore = useCallback((fitScore: any): number => {
     if (typeof fitScore === 'number') return fitScore;
     if (typeof fitScore === 'object' && fitScore?.score) return fitScore.score;
     return 0;
   }, []);
 
+  const currentCandidates = activeTab === 'linkedin' ? filteredLinkedInCandidates : filteredResumeCandidates;
+  const estimatedTime = Math.ceil(selectedCandidates.size * 0.5);
+
   if (loading) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-background via-background to-primary/5 flex items-center justify-center">
+      <div className="min-h-screen bg-background flex items-center justify-center" role="status" aria-label="Loading candidates">
         <div className="text-center space-y-4">
-          <Loader2 className="h-12 w-12 animate-spin text-primary mx-auto" />
-          <p className="text-muted-foreground">Loading candidates...</p>
+          <div className="relative">
+            <Loader2 className="h-12 w-12 animate-spin text-primary mx-auto" />
+            <div className="absolute inset-0 h-12 w-12 mx-auto rounded-full bg-primary/20 animate-ping" />
+          </div>
+          <p className="text-muted-foreground animate-pulse">Loading candidates...</p>
         </div>
       </div>
     );
@@ -302,425 +382,552 @@ export default function DeepSearch() {
   const totalAnalyzed = allAnalyzedResults.length;
 
   return (
-    <div className="min-h-screen bg-background relative overflow-hidden">
-      <PremiumBackground />
+    <TooltipProvider delayDuration={200}>
+      <div className="min-h-screen bg-background relative overflow-hidden">
+        <PremiumBackground />
 
-      {/* Header */}
-      <div className="border-b border-border/50 bg-card/30 backdrop-blur-lg sticky top-0 z-10 shadow-sm relative">
-        <div className="container mx-auto px-4 py-6">
-          {/* Top row - Logo and Title */}
-          <div className="flex items-center justify-between mb-4">
-            <div className="flex items-center gap-3">
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={() => navigate("/dashboard")}
-                className="hover:bg-primary/10"
-              >
-                <ArrowLeft className="w-5 h-5" />
-              </Button>
-              <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-primary to-primary-dark flex items-center justify-center shadow-lg shadow-primary/20">
-                <Brain className="w-8 h-8 text-white" />
-              </div>
-              <div>
-                <h1 className="text-3xl font-bold bg-gradient-to-r from-primary via-cyan-500 to-primary bg-clip-text text-transparent animate-fade-in-down">
-                  Deep Search AI
-                </h1>
-                <p className="text-muted-foreground text-sm">
-                  Advanced candidate intelligence powered by AI
-                </p>
-              </div>
-            </div>
-          </div>
-
-          {/* Stats Bar */}
-          <div className="grid grid-cols-3 gap-4 mb-4">
-            <Card className="border-border/50 bg-card/50 backdrop-blur-sm">
-              <CardContent className="p-3 flex items-center gap-3">
-                <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center">
-                  <Users className="w-5 h-5 text-primary" />
+        {/* Compact Header */}
+        <header className="border-b border-border/50 bg-card/30 backdrop-blur-lg sticky top-0 z-10 shadow-sm">
+          <div className="container mx-auto px-4 py-4">
+            {/* Top row */}
+            <div className="flex items-center justify-between gap-4 mb-4">
+              <div className="flex items-center gap-3">
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => navigate("/dashboard")}
+                      className="hover:bg-primary/10"
+                      aria-label="Go back to dashboard"
+                    >
+                      <ArrowLeft className="w-5 h-5" />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>Back to Dashboard</TooltipContent>
+                </Tooltip>
+                
+                <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-primary to-cyan-500 flex items-center justify-center shadow-lg shadow-primary/20">
+                  <Brain className="w-6 h-6 text-white" />
                 </div>
                 <div>
-                  <p className="text-2xl font-bold">{totalCandidates}</p>
-                  <p className="text-xs text-muted-foreground">Total Candidates</p>
-                </div>
-              </CardContent>
-            </Card>
-
-            <Card className="border-border/50 bg-card/50 backdrop-blur-sm">
-              <CardContent className="p-3 flex items-center gap-3">
-                <div className="w-10 h-10 rounded-lg bg-cyan-500/10 flex items-center justify-center">
-                  <CheckCircle2 className="w-5 h-5 text-cyan-500" />
-                </div>
-                <div>
-                  <p className="text-2xl font-bold">{selectedCandidates.size}</p>
-                  <p className="text-xs text-muted-foreground">Selected for Analysis</p>
-                </div>
-              </CardContent>
-            </Card>
-
-            <Card className="border-border/50 bg-card/50 backdrop-blur-sm">
-              <CardContent className="p-3 flex items-center gap-3">
-                <div className="w-10 h-10 rounded-lg bg-green-500/10 flex items-center justify-center">
-                  <TrendingUp className="w-5 h-5 text-green-500" />
-                </div>
-                <div>
-                  <p className="text-2xl font-bold">{totalAnalyzed}</p>
-                  <p className="text-xs text-muted-foreground">Analyzed Profiles</p>
-                </div>
-              </CardContent>
-            </Card>
-          </div>
-
-          {/* View Toggle */}
-          <Tabs value={viewMode} onValueChange={(v) => setViewMode(v as any)} className="w-full">
-            <TabsList className="grid w-full grid-cols-2 h-12">
-              <TabsTrigger value="select" className="gap-2 text-base">
-                <Filter className="w-4 h-4" />
-                Select Candidates
-              </TabsTrigger>
-              <TabsTrigger value="analyzed" className="gap-2 text-base">
-                <Brain className="w-4 h-4" />
-                Analyzed Results ({totalAnalyzed})
-              </TabsTrigger>
-            </TabsList>
-          </Tabs>
-        </div>
-      </div>
-
-      <div className="container mx-auto px-4 py-8 relative">
-        {viewMode === "select" ? (
-          <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
-            {/* Left Sidebar - Saved Searches */}
-            <div className="lg:col-span-1">
-              <SavedSearches
-                activeSessionId={activeSessionId}
-                onSessionSelect={fetchCandidates}
-                refreshTrigger={refreshTrigger}
-              />
-            </div>
-
-            {/* Main Content */}
-            <div className="lg:col-span-3 space-y-6">
-              {/* Search and Filter Bar */}
-              <Card className="border-primary/20 bg-card/50 backdrop-blur-sm">
-                <CardContent className="p-4">
-                  <div className="flex flex-col md:flex-row gap-4">
-                    <div className="flex-1">
-                      <div className="relative">
-                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                        <Input
-                          placeholder="Search by name, company, role..."
-                          value={searchTerm}
-                          onChange={(e) => setSearchTerm(e.target.value)}
-                          className="pl-10"
-                        />
-                      </div>
-                    </div>
-                    <div className="flex gap-2">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => {
-                          const allIds = new Set([
-                            ...(activeTab === 'linkedin' ? filteredLinkedInCandidates : filteredResumeCandidates).map(c => c.id)
-                          ]);
-                          setSelectedCandidates(allIds);
-                        }}
-                      >
-                        Select All
-                      </Button>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => setSelectedCandidates(new Set())}
-                      >
-                        Clear
-                      </Button>
-                    </div>
-                  </div>
-                  {activeSessionName && (
-                    <div className="mt-3 flex items-center gap-2">
-                      <Badge variant="secondary" className="text-sm">
-                        Viewing: {activeSessionName}
-                      </Badge>
-                      <Button
-                        variant="link"
-                        size="sm"
-                        className="text-xs text-primary h-auto p-0"
-                        onClick={() => fetchCandidates(null)}
-                      >
-                        View All
-                      </Button>
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
-
-              {/* Source Tabs */}
-              <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as any)} className="w-full">
-                <TabsList className="grid w-full grid-cols-2 mb-6">
-                  <TabsTrigger value="linkedin" className="gap-2">
-                    <Users className="w-4 h-4" />
-                    LinkedIn ({filteredLinkedInCandidates.length})
-                  </TabsTrigger>
-                  <TabsTrigger value="resume" className="gap-2">
-                    <FileText className="w-4 h-4" />
-                    Resume ({filteredResumeCandidates.length})
-                  </TabsTrigger>
-                </TabsList>
-
-                <TabsContent value="linkedin" className="space-y-0">
-                  {filteredLinkedInCandidates.length === 0 ? (
-                    <Card className="border-dashed border-2 bg-card/30 backdrop-blur-sm">
-                      <CardContent className="text-center py-16">
-                        <Users className="w-16 h-16 text-muted-foreground/50 mx-auto mb-4" />
-                        <h3 className="text-xl font-semibold mb-2">No LinkedIn Candidates</h3>
-                        <p className="text-muted-foreground max-w-md mx-auto">
-                          {searchTerm 
-                            ? "No candidates match your search. Try adjusting your filters."
-                            : activeSessionName 
-                              ? "No candidates in this search folder."
-                              : "Import candidates from LinkedIn to get started with AI-powered analysis."}
-                        </p>
-                      </CardContent>
-                    </Card>
-                  ) : (
-                    <div className="grid md:grid-cols-2 xl:grid-cols-3 gap-4">
-                      {filteredLinkedInCandidates.map((candidate) => (
-                        <CandidateCard
-                          key={candidate.id}
-                          id={candidate.id}
-                          name={candidate.candidate_name}
-                          title={candidate.job_title}
-                          company={candidate.company}
-                          experienceLevel={candidate.experience_level}
-                          linkedinUrl={candidate.linkedin_url}
-                          isSelected={selectedCandidates.has(candidate.id)}
-                          isAnalyzed={analyzedCandidates.has(candidate.id)}
-                          onSelect={handleSelectCandidate}
-                          type="linkedin"
-                        />
-                      ))}
-                    </div>
-                  )}
-                </TabsContent>
-
-                <TabsContent value="resume" className="space-y-0">
-                  {filteredResumeCandidates.length === 0 ? (
-                    <Card className="border-dashed border-2 bg-card/30 backdrop-blur-sm">
-                      <CardContent className="text-center py-16">
-                        <FileText className="w-16 h-16 text-muted-foreground/50 mx-auto mb-4" />
-                        <h3 className="text-xl font-semibold mb-2">No Resume Candidates</h3>
-                        <p className="text-muted-foreground max-w-md mx-auto">
-                          {searchTerm 
-                            ? "No candidates match your search. Try adjusting your filters."
-                            : "Upload resumes to start screening candidates with AI assistance."}
-                        </p>
-                      </CardContent>
-                    </Card>
-                  ) : (
-                    <div className="grid md:grid-cols-2 xl:grid-cols-3 gap-4">
-                      {filteredResumeCandidates.map((candidate) => (
-                        <CandidateCard
-                          key={candidate.id}
-                          id={candidate.id}
-                          name={candidate.candidate_name}
-                          recruitmentName={candidate.recruitment_name}
-                          email={candidate.email}
-                          fitScore={getFitScore(candidate.fit_score)}
-                          currentStage={candidate.current_stage}
-                          isSelected={selectedCandidates.has(candidate.id)}
-                          isAnalyzed={analyzedCandidates.has(candidate.id)}
-                          onSelect={handleSelectCandidate}
-                          type="resume"
-                        />
-                      ))}
-                    </div>
-                  )}
-                </TabsContent>
-              </Tabs>
-            </div>
-          </div>
-        ) : (
-          <div className="space-y-6">
-            {allAnalyzedResults.length === 0 ? (
-              <Card className="border-primary/20 bg-card/50 backdrop-blur-sm">
-                <CardContent className="py-12 text-center">
-                  <Brain className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-                  <p className="text-muted-foreground">No analyzed candidates yet</p>
-                  <p className="text-sm text-muted-foreground/70 mt-2">
-                    Select candidates and run deep search to see AI-powered insights
+                  <h1 className="text-2xl font-bold bg-gradient-to-r from-primary via-cyan-500 to-primary bg-clip-text text-transparent">
+                    Deep Search AI
+                  </h1>
+                  <p className="text-muted-foreground text-xs">
+                    Advanced candidate intelligence
                   </p>
-                </CardContent>
-              </Card>
-            ) : (
-              <>
-                <div className="flex items-center justify-between mb-4">
-                  <h2 className="text-2xl font-bold flex items-center gap-2">
-                    <Brain className="w-6 h-6 text-primary" />
-                    Analysis Results
-                  </h2>
-                  <Badge variant="secondary" className="px-4 py-2">
-                    {allAnalyzedResults.length} Candidate{allAnalyzedResults.length !== 1 ? 's' : ''} Analyzed
-                  </Badge>
+                </div>
+              </div>
+
+              {/* Compact Stats */}
+              <div className="hidden md:flex items-center gap-3">
+                <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-card/50 border border-border/50">
+                  <Users className="w-4 h-4 text-primary" />
+                  <span className="text-sm font-medium">{totalCandidates}</span>
+                  <span className="text-xs text-muted-foreground">candidates</span>
+                </div>
+                <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-card/50 border border-border/50">
+                  <CheckCircle2 className="w-4 h-4 text-cyan-500" />
+                  <span className="text-sm font-medium">{selectedCandidates.size}</span>
+                  <span className="text-xs text-muted-foreground">selected</span>
+                </div>
+                <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-card/50 border border-border/50">
+                  <TrendingUp className="w-4 h-4 text-green-500" />
+                  <span className="text-sm font-medium">{totalAnalyzed}</span>
+                  <span className="text-xs text-muted-foreground">analyzed</span>
                 </div>
                 
-                <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
-                  {allAnalyzedResults.map((result) => (
-                    <AnalyzedCandidateCard
-                      key={result.id}
-                      {...result}
-                      onDeleted={fetchAnalyzedResults}
-                    />
-                  ))}
-                </div>
-              </>
-            )}
-          </div>
-        )}
+                {/* Keyboard shortcuts hint */}
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-8 w-8"
+                      onClick={() => setShowKeyboardHints(!showKeyboardHints)}
+                      aria-label="Show keyboard shortcuts"
+                    >
+                      <Keyboard className="w-4 h-4 text-muted-foreground" />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent side="bottom" className="max-w-xs">
+                    <div className="space-y-1 text-xs">
+                      <p><kbd className="px-1 bg-muted rounded">Ctrl+A</kbd> Select all</p>
+                      <p><kbd className="px-1 bg-muted rounded">Ctrl+F</kbd> Focus search</p>
+                      <p><kbd className="px-1 bg-muted rounded">Ctrl+Enter</kbd> Run deep search</p>
+                      <p><kbd className="px-1 bg-muted rounded">Esc</kbd> Clear selection</p>
+                    </div>
+                  </TooltipContent>
+                </Tooltip>
+              </div>
+            </div>
 
-        {/* Floating Action Panel */}
-        {viewMode === "select" && selectedCandidates.size > 0 && (
-          <div className="fixed bottom-0 left-0 right-0 z-20 animate-slide-in-bottom">
-            <div className="container mx-auto px-4 py-4">
-              <Card className="border-2 border-primary shadow-2xl shadow-primary/25 bg-card backdrop-blur-lg">
-                <CardContent className="p-4">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-4">
-                      <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-primary to-cyan-500 flex items-center justify-center">
-                        <CheckCircle2 className="w-6 h-6 text-white" />
+            {/* View Toggle */}
+            <Tabs value={viewMode} onValueChange={(v) => setViewMode(v as any)} className="w-full">
+              <TabsList className="grid w-full grid-cols-2 h-10">
+                <TabsTrigger value="select" className="gap-2 text-sm">
+                  <Filter className="w-4 h-4" />
+                  Select Candidates
+                  {selectedCandidates.size > 0 && (
+                    <Badge variant="secondary" className="ml-1 h-5 px-1.5 text-xs">
+                      {selectedCandidates.size}
+                    </Badge>
+                  )}
+                </TabsTrigger>
+                <TabsTrigger value="analyzed" className="gap-2 text-sm">
+                  <Brain className="w-4 h-4" />
+                  Analyzed Results
+                  <Badge variant="secondary" className="ml-1 h-5 px-1.5 text-xs">
+                    {totalAnalyzed}
+                  </Badge>
+                </TabsTrigger>
+              </TabsList>
+            </Tabs>
+          </div>
+        </header>
+
+        <main className="container mx-auto px-4 py-6 relative">
+          {viewMode === "select" ? (
+            <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
+              {/* Left Sidebar - Saved Searches */}
+              <aside className="lg:col-span-1" aria-label="Saved searches">
+                <SavedSearches
+                  activeSessionId={activeSessionId}
+                  onSessionSelect={fetchCandidates}
+                  refreshTrigger={refreshTrigger}
+                />
+              </aside>
+
+              {/* Main Content */}
+              <div className="lg:col-span-3 space-y-4">
+                {/* Search and Filter Bar */}
+                <Card className="border-primary/20 bg-card/50 backdrop-blur-sm">
+                  <CardContent className="p-3">
+                    <div className="flex flex-col md:flex-row gap-3">
+                      <div className="flex-1">
+                        <div className="relative">
+                          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                          <Input
+                            ref={searchInputRef}
+                            placeholder="Search by name, company, role..."
+                            value={searchTerm}
+                            onChange={(e) => setSearchTerm(e.target.value)}
+                            className="pl-10 h-9"
+                            aria-label="Search candidates"
+                          />
+                          {searchTerm && (
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="absolute right-1 top-1/2 -translate-y-1/2 h-7 w-7"
+                              onClick={() => setSearchTerm("")}
+                              aria-label="Clear search"
+                            >
+                              <X className="w-3 h-3" />
+                            </Button>
+                          )}
+                        </div>
                       </div>
-                      <div>
-                        <p className="font-semibold text-lg">
-                          {selectedCandidates.size} Candidate{selectedCandidates.size !== 1 ? 's' : ''} Selected
-                        </p>
-                        <p className="text-sm text-muted-foreground">
-                          Ready for AI-powered deep search analysis
-                        </p>
+                      <div className="flex gap-2">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => {
+                            const allIds = new Set(currentCandidates.map(c => c.id));
+                            setSelectedCandidates(allIds);
+                          }}
+                          className="h-9"
+                        >
+                          Select All ({currentCandidates.length})
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setSelectedCandidates(new Set())}
+                          disabled={selectedCandidates.size === 0}
+                          className="h-9"
+                        >
+                          Clear
+                        </Button>
                       </div>
                     </div>
+                    
+                    {/* Active filters */}
+                    <div className="flex flex-wrap items-center gap-2 mt-3">
+                      {activeSessionName && (
+                        <Badge variant="secondary" className="gap-1 pr-1">
+                          <span>Folder: {activeSessionName}</span>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-4 w-4 ml-1 hover:bg-transparent"
+                            onClick={() => fetchCandidates(null)}
+                            aria-label="Clear folder filter"
+                          >
+                            <X className="w-3 h-3" />
+                          </Button>
+                        </Badge>
+                      )}
+                      {searchTerm && (
+                        <Badge variant="outline" className="text-xs">
+                          {currentCandidates.length} results for "{searchTerm}"
+                        </Badge>
+                      )}
+                    </div>
+                  </CardContent>
+                </Card>
 
+                {/* Source Tabs */}
+                <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as any)} className="w-full">
+                  <TabsList className="grid w-full grid-cols-2 mb-4 h-9">
+                    <TabsTrigger value="linkedin" className="gap-2 text-sm">
+                      <Users className="w-4 h-4" />
+                      LinkedIn ({filteredLinkedInCandidates.length})
+                    </TabsTrigger>
+                    <TabsTrigger value="resume" className="gap-2 text-sm">
+                      <FileText className="w-4 h-4" />
+                      Resume ({filteredResumeCandidates.length})
+                    </TabsTrigger>
+                  </TabsList>
+
+                  <TabsContent value="linkedin" className="space-y-0 mt-0">
+                    {filteredLinkedInCandidates.length === 0 ? (
+                      <Card className="border-dashed border-2 bg-card/30 backdrop-blur-sm">
+                        <CardContent className="text-center py-12">
+                          <div className="w-16 h-16 rounded-full bg-muted/50 flex items-center justify-center mx-auto mb-4">
+                            <Users className="w-8 h-8 text-muted-foreground/50" />
+                          </div>
+                          <h3 className="text-lg font-semibold mb-2">No LinkedIn Candidates</h3>
+                          <p className="text-muted-foreground text-sm max-w-md mx-auto mb-4">
+                            {searchTerm 
+                              ? "No candidates match your search. Try adjusting your filters."
+                              : activeSessionName 
+                                ? "No candidates in this search folder."
+                                : "Import candidates from LinkedIn to get started."}
+                          </p>
+                          {!searchTerm && !activeSessionName && (
+                            <Button 
+                              variant="outline" 
+                              onClick={() => navigate("/lead-scraper")}
+                              className="gap-2"
+                            >
+                              <Users className="w-4 h-4" />
+                              Go to Lead Scraper
+                            </Button>
+                          )}
+                        </CardContent>
+                      </Card>
+                    ) : (
+                      <div 
+                        className="grid md:grid-cols-2 xl:grid-cols-3 gap-3"
+                        role="list"
+                        aria-label="LinkedIn candidates"
+                      >
+                        {filteredLinkedInCandidates.map((candidate) => (
+                          <CandidateCard
+                            key={candidate.id}
+                            id={candidate.id}
+                            name={candidate.candidate_name}
+                            title={candidate.job_title}
+                            company={candidate.company}
+                            experienceLevel={candidate.experience_level}
+                            linkedinUrl={candidate.linkedin_url}
+                            isSelected={selectedCandidates.has(candidate.id)}
+                            isAnalyzed={analyzedCandidates.has(candidate.id)}
+                            onSelect={handleSelectCandidate}
+                            type="linkedin"
+                          />
+                        ))}
+                      </div>
+                    )}
+                  </TabsContent>
+
+                  <TabsContent value="resume" className="space-y-0 mt-0">
+                    {filteredResumeCandidates.length === 0 ? (
+                      <Card className="border-dashed border-2 bg-card/30 backdrop-blur-sm">
+                        <CardContent className="text-center py-12">
+                          <div className="w-16 h-16 rounded-full bg-muted/50 flex items-center justify-center mx-auto mb-4">
+                            <FileText className="w-8 h-8 text-muted-foreground/50" />
+                          </div>
+                          <h3 className="text-lg font-semibold mb-2">No Resume Candidates</h3>
+                          <p className="text-muted-foreground text-sm max-w-md mx-auto mb-4">
+                            {searchTerm 
+                              ? "No candidates match your search. Try adjusting your filters."
+                              : "Upload resumes to start screening candidates."}
+                          </p>
+                          {!searchTerm && (
+                            <Button 
+                              variant="outline" 
+                              onClick={() => navigate("/candidates")}
+                              className="gap-2"
+                            >
+                              <FileText className="w-4 h-4" />
+                              Upload Resumes
+                            </Button>
+                          )}
+                        </CardContent>
+                      </Card>
+                    ) : (
+                      <div 
+                        className="grid md:grid-cols-2 xl:grid-cols-3 gap-3"
+                        role="list"
+                        aria-label="Resume candidates"
+                      >
+                        {filteredResumeCandidates.map((candidate) => (
+                          <CandidateCard
+                            key={candidate.id}
+                            id={candidate.id}
+                            name={candidate.candidate_name}
+                            recruitmentName={candidate.recruitment_name}
+                            email={candidate.email}
+                            fitScore={getFitScore(candidate.fit_score)}
+                            currentStage={candidate.current_stage}
+                            isSelected={selectedCandidates.has(candidate.id)}
+                            isAnalyzed={analyzedCandidates.has(candidate.id)}
+                            onSelect={handleSelectCandidate}
+                            type="resume"
+                          />
+                        ))}
+                      </div>
+                    )}
+                  </TabsContent>
+                </Tabs>
+              </div>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              {allAnalyzedResults.length === 0 ? (
+                <Card className="border-primary/20 bg-card/50 backdrop-blur-sm">
+                  <CardContent className="py-12 text-center">
+                    <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center mx-auto mb-4">
+                      <Brain className="h-8 w-8 text-primary" />
+                    </div>
+                    <h3 className="text-lg font-semibold mb-2">No Analyzed Candidates Yet</h3>
+                    <p className="text-muted-foreground text-sm max-w-md mx-auto mb-4">
+                      Select candidates and run deep search to see AI-powered insights
+                    </p>
+                    <Button 
+                      variant="outline" 
+                      onClick={() => setViewMode("select")}
+                      className="gap-2"
+                    >
+                      <Users className="w-4 h-4" />
+                      Select Candidates
+                    </Button>
+                  </CardContent>
+                </Card>
+              ) : (
+                <>
+                  {/* Results Header with Sort */}
+                  <div className="flex items-center justify-between">
                     <div className="flex items-center gap-3">
-                      <Button
-                        variant="outline"
-                        onClick={() => setSelectedCandidates(new Set())}
-                      >
-                        Clear Selection
-                      </Button>
-                      <Button
-                        onClick={openPromptDialog}
-                        disabled={processing}
-                        size="lg"
-                        className="gap-2 bg-gradient-to-r from-primary to-cyan-500 hover:opacity-90 shadow-lg shadow-primary/25"
-                      >
-                        {processing ? (
-                          <>
-                            <Loader2 className="w-5 h-5 animate-spin" />
-                            Analyzing...
-                          </>
-                        ) : (
-                          <>
-                            <Sparkles className="w-5 h-5" />
-                            Run Deep Search
-                          </>
-                        )}
-                      </Button>
+                      <h2 className="text-xl font-bold flex items-center gap-2">
+                        <Brain className="w-5 h-5 text-primary" />
+                        Analysis Results
+                      </h2>
+                      <Badge variant="secondary" className="px-3">
+                        {allAnalyzedResults.length} analyzed
+                      </Badge>
+                    </div>
+                    
+                    <div className="flex items-center gap-2">
+                      <Select value={analyzedSortBy} onValueChange={(v) => setAnalyzedSortBy(v as SortOption)}>
+                        <SelectTrigger className="w-[160px] h-9">
+                          <SortAsc className="w-4 h-4 mr-2" />
+                          <SelectValue placeholder="Sort by" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="date-desc">Newest First</SelectItem>
+                          <SelectItem value="date-asc">Oldest First</SelectItem>
+                          <SelectItem value="score-desc">Highest Score</SelectItem>
+                          <SelectItem value="score-asc">Lowest Score</SelectItem>
+                          <SelectItem value="name-asc">Name A-Z</SelectItem>
+                          <SelectItem value="name-desc">Name Z-A</SelectItem>
+                        </SelectContent>
+                      </Select>
                     </div>
                   </div>
-                </CardContent>
-              </Card>
+                  
+                  <div 
+                    className="grid md:grid-cols-2 lg:grid-cols-3 gap-4"
+                    role="list"
+                    aria-label="Analyzed candidates"
+                  >
+                    {sortedAnalyzedResults.map((result) => (
+                      <AnalyzedCandidateCard
+                        key={result.id}
+                        {...result}
+                        onDeleted={fetchAnalyzedResults}
+                      />
+                    ))}
+                  </div>
+                </>
+              )}
             </div>
-          </div>
-        )}
+          )}
 
-        {/* Evaluation Prompt Dialog */}
-        <Dialog open={showPromptDialog} onOpenChange={setShowPromptDialog}>
-          <DialogContent className="sm:max-w-[550px]">
-            <DialogHeader>
-              <DialogTitle className="flex items-center gap-2 text-xl">
-                <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-primary to-cyan-500 flex items-center justify-center">
-                  <Target className="w-5 h-5 text-white" />
+          {/* Floating Action Panel */}
+          {viewMode === "select" && selectedCandidates.size > 0 && (
+            <div 
+              className="fixed bottom-0 left-0 right-0 z-20 animate-slide-in-bottom"
+              role="region"
+              aria-label="Selection actions"
+            >
+              <div className="container mx-auto px-4 py-3">
+                <Card className="border-2 border-primary shadow-2xl shadow-primary/25 bg-card/95 backdrop-blur-lg">
+                  <CardContent className="p-3">
+                    <div className="flex items-center justify-between gap-4">
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-primary to-cyan-500 flex items-center justify-center">
+                          <CheckCircle2 className="w-5 h-5 text-white" />
+                        </div>
+                        <div>
+                          <p className="font-semibold">
+                            {selectedCandidates.size} Candidate{selectedCandidates.size !== 1 ? 's' : ''} Selected
+                          </p>
+                          <p className="text-xs text-muted-foreground">
+                            Est. {estimatedTime} min{estimatedTime !== 1 ? 's' : ''} to analyze
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-2">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => setSelectedCandidates(new Set())}
+                          className="hidden sm:flex"
+                        >
+                          Clear
+                        </Button>
+                        <Button
+                          onClick={openPromptDialog}
+                          disabled={processing}
+                          className="gap-2 bg-gradient-to-r from-primary to-cyan-500 hover:opacity-90 shadow-lg shadow-primary/25"
+                        >
+                          {processing ? (
+                            <>
+                              <Loader2 className="w-4 h-4 animate-spin" />
+                              <span className="hidden sm:inline">Analyzing...</span>
+                            </>
+                          ) : (
+                            <>
+                              <Sparkles className="w-4 h-4" />
+                              <span className="hidden sm:inline">Run Deep Search</span>
+                              <span className="sm:hidden">Analyze</span>
+                            </>
+                          )}
+                        </Button>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              </div>
+            </div>
+          )}
+
+          {/* Evaluation Prompt Dialog */}
+          <Dialog open={showPromptDialog} onOpenChange={setShowPromptDialog}>
+            <DialogContent className="sm:max-w-[550px]">
+              <DialogHeader>
+                <DialogTitle className="flex items-center gap-2 text-xl">
+                  <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-primary to-cyan-500 flex items-center justify-center">
+                    <Target className="w-5 h-5 text-white" />
+                  </div>
+                  Customize Your Search
+                </DialogTitle>
+                <DialogDescription className="text-sm pt-2">
+                  What specific skills or qualities are you looking for in these {selectedCandidates.size} candidate{selectedCandidates.size !== 1 ? 's' : ''}?
+                </DialogDescription>
+              </DialogHeader>
+              
+              <div className="py-4 space-y-4">
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <Label htmlFor="evaluation-prompt" className="text-sm font-medium">
+                      Evaluation Criteria
+                    </Label>
+                    <span className="text-xs text-muted-foreground">Optional</span>
+                  </div>
+                  <Textarea
+                    id="evaluation-prompt"
+                    placeholder="e.g., Looking for strong leadership experience, expertise in React and Node.js, experience with agile methodologies..."
+                    value={evaluationPrompt}
+                    onChange={(e) => setEvaluationPrompt(e.target.value)}
+                    className="min-h-[100px] resize-none"
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    This helps our AI focus on what matters most to you.
+                  </p>
                 </div>
-                Customize Your Search
-              </DialogTitle>
-              <DialogDescription className="text-base pt-2">
-                Tell us what specific skills or qualities you're looking for in these {selectedCandidates.size} candidate{selectedCandidates.size !== 1 ? 's' : ''}.
-              </DialogDescription>
-            </DialogHeader>
-            
-            <div className="py-4 space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="evaluation-prompt" className="text-sm font-medium">
-                  Evaluation Criteria (Optional)
-                </Label>
-                <Textarea
-                  id="evaluation-prompt"
-                  placeholder="e.g., Looking for strong leadership experience, expertise in React and Node.js, experience with agile methodologies, ability to work in fast-paced startup environments..."
-                  value={evaluationPrompt}
-                  onChange={(e) => setEvaluationPrompt(e.target.value)}
-                  className="min-h-[120px] resize-none"
-                />
-                <p className="text-xs text-muted-foreground">
-                  This helps our AI focus on what matters most to you when analyzing candidates.
-                </p>
+
+                {/* Quick Suggestions */}
+                <div className="space-y-2">
+                  <Label className="text-xs text-muted-foreground">Quick suggestions:</Label>
+                  <div className="flex flex-wrap gap-1.5">
+                    {[
+                      "Leadership skills",
+                      "Technical expertise",
+                      "Startup experience",
+                      "Team management",
+                      "Problem solving",
+                      "Communication skills",
+                      "Remote work experience"
+                    ].map((suggestion) => (
+                      <Button
+                        key={suggestion}
+                        variant="outline"
+                        size="sm"
+                        className="h-7 text-xs hover:bg-primary/10 hover:border-primary/30"
+                        onClick={() => setEvaluationPrompt(prev => 
+                          prev ? `${prev}, ${suggestion.toLowerCase()}` : suggestion
+                        )}
+                      >
+                        + {suggestion}
+                      </Button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Estimated time */}
+                <div className="flex items-center gap-2 p-3 rounded-lg bg-muted/50 border border-border/50">
+                  <Brain className="w-4 h-4 text-primary" />
+                  <span className="text-sm text-muted-foreground">
+                    Estimated analysis time: ~{estimatedTime} minute{estimatedTime !== 1 ? 's' : ''}
+                  </span>
+                </div>
               </div>
 
-              {/* Quick Suggestions */}
-              <div className="space-y-2">
-                <Label className="text-xs text-muted-foreground">Quick suggestions:</Label>
-                <div className="flex flex-wrap gap-2">
-                  {[
-                    "Leadership skills",
-                    "Technical expertise",
-                    "Startup experience",
-                    "Team management",
-                    "Problem solving"
-                  ].map((suggestion) => (
-                    <Button
-                      key={suggestion}
-                      variant="outline"
-                      size="sm"
-                      className="h-7 text-xs hover:bg-primary/10 hover:border-primary/30"
-                      onClick={() => setEvaluationPrompt(prev => 
-                        prev ? `${prev}, ${suggestion.toLowerCase()}` : suggestion
-                      )}
-                    >
-                      + {suggestion}
-                    </Button>
-                  ))}
-                </div>
-              </div>
-            </div>
-
-            <DialogFooter className="gap-2 sm:gap-0">
-              <Button
-                variant="outline"
-                onClick={() => setShowPromptDialog(false)}
-              >
-                Cancel
-              </Button>
-              <Button
-                onClick={handleRunDeepSearch}
-                disabled={processing}
-                className="gap-2 bg-gradient-to-r from-primary to-cyan-500 hover:opacity-90"
-              >
-                {processing ? (
-                  <>
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                    Analyzing...
-                  </>
-                ) : (
-                  <>
-                    <Brain className="w-4 h-4" />
-                    Start Deep Search
-                  </>
-                )}
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
+              <DialogFooter className="gap-2 sm:gap-0">
+                <Button
+                  variant="outline"
+                  onClick={() => setShowPromptDialog(false)}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  onClick={handleRunDeepSearch}
+                  disabled={processing}
+                  className="gap-2 bg-gradient-to-r from-primary to-cyan-500 hover:opacity-90"
+                >
+                  {processing ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      Analyzing...
+                    </>
+                  ) : (
+                    <>
+                      <Brain className="w-4 h-4" />
+                      Start Deep Search
+                    </>
+                  )}
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+        </main>
       </div>
-    </div>
+    </TooltipProvider>
   );
 }
