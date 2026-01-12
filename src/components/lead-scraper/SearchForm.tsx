@@ -1,10 +1,12 @@
 import { useState } from "react";
-import { Search, Building2, Briefcase, MapPin, Plus, X } from "lucide-react";
+import { Search, Building2, Plus, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Slider } from "@/components/ui/slider";
+import { LocationMultiSelect } from "./LocationMultiSelect";
+import { JobTitleMultiSelect } from "./JobTitleMultiSelect";
 
 export interface SearchFormData {
   currentCompanies: string[];
@@ -28,106 +30,42 @@ export const SearchForm = ({ onSubmit, isLoading }: SearchFormProps) => {
     searchQuery: "",
   });
   
-  const [inputs, setInputs] = useState({
-    currentCompany: "",
-    currentJobTitle: "",
-    location: "",
-  });
+  const [companyInput, setCompanyInput] = useState("");
 
-  const handleAddItem = (field: keyof SearchFormData, inputField: keyof typeof inputs) => {
-    const value = inputs[inputField].trim();
-    const currentArray = formData[field] as string[];
-    if (value && Array.isArray(currentArray) && !currentArray.includes(value)) {
+  const handleAddCompany = () => {
+    const value = companyInput.trim();
+    if (value && !formData.currentCompanies.includes(value)) {
       setFormData({
         ...formData,
-        [field]: [...currentArray, value],
+        currentCompanies: [...formData.currentCompanies, value],
       });
-      setInputs({ ...inputs, [inputField]: "" });
+      setCompanyInput("");
     }
   };
 
-  const handleRemoveItem = (field: keyof SearchFormData, item: string) => {
+  const handleRemoveCompany = (company: string) => {
     setFormData({
       ...formData,
-      [field]: (formData[field] as string[]).filter(i => i !== item),
+      currentCompanies: formData.currentCompanies.filter((c) => c !== company),
     });
   };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
 
-    const buildArray = (field: keyof SearchFormData, inputKey: keyof typeof inputs) => {
-      const current = (formData[field] as string[]) || [];
-      const pending = inputs[inputKey].trim();
-      if (pending && !current.includes(pending)) {
-        return [...current, pending];
-      }
-      return current;
-    };
+    // Include any pending company input
+    const finalCompanies = companyInput.trim() && !formData.currentCompanies.includes(companyInput.trim())
+      ? [...formData.currentCompanies, companyInput.trim()]
+      : formData.currentCompanies;
 
     const finalData: SearchFormData = {
       ...formData,
-      currentCompanies: buildArray("currentCompanies", "currentCompany"),
-      currentJobTitles: buildArray("currentJobTitles", "currentJobTitle"),
-      locations: buildArray("locations", "location"),
+      currentCompanies: finalCompanies,
     };
 
     console.log('Form data being submitted:', finalData);
     onSubmit(finalData);
   };
-
-  const renderArrayInput = (
-    label: string,
-    field: keyof SearchFormData,
-    inputField: keyof typeof inputs,
-    placeholder: string,
-    icon: React.ReactNode
-  ) => (
-    <div className="space-y-2">
-      <Label className="text-xs lg:text-sm font-medium text-foreground flex items-center gap-1.5">
-        {icon}
-        {label}
-      </Label>
-      <div className="flex gap-2">
-        <Input
-          placeholder={placeholder}
-          value={inputs[inputField]}
-          onChange={(e) => setInputs({ ...inputs, [inputField]: e.target.value })}
-          onKeyPress={(e) => {
-            if (e.key === "Enter") {
-              e.preventDefault();
-              handleAddItem(field, inputField);
-            }
-          }}
-          className="h-9 lg:h-10 flex-1 bg-background/50 border-border/50 focus:border-primary/50 text-sm transition-colors"
-        />
-        <Button 
-          type="button" 
-          onClick={() => handleAddItem(field, inputField)} 
-          size="icon"
-          variant="secondary"
-          className="h-9 lg:h-10 w-9 lg:w-10 shrink-0 hover:bg-primary/10 transition-colors"
-        >
-          <Plus className="w-4 h-4" />
-        </Button>
-      </div>
-      {Array.isArray(formData[field]) && (formData[field] as string[]).length > 0 && (
-        <div className="flex flex-wrap gap-1.5 pt-1">
-          {(formData[field] as string[]).map((item) => (
-            <Badge
-              key={item}
-              variant="secondary"
-              className="px-2 py-1 text-xs cursor-pointer hover:bg-destructive/20 hover:text-destructive transition-colors group max-w-[150px]"
-              onClick={() => handleRemoveItem(field, item)}
-            >
-              <span className="truncate">{item}</span>
-              <X className="w-2.5 h-2.5 ml-1 opacity-60 group-hover:opacity-100 shrink-0" />
-            </Badge>
-          ))}
-        </div>
-      )}
-    </div>
-  );
 
   return (
     <div className="rounded-xl border border-border/50 bg-card/80 backdrop-blur-sm shadow-sm hover:shadow-md hover:border-primary/20 transition-all duration-200 overflow-hidden">
@@ -183,32 +121,63 @@ export const SearchForm = ({ onSubmit, isLoading }: SearchFormProps) => {
 
         {/* Filter Fields Grid */}
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 lg:gap-5">
-          {/* Current Companies */}
-          {renderArrayInput(
-            "Companies",
-            "currentCompanies",
-            "currentCompany",
-            "e.g. Google, Microsoft",
-            <Building2 className="w-3.5 h-3.5 lg:w-4 lg:h-4 text-muted-foreground" />
-          )}
+          {/* Companies - keep simple input */}
+          <div className="space-y-2">
+            <Label className="text-xs lg:text-sm font-medium text-foreground flex items-center gap-1.5">
+              <Building2 className="w-3.5 h-3.5 lg:w-4 lg:h-4 text-muted-foreground" />
+              Companies
+            </Label>
+            <div className="flex gap-2">
+              <Input
+                placeholder="e.g. Google, Microsoft"
+                value={companyInput}
+                onChange={(e) => setCompanyInput(e.target.value)}
+                onKeyPress={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    handleAddCompany();
+                  }
+                }}
+                className="h-9 lg:h-10 flex-1 bg-background/50 border-border/50 focus:border-primary/50 text-sm transition-colors"
+              />
+              <Button 
+                type="button" 
+                onClick={handleAddCompany} 
+                size="icon"
+                variant="secondary"
+                className="h-9 lg:h-10 w-9 lg:w-10 shrink-0 hover:bg-primary/10 transition-colors"
+              >
+                <Plus className="w-4 h-4" />
+              </Button>
+            </div>
+            {formData.currentCompanies.length > 0 && (
+              <div className="flex flex-wrap gap-1.5 pt-1">
+                {formData.currentCompanies.map((company) => (
+                  <Badge
+                    key={company}
+                    variant="secondary"
+                    className="px-2 py-1 text-xs cursor-pointer hover:bg-destructive/20 hover:text-destructive transition-colors group max-w-[150px]"
+                    onClick={() => handleRemoveCompany(company)}
+                  >
+                    <span className="truncate">{company}</span>
+                    <X className="w-2.5 h-2.5 ml-1 opacity-60 group-hover:opacity-100 shrink-0" />
+                  </Badge>
+                ))}
+              </div>
+            )}
+          </div>
 
-          {/* Current Job Titles */}
-          {renderArrayInput(
-            "Job Titles",
-            "currentJobTitles",
-            "currentJobTitle",
-            "e.g. Software Engineer",
-            <Briefcase className="w-3.5 h-3.5 lg:w-4 lg:h-4 text-muted-foreground" />
-          )}
+          {/* Job Titles - Smart Multi-Select */}
+          <JobTitleMultiSelect
+            value={formData.currentJobTitles}
+            onChange={(titles) => setFormData({ ...formData, currentJobTitles: titles })}
+          />
 
-          {/* Locations */}
-          {renderArrayInput(
-            "Locations",
-            "locations",
-            "location",
-            "e.g. San Francisco, CA",
-            <MapPin className="w-3.5 h-3.5 lg:w-4 lg:h-4 text-muted-foreground" />
-          )}
+          {/* Locations - Smart Multi-Select */}
+          <LocationMultiSelect
+            value={formData.locations}
+            onChange={(locations) => setFormData({ ...formData, locations })}
+          />
         </div>
 
         <Button
