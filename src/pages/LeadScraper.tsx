@@ -419,7 +419,10 @@ export default function LeadScraper() {
                     isLoading={isLoading}
                   />
                 </div>
+              </TabsContent>
 
+              {/* Leads Tab */}
+              <TabsContent value="leads" className="space-y-6 mt-0">
                 {/* Saved & Recent Searches */}
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 lg:gap-6">
                   <SavedSearches
@@ -433,10 +436,7 @@ export default function LeadScraper() {
                     limit={5}
                   />
                 </div>
-              </TabsContent>
 
-              {/* Leads Tab */}
-              <TabsContent value="leads" className="mt-0">
                 <section className="rounded-xl border border-border/50 bg-card/80 backdrop-blur-sm shadow-sm transition-all duration-200 hover:shadow-md overflow-hidden">
                   <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 p-4 lg:p-6 border-b border-border/30">
                     <div className="min-w-0">
