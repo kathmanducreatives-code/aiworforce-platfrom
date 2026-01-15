@@ -54,7 +54,7 @@ const ScenarioCategoryBadges = ({ categories, showCounts = false, size = 'sm' }:
   }
 
   return (
-    <div className="flex flex-wrap gap-1">
+    <div className="flex flex-wrap gap-1.5 max-w-full overflow-hidden">
       {categories.map(({ category, count }) => {
         const config = categoryConfig[category];
         if (!config) return null;
@@ -67,12 +67,12 @@ const ScenarioCategoryBadges = ({ categories, showCounts = false, size = 'sm' }:
         return (
           <Badge 
             key={category} 
-            className={`${config.className} ${padding} ${text}`}
+            className={`${config.className} ${padding} ${text} whitespace-nowrap flex-shrink-0`}
           >
-            <Icon className={`${iconSize} mr-1`} />
-            {config.label}
+            <Icon className={`${iconSize} mr-1 flex-shrink-0`} />
+            <span className="truncate">{config.label}</span>
             {showCounts && count > 0 && (
-              <span className="ml-1 font-bold">({count})</span>
+              <span className="ml-1 font-bold flex-shrink-0">({count})</span>
             )}
           </Badge>
         );

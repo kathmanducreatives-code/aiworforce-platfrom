@@ -335,8 +335,8 @@ const CreateScreeningDialog = ({
 
   return (
     <Dialog open={open} onOpenChange={handleClose}>
-      <DialogContent className="sm:max-w-lg">
-        <DialogHeader>
+      <DialogContent className="sm:max-w-xl max-h-[90vh] overflow-hidden flex flex-col">
+        <DialogHeader className="flex-shrink-0">
           <DialogTitle className="flex items-center gap-2">
             {getStepIcon()}
             Create Behavioral Screening
@@ -350,14 +350,14 @@ const CreateScreeningDialog = ({
         </DialogHeader>
 
         {generatedUrl ? (
-          <div className="space-y-4">
+          <div className="space-y-4 p-1">
             <div className="p-4 bg-muted/50 rounded-lg">
               <Label className="text-sm text-muted-foreground mb-2 block">Screening Link for {selectedCandidate?.candidate_name}</Label>
               <div className="flex gap-2">
-                <code className="flex-1 bg-background p-2 rounded text-xs break-all">
+                <code className="flex-1 bg-background p-2 rounded text-xs break-all min-w-0">
                   {generatedUrl}
                 </code>
-                <Button size="icon" variant="outline" onClick={copyToClipboard}>
+                <Button size="icon" variant="outline" onClick={copyToClipboard} className="flex-shrink-0">
                   {copied ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
                 </Button>
               </div>
@@ -369,8 +369,8 @@ const CreateScreeningDialog = ({
             </p>
           </div>
         ) : (
-          <ScrollArea className="max-h-[60vh]">
-            <div className="space-y-4 pr-4">
+          <ScrollArea className="flex-1 min-h-0 max-h-[65vh]">
+            <div className="space-y-4 pr-4 pb-4">
               {/* Step 1: Role Briefing */}
               {currentStep === "role_briefing" && (
                 <RoleBriefingForm value={roleBriefing} onChange={setRoleBriefing} />
@@ -419,7 +419,7 @@ const CreateScreeningDialog = ({
                         className="pl-10"
                       />
                     </div>
-                    <ScrollArea className="h-40 border rounded-lg">
+                    <ScrollArea className="h-48 border rounded-lg">
                       <div className="p-2 space-y-1">
                         {filteredCandidates.length === 0 ? (
                           <p className="text-sm text-muted-foreground text-center py-4">

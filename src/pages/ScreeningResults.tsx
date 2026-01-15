@@ -298,160 +298,163 @@ const ScreeningResults = () => {
   };
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold text-foreground">Behavioral Screening</h1>
-          <p className="text-muted-foreground mt-1">
+    <div className="space-y-6 px-1">
+      {/* Header - responsive with proper wrapping */}
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        <div className="min-w-0">
+          <h1 className="text-2xl sm:text-3xl font-bold text-foreground">Behavioral Screening</h1>
+          <p className="text-muted-foreground mt-1 text-sm sm:text-base">
             Adaptive Stress-Based Screening™ results and insights
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <Button onClick={() => navigate("/behavioral-screening/templates")} variant="outline" size="sm">
             <FileText className="w-4 h-4 mr-2" />
-            Manage Templates
+            <span className="hidden sm:inline">Manage </span>Templates
           </Button>
           <Button onClick={fetchSessions} variant="outline" size="sm">
             <RefreshCw className="w-4 h-4 mr-2" />
-            Refresh
+            <span className="hidden sm:inline">Refresh</span>
           </Button>
-          <Button onClick={() => setShowCreateDialog(true)}>
+          <Button onClick={() => setShowCreateDialog(true)} size="sm">
             <UserPlus className="w-4 h-4 mr-2" />
-            Create Screening
+            <span className="hidden sm:inline">Create </span>Screening
           </Button>
         </div>
       </div>
 
-      {/* Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+      {/* Stats Cards - responsive grid */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 lg:gap-4">
         <Card className="bg-card/50 border-border">
-          <CardContent className="pt-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-muted-foreground">Total Sessions</p>
-                <p className="text-2xl font-bold">{stats.total}</p>
+          <CardContent className="p-4 lg:pt-6">
+            <div className="flex items-center justify-between gap-2">
+              <div className="min-w-0">
+                <p className="text-xs lg:text-sm text-muted-foreground truncate">Total Sessions</p>
+                <p className="text-xl lg:text-2xl font-bold">{stats.total}</p>
               </div>
-              <Users className="w-8 h-8 text-primary/50" />
+              <Users className="w-6 h-6 lg:w-8 lg:h-8 text-primary/50 flex-shrink-0" />
             </div>
           </CardContent>
         </Card>
         <Card className="bg-card/50 border-border">
-          <CardContent className="pt-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-muted-foreground">Completed</p>
-                <p className="text-2xl font-bold text-green-400">{stats.completed}</p>
+          <CardContent className="p-4 lg:pt-6">
+            <div className="flex items-center justify-between gap-2">
+              <div className="min-w-0">
+                <p className="text-xs lg:text-sm text-muted-foreground truncate">Completed</p>
+                <p className="text-xl lg:text-2xl font-bold text-green-400">{stats.completed}</p>
               </div>
-              <CheckCircle className="w-8 h-8 text-green-500/50" />
+              <CheckCircle className="w-6 h-6 lg:w-8 lg:h-8 text-green-500/50 flex-shrink-0" />
             </div>
           </CardContent>
         </Card>
         <Card className="bg-card/50 border-border">
-          <CardContent className="pt-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-muted-foreground">In Progress</p>
-                <p className="text-2xl font-bold text-blue-400">{stats.inProgress}</p>
+          <CardContent className="p-4 lg:pt-6">
+            <div className="flex items-center justify-between gap-2">
+              <div className="min-w-0">
+                <p className="text-xs lg:text-sm text-muted-foreground truncate">In Progress</p>
+                <p className="text-xl lg:text-2xl font-bold text-blue-400">{stats.inProgress}</p>
               </div>
-              <Clock className="w-8 h-8 text-blue-500/50" />
+              <Clock className="w-6 h-6 lg:w-8 lg:h-8 text-blue-500/50 flex-shrink-0" />
             </div>
           </CardContent>
         </Card>
         <Card className="bg-card/50 border-border">
-          <CardContent className="pt-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-muted-foreground">High Risk</p>
-                <p className="text-2xl font-bold text-red-400">{stats.highRisk}</p>
+          <CardContent className="p-4 lg:pt-6">
+            <div className="flex items-center justify-between gap-2">
+              <div className="min-w-0">
+                <p className="text-xs lg:text-sm text-muted-foreground truncate">High Risk</p>
+                <p className="text-xl lg:text-2xl font-bold text-red-400">{stats.highRisk}</p>
               </div>
-              <AlertTriangle className="w-8 h-8 text-red-500/50" />
+              <AlertTriangle className="w-6 h-6 lg:w-8 lg:h-8 text-red-500/50 flex-shrink-0" />
             </div>
           </CardContent>
         </Card>
       </div>
 
-      {/* Filters */}
+      {/* Filters - improved responsive wrapping */}
       <Card className="bg-card/50 border-border">
-        <CardContent className="pt-6">
-          <div className="flex flex-col md:flex-row gap-4">
-            <div className="flex-1 relative">
+        <CardContent className="p-4 lg:pt-6">
+          <div className="flex flex-col gap-3 lg:flex-row lg:flex-wrap lg:items-center">
+            <div className="flex-1 min-w-0 lg:min-w-[240px] relative">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
               <Input
-                placeholder="Search by candidate name, email, or position..."
+                placeholder="Search candidate, email, position..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 className="pl-10"
               />
             </div>
-            <Select value={dateFilter} onValueChange={setDateFilter}>
-              <SelectTrigger className="w-full md:w-36">
-                <Calendar className="w-4 h-4 mr-2 text-muted-foreground" />
-                <SelectValue placeholder="Date" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Time</SelectItem>
-                <SelectItem value="today">Today</SelectItem>
-                <SelectItem value="week">This Week</SelectItem>
-                <SelectItem value="month">This Month</SelectItem>
-              </SelectContent>
-            </Select>
-            <Select value={statusFilter} onValueChange={setStatusFilter}>
-              <SelectTrigger className="w-full md:w-40">
-                <SelectValue placeholder="Status" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Statuses</SelectItem>
-                <SelectItem value="completed">Completed</SelectItem>
-                <SelectItem value="in_progress">In Progress</SelectItem>
-                <SelectItem value="invited">Invited</SelectItem>
-                <SelectItem value="expired">Expired</SelectItem>
-              </SelectContent>
-            </Select>
-            <Select value={riskFilter} onValueChange={setRiskFilter}>
-              <SelectTrigger className="w-full md:w-40">
-                <SelectValue placeholder="Risk Level" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Risk Levels</SelectItem>
-                <SelectItem value="low">Low Risk</SelectItem>
-                <SelectItem value="medium">Medium Risk</SelectItem>
-                <SelectItem value="high">High Risk</SelectItem>
-              </SelectContent>
-            </Select>
-            {uniqueRoles.length > 0 && (
-              <Select value={roleFilter} onValueChange={setRoleFilter}>
-                <SelectTrigger className="w-full md:w-48">
-                  <SelectValue placeholder="Role/Position" />
+            <div className="flex flex-wrap gap-2">
+              <Select value={dateFilter} onValueChange={setDateFilter}>
+                <SelectTrigger className="w-[130px]">
+                  <Calendar className="w-4 h-4 mr-2 text-muted-foreground flex-shrink-0" />
+                  <SelectValue placeholder="Date" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all">All Positions</SelectItem>
-                  {uniqueRoles.map(role => (
-                    <SelectItem key={role} value={role}>{role}</SelectItem>
-                  ))}
+                  <SelectItem value="all">All Time</SelectItem>
+                  <SelectItem value="today">Today</SelectItem>
+                  <SelectItem value="week">This Week</SelectItem>
+                  <SelectItem value="month">This Month</SelectItem>
                 </SelectContent>
               </Select>
-            )}
+              <Select value={statusFilter} onValueChange={setStatusFilter}>
+                <SelectTrigger className="w-[140px]">
+                  <SelectValue placeholder="Status" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Statuses</SelectItem>
+                  <SelectItem value="completed">Completed</SelectItem>
+                  <SelectItem value="in_progress">In Progress</SelectItem>
+                  <SelectItem value="invited">Invited</SelectItem>
+                  <SelectItem value="expired">Expired</SelectItem>
+                </SelectContent>
+              </Select>
+              <Select value={riskFilter} onValueChange={setRiskFilter}>
+                <SelectTrigger className="w-[140px]">
+                  <SelectValue placeholder="Risk Level" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Risk Levels</SelectItem>
+                  <SelectItem value="low">Low Risk</SelectItem>
+                  <SelectItem value="medium">Medium Risk</SelectItem>
+                  <SelectItem value="high">High Risk</SelectItem>
+                </SelectContent>
+              </Select>
+              {uniqueRoles.length > 0 && (
+                <Select value={roleFilter} onValueChange={setRoleFilter}>
+                  <SelectTrigger className="w-[160px]">
+                    <SelectValue placeholder="Position" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Positions</SelectItem>
+                    {uniqueRoles.map(role => (
+                      <SelectItem key={role} value={role}>{role}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
+            </div>
           </div>
         </CardContent>
       </Card>
 
-      {/* Sessions Table */}
-      <Card className="bg-card/50 border-border">
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
+      {/* Sessions Table - with horizontal scroll for overflow */}
+      <Card className="bg-card/50 border-border overflow-hidden">
+        <CardHeader className="p-4 lg:p-6">
+          <CardTitle className="flex items-center gap-2 text-lg">
             <Brain className="w-5 h-5 text-primary" />
             Screening Sessions
           </CardTitle>
         </CardHeader>
-        <CardContent>
+        <CardContent className="p-0 lg:p-6 lg:pt-0">
           {isLoading ? (
-            <div className="space-y-3">
+            <div className="space-y-3 p-4 lg:p-0">
               {[1, 2, 3, 4, 5].map((i) => (
                 <Skeleton key={i} className="h-16 w-full" />
               ))}
             </div>
           ) : filteredSessions.length === 0 ? (
-            <div className="text-center py-12">
+            <div className="text-center py-12 px-4">
               <Brain className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
               <p className="text-muted-foreground">No screening sessions found</p>
               <p className="text-sm text-muted-foreground mt-1">
@@ -466,76 +469,80 @@ const ScreeningResults = () => {
               </Button>
             </div>
           ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Candidate</TableHead>
-                  <TableHead>Position</TableHead>
-                  <TableHead>Categories</TableHead>
-                  <TableHead>Progress</TableHead>
-                  <TableHead>Risk Level</TableHead>
-                  <TableHead>Invited</TableHead>
-                  <TableHead>Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {filteredSessions.map((session) => (
-                  <TableRow 
-                    key={session.id}
-                    className="cursor-pointer hover:bg-muted/50 transition-colors"
-                    onClick={() => handleRowClick(session.id)}
-                  >
-                    <TableCell>
-                      <div>
-                        <p className="font-medium">{session.candidate_name || 'Unknown'}</p>
-                        <p className="text-sm text-muted-foreground">{session.candidate_email}</p>
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <span className="text-sm text-muted-foreground">
-                        {session.recruitment_name || '—'}
-                      </span>
-                    </TableCell>
-                    <TableCell>
-                      <ScenarioCategoryBadges 
-                        categories={session.categories || []} 
-                        showCounts={session.session_status === 'completed'}
-                      />
-                    </TableCell>
-                    <TableCell>
-                      {getProgressBadge(session)}
-                    </TableCell>
-                    <TableCell>
-                      {session.session_status === 'completed' ? (
-                        getRiskBadge(session.overall_risk_level) || (
-                          <Badge variant="secondary">Analyzing...</Badge>
-                        )
-                      ) : (
-                        <span className="text-sm text-muted-foreground">—</span>
-                      )}
-                    </TableCell>
-                    <TableCell>
-                      <span className="text-sm text-muted-foreground">
-                        {format(new Date(session.invited_at), 'MMM d, yyyy')}
-                      </span>
-                    </TableCell>
-                    <TableCell>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleRowClick(session.id);
-                        }}
-                      >
-                        <Eye className="w-4 h-4 mr-1" />
-                        View
-                      </Button>
-                    </TableCell>
+            <div className="overflow-x-auto">
+              <Table className="min-w-[900px]">
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="min-w-[180px]">Candidate</TableHead>
+                    <TableHead className="min-w-[120px]">Position</TableHead>
+                    <TableHead className="min-w-[200px]">Categories</TableHead>
+                    <TableHead className="min-w-[100px]">Progress</TableHead>
+                    <TableHead className="min-w-[110px]">Risk Level</TableHead>
+                    <TableHead className="min-w-[100px]">Invited</TableHead>
+                    <TableHead className="min-w-[80px]">Actions</TableHead>
                   </TableRow>
-                ))}
-              </TableBody>
-            </Table>
+                </TableHeader>
+                <TableBody>
+                  {filteredSessions.map((session) => (
+                    <TableRow 
+                      key={session.id}
+                      className="cursor-pointer hover:bg-muted/50 transition-colors"
+                      onClick={() => handleRowClick(session.id)}
+                    >
+                      <TableCell>
+                        <div className="min-w-0">
+                          <p className="font-medium truncate max-w-[160px]">{session.candidate_name || 'Unknown'}</p>
+                          <p className="text-sm text-muted-foreground truncate max-w-[160px]">{session.candidate_email}</p>
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <span className="text-sm text-muted-foreground truncate block max-w-[110px]">
+                          {session.recruitment_name || '—'}
+                        </span>
+                      </TableCell>
+                      <TableCell>
+                        <div className="max-w-[200px] overflow-hidden">
+                          <ScenarioCategoryBadges 
+                            categories={session.categories || []} 
+                            showCounts={session.session_status === 'completed'}
+                          />
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        {getProgressBadge(session)}
+                      </TableCell>
+                      <TableCell>
+                        {session.session_status === 'completed' ? (
+                          getRiskBadge(session.overall_risk_level) || (
+                            <Badge variant="secondary" className="whitespace-nowrap">Analyzing...</Badge>
+                          )
+                        ) : (
+                          <span className="text-sm text-muted-foreground">—</span>
+                        )}
+                      </TableCell>
+                      <TableCell>
+                        <span className="text-sm text-muted-foreground whitespace-nowrap">
+                          {format(new Date(session.invited_at), 'MMM d, yyyy')}
+                        </span>
+                      </TableCell>
+                      <TableCell>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleRowClick(session.id);
+                          }}
+                        >
+                          <Eye className="w-4 h-4 mr-1" />
+                          View
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
           )}
         </CardContent>
       </Card>
