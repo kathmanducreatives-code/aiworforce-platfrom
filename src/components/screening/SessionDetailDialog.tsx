@@ -13,7 +13,6 @@ import {
   Calendar,
   User,
   Briefcase,
-  ExternalLink
 } from "lucide-react";
 import { format } from "date-fns";
 import BehavioralAnalysisCard from "./BehavioralAnalysisCard";
@@ -199,125 +198,129 @@ const SessionDetailDialog = ({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
-        <DialogHeader>
+      <DialogContent className="max-w-5xl max-h-[85vh] overflow-hidden flex flex-col">
+        <DialogHeader className="flex-shrink-0 pb-4">
           <DialogTitle className="flex items-center gap-2">
             <Brain className="w-5 h-5 text-primary" />
             Session Details
           </DialogTitle>
         </DialogHeader>
 
-        {isLoading ? (
-          <div className="space-y-4">
-            <Skeleton className="h-24 w-full" />
-            <Skeleton className="h-48 w-full" />
-          </div>
-        ) : session ? (
-          <div className="space-y-6">
-            {/* Session Header */}
-            <div className="p-4 bg-muted/30 rounded-lg border">
-              <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-                <div>
-                  <h3 className="text-xl font-semibold flex items-center gap-2">
-                    <User className="w-5 h-5 text-muted-foreground" />
-                    {session.candidate_name}
-                  </h3>
-                  <div className="flex flex-wrap items-center gap-3 mt-2 text-sm text-muted-foreground">
-                    {session.recruitment_name && (
-                      <span className="flex items-center gap-1">
-                        <Briefcase className="w-4 h-4" />
-                        {session.recruitment_name}
+        <div className="flex-1 overflow-y-auto min-h-0">
+          {isLoading ? (
+            <div className="space-y-4 p-1">
+              <Skeleton className="h-24 w-full" />
+              <Skeleton className="h-48 w-full" />
+            </div>
+          ) : session ? (
+            <div className="space-y-6 p-1">
+              {/* Session Header - improved layout */}
+              <div className="p-4 lg:p-5 bg-muted/30 rounded-lg border">
+                <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4">
+                  <div className="min-w-0 flex-1">
+                    <h3 className="text-lg lg:text-xl font-semibold flex items-center gap-2">
+                      <User className="w-5 h-5 text-muted-foreground flex-shrink-0" />
+                      <span className="truncate">{session.candidate_name}</span>
+                    </h3>
+                    <div className="flex flex-wrap items-center gap-x-4 gap-y-2 mt-2 text-sm text-muted-foreground">
+                      {session.recruitment_name && (
+                        <span className="flex items-center gap-1.5 min-w-0">
+                          <Briefcase className="w-4 h-4 flex-shrink-0" />
+                          <span className="truncate">{session.recruitment_name}</span>
+                        </span>
+                      )}
+                      <span className="flex items-center gap-1.5">
+                        <Calendar className="w-4 h-4 flex-shrink-0" />
+                        Invited {format(new Date(session.invited_at), 'MMM d, yyyy')}
                       </span>
+                    </div>
+                  </div>
+                  <div className="flex flex-wrap items-center gap-2 flex-shrink-0">
+                    {getStatusBadge(session.session_status)}
+                    {session.session_status === 'invited' && (
+                      <Button variant="outline" size="sm" onClick={copyScreeningLink}>
+                        {copied ? <Check className="w-4 h-4 mr-1" /> : <Copy className="w-4 h-4 mr-1" />}
+                        Copy Link
+                      </Button>
                     )}
-                    <span className="flex items-center gap-1">
-                      <Calendar className="w-4 h-4" />
-                      Invited {format(new Date(session.invited_at), 'MMM d, yyyy')}
-                    </span>
                   </div>
                 </div>
-                <div className="flex items-center gap-2">
-                  {getStatusBadge(session.session_status)}
-                  {session.session_status === 'invited' && (
-                    <Button variant="outline" size="sm" onClick={copyScreeningLink}>
-                      {copied ? <Check className="w-4 h-4 mr-1" /> : <Copy className="w-4 h-4 mr-1" />}
-                      Copy Link
-                    </Button>
-                  )}
-                </div>
-              </div>
 
-              {/* Scenario Categories */}
-              <div className="mt-4 pt-4 border-t">
-                <p className="text-sm text-muted-foreground mb-2">Scenario Categories</p>
-                <ScenarioCategoryBadges 
-                  categories={categoryBreakdown} 
-                  showCounts={session.session_status === 'completed'}
-                  size="md"
-                />
-              </div>
-
-              {/* Progress indicator for in-progress sessions */}
-              {session.session_status === 'in_progress' && (
+                {/* Scenario Categories */}
                 <div className="mt-4 pt-4 border-t">
-                  <p className="text-sm text-muted-foreground">
-                    Progress: Scenario {session.current_scenario_index + 1} of {session.scenario_count}
-                  </p>
-                  <div className="w-full bg-muted rounded-full h-2 mt-2">
-                    <div 
-                      className="bg-primary h-2 rounded-full transition-all"
-                      style={{ width: `${((session.current_scenario_index + 1) / session.scenario_count) * 100}%` }}
+                  <p className="text-sm text-muted-foreground mb-2">Scenario Categories</p>
+                  <div className="overflow-hidden">
+                    <ScenarioCategoryBadges 
+                      categories={categoryBreakdown} 
+                      showCounts={session.session_status === 'completed'}
+                      size="md"
                     />
                   </div>
                 </div>
+
+                {/* Progress indicator for in-progress sessions */}
+                {session.session_status === 'in_progress' && (
+                  <div className="mt-4 pt-4 border-t">
+                    <p className="text-sm text-muted-foreground">
+                      Progress: Scenario {session.current_scenario_index + 1} of {session.scenario_count}
+                    </p>
+                    <div className="w-full bg-muted rounded-full h-2 mt-2 overflow-hidden">
+                      <div 
+                        className="bg-primary h-2 rounded-full transition-all"
+                        style={{ width: `${((session.current_scenario_index + 1) / session.scenario_count) * 100}%` }}
+                      />
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Analysis and Transcript Tabs */}
+              {session.session_status === 'completed' && analysis ? (
+                <Tabs defaultValue="analysis" className="w-full">
+                  <TabsList className="grid w-full grid-cols-2">
+                    <TabsTrigger value="analysis">Behavioral Analysis</TabsTrigger>
+                    <TabsTrigger value="transcript">Full Transcript</TabsTrigger>
+                  </TabsList>
+                  <TabsContent value="analysis" className="mt-4 min-h-[300px]">
+                    <BehavioralAnalysisCard analysis={analysis} />
+                  </TabsContent>
+                  <TabsContent value="transcript" className="mt-4 min-h-[300px]">
+                    <BehavioralAnalysisCard 
+                      analysis={analysis} 
+                      conversationLogs={conversationLogs.map(log => ({
+                        role: log.role,
+                        content: log.content,
+                        created_at: log.created_at,
+                      }))} 
+                    />
+                  </TabsContent>
+                </Tabs>
+              ) : session.session_status === 'completed' ? (
+                <div className="text-center py-8 text-muted-foreground">
+                  <Brain className="w-12 h-12 mx-auto mb-4 opacity-50" />
+                  <p>Behavioral analysis is being processed...</p>
+                  <p className="text-sm mt-1">This may take a few moments.</p>
+                </div>
+              ) : (
+                <div className="text-center py-8 text-muted-foreground">
+                  <Brain className="w-12 h-12 mx-auto mb-4 opacity-50" />
+                  <p>Session not yet completed</p>
+                  <p className="text-sm mt-1">
+                    {session.session_status === 'invited' 
+                      ? 'Waiting for candidate to start the screening.'
+                      : session.session_status === 'in_progress'
+                      ? 'Candidate is currently completing the screening.'
+                      : 'This session has expired or was abandoned.'}
+                  </p>
+                </div>
               )}
             </div>
-
-            {/* Analysis and Transcript Tabs */}
-            {session.session_status === 'completed' && analysis ? (
-              <Tabs defaultValue="analysis" className="w-full">
-                <TabsList className="grid w-full grid-cols-2">
-                  <TabsTrigger value="analysis">Behavioral Analysis</TabsTrigger>
-                  <TabsTrigger value="transcript">Full Transcript</TabsTrigger>
-                </TabsList>
-                <TabsContent value="analysis" className="mt-4">
-                  <BehavioralAnalysisCard analysis={analysis} />
-                </TabsContent>
-                <TabsContent value="transcript" className="mt-4">
-                  <BehavioralAnalysisCard 
-                    analysis={analysis} 
-                    conversationLogs={conversationLogs.map(log => ({
-                      role: log.role,
-                      content: log.content,
-                      created_at: log.created_at,
-                    }))} 
-                  />
-                </TabsContent>
-              </Tabs>
-            ) : session.session_status === 'completed' ? (
-              <div className="text-center py-8 text-muted-foreground">
-                <Brain className="w-12 h-12 mx-auto mb-4 opacity-50" />
-                <p>Behavioral analysis is being processed...</p>
-                <p className="text-sm mt-1">This may take a few moments.</p>
-              </div>
-            ) : (
-              <div className="text-center py-8 text-muted-foreground">
-                <Brain className="w-12 h-12 mx-auto mb-4 opacity-50" />
-                <p>Session not yet completed</p>
-                <p className="text-sm mt-1">
-                  {session.session_status === 'invited' 
-                    ? 'Waiting for candidate to start the screening.'
-                    : session.session_status === 'in_progress'
-                    ? 'Candidate is currently completing the screening.'
-                    : 'This session has expired or was abandoned.'}
-                </p>
-              </div>
-            )}
-          </div>
-        ) : (
-          <div className="text-center py-8 text-muted-foreground">
-            Session not found
-          </div>
-        )}
+          ) : (
+            <div className="text-center py-8 text-muted-foreground">
+              Session not found
+            </div>
+          )}
+        </div>
       </DialogContent>
     </Dialog>
   );
