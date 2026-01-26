@@ -8,12 +8,14 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/component
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { LocationMultiSelect } from "./LocationMultiSelect";
 import { JobTitleMultiSelect } from "./JobTitleMultiSelect";
+import { IndustryMultiSelect } from "./IndustryMultiSelect";
 import { Input } from "@/components/ui/input";
 import { X } from "lucide-react";
 
 export interface FilterState {
   skipOwned: boolean;
   jobTitles: string[];
+  industries: string[];
   locations: string[];
   companies: string[];
   keywords: string[];
@@ -109,6 +111,7 @@ export const FiltersSidebar = ({
 
   const activeFilterCount =
     filters.jobTitles.length +
+    filters.industries.length +
     filters.locations.length +
     filters.companies.length +
     filters.keywords.length;
@@ -156,6 +159,20 @@ export const FiltersSidebar = ({
             />
           </FilterSection>
 
+          {/* Industries */}
+          <FilterSection
+            title="Industries"
+            icon={<Building2 className="w-4 h-4" />}
+            count={filters.industries.length}
+            defaultOpen={true}
+          >
+            <IndustryMultiSelect
+              value={filters.industries}
+              onChange={(industries) => updateFilters({ industries })}
+              placeholder="Select industries..."
+            />
+          </FilterSection>
+
           {/* Location */}
           <FilterSection
             title="Location"
@@ -166,8 +183,11 @@ export const FiltersSidebar = ({
             <LocationMultiSelect
               value={filters.locations}
               onChange={(locations) => updateFilters({ locations })}
-              placeholder="Search countries..."
+              placeholder="Search countries or cities..."
             />
+            <p className="text-[10px] text-muted-foreground mt-1.5 px-1">
+              Select specific cities or broader regions to adjust result volume.
+            </p>
           </FilterSection>
 
           {/* Companies */}
@@ -201,11 +221,13 @@ export const FiltersSidebar = ({
                     <Badge
                       key={company}
                       variant="secondary"
-                      className="gap-1 pr-1 hover:bg-destructive/20 group cursor-pointer transition-colors"
-                      onClick={() => handleRemoveCompany(company)}
+                      className="px-2 py-0.5 text-xs flex items-center gap-1"
                     >
                       {company}
-                      <X className="w-3 h-3 text-muted-foreground group-hover:text-destructive" />
+                      <X
+                        className="w-3 h-3 cursor-pointer hover:text-destructive"
+                        onClick={() => handleRemoveCompany(company)}
+                      />
                     </Badge>
                   ))}
                 </div>
@@ -244,11 +266,13 @@ export const FiltersSidebar = ({
                     <Badge
                       key={keyword}
                       variant="secondary"
-                      className="gap-1 pr-1 hover:bg-destructive/20 group cursor-pointer transition-colors"
-                      onClick={() => handleRemoveKeyword(keyword)}
+                      className="px-2 py-0.5 text-xs flex items-center gap-1"
                     >
                       {keyword}
-                      <X className="w-3 h-3 text-muted-foreground group-hover:text-destructive" />
+                      <X
+                        className="w-3 h-3 cursor-pointer hover:text-destructive"
+                        onClick={() => handleRemoveKeyword(keyword)}
+                      />
                     </Badge>
                   ))}
                 </div>
@@ -261,25 +285,18 @@ export const FiltersSidebar = ({
             title="Max Results"
             icon={<SlidersHorizontal className="w-4 h-4" />}
           >
-            <div className="space-y-3 pt-1">
+            <div className="space-y-4 pt-1">
               <div className="flex items-center justify-between">
-                <span className="text-sm text-muted-foreground">Limit</span>
-                <Badge variant="outline" className="font-mono">
-                  {filters.maxResults}
-                </Badge>
+                <span className="text-sm font-medium">{filters.maxResults} leads</span>
               </div>
               <Slider
                 value={[filters.maxResults]}
-                onValueChange={([value]) => updateFilters({ maxResults: value })}
                 min={10}
-                max={500}
+                max={100}
                 step={10}
+                onValueChange={(value) => updateFilters({ maxResults: value[0] })}
                 className="w-full"
               />
-              <div className="flex justify-between text-xs text-muted-foreground">
-                <span>10</span>
-                <span>500</span>
-              </div>
             </div>
           </FilterSection>
         </div>
@@ -292,19 +309,10 @@ export const FiltersSidebar = ({
           onClick={onApplyFilters}
           disabled={isLoading}
         >
-          {isLoading ? (
-            <>
-              <div className="w-4 h-4 border-2 border-primary-foreground/30 border-t-primary-foreground rounded-full animate-spin" />
-              Searching...
-            </>
-          ) : (
-            <>
-              <Filter className="w-4 h-4" />
-              Apply Filters
-            </>
-          )}
+          {isLoading ? "Searching..." : "Apply Filters"}
         </Button>
       </div>
     </div>
+
   );
 };

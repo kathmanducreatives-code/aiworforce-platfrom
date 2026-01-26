@@ -25,6 +25,7 @@ import { DeepSearchResults } from "@/components/lead-scraper/DeepSearchResults";
 const defaultFilters: FilterState = {
   skipOwned: false,
   jobTitles: [],
+  industries: [],
   locations: [],
   companies: [],
   keywords: [],
@@ -68,9 +69,14 @@ export default function LeadScraper() {
     if (activeTab === 'search') {
       setShowFiltersSidebar(true);
     } else if (activeTab === 'leads') {
-      setShowFiltersSidebar(false);
+      // Keep sidebar open if scraping is active
+      if (isScrapingActive) {
+        setShowFiltersSidebar(true);
+      } else {
+        setShowFiltersSidebar(false);
+      }
     }
-  }, [activeTab]);
+  }, [activeTab, isScrapingActive]);
 
   const lastToastTime = useRef(0);
   const pendingLeads = useRef<LinkedInLead[]>([]);
@@ -217,6 +223,7 @@ export default function LeadScraper() {
     // Check requirements using activeFilters
     const hasRequirements =
       activeFilters.jobTitles.length > 0 ||
+      activeFilters.industries.length > 0 ||
       activeFilters.locations.length > 0 ||
       activeFilters.companies.length > 0 ||
       activeFilters.keywords.length > 0;
@@ -231,7 +238,13 @@ export default function LeadScraper() {
     }
 
     try {
+      // Start animation immediately
       setIsLoading(true);
+      setIsScrapingActive(true);
+      setHasStartedScraping(true);
+      setLeads([]);
+      setActiveTab("leads");
+
       setSearchResultMetadata(undefined);
       setSuggestions([]);
       setLastSearchQuery(trimmed);
@@ -242,6 +255,7 @@ export default function LeadScraper() {
       const formData = {
         currentCompanies: activeFilters.companies,
         currentJobTitles: activeFilters.jobTitles,
+        currentIndustries: activeFilters.industries, // Pass industries
         locations: activeFilters.locations,
         maxItems: activeFilters.maxResults,
         searchQuery: trimmed,
@@ -286,14 +300,14 @@ export default function LeadScraper() {
 
       setActiveSessionId(session.id);
       setActiveSessionName(autoName);
-      setLeads([]);
-      setIsScrapingActive(true);
-      setHasStartedScraping(true);
+      // setLeads([]) handled above
+      // setIsScrapingActive(true) handled above
+      // setHasStartedScraping(true) handled above
       setIsSearchInitialized(true);
       setSessionIdForSaveCard(session.id);
       setSaveSearchDismissed(false);
       setSaveSearchCompleted(false);
-      setActiveTab("leads");
+      // setActiveTab("leads") handled above
 
       if (scrapingTimeoutRef.current) clearTimeout(scrapingTimeoutRef.current);
       scrapingTimeoutRef.current = setTimeout(() => {

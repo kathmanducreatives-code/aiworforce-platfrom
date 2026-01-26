@@ -16,7 +16,7 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
-import { Label } from "@/components/ui/label";
+// Label import removed
 
 // Popular countries shown first
 const POPULAR_COUNTRIES = [
@@ -35,6 +35,26 @@ const POPULAR_COUNTRIES = [
   "United Arab Emirates",
   "Switzerland",
   "Ireland",
+];
+
+const REGIONS = [
+  "North America",
+  "Europe",
+  "APAC",
+  "EMEA",
+  "LATAM",
+  "Southeast Asia",
+  "Nordics",
+  "DACH",
+];
+
+const MAJOR_CITIES = [
+  "New York, NY", "San Francisco, CA", "London, UK", "New York", "London",
+  "San Francisco", "Austin, TX", "Los Angeles, CA", "Chicago, IL",
+  "Toronto, Canada", "Berlin, Germany", "Paris, France", "Amsterdam, Netherlands",
+  "Singapore", "Tokyo, Japan", "Sydney, Australia", "Dubai, UAE",
+  "Bangalore, India", "Mumbai, India", "Tel Aviv, Israel", "São Paulo, Brazil",
+  "Mexico City, Mexico", "Hong Kong"
 ];
 
 // Complete list of countries
@@ -100,7 +120,19 @@ export const LocationMultiSelect = ({
     onChange(value.filter((v) => v !== country));
   };
 
-  // Filter countries based on search
+  // Filter lists based on search
+  const filteredRegions = REGIONS.filter(
+    (region) =>
+      region.toLowerCase().includes(search.toLowerCase()) &&
+      !value.includes(region)
+  );
+
+  const filteredCities = MAJOR_CITIES.filter(
+    (city) =>
+      city.toLowerCase().includes(search.toLowerCase()) &&
+      !value.includes(city)
+  );
+
   const filteredPopular = POPULAR_COUNTRIES.filter(
     (country) =>
       country.toLowerCase().includes(search.toLowerCase()) &&
@@ -115,10 +147,6 @@ export const LocationMultiSelect = ({
 
   return (
     <div className="space-y-2">
-      <Label className="text-xs lg:text-sm font-medium text-foreground flex items-center gap-1.5">
-        <MapPin className="w-3.5 h-3.5 lg:w-4 lg:h-4 text-muted-foreground" />
-        Locations
-      </Label>
 
       <Popover open={open} onOpenChange={setOpen}>
         <PopoverTrigger asChild>
@@ -169,6 +197,40 @@ export const LocationMultiSelect = ({
                     >
                       <Check className="h-4 w-4 text-primary shrink-0" />
                       <span className="flex-1 truncate">{country}</span>
+                    </CommandItem>
+                  ))}
+                </CommandGroup>
+              )}
+
+              {/* Regions */}
+              {filteredRegions.length > 0 && (
+                <CommandGroup heading="Regions">
+                  {filteredRegions.map((region) => (
+                    <CommandItem
+                      key={region}
+                      value={region}
+                      onSelect={() => handleSelect(region)}
+                      className="flex items-center gap-2 cursor-pointer hover:bg-primary/10"
+                    >
+                      <div className="h-4 w-4 border border-border/50 rounded-sm shrink-0" />
+                      <span className="flex-1 truncate">{region}</span>
+                    </CommandItem>
+                  ))}
+                </CommandGroup>
+              )}
+
+              {/* Cities */}
+              {filteredCities.length > 0 && (
+                <CommandGroup heading="Cities">
+                  {filteredCities.map((city) => (
+                    <CommandItem
+                      key={city}
+                      value={city}
+                      onSelect={() => handleSelect(city)}
+                      className="flex items-center gap-2 cursor-pointer hover:bg-primary/10"
+                    >
+                      <div className="h-4 w-4 border border-border/50 rounded-sm shrink-0" />
+                      <span className="flex-1 truncate">{city}</span>
                     </CommandItem>
                   ))}
                 </CommandGroup>

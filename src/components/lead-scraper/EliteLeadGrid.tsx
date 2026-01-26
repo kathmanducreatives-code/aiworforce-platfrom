@@ -32,7 +32,6 @@ interface EliteLeadGridProps {
     onLeadClick: (lead: LinkedInLead) => void;
     onRunDeepSearch: (lead: LinkedInLead) => void;
     onDeleteLead: (lead: LinkedInLead) => void;
-    onDeleteLead: (lead: LinkedInLead) => void;
     runningDeepSearchIds: Set<string>;
     suggestions?: Array<{ label: string; action: string; value?: string }>;
     onApplySuggestion?: (suggestion: { label: string; action: string; value?: string }) => void;
@@ -153,7 +152,7 @@ export const EliteLeadGrid = ({
     return (
         <div className="space-y-2">
             {/* Grid Header */}
-            <div className="grid grid-cols-[auto_minmax(200px,1.2fr)_minmax(200px,1.5fr)_minmax(180px,1.5fr)_minmax(150px,1fr)_minmax(100px,0.8fr)_80px_min-content] gap-4 items-center px-6 py-3 rounded-xl bg-card/40 backdrop-blur-sm border border-border/40 text-xs font-semibold text-muted-foreground uppercase tracking-wider sticky top-0 z-10 shadow-sm">
+            <div className="grid grid-cols-[auto_minmax(200px,1.2fr)_minmax(200px,1.5fr)_minmax(180px,1.5fr)_minmax(150px,1fr)_minmax(100px,0.8fr)_80px_minmax(180px,auto)] gap-4 items-center px-6 py-3 rounded-xl bg-card/40 backdrop-blur-sm border border-border/40 text-xs font-semibold text-muted-foreground uppercase tracking-wider sticky top-0 z-10 shadow-sm">
                 <div className="flex items-center w-8">
                     <Checkbox
                         checked={allSelected}
@@ -209,7 +208,7 @@ export const EliteLeadGrid = ({
                                 onLeadClick(lead);
                             }}
                             className={`
-                group relative grid grid-cols-[auto_minmax(200px,1.2fr)_minmax(200px,1.5fr)_minmax(180px,1.5fr)_minmax(150px,1fr)_minmax(100px,0.8fr)_80px_min-content] gap-4 items-center px-6 py-4 rounded-xl 
+                group relative grid grid-cols-[auto_minmax(200px,1.2fr)_minmax(200px,1.5fr)_minmax(180px,1.5fr)_minmax(150px,1fr)_minmax(100px,0.8fr)_80px_minmax(180px,auto)] gap-4 items-center px-6 py-4 rounded-xl 
                 border transition-all duration-200 cursor-pointer
                 ${isSelected
                                     ? "bg-primary/5 border-primary/20 shadow-md shadow-primary/5"

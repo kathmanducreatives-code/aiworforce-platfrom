@@ -16,7 +16,7 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
-import { Label } from "@/components/ui/label";
+// Label import removed
 
 // Categorized job titles
 const JOB_TITLES_BY_CATEGORY: Record<string, string[]> = {
@@ -205,10 +205,6 @@ export const JobTitleMultiSelect = ({
 
   return (
     <div className="space-y-2">
-      <Label className="text-xs lg:text-sm font-medium text-foreground flex items-center gap-1.5">
-        <Briefcase className="w-3.5 h-3.5 lg:w-4 lg:h-4 text-muted-foreground" />
-        Job Titles
-      </Label>
 
       <Popover open={open} onOpenChange={setOpen}>
         <PopoverTrigger asChild>
