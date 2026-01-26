@@ -1,17 +1,19 @@
 import { useState } from "react";
-import { Sparkles, Search } from "lucide-react";
+import { Sparkles, Search, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 
 interface AISearchBarProps {
   onSearch: (query: string) => void;
   isLoading?: boolean;
+  loadingLabel?: string;
   placeholder?: string;
 }
 
 export const AISearchBar = ({
   onSearch,
   isLoading = false,
+  loadingLabel = "Starting scrape...",
   placeholder = "E.g. Engineers in New York in software companies with more than 500 employees",
 }: AISearchBarProps) => {
   const [query, setQuery] = useState("");
@@ -49,12 +51,13 @@ export const AISearchBar = ({
           type="submit"
           size="lg"
           disabled={isLoading || !query.trim()}
-          className="h-12 sm:h-14 px-6 sm:px-8 gap-2 rounded-xl bg-gradient-to-r from-primary to-primary/80 hover:from-primary/90 hover:to-primary/70 shadow-lg shadow-primary/20 transition-all duration-200"
+          className={`h-12 sm:h-14 px-6 sm:px-8 gap-2 rounded-xl bg-gradient-to-r from-primary to-primary/80 hover:from-primary/90 hover:to-primary/70 shadow-lg shadow-primary/20 transition-all duration-200 ${isLoading ? "animate-pulse" : ""
+            }`}
         >
           {isLoading ? (
             <>
-              <div className="w-5 h-5 border-2 border-primary-foreground/30 border-t-primary-foreground rounded-full animate-spin" />
-              <span className="hidden sm:inline">Searching...</span>
+              <Loader2 className="w-5 h-5 animate-spin" />
+              <span className="hidden sm:inline">{loadingLabel}</span>
             </>
           ) : (
             <>

@@ -10,6 +10,15 @@ export interface LeadScraperResponse {
   success: boolean;
   message?: string;
   leadsCount?: number;
+  results_metadata?: {
+    actual_count: number;
+    requested_count: number;
+  };
+  suggestions?: Array<{
+    label: string;
+    action: string;
+    value?: string;
+  }>;
 }
 
 // n8n webhook URL for LinkedIn Lead Scraper
@@ -28,9 +37,9 @@ export const leadScraperApi = {
         timestamp: new Date().toISOString(),
         source: "screening-pilot-lead-scrape",
       };
-      
+
       console.log("Webhook payload:", payload);
-      
+
       const response = await fetch(N8N_LEAD_SCRAPER_WEBHOOK_URL, {
         method: 'POST',
         headers: {
@@ -51,6 +60,8 @@ export const leadScraperApi = {
         success: true,
         message: result.message || 'Lead scraping initiated successfully',
         leadsCount: result.leadsCount,
+        results_metadata: result.results_metadata,
+        suggestions: result.suggestions,
       };
     } catch (error) {
       console.error('Error calling lead scraper webhook:', error);

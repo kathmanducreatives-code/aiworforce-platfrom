@@ -3,11 +3,9 @@ import { useNavigate } from 'react-router-dom';
 import { ArrowLeft, Calendar, Plus, RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useInterviews } from '@/hooks/useInterviews';
-import { useGoogleCalendar } from '@/hooks/useGoogleCalendar';
 import InterviewCalendarView from '@/components/interview/InterviewCalendarView';
 import InterviewNotesDialog from '@/components/interview/InterviewNotesDialog';
 import SimpleScheduleDialog from '@/components/interview/SimpleScheduleDialog';
-import GoogleCalendarConnect from '@/components/interview/GoogleCalendarConnect';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Interview } from '@/types/Interview';
@@ -24,8 +22,6 @@ const InterviewScheduler = () => {
     cancelInterview,
     updateInterview,
   } = useInterviews();
-
-  const { isConnected: isCalendarConnected, createCalendarEvent } = useGoogleCalendar();
 
   const [isScheduleDialogOpen, setIsScheduleDialogOpen] = useState(false);
   const [selectedInterview, setSelectedInterview] = useState<Interview | null>(null);
@@ -47,30 +43,6 @@ const InterviewScheduler = () => {
   const handleScheduleInterview = async (interviewData: Partial<Interview>, sendEmailInvite: boolean) => {
     const result = await scheduleInterview(interviewData, sendEmailInvite);
     
-    // Sync with Google Calendar if connected
-    if (result && isCalendarConnected) {
-      try {
-        const endTime = new Date(result.scheduled_at);
-        endTime.setMinutes(endTime.getMinutes() + (result.duration_minutes || 30));
-        
-        const calendarResult = await createCalendarEvent({
-          summary: `Interview with ${result.candidate_name}`,
-          description: `Interview scheduled via ScreeningPilot\nCandidate Email: ${result.candidate_email}${result.notes ? `\n\nNotes: ${result.notes}` : ''}`,
-          startTime: result.scheduled_at,
-          endTime: endTime.toISOString(),
-          attendees: [result.candidate_email],
-          addMeet: !result.meeting_link,
-        });
-
-        // Update interview with Google Meet link if generated
-        if (calendarResult?.meetLink && !result.meeting_link) {
-          await updateInterview(result.id, { meeting_link: calendarResult.meetLink });
-        }
-      } catch (err) {
-        console.error('Failed to sync with Google Calendar:', err);
-      }
-    }
-    
     return result;
   };
 
@@ -85,9 +57,9 @@ const InterviewScheduler = () => {
 
   return (
     <div className="min-h-screen bg-background">
-      <div className="max-w-7xl mx-auto px-6 py-8">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 py-6 sm:py-8">
         {/* Header */}
-        <div className="flex items-center justify-between mb-8">
+        <div className="flex flex-wrap items-center justify-between gap-4 mb-6">
           <div className="flex items-center gap-4">
             <Button
               variant="ghost"
@@ -106,72 +78,69 @@ const InterviewScheduler = () => {
               </p>
             </div>
           </div>
-          <Button onClick={() => setIsScheduleDialogOpen(true)}>
+          <Button onClick={() => setIsScheduleDialogOpen(true)} className="whitespace-nowrap">
             <Plus className="h-4 w-4 mr-2" />
             Schedule Interview
           </Button>
         </div>
 
-        {/* Google Calendar Connection */}
-        <div className="mb-6">
-          <GoogleCalendarConnect />
-        </div>
+        <div className="grid grid-cols-1 lg:grid-cols-4 gap-4 mb-8">
+          {/* Stats Cards */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 lg:col-span-4">
+            <Card className="bg-card border-border">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm font-medium text-muted-foreground">
+                  Today's Interviews
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="flex items-center gap-2">
+                  <span className="text-3xl font-bold text-foreground">
+                    {todayInterviews.length}
+                  </span>
+                  {todayInterviews.length > 0 && (
+                    <Badge className="bg-primary/10 text-primary border-primary/20">
+                      Active
+                    </Badge>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
 
-        {/* Stats Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
-          <Card className="bg-card border-border">
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground">
-                Today's Interviews
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="flex items-center gap-2">
+            <Card className="bg-card border-border">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm font-medium text-muted-foreground">
+                  Upcoming This Week
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
                 <span className="text-3xl font-bold text-foreground">
-                  {todayInterviews.length}
+                  {upcomingInterviews.filter((i) => {
+                    const weekFromNow = new Date();
+                    weekFromNow.setDate(weekFromNow.getDate() + 7);
+                    return new Date(i.scheduled_at) < weekFromNow;
+                  }).length}
                 </span>
-                {todayInterviews.length > 0 && (
-                  <Badge className="bg-primary/10 text-primary border-primary/20">
-                    Active
-                  </Badge>
-                )}
-              </div>
-            </CardContent>
-          </Card>
+              </CardContent>
+            </Card>
 
-          <Card className="bg-card border-border">
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground">
-                Upcoming This Week
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <span className="text-3xl font-bold text-foreground">
-                {upcomingInterviews.filter((i) => {
-                  const weekFromNow = new Date();
-                  weekFromNow.setDate(weekFromNow.getDate() + 7);
-                  return new Date(i.scheduled_at) < weekFromNow;
-                }).length}
-              </span>
-            </CardContent>
-          </Card>
-
-          <Card className="bg-card border-border">
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground">
-                Total Scheduled
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <span className="text-3xl font-bold text-foreground">
-                {upcomingInterviews.length}
-              </span>
-            </CardContent>
-          </Card>
+            <Card className="bg-card border-border">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm font-medium text-muted-foreground">
+                  Total Scheduled
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <span className="text-3xl font-bold text-foreground">
+                  {upcomingInterviews.length}
+                </span>
+              </CardContent>
+            </Card>
+          </div>
         </div>
 
         {/* Main Content */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start auto-rows-min">
           {/* Calendar View */}
           <div className="lg:col-span-2">
             <InterviewCalendarView
@@ -203,7 +172,7 @@ const InterviewScheduler = () => {
                         onClick={() => handleSelectInterview(interview)}
                         className="w-full text-left p-3 rounded-lg bg-primary/5 border border-primary/20 hover:bg-primary/10 transition-colors"
                       >
-                        <p className="font-medium text-foreground">
+                        <p className="font-medium text-foreground truncate">
                           {interview.candidate_name}
                         </p>
                         <p className="text-sm text-muted-foreground">
@@ -234,6 +203,7 @@ const InterviewScheduler = () => {
                     <Button
                       size="sm"
                       variant="outline"
+                      className="w-full justify-center"
                       onClick={() => setIsScheduleDialogOpen(true)}
                     >
                       <Plus className="h-4 w-4 mr-1" />

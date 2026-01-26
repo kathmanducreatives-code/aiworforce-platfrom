@@ -298,10 +298,10 @@ const ScreeningResults = () => {
   };
 
   return (
-    <div className="space-y-6 px-1">
+    <div className="space-y-6 px-1 pt-6">
       {/* Header - responsive with proper wrapping */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <div className="min-w-0">
+        <div className="min-w-0 pl-4">
           <h1 className="text-2xl sm:text-3xl font-bold text-foreground">Behavioral Screening</h1>
           <p className="text-muted-foreground mt-1 text-sm sm:text-base">
             Adaptive Stress-Based Screening™ results and insights

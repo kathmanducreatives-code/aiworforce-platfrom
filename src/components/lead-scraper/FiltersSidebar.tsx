@@ -107,10 +107,10 @@ export const FiltersSidebar = ({
     updateFilters({ keywords: filters.keywords.filter((k) => k !== keyword) });
   };
 
-  const activeFilterCount = 
-    filters.jobTitles.length + 
-    filters.locations.length + 
-    filters.companies.length + 
+  const activeFilterCount =
+    filters.jobTitles.length +
+    filters.locations.length +
+    filters.companies.length +
     filters.keywords.length;
 
   return (
@@ -140,8 +140,8 @@ export const FiltersSidebar = ({
       </div>
 
       {/* Filter Sections */}
-      <ScrollArea className="flex-1">
-        <div className="py-2">
+      <ScrollArea className="flex-1 px-1">
+        <div className="py-2 space-y-1">
           {/* Job Titles */}
           <FilterSection
             title="Job Titles"
@@ -183,7 +183,7 @@ export const FiltersSidebar = ({
                   onChange={(e) => setCompanyInput(e.target.value)}
                   onKeyDown={(e) => e.key === "Enter" && handleAddCompany()}
                   placeholder="e.g. Google"
-                  className="h-9 text-sm bg-background/50"
+                  className="h-9 text-xs bg-background/50 border-muted-foreground/20 focus-visible:ring-primary/20 transition-all"
                 />
                 <Button
                   size="sm"
@@ -226,7 +226,7 @@ export const FiltersSidebar = ({
                   onChange={(e) => setKeywordInput(e.target.value)}
                   onKeyDown={(e) => e.key === "Enter" && handleAddKeyword()}
                   placeholder="e.g. React, Python"
-                  className="h-9 text-sm bg-background/50"
+                  className="h-9 text-xs bg-background/50 border-muted-foreground/20 focus-visible:ring-primary/20 transition-all"
                 />
                 <Button
                   size="sm"
@@ -286,9 +286,9 @@ export const FiltersSidebar = ({
       </ScrollArea>
 
       {/* Apply Button */}
-      <div className="p-4 border-t border-border/30">
+      <div className="p-4 border-t border-border/30 bg-card/50">
         <Button
-          className="w-full gap-2"
+          className="w-full gap-2 shadow-lg shadow-primary/25 hover:shadow-primary/40 transition-all duration-300"
           onClick={onApplyFilters}
           disabled={isLoading}
         >
