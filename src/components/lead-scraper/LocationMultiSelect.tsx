@@ -302,3 +302,4 @@ export const LocationMultiSelect = ({
     </div>
   );
 };
+// End of component

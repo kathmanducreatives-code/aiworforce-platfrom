@@ -316,3 +316,4 @@ export const FiltersSidebar = ({
 
   );
 };
+// End of component
