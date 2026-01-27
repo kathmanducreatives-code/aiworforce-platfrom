@@ -23,6 +23,10 @@ import {
 import { MatchScore } from "./MatchScore";
 import type { LinkedInLead } from "./LeadTable"; // Temporarily importing type until we fully migrate
 
+interface LeadWithScore extends LinkedInLead {
+    match_score?: number;
+}
+
 interface EliteLeadGridProps {
     leads: LinkedInLead[];
     isLoading: boolean;
@@ -35,6 +39,7 @@ interface EliteLeadGridProps {
     runningDeepSearchIds: Set<string>;
     suggestions?: Array<{ label: string; action: string; value?: string }>;
     onApplySuggestion?: (suggestion: { label: string; action: string; value?: string }) => void;
+    targetProfileId?: string | null;
 }
 
 type SortField = "candidate_name" | "job_title" | "company" | "scraped_at" | "match_score";
@@ -52,6 +57,7 @@ export const EliteLeadGrid = ({
     runningDeepSearchIds,
     suggestions = [],
     onApplySuggestion,
+    targetProfileId,
 }: EliteLeadGridProps) => {
     const [sortField, setSortField] = useState<SortField>("scraped_at");
     const [sortOrder, setSortOrder] = useState<SortOrder>("desc");
@@ -60,13 +66,15 @@ export const EliteLeadGrid = ({
     // In a real app, this would come from the backend.
     // We use stable randoms based on ID to keep it consistent during renders
     const leadsWithScores = useMemo(() => {
+        if (!targetProfileId) return leads;
+
         return leads.map(lead => {
             // Simple hash to get a consistent pseudo-random score between 60 and 98
             const hash = lead.id.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
             const score = 60 + (hash % 39);
             return { ...lead, match_score: score };
         });
-    }, [leads]);
+    }, [leads, targetProfileId]);
 
     const sortedLeads = useMemo(() => {
         return [...leadsWithScores].sort((a, b) => {
@@ -152,7 +160,10 @@ export const EliteLeadGrid = ({
     return (
         <div className="space-y-2">
             {/* Grid Header */}
-            <div className="grid grid-cols-[auto_minmax(200px,1.2fr)_minmax(200px,1.5fr)_minmax(180px,1.5fr)_minmax(150px,1fr)_minmax(100px,0.8fr)_80px_minmax(180px,auto)] gap-4 items-center px-6 py-3 rounded-xl bg-card/40 backdrop-blur-sm border border-border/40 text-xs font-semibold text-muted-foreground uppercase tracking-wider sticky top-0 z-10 shadow-sm">
+            <div className={`grid ${targetProfileId
+                ? "grid-cols-[auto_minmax(200px,1.2fr)_minmax(200px,1.5fr)_minmax(180px,1.5fr)_minmax(150px,1fr)_minmax(100px,0.8fr)_80px_minmax(180px,auto)]"
+                : "grid-cols-[auto_minmax(200px,1.2fr)_minmax(200px,1.5fr)_minmax(180px,1.5fr)_minmax(150px,1fr)_minmax(100px,0.8fr)_minmax(180px,auto)]"
+                } gap-4 items-center px-6 py-3 rounded-xl bg-card/40 backdrop-blur-sm border border-border/40 text-xs font-semibold text-muted-foreground uppercase tracking-wider sticky top-0 z-10 shadow-sm`}>
                 <div className="flex items-center w-8">
                     <Checkbox
                         checked={allSelected}
@@ -184,10 +195,12 @@ export const EliteLeadGrid = ({
                     LinkedIn
                 </div>
 
-                <div className="hidden lg:flex cursor-pointer hover:text-foreground transition-colors items-center gap-1" onClick={() => toggleSort("match_score")}>
-                    Match
-                    <ArrowUpDown className="w-3 h-3 opacity-50" />
-                </div>
+                {targetProfileId && (
+                    <div className="hidden lg:flex cursor-pointer hover:text-foreground transition-colors items-center gap-1" onClick={() => toggleSort("match_score")}>
+                        Match
+                        <ArrowUpDown className="w-3 h-3 opacity-50" />
+                    </div>
+                )}
 
                 <div className="flex justify-end">
                     Actions
@@ -208,7 +221,10 @@ export const EliteLeadGrid = ({
                                 onLeadClick(lead);
                             }}
                             className={`
-                group relative grid grid-cols-[auto_minmax(200px,1.2fr)_minmax(200px,1.5fr)_minmax(180px,1.5fr)_minmax(150px,1fr)_minmax(100px,0.8fr)_80px_minmax(180px,auto)] gap-4 items-center px-6 py-4 rounded-xl 
+                group relative grid ${targetProfileId
+                                    ? "grid-cols-[auto_minmax(200px,1.2fr)_minmax(200px,1.5fr)_minmax(180px,1.5fr)_minmax(150px,1fr)_minmax(100px,0.8fr)_80px_minmax(180px,auto)]"
+                                    : "grid-cols-[auto_minmax(200px,1.2fr)_minmax(200px,1.5fr)_minmax(180px,1.5fr)_minmax(150px,1fr)_minmax(100px,0.8fr)_minmax(180px,auto)]"
+                                } gap-4 items-center px-6 py-4 rounded-xl 
                 border transition-all duration-200 cursor-pointer
                 ${isSelected
                                     ? "bg-primary/5 border-primary/20 shadow-md shadow-primary/5"
@@ -269,9 +285,11 @@ export const EliteLeadGrid = ({
                             </div>
 
                             {/* Match Score */}
-                            <div className="hidden lg:flex items-center justify-center">
-                                <MatchScore score={lead.match_score} />
-                            </div>
+                            {targetProfileId && (
+                                <div className="hidden lg:flex items-center justify-center">
+                                    <MatchScore score={(lead as LeadWithScore).match_score || 0} />
+                                </div>
+                            )}
 
                             {/* Actions */}
                             <div className="flex justify-end ml-auto items-center gap-2 flex-nowrap shrink-0">

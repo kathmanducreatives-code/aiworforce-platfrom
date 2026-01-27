@@ -45,13 +45,13 @@ export function RoleBriefingForm({ value, onChange }: RoleBriefingFormProps) {
   };
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-6">
       <div className="flex items-center gap-2 text-sm text-muted-foreground mb-2">
         <Briefcase className="w-4 h-4" />
         <span>This context guides the AI interviewer but is not shown to the candidate.</span>
       </div>
 
-      <div className="space-y-2">
+      <div className="space-y-2 px-1">
         <Label htmlFor="role_title">Role Title *</Label>
         <Input
           id="role_title"
@@ -61,7 +61,7 @@ export function RoleBriefingForm({ value, onChange }: RoleBriefingFormProps) {
         />
       </div>
 
-      <div className="space-y-2">
+      <div className="space-y-2 px-1">
         <Label htmlFor="skills_expected">Skills Expected</Label>
         <Textarea
           id="skills_expected"
@@ -72,7 +72,7 @@ export function RoleBriefingForm({ value, onChange }: RoleBriefingFormProps) {
         />
       </div>
 
-      <div className="space-y-2">
+      <div className="space-y-2 px-1">
         <Label htmlFor="experience_required">Experience Required</Label>
         <Select
           value={value.experience_required}
@@ -91,23 +91,24 @@ export function RoleBriefingForm({ value, onChange }: RoleBriefingFormProps) {
         </Select>
       </div>
 
-      <div className="space-y-2">
+      <div className="space-y-3 px-1">
         <Label>Key Traits to Evaluate</Label>
-        <div className="grid grid-cols-2 gap-2 mt-2">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mt-2">
           {KEY_TRAITS.map((trait) => (
-            <div key={trait.id} className="flex items-center space-x-2">
+            <label
+              key={trait.id}
+              htmlFor={trait.id}
+              className="flex items-center space-x-3 p-3 rounded-lg border border-border hover:bg-muted/50 cursor-pointer transition-colors"
+            >
               <Checkbox
                 id={trait.id}
                 checked={value.key_traits.includes(trait.id)}
                 onCheckedChange={() => handleTraitToggle(trait.id)}
               />
-              <label
-                htmlFor={trait.id}
-                className="text-sm cursor-pointer"
-              >
+              <span className="text-sm font-medium">
                 {trait.label}
-              </label>
-            </div>
+              </span>
+            </label>
           ))}
         </div>
       </div>

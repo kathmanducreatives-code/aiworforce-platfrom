@@ -1,4 +1,4 @@
-import { LayoutDashboard, BarChart3, Search, Brain, LogOut, Menu, X, MessageSquare, Calendar, Mail, Activity } from "lucide-react";
+import { LayoutDashboard, BarChart3, Search, Brain, LogOut, Menu, X, MessageSquare, Calendar, Mail, Activity, Target } from "lucide-react";
 import { NavLink } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import { useNavigate } from "react-router-dom";
@@ -29,6 +29,7 @@ const Sidebar = ({ isCollapsed, onToggle, onCollaborationToggle, onCloseCollabor
     { to: "/analytics", icon: BarChart3, label: "Analytics" },
     { to: "/behavioral-screening", icon: Activity, label: "Behavioral Screening" },
     { to: "/lead-scraper", icon: Search, label: "Lead Scraper" },
+    { to: "/icp-intelligence", icon: Target, label: "ICP Intelligence" },
     { to: "/deep-search", icon: Brain, label: "Deep Search" },
     { to: "/interview-scheduler", icon: Calendar, label: "Interviews" },
     { to: "/email-sequences", icon: Mail, label: "Email Sequences" },
@@ -40,20 +41,19 @@ const Sidebar = ({ isCollapsed, onToggle, onCollaborationToggle, onCloseCollabor
   };
 
   return (
-    <aside 
-      className={`${isMobile ? 'relative' : 'fixed left-0 top-0'} h-screen bg-card/95 backdrop-blur-xl ${!isMobile && 'border-r border-border/50 shadow-[0_0_30px_rgba(0,0,0,0.5)]'} flex flex-col transition-all duration-300 ${!isMobile && 'z-40'} ${
-        isCollapsed && !isMobile ? 'w-16' : 'w-64'
-      }`}
+    <aside
+      className={`${isMobile ? 'relative' : 'fixed left-0 top-0'} h-screen bg-card/95 backdrop-blur-xl ${!isMobile && 'border-r border-border/50 shadow-[0_0_30px_rgba(0,0,0,0.5)]'} flex flex-col transition-all duration-300 ${!isMobile && 'z-40'} ${isCollapsed && !isMobile ? 'w-16' : 'w-64'
+        }`}
     >
       {/* Header with hamburger */}
       <div className="p-5 border-b border-border/50 flex items-center justify-between min-h-[72px]">
         {!isCollapsed && (
           <div className="flex-1">
             {profile?.logo_url ? (
-              <img 
-                src={profile.logo_url} 
-                alt="Client logo" 
-                className="h-12 w-auto hover:scale-105 transition-transform duration-300" 
+              <img
+                src={profile.logo_url}
+                alt="Client logo"
+                className="h-12 w-auto hover:scale-105 transition-transform duration-300"
               />
             ) : (
               <h2 className="text-xl font-bold bg-gradient-to-r from-primary via-cyan-500 to-primary bg-clip-text text-transparent tracking-tight">
@@ -81,10 +81,9 @@ const Sidebar = ({ isCollapsed, onToggle, onCollaborationToggle, onCloseCollabor
             end={item.to === "/dashboard"}
             onClick={() => onCloseCollaboration?.()}
             className={({ isActive }) =>
-              `group flex items-center gap-3 px-4 py-2.5 rounded-lg transition-all duration-300 relative ${
-                isActive
-                  ? "bg-primary text-primary-foreground shadow-[0_0_20px_rgba(62,207,142,0.2)]"
-                  : "text-muted-foreground hover:bg-primary/10 hover:text-primary hover:shadow-[0_0_15px_rgba(62,207,142,0.15)]"
+              `group flex items-center gap-3 px-4 py-2.5 rounded-lg transition-all duration-300 relative ${isActive
+                ? "bg-primary text-primary-foreground shadow-[0_0_20px_rgba(62,207,142,0.2)]"
+                : "text-muted-foreground hover:bg-primary/10 hover:text-primary hover:shadow-[0_0_15px_rgba(62,207,142,0.15)]"
               } ${isCollapsed ? 'justify-center' : ''}`
             }
             title={isCollapsed ? item.label : undefined}
@@ -102,15 +101,14 @@ const Sidebar = ({ isCollapsed, onToggle, onCollaborationToggle, onCloseCollabor
             )}
           </NavLink>
         ))}
-        
+
         {/* Collaboration Button */}
         <button
           onClick={handleCollaborationClick}
-          className={`group flex items-center gap-3 px-4 py-2.5 rounded-lg transition-all duration-300 relative w-full ${
-            showCollaboration
+          className={`group flex items-center gap-3 px-4 py-2.5 rounded-lg transition-all duration-300 relative w-full ${showCollaboration
               ? "bg-primary text-primary-foreground shadow-[0_0_20px_rgba(62,207,142,0.2)]"
               : "text-muted-foreground hover:bg-primary/10 hover:text-primary hover:shadow-[0_0_15px_rgba(62,207,142,0.15)]"
-          } ${isCollapsed ? 'justify-center' : ''}`}
+            } ${isCollapsed ? 'justify-center' : ''}`}
           title={isCollapsed ? "Collaboration" : undefined}
         >
           {showCollaboration && !isCollapsed && (
@@ -128,9 +126,8 @@ const Sidebar = ({ isCollapsed, onToggle, onCollaborationToggle, onCloseCollabor
         <Button
           onClick={handleSignOut}
           variant="ghost"
-          className={`w-full gap-3 text-muted-foreground hover:text-primary hover:bg-primary/10 hover:shadow-[0_0_15px_rgba(62,207,142,0.15)] transition-all duration-300 ${
-            isCollapsed ? 'justify-center px-0' : 'justify-start'
-          }`}
+          className={`w-full gap-3 text-muted-foreground hover:text-primary hover:bg-primary/10 hover:shadow-[0_0_15px_rgba(62,207,142,0.15)] transition-all duration-300 ${isCollapsed ? 'justify-center px-0' : 'justify-start'
+            }`}
           title={isCollapsed ? "Sign Out" : undefined}
         >
           <LogOut className="h-5 w-5 flex-shrink-0" />

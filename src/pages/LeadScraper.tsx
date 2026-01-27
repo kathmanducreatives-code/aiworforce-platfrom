@@ -21,6 +21,8 @@ import { LeadPeekSheet } from "@/components/lead-scraper/LeadPeekSheet";
 import { BulkActionBar } from "@/components/lead-scraper/BulkActionBar";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { DeepSearchResults } from "@/components/lead-scraper/DeepSearchResults";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Target } from "lucide-react";
 
 const defaultFilters: FilterState = {
   skipOwned: false,
@@ -63,6 +65,9 @@ export default function LeadScraper() {
   const [peekLead, setPeekLead] = useState<LinkedInLead | null>(null);
   const [runningDeepSearchIds, setRunningDeepSearchIds] = useState<Set<string>>(new Set());
   const [showDeepSearchResults, setShowDeepSearchResults] = useState<string | null>(null);
+
+  // ICP Targeting
+  const [selectedProfileId, setSelectedProfileId] = useState<string | null>(null);
 
   // Sync sidebar state with active tab
   useEffect(() => {

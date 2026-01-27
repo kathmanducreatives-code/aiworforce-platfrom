@@ -32,6 +32,7 @@ import AdaptiveScreening from "./pages/AdaptiveScreening";
 import ScreeningResults from "./pages/ScreeningResults";
 import ScreeningTemplates from "./pages/ScreeningTemplates";
 import TemplateEditor from "./pages/TemplateEditor";
+import ICPManager from "./pages/ICPManager";
 const queryClient = new QueryClient();
 
 const App = () => (
@@ -59,7 +60,7 @@ const App = () => (
                     </MainLayout>
                   </ProtectedRoute>
                 } />
-                
+
                 <Route path="/screening" element={
                   <ProtectedRoute>
                     <MainLayout>
@@ -67,7 +68,7 @@ const App = () => (
                     </MainLayout>
                   </ProtectedRoute>
                 } />
-                
+
                 <Route path="/candidates" element={
                   <ProtectedRoute>
                     <MainLayout>
@@ -75,7 +76,7 @@ const App = () => (
                     </MainLayout>
                   </ProtectedRoute>
                 } />
-                
+
                 <Route path="/analytics" element={
                   <ProtectedRoute>
                     <MainLayout>
@@ -83,7 +84,7 @@ const App = () => (
                     </MainLayout>
                   </ProtectedRoute>
                 } />
-                
+
                 <Route path="/folder/:folderName" element={
                   <ProtectedRoute>
                     <MainLayout>
@@ -91,7 +92,7 @@ const App = () => (
                     </MainLayout>
                   </ProtectedRoute>
                 } />
-                
+
                 <Route path="/email-sequence/:folderName" element={
                   <ProtectedRoute>
                     <MainLayout>
@@ -99,7 +100,7 @@ const App = () => (
                     </MainLayout>
                   </ProtectedRoute>
                 } />
-                
+
                 <Route path="/client-metrics" element={
                   <ProtectedRoute>
                     <MainLayout>
@@ -107,7 +108,7 @@ const App = () => (
                     </MainLayout>
                   </ProtectedRoute>
                 } />
-                
+
                 <Route path="/client/:clientId" element={
                   <ProtectedRoute>
                     <MainLayout>
@@ -115,7 +116,7 @@ const App = () => (
                     </MainLayout>
                   </ProtectedRoute>
                 } />
-                
+
                 <Route path="/lead-scraper" element={
                   <ProtectedRoute>
                     <MainLayout>
@@ -123,7 +124,7 @@ const App = () => (
                     </MainLayout>
                   </ProtectedRoute>
                 } />
-                
+
                 <Route path="/deep-search" element={
                   <ProtectedRoute>
                     <MainLayout>
@@ -131,7 +132,15 @@ const App = () => (
                     </MainLayout>
                   </ProtectedRoute>
                 } />
-                
+
+                <Route path="/icp-intelligence" element={
+                  <ProtectedRoute>
+                    <MainLayout>
+                      <ICPManager />
+                    </MainLayout>
+                  </ProtectedRoute>
+                } />
+
                 <Route path="/email-sequences" element={
                   <ProtectedRoute>
                     <MainLayout>
@@ -139,7 +148,7 @@ const App = () => (
                     </MainLayout>
                   </ProtectedRoute>
                 } />
-                
+
                 <Route path="/interview-scheduler" element={
                   <ProtectedRoute>
                     <MainLayout>
@@ -147,7 +156,7 @@ const App = () => (
                     </MainLayout>
                   </ProtectedRoute>
                 } />
-                
+
                 <Route path="/behavioral-screening" element={
                   <ProtectedRoute>
                     <MainLayout>
@@ -155,7 +164,7 @@ const App = () => (
                     </MainLayout>
                   </ProtectedRoute>
                 } />
-                
+
                 <Route path="/behavioral-screening/templates" element={
                   <ProtectedRoute>
                     <MainLayout>
@@ -163,7 +172,7 @@ const App = () => (
                     </MainLayout>
                   </ProtectedRoute>
                 } />
-                
+
                 <Route path="/behavioral-screening/templates/:id" element={
                   <ProtectedRoute>
                     <MainLayout>

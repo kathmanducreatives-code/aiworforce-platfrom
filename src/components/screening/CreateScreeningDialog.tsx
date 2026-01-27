@@ -13,6 +13,7 @@ import { TemplateSelector } from "./TemplateSelector";
 import { RoleBriefingForm, RoleBriefing } from "./RoleBriefingForm";
 import { ScenarioCoverageConfig, ScenarioConfig } from "./ScenarioCoverageConfig";
 import { TemplatePreviewDialog } from "./TemplatePreviewDialog";
+import { screeningAPI, handleScreeningAPIError } from "@/lib/api/screening";
 
 interface Candidate {
   id: string;
@@ -55,24 +56,24 @@ const CreateScreeningDialog = ({
   const [isLoading, setIsLoading] = useState(false);
   const [candidates, setCandidates] = useState<Candidate[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
-  
+
   // Step 1: Role Briefing
   const [roleBriefing, setRoleBriefing] = useState<RoleBriefing>(DEFAULT_ROLE_BRIEFING);
-  
+
   // Step 2: Template Selection
   const [selectedTemplateId, setSelectedTemplateId] = useState<string | null>(null);
   const [templateCategoryCounts, setTemplateCategoryCounts] = useState<Record<string, number>>({});
   const [previewTemplateId, setPreviewTemplateId] = useState<string | null>(null);
-  
+
   // Step 3: Scenario Coverage
   const [scenarioConfig, setScenarioConfig] = useState<ScenarioConfig>(DEFAULT_SCENARIO_CONFIG);
-  
+
   // Step 4: Send Invite (after webhook success)
   const [selectedCandidate, setSelectedCandidate] = useState<Candidate | null>(null);
   const [expiresInDays, setExpiresInDays] = useState("7");
   const [sendEmail, setSendEmail] = useState(true);
   const [webhookSynced, setWebhookSynced] = useState(false);
-  
+
   // Result
   const [generatedUrl, setGeneratedUrl] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
@@ -123,7 +124,7 @@ const CreateScreeningDialog = ({
       .from('screening_template_questions')
       .select('category')
       .eq('template_id', templateId);
-    
+
     if (error) {
       console.error('Failed to fetch template questions:', error);
       return;
@@ -161,59 +162,62 @@ const CreateScreeningDialog = ({
       return;
     }
 
+    if (!selectedCandidate) {
+      toast.error('Please select a candidate first');
+      return;
+    }
+
     try {
       setIsLoading(true);
-      setLoadingMessage("Syncing with backend...");
+      setLoadingMessage("Generating screening link...");
 
-      // Fetch template data for the webhook
+      // Fetch template data
       const { data: template } = await supabase
         .from('screening_templates')
         .select('id, name, description')
         .eq('id', selectedTemplateId)
         .single();
 
-      const { data: questions } = await supabase
-        .from('screening_template_questions')
-        .select('id, category, question_text, follow_up_prompts, difficulty_level')
-        .eq('template_id', selectedTemplateId)
-        .order('sort_order');
-
-      const webhookPayload = {
-        action: 'create_screening',
-        timestamp: new Date().toISOString(),
-        role_briefing: roleBriefing.role_title ? roleBriefing : null,
-        template: template ? { ...template, questions: questions || [] } : null,
-        scenario_config: scenarioConfig,
-        settings: {
-          expires_in_days: parseInt(expiresInDays),
-        },
-      };
-
-      const webhookResponse = await fetch('https://n8n.prasidha.me/webhook/behavioral-screening', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(webhookPayload),
-      });
-
-      if (!webhookResponse.ok) {
-        const errorText = await webhookResponse.text();
-        console.error('Webhook failed:', webhookResponse.status, errorText);
-        toast.error('Backend processing failed. Please try again.');
+      if (!template) {
+        toast.error('Template not found');
         return;
       }
 
-      console.log('Webhook synced successfully');
+      // Call n8n webhook with generate_link action
+      const response = await screeningAPI.generateLink({
+        candidate_id: selectedCandidate.id,
+        job_role: roleBriefing.role_title || 'Position',
+        template: {
+          id: template.id,
+          name: template.name,
+          description: template.description,
+        },
+        role_briefing: {
+          role_title: roleBriefing.role_title,
+          skills_expected: roleBriefing.skills_expected,
+          experience_required: roleBriefing.experience_required,
+          key_traits: roleBriefing.key_traits,
+        },
+        scenario_config: scenarioConfig,
+      });
+
+      // Store the generated link
+      setGeneratedUrl(response.candidate_link);
       setWebhookSynced(true);
-      setCurrentStep("send_invite");
-      toast.success('Screening setup synced successfully!');
+
+      console.log('Screening link generated:', response);
+      toast.success('Screening link generated successfully!');
+
+      // Send email if configured
+      if (sendEmail && selectedCandidate.email) {
+        // TODO: Implement email sending via Supabase function or n8n
+        toast.info(`Link ready to share with ${selectedCandidate.email}`);
+      }
 
     } catch (err: any) {
-      console.error('Failed to sync with backend:', err);
-      if (err.name === 'TypeError' && err.message.includes('fetch')) {
-        toast.error('Failed to connect to backend. Please check your connection.');
-      } else {
-        toast.error('Backend processing failed. Please try again.');
-      }
+      console.error('Failed to generate screening link:', err);
+      const errorMessage = handleScreeningAPIError(err);
+      toast.error(errorMessage);
     } finally {
       setIsLoading(false);
       setLoadingMessage("");
@@ -273,7 +277,7 @@ const CreateScreeningDialog = ({
 
   const copyToClipboard = async () => {
     if (!generatedUrl) return;
-    
+
     try {
       await navigator.clipboard.writeText(generatedUrl);
       setCopied(true);
@@ -335,17 +339,23 @@ const CreateScreeningDialog = ({
 
   return (
     <Dialog open={open} onOpenChange={handleClose}>
-      <DialogContent className="sm:max-w-xl max-h-[90vh] overflow-hidden flex flex-col">
+      <DialogContent className="sm:max-w-xl max-h-[95vh] overflow-hidden flex flex-col">
         <DialogHeader className="flex-shrink-0">
           <DialogTitle className="flex items-center gap-2">
             {getStepIcon()}
             Create Behavioral Screening
           </DialogTitle>
-          <DialogDescription>
-            {generatedUrl 
-              ? "Your screening link is ready"
-              : `Step ${getStepNumber()} of 4: ${getStepLabel()}`
-            }
+          <DialogDescription className="flex items-center gap-2">
+            {generatedUrl ? (
+              "Your screening link is ready"
+            ) : (
+              <>
+                <span className="inline-flex items-center px-2 py-0.5 rounded-md bg-muted text-xs font-medium text-muted-foreground">
+                  Step {getStepNumber()} of 4
+                </span>
+                <span>{getStepLabel()}</span>
+              </>
+            )}
           </DialogDescription>
         </DialogHeader>
 
@@ -369,8 +379,8 @@ const CreateScreeningDialog = ({
             </p>
           </div>
         ) : (
-          <ScrollArea className="flex-1 min-h-0 max-h-[65vh]">
-            <div className="space-y-4 pr-4 pb-4">
+          <ScrollArea className="flex-1 min-h-0 overflow-y-auto">
+            <div className="space-y-6 pr-4 pb-4">
               {/* Step 1: Role Briefing */}
               {currentStep === "role_briefing" && (
                 <RoleBriefingForm value={roleBriefing} onChange={setRoleBriefing} />
@@ -389,8 +399,8 @@ const CreateScreeningDialog = ({
 
               {/* Step 3: Scenario Coverage */}
               {currentStep === "scenario_coverage" && (
-                <ScenarioCoverageConfig 
-                  value={scenarioConfig} 
+                <ScenarioCoverageConfig
+                  value={scenarioConfig}
                   onChange={setScenarioConfig}
                   templateCategoryCounts={templateCategoryCounts}
                 />
@@ -430,11 +440,10 @@ const CreateScreeningDialog = ({
                             <button
                               key={candidate.id}
                               onClick={() => setSelectedCandidate(candidate)}
-                              className={`w-full text-left p-3 rounded-lg transition-colors ${
-                                selectedCandidate?.id === candidate.id
-                                  ? "bg-primary/10 border border-primary/20"
-                                  : "hover:bg-muted/50"
-                              }`}
+                              className={`w-full text-left p-3 rounded-lg transition-colors ${selectedCandidate?.id === candidate.id
+                                ? "bg-primary/10 border border-primary/20"
+                                : "hover:bg-muted/50"
+                                }`}
                             >
                               <p className="font-medium">{candidate.candidate_name}</p>
                               <p className="text-sm text-muted-foreground">
@@ -515,10 +524,10 @@ const CreateScreeningDialog = ({
                   </>
                 )}
               </Button>
-              
+
               {currentStep === "send_invite" ? (
-                <Button 
-                  onClick={handleGenerate} 
+                <Button
+                  onClick={handleGenerate}
                   disabled={isLoading || !selectedCandidate}
                 >
                   {isLoading ? (
@@ -534,8 +543,8 @@ const CreateScreeningDialog = ({
                   )}
                 </Button>
               ) : currentStep === "scenario_coverage" ? (
-                <Button 
-                  onClick={handleSyncToBackend} 
+                <Button
+                  onClick={handleSyncToBackend}
                   disabled={isLoading || !canProceed()}
                 >
                   {isLoading ? (
@@ -551,7 +560,12 @@ const CreateScreeningDialog = ({
                   )}
                 </Button>
               ) : (
-                <Button onClick={goToNextStep} disabled={!canProceed()}>
+                <Button
+                  onClick={goToNextStep}
+                  disabled={!canProceed()}
+                  variant={currentStep === "role_briefing" ? "default" : "default"}
+                  className={currentStep === "role_briefing" ? "bg-primary hover:bg-primary/90" : ""}
+                >
                   {currentStep === "role_briefing" ? "Next (Optional)" : "Next"}
                   <ChevronRight className="w-4 h-4 ml-1" />
                 </Button>
