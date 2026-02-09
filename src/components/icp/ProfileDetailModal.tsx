@@ -13,6 +13,7 @@ import {
 import { ProfileResult } from "@/types/icp";
 import { cn } from "@/lib/utils";
 import { ICPResponse } from "@/lib/api/icp";
+import { getMatchBadge as sharedGetMatchBadge } from "@/lib/matchBadges";
 import { useState, useEffect } from "react";
 import { useToast } from "@/components/ui/use-toast";
 
@@ -99,36 +100,13 @@ export const ProfileDetailModal = ({ profile, deepSearchResult, revealedEmail, o
     const topCategories = skillCategories.slice(0, 3);
     const totalSkills = profile.top_skills?.length || 0;
 
-    // Match badge helper
-    const getMatchBadge = (score: number) => {
-        if (score >= 75) return {
-            emoji: '💪',
-            label: 'Strong Match',
-            color: 'text-[#00FF85] border-[#00FF85] bg-[#00FF85]/10'
-        };
-        if (score >= 60) return {
-            emoji: '👍',
-            label: 'Good Match',
-            color: 'text-blue-400 border-blue-500/50 bg-blue-500/10'
-        };
-        if (score >= 50) return {
-            emoji: '👌',
-            label: 'Potential Match',
-            color: 'text-purple-400 border-purple-500/50 bg-purple-500/10'
-        };
-        if (score >= 40) return {
-            emoji: '🤝',
-            label: 'Fair Match',
-            color: 'text-orange-400 border-orange-500/50 bg-gradient-to-r from-orange-500/10 to-amber-500/10'
-        };
-        return {
-            emoji: '🤔',
-            label: 'Weak Match',
-            color: 'text-gray-400 border-gray-500/50 bg-gray-500/10'
-        };
+    // Match badge helper - uses shared config
+    const getMatchBadgeLocal = (score: number) => {
+        const b = sharedGetMatchBadge(score);
+        return { emoji: b.emoji, label: b.label, color: b.gradient };
     };
 
-    const matchBadge = profile.similarity_score ? getMatchBadge(profile.similarity_score) : null;
+    const matchBadge = profile.similarity_score ? getMatchBadgeLocal(profile.similarity_score) : null;
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
