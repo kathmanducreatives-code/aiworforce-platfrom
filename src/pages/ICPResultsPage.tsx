@@ -612,6 +612,96 @@ const ICPResultsPage = () => {
                                 </div>
                             </div>
                         ) : (
+                            <div className="space-y-5">
+                                {/* Find Emails Action Bar (List View) */}
+                                <div className="flex flex-wrap items-center justify-between gap-3 p-4 rounded-xl bg-card/60 border border-border/40 backdrop-blur-sm">
+                                    <div className="flex items-center gap-3">
+                                        <span className="text-sm text-muted-foreground font-medium">
+                                            <span className="text-primary font-bold">{filteredResults.length}</span> results found
+                                        </span>
+                                        <span className="w-px h-5 bg-border/60" />
+                                        <div className="flex items-center gap-1.5">
+                                            {[
+                                                { key: 'all', label: 'All', emoji: '', cls: 'border-border/60 text-muted-foreground hover:border-primary/40' },
+                                                { key: 'strong', label: 'Strong', emoji: '💪', cls: 'border-emerald-500/40 text-emerald-300 hover:bg-emerald-500/10' },
+                                                { key: 'good', label: 'Good', emoji: '👍', cls: 'border-blue-500/40 text-blue-300 hover:bg-blue-500/10' },
+                                                { key: 'potential', label: 'Potential', emoji: '👌', cls: 'border-amber-500/40 text-amber-300 hover:bg-amber-500/10' },
+                                                { key: 'fair', label: 'Fair', emoji: '🤝', cls: 'border-gray-500/40 text-gray-300 hover:bg-gray-500/10' },
+                                            ].map(chip => (
+                                                <button
+                                                    key={chip.key}
+                                                    onClick={() => setBadgeFilter(chip.key)}
+                                                    className={cn(
+                                                        "px-2.5 py-1 rounded-full text-xs font-medium border transition-all",
+                                                        badgeFilter === chip.key
+                                                            ? chip.key === 'all'
+                                                                ? "bg-primary/15 border-primary/60 text-primary"
+                                                                : `bg-white/10 ${chip.cls} ring-1 ring-white/10`
+                                                            : `bg-transparent ${chip.cls}`
+                                                    )}
+                                                >
+                                                    {chip.emoji && <span className="mr-1">{chip.emoji}</span>}
+                                                    {chip.label}
+                                                </button>
+                                            ))}
+                                        </div>
+                                    </div>
+
+                                    <div className="relative">
+                                        <div className="flex items-center">
+                                            <Button
+                                                onClick={handleFindEmails}
+                                                className="h-9 rounded-r-none gap-2 bg-primary text-primary-foreground hover:bg-primary/90 shadow-[0_0_15px_rgba(0,255,133,0.2)]"
+                                            >
+                                                <Sparkles className="w-4 h-4" />
+                                                Find Emails
+                                            </Button>
+                                            <Button
+                                                onClick={() => setShowFindEmailsDropdown(!showFindEmailsDropdown)}
+                                                className="h-9 px-2 rounded-l-none border-l border-black/20 bg-primary text-primary-foreground hover:bg-primary/90"
+                                            >
+                                                <ChevronDown className="w-4 h-4" />
+                                            </Button>
+                                        </div>
+
+                                        {showFindEmailsDropdown && (
+                                            <div className="absolute right-0 top-full mt-2 w-56 p-3 rounded-xl bg-card border border-border/60 shadow-xl z-50 space-y-3 animate-in fade-in slide-in-from-top-2 duration-200">
+                                                <div className="space-y-1.5">
+                                                    <label className="text-[10px] uppercase tracking-widest text-muted-foreground font-semibold">Number of emails</label>
+                                                    <Select value={findEmailCount} onValueChange={setFindEmailCount}>
+                                                        <SelectTrigger className="h-8 bg-background border-border/60 text-sm">
+                                                            <SelectValue />
+                                                        </SelectTrigger>
+                                                        <SelectContent className="bg-card border-border/60">
+                                                            {['10', '25', '50', '100', '200'].map(n => (
+                                                                <SelectItem key={n} value={n}>{n} emails</SelectItem>
+                                                            ))}
+                                                        </SelectContent>
+                                                    </Select>
+                                                </div>
+                                                <div className="space-y-1.5">
+                                                    <label className="text-[10px] uppercase tracking-widest text-muted-foreground font-semibold">Filter by badge</label>
+                                                    <Select value={badgeFilter} onValueChange={setBadgeFilter}>
+                                                        <SelectTrigger className="h-8 bg-background border-border/60 text-sm">
+                                                            <SelectValue />
+                                                        </SelectTrigger>
+                                                        <SelectContent className="bg-card border-border/60">
+                                                            <SelectItem value="all">All Badges</SelectItem>
+                                                            <SelectItem value="strong">💪 Strong Match (75%+)</SelectItem>
+                                                            <SelectItem value="good">👍 Good Match (60-74%)</SelectItem>
+                                                            <SelectItem value="potential">👌 Potential (50-59%)</SelectItem>
+                                                            <SelectItem value="fair">🤝 Fair Match (40-49%)</SelectItem>
+                                                        </SelectContent>
+                                                    </Select>
+                                                </div>
+                                                <Button onClick={handleFindEmails} className="w-full h-8 gap-2 bg-primary text-primary-foreground text-xs">
+                                                    <Mail className="w-3.5 h-3.5" /> Start Finding
+                                                </Button>
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+
                             <div className="rounded-md border border-white/10 bg-[#161616]">
                                 <Table>
                                     <TableHeader className="bg-black/20">
@@ -788,6 +878,7 @@ const ICPResultsPage = () => {
                                         ))}
                                     </TableBody>
                                 </Table>
+                            </div>
                             </div>
                         )
                     ) : (
