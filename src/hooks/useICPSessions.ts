@@ -1,5 +1,5 @@
 import useSWR from 'swr';
-import { supabase, TABLES, RPC } from '@/lib/supabase';
+import { supabase } from '@/integrations/supabase/client';
 import { ICPProfile } from '@/types/icp';
 import { useState, useCallback } from 'react';
 
@@ -31,14 +31,13 @@ export const useICPSessions = (options: UseICPSessionsOptions = {}): UseICPSessi
     // Fetcher function for SWR
     const fetcher = async (key: string) => {
         const currentPage = parseInt(key.split(':')[1] || '0');
-        const start = 0; // Always fetch from start to accumulate pages
+        const start = 0;
         const end = (currentPage + 1) * pageSize - 1;
 
         console.log(`[useICPSessions] Fetching sessions page ${currentPage}, range ${start}-${end}`);
 
-        // 1. Try to fetch from proper sessions table with pagination
         const { data: sessionData, error: sessionError } = await supabase
-            .from(TABLES.ICP_SESSIONS)
+            .from('icp_lookalike_sessions')
             .select('*')
             .order('created_at', { ascending: false })
             .range(start, end);
@@ -49,9 +48,8 @@ export const useICPSessions = (options: UseICPSessionsOptions = {}): UseICPSessi
         }
 
         if (sessionData && sessionData.length > 0) {
-            console.log(`[useICPSessions] Found ${sessionData.length} sessions in metadata table`);
+            console.log(`[useICPSessions] Found ${sessionData.length} sessions`);
 
-            // Map Supabase rows to ICPProfile
             const mappedProfiles: ICPProfile[] = sessionData.map((session: any) => ({
                 id: session.session_id,
                 name: session.profile_name || `Session ${session.session_id.slice(0, 8)}`,
@@ -69,22 +67,21 @@ export const useICPSessions = (options: UseICPSessionsOptions = {}): UseICPSessi
             return mappedProfiles;
         }
 
-        // 2. Fallback: Group from candidate_profiles if sessions table is empty
+        // Fallback: Group from candidate_profiles if sessions table is empty
         console.log('[useICPSessions] No sessions in metadata, attempting fallback...');
 
         const { data: candidates, error: candidateError } = await supabase
-            .from(TABLES.CANDIDATE_PROFILES)
+            .from('candidate_profiles')
             .select('session_id, inserted_at')
             .order('inserted_at', { ascending: false })
-            .range(start, end * 10); // Fetch more since we'll be grouping
+            .range(start, end * 10);
 
         if (candidateError) throw candidateError;
 
         if (candidates && candidates.length > 0) {
-            // Group by session_id
             const sessionMap = new Map<string, { count: number, latest: string }>();
 
-            candidates.forEach(c => {
+            candidates.forEach((c: any) => {
                 if (!c.session_id) return;
                 if (!sessionMap.has(c.session_id)) {
                     sessionMap.set(c.session_id, { count: 0, latest: c.inserted_at });
@@ -93,7 +90,6 @@ export const useICPSessions = (options: UseICPSessionsOptions = {}): UseICPSessi
                 entry.count++;
             });
 
-            // Convert to profiles and limit to page size
             const fallbackProfiles: ICPProfile[] = Array.from(sessionMap.entries())
                 .slice(0, (page + 1) * pageSize)
                 .map(([sessionId, data]) => ({
@@ -116,17 +112,15 @@ export const useICPSessions = (options: UseICPSessionsOptions = {}): UseICPSessi
         return [];
     };
 
-    // Use SWR for data fetching with caching
     const { data, error, isValidating, mutate } = useSWR<ICPProfile[]>(
         `icp_sessions:${page}`,
         fetcher,
         {
             revalidateOnFocus: false,
             revalidateOnReconnect: true,
-            dedupingInterval: 5000, // Dedupe requests within 5s
+            dedupingInterval: 5000,
             errorRetryCount: 3,
             errorRetryInterval: 2000,
-            // Show stale data while revalidating
             keepPreviousData: true,
         }
     );
@@ -134,54 +128,40 @@ export const useICPSessions = (options: UseICPSessionsOptions = {}): UseICPSessi
     const sessions = data || [];
     const hasMore = sessions.length >= (page + 1) * pageSize;
 
-    // Load more function
     const loadMore = useCallback(() => {
         if (!isValidating && hasMore) {
-            console.log(`[useICPSessions] Loading page ${page + 1}`);
             setPage(prev => prev + 1);
         }
-    }, [isValidating, hasMore, page]);
+    }, [isValidating, hasMore]);
 
-    // Delete sessions function with optimistic update
     const deleteSessions = useCallback(async (sessionIds: string[]) => {
         if (!sessionIds || sessionIds.length === 0) return;
 
-        console.log(`[useICPSessions] Deleting ${sessionIds.length} sessions:`, sessionIds);
-
-        // Optimistic update - remove from UI immediately
         const currentSessions = data || [];
         const optimisticUpdate = currentSessions.filter(s => !sessionIds.includes(s.id));
-        mutate(optimisticUpdate, false); // Update without revalidation
+        mutate(optimisticUpdate, false);
 
         try {
-            // Use standard Supabase delete with .in() instead of RPC
-            // This works without requiring database migration
             const { error } = await supabase
-                .from(TABLES.ICP_SESSIONS)
+                .from('icp_lookalike_sessions')
                 .delete()
                 .in('session_id', sessionIds);
 
             if (error) {
                 console.error('[useICPSessions] Bulk delete error:', error);
-                // Revert optimistic update on error
                 mutate(currentSessions, false);
                 throw error;
             }
 
-            console.log(`[useICPSessions] Successfully deleted ${sessionIds.length} sessions`);
-
-            // Also delete related candidates (since we might not have CASCADE configured)
             const { error: candidateError } = await supabase
-                .from(TABLES.CANDIDATE_PROFILES)
+                .from('candidate_profiles')
                 .delete()
                 .in('session_id', sessionIds);
 
             if (candidateError) {
                 console.warn('[useICPSessions] Warning: Could not delete related candidates:', candidateError);
-                // Don't throw - session is already deleted
             }
 
-            // Revalidate to get fresh data
             mutate();
         } catch (error) {
             console.error('[useICPSessions] Delete failed:', error);
@@ -189,7 +169,6 @@ export const useICPSessions = (options: UseICPSessionsOptions = {}): UseICPSessi
         }
     }, [data, mutate]);
 
-    // Refresh function
     const refresh = useCallback(() => {
         mutate();
     }, [mutate]);
