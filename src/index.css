@@ -70,6 +70,40 @@ All colors MUST be HSL.
     --input: 0 0% 9%;
     --ring: 153 75% 53%;
   }
+
+  /* Verdant Theme - Lush forest greens with warm earth tones */
+  [data-theme="verdant"] {
+    --glass-bg: rgba(34, 197, 94, 0.06);
+    --glass-border: rgba(34, 197, 94, 0.12);
+    --shadow-premium: 0 8px 32px rgba(0, 0, 0, 0.3);
+    --shadow-glow: 0 0 30px rgba(34, 197, 94, 0.15);
+
+    --background: 150 20% 8%;
+    --foreground: 80 20% 92%;
+
+    --card: 150 15% 12%;
+    --card-foreground: 80 20% 92%;
+
+    --popover: 150 15% 12%;
+    --popover-foreground: 80 20% 92%;
+
+    --primary: 142 60% 50%;
+    --primary-foreground: 150 30% 6%;
+    --primary-light: 142 60% 62%;
+    --primary-dark: 142 60% 38%;
+
+    --secondary: 150 12% 16%;
+    --secondary-foreground: 80 20% 92%;
+    --muted: 150 10% 16%;
+    --muted-foreground: 150 10% 55%;
+
+    --border: 150 10% 20%;
+    --input: 150 15% 12%;
+    --ring: 142 60% 50%;
+
+    --accent: 45 80% 55%;
+    --accent-foreground: 150 30% 6%;
+  }
 }
 
 @layer base {

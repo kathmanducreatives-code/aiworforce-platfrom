@@ -6,6 +6,7 @@ import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider } from "./hooks/useAuth";
 import { ClientProvider } from "./contexts/ClientContext";
 import { ClientThemeProvider } from "./components/ClientThemeProvider";
+import { ThemeProvider } from "./contexts/ThemeContext";
 import Landing from "./pages/Landing";
 import Dashboard from "./pages/Dashboard";
 import Screening from "./pages/Screening";
@@ -38,6 +39,7 @@ const queryClient = new QueryClient();
 
 const App = () => (
   <QueryClientProvider client={queryClient}>
+    <ThemeProvider>
     <TooltipProvider>
       <AuthProvider>
         <ClientProvider>
@@ -207,6 +209,7 @@ const App = () => (
         </ClientProvider>
       </AuthProvider>
     </TooltipProvider>
+    </ThemeProvider>
   </QueryClientProvider>
 );
 
