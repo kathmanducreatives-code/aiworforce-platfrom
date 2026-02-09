@@ -19,7 +19,7 @@ export const PersonaIntentForm = ({ value, onChange }: PersonaIntentFormProps) =
                 </p>
             </div>
 
-            <Card className="backdrop-blur-xl bg-black/30 border-white/20 shadow-lg">
+            <Card className="backdrop-blur-xl bg-card/30 border-border/40 shadow-lg">
                 <CardContent className="p-6 space-y-4">
                     <div className="flex items-start gap-3">
                         <div className="p-2 rounded-lg bg-primary/20">
@@ -39,12 +39,12 @@ export const PersonaIntentForm = ({ value, onChange }: PersonaIntentFormProps) =
                         <Textarea
                             id="requirements"
                             placeholder="I'm looking for a Product Manager with 5+ years of experience in B2B SaaS, specifically with API-first products. They should have a background in engineering or data science..."
-                            className="min-h-[200px] resize-none bg-black/20 border-white/10 focus:border-primary/50 text-base leading-relaxed p-4"
+                            className="min-h-[200px] resize-none bg-background/20 border-border/40 focus:border-primary/50 text-base leading-relaxed p-4"
                             value={value.candidate_requirements || ""}
                             maxLength={500}
                             onChange={(e) => onChange({ ...value, candidate_requirements: e.target.value })}
                         />
-                        <div className="absolute bottom-3 right-3 text-xs text-muted-foreground bg-black/40 px-2 py-1 rounded backdrop-blur-md">
+                        <div className="absolute bottom-3 right-3 text-xs text-muted-foreground bg-background/40 px-2 py-1 rounded backdrop-blur-md">
                             {(value.candidate_requirements || "").length}/500 characters
                         </div>
                     </div>

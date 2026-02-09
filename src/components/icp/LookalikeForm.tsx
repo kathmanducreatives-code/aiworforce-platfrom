@@ -25,7 +25,6 @@ export const LookalikeForm = ({ value, onChange, sessionId }: LookalikeFormProps
     const [imageError, setImageError] = useState(false);
 
     const handleAnalyze = async () => {
-        // Regex for basic LinkedIn profile URL validation
         const linkedInRegex = /^https?:\/\/(www\.)?linkedin\.com\/in\/[\w-]+\/?$/;
 
         if (!value.lookalikeUrl) {
@@ -38,21 +37,18 @@ export const LookalikeForm = ({ value, onChange, sessionId }: LookalikeFormProps
             return;
         }
 
-        // Strict session check
         if (!sessionId) {
-            toast.error("Session not initialized. Please restart the wizard."); // Modified this line
+            toast.error("Session not initialized. Please restart the wizard.");
             return;
         }
 
-        setIsLoading(true); // Kept isLoading as per existing state variable
-        setError(null); // Modified this line
-        setImageError(false); // Reset image error on new analysis
+        setIsLoading(true);
+        setError(null);
+        setImageError(false);
 
         try {
-            console.log('Detailed Debug: Step 3 - Sending with session_id:', sessionId); // Added this line
+            console.log('Detailed Debug: Step 3 - Sending with session_id:', sessionId);
 
-            // Use unified API client from screening.ts
-            // Note parameters: (session_id, url) - Updated signature
             const rawResponse = await icpAPI.analyzeLookalikeProfile(sessionId, value.lookalikeUrl);
 
             if (!rawResponse) {
@@ -61,51 +57,38 @@ export const LookalikeForm = ({ value, onChange, sessionId }: LookalikeFormProps
 
             console.log("Analysis Raw Response:", rawResponse);
 
-            // Handle Array Response (n8n often returns arrays)
             const responseItem = Array.isArray(rawResponse) ? rawResponse[0] : rawResponse;
-
-            // Handle potentially nested data structure
-            // It might be response.profile, response.data.profile, or just response (flat)
             const profileData = responseItem.profile || responseItem.data?.profile || responseItem;
 
             if (!profileData) {
                 console.warn("Profile data missing in response", responseItem);
-                // Don't throw immediately, try to fallback if partial data exists
             }
 
-            // Extract Strategy Data which might be at root or inside a property
             const generatedStrategy = responseItem.generated_strategy || responseItem.data?.generated_strategy;
             const searchLogicDna = responseItem.search_logic_dna || responseItem.data?.search_logic_dna;
             const firmographic = responseItem.firmographic_constraints || responseItem.data?.firmographic_constraints;
             const technical = responseItem.technical_execution || responseItem.data?.technical_execution;
 
-            // Map Backend Fields to Frontend Schema
-            // Normalize profile object - check for nested 'profile' key again within the data
             const rawProfile = profileData.profile || profileData;
 
             const mappedProfile = {
                 ...rawProfile,
-                // Map years_experience (int) to total_years_experience (string) for UI
                 total_years_experience: rawProfile.years_experience ? `${rawProfile.years_experience} Years` : rawProfile.total_years_experience,
                 seniority_level: rawProfile.seniority || rawProfile.seniority_level,
-                // Ensure work_history is preserved
                 work_history: rawProfile.work_history || [],
                 top_skills: rawProfile.top_skills || rawProfile.skills || []
             };
 
             setScrapedProfile(mappedProfile);
 
-            // Functional update pattern equivalent (creating new object reference)
             const nextState: ICPFormData = {
                 ...value,
                 lookalikeProfile: mappedProfile,
-                // Vital: Save the strategy data so Step 4 can display it
                 generated_strategy: generatedStrategy,
                 strategyData: {
                     search_logic_dna: searchLogicDna,
                     technical_execution: technical,
                     firmographic_constraints: firmographic || {
-                        // Fallback defaults if API returns null
                         location: value.company_location,
                         size: value.company_size,
                         industries: value.industries,
@@ -139,17 +122,14 @@ export const LookalikeForm = ({ value, onChange, sessionId }: LookalikeFormProps
         );
     }
 
-    // If we have a profile, we normally show preview, but the wizard handles next step.
-    // However, if we stay here to show result (legacy mode or review), show card.
-
     return (
         <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
             {/* Header */}
             <div className="text-center space-y-2 mb-8">
-                <div className="w-12 h-12 rounded-2xl bg-[#00FF85]/10 flex items-center justify-center mx-auto mb-4 ring-1 ring-[#00FF85]/20 shadow-[0_0_20px_rgba(0,255,133,0.1)]">
-                    <Linkedin className="w-6 h-6 text-[#00FF85]" />
+                <div className="w-12 h-12 rounded-2xl bg-primary/10 flex items-center justify-center mx-auto mb-4 ring-1 ring-primary/20 shadow-[0_0_20px_hsl(var(--primary)/0.1)]">
+                    <Linkedin className="w-6 h-6 text-primary" />
                 </div>
-                <h3 className="text-2xl font-bold text-white tracking-tight">Import Lookalike Profile</h3>
+                <h3 className="text-2xl font-bold text-foreground tracking-tight">Import Lookalike Profile</h3>
                 <p className="text-muted-foreground max-w-md mx-auto">
                     Provide a LinkedIn URL of your ideal candidate. Our AI will analyze their patterns to build your strategy.
                 </p>
@@ -194,11 +174,11 @@ export const LookalikeForm = ({ value, onChange, sessionId }: LookalikeFormProps
             {scrapedProfile && (
                 <div className="space-y-6">
                     {/* Premium Profile Preview Card */}
-                    <Card className="border-white/10 bg-white/5 backdrop-blur-md shadow-2xl overflow-hidden relative group">
+                    <Card className="border-border/40 bg-card/50 backdrop-blur-md shadow-2xl overflow-hidden relative group">
                         {/* Decorative background gradient */}
                         <div className="absolute inset-0 bg-gradient-to-br from-primary/5 via-transparent to-primary/5 pointer-events-none" />
 
-                        <CardHeader className="pb-6 border-b border-white/5 relative z-10">
+                        <CardHeader className="pb-6 border-b border-border/30 relative z-10">
                             <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
                                 <div className="flex items-center gap-5">
                                     {/* Avatar with Gradient Border & Status */}
@@ -234,7 +214,7 @@ export const LookalikeForm = ({ value, onChange, sessionId }: LookalikeFormProps
                                             </Badge>
                                         </div>
                                         <CardDescription className="flex flex-col gap-1">
-                                            <span className="font-medium text-slate-400 text-sm">
+                                            <span className="font-medium text-muted-foreground text-sm">
                                                 {scrapedProfile.headline || "No headline found"}
                                             </span>
                                             <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
@@ -261,7 +241,7 @@ export const LookalikeForm = ({ value, onChange, sessionId }: LookalikeFormProps
                                             onChange({ ...value, lookalikeProfile: undefined });
                                             setScrapedProfile(null);
                                         }}
-                                        className="gap-1.5 flex-1 md:flex-none border-white/10 hover:bg-white/5"
+                                        className="gap-1.5 flex-1 md:flex-none border-border/40 hover:bg-accent"
                                     >
                                         <Pencil className="w-3.5 h-3.5" /> Edit
                                     </Button>
@@ -303,7 +283,7 @@ export const LookalikeForm = ({ value, onChange, sessionId }: LookalikeFormProps
                                         <Briefcase className="w-4 h-4 text-primary/80" /> Proven Pedigree
                                     </div>
 
-                                    <div className="space-y-4 bg-white/5 p-4 rounded-lg border border-white/5 hover:border-white/10 transition-colors">
+                                    <div className="space-y-4 bg-accent/20 p-4 rounded-lg border border-border/30 hover:border-border/50 transition-colors">
                                         <div className="flex items-center justify-between">
                                             <Badge variant="outline" className="bg-emerald-500/5 text-emerald-500 border-emerald-500/20 px-3 py-1 text-xs font-semibold uppercase tracking-wide">
                                                 {scrapedProfile.seniority_level || "Unknown Level"}
@@ -314,7 +294,7 @@ export const LookalikeForm = ({ value, onChange, sessionId }: LookalikeFormProps
                                         </div>
 
                                         {/* Work History List */}
-                                        <div className="space-y-3 pt-2 border-t border-white/5">
+                                        <div className="space-y-3 pt-2 border-t border-border/30">
                                             <div className="text-[10px] text-muted-foreground font-medium uppercase tracking-wider">Work History</div>
                                             {scrapedProfile.work_history && scrapedProfile.work_history.length > 0 ? (
                                                 <div className="space-y-3">
@@ -322,7 +302,7 @@ export const LookalikeForm = ({ value, onChange, sessionId }: LookalikeFormProps
                                                         <div key={index} className="text-xs group/job">
                                                             <div className="font-medium text-foreground flex justify-between">
                                                                 <span>{job.title}</span>
-                                                                <span className="text-slate-500 text-[10px] ml-2 shrink-0">{job.date_range || job.duration}</span>
+                                                                <span className="text-muted-foreground/50 text-[10px] ml-2 shrink-0">{job.date_range || job.duration}</span>
                                                             </div>
                                                             <div className="text-muted-foreground group-hover/job:text-primary/80 transition-colors">
                                                                 {job.company}
@@ -330,7 +310,7 @@ export const LookalikeForm = ({ value, onChange, sessionId }: LookalikeFormProps
                                                         </div>
                                                     ))}
                                                     {scrapedProfile.work_history.length > 3 && (
-                                                        <div className="text-[10px] text-slate-500 italic mt-1">
+                                                        <div className="text-[10px] text-muted-foreground/50 italic mt-1">
                                                             +{scrapedProfile.work_history.length - 3} more roles
                                                         </div>
                                                     )}
@@ -340,13 +320,13 @@ export const LookalikeForm = ({ value, onChange, sessionId }: LookalikeFormProps
                                             )}
                                         </div>
 
-                                        {/* Past Companies Cloud (Keep as summary) */}
+                                        {/* Past Companies Cloud */}
                                         {scrapedProfile.past_companies && scrapedProfile.past_companies.length > 0 && (
-                                            <div className="space-y-2 pt-2 border-t border-white/5">
+                                            <div className="space-y-2 pt-2 border-t border-border/30">
                                                 <div className="text-[10px] text-muted-foreground font-medium uppercase tracking-wider">Company DNA</div>
-                                                <div className="flex overflow-x-auto pb-2 gap-2 scrollbar-thin scrollbar-thumb-white/10 scrollbar-track-transparent">
+                                                <div className="flex overflow-x-auto pb-2 gap-2 scrollbar-thin scrollbar-thumb-border scrollbar-track-transparent">
                                                     {scrapedProfile.past_companies?.map((company: string, i: number) => (
-                                                        <div key={i} className="whitespace-nowrap px-2.5 py-1 text-xs font-medium text-slate-300 bg-white/5 rounded border border-white/10 flex-shrink-0">
+                                                        <div key={i} className="whitespace-nowrap px-2.5 py-1 text-xs font-medium text-foreground/80 bg-accent/30 rounded border border-border/40 flex-shrink-0">
                                                             {company}
                                                         </div>
                                                     ))}
@@ -356,7 +336,7 @@ export const LookalikeForm = ({ value, onChange, sessionId }: LookalikeFormProps
 
                                         {/* Industry Focus */}
                                         {scrapedProfile.work_history && scrapedProfile.work_history.length > 0 && scrapedProfile.work_history[0].industry && (
-                                            <div className="pt-2 border-t border-white/5 flex items-center gap-2 text-xs text-muted-foreground">
+                                            <div className="pt-2 border-t border-border/30 flex items-center gap-2 text-xs text-muted-foreground">
                                                 <span className="w-1.5 h-1.5 rounded-full bg-primary" />
                                                 Focused in <span className="text-foreground/80 font-medium">{scrapedProfile.work_history[0].industry}</span>
                                             </div>
@@ -370,19 +350,19 @@ export const LookalikeForm = ({ value, onChange, sessionId }: LookalikeFormProps
                                         <GraduationCap className="w-4 h-4 text-primary/80" /> Skills & Education
                                     </div>
 
-                                    <div className="space-y-4 bg-white/5 p-4 rounded-lg border border-white/5 hover:border-white/10 transition-colors h-full">
+                                    <div className="space-y-4 bg-accent/20 p-4 rounded-lg border border-border/30 hover:border-border/50 transition-colors h-full">
                                         <div className="space-y-2">
                                             <span className="text-[10px] text-muted-foreground font-medium uppercase tracking-wider">Top Skills</span>
                                             <div className="flex flex-wrap gap-1.5">
                                                 {(scrapedProfile.top_skills && scrapedProfile.top_skills.length > 0) ? (
                                                     <>
                                                         {scrapedProfile.top_skills?.slice(0, 5).map((skill: string, i: number) => (
-                                                            <Badge key={i} variant="secondary" className="bg-background/40 hover:bg-background/60 text-foreground/90 border-white/10 text-xs py-0.5">
+                                                            <Badge key={i} variant="secondary" className="bg-background/40 hover:bg-background/60 text-foreground/90 border-border/40 text-xs py-0.5">
                                                                 {skill}
                                                             </Badge>
                                                         ))}
                                                         {scrapedProfile.top_skills.length > 5 && (
-                                                            <Badge variant="outline" className="border-dashed border-white/20 text-muted-foreground text-xs py-0.5">
+                                                            <Badge variant="outline" className="border-dashed border-border text-muted-foreground text-xs py-0.5">
                                                                 +{scrapedProfile.top_skills.length - 5} more
                                                             </Badge>
                                                         )}
@@ -393,7 +373,7 @@ export const LookalikeForm = ({ value, onChange, sessionId }: LookalikeFormProps
                                             </div>
                                         </div>
 
-                                        <div className="pt-3 border-t border-white/5">
+                                        <div className="pt-3 border-t border-border/30">
                                             <span className="text-[10px] text-muted-foreground font-medium uppercase tracking-wider block mb-2">Education</span>
 
                                             {scrapedProfile.education && scrapedProfile.education.length > 0 ? (
