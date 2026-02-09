@@ -145,108 +145,108 @@ export const ProfileResultCard = ({ profile, sessionId, onSave, onReveal, isEnri
             layout
         >
             <Card
-                className="bg-[#121212] border-white/5 overflow-hidden hover:border-[#00FF85]/30 transition-all duration-300 group shadow-lg shadow-black/50 relative cursor-pointer"
+                className="bg-card/80 border-border/40 overflow-hidden hover:border-primary/30 transition-all duration-300 group shadow-lg shadow-black/40 relative cursor-pointer backdrop-blur-sm"
                 onClick={() => setShowDetail(true)}
             >
-                {/* Header Section */}
-                <div className="p-5 pt-10 flex items-start gap-4 relative">
-                    {/* Similarity Score Badge (Top Right) */}
-                    {/* Match Strength Badge (Top Right) */}
-                    {profile.similarity_score && (() => {
-                        const badge = matchGetBadge(profile.similarity_score);
-                        return (
-                            <div className={cn(
-                                "absolute top-3 right-3 z-20 px-3 py-1.5 rounded-full flex items-center gap-1.5 text-xs font-bold transition-transform hover:scale-105 border backdrop-blur-md",
-                                badge.gradient
-                            )}>
-                                <span className="text-sm drop-shadow-sm">{badge.emoji}</span>
-                                <span className="tracking-wide drop-shadow-sm">{badge.label}</span>
-                                <span className="ml-1.5 pl-1.5 border-l border-white/20 font-mono opacity-80">
-                                    {profile.similarity_score}%
-                                </span>
+                {/* Match Badge - Flush top banner */}
+                {profile.similarity_score != null && (() => {
+                    const badge = matchGetBadge(profile.similarity_score);
+                    return (
+                        <div className={cn(
+                            "flex items-center justify-between px-5 py-2.5 border-b border-white/5",
+                            badge.gradient.replace('border-', 'border-b-')
+                        )}>
+                            <div className="flex items-center gap-2">
+                                <span className="text-base">{badge.emoji}</span>
+                                <span className="text-xs font-semibold tracking-wide">{badge.label}</span>
                             </div>
-                        );
-                    })()}
+                            <span className="text-sm font-mono font-bold tabular-nums">{profile.similarity_score}%</span>
+                        </div>
+                    );
+                })()}
 
+                {/* Profile Header */}
+                <div className="px-5 pt-5 pb-4 flex items-start gap-4">
                     {/* Avatar */}
-                    <div className="relative">
-                        <div className="w-16 h-16 rounded-full bg-[#1A1A1A] border-2 border-white/10 flex items-center justify-center overflow-hidden shadow-xl">
+                    <div className="relative flex-shrink-0">
+                        <div className="w-14 h-14 rounded-xl bg-muted/50 border border-border/60 flex items-center justify-center overflow-hidden ring-1 ring-white/5">
                             {profile.photo_url ? (
                                 <img src={profile.photo_url} alt={profile.name} className="w-full h-full object-cover" />
                             ) : (
-                                <User className="w-8 h-8 text-muted-foreground/50" />
+                                <User className="w-6 h-6 text-muted-foreground/40" />
                             )}
                         </div>
-                        {/* LinkedIn Icon Absolute */}
                         {profile.linkedin_url && (
                             <a
                                 href={profile.linkedin_url}
                                 target="_blank"
                                 rel="noopener noreferrer"
-                                className="absolute -bottom-1 -right-1 bg-[#0077b5] p-1 rounded-full text-white hover:scale-110 transition-transform shadow-lg"
+                                className="absolute -bottom-1.5 -right-1.5 bg-[#0077b5] p-1 rounded-md text-white hover:scale-110 transition-transform shadow-md"
                                 title="View on LinkedIn"
+                                onClick={(e) => e.stopPropagation()}
                             >
                                 <Linkedin className="w-3 h-3 fill-current" />
                             </a>
                         )}
                     </div>
 
-                    {/* Basic Info */}
-                    <div className="flex-1 min-w-0 pr-16">
-                        <h3 className="text-lg font-bold text-white group-hover:text-[#00FF85] transition-colors truncate">
+                    {/* Info */}
+                    <div className="flex-1 min-w-0 space-y-1.5">
+                        <h3 className="text-[15px] font-semibold text-foreground group-hover:text-primary transition-colors truncate leading-tight">
                             {profile.name}
                         </h3>
-                        <div className="flex items-center gap-2 text-sm text-gray-300 mt-0.5 truncate">
-                            <span className="font-medium text-white">{profile.current_title}</span>
-                            <span className="text-gray-600">•</span>
-                            <span className="text-emerald-400/90">{profile.current_company}</span>
-                        </div>
-                        <div className="flex items-center gap-4 mt-2 text-xs text-muted-foreground">
+                        <p className="text-sm text-muted-foreground truncate leading-snug">
+                            {profile.current_title}
+                            {profile.current_company && (
+                                <span className="text-primary/80 font-medium"> · {profile.current_company}</span>
+                            )}
+                        </p>
+                        <div className="flex items-center gap-3 text-xs text-muted-foreground/70 pt-0.5">
                             {profile.location && (
-                                <div className="flex items-center gap-1">
-                                    <MapPin className="w-3 h-3" />
-                                    {profile.location}
-                                </div>
+                                <span className="flex items-center gap-1 truncate">
+                                    <MapPin className="w-3 h-3 flex-shrink-0" />
+                                    <span className="truncate">{profile.location}</span>
+                                </span>
                             )}
                             {profile.years_experience !== undefined && (
-                                <div className="flex items-center gap-1">
+                                <span className="flex items-center gap-1 flex-shrink-0">
                                     <Briefcase className="w-3 h-3" />
                                     {profile.years_experience}+ YOE
-                                </div>
+                                </span>
                             )}
                         </div>
                     </div>
                 </div>
 
-                {/* Divider */}
-                <div className="h-px bg-gradient-to-r from-transparent via-white/10 to-transparent w-full" />
-
-                {/* Body / Summary */}
-                <div className="p-4 pt-3 space-y-3">
-                    {/* Skills Tags */}
-                    {Array.isArray(profile.top_skills) && profile.top_skills.length > 0 && (
-                        <div className="flex flex-wrap gap-1.5">
-                            {profile.top_skills.slice(0, 4).map((skill, idx) => (
-                                <Badge key={`${skill}-${idx}`} variant="secondary" className="bg-[#1A1A1A] text-gray-300 border-white/5 hover:bg-white/10 text-[10px] px-2 py-0.5 font-normal">
-                                    {typeof skill === 'string' ? skill : JSON.stringify(skill)}
-                                </Badge>
-                            ))}
-                            {profile.top_skills.length > 4 && (
-                                <span className="text-[10px] text-muted-foreground self-center">+{profile.top_skills.length - 4}</span>
-                            )}
-                        </div>
-                    )}
-
-                    {/* Why this match (Snippet) */}
-                    {profile.match_reason && (
-                        <div className="bg-[#00FF85]/5 border border-[#00FF85]/10 rounded-lg p-3 text-xs text-gray-300">
-                            <div className="flex items-center gap-1.5 mb-1 text-[#00FF85] font-semibold text-[10px] uppercase tracking-wider">
-                                <CheckCircle2 className="w-3 h-3" /> Why this match
+                {/* Skills + Match Reason */}
+                {(
+                    (Array.isArray(profile.top_skills) && profile.top_skills.length > 0) ||
+                    profile.match_reason
+                ) && (
+                    <div className="px-5 pb-4 space-y-3">
+                        {Array.isArray(profile.top_skills) && profile.top_skills.length > 0 && (
+                            <div className="flex flex-wrap gap-1.5">
+                                {profile.top_skills.slice(0, 4).map((skill, idx) => (
+                                    <Badge key={`${skill}-${idx}`} variant="secondary" className="bg-muted/40 text-muted-foreground border-border/30 text-[10px] px-2 py-0.5 font-normal rounded-md">
+                                        {typeof skill === 'string' ? skill : JSON.stringify(skill)}
+                                    </Badge>
+                                ))}
+                                {profile.top_skills.length > 4 && (
+                                    <span className="text-[10px] text-muted-foreground/50 self-center">+{profile.top_skills.length - 4}</span>
+                                )}
                             </div>
-                            <p className="line-clamp-2 opacity-80">{profile.match_reason}</p>
-                        </div>
-                    )}
-                </div>
+                        )}
+
+                        {profile.match_reason && (
+                            <div className="bg-primary/5 border border-primary/10 rounded-lg p-3">
+                                <div className="flex items-center gap-1.5 mb-1.5 text-primary text-[10px] font-semibold uppercase tracking-widest">
+                                    <CheckCircle2 className="w-3 h-3" /> Match Insight
+                                </div>
+                                <p className="text-xs text-muted-foreground leading-relaxed line-clamp-2">{profile.match_reason}</p>
+                            </div>
+                        )}
+                    </div>
+                )}
 
                 {/* Expanded Details */}
                 <AnimatePresence>
@@ -255,7 +255,7 @@ export const ProfileResultCard = ({ profile, sessionId, onSave, onReveal, isEnri
                             initial={{ height: 0, opacity: 0 }}
                             animate={{ height: "auto", opacity: 1 }}
                             exit={{ height: 0, opacity: 0 }}
-                            className="bg-[#161616] border-t border-white/5 px-5 py-4 space-y-4 overflow-hidden"
+                            className="bg-muted/20 border-t border-border/30 px-5 py-4 space-y-4 overflow-hidden"
                         >
                             {/* Work History */}
                             {Array.isArray(profile.work_history) && profile.work_history.length > 0 && (
@@ -263,12 +263,12 @@ export const ProfileResultCard = ({ profile, sessionId, onSave, onReveal, isEnri
                                     <h4 className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground mb-2 flex items-center gap-2">
                                         <Briefcase className="w-3 h-3" /> Experience
                                     </h4>
-                                    <div className="space-y-3 pl-1 border-l border-white/10 ml-1.5">
+                                    <div className="space-y-3 pl-1 border-l border-border/40 ml-1.5">
                                         {profile.work_history.slice(0, 3).map((job, idx) => (
                                             <div key={idx} className="pl-3 relative">
-                                                <div className="absolute -left-[5px] top-1.5 w-2 h-2 rounded-full bg-white/20" />
-                                                <div className="text-sm font-medium text-white">{job?.title || 'Unknown Title'}</div>
-                                                <div className="text-xs text-gray-400">{job?.company || 'Unknown Company'} <span className="text-gray-600">•</span> {job?.duration || ''}</div>
+                                                <div className="absolute -left-[5px] top-1.5 w-2 h-2 rounded-full bg-muted-foreground/30" />
+                                                <div className="text-sm font-medium text-foreground">{job?.title || 'Unknown Title'}</div>
+                                                <div className="text-xs text-muted-foreground">{job?.company || 'Unknown Company'} <span className="text-muted-foreground/40">•</span> {job?.duration || ''}</div>
                                             </div>
                                         ))}
                                     </div>
@@ -283,9 +283,9 @@ export const ProfileResultCard = ({ profile, sessionId, onSave, onReveal, isEnri
                                     </h4>
                                     <div className="space-y-2">
                                         {profile.education.map((edu, idx) => (
-                                            <div key={idx} className="bg-black/20 rounded-md p-2 text-xs flex justify-between items-center">
-                                                <span className="text-gray-300 truncate">{edu?.school || 'Unknown School'}</span>
-                                                <Badge variant="outline" className="text-[10px] border-white/10 text-gray-500 scale-90">{edu?.degree || 'Degree'}</Badge>
+                                            <div key={idx} className="bg-muted/30 rounded-md p-2 text-xs flex justify-between items-center">
+                                                <span className="text-muted-foreground truncate">{edu?.school || 'Unknown School'}</span>
+                                                <Badge variant="outline" className="text-[10px] border-border/40 text-muted-foreground/60 scale-90">{edu?.degree || 'Degree'}</Badge>
                                             </div>
                                         ))}
                                     </div>
@@ -296,31 +296,29 @@ export const ProfileResultCard = ({ profile, sessionId, onSave, onReveal, isEnri
                 </AnimatePresence>
 
                 {/* Footer Actions */}
-                <div className="p-3 bg-[#0A0A0A] border-t border-white/5 flex items-center justify-between gap-2" onClick={(e) => e.stopPropagation()}>
+                <div className="px-5 py-3 bg-muted/10 border-t border-border/30 flex items-center justify-between gap-2" onClick={(e) => e.stopPropagation()}>
                     <div className="flex items-center gap-2">
                         <Button
                             variant="outline"
                             size="sm"
-                            className="h-8 border-white/10 hover:border-[#00FF85] hover:text-[#00FF85] hover:bg-[#00FF85]/10 text-xs px-2"
+                            className="h-8 border-border/40 hover:border-primary hover:text-primary hover:bg-primary/10 text-xs px-3"
                             onClick={() => onSave?.(profile.id)}
                             title="Save Profile"
                         >
-                            <Bookmark className="w-3 h-3 mr-1" /> Save
+                            <Bookmark className="w-3 h-3 mr-1.5" /> Save
                         </Button>
 
-                        {/* LinkedIn Action - Primary */}
                         {profile.linkedin_url && (
                             <Button
                                 size="sm"
-                                className="h-8 bg-[#0077b5] text-white hover:bg-[#0077b5]/90 border border-transparent hover:border-emerald-500 hover:shadow-[0_0_15px_rgba(16,185,129,0.4)] transition-all duration-300 group/linkedin"
+                                className="h-8 bg-[#0077b5] text-white hover:bg-[#0077b5]/90 transition-all duration-300 text-xs"
                                 onClick={() => window.open(profile.linkedin_url, '_blank')}
                             >
-                                <Linkedin className="w-3.5 h-3.5 mr-1.5 fill-white group-hover/linkedin:scale-110 transition-transform" />
+                                <Linkedin className="w-3.5 h-3.5 mr-1.5 fill-white" />
                                 LinkedIn
                             </Button>
                         )}
 
-                        {/* Reveal Email Action (Green/Red) */}
                         <AnimatePresence mode="wait">
                             {(profile.email || revealedEmails[profile.id]) ? (
                                 <motion.div
@@ -330,15 +328,15 @@ export const ProfileResultCard = ({ profile, sessionId, onSave, onReveal, isEnri
                                     className={cn(
                                         "h-8 px-3 rounded-md border flex items-center gap-2 text-xs font-medium relative group/email cursor-pointer",
                                         (profile.email === "Not Found" || revealedEmails[profile.id] === "Not Found")
-                                            ? "bg-red-500/10 border-red-500/20 text-red-500"
-                                            : "bg-[#00FF85]/10 border-[#00FF85]/20 text-[#00FF85] pr-8" // Extra padding for copy icon
+                                            ? "bg-destructive/10 border-destructive/20 text-destructive"
+                                            : "bg-primary/10 border-primary/20 text-primary pr-8"
                                     )}
                                     onClick={(e) => {
                                         e.stopPropagation();
                                         const email = profile.email || revealedEmails[profile.id];
                                         if (email !== "Not Found") {
                                             navigator.clipboard.writeText(email!);
-                                            toast({ title: "Copied", description: "Email copied to clipboard", className: "border-[#00FF85] text-[#00FF85]" });
+                                            toast({ title: "Copied", description: "Email copied to clipboard" });
                                         }
                                     }}
                                 >
@@ -349,19 +347,15 @@ export const ProfileResultCard = ({ profile, sessionId, onSave, onReveal, isEnri
                                         </>
                                     ) : (
                                         <>
-                                            {/* Confidence Dot */}
                                             <div className={cn(
                                                 "w-2 h-2 rounded-full",
                                                 profile.email_confidence === 'low' ? "bg-amber-500" :
                                                     profile.email_confidence === 'medium' ? "bg-emerald-400" :
-                                                        "bg-[#00FF85]"
+                                                        "bg-primary"
                                             )} title={`Confidence: ${profile.email_confidence || 'High'}`} />
-
                                             <span className="truncate max-w-[140px]">{profile.email || revealedEmails[profile.id]}</span>
-
-                                            {/* Copy Icon (Absolute Right) */}
                                             <div className="absolute right-2 opacity-0 group-hover/email:opacity-100 transition-opacity">
-                                                <Copy className="w-3.5 h-3.5 text-emerald-400" />
+                                                <Copy className="w-3.5 h-3.5 text-primary" />
                                             </div>
                                         </>
                                     )}
@@ -375,7 +369,7 @@ export const ProfileResultCard = ({ profile, sessionId, onSave, onReveal, isEnri
                                     <Button
                                         size="sm"
                                         variant="outline"
-                                        className="h-8 border-[#00FF85] text-[#00FF85] hover:bg-[#00FF85]/10 hover:text-[#00FF85] transition-all duration-300 font-semibold disabled:opacity-50 disabled:cursor-not-allowed group/reveal"
+                                        className="h-8 border-primary text-primary hover:bg-primary/10 transition-all duration-300 font-semibold disabled:opacity-50 text-xs"
                                         onClick={(e) => {
                                             e.stopPropagation();
                                             handleRevealEmail(profile);
@@ -389,7 +383,7 @@ export const ProfileResultCard = ({ profile, sessionId, onSave, onReveal, isEnri
                                             </>
                                         ) : (
                                             <>
-                                                <Mail className="w-3.5 h-3.5 mr-1.5 group-hover/reveal:scale-110 transition-transform" />
+                                                <Mail className="w-3.5 h-3.5 mr-1.5" />
                                                 Reveal Email
                                             </>
                                         )}
