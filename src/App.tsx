@@ -33,6 +33,7 @@ import ScreeningResults from "./pages/ScreeningResults";
 import ScreeningTemplates from "./pages/ScreeningTemplates";
 import TemplateEditor from "./pages/TemplateEditor";
 import ICPManager from "./pages/ICPManager";
+import ICPResultsPage from "./pages/ICPResultsPage";
 const queryClient = new QueryClient();
 
 const App = () => (
@@ -138,6 +139,12 @@ const App = () => (
                     <MainLayout>
                       <ICPManager />
                     </MainLayout>
+                  </ProtectedRoute>
+                } />
+
+                <Route path="/icp/results/:sessionId" element={
+                  <ProtectedRoute>
+                    <ICPResultsPage />
                   </ProtectedRoute>
                 } />
 

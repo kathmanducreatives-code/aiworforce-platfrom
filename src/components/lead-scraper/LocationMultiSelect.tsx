@@ -1,5 +1,5 @@
 import * as React from "react";
-import { Check, ChevronsUpDown, MapPin, X } from "lucide-react";
+import { Check, Globe, X, Search, ChevronRight, Hash, MapPin } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -10,88 +10,14 @@ import {
   CommandInput,
   CommandItem,
   CommandList,
+  CommandSeparator,
 } from "@/components/ui/command";
 import {
   Popover,
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
-// Label import removed
-
-// Popular countries shown first
-const POPULAR_COUNTRIES = [
-  "United States",
-  "United Kingdom",
-  "Canada",
-  "Australia",
-  "Germany",
-  "France",
-  "India",
-  "Singapore",
-  "Netherlands",
-  "Sweden",
-  "Japan",
-  "Brazil",
-  "United Arab Emirates",
-  "Switzerland",
-  "Ireland",
-];
-
-const REGIONS = [
-  "North America",
-  "Europe",
-  "APAC",
-  "EMEA",
-  "LATAM",
-  "Southeast Asia",
-  "Nordics",
-  "DACH",
-];
-
-const MAJOR_CITIES = [
-  "New York, NY", "San Francisco, CA", "London, UK", "New York", "London",
-  "San Francisco", "Austin, TX", "Los Angeles, CA", "Chicago, IL",
-  "Toronto, Canada", "Berlin, Germany", "Paris, France", "Amsterdam, Netherlands",
-  "Singapore", "Tokyo, Japan", "Sydney, Australia", "Dubai, UAE",
-  "Bangalore, India", "Mumbai, India", "Tel Aviv, Israel", "São Paulo, Brazil",
-  "Mexico City, Mexico", "Hong Kong"
-];
-
-// Complete list of countries
-const ALL_COUNTRIES = [
-  "Afghanistan", "Albania", "Algeria", "Andorra", "Angola", "Antigua and Barbuda",
-  "Argentina", "Armenia", "Australia", "Austria", "Azerbaijan", "Bahamas", "Bahrain",
-  "Bangladesh", "Barbados", "Belarus", "Belgium", "Belize", "Benin", "Bhutan",
-  "Bolivia", "Bosnia and Herzegovina", "Botswana", "Brazil", "Brunei", "Bulgaria",
-  "Burkina Faso", "Burundi", "Cabo Verde", "Cambodia", "Cameroon", "Canada",
-  "Central African Republic", "Chad", "Chile", "China", "Colombia", "Comoros",
-  "Congo", "Costa Rica", "Croatia", "Cuba", "Cyprus", "Czech Republic",
-  "Democratic Republic of the Congo", "Denmark", "Djibouti", "Dominica",
-  "Dominican Republic", "Ecuador", "Egypt", "El Salvador", "Equatorial Guinea",
-  "Eritrea", "Estonia", "Eswatini", "Ethiopia", "Fiji", "Finland", "France",
-  "Gabon", "Gambia", "Georgia", "Germany", "Ghana", "Greece", "Grenada",
-  "Guatemala", "Guinea", "Guinea-Bissau", "Guyana", "Haiti", "Honduras", "Hungary",
-  "Iceland", "India", "Indonesia", "Iran", "Iraq", "Ireland", "Israel", "Italy",
-  "Ivory Coast", "Jamaica", "Japan", "Jordan", "Kazakhstan", "Kenya", "Kiribati",
-  "Kuwait", "Kyrgyzstan", "Laos", "Latvia", "Lebanon", "Lesotho", "Liberia",
-  "Libya", "Liechtenstein", "Lithuania", "Luxembourg", "Madagascar", "Malawi",
-  "Malaysia", "Maldives", "Mali", "Malta", "Marshall Islands", "Mauritania",
-  "Mauritius", "Mexico", "Micronesia", "Moldova", "Monaco", "Mongolia",
-  "Montenegro", "Morocco", "Mozambique", "Myanmar", "Namibia", "Nauru", "Nepal",
-  "Netherlands", "New Zealand", "Nicaragua", "Niger", "Nigeria", "North Korea",
-  "North Macedonia", "Norway", "Oman", "Pakistan", "Palau", "Palestine", "Panama",
-  "Papua New Guinea", "Paraguay", "Peru", "Philippines", "Poland", "Portugal",
-  "Qatar", "Romania", "Russia", "Rwanda", "Saint Kitts and Nevis", "Saint Lucia",
-  "Saint Vincent and the Grenadines", "Samoa", "San Marino", "Sao Tome and Principe",
-  "Saudi Arabia", "Senegal", "Serbia", "Seychelles", "Sierra Leone", "Singapore",
-  "Slovakia", "Slovenia", "Solomon Islands", "Somalia", "South Africa", "South Korea",
-  "South Sudan", "Spain", "Sri Lanka", "Sudan", "Suriname", "Sweden", "Switzerland",
-  "Syria", "Taiwan", "Tajikistan", "Tanzania", "Thailand", "Timor-Leste", "Togo",
-  "Tonga", "Trinidad and Tobago", "Tunisia", "Turkey", "Turkmenistan", "Tuvalu",
-  "Uganda", "Ukraine", "United Arab Emirates", "United Kingdom", "United States",
-  "Uruguay", "Uzbekistan", "Vanuatu", "Vatican City", "Venezuela", "Vietnam",
-  "Yemen", "Zambia", "Zimbabwe"
-];
+import { REGIONAL_LOCATIONS, ALL_COUNTRIES } from "@/data/locations";
 
 interface LocationMultiSelectProps {
   value: string[];
@@ -100,206 +26,166 @@ interface LocationMultiSelectProps {
 }
 
 export const LocationMultiSelect = ({
-  value,
+  value = [],
   onChange,
-  placeholder = "Search countries...",
+  placeholder = "Search regions or countries...",
 }: LocationMultiSelectProps) => {
-  const [open, setOpen] = React.useState(false);
-  const [search, setSearch] = React.useState("");
+  const [isActive, setIsActive] = React.useState(false);
+  const [search, setSearch] = React.useState(""); // Added search state
+  const inputRef = React.useRef<HTMLInputElement>(null); // Added inputRef
 
-  const handleSelect = (country: string) => {
-    if (value.includes(country)) {
-      onChange(value.filter((v) => v !== country));
+  const handleSelect = (item: string) => {
+    if (value.includes(item)) {
+      onChange(value.filter((v) => v !== item));
     } else {
-      onChange([...value, country]);
+      onChange([...value, item]);
     }
+    inputRef.current?.focus();
   };
 
-  const handleRemove = (country: string, e?: React.MouseEvent) => {
+  const handleRemove = (item: string, e?: React.MouseEvent) => {
     e?.stopPropagation();
-    onChange(value.filter((v) => v !== country));
+    onChange(value.filter((v) => v !== item));
   };
 
-  // Filter lists based on search
-  const filteredRegions = REGIONS.filter(
-    (region) =>
-      region.toLowerCase().includes(search.toLowerCase()) &&
-      !value.includes(region)
-  );
+  const getLabel = (val: string) => {
+    const region = REGIONAL_LOCATIONS.find(r => r.id === val);
+    if (region) return region.label;
+    return val;
+  };
 
-  const filteredCities = MAJOR_CITIES.filter(
-    (city) =>
-      city.toLowerCase().includes(search.toLowerCase()) &&
-      !value.includes(city)
+  // Filter regions/countries based on search
+  const filteredRegions = REGIONAL_LOCATIONS.filter(r =>
+    r.label.toLowerCase().includes(search.toLowerCase())
   );
-
-  const filteredPopular = POPULAR_COUNTRIES.filter(
-    (country) =>
-      country.toLowerCase().includes(search.toLowerCase()) &&
-      !value.includes(country)
-  );
-
-  const filteredAll = ALL_COUNTRIES.filter(
-    (country) =>
-      country.toLowerCase().includes(search.toLowerCase()) &&
-      !POPULAR_COUNTRIES.includes(country)
-  );
+  // Combine robustly if needed, for now using just regions from the original mock data
+  // Would expand to ALL_COUNTRIES if the list is manageable in client side or use async
 
   return (
-    <div className="space-y-2">
+    <div className={cn(
+      "relative transition-all duration-300 ease-out-quart rounded-xl border",
+      isActive
+        ? "bg-[#161616] border-[#00FF85] shadow-[0_0_20px_rgba(0,255,133,0.2)] z-50 scale-[1.02]"
+        : "bg-[#161616] border-[#00FF85]/30 hover:border-[#00FF85]/60 hover:shadow-[0_0_15px_rgba(0,255,133,0.1)]"
+    )}>
+      {/* Header / Trigger Area */}
+      <div
+        className="flex flex-col gap-3 p-4 cursor-text"
+        onClick={() => { setIsActive(true); inputRef.current?.focus(); }}
+      >
+        <div className="flex items-start justify-between">
+          <div className="flex items-center gap-2 text-[#00FF85]">
+            <Globe className="w-5 h-5 shrink-0" />
+            <span className="text-sm font-bold tracking-wide uppercase">Target Locations</span>
+          </div>
+        </div>
 
-      <Popover open={open} onOpenChange={setOpen}>
-        <PopoverTrigger asChild>
-          <Button
-            variant="outline"
-            role="combobox"
-            aria-expanded={open}
-            aria-label="Select locations"
-            className={cn(
-              "w-full h-9 lg:h-10 justify-between bg-background/50 border-border/50 hover:bg-background/80 hover:border-primary/30 transition-colors text-sm font-normal",
-              !value.length && "text-muted-foreground"
-            )}
-          >
-            <span className="truncate">
-              {value.length > 0
-                ? `${value.length} location${value.length > 1 ? "s" : ""} selected`
-                : placeholder}
-            </span>
-            <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-          </Button>
-        </PopoverTrigger>
-        <PopoverContent
-          className="w-[var(--radix-popover-trigger-width)] p-0 bg-popover border-border/50 shadow-lg"
-          align="start"
-          sideOffset={4}
-        >
-          <Command className="bg-transparent">
-            <CommandInput
-              placeholder="Search countries..."
-              value={search}
-              onValueChange={setSearch}
-              className="h-9 text-sm"
-            />
-            <CommandList className="max-h-[280px] overflow-y-auto">
-              <CommandEmpty className="py-4 text-center text-sm text-muted-foreground">
-                No country found.
-              </CommandEmpty>
-
-              {/* Selected items at top */}
-              {value.length > 0 && (
-                <CommandGroup heading="Selected">
-                  {value.map((country) => (
-                    <CommandItem
-                      key={`selected-${country}`}
-                      value={country}
-                      onSelect={() => handleSelect(country)}
-                      className="flex items-center gap-2 cursor-pointer hover:bg-primary/10"
-                    >
-                      <Check className="h-4 w-4 text-primary shrink-0" />
-                      <span className="flex-1 truncate">{country}</span>
-                    </CommandItem>
-                  ))}
-                </CommandGroup>
-              )}
-
-              {/* Regions */}
-              {filteredRegions.length > 0 && (
-                <CommandGroup heading="Regions">
-                  {filteredRegions.map((region) => (
-                    <CommandItem
-                      key={region}
-                      value={region}
-                      onSelect={() => handleSelect(region)}
-                      className="flex items-center gap-2 cursor-pointer hover:bg-primary/10"
-                    >
-                      <div className="h-4 w-4 border border-border/50 rounded-sm shrink-0" />
-                      <span className="flex-1 truncate">{region}</span>
-                    </CommandItem>
-                  ))}
-                </CommandGroup>
-              )}
-
-              {/* Cities */}
-              {filteredCities.length > 0 && (
-                <CommandGroup heading="Cities">
-                  {filteredCities.map((city) => (
-                    <CommandItem
-                      key={city}
-                      value={city}
-                      onSelect={() => handleSelect(city)}
-                      className="flex items-center gap-2 cursor-pointer hover:bg-primary/10"
-                    >
-                      <div className="h-4 w-4 border border-border/50 rounded-sm shrink-0" />
-                      <span className="flex-1 truncate">{city}</span>
-                    </CommandItem>
-                  ))}
-                </CommandGroup>
-              )}
-
-              {/* Popular countries */}
-              {filteredPopular.length > 0 && (
-                <CommandGroup heading="Popular">
-                  {filteredPopular.map((country) => (
-                    <CommandItem
-                      key={country}
-                      value={country}
-                      onSelect={() => handleSelect(country)}
-                      className="flex items-center gap-2 cursor-pointer hover:bg-primary/10"
-                    >
-                      <div className="h-4 w-4 border border-border/50 rounded-sm shrink-0" />
-                      <span className="flex-1 truncate">{country}</span>
-                    </CommandItem>
-                  ))}
-                </CommandGroup>
-              )}
-
-              {/* All countries */}
-              {filteredAll.length > 0 && (
-                <CommandGroup heading="All Countries">
-                  {filteredAll.map((country) => {
-                    const isSelected = value.includes(country);
-                    return (
-                      <CommandItem
-                        key={country}
-                        value={country}
-                        onSelect={() => handleSelect(country)}
-                        className="flex items-center gap-2 cursor-pointer hover:bg-primary/10"
-                      >
-                        {isSelected ? (
-                          <Check className="h-4 w-4 text-primary shrink-0" />
-                        ) : (
-                          <div className="h-4 w-4 border border-border/50 rounded-sm shrink-0" />
-                        )}
-                        <span className="flex-1 truncate">{country}</span>
-                      </CommandItem>
-                    );
-                  })}
-                </CommandGroup>
-              )}
-            </CommandList>
-          </Command>
-        </PopoverContent>
-      </Popover>
-
-      {/* Selected badges */}
-      {value.length > 0 && (
-        <div className="flex flex-wrap gap-1.5 pt-1">
-          {value.map((country) => (
+        {/* Selected Chips Area */}
+        <div className="flex flex-wrap gap-2 min-h-[32px]">
+          {value.map((val) => (
             <Badge
-              key={country}
+              key={val}
               variant="secondary"
-              className="px-2 py-1 text-xs cursor-pointer hover:bg-destructive/20 hover:text-destructive transition-colors group max-w-[150px] bg-primary/10 text-primary border-primary/20"
+              className="bg-[#00FF85]/10 text-[#00FF85] border border-[#00FF85]/30 px-2 py-1 h-8 text-sm gap-1 hover:bg-[#00FF85]/20 transition-colors animate-in fade-in zoom-in-50 duration-200"
             >
-              <span className="truncate">{country}</span>
-              <X
-                className="w-2.5 h-2.5 ml-1 opacity-60 group-hover:opacity-100 shrink-0"
-                onClick={(e) => handleRemove(country, e)}
-              />
+              {getLabel(val)}
+              <button
+                type="button"
+                className="ml-1 rounded-full p-0.5 hover:bg-[#00FF85]/20 hover:text-white transition-colors"
+                onClick={(e) => handleRemove(val, e)}
+              >
+                <X className="w-3 h-3" />
+              </button>
             </Badge>
           ))}
+          <input
+            ref={inputRef}
+            type="text"
+            className="bg-transparent border-none outline-none text-white placeholder:text-muted-foreground/50 h-8 min-w-[150px] flex-1 text-sm font-medium"
+            placeholder={value.length === 0 ? placeholder : ""}
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            onFocus={() => setIsActive(true)}
+            onBlur={() => setTimeout(() => setIsActive(false), 200)} // Delay for click handling
+          />
         </div>
-      )}
+      </div>
+
+      {/* Sliding Dropdown Content */}
+      <div className={cn(
+        "overflow-hidden transition-all duration-300 ease-out-quart",
+        isActive ? "max-h-[300px] border-t border-[#00FF85]/20 opacity-100 p-2" : "max-h-0 opacity-0 border-t-0 p-0"
+      )}>
+        <div className="max-h-[290px] overflow-y-auto scrollbar-thin scrollbar-thumb-[#00FF85]/20 scrollbar-track-transparent pr-1">
+          <div className="grid grid-cols-1 gap-1">
+            {filteredRegions.length > 0 ? (
+              // If searching regions/countries, we still want to maintain hierarchy if possible, 
+              // OR just show flattened results if search is active. 
+              // User requirement: "North America > USA, Canada, Mexico". 
+              // Let's iterate Regions and render children.
+
+              filteredRegions.map((region) => {
+                // Filter countries if search is active
+                const matchingCountries = region.countries.filter(c =>
+                  c.toLowerCase().includes(search.toLowerCase()) ||
+                  region.label.toLowerCase().includes(search.toLowerCase())
+                );
+
+                if (matchingCountries.length === 0) return null;
+
+                return (
+                  <div key={region.id} className="mb-2">
+                    {/* Region Header */}
+                    <div className="px-3 py-1.5 text-xs font-bold text-[#00FF85] uppercase tracking-wider bg-white/5 rounded-md mb-1 mx-1">
+                      {region.label}
+                    </div>
+
+                    {/* Countries */}
+                    {matchingCountries.map(country => (
+                      <div
+                        key={country}
+                        className={cn(
+                          "flex items-center gap-3 px-3 py-2 rounded-lg cursor-pointer transition-all ml-2",
+                          value.includes(country)
+                            ? "bg-[#00FF85]/10 text-[#00FF85]"
+                            : "text-muted-foreground hover:bg-white/5 hover:text-white"
+                        )}
+                        onMouseDown={(e) => {
+                          e.preventDefault(); // Prevent blur
+                          handleSelect(country);
+                        }}
+                      >
+                        <div className={cn(
+                          "w-4 h-4 rounded-sm border flex items-center justify-center transition-colors",
+                          value.includes(country)
+                            ? "border-[#00FF85] bg-[#00FF85]"
+                            : "border-muted-foreground/40"
+                        )}>
+                          {value.includes(country) && <Check className="w-3 h-3 text-black" />}
+                        </div>
+                        <span className="font-medium text-sm">{country}</span>
+                      </div>
+                    ))}
+                  </div>
+                );
+              })
+            ) : (
+              <div className="py-6 text-center text-muted-foreground text-sm">
+                <MapPin className="w-8 h-8 mx-auto mb-2 opacity-20" />
+                No locations found matching "{search}"
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* Active Indicator Line */}
+      <div className={cn(
+        "absolute bottom-0 left-0 h-[2px] bg-[#00FF85] transition-all duration-500 ease-out",
+        isActive ? "w-full shadow-[0_-2px_10px_rgba(0,255,133,0.5)]" : "w-0"
+      )} />
     </div>
   );
 };
-// End of component
+
+

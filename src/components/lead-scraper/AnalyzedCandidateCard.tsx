@@ -111,14 +111,14 @@ export const AnalyzedCandidateCard = ({
       .slice(0, 2);
   };
 
-  const topSkills = Array.isArray(strengths) 
-    ? strengths.slice(0, 3) 
+  const topSkills = Array.isArray(strengths)
+    ? strengths.slice(0, 3)
     : [];
 
   return (
     <TooltipProvider delayDuration={300}>
       <>
-        <Card 
+        <Card
           className="group relative border-2 border-border/50 hover:border-primary/40 bg-card/50 backdrop-blur-sm transition-all duration-300 hover:shadow-xl hover:-translate-y-1 overflow-hidden"
           role="article"
           aria-label={`Analysis for ${candidate_name}`}
@@ -135,7 +135,7 @@ export const AnalyzedCandidateCard = ({
                   {getInitials(candidate_name)}
                 </AvatarFallback>
               </Avatar>
-              
+
               <div className="flex-1 min-w-0">
                 <h3 className="text-lg font-semibold truncate group-hover:text-primary transition-colors">
                   {candidate_name}
@@ -148,25 +148,37 @@ export const AnalyzedCandidateCard = ({
                 </div>
               </div>
 
-              {/* Fit Score Badge - Compact */}
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <div className={`flex flex-col items-center justify-center px-3 py-2 rounded-xl border-2 ${getScoreBgColor(fit_score)} transition-all cursor-help`}>
-                    <div className={`text-2xl font-bold ${getScoreColor(fit_score)}`}>
-                      {fit_score || 0}
-                    </div>
-                    <div className="text-[10px] text-muted-foreground font-medium uppercase tracking-wide">
-                      Fit
-                    </div>
-                  </div>
-                </TooltipTrigger>
-                <TooltipContent>
-                  <div className="flex items-center gap-2">
-                    <Gauge className="w-4 h-4" />
-                    <span>{getScoreLabel(fit_score)} Match</span>
-                  </div>
-                </TooltipContent>
-              </Tooltip>
+              {/* Fit Score Badge - Consistent Design */}
+              {fit_score !== null && (() => {
+                let badge = { emoji: '🤔', label: 'Weak Match', color: 'text-gray-400 bg-gray-500/10 border-gray-500/50' };
+
+                if (fit_score >= 75) badge = { emoji: '💪', label: 'Strong Match', color: 'text-[#00FF85] bg-[#00FF85]/10 border-[#00FF85]' };
+                else if (fit_score >= 60) badge = { emoji: '👍', label: 'Good Match', color: 'text-blue-400 bg-blue-500/10 border-blue-500/50' };
+                else if (fit_score >= 50) badge = { emoji: '👌', label: 'Potential Match', color: 'text-purple-400 bg-purple-500/10 border-purple-500/50' };
+                else if (fit_score >= 40) badge = { emoji: '🤝', label: 'Fair Match', color: 'text-orange-400 bg-gradient-to-r from-orange-500/10 to-amber-500/10 border-orange-500/50' };
+
+                return (
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <div className={`flex flex-col items-center justify-center px-3 py-2 rounded-xl border ${badge.color} transition-all cursor-help min-w-[80px]`}>
+                        <div className="text-xl font-bold flex items-center gap-1.5">
+                          <span className="text-lg">{badge.emoji}</span>
+                          {fit_score}
+                        </div>
+                        <div className="text-[10px] opacity-80 font-medium uppercase tracking-wide">
+                          Fit
+                        </div>
+                      </div>
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      <div className="flex items-center gap-2">
+                        <Gauge className="w-4 h-4" />
+                        <span>{badge.label}</span>
+                      </div>
+                    </TooltipContent>
+                  </Tooltip>
+                );
+              })()}
             </div>
           </CardHeader>
 
@@ -193,9 +205,9 @@ export const AnalyzedCandidateCard = ({
                 </div>
                 <div className="flex flex-wrap gap-1.5">
                   {topSkills.map((skill: string, idx: number) => (
-                    <Badge 
-                      key={idx} 
-                      variant="secondary" 
+                    <Badge
+                      key={idx}
+                      variant="secondary"
                       className="text-xs bg-primary/10 text-primary border-primary/20 hover:bg-primary/20 transition-colors"
                     >
                       {skill}
@@ -212,7 +224,7 @@ export const AnalyzedCandidateCard = ({
 
             {/* Action Buttons */}
             <div className="flex gap-2 pt-2">
-              <Button 
+              <Button
                 onClick={() => setShowFullAnalysis(true)}
                 className="flex-1 bg-gradient-to-r from-primary to-cyan-500 hover:opacity-90 group/btn shadow-lg shadow-primary/20"
                 aria-label={`View full analysis for ${candidate_name}`}
@@ -220,7 +232,7 @@ export const AnalyzedCandidateCard = ({
                 <span>View Analysis</span>
                 <ChevronRight className="w-4 h-4 ml-1 group-hover/btn:translate-x-1 transition-transform" />
               </Button>
-              
+
               <Tooltip>
                 <TooltipTrigger asChild>
                   <Button
@@ -277,8 +289,8 @@ export const AnalyzedCandidateCard = ({
         {/* Full Analysis Dialog */}
         <Dialog open={showFullAnalysis} onOpenChange={setShowFullAnalysis}>
           <DialogContent className="w-screen max-w-none m-0 p-0 rounded-none animate-fade-in max-h-screen overflow-y-auto">
-            <DeepSearchResults 
-              candidateId={id} 
+            <DeepSearchResults
+              candidateId={id}
               candidateName={candidate_name}
               profilePictureUrl={profile_picture_url}
               onClose={() => setShowFullAnalysis(false)}

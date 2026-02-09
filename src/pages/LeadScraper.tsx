@@ -22,7 +22,8 @@ import { BulkActionBar } from "@/components/lead-scraper/BulkActionBar";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { DeepSearchResults } from "@/components/lead-scraper/DeepSearchResults";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Target } from "lucide-react";
+import { Target, LayoutGrid, List } from "lucide-react";
+import { ICPLeadsGallery } from "@/components/lead-scraper/ICPLeadsGallery";
 
 const defaultFilters: FilterState = {
   skipOwned: false,
@@ -65,6 +66,7 @@ export default function LeadScraper() {
   const [peekLead, setPeekLead] = useState<LinkedInLead | null>(null);
   const [runningDeepSearchIds, setRunningDeepSearchIds] = useState<Set<string>>(new Set());
   const [showDeepSearchResults, setShowDeepSearchResults] = useState<string | null>(null);
+  const [viewMode, setViewMode] = useState<'list' | 'gallery'>('list');
 
   // ICP Targeting
   const [selectedProfileId, setSelectedProfileId] = useState<string | null>(null);
@@ -260,7 +262,7 @@ export default function LeadScraper() {
       const formData = {
         currentCompanies: activeFilters.companies,
         currentJobTitles: activeFilters.jobTitles,
-        currentIndustries: activeFilters.industries, // Pass industries
+        industries: activeFilters.industries,
         locations: activeFilters.locations,
         maxItems: activeFilters.maxResults,
         searchQuery: trimmed,
@@ -696,63 +698,99 @@ export default function LeadScraper() {
                         )}
                       </p>
                     </div>
+                    {/* View Toggle */}
+                    <div className="flex bg-muted/50 rounded-lg p-0.5 border border-border/40 shrink-0">
+                      <Button
+                        variant={viewMode === 'list' ? 'secondary' : 'ghost'}
+                        size="sm"
+                        className="h-7 px-2"
+                        onClick={() => setViewMode('list')}
+                      >
+                        <List className="w-4 h-4" />
+                      </Button>
+                      <Button
+                        variant={viewMode === 'gallery' ? 'secondary' : 'ghost'}
+                        size="sm"
+                        className="h-7 px-2"
+                        onClick={() => setViewMode('gallery')}
+                      >
+                        <LayoutGrid className="w-4 h-4" />
+                      </Button>
+                    </div>
                   </div>
 
-                  <div className="p-4 lg:p-6">
+                  <div className="p-0">
+                    {/* If gallery mode, we use full-screen overlay style or integrated style? 
+                        The requirement was "Leads Gallery Page", implying full view. 
+                        Let's render it within this tab for now, but it usually takes over.
+                        Given the CSS of ICPLeadsGallery has min-h-screen and bg-black, it might look odd inside the card.
+                        I'll adjust ICPLeadsGallery to handle container behavior or just render properly here.
+                    */}
                     {isScrapingActive && leads.length === 0 ? (
-                      <ScrapingLoadingState
-                        searchName={activeSessionName || undefined}
-                        leadsFound={leads.length}
-                        onCancel={() => setIsScrapingActive(false)}
-                      />
-                    ) : (
-                      <EliteLeadGrid
+                      <div className="p-6">
+                        <ScrapingLoadingState
+                          searchName={activeSessionName || undefined}
+                          leadsFound={leads.length}
+                          onCancel={() => setIsScrapingActive(false)}
+                        />
+                      </div>
+                    ) : viewMode === 'gallery' ? (
+                      <ICPLeadsGallery
                         leads={leads}
                         isLoading={isFetchingLeads}
-                        selectedLeads={selectedLeadIds}
-                        onSelectLead={(id, selected) => {
-                          const next = new Set(selectedLeadIds);
-                          if (selected) next.add(id);
-                          else next.delete(id);
-                          setSelectedLeadIds(next);
-                        }}
-                        onSelectAll={(selected) => {
-                          if (selected) setSelectedLeadIds(new Set(leads.map(l => l.id)));
-                          else setSelectedLeadIds(new Set());
-                        }}
-                        onLeadClick={(lead) => setPeekLead(lead)}
-                        onRunDeepSearch={handleRunDeepSearch}
-                        onDeleteLead={(lead) => {
-                          // Single delete still uses direct toast/logic here or reuse bulk
-                          // For simplicity, we can just trigger a single delete confirm.
-                          // But to match prop, let's just reuse our local delete logic if needed, 
-                          // or for now just select it and show bulk. 
-                          // Actually, let's implement single delete confirm in the grid or here.
-                          // Grid has dropdown, so let's handle it.
-                          if (window.confirm(`Delete ${lead.candidate_name}?`)) {
-                            // Quick hack for single delete using bulk logic
-                            const s = new Set([lead.id]);
-                            setSelectedLeadIds(s);
-                            // Wait a tick for state then delete? No, easier to just call delete directly.
-                            // But my handleBulkDelete uses selectedLeadIds state.
-                            // Let's just create a helper for single delete.
-                            (async () => {
-                              const { error } = await supabase.from('linkedin_leads').delete().eq('id', lead.id);
-                              if (!error) {
-                                toast({ title: "Deleted", description: "Lead removed." });
-                                setLeads(prev => prev.filter(l => l.id !== lead.id));
-                                // remove from selection if there
-                                const next = new Set(selectedLeadIds);
-                                next.delete(lead.id);
-                                setSelectedLeadIds(next);
-                              }
-                            })();
-                          }
-                        }}
-                        runningDeepSearchIds={runningDeepSearchIds}
-                        suggestions={suggestions}
-                        onApplySuggestion={handleApplySuggestion}
+                        onExport={downloadCSV}
+                        lookalikeName={activeSessionName?.replace("AI: ", "") || "Current Search"}
                       />
+                    ) : (
+                      <div className="p-4 lg:p-6">
+                        <EliteLeadGrid
+                          leads={leads}
+                          isLoading={isFetchingLeads}
+                          selectedLeads={selectedLeadIds}
+                          onSelectLead={(id, selected) => {
+                            const next = new Set(selectedLeadIds);
+                            if (selected) next.add(id);
+                            else next.delete(id);
+                            setSelectedLeadIds(next);
+                          }}
+                          onSelectAll={(selected) => {
+                            if (selected) setSelectedLeadIds(new Set(leads.map(l => l.id)));
+                            else setSelectedLeadIds(new Set());
+                          }}
+                          onLeadClick={(lead) => setPeekLead(lead)}
+                          onRunDeepSearch={handleRunDeepSearch}
+                          onDeleteLead={(lead) => {
+                            // Single delete still uses direct toast/logic here or reuse bulk
+                            // For simplicity, we can just trigger a single delete confirm.
+                            // But to match prop, let's just reuse our local delete logic if needed, 
+                            // or for now just select it and show bulk. 
+                            // Actually, let's implement single delete confirm in the grid or here.
+                            // Grid has dropdown, so let's handle it.
+                            if (window.confirm(`Delete ${lead.candidate_name}?`)) {
+                              // Quick hack for single delete using bulk logic
+                              const s = new Set([lead.id]);
+                              setSelectedLeadIds(s);
+                              // Wait a tick for state then delete? No, easier to just call delete directly.
+                              // But my handleBulkDelete uses selectedLeadIds state.
+                              // Let's just create a helper for single delete.
+                              (async () => {
+                                const { error } = await supabase.from('linkedin_leads').delete().eq('id', lead.id);
+                                if (!error) {
+                                  toast({ title: "Deleted", description: "Lead removed." });
+                                  setLeads(prev => prev.filter(l => l.id !== lead.id));
+                                  // remove from selection if there
+                                  const next = new Set(selectedLeadIds);
+                                  next.delete(lead.id);
+                                  setSelectedLeadIds(next);
+                                }
+                              })();
+                            }
+                          }}
+                          runningDeepSearchIds={runningDeepSearchIds}
+                          suggestions={suggestions}
+                          onApplySuggestion={handleApplySuggestion}
+                        />
+                      </div>
                     )}
                   </div>
                 </section>
@@ -760,7 +798,7 @@ export default function LeadScraper() {
             </Tabs>
           </main>
         </div>
-      </div>
+      </div >
 
       <LeadPeekSheet
         lead={peekLead}
@@ -791,6 +829,6 @@ export default function LeadScraper() {
           )}
         </DialogContent>
       </Dialog>
-    </div>
+    </div >
   );
 }

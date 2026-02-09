@@ -5,25 +5,25 @@ import { cva, type VariantProps } from "class-variance-authority"
 import { cn } from "@/lib/utils"
 
 const buttonVariants = cva(
-  "inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-bold transition-all duration-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0",
+  "inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-xl text-sm font-bold transition-all duration-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0",
   {
     variants: {
       variant: {
-        default: "bg-gradient-primary text-primary-foreground shadow-glow hover:shadow-primary-lg hover:scale-105 transition-all",
+        default: "bg-primary text-primary-foreground shadow-[0_0_15px_rgba(0,255,133,0.2)] hover:shadow-[0_0_20px_rgba(0,255,133,0.4)] hover:scale-105 transition-all border border-transparent",
         destructive:
-          "bg-destructive text-destructive-foreground hover:bg-destructive/90 shadow-lg",
+          "bg-destructive text-destructive-foreground hover:bg-destructive/90 shadow-lg rounded-xl",
         outline:
-          "border-2 border-primary/50 bg-transparent text-primary hover:bg-primary/10 hover:border-primary hover:shadow-primary transition-all",
+          "border-2 border-primary/20 bg-transparent text-primary hover:bg-primary/10 hover:border-primary/50 hover:shadow-[0_0_15px_rgba(0,255,133,0.1)] transition-all rounded-xl",
         secondary:
-          "bg-secondary text-secondary-foreground hover:bg-secondary/80",
-        ghost: "hover:bg-accent/10 hover:text-accent",
+          "bg-secondary text-secondary-foreground hover:bg-secondary/80 rounded-xl",
+        ghost: "hover:bg-accent/10 hover:text-accent rounded-xl",
         link: "text-primary underline-offset-4 hover:underline",
-        accent: "bg-gradient-primary text-primary-foreground shadow-glow hover:shadow-primary-lg hover:scale-105 transition-all animate-pulse-glow",
+        accent: "bg-primary text-primary-foreground shadow-[0_0_15px_rgba(0,255,133,0.2)] hover:shadow-[0_0_20px_rgba(0,255,133,0.4)] hover:scale-105 transition-all rounded-xl",
       },
       size: {
         default: "h-10 px-4 py-2",
-        sm: "h-9 rounded-md px-3",
-        lg: "h-11 rounded-md px-8",
+        sm: "h-9 rounded-xl px-3",
+        lg: "h-11 rounded-xl px-8",
         icon: "h-10 w-10",
       },
     },
@@ -36,7 +36,7 @@ const buttonVariants = cva(
 
 export interface ButtonProps
   extends React.ButtonHTMLAttributes<HTMLButtonElement>,
-    VariantProps<typeof buttonVariants> {
+  VariantProps<typeof buttonVariants> {
   asChild?: boolean
 }
 

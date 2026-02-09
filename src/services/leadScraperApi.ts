@@ -2,6 +2,7 @@ export interface LeadScraperFormData {
   currentCompanies: string[];
   currentJobTitles: string[];
   locations: string[];
+  industries: number[];
   maxItems: number;
   searchQuery: string;
 }
@@ -31,6 +32,7 @@ export const leadScraperApi = {
         currentCompanies: formData.currentCompanies ?? [],
         currentJobTitles: formData.currentJobTitles ?? [],
         locations: formData.locations ?? [],
+        industries: formData.industries ?? [],
         maxItems: formData.maxItems ?? 50,
         searchQuery: formData.searchQuery ?? "",
         session_id: sessionId,

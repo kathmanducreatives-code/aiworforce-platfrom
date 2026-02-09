@@ -21,6 +21,7 @@ import {
     DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { MatchScore } from "./MatchScore";
+import { CandidateDetailModal } from "./CandidateDetailModal";
 import type { LinkedInLead } from "./LeadTable"; // Temporarily importing type until we fully migrate
 
 interface LeadWithScore extends LinkedInLead {
@@ -100,6 +101,36 @@ export const EliteLeadGrid = ({
 
     const handleSelectAll = (checked: boolean) => {
         onSelectAll(checked);
+    };
+
+    // Modal State
+    const [viewingLeadId, setViewingLeadId] = useState<string | null>(null);
+
+    const handleOpenModal = (lead: LinkedInLead) => {
+        setViewingLeadId(lead.id);
+    };
+
+    const handleCloseModal = () => {
+        setViewingLeadId(null);
+    };
+
+    const viewingLeadIndex = useMemo(() => {
+        if (!viewingLeadId) return -1;
+        return sortedLeads.findIndex(l => l.id === viewingLeadId);
+    }, [viewingLeadId, sortedLeads]);
+
+    const activeLead = viewingLeadIndex >= 0 ? sortedLeads[viewingLeadIndex] : null;
+
+    const handleNextLead = () => {
+        if (viewingLeadIndex >= 0 && viewingLeadIndex < sortedLeads.length - 1) {
+            setViewingLeadId(sortedLeads[viewingLeadIndex + 1].id);
+        }
+    };
+
+    const handlePrevLead = () => {
+        if (viewingLeadIndex > 0) {
+            setViewingLeadId(sortedLeads[viewingLeadIndex - 1].id);
+        }
     };
 
     if (isLoading) {
@@ -218,7 +249,8 @@ export const EliteLeadGrid = ({
                             onClick={(e) => {
                                 // Ignore clicks on checkbox or buttons
                                 if ((e.target as HTMLElement).closest('button, [role="checkbox"], a')) return;
-                                onLeadClick(lead);
+                                // onLeadClick(lead); // Use internal modal instead
+                                handleOpenModal(lead);
                             }}
                             className={`
                 group relative grid ${targetProfileId
@@ -365,6 +397,16 @@ export const EliteLeadGrid = ({
                     );
                 })}
             </div>
+            {/* Detail Modal */}
+            <CandidateDetailModal
+                lead={activeLead as any} // Cast for now given the extended type
+                isOpen={!!activeLead}
+                onClose={handleCloseModal}
+                onNext={handleNextLead}
+                onPrev={handlePrevLead}
+                hasNext={viewingLeadIndex < sortedLeads.length - 1}
+                hasPrev={viewingLeadIndex > 0}
+            />
         </div>
     );
 };

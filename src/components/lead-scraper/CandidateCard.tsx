@@ -70,11 +70,10 @@ export const CandidateCard = ({
   return (
     <TooltipProvider delayDuration={300}>
       <Card
-        className={`group relative border-2 transition-all duration-300 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 ${
-          isSelected
-            ? 'border-primary bg-primary/5 shadow-lg shadow-primary/15 scale-[1.02]'
-            : 'border-border/50 hover:border-primary/40 hover:bg-card/80 bg-card/50'
-        } backdrop-blur-sm hover:-translate-y-1 hover:shadow-xl`}
+        className={`group relative border-2 transition-all duration-300 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 ${isSelected
+          ? 'border-primary bg-primary/5 shadow-lg shadow-primary/15 scale-[1.02]'
+          : 'border-border/50 hover:border-primary/40 hover:bg-card/80 bg-card/50'
+          } backdrop-blur-sm hover:-translate-y-1 hover:shadow-xl`}
         onClick={handleCardClick}
         onKeyDown={handleKeyDown}
         tabIndex={0}
@@ -83,19 +82,18 @@ export const CandidateCard = ({
         aria-label={`Select ${name} for deep search analysis`}
       >
         {/* Selection indicator bar */}
-        <div 
-          className={`absolute top-0 left-0 right-0 h-1 rounded-t-lg transition-all duration-300 ${
-            isSelected 
-              ? 'bg-gradient-to-r from-primary to-cyan-500' 
-              : 'bg-transparent group-hover:bg-primary/20'
-          }`} 
+        <div
+          className={`absolute top-0 left-0 right-0 h-1 rounded-t-lg transition-all duration-300 ${isSelected
+            ? 'bg-gradient-to-r from-primary to-cyan-500'
+            : 'bg-transparent group-hover:bg-primary/20'
+            }`}
         />
 
         {/* Analyzed badge - positioned absolutely */}
         {isAnalyzed && (
           <div className="absolute -top-2 -right-2 z-10">
-            <Badge 
-              variant="default" 
+            <Badge
+              variant="default"
               className="gap-1 bg-gradient-to-r from-primary to-cyan-500 text-white shadow-lg animate-fade-in"
             >
               <Brain className="w-3 h-3" />
@@ -107,16 +105,15 @@ export const CandidateCard = ({
         <CardContent className="p-4">
           <div className="flex items-start gap-3">
             {/* Checkbox with larger click area */}
-            <div 
+            <div
               className="flex items-center pt-1"
               onClick={(e) => e.stopPropagation()}
             >
               <Checkbox
                 checked={isSelected}
                 onCheckedChange={(checked) => onSelect(id, checked as boolean)}
-                className={`h-5 w-5 transition-all duration-200 cursor-pointer ${
-                  isSelected ? 'scale-110' : 'group-hover:scale-105'
-                }`}
+                className={`h-5 w-5 transition-all duration-200 cursor-pointer ${isSelected ? 'scale-110' : 'group-hover:scale-105'
+                  }`}
                 aria-label={`Select ${name}`}
               />
             </div>
@@ -125,11 +122,10 @@ export const CandidateCard = ({
             <Tooltip>
               <TooltipTrigger asChild>
                 <div
-                  className={`w-12 h-12 rounded-xl flex items-center justify-center text-white font-bold text-sm flex-shrink-0 transition-all duration-300 ${
-                    isSelected
-                      ? 'bg-gradient-to-br from-primary to-cyan-500 shadow-lg shadow-primary/30'
-                      : 'bg-gradient-to-br from-muted-foreground/80 to-muted-foreground/60 group-hover:from-primary/80 group-hover:to-cyan-500/80'
-                  }`}
+                  className={`w-12 h-12 rounded-xl flex items-center justify-center text-white font-bold text-sm flex-shrink-0 transition-all duration-300 ${isSelected
+                    ? 'bg-gradient-to-br from-primary to-cyan-500 shadow-lg shadow-primary/30'
+                    : 'bg-gradient-to-br from-muted-foreground/80 to-muted-foreground/60 group-hover:from-primary/80 group-hover:to-cyan-500/80'
+                    }`}
                 >
                   {getInitials(name)}
                 </div>
@@ -222,18 +218,27 @@ export const CandidateCard = ({
                     )}
                   </>
                 )}
-                
+
                 {type === 'resume' && (
                   <>
-                    {fitScore !== undefined && fitScore !== null && (
-                      <Badge 
-                        variant="outline" 
-                        className={`text-xs font-medium ${getFitScoreColor(fitScore)}`}
-                      >
-                        <Sparkles className="w-3 h-3 mr-1" />
-                        Fit: {fitScore}%
-                      </Badge>
-                    )}
+                    {fitScore !== undefined && fitScore !== null && (() => {
+                      let badge = { emoji: '🤔', color: 'text-gray-400 bg-gray-500/10 border-gray-500/50' };
+
+                      if (fitScore >= 75) badge = { emoji: '💪', color: 'text-[#00FF85] bg-[#00FF85]/10 border-[#00FF85]' };
+                      else if (fitScore >= 60) badge = { emoji: '👍', color: 'text-blue-400 bg-blue-500/10 border-blue-500/50' };
+                      else if (fitScore >= 50) badge = { emoji: '👌', color: 'text-purple-400 bg-purple-500/10 border-purple-500/50' };
+                      else if (fitScore >= 40) badge = { emoji: '🤝', color: 'text-orange-400 bg-gradient-to-r from-orange-500/10 to-amber-500/10 border-orange-500/50' };
+
+                      return (
+                        <Badge
+                          variant="outline"
+                          className={`text-xs font-bold border ${badge.color}`}
+                        >
+                          <span className="mr-1.5">{badge.emoji}</span>
+                          Fit: {fitScore}%
+                        </Badge>
+                      );
+                    })()}
                     {currentStage && (
                       <Badge variant="outline" className="text-xs capitalize bg-card/80">
                         {currentStage.replace(/_/g, ' ')}
@@ -251,10 +256,9 @@ export const CandidateCard = ({
           </div>
 
           {/* Selection hint */}
-          <div 
-            className={`absolute bottom-2 right-2 text-[10px] text-muted-foreground transition-opacity duration-200 ${
-              isSelected ? 'opacity-100' : 'opacity-0 group-hover:opacity-60'
-            }`}
+          <div
+            className={`absolute bottom-2 right-2 text-[10px] text-muted-foreground transition-opacity duration-200 ${isSelected ? 'opacity-100' : 'opacity-0 group-hover:opacity-60'
+              }`}
           >
             {isSelected ? 'Selected ✓' : 'Click to select'}
           </div>

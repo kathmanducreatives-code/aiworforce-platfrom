@@ -1,5 +1,5 @@
 import * as React from "react";
-import { Check, ChevronsUpDown, Building2, X } from "lucide-react";
+import { Check, X, Building2, Search, ChevronRight, Briefcase } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -16,30 +16,7 @@ import {
     PopoverContent,
     PopoverTrigger,
 } from "@/components/ui/popover";
-// Label import removed
-
-const INDUSTRIES = [
-    "SaaS",
-    "Fintech",
-    "Healthcare",
-    "E-commerce",
-    "AI/ML",
-    "Recruitment",
-    "Marketing",
-    "Real Estate",
-    "Finance",
-    "Technology",
-    "Consulting",
-    "Education",
-    "Manufacturing",
-    "Logistics",
-    "Cybersecurity",
-    "Biotech",
-    "Construction",
-    "Legal",
-    "Media",
-    "Non-profit"
-];
+import { INDUSTRIES } from "@/data/industries";
 
 interface IndustryMultiSelectProps {
     value: string[];
@@ -50,116 +27,144 @@ interface IndustryMultiSelectProps {
 export const IndustryMultiSelect = ({
     value = [],
     onChange,
-    placeholder = "Select industries...",
+    placeholder = "Search industries...",
 }: IndustryMultiSelectProps) => {
-    const [open, setOpen] = React.useState(false);
+    const [isActive, setIsActive] = React.useState(false);
     const [search, setSearch] = React.useState("");
+    const inputRef = React.useRef<HTMLInputElement>(null);
 
-    const handleSelect = (industry: string) => {
-        if (value.includes(industry)) {
-            onChange(value.filter((v) => v !== industry));
+    // Filter industries based on search - Optimization: limit results for performance
+    const filteredIndustries = React.useMemo(() => {
+        if (!search) return INDUSTRIES.slice(0, 50); // Show initial popular/first ones
+        const lower = search.toLowerCase();
+        return INDUSTRIES.filter(i => i.label.toLowerCase().includes(lower)).slice(0, 50);
+    }, [search]);
+
+    const handleSelect = (id: number) => {
+        const idStr = id.toString();
+        if (value.includes(idStr)) {
+            onChange(value.filter((v) => v !== idStr));
         } else {
-            onChange([...value, industry]);
+            onChange([...value, idStr]);
         }
+        inputRef.current?.focus();
     };
 
-    const handleRemove = (industry: string, e?: React.MouseEvent) => {
+    const handleRemove = (idStr: string, e?: React.MouseEvent) => {
         e?.stopPropagation();
-        onChange(value.filter((v) => v !== industry));
+        onChange(value.filter((v) => v !== idStr));
     };
 
-    const filteredIndustries = INDUSTRIES.filter(
-        (industry) =>
-            industry.toLowerCase().includes(search.toLowerCase())
-    );
+    const getLabel = (idStr: string) => {
+        const numId = parseInt(idStr);
+        const ind = INDUSTRIES.find(i => i.id === numId);
+        return ind ? ind.label : idStr;
+    };
 
     return (
-        <div className="space-y-2">
+        <div className={cn(
+            "relative transition-all duration-300 ease-out-quart rounded-xl border",
+            isActive
+                ? "bg-[#161616] border-[#00FF85] shadow-[0_0_20px_rgba(0,255,133,0.2)] z-50 scale-[1.02]"
+                : "bg-[#161616] border-[#00FF85]/30 hover:border-[#00FF85]/60 hover:shadow-[0_0_15px_rgba(0,255,133,0.1)]"
+        )}>
+            {/* Header / Trigger Area */}
+            <div
+                className="flex flex-col gap-3 p-4 cursor-text"
+                onClick={() => { setIsActive(true); inputRef.current?.focus(); }}
+            >
+                <div className="flex items-start justify-between">
+                    <div className="flex items-center gap-2 text-[#00FF85]">
+                        <Briefcase className="w-5 h-5 shrink-0" />
+                        <span className="text-sm font-bold tracking-wide uppercase">Target Industries</span>
+                    </div>
+                </div>
 
-            <Popover open={open} onOpenChange={setOpen}>
-                <PopoverTrigger asChild>
-                    <Button
-                        variant="outline"
-                        role="combobox"
-                        aria-expanded={open}
-                        aria-label="Select industries"
-                        className={cn(
-                            "w-full h-9 lg:h-10 justify-between bg-background/50 border-border/50 hover:bg-background/80 hover:border-primary/30 transition-colors text-sm font-normal",
-                            !value.length && "text-muted-foreground"
-                        )}
-                    >
-                        <span className="truncate">
-                            {value.length > 0
-                                ? `${value.length} selected`
-                                : placeholder}
-                        </span>
-                        <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                    </Button>
-                </PopoverTrigger>
-                <PopoverContent
-                    className="w-[var(--radix-popover-trigger-width)] p-0 bg-popover border-border/50 shadow-lg"
-                    align="start"
-                    sideOffset={4}
-                >
-                    <Command className="bg-transparent">
-                        <CommandInput
-                            placeholder="Search industries..."
-                            value={search}
-                            onValueChange={setSearch}
-                            className="h-9 text-sm"
-                        />
-                        <CommandList className="max-h-[280px] overflow-y-auto">
-                            <CommandEmpty className="py-4 text-center text-sm text-muted-foreground">
-                                No industry found.
-                            </CommandEmpty>
-
-                            <CommandGroup>
-                                {filteredIndustries.map((industry) => {
-                                    const isSelected = value.includes(industry);
-                                    return (
-                                        <CommandItem
-                                            key={industry}
-                                            value={industry}
-                                            onSelect={() => handleSelect(industry)}
-                                            className="flex items-center gap-2 cursor-pointer hover:bg-primary/10"
-                                        >
-                                            <div className={cn(
-                                                "flex items-center justify-center w-4 h-4 border rounded-sm mr-2",
-                                                isSelected
-                                                    ? "bg-primary border-primary text-primary-foreground"
-                                                    : "border-muted-foreground/30 opacity-50 [&_svg]:invisible"
-                                            )}>
-                                                <Check className={cn("h-3 w-3")} />
-                                            </div>
-                                            <span className="flex-1 truncate">{industry}</span>
-                                        </CommandItem>
-                                    );
-                                })}
-                            </CommandGroup>
-                        </CommandList>
-                    </Command>
-                </PopoverContent>
-            </Popover>
-
-            {/* Selected badges */}
-            {value.length > 0 && (
-                <div className="flex flex-wrap gap-1.5 pt-1">
-                    {value.map((industry) => (
+                {/* Selected Chips */}
+                <div className="flex flex-wrap gap-2 min-h-[32px]">
+                    {value.map((idStr) => (
                         <Badge
-                            key={industry}
+                            key={idStr}
                             variant="secondary"
-                            className="px-2 py-1 text-xs cursor-pointer hover:bg-destructive/20 hover:text-destructive transition-colors group bg-primary/10 text-primary border-primary/20"
+                            className="bg-[#00FF85]/10 text-[#00FF85] border border-[#00FF85]/30 px-2 py-1 h-8 text-sm gap-1 hover:bg-[#00FF85]/20 transition-colors animate-in fade-in zoom-in-50 duration-200"
                         >
-                            <span className="truncate">{industry}</span>
-                            <X
-                                className="w-2.5 h-2.5 ml-1 opacity-60 group-hover:opacity-100 shrink-0"
-                                onClick={(e) => handleRemove(industry, e)}
-                            />
+                            {getLabel(idStr)}
+                            <button
+                                type="button"
+                                className="ml-1 rounded-full p-0.5 hover:bg-[#00FF85]/20 hover:text-white transition-colors"
+                                onClick={(e) => handleRemove(idStr, e)}
+                            >
+                                <X className="w-3 h-3" />
+                            </button>
                         </Badge>
                     ))}
+                    <input
+                        ref={inputRef}
+                        type="text"
+                        className="bg-transparent border-none outline-none text-white placeholder:text-muted-foreground/50 h-8 min-w-[200px] flex-1 text-sm font-medium"
+                        placeholder={value.length === 0 ? placeholder : ""}
+                        value={search}
+                        onChange={(e) => setSearch(e.target.value)}
+                        onFocus={() => setIsActive(true)}
+                        onBlur={() => setTimeout(() => setIsActive(false), 200)}
+                    />
                 </div>
-            )}
+            </div>
+
+            {/* Sliding Dropdown Content */}
+            <div className={cn(
+                "overflow-hidden transition-all duration-300 ease-out-quart",
+                isActive ? "max-h-[300px] border-t border-[#00FF85]/20 opacity-100 p-2" : "max-h-0 opacity-0 border-t-0 p-0"
+            )}>
+                <div className="max-h-[290px] overflow-y-auto scrollbar-thin scrollbar-thumb-[#00FF85]/20 scrollbar-track-transparent pr-1">
+                    {filteredIndustries.length === 0 && (
+                        <div className="py-6 text-center text-muted-foreground text-sm">
+                            <Search className="w-8 h-8 mx-auto mb-2 opacity-20" />
+                            No industries found matching "{search}"
+                        </div>
+                    )}
+
+                    <div className="grid grid-cols-1 gap-1">
+                        {filteredIndustries.map((ind) => {
+                            const isSelected = value.includes(ind.id.toString());
+                            return (
+                                <div
+                                    key={ind.id}
+                                    className={cn(
+                                        "flex items-center gap-3 px-3 py-2.5 rounded-lg cursor-pointer transition-all",
+                                        isSelected
+                                            ? "bg-[#00FF85]/10 text-[#00FF85]"
+                                            : "text-muted-foreground hover:bg-white/5 hover:text-white"
+                                    )}
+                                    onMouseDown={(e) => {
+                                        e.preventDefault();
+                                        handleSelect(ind.id);
+                                    }}
+                                >
+                                    <div className={cn(
+                                        "w-4 h-4 rounded-full border flex items-center justify-center transition-colors",
+                                        isSelected
+                                            ? "border-[#00FF85] bg-[#00FF85]"
+                                            : "border-muted-foreground/40"
+                                    )}>
+                                        {isSelected && <Check className="w-3 h-3 text-black" />}
+                                    </div>
+                                    <div className="flex flex-col">
+                                        <span className="font-medium text-sm">{ind.label}</span>
+                                        {ind.hierarchy && <span className="text-[10px] opacity-50 truncate max-w-[300px]">{ind.hierarchy}</span>}
+                                    </div>
+                                </div>
+                            );
+                        })}
+                    </div>
+                </div>
+            </div>
+
+            {/* Active Indicator Line */}
+            <div className={cn(
+                "absolute bottom-0 left-0 h-[2px] bg-[#00FF85] transition-all duration-500 ease-out",
+                isActive ? "w-full shadow-[0_-2px_10px_rgba(0,255,133,0.5)]" : "w-0"
+            )} />
         </div>
     );
 };
-// End of component

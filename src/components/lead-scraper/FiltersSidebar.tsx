@@ -15,7 +15,7 @@ import { X } from "lucide-react";
 export interface FilterState {
   skipOwned: boolean;
   jobTitles: string[];
-  industries: string[];
+  industries: number[];
   locations: string[];
   companies: string[];
   keywords: string[];
