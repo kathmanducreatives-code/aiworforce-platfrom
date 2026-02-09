@@ -83,7 +83,7 @@ export const StrategyPreviewStep = ({ value, onChange, sessionId }: StrategyPrev
     };
 
     return (
-        <div className="flex flex-col h-full relative space-y-5">
+        <div className="flex flex-col h-full relative space-y-3">
 
             {/* Candidate Reference Card */}
             {profile && (
