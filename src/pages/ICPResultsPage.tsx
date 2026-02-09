@@ -550,7 +550,7 @@ const ICPResultsPage = () => {
                                         </div>
 
                                         {showFindEmailsDropdown && (
-                                            <div className="absolute right-0 top-full mt-2 w-56 p-3 rounded-xl bg-card border border-border/60 shadow-xl z-50 space-y-3 animate-in fade-in slide-in-from-top-2 duration-200">
+                                            <div className="absolute right-0 top-full mt-2 w-56 p-3 rounded-xl bg-[#1a1a1a] border border-border/60 shadow-2xl z-[100] space-y-3 animate-in fade-in slide-in-from-top-2 duration-200">
                                                 <div className="space-y-1.5">
                                                     <label className="text-[10px] uppercase tracking-widest text-muted-foreground font-semibold">
                                                         Number of emails
@@ -665,7 +665,7 @@ const ICPResultsPage = () => {
                                         </div>
 
                                         {showFindEmailsDropdown && (
-                                            <div className="absolute right-0 top-full mt-2 w-56 p-3 rounded-xl bg-card border border-border/60 shadow-xl z-50 space-y-3 animate-in fade-in slide-in-from-top-2 duration-200">
+                                            <div className="absolute right-0 top-full mt-2 w-56 p-3 rounded-xl bg-[#1a1a1a] border border-border/60 shadow-2xl z-[100] space-y-3 animate-in fade-in slide-in-from-top-2 duration-200">
                                                 <div className="space-y-1.5">
                                                     <label className="text-[10px] uppercase tracking-widest text-muted-foreground font-semibold">Number of emails</label>
                                                     <Select value={findEmailCount} onValueChange={setFindEmailCount}>
