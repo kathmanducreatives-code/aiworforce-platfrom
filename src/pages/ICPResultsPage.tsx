@@ -497,7 +497,7 @@ const ICPResultsPage = () => {
                         viewMode === 'grid' ? (
                             <div className="space-y-5">
                                 {/* Find Emails Action Bar */}
-                                <div className="flex flex-wrap items-center justify-between gap-3 p-4 rounded-xl bg-card/60 border border-border/40 backdrop-blur-sm">
+                                <div className="relative z-20 flex flex-wrap items-center justify-between gap-3 p-4 rounded-xl bg-card/60 border border-border/40 backdrop-blur-sm">
                                     <div className="flex items-center gap-3">
                                         <span className="text-sm text-muted-foreground font-medium">
                                             <span className="text-primary font-bold">{filteredResults.length}</span> results found
