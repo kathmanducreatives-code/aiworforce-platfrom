@@ -3,14 +3,17 @@ import { useNavigate } from "react-router-dom";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
-import { TrendingUp, Folder, Brain, Users } from "lucide-react";
+import { TrendingUp, Folder, Brain, Users, Moon, Trees } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import ModernDashboard from "@/components/ModernDashboard";
 import WeeklyActivityChart from "@/components/dashboard/WeeklyActivityChart";
+import { Switch } from "@/components/ui/switch";
+import { useTheme } from "@/contexts/ThemeContext";
 
 const Dashboard = () => {
   const navigate = useNavigate();
   const { profile } = useAuth();
+  const { theme, toggleTheme } = useTheme();
   const [metrics, setMetrics] = useState({
     totalCandidates: 0,
     avgFitScore: 0,
@@ -89,13 +92,25 @@ const Dashboard = () => {
               </p>
             </div>
           </div>
-          <Button
-            onClick={() => navigate('/screening')}
-            size="sm"
-            className="bg-primary hover:bg-primary/90 text-primary-foreground shadow-[0_0_25px_rgba(62,207,142,0.3)] hover:shadow-[0_0_35px_rgba(62,207,142,0.4)] transition-all duration-300 w-full sm:w-auto"
-          >
-            + New Candidate
-          </Button>
+          <div className="flex items-center gap-3">
+            {/* Theme Toggle */}
+            <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-card/60 border border-border/40 backdrop-blur-sm">
+              <Moon className="h-3.5 w-3.5 text-muted-foreground" />
+              <Switch
+                checked={theme === 'verdant'}
+                onCheckedChange={toggleTheme}
+                className="data-[state=checked]:bg-[hsl(142,60%,50%)]"
+              />
+              <Trees className="h-3.5 w-3.5 text-primary" />
+            </div>
+            <Button
+              onClick={() => navigate('/screening')}
+              size="sm"
+              className="bg-primary hover:bg-primary/90 text-primary-foreground shadow-[0_0_25px_rgba(62,207,142,0.3)] hover:shadow-[0_0_35px_rgba(62,207,142,0.4)] transition-all duration-300 w-full sm:w-auto"
+            >
+              + New Candidate
+            </Button>
+          </div>
         </div>
 
         {/* KPI Cards */}
