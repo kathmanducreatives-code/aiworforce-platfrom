@@ -32,7 +32,7 @@ export interface ProfileResult {
     match_reason?: string;
     tier_source?: number;
     inserted_at?: string;
-    email?: string; // Email field for reveal functionality
+    email?: string;
     email_confidence?: 'high' | 'medium' | 'low' | 'none';
     email_source?: string;
 }
@@ -48,15 +48,14 @@ interface ProfileResultCardProps {
 import { ProfileDetailModal } from "./ProfileDetailModal";
 
 export const ProfileResultCard = ({ profile, sessionId, onSave, onReveal, isEnriching }: ProfileResultCardProps) => {
-    const [isExpanded, setIsExpanded] = useState(false); // Kept for legacy or if we want both
+    const [isExpanded, setIsExpanded] = useState(false);
     const [showDetail, setShowDetail] = useState(false);
-    // const [deepSearchResult, setDeepSearchResult] = useState<ICPResponse['deep_search_result'] | null>(null); // Removed deep search
     const [revealingEmail, setRevealingEmail] = useState<string | null>(null);
     const [revealedEmails, setRevealedEmails] = useState<Record<string, string>>({});
     const { toast } = useToast();
 
     const handleRevealEmail = async (profile: ProfileResult) => {
-        if (revealedEmails[profile.id]) return; // Already revealed
+        if (revealedEmails[profile.id]) return;
         if (!profile.linkedin_url) {
             toast({ title: "Error", description: "No LinkedIn URL available", variant: "destructive" });
             return;
@@ -69,10 +68,8 @@ export const ProfileResultCard = ({ profile, sessionId, onSave, onReveal, isEnri
         setRevealingEmail(profile.id);
 
         try {
-            // Call API with updated signature: profile_id, linkedin_url, session_id
             const response = await icpAPI.revealEmail(profile.id, profile.linkedin_url, sessionId);
 
-            // Special handling: Email Not Found (success: false, email: null) from our updated icp.ts logic
             if (response.email === null && response.success === false) {
                 setRevealedEmails(prev => ({ ...prev, [profile.id]: "Not Found" }));
                 setRevealingEmail(null);
@@ -84,54 +81,46 @@ export const ProfileResultCard = ({ profile, sessionId, onSave, onReveal, isEnri
                 return;
             }
 
-            // Standard success path (async job started)
             if (response.success) {
                 toast({
                     title: "Email Discovery Started",
                     description: "Finding email address...",
-                    className: "border-[#00FF85] text-[#00FF85]"
+                    className: "border-primary/30 text-primary"
                 });
-                // Note: We keep the loading state until the realtime update arrives
-                // The useEffect below will clear it when the email is updated
             } else {
-                // Other API failures
                 toast({
                     title: "Failed",
                     description: response.error?.message || "Could not start email discovery",
                     variant: "destructive"
                 });
-                setRevealingEmail(null); // Clear loading state on error
+                setRevealingEmail(null);
             }
         } catch (error) {
             console.error("Reveal email failed", error);
             toast({ title: "Failed", description: "Could not reveal email", variant: "destructive" });
-            setRevealingEmail(null); // Clear loading state on error
+            setRevealingEmail(null);
         }
     };
 
-    // Monitor profile changes - when email arrives via Supabase realtime, clear loading state
     useEffect(() => {
-        // If we were revealing email for this profile and now it has an email, clear loading state
         if (revealingEmail === profile.id && profile.email) {
             setRevealingEmail(null);
             toast({
                 title: "Email Found!",
                 description: profile.email,
-                className: "border-[#00FF85] text-[#00FF85]"
+                className: "border-primary/30 text-primary"
             });
         }
     }, [profile.email, revealingEmail, profile.id, toast]);
 
-    // Color coding based on match score
     const getScoreColor = (score: number = 0) => {
-        if (score >= 90) return "text-[#00FF85] border-[#00FF85]";
+        if (score >= 90) return "text-primary border-primary";
         if (score >= 75) return "text-emerald-400 border-emerald-400";
         return "text-yellow-400 border-yellow-400";
     };
 
     const scoreColor = getScoreColor(profile.similarity_score);
 
-    // Animation variants
     const cardVariants = {
         hidden: { opacity: 0, y: 20 },
         visible: { opacity: 1, y: 0 }
@@ -153,7 +142,7 @@ export const ProfileResultCard = ({ profile, sessionId, onSave, onReveal, isEnri
                     const badge = matchGetBadge(profile.similarity_score);
                     return (
                         <div className={cn(
-                            "flex items-center justify-between px-5 py-2.5 border-b border-white/5",
+                            "flex items-center justify-between px-5 py-2.5 border-b border-border/30",
                             badge.gradient.replace('border-', 'border-b-')
                         )}>
                             <div className="flex items-center gap-2">
@@ -169,7 +158,7 @@ export const ProfileResultCard = ({ profile, sessionId, onSave, onReveal, isEnri
                 <div className="px-5 pt-5 pb-4 flex items-start gap-4">
                     {/* Avatar */}
                     <div className="relative flex-shrink-0">
-                        <div className="w-14 h-14 rounded-xl bg-muted/50 border border-border/60 flex items-center justify-center overflow-hidden ring-1 ring-white/5">
+                        <div className="w-14 h-14 rounded-xl bg-muted/50 border border-border/60 flex items-center justify-center overflow-hidden ring-1 ring-border/20">
                             {profile.photo_url ? (
                                 <img src={profile.photo_url} alt={profile.name} className="w-full h-full object-cover" />
                             ) : (
@@ -257,7 +246,6 @@ export const ProfileResultCard = ({ profile, sessionId, onSave, onReveal, isEnri
                             exit={{ height: 0, opacity: 0 }}
                             className="bg-muted/20 border-t border-border/30 px-5 py-4 space-y-4 overflow-hidden"
                         >
-                            {/* Work History */}
                             {Array.isArray(profile.work_history) && profile.work_history.length > 0 && (
                                 <div>
                                     <h4 className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground mb-2 flex items-center gap-2">
@@ -275,7 +263,6 @@ export const ProfileResultCard = ({ profile, sessionId, onSave, onReveal, isEnri
                                 </div>
                             )}
 
-                            {/* Education */}
                             {Array.isArray(profile.education) && profile.education.length > 0 && (
                                 <div>
                                     <h4 className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground mb-2 flex items-center gap-2">
@@ -397,7 +384,7 @@ export const ProfileResultCard = ({ profile, sessionId, onSave, onReveal, isEnri
 
             <ProfileDetailModal
                 profile={profile}
-                deepSearchResult={undefined} // No longer passing deep search result from here
+                deepSearchResult={undefined}
                 revealedEmail={revealedEmails[profile.id]}
                 open={showDetail}
                 onOpenChange={setShowDetail}
