@@ -114,7 +114,7 @@ export const StrategyPreviewStep = ({ value, onChange, sessionId }: StrategyPrev
                                 {profile.name}
                                 <Badge variant="secondary" className="bg-[#00FF85]/10 text-[#00FF85] border-none text-[10px] h-5">Analyzed Reference</Badge>
                             </h4>
-                            <p className="text-muted-foreground text-sm truncate">{profile.headline || profile.current_title}</p>
+                            <p className="text-muted-foreground text-sm truncate">{profile.current_title}</p>
 
                             {/* Education Reveal (Delayed) */}
                             {education.length > 0 && (
