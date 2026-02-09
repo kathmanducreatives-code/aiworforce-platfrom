@@ -89,6 +89,54 @@ export type Database = {
           },
         ]
       }
+      audit_log: {
+        Row: {
+          action: string
+          candidate_id: string | null
+          created_at: string | null
+          error_message: string | null
+          execution_time_ms: number | null
+          id: string
+          ip_address: string | null
+          request_data: Json | null
+          response_data: Json | null
+          route: string | null
+          session_id: string | null
+          status: string | null
+          user_agent: string | null
+        }
+        Insert: {
+          action: string
+          candidate_id?: string | null
+          created_at?: string | null
+          error_message?: string | null
+          execution_time_ms?: number | null
+          id?: string
+          ip_address?: string | null
+          request_data?: Json | null
+          response_data?: Json | null
+          route?: string | null
+          session_id?: string | null
+          status?: string | null
+          user_agent?: string | null
+        }
+        Update: {
+          action?: string
+          candidate_id?: string | null
+          created_at?: string | null
+          error_message?: string | null
+          execution_time_ms?: number | null
+          id?: string
+          ip_address?: string | null
+          request_data?: Json | null
+          response_data?: Json | null
+          route?: string | null
+          session_id?: string | null
+          status?: string | null
+          user_agent?: string | null
+        }
+        Relationships: []
+      }
       candidate_notes: {
         Row: {
           candidate_id: string | null
@@ -124,6 +172,104 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "resume_analyses"
             referencedColumns: ["id"]
+          },
+        ]
+      }
+      candidate_profiles: {
+        Row: {
+          batch_number: number | null
+          created_at: string | null
+          current_company: string | null
+          current_title: string | null
+          education: Json | null
+          email: string | null
+          email_confidence: string | null
+          email_found_at: string | null
+          headline: string | null
+          id: string
+          inserted_at: string | null
+          linkedin_url: string
+          location: string | null
+          match_quality: string | null
+          match_reasons: Json | null
+          name: string | null
+          photo_url: string | null
+          profile_completeness: number | null
+          profile_data: Json | null
+          scrape_run_id: string | null
+          seniority_level: string | null
+          session_id: string | null
+          similarity_score: number | null
+          tier_source: number | null
+          top_skills: Json | null
+          work_history: Json | null
+          years_experience: number | null
+        }
+        Insert: {
+          batch_number?: number | null
+          created_at?: string | null
+          current_company?: string | null
+          current_title?: string | null
+          education?: Json | null
+          email?: string | null
+          email_confidence?: string | null
+          email_found_at?: string | null
+          headline?: string | null
+          id?: string
+          inserted_at?: string | null
+          linkedin_url: string
+          location?: string | null
+          match_quality?: string | null
+          match_reasons?: Json | null
+          name?: string | null
+          photo_url?: string | null
+          profile_completeness?: number | null
+          profile_data?: Json | null
+          scrape_run_id?: string | null
+          seniority_level?: string | null
+          session_id?: string | null
+          similarity_score?: number | null
+          tier_source?: number | null
+          top_skills?: Json | null
+          work_history?: Json | null
+          years_experience?: number | null
+        }
+        Update: {
+          batch_number?: number | null
+          created_at?: string | null
+          current_company?: string | null
+          current_title?: string | null
+          education?: Json | null
+          email?: string | null
+          email_confidence?: string | null
+          email_found_at?: string | null
+          headline?: string | null
+          id?: string
+          inserted_at?: string | null
+          linkedin_url?: string
+          location?: string | null
+          match_quality?: string | null
+          match_reasons?: Json | null
+          name?: string | null
+          photo_url?: string | null
+          profile_completeness?: number | null
+          profile_data?: Json | null
+          scrape_run_id?: string | null
+          seniority_level?: string | null
+          session_id?: string | null
+          similarity_score?: number | null
+          tier_source?: number | null
+          top_skills?: Json | null
+          work_history?: Json | null
+          years_experience?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "candidate_profiles_session_id_fkey"
+            columns: ["session_id"]
+            isOneToOne: false
+            referencedRelation: "icp_lookalike_sessions"
+            referencedColumns: ["session_id"]
           },
         ]
       }
@@ -564,9 +710,11 @@ export type Database = {
           company_match_notes: string | null
           created_at: string | null
           education: Json | null
+          email: string | null
           fit_score: number | null
           id: string
           ideal_roles: string[] | null
+          languages: Json | null
           linkedin_url: string | null
           profile_picture_url: string | null
           raw_analysis: Json | null
@@ -585,9 +733,11 @@ export type Database = {
           company_match_notes?: string | null
           created_at?: string | null
           education?: Json | null
+          email?: string | null
           fit_score?: number | null
           id?: string
           ideal_roles?: string[] | null
+          languages?: Json | null
           linkedin_url?: string | null
           profile_picture_url?: string | null
           raw_analysis?: Json | null
@@ -606,9 +756,11 @@ export type Database = {
           company_match_notes?: string | null
           created_at?: string | null
           education?: Json | null
+          email?: string | null
           fit_score?: number | null
           id?: string
           ideal_roles?: string[] | null
+          languages?: Json | null
           linkedin_url?: string | null
           profile_picture_url?: string | null
           raw_analysis?: Json | null
@@ -665,6 +817,42 @@ export type Database = {
           },
         ]
       }
+      error_log: {
+        Row: {
+          created_at: string | null
+          error_message: string | null
+          error_type: string | null
+          id: string
+          node_name: string | null
+          request_payload: Json | null
+          route: string | null
+          session_id: string | null
+          stack_trace: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          error_message?: string | null
+          error_type?: string | null
+          id?: string
+          node_name?: string | null
+          request_payload?: Json | null
+          route?: string | null
+          session_id?: string | null
+          stack_trace?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          error_message?: string | null
+          error_type?: string | null
+          id?: string
+          node_name?: string | null
+          request_payload?: Json | null
+          route?: string | null
+          session_id?: string | null
+          stack_trace?: string | null
+        }
+        Relationships: []
+      }
       google_calendar_tokens: {
         Row: {
           access_token: string
@@ -697,6 +885,270 @@ export type Database = {
           user_id?: string
         }
         Relationships: []
+      }
+      icp_drafts: {
+        Row: {
+          created_at: string | null
+          current_step: number | null
+          draft_name: string | null
+          form_data: Json | null
+          id: string
+          is_completed: boolean | null
+          updated_at: string | null
+          user_id: string
+          workspace_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          current_step?: number | null
+          draft_name?: string | null
+          form_data?: Json | null
+          id?: string
+          is_completed?: boolean | null
+          updated_at?: string | null
+          user_id: string
+          workspace_id: string
+        }
+        Update: {
+          created_at?: string | null
+          current_step?: number | null
+          draft_name?: string | null
+          form_data?: Json | null
+          id?: string
+          is_completed?: boolean | null
+          updated_at?: string | null
+          user_id?: string
+          workspace_id?: string
+        }
+        Relationships: []
+      }
+      icp_lookalike_results: {
+        Row: {
+          created_at: string | null
+          id: string
+          match_reasons: Json | null
+          match_score: number | null
+          profile_data: Json | null
+          profile_url: string | null
+          session_id: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          match_reasons?: Json | null
+          match_score?: number | null
+          profile_data?: Json | null
+          profile_url?: string | null
+          session_id?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          match_reasons?: Json | null
+          match_score?: number | null
+          profile_data?: Json | null
+          profile_url?: string | null
+          session_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "icp_lookalike_results_session_id_fkey"
+            columns: ["session_id"]
+            isOneToOne: false
+            referencedRelation: "icp_lookalike_sessions"
+            referencedColumns: ["session_id"]
+          },
+        ]
+      }
+      icp_lookalike_sessions: {
+        Row: {
+          ai_strategy: string | null
+          apify_run_id: string | null
+          company_location: Json | null
+          company_size: Json | null
+          created_at: string | null
+          current_phase: string | null
+          current_step: number | null
+          excluded_signals: Json | null
+          feature_weights: Json | null
+          firmographic_constraints: Json | null
+          hiring_intensity: string | null
+          id: string
+          industry_names: Json | null
+          is_draft: boolean | null
+          lookalike_profile_data: Json | null
+          lookalike_results: string | null
+          lookalike_url: string | null
+          mandatory_signals: Json | null
+          persona_description: string | null
+          profile_name: string | null
+          results_count: number | null
+          role_family: string | null
+          scrape_status: string | null
+          search_logic_dna: string | null
+          search_results_count: number | null
+          session_id: string
+          status: string | null
+          strong_matches_count: number | null
+          target_industry: string | null
+          target_industry_name: string | null
+          target_results_count: number | null
+          technical_execution: Json | null
+          updated_at: string | null
+          user_id: string | null
+        }
+        Insert: {
+          ai_strategy?: string | null
+          apify_run_id?: string | null
+          company_location?: Json | null
+          company_size?: Json | null
+          created_at?: string | null
+          current_phase?: string | null
+          current_step?: number | null
+          excluded_signals?: Json | null
+          feature_weights?: Json | null
+          firmographic_constraints?: Json | null
+          hiring_intensity?: string | null
+          id?: string
+          industry_names?: Json | null
+          is_draft?: boolean | null
+          lookalike_profile_data?: Json | null
+          lookalike_results?: string | null
+          lookalike_url?: string | null
+          mandatory_signals?: Json | null
+          persona_description?: string | null
+          profile_name?: string | null
+          results_count?: number | null
+          role_family?: string | null
+          scrape_status?: string | null
+          search_logic_dna?: string | null
+          search_results_count?: number | null
+          session_id: string
+          status?: string | null
+          strong_matches_count?: number | null
+          target_industry?: string | null
+          target_industry_name?: string | null
+          target_results_count?: number | null
+          technical_execution?: Json | null
+          updated_at?: string | null
+          user_id?: string | null
+        }
+        Update: {
+          ai_strategy?: string | null
+          apify_run_id?: string | null
+          company_location?: Json | null
+          company_size?: Json | null
+          created_at?: string | null
+          current_phase?: string | null
+          current_step?: number | null
+          excluded_signals?: Json | null
+          feature_weights?: Json | null
+          firmographic_constraints?: Json | null
+          hiring_intensity?: string | null
+          id?: string
+          industry_names?: Json | null
+          is_draft?: boolean | null
+          lookalike_profile_data?: Json | null
+          lookalike_results?: string | null
+          lookalike_url?: string | null
+          mandatory_signals?: Json | null
+          persona_description?: string | null
+          profile_name?: string | null
+          results_count?: number | null
+          role_family?: string | null
+          scrape_status?: string | null
+          search_logic_dna?: string | null
+          search_results_count?: number | null
+          session_id?: string
+          status?: string | null
+          strong_matches_count?: number | null
+          target_industry?: string | null
+          target_industry_name?: string | null
+          target_results_count?: number | null
+          technical_execution?: Json | null
+          updated_at?: string | null
+          user_id?: string | null
+        }
+        Relationships: []
+      }
+      icp_saved_searches: {
+        Row: {
+          backend_session_id: string | null
+          created_at: string | null
+          draft_id: string | null
+          id: string
+          search_name: string | null
+          status: string | null
+          updated_at: string | null
+          user_id: string
+          workspace_id: string
+        }
+        Insert: {
+          backend_session_id?: string | null
+          created_at?: string | null
+          draft_id?: string | null
+          id?: string
+          search_name?: string | null
+          status?: string | null
+          updated_at?: string | null
+          user_id: string
+          workspace_id: string
+        }
+        Update: {
+          backend_session_id?: string | null
+          created_at?: string | null
+          draft_id?: string | null
+          id?: string
+          search_name?: string | null
+          status?: string | null
+          updated_at?: string | null
+          user_id?: string
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "icp_saved_searches_draft_id_fkey"
+            columns: ["draft_id"]
+            isOneToOne: false
+            referencedRelation: "icp_drafts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      icp_search_results: {
+        Row: {
+          created_at: string | null
+          id: string
+          profile_data: Json | null
+          profile_url: string | null
+          search_id: string | null
+          similarity_score: number | null
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          profile_data?: Json | null
+          profile_url?: string | null
+          search_id?: string | null
+          similarity_score?: number | null
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          profile_data?: Json | null
+          profile_url?: string | null
+          search_id?: string | null
+          similarity_score?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "icp_search_results_search_id_fkey"
+            columns: ["search_id"]
+            isOneToOne: false
+            referencedRelation: "icp_saved_searches"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       interview_availability: {
         Row: {
