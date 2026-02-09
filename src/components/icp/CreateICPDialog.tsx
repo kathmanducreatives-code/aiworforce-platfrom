@@ -454,8 +454,15 @@ export const CreateICPDialog = ({ open, onOpenChange, onSuccess }: CreateICPDial
 
                                         {/* Empty State */}
                                         {!isLaunching && (!liveResults || liveResults.length === 0) && (
-                                            <div className="text-center py-12 border border-dashed border-[#262626] rounded-xl bg-[#161616]/30">
-                                                <p className="text-muted-foreground text-sm">Launch the strategy to find candidates.</p>
+                                            <div className="relative text-center py-14 border border-dashed border-white/[0.06] rounded-2xl bg-gradient-to-b from-[#111]/60 to-[#0d0d0d]/40 overflow-hidden">
+                                                <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_50%,rgba(0,255,133,0.03),transparent_70%)]" />
+                                                <div className="relative space-y-2">
+                                                    <div className="w-10 h-10 mx-auto rounded-xl bg-[#00FF85]/10 flex items-center justify-center border border-[#00FF85]/15 mb-3">
+                                                        <Rocket className="w-5 h-5 text-[#00FF85]/60" />
+                                                    </div>
+                                                    <p className="text-muted-foreground/80 text-sm font-medium">Launch the strategy to find candidates.</p>
+                                                    <p className="text-muted-foreground/40 text-xs">Click "Start Scraping" to begin the search</p>
+                                                </div>
                                             </div>
                                         )}
                                     </div>
