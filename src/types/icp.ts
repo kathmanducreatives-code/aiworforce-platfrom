@@ -3,12 +3,13 @@ export interface ICPProfile {
     id: string;
     name: string;
     industries: string[];
+    industry_names?: string[];
     revenue_range?: string;
     company_size: string;
     location?: string[];
     hiring_intensity?: 'High' | 'Medium' | 'Low';
     tech_stack?: string[];
-    lookalike_data?: any; // Store lookalike profile data
+    lookalike_data?: any;
     feature_weights?: any;
     scoring_weights?: {
         industry: number;
@@ -19,6 +20,13 @@ export interface ICPProfile {
     target_score?: number;
     created_at: string;
     updated_at?: string;
+    // Enhanced metadata
+    status?: string;
+    scrape_status?: string;
+    results_count?: number;
+    strong_matches_count?: number;
+    candidate_count?: number;
+    avg_score?: number;
 }
 
 // Workflow Phases

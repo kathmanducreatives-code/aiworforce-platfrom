@@ -50,19 +50,48 @@ export const useICPSessions = (options: UseICPSessionsOptions = {}): UseICPSessi
         if (sessionData && sessionData.length > 0) {
             console.log(`[useICPSessions] Found ${sessionData.length} sessions`);
 
-            const mappedProfiles: ICPProfile[] = sessionData.map((session: any) => ({
-                id: session.session_id,
-                name: session.profile_name || `Session ${session.session_id.slice(0, 8)}`,
-                created_at: session.created_at,
-                industries: session.target_industry || [],
-                company_size: session.company_size || "Unknown",
-                revenue_range: "Unknown",
-                location: session.company_location || [],
-                hiring_intensity: session.hiring_intensity || "Medium",
-                tech_stack: [],
-                target_score: 75,
-                user_id: session.user_id || "unknown"
-            } as ICPProfile));
+            // Fetch candidate counts per session
+            const sessionIds = sessionData.map((s: any) => s.session_id);
+            const { data: candidateCounts } = await supabase
+                .from('candidate_profiles')
+                .select('session_id, similarity_score')
+                .in('session_id', sessionIds);
+
+            const countMap = new Map<string, { count: number; totalScore: number }>();
+            (candidateCounts || []).forEach((c: any) => {
+                if (!c.session_id) return;
+                if (!countMap.has(c.session_id)) {
+                    countMap.set(c.session_id, { count: 0, totalScore: 0 });
+                }
+                const entry = countMap.get(c.session_id)!;
+                entry.count++;
+                entry.totalScore += c.similarity_score || 0;
+            });
+
+            const mappedProfiles: ICPProfile[] = sessionData.map((session: any) => {
+                const counts = countMap.get(session.session_id);
+                const candidateCount = counts?.count || session.results_count || 0;
+                const avgScore = counts && counts.count > 0 ? Math.round(counts.totalScore / counts.count) : 0;
+
+                return {
+                    id: session.session_id,
+                    name: session.profile_name || `Session ${session.session_id.slice(0, 8)}`,
+                    created_at: session.created_at,
+                    updated_at: session.updated_at,
+                    industries: session.target_industry || [],
+                    industry_names: session.industry_names || [],
+                    company_size: session.company_size || "",
+                    location: session.company_location || [],
+                    hiring_intensity: session.hiring_intensity || "Medium",
+                    tech_stack: [],
+                    status: session.status || session.scrape_status || "unknown",
+                    scrape_status: session.scrape_status,
+                    results_count: session.results_count,
+                    strong_matches_count: session.strong_matches_count,
+                    candidate_count: candidateCount,
+                    avg_score: avgScore,
+                } as ICPProfile;
+            });
 
             return mappedProfiles;
         }
