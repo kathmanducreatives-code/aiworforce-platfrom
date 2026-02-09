@@ -10,8 +10,9 @@ interface StrategyReviewStepProps {
 
 export const StrategyReviewStep = ({ value }: StrategyReviewStepProps) => {
 
-    const getIndustryLabel = (id: number) => {
-        return INDUSTRIES.find(i => i.id === id)?.label || `Industry ${id}`;
+    const getIndustryLabel = (id: string) => {
+        const numId = parseInt(id, 10);
+        return INDUSTRIES.find(i => i.id === numId)?.label || `Industry ${id}`;
     };
 
     // Generate Plain English Summary

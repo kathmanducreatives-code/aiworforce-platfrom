@@ -27,6 +27,7 @@ type Step = "account" | "persona" | "lookalike" | "strategy";
 const DEFAULT_FORM_DATA: ICPFormData = {
     name: "",
     industries: [],
+    tech_stack: [],
     company_size: "",
     company_location: [],
     hiringIntensity: "Medium",

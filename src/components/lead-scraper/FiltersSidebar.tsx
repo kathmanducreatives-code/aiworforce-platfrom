@@ -167,8 +167,8 @@ export const FiltersSidebar = ({
             defaultOpen={true}
           >
             <IndustryMultiSelect
-              value={filters.industries}
-              onChange={(industries) => updateFilters({ industries })}
+              value={filters.industries.map(String)}
+              onChange={(industries) => updateFilters({ industries: industries.map(Number) })}
               placeholder="Select industries..."
             />
           </FilterSection>

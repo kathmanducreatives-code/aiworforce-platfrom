@@ -59,7 +59,7 @@ export const FeatureWeightForm = ({ value, onChange }: FeatureWeightFormProps) =
 
             <div className="grid gap-4">
                 {features.map((feature) => {
-                    const isChecked = value.featureWeights?.[feature.id] || false;
+                    const isChecked = Boolean(value.featureWeights?.[feature.id]);
                     const Icon = feature.icon;
                     return (
                         <Card

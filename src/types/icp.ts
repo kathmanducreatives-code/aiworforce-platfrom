@@ -64,7 +64,8 @@ export interface ICPDraft {
 
 export interface ICPFormData {
     name: string;
-    industries: string[]; // Changed to number[] for V2 IDs
+    industries: string[];
+    tech_stack: string[];
     excluded_industries?: string[]; // IDs to explicitly exclude
     company_size: string;
     company_location?: string[]; // New
