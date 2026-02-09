@@ -5,6 +5,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/comp
 import { Brain, ChevronRight, Gauge, Trash2, RefreshCw, Clock, Star } from "lucide-react";
 import { useState } from "react";
 import { DeepSearchResults } from "./DeepSearchResults";
+import { getMatchBadge as sharedGetMatchBadge } from "@/lib/matchBadges";
 import {
   Dialog,
   DialogContent,
@@ -150,12 +151,8 @@ export const AnalyzedCandidateCard = ({
 
               {/* Fit Score Badge - Consistent Design */}
               {fit_score !== null && (() => {
-                let badge = { emoji: '🤔', label: 'Weak Match', color: 'text-gray-400 bg-gray-500/10 border-gray-500/50' };
-
-                if (fit_score >= 75) badge = { emoji: '💪', label: 'Strong Match', color: 'text-[#00FF85] bg-[#00FF85]/10 border-[#00FF85]' };
-                else if (fit_score >= 60) badge = { emoji: '👍', label: 'Good Match', color: 'text-blue-400 bg-blue-500/10 border-blue-500/50' };
-                else if (fit_score >= 50) badge = { emoji: '👌', label: 'Potential Match', color: 'text-purple-400 bg-purple-500/10 border-purple-500/50' };
-                else if (fit_score >= 40) badge = { emoji: '🤝', label: 'Fair Match', color: 'text-orange-400 bg-gradient-to-r from-orange-500/10 to-amber-500/10 border-orange-500/50' };
+                const badgeConfig = sharedGetMatchBadge(fit_score);
+                const badge = { emoji: badgeConfig.emoji, label: badgeConfig.label, color: badgeConfig.gradient };
 
                 return (
                   <Tooltip>

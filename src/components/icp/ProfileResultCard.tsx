@@ -11,6 +11,7 @@ import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 import { motion, AnimatePresence } from "framer-motion";
+import { getMatchBadge as matchGetBadge } from "@/lib/matchBadges";
 
 export interface ProfileResult {
     id: string;
@@ -152,53 +153,15 @@ export const ProfileResultCard = ({ profile, sessionId, onSave, onReveal, isEnri
                     {/* Similarity Score Badge (Top Right) */}
                     {/* Match Strength Badge (Top Right) */}
                     {profile.similarity_score && (() => {
-                        const getMatchBadge = (score: number) => {
-                            if (score >= 75) return {
-                                emoji: '💪',
-                                label: 'Strong Match',
-                                class: 'strong',
-                                bg: 'bg-[#00FF85] text-black shadow-[0_0_20px_rgba(0,255,133,0.4)] border border-[#00FF85]'
-                            };
-                            if (score >= 60) return {
-                                emoji: '👍',
-                                label: 'Good Match',
-                                class: 'good',
-                                bg: 'bg-blue-500/20 text-blue-400 border border-blue-500/50 shadow-[0_0_10px_rgba(59,130,246,0.2)] backdrop-blur-md'
-                            };
-                            if (score >= 50) return {
-                                emoji: '👌',
-                                label: 'Potential Match',
-                                class: 'potential',
-                                bg: 'bg-purple-500/20 text-purple-400 border border-purple-500/50 shadow-[0_0_10px_rgba(168,85,247,0.2)] backdrop-blur-md'
-                            };
-                            if (score >= 40) return {
-                                emoji: '🤝',
-                                label: 'Fair Match',
-                                class: 'fair',
-                                bg: 'bg-gradient-to-r from-orange-500/20 to-amber-500/20 text-orange-400 border border-orange-500/50 shadow-[0_0_10px_rgba(249,115,22,0.2)] backdrop-blur-md'
-                            };
-                            return {
-                                emoji: '🤔',
-                                label: 'Weak Match',
-                                class: 'weak',
-                                bg: 'bg-gray-500/20 text-gray-400 border border-gray-500/50 shadow-[0_0_10px_rgba(156,163,175,0.2)] backdrop-blur-md'
-                            };
-                        };
-
-                        const badge = getMatchBadge(profile.similarity_score);
-                        if (!badge) return null;
-
+                        const badge = matchGetBadge(profile.similarity_score);
                         return (
                             <div className={cn(
-                                "absolute top-3 right-3 z-20 px-3 py-1.5 rounded-full flex items-center gap-1.5 text-xs font-bold transition-transform hover:scale-105",
-                                badge.bg
+                                "absolute top-3 right-3 z-20 px-3 py-1.5 rounded-full flex items-center gap-1.5 text-xs font-bold transition-transform hover:scale-105 border backdrop-blur-md",
+                                badge.gradient
                             )}>
                                 <span className="text-sm drop-shadow-sm">{badge.emoji}</span>
                                 <span className="tracking-wide drop-shadow-sm">{badge.label}</span>
-                                <span className={cn(
-                                    "ml-1.5 pl-1.5 border-l font-mono opacity-80",
-                                    badge.class === 'potential' ? "border-[#00FF85]/40" : "border-black/20"
-                                )}>
+                                <span className="ml-1.5 pl-1.5 border-l border-white/20 font-mono opacity-80">
                                     {profile.similarity_score}%
                                 </span>
                             </div>

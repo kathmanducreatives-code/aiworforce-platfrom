@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Trash2, Check, Users, TrendingUp, Clock, Zap } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
 import { cn } from "@/lib/utils";
+import { getScoreColor as getMatchScoreColor } from "@/lib/matchBadges";
 
 interface ICPProfileCardProps {
     profile: ICPProfile;
@@ -31,13 +32,6 @@ const getStatusConfig = (status?: string) => {
         default:
             return { label: 'Pending', className: 'bg-muted text-muted-foreground border-border' };
     }
-};
-
-const getScoreColor = (score: number) => {
-    if (score >= 80) return "text-emerald-400";
-    if (score >= 60) return "text-yellow-400";
-    if (score >= 40) return "text-orange-400";
-    return "text-muted-foreground";
 };
 
 const timeAgo = (dateStr: string) => {
@@ -139,7 +133,7 @@ export const ICPProfileCard = ({ profile, onDelete, onClick, selected = false, o
                     <div className="flex items-center justify-center gap-1 mb-1">
                         <TrendingUp className="w-3.5 h-3.5 text-muted-foreground" />
                     </div>
-                    <span className={cn("text-lg font-bold", getScoreColor(avgScore))}>{avgScore}%</span>
+                    <span className={cn("text-lg font-bold", getMatchScoreColor(avgScore))}>{avgScore}%</span>
                     <p className="text-[10px] text-muted-foreground">Avg Match</p>
                 </div>
                 <div className="text-center p-2.5 rounded-lg bg-muted/30 border border-border/30">
