@@ -88,7 +88,7 @@ export const StrategyPreviewStep = ({ value, onChange, sessionId }: StrategyPrev
             {/* Candidate Reference Card */}
             {profile && (
                 <div className="animate-in slide-in-from-top-4 fade-in duration-700">
-                    <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-card to-card/80 border border-border/30 p-5">
+                    <div className="relative overflow-hidden rounded-2xl bg-card border border-border shadow-sm p-5">
                         {/* Subtle glow accent */}
                         <div className="absolute -top-8 -right-8 w-32 h-32 bg-primary/[0.06] blur-3xl rounded-full pointer-events-none" />
                         <div className="absolute -bottom-6 -left-6 w-24 h-24 bg-blue-500/[0.04] blur-2xl rounded-full pointer-events-none" />
@@ -131,7 +131,7 @@ export const StrategyPreviewStep = ({ value, onChange, sessionId }: StrategyPrev
 
             {/* Strategy Output Block */}
             <div className="animate-in fade-in slide-in-from-bottom-3 duration-700 delay-500 fill-mode-forwards opacity-0" style={{ animationDelay: '500ms' }}>
-                <div className="relative overflow-hidden rounded-2xl border border-primary/15 bg-gradient-to-b from-card via-background to-background shadow-[0_4px_32px_hsl(var(--primary)/0.06)]">
+                <div className="relative overflow-hidden rounded-2xl border border-border bg-card shadow-sm">
                     {/* Top accent bar */}
                     <div className="h-[2px] bg-gradient-to-r from-transparent via-primary/50 to-transparent" />
 
@@ -176,7 +176,7 @@ export const StrategyPreviewStep = ({ value, onChange, sessionId }: StrategyPrev
                 <Accordion type="single" collapsible defaultValue="item-1" className="space-y-3">
 
                     {/* Search Logic DNA */}
-                    <AccordionItem value="item-1" className="border border-border/30 rounded-2xl bg-gradient-to-b from-card to-background overflow-hidden data-[state=open]:border-primary/20 data-[state=open]:shadow-[0_0_20px_hsl(var(--primary)/0.04)] transition-all duration-300">
+                    <AccordionItem value="item-1" className="border border-border rounded-2xl bg-card shadow-sm overflow-hidden data-[state=open]:border-primary/20 data-[state=open]:shadow-[0_0_20px_hsl(var(--primary)/0.04)] transition-all duration-300">
                         <AccordionTrigger className="px-5 py-4 hover:bg-accent/30 hover:no-underline [&[data-state=open]]:bg-primary/[0.03]">
                             <div className="flex items-center gap-3">
                                 <div className="p-2 rounded-xl bg-blue-500/10 text-blue-400 border border-blue-500/10">
@@ -204,7 +204,7 @@ export const StrategyPreviewStep = ({ value, onChange, sessionId }: StrategyPrev
                                                 }
                                             });
                                         }}
-                                        className="bg-background/60 border-border/30 ring-1 ring-border/20 focus-visible:ring-primary/40 min-h-[120px] resize-y font-mono text-xs leading-relaxed tracking-wide text-primary drop-shadow-[0_0_2px_hsl(var(--primary)/0.3)] selection:bg-primary/30 rounded-xl"
+                                        className="bg-muted/30 border-border focus-visible:ring-primary/40 min-h-[120px] resize-y font-mono text-xs leading-relaxed tracking-wide text-primary drop-shadow-[0_0_2px_hsl(var(--primary)/0.3)] selection:bg-primary/30 rounded-xl"
                                         spellCheck={false}
                                         placeholder="// Search Logic DNA will be generated here..."
                                     />
@@ -220,7 +220,7 @@ export const StrategyPreviewStep = ({ value, onChange, sessionId }: StrategyPrev
                     </AccordionItem>
 
                     {/* Firmographic Constraints */}
-                    <AccordionItem value="item-2" className="border border-border/30 rounded-2xl bg-gradient-to-b from-card to-background overflow-hidden data-[state=open]:border-purple-500/20 data-[state=open]:shadow-[0_0_20px_rgba(168,85,247,0.04)] transition-all duration-300">
+                    <AccordionItem value="item-2" className="border border-border rounded-2xl bg-card shadow-sm overflow-hidden data-[state=open]:border-purple-500/20 data-[state=open]:shadow-[0_0_20px_rgba(168,85,247,0.04)] transition-all duration-300">
                         <AccordionTrigger className="px-5 py-4 hover:bg-accent/30 hover:no-underline [&[data-state=open]]:bg-purple-500/[0.03]">
                             <div className="flex items-center gap-3">
                                 <div className="p-2 rounded-xl bg-purple-500/10 text-purple-400 border border-purple-500/10">
@@ -236,7 +236,7 @@ export const StrategyPreviewStep = ({ value, onChange, sessionId }: StrategyPrev
                             <div className="flex flex-wrap gap-2">
                                 {value.strategyData?.firmographic_constraints && Object.keys(value.strategyData.firmographic_constraints).length > 0 ? (
                                     Object.entries(value.strategyData.firmographic_constraints).map(([key, val]) => (
-                                        <Badge key={key} variant="outline" className="h-8 pl-2.5 pr-3 gap-1.5 bg-accent/20 hover:bg-accent/40 border-border/40 transition-colors cursor-default rounded-lg">
+                                        <Badge key={key} variant="outline" className="h-8 pl-2.5 pr-3 gap-1.5 bg-accent/40 hover:bg-accent/60 border-border transition-colors cursor-default rounded-lg">
                                             {key.includes('location') || key.includes('geo') ? <span className="text-purple-400"><Globe className="w-3.5 h-3.5" /></span> :
                                                 key.includes('size') || key.includes('employees') ? <span className="text-blue-400"><Layers className="w-3.5 h-3.5" /></span> :
                                                     key.includes('industry') ? <span className="text-pink-400"><Briefcase className="w-3.5 h-3.5" /></span> :
@@ -249,28 +249,28 @@ export const StrategyPreviewStep = ({ value, onChange, sessionId }: StrategyPrev
                                 ) : (
                                     <>
                                         {value.company_location && value.company_location.length > 0 && (
-                                            <Badge variant="outline" className="h-8 pl-2.5 pr-3 gap-1.5 bg-accent/20 border-border/40 rounded-lg">
+                                            <Badge variant="outline" className="h-8 pl-2.5 pr-3 gap-1.5 bg-accent/40 border-border rounded-lg">
                                                 <span className="text-purple-400"><Globe className="w-3.5 h-3.5" /></span>
                                                 <span className="text-muted-foreground/80 text-xs">Location:</span>
                                                 <span className="text-foreground text-xs">{value.company_location.join(", ")}</span>
                                             </Badge>
                                         )}
                                         {value.company_size && (
-                                            <Badge variant="outline" className="h-8 pl-2.5 pr-3 gap-1.5 bg-accent/20 border-border/40 rounded-lg">
+                                            <Badge variant="outline" className="h-8 pl-2.5 pr-3 gap-1.5 bg-accent/40 border-border rounded-lg">
                                                 <span className="text-blue-400"><Layers className="w-3.5 h-3.5" /></span>
                                                 <span className="text-muted-foreground/80 text-xs">Size:</span>
                                                 <span className="text-foreground text-xs">{value.company_size}</span>
                                             </Badge>
                                         )}
                                         {value.hiringIntensity && (
-                                            <Badge variant="outline" className="h-8 pl-2.5 pr-3 gap-1.5 bg-accent/20 border-border/40 rounded-lg">
+                                            <Badge variant="outline" className="h-8 pl-2.5 pr-3 gap-1.5 bg-accent/40 border-border rounded-lg">
                                                 <span className="text-green-400"><Sparkles className="w-3.5 h-3.5" /></span>
                                                 <span className="text-muted-foreground/80 text-xs">Hiring:</span>
                                                 <span className="text-foreground text-xs">{value.hiringIntensity}</span>
                                             </Badge>
                                         )}
                                         {value.industries.map(id => (
-                                            <Badge key={id} variant="outline" className="h-8 pl-2.5 pr-3 gap-1.5 bg-accent/20 border-border/40 rounded-lg">
+                                            <Badge key={id} variant="outline" className="h-8 pl-2.5 pr-3 gap-1.5 bg-accent/40 border-border rounded-lg">
                                                 <span className="text-pink-400"><Briefcase className="w-3.5 h-3.5" /></span>
                                                 <span className="text-muted-foreground/80 text-xs">Industry:</span>
                                                 <span className="text-foreground text-xs">{getIndustryLabel(id)}</span>
@@ -283,7 +283,7 @@ export const StrategyPreviewStep = ({ value, onChange, sessionId }: StrategyPrev
                     </AccordionItem>
 
                     {/* Technical Execution */}
-                    <AccordionItem value="item-3" className="border border-border/30 rounded-2xl bg-gradient-to-b from-card to-background overflow-hidden data-[state=open]:border-orange-500/20 data-[state=open]:shadow-[0_0_20px_rgba(249,115,22,0.04)] transition-all duration-300">
+                    <AccordionItem value="item-3" className="border border-border rounded-2xl bg-card shadow-sm overflow-hidden data-[state=open]:border-orange-500/20 data-[state=open]:shadow-[0_0_20px_rgba(249,115,22,0.04)] transition-all duration-300">
                         <AccordionTrigger className="px-5 py-4 hover:bg-accent/30 hover:no-underline [&[data-state=open]]:bg-orange-500/[0.03]">
                             <div className="flex items-center gap-3">
                                 <div className="p-2 rounded-xl bg-orange-500/10 text-orange-400 border border-orange-500/10">
@@ -296,8 +296,8 @@ export const StrategyPreviewStep = ({ value, onChange, sessionId }: StrategyPrev
                             </div>
                         </AccordionTrigger>
                         <AccordionContent className="px-5 pb-5 pt-2">
-                            <div className="relative rounded-xl bg-background/60 border border-border/30 overflow-hidden">
-                                <div className="flex items-center gap-2 px-4 py-2.5 border-b border-border/30 bg-accent/10">
+                            <div className="relative rounded-xl bg-muted/20 border border-border overflow-hidden">
+                                <div className="flex items-center gap-2 px-4 py-2.5 border-b border-border bg-accent/10">
                                     <Code2 className="w-3.5 h-3.5 text-muted-foreground/50" />
                                     <span className="text-[10px] font-mono text-muted-foreground/50 uppercase tracking-wider">execution_payload.json</span>
                                 </div>
