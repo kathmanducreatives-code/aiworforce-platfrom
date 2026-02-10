@@ -116,7 +116,7 @@ export const StrategyPreviewStep = ({
     }}>
                 <div className="relative overflow-hidden rounded-2xl border border-border bg-card shadow-sm">
                     {/* Top accent bar */}
-                    <div className="h-[2px] bg-gradient-to-r from-transparent via-primary/50 to-transparent" />
+                    
 
                     {/* Decorative glow */}
                     <div className="absolute top-0 right-0 -mt-6 -mr-6 w-28 h-28 bg-primary/[0.07] blur-3xl rounded-full pointer-events-none animate-pulse" />
