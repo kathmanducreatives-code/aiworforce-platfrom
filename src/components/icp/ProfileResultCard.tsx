@@ -12,7 +12,14 @@ import { getMatchBadge as matchGetBadge } from "@/lib/matchBadges";
 export interface ProfileResult {
   id: string;
   name: string;
-  photo_url?: string | { url?: string; sizes?: { url: string; width: number; height: number }[] };
+  photo_url?: string | {
+    url?: string;
+    sizes?: {
+      url: string;
+      width: number;
+      height: number;
+    }[];
+  };
   headline?: string;
   current_title?: string;
   current_company?: string;
@@ -31,7 +38,14 @@ export interface ProfileResult {
     dateRange?: string;
     period?: string;
     description?: string;
-    schoolLogo?: { url?: string; sizes?: { url: string; width: number; height: number }[] };
+    schoolLogo?: {
+      url?: string;
+      sizes?: {
+        url: string;
+        width: number;
+        height: number;
+      }[];
+    };
   }[];
   work_history?: {
     company?: string;
@@ -41,9 +55,24 @@ export interface ProfileResult {
     duration?: string;
     location?: string;
     description?: string;
-    startDate?: { month?: string; year?: number; text?: string };
-    endDate?: { month?: string; year?: number; text?: string };
-    companyLogo?: { url?: string; sizes?: { url: string; width: number; height: number }[] };
+    startDate?: {
+      month?: string;
+      year?: number;
+      text?: string;
+    };
+    endDate?: {
+      month?: string;
+      year?: number;
+      text?: string;
+    };
+    companyLogo?: {
+      url?: string;
+      sizes?: {
+        url: string;
+        width: number;
+        height: number;
+      }[];
+    };
     companyLinkedinUrl?: string;
   }[];
   match_reason?: string;
@@ -55,7 +84,14 @@ export interface ProfileResult {
 }
 
 /** Extract a usable image URL from a photo_url field that may be a string or JSON object */
-export function resolvePhotoUrl(photo_url?: string | { url?: string; sizes?: { url: string; width: number; height: number }[] }): string | undefined {
+export function resolvePhotoUrl(photo_url?: string | {
+  url?: string;
+  sizes?: {
+    url: string;
+    width: number;
+    height: number;
+  }[];
+}): string | undefined {
   if (!photo_url) return undefined;
   if (typeof photo_url === 'string') {
     // Could be a JSON string
@@ -171,26 +207,30 @@ export const ProfileResultCard = ({
     visible: {
       opacity: 1,
       y: 0,
-      transition: { duration: 0.5, ease: "easeOut" as const }
+      transition: {
+        duration: 0.5,
+        ease: "easeOut" as const
+      }
     }
   };
-  return <motion.div
-    variants={cardVariants}
-    initial="hidden"
-    whileInView="visible"
-    viewport={{ once: true }}
-    layout
-    whileHover={{ y: -4, transition: { duration: 0.25, ease: "easeOut" } }}
-    className="group"
-  >
+  return <motion.div variants={cardVariants} initial="hidden" whileInView="visible" viewport={{
+    once: true
+  }} layout whileHover={{
+    y: -4,
+    transition: {
+      duration: 0.25,
+      ease: "easeOut"
+    }
+  }} className="group">
     <Card className="bg-white/[0.06] backdrop-blur-[10px] border border-[#059467]/20 overflow-hidden hover:border-[#059467]/40 transition-all duration-[250ms] ease-out shadow-[0_8px_32px_rgba(5,148,103,0.12)] hover:shadow-[0_12px_40px_rgba(5,148,103,0.2)] relative cursor-pointer" onClick={() => navigate(`/icp/results/${sessionId}/candidate/${profile.id}`)}>
       {/* Match Badge - Gradient pill in top-right corner */}
       {profile.similarity_score != null && (() => {
         const badge = matchGetBadge(profile.similarity_score);
-        return <div
-          className="absolute top-3 right-3 z-10 flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-semibold tracking-wide transition-transform duration-[600ms] group-hover:scale-105"
-          style={{ background: badge.gradient, boxShadow: badge.glow, color: badge.textHex }}
-        >
+        return <div className="absolute top-3 right-3 z-10 flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-semibold tracking-wide transition-transform duration-[600ms] group-hover:scale-105" style={{
+          background: badge.gradient,
+          boxShadow: badge.glow,
+          color: badge.textHex
+        }}>
           <span className="text-sm leading-none">{badge.emoji}</span>
           <span>{badge.label}</span>
         </div>;
@@ -274,7 +314,7 @@ export const ProfileResultCard = ({
 
       {/* Footer Actions */}
       <div className="py-3 bg-muted/10 border-t border-border/30 flex items-center justify-between gap-2 px-[75px]" onClick={e => e.stopPropagation()}>
-        <div className="flex-row px-0 flex items-center justify-center shadow-sm gap-[30px] mx-0">
+        <div className="flex-row px-0 shadow-sm mx-0 flex items-center justify-center gap-[20px]">
           <Button variant="outline" size="sm" className="h-8 border-border/40 hover:border-primary hover:text-primary hover:bg-primary/10 text-xs px-[10px] text-center" onClick={() => onSave?.(profile.id)} title="Save Profile">
             <Bookmark className="w-3 h-3 mr-1.5" /> Save
           </Button>
