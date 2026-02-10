@@ -378,11 +378,11 @@ const ICPCandidateDetail = () => {
             )}
 
             {/* Career Timeline */}
-            {profile.work_history && profile.work_history.length > 0 && (
-              <div className="bg-card border border-border/40 rounded-xl p-5 shadow-sm space-y-4">
-                <h3 className="text-xs font-semibold uppercase tracking-widest text-muted-foreground flex items-center gap-2">
-                  <Briefcase className="w-3.5 h-3.5" /> Career Timeline
-                </h3>
+            <div className="bg-card border border-border/40 rounded-xl p-5 shadow-sm space-y-4">
+              <h3 className="text-xs font-semibold uppercase tracking-widest text-muted-foreground flex items-center gap-2">
+                <Briefcase className="w-3.5 h-3.5" /> Career Timeline
+              </h3>
+              {profile.work_history && profile.work_history.length > 0 ? (
                 <div className="space-y-0 relative ml-3">
                   <div className="absolute left-0 top-2 bottom-2 w-px bg-border/60" />
                   {profile.work_history.map((job, idx) => {
@@ -400,7 +400,6 @@ const ICPCandidateDetail = () => {
                           idx === 0 ? "border-primary bg-primary/30" : "border-border bg-card"
                         )} />
                         <div className="flex items-start gap-3">
-                          {/* Company logo */}
                           <div className="w-9 h-9 rounded-lg bg-muted/40 border border-border/30 flex items-center justify-center shrink-0 overflow-hidden">
                             {companyLogo ? (
                               <img src={companyLogo} alt={company} className="w-full h-full object-cover" />
@@ -452,15 +451,17 @@ const ICPCandidateDetail = () => {
                     );
                   })}
                 </div>
-              </div>
-            )}
+              ) : (
+                <p className="text-sm text-muted-foreground italic">No work history available</p>
+              )}
+            </div>
 
             {/* Education */}
-            {profile.education && profile.education.length > 0 && (
-              <div className="bg-card border border-border/40 rounded-xl p-5 shadow-sm space-y-4">
-                <h3 className="text-xs font-semibold uppercase tracking-widest text-muted-foreground flex items-center gap-2">
-                  <GraduationCap className="w-3.5 h-3.5" /> Education
-                </h3>
+            <div className="bg-card border border-border/40 rounded-xl p-5 shadow-sm space-y-4">
+              <h3 className="text-xs font-semibold uppercase tracking-widest text-muted-foreground flex items-center gap-2">
+                <GraduationCap className="w-3.5 h-3.5" /> Education
+              </h3>
+              {profile.education && profile.education.length > 0 ? (
                 <div className="space-y-4">
                   {profile.education.map((edu, idx) => (
                     <div key={idx} className="flex items-start gap-3">
@@ -487,8 +488,10 @@ const ICPCandidateDetail = () => {
                     </div>
                   ))}
                 </div>
-              </div>
-            )}
+              ) : (
+                <p className="text-sm text-muted-foreground italic">No education information available</p>
+              )}
+            </div>
 
             {/* Skills & Expertise */}
             {totalSkills > 0 && (
