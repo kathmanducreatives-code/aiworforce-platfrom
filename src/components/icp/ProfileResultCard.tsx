@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import { useToast } from "@/components/ui/use-toast";
 import { icpAPI, ICPResponse } from "@/lib/api/icp";
 import { User, MapPin, Briefcase, GraduationCap, Linkedin, ChevronDown, ChevronUp, Star, CheckCircle2, ExternalLink, Mail, Bookmark, ScanSearch, X, Copy } from "lucide-react";
@@ -45,7 +46,6 @@ interface ProfileResultCardProps {
   onReveal?: (id: string) => void;
   isEnriching?: boolean;
 }
-import { ProfileDetailModal } from "./ProfileDetailModal";
 export const ProfileResultCard = ({
   profile,
   sessionId,
@@ -54,9 +54,9 @@ export const ProfileResultCard = ({
   isEnriching
 }: ProfileResultCardProps) => {
   const [isExpanded, setIsExpanded] = useState(false);
-  const [showDetail, setShowDetail] = useState(false);
   const [revealingEmail, setRevealingEmail] = useState<string | null>(null);
   const [revealedEmails, setRevealedEmails] = useState<Record<string, string>>({});
+  const navigate = useNavigate();
   const {
     toast
   } = useToast();
@@ -145,7 +145,7 @@ export const ProfileResultCard = ({
     }
   };
   return <motion.div variants={cardVariants} initial="hidden" animate="visible" layout>
-            <Card className="bg-card/80 border-border/40 overflow-hidden hover:border-primary/30 transition-all duration-300 group shadow-lg shadow-black/40 relative cursor-pointer backdrop-blur-sm" onClick={() => setShowDetail(true)}>
+            <Card className="bg-card/80 border-border/40 overflow-hidden hover:border-primary/30 transition-all duration-300 group shadow-lg shadow-black/40 relative cursor-pointer backdrop-blur-sm" onClick={() => navigate(`/icp/results/${sessionId}/candidate/${profile.id}`)}>
                 {/* Match Badge - Flush top banner */}
                 {profile.similarity_score != null && (() => {
         const badge = matchGetBadge(profile.similarity_score);
@@ -303,7 +303,5 @@ export const ProfileResultCard = ({
                     </div>
                 </div>
             </Card>
-
-            <ProfileDetailModal profile={profile} deepSearchResult={undefined} revealedEmail={revealedEmails[profile.id]} open={showDetail} onOpenChange={setShowDetail} />
         </motion.div>;
 };
