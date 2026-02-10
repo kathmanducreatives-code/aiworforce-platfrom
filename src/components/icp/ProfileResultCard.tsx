@@ -12,7 +12,7 @@ import { getMatchBadge as matchGetBadge } from "@/lib/matchBadges";
 export interface ProfileResult {
   id: string;
   name: string;
-  photo_url?: string;
+  photo_url?: string | { url?: string; sizes?: { url: string; width: number; height: number }[] };
   headline?: string;
   current_title?: string;
   current_company?: string;
@@ -24,13 +24,24 @@ export interface ProfileResult {
   linkedin_url?: string;
   top_skills?: string[];
   education?: {
-    school: string;
-    degree: string;
+    school?: string;
+    degree?: string;
+    fieldOfStudy?: string;
+    dateRange?: string;
+    description?: string;
   }[];
   work_history?: {
-    company: string;
-    title: string;
+    company?: string;
+    companyName?: string;
+    title?: string;
+    position?: string;
     duration?: string;
+    location?: string;
+    description?: string;
+    startDate?: { month?: string; year?: number; text?: string };
+    endDate?: { month?: string; year?: number; text?: string };
+    companyLogo?: { url?: string; sizes?: { url: string; width: number; height: number }[] };
+    companyLinkedinUrl?: string;
   }[];
   match_reason?: string;
   tier_source?: number;
@@ -38,6 +49,21 @@ export interface ProfileResult {
   email?: string;
   email_confidence?: 'high' | 'medium' | 'low' | 'none';
   email_source?: string;
+}
+
+/** Extract a usable image URL from a photo_url field that may be a string or JSON object */
+export function resolvePhotoUrl(photo_url?: string | { url?: string; sizes?: { url: string; width: number; height: number }[] }): string | undefined {
+  if (!photo_url) return undefined;
+  if (typeof photo_url === 'string') {
+    // Could be a JSON string
+    try {
+      const parsed = JSON.parse(photo_url);
+      return parsed?.url || parsed?.sizes?.[0]?.url;
+    } catch {
+      return photo_url; // plain URL string
+    }
+  }
+  return photo_url.url || photo_url.sizes?.[0]?.url;
 }
 interface ProfileResultCardProps {
   profile: ProfileResult;
@@ -163,7 +189,7 @@ export const ProfileResultCard = ({
                     {/* Avatar */}
                     <div className="relative flex-shrink-0">
                         <div className="w-14 h-14 rounded-xl bg-muted/50 border border-border/60 flex items-center justify-center overflow-hidden ring-1 ring-border/20">
-                            {profile.photo_url ? <img src={profile.photo_url} alt={profile.name} className="w-full h-full object-cover" /> : <User className="w-6 h-6 text-muted-foreground/40" />}
+                            {resolvePhotoUrl(profile.photo_url) ? <img src={resolvePhotoUrl(profile.photo_url)} alt={profile.name} className="w-full h-full object-cover" /> : <User className="w-6 h-6 text-muted-foreground/40" />}
                         </div>
                         {profile.linkedin_url && <a href={profile.linkedin_url} target="_blank" rel="noopener noreferrer" className="absolute -bottom-1.5 -right-1.5 bg-[#0077b5] p-1 rounded-md text-white hover:scale-110 transition-transform shadow-md" title="View on LinkedIn" onClick={e => e.stopPropagation()}>
                                 <Linkedin className="w-3 h-3 fill-current" />

@@ -1,7 +1,7 @@
-import { useParams, useNavigate, useSearchParams } from "react-router-dom";
+import { useParams, useNavigate } from "react-router-dom";
 import { useEffect, useState, useMemo } from "react";
 import { supabase } from "@/lib/supabase";
-import { ProfileResult } from "@/components/icp/ProfileResultCard";
+import { ProfileResult, resolvePhotoUrl } from "@/components/icp/ProfileResultCard";
 import { getMatchBadge } from "@/lib/matchBadges";
 import { useToast } from "@/components/ui/use-toast";
 import { Button } from "@/components/ui/button";
@@ -27,12 +27,10 @@ const ICPCandidateDetail = () => {
   const [allProfiles, setAllProfiles] = useState<ProfileResult[]>([]);
   const [loading, setLoading] = useState(true);
   const [sessionName, setSessionName] = useState("");
-  const [showEmail, setShowEmail] = useState(false);
   const [copied, setCopied] = useState<string | null>(null);
   const [showAllSkills, setShowAllSkills] = useState(false);
   const [revealingEmail, setRevealingEmail] = useState(false);
 
-  // Load all profiles for prev/next navigation
   useEffect(() => {
     const load = async () => {
       if (!sessionId || !candidateId) return;
@@ -145,6 +143,13 @@ const ICPCandidateDetail = () => {
       .map(([category, skills]) => ({ category, skills }));
   };
 
+  const resolveCompanyLogo = (logo?: { url?: string; sizes?: { url: string; width: number; height: number }[] }): string | undefined => {
+    if (!logo) return undefined;
+    // Prefer smallest size for thumbnails
+    const smallest = logo.sizes?.sort((a, b) => a.width - b.width)?.[0];
+    return smallest?.url || logo.url;
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen bg-background p-8 flex flex-col items-center justify-center gap-4">
@@ -169,6 +174,7 @@ const ICPCandidateDetail = () => {
   const skillCategories = categorizeSkills();
   const totalSkills = profile.top_skills?.length || 0;
   const visibleSkillLimit = 12;
+  const photoSrc = resolvePhotoUrl(profile.photo_url);
 
   return (
     <div className="min-h-screen bg-background text-foreground">
@@ -202,7 +208,6 @@ const ICPCandidateDetail = () => {
             </Breadcrumb>
           </div>
 
-          {/* Prev/Next Navigation */}
           <div className="flex items-center gap-2">
             <span className="text-xs text-muted-foreground mr-2 hidden sm:inline">
               {currentIndex + 1} of {allProfiles.length}
@@ -229,7 +234,7 @@ const ICPCandidateDetail = () => {
         </div>
       </header>
 
-      {/* Main Content: Two-column layout */}
+      {/* Main Content */}
       <div className="max-w-[1400px] mx-auto px-6 py-8">
         <div className="flex flex-col lg:flex-row gap-8">
 
@@ -237,15 +242,15 @@ const ICPCandidateDetail = () => {
           <aside className="w-full lg:w-[40%] lg:max-w-[480px] shrink-0">
             <div className="lg:sticky lg:top-[72px] space-y-5">
               {/* Profile Card */}
-              <div className="bg-card/60 border border-border/40 rounded-xl p-6 space-y-5">
-                {/* Avatar + Name */}
+              <div className="bg-card border border-border/40 rounded-xl p-6 shadow-sm space-y-5">
                 <div className="flex flex-col items-center text-center gap-4">
-                  <div className="w-24 h-24 rounded-2xl border border-border/60 bg-card overflow-hidden shadow-lg ring-1 ring-primary/10">
-                    {profile.photo_url ? (
-                      <img src={profile.photo_url} alt={profile.name} className="w-full h-full object-cover" />
+                  {/* Large circular avatar */}
+                  <div className="w-40 h-40 rounded-full border-2 border-border/60 bg-card overflow-hidden shadow-lg ring-2 ring-primary/10">
+                    {photoSrc ? (
+                      <img src={photoSrc} alt={profile.name} className="w-full h-full object-cover" />
                     ) : (
                       <div className="w-full h-full flex items-center justify-center bg-muted/30">
-                        <User className="w-10 h-10 text-muted-foreground/40" />
+                        <User className="w-16 h-16 text-muted-foreground/40" />
                       </div>
                     )}
                   </div>
@@ -257,15 +262,7 @@ const ICPCandidateDetail = () => {
                       {profile.current_company && (
                         <>
                           <span className="mx-1.5 text-border">·</span>
-                          <a
-                            href={`https://www.linkedin.com/company/${profile.current_company}`}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="text-primary hover:underline inline-flex items-center gap-0.5"
-                          >
-                            {profile.current_company}
-                            <ExternalLink className="w-3 h-3" />
-                          </a>
+                          <span className="text-foreground/80">{profile.current_company}</span>
                         </>
                       )}
                     </p>
@@ -336,84 +333,13 @@ const ICPCandidateDetail = () => {
                   </Button>
                 </div>
               </div>
-
-              {/* Contact Info Card */}
-              <div className="bg-card/60 border border-border/40 rounded-xl p-5 space-y-4">
-                <h3 className="text-xs font-semibold uppercase tracking-widest text-muted-foreground flex items-center gap-2">
-                  <Mail className="w-3.5 h-3.5" /> Contact
-                </h3>
-
-                {/* Email */}
-                <div className="flex items-center justify-between group">
-                  <div className="flex items-center gap-3 min-w-0">
-                    <div className="w-8 h-8 rounded-lg bg-muted/40 flex items-center justify-center shrink-0">
-                      <Mail className="w-4 h-4 text-muted-foreground" />
-                    </div>
-                    <div className="min-w-0">
-                      <div className="text-[10px] uppercase tracking-wider text-muted-foreground/70 mb-0.5">Email</div>
-                      {profile.email ? (
-                        <div className="flex items-center gap-1.5">
-                          {profile.email_confidence && (
-                            <div className={cn(
-                              "w-1.5 h-1.5 rounded-full shrink-0",
-                              profile.email_confidence === "low" ? "bg-amber-500" :
-                              profile.email_confidence === "medium" ? "bg-emerald-400" : "bg-primary"
-                            )} />
-                          )}
-                          <span className="text-foreground font-mono text-sm truncate">{profile.email}</span>
-                        </div>
-                      ) : (
-                        <span className="text-muted-foreground text-sm">Not yet revealed</span>
-                      )}
-                    </div>
-                  </div>
-                  {profile.email && (
-                    <Button size="icon" variant="ghost" className="h-7 w-7 opacity-0 group-hover:opacity-100 transition-opacity rounded-md" onClick={() => handleCopy(profile.email!, "Email")}>
-                      {copied === "Email" ? <Check className="w-3.5 h-3.5 text-primary" /> : <Copy className="w-3.5 h-3.5" />}
-                    </Button>
-                  )}
-                </div>
-
-                {/* LinkedIn */}
-                {profile.linkedin_url && (
-                  <div className="flex items-center justify-between group">
-                    <div className="flex items-center gap-3 min-w-0">
-                      <div className="w-8 h-8 rounded-lg bg-[#0077b5]/10 flex items-center justify-center shrink-0">
-                        <Linkedin className="w-4 h-4 text-[#0077b5]" />
-                      </div>
-                      <div className="min-w-0">
-                        <div className="text-[10px] uppercase tracking-wider text-muted-foreground/70 mb-0.5">LinkedIn</div>
-                        <a href={profile.linkedin_url} target="_blank" rel="noreferrer" className="text-[#0077b5] text-sm hover:underline truncate block max-w-[220px]">
-                          {profile.linkedin_url.replace(/^https?:\/\/(www\.)?linkedin\.com\/in\//, "").replace(/\/$/, "")}
-                        </a>
-                      </div>
-                    </div>
-                    <Button size="icon" variant="ghost" className="h-7 w-7 opacity-0 group-hover:opacity-100 transition-opacity rounded-md" onClick={() => handleCopy(profile.linkedin_url!, "LinkedIn URL")}>
-                      {copied === "LinkedIn URL" ? <Check className="w-3.5 h-3.5 text-primary" /> : <Copy className="w-3.5 h-3.5" />}
-                    </Button>
-                  </div>
-                )}
-
-                {/* Location */}
-                {profile.location && (
-                  <div className="flex items-center gap-3">
-                    <div className="w-8 h-8 rounded-lg bg-muted/40 flex items-center justify-center shrink-0">
-                      <MapPin className="w-4 h-4 text-muted-foreground" />
-                    </div>
-                    <div>
-                      <div className="text-[10px] uppercase tracking-wider text-muted-foreground/70 mb-0.5">Location</div>
-                      <span className="text-foreground text-sm">{profile.location}</span>
-                    </div>
-                  </div>
-                )}
-              </div>
             </div>
           </aside>
 
           {/* Right Content — Scrollable */}
           <main className="flex-1 space-y-5 min-w-0">
             {/* About */}
-            <div className="bg-card/60 border border-border/40 rounded-xl p-5 space-y-3">
+            <div className="bg-card border border-border/40 rounded-xl p-5 shadow-sm space-y-3">
               <h3 className="text-xs font-semibold uppercase tracking-widest text-muted-foreground flex items-center gap-2">
                 <User className="w-3.5 h-3.5" /> About
               </h3>
@@ -422,7 +348,7 @@ const ICPCandidateDetail = () => {
 
             {/* Match Analysis */}
             {profile.match_reason && profile.similarity_score && (
-              <div className="bg-card/60 border border-primary/20 rounded-xl p-5 space-y-4">
+              <div className="bg-card border border-primary/20 rounded-xl p-5 shadow-sm space-y-4">
                 <h3 className="text-xs font-semibold uppercase tracking-widest text-muted-foreground flex items-center gap-2">
                   <Sparkles className="w-3.5 h-3.5 text-primary" /> Match Analysis
                 </h3>
@@ -451,9 +377,122 @@ const ICPCandidateDetail = () => {
               </div>
             )}
 
+            {/* Career Timeline */}
+            {profile.work_history && profile.work_history.length > 0 && (
+              <div className="bg-card border border-border/40 rounded-xl p-5 shadow-sm space-y-4">
+                <h3 className="text-xs font-semibold uppercase tracking-widest text-muted-foreground flex items-center gap-2">
+                  <Briefcase className="w-3.5 h-3.5" /> Career Timeline
+                </h3>
+                <div className="space-y-0 relative ml-3">
+                  <div className="absolute left-0 top-2 bottom-2 w-px bg-border/60" />
+                  {profile.work_history.map((job, idx) => {
+                    const jobTitle = job.position || job.title || "Unknown Title";
+                    const company = job.companyName || job.company || "Unknown Company";
+                    const companyLogo = resolveCompanyLogo(job.companyLogo);
+                    const dateRange = job.startDate?.text
+                      ? `${job.startDate.text} – ${job.endDate?.text || "Present"}`
+                      : job.duration;
+
+                    return (
+                      <div key={idx} className="relative pl-6 py-3 first:pt-0 last:pb-0">
+                        <div className={cn(
+                          "absolute left-[-3px] top-4 w-[7px] h-[7px] rounded-full border-2",
+                          idx === 0 ? "border-primary bg-primary/30" : "border-border bg-card"
+                        )} />
+                        <div className="flex items-start gap-3">
+                          {/* Company logo */}
+                          <div className="w-9 h-9 rounded-lg bg-muted/40 border border-border/30 flex items-center justify-center shrink-0 overflow-hidden">
+                            {companyLogo ? (
+                              <img src={companyLogo} alt={company} className="w-full h-full object-cover" />
+                            ) : (
+                              <Briefcase className="w-4 h-4 text-muted-foreground/50" />
+                            )}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <h4 className="text-sm font-semibold text-foreground leading-tight">{jobTitle}</h4>
+                            <p className="text-xs text-primary mt-0.5">
+                              {job.companyLinkedinUrl ? (
+                                <a
+                                  href={job.companyLinkedinUrl}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  className="hover:underline inline-flex items-center gap-0.5"
+                                >
+                                  {company} <ExternalLink className="w-2.5 h-2.5" />
+                                </a>
+                              ) : company}
+                            </p>
+                            <div className="flex flex-wrap items-center gap-3 mt-1">
+                              {dateRange && (
+                                <span className="text-[11px] text-muted-foreground/60 flex items-center gap-1">
+                                  <Calendar className="w-3 h-3" />
+                                  {dateRange}
+                                </span>
+                              )}
+                              {job.duration && dateRange !== job.duration && (
+                                <span className="text-[11px] text-muted-foreground/50">
+                                  ({job.duration})
+                                </span>
+                              )}
+                              {job.location && (
+                                <span className="text-[11px] text-muted-foreground/60 flex items-center gap-1">
+                                  <MapPin className="w-3 h-3" />
+                                  {job.location}
+                                </span>
+                              )}
+                            </div>
+                            {job.description && (
+                              <p className="text-xs text-muted-foreground/70 mt-2 leading-relaxed line-clamp-3">
+                                {job.description}
+                              </p>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            {/* Education */}
+            {profile.education && profile.education.length > 0 && (
+              <div className="bg-card border border-border/40 rounded-xl p-5 shadow-sm space-y-4">
+                <h3 className="text-xs font-semibold uppercase tracking-widest text-muted-foreground flex items-center gap-2">
+                  <GraduationCap className="w-3.5 h-3.5" /> Education
+                </h3>
+                <div className="space-y-4">
+                  {profile.education.map((edu, idx) => (
+                    <div key={idx} className="flex items-start gap-3">
+                      <div className="w-9 h-9 rounded-lg bg-muted/40 border border-border/30 flex items-center justify-center shrink-0 text-lg">
+                        🎓
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <h4 className="text-sm font-semibold text-foreground leading-tight">
+                          {edu.degree || edu.fieldOfStudy || "Degree"}
+                        </h4>
+                        <p className="text-xs text-primary mt-0.5">{edu.school || "Unknown Institution"}</p>
+                        {edu.dateRange && (
+                          <p className="text-[11px] text-muted-foreground/60 mt-1 flex items-center gap-1">
+                            <Calendar className="w-3 h-3" />
+                            {edu.dateRange}
+                          </p>
+                        )}
+                        {edu.description && (
+                          <p className="text-xs text-muted-foreground/70 mt-1 leading-relaxed line-clamp-2">
+                            {edu.description}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
             {/* Skills & Expertise */}
             {totalSkills > 0 && (
-              <div className="bg-card/60 border border-border/40 rounded-xl p-5 space-y-4">
+              <div className="bg-card border border-border/40 rounded-xl p-5 shadow-sm space-y-4">
                 <div className="flex items-center justify-between">
                   <h3 className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">Skills & Expertise</h3>
                   <span className="text-[10px] text-muted-foreground/60 tabular-nums">{totalSkills} skills</span>
@@ -487,60 +526,72 @@ const ICPCandidateDetail = () => {
               </div>
             )}
 
-            {/* Career + Education */}
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-              {/* Career Timeline */}
-              {profile.work_history && profile.work_history.length > 0 && (
-                <div className={cn(
-                  "bg-card/60 border border-border/40 rounded-xl p-5 space-y-4",
-                  profile.education && profile.education.length > 0 ? "lg:col-span-2" : "lg:col-span-3"
-                )}>
-                  <h3 className="text-xs font-semibold uppercase tracking-widest text-muted-foreground flex items-center gap-2">
-                    <Briefcase className="w-3.5 h-3.5" /> Career Timeline
-                  </h3>
-                  <div className="space-y-0 relative ml-3">
-                    <div className="absolute left-0 top-2 bottom-2 w-px bg-border/60" />
-                    {profile.work_history.map((job, idx) => (
-                      <div key={idx} className="relative pl-6 py-2.5 first:pt-0 last:pb-0">
-                        <div className={cn(
-                          "absolute left-[-3px] top-3 w-[7px] h-[7px] rounded-full border-2",
-                          idx === 0 ? "border-primary bg-primary/30" : "border-border bg-card"
-                        )} />
-                        <h4 className="text-sm font-semibold text-foreground leading-tight">{job.title || "Unknown Title"}</h4>
-                        <p className="text-xs text-primary mt-0.5">{job.company || "Unknown Company"}</p>
-                        {job.duration && (
-                          <p className="text-[11px] text-muted-foreground/60 mt-1 flex items-center gap-1">
-                            <Calendar className="w-3 h-3" />
-                            {job.duration}
-                          </p>
-                        )}
-                      </div>
-                    ))}
+            {/* Contact */}
+            <div className="bg-card border border-border/40 rounded-xl p-5 shadow-sm space-y-4">
+              <h3 className="text-xs font-semibold uppercase tracking-widest text-muted-foreground flex items-center gap-2">
+                <Mail className="w-3.5 h-3.5" /> Contact
+              </h3>
+
+              {/* Email */}
+              <div className="flex items-center justify-between group">
+                <div className="flex items-center gap-3 min-w-0">
+                  <div className="w-8 h-8 rounded-lg bg-muted/40 flex items-center justify-center shrink-0">
+                    <Mail className="w-4 h-4 text-muted-foreground" />
                   </div>
+                  <div className="min-w-0">
+                    <div className="text-[10px] uppercase tracking-wider text-muted-foreground/70 mb-0.5">Email</div>
+                    {profile.email ? (
+                      <div className="flex items-center gap-1.5">
+                        {profile.email_confidence && (
+                          <div className={cn(
+                            "w-1.5 h-1.5 rounded-full shrink-0",
+                            profile.email_confidence === "low" ? "bg-amber-500" :
+                            profile.email_confidence === "medium" ? "bg-emerald-400" : "bg-primary"
+                          )} />
+                        )}
+                        <span className="text-foreground font-mono text-sm truncate">{profile.email}</span>
+                      </div>
+                    ) : (
+                      <span className="text-muted-foreground text-sm">Not yet revealed</span>
+                    )}
+                  </div>
+                </div>
+                {profile.email && (
+                  <Button size="icon" variant="ghost" className="h-7 w-7 opacity-0 group-hover:opacity-100 transition-opacity rounded-md" onClick={() => handleCopy(profile.email!, "Email")}>
+                    {copied === "Email" ? <Check className="w-3.5 h-3.5 text-primary" /> : <Copy className="w-3.5 h-3.5" />}
+                  </Button>
+                )}
+              </div>
+
+              {/* LinkedIn */}
+              {profile.linkedin_url && (
+                <div className="flex items-center justify-between group">
+                  <div className="flex items-center gap-3 min-w-0">
+                    <div className="w-8 h-8 rounded-lg bg-[#0077b5]/10 flex items-center justify-center shrink-0">
+                      <Linkedin className="w-4 h-4 text-[#0077b5]" />
+                    </div>
+                    <div className="min-w-0">
+                      <div className="text-[10px] uppercase tracking-wider text-muted-foreground/70 mb-0.5">LinkedIn</div>
+                      <a href={profile.linkedin_url} target="_blank" rel="noreferrer" className="text-[#0077b5] text-sm hover:underline truncate block max-w-[280px]">
+                        {profile.linkedin_url.replace(/^https?:\/\/(www\.)?linkedin\.com\/in\//, "").replace(/\/$/, "")}
+                      </a>
+                    </div>
+                  </div>
+                  <Button size="icon" variant="ghost" className="h-7 w-7 opacity-0 group-hover:opacity-100 transition-opacity rounded-md" onClick={() => handleCopy(profile.linkedin_url!, "LinkedIn URL")}>
+                    {copied === "LinkedIn URL" ? <Check className="w-3.5 h-3.5 text-primary" /> : <Copy className="w-3.5 h-3.5" />}
+                  </Button>
                 </div>
               )}
 
-              {/* Education */}
-              {profile.education && profile.education.length > 0 && (
-                <div className={cn(
-                  "bg-card/60 border border-border/40 rounded-xl p-5 space-y-4",
-                  !(profile.work_history && profile.work_history.length > 0) && "lg:col-span-3"
-                )}>
-                  <h3 className="text-xs font-semibold uppercase tracking-widest text-muted-foreground flex items-center gap-2">
-                    <GraduationCap className="w-3.5 h-3.5" /> Education
-                  </h3>
-                  <div className="space-y-3">
-                    {profile.education.map((edu, idx) => (
-                      <div key={idx} className="flex items-start gap-3">
-                        <div className="w-8 h-8 rounded-lg bg-muted/40 flex items-center justify-center shrink-0 mt-0.5">
-                          <GraduationCap className="w-4 h-4 text-muted-foreground" />
-                        </div>
-                        <div>
-                          <h4 className="text-sm font-semibold text-foreground leading-tight">{edu.school || "Unknown School"}</h4>
-                          {edu.degree && <p className="text-xs text-muted-foreground mt-0.5">{edu.degree}</p>}
-                        </div>
-                      </div>
-                    ))}
+              {/* Location */}
+              {profile.location && (
+                <div className="flex items-center gap-3">
+                  <div className="w-8 h-8 rounded-lg bg-muted/40 flex items-center justify-center shrink-0">
+                    <MapPin className="w-4 h-4 text-muted-foreground" />
+                  </div>
+                  <div>
+                    <div className="text-[10px] uppercase tracking-wider text-muted-foreground/70 mb-0.5">Location</div>
+                    <span className="text-foreground text-sm">{profile.location}</span>
                   </div>
                 </div>
               )}
@@ -549,7 +600,7 @@ const ICPCandidateDetail = () => {
         </div>
       </div>
 
-      {/* Bottom Nav */}
+      {/* Bottom Nav — Mobile */}
       <div className="sticky bottom-0 bg-background/95 backdrop-blur-md border-t border-border/30 lg:hidden">
         <div className="max-w-[1400px] mx-auto px-6 h-14 flex items-center justify-between">
           <Button
