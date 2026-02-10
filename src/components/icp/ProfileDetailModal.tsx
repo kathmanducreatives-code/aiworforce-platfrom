@@ -153,10 +153,10 @@ export const ProfileDetailModal = ({ profile, deepSearchResult, revealedEmail, o
 
                                     {/* Match Badge */}
                                     {matchBadge && (
-                                        <div className={cn(
-                                            "px-3 py-1.5 rounded-lg flex items-center gap-1.5 text-xs font-bold border shrink-0",
-                                            matchBadge.gradient
-                                        )}>
+                                        <div
+                                            className="px-3 py-1.5 rounded-lg flex items-center gap-1.5 text-xs font-bold shrink-0"
+                                            style={{ background: matchBadge.gradient, boxShadow: matchBadge.glow, color: matchBadge.textHex }}
+                                        >
                                             <span>{matchBadge.emoji}</span>
                                             <span className="font-mono tabular-nums">{profile.similarity_score}%</span>
                                         </div>

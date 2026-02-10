@@ -374,10 +374,10 @@ const ICPCandidateDetail = () => {
 
                   {/* Match Badge */}
                   {matchBadge && (
-                    <div className={cn(
-                      "px-4 py-2 rounded-lg flex items-center gap-2 text-sm font-bold border",
-                      matchBadge.gradient
-                    )}>
+                    <div
+                      className="px-4 py-2 rounded-lg flex items-center gap-2 text-sm font-bold"
+                      style={{ background: matchBadge.gradient, boxShadow: matchBadge.glow, color: matchBadge.textHex }}
+                    >
                       <span>{matchBadge.emoji}</span>
                       <span>{matchBadge.label}</span>
                       <span className="font-mono tabular-nums">— {profile.similarity_score}%</span>

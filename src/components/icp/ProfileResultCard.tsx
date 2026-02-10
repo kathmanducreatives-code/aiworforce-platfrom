@@ -184,15 +184,15 @@ export const ProfileResultCard = ({
     className="group"
   >
     <Card className="bg-white/[0.06] backdrop-blur-[10px] border border-[#059467]/20 overflow-hidden hover:border-[#059467]/40 transition-all duration-[250ms] ease-out shadow-[0_8px_32px_rgba(5,148,103,0.12)] hover:shadow-[0_12px_40px_rgba(5,148,103,0.2)] relative cursor-pointer" onClick={() => navigate(`/icp/results/${sessionId}/candidate/${profile.id}`)}>
-      {/* Match Badge - Flush top banner with hover pulse */}
+      {/* Match Badge - Gradient pill in top-right corner */}
       {profile.similarity_score != null && (() => {
         const badge = matchGetBadge(profile.similarity_score);
-        return <div className={cn("flex items-center justify-between px-5 py-2.5 border-b border-border/30 transition-transform duration-[600ms] group-hover:scale-[1.02]", badge.gradient.replace('border-', 'border-b-'))}>
-          <div className="flex items-center gap-2">
-            <span className="text-base">{badge.emoji}</span>
-            <span className="text-xs font-semibold tracking-wide">{badge.label}</span>
-          </div>
-          
+        return <div
+          className="absolute top-3 right-3 z-10 flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-semibold tracking-wide transition-transform duration-[600ms] group-hover:scale-105"
+          style={{ background: badge.gradient, boxShadow: badge.glow, color: badge.textHex }}
+        >
+          <span className="text-sm leading-none">{badge.emoji}</span>
+          <span>{badge.label}</span>
         </div>;
       })()}
 

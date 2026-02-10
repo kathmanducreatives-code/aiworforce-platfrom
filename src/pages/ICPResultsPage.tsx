@@ -784,10 +784,10 @@ const ICPResultsPage = () => {
                                                             const badge = getMatchBadge(score);
 
                                                             return (
-                                                                <div className={cn(
-                                                                    "inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border text-xs font-bold",
-                                                                    badge.gradient
-                                                                )}>
+                                                                <div
+                                                                    className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold"
+                                                                    style={{ background: badge.gradient, boxShadow: badge.glow, color: badge.textHex }}
+                                                                >
                                                                     <span>{badge.emoji}</span>
                                                                     <span>{score}%</span>
                                                                 </div>
