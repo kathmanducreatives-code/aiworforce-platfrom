@@ -3,92 +3,78 @@ import { ICPFormData } from "@/types/icp";
 import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
-import {
-    Accordion,
-    AccordionContent,
-    AccordionItem,
-    AccordionTrigger,
-} from "@/components/ui/accordion";
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { Brain, Search, Globe, Sparkles, Briefcase, Loader2, User, GraduationCap, Cpu, Layers, Code2, Zap } from "lucide-react";
 import { INDUSTRIES } from "@/data/industries";
 import { cn } from "@/lib/utils";
-
 interface StrategyPreviewStepProps {
-    value: ICPFormData;
-    onChange: (data: ICPFormData) => void;
-    sessionId?: string;
+  value: ICPFormData;
+  onChange: (data: ICPFormData) => void;
+  sessionId?: string;
 }
-
-export const StrategyPreviewStep = ({ value, onChange, sessionId }: StrategyPreviewStepProps) => {
-    const [typedStrategy, setTypedStrategy] = useState("");
-    const [isTyping, setIsTyping] = useState(true);
-    const [showAccordions, setShowAccordions] = useState(false);
-
-    const fullStrategy = value.generated_strategy || "";
-    const isRefining = !value.generated_strategy && !value.strategyData?.search_logic_dna;
-
-    useEffect(() => {
-        if (!fullStrategy || isRefining) {
-            setIsTyping(false);
-            return;
+export const StrategyPreviewStep = ({
+  value,
+  onChange,
+  sessionId
+}: StrategyPreviewStepProps) => {
+  const [typedStrategy, setTypedStrategy] = useState("");
+  const [isTyping, setIsTyping] = useState(true);
+  const [showAccordions, setShowAccordions] = useState(false);
+  const fullStrategy = value.generated_strategy || "";
+  const isRefining = !value.generated_strategy && !value.strategyData?.search_logic_dna;
+  useEffect(() => {
+    if (!fullStrategy || isRefining) {
+      setIsTyping(false);
+      return;
+    }
+    const startDelay = setTimeout(() => {
+      let i = 0;
+      const speed = 10;
+      const interval = setInterval(() => {
+        setTypedStrategy(fullStrategy.slice(0, i + 1));
+        i++;
+        if (i >= fullStrategy.length) {
+          clearInterval(interval);
+          setIsTyping(false);
+          setShowAccordions(true);
         }
-
-        const startDelay = setTimeout(() => {
-            let i = 0;
-            const speed = 10;
-            const interval = setInterval(() => {
-                setTypedStrategy(fullStrategy.slice(0, i + 1));
-                i++;
-                if (i >= fullStrategy.length) {
-                    clearInterval(interval);
-                    setIsTyping(false);
-                    setShowAccordions(true);
-                }
-            }, speed);
-            return () => clearInterval(interval);
-        }, 800);
-
-        const accordionTimeout = setTimeout(() => setShowAccordions(true), 1500);
-
-        return () => {
-            clearTimeout(startDelay);
-            clearTimeout(accordionTimeout);
-        };
-    }, [fullStrategy, isRefining]);
-
-    const profile = value.lookalikeProfile;
-    const education = profile?.education || [];
-
-    const getIndustryLabel = (id: string | number) => {
-        const numId = Number(id);
-        if (isNaN(numId)) return String(id);
-        return INDUSTRIES.find(i => i.id === numId)?.label || String(id);
+      }, speed);
+      return () => clearInterval(interval);
+    }, 800);
+    const accordionTimeout = setTimeout(() => setShowAccordions(true), 1500);
+    return () => {
+      clearTimeout(startDelay);
+      clearTimeout(accordionTimeout);
     };
-
-    const jsonPreview = value.strategyData?.technical_execution || {
-        boolean_logic: {
-            must: {
-                industries: value.industries,
-                location: value.company_location || "Global"
-            },
-            should: {
-                keywords: value.candidate_requirements?.split(" ").slice(0, 5) || [],
-                lookalike_vector: value.lookalikeProfile?.name || "null"
-            },
-            filter: {
-                size: value.company_size
-            }
-        },
-        execution_mode: "deep_scrape"
-    };
-
-    return (
-        <div className="flex flex-col h-full relative space-y-3">
+  }, [fullStrategy, isRefining]);
+  const profile = value.lookalikeProfile;
+  const education = profile?.education || [];
+  const getIndustryLabel = (id: string | number) => {
+    const numId = Number(id);
+    if (isNaN(numId)) return String(id);
+    return INDUSTRIES.find(i => i.id === numId)?.label || String(id);
+  };
+  const jsonPreview = value.strategyData?.technical_execution || {
+    boolean_logic: {
+      must: {
+        industries: value.industries,
+        location: value.company_location || "Global"
+      },
+      should: {
+        keywords: value.candidate_requirements?.split(" ").slice(0, 5) || [],
+        lookalike_vector: value.lookalikeProfile?.name || "null"
+      },
+      filter: {
+        size: value.company_size
+      }
+    },
+    execution_mode: "deep_scrape"
+  };
+  return <div className="flex flex-col h-full relative space-y-3">
 
             {/* Candidate Reference Card */}
-            {profile && (
-                <div className="animate-in slide-in-from-top-4 fade-in duration-700">
-                    <div className="relative overflow-hidden rounded-2xl bg-card border border-border shadow-sm p-5">
+            {profile && <div className="animate-in slide-in-from-top-4 fade-in duration-700">
+                    <div className="relative overflow-hidden rounded-2xl bg-card border border-border shadow-sm p-5 py-[2px] px-[2px]">
                         {/* Subtle glow accent */}
                         <div className="absolute -top-8 -right-8 w-32 h-32 bg-primary/[0.06] blur-3xl rounded-full pointer-events-none" />
                         <div className="absolute -bottom-6 -left-6 w-24 h-24 bg-blue-500/[0.04] blur-2xl rounded-full pointer-events-none" />
@@ -97,11 +83,7 @@ export const StrategyPreviewStep = ({ value, onChange, sessionId }: StrategyPrev
                             {/* Avatar */}
                             <div className="relative flex-shrink-0">
                                 <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-primary/20 to-primary/5 flex items-center justify-center border border-primary/15 shadow-[0_0_20px_hsl(var(--primary)/0.08)]">
-                                    {profile.photo_url ? (
-                                        <img src={profile.photo_url} alt={profile.name} className="w-full h-full rounded-2xl object-cover" />
-                                    ) : (
-                                        <User className="w-6 h-6 text-primary/70" />
-                                    )}
+                                    {profile.photo_url ? <img src={profile.photo_url} alt={profile.name} className="w-full h-full rounded-2xl object-cover" /> : <User className="w-6 h-6 text-primary/70" />}
                                 </div>
                                 <div className="absolute -bottom-1 -right-1 w-5 h-5 rounded-full bg-primary flex items-center justify-center shadow-[0_0_8px_hsl(var(--primary)/0.5)]">
                                     <Zap className="w-3 h-3 text-primary-foreground" />
@@ -117,20 +99,21 @@ export const StrategyPreviewStep = ({ value, onChange, sessionId }: StrategyPrev
                                     </Badge>
                                 </div>
                                 <p className="text-muted-foreground text-sm font-medium">{profile.current_title}</p>
-                                {education.length > 0 && (
-                                    <div className="flex items-center gap-2 text-xs text-muted-foreground/70 animate-in fade-in duration-700" style={{ animationDelay: '400ms' }}>
+                                {education.length > 0 && <div className="flex items-center gap-2 text-xs text-muted-foreground/70 animate-in fade-in duration-700" style={{
+              animationDelay: '400ms'
+            }}>
                                         <GraduationCap className="w-3.5 h-3.5 text-muted-foreground/50" />
                                         <span className="truncate max-w-[300px]">{education[0].school || education[0].institution_name}</span>
-                                    </div>
-                                )}
+                                    </div>}
                             </div>
                         </div>
                     </div>
-                </div>
-            )}
+                </div>}
 
             {/* Strategy Output Block */}
-            <div className="animate-in fade-in slide-in-from-bottom-3 duration-700 delay-500 fill-mode-forwards opacity-0" style={{ animationDelay: '500ms' }}>
+            <div className="animate-in fade-in slide-in-from-bottom-3 duration-700 delay-500 fill-mode-forwards opacity-0" style={{
+      animationDelay: '500ms'
+    }}>
                 <div className="relative overflow-hidden rounded-2xl border border-border bg-card shadow-sm">
                     {/* Top accent bar */}
                     <div className="h-[2px] bg-gradient-to-r from-transparent via-primary/50 to-transparent" />
@@ -146,33 +129,21 @@ export const StrategyPreviewStep = ({ value, onChange, sessionId }: StrategyPrev
                             <span className="text-xs font-bold tracking-[0.15em] uppercase text-primary/80">Generated Strategy</span>
                         </div>
 
-                        {isRefining ? (
-                            <div className="flex items-center gap-3 py-10">
+                        {isRefining ? <div className="flex items-center gap-3 py-10">
                                 <Loader2 className="w-5 h-5 animate-spin text-primary" />
                                 <span className="text-lg font-medium text-foreground/60 animate-pulse">Refining Strategy...</span>
-                            </div>
-                        ) : (
-                            <div className="min-h-[80px]">
-                                <Textarea
-                                    value={isTyping ? typedStrategy : (value.generated_strategy || typedStrategy)}
-                                    onChange={(e) => onChange({ ...value, generated_strategy: e.target.value })}
-                                    className={cn(
-                                        "text-base md:text-lg font-medium leading-[1.7] text-foreground/90 bg-transparent border-none focus-visible:ring-0 focus-visible:ring-offset-0 resize-none p-0 h-auto w-full placeholder:text-foreground/20",
-                                        isTyping && "after:content-['|'] after:animate-blink after:text-primary"
-                                    )}
-                                    placeholder="Strategy will appear here..."
-                                />
-                            </div>
-                        )}
+                            </div> : <div className="min-h-[80px]">
+                                <Textarea value={isTyping ? typedStrategy : value.generated_strategy || typedStrategy} onChange={e => onChange({
+              ...value,
+              generated_strategy: e.target.value
+            })} className={cn("text-base md:text-lg font-medium leading-[1.7] text-foreground/90 bg-transparent border-none focus-visible:ring-0 focus-visible:ring-offset-0 resize-none p-0 h-auto w-full placeholder:text-foreground/20", isTyping && "after:content-['|'] after:animate-blink after:text-primary")} placeholder="what's here ?" />
+                            </div>}
                     </div>
                 </div>
             </div>
 
             {/* Technical Accordions */}
-            <div className={cn(
-                "flex-1 min-h-0 overflow-y-auto transition-all duration-700",
-                showAccordions ? "opacity-100 translate-y-0" : "opacity-0 translate-y-6"
-            )}>
+            <div className={cn("flex-1 min-h-0 overflow-y-auto transition-all duration-700", showAccordions ? "opacity-100 translate-y-0" : "opacity-0 translate-y-6")}>
                 <Accordion type="single" collapsible defaultValue="item-1" className="space-y-3">
 
                     {/* Search Logic DNA */}
@@ -191,23 +162,17 @@ export const StrategyPreviewStep = ({ value, onChange, sessionId }: StrategyPrev
                         <AccordionContent className="px-5 pb-5 pt-2">
                             <div className="space-y-3">
                                 <div className="relative">
-                                    <Textarea
-                                        value={value.strategyData?.search_logic_dna || value.final_query || ""}
-                                        onChange={(e) => {
-                                            const newDna = e.target.value;
-                                            onChange({
-                                                ...value,
-                                                final_query: newDna,
-                                                strategyData: {
-                                                    ...value.strategyData!,
-                                                    search_logic_dna: newDna
-                                                }
-                                            });
-                                        }}
-                                        className="bg-muted/30 border-border focus-visible:ring-primary/40 min-h-[120px] resize-y font-mono text-xs leading-relaxed tracking-wide text-primary drop-shadow-[0_0_2px_hsl(var(--primary)/0.3)] selection:bg-primary/30 rounded-xl"
-                                        spellCheck={false}
-                                        placeholder="// Search Logic DNA will be generated here..."
-                                    />
+                                    <Textarea value={value.strategyData?.search_logic_dna || value.final_query || ""} onChange={e => {
+                  const newDna = e.target.value;
+                  onChange({
+                    ...value,
+                    final_query: newDna,
+                    strategyData: {
+                      ...value.strategyData!,
+                      search_logic_dna: newDna
+                    }
+                  });
+                }} className="bg-muted/30 border-border focus-visible:ring-primary/40 min-h-[120px] resize-y font-mono text-xs leading-relaxed tracking-wide text-primary drop-shadow-[0_0_2px_hsl(var(--primary)/0.3)] selection:bg-primary/30 rounded-xl" spellCheck={false} placeholder="// Search Logic DNA will be generated here..." />
                                     <div className="absolute bottom-3 right-3">
                                         <Button size="sm" variant="secondary" className="h-7 text-xs gap-1.5 bg-primary/10 hover:bg-primary/20 text-primary border border-primary/15 rounded-lg shadow-[0_0_10px_hsl(var(--primary)/0.08)]">
                                             <Sparkles className="w-3 h-3" />
@@ -234,50 +199,32 @@ export const StrategyPreviewStep = ({ value, onChange, sessionId }: StrategyPrev
                         </AccordionTrigger>
                         <AccordionContent className="px-5 pb-5 pt-2">
                             <div className="flex flex-wrap gap-2">
-                                {value.strategyData?.firmographic_constraints && Object.keys(value.strategyData.firmographic_constraints).length > 0 ? (
-                                    Object.entries(value.strategyData.firmographic_constraints).map(([key, val]) => (
-                                        <Badge key={key} variant="outline" className="h-8 pl-2.5 pr-3 gap-1.5 bg-accent/40 hover:bg-accent/60 border-border transition-colors cursor-default rounded-lg">
-                                            {key.includes('location') || key.includes('geo') ? <span className="text-purple-400"><Globe className="w-3.5 h-3.5" /></span> :
-                                                key.includes('size') || key.includes('employees') ? <span className="text-blue-400"><Layers className="w-3.5 h-3.5" /></span> :
-                                                    key.includes('industry') ? <span className="text-pink-400"><Briefcase className="w-3.5 h-3.5" /></span> :
-                                                        <div className="w-1.5 h-1.5 rounded-full bg-muted-foreground" />
-                                            }
+                                {value.strategyData?.firmographic_constraints && Object.keys(value.strategyData.firmographic_constraints).length > 0 ? Object.entries(value.strategyData.firmographic_constraints).map(([key, val]) => <Badge key={key} variant="outline" className="h-8 pl-2.5 pr-3 gap-1.5 bg-accent/40 hover:bg-accent/60 border-border transition-colors cursor-default rounded-lg">
+                                            {key.includes('location') || key.includes('geo') ? <span className="text-purple-400"><Globe className="w-3.5 h-3.5" /></span> : key.includes('size') || key.includes('employees') ? <span className="text-blue-400"><Layers className="w-3.5 h-3.5" /></span> : key.includes('industry') ? <span className="text-pink-400"><Briefcase className="w-3.5 h-3.5" /></span> : <div className="w-1.5 h-1.5 rounded-full bg-muted-foreground" />}
                                             <span className="capitalize text-muted-foreground/80 text-xs">{key.replace(/_/g, ' ')}:</span>
                                             <span className="text-foreground font-medium text-xs">{String(val)}</span>
-                                        </Badge>
-                                    ))
-                                ) : (
-                                    <>
-                                        {value.company_location && value.company_location.length > 0 && (
-                                            <Badge variant="outline" className="h-8 pl-2.5 pr-3 gap-1.5 bg-accent/40 border-border rounded-lg">
+                                        </Badge>) : <>
+                                        {value.company_location && value.company_location.length > 0 && <Badge variant="outline" className="h-8 pl-2.5 pr-3 gap-1.5 bg-accent/40 border-border rounded-lg">
                                                 <span className="text-purple-400"><Globe className="w-3.5 h-3.5" /></span>
                                                 <span className="text-muted-foreground/80 text-xs">Location:</span>
                                                 <span className="text-foreground text-xs">{value.company_location.join(", ")}</span>
-                                            </Badge>
-                                        )}
-                                        {value.company_size && (
-                                            <Badge variant="outline" className="h-8 pl-2.5 pr-3 gap-1.5 bg-accent/40 border-border rounded-lg">
+                                            </Badge>}
+                                        {value.company_size && <Badge variant="outline" className="h-8 pl-2.5 pr-3 gap-1.5 bg-accent/40 border-border rounded-lg">
                                                 <span className="text-blue-400"><Layers className="w-3.5 h-3.5" /></span>
                                                 <span className="text-muted-foreground/80 text-xs">Size:</span>
                                                 <span className="text-foreground text-xs">{value.company_size}</span>
-                                            </Badge>
-                                        )}
-                                        {value.hiringIntensity && (
-                                            <Badge variant="outline" className="h-8 pl-2.5 pr-3 gap-1.5 bg-accent/40 border-border rounded-lg">
+                                            </Badge>}
+                                        {value.hiringIntensity && <Badge variant="outline" className="h-8 pl-2.5 pr-3 gap-1.5 bg-accent/40 border-border rounded-lg">
                                                 <span className="text-green-400"><Sparkles className="w-3.5 h-3.5" /></span>
                                                 <span className="text-muted-foreground/80 text-xs">Hiring:</span>
                                                 <span className="text-foreground text-xs">{value.hiringIntensity}</span>
-                                            </Badge>
-                                        )}
-                                        {value.industries.map(id => (
-                                            <Badge key={id} variant="outline" className="h-8 pl-2.5 pr-3 gap-1.5 bg-accent/40 border-border rounded-lg">
+                                            </Badge>}
+                                        {value.industries.map(id => <Badge key={id} variant="outline" className="h-8 pl-2.5 pr-3 gap-1.5 bg-accent/40 border-border rounded-lg">
                                                 <span className="text-pink-400"><Briefcase className="w-3.5 h-3.5" /></span>
                                                 <span className="text-muted-foreground/80 text-xs">Industry:</span>
                                                 <span className="text-foreground text-xs">{getIndustryLabel(id)}</span>
-                                            </Badge>
-                                        ))}
-                                    </>
-                                )}
+                                            </Badge>)}
+                                    </>}
                             </div>
                         </AccordionContent>
                     </AccordionItem>
@@ -309,6 +256,5 @@ export const StrategyPreviewStep = ({ value, onChange, sessionId }: StrategyPrev
                     </AccordionItem>
                 </Accordion>
             </div>
-        </div>
-    );
+        </div>;
 };
