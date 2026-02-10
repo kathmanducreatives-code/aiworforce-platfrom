@@ -7,6 +7,8 @@ export interface MatchBadgeConfig {
     label: string;
     color: string;
     gradient: string;
+    glow: string;
+    textHex: string;
 }
 
 export const getMatchBadge = (score: number): MatchBadgeConfig => {
@@ -14,25 +16,33 @@ export const getMatchBadge = (score: number): MatchBadgeConfig => {
         emoji: '🏆',
         label: 'Excellent Match',
         color: 'text-white',
-        gradient: 'bg-[#059652] border-[#059652]/50 text-white shadow-[0_0_15px_rgba(5,150,82,0.2)]',
+        gradient: 'linear-gradient(135deg, #059652 0%, #14b8a5 100%)',
+        glow: '0 0 16px rgba(5,150,82,0.35)',
+        textHex: '#ffffff',
     };
     if (score >= 20) return {
         emoji: '💪',
         label: 'Strong Match',
         color: 'text-gray-900',
-        gradient: 'bg-[#6DDBA6] border-[#6DDBA6]/50 text-gray-900 shadow-[0_0_15px_rgba(109,219,166,0.2)]',
+        gradient: 'linear-gradient(135deg, #6DDBA6 0%, #34D399 100%)',
+        glow: '0 0 12px rgba(109,219,166,0.25)',
+        textHex: '#171717',
     };
     if (score >= 10) return {
         emoji: '👍',
         label: 'Good Match',
         color: 'text-[#148C6E]',
-        gradient: 'bg-[#E8FDF5] border-[#E8FDF5]/50 text-[#148C6E] shadow-[0_0_10px_rgba(20,140,110,0.1)]',
+        gradient: 'linear-gradient(135deg, #E8FDF5 0%, #6DDBA6 50%, #14b8a5 100%)',
+        glow: '0 0 10px rgba(20,140,110,0.15)',
+        textHex: '#148C6E',
     };
     return {
         emoji: '🤔',
         label: 'Weak Match',
         color: 'text-gray-900',
-        gradient: 'bg-[#A1A1A1] border-[#A1A1A1]/40 text-gray-900',
+        gradient: 'linear-gradient(135deg, #A1A1A1 0%, #D4D4D4 100%)',
+        glow: 'none',
+        textHex: '#171717',
     };
 };
 
