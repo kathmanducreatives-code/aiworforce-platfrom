@@ -193,16 +193,7 @@ export const ProfileResultCard = ({
                 </div>
 
                 {/* Skills + Match Reason */}
-                {(Array.isArray(profile.top_skills) && profile.top_skills.length > 0 || profile.match_reason) && <div className="px-5 pb-4 space-y-3">
-                        {Array.isArray(profile.top_skills) && profile.top_skills.length > 0}
-
-                        {profile.match_reason && <div className="bg-primary/5 border border-primary/10 rounded-lg p-3">
-                                <div className="flex items-center gap-1.5 mb-1.5 text-primary text-[10px] font-semibold uppercase tracking-widest">
-                                    <CheckCircle2 className="w-3 h-3" /> Match Insight
-                                </div>
-                                <p className="text-xs text-muted-foreground leading-relaxed line-clamp-2">{profile.match_reason}</p>
-                            </div>}
-                    </div>}
+                {Array.isArray(profile.top_skills) && profile.top_skills.length > 0 || profile.match_reason}
 
                 {/* Expanded Details */}
                 <AnimatePresence>
@@ -244,9 +235,9 @@ export const ProfileResultCard = ({
                 </AnimatePresence>
 
                 {/* Footer Actions */}
-                <div className="px-5 py-3 bg-muted/10 border-t border-border/30 flex items-center justify-between gap-2" onClick={e => e.stopPropagation()}>
-                    <div className="flex items-center gap-2">
-                        <Button variant="outline" size="sm" className="h-8 border-border/40 hover:border-primary hover:text-primary hover:bg-primary/10 text-xs px-3" onClick={() => onSave?.(profile.id)} title="Save Profile">
+                <div className="py-3 bg-muted/10 border-t border-border/30 flex items-center justify-between gap-2 px-[75px]" onClick={e => e.stopPropagation()}>
+                    <div className="flex-row px-0 flex items-center justify-center shadow-sm gap-[30px] mx-0">
+                        <Button variant="outline" size="sm" className="h-8 border-border/40 hover:border-primary hover:text-primary hover:bg-primary/10 text-xs px-[10px] text-center" onClick={() => onSave?.(profile.id)} title="Save Profile">
                             <Bookmark className="w-3 h-3 mr-1.5" /> Save
                         </Button>
 
