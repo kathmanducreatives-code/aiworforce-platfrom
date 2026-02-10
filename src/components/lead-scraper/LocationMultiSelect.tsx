@@ -52,7 +52,7 @@ export const LocationMultiSelect = ({
         <div className="flex items-start justify-between">
           <div className="flex items-center gap-2 text-[#00FF85]">
             <Globe className="w-5 h-5 shrink-0 text-[#059467]" />
-            <span className="text-sm font-bold tracking-wide uppercase text-[#059467]">Target Locations</span>
+            <span className="text-sm tracking-wide uppercase text-[#059467] font-semibold">Target Locations</span>
           </div>
         </div>
 

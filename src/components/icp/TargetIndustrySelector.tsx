@@ -480,7 +480,7 @@ export const TargetIndustrySelector = ({
                 <div className="flex items-start justify-between">
                     <div className="flex items-center gap-2 text-[#00FF85]">
                         <Briefcase className="w-5 h-5 shrink-0 bg-[#f7f8f8] text-[#059467]" />
-                        <span className="text-sm font-bold tracking-wide uppercase text-[#059467]">Target Industries</span>
+                        <span className="text-sm tracking-wide uppercase text-[#059467] font-semibold">Target Industries</span>
                     </div>
                 </div>
 
