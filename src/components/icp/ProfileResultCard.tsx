@@ -314,7 +314,7 @@ export const ProfileResultCard = ({
 
       {/* Footer Actions */}
       <div className="py-3 bg-muted/10 border-t border-border/30 flex items-center justify-between gap-2 px-[75px]" onClick={e => e.stopPropagation()}>
-        <div className="shadow-sm mx-0 items-center justify-center gap-[20px] px-[10px] py-0 my-0 flex flex-row">
+        <div className="shadow-sm mx-0 py-0 my-0 flex-row px-0 flex items-center justify-start gap-[20px]">
           <Button variant="outline" size="sm" className="h-8 border-border/40 hover:border-primary hover:text-primary hover:bg-primary/10 text-xs px-[10px] text-center" onClick={() => onSave?.(profile.id)} title="Save Profile">
             <Bookmark className="w-3 h-3 mr-1.5" /> Save
           </Button>
