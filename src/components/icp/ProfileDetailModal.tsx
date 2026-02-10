@@ -52,7 +52,18 @@ export const ProfileDetailModal = ({ profile, deepSearchResult, revealedEmail, o
 
     if (!profile) return null;
 
+    // Generate bio if not available
     const generateBio = () => {
+        // Debug logs for data issues
+        console.log('Profile Data Debug:', {
+            name: profile.name,
+            work_history: profile.work_history,
+            education: profile.education,
+            work_type: typeof profile.work_history,
+            edu_type: typeof profile.education,
+            raw_profile: profile
+        });
+
         if (profile.headline) return profile.headline;
         const skills = profile.top_skills?.slice(0, 3).join(', ') || 'various skills';
         const experience = profile.years_experience ? `${profile.years_experience}+ years` : 'extensive';

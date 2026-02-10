@@ -6,20 +6,24 @@ const parseJSON = (value: any) => {
     if (!value) return null;
     if (typeof value === 'object') return value;
     try {
-        return JSON.parse(value);
+        const parsed = JSON.parse(value);
+        // Handle double stringification
+        if (typeof parsed === 'string' && (parsed.startsWith('[') || parsed.startsWith('{'))) {
+            try { return JSON.parse(parsed); } catch { return parsed; }
+        }
+        return parsed;
     } catch {
         return value;
     }
 };
 
 const extractPhotoUrl = (photoData: any) => {
-    if (!photoData) return '/default-avatar.png'; // Or empty string to let UI handle fallback
+    if (!photoData) return '/default-avatar.png';
     if (typeof photoData === 'string' && photoData.startsWith('http')) return photoData;
 
     const parsed = parseJSON(photoData);
     if (!parsed) return '/default-avatar.png';
 
-    // Handle nested structure: {"url": "...", "sizes": [...]}
     if (parsed.url) return parsed.url;
     if (parsed.sizes && parsed.sizes[0]?.url) return parsed.sizes[0].url;
     if (typeof parsed === 'string' && parsed.startsWith('http')) return parsed;
@@ -31,7 +35,6 @@ const extractSkills = (skillsData: any) => {
     const parsed = parseJSON(skillsData);
     if (!parsed || !Array.isArray(parsed)) return [];
 
-    // Handle both formats: ["skill1", "skill2"] or [{"name": "skill1", ...}]
     return parsed.map((skill: any) => {
         if (typeof skill === 'string') return skill;
         if (skill.name) return skill.name;
@@ -44,22 +47,30 @@ const extractEducation = (eduData: any) => {
     if (!parsed || !Array.isArray(parsed)) return [];
 
     return parsed.map((edu: any) => ({
-        school: edu.schoolName || edu.school || 'Unknown',
-        degree: edu.degree || '',
-        field: edu.fieldOfStudy || ''
+        school: edu.schoolName || edu.school || edu.institution || 'Unknown School',
+        degree: edu.degree || edu.degree_name || '',
+        field: edu.fieldOfStudy || edu.field_of_study || ''
     }));
 };
 
 const extractWorkHistory = (workData: any) => {
     const parsed = parseJSON(workData);
-    if (!parsed || !Array.isArray(parsed)) return [];
+    if (!parsed) return [];
 
-    return parsed.map((job: any) => ({
-        company: job.companyName || job.company || 'Unknown',
-        title: job.position || job.title || 'Unknown',
+    // Handle case where parsed is wrapped in an object e.g. { work_history: [...] }
+    let workArray = parsed;
+    if (!Array.isArray(parsed) && parsed.work_history && Array.isArray(parsed.work_history)) {
+        workArray = parsed.work_history;
+    } else if (!Array.isArray(parsed)) {
+        return [];
+    }
+
+    return workArray.map((job: any) => ({
+        company: job.companyName || job.company || job.company_name || 'Unknown Company',
+        title: job.position || job.title || 'Unknown Title',
         duration: job.duration || '',
-        start: job.startDate?.text || job.start_date || '',
-        end: job.endDate?.text || job.end_date || 'Present'
+        start: job.startDate?.text || job.start_date || job.startDate || '',
+        end: job.endDate?.text || job.end_date || job.endDate || 'Present'
     }));
 };
 
@@ -129,7 +140,6 @@ export const useICPResults = (sessionId: string | undefined) => {
                 table: TABLES.CANDIDATE_PROFILES,
                 filter: sessionId !== 'test-session-123' ? `session_id=eq.${sessionId}` : undefined
             }, (payload) => {
-                console.log("Real-time update received:", payload);
                 const newProfile = parseProfile(payload.new);
 
                 setProfiles(prev => {

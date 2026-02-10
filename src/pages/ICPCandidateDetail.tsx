@@ -13,10 +13,26 @@ import {
   Mail, Bookmark, Download, ExternalLink, Copy, Check,
   ChevronLeft, ChevronRight, Sparkles, Calendar, ScanSearch
 } from "lucide-react";
+import { motion } from "framer-motion";
+import { VerdantBackground } from "@/components/ui/VerdantBackground";
 import {
   Breadcrumb, BreadcrumbList, BreadcrumbItem, BreadcrumbLink, BreadcrumbSeparator, BreadcrumbPage
 } from "@/components/ui/breadcrumb";
 import { icpAPI } from "@/lib/api/icp";
+
+const parseJSON = (value: any) => {
+  if (!value) return null;
+  if (typeof value === 'object') return value;
+  try {
+    const parsed = JSON.parse(value);
+    if (typeof parsed === 'string' && (parsed.startsWith('[') || parsed.startsWith('{'))) {
+      try { return JSON.parse(parsed); } catch { return parsed; }
+    }
+    return parsed;
+  } catch {
+    return value;
+  }
+};
 
 const ICPCandidateDetail = () => {
   const { sessionId, candidateId } = useParams<{ sessionId: string; candidateId: string }>();
@@ -52,28 +68,76 @@ const ICPCandidateDetail = () => {
         if (session?.profile_name) setSessionName(session.profile_name);
 
         if (profiles) {
-          const mapped: ProfileResult[] = profiles.map((p: any) => ({
-            id: p.id,
-            name: p.name || "Unknown",
-            photo_url: p.photo_url,
-            headline: p.headline,
-            current_title: p.current_title,
-            current_company: p.current_company,
-            location: p.location,
-            seniority_level: p.seniority_level,
-            years_experience: p.years_experience,
-            similarity_score: p.similarity_score,
-            match_quality: p.match_quality,
-            linkedin_url: p.linkedin_url,
-            top_skills: Array.isArray(p.top_skills) ? p.top_skills : [],
-            education: Array.isArray(p.education) ? p.education : [],
-            work_history: Array.isArray(p.work_history) ? p.work_history : [],
-            match_reason: Array.isArray(p.match_reasons) ? p.match_reasons.join(". ") : p.match_reasons,
-            tier_source: p.tier_source,
-            inserted_at: p.inserted_at,
-            email: p.email,
-            email_confidence: p.email_confidence,
-          }));
+          const mapped: ProfileResult[] = profiles.map((p: any) => {
+            const parsedWork = parseJSON(p.work_history);
+            const parsedEdu = parseJSON(p.education);
+            const parsedSkills = parseJSON(p.top_skills);
+
+            // Handle Work History
+            let work_history = [];
+            if (Array.isArray(parsedWork)) {
+              work_history = parsedWork.map((job: any) => ({
+                company: job.companyName || job.company || job.company_name || 'Unknown Company',
+                title: job.position || job.title || 'Unknown Title',
+                duration: job.duration || '',
+                start: job.startDate?.text || job.start_date || job.startDate || '',
+                end: job.endDate?.text || job.end_date || job.endDate || 'Present',
+                location: job.location,
+                description: job.description
+              }));
+            } else if (parsedWork && parsedWork.work_history && Array.isArray(parsedWork.work_history)) {
+              work_history = parsedWork.work_history.map((job: any) => ({
+                company: job.companyName || job.company || job.company_name || 'Unknown Company',
+                title: job.position || job.title || 'Unknown Title',
+                duration: job.duration || '',
+                start: job.startDate?.text || job.start_date || job.startDate || '',
+                end: job.endDate?.text || job.end_date || job.endDate || 'Present',
+                location: job.location,
+                description: job.description
+              }));
+            }
+
+            // Handle Education
+            let education = [];
+            if (Array.isArray(parsedEdu)) {
+              education = parsedEdu.map((edu: any) => ({
+                school: edu.schoolName || edu.school || edu.institution || 'Unknown School',
+                degree: edu.degree || edu.degree_name || '',
+                field: edu.fieldOfStudy || edu.field_of_study || '',
+                dateRange: edu.dateRange || edu.period || '',
+                description: edu.description
+              }));
+            }
+
+            // Handle Skills
+            let top_skills = [];
+            if (Array.isArray(parsedSkills)) {
+              top_skills = parsedSkills.map((s: any) => typeof s === 'string' ? s : s.name).filter(Boolean);
+            }
+
+            return {
+              id: p.id,
+              name: p.name || "Unknown",
+              photo_url: p.photo_url,
+              headline: p.headline,
+              current_title: p.current_title,
+              current_company: p.current_company,
+              location: p.location,
+              seniority_level: p.seniority_level,
+              years_experience: p.years_experience,
+              similarity_score: p.similarity_score,
+              match_quality: p.match_quality,
+              linkedin_url: p.linkedin_url,
+              top_skills,
+              education,
+              work_history,
+              match_reason: typeof p.match_reason === 'string' && p.match_reason.startsWith('{') ? "AI matched based on profile constraints." : (p.match_reason || (Array.isArray(p.match_reasons) ? p.match_reasons.join(". ") : "")),
+              tier_source: p.tier_source,
+              inserted_at: p.inserted_at,
+              email: p.email,
+              email_confidence: p.email_confidence,
+            }
+          });
           setAllProfiles(mapped);
           const current = mapped.find((p) => p.id === candidateId);
           setProfile(current || null);
@@ -177,7 +241,8 @@ const ICPCandidateDetail = () => {
   const photoSrc = resolvePhotoUrl(profile.photo_url);
 
   return (
-    <div className="min-h-screen bg-background text-foreground">
+    <div className="min-h-screen bg-transparent text-foreground relative font-sans">
+      <VerdantBackground mode="spotlight" />
       {/* Top Bar */}
       <header className="sticky top-0 z-40 bg-background/95 backdrop-blur-md border-b border-border/30">
         <div className="max-w-[1400px] mx-auto px-6 h-14 flex items-center justify-between">
@@ -242,10 +307,11 @@ const ICPCandidateDetail = () => {
           <aside className="w-full lg:w-[40%] lg:max-w-[480px] shrink-0">
             <div className="lg:sticky lg:top-[72px] space-y-5">
               {/* Profile Card */}
-              <div className="bg-card border border-border/40 rounded-xl p-6 shadow-sm space-y-5">
+              <div className="bg-white/5 backdrop-blur-md border border-[#059467]/20 rounded-xl p-6 shadow-[0_8px_32px_rgba(5,148,103,0.1)] space-y-5">
                 <div className="flex flex-col items-center text-center gap-4">
                   {/* Large circular avatar */}
-                  <div className="w-40 h-40 rounded-full border-2 border-border/60 bg-card overflow-hidden shadow-lg ring-2 ring-primary/10">
+                  <div className="w-40 h-40 rounded-full border-2 border-[#059467]/30 bg-black/20 overflow-hidden shadow-[0_0_40px_rgba(5,148,103,0.3)] ring-4 ring-[#059467]/10 relative group">
+                    <div className="absolute inset-0 bg-gradient-to-tr from-[#059467]/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
                     {photoSrc ? (
                       <img src={photoSrc} alt={profile.name} className="w-full h-full object-cover" />
                     ) : (
@@ -298,8 +364,8 @@ const ICPCandidateDetail = () => {
                 </div>
 
                 {/* Action Buttons */}
-                <div className="flex flex-wrap gap-2 justify-center pt-2 border-t border-border/30">
-                  <Button size="sm" variant="outline" className="h-9 text-xs border-border/50 hover:border-primary/50 hover:text-primary rounded-lg">
+                <div className="flex flex-wrap gap-2 justify-center pt-2 border-t border-[#059467]/20">
+                  <Button size="sm" variant="outline" className="h-9 text-xs border-[#059467]/30 hover:border-[#059467] hover:text-[#059467] hover:bg-[#059467]/10 rounded-lg bg-transparent text-foreground/90">
                     <Bookmark className="w-3.5 h-3.5 mr-1.5" />
                     Save
                   </Button>
@@ -337,9 +403,10 @@ const ICPCandidateDetail = () => {
           </aside>
 
           {/* Right Content — Scrollable */}
+          {/* Right Content — Scrollable */}
           <main className="flex-1 space-y-5 min-w-0">
             {/* About */}
-            <div className="bg-card border border-border/40 rounded-xl p-5 shadow-sm space-y-3">
+            <div className="bg-white/5 backdrop-blur-md border border-[#059467]/10 rounded-xl p-5 shadow-sm space-y-3">
               <h3 className="text-xs font-semibold uppercase tracking-widest text-muted-foreground flex items-center gap-2">
                 <User className="w-3.5 h-3.5" /> About
               </h3>
@@ -348,20 +415,20 @@ const ICPCandidateDetail = () => {
 
             {/* Match Analysis */}
             {profile.match_reason && profile.similarity_score && (
-              <div className="bg-card border border-primary/20 rounded-xl p-5 shadow-sm space-y-4">
+              <div className="bg-white/5 backdrop-blur-md border border-[#059467]/20 rounded-xl p-5 shadow-sm space-y-4">
                 <h3 className="text-xs font-semibold uppercase tracking-widest text-muted-foreground flex items-center gap-2">
-                  <Sparkles className="w-3.5 h-3.5 text-primary" /> Match Analysis
+                  <Sparkles className="w-3.5 h-3.5 text-[#059467]" /> Match Analysis
                 </h3>
                 <div className="flex items-center gap-4">
                   <div className="relative w-14 h-14 shrink-0">
                     <svg className="w-14 h-14 -rotate-90" viewBox="0 0 56 56">
                       <circle cx="28" cy="28" r="24" fill="none" stroke="hsl(var(--muted))" strokeWidth="4" opacity="0.3" />
-                      <circle cx="28" cy="28" r="24" fill="none" stroke="hsl(var(--primary))" strokeWidth="4"
+                      <circle cx="28" cy="28" r="24" fill="none" stroke="#059467" strokeWidth="4"
                         strokeDasharray={`${(profile.similarity_score / 100) * 150.8} 150.8`}
                         strokeLinecap="round"
                       />
                     </svg>
-                    <span className="absolute inset-0 flex items-center justify-center text-sm font-bold text-primary tabular-nums">
+                    <span className="absolute inset-0 flex items-center justify-center text-sm font-bold text-[#059467] tabular-nums">
                       {profile.similarity_score}
                     </span>
                   </div>
@@ -378,13 +445,13 @@ const ICPCandidateDetail = () => {
             )}
 
             {/* Career Timeline */}
-            <div className="bg-card border border-border/40 rounded-xl p-5 shadow-sm space-y-4">
+            <div className="bg-white/5 backdrop-blur-md border border-[#059467]/10 rounded-xl p-5 shadow-sm space-y-4">
               <h3 className="text-xs font-semibold uppercase tracking-widest text-muted-foreground flex items-center gap-2">
                 <Briefcase className="w-3.5 h-3.5" /> Career Timeline
               </h3>
               {profile.work_history && profile.work_history.length > 0 ? (
                 <div className="space-y-0 relative ml-3">
-                  <div className="absolute left-0 top-2 bottom-2 w-px bg-border/60" />
+                  <div className="absolute left-0 top-2 bottom-2 w-px bg-border/40" />
                   {profile.work_history.map((job, idx) => {
                     const jobTitle = job.position || job.title || "Unknown Title";
                     const company = job.companyName || job.company || "Unknown Company";
@@ -394,13 +461,20 @@ const ICPCandidateDetail = () => {
                       : job.duration;
 
                     return (
-                      <div key={idx} className="relative pl-6 py-3 first:pt-0 last:pb-0">
+                      <motion.div
+                        key={idx}
+                        initial={{ opacity: 0, y: 10 }}
+                        whileInView={{ opacity: 1, y: 0 }}
+                        viewport={{ once: true }}
+                        transition={{ delay: idx * 0.1 }}
+                        className="relative pl-6 py-3 first:pt-0 last:pb-0 group/item"
+                      >
                         <div className={cn(
-                          "absolute left-[-3px] top-4 w-[7px] h-[7px] rounded-full border-2",
-                          idx === 0 ? "border-primary bg-primary/30" : "border-border bg-card"
+                          "absolute left-[-3px] top-4 w-[7px] h-[7px] rounded-full border-2 transition-colors duration-300",
+                          idx === 0 ? "border-[#059467] bg-[#059467]" : "border-muted-foreground/40 bg-background group-hover/item:border-[#059467]/60 group-hover/item:bg-[#059467]/20"
                         )} />
                         <div className="flex items-start gap-3">
-                          <div className="w-9 h-9 rounded-lg bg-muted/40 border border-border/30 flex items-center justify-center shrink-0 overflow-hidden">
+                          <div className="w-9 h-9 rounded-lg bg-white/5 border border-border/30 flex items-center justify-center shrink-0 overflow-hidden">
                             {companyLogo ? (
                               <img src={companyLogo} alt={company} className="w-full h-full object-cover" />
                             ) : (
@@ -409,7 +483,7 @@ const ICPCandidateDetail = () => {
                           </div>
                           <div className="flex-1 min-w-0">
                             <h4 className="text-sm font-semibold text-foreground leading-tight">{jobTitle}</h4>
-                            <p className="text-xs text-primary mt-0.5">
+                            <p className="text-xs text-[#14b8a5] mt-0.5">
                               {job.companyLinkedinUrl ? (
                                 <a
                                   href={job.companyLinkedinUrl}
@@ -447,7 +521,7 @@ const ICPCandidateDetail = () => {
                             )}
                           </div>
                         </div>
-                      </div>
+                      </motion.div>
                     );
                   })}
                 </div>
@@ -457,7 +531,7 @@ const ICPCandidateDetail = () => {
             </div>
 
             {/* Education */}
-            <div className="bg-card border border-border/40 rounded-xl p-5 shadow-sm space-y-4">
+            <div className="bg-white/5 backdrop-blur-md border border-[#059467]/10 rounded-xl p-5 shadow-sm space-y-4">
               <h3 className="text-xs font-semibold uppercase tracking-widest text-muted-foreground flex items-center gap-2">
                 <GraduationCap className="w-3.5 h-3.5" /> Education
               </h3>
@@ -465,14 +539,14 @@ const ICPCandidateDetail = () => {
                 <div className="space-y-4">
                   {profile.education.map((edu, idx) => (
                     <div key={idx} className="flex items-start gap-3">
-                      <div className="w-9 h-9 rounded-lg bg-muted/40 border border-border/30 flex items-center justify-center shrink-0 text-lg">
+                      <div className="w-9 h-9 rounded-lg bg-white/5 border border-border/30 flex items-center justify-center shrink-0 text-lg">
                         🎓
                       </div>
                       <div className="flex-1 min-w-0">
                         <h4 className="text-sm font-semibold text-foreground leading-tight">
                           {edu.degree || edu.fieldOfStudy || (edu.school || edu.schoolName || "Education")}
                         </h4>
-                        <p className="text-xs text-primary mt-0.5">{edu.schoolName || edu.school || "Unknown Institution"}</p>
+                        <p className="text-xs text-[#14b8a5] mt-0.5">{edu.schoolName || edu.school || "Unknown Institution"}</p>
                         {(edu.dateRange || edu.period) && (
                           <p className="text-[11px] text-muted-foreground/60 mt-1 flex items-center gap-1">
                             <Calendar className="w-3 h-3" />
@@ -495,20 +569,20 @@ const ICPCandidateDetail = () => {
 
             {/* Skills & Expertise */}
             {totalSkills > 0 && (
-              <div className="bg-card border border-border/40 rounded-xl p-5 shadow-sm space-y-4">
+              <div className="bg-white/5 backdrop-blur-md border border-[#059467]/10 rounded-xl p-5 shadow-sm space-y-4">
                 <div className="flex items-center justify-between">
                   <h3 className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">Skills & Expertise</h3>
                   <span className="text-[10px] text-muted-foreground/60 tabular-nums">{totalSkills} skills</span>
                 </div>
                 {skillCategories.map(({ category, skills }) => (
                   <div key={category} className="space-y-2">
-                    <h4 className="text-[10px] font-semibold text-primary uppercase tracking-widest">{category}</h4>
+                    <h4 className="text-[10px] font-semibold text-[#059467] uppercase tracking-widest">{category}</h4>
                     <div className="flex flex-wrap gap-1.5">
                       {(showAllSkills ? skills : skills.slice(0, visibleSkillLimit)).map((skill, idx) => (
                         <Badge
                           key={idx}
                           variant="secondary"
-                          className="bg-muted/40 border border-border/40 hover:bg-muted/60 text-muted-foreground text-[11px] font-medium px-2.5 py-0.5 rounded-md transition-colors"
+                          className="bg-white/5 border border-border/40 hover:bg-white/10 text-muted-foreground text-[11px] font-medium px-2.5 py-0.5 rounded-md transition-colors"
                         >
                           {skill}
                         </Badge>
@@ -520,7 +594,7 @@ const ICPCandidateDetail = () => {
                   <Button
                     variant="ghost"
                     size="sm"
-                    className="w-full h-8 text-xs text-primary hover:bg-primary/10 rounded-lg"
+                    className="w-full h-8 text-xs text-[#059467] hover:bg-[#059467]/10 rounded-lg"
                     onClick={() => setShowAllSkills(!showAllSkills)}
                   >
                     {showAllSkills ? "Show less" : `Show all ${totalSkills} skills`}
@@ -530,7 +604,7 @@ const ICPCandidateDetail = () => {
             )}
 
             {/* Contact */}
-            <div className="bg-card border border-border/40 rounded-xl p-5 shadow-sm space-y-4">
+            <div className="bg-white/5 backdrop-blur-md border border-[#059467]/10 rounded-xl p-5 shadow-sm space-y-4">
               <h3 className="text-xs font-semibold uppercase tracking-widest text-muted-foreground flex items-center gap-2">
                 <Mail className="w-3.5 h-3.5" /> Contact
               </h3>
@@ -538,7 +612,7 @@ const ICPCandidateDetail = () => {
               {/* Email */}
               <div className="flex items-center justify-between group">
                 <div className="flex items-center gap-3 min-w-0">
-                  <div className="w-8 h-8 rounded-lg bg-muted/40 flex items-center justify-center shrink-0">
+                  <div className="w-8 h-8 rounded-lg bg-white/5 border border-border/30 flex items-center justify-center shrink-0">
                     <Mail className="w-4 h-4 text-muted-foreground" />
                   </div>
                   <div className="min-w-0">
@@ -549,7 +623,7 @@ const ICPCandidateDetail = () => {
                           <div className={cn(
                             "w-1.5 h-1.5 rounded-full shrink-0",
                             profile.email_confidence === "low" ? "bg-amber-500" :
-                            profile.email_confidence === "medium" ? "bg-emerald-400" : "bg-primary"
+                              profile.email_confidence === "medium" ? "bg-emerald-400" : "bg-[#059467]"
                           )} />
                         )}
                         <span className="text-foreground font-mono text-sm truncate">{profile.email}</span>
@@ -561,7 +635,7 @@ const ICPCandidateDetail = () => {
                 </div>
                 {profile.email && (
                   <Button size="icon" variant="ghost" className="h-7 w-7 opacity-0 group-hover:opacity-100 transition-opacity rounded-md" onClick={() => handleCopy(profile.email!, "Email")}>
-                    {copied === "Email" ? <Check className="w-3.5 h-3.5 text-primary" /> : <Copy className="w-3.5 h-3.5" />}
+                    {copied === "Email" ? <Check className="w-3.5 h-3.5 text-[#059467]" /> : <Copy className="w-3.5 h-3.5" />}
                   </Button>
                 )}
               </div>
@@ -581,7 +655,7 @@ const ICPCandidateDetail = () => {
                     </div>
                   </div>
                   <Button size="icon" variant="ghost" className="h-7 w-7 opacity-0 group-hover:opacity-100 transition-opacity rounded-md" onClick={() => handleCopy(profile.linkedin_url!, "LinkedIn URL")}>
-                    {copied === "LinkedIn URL" ? <Check className="w-3.5 h-3.5 text-primary" /> : <Copy className="w-3.5 h-3.5" />}
+                    {copied === "LinkedIn URL" ? <Check className="w-3.5 h-3.5 text-[#059467]" /> : <Copy className="w-3.5 h-3.5" />}
                   </Button>
                 </div>
               )}
@@ -589,7 +663,7 @@ const ICPCandidateDetail = () => {
               {/* Location */}
               {profile.location && (
                 <div className="flex items-center gap-3">
-                  <div className="w-8 h-8 rounded-lg bg-muted/40 flex items-center justify-center shrink-0">
+                  <div className="w-8 h-8 rounded-lg bg-white/5 border border-border/30 flex items-center justify-center shrink-0">
                     <MapPin className="w-4 h-4 text-muted-foreground" />
                   </div>
                   <div>
@@ -604,7 +678,7 @@ const ICPCandidateDetail = () => {
       </div>
 
       {/* Bottom Nav — Mobile */}
-      <div className="sticky bottom-0 bg-background/95 backdrop-blur-md border-t border-border/30 lg:hidden">
+      <div className="sticky bottom-0 bg-background/80 backdrop-blur-md border-t border-border/30 lg:hidden">
         <div className="max-w-[1400px] mx-auto px-6 h-14 flex items-center justify-between">
           <Button
             variant="outline"

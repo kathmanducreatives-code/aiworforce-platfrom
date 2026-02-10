@@ -20,6 +20,7 @@ import { Table, TableBody, TableCaption, TableCell, TableHead, TableHeader, Tabl
 import { useToast } from "@/components/ui/use-toast";
 import { cn } from "@/lib/utils";
 import { Linkedin } from "lucide-react";
+import { VerdantBackground } from "@/components/ui/VerdantBackground";
 
 const ICPResultsPage = () => {
     const { sessionId } = useParams<{ sessionId: string }>();
@@ -317,12 +318,17 @@ const ICPResultsPage = () => {
     }, {} as Record<string, typeof results>);
 
     const groupOrder = ["Today", "Yesterday", "Past 7 Days", "Older", "Unknown Date"];
+
+    // ... existing imports
+
     const showGroups = ['latest', 'oldest', 'today', 'week'].includes(timeFilter);
 
     return (
-        <div className="min-h-screen bg-background text-foreground flex flex-col">
+        <div className="min-h-screen bg-transparent text-foreground flex flex-col relative font-sans">
+            <VerdantBackground mode="mesh" />
+
             {/* Sticky Header */}
-            <header className="sticky top-0 z-40 bg-background/95 backdrop-blur-md border-b border-border/30">
+            <header className="sticky top-0 z-40 bg-[#059467]/5 backdrop-blur-xl border-b border-[#059467]/10">
                 <div className="max-w-[1600px] mx-auto px-6 h-16 flex items-center justify-between">
                     <div className="flex items-center gap-4">
                         <Button variant="ghost" size="icon" onClick={() => navigate('/icp-intelligence')} className="text-muted-foreground hover:text-foreground">
@@ -684,170 +690,170 @@ const ICPResultsPage = () => {
                                     </div>
                                 </div>
 
-                            <div className="rounded-md border border-border/40 bg-card">
-                                <Table>
-                                    <TableHeader className="bg-muted/20">
-                                        <TableRow className="border-border/30 hover:bg-transparent">
-                                            <TableHead className="w-[50px]">
-                                                <Checkbox
-                                                    checked={selectedIds.size === filteredResults.length && filteredResults.length > 0}
-                                                    onCheckedChange={toggleSelectAll}
-                                                    disabled={filteredResults.length === 0}
-                                                    className="border-border data-[state=checked]:bg-primary data-[state=checked]:text-primary-foreground"
-                                                />
-                                            </TableHead>
-                                            <TableHead className="text-foreground font-bold cursor-pointer" onClick={() => setSortBy('name_asc')}>
-                                                Name
-                                            </TableHead>
-                                            <TableHead className="text-foreground font-bold">Current Role</TableHead>
-                                            <TableHead className="text-foreground font-bold">Location</TableHead>
-                                            <TableHead className="text-foreground font-bold text-center">Match</TableHead>
-                                            <TableHead className="text-foreground font-bold text-center">LinkedIn</TableHead>
-
-                                            <TableHead className="text-foreground font-bold min-w-[200px]">
-                                                {selectedIds.size > 0 ? (
-                                                    <Button
-                                                        size="sm"
-                                                        variant="ghost"
-                                                        className="h-7 px-2 text-primary hover:text-primary hover:bg-primary/10 -ml-2"
-                                                        onClick={() => handleBulkEnrich(Array.from(selectedIds))}
-                                                    >
-                                                        <Sparkles className="w-3.5 h-3.5 mr-1.5" />
-                                                        Find Emails for {selectedIds.size}
-                                                    </Button>
-                                                ) : (
-                                                    "Contact Email"
-                                                )}
-                                            </TableHead>
-
-                                            <TableHead className="text-foreground font-bold text-right cursor-pointer" onClick={() => setTimeFilter('latest')}>
-                                                Scraped At
-                                            </TableHead>
-                                            <TableHead className="text-right">Action</TableHead>
-                                        </TableRow>
-                                    </TableHeader>
-                                    <TableBody>
-                                        {filteredResults.map((profile) => (
-                                            <TableRow
-                                                key={profile.id}
-                                                className={cn(
-                                                    "border-border/30 hover:bg-accent/30 transition-colors",
-                                                    selectedIds.has(profile.id) && "bg-primary/5 hover:bg-primary/10"
-                                                )}
-                                            >
-                                                <TableCell>
+                                <div className="rounded-md border border-border/40 bg-card">
+                                    <Table>
+                                        <TableHeader className="bg-muted/20">
+                                            <TableRow className="border-border/30 hover:bg-transparent">
+                                                <TableHead className="w-[50px]">
                                                     <Checkbox
-                                                        checked={selectedIds.has(profile.id)}
-                                                        onCheckedChange={() => toggleSelection(profile.id)}
+                                                        checked={selectedIds.size === filteredResults.length && filteredResults.length > 0}
+                                                        onCheckedChange={toggleSelectAll}
+                                                        disabled={filteredResults.length === 0}
                                                         className="border-border data-[state=checked]:bg-primary data-[state=checked]:text-primary-foreground"
                                                     />
-                                                </TableCell>
-                                                <TableCell className="font-medium">
-                                                    <div className="flex items-center gap-3">
-                                                        <div className="w-8 h-8 rounded-full bg-muted overflow-hidden flex items-center justify-center shrink-0">
-                                                            {profile.photo_url ? (
-                                                                <img src={profile.photo_url} alt={profile.name} className="w-full h-full object-cover" />
-                                                            ) : (
-                                                                <span className="text-xs text-muted-foreground">{profile.name.charAt(0)}</span>
-                                                            )}
-                                                        </div>
-                                                        <span className="text-foreground truncate max-w-[150px]" title={profile.name}>{profile.name}</span>
-                                                    </div>
-                                                </TableCell>
-                                                <TableCell>
-                                                    <div className="flex flex-col max-w-[200px]">
-                                                        <span className="text-sm text-foreground/80 truncate" title={profile.current_title}>{profile.current_title}</span>
-                                                        <span className="text-xs text-primary truncate" title={profile.current_company}>{profile.current_company}</span>
-                                                    </div>
-                                                </TableCell>
-                                                <TableCell className="text-muted-foreground max-w-[150px] truncate" title={profile.location}>{profile.location}</TableCell>
-                                                <TableCell className="text-center">
-                                                    {profile.similarity_score && (() => {
-                                                        const score = profile.similarity_score;
-                                                        const badge = getMatchBadge(score);
+                                                </TableHead>
+                                                <TableHead className="text-foreground font-bold cursor-pointer" onClick={() => setSortBy('name_asc')}>
+                                                    Name
+                                                </TableHead>
+                                                <TableHead className="text-foreground font-bold">Current Role</TableHead>
+                                                <TableHead className="text-foreground font-bold">Location</TableHead>
+                                                <TableHead className="text-foreground font-bold text-center">Match</TableHead>
+                                                <TableHead className="text-foreground font-bold text-center">LinkedIn</TableHead>
 
-                                                        return (
-                                                            <div className={cn(
-                                                                "inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border text-xs font-bold",
-                                                                badge.gradient
-                                                            )}>
-                                                                <span>{badge.emoji}</span>
-                                                                <span>{score}%</span>
-                                                            </div>
-                                                        );
-                                                    })()}
-                                                </TableCell>
-                                                <TableCell className="text-center">
-                                                    {profile.linkedin_url && (
-                                                        <a href={profile.linkedin_url} target="_blank" rel="noreferrer" className="inline-flex items-center justify-center w-8 h-8 rounded-full bg-[#0077b5]/10 text-[#0077b5] hover:bg-[#0077b5] hover:text-white transition-all">
-                                                            <Linkedin className="w-4 h-4" />
-                                                        </a>
-                                                    )}
-                                                </TableCell>
-
-                                                {/* Email Cell */}
-                                                <TableCell>
-                                                    {profile.email ? (
-                                                        <div className="flex items-center gap-2 group/email relative">
-                                                            {profile.email !== "Not Found" && (
-                                                                <div className={cn(
-                                                                    "w-2 h-2 rounded-full shrink-0",
-                                                                    profile.email_confidence === 'low' ? "bg-amber-500" :
-                                                                        profile.email_confidence === 'medium' ? "bg-emerald-400" :
-                                                                            "bg-primary"
-                                                                )} title={`Confidence: ${profile.email_confidence}`} />
-                                                            )}
-
-                                                            <span className={cn(
-                                                                "text-sm font-mono truncate max-w-[180px] select-all",
-                                                                profile.email === "Not Found" ? "text-destructive" : "text-foreground/80"
-                                                            )}>
-                                                                {profile.email}
-                                                            </span>
-
-                                                            {profile.email !== "Not Found" && (
-                                                                <button
-                                                                    onClick={() => {
-                                                                        navigator.clipboard.writeText(profile.email!);
-                                                                        toast({ title: "Copied", className: "h-8 border-primary/30 text-primary" });
-                                                                    }}
-                                                                    className="opacity-0 group-hover/email:opacity-100 transition-opacity text-primary hover:text-primary/80"
-                                                                >
-                                                                    <Copy className="w-3.5 h-3.5" />
-                                                                </button>
-                                                            )}
-
-                                                            {profile.email === "Not Found" && <span className="text-xs text-destructive/50 ml-1">(No Data)</span>}
-                                                        </div>
-                                                    ) : (
+                                                <TableHead className="text-foreground font-bold min-w-[200px]">
+                                                    {selectedIds.size > 0 ? (
                                                         <Button
-                                                            size="sm" variant="ghost"
-                                                            className="h-7 w-full justify-start text-muted-foreground hover:text-primary hover:bg-primary/10"
-                                                            onClick={() => handleReveal(profile.id)}
-                                                            disabled={enrichingIds.has(profile.id)}
+                                                            size="sm"
+                                                            variant="ghost"
+                                                            className="h-7 px-2 text-primary hover:text-primary hover:bg-primary/10 -ml-2"
+                                                            onClick={() => handleBulkEnrich(Array.from(selectedIds))}
                                                         >
-                                                            {enrichingIds.has(profile.id) ? (
-                                                                <><Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" /> Revealing...</>
-                                                            ) : (
-                                                                <><Mail className="w-3.5 h-3.5 mr-1.5" /> Reveal Email</>
-                                                            )}
+                                                            <Sparkles className="w-3.5 h-3.5 mr-1.5" />
+                                                            Find Emails for {selectedIds.size}
                                                         </Button>
+                                                    ) : (
+                                                        "Contact Email"
                                                     )}
-                                                </TableCell>
+                                                </TableHead>
 
-                                                <TableCell className="text-right text-muted-foreground text-xs whitespace-nowrap">
-                                                    {profile.inserted_at ? new Date(profile.inserted_at).toLocaleDateString() : '—'}
-                                                </TableCell>
-                                                <TableCell className="text-right">
-                                                    <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-foreground">
-                                                        <MoreHorizontal className="w-4 h-4" />
-                                                    </Button>
-                                                </TableCell>
+                                                <TableHead className="text-foreground font-bold text-right cursor-pointer" onClick={() => setTimeFilter('latest')}>
+                                                    Scraped At
+                                                </TableHead>
+                                                <TableHead className="text-right">Action</TableHead>
                                             </TableRow>
-                                        ))}
-                                    </TableBody>
-                                </Table>
-                            </div>
+                                        </TableHeader>
+                                        <TableBody>
+                                            {filteredResults.map((profile) => (
+                                                <TableRow
+                                                    key={profile.id}
+                                                    className={cn(
+                                                        "border-border/30 hover:bg-accent/30 transition-colors",
+                                                        selectedIds.has(profile.id) && "bg-primary/5 hover:bg-primary/10"
+                                                    )}
+                                                >
+                                                    <TableCell>
+                                                        <Checkbox
+                                                            checked={selectedIds.has(profile.id)}
+                                                            onCheckedChange={() => toggleSelection(profile.id)}
+                                                            className="border-border data-[state=checked]:bg-primary data-[state=checked]:text-primary-foreground"
+                                                        />
+                                                    </TableCell>
+                                                    <TableCell className="font-medium">
+                                                        <div className="flex items-center gap-3">
+                                                            <div className="w-8 h-8 rounded-full bg-muted overflow-hidden flex items-center justify-center shrink-0">
+                                                                {profile.photo_url ? (
+                                                                    <img src={profile.photo_url} alt={profile.name} className="w-full h-full object-cover" />
+                                                                ) : (
+                                                                    <span className="text-xs text-muted-foreground">{profile.name.charAt(0)}</span>
+                                                                )}
+                                                            </div>
+                                                            <span className="text-foreground truncate max-w-[150px]" title={profile.name}>{profile.name}</span>
+                                                        </div>
+                                                    </TableCell>
+                                                    <TableCell>
+                                                        <div className="flex flex-col max-w-[200px]">
+                                                            <span className="text-sm text-foreground/80 truncate" title={profile.current_title}>{profile.current_title}</span>
+                                                            <span className="text-xs text-primary truncate" title={profile.current_company}>{profile.current_company}</span>
+                                                        </div>
+                                                    </TableCell>
+                                                    <TableCell className="text-muted-foreground max-w-[150px] truncate" title={profile.location}>{profile.location}</TableCell>
+                                                    <TableCell className="text-center">
+                                                        {profile.similarity_score && (() => {
+                                                            const score = profile.similarity_score;
+                                                            const badge = getMatchBadge(score);
+
+                                                            return (
+                                                                <div className={cn(
+                                                                    "inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border text-xs font-bold",
+                                                                    badge.gradient
+                                                                )}>
+                                                                    <span>{badge.emoji}</span>
+                                                                    <span>{score}%</span>
+                                                                </div>
+                                                            );
+                                                        })()}
+                                                    </TableCell>
+                                                    <TableCell className="text-center">
+                                                        {profile.linkedin_url && (
+                                                            <a href={profile.linkedin_url} target="_blank" rel="noreferrer" className="inline-flex items-center justify-center w-8 h-8 rounded-full bg-[#0077b5]/10 text-[#0077b5] hover:bg-[#0077b5] hover:text-white transition-all">
+                                                                <Linkedin className="w-4 h-4" />
+                                                            </a>
+                                                        )}
+                                                    </TableCell>
+
+                                                    {/* Email Cell */}
+                                                    <TableCell>
+                                                        {profile.email ? (
+                                                            <div className="flex items-center gap-2 group/email relative">
+                                                                {profile.email !== "Not Found" && (
+                                                                    <div className={cn(
+                                                                        "w-2 h-2 rounded-full shrink-0",
+                                                                        profile.email_confidence === 'low' ? "bg-amber-500" :
+                                                                            profile.email_confidence === 'medium' ? "bg-emerald-400" :
+                                                                                "bg-primary"
+                                                                    )} title={`Confidence: ${profile.email_confidence}`} />
+                                                                )}
+
+                                                                <span className={cn(
+                                                                    "text-sm font-mono truncate max-w-[180px] select-all",
+                                                                    profile.email === "Not Found" ? "text-destructive" : "text-foreground/80"
+                                                                )}>
+                                                                    {profile.email}
+                                                                </span>
+
+                                                                {profile.email !== "Not Found" && (
+                                                                    <button
+                                                                        onClick={() => {
+                                                                            navigator.clipboard.writeText(profile.email!);
+                                                                            toast({ title: "Copied", className: "h-8 border-primary/30 text-primary" });
+                                                                        }}
+                                                                        className="opacity-0 group-hover/email:opacity-100 transition-opacity text-primary hover:text-primary/80"
+                                                                    >
+                                                                        <Copy className="w-3.5 h-3.5" />
+                                                                    </button>
+                                                                )}
+
+                                                                {profile.email === "Not Found" && <span className="text-xs text-destructive/50 ml-1">(No Data)</span>}
+                                                            </div>
+                                                        ) : (
+                                                            <Button
+                                                                size="sm" variant="ghost"
+                                                                className="h-7 w-full justify-start text-muted-foreground hover:text-primary hover:bg-primary/10"
+                                                                onClick={() => handleReveal(profile.id)}
+                                                                disabled={enrichingIds.has(profile.id)}
+                                                            >
+                                                                {enrichingIds.has(profile.id) ? (
+                                                                    <><Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" /> Revealing...</>
+                                                                ) : (
+                                                                    <><Mail className="w-3.5 h-3.5 mr-1.5" /> Reveal Email</>
+                                                                )}
+                                                            </Button>
+                                                        )}
+                                                    </TableCell>
+
+                                                    <TableCell className="text-right text-muted-foreground text-xs whitespace-nowrap">
+                                                        {profile.inserted_at ? new Date(profile.inserted_at).toLocaleDateString() : '—'}
+                                                    </TableCell>
+                                                    <TableCell className="text-right">
+                                                        <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-foreground">
+                                                            <MoreHorizontal className="w-4 h-4" />
+                                                        </Button>
+                                                    </TableCell>
+                                                </TableRow>
+                                            ))}
+                                        </TableBody>
+                                    </Table>
+                                </div>
                             </div>
                         )
                     ) : (

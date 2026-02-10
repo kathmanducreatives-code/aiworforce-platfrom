@@ -65,8 +65,8 @@ export const IndustryMultiSelect = ({
         <div className={cn(
             "relative transition-all duration-300 ease-out-quart rounded-xl border",
             isActive
-                ? "bg-[#161616] border-[#00FF85] shadow-[0_0_20px_rgba(0,255,133,0.2)] z-50 scale-[1.02]"
-                : "bg-[#161616] border-[#00FF85]/30 hover:border-[#00FF85]/60 hover:shadow-[0_0_15px_rgba(0,255,133,0.1)]"
+                ? "bg-white border-[#00FF85] shadow-[0_0_20px_rgba(0,255,133,0.2)] z-50 scale-[1.02]"
+                : "bg-white border-gray-200 hover:border-[#00FF85]/60 hover:shadow-md"
         )}>
             {/* Header / Trigger Area */}
             <div
@@ -74,9 +74,9 @@ export const IndustryMultiSelect = ({
                 onClick={() => { setIsActive(true); inputRef.current?.focus(); }}
             >
                 <div className="flex items-start justify-between">
-                    <div className="flex items-center gap-2 text-[#00FF85]">
-                        <Briefcase className="w-5 h-5 shrink-0" />
-                        <span className="text-sm font-bold tracking-wide uppercase">Target Industries</span>
+                    <div className="flex items-center gap-2 text-gray-900">
+                        <Briefcase className="w-5 h-5 shrink-0 text-[#059467]" />
+                        <span className="text-sm tracking-wide uppercase text-gray-700 font-bold">Target Industries</span>
                     </div>
                 </div>
 
@@ -101,7 +101,7 @@ export const IndustryMultiSelect = ({
                     <input
                         ref={inputRef}
                         type="text"
-                        className="bg-transparent border-none outline-none text-white placeholder:text-muted-foreground/50 h-8 min-w-[200px] flex-1 text-sm font-medium"
+                        className="bg-transparent border-none outline-none text-gray-900 placeholder:text-gray-400 h-8 min-w-[200px] flex-1 text-sm font-medium"
                         placeholder={value.length === 0 ? placeholder : ""}
                         value={search}
                         onChange={(e) => setSearch(e.target.value)}
@@ -113,49 +113,51 @@ export const IndustryMultiSelect = ({
 
             {/* Sliding Dropdown Content */}
             <div className={cn(
-                "overflow-hidden transition-all duration-300 ease-out-quart",
-                isActive ? "max-h-[300px] border-t border-[#00FF85]/20 opacity-100 p-2" : "max-h-0 opacity-0 border-t-0 p-0"
+                "overflow-hidden transition-all duration-300 ease-out-quart rounded-b-xl",
+                isActive ? "max-h-[300px] border-t border-gray-100 opacity-100" : "max-h-0 opacity-0 border-t-0"
             )}>
-                <div className="max-h-[290px] overflow-y-auto scrollbar-thin scrollbar-thumb-[#00FF85]/20 scrollbar-track-transparent pr-1">
-                    {filteredIndustries.length === 0 && (
-                        <div className="py-6 text-center text-muted-foreground text-sm">
-                            <Search className="w-8 h-8 mx-auto mb-2 opacity-20" />
-                            No industries found matching "{search}"
-                        </div>
-                    )}
+                <div className="bg-gray-50/80 backdrop-blur-sm p-2">
+                    <div className="max-h-[290px] overflow-y-auto scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-transparent pr-1">
+                        {filteredIndustries.length === 0 && (
+                            <div className="py-6 text-center text-muted-foreground text-sm">
+                                <Search className="w-8 h-8 mx-auto mb-2 opacity-20" />
+                                No industries found matching "{search}"
+                            </div>
+                        )}
 
-                    <div className="grid grid-cols-1 gap-1">
-                        {filteredIndustries.map((ind) => {
-                            const isSelected = value.includes(ind.id.toString());
-                            return (
-                                <div
-                                    key={ind.id}
-                                    className={cn(
-                                        "flex items-center gap-3 px-3 py-2.5 rounded-lg cursor-pointer transition-all",
-                                        isSelected
-                                            ? "bg-[#00FF85]/10 text-[#00FF85]"
-                                            : "text-muted-foreground hover:bg-white/5 hover:text-white"
-                                    )}
-                                    onMouseDown={(e) => {
-                                        e.preventDefault();
-                                        handleSelect(ind.id);
-                                    }}
-                                >
-                                    <div className={cn(
-                                        "w-4 h-4 rounded-full border flex items-center justify-center transition-colors",
-                                        isSelected
-                                            ? "border-[#00FF85] bg-[#00FF85]"
-                                            : "border-muted-foreground/40"
-                                    )}>
-                                        {isSelected && <Check className="w-3 h-3 text-black" />}
+                        <div className="grid grid-cols-1 gap-1">
+                            {filteredIndustries.map((ind) => {
+                                const isSelected = value.includes(ind.id.toString());
+                                return (
+                                    <div
+                                        key={ind.id}
+                                        className={cn(
+                                            "flex items-center gap-3 px-3 py-2.5 rounded-lg cursor-pointer transition-all",
+                                            isSelected
+                                                ? "bg-[#00FF85]/10 text-emerald-700"
+                                                : "text-gray-600 hover:bg-white hover:text-gray-900 hover:shadow-sm"
+                                        )}
+                                        onMouseDown={(e) => {
+                                            e.preventDefault();
+                                            handleSelect(ind.id);
+                                        }}
+                                    >
+                                        <div className={cn(
+                                            "w-4 h-4 rounded-full border flex items-center justify-center transition-colors",
+                                            isSelected
+                                                ? "border-[#00FF85] bg-[#00FF85]"
+                                                : "border-gray-300 bg-white"
+                                        )}>
+                                            {isSelected && <Check className="w-3 h-3 text-white" />}
+                                        </div>
+                                        <div className="flex flex-col">
+                                            <span className="font-medium text-sm">{ind.label}</span>
+                                            {ind.hierarchy && <span className="text-[10px] opacity-50 truncate max-w-[300px]">{ind.hierarchy}</span>}
+                                        </div>
                                     </div>
-                                    <div className="flex flex-col">
-                                        <span className="font-medium text-sm">{ind.label}</span>
-                                        {ind.hierarchy && <span className="text-[10px] opacity-50 truncate max-w-[300px]">{ind.hierarchy}</span>}
-                                    </div>
-                                </div>
-                            );
-                        })}
+                                );
+                            })}
+                        </div>
                     </div>
                 </div>
             </div>
