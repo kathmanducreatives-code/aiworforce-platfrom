@@ -170,22 +170,24 @@ export const ProfileResultCard = ({
     },
     visible: {
       opacity: 1,
-      y: 0
+      y: 0,
+      transition: { duration: 0.5, ease: "easeOut" as const }
     }
   };
   return <motion.div
     variants={cardVariants}
     initial="hidden"
-    animate="visible"
+    whileInView="visible"
+    viewport={{ once: true }}
     layout
     whileHover={{ y: -4, transition: { duration: 0.25, ease: "easeOut" } }}
     className="group"
   >
-    <Card className="bg-white/5 backdrop-blur-[10px] border border-[#059467]/20 overflow-hidden hover:border-[#059467]/60 transition-colors duration-300 shadow-[0_8px_32px_rgba(5,148,103,0.12)] hover:shadow-[0_12px_40px_rgba(5,148,103,0.2)] relative cursor-pointer" onClick={() => navigate(`/icp/results/${sessionId}/candidate/${profile.id}`)}>
-      {/* Match Badge - Flush top banner */}
+    <Card className="bg-white/[0.06] backdrop-blur-[10px] border border-[#059467]/20 overflow-hidden hover:border-[#059467]/40 transition-all duration-[250ms] ease-out shadow-[0_8px_32px_rgba(5,148,103,0.12)] hover:shadow-[0_12px_40px_rgba(5,148,103,0.2)] relative cursor-pointer" onClick={() => navigate(`/icp/results/${sessionId}/candidate/${profile.id}`)}>
+      {/* Match Badge - Flush top banner with hover pulse */}
       {profile.similarity_score != null && (() => {
         const badge = matchGetBadge(profile.similarity_score);
-        return <div className={cn("flex items-center justify-between px-5 py-2.5 border-b border-border/30", badge.gradient.replace('border-', 'border-b-'))}>
+        return <div className={cn("flex items-center justify-between px-5 py-2.5 border-b border-border/30 transition-transform duration-[600ms] group-hover:scale-[1.02]", badge.gradient.replace('border-', 'border-b-'))}>
           <div className="flex items-center gap-2">
             <span className="text-base">{badge.emoji}</span>
             <span className="text-xs font-semibold tracking-wide">{badge.label}</span>

@@ -11,6 +11,7 @@ import {
     MoreHorizontal, LayoutGrid, List, SlidersHorizontal, Share2, Loader2, Calendar, Mail, Check, Copy,
     ChevronDown
 } from "lucide-react";
+import { motion } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -585,8 +586,18 @@ const ICPResultsPage = () => {
                                     </div>
                                 </div>
 
-                                {/* Grid */}
-                                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-6">
+                                {/* Grid with staggered animations */}
+                                <motion.div
+                                    className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-6"
+                                    initial="hidden"
+                                    whileInView="visible"
+                                    viewport={{ once: true, margin: "-50px" }}
+                                    variants={{
+                                        visible: {
+                                            transition: { staggerChildren: 0.08 }
+                                        }
+                                    }}
+                                >
                                     {filteredResults.map(profile => (
                                         <ProfileResultCard
                                             key={profile.id}
@@ -597,7 +608,7 @@ const ICPResultsPage = () => {
                                             isEnriching={enrichingIds.has(profile.id)}
                                         />
                                     ))}
-                                </div>
+                                </motion.div>
                             </div>
                         ) : (
                             <div className="space-y-5">

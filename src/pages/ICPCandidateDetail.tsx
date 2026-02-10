@@ -1,5 +1,5 @@
 import { useParams, useNavigate } from "react-router-dom";
-import { useEffect, useState, useMemo } from "react";
+import { useEffect, useState, useMemo, useRef } from "react";
 import { supabase } from "@/lib/supabase";
 import { ProfileResult, resolvePhotoUrl } from "@/components/icp/ProfileResultCard";
 import { getMatchBadge } from "@/lib/matchBadges";
@@ -13,7 +13,7 @@ import {
   Mail, Bookmark, Download, ExternalLink, Copy, Check,
   ChevronLeft, ChevronRight, Sparkles, Calendar, ScanSearch
 } from "lucide-react";
-import { motion } from "framer-motion";
+import { motion, useScroll, useTransform } from "framer-motion";
 import { VerdantBackground } from "@/components/ui/VerdantBackground";
 import {
   Breadcrumb, BreadcrumbList, BreadcrumbItem, BreadcrumbLink, BreadcrumbSeparator, BreadcrumbPage
@@ -34,6 +34,23 @@ const parseJSON = (value: any) => {
   }
 };
 
+/** Staggered section animation wrapper */
+const SectionCard = ({ children, className, index = 0 }: { children: React.ReactNode; className?: string; index?: number }) => (
+  <motion.div
+    initial={{ opacity: 0, y: 16 }}
+    whileInView={{ opacity: 1, y: 0 }}
+    viewport={{ once: true }}
+    transition={{ duration: 0.5, delay: index * 0.1, ease: "easeOut" }}
+    className={cn(
+      "bg-white/[0.06] backdrop-blur-[10px] border border-[#059467]/15 rounded-xl p-5 shadow-sm space-y-4",
+      "hover:border-[#059467]/30 hover:shadow-[0_12px_40px_rgba(5,148,103,0.15)] hover:scale-[1.02] transition-all duration-[250ms] ease-out",
+      className
+    )}
+  >
+    {children}
+  </motion.div>
+);
+
 const ICPCandidateDetail = () => {
   const { sessionId, candidateId } = useParams<{ sessionId: string; candidateId: string }>();
   const navigate = useNavigate();
@@ -46,6 +63,11 @@ const ICPCandidateDetail = () => {
   const [copied, setCopied] = useState<string | null>(null);
   const [showAllSkills, setShowAllSkills] = useState(false);
   const [revealingEmail, setRevealingEmail] = useState(false);
+
+  // Parallax scroll
+  const containerRef = useRef<HTMLDivElement>(null);
+  const { scrollYProgress } = useScroll({ target: containerRef });
+  const backgroundY = useTransform(scrollYProgress, [0, 1], ["0%", "25%"]);
 
   useEffect(() => {
     const load = async () => {
@@ -241,8 +263,12 @@ const ICPCandidateDetail = () => {
   const photoSrc = resolvePhotoUrl(profile.photo_url);
 
   return (
-    <div className="min-h-screen bg-transparent text-foreground relative font-sans">
-      <VerdantBackground mode="spotlight" />
+    <div ref={containerRef} className="min-h-screen bg-transparent text-foreground relative font-sans">
+      {/* Parallax Background */}
+      <motion.div className="fixed inset-0 -z-50" style={{ y: backgroundY }}>
+        <VerdantBackground mode="spotlight" />
+      </motion.div>
+
       {/* Top Bar */}
       <header className="sticky top-0 z-40 bg-background/95 backdrop-blur-md border-b border-border/30">
         <div className="max-w-[1400px] mx-auto px-6 h-14 flex items-center justify-between">
@@ -307,18 +333,30 @@ const ICPCandidateDetail = () => {
           <aside className="w-full lg:w-[40%] lg:max-w-[480px] shrink-0">
             <div className="lg:sticky lg:top-[72px] space-y-5">
               {/* Profile Card */}
-              <div className="bg-white/5 backdrop-blur-md border border-[#059467]/20 rounded-xl p-6 shadow-[0_8px_32px_rgba(5,148,103,0.1)] space-y-5">
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.5 }}
+                className="bg-white/[0.08] backdrop-blur-[12px] border border-[#059467]/25 rounded-xl p-6 shadow-[0_8px_32px_rgba(5,148,103,0.12)] space-y-5"
+              >
                 <div className="flex flex-col items-center text-center gap-4">
-                  {/* Large circular avatar */}
-                  <div className="w-40 h-40 rounded-full border-2 border-[#059467]/30 bg-black/20 overflow-hidden shadow-[0_0_40px_rgba(5,148,103,0.3)] ring-4 ring-[#059467]/10 relative group">
-                    <div className="absolute inset-0 bg-gradient-to-tr from-[#059467]/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
-                    {photoSrc ? (
-                      <img src={photoSrc} alt={profile.name} className="w-full h-full object-cover" />
-                    ) : (
-                      <div className="w-full h-full flex items-center justify-center bg-muted/30">
-                        <User className="w-16 h-16 text-muted-foreground/40" />
-                      </div>
-                    )}
+                  {/* Large circular avatar with glow overlay */}
+                  <div className="relative">
+                    {/* Radial glow behind avatar */}
+                    <div
+                      className="absolute inset-0 -m-4 rounded-full blur-[60px] pointer-events-none"
+                      style={{ background: "radial-gradient(circle, rgba(5,148,103,0.08) 0%, transparent 70%)" }}
+                    />
+                    <div className="w-40 h-40 rounded-full border-2 border-[#059467]/30 bg-black/20 overflow-hidden shadow-[0_0_40px_rgba(5,148,103,0.3)] ring-4 ring-[#059467]/10 relative group">
+                      <div className="absolute inset-0 bg-gradient-to-tr from-[#059467]/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
+                      {photoSrc ? (
+                        <img src={photoSrc} alt={profile.name} className="w-full h-full object-cover" />
+                      ) : (
+                        <div className="w-full h-full flex items-center justify-center bg-muted/30">
+                          <User className="w-16 h-16 text-muted-foreground/40" />
+                        </div>
+                      )}
+                    </div>
                   </div>
 
                   <div className="space-y-1.5">
@@ -372,7 +410,7 @@ const ICPCandidateDetail = () => {
                   {!profile.email && (
                     <Button
                       size="sm"
-                      className="h-9 text-xs bg-primary text-primary-foreground hover:bg-primary/90 rounded-lg"
+                      className="h-9 text-xs bg-primary text-primary-foreground hover:bg-gradient-to-r hover:from-[#059467] hover:to-[#14b8a5] transition-all duration-200 rounded-lg"
                       onClick={handleRevealEmail}
                       disabled={revealingEmail}
                     >
@@ -393,29 +431,28 @@ const ICPCandidateDetail = () => {
                       LinkedIn
                     </Button>
                   )}
-                  <Button size="sm" variant="outline" className="h-9 text-xs border-border/50 hover:border-border rounded-lg">
+                  <Button size="sm" variant="outline" className="h-9 text-xs border-border/50 hover:border-border hover:bg-[#059467]/10 rounded-lg transition-all duration-200">
                     <Download className="w-3.5 h-3.5 mr-1.5" />
                     Export
                   </Button>
                 </div>
-              </div>
+              </motion.div>
             </div>
           </aside>
 
           {/* Right Content — Scrollable */}
-          {/* Right Content — Scrollable */}
           <main className="flex-1 space-y-5 min-w-0">
             {/* About */}
-            <div className="bg-white/5 backdrop-blur-md border border-[#059467]/10 rounded-xl p-5 shadow-sm space-y-3">
+            <SectionCard index={0} className="space-y-3">
               <h3 className="text-xs font-semibold uppercase tracking-widest text-muted-foreground flex items-center gap-2">
                 <User className="w-3.5 h-3.5" /> About
               </h3>
               <p className="text-sm text-muted-foreground leading-relaxed">{generateBio()}</p>
-            </div>
+            </SectionCard>
 
             {/* Match Analysis */}
             {profile.match_reason && profile.similarity_score && (
-              <div className="bg-white/5 backdrop-blur-md border border-[#059467]/20 rounded-xl p-5 shadow-sm space-y-4">
+              <SectionCard index={1}>
                 <h3 className="text-xs font-semibold uppercase tracking-widest text-muted-foreground flex items-center gap-2">
                   <Sparkles className="w-3.5 h-3.5 text-[#059467]" /> Match Analysis
                 </h3>
@@ -441,11 +478,11 @@ const ICPCandidateDetail = () => {
                     </p>
                   </div>
                 </div>
-              </div>
+              </SectionCard>
             )}
 
             {/* Career Timeline */}
-            <div className="bg-white/5 backdrop-blur-md border border-[#059467]/10 rounded-xl p-5 shadow-sm space-y-4">
+            <SectionCard index={2}>
               <h3 className="text-xs font-semibold uppercase tracking-widest text-muted-foreground flex items-center gap-2">
                 <Briefcase className="w-3.5 h-3.5" /> Career Timeline
               </h3>
@@ -466,7 +503,7 @@ const ICPCandidateDetail = () => {
                         initial={{ opacity: 0, y: 10 }}
                         whileInView={{ opacity: 1, y: 0 }}
                         viewport={{ once: true }}
-                        transition={{ delay: idx * 0.1 }}
+                        transition={{ delay: idx * 0.1, duration: 0.5 }}
                         className="relative pl-6 py-3 first:pt-0 last:pb-0 group/item"
                       >
                         <div className={cn(
@@ -528,10 +565,10 @@ const ICPCandidateDetail = () => {
               ) : (
                 <p className="text-sm text-muted-foreground italic">No work history available</p>
               )}
-            </div>
+            </SectionCard>
 
             {/* Education */}
-            <div className="bg-white/5 backdrop-blur-md border border-[#059467]/10 rounded-xl p-5 shadow-sm space-y-4">
+            <SectionCard index={3}>
               <h3 className="text-xs font-semibold uppercase tracking-widest text-muted-foreground flex items-center gap-2">
                 <GraduationCap className="w-3.5 h-3.5" /> Education
               </h3>
@@ -565,11 +602,11 @@ const ICPCandidateDetail = () => {
               ) : (
                 <p className="text-sm text-muted-foreground italic">No education information available</p>
               )}
-            </div>
+            </SectionCard>
 
             {/* Skills & Expertise */}
             {totalSkills > 0 && (
-              <div className="bg-white/5 backdrop-blur-md border border-[#059467]/10 rounded-xl p-5 shadow-sm space-y-4">
+              <SectionCard index={4}>
                 <div className="flex items-center justify-between">
                   <h3 className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">Skills & Expertise</h3>
                   <span className="text-[10px] text-muted-foreground/60 tabular-nums">{totalSkills} skills</span>
@@ -600,11 +637,11 @@ const ICPCandidateDetail = () => {
                     {showAllSkills ? "Show less" : `Show all ${totalSkills} skills`}
                   </Button>
                 )}
-              </div>
+              </SectionCard>
             )}
 
             {/* Contact */}
-            <div className="bg-white/5 backdrop-blur-md border border-[#059467]/10 rounded-xl p-5 shadow-sm space-y-4">
+            <SectionCard index={5}>
               <h3 className="text-xs font-semibold uppercase tracking-widest text-muted-foreground flex items-center gap-2">
                 <Mail className="w-3.5 h-3.5" /> Contact
               </h3>
@@ -672,7 +709,7 @@ const ICPCandidateDetail = () => {
                   </div>
                 </div>
               )}
-            </div>
+            </SectionCard>
           </main>
         </div>
       </div>
