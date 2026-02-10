@@ -192,7 +192,7 @@ export const ProfileResultCard = ({
             <span className="text-base">{badge.emoji}</span>
             <span className="text-xs font-semibold tracking-wide">{badge.label}</span>
           </div>
-          <span className="text-sm font-mono font-bold tabular-nums">{profile.similarity_score}%</span>
+          
         </div>;
       })()}
 
