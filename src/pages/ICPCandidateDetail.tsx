@@ -469,13 +469,13 @@ const ICPCandidateDetail = () => {
                       </div>
                       <div className="flex-1 min-w-0">
                         <h4 className="text-sm font-semibold text-foreground leading-tight">
-                          {edu.degree || edu.fieldOfStudy || "Degree"}
+                          {edu.degree || edu.fieldOfStudy || (edu.school || edu.schoolName || "Education")}
                         </h4>
-                        <p className="text-xs text-primary mt-0.5">{edu.school || "Unknown Institution"}</p>
-                        {edu.dateRange && (
+                        <p className="text-xs text-primary mt-0.5">{edu.schoolName || edu.school || "Unknown Institution"}</p>
+                        {(edu.dateRange || edu.period) && (
                           <p className="text-[11px] text-muted-foreground/60 mt-1 flex items-center gap-1">
                             <Calendar className="w-3 h-3" />
-                            {edu.dateRange}
+                            {edu.dateRange || edu.period}
                           </p>
                         )}
                         {edu.description && (
