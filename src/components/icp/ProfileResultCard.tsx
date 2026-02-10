@@ -25,10 +25,13 @@ export interface ProfileResult {
   top_skills?: string[];
   education?: {
     school?: string;
+    schoolName?: string;
     degree?: string;
     fieldOfStudy?: string;
     dateRange?: string;
+    period?: string;
     description?: string;
+    schoolLogo?: { url?: string; sizes?: { url: string; width: number; height: number }[] };
   }[];
   work_history?: {
     company?: string;
