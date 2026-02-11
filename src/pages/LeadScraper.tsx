@@ -638,7 +638,7 @@ export default function LeadScraper() {
               {/* Search Tab */}
               <TabsContent value="search" className="space-y-6 mt-0">
                 {/* AI Search Bar */}
-                <div className="rounded-xl border border-border/50 bg-card/60 backdrop-blur-md p-6 lg:p-8 shadow-sm">
+                <div className="rounded-xl border border-border/50 bg-card/60 backdrop-blur-md p-4 sm:p-6 lg:p-8 shadow-sm">
                   <AISearchBar
                     onSearch={handleAISearch}
                     isLoading={isLoading}

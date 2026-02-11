@@ -271,7 +271,7 @@ const ICPCandidateDetail = () => {
 
       {/* Top Bar */}
       <header className="sticky top-0 z-40 bg-background/95 backdrop-blur-md border-b border-border/30">
-        <div className="max-w-[1400px] mx-auto px-6 h-14 flex items-center justify-between">
+        <div className="max-w-[1400px] mx-auto px-4 sm:px-6 h-14 flex items-center justify-between">
           <div className="flex items-center gap-4">
             <Button
               variant="ghost"
@@ -284,16 +284,17 @@ const ICPCandidateDetail = () => {
             <Breadcrumb>
               <BreadcrumbList>
                 <BreadcrumbItem>
-                  <BreadcrumbLink
-                    className="cursor-pointer text-muted-foreground hover:text-foreground"
+                    <BreadcrumbLink
+                    className="cursor-pointer text-muted-foreground hover:text-foreground truncate max-w-[80px] sm:max-w-none"
                     onClick={() => navigate(`/icp/results/${sessionId}`)}
                   >
-                    Lookalike Results
+                    <span className="hidden sm:inline">Lookalike Results</span>
+                    <span className="sm:hidden">Results</span>
                   </BreadcrumbLink>
                 </BreadcrumbItem>
                 <BreadcrumbSeparator />
                 <BreadcrumbItem>
-                  <BreadcrumbPage>{profile.name}</BreadcrumbPage>
+                  <BreadcrumbPage className="truncate max-w-[100px] sm:max-w-[200px]">{profile.name}</BreadcrumbPage>
                 </BreadcrumbItem>
               </BreadcrumbList>
             </Breadcrumb>
@@ -326,7 +327,7 @@ const ICPCandidateDetail = () => {
       </header>
 
       {/* Main Content */}
-      <div className="max-w-[1400px] mx-auto px-6 py-8">
+      <div className="max-w-[1400px] mx-auto px-4 py-6 sm:px-6 sm:py-8">
         <div className="flex flex-col lg:flex-row gap-8">
 
           {/* Left Sidebar — Sticky */}
@@ -347,7 +348,7 @@ const ICPCandidateDetail = () => {
                       className="absolute inset-0 -m-4 rounded-full blur-[60px] pointer-events-none"
                       style={{ background: "radial-gradient(circle, rgba(5,148,103,0.08) 0%, transparent 70%)" }}
                     />
-                    <div className="w-40 h-40 rounded-full border-2 border-[#059467]/30 bg-black/20 overflow-hidden shadow-[0_0_40px_rgba(5,148,103,0.3)] ring-4 ring-[#059467]/10 relative group">
+                    <div className="w-28 h-28 sm:w-40 sm:h-40 rounded-full border-2 border-[#059467]/30 bg-black/20 overflow-hidden shadow-[0_0_40px_rgba(5,148,103,0.3)] ring-4 ring-[#059467]/10 relative group">
                       <div className="absolute inset-0 bg-gradient-to-tr from-[#059467]/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
                       {photoSrc ? (
                         <img src={photoSrc} alt={profile.name} className="w-full h-full object-cover" />

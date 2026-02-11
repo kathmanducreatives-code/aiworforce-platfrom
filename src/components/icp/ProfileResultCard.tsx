@@ -226,7 +226,7 @@ export const ProfileResultCard = ({
       {/* Match Badge - Gradient pill in top-right corner */}
       {profile.similarity_score != null && (() => {
         const badge = matchGetBadge(profile.similarity_score);
-        return <div className="absolute top-3 right-3 z-10 flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-semibold tracking-wide transition-transform duration-[600ms] group-hover:scale-105" style={{
+        return <div className="absolute top-3 right-3 z-10 flex items-center gap-1 sm:gap-1.5 px-2.5 sm:px-3.5 py-1 sm:py-1.5 rounded-full text-[10px] sm:text-xs font-semibold tracking-wide transition-transform duration-[600ms] group-hover:scale-105" style={{
           background: badge.gradient,
           boxShadow: badge.glow,
           color: badge.textHex
@@ -313,8 +313,8 @@ export const ProfileResultCard = ({
       </AnimatePresence>
 
       {/* Footer Actions */}
-      <div className="py-3 bg-muted/10 border-t border-border/30 flex items-center justify-center gap-2 px-4" onClick={e => e.stopPropagation()}>
-        <div className="flex items-center justify-center gap-3">
+      <div className="py-3 bg-muted/10 border-t border-border/30 flex items-center justify-center gap-2 px-3 sm:px-4" onClick={e => e.stopPropagation()}>
+        <div className="flex flex-wrap items-center justify-center gap-2 sm:gap-3">
           <Button variant="outline" size="sm" className="h-8 border-border/40 hover:border-primary hover:text-primary hover:bg-primary/10 text-xs px-[10px] text-center" onClick={() => onSave?.(profile.id)} title="Save Profile">
             <Bookmark className="w-3 h-3 mr-1.5" /> Save
           </Button>
@@ -352,7 +352,7 @@ export const ProfileResultCard = ({
                 <span>Not Found</span>
               </> : <>
                 <div className={cn("w-2 h-2 rounded-full", profile.email_confidence === 'low' ? "bg-amber-500" : profile.email_confidence === 'medium' ? "bg-emerald-400" : "bg-primary")} title={`Confidence: ${profile.email_confidence || 'High'}`} />
-                <span className="truncate max-w-[140px]">{profile.email || revealedEmails[profile.id]}</span>
+                <span className="truncate max-w-[100px] sm:max-w-[140px]">{profile.email || revealedEmails[profile.id]}</span>
                 <div className="absolute right-2 opacity-0 group-hover/email:opacity-100 transition-opacity">
                   <Copy className="w-3.5 h-3.5 text-primary" />
                 </div>

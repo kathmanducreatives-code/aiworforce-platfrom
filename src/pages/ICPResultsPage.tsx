@@ -330,20 +330,21 @@ const ICPResultsPage = () => {
 
             {/* Sticky Header */}
             <header className="sticky top-0 z-40 bg-[#059467]/5 backdrop-blur-xl border-b border-[#059467]/10">
-                <div className="max-w-[1600px] mx-auto px-6 h-16 flex items-center justify-between">
+                <div className="max-w-[1600px] mx-auto px-4 sm:px-6 h-14 sm:h-16 flex items-center justify-between">
                     <div className="flex items-center gap-4">
                         <Button variant="ghost" size="icon" onClick={() => navigate('/icp-intelligence')} className="text-muted-foreground hover:text-foreground">
                             <ArrowLeft className="w-5 h-5" />
                         </Button>
-                        <div>
-                            <h1 className="text-lg font-bold flex items-center gap-2">
-                                Lookalike Results
-                                <span className="text-muted-foreground mx-2">/</span>
-                                <span className="text-primary">
+                        <div className="min-w-0">
+                            <h1 className="text-sm sm:text-lg font-bold flex items-center gap-1 sm:gap-2 truncate">
+                                <span className="hidden sm:inline">Lookalike Results</span>
+                                <span className="sm:hidden">Results</span>
+                                <span className="text-muted-foreground mx-1 sm:mx-2">/</span>
+                                <span className="text-primary truncate max-w-[120px] sm:max-w-none">
                                     {sessionName || "Loading..."}
                                 </span>
                             </h1>
-                            <p className="text-xs text-muted-foreground">Generated Strategy Session</p>
+                            <p className="text-xs text-muted-foreground hidden sm:block">Generated Strategy Session</p>
                         </div>
                     </div>
 
@@ -370,9 +371,9 @@ const ICPResultsPage = () => {
 
                 {/* Secondary Toolbar (Filters) */}
                 <div className="border-t border-border/30 bg-card/50">
-                    <div className="max-w-[1600px] mx-auto px-6 py-3 flex flex-col gap-4">
+                    <div className="max-w-[1600px] mx-auto px-4 sm:px-6 py-3 flex flex-col gap-4">
                         <div className="flex flex-wrap items-center justify-between gap-4">
-                            <div className="flex items-center gap-3 flex-1 min-w-[300px]">
+                            <div className="flex items-center gap-3 flex-1 min-w-0 sm:min-w-[300px]">
                                 <div className="relative flex-1 max-w-md">
                                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
                                     <Input
@@ -470,7 +471,7 @@ const ICPResultsPage = () => {
             </header>
 
             {/* Main Content */}
-            <main className="flex-1 p-6 overflow-y-auto">
+            <main className="flex-1 p-4 sm:p-6 overflow-y-auto">
                 <div className="max-w-[1600px] mx-auto">
                     {isLoading ? (
                         <div className="flex flex-col items-center justify-center h-[50vh] gap-4">
@@ -486,14 +487,14 @@ const ICPResultsPage = () => {
                         viewMode === 'grid' ? (
                             <div className="space-y-5">
                                 {/* Find Emails Action Bar */}
-                                <div className="relative z-20 flex flex-wrap items-center justify-between gap-3 p-4 rounded-xl bg-card/60 border border-border/40 backdrop-blur-sm">
-                                    <div className="flex items-center gap-3">
+                                <div className="relative z-20 flex flex-col sm:flex-row flex-wrap items-start sm:items-center justify-between gap-3 p-3 sm:p-4 rounded-xl bg-card/60 border border-border/40 backdrop-blur-sm">
+                                    <div className="flex flex-wrap items-center gap-2 sm:gap-3 w-full sm:w-auto">
                                         <span className="text-sm text-muted-foreground font-medium">
                                             <span className="text-primary font-bold">{filteredResults.length}</span> results found
                                         </span>
-                                        <span className="w-px h-5 bg-border/60" />
+                                        <span className="w-px h-5 bg-border/60 hidden sm:block" />
                                         {/* Badge Filter Chips */}
-                                        <div className="flex items-center gap-1.5">
+                                        <div className="flex flex-wrap items-center gap-1.5">
                                             {[
                                                 { key: 'all', label: 'All', emoji: '', cls: 'border-border/60 text-muted-foreground hover:border-primary/40' },
                                                 { key: 'strong', label: 'Strong', emoji: '💪', cls: 'border-emerald-500/40 text-emerald-300 hover:bg-emerald-500/10' },
@@ -701,8 +702,8 @@ const ICPResultsPage = () => {
                                     </div>
                                 </div>
 
-                                <div className="rounded-md border border-border/40 bg-card">
-                                    <Table>
+                                <div className="rounded-md border border-border/40 bg-card overflow-x-auto">
+                                    <Table className="min-w-[800px]">
                                         <TableHeader className="bg-muted/20">
                                             <TableRow className="border-border/30 hover:bg-transparent">
                                                 <TableHead className="w-[50px]">
