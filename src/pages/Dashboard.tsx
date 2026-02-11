@@ -72,9 +72,9 @@ const Dashboard = () => {
 
   return (
     <div className="min-h-screen bg-background">
-      <div className="max-w-7xl mx-auto px-0 sm:px-6 lg:px-8 py-0 sm:py-6">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-6">
         {/* Header Section */}
-        <div className="mb-6 sm:mb-8 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 px-4 sm:px-0 animate-fade-in-up">
+        <div className="mb-6 sm:mb-8 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 animate-fade-in-up">
           <div className="flex items-center gap-3 sm:gap-4">
             {profile?.logo_url && (
               <img 
@@ -114,7 +114,7 @@ const Dashboard = () => {
         </div>
 
         {/* KPI Cards */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6 px-4 sm:px-0">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
           <Card className="p-4 sm:p-6 bg-card/50 backdrop-blur-sm border-border/30 hover:border-primary/50 transition-all duration-300 hover:shadow-[0_0_25px_rgba(62,207,142,0.2)] animate-fade-in-up" style={{ animationDelay: '0.1s' }}>
             <div className="flex items-center gap-3 mb-3 sm:mb-4">
               <div className="p-2 bg-primary/10 rounded-lg border border-primary/20">
@@ -161,7 +161,7 @@ const Dashboard = () => {
         </div>
 
         {/* Quick Actions */}
-        <div className="flex flex-col sm:flex-row gap-3 mb-6 px-4 sm:px-0 animate-fade-in-up" style={{ animationDelay: '0.5s' }}>
+        <div className="flex flex-col sm:flex-row gap-3 mb-6 animate-fade-in-up" style={{ animationDelay: '0.5s' }}>
           <Button onClick={() => navigate('/screening')} variant="outline" className="w-full sm:w-auto border-primary/30 hover:bg-primary/10 hover:border-primary hover:shadow-[0_0_15px_rgba(62,207,142,0.15)] transition-all duration-300" size="sm">
             Upload Resume
           </Button>

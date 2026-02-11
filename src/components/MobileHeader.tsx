@@ -1,4 +1,4 @@
-import { LayoutDashboard, BarChart3, Search, Brain, LogOut, MessageSquare } from "lucide-react";
+import { LayoutDashboard, BarChart3, Search, Brain, LogOut, MessageSquare, Target, Shield } from "lucide-react";
 import { NavLink } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import { useNavigate } from "react-router-dom";
@@ -24,6 +24,8 @@ const MobileHeader = ({ onCollaborationToggle, showCollaboration }: MobileHeader
     { to: "/analytics", icon: BarChart3, label: "Analytics" },
     { to: "/lead-scraper", icon: Search, label: "Leads" },
     { to: "/deep-search", icon: Brain, label: "Deep Search" },
+    { to: "/icp-intelligence", icon: Target, label: "ICP" },
+    { to: "/screening", icon: Shield, label: "Screening" },
   ];
 
   return (
@@ -58,8 +60,8 @@ const MobileHeader = ({ onCollaborationToggle, showCollaboration }: MobileHeader
       </div>
 
       {/* Navigation Section */}
-      <ScrollArea className="w-full">
-        <nav className="flex items-center gap-1 px-2 py-2 overflow-x-auto">
+      <div className="w-full overflow-x-auto scrollbar-hide">
+        <nav className="flex items-center gap-1 px-2 py-2">
           {navItems.map((item) => (
             <NavLink
               key={item.to}
@@ -92,7 +94,7 @@ const MobileHeader = ({ onCollaborationToggle, showCollaboration }: MobileHeader
             <span className="text-sm font-medium">Sign Out</span>
           </Button>
         </nav>
-      </ScrollArea>
+      </div>
     </header>
   );
 };

@@ -175,9 +175,25 @@ All colors MUST be HSL.
   }
 }
 
-/* Enable smooth scrolling globally */
+/* Enable smooth scrolling globally + prevent horizontal scroll */
 html {
   scroll-behavior: smooth;
+  overflow-x: hidden;
+  max-width: 100vw;
+}
+
+body {
+  overflow-x: hidden;
+  max-width: 100vw;
+}
+
+/* Hide scrollbar for mobile nav */
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
+}
+.scrollbar-hide {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
 }
 
 /* Enhanced scroll behavior for webkit browsers */
