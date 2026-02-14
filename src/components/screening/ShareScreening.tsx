@@ -47,13 +47,6 @@ export function ShareScreening({ requirements, questions, settings, generatedUrl
     fetchCandidates();
   }, []);
 
-  // Auto-generate link on mount if not already generated
-  useEffect(() => {
-    if (!generatedUrl && !isGenerating) {
-      generateLink();
-    }
-  }, []);
-
   const fetchCandidates = async () => {
     const results: CandidateOption[] = [];
 
@@ -84,7 +77,8 @@ export function ShareScreening({ requirements, questions, settings, generatedUrl
     setCandidates(results);
   };
 
-  const generateLink = async (candidateId?: string) => {
+  const generateLink = async (candidateId: string) => {
+    if (!candidateId) return;
     setIsGenerating(true);
     try {
       // Filter questions by enabled types
@@ -97,7 +91,7 @@ export function ShareScreening({ requirements, questions, settings, generatedUrl
 
       const { data, error } = await supabase.functions.invoke('generate-screening-invite', {
         body: {
-          candidate_id: candidateId || 'preview',
+          candidate_id: candidateId,
           role_title: requirements.role_title,
           required_skills: requirements.required_skills,
           experience_level: requirements.experience_level,
@@ -194,19 +188,13 @@ export function ShareScreening({ requirements, questions, settings, generatedUrl
 
   return (
     <div className="space-y-6">
-      {/* Section A: Copy Link */}
-      <div className="space-y-3">
-        <div className="flex items-center gap-2">
-          <Link2 className="w-4 h-4 text-primary" />
-          <Label className="text-base font-semibold">Copy Screening Link</Label>
-        </div>
-
-        {isGenerating ? (
-          <div className="flex items-center gap-2 p-4 bg-muted/50 rounded-lg text-sm text-muted-foreground">
-            <Loader2 className="w-4 h-4 animate-spin" />
-            Generating your screening link...
+      {/* Section A: Copy Link (only visible after generating) */}
+      {generatedUrl && (
+        <div className="space-y-3">
+          <div className="flex items-center gap-2">
+            <Link2 className="w-4 h-4 text-primary" />
+            <Label className="text-base font-semibold">Copy Screening Link</Label>
           </div>
-        ) : generatedUrl ? (
           <div className="space-y-2">
             <div className="flex gap-2">
               <code className="flex-1 bg-muted/50 p-3 rounded-lg text-xs break-all border border-border">
@@ -221,39 +209,37 @@ export function ShareScreening({ requirements, questions, settings, generatedUrl
               Share this link with your candidate — it's valid for {expiresInDays} days.
             </div>
           </div>
-        ) : (
-          <Button onClick={() => generateLink()} variant="outline" size="sm">
-            Generate Link
-          </Button>
-        )}
-
-        <div className="w-32">
-          <Select value={expiresInDays} onValueChange={setExpiresInDays}>
-            <SelectTrigger className="h-8 text-xs">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="3">3 days</SelectItem>
-              <SelectItem value="7">7 days</SelectItem>
-              <SelectItem value="14">14 days</SelectItem>
-            </SelectContent>
-          </Select>
         </div>
-      </div>
+      )}
 
-      {/* Divider */}
-      <div className="relative">
-        <div className="absolute inset-0 flex items-center"><div className="w-full border-t border-border" /></div>
-        <div className="relative flex justify-center text-xs">
-          <span className="bg-background px-3 text-muted-foreground">or</span>
+      {generatedUrl && (
+        <div className="relative">
+          <div className="absolute inset-0 flex items-center"><div className="w-full border-t border-border" /></div>
+          <div className="relative flex justify-center text-xs">
+            <span className="bg-background px-3 text-muted-foreground">or send directly</span>
+          </div>
         </div>
-      </div>
+      )}
 
-      {/* Section B: Send Email */}
+
+      {/* Section B: Select Candidate & Send */}
       <div className="space-y-3">
         <div className="flex items-center gap-2">
           <Mail className="w-4 h-4 text-primary" />
-          <Label className="text-base font-semibold">Send Email Directly</Label>
+          <Label className="text-base font-semibold">Select Candidate</Label>
+        </div>
+
+        <div className="w-40">
+          <Select value={expiresInDays} onValueChange={setExpiresInDays}>
+            <SelectTrigger className="h-8 text-xs">
+              <SelectValue placeholder="Link expiry" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="3">Expires in 3 days</SelectItem>
+              <SelectItem value="7">Expires in 7 days</SelectItem>
+              <SelectItem value="14">Expires in 14 days</SelectItem>
+            </SelectContent>
+          </Select>
         </div>
 
         <div className="relative">
@@ -278,7 +264,10 @@ export function ShareScreening({ requirements, questions, settings, generatedUrl
                   {items.map((c) => (
                     <button
                       key={`${c.source}-${c.id}`}
-                      onClick={() => setSelectedCandidate(c)}
+                      onClick={() => {
+                        setSelectedCandidate(c);
+                        if (!generatedUrl) generateLink(c.id);
+                      }}
                       className={`w-full text-left p-2.5 rounded-md transition-colors text-sm ${
                         selectedCandidate?.id === c.id && selectedCandidate?.source === c.source
                           ? "bg-primary/10 border border-primary/20"
@@ -298,6 +287,13 @@ export function ShareScreening({ requirements, questions, settings, generatedUrl
           </div>
         </ScrollArea>
 
+        {isGenerating && (
+          <div className="flex items-center gap-2 p-3 bg-muted/50 rounded-lg text-sm text-muted-foreground">
+            <Loader2 className="w-4 h-4 animate-spin" />
+            Generating screening link for {selectedCandidate?.name}...
+          </div>
+        )}
+
         {selectedCandidate && (
           <div className="space-y-3">
             <div className="p-3 bg-primary/5 rounded-lg border border-primary/20">
@@ -307,23 +303,33 @@ export function ShareScreening({ requirements, questions, settings, generatedUrl
                 {SOURCE_LABELS[selectedCandidate.source]}
               </Badge>
             </div>
-            <Button
-              onClick={sendEmail}
-              disabled={isSendingEmail || !generatedUrl}
-              className="w-full"
-            >
-              {isSendingEmail ? (
-                <>
-                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                  Sending...
-                </>
-              ) : (
-                <>
-                  <Send className="w-4 h-4 mr-2" />
-                  Send Invitation Email
-                </>
-              )}
-            </Button>
+
+            {!generatedUrl && !isGenerating && (
+              <Button onClick={() => generateLink(selectedCandidate.id)} variant="outline" className="w-full">
+                <Link2 className="w-4 h-4 mr-2" />
+                Generate Screening Link
+              </Button>
+            )}
+
+            {generatedUrl && (
+              <Button
+                onClick={sendEmail}
+                disabled={isSendingEmail}
+                className="w-full"
+              >
+                {isSendingEmail ? (
+                  <>
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    Sending...
+                  </>
+                ) : (
+                  <>
+                    <Send className="w-4 h-4 mr-2" />
+                    Send Invitation Email
+                  </>
+                )}
+              </Button>
+            )}
           </div>
         )}
       </div>
