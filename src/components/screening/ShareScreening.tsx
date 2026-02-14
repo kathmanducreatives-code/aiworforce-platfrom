@@ -89,9 +89,13 @@ export function ShareScreening({ requirements, questions, settings, generatedUrl
         return settings.enabledTypes.includes(q.category);
       }).slice(0, settings.questionCount);
 
+      const candidate = candidates.find(c => c.id === candidateId);
+      const candidateSource = candidate?.source === 'linkedin_leads' ? 'linkedin_leads' : 'resume_screening';
+
       const { data, error } = await supabase.functions.invoke('generate-screening-invite', {
         body: {
           candidate_id: candidateId,
+          candidate_source: candidateSource,
           role_title: requirements.role_title,
           required_skills: requirements.required_skills,
           experience_level: requirements.experience_level,
@@ -142,9 +146,11 @@ export function ShareScreening({ requirements, questions, settings, generatedUrl
     if (!selectedCandidate || !generatedUrl) return;
     setIsSendingEmail(true);
     try {
+      const candidateSource = selectedCandidate.source === 'linkedin_leads' ? 'linkedin_leads' : 'resume_screening';
       const { error } = await supabase.functions.invoke('generate-screening-invite', {
         body: {
           candidate_id: selectedCandidate.id,
+          candidate_source: candidateSource,
           role_title: requirements.role_title,
           required_skills: requirements.required_skills,
           experience_level: requirements.experience_level,
