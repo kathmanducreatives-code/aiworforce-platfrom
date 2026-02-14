@@ -1863,6 +1863,74 @@ export type Database = {
         }
         Relationships: []
       }
+      screening_applications: {
+        Row: {
+          access_token: string
+          candidate_edits: Json | null
+          completed_at: string | null
+          created_at: string
+          extracted_data: Json | null
+          id: string
+          interview_questions: Json | null
+          job_id: string
+          match_category: string | null
+          match_score: number | null
+          red_flags: Json | null
+          resume_url: string | null
+          screening_answers: Json | null
+          status: string
+          strengths: Json | null
+          tab_switches: number
+          total_time_seconds: number
+        }
+        Insert: {
+          access_token?: string
+          candidate_edits?: Json | null
+          completed_at?: string | null
+          created_at?: string
+          extracted_data?: Json | null
+          id?: string
+          interview_questions?: Json | null
+          job_id: string
+          match_category?: string | null
+          match_score?: number | null
+          red_flags?: Json | null
+          resume_url?: string | null
+          screening_answers?: Json | null
+          status?: string
+          strengths?: Json | null
+          tab_switches?: number
+          total_time_seconds?: number
+        }
+        Update: {
+          access_token?: string
+          candidate_edits?: Json | null
+          completed_at?: string | null
+          created_at?: string
+          extracted_data?: Json | null
+          id?: string
+          interview_questions?: Json | null
+          job_id?: string
+          match_category?: string | null
+          match_score?: number | null
+          red_flags?: Json | null
+          resume_url?: string | null
+          screening_answers?: Json | null
+          status?: string
+          strengths?: Json | null
+          tab_switches?: number
+          total_time_seconds?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "screening_applications_job_id_fkey"
+            columns: ["job_id"]
+            isOneToOne: false
+            referencedRelation: "screening_jobs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       screening_behavioral_analysis: {
         Row: {
           ai_confidence_score: number | null
@@ -2000,6 +2068,60 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      screening_jobs: {
+        Row: {
+          company_name: string
+          created_at: string
+          custom_questions: Json | null
+          description: string
+          education_requirement: string
+          id: string
+          required_skills: string[]
+          required_years: number
+          salary_max: number | null
+          salary_min: number | null
+          slug: string
+          status: string
+          title: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          company_name?: string
+          created_at?: string
+          custom_questions?: Json | null
+          description?: string
+          education_requirement?: string
+          id?: string
+          required_skills?: string[]
+          required_years?: number
+          salary_max?: number | null
+          salary_min?: number | null
+          slug: string
+          status?: string
+          title: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          company_name?: string
+          created_at?: string
+          custom_questions?: Json | null
+          description?: string
+          education_requirement?: string
+          id?: string
+          required_skills?: string[]
+          required_years?: number
+          salary_max?: number | null
+          salary_min?: number | null
+          slug?: string
+          status?: string
+          title?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
       }
       screening_scenarios: {
         Row: {
