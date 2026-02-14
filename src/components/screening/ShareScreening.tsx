@@ -194,58 +194,11 @@ export function ShareScreening({ requirements, questions, settings, generatedUrl
 
   return (
     <div className="space-y-6">
-      {/* Section A: Copy Link (only visible after generating) */}
-      {generatedUrl && (
-        <div className="space-y-3">
-          <div className="flex items-center gap-2">
-            <Link2 className="w-4 h-4 text-primary" />
-            <Label className="text-base font-semibold">Copy Screening Link</Label>
-          </div>
-          <div className="space-y-2">
-            <div className="flex gap-2">
-              <code className="flex-1 bg-muted/50 p-3 rounded-lg text-xs break-all border border-border">
-                {generatedUrl}
-              </code>
-              <Button size="icon" variant="outline" onClick={copyToClipboard} className="shrink-0">
-                {copied ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
-              </Button>
-            </div>
-            <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-              <Clock className="w-3 h-3" />
-              Share this link with your candidate — it's valid for {expiresInDays} days.
-            </div>
-          </div>
-        </div>
-      )}
-
-      {generatedUrl && (
-        <div className="relative">
-          <div className="absolute inset-0 flex items-center"><div className="w-full border-t border-border" /></div>
-          <div className="relative flex justify-center text-xs">
-            <span className="bg-background px-3 text-muted-foreground">or send directly</span>
-          </div>
-        </div>
-      )}
-
-
-      {/* Section B: Select Candidate & Send */}
+      {/* Step 1: Select Candidate */}
       <div className="space-y-3">
         <div className="flex items-center gap-2">
           <Mail className="w-4 h-4 text-primary" />
           <Label className="text-base font-semibold">Select Candidate</Label>
-        </div>
-
-        <div className="w-40">
-          <Select value={expiresInDays} onValueChange={setExpiresInDays}>
-            <SelectTrigger className="h-8 text-xs">
-              <SelectValue placeholder="Link expiry" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="3">Expires in 3 days</SelectItem>
-              <SelectItem value="7">Expires in 7 days</SelectItem>
-              <SelectItem value="14">Expires in 14 days</SelectItem>
-            </SelectContent>
-          </Select>
         </div>
 
         <div className="relative">
@@ -270,10 +223,7 @@ export function ShareScreening({ requirements, questions, settings, generatedUrl
                   {items.map((c) => (
                     <button
                       key={`${c.source}-${c.id}`}
-                      onClick={() => {
-                        setSelectedCandidate(c);
-                        if (!generatedUrl) generateLink(c.id);
-                      }}
+                      onClick={() => setSelectedCandidate(c)}
                       className={`w-full text-left p-2.5 rounded-md transition-colors text-sm ${
                         selectedCandidate?.id === c.id && selectedCandidate?.source === c.source
                           ? "bg-primary/10 border border-primary/20"
@@ -292,35 +242,86 @@ export function ShareScreening({ requirements, questions, settings, generatedUrl
             )}
           </div>
         </ScrollArea>
+      </div>
 
-        {isGenerating && (
-          <div className="flex items-center gap-2 p-3 bg-muted/50 rounded-lg text-sm text-muted-foreground">
-            <Loader2 className="w-4 h-4 animate-spin" />
-            Generating screening link for {selectedCandidate?.name}...
-          </div>
-        )}
-
-        {selectedCandidate && (
-          <div className="space-y-3">
-            <div className="p-3 bg-primary/5 rounded-lg border border-primary/20">
+      {/* Step 2: Selected candidate info + Generate / Copy */}
+      {selectedCandidate && (
+        <div className="space-y-4">
+          <div className="p-3 bg-primary/5 rounded-lg border border-primary/20 flex items-center justify-between">
+            <div>
               <p className="font-medium text-sm">{selectedCandidate.name}</p>
               <p className="text-xs text-muted-foreground">{selectedCandidate.email}</p>
               <Badge variant="outline" className="mt-1 text-[10px]">
                 {SOURCE_LABELS[selectedCandidate.source]}
               </Badge>
             </div>
+            <div className="w-40 shrink-0">
+              <Select value={expiresInDays} onValueChange={setExpiresInDays}>
+                <SelectTrigger className="h-8 text-xs">
+                  <SelectValue placeholder="Link expiry" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="3">Expires in 3 days</SelectItem>
+                  <SelectItem value="7">Expires in 7 days</SelectItem>
+                  <SelectItem value="14">Expires in 14 days</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
 
-            {!generatedUrl && !isGenerating && (
-              <Button onClick={() => generateLink(selectedCandidate.id)} variant="outline" className="w-full">
-                <Link2 className="w-4 h-4 mr-2" />
-                Generate Screening Link
-              </Button>
-            )}
+          {/* Generate button */}
+          {!generatedUrl && (
+            <Button
+              onClick={() => generateLink(selectedCandidate.id)}
+              disabled={isGenerating}
+              className="w-full"
+              size="lg"
+            >
+              {isGenerating ? (
+                <>
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  Generating link...
+                </>
+              ) : (
+                <>
+                  <Link2 className="w-4 h-4 mr-2" />
+                  Generate Screening Link
+                </>
+              )}
+            </Button>
+          )}
 
-            {generatedUrl && (
+          {/* Generated link + copy */}
+          {generatedUrl && (
+            <div className="space-y-3">
+              <div className="flex items-center gap-2">
+                <Link2 className="w-4 h-4 text-primary" />
+                <Label className="text-base font-semibold">Screening Link</Label>
+              </div>
+              <div className="flex gap-2">
+                <code className="flex-1 bg-muted/50 p-3 rounded-lg text-xs break-all border border-border">
+                  {generatedUrl}
+                </code>
+                <Button size="icon" variant="outline" onClick={copyToClipboard} className="shrink-0">
+                  {copied ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
+                </Button>
+              </div>
+              <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                <Clock className="w-3 h-3" />
+                Share this link with your candidate — it's valid for {expiresInDays} days.
+              </div>
+
+              <div className="relative">
+                <div className="absolute inset-0 flex items-center"><div className="w-full border-t border-border" /></div>
+                <div className="relative flex justify-center text-xs">
+                  <span className="bg-background px-3 text-muted-foreground">or send via email</span>
+                </div>
+              </div>
+
               <Button
                 onClick={sendEmail}
                 disabled={isSendingEmail}
+                variant="outline"
                 className="w-full"
               >
                 {isSendingEmail ? (
@@ -331,14 +332,14 @@ export function ShareScreening({ requirements, questions, settings, generatedUrl
                 ) : (
                   <>
                     <Send className="w-4 h-4 mr-2" />
-                    Send Invitation Email
+                    Send Invitation Email to {selectedCandidate.name}
                   </>
                 )}
               </Button>
-            )}
-          </div>
-        )}
-      </div>
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }
