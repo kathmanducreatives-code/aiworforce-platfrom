@@ -31,6 +31,7 @@ import ProtectedRoute from "./components/ProtectedRoute";
 import MainLayout from "./components/MainLayout";
 import AdaptiveScreening from "./pages/AdaptiveScreening";
 import ScreeningResults from "./pages/ScreeningResults";
+import CandidateApply from "./pages/CandidateApply";
 import ScreeningTemplates from "./pages/ScreeningTemplates";
 import TemplateEditor from "./pages/TemplateEditor";
 import ICPManager from "./pages/ICPManager";
@@ -198,6 +199,7 @@ const App = () => (
                 } />
 
                 {/* Public pages - no auth required */}
+                <Route path="/apply/:slug" element={<CandidateApply />} />
                 <Route path="/book/:token" element={<BookInterview />} />
                 <Route path="/screening/:token" element={<AdaptiveScreening />} />
 

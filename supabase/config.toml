@@ -72,3 +72,9 @@ verify_jwt = true
 
 [functions.generate-screening-questions]
 verify_jwt = false
+
+[functions.parse-resume]
+verify_jwt = false
+
+[functions.screen-candidate]
+verify_jwt = false
