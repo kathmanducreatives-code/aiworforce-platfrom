@@ -78,3 +78,6 @@ verify_jwt = false
 
 [functions.screen-candidate]
 verify_jwt = false
+
+[functions.screening-notifications]
+verify_jwt = false
