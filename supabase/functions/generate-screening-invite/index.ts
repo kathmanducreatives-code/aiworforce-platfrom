@@ -3,15 +3,138 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version',
 };
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL');
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
 const RESEND_API_KEY = Deno.env.get('RESEND_API_KEY');
+const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
 
-// n8n webhook URL for screening backend
 const N8N_WEBHOOK_URL = 'https://n8n.prasidha.me/webhook/behavioral-screening';
+const AI_GATEWAY_URL = 'https://ai.gateway.lovable.dev/v1/chat/completions';
+
+// Generate custom screening questions using Lovable AI
+async function generateCustomQuestions(
+  role_title: string,
+  required_skills: string[],
+  experience_level: string,
+  culture_keywords: string[] = []
+): Promise<Array<{ category: string; question_text: string; follow_up_prompts: string[]; difficulty_level: number }> | null> {
+  if (!LOVABLE_API_KEY) {
+    console.error('LOVABLE_API_KEY not configured, skipping AI question generation');
+    return null;
+  }
+
+  const skillsList = required_skills.join(', ');
+  const cultureList = culture_keywords.length > 0 ? culture_keywords.join(', ') : 'teamwork, adaptability';
+  const levelMap: Record<string, string> = {
+    entry: 'entry-level (0-2 years experience)',
+    mid: 'mid-level (3-7 years experience)',
+    senior: 'senior-level (8+ years experience)',
+  };
+  const levelDesc = levelMap[experience_level] || levelMap['mid'];
+
+  const systemPrompt = `You are an expert behavioral interview designer for recruitment. You create STAR-format behavioral screening questions that are probing, open-ended, and role-specific. Never create yes/no questions. Each question should present a realistic workplace scenario that reveals how the candidate thinks and acts.`;
+
+  const userPrompt = `Generate behavioral screening questions for a ${levelDesc} "${role_title}" position.
+
+Required skills to assess: ${skillsList}
+Culture keywords to probe: ${cultureList}
+
+Generate questions following this exact distribution:
+- 2 ownership/accountability scenario questions (category: "accountability")
+- ${required_skills.length >= 3 ? '3' : '2'} questions per required skill, testing behavioral competency (category: the skill name, e.g. "${required_skills[0]}")
+- ${culture_keywords.length > 0 ? '2' : '1'} culture-fit questions using the culture keywords (category: "culture_fit")
+- 1 red-flag detector question designed to surface concerning patterns (category: "red_flag")
+
+Each question must:
+- Be STAR-format friendly (Situation, Task, Action, Result)
+- Be open-ended and probing (never yes/no)
+- Include 2 follow-up prompts to dig deeper
+- Have a difficulty_level between 1-5 appropriate for ${experience_level} level
+- Be specific to the "${role_title}" role`;
+
+  const toolDef = {
+    type: "function",
+    function: {
+      name: "generate_screening_questions",
+      description: "Return an array of behavioral screening questions for the role.",
+      parameters: {
+        type: "object",
+        properties: {
+          questions: {
+            type: "array",
+            items: {
+              type: "object",
+              properties: {
+                category: { type: "string", description: "Category: accountability, culture_fit, red_flag, or the skill name" },
+                question_text: { type: "string", description: "The full behavioral question text" },
+                follow_up_prompts: { type: "array", items: { type: "string" }, description: "2 follow-up probing questions" },
+                difficulty_level: { type: "number", description: "Difficulty 1-5" },
+              },
+              required: ["category", "question_text", "follow_up_prompts", "difficulty_level"],
+              additionalProperties: false,
+            },
+          },
+        },
+        required: ["questions"],
+        additionalProperties: false,
+      },
+    },
+  };
+
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 30000);
+
+  try {
+    const response = await fetch(AI_GATEWAY_URL, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${LOVABLE_API_KEY}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        model: 'google/gemini-3-flash-preview',
+        messages: [
+          { role: 'system', content: systemPrompt },
+          { role: 'user', content: userPrompt },
+        ],
+        tools: [toolDef],
+        tool_choice: { type: "function", function: { name: "generate_screening_questions" } },
+      }),
+      signal: controller.signal,
+    });
+
+    clearTimeout(timeoutId);
+
+    if (!response.ok) {
+      const errText = await response.text();
+      console.error(`AI gateway error [${response.status}]:`, errText);
+      return null;
+    }
+
+    const result = await response.json();
+    const toolCall = result.choices?.[0]?.message?.tool_calls?.[0];
+    if (!toolCall?.function?.arguments) {
+      console.error('No tool call in AI response:', JSON.stringify(result));
+      return null;
+    }
+
+    const parsed = JSON.parse(toolCall.function.arguments);
+    if (!Array.isArray(parsed.questions) || parsed.questions.length === 0) {
+      console.error('AI returned empty questions array');
+      return null;
+    }
+
+    console.log(`AI generated ${parsed.questions.length} custom questions for "${role_title}"`);
+    return parsed.questions;
+  } catch (err) {
+    clearTimeout(timeoutId);
+    console.error('AI question generation failed:', err);
+    return null;
+  }
+}
 
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
@@ -21,13 +144,18 @@ serve(async (req) => {
   try {
     const { 
       candidate_id, 
-      template_id = null,
-      role_briefing = null,
+      template_id: incoming_template_id = null,
+      role_briefing: incoming_role_briefing = null,
       scenario_config = null,
       scenario_count = 3, 
       expires_in_days = 7, 
       send_email = true,
-      skip_webhook = false, // When true, skip n8n call (already synced in Step 3)
+      skip_webhook = false,
+      // New AI question generation params
+      role_title = null,
+      required_skills = null,
+      experience_level = 'mid',
+      culture_keywords = [],
     } = await req.json();
 
     if (!candidate_id) {
@@ -36,8 +164,18 @@ serve(async (req) => {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
+
+    let template_id = incoming_template_id;
+    let role_briefing = incoming_role_briefing;
     
-    console.log('Creating screening with context:', { template_id, role_briefing: !!role_briefing, scenario_config: !!scenario_config, skip_webhook });
+    console.log('Creating screening with context:', { 
+      template_id, 
+      role_briefing: !!role_briefing, 
+      scenario_config: !!scenario_config, 
+      skip_webhook,
+      role_title,
+      required_skills,
+    });
 
     const supabase = createClient(SUPABASE_URL!, SUPABASE_SERVICE_ROLE_KEY!);
 
@@ -64,9 +202,7 @@ serve(async (req) => {
       .single();
 
     if (existingSession) {
-      // Return existing session
       const screeningUrl = `${req.headers.get('origin') || 'https://screeningpilot.com'}/screening/${existingSession.access_token}`;
-      
       return new Response(JSON.stringify({
         session_id: existingSession.id,
         access_token: existingSession.access_token,
@@ -78,13 +214,77 @@ serve(async (req) => {
       });
     }
 
+    // === AI-Powered Custom Question Generation ===
+    if (role_title && required_skills && Array.isArray(required_skills) && required_skills.length > 0) {
+      console.log(`Generating custom questions for role: "${role_title}", skills: [${required_skills.join(', ')}]`);
+      
+      const generatedQuestions = await generateCustomQuestions(
+        role_title,
+        required_skills,
+        experience_level,
+        culture_keywords
+      );
+
+      if (generatedQuestions && generatedQuestions.length > 0) {
+        // Create custom template
+        const { data: newTemplate, error: templateError } = await supabase
+          .from('screening_templates')
+          .insert({
+            name: `${role_title} Custom Assessment`,
+            description: `AI-generated behavioral assessment for ${role_title} role. Skills: ${required_skills.join(', ')}.`,
+            role_focus: role_title,
+            is_default: false,
+          })
+          .select()
+          .single();
+
+        if (templateError || !newTemplate) {
+          console.error('Failed to create custom template:', templateError);
+          // Fall through to default behavior
+        } else {
+          // Insert generated questions
+          const questionsToInsert = generatedQuestions.map((q, idx) => ({
+            template_id: newTemplate.id,
+            category: q.category,
+            question_text: q.question_text,
+            follow_up_prompts: q.follow_up_prompts,
+            difficulty_level: q.difficulty_level,
+            is_custom: true,
+            sort_order: idx + 1,
+          }));
+
+          const { error: questionsError } = await supabase
+            .from('screening_template_questions')
+            .insert(questionsToInsert);
+
+          if (questionsError) {
+            console.error('Failed to insert custom questions:', questionsError);
+          } else {
+            console.log(`Created template "${newTemplate.name}" with ${questionsToInsert.length} AI-generated questions`);
+            template_id = newTemplate.id;
+          }
+        }
+
+        // Enrich role_briefing with custom params for chat AI context
+        role_briefing = {
+          ...(role_briefing || {}),
+          role_title,
+          required_skills,
+          experience_level,
+          culture_keywords,
+          ai_generated: true,
+        };
+      } else {
+        console.log('AI generation returned no questions, falling back to default behavior');
+      }
+    }
+
     // Calculate expiration
     const expiresAt = new Date();
     expiresAt.setDate(expiresAt.getDate() + expires_in_days);
 
-    // Only call n8n webhook if not skipped (webhook was already called in Step 3)
+    // Only call n8n webhook if not skipped
     if (!skip_webhook) {
-      // Fetch template data if template_id is provided
       let templateData = null;
       if (template_id) {
         const { data: template } = await supabase
@@ -104,7 +304,6 @@ serve(async (req) => {
         }
       }
 
-      // Build payload for n8n webhook
       const webhookPayload = {
         action: 'create_screening',
         timestamp: new Date().toISOString(),
@@ -130,7 +329,6 @@ serve(async (req) => {
 
       console.log('Calling n8n webhook with payload:', JSON.stringify(webhookPayload, null, 2));
 
-      // Call n8n webhook and wait for response (30 second timeout)
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 30000);
 
@@ -184,7 +382,7 @@ serve(async (req) => {
       console.log('Skipping n8n webhook - already synced in Step 3');
     }
 
-    // n8n webhook succeeded - now create the session in Supabase
+    // Create the session in Supabase
     const { data: newSession, error: sessionError } = await supabase
       .from('adaptive_screening_sessions')
       .insert({
@@ -209,18 +407,15 @@ serve(async (req) => {
       .update({ screening_status: 'invited' })
       .eq('id', candidate_id);
 
-    // Generate screening URL
     const origin = req.headers.get('origin') || 'https://screeningpilot.com';
     const screeningUrl = `${origin}/screening/${newSession.access_token}`;
 
-    // Send email invitation if enabled and email is available
     if (send_email && candidate.email && RESEND_API_KEY) {
       try {
         await sendInviteEmail(candidate, screeningUrl, expiresAt);
         console.log('Invite email sent to:', candidate.email);
       } catch (emailError) {
         console.error('Failed to send invite email:', emailError);
-        // Don't fail the whole request if email fails
       }
     }
 
@@ -232,6 +427,7 @@ serve(async (req) => {
       screening_url: screeningUrl,
       expires_at: newSession.expires_at,
       existing: false,
+      ai_generated: !!(role_title && template_id !== incoming_template_id),
     }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });

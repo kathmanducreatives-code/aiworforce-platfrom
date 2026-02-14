@@ -196,6 +196,7 @@ export type Database = {
           photo_url: string | null
           profile_completeness: number | null
           profile_data: Json | null
+          score_breakdown: Json | null
           scrape_run_id: string | null
           seniority_level: string | null
           session_id: string | null
@@ -225,6 +226,7 @@ export type Database = {
           photo_url?: string | null
           profile_completeness?: number | null
           profile_data?: Json | null
+          score_breakdown?: Json | null
           scrape_run_id?: string | null
           seniority_level?: string | null
           session_id?: string | null
@@ -254,6 +256,7 @@ export type Database = {
           photo_url?: string | null
           profile_completeness?: number | null
           profile_data?: Json | null
+          score_breakdown?: Json | null
           scrape_run_id?: string | null
           seniority_level?: string | null
           session_id?: string | null
@@ -1530,6 +1533,99 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      marketing_videos: {
+        Row: {
+          ai_motion_graphics: Json | null
+          ai_motion_raw_response: string | null
+          ai_script: Json | null
+          ai_script_raw_response: string | null
+          avatar_id: string | null
+          completed_at: string | null
+          created_at: string | null
+          cta_message: string | null
+          demo_steps: Json | null
+          error_message: string | null
+          feature_description: string | null
+          feature_name: string
+          generation_status: string | null
+          heygen_status: string | null
+          heygen_video_id: string | null
+          id: string
+          key_benefits: Json | null
+          problem_solved: string | null
+          script_estimated_duration: number | null
+          script_word_count: number | null
+          target_audience: string | null
+          thumbnail_url: string | null
+          updated_at: string | null
+          video_intent: string | null
+          video_length: number | null
+          video_style: string | null
+          video_url: string | null
+          voice_id: string | null
+        }
+        Insert: {
+          ai_motion_graphics?: Json | null
+          ai_motion_raw_response?: string | null
+          ai_script?: Json | null
+          ai_script_raw_response?: string | null
+          avatar_id?: string | null
+          completed_at?: string | null
+          created_at?: string | null
+          cta_message?: string | null
+          demo_steps?: Json | null
+          error_message?: string | null
+          feature_description?: string | null
+          feature_name: string
+          generation_status?: string | null
+          heygen_status?: string | null
+          heygen_video_id?: string | null
+          id?: string
+          key_benefits?: Json | null
+          problem_solved?: string | null
+          script_estimated_duration?: number | null
+          script_word_count?: number | null
+          target_audience?: string | null
+          thumbnail_url?: string | null
+          updated_at?: string | null
+          video_intent?: string | null
+          video_length?: number | null
+          video_style?: string | null
+          video_url?: string | null
+          voice_id?: string | null
+        }
+        Update: {
+          ai_motion_graphics?: Json | null
+          ai_motion_raw_response?: string | null
+          ai_script?: Json | null
+          ai_script_raw_response?: string | null
+          avatar_id?: string | null
+          completed_at?: string | null
+          created_at?: string | null
+          cta_message?: string | null
+          demo_steps?: Json | null
+          error_message?: string | null
+          feature_description?: string | null
+          feature_name?: string
+          generation_status?: string | null
+          heygen_status?: string | null
+          heygen_video_id?: string | null
+          id?: string
+          key_benefits?: Json | null
+          problem_solved?: string | null
+          script_estimated_duration?: number | null
+          script_word_count?: number | null
+          target_audience?: string | null
+          thumbnail_url?: string | null
+          updated_at?: string | null
+          video_intent?: string | null
+          video_length?: number | null
+          video_style?: string | null
+          video_url?: string | null
+          voice_id?: string | null
+        }
+        Relationships: []
       }
       profiles: {
         Row: {
