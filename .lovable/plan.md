@@ -1,64 +1,56 @@
 
-## Add "Generate Session Link" (No Candidate Required) to Step 4
 
-### Problem
-Step 4 currently requires selecting a candidate before generating a screening link. Recruiters need the ability to create a generic session link they can share with anyone -- even candidates not yet in the system.
+## Fix: Screening Link Generation Fails Due to n8n Webhook Error
+
+### Root Cause
+The `generate-screening-invite` edge function calls an external n8n webhook (line 426) **before** creating the screening session in the database (line 478). When the webhook returns a 500 error (as seen in the logs: "Validation failed [line 35]"), the function immediately returns a 502 error to the frontend (lines 438-445) and **never reaches the session creation code**. No session is created, no URL is generated.
+
+The n8n webhook is a secondary integration (for syncing/notifications) and should not block the core functionality of generating a screening link.
 
 ### Solution
-Add a standalone "Generate Session Link" section at the top of Step 4, visually separated from the existing candidate-specific flow. Both the frontend and edge function need updates to support candidateless sessions.
+Make the n8n webhook call **non-blocking**. Instead of returning an error response when the webhook fails, log the failure as a warning and continue to create the session and return the screening URL.
 
-### Changes
+### Change
 
-#### 1. `supabase/functions/generate-screening-invite/index.ts`
+**File: `supabase/functions/generate-screening-invite/index.ts`**
 
-Make `candidate_id` optional:
+Lines 435-470 -- Replace the fatal error handling for the webhook with a warning-only approach:
 
-- Remove the early `400` return when `candidate_id` is missing (lines 165-170)
-- When `candidate_id` is absent, skip candidate lookup, existing-session check, status update, and email sending
-- Set `candidate_id: null` in the session insert and populate `role_briefing` with a `"generic_session": true` flag instead of candidate metadata
-- The n8n webhook payload uses placeholder candidate info (`name: "Generic Session"`, `email: null`)
-- Everything else (template creation, question insertion, token generation) works unchanged
+- When the webhook returns a non-OK status: log the error but **do not return** a 502 response. Continue execution.
+- When the webhook times out: log the timeout but **do not return** a 504 response. Continue execution.
+- When a network error occurs: log the error but **do not return** a 503 response. Continue execution.
 
-#### 2. `src/components/screening/ShareScreening.tsx`
+The three `return new Response(...)` statements inside the webhook error handlers (lines 438-445, 455-459, 463-469) will be removed and replaced with `console.warn(...)` calls, allowing the function to fall through to session creation.
 
-Add a new section **above** the candidate selector:
-
-- A card titled "Generate Generic Session Link" with a subtitle: "Create a screening link you can share with anyone -- no candidate selection needed."
-- A link-expiry dropdown (reuse the existing 3/7/14 days selector)
-- A "Generate Session Link" button that calls `generate-screening-invite` with **no `candidate_id`** and `send_email: false`
-- Once generated, show the URL in a `<code>` block with a Copy button (same pattern as the existing link display)
-- A visual divider ("or send to a specific candidate") separates this from the existing candidate-selection flow below
-- If a generic link has been generated, disable the candidate-specific generate button (only one link per dialog session)
-
-### UI Layout (Step 4 after changes)
+### Before (simplified)
 
 ```text
-+---------------------------------------------+
-| Generate Generic Session Link               |
-| Create a link to share with anyone.         |
-| [Expiry: 7 days v]  [Generate Session Link] |
-|                                             |
-| [generated-url-here]            [Copy]      |
-| Valid for 7 days.                           |
-+---------------------------------------------+
-|                                             |
-|         -- or send to a candidate --        |
-|                                             |
-+---------------------------------------------+
-| Select Candidate                            |
-| [Search candidates...]                      |
-| [candidate list...]                         |
-|                                             |
-| [Selected candidate card]                   |
-| [Generate Screening Link] / [Copy] / [Send] |
-+---------------------------------------------+
+webhook call
+  if (!ok) -> return 502   <-- BLOCKS everything
+  if (timeout) -> return 504
+  if (network) -> return 503
+
+create session   <-- NEVER REACHED
+return screening_url
+```
+
+### After (simplified)
+
+```text
+webhook call
+  if (!ok) -> console.warn("webhook failed, continuing")
+  if (timeout) -> console.warn("webhook timed out, continuing")
+  if (network) -> console.warn("webhook error, continuing")
+
+create session   <-- ALWAYS REACHED
+return screening_url
 ```
 
 ### Technical Details
 
-| File | Change |
-|------|--------|
-| `supabase/functions/generate-screening-invite/index.ts` | Make `candidate_id` optional; skip candidate lookup/email/status-update when absent; insert session with `candidate_id: null` and `generic_session: true` in role_briefing |
-| `src/components/screening/ShareScreening.tsx` | Add generic link generation section at top with its own expiry selector, generate button, URL display, and copy button; add visual divider before existing candidate flow |
+| File | Lines | Change |
+|------|-------|--------|
+| `supabase/functions/generate-screening-invite/index.ts` | 435-469 | Remove three `return new Response(...)` error returns inside webhook error handlers; replace with `console.warn()` so execution continues to session creation |
 
-No database migrations needed -- `candidate_id` on `adaptive_screening_sessions` is already nullable (used for LinkedIn leads).
+No frontend changes needed. No database changes needed.
+
