@@ -27,7 +27,7 @@ const Sidebar = ({ isCollapsed, onToggle, onCollaborationToggle, onCloseCollabor
   const navItems = [
     { to: "/dashboard", icon: LayoutDashboard, label: "Dashboard" },
     { to: "/analytics", icon: BarChart3, label: "Analytics" },
-    { to: "/behavioral-screening", icon: Activity, label: "Behavioral Screening" },
+    { to: "/screening-jobs", icon: Activity, label: "Job Screening" },
     { to: "/lead-scraper", icon: Search, label: "Lead Scraper" },
     { to: "/icp-intelligence", icon: Target, label: "ICP Intelligence" },
     { to: "/deep-search", icon: Brain, label: "Deep Search" },

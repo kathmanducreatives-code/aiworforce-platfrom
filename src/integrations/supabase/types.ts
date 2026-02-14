@@ -1872,9 +1872,12 @@ export type Database = {
           extracted_data: Json | null
           id: string
           interview_questions: Json | null
+          is_archived: boolean | null
           job_id: string
           match_category: string | null
           match_score: number | null
+          recruiter_notes: string | null
+          recruiter_status: string | null
           red_flags: Json | null
           resume_url: string | null
           screening_answers: Json | null
@@ -1891,9 +1894,12 @@ export type Database = {
           extracted_data?: Json | null
           id?: string
           interview_questions?: Json | null
+          is_archived?: boolean | null
           job_id: string
           match_category?: string | null
           match_score?: number | null
+          recruiter_notes?: string | null
+          recruiter_status?: string | null
           red_flags?: Json | null
           resume_url?: string | null
           screening_answers?: Json | null
@@ -1910,9 +1916,12 @@ export type Database = {
           extracted_data?: Json | null
           id?: string
           interview_questions?: Json | null
+          is_archived?: boolean | null
           job_id?: string
           match_category?: string | null
           match_score?: number | null
+          recruiter_notes?: string | null
+          recruiter_status?: string | null
           red_flags?: Json | null
           resume_url?: string | null
           screening_answers?: Json | null
