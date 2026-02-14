@@ -1,99 +1,105 @@
 
 
-## Comprehensive Mobile-First Optimization: Zero Horizontal Scroll
+## AI-Powered Custom Question Generation in Screening Invite
 
 ### Overview
-Audit and fix every page and component to enforce a strict "zero horizontal scroll" policy. Content must scale down gracefully to phone screens (320px minimum), with proper padding, centered content, and no edge-bleeding elements.
+Enhance the `generate-screening-invite` edge function to accept role-specific parameters and use Lovable AI to generate tailored behavioral screening questions. When custom parameters are provided, the function creates a new template with AI-generated questions before creating the session. When no custom parameters are provided, existing behavior is preserved.
 
-### Problem Areas Identified
+### Flow
 
-1. **ICPResultsPage** -- The sticky header has `px-6`, hardcoded `min-w-[300px]` on search, badge filter chips overflow horizontally, table view (list mode) has no horizontal scroll wrapper, and the Find Emails split button + badge chips spill off-screen on mobile.
+```text
+Client sends invite request
+        |
+        v
+  Has role_title + required_skills?
+       / \
+     No    Yes
+     |       |
+     v       v
+  Existing  Call Lovable AI to generate questions
+  behavior        |
+     |            v
+     |     Create screening_template
+     |     ("{role_title} Custom Assessment")
+     |            |
+     |            v
+     |     Insert questions into screening_template_questions
+     |     (mapped to categories)
+     |            |
+     |            v
+     |     Store role context in session role_briefing
+     |            |
+     v            v
+  Create session (with or without new template_id)
+        |
+        v
+  Continue with webhook, email, etc.
+```
 
-2. **ICPCandidateDetail** -- Two-column layout (`lg:flex-row`) is fine, but the header has `px-6` with no mobile reduction, breadcrumbs can overflow, LinkedIn URL in contact section has `max-w-[280px]` that can still overflow, and the top navigation bar's Prev/Next buttons crowd on small screens.
+### Changes
 
-3. **ProfileResultCard** -- Footer action buttons (Save, LinkedIn, Reveal Email) can wrap awkwardly on very small screens. The absolute-positioned pill badge at `top-3 right-3` can overlap the avatar area.
+#### 1. Edge Function: `supabase/functions/generate-screening-invite/index.ts`
 
-4. **LeadScraper** -- Already fairly responsive but the desktop filter sidebar toggle and tab bar can crowd on small screens. The leads section header and view toggle can overflow.
+**New accepted parameters** (destructured from request body alongside existing ones):
+- `role_title` (string, optional)
+- `required_skills` (string[], optional)
+- `experience_level` (string: "entry" | "mid" | "senior", optional)
+- `culture_keywords` (string[], optional)
 
-5. **DeepSearch** -- Large toolbar with sort, filter, keyboard hints, and view toggle buttons can overflow horizontally.
+**New logic block** (inserted after candidate validation, before the n8n webhook call):
 
-6. **MainLayout** -- Mobile padding is `px-4 py-6` which is fine, but the `pt-[120px]` for mobile header offset may be too much if header height changes.
+1. Check if `role_title` and `required_skills` are both provided (the trigger for custom generation)
+2. Call Lovable AI Gateway (`https://ai.gateway.lovable.dev/v1/chat/completions`) using tool calling to extract structured output:
+   - Model: `google/gemini-3-flash-preview`
+   - System prompt instructs the AI to generate behavioral screening questions in STAR format
+   - Tool definition: `generate_screening_questions` with a schema expecting an array of question objects (each with `category`, `question_text`, `follow_up_prompts`, `difficulty_level`)
+   - The prompt includes role_title, required_skills, experience_level, and culture_keywords
+3. Parse the tool call response to get the generated questions array
+4. Create a new `screening_templates` row with:
+   - `name`: `"{role_title} Custom Assessment"`
+   - `description`: Auto-generated description mentioning the role and skills
+   - `role_focus`: `role_title`
+   - `is_default`: `false`
+5. Insert each generated question into `screening_template_questions` with:
+   - `template_id`: the new template's ID
+   - `category`: mapped from the AI output (ownership, skill-specific, culture_fit, red_flag)
+   - `question_text`, `follow_up_prompts`, `difficulty_level` from AI output
+   - `is_custom`: `true`
+   - `sort_order`: sequential
+6. Set the `template_id` variable to the new template's ID (so the session links to it)
+7. Enrich `role_briefing` with the custom parameters so the chat AI can reference them during follow-ups
 
-7. **MobileHeader** -- Navigation uses `overflow-x-auto` which technically allows horizontal scroll within the nav bar. Missing ICP Intelligence link.
+**Error handling**: If Lovable AI call fails (network error, 429, 402), log the error and fall back to default behavior (no custom questions generated, session still created).
 
-8. **Global CSS** -- No `overflow-x: hidden` on body/root to prevent accidental horizontal scroll from any element.
+**Question generation prompt structure**:
+- 2 ownership/accountability scenarios
+- 2-3 questions per required skill (behavioral, probing)
+- 1-2 culture-fit questions using culture_keywords
+- 1 red-flag detector question
+- All questions must be STAR-format friendly, open-ended, and role-specific for the given experience_level
 
-### Changes by File
+**Category mapping for `screening_template_questions`**:
+- Ownership questions map to category `"accountability"`
+- Skill questions map to the skill name (e.g., `"leadership"`, `"communication"`)
+- Culture questions map to `"culture_fit"`
+- Red-flag questions map to `"red_flag"`
 
-#### 1. `src/index.css` -- Global overflow protection
-- Add `overflow-x: hidden` to `html` and `body` to enforce zero horizontal scroll globally
-- Add `max-width: 100vw` to prevent any element from exceeding viewport
-
-#### 2. `src/components/MobileHeader.tsx` -- Add missing nav items
-- Add ICP Intelligence link (`/icp-intelligence`, Target icon) to the mobile nav
-- Add Screening link (`/screening`) for completeness
-- Ensure the horizontal scroll nav is touch-friendly with `scrollbar-hide` class
-
-#### 3. `src/pages/ICPResultsPage.tsx` -- Major mobile fixes
-- **Header**: Change `px-6` to `px-4 sm:px-6` throughout
-- **Session title**: Add `truncate` and `max-w-[200px] sm:max-w-none` to prevent long names from overflowing
-- **Stats pill** (Total/Avg Match): Already hidden on mobile (`hidden md:flex`) -- good
-- **Search bar**: Change `min-w-[300px]` to `min-w-0 w-full` on mobile, keep `min-w-[300px]` on `sm:`
-- **Badge filter chips**: Wrap in a horizontally scrollable container with `overflow-x-auto scrollbar-hide` and `flex-nowrap` on mobile, or stack them in a `flex-wrap` layout
-- **Find Emails button**: On mobile, make it full-width below the badge chips instead of inline
-- **Action bar (grid view)**: Change from `flex items-center justify-between` to `flex flex-col sm:flex-row` so chips stack above the button on mobile
-- **Grid**: Already `grid-cols-1 md:grid-cols-2` -- good
-- **Table/List view**: Wrap the `<Table>` in `overflow-x-auto` div so it scrolls horizontally within its container (not the page) -- this is the only acceptable horizontal scroll (within a contained element)
-- **Filter panel**: Change `grid-cols-1 md:grid-cols-4` -- already has `grid-cols-1` fallback, good
-- **Toolbar row** (sort, view toggle): Wrap in `flex-wrap` to allow stacking
-
-#### 4. `src/pages/ICPCandidateDetail.tsx` -- Mobile layout fixes
-- **Header**: Change `px-6` to `px-4 sm:px-6`
-- **Breadcrumb**: Add `truncate` to breadcrumb text, hide "Lookalike Results" label on very small screens or truncate
-- **Main content container**: Change `px-6 py-8` to `px-4 py-6 sm:px-6 sm:py-8`
-- **Profile card avatar**: Reduce from `w-40 h-40` to `w-28 h-28 sm:w-40 sm:h-40` on mobile
-- **Action buttons**: Already `flex-wrap` -- good
-- **Contact section LinkedIn URL**: Change `max-w-[280px]` to `max-w-[200px] sm:max-w-[280px]`
-- **Aside width**: Already `w-full lg:w-[40%]` -- good
-
-#### 5. `src/components/icp/ProfileResultCard.tsx` -- Card mobile polish
-- **Footer buttons**: Add `flex-wrap` to the button container so they wrap gracefully on very narrow screens
-- **Email display**: Add `max-w-[120px] sm:max-w-[140px]` to the email truncate span
-- **Badge pill**: Reduce padding on mobile: `px-2.5 sm:px-3.5 py-1 sm:py-1.5 text-[10px] sm:text-xs`
-
-#### 6. `src/pages/LeadScraper.tsx` -- Mobile refinements
-- Header already handles mobile well with `sm:` breakpoints
-- **Tab bar**: Add `w-full` to TabsList so it fills the container on mobile
-- **Leads section header**: Already has `flex-col sm:flex-row` -- good
-- **AI Search container**: Change `p-6 lg:p-8` to `p-4 sm:p-6 lg:p-8`
-
-#### 7. `src/pages/DeepSearch.tsx` -- Mobile toolbar fix
-- Wrap toolbar controls in `flex-wrap` containers
-- Ensure keyboard hints panel doesn't overflow
-
-#### 8. `src/pages/Dashboard.tsx` -- Minor padding fix
-- Change `px-0 sm:px-6` pattern to ensure consistent mobile padding
-- KPI cards: Already `grid-cols-1 sm:grid-cols-2 lg:grid-cols-4` -- good
-
-#### 9. `src/components/MainLayout.tsx` -- Verify mobile offset
-- Keep `pt-[120px]` as the MobileHeader is ~120px tall (logo row + nav row)
-- No changes needed
+(The `screening_template_questions.category` column is a plain `string`, not the enum, so custom category names are supported.)
 
 ### Technical Details
 
-| File | Key Changes |
-|------|-------------|
-| `src/index.css` | Add `overflow-x: hidden` to html/body |
-| `src/components/MobileHeader.tsx` | Add ICP Intelligence + Screening nav links |
-| `src/pages/ICPResultsPage.tsx` | Responsive padding, flex-wrap on toolbars, scrollable table container, stacking action bars |
-| `src/pages/ICPCandidateDetail.tsx` | Responsive padding, smaller avatar on mobile, truncated breadcrumbs |
-| `src/components/icp/ProfileResultCard.tsx` | Flex-wrap footer, responsive badge sizing |
-| `src/pages/LeadScraper.tsx` | Tighter mobile padding on search container |
-| `src/pages/DeepSearch.tsx` | Flex-wrap on toolbar controls |
-| `src/pages/Dashboard.tsx` | Consistent mobile padding |
+| File | Change |
+|------|--------|
+| `supabase/functions/generate-screening-invite/index.ts` | Add AI question generation logic, new parameters, template creation |
 
-**Files modified: 8**
-**No new dependencies required.**
+**No database schema changes needed** -- all tables already support the required fields.
 
-All changes use Tailwind responsive prefixes (`sm:`, `md:`, `lg:`) following existing patterns. The global `overflow-x: hidden` acts as a safety net to guarantee zero horizontal page scroll.
+**No frontend changes in this task** -- the edge function accepts new optional parameters; existing callers continue to work without them.
 
+### Key Implementation Notes
+
+- Uses `LOVABLE_API_KEY` (already available as a Supabase secret) for the AI gateway
+- Uses structured output via tool calling (not raw JSON parsing) for reliable question extraction
+- The AI call is non-streaming (single `invoke`-style fetch) since we need the complete response before inserting into DB
+- Timeout: 30 seconds for AI call (separate from the n8n webhook timeout)
+- If AI generation fails, the function logs the error and proceeds without custom questions (graceful degradation)
