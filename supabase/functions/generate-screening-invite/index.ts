@@ -434,39 +434,19 @@ serve(async (req) => {
 
         if (!webhookResponse.ok) {
           const errorText = await webhookResponse.text();
-          console.error('n8n webhook failed:', webhookResponse.status, errorText);
-          return new Response(JSON.stringify({ 
-            error: 'Backend processing failed. Please try again.',
-            details: errorText,
-            status_code: webhookResponse.status,
-          }), {
-            status: 502,
-            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-          });
+          console.warn('n8n webhook failed (non-blocking):', webhookResponse.status, errorText);
+        } else {
+          const webhookResult = await webhookResponse.json();
+          console.log('n8n webhook success:', webhookResult);
         }
-
-        const webhookResult = await webhookResponse.json();
-        console.log('n8n webhook success:', webhookResult);
 
       } catch (fetchError) {
         clearTimeout(timeoutId);
         if (fetchError.name === 'AbortError') {
-          console.error('n8n webhook timed out after 30 seconds');
-          return new Response(JSON.stringify({ 
-            error: 'Backend processing timed out. Please try again.',
-          }), {
-            status: 504,
-            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-          });
+          console.warn('n8n webhook timed out (non-blocking), continuing to session creation');
+        } else {
+          console.warn('n8n webhook network error (non-blocking):', fetchError.message);
         }
-        console.error('n8n webhook network error:', fetchError);
-        return new Response(JSON.stringify({ 
-          error: 'Failed to connect to backend. Please check your connection.',
-          details: fetchError.message,
-        }), {
-          status: 503,
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        });
       }
     } else {
       console.log('Skipping n8n webhook - already synced in Step 3');
