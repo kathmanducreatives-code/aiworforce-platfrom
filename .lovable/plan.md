@@ -1,32 +1,64 @@
 
+## Add "Generate Session Link" (No Candidate Required) to Step 4
 
-## Fix: Screening Link Generation Fails for LinkedIn Lead Candidates
-
-### Root Cause
-The `generate-screening-invite` edge function only looks up candidates in the `resume_analyses` table (line 185-189). However, `ShareScreening.tsx` can send candidate IDs from **two sources**: `resume_analyses` and `linkedin_leads`. When a LinkedIn lead is selected, the ID doesn't exist in `resume_analyses`, so the function returns `404: Candidate not found`.
+### Problem
+Step 4 currently requires selecting a candidate before generating a screening link. Recruiters need the ability to create a generic session link they can share with anyone -- even candidates not yet in the system.
 
 ### Solution
-Pass the `candidate_source` from the frontend so the edge function knows which table to query.
+Add a standalone "Generate Session Link" section at the top of Step 4, visually separated from the existing candidate-specific flow. Both the frontend and edge function need updates to support candidateless sessions.
 
 ### Changes
 
-#### 1. `src/components/screening/ShareScreening.tsx`
-- Pass `candidate_source` (the `source` field from the selected candidate) in the request body to `generate-screening-invite`
-- Both the `generateLink` call (line 92-113) and the `sendEmail` call (line 145-166) need this field added
+#### 1. `supabase/functions/generate-screening-invite/index.ts`
 
-#### 2. `supabase/functions/generate-screening-invite/index.ts`
-- Accept new param `candidate_source` (default: `"resume_screening"`)
-- Replace the single `resume_analyses` lookup with a multi-table lookup:
-  - If `candidate_source === "linkedin_leads"`: query `linkedin_leads` table, map `contact_email` to `email`, and `candidate_name` to `name`
-  - Otherwise: query `resume_analyses` as before
-- Normalize the candidate object so the rest of the function works regardless of source
-- For LinkedIn leads, the `screening_status` update on `resume_analyses` (line 456-459) should be skipped since the candidate isn't in that table
+Make `candidate_id` optional:
+
+- Remove the early `400` return when `candidate_id` is missing (lines 165-170)
+- When `candidate_id` is absent, skip candidate lookup, existing-session check, status update, and email sending
+- Set `candidate_id: null` in the session insert and populate `role_briefing` with a `"generic_session": true` flag instead of candidate metadata
+- The n8n webhook payload uses placeholder candidate info (`name: "Generic Session"`, `email: null`)
+- Everything else (template creation, question insertion, token generation) works unchanged
+
+#### 2. `src/components/screening/ShareScreening.tsx`
+
+Add a new section **above** the candidate selector:
+
+- A card titled "Generate Generic Session Link" with a subtitle: "Create a screening link you can share with anyone -- no candidate selection needed."
+- A link-expiry dropdown (reuse the existing 3/7/14 days selector)
+- A "Generate Session Link" button that calls `generate-screening-invite` with **no `candidate_id`** and `send_email: false`
+- Once generated, show the URL in a `<code>` block with a Copy button (same pattern as the existing link display)
+- A visual divider ("or send to a specific candidate") separates this from the existing candidate-selection flow below
+- If a generic link has been generated, disable the candidate-specific generate button (only one link per dialog session)
+
+### UI Layout (Step 4 after changes)
+
+```text
++---------------------------------------------+
+| Generate Generic Session Link               |
+| Create a link to share with anyone.         |
+| [Expiry: 7 days v]  [Generate Session Link] |
+|                                             |
+| [generated-url-here]            [Copy]      |
+| Valid for 7 days.                           |
++---------------------------------------------+
+|                                             |
+|         -- or send to a candidate --        |
+|                                             |
++---------------------------------------------+
+| Select Candidate                            |
+| [Search candidates...]                      |
+| [candidate list...]                         |
+|                                             |
+| [Selected candidate card]                   |
+| [Generate Screening Link] / [Copy] / [Send] |
++---------------------------------------------+
+```
 
 ### Technical Details
 
 | File | Change |
 |------|--------|
-| `src/components/screening/ShareScreening.tsx` | Add `candidate_source: selectedCandidate.source` to both function invoke bodies |
-| `supabase/functions/generate-screening-invite/index.ts` | Accept `candidate_source`, add conditional table lookup, skip `resume_analyses` status update for non-resume candidates |
+| `supabase/functions/generate-screening-invite/index.ts` | Make `candidate_id` optional; skip candidate lookup/email/status-update when absent; insert session with `candidate_id: null` and `generic_session: true` in role_briefing |
+| `src/components/screening/ShareScreening.tsx` | Add generic link generation section at top with its own expiry selector, generate button, URL display, and copy button; add visual divider before existing candidate flow |
 
-**No database changes needed.**
+No database migrations needed -- `candidate_id` on `adaptive_screening_sessions` is already nullable (used for LinkedIn leads).
