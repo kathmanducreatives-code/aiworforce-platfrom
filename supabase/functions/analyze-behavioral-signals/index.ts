@@ -3,12 +3,49 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version',
 };
 
-const N8N_WEBHOOK_URL = "https://siraa.app.n8n.cloud/webhook/2626a504-e45b-407f-9042-78618ad66928";
+const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL');
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+
+const ANALYSIS_SYSTEM_PROMPT = `You are an expert Behavioral Psychologist specializing in workplace behavioral assessment. You will analyze a candidate's screening conversation transcript and produce a structured behavioral analysis.
+
+You MUST respond with valid JSON matching this exact schema:
+
+{
+  "ownership_score": <number 0-100>,
+  "ownership_evidence": [{"quote": "<exact quote>", "signal": "<signal name>", "strength": "weak"|"moderate"|"strong", "scenario_context": "<context>"}],
+  "clarity_score": <number 0-100>,
+  "clarity_evidence": [{"quote": "<exact quote>", "signal": "<signal name>", "strength": "weak"|"moderate"|"strong", "scenario_context": "<context>"}],
+  "emotional_regulation_score": <number 0-100>,
+  "emotional_evidence": [{"quote": "<exact quote>", "signal": "<signal name>", "strength": "weak"|"moderate"|"strong", "scenario_context": "<context>"}],
+  "consistency_score": <number 0-100>,
+  "consistency_evidence": [{"quote": "<exact quote>", "signal": "<signal name>", "strength": "weak"|"moderate"|"strong", "scenario_context": "<context>"}],
+  "overall_risk_level": "low"|"medium"|"high",
+  "risk_summary": "<2-4 sentence summary of behavioral risk assessment>",
+  "red_flags": [{"title": "<flag title>", "description": "<description>", "evidence_quote": "<quote>", "severity": "minor"|"moderate"|"major"}],
+  "green_flags": [{"title": "<flag title>", "description": "<description>", "evidence_quote": "<quote>"}],
+  "ai_confidence_score": <number 0-100>
+}
+
+SCORING GUIDELINES:
+- Ownership (0-100): Does the candidate take personal responsibility? Do they use "I" vs "we/they"? Do they own mistakes?
+- Clarity (0-100): Can they articulate thoughts clearly? Are responses structured and specific?
+- Emotional Regulation (0-100): Do they stay composed under pressure scenarios? Do they escalate or de-escalate?
+- Consistency (0-100): Are values and approaches consistent across different scenarios?
+
+RISK LEVEL:
+- "low": Scores mostly above 70, no major red flags
+- "medium": Some scores below 60 or minor red flags present
+- "high": Multiple scores below 50 or major red flags detected
+
+IMPORTANT:
+- Base all evidence on actual quotes from the transcript
+- Be fair and balanced - look for both strengths and areas of concern
+- This is a decision SUPPORT tool, not an automated rejection system
+- Confidence score reflects transcript quality and response depth`;
 
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
@@ -23,6 +60,10 @@ serve(async (req) => {
         status: 400,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
+    }
+
+    if (!LOVABLE_API_KEY) {
+      throw new Error('LOVABLE_API_KEY is not configured');
     }
 
     const supabase = createClient(SUPABASE_URL!, SUPABASE_SERVICE_ROLE_KEY!);
@@ -48,8 +89,6 @@ serve(async (req) => {
       });
     }
 
-    const roleName = session.resume_analyses?.recruitment_name || null;
-
     // Get conversation logs
     const { data: conversationLogs } = await supabase
       .from('screening_conversation_logs')
@@ -64,75 +103,96 @@ serve(async (req) => {
       });
     }
 
-    // Get scenarios that were presented
-    const { data: scenarios } = await supabase
-      .from('screening_scenarios')
-      .select('scenario_prompt, category, name')
-      .eq('is_active', true);
+    // Format transcript
+    const candidateName = session.resume_analyses?.candidate_name || 'Unknown';
+    const roleName = session.resume_analyses?.recruitment_name || 'Not specified';
+    
+    const transcript = conversationLogs.map((log: any) => 
+      `[${log.role.toUpperCase()}]: ${log.content}`
+    ).join('\n\n');
 
-    // Calculate category breakdown from conversation logs
-    const { data: logsWithScenarios } = await supabase
-      .from('screening_conversation_logs')
-      .select(`
-        *,
-        screening_scenarios (
-          category,
-          name
-        )
-      `)
-      .eq('session_id', session_id)
-      .eq('role', 'assistant');
-
-    const categoryBreakdown: Record<string, number> = {};
-    (logsWithScenarios || []).forEach((log: any) => {
-      if (log.screening_scenarios?.category) {
-        const cat = log.screening_scenarios.category;
-        categoryBreakdown[cat] = (categoryBreakdown[cat] || 0) + 1;
-      }
-    });
-
-    // Build payload for n8n webhook with role context and category breakdown
-    const payload = {
-      session_id: session_id,
-      candidate_name: session.resume_analyses?.candidate_name || 'Unknown',
-      role_position: roleName,
-      transcript: conversationLogs.map((log: any) => ({
-        role: log.role,
-        content: log.content,
-        timestamp: log.created_at,
-        message_index: log.message_index,
-      })),
-      scenarios_presented: scenarios?.map((s: any) => ({
-        name: s.name,
-        category: s.category,
-        prompt: s.scenario_prompt,
-      })) || [],
-      category_breakdown: categoryBreakdown,
-    };
-
-    console.log('Sending transcript to n8n for behavioral analysis:', session_id);
-    console.log('Transcript messages:', conversationLogs.length);
-
-    // Call n8n webhook for analysis
-    const n8nResponse = await fetch(N8N_WEBHOOK_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload),
-    });
-
-    if (!n8nResponse.ok) {
-      const errorText = await n8nResponse.text();
-      console.error('n8n webhook error:', n8nResponse.status, errorText);
-      throw new Error(`Failed to get behavioral analysis from n8n: ${n8nResponse.status}`);
+    // Build role context from role_briefing
+    let roleContext = '';
+    if (session.role_briefing) {
+      const rb = session.role_briefing;
+      const parts = [];
+      if (rb.role_title) parts.push(`Role: ${rb.role_title}`);
+      if (rb.skills_expected) parts.push(`Required skills: ${rb.skills_expected}`);
+      if (rb.experience_required) parts.push(`Experience level: ${rb.experience_required}`);
+      if (rb.key_traits?.length) parts.push(`Key traits: ${rb.key_traits.join(', ')}`);
+      if (parts.length > 0) roleContext = `\n\nRole Context:\n${parts.join('\n')}`;
     }
 
-    const analysis = await n8nResponse.json();
-    console.log('Received analysis from n8n:', JSON.stringify(analysis).slice(0, 200));
+    const userPrompt = `Analyze the following behavioral screening transcript for candidate "${candidateName}" applying for position "${roleName}".${roleContext}
 
-    // Validate required fields from n8n response
-    if (!analysis.overall_risk_level) {
-      console.error('Invalid n8n response - missing overall_risk_level:', analysis);
-      throw new Error('Invalid analysis response from n8n');
+FULL TRANSCRIPT:
+${transcript}
+
+Provide your complete behavioral analysis as JSON.`;
+
+    console.log('Calling Lovable AI for behavioral analysis, session:', session_id, 'messages:', conversationLogs.length);
+
+    // Call Lovable AI Gateway with Gemini
+    const aiResponse = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${LOVABLE_API_KEY}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        model: 'google/gemini-2.5-flash',
+        messages: [
+          { role: 'system', content: ANALYSIS_SYSTEM_PROMPT },
+          { role: 'user', content: userPrompt },
+        ],
+        temperature: 0.3,
+      }),
+    });
+
+    if (!aiResponse.ok) {
+      const errorText = await aiResponse.text();
+      console.error('Lovable AI error:', aiResponse.status, errorText);
+      
+      if (aiResponse.status === 429) {
+        return new Response(JSON.stringify({ error: 'Rate limit exceeded. Analysis will be retried.' }), {
+          status: 429,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+      if (aiResponse.status === 402) {
+        return new Response(JSON.stringify({ error: 'AI credits exhausted. Please add credits.' }), {
+          status: 402,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+      throw new Error(`AI gateway error: ${aiResponse.status}`);
+    }
+
+    const aiData = await aiResponse.json();
+    const rawContent = aiData.choices?.[0]?.message?.content;
+
+    if (!rawContent) {
+      throw new Error('Empty response from AI');
+    }
+
+    // Parse JSON from response (handle markdown code blocks)
+    let analysis: any;
+    try {
+      // Strip markdown code fences if present
+      let jsonStr = rawContent.trim();
+      if (jsonStr.startsWith('```')) {
+        jsonStr = jsonStr.replace(/^```(?:json)?\s*\n?/, '').replace(/\n?```\s*$/, '');
+      }
+      analysis = JSON.parse(jsonStr);
+    } catch (parseError) {
+      console.error('Failed to parse AI response as JSON:', rawContent.slice(0, 500));
+      throw new Error('AI returned invalid JSON');
+    }
+
+    // Validate required fields
+    if (!analysis.overall_risk_level || !['low', 'medium', 'high'].includes(analysis.overall_risk_level)) {
+      console.error('Invalid risk level:', analysis.overall_risk_level);
+      analysis.overall_risk_level = 'medium'; // fallback
     }
 
     // Save analysis to database
@@ -141,19 +201,19 @@ serve(async (req) => {
       .upsert({
         session_id: session_id,
         candidate_id: session.candidate_id,
-        ownership_score: analysis.ownership_score || 0,
+        ownership_score: analysis.ownership_score ?? 0,
         ownership_evidence: analysis.ownership_evidence || [],
-        clarity_score: analysis.clarity_score || 0,
+        clarity_score: analysis.clarity_score ?? 0,
         clarity_evidence: analysis.clarity_evidence || [],
-        emotional_regulation_score: analysis.emotional_regulation_score || 0,
+        emotional_regulation_score: analysis.emotional_regulation_score ?? 0,
         emotional_evidence: analysis.emotional_evidence || [],
-        consistency_score: analysis.consistency_score || 0,
+        consistency_score: analysis.consistency_score ?? 0,
         consistency_evidence: analysis.consistency_evidence || [],
         red_flags: analysis.red_flags || [],
         green_flags: analysis.green_flags || [],
         overall_risk_level: analysis.overall_risk_level,
         risk_summary: analysis.risk_summary || '',
-        ai_confidence_score: analysis.ai_confidence_score || 0,
+        ai_confidence_score: analysis.ai_confidence_score ?? 0,
         analysis_completed_at: new Date().toISOString(),
       }, {
         onConflict: 'session_id',

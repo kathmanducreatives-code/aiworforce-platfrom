@@ -65,7 +65,7 @@ verify_jwt = false
 verify_jwt = false
 
 [functions.analyze-behavioral-signals]
-verify_jwt = true
+verify_jwt = false
 
 [functions.generate-screening-invite]
 verify_jwt = true
