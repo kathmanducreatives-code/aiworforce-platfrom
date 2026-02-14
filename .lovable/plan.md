@@ -1,166 +1,110 @@
 
-## Phase 2: Recruiter Dashboard -- Create Jobs and View Candidates
 
-This phase builds the recruiter-facing pages that replace the existing `/behavioral-screening` route. Recruiters will be able to create job screening links and view all candidate applications with scores, match breakdowns, and AI-generated interview questions.
+## Phase 4: Email Notifications for Screening
 
----
-
-### Overview
-
-Three new pages replace the current behavioral screening route:
-
-1. **Job Screening Manager** (`/screening-jobs`) -- List all screening jobs, stats per job, create new jobs
-2. **Job Applicants View** (`/screening-jobs/:jobId`) -- Grid of candidate cards for a specific job, with filters and stats
-3. **Candidate Detail Modal** -- Full detail view within the applicants page showing match breakdown, Q&A with AI analysis, strengths/red flags, and AI-generated interview questions
+Add automated email notifications to the screening system so recruiters are alerted when candidates complete applications, and candidates receive confirmation emails after submitting.
 
 ---
 
-### Page 1: Create Job Screening Link
+### What Gets Built
 
-A full page (not a dialog) at `/screening-jobs` with two sections:
+**1. Candidate Confirmation Email**
+When a candidate completes the screening flow (Step 4 -- Thank You page), an email is sent to the candidate's extracted email address confirming their application was received.
 
-**Top section: "Create New Screening" form**
-- Job title (text input)
-- Company name (text input, pre-filled from profile)
-- Job description (textarea)
-- Required years of experience (number input)
-- Required skills (tag input -- type and press Enter to add)
-- Education requirement (dropdown: None, High School, Bachelor's, Master's, PhD)
-- Salary range (two optional number fields: min and max)
-- Custom questions (up to 3 text inputs, add/remove)
-- "Create Screening Link" button
-  - Generates a random slug
-  - Inserts into `screening_jobs` table
-  - Shows the generated URL with a copy button
+**2. Recruiter Notification Email**
+When a candidate completes screening and receives a match score, the recruiter (job owner) receives an email with:
+- Candidate name and match category (Strong Fit, Good Fit, etc.)
+- Match score percentage
+- Top strengths summary
+- Link to the applicant dashboard to review
 
-**Bottom section: "Your Screening Jobs" list**
-- Table/card list of all jobs the recruiter has created
-- Columns: Job Title, Slug, Applications count, Strong/Good/Maybe/Not Qualified counts, Status, Created date
-- Click a row to navigate to `/screening-jobs/:jobId`
-- Quick actions: Copy link, Pause/Activate, View applicants
+**3. Status Change Email to Candidate**
+When a recruiter updates a candidate's status (e.g., "Interview Scheduled" or "Rejected") from the Applicant Detail Modal, an optional email is sent to the candidate with the update.
 
 ---
 
-### Page 2: Job Applicants Dashboard (`/screening-jobs/:jobId`)
+### Implementation Details
 
-**Overview Stats Bar** (4 cards):
-- Total Applications
-- Strong Fits (80%+) in green
-- Good Fits (60-79%) in yellow
-- Not Qualified (below 40%) in red
+**New Edge Function: `screening-notifications`**
 
-**Filter Tabs**: All | Strong Fits | Good Fits | Maybe | Not Qualified
+Handles three notification types via an `action` field:
 
-**Candidate Cards Grid** (2-3 columns):
-Each card shows:
-- Candidate name (from extracted_data)
-- Match score % with color coding
-- Top 3 strengths (green checkmarks)
-- Top 2 red flags (yellow warnings)
-- Time taken and tab switches count
-- "View Details" button to open detail modal
-- "Download Resume" link (from resume_url in storage)
+| Action | Trigger | Recipient |
+|--------|---------|-----------|
+| `candidate_confirmation` | Candidate completes screening | Candidate |
+| `recruiter_new_application` | Screening completed with score | Recruiter (job owner) |
+| `candidate_status_update` | Recruiter changes status | Candidate |
 
----
+Uses the existing Resend API key (already configured) and follows the same email HTML pattern used by `send-interview-invite`.
 
-### Page 3: Candidate Detail Modal
+**Edge function input:**
 
-Opens as a large dialog when clicking "View Details" on a candidate card.
+```text
+{
+  action: "candidate_confirmation" | "recruiter_new_application" | "candidate_status_update",
+  application_id: string,
+  // For status updates:
+  new_status?: string,
+  custom_message?: string
+}
+```
 
-**Section 1: Match Overview**
-- Large score display with category badge (Strong Fit / Good Fit / Maybe / Not Qualified)
-- Applied date, time taken, tab switches
-
-**Section 2: Resume Info**
-- Name, email, phone from extracted_data
-- Work history, education, skills as tags
-- Download resume button
-
-**Section 3: Screening Q&A**
-- Each question/answer pair from screening_answers
-- AI analysis shown under each answer with score badge
-- Sentiment indicator
-
-**Section 4: Match Breakdown**
-- Checklist of requirements (from screening_jobs) vs candidate data
-- Visual match/mismatch indicators
-
-**Section 5: AI Interview Questions**
-- Display interview_questions from the application record (already generated by `complete_screening`)
-- Each question with context ("Why this question")
-- "Copy All Questions" button
-- "Export to PDF" button (generates downloadable PDF)
-
-**Section 6: Recruiter Actions**
-- Status dropdown (New / Reviewing / Interview Scheduled / Rejected / Hired) -- stored in a new `recruiter_status` column
-- Notes textarea (stored in a new `recruiter_notes` column)
-- Archive button (sets `is_archived` flag)
+The edge function fetches the application and related job data from Supabase using the service role key, then constructs and sends the appropriate email via Resend.
 
 ---
 
-### Database Changes
+### Frontend Changes
 
-Add 3 columns to `screening_applications`:
+**1. `ScreeningChatStep.tsx`** -- After the `complete_screening` call succeeds, fire a request to `screening-notifications` with action `candidate_confirmation`.
 
-| Column | Type | Default |
-|--------|------|---------|
-| `recruiter_status` | text | `'new'` |
-| `recruiter_notes` | text | `null` |
-| `is_archived` | boolean | `false` |
+**2. `ScreeningChatStep.tsx`** -- Also fire `recruiter_new_application` after completion so the recruiter gets notified.
 
-No new tables needed -- everything uses `screening_jobs` and `screening_applications` from Phase 1.
+**3. `ApplicantDetailModal.tsx`** -- Add a "Notify Candidate" checkbox (default checked) next to the status save button. When checked and status is changed, call `screening-notifications` with action `candidate_status_update`.
 
 ---
 
-### Sidebar and Routing Changes
+### Email Templates
 
-**Sidebar**: Replace "Behavioral Screening" nav item with "Job Screening" pointing to `/screening-jobs`
+**Candidate Confirmation:**
+- Subject: "Application Received -- [Job Title]"
+- Body: Thanks the candidate by name, confirms the position applied for, mentions they will hear back within 3-5 business days
 
-**Routes in App.tsx**:
-- Add `/screening-jobs` (protected, MainLayout) -- new ScreeningJobsPage
-- Add `/screening-jobs/:jobId` (protected, MainLayout) -- new JobApplicantsPage
-- Keep `/behavioral-screening` temporarily as a redirect to `/screening-jobs`
-- Keep existing public routes (`/apply/:slug`, `/screening/:token`) unchanged
+**Recruiter New Application:**
+- Subject: "New Applicant: [Candidate Name] -- [Match Category]"
+- Body: Candidate name, match score with color-coded badge, top 3 strengths, link to `/screening-jobs/[jobId]`
 
----
-
-### Frontend Files
-
-**New files:**
-- `src/pages/ScreeningJobs.tsx` -- Job list + create form
-- `src/pages/JobApplicants.tsx` -- Candidate grid for a job
-- `src/components/screening/CreateJobForm.tsx` -- Form component
-- `src/components/screening/JobCard.tsx` -- Job list item
-- `src/components/screening/ApplicantCard.tsx` -- Candidate card in grid
-- `src/components/screening/ApplicantDetailModal.tsx` -- Full candidate detail dialog
-- `src/components/screening/InterviewQuestionsPanel.tsx` -- Interview questions display with copy/export
-
-**Modified files:**
-- `src/App.tsx` -- Add new routes
-- `src/components/Sidebar.tsx` -- Update nav item
-- `src/integrations/supabase/types.ts` -- Will auto-update after migration
+**Candidate Status Update:**
+- Subject: "Application Update -- [Job Title]"
+- Body: Status-specific message (e.g., "We'd like to schedule an interview" for Interview Scheduled, "We've decided to move forward with other candidates" for Rejected)
 
 ---
 
-### Technical Details
+### Files
 
-**Slug generation**: Random 12-character alphanumeric string generated client-side using `crypto.getRandomValues`
+**New:**
+- `supabase/functions/screening-notifications/index.ts`
 
-**Application count queries**: Use Supabase's `select('id, match_category')` with `.eq('job_id', jobId)` and count client-side by category
+**Modified:**
+- `src/components/apply/ScreeningChatStep.tsx` -- Add notification calls after screening completion
+- `src/components/screening/ApplicantDetailModal.tsx` -- Add "Notify Candidate" checkbox on status change
+- `supabase/config.toml` -- Register new edge function with `verify_jwt = false`
 
-**Resume download**: Use `supabase.storage.from('screening-resumes').createSignedUrl(path, 3600)` to generate temporary download links
+---
 
-**PDF export for interview questions**: Use browser's `window.print()` with a print-specific layout, or build a simple text-based PDF using the `jspdf` library (already possible without new deps by generating a printable HTML page)
+### Technical Notes
 
-**Copy all questions**: Concatenate questions into formatted text and use `navigator.clipboard.writeText()`
+- Uses `RESEND_API_KEY` (already configured) and `SUPABASE_SERVICE_ROLE_KEY` (auto-available in edge functions)
+- Sends from `onboarding@resend.dev` (Resend's default sandbox sender) consistent with existing email functions
+- The recruiter notification email includes a direct link to the published app URL for the applicant dashboard
+- No database changes required -- all notification state is fire-and-forget (no delivery tracking for screening emails)
 
 ---
 
 ### Implementation Order
 
-1. Database migration (add 3 columns to screening_applications)
-2. ScreeningJobs page with CreateJobForm
-3. JobApplicants page with ApplicantCard grid
-4. ApplicantDetailModal with all 6 sections
-5. Route and sidebar updates
-6. Test end-to-end flow
+1. Create `screening-notifications` edge function with all 3 email templates
+2. Update `ScreeningChatStep.tsx` to trigger candidate + recruiter notifications on completion
+3. Update `ApplicantDetailModal.tsx` to add notify checkbox on status change
+4. Update `supabase/config.toml`
+5. Deploy and test
+
