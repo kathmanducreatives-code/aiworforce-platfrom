@@ -69,3 +69,6 @@ verify_jwt = true
 
 [functions.generate-screening-invite]
 verify_jwt = true
+
+[functions.generate-screening-questions]
+verify_jwt = false

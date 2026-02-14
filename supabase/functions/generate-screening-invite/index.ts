@@ -156,6 +156,8 @@ serve(async (req) => {
       required_skills = null,
       experience_level = 'mid',
       culture_keywords = [],
+      // Pre-generated questions from wizard preview (skip AI call)
+      pre_generated_questions = null,
     } = await req.json();
 
     if (!candidate_id) {
@@ -215,7 +217,56 @@ serve(async (req) => {
     }
 
     // === AI-Powered Custom Question Generation ===
-    if (role_title && required_skills && Array.isArray(required_skills) && required_skills.length > 0) {
+    // === Pre-generated questions from wizard (skip AI call) ===
+    if (pre_generated_questions && Array.isArray(pre_generated_questions) && pre_generated_questions.length > 0) {
+      console.log(`Using ${pre_generated_questions.length} pre-generated questions from wizard`);
+      
+      const templateName = role_title ? `${role_title} Custom Assessment` : 'Custom Assessment';
+      const { data: newTemplate, error: templateError } = await supabase
+        .from('screening_templates')
+        .insert({
+          name: templateName,
+          description: `AI-generated behavioral assessment. Skills: ${(required_skills || []).join(', ')}.`,
+          role_focus: role_title || 'General',
+          is_default: false,
+        })
+        .select()
+        .single();
+
+      if (!templateError && newTemplate) {
+        const questionsToInsert = pre_generated_questions.map((q: any, idx: number) => ({
+          template_id: newTemplate.id,
+          category: q.category || 'general',
+          question_text: q.question_text,
+          follow_up_prompts: q.follow_up_prompts || [],
+          difficulty_level: q.difficulty_level || 3,
+          is_custom: true,
+          sort_order: idx + 1,
+        }));
+
+        const { error: questionsError } = await supabase
+          .from('screening_template_questions')
+          .insert(questionsToInsert);
+
+        if (!questionsError) {
+          console.log(`Created template "${newTemplate.name}" with ${questionsToInsert.length} pre-generated questions`);
+          template_id = newTemplate.id;
+        } else {
+          console.error('Failed to insert pre-generated questions:', questionsError);
+        }
+      }
+
+      role_briefing = {
+        ...(role_briefing || {}),
+        role_title,
+        required_skills,
+        experience_level,
+        culture_keywords,
+        ai_generated: true,
+      };
+    }
+    // === AI-Powered Custom Question Generation (fallback if no pre-generated) ===
+    else if (role_title && required_skills && Array.isArray(required_skills) && required_skills.length > 0) {
       console.log(`Generating custom questions for role: "${role_title}", skills: [${required_skills.join(', ')}]`);
       
       const generatedQuestions = await generateCustomQuestions(
