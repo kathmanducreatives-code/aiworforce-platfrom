@@ -7,7 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
-import { Copy, Check, Search, Mail, Send, Loader2, Link2, Clock } from "lucide-react";
+import { Copy, Check, Search, Mail, Send, Loader2, Link2, Clock, Globe } from "lucide-react";
 import type { RequirementsData } from "./RequirementsForm";
 import type { GeneratedQuestion } from "./QuestionPreview";
 import type { InterviewSettings } from "./InterviewSettingsForm";
@@ -38,10 +38,14 @@ export function ShareScreening({ requirements, questions, settings, generatedUrl
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedCandidate, setSelectedCandidate] = useState<CandidateOption | null>(null);
   const [expiresInDays, setExpiresInDays] = useState("7");
+  const [genericExpiresInDays, setGenericExpiresInDays] = useState("7");
   const [isGenerating, setIsGenerating] = useState(false);
+  const [isGeneratingGeneric, setIsGeneratingGeneric] = useState(false);
   const [isSendingEmail, setIsSendingEmail] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [copiedGeneric, setCopiedGeneric] = useState(false);
   const [linkGenerated, setLinkGenerated] = useState(!!generatedUrl);
+  const [genericUrl, setGenericUrl] = useState<string | null>(null);
 
   useEffect(() => {
     fetchCandidates();
@@ -50,7 +54,6 @@ export function ShareScreening({ requirements, questions, settings, generatedUrl
   const fetchCandidates = async () => {
     const results: CandidateOption[] = [];
 
-    // Resume Screening
     const { data: resumes } = await supabase
       .from('resume_analyses')
       .select('id, candidate_name, email')
@@ -62,7 +65,6 @@ export function ShareScreening({ requirements, questions, settings, generatedUrl
       if (r.email) results.push({ id: r.id, name: r.candidate_name, email: r.email, source: 'resume_screening' });
     });
 
-    // LinkedIn Leads
     const { data: leads } = await supabase
       .from('linkedin_leads')
       .select('id, candidate_name, contact_email')
@@ -77,17 +79,74 @@ export function ShareScreening({ requirements, questions, settings, generatedUrl
     setCandidates(results);
   };
 
+  const getFilteredQuestions = () => {
+    return questions.filter(q => {
+      if (!["accountability", "culture_fit", "red_flag"].includes(q.category)) {
+        return settings.enabledTypes.includes("skill");
+      }
+      return settings.enabledTypes.includes(q.category);
+    }).slice(0, settings.questionCount);
+  };
+
+  const generateGenericLink = async () => {
+    setIsGeneratingGeneric(true);
+    try {
+      const filteredQuestions = getFilteredQuestions();
+
+      const { data, error } = await supabase.functions.invoke('generate-screening-invite', {
+        body: {
+          // No candidate_id — generic session
+          role_title: requirements.role_title,
+          required_skills: requirements.required_skills,
+          experience_level: requirements.experience_level,
+          culture_keywords: requirements.culture_keywords,
+          pre_generated_questions: filteredQuestions,
+          scenario_count: filteredQuestions.length,
+          expires_in_days: parseInt(genericExpiresInDays),
+          send_email: false,
+          role_briefing: {
+            role_title: requirements.role_title,
+            required_skills: requirements.required_skills,
+            experience_level: requirements.experience_level,
+            culture_keywords: requirements.culture_keywords,
+            industry: requirements.industry,
+            free_text: requirements.free_text,
+            ai_generated: true,
+          },
+        },
+      });
+
+      if (error) throw error;
+
+      if (data?.screening_url) {
+        setGenericUrl(data.screening_url);
+        toast.success('Generic session link generated!');
+      }
+    } catch (err: any) {
+      console.error('Failed to generate generic link:', err);
+      toast.error('Failed to generate session link');
+    } finally {
+      setIsGeneratingGeneric(false);
+    }
+  };
+
+  const copyGenericUrl = async () => {
+    if (!genericUrl) return;
+    try {
+      await navigator.clipboard.writeText(genericUrl);
+      setCopiedGeneric(true);
+      toast.success('Link copied to clipboard!');
+      setTimeout(() => setCopiedGeneric(false), 2000);
+    } catch {
+      toast.error('Failed to copy link');
+    }
+  };
+
   const generateLink = async (candidateId: string) => {
     if (!candidateId) return;
     setIsGenerating(true);
     try {
-      // Filter questions by enabled types
-      const filteredQuestions = questions.filter(q => {
-        if (!["accountability", "culture_fit", "red_flag"].includes(q.category)) {
-          return settings.enabledTypes.includes("skill");
-        }
-        return settings.enabledTypes.includes(q.category);
-      }).slice(0, settings.questionCount);
+      const filteredQuestions = getFilteredQuestions();
 
       const candidate = candidates.find(c => c.id === candidateId);
       const candidateSource = candidate?.source === 'linkedin_leads' ? 'linkedin_leads' : 'resume_screening';
@@ -194,7 +253,73 @@ export function ShareScreening({ requirements, questions, settings, generatedUrl
 
   return (
     <div className="space-y-6">
-      {/* Step 1: Select Candidate */}
+      {/* Generic Session Link Section */}
+      <div className="p-4 rounded-lg border border-border bg-muted/30 space-y-3">
+        <div className="flex items-center gap-2">
+          <Globe className="w-4 h-4 text-primary" />
+          <Label className="text-base font-semibold">Generate Generic Session Link</Label>
+        </div>
+        <p className="text-sm text-muted-foreground">
+          Create a screening link you can share with anyone — no candidate selection needed.
+        </p>
+
+        {!genericUrl ? (
+          <div className="flex items-center gap-3">
+            <Select value={genericExpiresInDays} onValueChange={setGenericExpiresInDays}>
+              <SelectTrigger className="w-44 h-9 text-xs">
+                <SelectValue placeholder="Link expiry" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="3">Expires in 3 days</SelectItem>
+                <SelectItem value="7">Expires in 7 days</SelectItem>
+                <SelectItem value="14">Expires in 14 days</SelectItem>
+              </SelectContent>
+            </Select>
+            <Button
+              onClick={generateGenericLink}
+              disabled={isGeneratingGeneric}
+              size="sm"
+            >
+              {isGeneratingGeneric ? (
+                <>
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  Generating...
+                </>
+              ) : (
+                <>
+                  <Link2 className="w-4 h-4 mr-2" />
+                  Generate Session Link
+                </>
+              )}
+            </Button>
+          </div>
+        ) : (
+          <div className="space-y-2">
+            <div className="flex gap-2">
+              <code className="flex-1 bg-background p-3 rounded-lg text-xs break-all border border-border">
+                {genericUrl}
+              </code>
+              <Button size="icon" variant="outline" onClick={copyGenericUrl} className="shrink-0">
+                {copiedGeneric ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
+              </Button>
+            </div>
+            <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+              <Clock className="w-3 h-3" />
+              Valid for {genericExpiresInDays} days. Share this link with any candidate.
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Divider */}
+      <div className="relative">
+        <div className="absolute inset-0 flex items-center"><div className="w-full border-t border-border" /></div>
+        <div className="relative flex justify-center text-xs">
+          <span className="bg-background px-3 text-muted-foreground">or send to a specific candidate</span>
+        </div>
+      </div>
+
+      {/* Candidate-specific flow */}
       <div className="space-y-3">
         <div className="flex items-center gap-2">
           <Mail className="w-4 h-4 text-primary" />
@@ -244,7 +369,7 @@ export function ShareScreening({ requirements, questions, settings, generatedUrl
         </ScrollArea>
       </div>
 
-      {/* Step 2: Selected candidate info + Generate / Copy */}
+      {/* Selected candidate actions */}
       {selectedCandidate && (
         <div className="space-y-4">
           <div className="p-3 bg-primary/5 rounded-lg border border-primary/20 flex items-center justify-between">
@@ -269,11 +394,10 @@ export function ShareScreening({ requirements, questions, settings, generatedUrl
             </div>
           </div>
 
-          {/* Generate button */}
           {!generatedUrl && (
             <Button
               onClick={() => generateLink(selectedCandidate.id)}
-              disabled={isGenerating}
+              disabled={isGenerating || !!genericUrl}
               className="w-full"
               size="lg"
             >
@@ -291,7 +415,6 @@ export function ShareScreening({ requirements, questions, settings, generatedUrl
             </Button>
           )}
 
-          {/* Generated link + copy */}
           {generatedUrl && (
             <div className="space-y-3">
               <div className="flex items-center gap-2">

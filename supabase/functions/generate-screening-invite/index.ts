@@ -162,12 +162,7 @@ serve(async (req) => {
       candidate_source = 'resume_screening',
     } = await req.json();
 
-    if (!candidate_id) {
-      return new Response(JSON.stringify({ error: 'candidate_id is required' }), {
-        status: 400,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
-    }
+    const isGenericSession = !candidate_id;
 
     let template_id = incoming_template_id;
     let role_briefing = incoming_role_briefing;
@@ -179,72 +174,85 @@ serve(async (req) => {
       skip_webhook,
       role_title,
       required_skills,
+      isGenericSession,
     });
 
     const supabase = createClient(SUPABASE_URL!, SUPABASE_SERVICE_ROLE_KEY!);
 
-    // Get candidate info from the appropriate table
+    // Get candidate info from the appropriate table (skip for generic sessions)
     let candidate: any = null;
 
-    if (candidate_source === 'linkedin_leads') {
-      const { data, error: err } = await supabase
-        .from('linkedin_leads')
+    if (!isGenericSession) {
+      if (candidate_source === 'linkedin_leads') {
+        const { data, error: err } = await supabase
+          .from('linkedin_leads')
+          .select('*')
+          .eq('id', candidate_id)
+          .single();
+
+        if (err || !data) {
+          return new Response(JSON.stringify({ error: 'Candidate not found in linkedin_leads' }), {
+            status: 404,
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          });
+        }
+
+        candidate = {
+          id: data.id,
+          candidate_name: data.candidate_name,
+          email: data.contact_email,
+          recruitment_name: data.job_title,
+          resume: null,
+          strengths: null,
+          weaknesses: null,
+        };
+      } else {
+        const { data, error: err } = await supabase
+          .from('resume_analyses')
+          .select('*')
+          .eq('id', candidate_id)
+          .single();
+
+        if (err || !data) {
+          return new Response(JSON.stringify({ error: 'Candidate not found in resume_analyses' }), {
+            status: 404,
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          });
+        }
+        candidate = data;
+      }
+
+      // Check for existing active session
+      const { data: existingSession } = await supabase
+        .from('adaptive_screening_sessions')
         .select('*')
-        .eq('id', candidate_id)
+        .eq('candidate_id', candidate_id)
+        .in('session_status', ['invited', 'in_progress'])
         .single();
 
-      if (err || !data) {
-        return new Response(JSON.stringify({ error: 'Candidate not found in linkedin_leads' }), {
-          status: 404,
+      if (existingSession) {
+        const screeningUrl = `${req.headers.get('origin') || 'https://screeningpilot.com'}/screening/${existingSession.access_token}`;
+        return new Response(JSON.stringify({
+          session_id: existingSession.id,
+          access_token: existingSession.access_token,
+          screening_url: screeningUrl,
+          expires_at: existingSession.expires_at,
+          existing: true,
+        }), {
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         });
       }
-
-      // Normalize to common shape
+    } else {
+      // Generic session placeholder
       candidate = {
-        id: data.id,
-        candidate_name: data.candidate_name,
-        email: data.contact_email,
-        recruitment_name: data.job_title,
+        id: null,
+        candidate_name: 'Generic Session',
+        email: null,
+        recruitment_name: role_title || null,
         resume: null,
         strengths: null,
         weaknesses: null,
       };
-    } else {
-      const { data, error: err } = await supabase
-        .from('resume_analyses')
-        .select('*')
-        .eq('id', candidate_id)
-        .single();
-
-      if (err || !data) {
-        return new Response(JSON.stringify({ error: 'Candidate not found in resume_analyses' }), {
-          status: 404,
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        });
-      }
-      candidate = data;
-    }
-
-    // Check for existing active session
-    const { data: existingSession } = await supabase
-      .from('adaptive_screening_sessions')
-      .select('*')
-      .eq('candidate_id', candidate_id)
-      .in('session_status', ['invited', 'in_progress'])
-      .single();
-
-    if (existingSession) {
-      const screeningUrl = `${req.headers.get('origin') || 'https://screeningpilot.com'}/screening/${existingSession.access_token}`;
-      return new Response(JSON.stringify({
-        session_id: existingSession.id,
-        access_token: existingSession.access_token,
-        screening_url: screeningUrl,
-        expires_at: existingSession.expires_at,
-        existing: true,
-      }), {
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
     }
 
     // === AI-Powered Custom Question Generation ===
@@ -465,8 +473,8 @@ serve(async (req) => {
     }
 
     // Create the session in Supabase
-    // Note: candidate_id FK references resume_analyses, so for LinkedIn leads we set it to null
-    const sessionCandidateId = candidate_source === 'linkedin_leads' ? null : candidate_id;
+    // candidate_id FK references resume_analyses, so for LinkedIn leads and generic sessions we set it to null
+    const sessionCandidateId = (isGenericSession || candidate_source === 'linkedin_leads') ? null : candidate_id;
     const { data: newSession, error: sessionError } = await supabase
       .from('adaptive_screening_sessions')
       .insert({
@@ -476,8 +484,9 @@ serve(async (req) => {
         expires_at: expiresAt.toISOString(),
         role_briefing: {
           ...(role_briefing || {}),
-          actual_candidate_id: candidate_id,
-          candidate_source: candidate_source,
+          generic_session: isGenericSession,
+          actual_candidate_id: candidate_id || null,
+          candidate_source: isGenericSession ? 'generic' : candidate_source,
           candidate_name: candidate.candidate_name,
           candidate_email: candidate.email,
         },
@@ -492,7 +501,7 @@ serve(async (req) => {
     }
 
     // Update candidate's screening status (only for resume_analyses candidates)
-    if (candidate_source !== 'linkedin_leads') {
+    if (!isGenericSession && candidate_source !== 'linkedin_leads') {
       await supabase
         .from('resume_analyses')
         .update({ screening_status: 'invited' })
@@ -502,7 +511,7 @@ serve(async (req) => {
     const origin = req.headers.get('origin') || 'https://screeningpilot.com';
     const screeningUrl = `${origin}/screening/${newSession.access_token}`;
 
-    if (send_email && candidate.email && RESEND_API_KEY) {
+    if (!isGenericSession && send_email && candidate.email && RESEND_API_KEY) {
       try {
         await sendInviteEmail(candidate, screeningUrl, expiresAt);
         console.log('Invite email sent to:', candidate.email);
@@ -511,7 +520,7 @@ serve(async (req) => {
       }
     }
 
-    console.log('Screening invite created for candidate:', candidate_id);
+    console.log('Screening invite created:', isGenericSession ? 'generic session' : `candidate ${candidate_id}`);
 
     return new Response(JSON.stringify({
       session_id: newSession.id,
