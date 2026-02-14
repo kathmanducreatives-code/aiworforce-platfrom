@@ -9,6 +9,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { format } from "date-fns";
+import { Checkbox } from "@/components/ui/checkbox";
 import { CheckCircle2, AlertTriangle, Clock, MonitorOff, Download, Copy, Archive, Briefcase, MessageSquare, FileText, Target, HelpCircle } from "lucide-react";
 import InterviewQuestionsPanel from "./InterviewQuestionsPanel";
 
@@ -34,6 +35,7 @@ const ApplicantDetailModal = ({ application, job, open, onOpenChange, onUpdate }
   const [status, setStatus] = useState(application.recruiter_status || "new");
   const [notes, setNotes] = useState(application.recruiter_notes || "");
   const [saving, setSaving] = useState(false);
+  const [notifyCandidate, setNotifyCandidate] = useState(true);
 
   const extracted = application.extracted_data as any;
   const answers = (application.screening_answers as any[]) || [];
@@ -43,10 +45,19 @@ const ApplicantDetailModal = ({ application, job, open, onOpenChange, onUpdate }
 
   const handleSave = async () => {
     setSaving(true);
+    const statusChanged = status !== application.recruiter_status;
     await supabase.from("screening_applications").update({
       recruiter_status: status,
       recruiter_notes: notes,
     }).eq("id", application.id);
+
+    // Send status notification if checkbox is checked and status actually changed
+    if (notifyCandidate && statusChanged && status !== "new") {
+      supabase.functions.invoke('screening-notifications', {
+        body: { action: 'candidate_status_update', application_id: application.id, new_status: status },
+      }).catch((e: any) => console.error('Status notification failed:', e));
+    }
+
     setSaving(false);
     toast.success("Saved");
     onUpdate();
@@ -229,6 +240,10 @@ const ApplicantDetailModal = ({ application, job, open, onOpenChange, onUpdate }
             <div className="space-y-2">
               <Label>Private Notes</Label>
               <Textarea value={notes} onChange={e => setNotes(e.target.value)} rows={4} placeholder="Add recruiter notes..." />
+            </div>
+            <div className="flex items-center gap-2">
+              <Checkbox id="notify" checked={notifyCandidate} onCheckedChange={(v) => setNotifyCandidate(!!v)} />
+              <Label htmlFor="notify" className="text-sm text-muted-foreground cursor-pointer">Notify candidate of status change</Label>
             </div>
             <div className="flex gap-2">
               <Button onClick={handleSave} disabled={saving}>{saving ? "Saving..." : "Save"}</Button>

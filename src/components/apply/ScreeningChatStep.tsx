@@ -134,6 +134,15 @@ export default function ScreeningChatStep({ applicationId, extractedData, onComp
           body: { action: 'complete_screening', application_id: applicationId },
         });
 
+        // Fire notification emails (fire-and-forget)
+        supabase.functions.invoke('screening-notifications', {
+          body: { action: 'candidate_confirmation', application_id: applicationId },
+        }).catch((e: any) => console.error('Candidate notification failed:', e));
+
+        supabase.functions.invoke('screening-notifications', {
+          body: { action: 'recruiter_new_application', application_id: applicationId },
+        }).catch((e: any) => console.error('Recruiter notification failed:', e));
+
         setTimeout(() => onComplete(), 2000);
       } else {
         // Next question
