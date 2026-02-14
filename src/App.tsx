@@ -37,6 +37,8 @@ import TemplateEditor from "./pages/TemplateEditor";
 import ICPManager from "./pages/ICPManager";
 import ICPResultsPage from "./pages/ICPResultsPage";
 import ICPCandidateDetail from "./pages/ICPCandidateDetail";
+import ScreeningJobs from "./pages/ScreeningJobs";
+import JobApplicants from "./pages/JobApplicants";
 const queryClient = new QueryClient();
 
 const App = () => (
@@ -174,13 +176,23 @@ const App = () => (
                   </ProtectedRoute>
                 } />
 
-                <Route path="/behavioral-screening" element={
+                <Route path="/screening-jobs" element={
                   <ProtectedRoute>
                     <MainLayout>
-                      <ScreeningResults />
+                      <ScreeningJobs />
                     </MainLayout>
                   </ProtectedRoute>
                 } />
+
+                <Route path="/screening-jobs/:jobId" element={
+                  <ProtectedRoute>
+                    <MainLayout>
+                      <JobApplicants />
+                    </MainLayout>
+                  </ProtectedRoute>
+                } />
+
+                <Route path="/behavioral-screening" element={<Navigate to="/screening-jobs" replace />} />
 
                 <Route path="/behavioral-screening/templates" element={
                   <ProtectedRoute>
