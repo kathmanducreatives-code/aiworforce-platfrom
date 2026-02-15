@@ -36,11 +36,11 @@ const InterviewQuestionsPanel = ({ questions }: InterviewQuestionsPanelProps) =>
 
   return (
     <div className="space-y-4">
-      <div className="flex gap-2">
-        <Button variant="outline" size="sm" onClick={handleCopyAll}>
+      <div className="flex flex-wrap gap-2">
+        <Button variant="outline" size="sm" onClick={handleCopyAll} className="flex-1 sm:flex-none">
           <Copy className="h-4 w-4 mr-1" /> Copy All
         </Button>
-        <Button variant="outline" size="sm" onClick={handlePrint}>
+        <Button variant="outline" size="sm" onClick={handlePrint} className="flex-1 sm:flex-none">
           <Printer className="h-4 w-4 mr-1" /> Print
         </Button>
       </div>

@@ -45,13 +45,13 @@ const ScreeningJobs = () => {
   useEffect(() => { fetchJobs(); }, [user]);
 
   return (
-    <div className="p-6 space-y-8 max-w-5xl mx-auto">
+    <div className="p-4 md:p-6 space-y-6 md:space-y-8 max-w-5xl mx-auto">
       <div>
-        <h1 className="text-2xl font-bold text-foreground flex items-center gap-2">
-          <Briefcase className="h-6 w-6 text-primary" />
+        <h1 className="text-xl md:text-2xl font-bold text-foreground flex items-center gap-2">
+          <Briefcase className="h-5 w-5 md:h-6 md:w-6 text-primary" />
           Job Screening
         </h1>
-        <p className="text-muted-foreground mt-1">Create screening links and manage applicants</p>
+        <p className="text-sm md:text-base text-muted-foreground mt-1">Create screening links and manage applicants</p>
       </div>
 
       <CreateJobForm onJobCreated={fetchJobs} />
