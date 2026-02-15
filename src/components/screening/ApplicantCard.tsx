@@ -40,20 +40,20 @@ const ApplicantCard = ({ application, onViewDetails }: ApplicantCardProps) => {
   return (
     <Card className="hover:border-primary/30 transition-colors">
       <CardContent className="p-4 space-y-3">
-        <div className="flex items-start justify-between">
-          <div>
-            <h3 className="font-semibold text-foreground">{name}</h3>
+        <div className="flex items-start justify-between gap-2">
+          <div className="min-w-0">
+            <h3 className="font-semibold text-foreground truncate">{name}</h3>
             <p className="text-xs text-muted-foreground">
               Applied {format(new Date(application.created_at), "MMM d, yyyy")}
             </p>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1.5 flex-shrink-0">
             {score != null && (
               <span className={`text-lg font-bold ${score >= 80 ? 'text-emerald-400' : score >= 60 ? 'text-amber-400' : score >= 40 ? 'text-muted-foreground' : 'text-destructive'}`}>
                 {score}%
               </span>
             )}
-            <Badge variant="outline" className={cat.color}>{cat.label}</Badge>
+            <Badge variant="outline" className={`${cat.color} text-xs whitespace-nowrap`}>{cat.label}</Badge>
           </div>
         </div>
 
@@ -79,7 +79,7 @@ const ApplicantCard = ({ application, onViewDetails }: ApplicantCardProps) => {
           </div>
         )}
 
-        <div className="flex items-center justify-between pt-1 border-t border-border/50">
+        <div className="flex flex-wrap items-center justify-between gap-2 pt-1 border-t border-border/50">
           <div className="flex items-center gap-3 text-xs text-muted-foreground">
             <span className="flex items-center gap-1"><Clock className="h-3 w-3" />{totalMinutes}m</span>
             <span className="flex items-center gap-1"><MonitorOff className="h-3 w-3" />{application.tab_switches || 0} switches</span>

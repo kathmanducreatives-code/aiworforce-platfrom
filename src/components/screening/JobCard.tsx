@@ -31,16 +31,16 @@ const JobCard = ({ job, applicationCounts, onStatusToggle }: JobCardProps) => {
   return (
     <Card className="hover:border-primary/30 transition-colors">
       <CardContent className="p-4">
-        <div className="flex items-start justify-between gap-4">
+        <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
           <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-2 mb-1">
+            <div className="flex items-center gap-2 mb-1 flex-wrap">
               <h3 className="font-semibold text-foreground truncate">{job.title}</h3>
               <Badge variant={job.status === "active" ? "default" : "secondary"} className="text-xs">
                 {job.status}
               </Badge>
             </div>
             <p className="text-sm text-muted-foreground">{job.company_name} · Created {format(new Date(job.created_at), "MMM d, yyyy")}</p>
-            <div className="flex gap-3 mt-2 text-xs">
+            <div className="flex flex-wrap gap-x-3 gap-y-1 mt-2 text-xs">
               <span className="text-foreground font-medium">{applicationCounts.total} total</span>
               {applicationCounts.strong > 0 && <span className="text-emerald-500">{applicationCounts.strong} strong</span>}
               {applicationCounts.good > 0 && <span className="text-amber-500">{applicationCounts.good} good</span>}
@@ -48,14 +48,14 @@ const JobCard = ({ job, applicationCounts, onStatusToggle }: JobCardProps) => {
               {applicationCounts.not_qualified > 0 && <span className="text-destructive">{applicationCounts.not_qualified} not qualified</span>}
             </div>
           </div>
-          <div className="flex items-center gap-1">
-            <Button variant="ghost" size="icon" onClick={handleCopy} title="Copy link">
+          <div className="flex items-center gap-1 border-t sm:border-t-0 border-border/50 pt-2 sm:pt-0">
+            <Button variant="ghost" size="icon" onClick={handleCopy} title="Copy link" className="h-9 w-9">
               <Copy className="h-4 w-4" />
             </Button>
-            <Button variant="ghost" size="icon" onClick={handleToggleStatus} title={job.status === "active" ? "Pause" : "Activate"}>
+            <Button variant="ghost" size="icon" onClick={handleToggleStatus} title={job.status === "active" ? "Pause" : "Activate"} className="h-9 w-9">
               {job.status === "active" ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
             </Button>
-            <Button variant="ghost" size="icon" onClick={() => navigate(`/screening-jobs/${job.id}`)} title="View applicants">
+            <Button variant="ghost" size="icon" onClick={() => navigate(`/screening-jobs/${job.id}`)} title="View applicants" className="h-9 w-9">
               <Eye className="h-4 w-4" />
             </Button>
           </div>

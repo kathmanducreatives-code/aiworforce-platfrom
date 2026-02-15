@@ -78,13 +78,13 @@ const ApplicantDetailModal = ({ application, job, open, onOpenChange, onUpdate }
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
+      <DialogContent className="w-full max-w-3xl max-h-[90vh] overflow-y-auto p-4 md:p-6">
         <DialogHeader>
-          <DialogTitle className="flex items-center justify-between">
-            <span>{extracted?.name || "Candidate"}</span>
-            <div className="flex items-center gap-2">
+          <DialogTitle className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+            <span className="truncate">{extracted?.name || "Candidate"}</span>
+            <div className="flex items-center gap-2 flex-shrink-0">
               {application.match_score != null && (
-                <span className={`text-2xl font-bold ${application.match_score >= 80 ? 'text-emerald-400' : application.match_score >= 60 ? 'text-amber-400' : 'text-destructive'}`}>
+                <span className={`text-xl md:text-2xl font-bold ${application.match_score >= 80 ? 'text-emerald-400' : application.match_score >= 60 ? 'text-amber-400' : 'text-destructive'}`}>
                   {application.match_score}%
                 </span>
               )}
@@ -93,20 +93,22 @@ const ApplicantDetailModal = ({ application, job, open, onOpenChange, onUpdate }
           </DialogTitle>
         </DialogHeader>
 
-        <div className="flex items-center gap-4 text-sm text-muted-foreground border-b border-border pb-3">
+        <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4 text-sm text-muted-foreground border-b border-border pb-3">
           <span>Applied {format(new Date(application.created_at), "MMM d, yyyy 'at' h:mm a")}</span>
           <span className="flex items-center gap-1"><Clock className="h-3.5 w-3.5" />{totalMinutes} min</span>
           <span className="flex items-center gap-1"><MonitorOff className="h-3.5 w-3.5" />{application.tab_switches || 0} tab switches</span>
         </div>
 
         <Tabs defaultValue="overview" className="mt-2">
-          <TabsList className="grid grid-cols-5 w-full">
-            <TabsTrigger value="overview"><Target className="h-4 w-4 mr-1" />Overview</TabsTrigger>
-            <TabsTrigger value="resume"><FileText className="h-4 w-4 mr-1" />Resume</TabsTrigger>
-            <TabsTrigger value="qa"><MessageSquare className="h-4 w-4 mr-1" />Q&A</TabsTrigger>
-            <TabsTrigger value="interview"><HelpCircle className="h-4 w-4 mr-1" />Interview</TabsTrigger>
-            <TabsTrigger value="actions"><Briefcase className="h-4 w-4 mr-1" />Actions</TabsTrigger>
-          </TabsList>
+          <div className="overflow-x-auto -mx-4 px-4 md:mx-0 md:px-0">
+            <TabsList className="w-max md:w-full md:grid md:grid-cols-5">
+              <TabsTrigger value="overview"><Target className="h-4 w-4 md:mr-1" /><span className="hidden md:inline">Overview</span></TabsTrigger>
+              <TabsTrigger value="resume"><FileText className="h-4 w-4 md:mr-1" /><span className="hidden md:inline">Resume</span></TabsTrigger>
+              <TabsTrigger value="qa"><MessageSquare className="h-4 w-4 md:mr-1" /><span className="hidden md:inline">Q&A</span></TabsTrigger>
+              <TabsTrigger value="interview"><HelpCircle className="h-4 w-4 md:mr-1" /><span className="hidden md:inline">Interview</span></TabsTrigger>
+              <TabsTrigger value="actions"><Briefcase className="h-4 w-4 md:mr-1" /><span className="hidden md:inline">Actions</span></TabsTrigger>
+            </TabsList>
+          </div>
 
           <TabsContent value="overview" className="space-y-4 mt-4">
             {strengths.length > 0 && (
@@ -163,7 +165,7 @@ const ApplicantDetailModal = ({ application, job, open, onOpenChange, onUpdate }
           </TabsContent>
 
           <TabsContent value="resume" className="space-y-4 mt-4">
-            <div className="grid grid-cols-2 gap-4 text-sm">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
               <div><Label className="text-muted-foreground">Name</Label><p className="text-foreground">{extracted?.name || "-"}</p></div>
               <div><Label className="text-muted-foreground">Email</Label><p className="text-foreground">{extracted?.email || "-"}</p></div>
               <div><Label className="text-muted-foreground">Phone</Label><p className="text-foreground">{extracted?.phone || "-"}</p></div>

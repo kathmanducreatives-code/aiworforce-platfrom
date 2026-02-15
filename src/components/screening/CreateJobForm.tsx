@@ -93,15 +93,16 @@ const CreateJobForm = ({ onJobCreated }: CreateJobFormProps) => {
   if (createdUrl) {
     return (
       <Card className="border-primary/30 bg-primary/5">
-        <CardContent className="p-6 flex flex-col items-center gap-4">
+        <CardContent className="p-4 md:p-6 flex flex-col items-center gap-4">
           <div className="h-12 w-12 rounded-full bg-primary/20 flex items-center justify-center">
             <Check className="h-6 w-6 text-primary" />
           </div>
           <p className="text-lg font-semibold text-foreground">Screening Link Ready!</p>
-          <div className="flex items-center gap-2 w-full max-w-lg">
-            <Input value={createdUrl} readOnly className="text-sm" />
-            <Button onClick={handleCopy} variant="outline" size="icon">
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 w-full max-w-lg">
+            <Input value={createdUrl} readOnly className="text-sm flex-1" />
+            <Button onClick={handleCopy} variant="outline" className="sm:w-auto w-full flex items-center justify-center gap-2">
               {copied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
+              <span className="sm:hidden">Copy Link</span>
             </Button>
           </div>
           <Button variant="ghost" onClick={() => { setCreatedUrl(null); setTitle(""); setDescription(""); setSkills([]); setCustomQuestions([]); }}>

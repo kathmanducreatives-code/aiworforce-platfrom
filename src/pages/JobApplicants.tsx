@@ -43,50 +43,52 @@ const JobApplicants = () => {
   if (!job) return <div className="p-6 text-muted-foreground">Job not found</div>;
 
   return (
-    <div className="p-6 space-y-6 max-w-6xl mx-auto">
+    <div className="p-4 md:p-6 space-y-4 md:space-y-6 max-w-6xl mx-auto">
       <div className="flex items-center gap-3">
         <Button variant="ghost" size="icon" onClick={() => navigate("/screening-jobs")}>
           <ArrowLeft className="h-5 w-5" />
         </Button>
-        <div>
-          <h1 className="text-xl font-bold text-foreground">{job.title}</h1>
+        <div className="min-w-0">
+          <h1 className="text-lg md:text-xl font-bold text-foreground truncate">{job.title}</h1>
           <p className="text-sm text-muted-foreground">{job.company_name}</p>
         </div>
       </div>
 
       {/* Stats */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        <Card><CardContent className="p-4 text-center">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-2 md:gap-3">
+        <Card><CardContent className="p-3 md:p-4 text-center">
           <Users className="h-5 w-5 mx-auto text-primary mb-1" />
-          <p className="text-2xl font-bold text-foreground">{counts.total}</p>
+          <p className="text-xl md:text-2xl font-bold text-foreground">{counts.total}</p>
           <p className="text-xs text-muted-foreground">Total</p>
         </CardContent></Card>
-        <Card className="border-emerald-500/30"><CardContent className="p-4 text-center">
+        <Card className="border-emerald-500/30"><CardContent className="p-3 md:p-4 text-center">
           <CheckCircle2 className="h-5 w-5 mx-auto text-emerald-400 mb-1" />
-          <p className="text-2xl font-bold text-emerald-400">{counts.strong}</p>
-          <p className="text-xs text-muted-foreground">Strong Fits</p>
+          <p className="text-xl md:text-2xl font-bold text-emerald-400">{counts.strong}</p>
+          <p className="text-xs text-muted-foreground">Strong</p>
         </CardContent></Card>
-        <Card className="border-amber-500/30"><CardContent className="p-4 text-center">
+        <Card className="border-amber-500/30"><CardContent className="p-3 md:p-4 text-center">
           <AlertTriangle className="h-5 w-5 mx-auto text-amber-400 mb-1" />
-          <p className="text-2xl font-bold text-amber-400">{counts.good}</p>
-          <p className="text-xs text-muted-foreground">Good Fits</p>
+          <p className="text-xl md:text-2xl font-bold text-amber-400">{counts.good}</p>
+          <p className="text-xs text-muted-foreground">Good</p>
         </CardContent></Card>
-        <Card className="border-destructive/30"><CardContent className="p-4 text-center">
+        <Card className="border-destructive/30"><CardContent className="p-3 md:p-4 text-center">
           <XCircle className="h-5 w-5 mx-auto text-destructive mb-1" />
-          <p className="text-2xl font-bold text-destructive">{counts.not_qualified}</p>
+          <p className="text-xl md:text-2xl font-bold text-destructive">{counts.not_qualified}</p>
           <p className="text-xs text-muted-foreground">Not Qualified</p>
         </CardContent></Card>
       </div>
 
       {/* Filters */}
       <Tabs value={filter} onValueChange={setFilter}>
-        <TabsList>
-          <TabsTrigger value="all">All ({counts.total})</TabsTrigger>
-          <TabsTrigger value="strong_fit">Strong ({counts.strong})</TabsTrigger>
-          <TabsTrigger value="good_fit">Good ({counts.good})</TabsTrigger>
-          <TabsTrigger value="maybe">Maybe ({counts.maybe})</TabsTrigger>
-          <TabsTrigger value="not_qualified">Not Qualified ({counts.not_qualified})</TabsTrigger>
-        </TabsList>
+        <div className="overflow-x-auto -mx-4 px-4 md:mx-0 md:px-0">
+          <TabsList className="w-max md:w-full md:grid md:grid-cols-5">
+            <TabsTrigger value="all" className="text-xs md:text-sm">All ({counts.total})</TabsTrigger>
+            <TabsTrigger value="strong_fit" className="text-xs md:text-sm">Strong ({counts.strong})</TabsTrigger>
+            <TabsTrigger value="good_fit" className="text-xs md:text-sm">Good ({counts.good})</TabsTrigger>
+            <TabsTrigger value="maybe" className="text-xs md:text-sm">Maybe ({counts.maybe})</TabsTrigger>
+            <TabsTrigger value="not_qualified" className="text-xs md:text-sm whitespace-nowrap">Not Qualified ({counts.not_qualified})</TabsTrigger>
+          </TabsList>
+        </div>
       </Tabs>
 
       {/* Grid */}
