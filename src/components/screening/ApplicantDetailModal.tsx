@@ -129,7 +129,7 @@ const ApplicantDetailModal = ({ application, job, open, onOpenChange, onUpdate }
                 <h4 className="text-sm font-semibold text-foreground mb-2">Red Flags</h4>
                 <div className="space-y-1.5">
                   {redFlags.map((r, i) => (
-                    <div key={i} className="flex items-start gap-2 text-sm text-amber-400">
+                    <div key={i} className="flex items-start gap-2 text-sm text-red-400">
                       <AlertTriangle className="h-4 w-4 mt-0.5 flex-shrink-0" />
                       <span>{typeof r === 'string' ? r : (r as any)?.text || JSON.stringify(r)}</span>
                     </div>
