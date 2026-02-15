@@ -1,4 +1,4 @@
-import { LayoutDashboard, BarChart3, Search, Brain, LogOut, MessageSquare, Target, Shield } from "lucide-react";
+import { LayoutDashboard, BarChart3, Search, Brain, LogOut, MessageSquare, Target, Shield, Briefcase } from "lucide-react";
 import { NavLink } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import { useNavigate } from "react-router-dom";
@@ -26,6 +26,7 @@ const MobileHeader = ({ onCollaborationToggle, showCollaboration }: MobileHeader
     { to: "/deep-search", icon: Brain, label: "Deep Search" },
     { to: "/icp-intelligence", icon: Target, label: "ICP" },
     { to: "/screening", icon: Shield, label: "Screening" },
+    { to: "/screening-jobs", icon: Briefcase, label: "Jobs" },
   ];
 
   return (
