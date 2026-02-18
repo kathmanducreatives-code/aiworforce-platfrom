@@ -1,0 +1,2079 @@
+{
+  "id": "uOsTgtuoxtKzXoGi",
+  "name": "ICP Lookalike Engine",
+  "active": true,
+  "isArchived": false,
+  "versionId": "166f64c7-341d-4121-8f2e-bf1fcf9d09b4",
+  "triggerCount": 1,
+  "createdAt": "2026-01-27T08:15:37.726Z",
+  "updatedAt": "2026-02-11T07:40:19.098Z",
+  "settings": {
+    "executionOrder": "v1",
+    "callerPolicy": "workflowsFromSameOwner",
+    "availableInMCP": true
+  },
+  "connections": {
+    "Webhook Trigger": {
+      "main": [
+        [
+          {
+            "node": "Input Validation",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Input Validation": {
+      "main": [
+        [
+          {
+            "node": "Route by Action",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Aggregate Errors",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Route by Action": {
+      "main": [
+        [
+          {
+            "node": "Save Account Definition",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Save Persona Intent",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Prepare Apify Scrape",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Retrieve Session Data",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Map Industry Names",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Query Session Status",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Query Candidate Profiles",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Validate Email Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Account Response": {
+      "main": [
+        [
+          {
+            "node": "Respond - Account Saved",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Apify Scrape": {
+      "main": [
+        [
+          {
+            "node": "Apify - Scrape Profile",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Apify - Scrape Profile": {
+      "main": [
+        [
+          {
+            "node": "Extract Profile Data",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Aggregate Errors",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract Profile Data": {
+      "main": [
+        [
+          {
+            "node": "Save Profile to DB",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Profile Response": {
+      "main": [
+        [
+          {
+            "node": "Respond - Profile Scraped",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Aggregate Errors": {
+      "main": [
+        [
+          {
+            "node": "Respond - Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Persona Response": {
+      "main": [
+        [
+          {
+            "node": "Respond - Persona Saved",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Map Industry Names": {
+      "main": [
+        [
+          {
+            "node": "Respond - Industry Names",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Retrieve Full Session": {
+      "main": [
+        [
+          {
+            "node": "Prepare Strategy Context",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Strategy Context": {
+      "main": [
+        [
+          {
+            "node": "AI Strategy Generation",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Anthropic Haiku": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Strategy Generation",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Retrieve Session Data": {
+      "main": [
+        [
+          {
+            "node": "Build Tier 1 Input",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Strategy Generation": {
+      "main": [
+        [
+          {
+            "node": "Parse AI Output",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse AI Output": {
+      "main": [
+        [
+          {
+            "node": "Validate Job Titles",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validate Job Titles": {
+      "main": [
+        [
+          {
+            "node": "Save Strategy",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Save Account Definition": {
+      "main": [
+        [
+          {
+            "node": "Format Account Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Save Persona Intent": {
+      "main": [
+        [
+          {
+            "node": "Format Persona Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Save Profile to DB": {
+      "main": [
+        [
+          {
+            "node": "Retrieve Full Session",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Save Strategy": {
+      "main": [
+        [
+          {
+            "node": "Format Profile Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Tier 1 Input": {
+      "main": [
+        [
+          {
+            "node": "Trigger Tier 1 Apify",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Trigger Tier 1 Apify": {
+      "main": [
+        [
+          {
+            "node": "Check Tier 1 Count",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Aggregate Errors",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Tier 1 Count": {
+      "main": [
+        [
+          {
+            "node": "Need More Tier 2?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Need More Tier 2?": {
+      "main": [
+        [
+          {
+            "node": "Build Tier 2 Input",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Merge All Tiers",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Tier 2 Input": {
+      "main": [
+        [
+          {
+            "node": "Trigger Tier 2 Apify",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Trigger Tier 2 Apify": {
+      "main": [
+        [
+          {
+            "node": "Check Tier 2 Count",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Aggregate Errors",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Tier 2 Count": {
+      "main": [
+        [
+          {
+            "node": "Need More Tier 3?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Need More Tier 3?": {
+      "main": [
+        [
+          {
+            "node": "Build Tier 3 Input",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Merge All Tiers",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Tier 3 Input": {
+      "main": [
+        [
+          {
+            "node": "Trigger Tier 3 Apify",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Trigger Tier 3 Apify": {
+      "main": [
+        [
+          {
+            "node": "Merge All Tiers",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Aggregate Errors",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge All Tiers": {
+      "main": [
+        [
+          {
+            "node": "Process & Score Results",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Process & Score Results": {
+      "main": [
+        [
+          {
+            "node": "Save Lookalike Results",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Query Candidate Profiles": {
+      "main": [
+        [
+          {
+            "node": "Format Results Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Results Response": {
+      "main": [
+        [
+          {
+            "node": "Respond - Results",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Query Session Status": {
+      "main": [
+        [
+          {
+            "node": "Format Status Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Status Response": {
+      "main": [
+        [
+          {
+            "node": "Respond - Status",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Save Lookalike Results": {
+      "main": [
+        [
+          {
+            "node": "Split Candidate Profiles",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Split Candidate Profiles": {
+      "main": [
+        [
+          {
+            "node": "Insert Candidate Profile",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Insert Candidate Profile": {
+      "main": [
+        [
+          {
+            "node": "Collect Insert Results",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Collect Insert Results": {
+      "main": [
+        [
+          {
+            "node": "Respond - Strategy Launched",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validate Email Request": {
+      "main": [
+        [
+          {
+            "node": "Scrape Email via Apify",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Aggregate Errors",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Scrape Email via Apify": {
+      "main": [
+        [
+          {
+            "node": "Parse Email Result",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Aggregate Errors",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Email Result": {
+      "main": [
+        [
+          {
+            "node": "Update Profile Email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update Profile Email": {
+      "main": [
+        [
+          {
+            "node": "Format Email Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Email Response": {
+      "main": [
+        [
+          {
+            "node": "Respond - Email Revealed",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update Session Complete": {
+      "main": [
+        []
+      ]
+    },
+    "Respond - Strategy Launched": {
+      "main": [
+        [
+          {
+            "node": "Update Session Complete",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "icp-lookalike-engine",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "webhook-trigger",
+      "name": "Webhook Trigger",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        -928,
+        560
+      ],
+      "webhookId": "icp-lookalike-engine",
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const input = $input.first().json;\nconst body = input.body || input;\nconst validActions = [\n  'save_account_definition',\n  'save_account',\n  'save_persona_intent',\n  'scrape_lookalike_profile',\n  'generate_strategy_and_launch',\n  'get_industry_name',\n  'get_scrape_status',\n  'get_results',\n  'reveal_email'\n];\nconst errors = [];\n\nif (!body.action || !validActions.includes(body.action)) {\n  errors.push(`Invalid action: ${body.action || 'none'}`);\n}\n\nif (body.action !== 'get_industry_name' && !body.session_id) {\n  errors.push('Missing required session_id');\n}\n\nif (body.account_data) {\n  body.profile_name = body.account_data.name;\n  body.target_industry = body.account_data.industries;\n  body.company_size = body.account_data.size;\n  body.company_location = body.account_data.location;\n  body.hiring_intensity = body.account_data.hiring_intensity;\n  const requestedTarget = parseInt(body.account_data.target_results_count) || 50;\n  body.target_results_count = Math.max(20, Math.min(requestedTarget, 100));\n}\n\nif (!body.target_results_count) {\n  body.target_results_count = 50;\n}\n\nif (body.action === 'save_account') {\n  body.action = 'save_account_definition';\n}\n\nif (body.action === 'save_persona_intent') {\n  body.persona_description = body.search_query || body.persona_description;\n  if (!body.persona_description) errors.push('Missing search_query text');\n}\n\nif (body.action === 'scrape_lookalike_profile') {\n  if (!body.linkedin_url) errors.push('LinkedIn URL is required for scraping');\n}\n\nif (body.action === 'reveal_email') {\n  if (!body.linkedin_url) errors.push('linkedin_url is required for email reveal');\n  if (!body.profile_id) errors.push('profile_id is required for email reveal');\n}\n\nif (errors.length > 0) {\n  return [{ \n    json: { \n      success: false, \n      error_code: 'VALIDATION_FAILED', \n      errors: errors \n    } \n  }];\n}\n\nreturn [{ json: { ...body, validated: true } }];"
+      },
+      "id": "57aaaa66-198d-4528-aae8-048f30f97a84",
+      "name": "Input Validation",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -656,
+        560
+      ],
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "action-save-account",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    },
+                    "leftValue": "={{ $json.action }}",
+                    "rightValue": "save_account_definition"
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "save_account"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "action-save-persona",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    },
+                    "leftValue": "={{ $json.action }}",
+                    "rightValue": "save_persona_intent"
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "save_persona"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "action-scrape-profile",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    },
+                    "leftValue": "={{ $json.action }}",
+                    "rightValue": "scrape_lookalike_profile"
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "scrape_profile"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "action-generate-launch",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    },
+                    "leftValue": "={{ $json.action }}",
+                    "rightValue": "generate_strategy_and_launch"
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "generate_launch"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "action-get-industry",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    },
+                    "leftValue": "={{ $json.action }}",
+                    "rightValue": "get_industry_name"
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "get_industry"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "action-get-status",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    },
+                    "leftValue": "={{ $json.action }}",
+                    "rightValue": "get_scrape_status"
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "get_status"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "action-get-results",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    },
+                    "leftValue": "={{ $json.action }}",
+                    "rightValue": "get_results"
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "get_results"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "action-reveal-email",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    },
+                    "leftValue": "={{ $json.action }}",
+                    "rightValue": "reveal_email"
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "reveal_email"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "bd3eb0aa-9bdb-4ba4-9c4f-af33e47b1679",
+      "name": "Route by Action",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.2,
+      "position": [
+        -256,
+        368
+      ]
+    },
+    {
+      "parameters": {
+        "tableId": "icp_lookalike_sessions",
+        "fieldsUi": {
+          "fieldValues": [
+            {
+              "fieldId": "session_id",
+              "fieldValue": "={{ $json.session_id }}"
+            },
+            {
+              "fieldId": "profile_name",
+              "fieldValue": "={{ $json.profile_name }}"
+            },
+            {
+              "fieldId": "target_industry",
+              "fieldValue": "={{ JSON.stringify($json.industry_names || []) }}"
+            },
+            {
+              "fieldId": "industry_names",
+              "fieldValue": "={{ JSON.stringify($json.industry_names || []) }}"
+            },
+            {
+              "fieldId": "company_size",
+              "fieldValue": "={{ JSON.stringify($json.company_size || []) }}"
+            },
+            {
+              "fieldId": "company_location",
+              "fieldValue": "={{ JSON.stringify($json.company_location || []) }}"
+            },
+            {
+              "fieldId": "hiring_intensity",
+              "fieldValue": "={{ $json.hiring_intensity || 'medium' }}"
+            },
+            {
+              "fieldId": "target_results_count",
+              "fieldValue": "={{ $json.target_results_count || 50 }}"
+            }
+          ]
+        }
+      },
+      "id": "62a9d8c8-90f2-4947-951b-22fb135f484e",
+      "name": "Save Account Definition",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        64,
+        176
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const input = $input.first().json;\n// Changed 'Webhook Trigger1' to 'Webhook Trigger' to match your canvas\nconst webhookBody = $('Webhook Trigger').first().json.body;\n\nreturn [{\n  json: {\n    success: true,\n    message: 'Account definition saved successfully',\n    data: {\n      session_id: webhookBody.session_id,\n      step: 1,\n      next_step: 'save_persona_intent',\n      saved: {\n        profile_name: webhookBody.profile_name,\n        industry_names: webhookBody.industry_names,\n        industry_ids: webhookBody.industry_ids,\n        company_size: webhookBody.company_size,\n        company_location: webhookBody.company_location,\n        hiring_intensity: webhookBody.hiring_intensity\n      }\n    },\n    errors: []\n  }\n}];"
+      },
+      "id": "0b78410a-8972-42d2-a431-69ea81d5e4a3",
+      "name": "Format Account Response",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        320,
+        176
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify($json) }}",
+        "options": {
+          "responseCode": 200
+        }
+      },
+      "id": "f6792fbd-b777-4c22-a78f-181bcd662a55",
+      "name": "Respond - Account Saved",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        592,
+        176
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const input = $json;\n\n// Extract URL - check both possible field names from frontend\nconst url = input.linkedin_url || input.url;\n\nif (!url) {\n  throw new Error('No URL found in the input data. Check field names.');\n}\n\n// Extract username using the regex\nconst match = url.match(/linkedin\\.com\\/in\\/([a-zA-Z0-9_-]+)/);\nconst username = match ? match[1] : null;\n\nif (!username) {\n  throw new Error(`Could not extract username from LinkedIn URL: ${url}`);\n}\n\nreturn [{\n  json: {\n    session_id: input.session_id,\n    linkedin_url: url,\n    username: username,\n    apify_input: {\n      profileUrls: [url],\n      profileScraperMode: 'Full',\n      maxItems: 1\n    }\n  }\n}];"
+      },
+      "id": "64bb1214-aab6-402b-87b0-df96fa60ce42",
+      "name": "Prepare Apify Scrape",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        64,
+        368
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "Run actor and get dataset",
+        "actorId": {
+          "__rl": true,
+          "value": "2SyF0bVxmgGr8IVCZ",
+          "mode": "list",
+          "cachedResultName": "\u2728Mass Linkedin Profile Scraper with Email \ud83d\udce7 (No Cookies) (dev_fusion/Linkedin-Profile-Scraper)",
+          "cachedResultUrl": "https://console.apify.com/actors/2SyF0bVxmgGr8IVCZ/input"
+        },
+        "customBody": "={{ $json.apify_input }}",
+        "timeout": {}
+      },
+      "id": "728bc696-5420-4d9a-9f1a-ac129675da80",
+      "name": "Apify - Scrape Profile",
+      "type": "@apify/n8n-nodes-apify.apify",
+      "typeVersion": 1,
+      "position": [
+        256,
+        368
+      ],
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const items = $input.all();\nconst sessionId = $('Prepare Apify Scrape').first().json.session_id;\nconst linkedinUrl = $('Prepare Apify Scrape').first().json.linkedin_url;\n\n// Handle empty or error results\nif (!items || items.length === 0 || items[0].json.error) {\n  const error = new Error('Profile scrape failed');\n  error.description = JSON.stringify({\n    success: false,\n    error_code: 'PROFILE_SCRAPE_FAILED',\n    message: 'Failed to scrape LinkedIn profile. Please check the URL and try again.',\n    data: { linkedin_url: linkedinUrl, session_id: sessionId },\n    errors: [{ stage: 'profile_scrape', error: 'Apify returned no results or error' }]\n  });\n  throw error;\n}\n\nconst profile = items[0].json;\n\n// 1. Basic Info & Professional Branding\nconst name = profile.fullName || `${profile.firstName || ''} ${profile.lastName || ''}`.trim() || 'Unknown';\nconst headline = profile.headline || '';\nconst photoUrl = profile.profilePicHighQuality || profile.profilePic || '';\nconst location = profile.addressWithoutCountry || profile.jobLocation || profile.addressWithCountry || '';\n\n// 2. Work History Mapping\nconst workHistory = (profile.experiences || []).map(exp => ({\n  company: exp.companyName || '',\n  title: exp.title || '',\n  location: exp.jobLocation || '',\n  industry: exp.companyIndustry || '',\n  description: exp.jobDescription || '',\n  start_date: exp.jobStartedOn || '',\n  end_date: exp.jobEndedOn || 'Present',\n  is_current: exp.jobStillWorking === true\n})).filter(w => w.company || w.title);\n\n// 3. Experience & Seniority Calculations\nconst totalYears = profile.totalExperienceYears || 0;\nconst currentTitle = profile.jobTitle || (workHistory.find(w => w.is_current)?.title) || '';\nconst currentCompany = profile.companyName || (workHistory.find(w => w.is_current)?.company) || '';\n\nlet seniorityLevel = 'Junior';\nconst titleLower = currentTitle.toLowerCase();\nif (titleLower.includes('founder') || titleLower.includes('ceo') || titleLower.includes('director') || titleLower.includes('vp') || totalYears >= 12) {\n  seniorityLevel = 'Executive';\n} else if (titleLower.includes('senior') || titleLower.includes('lead') || titleLower.includes('principal') || totalYears >= 8) {\n  seniorityLevel = 'Senior';\n} else if (titleLower.includes('manager') || totalYears >= 4) {\n  seniorityLevel = 'Mid';\n}\n\n// 4. Past Companies & Industry Focus\nconst pastCompaniesList = [...new Set(workHistory.filter(w => !w.is_current).map(w => w.company))].slice(0, 5);\nconst primaryIndustry = workHistory[0]?.industry || 'Professional Services';\n\n// 5. Insights for Recruiter Preview\nconst experienceSummary = `${seniorityLevel} level professional with ${Math.round(totalYears)} years of experience, primarily in ${primaryIndustry}. Career trajectory includes key roles at ${pastCompaniesList.join(', ')}.`.trim();\n\n// 6. Skills & Education\nconst topSkills = (profile.skills || []).map(s => s.title).filter(Boolean);\nconst education = (profile.educations || []).map(edu => ({\n  school: edu.title || '',\n  degree: edu.subtitle || '',\n  display: `${edu.subtitle || 'Studies'} at ${edu.title || 'University'}`\n})).filter(e => e.school);\n\n// 7. Final Payload Construction\nconst richProfile = {\n  name,\n  photo_url: photoUrl,\n  headline,\n  current_title: currentTitle,\n  current_company: currentCompany,\n  location,\n  linkedin_url: linkedinUrl,\n  \n  // Professional DNA (Enriched for Recruiter)\n  top_skills: topSkills.slice(0, 10),\n  skills_count: topSkills.length,\n  total_years_experience: Math.round(totalYears),\n  seniority_level: seniorityLevel,\n  experience_summary: experienceSummary, // <-- New insightful field\n  \n  // History\n  education,\n  education_summary: education.length > 0 ? education[0].display : 'Not specified',\n  work_history: workHistory,\n  past_companies: pastCompaniesList,\n  \n  // Metadata\n  profile_completeness: 100,\n  scraped_at: new Date().toISOString()\n};\n\nreturn [{\n  json: {\n    success: true,\n    session_id: sessionId,\n    profile: richProfile\n  }\n}];"
+      },
+      "id": "f741ba22-7155-4fe7-8875-09f5292f6ba2",
+      "name": "Extract Profile Data",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        496,
+        352
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "tableId": "icp_lookalike_sessions",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "session_id",
+              "condition": "eq",
+              "keyValue": "={{ $json.session_id }}"
+            }
+          ]
+        },
+        "fieldsUi": {
+          "fieldValues": [
+            {
+              "fieldId": "lookalike_url",
+              "fieldValue": "={{ $json.lookalike_url }}"
+            },
+            {
+              "fieldId": "lookalike_profile_data",
+              "fieldValue": "={{ $json.profile }}"
+            }
+          ]
+        }
+      },
+      "id": "e17c79e5-6f68-4d3e-990e-6d82a129a5b5",
+      "name": "Save Profile to DB",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        704,
+        352
+      ],
+      "alwaysOutputData": false
+    },
+    {
+      "parameters": {
+        "jsCode": "// LAYER 8: AUDITABILITY - Complete Response with Validation Metadata\nconst webhookBody = $('Webhook Trigger').first().json.body || {};\nconst profileData = $('Extract Profile Data').first().json.profile || {};\nconst strategyData = $('Validate Job Titles').first().json;\nconst context = $('Prepare Strategy Context').first().json;\n\nreturn [{\n  json: {\n    success: true,\n    message: 'Profile scraped and strategy generated successfully',\n    data: {\n      session_id: webhookBody.session_id,\n      \n      // Enriched Profile Data\n      profile: {\n        name: profileData.name || '',\n        photo_url: profileData.photo_url || '',\n        headline: profileData.headline || '',\n        current_title: profileData.current_title || '',\n        current_company: profileData.current_company || '',\n        location: profileData.location || '',\n        seniority: profileData.seniority_level || '',\n        years_experience: profileData.total_years_experience || 0,\n        top_skills: profileData.top_skills || [],\n        education: profileData.education || [],\n        work_history: (profileData.work_history || []).slice(0, 3),\n        focus_areas: [profileData.work_history?.[0]?.industry || '']\n      },\n      \n      // LAYER 8: AUDITABILITY - Include role classification\n      role_family: strategyData.role_family,\n      \n      // AI Generated Strategy\n      generated_strategy: strategyData.generated_strategy || '',\n      search_logic_dna: strategyData.search_logic_dna || '',\n      \n      // LAYER 8: AUDITABILITY - Include validation signals\n      mandatory_signals: strategyData.mandatory_signals,\n      excluded_signals: strategyData.excluded,\n      \n      // Validation metadata from title hardening\n      validation_metadata: strategyData.validation_metadata,\n      \n      // Firmographic Constraints from context\n      firmographic_constraints: {\n        industries: context.industries || [],\n        locations: context.locations || [],\n        company_sizes: context.company_size || [],\n        hiring_intensity: context.hiring_intensity || ''\n      },\n      \n      // Technical Apify Parameters (validated)\n      technical_execution: strategyData.apify_params || {}\n    }\n  }\n}];"
+      },
+      "id": "d64399bc-c2d3-4cde-a463-e8f1c80ecf86",
+      "name": "Format Profile Response",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2208,
+        352
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ $json.data || $json }}",
+        "options": {
+          "responseCode": 200
+        }
+      },
+      "id": "83d9b4b6-ccc2-4166-bf3d-3b7ac5c4ff9e",
+      "name": "Respond - Profile Scraped",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        2432,
+        352
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "getAll",
+        "tableId": "icp_lookalike_sessions",
+        "limit": 1,
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "session_id",
+              "condition": "eq",
+              "keyValue": "={{ $('Webhook Trigger').first().json.body.session_id }}"
+            }
+          ]
+        }
+      },
+      "id": "a8ea831b-2be7-44a4-a933-700aaa5236da",
+      "name": "Retrieve Session Data",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        240,
+        784
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify($('Save Lookalike Results').first().json.response_data) }}",
+        "options": {
+          "responseCode": 200
+        }
+      },
+      "id": "6b51aeb0-78a0-4f2c-bb6a-8a348694a9c8",
+      "name": "Respond - Strategy Launched",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        4304,
+        1200
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Aggregate error information with specific error codes\nconst items = $input.all();\nconst firstItem = items[0]?.json || {};\n\n// Determine error code and details\nlet errorCode = 'UNKNOWN_ERROR';\nlet errorMessage = 'Unknown error occurred';\nlet details = '';\nlet stage = 'unknown';\n\n// Check if this is a validation error with error_code already set\nif (firstItem.error_code) {\n  errorCode = firstItem.error_code;\n  errorMessage = firstItem.message || 'Processing error';\n  details = JSON.stringify(firstItem.errors || []);\n  stage = 'validation';\n} \n// Check for structured error in description (from thrown errors)\nelse if (firstItem.description) {\n  try {\n    const parsed = JSON.parse(firstItem.description);\n    errorCode = parsed.error_code || 'PROCESSING_ERROR';\n    errorMessage = parsed.message || 'Processing error';\n    details = JSON.stringify(parsed.errors || []);\n    stage = parsed.errors?.[0]?.stage || 'processing';\n  } catch (e) {\n    errorMessage = firstItem.description;\n    stage = 'processing';\n  }\n}\n// Standard error handling\nelse {\n  errorMessage = firstItem.message || firstItem.error || 'Processing error';\n  details = firstItem.stack || '';\n  \n  // Determine error code based on error message\n  if (errorMessage.includes('LinkedIn') || errorMessage.includes('URL')) {\n    errorCode = 'INVALID_URL';\n    stage = 'validation';\n  } else if (errorMessage.includes('scrape') || errorMessage.includes('Apify')) {\n    errorCode = 'PROFILE_SCRAPE_FAILED';\n    stage = 'profile_scrape';\n  } else if (errorMessage.includes('required') || errorMessage.includes('Missing')) {\n    errorCode = 'MISSING_FIELDS';\n    stage = 'validation';\n  } else if (errorMessage.includes('database') || errorMessage.includes('Supabase')) {\n    errorCode = 'DATABASE_ERROR';\n    stage = 'database';\n  } else if (errorMessage.includes('AI') || errorMessage.includes('Claude') || errorMessage.includes('OpenAI')) {\n    errorCode = 'AI_GENERATION_ERROR';\n    stage = 'ai_generation';\n  } else {\n    errorCode = 'PROCESSING_ERROR';\n    stage = 'processing';\n  }\n}\n\nreturn [{\n  json: {\n    success: false,\n    error_code: errorCode,\n    message: errorMessage,\n    data: null,\n    errors: [{\n      stage: stage,\n      error: errorMessage,\n      details: details,\n      timestamp: new Date().toISOString()\n    }]\n  }\n}];"
+      },
+      "id": "eb9b613c-e0f2-47c7-9e63-ea764f918fa9",
+      "name": "Aggregate Errors",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1920,
+        1936
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify($json) }}",
+        "options": {
+          "responseCode": "={{ $json.error_code === 'INVALID_URL' || $json.error_code === 'MISSING_FIELDS' ? 400 : $json.error_code === 'PROFILE_SCRAPE_FAILED' ? 422 : 500 }}"
+        }
+      },
+      "id": "c1ef3cef-680d-4282-a576-a35261d677ff",
+      "name": "Respond - Error",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        2112,
+        1936
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "tableId": "icp_lookalike_sessions",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "session_id",
+              "condition": "eq",
+              "keyValue": "={{ $json.session_id }}"
+            }
+          ]
+        },
+        "fieldsUi": {
+          "fieldValues": [
+            {
+              "fieldId": "persona_description",
+              "fieldValue": "={{ $json.persona_description }}"
+            }
+          ]
+        }
+      },
+      "id": "9abf1f06-98d1-4624-9294-32de56b4f227",
+      "name": "Save Persona Intent",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        64,
+        544
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const input = $input.first().json;\n// Reference updated to 'Webhook Trigger' to match your actual node name\nconst webhookBody = $('Webhook Trigger').first().json.body;\n\nreturn [{\n  json: {\n    success: true,\n    message: 'Persona intent saved successfully',\n    data: {\n      session_id: webhookBody.session_id,\n      step: 2,\n      next_step: 'scrape_lookalike_profile',\n      saved: {\n        persona_description: webhookBody.persona_description,\n        character_count: webhookBody.persona_description?.length || 0\n      }\n    },\n    errors: []\n  }\n}];"
+      },
+      "id": "0b941307-4849-4dce-9ea8-5fa0847b226c",
+      "name": "Format Persona Response",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        272,
+        544
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify($json) }}",
+        "options": {
+          "responseCode": 200
+        }
+      },
+      "id": "7f656f43-c07c-4908-bd9b-2aab5b6f4340",
+      "name": "Respond - Persona Saved",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        480,
+        544
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Industry ID to Name mapping based on LinkedIn Industry Codes v2\n\nconst industryMap = {\n  4: 'Computer Software',\n  6: 'Computer Networking',\n  96: 'Information Technology and Services',\n  3: 'Computer Hardware',\n  5: 'Computer & Network Security',\n  105: 'Internet',\n  104: 'Internet',\n  43: 'Financial Services',\n  44: 'Banking',\n  45: 'Capital Markets',\n  46: 'Investment Banking',\n  47: 'Investment Management',\n  48: 'Insurance',\n  14: 'Medical Devices',\n  15: 'Biotechnology',\n  13: 'Pharmaceuticals',\n  12: 'Hospital & Health Care',\n  56: 'Automotive',\n  52: 'Machinery',\n  55: 'Industrial Automation',\n  51: 'Mechanical or Industrial Engineering',\n  57: 'Aviation & Aerospace',\n  30: 'Retail',\n  25: 'Consumer Goods',\n  26: 'Consumer Electronics',\n  27: 'Consumer Services',\n  39: 'Entertainment',\n  38: 'Media Production',\n  40: 'Music',\n  37: 'Broadcast Media',\n  70: 'Management Consulting',\n  8: 'Accounting',\n  10: 'Law Practice',\n  67: 'Human Resources',\n  68: 'Education Management',\n  69: 'Higher Education',\n  66: 'E-Learning',\n  59: 'Oil & Energy',\n  60: 'Renewables & Environment',\n  61: 'Utilities',\n  62: 'Logistics and Supply Chain',\n  63: 'Transportation/Trucking/Railroad',\n  64: 'Warehousing',\n  75: 'Government Administration',\n  76: 'Government Relations',\n  71: 'Non-Profit Organization Management',\n  72: 'Civic & Social Organization',\n  80: 'Marketing and Advertising',\n  81: 'Market Research',\n  82: 'Public Relations and Communications',\n  31: 'Hospitality',\n  32: 'Restaurants',\n  33: 'Food & Beverages',\n  34: 'Leisure, Travel & Tourism',\n  1: 'Defense & Space',\n  99: 'Venture Capital & Private Equity',\n  100: 'Think Tanks',\n  94: 'Research',\n  7: 'Semiconductors'\n};\n\nconst webhookBody = $('Webhook Trigger').first().json.body;\nconst industryIds = webhookBody.industry_ids || [];\n\nconst mappedIndustries = industryIds.map(id => ({\n  id: id,\n  name: industryMap[id] || `Industry ${id}`,\n  found: !!industryMap[id]\n}));\n\nconst industryLookup = {};\nmappedIndustries.forEach(ind => {\n  industryLookup[ind.id] = ind.name;\n});\n\nreturn [{\n  json: {\n    success: true,\n    message: `Mapped ${mappedIndustries.length} industry IDs to names`,\n    data: {\n      industries: mappedIndustries,\n      lookup: industryLookup,\n      requested_ids: industryIds,\n      found_count: mappedIndustries.filter(i => i.found).length,\n      not_found_count: mappedIndustries.filter(i => !i.found).length\n    },\n    errors: []\n  }\n}];"
+      },
+      "id": "5afea14f-fa95-4cf7-a095-0d64939c4fe0",
+      "name": "Map Industry Names",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        48,
+        1040
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify($json) }}",
+        "options": {
+          "responseCode": 200
+        }
+      },
+      "id": "6dd1623c-1253-4794-bd66-e9a9c6f08db6",
+      "name": "Respond - Industry Names",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        256,
+        1040
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "getAll",
+        "tableId": "icp_lookalike_sessions",
+        "limit": 1,
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "session_id",
+              "condition": "eq",
+              "keyValue": "={{ $json.session_id }}"
+            }
+          ]
+        }
+      },
+      "id": "retrieve-full-session",
+      "name": "Retrieve Full Session",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        960,
+        352
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// ============================================================\n// TIER-AWARE STRATEGY CONTEXT BUILDER\n// Extracts precise signals for high-precision Tier 1 results\n// ============================================================\nconst session = $(\"Retrieve Full Session\").first().json;\n\nlet profile = {};\ntry {\n  profile = $(\"Extract Profile Data\").first().json.profile || {};\n} catch (e) {\n  const raw = session.lookalike_profile_data;\n  profile = raw ? (typeof raw === 'object' ? raw : JSON.parse(raw)) : {};\n}\n\nconst profile_name = session.profile_name || 'Not Provided';\nconst safeParse = (v, d) => { if (!v) return d; if (typeof v === 'object') return v; try { return JSON.parse(v) || d; } catch { return d; } };\nconst industries = safeParse(session.target_industry_names, []);\nconst industryIds = safeParse(session.industry_ids, []);\nconst locations = safeParse(session.company_location, []);\nconst company_size = safeParse(session.company_size, '');\nconst hiring_intensity = session.hiring_intensity || 'medium';\nconst persona_description = session.persona_description || '';\n\nconst lookalike = {\n  name: profile.name || 'Unknown',\n  title: profile.current_title || '',\n  company: profile.current_company || '',\n  location: profile.location || '',\n  skills: profile.top_skills || [],\n  education: profile.education || [],\n  work_history: profile.work_history || [],\n  years_experience: profile.total_years_experience || 0,\n  seniority_level: profile.seniority_level || 'Mid',\n  headline: profile.headline || ''\n};\n\nconst primaryIndustry = lookalike.work_history?.[0]?.industry || industries[0] || '';\n\n// ============================================================\n// NEW: TIER-AWARE AI PROMPT\n// ============================================================\nconst prompt = `You are a LinkedIn talent search strategist. Your goal is to generate TIER-SPECIFIC search parameters that maximize Tier 1 precision.\n\nCRITICAL CONTEXT:\nThe system uses a 3-tier waterfall search:\n- **Tier 1 (HIGH PRECISION)**: Should deliver 70-100% of target results with excellent quality\n- **Tier 2 (EXPANDED REACH)**: Fallback if Tier 1 is insufficient (relaxed filters)\n- **Tier 3 (SAFETY VALVE)**: Emergency fallback (very broad filters)\n\nYOUR PRIMARY GOAL: Make Tier 1 so precise that it delivers 70-100 high-quality matches, minimizing reliance on Tier 2/3.\n\nPROFILE ANALYSIS:\nName: ${lookalike.name}\nCurrent Title: ${lookalike.title}\nHeadline: ${lookalike.headline}\nCompany: ${lookalike.company}\nPrimary Industry: ${primaryIndustry}\nLocation: ${lookalike.location}\nYears of Experience: ${lookalike.years_experience}\nSeniority Level: ${lookalike.seniority_level}\nTop Skills: ${lookalike.skills.slice(0, 10).join(', ')}\nWork History: ${JSON.stringify(lookalike.work_history.slice(0, 3))}\n\nUSER REQUIREMENTS:\nTarget Role: ${persona_description}\nTarget Industries: ${industries.join(', ')}\nTarget Locations: ${locations.join(', ')}\nCompany Size: ${company_size}\n\nTIER 1 EXTRACTION RULES (CRITICAL FOR PRECISION):\n\n1. NICHE SPECIALIZATION (MANDATORY):\n   - Extract the EXACT niche from headline, bio, and skills\n   - If headline contains \"B2B SaaS recruiting\" \u2192 searchQuery MUST include \"B2B SaaS recruiting\" OR \"SaaS talent acquisition\" OR \"tech recruiting\"\n   - If skills contain [\"SaaS\", \"SaaS Sales\"] \u2192 These are NICHE indicators, not generic\n   - Rule: If profile mentions a specific niche (SaaS, fintech, healthcare tech, e-commerce, etc.), Tier 1 searchQuery MUST include that niche as quoted phrases or specific variations\n   - BAD Tier 1 query: \"(CEO OR Founder) AND (recruiting OR staffing)\" \u2190 TOO GENERIC\n   - GOOD Tier 1 query: \"(CEO OR Founder) AND (\\\"B2B SaaS recruiting\\\" OR \\\"SaaS talent\\\" OR \\\"tech executive search\\\") AND (scale-up OR unicorn) -\\\"healthcare staffing\\\" -\\\"retail recruiting\\\"\"\n\n2. EXPERIENCE LEVEL FILTERING (MANDATORY):\n   - Profile years: ${lookalike.years_experience}\n   - Map to LinkedIn experience IDs (ALWAYS REQUIRED FOR TIER 1):\n     * 0-2 years \u2192 ID \"1\"\n     * 3-5 years \u2192 ID \"2\"\n     * 6-10 years \u2192 ID \"3\"\n     * 11-15 years \u2192 ID \"4\"\n     * 16-20 years \u2192 ID \"5\"\n     * 21+ years \u2192 ID \"6\"\n   - Tier 1 tolerance: \u00b15 years (e.g., 18 years \u2192 search 11-20 years \u2192 IDs [\"4\", \"5\"])\n   - Tier 2 tolerance: \u00b18 years\n   - Tier 3 tolerance: Any 5+ years\n   - NEVER leave yearsOfExperienceIds empty in Tier 1\n\n3. SKILLS AS DIFFERENTIATORS (MANDATORY):\n   - Extract top 3-5 NICHE-SPECIFIC skills from profile\n   - Profile skills: ${lookalike.skills.slice(0, 10).join(', ')}\n   - Tier 1: Require 3-4 of these skills (separates specialists from generalists)\n   - Tier 2: Require 1-2 skills\n   - Tier 3: No skill requirements\n   - NEVER leave skills empty in Tier 1\n\n4. SENIORITY MATCHING (MANDATORY):\n   - Profile seniority: ${lookalike.seniority_level}\n   - Map to LinkedIn seniority IDs:\n     * Entry/Junior (100-110): Internship, Entry Level\n     * Mid-level (120-130): Associate, Mid-Senior\n     * Manager (200-220): Manager, Senior Manager\n     * Executive (300-320): Director, VP, C-level\n   - Tier 1: Exact seniority match (e.g., Executive \u2192 [\"300\", \"310\", \"320\"])\n   - Tier 2: Allow one level down (e.g., Executive \u2192 [\"220\", \"300\", \"310\", \"320\"])\n   - Tier 3: Broader range\n   - NEVER leave seniorityLevelIds empty in Tier 1\n\n5. TIER-SPECIFIC SEARCH QUERY CONSTRUCTION:\n   - Tier 1 formula: (specific_title1 OR specific_title2) AND (\"exact niche phrase\" OR niche_variant1 OR niche_variant2) AND (qualifier1 OR qualifier2) -\"specific_wrong_subniche1\" -\"specific_wrong_subniche2\"\n   - Tier 2 formula: (title_variants) AND (niche_category OR related_keyword) -broad_wrong_industry\n   - Tier 3 formula: (generic_title) AND (industry_keyword) -clearly_unrelated\n   \n   Example for B2B SaaS recruiting CEO:\n   - Tier 1: (CEO OR Founder OR \"Managing Partner\") AND (\"B2B SaaS recruiting\" OR \"SaaS talent acquisition\" OR \"tech executive search\") AND (scale-up OR unicorn OR \"Series A\") -\"healthcare staffing\" -\"retail recruiting\" -\"hospitality staffing\" -\"temporary staffing\"\n   - Tier 2: (CEO OR Founder OR \"VP Talent\") AND (SaaS OR software OR technology) AND recruiting -healthcare -retail -hospitality\n   - Tier 3: (CEO OR Founder OR Owner) AND (recruiting OR staffing) -healthcare -retail\n\n6. NEGATIVE KEYWORDS (BE SPECIFIC):\n   - Tier 1: Exclude specific WRONG SUB-INDUSTRIES (not broad categories)\n     * For SaaS recruiters: -\"healthcare staffing\" -\"retail recruiting\" -\"hospitality staffing\" -\"temporary staffing\"\n     * For fintech: -\"traditional banking\" -\"wealth management\" (NOT just \"-finance\")\n     * For legaltech: -\"law firm\" -\"litigation\" (NOT just \"-legal\")\n   - Tier 2: Broaden slightly: -healthcare -retail -hospitality\n   - Tier 3: Only clearly unrelated: -nonprofit -government\n\n7. INDUSTRY FILTERING:\n   - Tier 1: Strict - only exact industry (e.g., \"104\" for Staffing & Recruiting)\n   - Tier 2: Add adjacent industries (e.g., add \"96\" IT Services for tech recruiters)\n   - Tier 3: Accept any related industry\n\nOUTPUT FORMAT (JSON only, no markdown):\n{\n  \"role_family\": \"<recruiting|engineering|sales|marketing|finance|operations|legal|healthcare|design|product|data|hr|executive|consulting|other>\",\n  \"primary_industry\": \"<THE MAIN INDUSTRY>\",\n  \"niche_specialization\": \"<EXTRACTED NICHE e.g. 'B2B SaaS recruiting', 'fintech sales', 'healthcare tech'>\",\n  \"mandatory_signals\": {\n    \"job_titles\": [\"<3-5 core titles>\"],\n    \"keywords\": [\"<5-8 niche-specific keywords>\"],\n    \"industries\": [\"<industry IDs>\"]\n  },\n  \"supportive_signals\": {\n    \"skills\": [\"<3-5 differentiating skills for Tier 1>\"],\n    \"past_companies\": [],\n    \"certifications\": []\n  },\n  \"excluded\": {\n    \"role_families\": [\"<role families to exclude>\"],\n    \"industries\": [\"<industry NAMES>\"],\n    \"keywords\": [\"<specific sub-industry keywords to exclude>\"]\n  },\n  \"generated_strategy\": \"<1-2 sentence explanation>\",\n  \"search_logic_dna\": \"<technical summary>\",\n  \"tier_1_params\": {\n    \"searchQuery\": \"<PRECISE query with niche phrases>\",\n    \"currentJobTitles\": [],\n    \"pastJobTitles\": [],\n    \"currentCompanies\": [],\n    \"pastCompanies\": [],\n    \"skills\": [\"<3-4 required skills>\"],\n    \"industryIds\": [\"<1-2 exact IDs>\"],\n    \"locations\": ${JSON.stringify(locations)},\n    \"seniorityLevelIds\": [\"<exact seniority IDs>\"],\n    \"yearsOfExperienceIds\": [\"<experience IDs with \u00b15 year tolerance>\"],\n    \"schools\": [],\n    \"profileLanguages\": [\"English\"],\n    \"profileScraperMode\": \"Full\",\n    \"maxItems\": 100\n  },\n  \"tier_2_params\": {\n    \"searchQuery\": \"<EXPANDED query>\",\n    \"currentJobTitles\": [],\n    \"skills\": [\"<1-2 skills>\"],\n    \"industryIds\": [\"<2-3 IDs including adjacent>\"],\n    \"locations\": ${JSON.stringify(locations)},\n    \"seniorityLevelIds\": [\"<expanded seniority range>\"],\n    \"yearsOfExperienceIds\": [\"<\u00b18 year tolerance>\"],\n    \"profileLanguages\": [\"English\"],\n    \"profileScraperMode\": \"Full\",\n    \"maxItems\": 100\n  },\n  \"tier_3_params\": {\n    \"searchQuery\": \"<BROAD query>\",\n    \"currentJobTitles\": [],\n    \"skills\": [],\n    \"industryIds\": [\"<broad industry IDs>\"],\n    \"locations\": ${JSON.stringify(locations)},\n    \"seniorityLevelIds\": [],\n    \"yearsOfExperienceIds\": [],\n    \"profileLanguages\": [\"English\"],\n    \"profileScraperMode\": \"Full\",\n    \"maxItems\": 100\n  }\n}\n\nCRITICAL REMINDERS:\n- Tier 1 MUST have: niche-specific searchQuery, 3-4 skills, experience IDs, seniority IDs\n- NEVER leave Tier 1 filters empty\n- Extract niche from headline/bio/skills (e.g., \"SaaS\", \"fintech\", \"healthcare tech\")\n- Use specific sub-industry exclusions, not broad categories\n- The better Tier 1 performs, the less we need Tier 2/3\n\nReturn ONLY valid JSON.`;\n\nreturn [{\n  json: {\n    prompt,\n    session_id: session.session_id,\n    profile_name,\n    industries,\n    industry_ids: industryIds,\n    locations,\n    company_size,\n    hiring_intensity,\n    persona_description,\n    lookalike,\n    primary_industry: primaryIndustry\n  }\n}];\n"
+      },
+      "id": "prepare-strategy-context",
+      "name": "Prepare Strategy Context",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1184,
+        352
+      ]
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ $('Prepare Strategy Context').first().json.prompt }}"
+      },
+      "id": "ai-strategy-generation",
+      "name": "AI Strategy Generation",
+      "type": "@n8n/n8n-nodes-langchain.chainLlm",
+      "typeVersion": 1.4,
+      "position": [
+        1376,
+        352
+      ]
+    },
+    {
+      "parameters": {
+        "model": "claude-3-5-sonnet-20240620",
+        "options": {
+          "maxTokensToSample": 4096,
+          "temperature": 0.3
+        }
+      },
+      "id": "anthropic-haiku",
+      "name": "Claude 3.5 Sonnet",
+      "type": "@n8n/n8n-nodes-langchain.lmChatAnthropic",
+      "typeVersion": 1.2,
+      "position": [
+        1360,
+        192
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "tableId": "icp_lookalike_sessions",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "session_id",
+              "condition": "eq",
+              "keyValue": "={{ $('Webhook Trigger').first().json.body.session_id }}"
+            }
+          ]
+        },
+        "fieldsUi": {
+          "fieldValues": [
+            {
+              "fieldId": "ai_strategy",
+              "fieldValue": "={{ $json.generated_strategy }}"
+            },
+            {
+              "fieldId": "search_logic_dna",
+              "fieldValue": "={{ $json.search_logic_dna }}"
+            },
+            {
+              "fieldId": "technical_execution",
+              "fieldValue": "={{ JSON.stringify($json.apify_params) }}"
+            },
+            {
+              "fieldId": "role_family",
+              "fieldValue": "={{ $json.role_family }}"
+            },
+            {
+              "fieldId": "mandatory_signals",
+              "fieldValue": "={{ JSON.stringify($json.mandatory_signals) }}"
+            },
+            {
+              "fieldId": "excluded_signals",
+              "fieldValue": "={{ JSON.stringify($json.excluded) }}"
+            },
+            {
+              "fieldId": "firmographic_constraints",
+              "fieldValue": "={{ JSON.stringify({ industries: $('Prepare Strategy Context').first().json.industries, locations: $('Prepare Strategy Context').first().json.locations, company_size: $('Prepare Strategy Context').first().json.company_size, hiring_intensity: $('Prepare Strategy Context').first().json.hiring_intensity }) }}"
+            },
+            {
+              "fieldId": "is_draft",
+              "fieldValue": "false"
+            }
+          ]
+        }
+      },
+      "id": "save-strategy",
+      "name": "Save Strategy",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        2016,
+        352
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// LAYER 1-2: Parse AI Output with Tier-Specific Signal Extraction\nconst aiNode = $('AI Strategy Generation').first();\nconst aiText = aiNode.json.text || aiNode.json.output || '';\nconst context = $('Prepare Strategy Context').first().json;\n\n// Default structure with SAFE DEFAULTS (Layer 7)\nlet parsed = {\n  role_family: 'other',\n  niche_specialization: '',\n  mandatory_signals: {\n    job_titles: [],\n    keywords: [],\n    industries: []\n  },\n  supportive_signals: {\n    skills: [],\n    past_companies: [],\n    certifications: []\n  },\n  excluded: {\n    role_families: [],\n    industries: ['Arts', 'Music', 'Entertainment', 'Non-profit', 'Religious', 'Wildlife', 'Conservation'],\n    keywords: []\n  },\n  generated_strategy: '',\n  search_logic_dna: '',\n  tier_1_params: null,\n  tier_2_params: null,\n  tier_3_params: null\n};\n\ntry {\n  // Parse JSON from AI response\n  const jsonStr = aiText.replace(/```json\\n?/g, '').replace(/```\\n?/g, '').trim();\n  const aiParsed = JSON.parse(jsonStr);\n  \n  // Extract role_family and niche\n  parsed.role_family = aiParsed.role_family || 'other';\n  parsed.niche_specialization = aiParsed.niche_specialization || '';\n  \n  // Extract mandatory_signals\n  if (aiParsed.mandatory_signals) {\n    parsed.mandatory_signals = {\n      job_titles: aiParsed.mandatory_signals.job_titles || [],\n      keywords: aiParsed.mandatory_signals.keywords || [],\n      industries: aiParsed.mandatory_signals.industries || []\n    };\n  }\n  \n  // Extract supportive_signals\n  if (aiParsed.supportive_signals) {\n    parsed.supportive_signals = {\n      skills: aiParsed.supportive_signals.skills || [],\n      past_companies: aiParsed.supportive_signals.past_companies || [],\n      certifications: aiParsed.supportive_signals.certifications || []\n    };\n  }\n  \n  // Extract excluded signals\n  if (aiParsed.excluded) {\n    parsed.excluded = {\n      role_families: aiParsed.excluded.role_families || [],\n      industries: [...new Set([...(aiParsed.excluded.industries || []), 'Arts', 'Music', 'Entertainment', 'Non-profit', 'Religious', 'Wildlife', 'Conservation'])],\n      keywords: aiParsed.excluded.keywords || []\n    };\n  }\n  \n  // Extract strategy explanations\n  parsed.generated_strategy = aiParsed.generated_strategy || '';\n  parsed.search_logic_dna = aiParsed.search_logic_dna || '';\n  \n  // Extract tier-specific params\n  parsed.tier_1_params = aiParsed.tier_1_params || null;\n  parsed.tier_2_params = aiParsed.tier_2_params || null;\n  parsed.tier_3_params = aiParsed.tier_3_params || null;\n  \n} catch (error) {\n  console.error('Failed to parse AI output:', error.message);\n}\n\n// LAYER 7: SAFE DEFAULTS - Validate tier params exist\nif (!parsed.tier_1_params) {\n  console.warn('No tier_1_params from AI, generating fallback');\n  const fallbackKeywords = parsed.mandatory_signals.keywords.slice(0, 5).join(' ');\n  parsed.tier_1_params = {\n    searchQuery: fallbackKeywords || `${parsed.role_family} professional`,\n    currentJobTitles: [],\n    skills: parsed.supportive_signals.skills.slice(0, 4),\n    industryIds: context.industry_ids || [],\n    locations: context.locations || [],\n    seniorityLevelIds: [],\n    yearsOfExperienceIds: [],\n    profileLanguages: ['English'],\n    profileScraperMode: 'Full',\n    maxItems: 100\n  };\n}\n\nreturn [{\n  json: {\n    role_family: parsed.role_family,\n    niche_specialization: parsed.niche_specialization,\n    mandatory_signals: parsed.mandatory_signals,\n    supportive_signals: parsed.supportive_signals,\n    excluded: parsed.excluded,\n    generated_strategy: parsed.generated_strategy,\n    search_logic_dna: parsed.search_logic_dna,\n    tier_1_params: parsed.tier_1_params,\n    tier_2_params: parsed.tier_2_params,\n    tier_3_params: parsed.tier_3_params,\n    // Keep legacy apify_params for backward compatibility (use tier_1)\n    apify_params: parsed.tier_1_params\n  }\n}];"
+      },
+      "id": "parse-ai-output",
+      "name": "Parse AI Output",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1680,
+        352
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// LAYER 3-4: Title Hardening & Industry/Skill Gating\nconst input = $('Parse AI Output').first().json;\nconst apifyParams = { ...input.apify_params };\nconst roleFamily = input.role_family;\nconst excluded = input.excluded || {};\n\n// ===== LAYER 3: TITLE HARDENING =====\nconst GENERIC_TITLES = ['Founder', 'Director', 'Manager', 'Head', 'Lead', 'Owner', 'Partner', 'Principal', 'President', 'Chairman'];\n\nconst ROLE_FAMILY_KEYWORDS = {\n  'recruiting': ['recruit', 'talent', 'staffing', 'hr', 'human resources', 'sourcer', 'headhunt', 'acquisition'],\n  'engineering': ['engineer', 'developer', 'architect', 'swe', 'devops', 'sre', 'programmer', 'technical'],\n  'sales': ['sales', 'account', 'business development', 'revenue', 'bdr', 'sdr', 'ae', 'commercial'],\n  'marketing': ['marketing', 'growth', 'brand', 'content', 'demand gen', 'digital', 'communications'],\n  'finance': ['finance', 'accounting', 'controller', 'analyst', 'fp&a', 'treasury', 'audit', 'cfo'],\n  'product': ['product', 'pm', 'product manager', 'product owner', 'roadmap'],\n  'data': ['data', 'analytics', 'scientist', 'ml', 'machine learning', 'ai', 'bi', 'intelligence'],\n  'design': ['design', 'ux', 'ui', 'creative', 'visual', 'graphic', 'user experience'],\n  'operations': ['operations', 'ops', 'supply chain', 'logistics', 'procurement', 'facilities'],\n  'legal': ['legal', 'counsel', 'attorney', 'lawyer', 'compliance', 'regulatory'],\n  'hr': ['hr', 'human resources', 'people', 'culture', 'compensation', 'benefits', 'learning'],\n  'executive': ['ceo', 'cto', 'cfo', 'coo', 'cmo', 'cpo', 'chief', 'vp', 'vice president', 'evp', 'svp'],\n  'consulting': ['consultant', 'advisor', 'strategist', 'transformation'],\n  'healthcare': ['nurse', 'doctor', 'physician', 'clinical', 'medical', 'healthcare', 'patient']\n};\n\nconst validateTitle = (title, roleFamily) => {\n  if (!title || title.trim() === '') return { valid: false, reason: 'Empty title' };\n  const titleLower = title.toLowerCase().trim();\n  const isOnlyGeneric = GENERIC_TITLES.some(g => titleLower === g.toLowerCase());\n  if (isOnlyGeneric) return { valid: false, reason: `Generic title: ${title}` };\n  const keywords = ROLE_FAMILY_KEYWORDS[roleFamily] || [];\n  if (keywords.length > 0) {\n    const hasRoleKeyword = keywords.some(kw => titleLower.includes(kw.toLowerCase()));\n    if (!hasRoleKeyword) return { valid: false, reason: `No role match: ${title}` };\n  }\n  const excludedFamilies = excluded.role_families || [];\n  for (const exFamily of excludedFamilies) {\n    const exKeywords = ROLE_FAMILY_KEYWORDS[exFamily] || [];\n    if (exKeywords.some(kw => titleLower.includes(kw.toLowerCase()))) {\n      return { valid: false, reason: `Excluded family: ${exFamily}` };\n    }\n  }\n  return { valid: true, reason: 'Passed' };\n};\n\nconst titleValidation = apifyParams.currentJobTitles.map(title => ({ title, ...validateTitle(title, roleFamily) }));\nconst validTitles = titleValidation.filter(t => t.valid).map(t => t.title);\nconst rejectedTitles = titleValidation.filter(t => !t.valid);\n\nif (validTitles.length === 0) {\n  throw new Error(JSON.stringify({\n    success: false,\n    error_code: 'TITLE_VALIDATION_FAILED',\n    message: `No valid job titles for role family: ${roleFamily}`,\n    data: { rejected_titles: rejectedTitles }\n  }));\n}\napifyParams.currentJobTitles = validTitles;\n\n// LAYER 4: SKILL GATING\nconst EXCLUDED_SKILLS = ['music', 'art', 'painting', 'wildlife', 'conservation', 'teaching', 'academic research', 'nonprofit', 'charity', 'volunteering', 'ministry', 'pottery', 'theater', 'acting', 'singing', 'dancing', 'religious', 'spiritual', 'meditation', 'yoga instructor'];\napifyParams.skills = (apifyParams.skills || []).filter(skill => {\n  if (!skill) return false;\n  const skillLower = skill.toLowerCase();\n  return !EXCLUDED_SKILLS.some(ex => skillLower.includes(ex)) && !(excluded.keywords || []).some(kw => skillLower.includes(kw.toLowerCase()));\n});\n\n// LAYER 4: INDUSTRY GATING\nconst EXCLUDED_INDUSTRY_IDS = ['39', '40', '37', '71', '72', '94'];\napifyParams.industryIds = (apifyParams.industryIds || []).filter(id => !EXCLUDED_INDUSTRY_IDS.includes(String(id)));\n\n// VALIDATE SEARCH QUERY\nif (!apifyParams.searchQuery || apifyParams.searchQuery.trim().length < 5) {\n  apifyParams.searchQuery = (input.mandatory_signals?.keywords || []).slice(0, 5).join(' ') || `${roleFamily} professional`;\n}\n\nreturn [{\n  json: {\n    ...input,\n    apify_params: apifyParams,\n    validation_metadata: {\n      valid_titles: validTitles.length,\n      rejected_titles: rejectedTitles\n    }\n  }\n}];"
+      },
+      "id": "validate-job-titles",
+      "name": "Validate Job Titles",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1840,
+        352
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// TIER 1: BROAD SEARCH - Maximize results\n// Uses ONLY: searchQuery + industryIds + locations (from user constraints)\nconst session = $('Retrieve Session Data').first().json;\n\nconst targetCount = parseInt(session.target_results_count) || 50;\nconst tier1Threshold = Math.ceil(targetCount * 0.8);\nconst tier2Threshold = targetCount;\n\nconst safeParse = (value, defaultValue = null) => {\n  if (!value) return defaultValue;\n  if (typeof value === 'object') return value;\n  try { return JSON.parse(value) || defaultValue; } catch { return defaultValue; }\n};\nconst safeArray = (value) => {\n  const parsed = safeParse(value, []);\n  return Array.isArray(parsed) ? parsed.filter(v => v != null && v !== '') : [];\n};\nconst safeString = (value) => value ? String(value).trim() : '';\nconst dedupe = (arr) => [...new Set(arr.filter(Boolean))];\n\nconst INDUSTRY_NAME_TO_ID = {\n  'staffing and recruiting': '104', 'staffing': '104', 'recruiting': '104', 'recruitment': '104',\n  'human resources': '137', 'human resources services': '137', 'hr': '137', 'hr services': '137',\n  'it services': '96', 'it services and it consulting': '96', 'information technology and services': '96', 'technology': '96',\n  'computer software': '4', 'software': '4', 'internet': '6',\n  'financial services': '43', 'finance': '43', 'banking': '41', 'investment banking': '45', 'investment management': '46',\n  'venture capital and private equity principals': '106', 'accounting': '11',\n  'consulting': '10', 'management consulting': '10',\n  'legal': '9', 'law': '9', 'law practice': '9',\n  'marketing': '100', 'marketing and advertising': '100', 'advertising': '100',\n  'hospitality': '31', 'hotels': '31',\n  'computer and network security': '123', 'real estate': '44', 'construction': '48',\n  'education': '69', 'higher education': '68',\n  'healthcare': '14', 'hospital and health care': '14', 'pharmaceuticals': '15', 'medical devices': '258',\n  'retail': '27', 'consumer goods': '25', 'food and beverages': '34', 'automotive': '53',\n  'telecommunications': '8', 'media': '29', 'entertainment': '30', 'insurance': '42',\n  'transportation': '92', 'logistics': '114', 'supply chain': '114', 'manufacturing': '56',\n  'oil and gas': '57', 'mining': '56', 'agriculture': '201',\n  'nonprofit': '127', 'government': '75', 'defense': '58', 'aerospace': '51'\n};\n\nconst mapIndustryToId = (industryName) => {\n  const lower = (industryName || '').toLowerCase();\n  for (const [key, id] of Object.entries(INDUSTRY_NAME_TO_ID)) {\n    if (lower.includes(key)) return id;\n  }\n  return null;\n};\n\n// Extract ALL core roles from a title (handles comma-separated like \"CEO, Partner, Co-founder\")\nconst extractCoreRoles = (title) => {\n  if (!title) return [];\n  const parts = title.split(/[,&]+/);\n  const roleMap = {\n    'ceo': 'CEO', 'founder': 'Founder', 'co-founder': 'Founder', 'cofounder': 'Founder',\n    'owner': 'Owner', 'president': 'President', 'partner': 'Partner',\n    'managing director': 'Managing Director', 'director': 'Director',\n    'vp': 'VP', 'vice president': 'VP', 'head': 'Head', 'manager': 'Manager',\n    'coo': 'COO', 'cto': 'CTO', 'cfo': 'CFO', 'cmo': 'CMO'\n  };\n  const found = [];\n  for (const part of parts) {\n    const t = part.trim().toLowerCase();\n    for (const [key, label] of Object.entries(roleMap)) {\n      if (t.includes(key)) { found.push(label); break; }\n    }\n  }\n  return found.length > 0 ? found : [title.trim()];\n};\n\nconst sessionId = session.session_id;\nconst profileName = session.profile_name || '';\nconst roleFamily = safeString(session.role_family) || 'other';\nconst mandatorySignals = safeParse(session.mandatory_signals, { job_titles: [], keywords: [], industries: [] });\nconst excludedSignals = safeParse(session.excluded_signals, { industries: [], keywords: [] });\nconst technicalExecution = safeParse(session.technical_execution, {});\nconst lookalikeProfileData = safeParse(session.lookalike_profile_data, {});\nconst firmographicConstraints = safeParse(session.firmographic_constraints, {});\n\nconst profile = lookalikeProfileData;\nconst anchor = {\n  currentTitle: safeString(profile.current_title || profile.headline),\n  currentCompany: safeString(profile.current_company),\n  seniorityLevel: safeString(profile.seniority_level),\n  industries: safeArray(profile.industries || profile.industry),\n  yearsOfExperience: parseInt(profile.total_years_experience) || 0,\n  location: safeString(profile.location)\n};\n\nconst jobTitles = dedupe([...safeArray(mandatorySignals.job_titles), anchor.currentTitle].filter(Boolean));\nconst industryKeywords = safeArray(mandatorySignals.keywords).filter(Boolean);\n\n// INDUSTRY IDs: Handle both names and numeric IDs\nconst industryEntries = safeArray(mandatorySignals.industries);\nconst alreadyIds = industryEntries.filter(e => /^\\d+$/.test(String(e)));\nconst industryNames = industryEntries.filter(e => !/^\\d+$/.test(String(e)));\nconst mappedFromNames = industryNames.map(name => mapIndustryToId(name)).filter(Boolean);\nlet industryIds = dedupe([...alreadyIds, ...mappedFromNames]);\n\nif (industryIds.length === 0) {\n  const workIndustry = profile.work_history?.[0]?.industry;\n  if (workIndustry) {\n    const id = mapIndustryToId(workIndustry);\n    if (id) industryIds.push(id);\n  }\n}\n\n// LOCATIONS: ONLY from user's firmographic constraints - NEVER add profile city\nconst locations = dedupe(safeArray(firmographicConstraints.locations).filter(Boolean));\n\n// BUILD SEARCH QUERY - Extract core roles from ALL title sources\nconst anchorRoles = extractCoreRoles(anchor.currentTitle);\nconst strategyRoles = jobTitles.slice(0, 3).flatMap(t => extractCoreRoles(t));\nconst titleVariations = dedupe([...anchorRoles, ...strategyRoles]).slice(0, 4);\nconst titlePart = titleVariations.map(t => `\"${t}\"`).join(' OR ');\nconst industryPart = industryKeywords.slice(0, 3).join(' OR ') || 'recruiting OR staffing';\nconst negatives = '-finance -legal -consulting';\nconst searchQuery = `(${titlePart}) AND (${industryPart}) ${negatives}`;\n\n// Smart maxItems: overfetch by 50% for post-filtering, cap at 150\nconst maxItems = Math.min(Math.ceil(targetCount * 1.5), 150);\n\nconst tier1ApifyInput = {\n  searchQuery,\n  currentJobTitles: [],\n  pastJobTitles: [],\n  currentCompanies: [],\n  pastCompanies: [],\n  industryIds: industryIds.slice(0, 2),\n  locations: locations.slice(0, 5),\n  seniorityLevelIds: [],\n  yearsOfExperienceIds: [],\n  schools: [],\n  profileLanguages: ['English'],\n  profileScraperMode: 'Full',\n  maxItems,\n  autoQuerySegmentation: false,\n  recentlyChangedJobs: false\n};\n\n// VALIDATION\nconst issues = [];\nif (!searchQuery || searchQuery.length < 5) issues.push('searchQuery too short');\nif (searchQuery.includes('--')) issues.push('searchQuery has double-dash');\nif (industryIds.length === 0) console.warn('WARNING: No industryIds - search may be too broad');\nif (issues.length > 0) {\n  console.error('VALIDATION ISSUES:', issues);\n  throw new Error('Invalid Tier 1 input: ' + issues.join('; '));\n}\n\n// COMPREHENSIVE LOGGING\nconsole.log('\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501');\nconsole.log('BUILD TIER 1 INPUT');\nconsole.log('\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501');\nconsole.log('Session ID:', sessionId);\nconsole.log('Profile:', profileName);\nconsole.log('Anchor title:', anchor.currentTitle);\nconsole.log('Extracted roles:', titleVariations);\nconsole.log('Target count:', targetCount);\nconsole.log('Tier 1 threshold (80%):', tier1Threshold);\nconsole.log('maxItems:', maxItems);\nconsole.log('');\nconsole.log('SEARCH PARAMS:');\nconsole.log('  searchQuery:', searchQuery);\nconsole.log('  industryIds:', industryIds.slice(0, 2));\nconsole.log('  locations:', locations.slice(0, 5));\nconsole.log('  currentJobTitles: [] (intentionally empty)');\nconsole.log('  seniorityLevelIds: [] (intentionally empty)');\nconsole.log('\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501');\n\nreturn [{ json: {\n  tier: 1, session_id: sessionId, profile_name: profileName, role_family: roleFamily,\n  apify_input: tier1ApifyInput, enforced_mandatory_signals: mandatorySignals,\n  enforced_excluded_signals: excludedSignals, lookalike_anchor: anchor,\n  firmographic_constraints: firmographicConstraints, target_count: targetCount,\n  all_job_titles: jobTitles,\n  tier_config: { tier1_threshold: tier1Threshold, tier2_threshold: tier2Threshold, target_count: targetCount }\n}}];\n"
+      },
+      "id": "build-tier1-input",
+      "name": "Build Tier 1 Input",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        496,
+        784
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "Run actor and get dataset",
+        "actorId": {
+          "__rl": true,
+          "value": "M2FMdjRVeF1HPGFcc",
+          "mode": "list",
+          "cachedResultName": "LinkedIn Profile Search Scraper No Cookies \u2705 Find all people \ud83d\udce7 (harvestapi/linkedin-profile-search)",
+          "cachedResultUrl": "https://console.apify.com/actors/M2FMdjRVeF1HPGFcc/input"
+        },
+        "customBody": "={{ $json.apify_input }}",
+        "memory": 8192
+      },
+      "id": "trigger-tier1-apify",
+      "name": "Trigger Tier 1 Apify",
+      "type": "@apify/n8n-nodes-apify.apify",
+      "typeVersion": 1,
+      "position": [
+        736,
+        784
+      ],
+      "alwaysOutputData": true,
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "// CHECK TIER 1 RESULTS & PREPARE FOR TIER 2 DECISION\n// Threshold: 80% of target = Tier 1 success\n// Handles 0 results from alwaysOutputData (empty item)\n\nconst inputData = $('Build Tier 1 Input').first().json;\nconst tier1Results = $input.all();\n\n// Extract profiles from Apify response - handles empty items from alwaysOutputData\nlet tier1Profiles = [];\nfor (const item of tier1Results) {\n  const j = item.json || {};\n  if (j.dataset && j.dataset.items) {\n    tier1Profiles.push(...j.dataset.items);\n  } else if (j.items) {\n    tier1Profiles.push(...j.items);\n  } else if (Array.isArray(j)) {\n    tier1Profiles.push(...j);\n  } else if (j.linkedinUrl) {\n    tier1Profiles.push(j);\n  }\n  // If item is empty {} from alwaysOutputData, no profiles are added (correct)\n}\n\n// Deduplicate by LinkedIn URL\nconst seen = new Set();\nconst uniqueProfiles = tier1Profiles.filter(p => {\n  const url = p.linkedinUrl || p.profileUrl || '';\n  if (!url || seen.has(url)) return false;\n  seen.add(url);\n  return true;\n});\n\nconst tier1Count = uniqueProfiles.length;\nconst targetCount = inputData.target_count || inputData.tier_config?.target_count || 50;\nconst tier1Threshold = inputData.tier_config?.tier1_threshold || Math.ceil(targetCount * 0.8);\n\n// CRITICAL: Always proceed to Tier 2 if below threshold\nconst needMoreTier2 = tier1Count < tier1Threshold;\nconst isEmergencyMode = tier1Count === 0;\n\nconsole.log('\u2501\u2501\u2501 TIER 1 RESULTS \u2501\u2501\u2501');\nconsole.log('Profiles found:', tier1Count);\nconsole.log('Target:', targetCount);\nconsole.log('Threshold (80%):', tier1Threshold);\nconsole.log('Needs Tier 2:', needMoreTier2);\nconsole.log('Emergency mode:', isEmergencyMode);\nconsole.log('\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501');\n\nif (isEmergencyMode) {\n  console.warn('\u26a0\ufe0f TIER 1 RETURNED 0 RESULTS - proceeding to Tier 2 with relaxed filters');\n}\n\nreturn [{\n  json: {\n    ...inputData,\n    tier1_results: {\n      count: tier1Count,\n      threshold: tier1Threshold,\n      met_threshold: !needMoreTier2\n    },\n    accumulated_profiles: uniqueProfiles,\n    accumulated_count: tier1Count,\n    need_tier2: needMoreTier2,\n    is_emergency_mode: isEmergencyMode,\n    tier1_profiles: uniqueProfiles,\n    target_count: targetCount,\n    execution_log: {\n      tier_1_count: tier1Count,\n      target: targetCount,\n      threshold: tier1Threshold,\n      needs_tier_2: needMoreTier2,\n      emergency_mode: isEmergencyMode\n    }\n  }\n}];\n"
+      },
+      "id": "check-tier1-count",
+      "name": "Check Tier 1 Count",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        960,
+        784
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "version": 2,
+            "leftValue": "",
+            "caseSensitive": true,
+            "typeValidation": "strict"
+          },
+          "combinator": "and",
+          "conditions": [
+            {
+              "id": "tier2-check",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              },
+              "leftValue": "={{ $json.need_tier2 }}",
+              "rightValue": ""
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "need-more-tier2",
+      "name": "Need More Tier 2?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1136,
+        784
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// TIER 2: EXPANDED REACH - with emergency mode when Tier 1 returns 0\nconst inputData = $('Check Tier 1 Count').first().json;\n\nconst targetCount = inputData.target_count || inputData.tier_config?.target_count || 50;\nconst tier1Count = inputData.accumulated_count || 0;\nconst remaining = targetCount - tier1Count;\nconst isEmergencyMode = inputData.is_emergency_mode === true;\n\nconst tier2MaxItems = isEmergencyMode ? 100 : Math.min(Math.ceil(remaining * 1.3), 100);\n\nconst VALID_EXPERIENCE_IDS = ['1', '2', '3', '4', '5'];\nconst VALID_SENIORITY_IDS = ['100', '110', '120', '130', '200', '210', '220', '300', '310', '320'];\nconst validateExperienceIds = (ids) => ids.filter(id => VALID_EXPERIENCE_IDS.includes(String(id))).map(String);\nconst validateSeniorityIds = (ids) => ids.filter(id => VALID_SENIORITY_IDS.includes(String(id))).map(String);\n\nconst INDUSTRY_NAME_TO_ID = {\n  'staffing and recruiting': '104', 'staffing': '104', 'recruiting': '104', 'recruitment': '104',\n  'human resources': '137', 'human resources services': '137', 'hr': '137',\n  'it services': '96', 'technology': '96', 'computer software': '4', 'software': '4',\n  'financial services': '43', 'finance': '43', 'banking': '41',\n  'consulting': '10', 'management consulting': '10',\n  'legal': '9', 'law': '9', 'law practice': '9',\n  'marketing': '100', 'hospitality': '31',\n  'healthcare': '14', 'retail': '27', 'insurance': '42',\n  'manufacturing': '56', 'construction': '48', 'real estate': '44',\n  'education': '69', 'nonprofit': '127', 'government': '75'\n};\n\nconst mapIndustryToId = (name) => {\n  const lower = (name || '').toLowerCase();\n  for (const [key, id] of Object.entries(INDUSTRY_NAME_TO_ID)) {\n    if (lower.includes(key)) return id;\n  }\n  return null;\n};\n\n// Extract core roles from title (same as Tier 1)\nconst extractCoreRoles = (title) => {\n  if (!title) return [];\n  const parts = title.split(/[,&]+/);\n  const roleMap = {\n    'ceo': 'CEO', 'founder': 'Founder', 'co-founder': 'Founder', 'cofounder': 'Founder',\n    'owner': 'Owner', 'president': 'President', 'partner': 'Partner',\n    'managing director': 'Managing Director', 'director': 'Director',\n    'vp': 'VP', 'vice president': 'VP', 'head': 'Head', 'manager': 'Manager'\n  };\n  const found = [];\n  for (const part of parts) {\n    const t = part.trim().toLowerCase();\n    for (const [key, label] of Object.entries(roleMap)) {\n      if (t.includes(key)) { found.push(label); break; }\n    }\n  }\n  return found.length > 0 ? found : [title.trim()];\n};\n\nconst dedupe = (arr) => [...new Set(arr.filter(Boolean))];\n\nconst mapSeniorityIds = (seniorityLevel, years, currentTitle) => {\n  const level = (seniorityLevel || '').toLowerCase();\n  const title = (currentTitle || '').toLowerCase();\n  const yrs = parseInt(years) || 0;\n  if (title.match(/\\b(ceo|founder|owner|chief|president|cto|cfo|coo|cmo)\\b/)) return ['300', '310', '320'];\n  if (title.includes('partner')) return ['320'];\n  if (title.match(/\\b(vp|vice president)\\b/)) return ['300', '310'];\n  if (title.match(/\\b(director|head of)\\b/)) return ['220', '300'];\n  if (title.match(/\\b(manager|supervisor)\\b/)) return yrs >= 10 ? ['210', '220'] : ['200', '210'];\n  if (title.match(/\\b(lead|principal|staff)\\b/)) return ['130', '200'];\n  if (level.includes('senior') || yrs >= 8) return ['120', '130'];\n  if (level.includes('mid') || yrs >= 3) return ['110', '120'];\n  return ['110', '120'];\n};\n\nconst expandSeniorityRange = (base) => {\n  const expanded = new Set(base);\n  for (const id of base) {\n    const n = parseInt(id);\n    if (n >= 110) expanded.add(String(n - 10));\n    if (n <= 310) expanded.add(String(n + 10));\n  }\n  return validateSeniorityIds([...expanded]);\n};\n\nconst ADJACENT_INDUSTRIES = {\n  '104': ['137'], '137': ['104'], '96': ['4'], '4': ['96'],\n  '43': ['41', '11'], '10': [], '9': [], '100': [], '31': []\n};\n\nconst getAdjacentIndustries = (ids) => {\n  const adjacent = new Set();\n  for (const id of ids) {\n    if (ADJACENT_INDUSTRIES[id]) ADJACENT_INDUSTRIES[id].forEach(a => adjacent.add(a));\n  }\n  return [...adjacent];\n};\n\nconst tier1Input = inputData.apify_input || {};\nconst tier1Profiles = inputData.tier1_profiles || [];\nconst anchor = inputData.lookalike_anchor || {};\nconst mandatorySignals = inputData.enforced_mandatory_signals || {};\nconst excludedSignals = inputData.enforced_excluded_signals || {};\nconst excludeUrls = new Set(tier1Profiles.map(p => p.linkedinUrl || p.profileUrl).filter(Boolean));\n\n// EMERGENCY MODE: Ultra-broad search\nif (isEmergencyMode) {\n  console.warn('\u2501\u2501\u2501 EMERGENCY MODE: TIER 2 \u2501\u2501\u2501');\n  const industryKeywords = (mandatorySignals.keywords || []).slice(0, 2);\n  const primaryKeyword = industryKeywords[0] || 'recruiting';\n  const emergencyQuery = primaryKeyword;\n  const emergencyIndustries = (tier1Input.industryIds || []).slice(0, 1);\n\n  console.log('Emergency searchQuery:', emergencyQuery);\n  console.log('Emergency industryIds:', emergencyIndustries);\n  console.log('maxItems:', 100);\n  console.log('\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501');\n\n  return [{ json: {\n    tier: 2, session_id: inputData.session_id, profile_name: inputData.profile_name,\n    role_family: inputData.role_family,\n    apify_input: {\n      searchQuery: emergencyQuery,\n      currentJobTitles: [],\n      pastJobTitles: [],\n      currentCompanies: [],\n      pastCompanies: [],\n      industryIds: emergencyIndustries,\n      locations: tier1Input.locations || [],\n      seniorityLevelIds: [],\n      yearsOfExperienceIds: [],\n      schools: [],\n      profileLanguages: ['English'],\n      profileScraperMode: 'Full',\n      maxItems: 100,\n      autoQuerySegmentation: false,\n      recentlyChangedJobs: false\n    },\n    enforced_mandatory_signals: mandatorySignals,\n    enforced_excluded_signals: excludedSignals,\n    lookalike_anchor: anchor,\n    firmographic_constraints: inputData.firmographic_constraints,\n    tier1_profiles: tier1Profiles, accumulated_profiles: tier1Profiles,\n    accumulated_count: 0, exclude_urls: [...excludeUrls],\n    target_count: targetCount, tier_config: inputData.tier_config,\n    is_emergency_mode: true, all_job_titles: inputData.all_job_titles || []\n  }}];\n}\n\n// NORMAL TIER 2: Expanded but targeted\nconst baseSeniority = mapSeniorityIds(anchor.seniorityLevel, anchor.yearsOfExperience, anchor.currentTitle);\nconst tier2Seniority = expandSeniorityRange(baseSeniority);\nconst tier2Experience = validateExperienceIds(['4', '5']);\n\nconst baseIndustries = (tier1Input.industryIds || []).map(String);\nconst adjacentIndustries = getAdjacentIndustries(baseIndustries);\nconst tier2Industries = [...new Set([...baseIndustries, ...adjacentIndustries])].slice(0, 3);\n\nconst industryKeywords = (mandatorySignals.keywords || []).slice(0, 5);\n\n// Use extractCoreRoles for clean titles (same approach as Tier 1)\nconst allTitles = inputData.all_job_titles || [];\nconst cleanTitles = dedupe(allTitles.flatMap(t => extractCoreRoles(t))).slice(0, 5);\n\nconst titlePart = cleanTitles.map(t => `\"${t}\"`).join(' OR ');\nconst industryPart = industryKeywords.slice(0, 4).join(' OR ') || 'recruiting OR staffing';\nconst negatives = '-finance -legal -consulting';\nconst searchQuery = `(${titlePart}) AND (${industryPart}) ${negatives}`;\n\nconst tier2ApifyInput = {\n  searchQuery,\n  currentJobTitles: cleanTitles.slice(0, 5),\n  pastJobTitles: [],\n  currentCompanies: [],\n  pastCompanies: [],\n  industryIds: tier2Industries,\n  locations: tier1Input.locations || [],\n  seniorityLevelIds: tier2Seniority,\n  yearsOfExperienceIds: tier2Experience,\n  schools: [],\n  profileLanguages: ['English'],\n  profileScraperMode: 'Full',\n  maxItems: tier2MaxItems,\n  autoQuerySegmentation: false,\n  recentlyChangedJobs: false\n};\n\n// VALIDATION\nif (searchQuery.includes('--')) {\n  console.error('DOUBLE-DASH in Tier 2 searchQuery!');\n  throw new Error('Invalid Tier 2 searchQuery: contains double-dash');\n}\n\nconsole.log('\u2501\u2501\u2501 TIER 2 CONFIGURATION \u2501\u2501\u2501');\nconsole.log('Tier 1 count:', tier1Count);\nconsole.log('Remaining needed:', remaining);\nconsole.log('maxItems:', tier2MaxItems);\nconsole.log('searchQuery:', searchQuery);\nconsole.log('Clean titles:', cleanTitles);\nconsole.log('industryIds:', tier2Industries);\nconsole.log('seniorityLevelIds:', tier2Seniority);\nconsole.log('\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501');\n\nreturn [{ json: {\n  tier: 2, session_id: inputData.session_id, profile_name: inputData.profile_name,\n  role_family: inputData.role_family, apify_input: tier2ApifyInput,\n  enforced_mandatory_signals: mandatorySignals,\n  enforced_excluded_signals: excludedSignals,\n  lookalike_anchor: anchor, firmographic_constraints: inputData.firmographic_constraints,\n  tier1_profiles: tier1Profiles, accumulated_profiles: tier1Profiles,\n  accumulated_count: inputData.accumulated_count || 0, exclude_urls: [...excludeUrls],\n  target_count: targetCount, tier_config: inputData.tier_config,\n  is_emergency_mode: false, all_job_titles: inputData.all_job_titles || allTitles\n}}];\n"
+      },
+      "id": "build-tier2-input",
+      "name": "Build Tier 2 Input",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1344,
+        768
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "Run actor and get dataset",
+        "actorId": {
+          "__rl": true,
+          "value": "M2FMdjRVeF1HPGFcc",
+          "mode": "list",
+          "cachedResultName": "LinkedIn Profile Search Scraper No Cookies \u2705 Find all people \ud83d\udce7 (harvestapi/linkedin-profile-search)",
+          "cachedResultUrl": "https://console.apify.com/actors/M2FMdjRVeF1HPGFcc/input"
+        },
+        "customBody": "={{ $json.apify_input }}",
+        "memory": 8192
+      },
+      "id": "trigger-tier2-apify",
+      "name": "Trigger Tier 2 Apify",
+      "type": "@apify/n8n-nodes-apify.apify",
+      "typeVersion": 1,
+      "position": [
+        1520,
+        768
+      ],
+      "alwaysOutputData": true,
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "// ============================================================\n// CHECK TIER 2 RESULTS & PREPARE FOR TIER 3 DECISION\n// Uses dynamic thresholds from target_results_count\n// ============================================================\n\nconst inputData = $('Build Tier 2 Input').first().json;\nconst tier2Results = $input.all();\n\n// Extract profiles from Apify response\nlet tier2Profiles = [];\nfor (const item of tier2Results) {\n  // Handle dataset items format\n  if (item.json && item.json.dataset && item.json.dataset.items) {\n    tier2Profiles.push(...item.json.dataset.items);\n  }\n  // Handle direct items array\n  else if (item.json && item.json.items) {\n    tier2Profiles.push(...item.json.items);\n  }\n  // Handle array of profiles\n  else if (item.json && Array.isArray(item.json)) {\n    tier2Profiles.push(...item.json);\n  }\n  // Handle single profile object\n  else if (item.json && item.json.linkedinUrl) {\n    tier2Profiles.push(item.json);\n  }\n}\n\n// Deduplicate within Tier 2 (excluding Tier 1 URLs)\nconst seen = new Set(inputData.exclude_urls || []);\nconst uniqueTier2 = tier2Profiles.filter(p => {\n  const url = p.linkedinUrl || p.profileUrl || '';\n  if (!url || seen.has(url)) return false;\n  seen.add(url);\n  return true;\n});\n\n// Combine with Tier 1 profiles\nconst allProfiles = [...(inputData.tier1_profiles || []), ...uniqueTier2];\nconst cumulativeCount = allProfiles.length;\n\n// Use DYNAMIC threshold (85% of target)\nconst targetCount = inputData.target_count || inputData.tier_config?.target_count || 50;\nconst tier2Threshold = inputData.tier_config?.tier2_threshold || Math.ceil(targetCount * 0.85);\nconst needMoreTier3 = cumulativeCount < tier2Threshold;\n\nreturn [{\n  json: {\n    ...inputData,\n    tier2_results: {\n      count: uniqueTier2.length,\n      cumulative: cumulativeCount,\n      threshold: tier2Threshold,\n      met_threshold: !needMoreTier3\n    },\n    tier2_profiles: uniqueTier2,\n    accumulated_profiles: allProfiles,\n    accumulated_count: cumulativeCount,\n    need_tier3: needMoreTier3,\n    exclude_urls: [...seen],\n    target_count: targetCount,\n    execution_log: {\n      tier_2_count: uniqueTier2.length,\n      total_count: cumulativeCount,\n      target: targetCount,\n      threshold: tier2Threshold,\n      needs_tier_3: needMoreTier3\n    }\n  }\n}];"
+      },
+      "id": "check-tier2-count",
+      "name": "Check Tier 2 Count",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1712,
+        752
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "version": 2,
+            "leftValue": "",
+            "caseSensitive": true,
+            "typeValidation": "strict"
+          },
+          "combinator": "and",
+          "conditions": [
+            {
+              "id": "tier3-check",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              },
+              "leftValue": "={{ $json.need_tier3 }}",
+              "rightValue": ""
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "need-more-tier3",
+      "name": "Need More Tier 3?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1904,
+        752
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// TIER 3: RECALL RECOVERY - STILL INDUSTRY CONSTRAINED (not fully open)\nconst inputData = $('Check Tier 2 Count').first().json;\n\nconst targetCount = inputData.target_count || inputData.tier_config?.target_count || 50;\nconst accumulatedCount = inputData.accumulated_count || 0;\nconst remaining = targetCount - accumulatedCount;\nconst tier3MaxItems = Math.max(20, Math.ceil(remaining * 1.5));  // Overfetch by 50% for final tier\n\nconst VALID_SENIORITY_IDS = ['100', '110', '120', '130', '200', '210', '220', '300', '310', '320'];\nconst validateSeniorityIds = (ids) => ids.filter(id => VALID_SENIORITY_IDS.includes(String(id))).map(String);\n\nconst tier1Input = inputData.apify_input || {};\nconst accumulatedProfiles = inputData.accumulated_profiles || [];\nconst mandatorySignals = inputData.enforced_mandatory_signals || {};\nconst excludedSignals = inputData.enforced_excluded_signals || {};\nconst excludeUrls = new Set(inputData.exclude_urls || []);\n\nconst tier2Profiles = inputData.tier2_profiles || [];\ntier2Profiles.forEach(p => {\n  const url = p.linkedinUrl || p.profileUrl;\n  if (url) excludeUrls.add(url);\n});\n\nconst tier3Seniority = validateSeniorityIds([\n  '110', '120', '130',\n  '200', '210', '220',\n  '300', '310', '320'\n]);\n\nconst industryKeywords = (mandatorySignals.keywords || []).slice(0, 5);\nconst excludedKeywords = (excludedSignals.keywords || []).slice(0, 5);\n\nconst jobTitles = tier1Input.currentJobTitles || [];\nconst keywordPart = industryKeywords.slice(0, 4).join(' OR ') || 'recruiting OR staffing OR talent';\n\nconst defaultExclusions = ['-finance', '-consulting', '-legal'];\nconst customExclusions = excludedKeywords.slice(0, 3).map(k => `-${k.toLowerCase().replace(/\\s+/g, '')}`);\nconst allExclusions = [...new Set([...defaultExclusions, ...customExclusions])].join(' ');\n\nconst searchQuery = `(${keywordPart}) ${allExclusions}`;\n\nconst tier3ApifyInput = {\n  searchQuery,\n  currentJobTitles: jobTitles.slice(0, 15),\n  pastJobTitles: jobTitles.slice(0, 10),\n  currentCompanies: [],\n  pastCompanies: [],\n  industryIds: tier1Input.industryIds || [],\n  locations: tier1Input.locations || [],\n  seniorityLevelIds: tier3Seniority,\n  yearsOfExperienceIds: [],\n  schools: [],\n  profileLanguages: ['English'],\n  profileScraperMode: 'Full',\n  maxItems: tier3MaxItems,\n  autoQuerySegmentation: false,\n  recentlyChangedJobs: false\n};\n\nreturn [{ json: {\n  tier: 3, session_id: inputData.session_id, profile_name: inputData.profile_name,\n  role_family: inputData.role_family, apify_input: tier3ApifyInput,\n  enforced_mandatory_signals: mandatorySignals,\n  enforced_excluded_signals: excludedSignals,\n  lookalike_anchor: inputData.lookalike_anchor, firmographic_constraints: inputData.firmographic_constraints,\n  tier1_profiles: inputData.tier1_profiles || [], tier2_profiles: tier2Profiles,\n  accumulated_profiles: [...accumulatedProfiles, ...tier2Profiles],\n  accumulated_count: accumulatedCount, exclude_urls: [...excludeUrls],\n  target_count: targetCount, tier_config: inputData.tier_config\n}}];"
+      },
+      "id": "build-tier3-input",
+      "name": "Build Tier 3 Input",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2112,
+        736
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "Run actor and get dataset",
+        "actorId": {
+          "__rl": true,
+          "value": "M2FMdjRVeF1HPGFcc",
+          "mode": "list",
+          "cachedResultName": "LinkedIn Profile Search Scraper No Cookies \u2705 Find all people \ud83d\udce7 (harvestapi/linkedin-profile-search)",
+          "cachedResultUrl": "https://console.apify.com/actors/M2FMdjRVeF1HPGFcc/input"
+        },
+        "customBody": "={{ $json.apify_input }}",
+        "memory": 8192
+      },
+      "id": "trigger-tier3-apify",
+      "name": "Trigger Tier 3 Apify",
+      "type": "@apify/n8n-nodes-apify.apify",
+      "typeVersion": 1,
+      "position": [
+        2336,
+        736
+      ],
+      "alwaysOutputData": true,
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "// ============================================================\n// MERGE ALL TIERS WITH DEDUPLICATION\n// Preserves target_count for dynamic limiting\n// ============================================================\n\nconst allInputs = $input.all();\nlet inputData = null;\nlet tier3Results = [];\n\n// Determine which path we came from\nfor (const item of allInputs) {\n  const json = item.json;\n  \n  // Check if this is Tier 3 Apify results (dataset format)\n  if (json.dataset && json.dataset.items) {\n    tier3Results.push(...json.dataset.items);\n  }\n  // Check if this is Tier 3 Apify results (items format)\n  else if (json.items && Array.isArray(json.items)) {\n    tier3Results.push(...json.items);\n  }\n  // Check if this is a profile array\n  else if (json.linkedinUrl || (Array.isArray(json) && json[0]?.linkedinUrl)) {\n    if (Array.isArray(json)) {\n      tier3Results.push(...json);\n    } else {\n      tier3Results.push(json);\n    }\n  }\n  // Check if this is the context data from previous tier checks\n  else if (json.session_id && (json.accumulated_profiles || json.tier1_profiles)) {\n    inputData = json;\n  }\n}\n\n// If no inputData found, try to get it from parent nodes\nif (!inputData) {\n  try {\n    inputData = $('Check Tier 2 Count').first().json;\n  } catch (e) {\n    try {\n      inputData = $('Check Tier 1 Count').first().json;\n    } catch (e2) {\n      throw new Error('Could not find tier data from any source');\n    }\n  }\n}\n\n// Get context for Build Tier 3 if available\nlet tier3Context = null;\ntry {\n  tier3Context = $('Build Tier 3 Input').first().json;\n} catch (e) {\n  // Tier 3 wasn't executed\n}\n\n// Get target_count from any available source\nconst targetCount = inputData.target_count || \n                    tier3Context?.target_count || \n                    inputData.tier_config?.target_count || \n                    50;\n\n// Collect all profiles from all tiers\nconst tier1Profiles = inputData.tier1_profiles || [];\nconst tier2Profiles = inputData.tier2_profiles || [];\n\n// If we have tier3 context, use its accumulated_profiles\nlet accumulatedBefore = [];\nif (tier3Context) {\n  accumulatedBefore = tier3Context.accumulated_profiles || [];\n} else {\n  accumulatedBefore = inputData.accumulated_profiles || [...tier1Profiles, ...tier2Profiles];\n}\n\n// Process Tier 3 results and deduplicate\nconst existingUrls = new Set(\n  accumulatedBefore.map(p => p.linkedinUrl || p.profileUrl).filter(Boolean)\n);\n\nconst uniqueTier3 = tier3Results.filter(p => {\n  const url = p.linkedinUrl || p.profileUrl || '';\n  if (!url || existingUrls.has(url)) return false;\n  existingUrls.add(url);\n  return true;\n});\n\n// Final merge with tier tagging\nconst allProfiles = [];\n\n// Add Tier 1 profiles with tier tag\nfor (const p of tier1Profiles) {\n  allProfiles.push({ ...p, _tier: 1, _tier_priority: 1 });\n}\n\n// Add Tier 2 profiles with tier tag\nfor (const p of tier2Profiles) {\n  allProfiles.push({ ...p, _tier: 2, _tier_priority: 2 });\n}\n\n// Add Tier 3 profiles with tier tag\nfor (const p of uniqueTier3) {\n  allProfiles.push({ ...p, _tier: 3, _tier_priority: 3 });\n}\n\n// Final deduplication (safety check)\nconst seen = new Set();\nconst finalProfiles = allProfiles.filter(p => {\n  const url = p.linkedinUrl || p.profileUrl || '';\n  if (!url || seen.has(url)) return false;\n  seen.add(url);\n  return true;\n});\n\n// Summary statistics\nconst tierBreakdown = {\n  tier1: tier1Profiles.length,\n  tier2: tier2Profiles.length,\n  tier3: uniqueTier3.length,\n  total: finalProfiles.length\n};\n\n// Determine how many tiers were executed\nlet tiersExecuted = 1;\nif (tier2Profiles.length > 0) tiersExecuted = 2;\nif (uniqueTier3.length > 0) tiersExecuted = 3;\n\nreturn [{\n  json: {\n    session_id: inputData.session_id,\n    profile_name: inputData.profile_name,\n    role_family: inputData.role_family,\n    all_profiles: finalProfiles,\n    total_count: finalProfiles.length,\n    target_count: targetCount,\n    tiers_executed: tiersExecuted,\n    tier_breakdown: tierBreakdown,\n    tier_results: {\n      tier1: inputData.tier1_results || { count: tier1Profiles.length },\n      tier2: inputData.tier2_results || { count: tier2Profiles.length },\n      tier3: { count: uniqueTier3.length }\n    },\n    enforced_mandatory_signals: inputData.enforced_mandatory_signals,\n    enforced_excluded_signals: inputData.enforced_excluded_signals,\n    lookalike_anchor: inputData.lookalike_anchor,\n    firmographic_constraints: inputData.firmographic_constraints,\n    tier_config: inputData.tier_config\n  }\n}];"
+      },
+      "id": "merge-all-tiers",
+      "name": "Merge All Tiers",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2912,
+        1200
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// ============================================================\n// ============================================================\n// SCORING CONFIGURATION (Tunable)\n// ============================================================\nconst WEIGHTS = {\n  INDUSTRY_MATCH: 40,\n  TITLE_MATCH: 30,\n  TIER_BONUS_1: 5,   // Reduced from 15 (Optimization: Quality over Tier)\n  TIER_BONUS_2: 3,\n  EXPERIENCE: 10,\n  SENIORITY: 10\n};\n\n// ============================================================\n// PROCESS & SCORE RESULTS - FIXED with STRICT INDUSTRY FILTERING\n\n// ============================================================\n\nconst inputData = $('Merge All Tiers').first().json;\nconst allProfiles = inputData.all_profiles || [];\nconst anchor = inputData.lookalike_anchor || {};\nconst mandatorySignals = inputData.enforced_mandatory_signals || {};\nconst excludedSignals = inputData.enforced_excluded_signals || {};\n\n// DYNAMIC TARGET from session\nconst targetCount = inputData.target_count || inputData.tier_config?.target_count || 50;\nconst tiersExecuted = inputData.tiers_executed || 1;\n\n// ============================================================\n// HELPER FUNCTIONS\n// ============================================================\n\nconst normalizeString = (str) => {\n  if (!str) return '';\n  return String(str).toLowerCase().trim();\n};\n\n// ============================================================\n// STRICT INDUSTRY FILTER - MANDATORY CHECK\n// ============================================================\n\nconst isIndustryMatch = (candidateIndustry, requiredIndustries, requiredKeywords) => {\n  if (!candidateIndustry) return false;\n\n  const candInd = normalizeString(candidateIndustry);\n\n  // Check against required industries\n  const industries = (requiredIndustries || []).map(normalizeString);\n  for (const reqInd of industries) {\n    if (candInd.includes(reqInd) || reqInd.includes(candInd)) {\n      return true;\n    }\n  }\n\n  // Check against required keywords (for industry matching)\n  const keywords = (requiredKeywords || []).map(normalizeString);\n  for (const kw of keywords) {\n    if (candInd.includes(kw)) {\n      return true;\n    }\n  }\n\n  return false;\n};\n\nconst isExcludedIndustry = (candidateIndustry, excludedIndustries, excludedKeywords) => {\n  if (!candidateIndustry) return false;\n\n  const candInd = normalizeString(candidateIndustry);\n\n  // Check excluded industries\n  const industries = (excludedIndustries || []).map(normalizeString);\n  for (const excInd of industries) {\n    if (candInd.includes(excInd)) {\n      return true;\n    }\n  }\n\n  // Check excluded keywords\n  const keywords = (excludedKeywords || []).map(normalizeString);\n  for (const kw of keywords) {\n    if (candInd.includes(kw)) {\n      return true;\n    }\n  }\n\n  return false;\n};\n\nconst hasTitleKeywordMatch = (candidateTitle, requiredKeywords) => {\n  if (!candidateTitle || !requiredKeywords?.length) return true; // No filter if no keywords\n\n  const titleLower = normalizeString(candidateTitle);\n  const keywords = requiredKeywords.map(normalizeString);\n\n  // At least one keyword must be in title\n  return keywords.some(kw => titleLower.includes(kw));\n};\n\n// ============================================================\n// STRICT FILTER FUNCTION - APPLIED BEFORE SCORING\n// ============================================================\n\nconst strictFilter = (candidate) => {\n  const requiredIndustries = mandatorySignals.industries || [];\n  const requiredKeywords = mandatorySignals.keywords || [];\n  const excludedIndustries = excludedSignals.industries || [];\n  const excludedKeywords = excludedSignals.keywords || [];\n\n  // Get candidate's industry\n  const candidateIndustry = candidate.industry ||\n                           candidate.currentCompanyIndustry ||\n                           candidate.current_company_industry || '';\n\n  // Get candidate's title\n  const candidateTitle = candidate.currentTitle ||\n                        candidate.current_title ||\n                        candidate.headline || '';\n\n  // RULE 1: If we have required industries, candidate MUST match\n  if (requiredIndustries.length > 0) {\n    const industryMatch = isIndustryMatch(candidateIndustry, requiredIndustries, requiredKeywords);\n\n    // If industry field is empty, check title for industry keywords\n    if (!candidateIndustry) {\n      const titleHasIndustry = requiredKeywords.some(kw =>\n        normalizeString(candidateTitle).includes(normalizeString(kw))\n      );\n      if (!titleHasIndustry) {\n        return { pass: false, reason: 'no_industry_match' };\n      }\n    } else if (!industryMatch) {\n      return { pass: false, reason: 'industry_mismatch' };\n    }\n  }\n\n  // RULE 2: Check excluded industries\n  if (excludedIndustries.length > 0) {\n    if (isExcludedIndustry(candidateIndustry, excludedIndustries, excludedKeywords)) {\n      return { pass: false, reason: 'excluded_industry' };\n    }\n  }\n\n  // RULE 3: Title must have some relevance (at least one keyword match)\n  if (requiredKeywords.length >= 3) {\n    const hasRelevantTitle = hasTitleKeywordMatch(candidateTitle, requiredKeywords.slice(0, 5));\n    if (!hasRelevantTitle) {\n      return { pass: false, reason: 'no_title_relevance' };\n    }\n  }\n\n  return { pass: true, reason: 'passed' };\n};\n\n// ============================================================\n// SCORING FUNCTIONS\n// ============================================================\n\nconst calculateTitleSimilarity = (profileTitle, anchorTitle, mandatoryTitles) => {\n  if (!profileTitle) return 0;\n  const pTitle = normalizeString(profileTitle);\n  const aTitle = normalizeString(anchorTitle);\n\n  let score = 0;\n\n  // Exact match with anchor\n  if (pTitle === aTitle) {\n    score += 30;\n  }\n  // Partial match with anchor\n  else if (pTitle.includes(aTitle) || aTitle.includes(pTitle)) {\n    score += 20;\n  }\n  // Word overlap with anchor\n  else {\n    const pWords = new Set(pTitle.split(/\\s+/));\n    const aWords = new Set(aTitle.split(/\\s+/));\n    const overlap = [...pWords].filter(w => aWords.has(w) && w.length > 2).length;\n    score += Math.min(overlap * 5, 15);\n  }\n\n  // Check mandatory titles\n  const titles = mandatoryTitles || [];\n  for (const t of titles) {\n    if (pTitle.includes(normalizeString(t))) {\n      score += 10;\n      break;\n    }\n  }\n\n  return score;\n};\n\nconst calculateIndustrySimilarity = (profileIndustry, anchorIndustries, mandatoryIndustries) => {\n  if (!profileIndustry) return 0;\n  const pInd = normalizeString(profileIndustry);\n\n  let score = 0;\n\n  // Check anchor industries - INCREASED WEIGHT\n  const aIndustries = (anchorIndustries || []).map(normalizeString);\n  for (const aInd of aIndustries) {\n    if (pInd === aInd) {\n      score += WEIGHTS.INDUSTRY_MATCH;\n      break;\n    } else if (pInd.includes(aInd) || aInd.includes(pInd)) {\n      score += WEIGHTS.TITLE_MATCH;\n      break;\n    }\n  }\n\n  // Check mandatory industries - INCREASED WEIGHT\n  const mIndustries = (mandatoryIndustries || []).map(normalizeString);\n  for (const mInd of mIndustries) {\n    if (pInd.includes(mInd)) {\n      score += 20;  // INCREASED from 5\n      break;\n    }\n  }\n\n  return score;\n};\n\nconst calculateExperienceScore = (yearsExperience) => {\n  const years = parseInt(yearsExperience) || 0;\n  if (years >= 15) return 10;  // REDUCED from 15\n  if (years >= 10) return 8;\n  if (years >= 7) return 6;\n  if (years >= 5) return 5;\n  if (years >= 3) return 3;\n  return 2;\n};\n\nconst calculateSeniorityScore = (seniorityLevel) => {\n  const level = normalizeString(seniorityLevel);\n  if (level.includes('executive') || level.includes('c-level') || level.includes('chief')) return 10;\n  if (level.includes('director') || level.includes('vp') || level.includes('head')) return 8;\n  if (level.includes('senior') || level.includes('manager')) return 6;\n  if (level.includes('mid') || level.includes('lead')) return 4;\n  return 2;\n};\n\nconst calculateTierBonus = (tier) => {\n  // Tier 1 profiles get highest priority\n  if (tier === 1) return 15;  // REDUCED from 20\n  if (tier === 2) return 8;\n  return 0;\n};\n\n// ============================================================\n// PROCESS ALL PROFILES\n// ============================================================\n\n// STEP 1: Apply strict filter FIRST\nconst filteredProfiles = [];\nconst rejectedProfiles = {\n  no_industry_match: 0,\n  industry_mismatch: 0,\n  excluded_industry: 0,\n  no_title_relevance: 0\n};\n\nfor (const profile of allProfiles) {\n  const filterResult = strictFilter(profile);\n  if (filterResult.pass) {\n    filteredProfiles.push(profile);\n  } else {\n    rejectedProfiles[filterResult.reason] = (rejectedProfiles[filterResult.reason] || 0) + 1;\n  }\n}\n\n// STEP 2: Score remaining profiles\nconst scoredProfiles = filteredProfiles.map(profile => {\n  const titleScore = calculateTitleSimilarity(\n    profile.currentTitle || profile.headline,\n    anchor.currentTitle,\n    mandatorySignals.job_titles\n  );\n\n  const industryScore = calculateIndustrySimilarity(\n    profile.industry || profile.currentCompanyIndustry,\n    anchor.industries,\n    mandatorySignals.industries\n  );\n\n  const experienceScore = calculateExperienceScore(profile.yearsOfExperience);\n  const seniorityScore = calculateSeniorityScore(profile.seniorityLevel);\n  const tierBonus = calculateTierBonus(profile._tier);\n\n  const totalScore = titleScore + industryScore + experienceScore + seniorityScore + tierBonus;\n\n  return {\n    ...profile,\n    _similarity_score: totalScore,\n    _score_breakdown: {\n      title: titleScore,\n      industry: industryScore,\n      experience: experienceScore,\n      seniority: seniorityScore,\n      tier_bonus: tierBonus\n    }\n  };\n});\n\n// Sort by score descending\nconst sortedProfiles = scoredProfiles.sort((a, b) => b._similarity_score - a._similarity_score);\n\n// DYNAMIC: Limit to target_count\nconst finalProfiles = sortedProfiles.slice(0, targetCount);\n\n// Calculate quality breakdown - RAISED THRESHOLDS\nconst excellentMatches = finalProfiles.filter(p => p._similarity_score >= 80).length;\nconst strongMatches = finalProfiles.filter(p => p._similarity_score >= 60 && p._similarity_score < 80).length;\nconst moderateMatches = finalProfiles.filter(p => p._similarity_score >= 40 && p._similarity_score < 60).length;\n\n// Calculate statistics\nconst stats = {\n  total_raw: allProfiles.length,\n  total_after_filter: filteredProfiles.length,\n  final_count: finalProfiles.length,\n  target_count: targetCount,\n  target_met: finalProfiles.length >= targetCount,\n  filter_rejection_rate: allProfiles.length > 0\n    ? Math.round((1 - filteredProfiles.length / allProfiles.length) * 100)\n    : 0,\n  rejection_breakdown: rejectedProfiles,\n  avg_score: finalProfiles.length > 0\n    ? Math.round(finalProfiles.reduce((sum, p) => sum + p._similarity_score, 0) / finalProfiles.length)\n    : 0,\n  max_score: finalProfiles.length > 0 ? finalProfiles[0]._similarity_score : 0,\n  min_score: finalProfiles.length > 0 ? finalProfiles[finalProfiles.length - 1]._similarity_score : 0,\n  quality_breakdown: {\n    excellent: excellentMatches,\n    strong: strongMatches,\n    moderate: moderateMatches\n  },\n  tier_distribution: {\n    tier1: finalProfiles.filter(p => p._tier === 1).length,\n    tier2: finalProfiles.filter(p => p._tier === 2).length,\n    tier3: finalProfiles.filter(p => p._tier === 3).length\n  },\n  tiers_executed: tiersExecuted\n};\n\nreturn [{\n  json: {\n    session_id: inputData.session_id,\n    profile_name: inputData.profile_name,\n    role_family: inputData.role_family,\n    scored_profiles: finalProfiles,\n    scoring_stats: stats,\n    target_count: targetCount,\n    target_met: finalProfiles.length >= targetCount,\n    tiers_executed: tiersExecuted,\n    tier_breakdown: inputData.tier_breakdown,\n    tier_results: inputData.tier_results,\n    enforced_mandatory_signals: inputData.enforced_mandatory_signals,\n    enforced_excluded_signals: inputData.enforced_excluded_signals,\n    lookalike_anchor: inputData.lookalike_anchor,\n    firmographic_constraints: inputData.firmographic_constraints\n  }\n}];\n"
+      },
+      "id": "process-score-results",
+      "name": "Process & Score Results",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3152,
+        1200
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// SAVE LOOKALIKE RESULTS - Prepare for Database & Response\nconst inputData = $('Process & Score Results').first().json;\nconst scoredProfiles = inputData.scored_profiles || [];\nconst sessionId = inputData.session_id;\nconst targetCount = inputData.target_count || 50;\nconst targetMet = inputData.target_met || false;\nconst tiersExecuted = inputData.tiers_executed || 1;\nconst scoringStats = inputData.scoring_stats || {};\n\n// PREPARE CANDIDATE PROFILES FOR BULK INSERT\nconst candidateProfiles = scoredProfiles.map(profile => {\n  const name = profile.fullName || `${profile.firstName || ''} ${profile.lastName || ''}`.trim() || profile.name || 'Unknown';\n  const linkedinUrl = profile.linkedinUrl || profile.linkedin_url || '';\n  const score = profile._similarity_score || 0;\n  let matchQuality = 'weak';\n  if (score >= 80) matchQuality = 'excellent';\n  else if (score >= 65) matchQuality = 'strong';\n  else if (score >= 50) matchQuality = 'good';\n  else if (score >= 35) matchQuality = 'moderate';\n\n  return {\n    session_id: sessionId,\n    linkedin_url: linkedinUrl,\n    name: name,\n    photo_url: profile.profilePicture || profile.photo_url || profile.photoUrl || null,\n    headline: profile.headline || profile.tagline || null,\n    current_title: profile.currentTitle || profile.position || profile.headline?.split(' at ')[0] || null,\n    current_company: profile.companyName || profile.currentCompany || profile.currentPosition?.[0]?.companyName || profile.headline?.split(' at ')[1] || null,\n    location: typeof profile.location === 'object'\n      ? (profile.location?.parsed?.text || profile.location?.linkedinText || JSON.stringify(profile.location))\n      : (profile.location || null),\n    seniority_level: profile.seniorityLevel || null,\n    years_experience: parseInt(profile.yearsOfExperience) || 0,\n    top_skills: JSON.stringify(profile.skills || profile.topSkills || []),\n    education: JSON.stringify(profile.education || profile.educations || []),\n    work_history: JSON.stringify(profile.positions || profile.workHistory || profile.experience || []),\n    profile_completeness: profile.profileCompleteness || 0,\n    similarity_score: score,\n    match_quality: matchQuality,\n    match_reasons: JSON.stringify(profile._score_breakdown || {}),\n    profile_data: JSON.stringify(profile),\n    // FIX: Add metadata fields that were missing\n    tier_source: profile._tier || null,\n    scrape_run_id: sessionId,\n    batch_number: 1\n  };\n}).filter(p => p.linkedin_url && p.name !== 'Unknown');\n\n// PREPARE CANDIDATE PREVIEW (Top 20 for response)\nconst candidatePreview = scoredProfiles.slice(0, 20).map(profile => ({\n  name: profile.fullName || `${profile.firstName || ''} ${profile.lastName || ''}`.trim() || profile.name || 'Unknown',\n  title: profile.headline || profile.currentTitle || profile.occupation || '',\n  company: profile.companyName || profile.currentCompany || profile.currentPosition?.[0]?.companyName || '',\n  location: profile.location?.parsed?.text || profile.location?.linkedinText || profile.location || '',\n  linkedin_url: profile.linkedinUrl || profile.linkedin_url || '',\n  photo_url: profile.profilePicture || profile.photo_url || '',\n  similarity_score: profile._similarity_score,\n  score_breakdown: profile._score_breakdown,\n  tier: profile._tier,\n  seniority: profile.seniorityLevel || '',\n  experience_years: profile.yearsOfExperience || 0\n})).filter(c => c.name && c.name !== 'Unknown');\n\nconst strongMatchesCount = candidateProfiles.filter(p => p.match_quality === 'excellent' || p.match_quality === 'strong').length;\n\nreturn [{\n  json: {\n    session_id: sessionId,\n    profile_name: inputData.profile_name,\n    role_family: inputData.role_family,\n    lookalike_results: JSON.stringify(candidateProfiles.slice(0, 100)),\n    results_count: candidateProfiles.length,\n    strong_matches_count: strongMatchesCount,\n    candidate_profiles: candidateProfiles,\n    profiles_to_save: candidateProfiles.length,\n    response_data: {\n      success: true,\n      message: `3-Tier Progressive Search completed. Found ${scoredProfiles.length} of ${targetCount} requested profiles.`,\n      data: {\n        session_id: sessionId,\n        profile_name: inputData.profile_name,\n        step: 4,\n        status: 'completed',\n        role_family: inputData.role_family,\n        total_results: candidateProfiles.length,\n        target_results: targetCount,\n        target_met: targetMet,\n        tiers_executed: tiersExecuted,\n        profiles_saved: candidateProfiles.length,\n        strong_matches: strongMatchesCount,\n        average_score: scoringStats.avg_score || 0,\n        search_results: {\n          total_qualified: candidateProfiles.length,\n          quality_breakdown: scoringStats.quality_breakdown,\n          tier_distribution: scoringStats.tier_distribution,\n          avg_similarity_score: scoringStats.avg_score,\n          candidates_preview: candidatePreview\n        },\n        tier_summary: inputData.tier_results,\n        lookalike_anchor: inputData.lookalike_anchor ? {\n          title: inputData.lookalike_anchor.currentTitle,\n          company: inputData.lookalike_anchor.currentCompany,\n          seniority: inputData.lookalike_anchor.seniorityLevel,\n          industries: inputData.lookalike_anchor.industries\n        } : null,\n        firmographic_constraints: inputData.firmographic_constraints,\n        enforced_mandatory_signals: inputData.enforced_mandatory_signals\n      },\n      errors: []\n    }\n  }\n}];"
+      },
+      "id": "save-lookalike-results",
+      "name": "Save Lookalike Results",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3392,
+        1200
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "getAll",
+        "tableId": "candidate_profiles",
+        "limit": 100,
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "session_id",
+              "condition": "eq",
+              "keyValue": "={{ $json.session_id }}"
+            }
+          ]
+        }
+      },
+      "id": "query-candidate-profiles",
+      "name": "Query Candidate Profiles",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        1808,
+        1408
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// ============================================================\n// FORMAT RESULTS RESPONSE\n// Query candidate_profiles and format for API response\n// ============================================================\n\nconst profiles = $input.all().map(item => item.json);\n\n// Parse JSON fields if stored as strings\nconst formattedProfiles = profiles.map(p => ({\n  id: p.id,\n  name: p.name,\n  photo_url: p.photo_url,\n  headline: p.headline,\n  current_title: p.current_title,\n  current_company: p.current_company,\n  location: p.location,\n  seniority_level: p.seniority_level,\n  years_experience: p.years_experience,\n  similarity_score: p.similarity_score,\n  match_quality: p.match_quality,\n  linkedin_url: p.linkedin_url,\n  top_skills: typeof p.top_skills === 'string' ? JSON.parse(p.top_skills || '[]') : (p.top_skills || []),\n  education: typeof p.education === 'string' ? JSON.parse(p.education || '[]') : (p.education || []),\n  work_history: typeof p.work_history === 'string' ? JSON.parse(p.work_history || '[]') : (p.work_history || []),\n  created_at: p.created_at\n}));\n\n// Sort by similarity score descending\nformattedProfiles.sort((a, b) => (b.similarity_score || 0) - (a.similarity_score || 0));\n\nreturn [{\n  json: {\n    success: true,\n    message: `Retrieved ${formattedProfiles.length} candidate profiles`,\n    data: {\n      results: formattedProfiles,\n      total_count: formattedProfiles.length,\n      strong_matches: formattedProfiles.filter(p => p.match_quality === 'strong').length,\n      good_matches: formattedProfiles.filter(p => p.match_quality === 'good').length\n    }\n  }\n}];"
+      },
+      "id": "format-results-response",
+      "name": "Format Results Response",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2064,
+        1408
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify($json) }}",
+        "options": {
+          "responseCode": 200
+        }
+      },
+      "id": "respond-results",
+      "name": "Respond - Results",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        2304,
+        1408
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "get",
+        "tableId": "icp_lookalike_sessions",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "session_id",
+              "keyValue": "={{ $json.session_id }}"
+            }
+          ]
+        }
+      },
+      "id": "query-session-status",
+      "name": "Query Session Status",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        1808,
+        1200
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// ============================================================\n// FORMAT STATUS RESPONSE\n// Return session scrape status\n// ============================================================\n\nconst session = $input.first().json;\n\nconst statusMap = {\n  'pending': 'Waiting to start',\n  'in_progress': 'Scraping in progress',\n  'completed': 'Scraping completed',\n  'failed': 'Scraping failed'\n};\n\nreturn [{\n  json: {\n    success: true,\n    message: statusMap[session.scrape_status] || statusMap[session.status] || 'Unknown status',\n    data: {\n      session_id: session.session_id,\n      status: session.status,\n      scrape_status: session.scrape_status || session.status,\n      current_phase: session.current_phase,\n      current_step: session.current_step,\n      results_count: session.results_count || 0,\n      strong_matches_count: session.strong_matches_count || 0,\n      target_results_count: session.target_results_count || 50,\n      progress_percent: session.results_count && session.target_results_count \n        ? Math.min(100, Math.round((session.results_count / session.target_results_count) * 100)) \n        : 0,\n      created_at: session.created_at,\n      updated_at: session.updated_at\n    }\n  }\n}];"
+      },
+      "id": "format-status-response",
+      "name": "Format Status Response",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2064,
+        1200
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify($json) }}",
+        "options": {
+          "responseCode": 200
+        }
+      },
+      "id": "respond-status",
+      "name": "Respond - Status",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        2304,
+        1200
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// ============================================================\n// SPLIT CANDIDATE PROFILES FOR BULK INSERT\n// Output each profile as individual item for Supabase insert\n// ============================================================\n\nconst inputData = $('Save Lookalike Results').first().json;\nconst profiles = inputData.candidate_profiles || [];\n\nif (profiles.length === 0) {\n  return [{ json: { skip: true, message: 'No profiles to insert' } }];\n}\n\n// Return each profile as a separate item\nreturn profiles.map(profile => ({\n  json: {\n    ...profile,\n    // Pass through session data for later nodes\n    _session_id: inputData.session_id,\n    _results_count: inputData.results_count,\n    _strong_matches_count: inputData.strong_matches_count\n  }\n}));"
+      },
+      "id": "split-candidate-profiles",
+      "name": "Split Candidate Profiles",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3600,
+        1200
+      ]
+    },
+    {
+      "parameters": {
+        "tableId": "candidate_profiles",
+        "fieldsUi": {
+          "fieldValues": [
+            {
+              "fieldId": "session_id",
+              "fieldValue": "={{ $json.session_id }}"
+            },
+            {
+              "fieldId": "linkedin_url",
+              "fieldValue": "={{ $json.linkedin_url }}"
+            },
+            {
+              "fieldId": "name",
+              "fieldValue": "={{ $json.name }}"
+            },
+            {
+              "fieldId": "photo_url",
+              "fieldValue": "={{ $json.photo_url }}"
+            },
+            {
+              "fieldId": "headline",
+              "fieldValue": "={{ $json.headline }}"
+            },
+            {
+              "fieldId": "current_title",
+              "fieldValue": "={{ $json.current_title }}"
+            },
+            {
+              "fieldId": "current_company",
+              "fieldValue": "={{ $json.current_company }}"
+            },
+            {
+              "fieldId": "location",
+              "fieldValue": "={{ $json.location }}"
+            },
+            {
+              "fieldId": "seniority_level",
+              "fieldValue": "={{ $json.seniority_level }}"
+            },
+            {
+              "fieldId": "years_experience",
+              "fieldValue": "={{ $json.years_experience }}"
+            },
+            {
+              "fieldId": "top_skills",
+              "fieldValue": "={{ $json.top_skills }}"
+            },
+            {
+              "fieldId": "education",
+              "fieldValue": "={{ $json.education }}"
+            },
+            {
+              "fieldId": "work_history",
+              "fieldValue": "={{ $json.work_history }}"
+            },
+            {
+              "fieldId": "profile_completeness",
+              "fieldValue": "={{ $json.profile_completeness }}"
+            },
+            {
+              "fieldId": "similarity_score",
+              "fieldValue": "={{ $json.similarity_score }}"
+            },
+            {
+              "fieldId": "match_quality",
+              "fieldValue": "={{ $json.match_quality }}"
+            },
+            {
+              "fieldId": "match_reasons",
+              "fieldValue": "={{ $json.match_reasons }}"
+            },
+            {
+              "fieldId": "profile_data",
+              "fieldValue": "={{ $json.profile_data }}"
+            },
+            {
+              "fieldId": "tier_source",
+              "fieldValue": "={{ $json.tier_source }}"
+            },
+            {
+              "fieldId": "scrape_run_id",
+              "fieldValue": "={{ $json.scrape_run_id }}"
+            },
+            {
+              "fieldId": "batch_number",
+              "fieldValue": "={{ $json.batch_number }}"
+            }
+          ]
+        }
+      },
+      "id": "insert-candidate-profile",
+      "name": "Insert Candidate Profile",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        3840,
+        1200
+      ],
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "jsCode": "// ============================================================\n// COLLECT INSERT RESULTS\n// Aggregate profile insert results and prepare for session update\n// ============================================================\n\nconst allResults = $input.all();\nlet insertedCount = 0;\nlet failedCount = 0;\nlet sessionId = '';\nlet resultsCount = 0;\nlet strongMatchesCount = 0;\n\nfor (const item of allResults) {\n  const json = item.json;\n  \n  // Track session data from first item\n  if (!sessionId && json._session_id) {\n    sessionId = json._session_id;\n    resultsCount = json._results_count || 0;\n    strongMatchesCount = json._strong_matches_count || 0;\n  }\n  \n  // Check if insert succeeded\n  if (json.id) {\n    insertedCount++;\n  } else if (json.error || json.skip) {\n    failedCount++;\n  } else {\n    // Assume success if no error field\n    insertedCount++;\n  }\n}\n\n// Get data from Save Lookalike Results if not found\nif (!sessionId) {\n  try {\n    const saveResults = $('Save Lookalike Results').first().json;\n    sessionId = saveResults.session_id;\n    resultsCount = saveResults.results_count;\n    strongMatchesCount = saveResults.strong_matches_count;\n  } catch (e) {\n    // Use defaults\n    resultsCount = insertedCount;\n  }\n}\n\nreturn [{\n  json: {\n    session_id: sessionId,\n    profiles_inserted: insertedCount,\n    profiles_failed: failedCount,\n    results_count: resultsCount || insertedCount,\n    strong_matches_count: strongMatchesCount,\n    insert_summary: {\n      total_attempted: allResults.length,\n      successful: insertedCount,\n      failed: failedCount\n    }\n  }\n}];"
+      },
+      "id": "collect-insert-results",
+      "name": "Collect Insert Results",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        4064,
+        1200
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const body = $input.first().json;\n\nif (!body.linkedin_url) {\n  throw new Error('linkedin_url is required for email reveal');\n}\nif (!body.profile_id) {\n  throw new Error('profile_id is required for email reveal');\n}\nif (!body.linkedin_url.includes('linkedin.com')) {\n  throw new Error('Invalid LinkedIn URL format');\n}\n\nreturn [{\n  json: {\n    linkedin_url: body.linkedin_url,\n    profile_id: body.profile_id,\n    session_id: body.session_id || null\n  }\n}];"
+      },
+      "id": "validate-email-request",
+      "name": "Validate Email Request",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -32,
+        1680
+      ],
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "operation": "Run actor and get dataset",
+        "actorId": {
+          "__rl": true,
+          "value": "TthkVR0ZjJt8gbtRy",
+          "mode": "list",
+          "cachedResultName": "LinkedIn Email Finder \u2013 Verified Emails at Scale (blitzapi/linkedin-email-finder)",
+          "cachedResultUrl": "https://console.apify.com/actors/TthkVR0ZjJt8gbtRy/input"
+        },
+        "customBody": "={\n    \"linkedin_profile_url\": \"{{ $json.linkedin_url }}\"\n}"
+      },
+      "id": "scrape-email-apify",
+      "name": "Scrape Email via Apify",
+      "type": "@apify/n8n-nodes-apify.apify",
+      "typeVersion": 1,
+      "position": [
+        192,
+        1664
+      ],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000,
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const result = $input.first().json;\nconst profileId = $('Validate Email Request').first().json.profile_id;\nconst sessionId = $('Validate Email Request').first().json.session_id;\n\nconst email = result.contact_info?.email\n  || result.personal_emails?.[0]\n  || result.email\n  || result.emails?.[0]\n  || null;\n\nconst confidence = result.contact_info?.has_email ? 'high' : (email ? 'medium' : 'none');\nconst source = 'apify_linkedin_detail';\n\nif (!email) {\n  return [{\n    json: {\n      success: false,\n      profile_id: profileId,\n      session_id: sessionId,\n      email: null,\n      confidence: 'none',\n      source: source,\n      email_found_at: null,\n      error: 'Email not found for this LinkedIn profile'\n    }\n  }];\n}\n\nreturn [{\n  json: {\n    success: true,\n    profile_id: profileId,\n    session_id: sessionId,\n    email: email,\n    confidence: confidence,\n    source: source,\n    email_found_at: new Date().toISOString(),\n    full_name: result.basic_info?.fullname || null\n  }\n}];"
+      },
+      "id": "parse-email-result",
+      "name": "Parse Email Result",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        416,
+        1648
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "tableId": "candidate_profiles",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "id",
+              "condition": "eq",
+              "keyValue": "={{ $json.profile_id }}"
+            }
+          ]
+        },
+        "fieldsUi": {
+          "fieldValues": [
+            {
+              "fieldId": "email",
+              "fieldValue": "={{ $json.email }}"
+            },
+            {
+              "fieldId": "email_confidence",
+              "fieldValue": "={{ $json.confidence }}"
+            },
+            {
+              "fieldId": "email_found_at",
+              "fieldValue": "={{ $json.email_found_at }}"
+            }
+          ]
+        }
+      },
+      "id": "update-profile-email",
+      "name": "Update Profile Email",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        624,
+        1648
+      ],
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "jsCode": "const emailData = $('Parse Email Result').first().json;\n\nreturn [{\n  json: {\n    success: emailData.success,\n    profile_id: emailData.profile_id,\n    email: emailData.email || null,\n    confidence: emailData.confidence || 'none',\n    source: emailData.source || 'unknown',\n    error: emailData.error || null\n  }\n}];"
+      },
+      "id": "format-email-response",
+      "name": "Format Email Response",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        816,
+        1648
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "options": {}
+      },
+      "id": "respond-email-revealed",
+      "name": "Respond - Email Revealed",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.4,
+      "position": [
+        1040,
+        1648
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "tableId": "icp_lookalike_sessions",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "session_id",
+              "condition": "eq",
+              "keyValue": "={{ $('Save Lookalike Results').first().json.session_id }}"
+            }
+          ]
+        },
+        "fieldsUi": {
+          "fieldValues": [
+            {
+              "fieldId": "current_phase",
+              "fieldValue": "completed"
+            },
+            {
+              "fieldId": "current_step",
+              "fieldValue": "6"
+            },
+            {
+              "fieldId": "is_draft",
+              "fieldValue": "false"
+            },
+            {
+              "fieldId": "status",
+              "fieldValue": "completed"
+            },
+            {
+              "fieldId": "scrape_status",
+              "fieldValue": "completed"
+            },
+            {
+              "fieldId": "results_count",
+              "fieldValue": "={{ $json.results_count }}"
+            },
+            {
+              "fieldId": "strong_matches_count",
+              "fieldValue": "={{ $json.strong_matches_count }}"
+            },
+            {
+              "fieldId": "lookalike_results",
+              "fieldValue": "={{ $('Save Lookalike Results').first().json.lookalike_results }}"
+            },
+            {
+              "fieldId": "updated_at",
+              "fieldValue": "={{ $now.toISO() }}"
+            }
+          ]
+        }
+      },
+      "id": "3179441b-bc49-4d4d-8b9e-ae0e0bd767a3",
+      "name": "Update Session Complete",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        4528,
+        1200
+      ]
+    }
+  ],
+  "tags": [],
+  "meta": {
+    "templateCredsSetupCompleted": true
+  },
+  "parentFolderId": null
+}

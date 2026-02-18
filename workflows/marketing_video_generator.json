@@ -1,0 +1,466 @@
+{
+    "name": "Marketing Video Generator with Motion Graphics",
+    "nodes": [
+        {
+            "parameters": {
+                "httpMethod": "POST",
+                "path": "generate-marketing-video",
+                "options": {}
+            },
+            "id": "webhook-trigger",
+            "name": "Webhook",
+            "type": "n8n-nodes-base.webhook",
+            "typeVersion": 1,
+            "position": [
+                20,
+                300
+            ]
+        },
+        {
+            "parameters": {
+                "jsCode": "const body = $input.first().json.body || $input.first().json;\n\nconst errors = [];\n\nif (!body.feature_name) errors.push('feature_name required');\nif (!body.feature_description) errors.push('feature_description required');\n\nif (errors.length > 0) {\n  return [{\n    json: {\n      success: false,\n      errors: errors\n    }\n  }];\n}\n\nreturn [{\n  json: {\n    feature_name: body.feature_name,\n    feature_description: body.feature_description,\n    video_duration: body.video_duration || 60,\n    avatar_id: body.avatar_id || 'josh_lite3_20230714',\n    voice_id: body.voice_id || 'en-US-Neural2-A',\n    style: body.style || 'professional',\n    include_motion_graphics: body.include_motion_graphics !== false\n  }\n}];"
+            },
+            "id": "input-validation",
+            "name": "Input Validation",
+            "type": "n8n-nodes-base.code",
+            "typeVersion": 2,
+            "position": [
+                220,
+                300
+            ]
+        },
+        {
+            "parameters": {
+                "method": "POST",
+                "url": "https://api.anthropic.com/v1/messages",
+                "sendHeaders": true,
+                "headerParameters": {
+                    "parameters": [
+                        {
+                            "name": "x-api-key",
+                            "value": "={{ $env.ANTHROPIC_API_KEY }}"
+                        },
+                        {
+                            "name": "anthropic-version",
+                            "value": "2023-06-01"
+                        },
+                        {
+                            "name": "content-type",
+                            "value": "application/json"
+                        }
+                    ]
+                },
+                "sendBody": true,
+                "bodyParameters": {
+                    "parameters": [
+                        {
+                            "name": "model",
+                            "value": "claude-3-5-sonnet-20240620"
+                        },
+                        {
+                            "name": "max_tokens",
+                            "value": 3000
+                        },
+                        {
+                            "name": "messages",
+                            "value": "={{ [{\n  \"role\": \"user\",\n  \"content\": \"You are a B2B SaaS video scriptwriter for ScreeningPilot, an AI recruiting automation platform.\\n\\nCREATE A \" + $json.video_duration + \"-SECOND VIDEO SCRIPT WITH DETAILED MOTION GRAPHICS DIRECTIONS\\n\\nFEATURE: \" + $json.feature_name + \"\\nDESCRIPTION: \" + $json.feature_description + \"\\n\\nSTRUCTURE:\\n1. Hook (5s) - Attention-grabbing problem statement\\n2. Problem (10s) - Paint the pain vividly  \\n3. Solution (20s) - Introduce feature and how it works\\n4. Demo (15s) - Key actions/results with animated UI\\n5. CTA (10s) - Clear call to action\\n\\nOUTPUT FORMAT (JSON only, no markdown):\\n{\\n  \\\"full_script\\\": \\\"complete narration text\\\",\\n  \\\"scenes\\\": [\\n    {\\n      \\\"name\\\": \\\"hook\\\",\\n      \\\"duration\\\": 5,\\n      \\\"narration\\\": \\\"Here's the problem with recruiting today...\\\",\\n      \\\"visual_description\\\": \\\"Dark background with animated text appearing\\\",\\n      \\\"motion_graphics\\\": {\\n        \\\"background\\\": {\\\"type\\\": \\\"gradient\\\", \\\"colors\\\": [\\\"#667eea\\\", \\\"#764ba2\\\"], \\\"animation\\\": \\\"slow-pan\\\"},\\n        \\\"elements\\\": [\\n          {\\n            \\\"type\\\": \\\"text\\\",\\n            \\\"content\\\": \\\"The Problem with Recruiting\\\",\\n            \\\"fontSize\\\": 80,\\n            \\\"color\\\": \\\"#ffffff\\\",\\n            \\\"animation\\\": \\\"fadeIn\\\",\\n            \\\"position\\\": {\\\"x\\\": \\\"center\\\", \\\"y\\\": \\\"center\\\"},\\n            \\\"timing\\\": {\\\"start\\\": 0, \\\"duration\\\": 2}\\n          },\\n          {\\n            \\\"type\\\": \\\"icon\\\",\\n            \\\"name\\\": \\\"search\\\",\\n            \\\"size\\\": 120,\\n            \\\"color\\\": \\\"#10b981\\\",\\n            \\\"animation\\\": \\\"bounce\\\",\\n            \\\"position\\\": {\\\"x\\\": \\\"center\\\", \\\"y\\\": 200},\\n            \\\"timing\\\": {\\\"start\\\": 1, \\\"duration\\\": 3}\\n          }\\n        ]\\n      }\\n    },\\n    {\\n      \\\"name\\\": \\\"demo\\\",\\n      \\\"duration\\\": 15,\\n      \\\"narration\\\": \\\"Watch how it works...\\\",\\n      \\\"visual_description\\\": \\\"Animated counter showing candidates found\\\",\\n      \\\"motion_graphics\\\": {\\n        \\\"background\\\": {\\\"type\\\": \\\"color\\\", \\\"value\\\": \\\"#0f172a\\\"},\\n        \\\"elements\\\": [\\n          {\\n            \\\"type\\\": \\\"counter\\\",\\n            \\\"from\\\": 0,\\n            \\\"to\\\": 2147,\\n            \\\"duration\\\": 5,\\n            \\\"fontSize\\\": 120,\\n            \\\"color\\\": \\\"#10b981\\\",\\n            \\\"position\\\": {\\\"x\\\": \\\"center\\\", \\\"y\\\": \\\"center\\\"},\\n            \\\"timing\\\": {\\\"start\\\": 2, \\\"duration\\\": 5}\\n          },\\n          {\\n            \\\"type\\\": \\\"text\\\",\\n            \\\"content\\\": \\\"Candidates Found\\\",\\n            \\\"fontSize\\\": 40,\\n            \\\"color\\\": \\\"#94a3b8\\\",\\n            \\\"position\\\": {\\\"x\\\": \\\"center\\\", \\\"y\\\": 400},\\n            \\\"timing\\\": {\\\"start\\\": 2, \\\"duration\\\": 5}\\n          },\\n          {\\n            \\\"type\\\": \\\"progress-bar\\\",\\n            \\\"width\\\": 600,\\n            \\\"height\\\": 8,\\n            \\\"color\\\": \\\"#10b981\\\",\\n            \\\"progress\\\": 100,\\n            \\\"duration\\\": 5,\\n            \\\"position\\\": {\\\"x\\\": \\\"center\\\", \\\"y\\\": 500},\\n            \\\"timing\\\": {\\\"start\\\": 3, \\\"duration\\\": 4}\\n          }\\n        ]\\n      }\\n    }\\n  ],\\n  \\\"brand_colors\\\": {\\n    \\\"primary\\\": \\\"#667eea\\\",\\n    \\\"secondary\\\": \\\"#10b981\\\",\\n    \\\"background\\\": \\\"#0f172a\\\",\\n    \\\"text\\\": \\\"#ffffff\\\"\\n  },\\n  \\\"key_stats\\\": [\\\"2,147 candidates\\\", \\\"8 minutes\\\"],\\n  \\\"tone\\\": \\\"professional yet conversational\\\"\\n}\\n\\nRULES:\\n- Exactly \" + $json.video_duration + \" seconds when read aloud\\n- Include DETAILED motion graphics specs for each scene\\n- Every element needs: type, content, position, timing, animation\\n- Use ScreeningPilot brand colors (#667eea primary, #10b981 accent)\\n- Include animated counters, progress bars, icons where relevant\\n- Professional B2B SaaS aesthetic\\n\\nGenerate now.\" } ] }}"
+                        }
+                    ]
+                }
+            },
+            "id": "generate-script",
+            "name": "Generate Script with Claude",
+            "type": "n8n-nodes-base.httpRequest",
+            "typeVersion": 4.1,
+            "position": [
+                440,
+                300
+            ]
+        },
+        {
+            "parameters": {
+                "jsCode": "const response = $input.first().json;\nconst content = response.content[0].text;\n\n// Extract JSON from response\nconst jsonMatch = content.match(/\\{[\\s\\S]*\\}/);\nif (!jsonMatch) {\n  throw new Error('No valid JSON found in Claude response');\n}\n\nconst script = JSON.parse(jsonMatch[0]);\n\nconsole.log('Generated script:', script.full_script);\nconsole.log('Scenes with motion graphics:', script.scenes.length);\n\nreturn [{\n  json: {\n    ...($('Input Validation').first().json),\n    script: script\n  }\n}];"
+            },
+            "id": "parse-claude-response",
+            "name": "Parse Claude Response",
+            "type": "n8n-nodes-base.code",
+            "typeVersion": 2,
+            "position": [
+                660,
+                300
+            ]
+        },
+        {
+            "parameters": {
+                "jsCode": "const data = $input.first().json;\nconst script = data.script;\n\n// Generate Remotion composition code\nconst remotionComposition = `\nimport { AbsoluteFill, useCurrentFrame, useVideoConfig, spring, interpolate } from 'remotion';\nimport React from 'react';\n\nexport const ScreeningPilotVideo = () => {\n  const frame = useCurrentFrame();\n  const { fps } = useVideoConfig();\n  \n  ${script.scenes.map((scene, idx) => {\n    const startFrame = script.scenes.slice(0, idx).reduce((sum, s) => sum + (s.duration * fps), 0);\n    const endFrame = startFrame + (scene.duration * fps);\n    \n    return `\n    // ${scene.name.toUpperCase()} SCENE (${scene.duration}s)\n    {frame >= ${startFrame} && frame < ${endFrame} && (\n      <Scene${idx} frame={frame - ${startFrame}} fps={fps} data={${JSON.stringify(scene.motion_graphics)}} />\n    )}\n    `;\n  }).join('\\n')}\n  \n  return (\n    <AbsoluteFill style={{ backgroundColor: '${script.brand_colors.background}' }}>\n      {/* Scenes render here */}\n    </AbsoluteFill>\n  );\n};\n\n${script.scenes.map((scene, idx) => `\nconst Scene${idx} = ({ frame, fps, data }) => {\n  return (\n    <AbsoluteFill>\n      {/* Background */}\n      ${scene.motion_graphics.background.type === 'gradient' ? `\n      <div style={{\n        position: 'absolute',\n        width: '100%',\n        height: '100%',\n        background: 'linear-gradient(135deg, ${scene.motion_graphics.background.colors.join(', ')})'\n      }} />\n      ` : `\n      <div style={{\n        position: 'absolute',\n        width: '100%',\n        height: '100%',\n        backgroundColor: '${scene.motion_graphics.background.value}'\n      }} />\n      `}\n      \n      {/* Elements */}\n      ${scene.motion_graphics.elements.map((el, elIdx) => {\n        if (el.type === 'text') {\n          return `\n          {frame >= ${el.timing.start * fps} && frame < ${(el.timing.start + el.timing.duration) * fps} && (\n            <AnimatedText\n              text=\"${el.content}\"\n              fontSize={${el.fontSize}}\n              color=\"${el.color}\"\n              position={{ x: \"${el.position.x}\", y: ${el.position.y} }}\n              frame={frame - ${el.timing.start * fps}}\n              animation=\"${el.animation}\"\n            />\n          )}\n          `;\n        }\n        \n        if (el.type === 'counter') {\n          return `\n          {frame >= ${el.timing.start * fps} && frame < ${(el.timing.start + el.timing.duration) * fps} && (\n            <AnimatedCounter\n              from={${el.from}}\n              to={${el.to}}\n              fontSize={${el.fontSize}}\n              color=\"${el.color}\"\n              position={{ x: \"${el.position.x}\", y: ${el.position.y} }}\n              frame={frame - ${el.timing.start * fps}}\n              duration={${el.duration * fps}}\n            />\n          )}\n          `;\n        }\n        \n        if (el.type === 'progress-bar') {\n          return `\n          {frame >= ${el.timing.start * fps} && frame < ${(el.timing.start + el.timing.duration) * fps} && (\n            <ProgressBar\n              width={${el.width}}\n              height={${el.height}}\n              color=\"${el.color}\"\n              progress={${el.progress}}\n              position={{ x: \"${el.position.x}\", y: ${el.position.y} }}\n              frame={frame - ${el.timing.start * fps}}\n              duration={${el.duration * fps}}\n            />\n          )}\n          `;\n        }\n        \n        if (el.type === 'icon') {\n          return `\n          {frame >= ${el.timing.start * fps} && frame < ${(el.timing.start + el.timing.duration) * fps} && (\n            <AnimatedIcon\n              name=\"${el.name}\"\n              size={${el.size}}\n              color=\"${el.color}\"\n              position={{ x: \"${el.position.x}\", y: ${el.position.y} }}\n              frame={frame - ${el.timing.start * fps}}\n              animation=\"${el.animation}\"\n            />\n          )}\n          `;\n        }\n      }).join('\\n')}\n    </AbsoluteFill>\n  );\n};\n`).join('\\n')}\n\n// Helper Components\nconst AnimatedText = ({ text, fontSize, color, position, frame, animation }) => {\n  const opacity = animation === 'fadeIn' \n    ? interpolate(frame, [0, 30], [0, 1], { extrapolateRight: 'clamp' })\n    : 1;\n  \n  const scale = animation === 'zoomIn'\n    ? spring({ frame, fps: 30, from: 0.5, to: 1 })\n    : 1;\n  \n  return (\n    <div style={{\n      position: 'absolute',\n      fontSize: fontSize,\n      color: color,\n      fontWeight: 700,\n      opacity: opacity,\n      transform: \\`translate(-50%, -50%) scale(\\${scale})\\`,\n      left: position.x === 'center' ? '50%' : position.x,\n      top: position.y\n    }}>\n      {text}\n    </div>\n  );\n};\n\nconst AnimatedCounter = ({ from, to, fontSize, color, position, frame, duration }) => {\n  const value = Math.round(interpolate(frame, [0, duration], [from, to], { extrapolateRight: 'clamp' }));\n  \n  return (\n    <div style={{\n      position: 'absolute',\n      fontSize: fontSize,\n      color: color,\n      fontWeight: 700,\n      transform: 'translate(-50%, -50%)',\n      left: position.x === 'center' ? '50%' : position.x,\n      top: position.y\n    }}>\n      {value.toLocaleString()}\n    </div>\n  );\n};\n\nconst ProgressBar = ({ width, height, color, progress, position, frame, duration }) => {\n  const currentProgress = interpolate(frame, [0, duration], [0, progress], { extrapolateRight: 'clamp' });\n  \n  return (\n    <div style={{\n      position: 'absolute',\n      width: width,\n      height: height,\n      backgroundColor: 'rgba(255,255,255,0.1)',\n      borderRadius: height / 2,\n      transform: 'translateX(-50%)',\n      left: position.x === 'center' ? '50%' : position.x,\n      top: position.y,\n      overflow: 'hidden'\n    }}>\n      <div style={{\n        width: \\`\\${currentProgress}%\\`,\n        height: '100%',\n        backgroundColor: color,\n        borderRadius: height / 2,\n        transition: 'width 0.3s ease'\n      }} />\n    </div>\n  );\n};\n\nconst AnimatedIcon = ({ name, size, color, position, frame, animation }) => {\n  const scale = animation === 'bounce'\n    ? spring({ frame, fps: 30, from: 0, to: 1, config: { damping: 8, stiffness: 200 } })\n    : 1;\n  \n  // Icon SVGs (add more as needed)\n  const icons = {\n    search: '<svg viewBox=\"0 0 24 24\"><circle cx=\"11\" cy=\"11\" r=\"8\"/><path d=\"m21 21-4.35-4.35\"/></svg>',\n    check: '<svg viewBox=\"0 0 24 24\"><polyline points=\"20 6 9 17 4 12\"/></svg>',\n    users: '<svg viewBox=\"0 0 24 24\"><path d=\"M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx=\"9\" cy=\"7\" r=\"4"/><path d=\"M23 21v-2a4 4 0 0 0-3-3.87"/><path d=\"M16 3.13a4 4 0 0 1 0 7.75\"/></svg>'\n  };\n  \n  return (\n    <div style={{\n      position: 'absolute',\n      width: size,\n      height: size,\n      color: color,\n      transform: \\`translate(-50%, -50%) scale(\\${scale})\\`,\n      left: position.x === 'center' ? '50%' : position.x,\n      top: position.y\n    }} dangerouslySetInnerHTML={{ __html: icons[name] || icons.search }} />\n  );\n};\n`;\n\nreturn [{\n  json: {\n    feature_name: data.feature_name,\n    script: script,\n    remotion_composition: remotionComposition,\n    video_config: {\n      width: 1920,\n      height: 1080,\n      fps: 30,\n      durationInFrames: script.scenes.reduce((sum, s) => sum + s.duration, 0) * 30\n    }\n  }\n}];"
+            },
+            "id": "generate-remotion-composition",
+            "name": "Generate Remotion Composition",
+            "type": "n8n-nodes-base.code",
+            "typeVersion": 2,
+            "position": [
+                860,
+                300
+            ]
+        },
+        {
+            "parameters": {
+                "jsCode": "const fs = require('fs');\nconst path = require('path');\nconst data = $input.first().json;\n\n// Create temporary directory for this video\nconst videoId = Date.now().toString();\nconst workDir = `/tmp/remotion-${videoId}`;\n\nif (!fs.existsSync(workDir)) {\n  fs.mkdirSync(workDir, { recursive: true });\n}\n\n// Write composition file\nconst compositionPath = path.join(workDir, 'Composition.tsx');\nfs.writeFileSync(compositionPath, data.remotion_composition);\n\n// Write remotion config\nconst configContent = `\nimport { Config } from '@remotion/cli/config';\n\nConfig.setVideoImageFormat('jpeg');\nConfig.setOverwriteOutput(true);\n`;\n\nconst configPath = path.join(workDir, 'remotion.config.ts');\nfs.writeFileSync(configPath, configContent);\n\nconsole.log('Remotion files saved to:', workDir);\n\nreturn [{\n  json: {\n    ...data,\n    work_dir: workDir,\n    composition_path: compositionPath\n  }\n}];"
+            },
+            "id": "save-remotion-files",
+            "name": "Save Remotion Files",
+            "type": "n8n-nodes-base.code",
+            "typeVersion": 2,
+            "position": [
+                1080,
+                300
+            ]
+        },
+        {
+            "parameters": {
+                "command": "=cd {{ $json.work_dir }} && \\\nnpx remotion render Composition out/background.mp4 \\\n  --codec h264 \\\n  --width {{ $json.video_config.width }} \\\n  --height {{ $json.video_config.height }} \\\n  --fps {{ $json.video_config.fps }}"
+            },
+            "id": "render-remotion-video",
+            "name": "Render Remotion Video",
+            "type": "n8n-nodes-base.executeCommand",
+            "typeVersion": 1,
+            "position": [
+                1300,
+                300
+            ]
+        },
+        {
+            "parameters": {
+                "jsCode": "const data = $input.first().json;\nconst script = data.script;\nconst backgroundVideoUrl = \"https://dummy-url.com/background.mp4\"; // In production, replace with actual upload logic\n\n// Combine all narration into single text\nconst fullNarration = script.scenes\n  .map(s => s.narration)\n  .join(' ');\n\n// HeyGen API payload with custom background\nconst heygenInput = {\n  video_inputs: [{\n    character: {\n      type: 'avatar',\n      avatar_id: data.avatar_id,\n      avatar_style: 'normal'\n    },\n    voice: {\n      type: 'text',\n      input_text: fullNarration,\n      voice_id: data.voice_id,\n      speed: 1.0\n    },\n    background: {\n      type: 'url',\n      url: backgroundVideoUrl  // Use Remotion-generated video as background\n    }\n  }],\n  dimension: {\n    width: 1920,\n    height: 1080\n  },\n  aspect_ratio: '16:9',\n  test: false,\n  caption: true\n};\n\nreturn [{\n  json: {\n    feature_name: data.feature_name,\n    script: script,\n    background_video_url: backgroundVideoUrl,\n    heygen_input: heygenInput\n  }\n}];"
+            },
+            "id": "prepare-heygen-input",
+            "name": "Prepare HeyGen Input",
+            "type": "n8n-nodes-base.code",
+            "typeVersion": 2,
+            "position": [
+                1520,
+                300
+            ]
+        },
+        {
+            "parameters": {
+                "method": "POST",
+                "url": "https://api.heygen.com/v2/video/generate",
+                "sendHeaders": true,
+                "headerParameters": {
+                    "parameters": [
+                        {
+                            "name": "X-Api-Key",
+                            "value": "={{ $env.HEYGEN_API_KEY }}"
+                        },
+                        {
+                            "name": "Content-Type",
+                            "value": "application/json"
+                        }
+                    ]
+                },
+                "sendBody": true,
+                "bodyParameters": {
+                    "parameters": [
+                        {
+                            "name": "video_inputs",
+                            "value": "={{ $json.heygen_input.video_inputs }}"
+                        },
+                        {
+                            "name": "dimension",
+                            "value": "={{ $json.heygen_input.dimension }}"
+                        }
+                    ]
+                }
+            },
+            "id": "trigger-heygen",
+            "name": "Trigger HeyGen Video",
+            "type": "n8n-nodes-base.httpRequest",
+            "typeVersion": 4.1,
+            "position": [
+                1740,
+                300
+            ]
+        },
+        {
+            "parameters": {
+                "jsCode": "const response = $input.first().json;\n\nif (!response.data || !response.data.video_id) {\n  throw new Error('HeyGen video generation failed: ' + JSON.stringify(response));\n}\n\nconst videoId = response.data.video_id;\n\nconsole.log('HeyGen video ID:', videoId);\n\nreturn [{\n  json: {\n    feature_name: $('Prepare HeyGen Input').first().json.feature_name,\n    script: $('Prepare HeyGen Input').first().json.script,\n    background_video_url: $('Prepare HeyGen Input').first().json.background_video_url,\n    video_id: videoId,\n    status: 'pending'\n  }\n}];"
+            },
+            "id": "extract-video-id",
+            "name": "Extract Video ID",
+            "type": "n8n-nodes-base.code",
+            "typeVersion": 2,
+            "position": [
+                1960,
+                300
+            ]
+        },
+        {
+            "parameters": {
+                "amount": 10,
+                "unit": "seconds"
+            },
+            "id": "wait-node",
+            "name": "Wait",
+            "type": "n8n-nodes-base.wait",
+            "typeVersion": 1,
+            "position": [
+                2180,
+                300
+            ]
+        },
+        {
+            "parameters": {
+                "url": "=https://api.heygen.com/v2/video/{{ $json.video_id }}",
+                "sendHeaders": true,
+                "headerParameters": {
+                    "parameters": [
+                        {
+                            "name": "X-Api-Key",
+                            "value": "={{ $env.HEYGEN_API_KEY }}"
+                        }
+                    ]
+                }
+            },
+            "id": "check-video-status",
+            "name": "Check Video Status",
+            "type": "n8n-nodes-base.httpRequest",
+            "typeVersion": 4.1,
+            "position": [
+                2400,
+                300
+            ]
+        },
+        {
+            "parameters": {
+                "jsCode": "const response = $input.first().json;\nconst previousData = $('Extract Video ID').first().json;\n\nconst status = response.data.status;\nconst videoUrl = response.data.video_url;\nconst thumbnailUrl = response.data.thumbnail_url;\n\nconsole.log('Status:', status);\n\nif (status === 'failed') {\n  throw new Error('HeyGen video generation failed');\n}\n\nreturn [{\n  json: {\n    ...previousData,\n    status: status,\n    final_video_url: videoUrl || null,\n    thumbnail_url: thumbnailUrl || null,\n    is_complete: status === 'completed',\n    should_retry: status !== 'completed'\n  }\n}];"
+            },
+            "id": "parse-status",
+            "name": "Parse Status",
+            "type": "n8n-nodes-base.code",
+            "typeVersion": 2,
+            "position": [
+                2620,
+                300
+            ]
+        },
+        {
+            "parameters": {
+                "conditions": {
+                    "boolean": [
+                        {
+                            "value1": "={{ $json.should_retry }}",
+                            "value2": true
+                        }
+                    ]
+                }
+            },
+            "id": "check-completion",
+            "name": "Is Complete?",
+            "type": "n8n-nodes-base.if",
+            "typeVersion": 1,
+            "position": [
+                2840,
+                300
+            ]
+        },
+        {
+            "parameters": {
+                "operation": "executeQuery",
+                "query": "INSERT INTO marketing_videos (feature_name, script, background_video_url, final_video_url, thumbnail_url, duration, has_motion_graphics) VALUES ($1, $2, $3, $4, $5, $6, $7)",
+                "additionalFields": {
+                    "queryParams": "={{ [ $json.feature_name, JSON.stringify($json.script), $json.background_video_url, $json.final_video_url, $json.thumbnail_url, $json.script.scenes.reduce((sum, s) => sum + s.duration, 0), true ] }}"
+                }
+            },
+            "id": "save-to-database",
+            "name": "Save to Database",
+            "type": "n8n-nodes-base.postgres",
+            "typeVersion": 1,
+            "position": [
+                3060,
+                300
+            ]
+        },
+        {
+            "parameters": {
+                "jsCode": "const fs = require('fs');\nconst workDir = $('Save Remotion Composition to File').first().json.work_dir;\n\n// Delete temporary Remotion files\nif (fs.existsSync(workDir)) {\n  fs.rmSync(workDir, { recursive: true, force: true });\n  console.log('Cleaned up:', workDir);\n}\n\nreturn [$input.first()];"
+            },
+            "id": "cleanup",
+            "name": "Cleanup Temp Files",
+            "type": "n8n-nodes-base.code",
+            "typeVersion": 2,
+            "position": [
+                3060,
+                500
+            ]
+        }
+    ],
+    "connections": {
+        "Webhook": {
+            "main": [
+                [
+                    {
+                        "node": "Input Validation",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Input Validation": {
+            "main": [
+                [
+                    {
+                        "node": "Generate Script with Claude",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Generate Script with Claude": {
+            "main": [
+                [
+                    {
+                        "node": "Parse Claude Response",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Parse Claude Response": {
+            "main": [
+                [
+                    {
+                        "node": "Generate Remotion Composition",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Generate Remotion Composition": {
+            "main": [
+                [
+                    {
+                        "node": "Save Remotion Files",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Save Remotion Files": {
+            "main": [
+                [
+                    {
+                        "node": "Render Remotion Video",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Render Remotion Video": {
+            "main": [
+                [
+                    {
+                        "node": "Prepare HeyGen Input",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Prepare HeyGen Input": {
+            "main": [
+                [
+                    {
+                        "node": "Trigger HeyGen Video",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Trigger HeyGen Video": {
+            "main": [
+                [
+                    {
+                        "node": "Extract Video ID",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Extract Video ID": {
+            "main": [
+                [
+                    {
+                        "node": "Wait",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Wait": {
+            "main": [
+                [
+                    {
+                        "node": "Check Video Status",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Check Video Status": {
+            "main": [
+                [
+                    {
+                        "node": "Parse Status",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Parse Status": {
+            "main": [
+                [
+                    {
+                        "node": "Is Complete?",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Is Complete?": {
+            "main": [
+                [
+                    {
+                        "node": "Wait",
+                        "type": "main",
+                        "index": 0
+                    }
+                ],
+                [
+                    {
+                        "node": "Save to Database",
+                        "type": "main",
+                        "index": 0
+                    },
+                    {
+                        "node": "Cleanup Temp Files",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        }
+    }
+}

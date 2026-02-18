@@ -9,7 +9,7 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-const PUBLISHED_URL = "https://screeningpilot.lovable.app";
+const PUBLISHED_URL = Deno.env.get("PUBLISHED_URL") || "https://screeningpilot.lovable.app";
 
 interface NotificationRequest {
   action: "candidate_confirmation" | "recruiter_new_application" | "candidate_status_update";

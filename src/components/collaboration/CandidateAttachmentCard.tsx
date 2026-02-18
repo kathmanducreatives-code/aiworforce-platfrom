@@ -38,7 +38,7 @@ const CandidateAttachmentCard = ({ attachment, roomId }: CandidateAttachmentCard
 
   const handleMarkContacted = async () => {
     const history = await checkContactHistory(attachment.candidate_source, attachment.candidate_id);
-    
+
     if (history) {
       setShowWarning(true);
     } else {
@@ -99,6 +99,7 @@ const CandidateAttachmentCard = ({ attachment, roomId }: CandidateAttachmentCard
       case 'resume_screening': return 'bg-blue-500/10 text-blue-500';
       case 'deep_search': return 'bg-purple-500/10 text-purple-500';
       case 'linkedin_scraper': return 'bg-green-500/10 text-green-500';
+      case 'screening_flow': return 'bg-orange-500/10 text-orange-500';
       default: return 'bg-muted text-muted-foreground';
     }
   };
@@ -108,6 +109,7 @@ const CandidateAttachmentCard = ({ attachment, roomId }: CandidateAttachmentCard
       case 'resume_screening': return 'Resume';
       case 'deep_search': return 'Deep Search';
       case 'linkedin_scraper': return 'LinkedIn';
+      case 'screening_flow': return 'Screening';
       default: return source;
     }
   };

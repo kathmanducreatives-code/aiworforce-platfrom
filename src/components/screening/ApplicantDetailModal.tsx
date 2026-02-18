@@ -10,8 +10,10 @@ import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { format } from "date-fns";
 import { Checkbox } from "@/components/ui/checkbox";
-import { CheckCircle2, AlertTriangle, Clock, MonitorOff, Download, Copy, Archive, Briefcase, MessageSquare, FileText, Target, HelpCircle } from "lucide-react";
+import { CheckCircle2, AlertTriangle, Clock, MonitorOff, Download, Copy, Archive, Briefcase, MessageSquare, FileText, Target, HelpCircle, CalendarPlus, MessageSquarePlus } from "lucide-react";
 import InterviewQuestionsPanel from "./InterviewQuestionsPanel";
+import ScheduleInterviewDialog from "@/components/interview/ScheduleInterviewDialog";
+import StartDiscussionDialog from "@/components/collaboration/StartDiscussionDialog";
 
 interface ApplicantDetailModalProps {
   application: any;
@@ -36,6 +38,38 @@ const ApplicantDetailModal = ({ application, job, open, onOpenChange, onUpdate }
   const [notes, setNotes] = useState(application.recruiter_notes || "");
   const [saving, setSaving] = useState(false);
   const [notifyCandidate, setNotifyCandidate] = useState(true);
+  const [showScheduleDialog, setShowScheduleDialog] = useState(false);
+  const [showDiscussionDialog, setShowDiscussionDialog] = useState(false);
+  const [interviewTypes, setInterviewTypes] = useState<any[]>([]);
+
+  const fetchInterviewTypes = async () => {
+    const { data } = await supabase.from('interview_types').select('*').eq('is_active', true);
+    setInterviewTypes(data || []);
+  };
+
+  const handleOpenSchedule = () => {
+    fetchInterviewTypes();
+    setShowScheduleDialog(true);
+  };
+
+  const handleScheduleConfirm = async (interviewData: any) => {
+    const { data, error } = await supabase.from('interviews').insert({
+      ...interviewData,
+      recruiter_id: (await supabase.auth.getUser()).data.user?.id
+    }).select().single();
+
+    if (error) {
+      toast.error('Failed to schedule interview');
+      console.error(error);
+      return null;
+    }
+
+    toast.success('Interview scheduled');
+    setStatus('interview_scheduled');
+    // Trigger save to update local status and notify if needed
+    setTimeout(() => handleSave(), 100);
+    return data;
+  };
 
   const extracted = application.extracted_data as any;
   const answers = (application.screening_answers as any[]) || [];
@@ -226,6 +260,23 @@ const ApplicantDetailModal = ({ application, job, open, onOpenChange, onUpdate }
           </TabsContent>
 
           <TabsContent value="actions" className="space-y-4 mt-4">
+            <div className="p-4 border rounded-lg bg-muted/20 space-y-3">
+              <h4 className="font-medium text-sm flex items-center gap-2">
+                <CalendarPlus className="h-4 w-4 text-primary" />
+                Next Steps
+              </h4>
+              <p className="text-sm text-muted-foreground">Ready to move forward? Schedule an interview or start a team discussion.</p>
+              <div className="flex flex-col sm:flex-row gap-2">
+                <Button onClick={handleOpenSchedule} variant="secondary" className="w-full sm:w-auto">
+                  Schedule Interview
+                </Button>
+                <Button onClick={() => setShowDiscussionDialog(true)} variant="outline" className="w-full sm:w-auto">
+                  <MessageSquarePlus className="h-4 w-4 mr-2" />
+                  Discuss Candidate
+                </Button>
+              </div>
+            </div>
+
             <div className="space-y-2">
               <Label>Recruiter Status</Label>
               <Select value={status} onValueChange={setStatus}>
@@ -255,6 +306,31 @@ const ApplicantDetailModal = ({ application, job, open, onOpenChange, onUpdate }
             </div>
           </TabsContent>
         </Tabs>
+
+        <Dialog open={showScheduleDialog} onOpenChange={setShowScheduleDialog}>
+          <DialogContent className="max-w-2xl">
+            <ScheduleInterviewDialog
+              open={showScheduleDialog}
+              onOpenChange={setShowScheduleDialog}
+              interviewTypes={interviewTypes}
+              onSchedule={handleScheduleConfirm}
+              candidate={{
+                name: extracted?.name || "Candidate",
+                email: extracted?.email || "",
+                id: application.id,
+                source: 'screening_flow'
+              }}
+            />
+          </DialogContent>
+        </Dialog>
+
+        <StartDiscussionDialog
+          open={showDiscussionDialog}
+          onOpenChange={setShowDiscussionDialog}
+          candidateId={application.id}
+          candidateName={extracted?.name || "Candidate"}
+          candidateSource="screening_flow"
+        />
       </DialogContent>
     </Dialog>
   );

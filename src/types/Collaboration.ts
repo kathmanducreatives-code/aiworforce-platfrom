@@ -1,4 +1,4 @@
-export type CandidateSource = 'resume_screening' | 'deep_search' | 'linkedin_scraper';
+export type CandidateSource = 'resume_screening' | 'deep_search' | 'linkedin_scraper' | 'screening_flow';
 
 export interface CollaborationRoom {
   id: string;

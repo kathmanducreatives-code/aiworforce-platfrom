@@ -19,6 +19,31 @@ serve(async (req) => {
     const { action, application_id, answer, question_index } = await req.json();
     const supabase = createClient(SUPABASE_URL!, SUPABASE_SERVICE_ROLE_KEY!);
 
+    // Validate application exists and is not already completed
+    if (!application_id) {
+      return new Response(JSON.stringify({ error: 'Missing application_id' }), {
+        status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    const { data: appCheck, error: appErr } = await supabase
+      .from('screening_applications')
+      .select('id, status')
+      .eq('id', application_id)
+      .single();
+
+    if (appErr || !appCheck) {
+      return new Response(JSON.stringify({ error: 'Application not found' }), {
+        status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    if (appCheck.status === 'completed' && action !== 'complete_screening') {
+      return new Response(JSON.stringify({ error: 'Application already completed' }), {
+        status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
     if (action === 'generate_questions') {
       return await handleGenerateQuestions(supabase, application_id);
     } else if (action === 'evaluate_answer') {

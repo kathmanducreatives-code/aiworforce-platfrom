@@ -22,11 +22,11 @@ interface ExtractedData {
 }
 
 interface ResumeUploadStepProps {
-  applicationId: string;
+  jobId: string;
   onComplete: (data: ExtractedData) => void;
 }
 
-export default function ResumeUploadStep({ applicationId, onComplete }: ResumeUploadStepProps) {
+export default function ResumeUploadStep({ jobId, onComplete }: ResumeUploadStepProps) {
   const [isDragging, setIsDragging] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
   const [isParsing, setIsParsing] = useState(false);
@@ -34,6 +34,7 @@ export default function ResumeUploadStep({ applicationId, onComplete }: ResumeUp
   const [editMode, setEditMode] = useState(false);
   const [editedData, setEditedData] = useState<ExtractedData | null>(null);
   const [fileName, setFileName] = useState<string>('');
+  const [uploadedFilePath, setUploadedFilePath] = useState<string | null>(null);
 
   const processFile = useCallback(async (file: File) => {
     // Validate file
@@ -51,29 +52,35 @@ export default function ResumeUploadStep({ applicationId, onComplete }: ResumeUp
     setIsUploading(true);
 
     try {
-      // Upload to Supabase Storage
-      const filePath = `${applicationId}/${file.name}`;
+      // Upload to Supabase Storage with a temp path (jobId + timestamp)
+      const filePath = `${jobId}/${Date.now()}_${file.name}`;
       const { error: uploadError } = await supabase.storage
         .from('screening-resumes')
         .upload(filePath, file, { upsert: true });
 
       if (uploadError) throw uploadError;
-
-      // Update application with resume URL
-      await supabase
-        .from('screening_applications')
-        .update({ resume_url: filePath })
-        .eq('id', applicationId);
+      setUploadedFilePath(filePath);
 
       setIsUploading(false);
       setIsParsing(true);
 
-      // Read file content as text for AI parsing
-      const text = await file.text();
+      // Convert file to base64 for proper parsing of PDFs
+      const arrayBuffer = await file.arrayBuffer();
+      const uint8Array = new Uint8Array(arrayBuffer);
+      let binary = '';
+      for (let i = 0; i < uint8Array.length; i++) {
+        binary += String.fromCharCode(uint8Array[i]);
+      }
+      const base64Content = btoa(binary);
 
-      // Call parse-resume edge function
+      // Call parse-resume edge function with base64 content
       const { data, error } = await supabase.functions.invoke('parse-resume', {
-        body: { file_content: text, file_name: file.name, application_id: applicationId },
+        body: {
+          file_content_base64: base64Content,
+          file_name: file.name,
+          file_path: filePath,
+          job_id: jobId,
+        },
       });
 
       if (error) throw error;
@@ -88,7 +95,7 @@ export default function ResumeUploadStep({ applicationId, onComplete }: ResumeUp
       setIsUploading(false);
       setIsParsing(false);
     }
-  }, [applicationId]);
+  }, [jobId]);
 
   const handleDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault();
@@ -109,15 +116,6 @@ export default function ResumeUploadStep({ applicationId, onComplete }: ResumeUp
 
   const handleConfirm = async () => {
     const finalData = editMode ? editedData! : extractedData!;
-    
-    // Save candidate edits
-    if (editMode) {
-      await supabase
-        .from('screening_applications')
-        .update({ candidate_edits: finalData as any })
-        .eq('id', applicationId);
-    }
-
     onComplete(finalData);
   };
 
@@ -246,9 +244,8 @@ export default function ResumeUploadStep({ applicationId, onComplete }: ResumeUp
         </div>
 
         <div
-          className={`border-2 border-dashed rounded-xl p-10 text-center cursor-pointer transition-colors ${
-            isDragging ? 'border-primary bg-primary/5' : 'border-border hover:border-primary/50'
-          }`}
+          className={`border-2 border-dashed rounded-xl p-10 text-center cursor-pointer transition-colors ${isDragging ? 'border-primary bg-primary/5' : 'border-border hover:border-primary/50'
+            }`}
           onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
           onDragLeave={() => setIsDragging(false)}
           onDrop={handleDrop}

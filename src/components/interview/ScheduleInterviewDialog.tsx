@@ -37,7 +37,7 @@ interface ScheduleInterviewDialogProps {
     id: string;
     name: string;
     email: string;
-    source: 'resume_screening' | 'deep_search' | 'linkedin_scraper';
+    source: 'resume_screening' | 'deep_search' | 'linkedin_scraper' | 'screening_flow';
   };
 }
 

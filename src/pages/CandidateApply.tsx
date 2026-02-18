@@ -7,7 +7,7 @@ import ResumeUploadStep from "@/components/apply/ResumeUploadStep";
 import ScreeningChatStep from "@/components/apply/ScreeningChatStep";
 import ThankYouStep from "@/components/apply/ThankYouStep";
 
-type Step = 'landing' | 'resume' | 'screening' | 'thankyou';
+type Step = 'landing' | 'resume' | 'screening' | 'thankyou' | 'already_applied';
 
 export default function CandidateApply() {
   const { slug } = useParams<{ slug: string }>();
@@ -46,24 +46,51 @@ export default function CandidateApply() {
     fetchJob();
   }, [slug]);
 
-  const handleStart = async () => {
-    // Create application record
-    const { data, error: insertError } = await supabase
+  const handleStart = () => {
+    // No record creation here — we only move to resume step
+    setStep('resume');
+  };
+
+  const handleResumeComplete = async (data: any) => {
+    // Check for duplicate application by email
+    if (data.email && job) {
+      const { data: existing } = await supabase
+        .from('screening_applications')
+        .select('id, extracted_data')
+        .eq('job_id', job.id)
+        .eq('is_archived', false);
+
+      if (existing && existing.length > 0) {
+        const hasDuplicate = existing.some((app: any) => {
+          const appEmail = (app.extracted_data as any)?.email;
+          return appEmail && appEmail.toLowerCase() === data.email.toLowerCase();
+        });
+        if (hasDuplicate) {
+          setStep('already_applied');
+          return;
+        }
+      }
+    }
+
+    // Create application record NOW (after resume is uploaded, not on "Start")
+    const { data: appData, error: insertError } = await supabase
       .from('screening_applications')
       .insert({ job_id: job.id })
       .select('id')
       .single();
 
-    if (insertError || !data) {
+    if (insertError || !appData) {
       console.error('Failed to create application:', insertError);
       return;
     }
 
-    setApplicationId(data.id);
-    setStep('resume');
-  };
+    // Save parsed resume data to the newly created application
+    await supabase
+      .from('screening_applications')
+      .update({ extracted_data: data })
+      .eq('id', appData.id);
 
-  const handleResumeComplete = (data: any) => {
+    setApplicationId(appData.id);
     setExtractedData(data);
     setStep('screening');
   };
@@ -95,10 +122,24 @@ export default function CandidateApply() {
     case 'landing':
       return <JobLandingStep job={job} onStart={handleStart} />;
     case 'resume':
-      return <ResumeUploadStep applicationId={applicationId!} onComplete={handleResumeComplete} />;
+      return <ResumeUploadStep jobId={job.id} onComplete={handleResumeComplete} />;
     case 'screening':
       return <ScreeningChatStep applicationId={applicationId!} extractedData={extractedData} onComplete={handleScreeningComplete} />;
+    case 'already_applied':
+      return (
+        <div className="min-h-screen flex items-center justify-center bg-background p-4">
+          <div className="max-w-md w-full text-center space-y-4">
+            <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-amber-500/10 mx-auto">
+              <Loader2 className="w-8 h-8 text-amber-500" />
+            </div>
+            <h1 className="text-xl font-bold text-foreground">Already Applied</h1>
+            <p className="text-muted-foreground">
+              It looks like you've already submitted an application for this position. Our team is reviewing it — you'll hear back soon!
+            </p>
+          </div>
+        </div>
+      );
     case 'thankyou':
-      return <ThankYouStep />;
+      return <ThankYouStep job={job} />;
   }
 }

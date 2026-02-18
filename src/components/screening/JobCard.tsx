@@ -1,19 +1,32 @@
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Copy, Eye, Pause, Play } from "lucide-react";
+import { Copy, Eye, Pause, Play, Pencil, Trash2 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { format } from "date-fns";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 
 interface JobCardProps {
   job: any;
   applicationCounts: { total: number; strong: number; good: number; maybe: number; not_qualified: number };
   onStatusToggle: () => void;
+  onEdit?: (job: any) => void;
+  onDelete?: (jobId: string) => void;
 }
 
-const JobCard = ({ job, applicationCounts, onStatusToggle }: JobCardProps) => {
+const JobCard = ({ job, applicationCounts, onStatusToggle, onEdit, onDelete }: JobCardProps) => {
   const navigate = useNavigate();
 
   const handleCopy = () => {
@@ -26,6 +39,16 @@ const JobCard = ({ job, applicationCounts, onStatusToggle }: JobCardProps) => {
     await supabase.from("screening_jobs").update({ status: newStatus }).eq("id", job.id);
     onStatusToggle();
     toast.success(`Job ${newStatus === "active" ? "activated" : "paused"}`);
+  };
+
+  const handleDelete = async () => {
+    const { error } = await supabase.from("screening_jobs").delete().eq("id", job.id);
+    if (error) {
+      toast.error("Failed to delete job. It may have existing applications.");
+      return;
+    }
+    toast.success("Job deleted");
+    onDelete?.(job.id);
   };
 
   return (
@@ -52,12 +75,38 @@ const JobCard = ({ job, applicationCounts, onStatusToggle }: JobCardProps) => {
             <Button variant="ghost" size="icon" onClick={handleCopy} title="Copy link" className="h-9 w-9">
               <Copy className="h-4 w-4" />
             </Button>
+            {onEdit && (
+              <Button variant="ghost" size="icon" onClick={() => onEdit(job)} title="Edit job" className="h-9 w-9">
+                <Pencil className="h-4 w-4" />
+              </Button>
+            )}
             <Button variant="ghost" size="icon" onClick={handleToggleStatus} title={job.status === "active" ? "Pause" : "Activate"} className="h-9 w-9">
               {job.status === "active" ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
             </Button>
             <Button variant="ghost" size="icon" onClick={() => navigate(`/screening-jobs/${job.id}`)} title="View applicants" className="h-9 w-9">
               <Eye className="h-4 w-4" />
             </Button>
+            <AlertDialog>
+              <AlertDialogTrigger asChild>
+                <Button variant="ghost" size="icon" title="Delete job" className="h-9 w-9 text-destructive hover:text-destructive">
+                  <Trash2 className="h-4 w-4" />
+                </Button>
+              </AlertDialogTrigger>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Delete "{job.title}"?</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    This will permanently delete this job and all its applications. This action cannot be undone.
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>Cancel</AlertDialogCancel>
+                  <AlertDialogAction onClick={handleDelete} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+                    Delete
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
           </div>
         </div>
       </CardContent>

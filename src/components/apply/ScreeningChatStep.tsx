@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import { Send, Bot, User, Loader2 } from "lucide-react";
+import { Send, Bot, User, Loader2, Undo2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Progress } from "@/components/ui/progress";
@@ -33,6 +33,7 @@ export default function ScreeningChatStep({ applicationId, extractedData, onComp
   const [questionStartTime, setQuestionStartTime] = useState<number>(Date.now());
   const [tabSwitches, setTabSwitches] = useState(0);
   const [startTime] = useState(Date.now());
+  const [canEditLast, setCanEditLast] = useState(false);
   const chatEndRef = useRef<HTMLDivElement>(null);
   const candidateName = extractedData?.name?.split(' ')[0] || 'there';
 
@@ -79,7 +80,7 @@ export default function ScreeningChatStep({ applicationId, extractedData, onComp
   }, [messages]);
 
   const handleSend = async () => {
-    if (input.trim().length < 50 || isSending) return;
+    if (input.trim().length < 30 || isSending) return;
 
     const answer = input.trim();
     const timeSpent = Math.round((Date.now() - questionStartTime) / 1000);
@@ -88,6 +89,7 @@ export default function ScreeningChatStep({ applicationId, extractedData, onComp
 
     // Add user message
     setMessages((prev) => [...prev, { role: 'user', content: answer }]);
+    setCanEditLast(false);
 
     try {
       // Evaluate answer
@@ -148,6 +150,7 @@ export default function ScreeningChatStep({ applicationId, extractedData, onComp
         // Next question
         setCurrentIndex(nextIndex);
         setQuestionStartTime(Date.now());
+        setCanEditLast(true);
         setMessages((prev) => [...prev, { role: 'assistant', content: questions[nextIndex].question }]);
       }
     } catch (err) {
@@ -169,8 +172,21 @@ export default function ScreeningChatStep({ applicationId, extractedData, onComp
   }
 
   const progress = questions.length > 0 ? ((currentIndex + (isSending ? 1 : 0)) / questions.length) * 100 : 0;
-  const minLength = 50;
+  const minLength = 30;
   const charCount = input.length;
+
+  const handleEditLast = () => {
+    if (!canEditLast || currentIndex === 0 || answers.length === 0) return;
+    // Remove last answer and go back
+    const lastAnswer = answers[answers.length - 1];
+    setAnswers(answers.slice(0, -1));
+    setCurrentIndex(currentIndex - 1);
+    setInput(lastAnswer.answer);
+    setCanEditLast(false);
+    // Remove last assistant message and last user message
+    setMessages((prev) => prev.slice(0, -2));
+    setQuestionStartTime(Date.now());
+  };
 
   return (
     <div className="min-h-screen flex flex-col bg-background">
@@ -194,11 +210,10 @@ export default function ScreeningChatStep({ applicationId, extractedData, onComp
                   <Bot className="w-4 h-4 text-primary" />
                 </div>
               )}
-              <div className={`max-w-[80%] rounded-2xl px-4 py-3 text-sm leading-relaxed ${
-                msg.role === 'user'
+              <div className={`max-w-[80%] rounded-2xl px-4 py-3 text-sm leading-relaxed ${msg.role === 'user'
                   ? 'bg-primary text-primary-foreground rounded-br-md'
                   : 'bg-card border border-border text-foreground rounded-bl-md'
-              }`}>
+                }`}>
                 {msg.content}
               </div>
               {msg.role === 'user' && (
@@ -216,6 +231,15 @@ export default function ScreeningChatStep({ applicationId, extractedData, onComp
       {currentIndex < questions.length && (
         <div className="border-t border-border px-4 py-4 bg-card">
           <div className="max-w-2xl mx-auto">
+            {canEditLast && currentIndex > 0 && (
+              <button
+                onClick={handleEditLast}
+                className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors mb-2"
+              >
+                <Undo2 className="w-3 h-3" />
+                Edit previous answer
+              </button>
+            )}
             <div className="flex gap-2 items-end">
               <div className="flex-1 relative">
                 <Textarea
@@ -246,7 +270,7 @@ export default function ScreeningChatStep({ applicationId, extractedData, onComp
             </div>
             {charCount > 0 && charCount < minLength && (
               <p className="text-xs text-muted-foreground mt-1.5">
-                Please write at least {minLength} characters ({minLength - charCount} more needed)
+                For the best evaluation, write at least {minLength} characters ({minLength - charCount} more)
               </p>
             )}
           </div>

@@ -46,7 +46,7 @@ export interface Interview {
   id: string;
   slot_id: string | null;
   candidate_id: string | null;
-  candidate_source: 'resume_screening' | 'deep_search' | 'linkedin_scraper' | null;
+  candidate_source: 'resume_screening' | 'deep_search' | 'linkedin_scraper' | 'screening_flow' | null;
   candidate_name: string;
   candidate_email: string;
   interview_type_id: string | null;

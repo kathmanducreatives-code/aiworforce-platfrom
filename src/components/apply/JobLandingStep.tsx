@@ -7,6 +7,7 @@ interface JobLandingStepProps {
     company_name: string;
     description: string;
     required_skills: string[];
+    logo_url?: string | null;
   };
   onStart: () => void;
 }
@@ -17,7 +18,11 @@ export default function JobLandingStep({ job, onStart }: JobLandingStepProps) {
       <div className="max-w-lg w-full space-y-8 text-center">
         <div className="space-y-3">
           <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-primary/10 text-primary text-sm font-medium">
-            <Briefcase className="w-4 h-4" />
+            {job.logo_url ? (
+              <img src={job.logo_url} alt={job.company_name} className="w-5 h-5 rounded-full object-cover" />
+            ) : (
+              <Briefcase className="w-4 h-4" />
+            )}
             {job.company_name || 'Company'}
           </div>
           <h1 className="text-3xl font-bold text-foreground tracking-tight">

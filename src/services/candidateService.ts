@@ -13,7 +13,7 @@ export const fetchUnifiedCandidate = async (
           .select('*')
           .eq('id', candidateId)
           .single();
-        
+
         if (error) throw error;
         if (!data) return null;
 
@@ -34,7 +34,7 @@ export const fetchUnifiedCandidate = async (
           .select('*')
           .eq('id', candidateId)
           .single();
-        
+
         if (error) throw error;
         if (!data) return null;
 
@@ -55,7 +55,7 @@ export const fetchUnifiedCandidate = async (
           .select('*')
           .eq('id', candidateId)
           .single();
-        
+
         if (error) throw error;
         if (!data) return null;
 
@@ -67,6 +67,31 @@ export const fetchUnifiedCandidate = async (
           company: data.company || undefined,
           email: data.contact_email || undefined,
           linkedin_url: data.linkedin_url || undefined,
+        };
+      }
+
+      case 'screening_flow': {
+        const { data, error } = await supabase
+          .from('screening_applications')
+          .select('*, screening_jobs(title)')
+          .eq('id', candidateId)
+          .single();
+
+        if (error) throw error;
+        if (!data) return null;
+
+        // Cast extracted_data to any to access properties
+        const extracted = (data.extracted_data as any) || {};
+
+        return {
+          id: data.id,
+          source: 'screening_flow',
+          name: extracted.name || 'Candidate',
+          email: extracted.email || undefined,
+          title: (data.screening_jobs as any)?.title || undefined,
+          fitScore: data.match_score || undefined,
+          status: data.recruiter_status || undefined,
+          notes: data.recruiter_notes || undefined,
         };
       }
 
