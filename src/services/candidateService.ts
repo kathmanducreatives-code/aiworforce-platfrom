@@ -112,7 +112,7 @@ export const checkContactHistory = async (
     const { data, error } = await supabase
       .from('collaboration_contact_history')
       .select('*')
-      .eq('candidate_source', source)
+      .eq('candidate_source', source as any)
       .eq('candidate_id', candidateId)
       .order('contacted_at', { ascending: false })
       .limit(1)
@@ -139,13 +139,13 @@ export const recordContact = async (
     const { error } = await supabase
       .from('collaboration_contact_history')
       .insert({
-        candidate_source: source,
+        candidate_source: source as any,
         candidate_id: candidateId,
         contacted_by: user.id,
         contact_method: contactMethod,
         notes: notes,
         contacted_at: new Date().toISOString(),
-      });
+      } as any);
 
     if (error) throw error;
     return true;

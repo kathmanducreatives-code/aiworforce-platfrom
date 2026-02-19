@@ -68,11 +68,11 @@ const AttachCandidateDialog = ({ open, onOpenChange, roomId, onAttached }: Attac
         .from('collaboration_candidate_attachments')
         .insert({
           room_id: roomId,
-          candidate_source: activeTab,
+          candidate_source: activeTab as any,
           candidate_id: candidateId,
           attached_by: user.id,
           custom_notes: notes || null,
-        });
+        } as any);
 
       if (error) throw error;
 

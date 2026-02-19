@@ -229,7 +229,7 @@ export function useInterviews() {
     try {
       const { error } = await supabase
         .from('interviews')
-        .update(updates)
+        .update(updates as any)
         .eq('id', id);
 
       if (error) throw error;
