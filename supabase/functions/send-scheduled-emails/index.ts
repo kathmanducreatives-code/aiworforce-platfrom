@@ -1,5 +1,4 @@
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
-import { Resend } from "npm:resend@2.0.0";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
 
 const resendApiKey = Deno.env.get("RESEND_API_KEY");
@@ -62,7 +61,6 @@ serve(async (req) => {
     );
   }
 
-  const resend = new Resend(resendApiKey);
   const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
   try {
@@ -103,15 +101,27 @@ serve(async (req) => {
         const htmlContent = textToHtml(email.content || "");
         const trackedHtml = addTrackingToEmail(email.id, htmlContent);
 
-        // Send email via Resend
-        const emailResponse = await resend.emails.send({
-          from: `${email.sender_name || "Recruiter"} <onboarding@resend.dev>`,
-          to: [email.candidate_email],
-          subject: email.subject || "No Subject",
-          html: trackedHtml,
+        // Send email via Resend (direct fetch)
+        const emailResponse = await fetch("https://api.resend.com/emails", {
+          method: "POST",
+          headers: {
+            "Authorization": `Bearer ${resendApiKey}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            from: `${email.sender_name || "Recruiter"} <onboarding@resend.dev>`,
+            to: [email.candidate_email],
+            subject: email.subject || "No Subject",
+            html: trackedHtml,
+          }),
         });
 
-        console.log(`Email sent successfully to ${email.candidate_email}:`, emailResponse);
+        if (!emailResponse.ok) {
+          const errText = await emailResponse.text();
+          throw new Error(`Resend API error: ${errText}`);
+        }
+
+        console.log(`Email sent successfully to ${email.candidate_email}`);
 
         // Update status to sent
         const { error: updateError } = await supabase

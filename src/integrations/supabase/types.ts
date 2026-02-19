@@ -2291,7 +2291,11 @@ export type Database = {
     }
     Enums: {
       behavioral_risk_level: "low" | "medium" | "high"
-      candidate_source: "resume_screening" | "deep_search" | "linkedin_scraper"
+      candidate_source:
+        | "resume_screening"
+        | "deep_search"
+        | "linkedin_scraper"
+        | "screening_flow"
       interview_location_type: "video" | "phone" | "in_person"
       interview_status:
         | "scheduled"
@@ -2441,7 +2445,12 @@ export const Constants = {
   public: {
     Enums: {
       behavioral_risk_level: ["low", "medium", "high"],
-      candidate_source: ["resume_screening", "deep_search", "linkedin_scraper"],
+      candidate_source: [
+        "resume_screening",
+        "deep_search",
+        "linkedin_scraper",
+        "screening_flow",
+      ],
       interview_location_type: ["video", "phone", "in_person"],
       interview_status: [
         "scheduled",

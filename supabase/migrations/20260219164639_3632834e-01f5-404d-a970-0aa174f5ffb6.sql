@@ -1,0 +1,1 @@
+ALTER TYPE candidate_source ADD VALUE IF NOT EXISTS 'screening_flow';

@@ -54,9 +54,9 @@ export default function StartDiscussionDialog({
                 .insert({
                     room_id: room.id,
                     candidate_id: candidateId,
-                    candidate_source: candidateSource,
+                    candidate_source: candidateSource as any,
                     attached_by: user.id
-                });
+                } as any);
 
             if (attachError) throw attachError;
 
