@@ -1,74 +1,101 @@
 
-## Fix All Build Errors
+## Premium UI Redesign: Job Screening Feature
 
-There are 5 categories of build errors to resolve. None require database schema changes — all are TypeScript type mismatches or import issues introduced when `screening_flow` was added as a candidate source without updating the database enum.
-
----
-
-### Root Cause Analysis
-
-**Error Group 1 — `npm:resend@2.0.0` in `send-scheduled-emails`**
-The edge function uses `import { Resend } from "npm:resend@2.0.0"` which isn't resolving in the edge runtime. The fix is to switch to the raw fetch-based Resend call (same pattern used in `screening-notifications`) instead of the npm package import.
-
-**Error Group 2 — `screening_flow` not in DB enum**
-The `interviews.candidate_source` and `collaboration_contact_history.candidate_source` and `collaboration_candidate_attachments.candidate_source` columns only allow 3 values in the DB: `deep_search`, `linkedin_scraper`, `resume_screening`. But `screening_flow` was added to the TypeScript types without a matching DB migration.
-
-The fix: Add `screening_flow` to the enum in a DB migration so the TypeScript generated types accept it everywhere.
-
-**Error Group 3 — `collaboration_candidate_attachments` insert missing `room_id`**
-The Supabase-generated insert type for `collaboration_candidate_attachments` doesn't include `room_id` (it's listed as a non-nullable column but is excluded from the insert type). This is a generated types issue — the DB migration adding `screening_flow` to the enum will regenerate properly. In the meantime, we cast the insert object to fix the TS error.
-
-**Error Group 4 — `remotion` components**
-The `src/remotion/` components import from `remotion` which is not installed. These components are unused in the main app. The fix is to add `// @ts-ignore` suppressions or exclude the folder from TypeScript compilation via `tsconfig.app.json`.
+The current screening UI uses basic Card/Badge/Button components with no visual hierarchy or premium feel. The goal is to elevate it to match the platform's established premium SaaS aesthetic — glassmorphism, glowing accents, staggered animations, and information-dense but visually clear layouts — consistent with ICP Manager and Lead Scraper pages.
 
 ---
 
-### Implementation Plan
+### Visual Audit of Current Issues
 
-**Step 1 — Database Migration: Add `screening_flow` to the candidate_source enum**
+| Component | Current Problem | Fix |
+|---|---|---|
+| `ScreeningJobs.tsx` | Plain page header, basic "Loading..." text, flat card list | Add gradient header with stats bar, animated skeleton states, better empty state |
+| `JobCard.tsx` | Flat white card, icon-only buttons with no context, no visual weight | Glassmorphism card with gradient accent bar, labeled action buttons, animated hover |
+| `CreateJobForm.tsx` | Bare form inside a generic card | Collapsible/expandable panel with step-feeling, premium inputs, better spacing |
+| `ApplicantCard.tsx` | Plain card with small text, no avatar/initials | Initials avatar, score ring, rich strengths/flags display, premium hover |
+| `JobApplicants.tsx` | Flat stat cards, basic tabs | Glowing stat cards with icons, gradient header, animated filter tabs |
+| `ApplicantDetailModal.tsx` | Unstyled dialog with generic gray background | Full-width dark modal, colored tab bar, structured info blocks, premium action CTA |
+| `InterviewQuestionsPanel.tsx` | Plain border list items | Numbered cards with gradient left bar, category indicators |
 
-```sql
-ALTER TYPE candidate_source ADD VALUE IF NOT EXISTS 'screening_flow';
+---
+
+### Implementation Plan by File
+
+**1. `src/pages/ScreeningJobs.tsx`**
+- Add a premium gradient page header with an icon glyph background, subtitle, and stats summary row (total jobs, total applicants, active/paused counts)
+- Replace `<p>Loading...</p>` with animated skeleton cards (3 placeholder cards)
+- Replace `<p>No screening jobs yet</p>` with a visual empty state illustration using icons, heading, and a CTA arrow pointing to the form above
+- Give the "Your Screening Jobs" section header a count badge and a subtle separator line
+
+**2. `src/components/screening/JobCard.tsx`**
+- Redesign as a premium glassmorphism card: `bg-card/60 backdrop-blur-sm border-border/50`
+- Add a colored left accent bar (green=active, gray=paused) using `absolute` positioning
+- Add candidate initials-style visual on the left (briefcase icon in a colored rounded square)
+- Show application counts as mini stat pills in a row: green chip for Strong, amber for Good, etc.
+- Replace icon-only ghost buttons with a proper action row: "View Applicants" as a primary outlined button (full label visible), and a `MoreHorizontal` dropdown for Copy Link / Pause / Delete
+- Add `hover:-translate-y-0.5 hover:shadow-lg hover:shadow-primary/5` to the card
+- Show a subtle "Active" / "Paused" badge with a glowing dot indicator
+
+**3. `src/components/screening/CreateJobForm.tsx`**
+- Wrap in a premium card with `bg-card/60 backdrop-blur-sm`
+- Add a section stepper feel: number the logical groups (1. Basics, 2. Requirements, 3. Questions)
+- Skills input: style the skill badges with `bg-primary/10 text-primary border-primary/20`
+- Success state: upgrade to a full-width celebration block with animated checkmark ring, the URL in a code-styled input, and a "Share on LinkedIn" hint text
+- Add smooth `animate-in slide-in-from-bottom-2` to the form card
+
+**4. `src/components/screening/ApplicantCard.tsx`**
+- Add an initials avatar (gradient circle with candidate's initials, same pattern as `CandidateCard.tsx`)
+- Replace flat card with glassmorphism: `rounded-xl border bg-card/60 backdrop-blur-sm hover:-translate-y-0.5 hover:shadow-lg`
+- Add a colored top accent bar that changes color based on match category (emerald/amber/red/gray)
+- Show match score as a bold number badge in the top-right corner styled like a score ring
+- Style strengths as green pills with check icons, red flags as red warning items
+- Footer: clean time/tab-switch row with icon chips, "View Details" as a full-labeled button
+
+**5. `src/pages/JobApplicants.tsx`**
+- Add a premium header with back button, job title, company name, and a status badge (Active/Paused)
+- Stat cards: upgrade with glassmorphism, colored backgrounds per category, larger numbers, subtle glow border
+- Filter tabs: style the active tab with primary color background and glow, add transition animations
+- Empty/loading states: use skeleton cards instead of plain text
+
+**6. `src/components/screening/ApplicantDetailModal.tsx`**
+- Upgrade DialogContent: add subtle gradient background overlay, wider on large screens
+- Header: add a gradient avatar circle with initials, score as a styled badge, and a colored fit pill
+- Tab bar: style each tab with icons and labels, active tab with primary underline glow
+- Overview tab: strengths and flags in structured labeled sections with colored left borders
+- Q&A tab: each Q&A block as an elevated card with score badge, question in bold, answer in muted bg block
+- Interview tab: already delegated to `InterviewQuestionsPanel`
+- Actions tab: "Next Steps" block with gradient border and clearer CTA styling
+
+**7. `src/components/screening/InterviewQuestionsPanel.tsx`**
+- Number each question card with a bold circular counter badge (emerald)
+- Add a left gradient border accent to each question card
+- "Why" context text in a styled italic muted section
+- Copy/Print buttons: upgrade to icon + label with premium outline style
+
+---
+
+### Design Tokens Used (Consistent with Platform)
+
+```text
+Cards:          bg-card/60 backdrop-blur-sm border-border/50 rounded-xl
+Hover:          hover:-translate-y-0.5 hover:shadow-lg hover:shadow-primary/5 hover:border-primary/30
+Strong Fit:     bg-emerald-500/15 text-emerald-400 border-emerald-500/30
+Good Fit:       bg-amber-500/15 text-amber-400 border-amber-500/30
+Not Qualified:  bg-destructive/15 text-destructive border-destructive/30
+Primary accent: text-primary, bg-primary/10, border-primary/20
+Animations:     animate-in fade-in duration-300, slide-in-from-bottom-2
 ```
 
-This fixes all the TypeScript errors in:
-- `useInterviews.ts` — `interview.candidate_source` now accepts `screening_flow`
-- `candidateService.ts` — `checkContactHistory` and `recordContact` now accept `screening_flow`
-- `AttachCandidateDialog.tsx` and `StartDiscussionDialog.tsx` — `collaboration_candidate_attachments.candidate_source` now accepts `screening_flow`
-
-**Step 2 — Fix `send-scheduled-emails` edge function**
-
-Replace:
-```typescript
-import { Resend } from "npm:resend@2.0.0";
-```
-
-With a direct fetch call to the Resend API (same pattern already used in `screening-notifications/index.ts`). Remove the `Resend` class usage and replace with `fetch("https://api.resend.com/emails", { ... })`.
-
-**Step 3 — Fix `remotion` TypeScript errors**
-
-In `tsconfig.app.json`, add `src/remotion/**` to the `exclude` array so these unused components don't cause build failures:
-
-```json
-{
-  "exclude": ["src/remotion"]
-}
-```
-
 ---
 
-### Files Changed
+### Files Modified
 
-| File | Change |
-|------|--------|
-| DB migration | Add `screening_flow` to `candidate_source` enum |
-| `supabase/functions/send-scheduled-emails/index.ts` | Replace `npm:resend` import with fetch-based calls |
-| `tsconfig.app.json` | Exclude `src/remotion` from compilation |
-
-No frontend component files need changes — once the enum is updated in the database, the Supabase-generated types will automatically accept `screening_flow` everywhere.
-
----
-
-### After These Fixes
-
-The build will be clean and the full screening flow (create job → candidate applies → chat → scoring → recruiter notifications → status updates) will work end-to-end without TypeScript errors.
+| File | Scope |
+|---|---|
+| `src/pages/ScreeningJobs.tsx` | Header, stats, skeleton, empty state |
+| `src/components/screening/JobCard.tsx` | Full premium card redesign |
+| `src/components/screening/CreateJobForm.tsx` | Form polish + success state |
+| `src/components/screening/ApplicantCard.tsx` | Avatar, score ring, accent bar |
+| `src/pages/JobApplicants.tsx` | Header, stat cards, tabs |
+| `src/components/screening/ApplicantDetailModal.tsx` | Modal header, tabs, content blocks |
+| `src/components/screening/InterviewQuestionsPanel.tsx` | Numbered cards, accent bars |
