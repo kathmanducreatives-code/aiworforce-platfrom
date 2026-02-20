@@ -889,6 +889,63 @@ export type Database = {
         }
         Relationships: []
       }
+      growth_signal_companies: {
+        Row: {
+          company_name: string
+          created_at: string
+          engineering_roles_count: number
+          funding_amount: number | null
+          funding_date: string | null
+          funding_round: string | null
+          growth_score: number
+          id: string
+          industry: string | null
+          investors: Json | null
+          is_hot_lead: boolean
+          last_updated: string
+          open_roles_count: number
+          sample_job_titles: Json | null
+          source_url: string | null
+          user_id: string
+        }
+        Insert: {
+          company_name: string
+          created_at?: string
+          engineering_roles_count?: number
+          funding_amount?: number | null
+          funding_date?: string | null
+          funding_round?: string | null
+          growth_score?: number
+          id?: string
+          industry?: string | null
+          investors?: Json | null
+          is_hot_lead?: boolean
+          last_updated?: string
+          open_roles_count?: number
+          sample_job_titles?: Json | null
+          source_url?: string | null
+          user_id: string
+        }
+        Update: {
+          company_name?: string
+          created_at?: string
+          engineering_roles_count?: number
+          funding_amount?: number | null
+          funding_date?: string | null
+          funding_round?: string | null
+          growth_score?: number
+          id?: string
+          industry?: string | null
+          investors?: Json | null
+          is_hot_lead?: boolean
+          last_updated?: string
+          open_roles_count?: number
+          sample_job_titles?: Json | null
+          source_url?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
       icp_drafts: {
         Row: {
           created_at: string | null
@@ -1402,6 +1459,56 @@ export type Database = {
             columns: ["slot_id"]
             isOneToOne: false
             referencedRelation: "interview_slots"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      job_distribution_status: {
+        Row: {
+          created_at: string
+          error_message: string | null
+          external_job_id: string | null
+          feed_url: string | null
+          id: string
+          job_id: string
+          last_synced_at: string | null
+          platform: string
+          posted_at: string | null
+          status: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          error_message?: string | null
+          external_job_id?: string | null
+          feed_url?: string | null
+          id?: string
+          job_id: string
+          last_synced_at?: string | null
+          platform: string
+          posted_at?: string | null
+          status?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          error_message?: string | null
+          external_job_id?: string | null
+          feed_url?: string | null
+          id?: string
+          job_id?: string
+          last_synced_at?: string | null
+          platform?: string
+          posted_at?: string | null
+          status?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "job_distribution_status_job_id_fkey"
+            columns: ["job_id"]
+            isOneToOne: false
+            referencedRelation: "screening_jobs"
             referencedColumns: ["id"]
           },
         ]

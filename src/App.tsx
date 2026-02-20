@@ -37,6 +37,8 @@ import ICPResultsPage from "./pages/ICPResultsPage";
 import ICPCandidateDetail from "./pages/ICPCandidateDetail";
 import ScreeningJobs from "./pages/ScreeningJobs";
 import JobApplicants from "./pages/JobApplicants";
+import JobDistribution from "./pages/JobDistribution";
+import GrowthSignals from "./pages/GrowthSignals";
 const queryClient = new QueryClient();
 
 const App = () => (
@@ -185,6 +187,22 @@ const App = () => (
                   } />
 
 
+
+                  <Route path="/job-distribution" element={
+                    <ProtectedRoute>
+                      <MainLayout>
+                        <JobDistribution />
+                      </MainLayout>
+                    </ProtectedRoute>
+                  } />
+
+                  <Route path="/growth-signals" element={
+                    <ProtectedRoute>
+                      <MainLayout>
+                        <GrowthSignals />
+                      </MainLayout>
+                    </ProtectedRoute>
+                  } />
 
                   {/* Public pages - no auth required */}
                   <Route path="/apply/:slug" element={<CandidateApply />} />
