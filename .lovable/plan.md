@@ -1,101 +1,165 @@
 
-## Premium UI Redesign: Job Screening Feature
 
-The current screening UI uses basic Card/Badge/Button components with no visual hierarchy or premium feel. The goal is to elevate it to match the platform's established premium SaaS aesthetic — glassmorphism, glowing accents, staggered animations, and information-dense but visually clear layouts — consistent with ICP Manager and Lead Scraper pages.
+## Multi-Platform Job Distribution Engine + Growth Intelligence + Cost Calculator
+
+Since you want to start with the **Job Distribution Engine** and use mock/sample data for now, this plan builds all three features in phases, with distribution as the core focus and growth signals + calculator as supporting modules.
 
 ---
 
-### Visual Audit of Current Issues
+### Phase 1: Database Schema (New Tables)
 
-| Component | Current Problem | Fix |
+**Table 1: `job_distribution_status`** — tracks where each screening job has been distributed
+
+| Column | Type | Notes |
 |---|---|---|
-| `ScreeningJobs.tsx` | Plain page header, basic "Loading..." text, flat card list | Add gradient header with stats bar, animated skeleton states, better empty state |
-| `JobCard.tsx` | Flat white card, icon-only buttons with no context, no visual weight | Glassmorphism card with gradient accent bar, labeled action buttons, animated hover |
-| `CreateJobForm.tsx` | Bare form inside a generic card | Collapsible/expandable panel with step-feeling, premium inputs, better spacing |
-| `ApplicantCard.tsx` | Plain card with small text, no avatar/initials | Initials avatar, score ring, rich strengths/flags display, premium hover |
-| `JobApplicants.tsx` | Flat stat cards, basic tabs | Glowing stat cards with icons, gradient header, animated filter tabs |
-| `ApplicantDetailModal.tsx` | Unstyled dialog with generic gray background | Full-width dark modal, colored tab bar, structured info blocks, premium action CTA |
-| `InterviewQuestionsPanel.tsx` | Plain border list items | Numbered cards with gradient left bar, category indicators |
+| id | uuid | PK |
+| job_id | uuid | FK to screening_jobs |
+| platform | text | linkedin, indeed, wellfound, xml_feed |
+| status | text | pending, posted, failed, removed |
+| external_job_id | text | nullable, ID from the platform |
+| posted_at | timestamptz | nullable |
+| last_synced_at | timestamptz | nullable |
+| feed_url | text | nullable, for XML/JSON feed |
+| error_message | text | nullable |
+| created_at | timestamptz | default now() |
+| user_id | uuid | for RLS |
+
+**Table 2: `growth_signal_companies`** — unified hiring + funding intelligence
+
+| Column | Type | Notes |
+|---|---|---|
+| id | uuid | PK |
+| company_name | text | normalized |
+| industry | text | nullable |
+| funding_round | text | e.g. Series A, Seed |
+| funding_amount | numeric | nullable |
+| funding_date | date | nullable |
+| investors | jsonb | array of investor names |
+| open_roles_count | integer | default 0 |
+| engineering_roles_count | integer | default 0 |
+| sample_job_titles | jsonb | array of strings |
+| growth_score | integer | computed 0-100 |
+| is_hot_lead | boolean | default false |
+| source_url | text | nullable |
+| last_updated | timestamptz | default now() |
+| created_at | timestamptz | default now() |
+| user_id | uuid | for RLS |
+
+RLS: Both tables scoped to authenticated users by `user_id`.
 
 ---
 
-### Implementation Plan by File
+### Phase 2: Job Distribution Engine (Core Feature)
 
-**1. `src/pages/ScreeningJobs.tsx`**
-- Add a premium gradient page header with an icon glyph background, subtitle, and stats summary row (total jobs, total applicants, active/paused counts)
-- Replace `<p>Loading...</p>` with animated skeleton cards (3 placeholder cards)
-- Replace `<p>No screening jobs yet</p>` with a visual empty state illustration using icons, heading, and a CTA arrow pointing to the form above
-- Give the "Your Screening Jobs" section header a count badge and a subtle separator line
+**A. Enhance Existing Job Creation**
 
-**2. `src/components/screening/JobCard.tsx`**
-- Redesign as a premium glassmorphism card: `bg-card/60 backdrop-blur-sm border-border/50`
-- Add a colored left accent bar (green=active, gray=paused) using `absolute` positioning
-- Add candidate initials-style visual on the left (briefcase icon in a colored rounded square)
-- Show application counts as mini stat pills in a row: green chip for Strong, amber for Good, etc.
-- Replace icon-only ghost buttons with a proper action row: "View Applicants" as a primary outlined button (full label visible), and a `MoreHorizontal` dropdown for Copy Link / Pause / Delete
-- Add `hover:-translate-y-0.5 hover:shadow-lg hover:shadow-primary/5` to the card
-- Show a subtle "Active" / "Paused" badge with a glowing dot indicator
+Extend the `CreateJobForm.tsx` to add after job creation:
+- A new "Distribute Job" step/dialog that appears after a screening job is created
+- Platform checkboxes: LinkedIn, Indeed, Wellfound, Custom XML Feed
+- "Distribute" button that creates `job_distribution_status` records
 
-**3. `src/components/screening/CreateJobForm.tsx`**
-- Wrap in a premium card with `bg-card/60 backdrop-blur-sm`
-- Add a section stepper feel: number the logical groups (1. Basics, 2. Requirements, 3. Questions)
-- Skills input: style the skill badges with `bg-primary/10 text-primary border-primary/20`
-- Success state: upgrade to a full-width celebration block with animated checkmark ring, the URL in a code-styled input, and a "Share on LinkedIn" hint text
-- Add smooth `animate-in slide-in-from-bottom-2` to the form card
+**B. New Page: `/job-distribution`**
 
-**4. `src/components/screening/ApplicantCard.tsx`**
-- Add an initials avatar (gradient circle with candidate's initials, same pattern as `CandidateCard.tsx`)
-- Replace flat card with glassmorphism: `rounded-xl border bg-card/60 backdrop-blur-sm hover:-translate-y-0.5 hover:shadow-lg`
-- Add a colored top accent bar that changes color based on match category (emerald/amber/red/gray)
-- Show match score as a bold number badge in the top-right corner styled like a score ring
-- Style strengths as green pills with check icons, red flags as red warning items
-- Footer: clean time/tab-switch row with icon chips, "View Details" as a full-labeled button
+A dashboard showing all distributed jobs with:
+- Table view: Job Title | Platforms (icon badges) | Status per platform | Last Synced | Actions
+- Status indicators: green dot = posted, yellow = pending, red = failed
+- "Distribute" button to push to new platforms
+- "Generate Feed URL" button for XML/JSON feed
 
-**5. `src/pages/JobApplicants.tsx`**
-- Add a premium header with back button, job title, company name, and a status badge (Active/Paused)
-- Stat cards: upgrade with glassmorphism, colored backgrounds per category, larger numbers, subtle glow border
-- Filter tabs: style the active tab with primary color background and glow, add transition animations
-- Empty/loading states: use skeleton cards instead of plain text
+**C. XML/JSON Feed Generator**
 
-**6. `src/components/screening/ApplicantDetailModal.tsx`**
-- Upgrade DialogContent: add subtle gradient background overlay, wider on large screens
-- Header: add a gradient avatar circle with initials, score as a styled badge, and a colored fit pill
-- Tab bar: style each tab with icons and labels, active tab with primary underline glow
-- Overview tab: strengths and flags in structured labeled sections with colored left borders
-- Q&A tab: each Q&A block as an elevated card with score badge, question in bold, answer in muted bg block
-- Interview tab: already delegated to `InterviewQuestionsPanel`
-- Actions tab: "Next Steps" block with gradient border and clearer CTA styling
+Create a Supabase Edge Function `job-feed` that:
+- Accepts a user token or feed key
+- Returns all active screening_jobs in XML (ATS-compatible) or JSON Schema format
+- Provides a public feed URL the user can submit to job boards
+- Format follows standard job posting XML (like Indeed XML feed spec)
 
-**7. `src/components/screening/InterviewQuestionsPanel.tsx`**
-- Number each question card with a bold circular counter badge (emerald)
-- Add a left gradient border accent to each question card
-- "Why" context text in a styled italic muted section
-- Copy/Print buttons: upgrade to icon + label with premium outline style
+**D. Distribution Status Tracking**
+
+Since we don't have real API integrations yet:
+- LinkedIn: generate a pre-filled URL (deep link to LinkedIn job posting form) — same pattern as existing `job_postings` feature
+- Indeed: generate XML feed URL for Indeed to crawl
+- Wellfound: generate pre-filled application URL
+- Track status manually or via the feed endpoint being hit
 
 ---
 
-### Design Tokens Used (Consistent with Platform)
+### Phase 3: Growth Signals Dashboard
 
-```text
-Cards:          bg-card/60 backdrop-blur-sm border-border/50 rounded-xl
-Hover:          hover:-translate-y-0.5 hover:shadow-lg hover:shadow-primary/5 hover:border-primary/30
-Strong Fit:     bg-emerald-500/15 text-emerald-400 border-emerald-500/30
-Good Fit:       bg-amber-500/15 text-amber-400 border-amber-500/30
-Not Qualified:  bg-destructive/15 text-destructive border-destructive/30
-Primary accent: text-primary, bg-primary/10, border-primary/20
-Animations:     animate-in fade-in duration-300, slide-in-from-bottom-2
-```
+**A. New Page: `/growth-signals`**
+
+Premium glassmorphism dashboard with:
+- Header with gradient + stats bar (total companies, hot leads, avg score)
+- Filter bar: Industry, Funding Stage, Score Range, Hiring Volume
+- Data table with columns: Company, Funding Round, Amount, Roles Hiring, Growth Score, Last Funding Date, Industry, Actions
+- "Add to Outreach" button per row (creates an email sequence or adds to lead scraper)
+- Hot Lead badge (fire icon) for score > 70
+
+**B. Scoring Engine (Client-Side)**
+
+Score calculation:
+- Funding in last 3 months: +40
+- Hiring 5+ roles: +30
+- Engineering/Product roles: +20
+- SaaS industry: +10
+- Score > 70 = HOT LEAD
+
+**C. Seed with Sample Data**
+
+Since no APIs are connected yet, seed the `growth_signal_companies` table with ~20 realistic sample companies showing various funding stages, hiring volumes, and scores. This lets the UI be fully functional immediately.
 
 ---
 
-### Files Modified
+### Phase 4: Agency Cost Calculator
 
-| File | Scope |
+**Widget component** added to the Growth Signals page (or as a standalone section):
+- Inputs: Role Type (dropdown), Annual Salary (number), Agency Fee % (slider, default 20%)
+- Outputs: Agency Cost, ScreeningPilot Cost (flat fee model), Savings %
+- Visual comparison bar chart using Recharts (already installed)
+- Animated numbers on change
+
+---
+
+### Sidebar Navigation Updates
+
+Add two new nav items:
+- "Growth Signals" with TrendingUp icon → `/growth-signals`
+- "Job Distribution" with Share2 icon → `/job-distribution`
+
+---
+
+### Files to Create
+
+| File | Purpose |
 |---|---|
-| `src/pages/ScreeningJobs.tsx` | Header, stats, skeleton, empty state |
-| `src/components/screening/JobCard.tsx` | Full premium card redesign |
-| `src/components/screening/CreateJobForm.tsx` | Form polish + success state |
-| `src/components/screening/ApplicantCard.tsx` | Avatar, score ring, accent bar |
-| `src/pages/JobApplicants.tsx` | Header, stat cards, tabs |
-| `src/components/screening/ApplicantDetailModal.tsx` | Modal header, tabs, content blocks |
-| `src/components/screening/InterviewQuestionsPanel.tsx` | Numbered cards, accent bars |
+| `src/pages/GrowthSignals.tsx` | Growth intelligence dashboard with filters, table, calculator |
+| `src/pages/JobDistribution.tsx` | Distribution status dashboard |
+| `src/components/distribution/DistributeJobDialog.tsx` | Platform selection dialog |
+| `src/components/distribution/DistributionStatusBadge.tsx` | Status indicator component |
+| `src/components/distribution/FeedUrlCard.tsx` | Shows generated feed URL |
+| `src/components/growth/GrowthSignalTable.tsx` | Main data table |
+| `src/components/growth/GrowthScoreBadge.tsx` | Score visualization |
+| `src/components/growth/AgencyCostCalculator.tsx` | Calculator widget |
+| `src/components/growth/GrowthFilters.tsx` | Filter bar component |
+| `supabase/functions/job-feed/index.ts` | XML/JSON job feed endpoint |
+| DB migration | Create both new tables + seed sample data |
+
+### Files to Modify
+
+| File | Change |
+|---|---|
+| `src/App.tsx` | Add routes for `/growth-signals` and `/job-distribution` |
+| `src/components/Sidebar.tsx` | Add nav items |
+| `src/components/screening/CreateJobForm.tsx` | Add "Distribute" option after job creation |
+
+---
+
+### Design Approach
+
+All new pages follow the established premium pattern:
+- Glassmorphism cards: `bg-card/60 backdrop-blur-sm border-border/50 rounded-xl`
+- Hover effects: `hover:-translate-y-0.5 hover:shadow-lg hover:shadow-primary/5`
+- Staggered fade-in animations
+- Consistent color tokens: emerald for positive, amber for warning, red for negative
+- Skeleton loading states
+
