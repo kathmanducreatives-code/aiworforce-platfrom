@@ -1534,6 +1534,39 @@ export type Database = {
           },
         ]
       }
+      linkedin_posts: {
+        Row: {
+          content_format: string | null
+          created_at: string | null
+          day: string
+          id: string
+          image_prompt: string | null
+          post_caption: string | null
+          status: string | null
+          video_idea: string | null
+        }
+        Insert: {
+          content_format?: string | null
+          created_at?: string | null
+          day: string
+          id?: string
+          image_prompt?: string | null
+          post_caption?: string | null
+          status?: string | null
+          video_idea?: string | null
+        }
+        Update: {
+          content_format?: string | null
+          created_at?: string | null
+          day?: string
+          id?: string
+          image_prompt?: string | null
+          post_caption?: string | null
+          status?: string | null
+          video_idea?: string | null
+        }
+        Relationships: []
+      }
       marketing_videos: {
         Row: {
           ai_motion_graphics: Json | null
