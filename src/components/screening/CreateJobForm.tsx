@@ -7,7 +7,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { toast } from "sonner";
-import { Copy, Plus, X, Briefcase, Check, Sparkles } from "lucide-react";
+import { Copy, Plus, X, Briefcase, Check, Sparkles, Share2 } from "lucide-react";
+import DistributeJobDialog from "@/components/distribution/DistributeJobDialog";
 
 interface CreateJobFormProps {
   onJobCreated: () => void;
@@ -34,6 +35,8 @@ const CreateJobForm = ({ onJobCreated }: CreateJobFormProps) => {
   const [customQuestions, setCustomQuestions] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
   const [createdUrl, setCreatedUrl] = useState<string | null>(null);
+  const [createdJobId, setCreatedJobId] = useState<string | null>(null);
+  const [distributeOpen, setDistributeOpen] = useState(false);
   const [copied, setCopied] = useState(false);
   const [isExpanded, setIsExpanded] = useState(false);
 
@@ -55,7 +58,7 @@ const CreateJobForm = ({ onJobCreated }: CreateJobFormProps) => {
     }
     setLoading(true);
     const slug = generateSlug();
-    const { error } = await supabase.from("screening_jobs").insert({
+    const { data: insertedData, error } = await supabase.from("screening_jobs").insert({
       user_id: user.id,
       slug,
       title: title.trim(),
@@ -68,7 +71,7 @@ const CreateJobForm = ({ onJobCreated }: CreateJobFormProps) => {
       salary_max: salaryMax ? parseInt(salaryMax) : null,
       custom_questions: customQuestions.filter(q => q.trim()) as any,
       status: "active",
-    });
+    }).select("id").single();
     setLoading(false);
     if (error) {
       toast.error("Failed to create screening job");
@@ -76,6 +79,7 @@ const CreateJobForm = ({ onJobCreated }: CreateJobFormProps) => {
     }
     const url = `${window.location.origin}/apply/${slug}`;
     setCreatedUrl(url);
+    if (insertedData?.id) setCreatedJobId(insertedData.id);
     toast.success("Screening link created!");
     onJobCreated();
   };
@@ -115,9 +119,25 @@ const CreateJobForm = ({ onJobCreated }: CreateJobFormProps) => {
             </Button>
           </div>
           <p className="text-xs text-muted-foreground">💡 Share on LinkedIn, email campaigns, or embed on your careers page.</p>
-          <Button variant="ghost" size="sm" onClick={() => { setCreatedUrl(null); setTitle(""); setDescription(""); setSkills([]); setCustomQuestions([]); setIsExpanded(false); }}>
-            Create Another Job
-          </Button>
+          <div className="flex items-center gap-2">
+            {createdJobId && (
+              <Button variant="outline" size="sm" className="border-primary/30 hover:bg-primary/10" onClick={() => setDistributeOpen(true)}>
+                <Share2 className="h-4 w-4 mr-1" /> Distribute to Platforms
+              </Button>
+            )}
+            <Button variant="ghost" size="sm" onClick={() => { setCreatedUrl(null); setCreatedJobId(null); setTitle(""); setDescription(""); setSkills([]); setCustomQuestions([]); setIsExpanded(false); }}>
+              Create Another Job
+            </Button>
+          </div>
+          {createdJobId && (
+            <DistributeJobDialog
+              open={distributeOpen}
+              onOpenChange={setDistributeOpen}
+              jobId={createdJobId}
+              jobTitle={title}
+              onDistributed={() => {}}
+            />
+          )}
         </div>
       </div>
     );
