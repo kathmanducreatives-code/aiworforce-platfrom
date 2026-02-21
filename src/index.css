@@ -1,9 +1,26 @@
 @import url("https://fonts.googleapis.com/css2?family=Work+Sans:wght@400;500;600;700&display=swap");
 @import url("https://fonts.googleapis.com/css2?family=Lora:wght@400;500;600;700&display=swap");
 @import url("https://fonts.googleapis.com/css2?family=Inconsolata:wght@400;700&display=swap");
+@import url("https://fonts.googleapis.com/css2?family=Bebas+Neue&family=JetBrains+Mono:wght@400;700&family=Syne:wght@400;500;600;700&display=swap");
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+/* Landing page fonts */
+.font-bebas { font-family: 'Bebas Neue', cursive; }
+.font-syne { font-family: 'Syne', sans-serif; }
+.font-jetbrains { font-family: 'JetBrains Mono', monospace; }
+
+/* Ticker animation */
+@keyframes ticker-scroll {
+  0% { transform: translateX(0); }
+  100% { transform: translateX(-50%); }
+}
+.ticker-track {
+  display: flex;
+  animation: ticker-scroll 30s linear infinite;
+}
 
 /* Professional Design System for AI Resume Screening Platform
 All colors MUST be HSL.
