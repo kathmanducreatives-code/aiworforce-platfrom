@@ -1,165 +1,140 @@
 
 
-## Multi-Platform Job Distribution Engine + Growth Intelligence + Cost Calculator
+## Premium Landing Page Redesign: Scroll-Bound Story Experience
 
-Since you want to start with the **Job Distribution Engine** and use mock/sample data for now, this plan builds all three features in phases, with distribution as the core focus and growth signals + calculator as supporting modules.
-
----
-
-### Phase 1: Database Schema (New Tables)
-
-**Table 1: `job_distribution_status`** — tracks where each screening job has been distributed
-
-| Column | Type | Notes |
-|---|---|---|
-| id | uuid | PK |
-| job_id | uuid | FK to screening_jobs |
-| platform | text | linkedin, indeed, wellfound, xml_feed |
-| status | text | pending, posted, failed, removed |
-| external_job_id | text | nullable, ID from the platform |
-| posted_at | timestamptz | nullable |
-| last_synced_at | timestamptz | nullable |
-| feed_url | text | nullable, for XML/JSON feed |
-| error_message | text | nullable |
-| created_at | timestamptz | default now() |
-| user_id | uuid | for RLS |
-
-**Table 2: `growth_signal_companies`** — unified hiring + funding intelligence
-
-| Column | Type | Notes |
-|---|---|---|
-| id | uuid | PK |
-| company_name | text | normalized |
-| industry | text | nullable |
-| funding_round | text | e.g. Series A, Seed |
-| funding_amount | numeric | nullable |
-| funding_date | date | nullable |
-| investors | jsonb | array of investor names |
-| open_roles_count | integer | default 0 |
-| engineering_roles_count | integer | default 0 |
-| sample_job_titles | jsonb | array of strings |
-| growth_score | integer | computed 0-100 |
-| is_hot_lead | boolean | default false |
-| source_url | text | nullable |
-| last_updated | timestamptz | default now() |
-| created_at | timestamptz | default now() |
-| user_id | uuid | for RLS |
-
-RLS: Both tables scoped to authenticated users by `user_id`.
+Replace the current generic landing page with a 5-section scroll-driven narrative that tells the story of why recruiting agencies are dead and positions ScreeningPilot as the replacement. Uses GSAP ScrollTrigger for pinned scroll animations, custom fonts (Bebas Neue, Syne, JetBrains Mono), and a dark #080808 aesthetic with teal (#00e5a0) accents.
 
 ---
 
-### Phase 2: Job Distribution Engine (Core Feature)
+### Architecture Approach
 
-**A. Enhance Existing Job Creation**
-
-Extend the `CreateJobForm.tsx` to add after job creation:
-- A new "Distribute Job" step/dialog that appears after a screening job is created
-- Platform checkboxes: LinkedIn, Indeed, Wellfound, Custom XML Feed
-- "Distribute" button that creates `job_distribution_status` records
-
-**B. New Page: `/job-distribution`**
-
-A dashboard showing all distributed jobs with:
-- Table view: Job Title | Platforms (icon badges) | Status per platform | Last Synced | Actions
-- Status indicators: green dot = posted, yellow = pending, red = failed
-- "Distribute" button to push to new platforms
-- "Generate Feed URL" button for XML/JSON feed
-
-**C. XML/JSON Feed Generator**
-
-Create a Supabase Edge Function `job-feed` that:
-- Accepts a user token or feed key
-- Returns all active screening_jobs in XML (ATS-compatible) or JSON Schema format
-- Provides a public feed URL the user can submit to job boards
-- Format follows standard job posting XML (like Indeed XML feed spec)
-
-**D. Distribution Status Tracking**
-
-Since we don't have real API integrations yet:
-- LinkedIn: generate a pre-filled URL (deep link to LinkedIn job posting form) — same pattern as existing `job_postings` feature
-- Indeed: generate XML feed URL for Indeed to crawl
-- Wellfound: generate pre-filled application URL
-- Track status manually or via the feed endpoint being hit
+Since this is a React/Vite project (not a standalone HTML file), the implementation will:
+- Install `gsap` as an npm dependency (includes ScrollTrigger plugin)
+- Add Google Fonts imports for Bebas Neue, Syne, and JetBrains Mono to `index.css`
+- Build each section as a dedicated React component
+- Replace the existing Landing page content entirely (keep Header + Footer wrapper)
+- Use `useEffect` + `useRef` for GSAP initialization and cleanup
 
 ---
 
-### Phase 3: Growth Signals Dashboard
+### Dependencies
 
-**A. New Page: `/growth-signals`**
-
-Premium glassmorphism dashboard with:
-- Header with gradient + stats bar (total companies, hot leads, avg score)
-- Filter bar: Industry, Funding Stage, Score Range, Hiring Volume
-- Data table with columns: Company, Funding Round, Amount, Roles Hiring, Growth Score, Last Funding Date, Industry, Actions
-- "Add to Outreach" button per row (creates an email sequence or adds to lead scraper)
-- Hot Lead badge (fire icon) for score > 70
-
-**B. Scoring Engine (Client-Side)**
-
-Score calculation:
-- Funding in last 3 months: +40
-- Hiring 5+ roles: +30
-- Engineering/Product roles: +20
-- SaaS industry: +10
-- Score > 70 = HOT LEAD
-
-**C. Seed with Sample Data**
-
-Since no APIs are connected yet, seed the `growth_signal_companies` table with ~20 realistic sample companies showing various funding stages, hiring volumes, and scores. This lets the UI be fully functional immediately.
+- **Add**: `gsap` npm package (includes ScrollTrigger, no CDN needed in React)
 
 ---
 
-### Phase 4: Agency Cost Calculator
-
-**Widget component** added to the Growth Signals page (or as a standalone section):
-- Inputs: Role Type (dropdown), Annual Salary (number), Agency Fee % (slider, default 20%)
-- Outputs: Agency Cost, ScreeningPilot Cost (flat fee model), Savings %
-- Visual comparison bar chart using Recharts (already installed)
-- Animated numbers on change
-
----
-
-### Sidebar Navigation Updates
-
-Add two new nav items:
-- "Growth Signals" with TrendingUp icon → `/growth-signals`
-- "Job Distribution" with Share2 icon → `/job-distribution`
-
----
-
-### Files to Create
+### New Files to Create
 
 | File | Purpose |
 |---|---|
-| `src/pages/GrowthSignals.tsx` | Growth intelligence dashboard with filters, table, calculator |
-| `src/pages/JobDistribution.tsx` | Distribution status dashboard |
-| `src/components/distribution/DistributeJobDialog.tsx` | Platform selection dialog |
-| `src/components/distribution/DistributionStatusBadge.tsx` | Status indicator component |
-| `src/components/distribution/FeedUrlCard.tsx` | Shows generated feed URL |
-| `src/components/growth/GrowthSignalTable.tsx` | Main data table |
-| `src/components/growth/GrowthScoreBadge.tsx` | Score visualization |
-| `src/components/growth/AgencyCostCalculator.tsx` | Calculator widget |
-| `src/components/growth/GrowthFilters.tsx` | Filter bar component |
-| `supabase/functions/job-feed/index.ts` | XML/JSON job feed endpoint |
-| DB migration | Create both new tables + seed sample data |
+| `src/components/landing/HeroHook.tsx` | Section 1 — Full viewport pinned hero with typewriter headline, agency fee counter, pulsing scroll arrow |
+| `src/components/landing/OldVsNewComparison.tsx` | Section 2 — Pinned 300vh scroll section with left/right comparison, center progress ring, agency dependency counter |
+| `src/components/landing/BehavioralEngine.tsx` | Section 3 — Feature cards with scroll-reveal animations, stat bar with countUp |
+| `src/components/landing/SocialProofMetrics.tsx` | Section 4 — 2x2 metric grid with countUp, horizontal ticker tape |
+| `src/components/landing/ClosingCTA.tsx` | Section 5 — Teal background CTA with strikethrough animations |
+| `src/components/landing/CustomCursor.tsx` | Custom teal dot cursor with trailing ring |
+| `src/components/landing/NoiseOverlay.tsx` | SVG noise texture grain overlay component |
 
 ### Files to Modify
 
 | File | Change |
 |---|---|
-| `src/App.tsx` | Add routes for `/growth-signals` and `/job-distribution` |
-| `src/components/Sidebar.tsx` | Add nav items |
-| `src/components/screening/CreateJobForm.tsx` | Add "Distribute" option after job creation |
+| `index.html` | Add Google Fonts link for Bebas Neue, Syne, JetBrains Mono |
+| `src/index.css` | Add font-face utility classes, noise texture CSS, ticker animation keyframes |
+| `src/pages/Landing.tsx` | Replace all content between Header and Footer with the 5 new sections; add GSAP initialization |
 
 ---
 
-### Design Approach
+### Section-by-Section Implementation
 
-All new pages follow the established premium pattern:
-- Glassmorphism cards: `bg-card/60 backdrop-blur-sm border-border/50 rounded-xl`
-- Hover effects: `hover:-translate-y-0.5 hover:shadow-lg hover:shadow-primary/5`
-- Staggered fade-in animations
-- Consistent color tokens: emerald for positive, amber for warning, red for negative
-- Skeleton loading states
+**Section 1 — HeroHook.tsx**
+- Full viewport height, `bg-[#080808]` with SVG noise overlay
+- Typewriter effect for "RECRUITING AGENCIES ARE STEALING FROM YOU" in Bebas Neue 120px (reuse existing `TypewriterText` component pattern but with GSAP for smoother control)
+- Body copy in Syne 18px white
+- CountUp counter from $0 to $247,000 in 2s using GSAP, displayed in Bebas Neue 80px teal
+- Label in JetBrains Mono uppercase
+- Pulsing down arrow with "Scroll to see a better way" text
+- GSAP ScrollTrigger pin for a brief pause effect
+
+**Section 2 — OldVsNewComparison.tsx**
+- Container pinned for 300vh scroll distance via ScrollTrigger `pin: true, scrub: 1`
+- Three-column layout: Old Way (left, red), Progress Ring (center), AI Way (right, teal)
+- GSAP timeline with scrub: Old Way fades/slides left, AI Way fades/slides in from right
+- SVG progress ring using `stroke-dasharray` / `stroke-dashoffset` animated by scroll progress
+- Ring text updates at 0%, 25%, 50%, 75%, 100% thresholds
+- Agency dependency counter: 100% down to 0%, then "ELIMINATED" with strikethrough
+- 5 steps each side with X (red) and checkmark (teal) icons
+- Mobile: stack vertically, simplify to sequential reveal
+
+**Section 3 — BehavioralEngine.tsx**
+- Normal scroll (not pinned), scroll-reveal via ScrollTrigger `start: "top 80%"`
+- Section label in teal JetBrains Mono small caps
+- Headline in Bebas Neue 100px
+- 3 feature cards in horizontal row (stack on mobile):
+  - Card 1: Brain icon — Behavioral DNA Mapping
+  - Card 2: Crosshair icon — Blind Scoring Engine
+  - Card 3: Zap icon — 8 Minute Shortlist
+- Cards: `bg-[#0f0f0f]` border `#1e1e1e`, teal top border, 32px padding, 12px radius
+- Full-width stat bar: "8 MIN", "94%", "$0" — countUp on scroll into view
+- Numbers in Bebas Neue 72px teal, labels in Syne 14px grey
+
+**Section 4 — SocialProofMetrics.tsx**
+- Subtle teal radial gradient center fading to black
+- 2x2 metric grid: 90% / $247K / 8 MIN / 3X — each with countUp
+- Cards animate in staggered with GSAP ScrollTrigger
+- Horizontal ticker tape: CSS `@keyframes ticker` infinite scroll left
+- Ticker text in teal on dark background
+
+**Section 5 — ClosingCTA.tsx**
+- `bg-[#00e5a0]`, all text `#080808` — maximum contrast
+- Headline in Bebas Neue 120px
+- 3 comparison lines with GSAP-powered strikethrough animation on scroll into view:
+  - Red text gets `line-through`, then teal replacement fades in
+- CTA pill button: `bg-[#080808]` text `#00e5a0`, hover inverts
+- Small mono text below button
+- "screeningpilot.com" bottom right
+
+**CustomCursor.tsx**
+- Small teal dot (8px) follows mouse exactly
+- Outer ring (32px) follows with slight GSAP delay (0.15s ease)
+- Hidden on mobile (touch devices)
+- Uses `pointer-events-none` and `fixed` positioning
+
+---
+
+### CSS Additions (index.css)
+
+```text
+- Font utility classes: .font-bebas, .font-syne, .font-jetbrains
+- Noise texture: SVG filter-based grain overlay
+- Ticker keyframes: @keyframes ticker-scroll for infinite horizontal scroll
+- Custom scrollbar styling for dark sections
+```
+
+### Google Fonts (index.html)
+
+```text
+Bebas Neue (display headlines)
+Syne (body/subheadlines)  
+JetBrains Mono (mono labels/counters)
+```
+
+---
+
+### Mobile Responsiveness (below 768px)
+
+- All sections stack vertically
+- Section 2 comparison: Old Way and AI Way stack vertically instead of side-by-side; progress ring scales down and sits between them
+- Pin duration reduced on mobile for better UX
+- Font sizes scale down: 120px to 48px, 100px to 36px, 80px to 32px, 72px to 28px
+- Custom cursor hidden on touch devices
+- Ticker tape remains functional
+
+### Performance Considerations
+
+- GSAP ScrollTrigger uses `will-change: transform` for pinned elements
+- SVG progress ring uses GPU-accelerated properties only
+- CountUp animations use `requestAnimationFrame` via GSAP
+- Noise overlay uses CSS filter (no canvas) for minimal paint cost
+- All animations respect `prefers-reduced-motion` media query
 
