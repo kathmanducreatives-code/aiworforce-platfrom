@@ -36,7 +36,6 @@ const BehavioralEngine = () => {
 
   useEffect(() => {
     const ctx = gsap.context(() => {
-      // Card reveals
       cardRefs.current.forEach((card, i) => {
         if (!card) return;
         gsap.fromTo(card, { opacity: 0, y: 40 }, {
@@ -45,7 +44,6 @@ const BehavioralEngine = () => {
         });
       });
 
-      // Stat counters
       stats.forEach((stat, i) => {
         gsap.to({ val: 0 }, {
           val: stat.end,
@@ -67,20 +65,20 @@ const BehavioralEngine = () => {
   }, []);
 
   return (
-    <section ref={sectionRef} className="relative py-24 md:py-32 px-4" style={{ backgroundColor: '#080808' }}>
+    <section ref={sectionRef} className="relative py-24 md:py-32 px-4 bg-background">
       <div className="max-w-6xl mx-auto">
         {/* Label */}
-        <p className="font-jetbrains text-xs md:text-sm uppercase tracking-[0.25em] mb-4" style={{ color: '#00e5a0' }}>
+        <p className="font-mono text-xs md:text-sm uppercase tracking-[0.25em] mb-4 text-primary">
           ◈ The Core Technology
         </p>
 
         {/* Headline */}
-        <h2 className="font-bebas text-[36px] md:text-[64px] lg:text-[100px] leading-[0.95] text-white mb-6">
+        <h2 className="font-sans font-bold text-[36px] md:text-[64px] lg:text-[100px] leading-[0.95] text-foreground mb-6">
           WE DON'T SCREEN RESUMES.<br />WE DECODE PEOPLE.
         </h2>
 
         {/* Subheadline */}
-        <p className="font-syne text-base md:text-xl text-white/80 max-w-3xl mb-16 leading-relaxed">
+        <p className="font-sans text-base md:text-xl text-muted-foreground max-w-3xl mb-16 leading-relaxed">
           The ICP Lookalike Engine analyzes the behavioral DNA of your best existing employees —
           how they think, how they work, how they solve problems under pressure. Then it finds more of them.
         </p>
@@ -91,28 +89,23 @@ const BehavioralEngine = () => {
             <div
               key={i}
               ref={el => { cardRefs.current[i] = el; }}
-              className="rounded-xl p-8 opacity-0"
-              style={{
-                backgroundColor: '#0f0f0f',
-                border: '1px solid #1e1e1e',
-                borderTop: '3px solid #00e5a0',
-              }}
+              className="rounded-xl p-8 opacity-0 bg-card border border-border border-t-2 border-t-primary"
             >
-              <card.icon className="w-8 h-8 mb-4" style={{ color: '#00e5a0' }} />
-              <h3 className="font-bebas text-2xl text-white mb-3 tracking-wide">{card.title}</h3>
-              <p className="font-syne text-sm text-white/60 leading-relaxed">{card.body}</p>
+              <card.icon className="w-8 h-8 mb-4 text-primary" />
+              <h3 className="font-sans font-bold text-2xl text-foreground mb-3 tracking-wide">{card.title}</h3>
+              <p className="font-sans text-sm text-muted-foreground leading-relaxed">{card.body}</p>
             </div>
           ))}
         </div>
 
         {/* Stat bar */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-8 py-10 border-t border-b" style={{ borderColor: '#1e1e1e' }}>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-8 py-10 border-t border-b border-border">
           {stats.map((stat, i) => (
             <div key={i} className="text-center">
-              <div className="font-bebas text-[40px] md:text-[72px] leading-none" style={{ color: '#00e5a0' }}>
+              <div className="font-mono font-bold text-[40px] md:text-[72px] leading-none text-primary">
                 {stat.prefix || ''}{counters[i]}{stat.suffix}
               </div>
-              <p className="font-syne text-xs md:text-sm text-white/40 mt-2">{stat.label}</p>
+              <p className="font-sans text-xs md:text-sm text-muted-foreground mt-2">{stat.label}</p>
             </div>
           ))}
         </div>

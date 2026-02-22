@@ -44,15 +44,14 @@ const ClosingCTA = () => {
   return (
     <section
       ref={sectionRef}
-      className="relative min-h-screen flex flex-col items-center justify-center px-4 py-24"
-      style={{ backgroundColor: '#00e5a0' }}
+      className="relative min-h-screen flex flex-col items-center justify-center px-4 py-24 bg-primary"
     >
       <div className="max-w-4xl mx-auto text-center">
-        <h2 className="font-bebas text-[48px] md:text-[80px] lg:text-[120px] leading-[0.95] mb-8" style={{ color: '#080808' }}>
+        <h2 className="font-sans font-bold text-[48px] md:text-[80px] lg:text-[120px] leading-[0.95] mb-8 text-primary-foreground">
           STOP PAYING THE<br />HIRING TAX.
         </h2>
 
-        <p className="font-syne text-base md:text-xl max-w-2xl mx-auto mb-12 leading-relaxed" style={{ color: '#080808' }}>
+        <p className="font-sans text-base md:text-xl max-w-2xl mx-auto mb-12 leading-relaxed text-primary-foreground/80">
           Every month you use a recruiting agency is another $20,000 you will never see again.
           Screening Pilot gives you back your money, your time, and your hiring power.
         </p>
@@ -65,10 +64,10 @@ const ClosingCTA = () => {
               ref={el => { lineRefs.current[i] = el; }}
               className="flex flex-col sm:flex-row items-start sm:items-center gap-2 sm:gap-4"
             >
-              <span className="old-text font-syne text-sm md:text-base" style={{ color: '#080808' }}>
+              <span className="old-text font-sans text-sm md:text-base text-primary-foreground/70">
                 ❌ {c.old}
               </span>
-              <span className="new-text font-syne text-sm md:text-base font-bold opacity-0" style={{ color: '#080808' }}>
+              <span className="new-text font-sans text-sm md:text-base font-bold opacity-0 text-primary-foreground">
                 → ✓ {c.replacement}
               </span>
             </div>
@@ -78,28 +77,12 @@ const ClosingCTA = () => {
         {/* CTA Button */}
         <button
           onClick={() => navigate('/auth')}
-          className="group font-bebas text-xl md:text-2xl tracking-[3px] px-10 md:px-12 py-4 md:py-5 rounded-full transition-all duration-300"
-          style={{
-            backgroundColor: '#080808',
-            color: '#00e5a0',
-          }}
-          onMouseEnter={e => {
-            (e.target as HTMLButtonElement).style.backgroundColor = '#00e5a0';
-            (e.target as HTMLButtonElement).style.color = '#080808';
-            (e.target as HTMLButtonElement).style.boxShadow = '0 0 30px rgba(0,229,160,0.4)';
-            (e.target as HTMLButtonElement).style.border = '2px solid #080808';
-          }}
-          onMouseLeave={e => {
-            (e.target as HTMLButtonElement).style.backgroundColor = '#080808';
-            (e.target as HTMLButtonElement).style.color = '#00e5a0';
-            (e.target as HTMLButtonElement).style.boxShadow = 'none';
-            (e.target as HTMLButtonElement).style.border = 'none';
-          }}
+          className="font-sans font-bold text-xl md:text-2xl tracking-[3px] uppercase px-10 md:px-12 py-4 md:py-5 rounded-full transition-all duration-300 bg-background text-primary hover:bg-primary-foreground hover:text-primary hover:shadow-lg"
         >
           KILL YOUR AGENCY DEPENDENCY — START FREE
         </button>
 
-        <p className="font-jetbrains text-xs mt-6" style={{ color: '#080808', opacity: 0.7 }}>
+        <p className="font-mono text-xs mt-6 text-primary-foreground/70">
           No credit card. No agency. No middleman.<br />
           Setup in under 10 minutes.
         </p>
@@ -107,7 +90,7 @@ const ClosingCTA = () => {
 
       {/* Bottom right branding */}
       <div className="absolute bottom-6 right-6">
-        <p className="font-jetbrains text-xs" style={{ color: '#080808', opacity: 0.5 }}>
+        <p className="font-mono text-xs text-primary-foreground/50">
           screeningpilot.com
         </p>
       </div>

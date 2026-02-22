@@ -29,13 +29,11 @@ const CustomCursor = () => {
     <>
       <div
         ref={dotRef}
-        className="fixed top-0 left-0 w-2 h-2 rounded-full pointer-events-none z-[9999]"
-        style={{ backgroundColor: '#00e5a0' }}
+        className="fixed top-0 left-0 w-2 h-2 rounded-full pointer-events-none z-[9999] bg-primary"
       />
       <div
         ref={ringRef}
-        className="fixed top-0 left-0 w-8 h-8 rounded-full pointer-events-none z-[9998] border"
-        style={{ borderColor: 'rgba(0,229,160,0.5)' }}
+        className="fixed top-0 left-0 w-8 h-8 rounded-full pointer-events-none z-[9998] border border-primary/50"
       />
     </>
   );
