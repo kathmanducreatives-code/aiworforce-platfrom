@@ -21,7 +21,7 @@ const Landing = () => {
   }, [user, navigate]);
 
   return (
-    <div className="min-h-screen relative" style={{ backgroundColor: '#080808' }}>
+    <div className="min-h-screen relative bg-background">
       <CustomCursor />
       <Header />
       

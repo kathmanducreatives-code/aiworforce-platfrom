@@ -42,16 +42,13 @@ const SocialProofMetrics = () => {
   return (
     <section
       ref={sectionRef}
-      className="relative py-24 md:py-32 px-4 overflow-hidden"
-      style={{
-        background: 'radial-gradient(ellipse at center, rgba(0,229,160,0.06) 0%, #080808 70%)',
-      }}
+      className="relative py-24 md:py-32 px-4 overflow-hidden bg-background"
     >
       <div className="max-w-6xl mx-auto">
-        <p className="font-jetbrains text-xs md:text-sm uppercase tracking-[0.25em] mb-4" style={{ color: '#00e5a0' }}>
+        <p className="font-mono text-xs md:text-sm uppercase tracking-[0.25em] mb-4 text-primary">
           ◈ The Numbers
         </p>
-        <h2 className="font-bebas text-[36px] md:text-[56px] lg:text-[80px] leading-[0.95] text-white mb-16">
+        <h2 className="font-sans font-bold text-[36px] md:text-[56px] lg:text-[80px] leading-[0.95] text-foreground mb-16">
           WHAT HAPPENS WHEN YOU<br />FIRE YOUR RECRUITING AGENCY
         </h2>
 
@@ -60,22 +57,21 @@ const SocialProofMetrics = () => {
           {metrics.map((m, i) => (
             <div
               key={i}
-              className="rounded-xl p-8 text-center"
-              style={{ backgroundColor: '#0f0f0f', border: '1px solid #1e1e1e' }}
+              className="rounded-xl p-8 text-center bg-card border border-border"
             >
-              <div className="font-bebas text-[48px] md:text-[72px] leading-none mb-2" style={{ color: '#00e5a0' }}>
+              <div className="font-mono font-bold text-[48px] md:text-[72px] leading-none mb-2 text-primary">
                 {m.display(counters[i])}
               </div>
-              <p className="font-syne text-base text-white/80 mb-1">{m.label}</p>
-              <p className="font-syne text-sm text-white/40">{m.sublabel}</p>
+              <p className="font-sans text-base text-foreground/80 mb-1">{m.label}</p>
+              <p className="font-sans text-sm text-muted-foreground">{m.sublabel}</p>
             </div>
           ))}
         </div>
       </div>
 
       {/* Ticker */}
-      <div className="w-full overflow-hidden py-4" style={{ borderTop: '1px solid #1e1e1e', borderBottom: '1px solid #1e1e1e' }}>
-        <div className="ticker-track font-jetbrains text-sm tracking-[0.15em] whitespace-nowrap" style={{ color: '#00e5a0' }}>
+      <div className="w-full overflow-hidden py-4 border-t border-b border-border">
+        <div className="ticker-track font-mono text-sm tracking-[0.15em] whitespace-nowrap text-primary">
           <span>{ticker.repeat(4)}</span>
           <span>{ticker.repeat(4)}</span>
         </div>
