@@ -1,93 +1,125 @@
 
 
-## Landing Page Theme Alignment: Match the Software's White-and-Green Identity
+## Landing Page Premium Overhaul: Full-Screen Glass Aesthetic with Moving Animations
 
-The current landing page uses a hardcoded dark aesthetic (#080808 black, #00e5a0 teal, Bebas Neue/Syne/JetBrains Mono fonts) that clashes with the main software's clean white-and-green Verdant theme using Work Sans, Lora, and Inconsolata. This update brings the entire landing page into visual harmony with the authenticated experience.
+Transform the current flat, plain-white landing page into an immersive, full-screen experience with glassmorphism cards, animated floating elements, gradient mesh backgrounds, and smooth motion throughout -- all using the existing Verdant design system.
+
+---
+
+### Current Problems
+
+- Hero section is plain white with no visual interest or depth
+- Cards are flat with minimal styling
+- No background animations or floating elements
+- Sections don't fill the viewport properly
+- No glassmorphism despite the platform using it everywhere else
+- The page feels static and lifeless compared to modern SaaS landing pages
 
 ---
 
 ### What Changes
 
-**Fonts**: Replace all `font-bebas`, `font-syne`, `font-jetbrains` classes with the software's standard font stack:
-- Headlines: `font-sans font-bold` (Work Sans Bold)
-- Body text: `font-sans` (Work Sans)
-- Metrics/labels: `font-mono` (Inconsolata)
-
-**Colors**: Replace all hardcoded hex values with semantic design tokens:
-- `#080808` backgrounds become `bg-background`
-- `#00e5a0` accents become `text-primary`
-- `#0f0f0f` card backgrounds become `bg-card`
-- `#1e1e1e` borders become `border-border`
-- `text-white` becomes `text-foreground`
-- `text-white/70` becomes `text-muted-foreground`
-
-**Overall feel**: Clean, professional SaaS page that uses the same visual language as the dashboard — not a separate aesthetic island.
+**Every section** gets:
+- Full viewport height (`min-h-screen`) with centered content
+- Animated gradient mesh background (subtle green radial gradients that pulse slowly)
+- Floating glass orbs/particles in the background for depth
+- Glassmorphism treatment on all cards and containers
 
 ---
 
-### Files to Modify
+### File-by-File Changes
 
-| File | Changes |
-|---|---|
-| `src/pages/Landing.tsx` | Replace hardcoded `backgroundColor: '#080808'` with `bg-background` |
-| `src/components/landing/HeroHook.tsx` | Swap all fonts to Work Sans/Inconsolata, replace hex colors with tokens, update `NoiseOverlay` opacity for light backgrounds |
-| `src/components/landing/OldVsNewComparison.tsx` | Replace #080808 bg, #00e5a0 accents, Bebas/Syne/JetBrains fonts with tokens |
-| `src/components/landing/BehavioralEngine.tsx` | Replace card hardcoded styles with `bg-card border-border border-t-primary`, swap fonts |
-| `src/components/landing/SocialProofMetrics.tsx` | Replace radial gradient hex with primary token-based gradient, swap fonts |
-| `src/components/landing/ClosingCTA.tsx` | Change `#00e5a0` background to `bg-primary`, update text/button contrast using `text-primary-foreground`, swap fonts |
-| `src/components/landing/CustomCursor.tsx` | Replace hardcoded teal with `hsl(var(--primary))` |
-| `src/components/landing/NoiseOverlay.tsx` | Adjust opacity for light theme readability |
+#### 1. `src/pages/Landing.tsx`
+- Add an animated background layer with floating gradient orbs (3-4 circles with `bg-primary/10` that drift with CSS keyframes)
+- Add a subtle grid pattern overlay for texture
+- Ensure `overflow-hidden` on the root container
+
+#### 2. `src/components/landing/HeroHook.tsx`
+- Make truly full-screen with `h-screen` instead of `min-h-screen`
+- Add animated gradient mesh background: radial gradient from `primary/5` at center fading out, with a slow pulsing animation (10s cycle)
+- Wrap counter in a glassmorphism container: `backdrop-blur-xl bg-card/40 border border-primary/20 rounded-2xl shadow-lg p-8`
+- Add floating decorative elements: 2-3 small glass circles that float up/down with staggered CSS animations
+- Typewriter headline gets a subtle gradient text effect on the word "STEALING" using `bg-gradient-to-r from-destructive to-destructive/70 bg-clip-text text-transparent`
+- Scroll arrow gets a glass pill container around it
+- GSAP: add parallax effect -- headline moves slightly slower than body content on scroll
+
+#### 3. `src/components/landing/OldVsNewComparison.tsx`
+- Old Way panel: wrap in a glass card with `backdrop-blur-md bg-destructive/5 border border-destructive/20 rounded-2xl p-6`
+- New Way panel: wrap in a glass card with `backdrop-blur-md bg-primary/5 border border-primary/20 rounded-2xl p-6`
+- Progress ring: add a glowing glass backdrop behind it (`backdrop-blur-xl bg-card/30 rounded-full p-6 border border-border/30`)
+- Each step animates in individually with staggered GSAP reveals as scroll progresses (not just the panels fading)
+- Add subtle connecting lines between the ring and the panels (decorative borders)
+- Background: add a very subtle radial gradient from `primary/3` at center
+
+#### 4. `src/components/landing/BehavioralEngine.tsx`
+- Section becomes `min-h-screen flex flex-col justify-center`
+- Feature cards get full glassmorphism: `backdrop-blur-md bg-card/60 border border-border/30 shadow-xl hover:shadow-2xl hover:border-primary/30 hover:-translate-y-2 transition-all duration-500`
+- Card icons get animated glass circles behind them: `w-14 h-14 rounded-xl bg-primary/10 backdrop-blur-sm border border-primary/20 flex items-center justify-center`
+- On hover, cards get a subtle shine sweep animation (the `premium-shine` keyframe already exists in CSS)
+- Stat bar numbers get glass pill containers
+- Add floating decorative dots in the background (3-4 small `bg-primary/20 rounded-full` elements with `animate-float`)
+- GSAP: cards slide up with rotation (slight 3D tilt that corrects on arrival)
+
+#### 5. `src/components/landing/SocialProofMetrics.tsx`
+- Full `min-h-screen` with centered content
+- Background: animated radial gradient mesh -- two overlapping radial gradients from `primary/5` that slowly shift position with CSS animation
+- Metric cards get glassmorphism: `backdrop-blur-md bg-card/50 border border-border/30 rounded-2xl shadow-lg hover:shadow-xl hover:border-primary/20 transition-all duration-400`
+- Each metric number gets a subtle glow effect: `text-shadow: 0 0 30px hsl(var(--primary) / 0.3)`
+- Ticker tape gets a glass track: `bg-card/30 backdrop-blur-sm border-y border-border/30`
+- GSAP: metric cards stagger in with scale (0.9 to 1) plus fade
+
+#### 6. `src/components/landing/ClosingCTA.tsx`
+- Full `min-h-screen` with centered content
+- Add animated background pattern: subtle diagonal lines or dots pattern overlay at 3% opacity
+- CTA button gets a glass effect with animated border glow on hover
+- The comparison lines get glass pill containers
+- Add a large decorative glass circle in the background (50% opacity, blurred, slowly rotating)
+- Button hover: add the glow shadow `shadow-[0_0_40px_hsl(var(--primary)/0.3)]`
+
+#### 7. `src/components/landing/CustomCursor.tsx`
+- Outer ring gets `backdrop-blur-sm` for a glass feel
+- Add a subtle trail effect: third element that follows with even more delay and lower opacity
+
+#### 8. `src/index.css` -- Add new keyframes
+- `@keyframes float-slow`: translateY 0 to -20px to 0 over 8s
+- `@keyframes float-gentle`: translateY 0 to -15px to 0 over 12s, with slight X movement
+- `@keyframes mesh-shift`: background-position shift for gradient mesh movement over 10s
+- `@keyframes glass-shine`: a sweep effect for card hover states
+- Utility classes: `.glass-panel`, `.glass-card-landing`, `.floating-orb`
+
+#### 9. `src/components/landing/NoiseOverlay.tsx`
+- Increase opacity slightly to `0.04` for more visible texture on the light background
+- Add a subtle gradient overlay on top (transparent to `background/10`) for depth
 
 ---
 
-### Section-by-Section Detail
+### Animation Summary
 
-**Section 1 -- Hero Hook**
-- Background: `bg-background` (white in light mode)
-- Headline: `font-sans font-bold text-foreground` at same responsive sizes
-- Body text: `font-sans text-muted-foreground`
-- Counter: `font-mono text-primary` with `shadow-glow` instead of hardcoded teal glow
-- Scroll arrow: `text-primary`
-
-**Section 2 -- Old vs New Comparison**
-- Background: `bg-background`
-- "OLD WAY" label: `text-destructive` (uses the theme's red token)
-- "SCREENING PILOT WAY" label: `text-primary`
-- Steps text: `font-sans text-muted-foreground`
-- SVG ring stroke: `hsl(var(--primary))` and `hsl(var(--border))` for track
-- Dependency counter: `font-mono`
-
-**Section 3 -- Behavioral Engine**
-- Background: `bg-background`
-- Section label: `font-mono text-primary uppercase`
-- Cards: `bg-card border border-border border-t-2 border-t-primary rounded-xl`
-- Card titles: `font-sans font-bold text-foreground`
-- Card body: `font-sans text-muted-foreground`
-- Stat numbers: `font-mono text-primary` at large sizes
-- Stat labels: `font-sans text-muted-foreground`
-
-**Section 4 -- Social Proof Metrics**
-- Background: subtle radial gradient using `hsl(var(--primary) / 0.06)` fading to `bg-background`
-- Metric numbers: `font-mono text-primary`
-- Labels: `font-sans text-foreground/80`
-- Ticker: `text-primary` on `border-border` track
-
-**Section 5 -- Closing CTA**
-- Background: `bg-primary` (the theme's green)
-- All text: `text-primary-foreground`
-- CTA button: `bg-background text-primary` with hover invert
-- Comparison strikethroughs: `text-destructive` for old, `text-primary-foreground font-bold` for new
-
-**Custom Cursor**
-- Dot and ring colors: use CSS custom property `hsl(var(--primary))` instead of hardcoded teal
+| Element | Animation | Duration | Trigger |
+|---|---|---|---|
+| Background orbs | Float up/down + drift | 8-12s loop | Always |
+| Hero headline chars | Typewriter reveal | 50ms stagger | On load |
+| Hero body text | Fade up | 800ms | On load, 1.5s delay |
+| Counter value | Count up | 2s | On load, 2s delay |
+| Feature cards | Slide up + fade | 600ms | Scroll into view, 150ms stagger |
+| Card hover | Lift + shine sweep | 500ms | Mouse hover |
+| Metric numbers | Count up + scale | 1.8s | Scroll into view |
+| Metric cards | Scale in + fade | 600ms | Scroll, 100ms stagger |
+| Progress ring | Stroke fill | Scrubbed | Scroll position |
+| Comparison panels | Slide + fade | Scrubbed | Scroll position |
+| Strikethrough lines | Line-through + replace | 600ms | Scroll into view, 300ms stagger |
+| Ticker tape | Infinite scroll left | 30s loop | Always |
+| CTA button glow | Border glow pulse | 300ms | Hover |
 
 ---
 
-### Technical Notes
+### Technical Details
 
-- The Bebas Neue / Syne / JetBrains Mono Google Fonts import line in `index.html` can be removed (or left for now since it causes no harm)
-- The `.font-bebas`, `.font-syne`, `.font-jetbrains` utility classes in `index.css` will no longer be used but can be cleaned up
-- All GSAP ScrollTrigger logic, pinning, scrub, and animation timelines remain exactly the same -- only visual styling changes
-- Inline `style={{ color: '#00e5a0' }}` and `style={{ backgroundColor: '#080808' }}` replaced with Tailwind classes using design tokens
-- Counter glow effects use `var(--shadow-glow)` or `shadow-[0_0_40px_hsl(var(--primary)/0.3)]`
+- All glassmorphism uses `backdrop-blur-md` (12px) or `backdrop-blur-xl` (24px) with semi-transparent backgrounds
+- Floating orbs use CSS animations only (no GSAP overhead for decorative elements)
+- GSAP remains for scroll-bound animations (pinning, scrub, countUp)
+- New CSS keyframes added to `index.css` for float/mesh/shine effects
+- All hover transitions use `transition-all duration-300` or `duration-500` for smoothness
+- Glass borders use `border-primary/20` or `border-border/30` for subtlety
+- No new dependencies required
 
