@@ -44,9 +44,24 @@ const ClosingCTA = () => {
   return (
     <section
       ref={sectionRef}
-      className="relative min-h-screen flex flex-col items-center justify-center px-4 py-24 bg-primary"
+      className="relative min-h-screen flex flex-col items-center justify-center px-4 py-24 bg-primary overflow-hidden"
     >
-      <div className="max-w-4xl mx-auto text-center">
+      {/* Large decorative glass circle */}
+      <div
+        className="absolute w-[600px] h-[600px] rounded-full border border-primary-foreground/10 bg-primary-foreground/5 top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2"
+        style={{ animation: 'float-gentle 15s ease-in-out infinite', filter: 'blur(1px)' }}
+      />
+
+      {/* Dot pattern overlay */}
+      <div
+        className="absolute inset-0 opacity-[0.03]"
+        style={{
+          backgroundImage: 'radial-gradient(circle, hsl(var(--primary-foreground)) 1px, transparent 1px)',
+          backgroundSize: '24px 24px',
+        }}
+      />
+
+      <div className="max-w-4xl mx-auto text-center relative z-10">
         <h2 className="font-sans font-bold text-[48px] md:text-[80px] lg:text-[120px] leading-[0.95] mb-8 text-primary-foreground">
           STOP PAYING THE<br />HIRING TAX.
         </h2>
@@ -56,13 +71,18 @@ const ClosingCTA = () => {
           Screening Pilot gives you back your money, your time, and your hiring power.
         </p>
 
-        {/* Comparisons */}
+        {/* Comparisons - Glass pills */}
         <div className="space-y-5 mb-14 max-w-xl mx-auto text-left">
           {comparisons.map((c, i) => (
             <div
               key={i}
               ref={el => { lineRefs.current[i] = el; }}
-              className="flex flex-col sm:flex-row items-start sm:items-center gap-2 sm:gap-4"
+              className="flex flex-col sm:flex-row items-start sm:items-center gap-2 sm:gap-4 rounded-xl px-4 py-3"
+              style={{
+                background: 'hsla(0, 0%, 100%, 0.08)',
+                backdropFilter: 'blur(8px)',
+                border: '1px solid hsla(0, 0%, 100%, 0.1)',
+              }}
             >
               <span className="old-text font-sans text-sm md:text-base text-primary-foreground/70">
                 ❌ {c.old}
@@ -74,10 +94,10 @@ const ClosingCTA = () => {
           ))}
         </div>
 
-        {/* CTA Button */}
+        {/* CTA Button with glow */}
         <button
           onClick={() => navigate('/auth')}
-          className="font-sans font-bold text-xl md:text-2xl tracking-[3px] uppercase px-10 md:px-12 py-4 md:py-5 rounded-full transition-all duration-300 bg-background text-primary hover:bg-primary-foreground hover:text-primary hover:shadow-lg"
+          className="font-sans font-bold text-xl md:text-2xl tracking-[3px] uppercase px-10 md:px-12 py-4 md:py-5 rounded-full transition-all duration-300 bg-background text-primary hover:bg-primary-foreground hover:text-primary hover:shadow-[0_0_40px_hsl(var(--primary)/0.3)] hover:scale-105"
         >
           KILL YOUR AGENCY DEPENDENCY — START FREE
         </button>

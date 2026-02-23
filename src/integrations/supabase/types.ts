@@ -416,6 +416,44 @@ export type Database = {
         }
         Relationships: []
       }
+      closely_events: {
+        Row: {
+          created_at: string | null
+          event_type: string
+          id: string
+          linkedin_url: string | null
+          matched_lead_id: string | null
+          processed: boolean | null
+          raw_payload: Json
+        }
+        Insert: {
+          created_at?: string | null
+          event_type: string
+          id?: string
+          linkedin_url?: string | null
+          matched_lead_id?: string | null
+          processed?: boolean | null
+          raw_payload: Json
+        }
+        Update: {
+          created_at?: string | null
+          event_type?: string
+          id?: string
+          linkedin_url?: string | null
+          matched_lead_id?: string | null
+          processed?: boolean | null
+          raw_payload?: Json
+        }
+        Relationships: [
+          {
+            foreignKeyName: "closely_events_matched_lead_id_fkey"
+            columns: ["matched_lead_id"]
+            isOneToOne: false
+            referencedRelation: "outreach_leads"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       collaboration_candidate_attachments: {
         Row: {
           attached_at: string | null
@@ -1767,6 +1805,338 @@ export type Database = {
         }
         Relationships: []
       }
+      outreach_activities: {
+        Row: {
+          action_type: string
+          body: string | null
+          channel: string
+          created_at: string
+          executed_date: string | null
+          id: string
+          lead_id: string
+          message_id: string | null
+          response_received: boolean | null
+          response_text: string | null
+          response_type: string | null
+          scheduled_date: string | null
+          sequence_id: string | null
+          source: string | null
+          status: Database["public"]["Enums"]["activity_status"] | null
+          step_number: number | null
+          subject: string | null
+        }
+        Insert: {
+          action_type: string
+          body?: string | null
+          channel: string
+          created_at?: string
+          executed_date?: string | null
+          id?: string
+          lead_id: string
+          message_id?: string | null
+          response_received?: boolean | null
+          response_text?: string | null
+          response_type?: string | null
+          scheduled_date?: string | null
+          sequence_id?: string | null
+          source?: string | null
+          status?: Database["public"]["Enums"]["activity_status"] | null
+          step_number?: number | null
+          subject?: string | null
+        }
+        Update: {
+          action_type?: string
+          body?: string | null
+          channel?: string
+          created_at?: string
+          executed_date?: string | null
+          id?: string
+          lead_id?: string
+          message_id?: string | null
+          response_received?: boolean | null
+          response_text?: string | null
+          response_type?: string | null
+          scheduled_date?: string | null
+          sequence_id?: string | null
+          source?: string | null
+          status?: Database["public"]["Enums"]["activity_status"] | null
+          step_number?: number | null
+          subject?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "outreach_activities_lead_id_fkey"
+            columns: ["lead_id"]
+            isOneToOne: false
+            referencedRelation: "outreach_leads"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "outreach_activities_sequence_id_fkey"
+            columns: ["sequence_id"]
+            isOneToOne: false
+            referencedRelation: "outreach_sequences"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      outreach_daily_queue: {
+        Row: {
+          action_type: string
+          activity_id: string | null
+          channel: string
+          created_at: string | null
+          id: string
+          lead_id: string | null
+          priority: number | null
+          queue_date: string
+          snooze_until: string | null
+          status: string | null
+        }
+        Insert: {
+          action_type: string
+          activity_id?: string | null
+          channel: string
+          created_at?: string | null
+          id?: string
+          lead_id?: string | null
+          priority?: number | null
+          queue_date?: string
+          snooze_until?: string | null
+          status?: string | null
+        }
+        Update: {
+          action_type?: string
+          activity_id?: string | null
+          channel?: string
+          created_at?: string | null
+          id?: string
+          lead_id?: string | null
+          priority?: number | null
+          queue_date?: string
+          snooze_until?: string | null
+          status?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "outreach_daily_queue_activity_id_fkey"
+            columns: ["activity_id"]
+            isOneToOne: false
+            referencedRelation: "outreach_activities"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "outreach_daily_queue_lead_id_fkey"
+            columns: ["lead_id"]
+            isOneToOne: false
+            referencedRelation: "outreach_leads"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      outreach_error_log: {
+        Row: {
+          activity_id: string | null
+          created_at: string | null
+          error_message: string | null
+          error_type: string | null
+          id: string
+          lead_id: string | null
+          payload: Json | null
+          workflow: string
+        }
+        Insert: {
+          activity_id?: string | null
+          created_at?: string | null
+          error_message?: string | null
+          error_type?: string | null
+          id?: string
+          lead_id?: string | null
+          payload?: Json | null
+          workflow: string
+        }
+        Update: {
+          activity_id?: string | null
+          created_at?: string | null
+          error_message?: string | null
+          error_type?: string | null
+          id?: string
+          lead_id?: string | null
+          payload?: Json | null
+          workflow?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "outreach_error_log_activity_id_fkey"
+            columns: ["activity_id"]
+            isOneToOne: false
+            referencedRelation: "outreach_activities"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "outreach_error_log_lead_id_fkey"
+            columns: ["lead_id"]
+            isOneToOne: false
+            referencedRelation: "outreach_leads"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      outreach_leads: {
+        Row: {
+          closely_connection_status: string | null
+          closely_last_event: string | null
+          closely_last_event_at: string | null
+          closely_synced: boolean | null
+          company: string
+          company_size: string | null
+          contact_name: string
+          created_at: string
+          current_sequence_step: number | null
+          email: string | null
+          id: string
+          industry: string | null
+          last_touch_date: string | null
+          linkedin_url: string | null
+          next_action_date: string | null
+          notes: string | null
+          sequence_id: string | null
+          signals: Json | null
+          status: Database["public"]["Enums"]["lead_status"] | null
+          tier: Database["public"]["Enums"]["lead_tier"] | null
+          title: string | null
+          updated_at: string
+        }
+        Insert: {
+          closely_connection_status?: string | null
+          closely_last_event?: string | null
+          closely_last_event_at?: string | null
+          closely_synced?: boolean | null
+          company: string
+          company_size?: string | null
+          contact_name: string
+          created_at?: string
+          current_sequence_step?: number | null
+          email?: string | null
+          id?: string
+          industry?: string | null
+          last_touch_date?: string | null
+          linkedin_url?: string | null
+          next_action_date?: string | null
+          notes?: string | null
+          sequence_id?: string | null
+          signals?: Json | null
+          status?: Database["public"]["Enums"]["lead_status"] | null
+          tier?: Database["public"]["Enums"]["lead_tier"] | null
+          title?: string | null
+          updated_at?: string
+        }
+        Update: {
+          closely_connection_status?: string | null
+          closely_last_event?: string | null
+          closely_last_event_at?: string | null
+          closely_synced?: boolean | null
+          company?: string
+          company_size?: string | null
+          contact_name?: string
+          created_at?: string
+          current_sequence_step?: number | null
+          email?: string | null
+          id?: string
+          industry?: string | null
+          last_touch_date?: string | null
+          linkedin_url?: string | null
+          next_action_date?: string | null
+          notes?: string | null
+          sequence_id?: string | null
+          signals?: Json | null
+          status?: Database["public"]["Enums"]["lead_status"] | null
+          tier?: Database["public"]["Enums"]["lead_tier"] | null
+          title?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "outreach_leads_sequence_id_fkey"
+            columns: ["sequence_id"]
+            isOneToOne: false
+            referencedRelation: "outreach_sequences"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      outreach_sequences: {
+        Row: {
+          created_at: string
+          description: string | null
+          id: string
+          leads_enrolled: number | null
+          name: string
+          settings: Json | null
+          status: Database["public"]["Enums"]["sequence_status"] | null
+          steps: Json | null
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          description?: string | null
+          id?: string
+          leads_enrolled?: number | null
+          name: string
+          settings?: Json | null
+          status?: Database["public"]["Enums"]["sequence_status"] | null
+          steps?: Json | null
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          description?: string | null
+          id?: string
+          leads_enrolled?: number | null
+          name?: string
+          settings?: Json | null
+          status?: Database["public"]["Enums"]["sequence_status"] | null
+          steps?: Json | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      outreach_settings: {
+        Row: {
+          created_at: string
+          default_cta: string | null
+          email_signature: string | null
+          id: string
+          linkedin_daily_connect_limit: number | null
+          linkedin_daily_dm_limit: number | null
+          product_context: string | null
+          updated_at: string
+          user_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          default_cta?: string | null
+          email_signature?: string | null
+          id?: string
+          linkedin_daily_connect_limit?: number | null
+          linkedin_daily_dm_limit?: number | null
+          product_context?: string | null
+          updated_at?: string
+          user_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          default_cta?: string | null
+          email_signature?: string | null
+          id?: string
+          linkedin_daily_connect_limit?: number | null
+          linkedin_daily_dm_limit?: number | null
+          product_context?: string | null
+          updated_at?: string
+          user_id?: string | null
+        }
+        Relationships: []
+      }
       profiles: {
         Row: {
           client_id: string | null
@@ -2400,7 +2770,34 @@ export type Database = {
       }
     }
     Views: {
-      [_ in never]: never
+      outreach_channel_performance: {
+        Row: {
+          channel: string | null
+          negative_replies: number | null
+          positive_replies: number | null
+          reply_rate_pct: number | null
+          total_replies: number | null
+          total_sent: number | null
+        }
+        Relationships: []
+      }
+      outreach_dashboard: {
+        Row: {
+          closed: number | null
+          dead: number | null
+          in_sequence: number | null
+          linkedin_connected: number | null
+          linkedin_pending: number | null
+          meetings_booked: number | null
+          meetings_this_week: number | null
+          new_leads_this_week: number | null
+          not_started: number | null
+          replied: number | null
+          replies_this_week: number | null
+          total_leads: number | null
+        }
+        Relationships: []
+      }
     }
     Functions: {
       get_client_branding: {
@@ -2430,6 +2827,7 @@ export type Database = {
       }
     }
     Enums: {
+      activity_status: "pending" | "sent" | "skipped" | "failed"
       behavioral_risk_level: "low" | "medium" | "high"
       candidate_source:
         | "resume_screening"
@@ -2443,6 +2841,14 @@ export type Database = {
         | "cancelled"
         | "no_show"
         | "rescheduled"
+      lead_status:
+        | "not_started"
+        | "in_sequence"
+        | "replied"
+        | "meeting_booked"
+        | "closed"
+        | "dead"
+      lead_tier: "unassigned" | "tier_1" | "tier_2" | "tier_3"
       reminder_type: "24h" | "1h" | "15min"
       scenario_category:
         | "ambiguity"
@@ -2456,6 +2862,7 @@ export type Database = {
         | "completed"
         | "expired"
         | "abandoned"
+      sequence_status: "draft" | "active" | "paused"
       slot_status: "available" | "booked" | "blocked"
     }
     CompositeTypes: {
@@ -2584,6 +2991,7 @@ export type CompositeTypes<
 export const Constants = {
   public: {
     Enums: {
+      activity_status: ["pending", "sent", "skipped", "failed"],
       behavioral_risk_level: ["low", "medium", "high"],
       candidate_source: [
         "resume_screening",
@@ -2599,6 +3007,15 @@ export const Constants = {
         "no_show",
         "rescheduled",
       ],
+      lead_status: [
+        "not_started",
+        "in_sequence",
+        "replied",
+        "meeting_booked",
+        "closed",
+        "dead",
+      ],
+      lead_tier: ["unassigned", "tier_1", "tier_2", "tier_3"],
       reminder_type: ["24h", "1h", "15min"],
       scenario_category: [
         "ambiguity",
@@ -2614,6 +3031,7 @@ export const Constants = {
         "expired",
         "abandoned",
       ],
+      sequence_status: ["draft", "active", "paused"],
       slot_status: ["available", "booked", "blocked"],
     },
   },

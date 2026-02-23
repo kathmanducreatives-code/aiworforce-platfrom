@@ -22,6 +22,71 @@
   animation: ticker-scroll 30s linear infinite;
 }
 
+/* Landing page floating orb animations */
+@keyframes float-slow {
+  0%, 100% { transform: translateY(0) translateX(0); }
+  25% { transform: translateY(-20px) translateX(10px); }
+  50% { transform: translateY(-10px) translateX(-5px); }
+  75% { transform: translateY(-25px) translateX(5px); }
+}
+@keyframes float-gentle {
+  0%, 100% { transform: translateY(0) translateX(0) scale(1); }
+  33% { transform: translateY(-15px) translateX(8px) scale(1.05); }
+  66% { transform: translateY(-8px) translateX(-12px) scale(0.95); }
+}
+@keyframes mesh-shift {
+  0%, 100% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+}
+@keyframes glass-shine {
+  0% { transform: translateX(-100%) skewX(-15deg); opacity: 0; }
+  50% { opacity: 0.4; }
+  100% { transform: translateX(200%) skewX(-15deg); opacity: 0; }
+}
+@keyframes pulse-border {
+  0%, 100% { border-color: hsl(var(--primary) / 0.2); }
+  50% { border-color: hsl(var(--primary) / 0.5); }
+}
+
+/* Landing glass utilities */
+.glass-panel {
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+  background: hsl(var(--card) / 0.4);
+  border: 1px solid hsl(var(--primary) / 0.15);
+}
+.glass-card-landing {
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  background: hsl(var(--card) / 0.6);
+  border: 1px solid hsl(var(--border) / 0.3);
+  transition: all 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.glass-card-landing:hover {
+  background: hsl(var(--card) / 0.8);
+  border-color: hsl(var(--primary) / 0.3);
+  transform: translateY(-4px);
+  box-shadow: 0 20px 40px hsl(var(--primary) / 0.1), 0 0 30px hsl(var(--primary) / 0.05);
+}
+.glass-card-landing:hover .glass-shine-sweep {
+  animation: glass-shine 0.8s ease-out forwards;
+}
+.floating-orb {
+  position: absolute;
+  border-radius: 50%;
+  background: radial-gradient(circle, hsl(var(--primary) / 0.15), hsl(var(--primary) / 0.03));
+  filter: blur(40px);
+  pointer-events: none;
+}
+.landing-mesh-bg {
+  background:
+    radial-gradient(ellipse 60% 50% at 20% 30%, hsl(var(--primary) / 0.06), transparent),
+    radial-gradient(ellipse 50% 60% at 80% 70%, hsl(var(--primary) / 0.04), transparent),
+    radial-gradient(ellipse 40% 40% at 50% 50%, hsl(var(--primary) / 0.03), transparent);
+  background-size: 200% 200%;
+  animation: mesh-shift 12s ease-in-out infinite;
+}
+
 /* Professional Design System for AI Resume Screening Platform
 All colors MUST be HSL.
 */
