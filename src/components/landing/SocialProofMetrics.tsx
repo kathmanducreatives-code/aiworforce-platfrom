@@ -15,6 +15,7 @@ const ticker = 'AGENCY FEES ELIMINATED ◈ SCREENING TIME REDUCED 94% ◈ BUILT 
 
 const SocialProofMetrics = () => {
   const sectionRef = useRef<HTMLDivElement>(null);
+  const cardRefs = useRef<(HTMLDivElement | null)[]>([]);
   const [counters, setCounters] = useState(metrics.map(() => 0));
 
   useEffect(() => {
@@ -34,6 +35,16 @@ const SocialProofMetrics = () => {
           },
         });
       });
+
+      // Stagger card scale-in
+      cardRefs.current.forEach((card, i) => {
+        if (!card) return;
+        gsap.fromTo(card, { opacity: 0, scale: 0.9 }, {
+          opacity: 1, scale: 1, duration: 0.6, delay: i * 0.1,
+          ease: 'back.out(1.2)',
+          scrollTrigger: { trigger: sectionRef.current, start: 'top 75%', toggleActions: 'play none none none' },
+        });
+      });
     }, sectionRef);
 
     return () => ctx.revert();
@@ -42,9 +53,12 @@ const SocialProofMetrics = () => {
   return (
     <section
       ref={sectionRef}
-      className="relative py-24 md:py-32 px-4 overflow-hidden bg-background"
+      className="relative min-h-screen flex flex-col justify-center px-4 py-24 md:py-32 overflow-hidden"
     >
-      <div className="max-w-6xl mx-auto">
+      {/* Animated mesh background */}
+      <div className="absolute inset-0 landing-mesh-bg" />
+
+      <div className="max-w-6xl mx-auto relative z-10">
         <p className="font-mono text-xs md:text-sm uppercase tracking-[0.25em] mb-4 text-primary">
           ◈ The Numbers
         </p>
@@ -52,14 +66,18 @@ const SocialProofMetrics = () => {
           WHAT HAPPENS WHEN YOU<br />FIRE YOUR RECRUITING AGENCY
         </h2>
 
-        {/* 2x2 Grid */}
+        {/* 2x2 Grid - Glass cards */}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 mb-20">
           {metrics.map((m, i) => (
             <div
               key={i}
-              className="rounded-xl p-8 text-center bg-card border border-border"
+              ref={el => { cardRefs.current[i] = el; }}
+              className="glass-card-landing rounded-2xl p-8 text-center opacity-0"
             >
-              <div className="font-mono font-bold text-[48px] md:text-[72px] leading-none mb-2 text-primary">
+              <div
+                className="font-mono font-bold text-[48px] md:text-[72px] leading-none mb-2 text-primary"
+                style={{ textShadow: '0 0 30px hsl(var(--primary) / 0.3)' }}
+              >
                 {m.display(counters[i])}
               </div>
               <p className="font-sans text-base text-foreground/80 mb-1">{m.label}</p>
@@ -69,8 +87,8 @@ const SocialProofMetrics = () => {
         </div>
       </div>
 
-      {/* Ticker */}
-      <div className="w-full overflow-hidden py-4 border-t border-b border-border">
+      {/* Ticker - Glass track */}
+      <div className="w-full overflow-hidden py-4 bg-card/30 backdrop-blur-sm border-y border-border/30">
         <div className="ticker-track font-mono text-sm tracking-[0.15em] whitespace-nowrap text-primary">
           <span>{ticker.repeat(4)}</span>
           <span>{ticker.repeat(4)}</span>
