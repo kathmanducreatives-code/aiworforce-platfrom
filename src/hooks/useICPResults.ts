@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { supabase, TABLES } from '@/lib/supabase';
+import { supabase } from '@/lib/supabase';
 import { ProfileResult } from "@/types/icp";
 
 const parseJSON = (value: any) => {
@@ -97,7 +97,7 @@ export const useICPResults = (sessionId: string | undefined) => {
             setLoading(true);
 
             let query = supabase
-                .from(TABLES.CANDIDATE_PROFILES)
+                .from('candidate_profiles')
                 .select('*')
                 .order('similarity_score', { ascending: false });
 
@@ -137,7 +137,7 @@ export const useICPResults = (sessionId: string | undefined) => {
             .on('postgres_changes', {
                 event: 'INSERT',
                 schema: 'public',
-                table: TABLES.CANDIDATE_PROFILES,
+                table: 'candidate_profiles',
                 filter: sessionId !== 'test-session-123' ? `session_id=eq.${sessionId}` : undefined
             }, (payload) => {
                 const newProfile = parseProfile(payload.new);
