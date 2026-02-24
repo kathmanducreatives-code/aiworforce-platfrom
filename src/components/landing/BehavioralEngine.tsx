@@ -19,45 +19,34 @@ const cards = [
   {
     icon: Zap,
     title: '8 Minute Shortlist',
-    body: '300 applicants enter. The engine reads, scores, and ranks every single one in under 8 minutes. You receive the top 10 with match scores, behavioral notes, and interview question suggestions.',
+    body: '300 applicants enter. The engine reads, scores, and ranks every single one in under 8 minutes. You receive the top 10 with match scores and interview question suggestions.',
   },
-];
-
-const stats = [
-  { end: 8, suffix: ' MIN', label: 'Average time to shortlist 300 candidates' },
-  { end: 94, suffix: '%', label: 'Reduction in screening time vs manual' },
-  { end: 0, prefix: '$', suffix: '', label: 'Agency fees paid by Screening Pilot customers' },
 ];
 
 const BehavioralEngine = () => {
   const sectionRef = useRef<HTMLDivElement>(null);
+  const headlineRefs = useRef<(HTMLDivElement | null)[]>([]);
   const cardRefs = useRef<(HTMLDivElement | null)[]>([]);
-  const [counters, setCounters] = useState(stats.map(() => 0));
 
   useEffect(() => {
     const ctx = gsap.context(() => {
-      cardRefs.current.forEach((card, i) => {
-        if (!card) return;
-        gsap.fromTo(card, { opacity: 0, y: 50, rotateX: 5 }, {
-          opacity: 1, y: 0, rotateX: 0, duration: 0.7, delay: i * 0.15,
+      // Headline line-by-line entrance
+      headlineRefs.current.forEach((line, i) => {
+        if (!line) return;
+        gsap.fromTo(line, { opacity: 0, y: 40 }, {
+          opacity: 1, y: 0, duration: 0.8, delay: i * 0.2,
           ease: 'power3.out',
-          scrollTrigger: { trigger: card, start: 'top 85%', toggleActions: 'play none none none' },
+          scrollTrigger: { trigger: sectionRef.current, start: 'top 75%', toggleActions: 'play none none none' },
         });
       });
 
-      stats.forEach((stat, i) => {
-        gsap.to({ val: 0 }, {
-          val: stat.end,
-          duration: 1.5,
-          ease: 'power2.out',
-          scrollTrigger: { trigger: sectionRef.current, start: 'top 50%', toggleActions: 'play none none none' },
-          onUpdate: function () {
-            setCounters(prev => {
-              const next = [...prev];
-              next[i] = Math.round(this.targets()[0].val);
-              return next;
-            });
-          },
+      // Card staggered entrance
+      cardRefs.current.forEach((card, i) => {
+        if (!card) return;
+        gsap.fromTo(card, { opacity: 0, y: 30 }, {
+          opacity: 1, y: 0, duration: 0.7, delay: i * 0.12,
+          ease: 'power3.out',
+          scrollTrigger: { trigger: card, start: 'top 85%', toggleActions: 'play none none none' },
         });
       });
     }, sectionRef);
@@ -66,63 +55,55 @@ const BehavioralEngine = () => {
   }, []);
 
   return (
-    <section ref={sectionRef} className="relative min-h-screen flex flex-col justify-center px-4 py-24 md:py-32">
-      {/* Floating decorative dots */}
-      <div className="absolute w-3 h-3 rounded-full bg-primary/20 top-[15%] right-[10%]" style={{ animation: 'float-slow 7s ease-in-out infinite' }} />
-      <div className="absolute w-2 h-2 rounded-full bg-primary/15 top-[30%] left-[5%]" style={{ animation: 'float-gentle 9s ease-in-out infinite 2s' }} />
-      <div className="absolute w-4 h-4 rounded-full bg-primary/10 bottom-[20%] right-[20%]" style={{ animation: 'float-slow 11s ease-in-out infinite 4s' }} />
-
+    <section ref={sectionRef} className="relative bg-white px-4 py-28 md:py-36">
       <div className="max-w-6xl mx-auto relative z-10">
         {/* Label */}
-        <p className="font-mono text-xs md:text-sm uppercase tracking-[0.25em] mb-4 text-primary">
-          ◈ The Core Technology
+        <p className="font-mono text-xs uppercase tracking-[0.25em] mb-5 text-emerald-600 font-semibold">
+          ◆ The Core Technology
         </p>
 
-        {/* Headline */}
-        <h2 className="font-sans font-bold text-[36px] md:text-[64px] lg:text-[100px] leading-[0.95] text-foreground mb-6">
-          WE DON'T SCREEN RESUMES.<br />WE DECODE PEOPLE.
-        </h2>
+        {/* Headline - two lines */}
+        <div className="mb-8">
+          <div
+            ref={el => { headlineRefs.current[0] = el; }}
+            className="opacity-0"
+          >
+            <h2 className="font-sans font-extrabold text-[clamp(2rem,5vw,4.5rem)] leading-[1.05] tracking-[-0.03em] text-zinc-950">
+              WE DON'T SCREEN RESUMES.
+            </h2>
+          </div>
+          <div
+            ref={el => { headlineRefs.current[1] = el; }}
+            className="opacity-0"
+          >
+            <h2 className="font-sans font-extrabold text-[clamp(2rem,5vw,4.5rem)] leading-[1.05] tracking-[-0.03em] text-emerald-600">
+              WE DECODE PEOPLE.
+            </h2>
+          </div>
+        </div>
 
-        {/* Subheadline */}
-        <p className="font-sans text-base md:text-xl text-muted-foreground max-w-3xl mb-16 leading-relaxed">
+        {/* Description */}
+        <p className="font-sans text-lg md:text-xl text-zinc-500 max-w-3xl mb-16 leading-relaxed">
           The ICP Lookalike Engine analyzes the behavioral DNA of your best existing employees —
           how they think, how they work, how they solve problems under pressure. Then it finds more of them.
         </p>
 
-        {/* Cards - Glassmorphism */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-20">
+        {/* Feature Cards */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           {cards.map((card, i) => (
             <div
               key={i}
               ref={el => { cardRefs.current[i] = el; }}
-              className="glass-card-landing rounded-2xl p-8 opacity-0 border-t-2 border-t-primary/40 relative overflow-hidden group"
-              style={{ perspective: '1000px' }}
+              className="group bg-white border border-zinc-200/60 rounded-2xl p-8 opacity-0 relative overflow-hidden transition-all duration-300 hover:-translate-y-1.5 hover:shadow-[0_12px_40px_rgba(0,0,0,0.06)] hover:border-emerald-200/60"
             >
-              {/* Shine sweep on hover */}
-              <div className="glass-shine-sweep absolute inset-0 bg-gradient-to-r from-transparent via-primary/10 to-transparent pointer-events-none opacity-0" />
+              {/* Green top border on hover */}
+              <div className="absolute top-0 left-0 w-full h-[3px] bg-emerald-500 origin-left scale-x-0 group-hover:scale-x-100 transition-transform duration-500" />
 
-              <div className="w-14 h-14 rounded-xl bg-primary/10 backdrop-blur-sm border border-primary/20 flex items-center justify-center mb-5 transition-transform duration-300 group-hover:scale-110">
-                <card.icon className="w-7 h-7 text-primary" />
+              <div className="w-14 h-14 rounded-2xl bg-emerald-50 flex items-center justify-center mb-6 transition-transform duration-300 group-hover:scale-110">
+                <card.icon className="w-7 h-7 text-emerald-600" />
               </div>
-              <h3 className="font-sans font-bold text-2xl text-foreground mb-3 tracking-wide">{card.title}</h3>
-              <p className="font-sans text-sm text-muted-foreground leading-relaxed">{card.body}</p>
-            </div>
-          ))}
-        </div>
-
-        {/* Stat bar - Glass pills */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-8 py-10">
-          {stats.map((stat, i) => (
-            <div key={i} className="text-center">
-              <div className="glass-panel rounded-2xl p-6 inline-block mx-auto">
-                <div
-                  className="font-mono font-bold text-[40px] md:text-[72px] leading-none text-primary"
-                  style={{ textShadow: '0 0 30px hsl(var(--primary) / 0.3)' }}
-                >
-                  {stat.prefix || ''}{counters[i]}{stat.suffix}
-                </div>
-              </div>
-              <p className="font-sans text-xs md:text-sm text-muted-foreground mt-3">{stat.label}</p>
+              <h3 className="font-sans font-bold text-xl text-zinc-900 mb-3">{card.title}</h3>
+              <p className="font-sans text-sm text-zinc-500 leading-relaxed">{card.body}</p>
             </div>
           ))}
         </div>
