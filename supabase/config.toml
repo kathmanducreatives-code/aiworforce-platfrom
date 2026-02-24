@@ -28,8 +28,8 @@ image_transformation = {enabled = true}
 [auth]
 enabled = true
 port = 54328
-site_url = "https://b168107d-fd13-46ce-b8e4-93d377d1a1b0.sandbox.lovable.dev"
-additional_redirect_urls = []
+site_url = "https://screeningpilot.lovable.app"
+additional_redirect_urls = ["https://id-preview--b168107d-fd13-46ce-b8e4-93d377d1a1b0.lovable.app/**", "https://screeningpilot.lovable.app/**"]
 jwt_expiry = 3600
 
 [edge_functions]
