@@ -17,7 +17,14 @@ const Auth = () => {
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
   const { toast } = useToast();
-
+  useEffect(() => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      if (session?.user) {
+        navigate('/dashboard', { replace: true });
+      }
+    });
+    return () => subscription.unsubscribe();
+  }, [navigate]);
 
   const handleAuth = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -39,7 +46,7 @@ const Auth = () => {
         
         navigate('/dashboard');
       } else {
-        const redirectUrl = `${window.location.origin}/dashboard`;
+        const redirectUrl = window.location.origin;
         
         const { error } = await supabase.auth.signUp({
           email,
