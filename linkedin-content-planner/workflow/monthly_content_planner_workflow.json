@@ -1,0 +1,181 @@
+{
+    "name": "LinkedIn 30-Day Monthly Content Planner Engine",
+    "nodes": [
+        {
+            "parameters": {
+                "httpMethod": "POST",
+                "path": "content-generate-monthly",
+                "responseMode": "onReceived",
+                "responseData": "{\"status\":\"started\", \"message\":\"Monthly plan generation underway.\"}",
+                "options": {
+                    "rawBody": false
+                }
+            },
+            "id": "lcp-webhook-monthly",
+            "name": "Webhook - Generate Monthly",
+            "type": "n8n-nodes-base.webhook",
+            "typeVersion": 2,
+            "position": [
+                0,
+                0
+            ],
+            "webhookId": "content-generate-monthly"
+        },
+        {
+            "parameters": {
+                "promptType": "define",
+                "text": "You are a LinkedIn content strategist for Screening Pilot, a B2B SaaS product that helps HR teams and technical recruiters save time, reduce hiring bias, and automate candidate shortlisting.\n\nCAMPAIGN GOAL: \"{{ $json.body.chatInput }}\"\n\nWORKFLOW — Generate a full 30-day content calendar.\n\nCONTENT FORMAT DISTRIBUTION (Cycle through these):\n- Storytelling (relatable pain/resolution)\n- Statistics (shocking hiring data)\n- Customer Testimonial (before/after)\n- How It Works (product breakdown)\n- Behind the Scenes (team/mission)\n- Thought Leadership (bold opinions)\n\nPOST CAPTION RULES:\n- 150 to 200 words max\n- Start with a strong hook\n- End with a clear CTA\n- Use short paragraphs and avoid fluff words.\n\nIMAGE PROMPT RULES:\n- High-quality Midjourney/DALL-E prompt matching the theme.\n\nOUTPUT RULES:\n- Return ONLY a raw valid JSON array of 30 objects.\n- Each object must have these exact keys: \"day\", \"postCaption\", \"imagePrompt\", \"contentFormat\"\n- \"day\" should be \"Day 1\", \"Day 2\", etc., up to \"Day 30\".\n- \"contentFormat\" must be one of the formats listed above.\n\nJSON FORMAT EXPECTED:\n[\n  {\n    \"day\": \"Day 1\",\n    \"contentFormat\": \"Storytelling\",\n    \"postCaption\": \"...\",\n    \"imagePrompt\": \"...\"\n  }\n]",
+                "messages": {
+                    "messageValues": [
+                        {
+                            "message": "You are a world-class LinkedIn Content Strategist. Your output must be exclusively raw, valid JSON containing exactly 30 items. No markdown blocks, no conversational text.",
+                            "type": "system"
+                        }
+                    ]
+                }
+            },
+            "id": "lcp-claude-monthly",
+            "name": "Claude - 30 Day Generator",
+            "type": "@n8n/n8n-nodes-langchain.chainLlm",
+            "typeVersion": 1.4,
+            "position": [
+                250,
+                0
+            ]
+        },
+        {
+            "parameters": {
+                "model": "claude-3-5-sonnet-20241022",
+                "options": {
+                    "maxTokensToSample": 8192,
+                    "temperature": 0.7
+                }
+            },
+            "id": "lcp-anthropic-monthly-sonnet",
+            "name": "Claude 3.5 Sonnet",
+            "type": "@n8n/n8n-nodes-langchain.lmChatAnthropic",
+            "typeVersion": 1.2,
+            "position": [
+                250,
+                -200
+            ]
+        },
+        {
+            "parameters": {
+                "jsCode": "let aiText = $input.first().json.text || $input.first().json.output || '';\nlet parsed;\ntry {\n  parsed = JSON.parse(aiText);\n} catch {\n  const jsonMatch = aiText.match(/\\[\\s*\\{[\\s\\S]*\\}\\s*\\]/);\n  if (jsonMatch) {\n    parsed = JSON.parse(jsonMatch[0]);\n  } else {\n    throw new Error('No JSON array found.');\n  }\n}\n// Include supabase creds from the original webhook\nconst creds = $(\"Webhook - Generate Monthly\").first().json.body;\n\nreturn parsed.map((post) => {\n  return { \n    json: {\n      ...post,\n      status: 'Planned',\n      supabaseUrl: creds.supabaseUrl,\n      supabaseKey: creds.supabaseKey\n    } \n  };\n});"
+            },
+            "id": "lcp-parse-split-monthly",
+            "name": "Parse & Split Items",
+            "type": "n8n-nodes-base.code",
+            "typeVersion": 2,
+            "position": [
+                550,
+                0
+            ]
+        },
+        {
+            "parameters": {
+                "method": "POST",
+                "url": "={{ $json.supabaseUrl }}/rest/v1/linkedin_posts",
+                "sendHeaders": true,
+                "headerParameters": {
+                    "parameters": [
+                        {
+                            "name": "apikey",
+                            "value": "={{ $json.supabaseKey }}"
+                        },
+                        {
+                            "name": "Authorization",
+                            "value": "=Bearer {{ $json.supabaseKey }}"
+                        },
+                        {
+                            "name": "Content-Profile",
+                            "value": "public"
+                        }
+                    ]
+                },
+                "sendBody": true,
+                "bodyParameters": {
+                    "parameters": [
+                        {
+                            "name": "day",
+                            "value": "={{ $json.day }}"
+                        },
+                        {
+                            "name": "content_format",
+                            "value": "={{ $json.contentFormat }}"
+                        },
+                        {
+                            "name": "post_caption",
+                            "value": "={{ $json.postCaption }}"
+                        },
+                        {
+                            "name": "image_prompt",
+                            "value": "={{ $json.imagePrompt }}"
+                        },
+                        {
+                            "name": "status",
+                            "value": "={{ $json.status }}"
+                        }
+                    ]
+                },
+                "options": {}
+            },
+            "id": "lcp-supabase-insert",
+            "name": "Insert into Supabase",
+            "type": "n8n-nodes-base.httpRequest",
+            "typeVersion": 4.1,
+            "position": [
+                800,
+                0
+            ]
+        }
+    ],
+    "connections": {
+        "Webhook - Generate Monthly": {
+            "main": [
+                [
+                    {
+                        "node": "Claude - 30 Day Generator",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Claude 3.5 Sonnet": {
+            "ai_languageModel": [
+                [
+                    {
+                        "node": "Claude - 30 Day Generator",
+                        "type": "ai_languageModel",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Claude - 30 Day Generator": {
+            "main": [
+                [
+                    {
+                        "node": "Parse & Split Items",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Parse & Split Items": {
+            "main": [
+                [
+                    {
+                        "node": "Insert into Supabase",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        }
+    },
+    "settings": {}
+}

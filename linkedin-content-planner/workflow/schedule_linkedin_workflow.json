@@ -1,0 +1,149 @@
+{
+    "name": "LinkedIn Schedule Workflow",
+    "nodes": [
+        {
+            "parameters": {
+                "httpMethod": "POST",
+                "path": "schedule-linkedin",
+                "responseMode": "lastNode",
+                "options": {
+                    "rawBody": false
+                }
+            },
+            "name": "Webhook (Receive Schedule)",
+            "type": "n8n-nodes-base.webhook",
+            "typeVersion": 1,
+            "position": [
+                200,
+                300
+            ]
+        },
+        {
+            "parameters": {
+                "fieldToSplitOut": "posts",
+                "options": {}
+            },
+            "name": "Split Posts",
+            "type": "n8n-nodes-base.itemLists",
+            "typeVersion": 1,
+            "position": [
+                400,
+                300
+            ]
+        },
+        {
+            "parameters": {
+                "mode": "jsonparse",
+                "jsonInput": "={{ $json.mediaBase64 ? Buffer.from($json.mediaBase64.split(',')[1], 'base64') : null }}",
+                "options": {
+                    "binaryPropertyName": "media"
+                }
+            },
+            "name": "Process Binary (Decode)",
+            "type": "n8n-nodes-base.code",
+            "typeVersion": 2,
+            "position": [
+                600,
+                300
+            ]
+        },
+        {
+            "parameters": {
+                "functionCode": "// Calculate wait time until scheduledTime\n// Mock logic: For demo, wait 5 seconds per item to simulate\nconst item = $input.item.json;\nconst scheduledTime = item.scheduledTime; // e.g. '08:00'\nconst day = item.day; // e.g. 'Monday'\n\n// In production, calculate real Date diff\n// For this demo, just return success\n\nreturn { json: { ...item, status: 'Processing' } };"
+            },
+            "name": "Calculate Delay (Mock)",
+            "type": "n8n-nodes-base.function",
+            "typeVersion": 1,
+            "position": [
+                800,
+                300
+            ]
+        },
+        {
+            "parameters": {
+                "amount": 5,
+                "unit": "seconds"
+            },
+            "name": "Wait (Mock)",
+            "type": "n8n-nodes-base.wait",
+            "typeVersion": 1,
+            "position": [
+                1000,
+                300
+            ]
+        },
+        {
+            "parameters": {
+                "authentication": "oAuth2",
+                "resource": "share",
+                "text": "={{ $json.caption }}",
+                "binaryData": true,
+                "binaryPropertyName": "media"
+            },
+            "name": "LinkedIn (Post)",
+            "type": "n8n-nodes-base.linkedin",
+            "typeVersion": 1,
+            "position": [
+                1200,
+                300
+            ]
+        }
+    ],
+    "connections": {
+        "Webhook (Receive Schedule)": {
+            "main": [
+                [
+                    {
+                        "node": "Split Posts",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Split Posts": {
+            "main": [
+                [
+                    {
+                        "node": "Process Binary (Decode)",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Process Binary (Decode)": {
+            "main": [
+                [
+                    {
+                        "node": "Calculate Delay (Mock)",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Calculate Delay (Mock)": {
+            "main": [
+                [
+                    {
+                        "node": "Wait (Mock)",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Wait (Mock)": {
+            "main": [
+                [
+                    {
+                        "node": "LinkedIn (Post)",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        }
+    }
+}

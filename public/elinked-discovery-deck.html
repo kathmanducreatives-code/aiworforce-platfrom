@@ -1,0 +1,556 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ScreeningPilot x eLinked | Discovery Deck</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/lucide/0.263.0/lucide.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Poppins:wght@600;700;800&display=swap');
+
+        :root {
+            --background: #F5F5F5;
+            --foreground: #171717;
+            --primary: #059652;
+            --primary-light: #6DDBA6;
+            --accent: #E8FDF5;
+            --accent-foreground: #148C6E;
+            --muted: #A1A1A1;
+            --border: #D4D4D4;
+            --radius: 12px;
+            --elinked-purple: #9333ea;
+            --glass: rgba(255, 255, 255, 0.95);
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #000;
+            color: var(--foreground);
+            overflow: hidden;
+            height: 100vh;
+            width: 100vw;
+        }
+
+        /* VIEWPORT ENGINE */
+        .presentation-viewport {
+            width: 100%; height: 100%;
+            overflow-y: scroll;
+            scroll-snap-type: y mandatory;
+            background-color: var(--background);
+            scrollbar-width: none;
+        }
+        .presentation-viewport::-webkit-scrollbar { display: none; }
+
+        .slide {
+            width: 100%; height: 100vh;
+            scroll-snap-align: start;
+            position: relative;
+            display: flex; align-items: center; justify-content: center;
+            padding: clamp(20px, 5vh, 60px);
+        }
+
+        .slide-content {
+            width: 100%; max-width: 1200px;
+            height: 100%; max-height: 800px;
+            display: flex; flex-direction: column;
+            justify-content: center;
+            position: relative; z-index: 2;
+        }
+
+        /* MOTION BACKGROUNDS */
+        .bg-mesh {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            background-image: radial-gradient(var(--elinked-purple) 0.8px, transparent 0.8px);
+            background-size: 60px 60px; opacity: 0.1; z-index: 1;
+        }
+
+        .animated-blob {
+            position: absolute; width: 60vmax; height: 60vmax;
+            background: radial-gradient(circle, var(--accent) 0%, transparent 60%);
+            border-radius: 50%; filter: blur(80px); z-index: 0;
+            animation: moveAround 20s infinite alternate ease-in-out;
+        }
+
+        @keyframes moveAround {
+            0% { transform: translate(-15%, -15%); }
+            100% { transform: translate(25%, 25%); }
+        }
+
+        /* LOGO RENDERING */
+        .elinked-brand {
+            display: flex; align-items: center; gap: 10px; margin-bottom: 2rem;
+        }
+        .logo-icon {
+            width: 50px; height: 50px; background: var(--elinked-purple);
+            border-radius: 50%; display: flex; align-items: center; justify-content: center;
+            color: white; font-family: 'Poppins'; font-weight: 800; font-size: 28px;
+        }
+        .logo-text { font-family: 'Poppins'; font-size: 42px; font-weight: 700; color: #000; letter-spacing: -1.5px; }
+
+        /* TYPOGRAPHY */
+        h1 { font-family: 'Poppins'; font-size: clamp(2.5rem, 6vw, 4.5rem); font-weight: 800; line-height: 1.1; margin-bottom: 1rem; }
+        h1 span { color: var(--primary); }
+        h2 { font-family: 'Poppins'; font-size: clamp(1.8rem, 4vw, 2.8rem); font-weight: 700; margin-bottom: 1.2rem; }
+        h2 span { color: var(--primary); }
+
+        .tag {
+            display: inline-flex; align-items: center; gap: 8px;
+            padding: 6px 16px; background: var(--accent); color: var(--accent-foreground);
+            border-radius: 100px; font-weight: 700; text-transform: uppercase;
+            letter-spacing: 1px; font-size: 0.7rem; margin-bottom: 1rem;
+        }
+
+        /* GRID SYSTEM */
+        .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 40px; align-items: center; }
+
+        /* CARDS & COMPONENTS */
+        .card {
+            background: var(--glass); border: 1px solid var(--border);
+            padding: clamp(1.5rem, 3vh, 2.5rem); border-radius: var(--radius);
+            box-shadow: 0 10px 30px rgba(0,0,0,0.03);
+            transition: all 0.4s ease;
+        }
+        .card:hover { border-color: var(--primary); transform: translateY(-5px); }
+
+        /* SCENARIO STEPS */
+        .step {
+            display: flex; gap: 20px; align-items: center; margin-bottom: 20px;
+            opacity: 0; transform: translateX(-30px); transition: 0.6s ease;
+        }
+        .slide.active .step { opacity: 1; transform: translateX(0); }
+        .step:nth-child(1) { transition-delay: 0.2s; }
+        .step:nth-child(2) { transition-delay: 0.4s; }
+        .step:nth-child(3) { transition-delay: 0.6s; }
+
+        .step-bubble {
+            width: 45px; height: 45px; border-radius: 50%; background: var(--primary);
+            color: white; display: flex; align-items: center; justify-content: center;
+            font-weight: 800; flex-shrink: 0; font-size: 1.2rem;
+        }
+
+        /* REVEAL ANIMATIONS */
+        .reveal { opacity: 0; transform: translateY(20px); transition: all 0.7s cubic-bezier(0.2, 0.8, 0.2, 1); }
+        .slide.active .reveal { opacity: 1; transform: translateY(0); }
+
+        /* NAVIGATION */
+        .nav-dock { position: fixed; bottom: 30px; right: 30px; z-index: 1000; display: flex; gap: 10px; }
+        .nav-btn {
+            width: 45px; height: 45px; border-radius: 50%; background: #fff;
+            border: 1px solid var(--border); display: flex; align-items: center; justify-content: center;
+            cursor: pointer; box-shadow: 0 4px 10px rgba(0,0,0,0.1); transition: 0.2s;
+        }
+        .nav-btn:hover { background: var(--primary); color: #fff; }
+
+        .progress-bar { position: fixed; top: 0; left: 0; height: 5px; background: var(--primary); z-index: 1001; width: 0%; transition: 0.1s; }
+
+        /* AI CONSOLE */
+        .console { border-radius: var(--radius); border: 1px solid var(--border); overflow: hidden; background: #fff; box-shadow: 0 15px 40px rgba(0,0,0,0.05); }
+        .console-top { background: #f0f0f0; padding: 10px 20px; font-size: 10px; font-weight: 800; color: #999; display: flex; gap: 5px; border-bottom: 1px solid var(--border); }
+        .console-top span { width: 8px; height: 8px; border-radius: 50%; background: #ddd; }
+        .console-inner { padding: 20px; }
+        textarea { width: 100%; height: 90px; padding: 12px; border: 1px solid var(--border); border-radius: 8px; font-family: inherit; margin-bottom: 12px; resize: none; font-size: 0.9rem; }
+        .btn-row { display: flex; gap: 10px; }
+        .btn { background: var(--primary); color: #fff; border: none; padding: 10px 20px; border-radius: 8px; font-weight: 600; cursor: pointer; display: flex; align-items: center; gap: 8px; font-size: 0.85rem; }
+
+        /* PDF DOWNLOAD BUTTON */
+        .download-dock {
+            position: fixed; bottom: 30px; left: 30px; z-index: 1000;
+        }
+        .download-btn {
+            display: flex; align-items: center; gap: 10px;
+            padding: 12px 24px;
+            background: linear-gradient(135deg, var(--primary), #04793f);
+            color: #fff; border: none; border-radius: 100px;
+            font-family: 'Inter', sans-serif; font-weight: 700; font-size: 0.85rem;
+            cursor: pointer; box-shadow: 0 8px 25px rgba(5, 150, 82, 0.35);
+            transition: all 0.3s ease; letter-spacing: 0.3px;
+        }
+        .download-btn:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 12px 35px rgba(5, 150, 82, 0.5);
+        }
+        .download-btn:active { transform: translateY(0); }
+        .download-btn.generating {
+            pointer-events: none; opacity: 0.7;
+        }
+        .download-btn svg { width: 18px; height: 18px; }
+
+        /* Print-specific styles applied during PDF generation */
+        .pdf-mode .presentation-viewport {
+            overflow: visible !important;
+            scroll-snap-type: none !important;
+            height: auto !important;
+        }
+        .pdf-mode .slide {
+            height: auto !important;
+            min-height: 100vh;
+            scroll-snap-align: none !important;
+            page-break-after: always;
+            break-after: page;
+        }
+        .pdf-mode .slide .reveal,
+        .pdf-mode .slide .step {
+            opacity: 1 !important;
+            transform: none !important;
+        }
+        .pdf-mode .nav-dock,
+        .pdf-mode .download-dock,
+        .pdf-mode .progress-bar {
+            display: none !important;
+        }
+        .pdf-mode .animated-blob {
+            animation: none !important;
+        }
+
+        @media print {
+            .nav-dock, .download-dock, .progress-bar { display: none !important; }
+            .slide { page-break-after: always; break-after: page; height: 100vh !important; }
+            .reveal, .step { opacity: 1 !important; transform: none !important; }
+            .animated-blob { animation: none !important; }
+        }
+    </style>
+</head>
+<body>
+
+<div class="progress-bar" id="pBar"></div>
+
+<div class="presentation-viewport" id="viewport">
+
+    <!-- SLIDE 1: INTRO -->
+    <section class="slide active">
+        <div class="bg-mesh"></div>
+        <div class="animated-blob"></div>
+        <div class="slide-content">
+            <div class="reveal">
+                <div class="elinked-brand">
+                    <div class="logo-icon">e</div>
+                    <div class="logo-text">Linked</div>
+                </div>
+                <div class="tag">Empowering Co-Founder Kristoffer Larsson</div>
+                <h1>Scaling the <span>Legacy</span> <br> of Nordic Talent</h1>
+                <p style="margin-top: 2rem; max-width: 700px; opacity: 0.8;">
+                    Protecting 14 years of industry excellence by automating the manual discovery phase. Turn recruitment from a labor expense into a high-velocity engine.
+                </p>
+            </div>
+        </div>
+    </section>
+
+    <!-- SLIDE 2: SCENARIO -->
+    <section class="slide">
+        <div class="slide-content">
+            <div class="reveal">
+                <div class="tag">Success Scenario</div>
+                <h2>The <span>Oslo Expansion</span> Race</h2>
+                <p style="margin-bottom: 3rem;">Winning a major Norwegian infrastructure project by sourcing at 10x speed.</p>
+            </div>
+
+            <div class="grid-2">
+                <div class="reveal" style="transition-delay: 0.1s;">
+                    <div class="card" style="border-left: 6px solid var(--elinked-purple); background: white;">
+                        <h4 style="color: var(--elinked-purple); font-family: 'Poppins'; margin-bottom: 10px;">The Challenge</h4>
+                        <p style="font-size: 0.95rem;">
+                            eLinked lands a project for <strong>20 High-Voltage Technicians</strong> in Oslo. You have <strong>5 days</strong> to present a shortlist.
+                            <br><br>
+                            Manual Search: <strong>45 Recruiter Hours.</strong>
+                        </p>
+                    </div>
+                    <div class="card" style="margin-top: 20px; background: var(--primary); color: white;">
+                        <p style="font-weight: 700; font-size: 0.8rem; text-transform: uppercase; margin-bottom: 5px;">ScreeningPilot Result</p>
+                        <p style="font-size: 3rem; font-weight: 800; line-height: 1;">12 Mins</p>
+                        <p style="font-size: 0.9rem; opacity: 0.9;">To find, score, and contact the top 40 candidates.</p>
+                    </div>
+                </div>
+
+                <div class="reveal" style="transition-delay: 0.3s; padding-left: 20px;">
+                    <div class="step">
+                        <div class="step-bubble">1</div>
+                        <div>
+                            <h4 style="font-size: 1.1rem;">ICP Lookalike Search</h4>
+                            <p style="font-size: 0.85rem; opacity: 0.7;">Upload a single eLinked top-performer profile. AI clones the skill & trajectory pattern instantly.</p>
+                        </div>
+                    </div>
+                    <div class="step">
+                        <div class="step-bubble">2</div>
+                        <div>
+                            <h4 style="font-size: 1.1rem;">Automated Tech Vetting</h4>
+                            <p style="font-size: 0.85rem; opacity: 0.7;">System confirms DSB/ECY certifications and parses years of offshore experience automatically.</p>
+                        </div>
+                    </div>
+                    <div class="step">
+                        <div class="step-bubble">3</div>
+                        <div>
+                            <h4 style="font-size: 1.1rem;">AI Outreach Sync</h4>
+                            <p style="font-size: 0.85rem; opacity: 0.7;">Kristoffer's personalized persona drafts 40 bespoke invites while the team focuses on closing.</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- SLIDE 3: JOB SCREENING -->
+    <section class="slide">
+        <div class="slide-content">
+            <div class="reveal">
+                <div class="tag">Cognitive Engine</div>
+                <h2>Precision <span>Job Screening</span></h2>
+                <p style="margin-bottom: 2rem;">Stop reading every resume. See the 90%+ match scores instantly.</p>
+            </div>
+            <div class="grid-2">
+                <div class="reveal" style="transition-delay: 0.2s;">
+                    <div class="card">
+                        <p style="font-size: 0.7rem; font-weight: 800; color: var(--muted); margin-bottom: 12px;">ACTIVE PIPELINE: INFRASTRUCTURE LEAD</p>
+                        <div style="background: white; border: 1px solid var(--border); border-radius: 8px; padding: 12px; margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center;">
+                            <div>
+                                <p style="font-weight: 700; font-size: 0.9rem;">Erik Johansen</p>
+                                <p style="font-size: 0.7rem; color: var(--muted);">DSB Certified • 12yr Industrial • Oslo</p>
+                            </div>
+                            <span style="font-size: 0.7rem; font-weight: 800; background: var(--accent); color: var(--primary); padding: 4px 8px; border-radius: 4px;">96% MATCH</span>
+                        </div>
+                        <div style="background: var(--background); padding: 12px; border-radius: 8px; font-size: 0.75rem;">
+                            <p style="color: var(--primary-dark); font-weight: 700; margin-bottom: 4px;">AI REASONING:</p>
+                            <p>+ Matches the 10yr+ tenure requirement.<br>+ Demonstrates direct experience with distribution networks.</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="reveal" style="transition-delay: 0.4s;">
+                    <div class="card" style="border: none; background: transparent;">
+                        <ul style="list-style: none;">
+                            <li style="margin-bottom: 1.5rem; display: flex; gap: 15px;">
+                                <i data-lucide="check-circle" style="color: var(--primary)"></i>
+                                <span><strong>Consistent Quality:</strong> Apply the same logic across Stockholm, Oslo, and Malmö branches.</span>
+                            </li>
+                            <li style="margin-bottom: 1.5rem; display: flex; gap: 15px;">
+                                <i data-lucide="check-circle" style="color: var(--primary)"></i>
+                                <span><strong>Bias Reduction:</strong> AI evaluates skills and trajectories, not formatting or names.</span>
+                            </li>
+                            <li style="display: flex; gap: 15px;">
+                                <i data-lucide="check-circle" style="color: var(--primary)"></i>
+                                <span><strong>Instant Shortlisting:</strong> Move the top 10% straight to interview.</span>
+                            </li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- SLIDE 4: AI DEMO -->
+    <section class="slide">
+        <div class="slide-content">
+            <div class="reveal" style="text-align: center; margin-bottom: 2rem;">
+                <div class="tag">Interactive Showcase</div>
+                <h2>The <span>Gen-AI</span> Workspace</h2>
+            </div>
+            <div class="grid-2">
+                <div class="reveal">
+                    <div class="console">
+                        <div class="console-top"><span></span><span></span><span></span> GEMINI 2.5 NORDIC FLASH</div>
+                        <div class="console-inner">
+                            <textarea id="aiIn" placeholder="Enter a profile or market question (e.g., 'Draft a LinkedIn message to a senior Norwegian electrician')..."></textarea>
+                            <div class="btn-row">
+                                <button class="btn" onclick="runAI('outreach')"><i data-lucide="sparkles"></i> Outreach</button>
+                                <button class="btn" onclick="runAI('market')"><i data-lucide="globe"></i> Market Data</button>
+                            </div>
+                            <div id="aiOut" style="margin-top: 15px; padding: 12px; background: var(--accent); border-radius: 8px; font-size: 0.8rem; min-height: 100px; max-height: 180px; overflow-y: auto;">
+                                <span id="outText">Choose an action to see ScreeningPilot in action.</span>
+                                <div id="loader" style="display:none; text-align:center;"><i data-lucide="loader-2" class="animate-spin"></i></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="reveal" style="transition-delay: 0.2s;">
+                    <div class="card" style="border-left: 6px solid var(--primary);">
+                        <p style="font-weight: 700; font-size: 1.2rem; color: var(--primary-dark);">"Reclaim 70% of your sourcing day."</p>
+                        <p style="margin-top: 10px; font-size: 0.95rem; opacity: 0.7;">ScreeningPilot turns a co-founder's strategic vision into automated execution, ensuring eLinked dominates the next 14 years.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- SLIDE 5: CTA -->
+    <section class="slide" style="background: var(--foreground); color: white;">
+        <div class="bg-mesh" style="opacity: 0.1;"></div>
+        <div class="slide-content" style="text-align: center;">
+            <div class="reveal">
+                <div class="tag" style="background: rgba(255,255,255,0.1); color: white;">Final Step</div>
+                <h1 style="color: white; margin-bottom: 2rem;">Build the <span>Future</span></h1>
+                <p style="max-width: 600px; margin: 0 auto 4rem; opacity: 0.7;">
+                    Kristoffer, your team is ready for the next level of efficiency. Join the top 1% of agencies using Gen-AI to dominate the industrial sector.
+                </p>
+                <div style="display: flex; justify-content: center; gap: 20px;">
+                    <div style="padding: 25px; background: rgba(255,255,255,0.05); border-radius: 12px; text-align: left; border: 1px solid rgba(255,255,255,0.1);">
+                        <p style="font-size: 0.75rem; color: var(--primary-light); font-weight: 800;">PLATFORM</p>
+                        <p style="font-weight: 700; font-size: 1.1rem;">screeningpilot.com</p>
+                    </div>
+                    <div style="padding: 25px; background: rgba(255,255,255,0.05); border-radius: 12px; text-align: left; border: 1px solid rgba(255,255,255,0.1);">
+                        <p style="font-size: 0.75rem; color: var(--primary-light); font-weight: 800;">ELINKED HQ</p>
+                        <p style="font-weight: 700; font-size: 1.1rem;">Gothenburg, Sweden</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+</div>
+
+<!-- DOWNLOAD PDF BUTTON -->
+<div class="download-dock">
+    <button class="download-btn" id="downloadPdfBtn" onclick="downloadPDF()">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+            <polyline points="7 10 12 15 17 10"></polyline>
+            <line x1="12" y1="15" x2="12" y2="3"></line>
+        </svg>
+        <span id="downloadLabel">Download PDF</span>
+    </button>
+</div>
+
+<div class="nav-dock">
+    <div class="nav-btn" id="upB"><i data-lucide="arrow-up"></i></div>
+    <div class="nav-btn" id="dnB"><i data-lucide="arrow-down"></i></div>
+</div>
+
+<script>
+    const apiKey = "";
+    const MODEL_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`;
+
+    window.addEventListener('load', () => {
+        if (typeof lucide !== 'undefined') lucide.createIcons();
+
+        const vp = document.getElementById('viewport');
+        const pb = document.getElementById('pBar');
+        const slides = document.querySelectorAll('.slide');
+        let currentIdx = 0;
+
+        vp.addEventListener('scroll', () => {
+            const perc = (vp.scrollTop / (vp.scrollHeight - vp.clientHeight)) * 100;
+            pb.style.width = perc + '%';
+
+            slides.forEach((s, i) => {
+                const rect = s.getBoundingClientRect();
+                if (rect.top >= -100 && rect.top <= 100) {
+                    s.classList.add('active');
+                    currentIdx = i;
+                } else {
+                    s.classList.remove('active');
+                }
+            });
+        });
+
+        document.getElementById('dnB').addEventListener('click', () => {
+            if (currentIdx < slides.length - 1) slides[currentIdx+1].scrollIntoView({behavior:'smooth'});
+        });
+        document.getElementById('upB').addEventListener('click', () => {
+            if (currentIdx > 0) slides[currentIdx-1].scrollIntoView({behavior:'smooth'});
+        });
+
+        window.addEventListener('keydown', (e) => {
+            if (e.key === 'ArrowDown' || e.key === ' ') {
+                if (currentIdx < slides.length - 1) slides[currentIdx+1].scrollIntoView({behavior:'smooth'});
+                e.preventDefault();
+            }
+            if (e.key === 'ArrowUp') {
+                if (currentIdx > 0) slides[currentIdx-1].scrollIntoView({behavior:'smooth'});
+                e.preventDefault();
+            }
+        });
+    });
+
+    async function downloadPDF() {
+        const btn = document.getElementById('downloadPdfBtn');
+        const label = document.getElementById('downloadLabel');
+        btn.classList.add('generating');
+        label.textContent = 'Generating PDF...';
+
+        // Add pdf-mode class to body for print-friendly styles
+        document.body.classList.add('pdf-mode');
+
+        // Force all slides to be active (so reveal animations show content)
+        const slides = document.querySelectorAll('.slide');
+        slides.forEach(s => s.classList.add('active'));
+
+        // Wait for styles to apply
+        await new Promise(r => setTimeout(r, 300));
+
+        const viewport = document.getElementById('viewport');
+
+        const opt = {
+            margin:       0,
+            filename:     'ScreeningPilot_x_eLinked_Discovery_Deck.pdf',
+            image:        { type: 'jpeg', quality: 0.98 },
+            html2canvas:  {
+                scale: 2,
+                useCORS: true,
+                logging: false,
+                windowWidth: 1440,
+                windowHeight: 900,
+                scrollX: 0,
+                scrollY: 0
+            },
+            jsPDF:        { unit: 'in', format: 'letter', orientation: 'landscape' },
+            pagebreak:    { mode: ['css', 'legacy'], before: '.slide', avoid: ['.card', '.step'] }
+        };
+
+        try {
+            await html2pdf().set(opt).from(viewport).save();
+        } catch (err) {
+            console.error('PDF generation failed:', err);
+            alert('PDF generation failed. Please try again.');
+        } finally {
+            // Restore normal presentation mode
+            document.body.classList.remove('pdf-mode');
+            btn.classList.remove('generating');
+            label.textContent = 'Download PDF';
+        }
+    }
+
+    async function runAI(t) {
+        const inp = document.getElementById('aiIn').value || "Candidate profile: Senior Electrician based in Malmö.";
+        const out = document.getElementById('outText');
+        const lod = document.getElementById('loader');
+        out.style.display = 'none'; lod.style.display = 'block';
+
+        let p = ""; let search = false;
+        if (t === 'outreach') {
+            p = `Draft a personalized recruitment outreach message from Kristoffer Larsson (eLinked Co-founder) for: "${inp}". Focus on infrastructure opportunities in Sweden and Norway. Mention ECY/DSB certifications.`;
+        } else {
+            p = `Analyze current 2024-2025 technical labor market shortages and salary trends in Sweden and Norway for: "${inp}". Summarize for co-founder Kristoffer Larsson.`;
+            search = true;
+        }
+
+        const payload = {
+            contents: [{ parts: [{ text: p }] }],
+            systemInstruction: { parts: [{ text: "You are the ScreeningPilot AI assistant specialized in Nordic technical recruitment. You support co-founder Kristoffer Larsson of eLinked. Be professional, direct, and concise." }] }
+        };
+
+        if (search) payload.tools = [{"google_search": {}}];
+
+        const call = async (r=5, d=1000) => {
+            try {
+                const res = await fetch(MODEL_URL, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+                if (!res.ok) throw new Error();
+                return await res.json();
+            } catch (err) {
+                if (r > 0) { await new Promise(f => setTimeout(f, d)); return call(r-1, d*2); }
+                throw err;
+            }
+        };
+
+        try {
+            const data = await call();
+            out.innerText = data.candidates?.[0]?.content?.parts?.[0]?.text || "Response unavailable.";
+        } catch (e) {
+            out.innerText = "Error Connecting to the AI Engine.";
+        } finally {
+            lod.style.display = 'none'; out.style.display = 'block';
+        }
+    }
+</script>
+
+</body>
+</html>

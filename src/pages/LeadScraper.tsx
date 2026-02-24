@@ -220,15 +220,16 @@ export default function LeadScraper() {
     if (isMobile) setFiltersSheetOpen(false);
   };
 
-  const handleAISearch = async (query: string, filtersOverride?: FilterState) => {
+  const handleAISearch = async (query: string, mode: 'standard' | 'advanced' = 'standard', filtersOverride?: FilterState) => {
     const trimmed = query.trim();
     if (!trimmed) return;
 
     // Use current filters or override if provided (for suggestions)
     const activeFilters = filtersOverride || filters;
 
-    // Check requirements using activeFilters
+    // Check requirements using activeFilters (only for standard mode)
     const hasRequirements =
+      mode === 'advanced' ||
       activeFilters.jobTitles.length > 0 ||
       activeFilters.industries.length > 0 ||
       activeFilters.locations.length > 0 ||
@@ -256,16 +257,18 @@ export default function LeadScraper() {
       setSuggestions([]);
       setLastSearchQuery(trimmed);
 
+      const prefix = mode === 'advanced' ? 'ADV: ' : 'AI: ';
       const autoName =
-        trimmed.length > 45 ? `AI: ${trimmed.slice(0, 45)}...` : `AI: ${trimmed}`;
+        trimmed.length > 45 ? `${prefix}${trimmed.slice(0, 45)}...` : `${prefix}${trimmed}`;
 
-      const formData = {
+      const formData: any = {
         currentCompanies: activeFilters.companies,
         currentJobTitles: activeFilters.jobTitles,
         industries: activeFilters.industries,
         locations: activeFilters.locations,
         maxItems: activeFilters.maxResults,
         searchQuery: trimmed,
+        mode: mode,
       };
 
       const { data: session, error: sessionError } = await supabase
@@ -291,7 +294,7 @@ export default function LeadScraper() {
       }
 
       toast({
-        title: "Scraping Initiated! 🚀",
+        title: mode === 'advanced' ? "Deep Search Initiated! 🌎" : "Scraping Initiated! 🚀",
         description: `Searching for up to ${formData.maxItems} candidates. Results will appear in My Leads.`,
       });
 
@@ -373,7 +376,7 @@ export default function LeadScraper() {
     toast({ title: toastMessage, description: "Re-running search with optimizations..." });
 
     // Trigger re-search with the NEW filters immediately
-    handleAISearch(lastSearchQuery || "Optimized Search", newFilters);
+    handleAISearch(lastSearchQuery || "Optimized Search", 'standard', newFilters);
   };
 
   const handleBulkDelete = async () => {

@@ -1,0 +1,494 @@
+{
+    "name": "LinkedIn Content Planner Engine",
+    "nodes": [
+        {
+            "parameters": {
+                "httpMethod": "POST",
+                "path": "content-generate",
+                "responseMode": "responseNode",
+                "options": {
+                    "rawBody": false
+                }
+            },
+            "id": "lcp-webhook-generate",
+            "name": "Webhook - Generate",
+            "type": "n8n-nodes-base.webhook",
+            "typeVersion": 2,
+            "position": [
+                -400,
+                200
+            ],
+            "webhookId": "content-generate"
+        },
+        {
+            "parameters": {
+                "httpMethod": "GET",
+                "path": "content-fetch",
+                "responseMode": "responseNode",
+                "options": {}
+            },
+            "id": "lcp-webhook-fetch",
+            "name": "Webhook - Fetch",
+            "type": "n8n-nodes-base.webhook",
+            "typeVersion": 2,
+            "position": [
+                -400,
+                600
+            ],
+            "webhookId": "content-fetch"
+        },
+        {
+            "parameters": {
+                "httpMethod": "PATCH",
+                "path": "content-update",
+                "responseMode": "responseNode",
+                "options": {
+                    "rawBody": false
+                }
+            },
+            "id": "lcp-webhook-update",
+            "name": "Webhook - Update Status",
+            "type": "n8n-nodes-base.webhook",
+            "typeVersion": 2,
+            "position": [
+                -400,
+                1000
+            ],
+            "webhookId": "content-update"
+        },
+        {
+            "parameters": {
+                "promptType": "define",
+                "text": "You are a LinkedIn content strategist for Screening Pilot, a B2B SaaS product that helps HR teams and technical recruiters save time, reduce hiring bias, and automate candidate shortlisting.\n\nCAMPAIGN GOAL: \"{{ $json.body.campaignGoal }}\"\n\nWORKFLOW — For each day, follow this generation order:\nStep 1 → Read the campaign goal above\nStep 2 → Write the Post Caption first (this is the anchor for everything else)\nStep 3 → Generate the Image Prompt based on the caption's theme and mood\nStep 4 → Generate the Video Idea that expands on the same message as the caption\n\nCONTENT FORMAT — Each day must use a different format:\nDay 1 (Monday)    → Storytelling: Open with a relatable recruiter pain story, resolve it with Screening Pilot\nDay 2 (Tuesday)   → Statistics: Lead with a shocking hiring stat, back it up with what Screening Pilot solves\nDay 3 (Wednesday) → Customer Testimonial: Write as if a real HR manager is sharing their before/after experience\nDay 4 (Thursday)  → How It Works: Step-by-step breakdown of how Screening Pilot screens candidates automatically\nDay 5 (Friday)    → Behind the Scenes: Show the team, the product build, or the mission behind Screening Pilot\nDay 6 (Saturday)  → Thought Leadership: Bold opinion on the future of hiring, AI, or recruitment bias\n\nPOST CAPTION RULES:\n- 150 to 200 words\n- Start with a strong hook (question, bold statement, or surprising fact)\n- Include Screening Pilot's core value: saves time, reduces bias, automates shortlisting\n- End with a clear CTA (comment, DM, visit link, share)\n- Tone: professional but human, written for LinkedIn\n- Use white space generously — short paragraphs, single-sentence lines where impactful\n- Use professional emojis sparingly (max 3-4 per post) to add visual breaks\n- No hashtags in the body; only 3 relevant ones at the very bottom\n- Never use the words 'delve', 'landscape', 'leverage', 'game-changer', or 'revolutionize'\n\nIMAGE PROMPT RULES:\n- Describe the visual in Midjourney/DALL-E style\n- Include: subject, setting, lighting, color palette, mood, and composition\n- The image must visually match the caption's theme\n- Example format: \"A focused HR professional reviewing a clean dashboard on a laptop, soft office lighting, teal and white color palette, modern and minimal, shot from slightly above\"\n\nVIDEO IDEA RULES:\n- 30 to 60 seconds short-form video\n- Include: opening scene, what happens in the middle, closing message and CTA\n- Match the tone and theme of the caption for that day\n- Format: Scene → Script outline → Key message\n\nOUTPUT RULES:\n- Return ONLY a raw valid JSON array of 6 objects\n- No markdown, no code fences, no explanation, no extra text before or after\n- Each object must have exactly these fields: \"day\", \"postCaption\", \"imagePrompt\", \"videoIdea\"\n\nJSON FORMAT:\n[\n  {\n    \"day\": \"Monday\",\n    \"postCaption\": \"...\",\n    \"imagePrompt\": \"...\",\n    \"videoIdea\": \"...\"\n  }\n]",
+                "messages": {
+                    "messageValues": [
+                        {
+                            "message": "You are a world-class LinkedIn Content Strategist for Screening Pilot, a B2B SaaS product.\n\nYour writing style is \"Calque\" inspired — short, punchy sentences. No AI fluff. Focus on recruiter pain points and real outcomes.\n\nBrand voice: Efficient, Modern, and Indispensable.\n\nYou always follow the Problem-Agitate-Solution (PAS) framework.\n\nYou produce content that is ready to publish on LinkedIn with no further editing needed.\n\nYou always output valid JSON with no markdown formatting, no code fences, and no explanation.",
+                            "type": "system"
+                        }
+                    ]
+                }
+            },
+            "id": "lcp-claude-strategy",
+            "name": "Claude - Content Generator",
+            "type": "@n8n/n8n-nodes-langchain.chainLlm",
+            "typeVersion": 1.4,
+            "position": [
+                -100,
+                200
+            ]
+        },
+        {
+            "parameters": {
+                "model": "claude-3-5-sonnet-20241022",
+                "options": {
+                    "maxTokensToSample": 8192,
+                    "temperature": 0.7
+                }
+            },
+            "id": "lcp-anthropic-sonnet",
+            "name": "Claude 3.5 Sonnet",
+            "type": "@n8n/n8n-nodes-langchain.lmChatAnthropic",
+            "typeVersion": 1.2,
+            "position": [
+                -120,
+                40
+            ]
+        },
+        {
+            "parameters": {
+                "jsCode": "// Parse the Claude output into a JSON array of 6 day posts\nconst aiText = $input.first().json.text || $input.first().json.output || '';\n\nlet parsed;\ntry {\n  parsed = JSON.parse(aiText);\n} catch {\n  // Try to extract JSON array from the response\n  const jsonMatch = aiText.match(/\\[\\s*\\{[\\s\\S]*\\}\\s*\\]/);\n  if (jsonMatch) {\n    try {\n      parsed = JSON.parse(jsonMatch[0]);\n    } catch (e2) {\n      throw new Error(`Failed to parse AI output: ${e2.message}`);\n    }\n  } else {\n    throw new Error(`No JSON array found in AI output: ${aiText.substring(0, 300)}`);\n  }\n}\n\nif (!Array.isArray(parsed)) {\n  throw new Error('Output is not an array');\n}\n\nconsole.log(`Parsed ${parsed.length} posts`);\n\n// Validate and normalize fields\nconst requiredFields = ['day', 'postCaption', 'imagePrompt', 'videoIdea'];\nconst contentFormats = {\n  'Monday': 'Storytelling',\n  'Tuesday': 'Statistics',\n  'Wednesday': 'Customer Testimonial',\n  'Thursday': 'How It Works',\n  'Friday': 'Behind the Scenes',\n  'Saturday': 'Thought Leadership'\n};\n\nconst normalized = parsed.map((post, i) => {\n  for (const field of requiredFields) {\n    if (!post[field]) {\n      console.warn(`Post ${i + 1} missing field: ${field}`);\n    }\n  }\n  return {\n    day: post.day || '',\n    postCaption: post.postCaption || '',\n    imagePrompt: post.imagePrompt || '',\n    videoIdea: post.videoIdea || '',\n    contentFormat: contentFormats[post.day] || '',\n    status: 'Planned'\n  };\n});\n\nreturn [{ json: { posts: normalized } }];"
+            },
+            "id": "lcp-parse-output",
+            "name": "Parse & Normalize Output",
+            "type": "n8n-nodes-base.code",
+            "typeVersion": 2,
+            "position": [
+                180,
+                200
+            ]
+        },
+        {
+            "parameters": {
+                "operation": "clear",
+                "documentId": {
+                    "__rl": true,
+                    "value": "",
+                    "mode": "list"
+                },
+                "sheetName": {
+                    "__rl": true,
+                    "value": "Sheet1",
+                    "mode": "list"
+                },
+                "clear": "exceptHeaders",
+                "options": {}
+            },
+            "id": "lcp-sheets-clear",
+            "name": "Sheets - Clear Old Data",
+            "type": "n8n-nodes-base.googleSheets",
+            "typeVersion": 4.5,
+            "position": [
+                440,
+                200
+            ]
+        },
+        {
+            "parameters": {
+                "jsCode": "// Split posts array into individual items for Sheet append\nconst posts = $('Parse & Normalize Output').first().json.posts;\nreturn posts.map(p => ({ json: p }));"
+            },
+            "id": "lcp-split-for-sheets",
+            "name": "Split for Sheets",
+            "type": "n8n-nodes-base.code",
+            "typeVersion": 2,
+            "position": [
+                680,
+                200
+            ]
+        },
+        {
+            "parameters": {
+                "operation": "append",
+                "documentId": {
+                    "__rl": true,
+                    "value": "",
+                    "mode": "list"
+                },
+                "sheetName": {
+                    "__rl": true,
+                    "value": "Sheet1",
+                    "mode": "list"
+                },
+                "columns": {
+                    "mappingMode": "defineBelow",
+                    "value": {
+                        "Day": "={{ $json.day }}",
+                        "Content Format": "={{ $json.contentFormat }}",
+                        "Caption": "={{ $json.postCaption }}",
+                        "Image Prompt": "={{ $json.imagePrompt }}",
+                        "Video Idea": "={{ $json.videoIdea }}",
+                        "Status": "={{ $json.status }}"
+                    },
+                    "matchingColumns": []
+                },
+                "options": {}
+            },
+            "id": "lcp-sheets-append",
+            "name": "Sheets - Append Posts",
+            "type": "n8n-nodes-base.googleSheets",
+            "typeVersion": 4.5,
+            "position": [
+                920,
+                200
+            ]
+        },
+        {
+            "parameters": {
+                "jsCode": "// Return the posts to the frontend\nconst posts = $('Parse & Normalize Output').first().json.posts;\nreturn [{ json: posts }];"
+            },
+            "id": "lcp-format-generate-response",
+            "name": "Format Generate Response",
+            "type": "n8n-nodes-base.code",
+            "typeVersion": 2,
+            "position": [
+                1160,
+                200
+            ]
+        },
+        {
+            "parameters": {
+                "respondWith": "json",
+                "responseBody": "={{ JSON.stringify($json) }}",
+                "options": {
+                    "responseHeaders": {
+                        "entries": [
+                            {
+                                "name": "Access-Control-Allow-Origin",
+                                "value": "*"
+                            }
+                        ]
+                    }
+                }
+            },
+            "id": "lcp-respond-generate",
+            "name": "Respond - Generate",
+            "type": "n8n-nodes-base.respondToWebhook",
+            "typeVersion": 1.1,
+            "position": [
+                1400,
+                200
+            ]
+        },
+        {
+            "parameters": {
+                "operation": "read",
+                "documentId": {
+                    "__rl": true,
+                    "value": "",
+                    "mode": "list"
+                },
+                "sheetName": {
+                    "__rl": true,
+                    "value": "Sheet1",
+                    "mode": "list"
+                },
+                "options": {}
+            },
+            "id": "lcp-sheets-read",
+            "name": "Sheets - Read All",
+            "type": "n8n-nodes-base.googleSheets",
+            "typeVersion": 4.5,
+            "position": [
+                -100,
+                600
+            ]
+        },
+        {
+            "parameters": {
+                "jsCode": "// Map Google Sheets rows to the format the frontend expects\nconst items = $input.all();\nconst contentFormats = {\n  'Monday': 'Storytelling',\n  'Tuesday': 'Statistics',\n  'Wednesday': 'Customer Testimonial',\n  'Thursday': 'How It Works',\n  'Friday': 'Behind the Scenes',\n  'Saturday': 'Thought Leadership'\n};\n\nconst posts = items.map((item, i) => {\n  const day = item.json.Day || item.json.day || '';\n  return {\n    day: day,\n    contentFormat: item.json['Content Format'] || item.json.contentFormat || contentFormats[day] || '',\n    postCaption: item.json.Caption || item.json.postCaption || '',\n    imagePrompt: item.json['Image Prompt'] || item.json.imagePrompt || '',\n    videoIdea: item.json['Video Idea'] || item.json.videoIdea || '',\n    status: item.json.Status || item.json.status || 'Planned',\n    rowIndex: i + 2\n  };\n});\n\nreturn [{ json: posts }];"
+            },
+            "id": "lcp-format-fetch",
+            "name": "Format Fetch Response",
+            "type": "n8n-nodes-base.code",
+            "typeVersion": 2,
+            "position": [
+                140,
+                600
+            ]
+        },
+        {
+            "parameters": {
+                "respondWith": "json",
+                "responseBody": "={{ JSON.stringify($json) }}",
+                "options": {
+                    "responseHeaders": {
+                        "entries": [
+                            {
+                                "name": "Access-Control-Allow-Origin",
+                                "value": "*"
+                            }
+                        ]
+                    }
+                }
+            },
+            "id": "lcp-respond-fetch",
+            "name": "Respond - Fetch",
+            "type": "n8n-nodes-base.respondToWebhook",
+            "typeVersion": 1.1,
+            "position": [
+                380,
+                600
+            ]
+        },
+        {
+            "parameters": {
+                "operation": "update",
+                "documentId": {
+                    "__rl": true,
+                    "value": "",
+                    "mode": "list"
+                },
+                "sheetName": {
+                    "__rl": true,
+                    "value": "Sheet1",
+                    "mode": "list"
+                },
+                "columns": {
+                    "mappingMode": "defineBelow",
+                    "value": {
+                        "Day": "={{ $json.body.day }}",
+                        "Status": "={{ $json.body.status }}"
+                    },
+                    "matchingColumns": [
+                        "Day"
+                    ]
+                },
+                "options": {}
+            },
+            "id": "lcp-sheets-update",
+            "name": "Sheets - Update Status",
+            "type": "n8n-nodes-base.googleSheets",
+            "typeVersion": 4.5,
+            "position": [
+                -100,
+                1000
+            ]
+        },
+        {
+            "parameters": {
+                "respondWith": "json",
+                "responseBody": "={{ JSON.stringify({ success: true, day: $json.Day || $('Webhook - Update Status').first().json.body.day, status: $json.Status || $('Webhook - Update Status').first().json.body.status }) }}",
+                "options": {
+                    "responseHeaders": {
+                        "entries": [
+                            {
+                                "name": "Access-Control-Allow-Origin",
+                                "value": "*"
+                            }
+                        ]
+                    }
+                }
+            },
+            "id": "lcp-respond-update",
+            "name": "Respond - Update",
+            "type": "n8n-nodes-base.respondToWebhook",
+            "typeVersion": 1.1,
+            "position": [
+                140,
+                1000
+            ]
+        }
+    ],
+    "connections": {
+        "Webhook - Generate": {
+            "main": [
+                [
+                    {
+                        "node": "Claude - Content Generator",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Claude 3.5 Sonnet": {
+            "ai_languageModel": [
+                [
+                    {
+                        "node": "Claude - Content Generator",
+                        "type": "ai_languageModel",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Claude - Content Generator": {
+            "main": [
+                [
+                    {
+                        "node": "Parse & Normalize Output",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Parse & Normalize Output": {
+            "main": [
+                [
+                    {
+                        "node": "Sheets - Clear Old Data",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Sheets - Clear Old Data": {
+            "main": [
+                [
+                    {
+                        "node": "Split for Sheets",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Split for Sheets": {
+            "main": [
+                [
+                    {
+                        "node": "Sheets - Append Posts",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Sheets - Append Posts": {
+            "main": [
+                [
+                    {
+                        "node": "Format Generate Response",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Format Generate Response": {
+            "main": [
+                [
+                    {
+                        "node": "Respond - Generate",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Webhook - Fetch": {
+            "main": [
+                [
+                    {
+                        "node": "Sheets - Read All",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Sheets - Read All": {
+            "main": [
+                [
+                    {
+                        "node": "Format Fetch Response",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Format Fetch Response": {
+            "main": [
+                [
+                    {
+                        "node": "Respond - Fetch",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Webhook - Update Status": {
+            "main": [
+                [
+                    {
+                        "node": "Sheets - Update Status",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Sheets - Update Status": {
+            "main": [
+                [
+                    {
+                        "node": "Respond - Update",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        }
+    },
+    "settings": {
+        "executionOrder": "v1"
+    },
+    "meta": {
+        "templateCredsSetupCompleted": false
+    },
+    "tags": []
+}
