@@ -21,6 +21,7 @@ const ProductScreening = () => {
     const [typedCompany, setTypedCompany] = useState('');
     const [typedDesc, setTypedDesc] = useState('');
     const [showToast, setShowToast] = useState(false);
+    const [btnGlow, setBtnGlow] = useState(false);
 
     const fullTitle = 'Senior Frontend Engineer';
     const fullCompany = 'Acme Corp';
@@ -28,69 +29,89 @@ const ProductScreening = () => {
 
     useEffect(() => {
         const ctx = gsap.context(() => {
-            // Mirror of page 1 — mockup from LEFT
-            gsap.fromTo(mockupRef.current, {
-                opacity: 0, x: -80, rotateY: 4,
-            }, {
-                opacity: 1, x: 0, rotateY: 0, duration: 0.8, ease: 'expo.out',
-                scrollTrigger: { trigger: sectionRef.current, start: 'top 60%', toggleActions: 'play none none none' },
+            // Mockup from LEFT with 3D entrance
+            const masterTL = gsap.timeline({
+                scrollTrigger: {
+                    trigger: sectionRef.current,
+                    start: 'top 60%',
+                    toggleActions: 'play none none none',
+                },
             });
+
+            masterTL.fromTo(mockupRef.current, {
+                opacity: 0, x: -80, rotateY: 5, scale: 0.92,
+            }, {
+                opacity: 1, x: 0, rotateY: 0, scale: 1, duration: 1, ease: 'expo.out',
+            }, 0);
 
             // Text from right
-            gsap.fromTo(textRef.current, { opacity: 0, y: 40 }, {
-                opacity: 1, y: 0, duration: 0.6, ease: 'expo.out',
-                scrollTrigger: { trigger: sectionRef.current, start: 'top 65%', toggleActions: 'play none none none' },
-            });
+            masterTL.fromTo(textRef.current, { opacity: 0, y: 40 }, {
+                opacity: 1, y: 0, duration: 0.7, ease: 'expo.out',
+            }, 0.15);
 
-            // Step line draws down (scaleY 0→1)
+            // Step line draws (scaleY 0→1)
             if (lineRef.current) {
-                gsap.fromTo(lineRef.current, { scaleY: 0 }, {
-                    scaleY: 1, duration: 1.2, ease: 'power3.out',
-                    scrollTrigger: { trigger: sectionRef.current, start: 'top 50%', toggleActions: 'play none none none' },
-                });
+                masterTL.fromTo(lineRef.current, { scaleY: 0 }, {
+                    scaleY: 1, duration: 1.4, ease: 'power3.out',
+                }, 0.6);
             }
 
-            // Steps activate as line draws
-            ScrollTrigger.create({
-                trigger: sectionRef.current,
-                start: 'top 50%',
-                onEnter: () => {
-                    steps.forEach((_, idx) => {
-                        setTimeout(() => setActiveStep(idx + 1), 300 + idx * 300);
-                    });
+            // Steps activate sequentially
+            masterTL.add(() => {
+                steps.forEach((_, idx) => {
+                    setTimeout(() => setActiveStep(idx + 1), idx * 350);
+                });
+            }, 0.7);
 
-                    // Typewriter after steps complete
-                    setTimeout(() => {
-                        let i = 0;
-                        const titleInt = setInterval(() => {
-                            setTypedTitle(fullTitle.slice(0, i + 1));
-                            i++;
-                            if (i >= fullTitle.length) {
-                                clearInterval(titleInt);
-                                let j = 0;
+            // Typewriter sequence (fires once after steps)
+            masterTL.add(() => {
+                setTimeout(() => {
+                    let i = 0;
+                    const titleInt = setInterval(() => {
+                        setTypedTitle(fullTitle.slice(0, i + 1));
+                        i++;
+                        if (i >= fullTitle.length) {
+                            clearInterval(titleInt);
+                            let j = 0;
+                            setTimeout(() => {
                                 const compInt = setInterval(() => {
                                     setTypedCompany(fullCompany.slice(0, j + 1));
                                     j++;
                                     if (j >= fullCompany.length) {
                                         clearInterval(compInt);
                                         let k = 0;
-                                        const descInt = setInterval(() => {
-                                            setTypedDesc(fullDesc.slice(0, k + 1));
-                                            k++;
-                                            if (k >= fullDesc.length) {
-                                                clearInterval(descInt);
-                                                // Show toast after typing
-                                                setTimeout(() => setShowToast(true), 600);
-                                                setTimeout(() => setShowToast(false), 3000);
-                                            }
-                                        }, 40);
+                                        setTimeout(() => {
+                                            const descInt = setInterval(() => {
+                                                setTypedDesc(fullDesc.slice(0, k + 1));
+                                                k++;
+                                                if (k >= fullDesc.length) {
+                                                    clearInterval(descInt);
+                                                    setBtnGlow(true);
+                                                    setTimeout(() => {
+                                                        setBtnGlow(false);
+                                                        setShowToast(true);
+                                                        setTimeout(() => setShowToast(false), 2500);
+                                                    }, 600);
+                                                }
+                                            }, 35);
+                                        }, 200);
                                     }
-                                }, 60);
-                            }
-                        }, 40);
-                    }, 1800);
-                },
-            });
+                                }, 50);
+                            }, 200);
+                        }
+                    }, 35);
+                }, 1200);
+            }, 0.8);
+
+            // Requirements tags bounce in
+            const tags = mockupRef.current?.querySelectorAll('.req-tag');
+            if (tags) {
+                tags.forEach((tag, i) => {
+                    masterTL.fromTo(tag, { opacity: 0, scale: 0, y: 5 }, {
+                        opacity: 1, scale: 1, y: 0, duration: 0.3, ease: 'back.out(2)',
+                    }, 1.2 + i * 0.1);
+                });
+            }
         }, sectionRef);
 
         return () => ctx.revert();
@@ -116,19 +137,19 @@ const ProductScreening = () => {
 
                         {/* Step flow with connecting line */}
                         <div className="relative pl-4">
-                            <div className="absolute left-[15px] top-3 bottom-3 w-[2px] bg-zinc-100" />
-                            <div ref={lineRef} className="absolute left-[15px] top-3 bottom-3 w-[2px] bg-emerald-500 origin-top" style={{ transform: 'scaleY(0)' }} />
+                            <div className="absolute left-[15px] top-4 bottom-4 w-[2px] bg-zinc-100" />
+                            <div ref={lineRef} className="absolute left-[15px] top-4 bottom-4 w-[2px] bg-emerald-500 origin-top" style={{ transform: 'scaleY(0)' }} />
                             {steps.map((step) => (
-                                <div key={step.num} className="flex items-start gap-4 py-3 relative">
-                                    <div className={`w-7 h-7 rounded-full flex items-center justify-center text-[11px] font-bold shrink-0 z-10 transition-all duration-500 ${activeStep >= step.num
-                                            ? 'bg-emerald-600 text-white shadow-[0_0_12px_rgba(5,150,105,0.3)]'
-                                            : 'bg-zinc-100 text-zinc-400'
+                                <div key={step.num} className="flex items-start gap-4 py-3.5 relative">
+                                    <div className={`w-8 h-8 rounded-full flex items-center justify-center text-[12px] font-bold shrink-0 z-10 transition-all duration-500 ${activeStep >= step.num
+                                            ? 'bg-emerald-600 text-white shadow-[0_0_16px_rgba(5,150,105,0.35)] scale-110'
+                                            : 'bg-zinc-100 text-zinc-400 scale-100'
                                         }`}>
                                         {step.num}
                                     </div>
-                                    <div className={`transition-all duration-400 ${activeStep >= step.num ? 'opacity-100 translate-x-0' : 'opacity-0 translate-x-[15px]'}`}>
+                                    <div className={`transition-all duration-500 ${activeStep >= step.num ? 'opacity-100 translate-x-0' : 'opacity-0 translate-x-[20px]'}`}>
                                         <p className="font-semibold text-sm text-zinc-900">{step.title}</p>
-                                        <p className="text-xs text-zinc-400">{step.desc}</p>
+                                        <p className="text-xs text-zinc-400 mt-0.5">{step.desc}</p>
                                     </div>
                                 </div>
                             ))}
@@ -137,8 +158,8 @@ const ProductScreening = () => {
 
                     {/* Left — Browser Mockup */}
                     <div ref={mockupRef} className="flex-[55] opacity-0 relative" style={{ perspective: '1200px' }}>
-                        {/* Toast notification */}
-                        <div className={`absolute -top-2 right-4 z-20 bg-emerald-600 text-white text-xs font-semibold px-4 py-2 rounded-lg shadow-lg transition-all duration-500 ${showToast ? 'opacity-100 translate-y-0' : 'opacity-0 -translate-y-4'}`}>
+                        {/* Toast */}
+                        <div className={`absolute -top-3 right-4 z-20 bg-emerald-600 text-white text-xs font-semibold px-4 py-2.5 rounded-xl shadow-[0_8px_24px_rgba(5,150,105,0.3)] transition-all duration-500 ${showToast ? 'opacity-100 translate-y-0 scale-100' : 'opacity-0 -translate-y-4 scale-90'}`}>
                             ✓ Screening link created!
                         </div>
 
@@ -167,31 +188,34 @@ const ProductScreening = () => {
                                     <div>
                                         <label className="text-[10px] text-zinc-400 font-medium mb-1 block">Job Title *</label>
                                         <div className="border border-zinc-200 rounded-lg px-3 py-2 text-sm text-zinc-900 min-h-[36px] bg-zinc-50/50">
-                                            {typedTitle}{typedTitle.length < fullTitle.length && cursor}
+                                            {typedTitle}{typedTitle.length < fullTitle.length && typedTitle.length > 0 && cursor}
                                         </div>
                                     </div>
                                     <div>
                                         <label className="text-[10px] text-zinc-400 font-medium mb-1 block">Company Name *</label>
                                         <div className="border border-zinc-200 rounded-lg px-3 py-2 text-sm text-zinc-900 min-h-[36px] bg-zinc-50/50">
-                                            {typedCompany}{typedTitle.length >= fullTitle.length && typedCompany.length < fullCompany.length && cursor}
+                                            {typedCompany}{typedTitle.length >= fullTitle.length && typedCompany.length < fullCompany.length && typedCompany.length > 0 && cursor}
                                         </div>
                                     </div>
                                     <div>
                                         <label className="text-[10px] text-zinc-400 font-medium mb-1 block">Job Description</label>
                                         <div className="border border-zinc-200 rounded-lg px-3 py-2 text-xs text-zinc-600 min-h-[60px] bg-zinc-50/50">
                                             {typedDesc || <span className="text-zinc-300">Describe the role...</span>}
-                                            {typedCompany.length >= fullCompany.length && typedDesc.length < fullDesc.length && cursor}
+                                            {typedCompany.length >= fullCompany.length && typedDesc.length < fullDesc.length && typedDesc.length > 0 && cursor}
                                         </div>
                                     </div>
                                     <div className="border-t border-zinc-100 pt-4">
                                         <p className="text-[10px] text-zinc-400 font-medium mb-3">Requirements</p>
-                                        <div className="grid grid-cols-2 gap-3">
-                                            {['Experience: 5+ years', 'Education: BS CS', 'Skills: React, TypeScript', 'Salary: $120-160K'].map((r) => (
-                                                <div key={r} className="bg-emerald-50/50 border border-emerald-100 rounded-md px-3 py-1.5 text-[10px] text-emerald-700">{r}</div>
+                                        <div className="grid grid-cols-2 gap-2">
+                                            {['Experience: 5+ years', 'Education: BS CS', 'Skills: React, TS', 'Salary: $120-160K'].map((r) => (
+                                                <div key={r} className="req-tag bg-emerald-50/70 border border-emerald-100 rounded-md px-3 py-1.5 text-[10px] text-emerald-700 font-medium opacity-0 scale-0">{r}</div>
                                             ))}
                                         </div>
                                     </div>
-                                    <button className={`w-full text-white text-xs font-semibold py-2.5 rounded-lg mt-2 transition-all duration-500 ${showToast ? 'bg-emerald-700 scale-[0.98]' : 'bg-emerald-600'}`}>
+                                    <button className={`w-full text-white text-xs font-semibold py-2.5 rounded-lg mt-2 transition-all duration-500 ${btnGlow
+                                            ? 'bg-emerald-500 shadow-[0_0_20px_rgba(5,150,105,0.5)] scale-[1.02]'
+                                            : 'bg-emerald-600'
+                                        }`}>
                                         Generate Screening Link →
                                     </button>
                                 </div>

@@ -31,88 +31,82 @@ const ProductLookalike = () => {
                 scrollTrigger: { trigger: sectionRef.current, start: 'top 75%', toggleActions: 'play none none none' },
             });
 
-            // ===== THE SHOWSTOPPER: pinned zoom-in =====
-            const tl = gsap.timeline({
+            // === FIXED: Single unified timeline, NO scrub ===
+            // The mockup zoom + all child animations fire as one clean sequence
+            const masterTL = gsap.timeline({
                 scrollTrigger: {
                     trigger: mockupRef.current,
-                    start: 'top 70%',
-                    end: '+=150%',
-                    pin: false,
-                    scrub: 1,
+                    start: 'top 80%',
+                    toggleActions: 'play none none none',
                 },
             });
 
-            // Phase 1: Zoom in from 55% and unblur
-            tl.fromTo(mockupRef.current, {
-                scale: 0.55, opacity: 0.4, filter: 'blur(6px)',
+            // Phase 1: Zoom-in + unblur (0-0.8s)
+            masterTL.fromTo(mockupRef.current, {
+                scale: 0.6, opacity: 0, filter: 'blur(6px)',
             }, {
-                scale: 1, opacity: 1, filter: 'blur(0px)', duration: 0.4, ease: 'power3.out',
+                scale: 1, opacity: 1, filter: 'blur(0px)', duration: 1.2, ease: 'expo.out',
             }, 0);
 
-            // Phase 2: Counters (handled by onUpdate)
-            let countersStarted = false;
-            ScrollTrigger.create({
-                trigger: mockupRef.current,
-                start: 'top 40%',
-                onEnter: () => {
-                    if (countersStarted) return;
-                    countersStarted = true;
-                    gsap.to({ val: 0 }, { val: 49, duration: 1.5, ease: 'power2.out', onUpdate: function () { setResultCount(Math.round(this.targets()[0].val)); } });
-                    gsap.to({ val: 0 }, { val: 42, duration: 1.5, delay: 0.2, ease: 'power2.out', onUpdate: function () { setAvgMatch(Math.round(this.targets()[0].val)); } });
-                },
-            });
+            // Phase 2: Perspective tilt straightens
+            masterTL.fromTo(mockupRef.current, { rotateX: 3 }, {
+                rotateX: 0, duration: 1.2, ease: 'expo.out',
+            }, 0);
 
-            // Phase 3: Filter pills pop in
+            // Phase 3: Counters count up (starts at 0.4s)
+            masterTL.add(() => {
+                gsap.to({ val: 0 }, {
+                    val: 49, duration: 1.5, ease: 'power2.out',
+                    onUpdate: function () { setResultCount(Math.round(this.targets()[0].val)); },
+                });
+                gsap.to({ val: 0 }, {
+                    val: 42, duration: 1.5, delay: 0.15, ease: 'power2.out',
+                    onUpdate: function () { setAvgMatch(Math.round(this.targets()[0].val)); },
+                });
+            }, 0.5);
+
+            // Phase 4: Filter pills pop in (starts at 0.7s)
             const pills = mockupRef.current?.querySelectorAll('.filter-pill');
             if (pills) {
                 pills.forEach((pill, i) => {
-                    gsap.fromTo(pill, { scale: 0, opacity: 0 }, {
-                        scale: 1, opacity: 1, duration: 0.3, delay: 1.2 + i * 0.08,
-                        ease: 'back.out(2)',
-                        scrollTrigger: { trigger: mockupRef.current, start: 'top 35%', toggleActions: 'play none none none' },
-                    });
+                    masterTL.fromTo(pill, { scale: 0, opacity: 0 }, {
+                        scale: 1, opacity: 1, duration: 0.35, ease: 'back.out(2.5)',
+                    }, 0.7 + i * 0.08);
                 });
             }
 
-            // Phase 4: Candidate cards stagger in reading order
+            // Phase 5: Candidate cards stagger (starts at 1.0s)
             const cards = mockupRef.current?.querySelectorAll('.candidate-card');
             if (cards) {
                 cards.forEach((card, i) => {
-                    gsap.fromTo(card, { opacity: 0, y: 25 }, {
-                        opacity: 1, y: 0, duration: 0.5, delay: 1.8 + i * 0.1,
-                        ease: 'power3.out',
-                        scrollTrigger: { trigger: mockupRef.current, start: 'top 30%', toggleActions: 'play none none none' },
-                    });
+                    masterTL.fromTo(card, { opacity: 0, y: 25, scale: 0.95 }, {
+                        opacity: 1, y: 0, scale: 1, duration: 0.5, ease: 'power3.out',
+                    }, 1.0 + i * 0.12);
                 });
             }
 
-            // Phase 5: Match badges pop separately with green flash
+            // Phase 6: Match badges pop + green flash (starts at 1.4s)
             const badges = mockupRef.current?.querySelectorAll('.match-badge');
             if (badges) {
                 badges.forEach((badge, i) => {
-                    gsap.fromTo(badge, { scale: 0 }, {
-                        scale: 1, duration: 0.3, delay: 2.4 + i * 0.12,
-                        ease: 'back.out(2.5)',
-                        scrollTrigger: { trigger: mockupRef.current, start: 'top 30%', toggleActions: 'play none none none' },
-                    });
-                    // Green glow flash on badge
-                    gsap.fromTo(badge, { boxShadow: '0 0 0 0 rgba(5,150,105,0)' }, {
-                        boxShadow: '0 0 8px 2px rgba(5,150,105,0.4)', duration: 0.3, delay: 2.4 + i * 0.12,
+                    masterTL.fromTo(badge, { scale: 0 }, {
+                        scale: 1, duration: 0.3, ease: 'back.out(3)',
+                    }, 1.4 + i * 0.12);
+                    masterTL.fromTo(badge, { boxShadow: '0 0 0 0 rgba(5,150,105,0)' }, {
+                        boxShadow: '0 0 10px 3px rgba(5,150,105,0.4)', duration: 0.25,
                         yoyo: true, repeat: 1,
-                        scrollTrigger: { trigger: mockupRef.current, start: 'top 30%', toggleActions: 'play none none none' },
-                    });
+                    }, 1.4 + i * 0.12);
                 });
             }
 
-            // Phase 6: Action buttons pulse
+            // Phase 7: Action buttons pulse (starts at 2.2s)
             const actionBtns = mockupRef.current?.querySelectorAll('.action-btn');
             if (actionBtns) {
                 actionBtns.forEach((btn, i) => {
-                    gsap.fromTo(btn, { boxShadow: '0 0 0 0 rgba(5,150,105,0)' }, {
-                        boxShadow: '0 0 12px 3px rgba(5,150,105,0.3)', duration: 0.4, delay: 3.6 + i * 0.5,
+                    masterTL.fromTo(btn, { boxShadow: '0 0 0 0 rgba(5,150,105,0)' }, {
+                        boxShadow: '0 0 14px 4px rgba(5,150,105,0.35)', duration: 0.35,
                         yoyo: true, repeat: 1,
-                        scrollTrigger: { trigger: mockupRef.current, start: 'top 30%', toggleActions: 'play none none none' },
-                    });
+                    }, 2.4 + i * 0.4);
                 });
             }
         }, sectionRef);
@@ -124,7 +118,7 @@ const ProductLookalike = () => {
         <section ref={sectionRef} className="relative bg-zinc-50/50 px-4 py-28 md:py-40 overflow-hidden">
             {/* Green glow behind */}
             <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                <div className="w-[700px] h-[500px] bg-emerald-500/[0.04] blur-[120px] rounded-full" />
+                <div className="w-[700px] h-[500px] bg-emerald-500/[0.05] blur-[120px] rounded-full" />
             </div>
 
             <div className="max-w-6xl mx-auto relative z-10">
@@ -141,8 +135,8 @@ const ProductLookalike = () => {
                     </p>
                 </div>
 
-                {/* Full-width Browser Mockup — THE SHOWSTOPPER */}
-                <div ref={mockupRef} className="max-w-[90vw] mx-auto" style={{ transformOrigin: 'center center' }}>
+                {/* Full-width Browser Mockup */}
+                <div ref={mockupRef} className="max-w-5xl mx-auto opacity-0" style={{ perspective: '1200px', transformOrigin: 'center center' }}>
                     <div className="rounded-xl overflow-hidden shadow-[0_25px_60px_rgba(0,0,0,0.12),0_8px_24px_rgba(0,0,0,0.06),0_0_100px_rgba(5,150,105,0.06)] border border-zinc-200/50">
                         {/* Title bar */}
                         <div className="bg-[#1f2937] px-4 py-2.5 flex items-center gap-3">
@@ -167,8 +161,8 @@ const ProductLookalike = () => {
                                     </p>
                                 </div>
                                 <div className="flex gap-2">
-                                    <div className="action-btn bg-emerald-600 text-white text-[10px] font-semibold px-3 py-1.5 rounded-md">Find Emails</div>
-                                    <div className="action-btn bg-white border border-zinc-200 text-zinc-600 text-[10px] font-semibold px-3 py-1.5 rounded-md">Export CSV</div>
+                                    <div className="action-btn bg-emerald-600 text-white text-[10px] font-semibold px-3 py-1.5 rounded-md cursor-default transition-all">Find Emails</div>
+                                    <div className="action-btn bg-white border border-zinc-200 text-zinc-600 text-[10px] font-semibold px-3 py-1.5 rounded-md cursor-default transition-all">Export CSV</div>
                                 </div>
                             </div>
 
@@ -184,10 +178,10 @@ const ProductLookalike = () => {
                             {/* Candidate cards grid */}
                             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
                                 {candidates.map((c, i) => (
-                                    <div key={i} className="candidate-card bg-white border border-zinc-100 rounded-lg p-3 opacity-0 hover:border-emerald-200/60 transition-colors">
+                                    <div key={i} className="candidate-card bg-white border border-zinc-100 rounded-lg p-3 opacity-0 hover:border-emerald-200/60 transition-all duration-300 hover:-translate-y-0.5 hover:shadow-sm">
                                         <div className="flex items-start justify-between mb-2">
                                             <div className="flex items-center gap-2">
-                                                <div className="w-8 h-8 rounded-full bg-gradient-to-br from-zinc-200 to-zinc-300 flex items-center justify-center text-[10px] font-bold text-zinc-500">
+                                                <div className="w-8 h-8 rounded-full bg-gradient-to-br from-emerald-100 to-emerald-200 flex items-center justify-center text-[10px] font-bold text-emerald-700">
                                                     {c.name.split(' ').map(n => n[0]).join('')}
                                                 </div>
                                                 <div>

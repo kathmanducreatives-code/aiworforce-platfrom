@@ -30,54 +30,73 @@ const ProductDashboard = () => {
         const ctx = gsap.context(() => {
             // Text fade-in-up
             gsap.fromTo(textRef.current, { opacity: 0, y: 40 }, {
-                opacity: 1, y: 0, duration: 0.6, ease: 'expo.out',
+                opacity: 1, y: 0, duration: 0.7, ease: 'expo.out',
                 scrollTrigger: { trigger: sectionRef.current, start: 'top 70%', toggleActions: 'play none none none' },
             });
 
-            // Highlight items stagger
+            // Highlight items stagger with slide-in
             highlightRefs.current.forEach((el, i) => {
                 if (!el) return;
-                gsap.fromTo(el, { opacity: 0, y: 15 }, {
-                    opacity: 1, y: 0, duration: 0.5, delay: 0.3 + i * 0.12,
-                    ease: 'power3.out',
+                gsap.fromTo(el, { opacity: 0, x: -20, scale: 0.95 }, {
+                    opacity: 1, x: 0, scale: 1, duration: 0.5, delay: 0.4 + i * 0.12,
+                    ease: 'back.out(1.5)',
                     scrollTrigger: { trigger: sectionRef.current, start: 'top 65%', toggleActions: 'play none none none' },
                 });
             });
 
-            // Browser mockup 3D entrance from right
-            gsap.fromTo(mockupRef.current, {
-                opacity: 0, x: 80, rotateY: -4,
-            }, {
-                opacity: 1, x: 0, rotateY: 0, duration: 0.8, ease: 'expo.out',
-                scrollTrigger: { trigger: sectionRef.current, start: 'top 60%', toggleActions: 'play none none none' },
+            // Unified master timeline for the mockup
+            const masterTL = gsap.timeline({
+                scrollTrigger: {
+                    trigger: mockupRef.current,
+                    start: 'top 75%',
+                    toggleActions: 'play none none none',
+                },
             });
 
-            // Stat card highlights — sequential green glow pulse
+            // Mockup 3D entrance from right
+            masterTL.fromTo(mockupRef.current, {
+                opacity: 0, x: 80, rotateY: -5, scale: 0.92,
+            }, {
+                opacity: 1, x: 0, rotateY: 0, scale: 1, duration: 1, ease: 'expo.out',
+            }, 0);
+
+            // Stat cards light up one-by-one with green glow
             const stats = mockupRef.current?.querySelectorAll('.dash-stat');
             if (stats) {
                 stats.forEach((card, i) => {
-                    gsap.fromTo(card, { opacity: 0.3, scale: 0.95 }, {
-                        opacity: 1, scale: 1, duration: 0.4, delay: 1.0 + i * 0.6,
-                        ease: 'power2.out',
-                        scrollTrigger: { trigger: sectionRef.current, start: 'top 55%', toggleActions: 'play none none none' },
-                    });
+                    masterTL.fromTo(card, { opacity: 0.25, scale: 0.9, y: 8 }, {
+                        opacity: 1, scale: 1, y: 0, duration: 0.4, ease: 'back.out(1.5)',
+                    }, 0.8 + i * 0.25);
                     // Green glow pulse
-                    gsap.fromTo(card, { boxShadow: '0 0 0 0 rgba(5,150,105,0)' }, {
-                        boxShadow: '0 0 0 3px rgba(5,150,105,0.3)', duration: 0.3, delay: 1.0 + i * 0.6,
+                    masterTL.fromTo(card, { boxShadow: '0 0 0 0 rgba(5,150,105,0)' }, {
+                        boxShadow: '0 0 0 3px rgba(5,150,105,0.35)', duration: 0.3,
                         yoyo: true, repeat: 1,
-                        scrollTrigger: { trigger: sectionRef.current, start: 'top 55%', toggleActions: 'play none none none' },
-                    });
+                    }, 0.8 + i * 0.25);
                 });
             }
 
-            // Action buttons sequential "click" animation
+            // Action buttons sequential "click" 
             const btns = mockupRef.current?.querySelectorAll('.dash-btn');
             if (btns) {
                 btns.forEach((btn, i) => {
-                    gsap.to(btn, {
-                        scale: 0.93, duration: 0.15, delay: 3.6 + i * 0.4,
-                        yoyo: true, repeat: 1, ease: 'power2.inOut',
-                        scrollTrigger: { trigger: sectionRef.current, start: 'top 55%', toggleActions: 'play none none none' },
+                    masterTL.to(btn, {
+                        scale: 0.9, duration: 0.12, yoyo: true, repeat: 1, ease: 'power2.inOut',
+                    }, 2.0 + i * 0.35);
+                    masterTL.fromTo(btn, { boxShadow: '0 0 0 0 rgba(5,150,105,0)' }, {
+                        boxShadow: '0 0 10px 2px rgba(5,150,105,0.3)', duration: 0.2,
+                        yoyo: true, repeat: 1,
+                    }, 2.0 + i * 0.35);
+                });
+            }
+
+            // Chart bars grow
+            const bars = mockupRef.current?.querySelectorAll('.chart-bar');
+            if (bars) {
+                bars.forEach((bar, i) => {
+                    gsap.fromTo(bar, { scaleY: 0 }, {
+                        scaleY: 1, duration: 0.6, delay: 1.6 + i * 0.08,
+                        ease: 'back.out(1.5)',
+                        scrollTrigger: { trigger: mockupRef.current, start: 'top 75%', toggleActions: 'play none none none' },
                     });
                 });
             }
@@ -103,7 +122,7 @@ const ProductDashboard = () => {
                         </p>
                         <div className="space-y-3">
                             {highlights.map((h, i) => (
-                                <div key={i} ref={el => { highlightRefs.current[i] = el; }} className="flex items-center gap-3 opacity-0">
+                                <div key={i} ref={el => { highlightRefs.current[i] = el; }} className="flex items-center gap-3 opacity-0 bg-white/60 rounded-lg px-4 py-2.5 border border-zinc-100/60 hover:border-emerald-200/50 hover:-translate-y-0.5 transition-all duration-300">
                                     <span className="text-lg">{h.icon}</span>
                                     <span className="text-sm font-medium text-zinc-700">{h.text}</span>
                                 </div>
@@ -114,7 +133,6 @@ const ProductDashboard = () => {
                     {/* Right — Browser Mockup */}
                     <div ref={mockupRef} className="flex-[55] opacity-0" style={{ perspective: '1200px' }}>
                         <div className="rounded-xl overflow-hidden shadow-[0_25px_60px_rgba(0,0,0,0.12),0_8px_24px_rgba(0,0,0,0.06),0_0_100px_rgba(5,150,105,0.06)] border border-zinc-200/50">
-                            {/* Title bar */}
                             <div className="bg-[#1f2937] px-4 py-2.5 flex items-center gap-3">
                                 <div className="flex gap-1.5">
                                     <div className="w-3 h-3 rounded-full bg-[#ef4444]" />
@@ -126,11 +144,10 @@ const ProductDashboard = () => {
                                 </div>
                             </div>
 
-                            {/* Dashboard UI */}
                             <div className="bg-zinc-50 p-5">
                                 <div className="grid grid-cols-4 gap-3 mb-4">
                                     {statCards.map((s, i) => (
-                                        <div key={i} className="dash-stat bg-white rounded-lg p-3 border border-zinc-100 opacity-30 transition-all">
+                                        <div key={i} className="dash-stat bg-white rounded-lg p-3 border border-zinc-100 opacity-25 transition-all">
                                             <p className="text-[10px] text-zinc-400 mb-1">{s.label}</p>
                                             <p className="text-lg font-bold text-zinc-900">{s.value}</p>
                                         </div>
@@ -138,7 +155,7 @@ const ProductDashboard = () => {
                                 </div>
                                 <div className="flex gap-2 mb-4">
                                     {actionBtns.map((btn) => (
-                                        <div key={btn} className="dash-btn bg-emerald-600 text-white text-[10px] font-semibold px-3 py-1.5 rounded-md cursor-default">
+                                        <div key={btn} className="dash-btn bg-emerald-600 text-white text-[10px] font-semibold px-3 py-1.5 rounded-md cursor-default transition-all">
                                             {btn}
                                         </div>
                                     ))}
@@ -147,7 +164,7 @@ const ProductDashboard = () => {
                                     <p className="text-[10px] text-zinc-400 mb-3 font-medium">Weekly Activity</p>
                                     <div className="flex items-end gap-1 h-16">
                                         {[40, 65, 45, 80, 55, 90, 70].map((h, i) => (
-                                            <div key={i} className="flex-1 bg-emerald-100 rounded-t" style={{ height: `${h}%` }}>
+                                            <div key={i} className="chart-bar flex-1 bg-emerald-100 rounded-t origin-bottom" style={{ height: `${h}%`, transform: 'scaleY(0)' }}>
                                                 <div className="w-full bg-emerald-500 rounded-t" style={{ height: '60%' }} />
                                             </div>
                                         ))}
