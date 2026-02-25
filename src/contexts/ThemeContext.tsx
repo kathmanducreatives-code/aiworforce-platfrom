@@ -1,6 +1,6 @@
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 
-export type ThemeName = 'dark' | 'verdant';
+export type ThemeName = 'dark' | 'light';
 
 interface ThemeContextType {
   theme: ThemeName;
@@ -13,7 +13,7 @@ const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
 export const ThemeProvider = ({ children }: { children: ReactNode }) => {
   const [theme, setThemeState] = useState<ThemeName>(() => {
     const stored = localStorage.getItem('app-theme');
-    return (stored === 'verdant' ? 'verdant' : 'dark') as ThemeName;
+    return (stored === 'light' ? 'light' : 'dark') as ThemeName;
   });
 
   useEffect(() => {
@@ -23,7 +23,7 @@ export const ThemeProvider = ({ children }: { children: ReactNode }) => {
   }, [theme]);
 
   const setTheme = (t: ThemeName) => setThemeState(t);
-  const toggleTheme = () => setThemeState(prev => prev === 'dark' ? 'verdant' : 'dark');
+  const toggleTheme = () => setThemeState(prev => prev === 'dark' ? 'light' : 'dark');
 
   return (
     <ThemeContext.Provider value={{ theme, setTheme, toggleTheme }}>

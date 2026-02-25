@@ -1,9 +1,8 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
-import { TrendingUp, Folder, Brain, Users, Moon, Trees } from "lucide-react";
+import { TrendingUp, Folder, Brain, Users, Moon, Sun } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import ModernDashboard from "@/components/ModernDashboard";
 import WeeklyActivityChart from "@/components/dashboard/WeeklyActivityChart";
@@ -36,22 +35,20 @@ const Dashboard = () => {
       if (candidates) {
         const now = new Date();
         const oneWeekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
-        
+
         const candidatesThisWeek = candidates.filter(
           c => new Date(c.created_at) >= oneWeekAgo
         ).length;
 
-        // Calculate average fit score
         const fitScores = candidates.map(c => {
           const fitScore = c.fit_score as any;
           return typeof fitScore === 'object' && fitScore !== null ? (fitScore.score || 0) : 0;
         }).filter(score => score > 0);
-        
-        const avgFitScore = fitScores.length > 0 
+
+        const avgFitScore = fitScores.length > 0
           ? Math.round(fitScores.reduce((a, b) => a + b, 0) / fitScores.length)
           : 0;
 
-        // Count unique recruitment names
         const uniqueRecruitments = new Set(
           candidates.map(c => c.recruitment_name).filter(Boolean)
         );
@@ -70,21 +67,28 @@ const Dashboard = () => {
     }
   };
 
+  const kpis = [
+    { label: 'Total Candidates', value: loading ? null : metrics.totalCandidates, sub: `+${metrics.candidatesThisWeek} this week`, icon: Users, color: 'text-emerald-400' },
+    { label: 'Avg Fit Score', value: loading ? null : `${metrics.avgFitScore}%`, sub: 'quality rate', icon: TrendingUp, color: 'text-teal-400' },
+    { label: 'Active Roles', value: loading ? null : metrics.activeRecruitments, sub: 'open positions', icon: Folder, color: 'text-blue-400' },
+    { label: 'AI Screening', value: '100%', sub: 'powered', icon: Brain, color: 'text-purple-400' },
+  ];
+
   return (
     <div className="min-h-screen bg-background">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-6">
-        {/* Header Section */}
-        <div className="mb-6 sm:mb-8 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 animate-fade-in-up">
+        {/* Header */}
+        <div className="mb-6 sm:mb-8 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
           <div className="flex items-center gap-3 sm:gap-4">
             {profile?.logo_url && (
-              <img 
-                src={profile.logo_url} 
-                alt="Client Logo" 
-                className="h-16 sm:h-24 w-auto hover:scale-105 transition-transform duration-300" 
+              <img
+                src={profile.logo_url}
+                alt="Client Logo"
+                className="h-16 sm:h-24 w-auto hover:scale-105 transition-transform duration-300"
               />
             )}
             <div>
-              <h1 className="text-xl sm:text-2xl font-semibold bg-gradient-to-r from-primary via-cyan-500 to-primary bg-clip-text text-transparent">
+              <h1 className="text-xl sm:text-2xl font-bold text-foreground tracking-tight font-display">
                 Dashboard
               </h1>
               <p className="text-xs sm:text-sm text-muted-foreground">
@@ -94,19 +98,19 @@ const Dashboard = () => {
           </div>
           <div className="flex items-center gap-3">
             {/* Theme Toggle */}
-            <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-card/60 border border-border/40 backdrop-blur-sm">
+            <div className="flex items-center gap-2 px-3 py-1.5 rounded-full dash-glass">
               <Moon className="h-3.5 w-3.5 text-muted-foreground" />
               <Switch
-                checked={theme === 'verdant'}
+                checked={theme === 'light'}
                 onCheckedChange={toggleTheme}
-                className="data-[state=checked]:bg-[hsl(142,60%,50%)]"
+                className="data-[state=checked]:bg-primary"
               />
-              <Trees className="h-3.5 w-3.5 text-primary" />
+              <Sun className="h-3.5 w-3.5 text-amber-400" />
             </div>
             <Button
               onClick={() => navigate('/screening')}
               size="sm"
-              className="bg-primary hover:bg-primary/90 text-primary-foreground shadow-[0_0_25px_rgba(62,207,142,0.3)] hover:shadow-[0_0_35px_rgba(62,207,142,0.4)] transition-all duration-300 w-full sm:w-auto"
+              className="ripple-btn bg-primary hover:bg-primary/90 text-primary-foreground shadow-[0_0_25px_rgba(5,150,105,0.2)] hover:shadow-[0_0_35px_rgba(5,150,105,0.35)] transition-all duration-300 w-full sm:w-auto rounded-lg"
             >
               + New Candidate
             </Button>
@@ -115,63 +119,36 @@ const Dashboard = () => {
 
         {/* KPI Cards */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-          <Card className="p-4 sm:p-6 bg-card/50 backdrop-blur-sm border-border/30 hover:border-primary/50 transition-all duration-300 hover:shadow-[0_0_25px_rgba(62,207,142,0.2)] animate-fade-in-up" style={{ animationDelay: '0.1s' }}>
-            <div className="flex items-center gap-3 mb-3 sm:mb-4">
-              <div className="p-2 bg-primary/10 rounded-lg border border-primary/20">
-                <Users className="h-4 w-4 sm:h-5 sm:w-5 text-primary" />
+          {kpis.map((kpi, i) => (
+            <div key={kpi.label} className="dash-glass rounded-2xl p-5 sm:p-6" style={{ animationDelay: `${0.1 + i * 0.1}s` }}>
+              <div className="flex items-center gap-3 mb-3 sm:mb-4">
+                <div className="p-2.5 rounded-xl bg-primary/10 border border-primary/15">
+                  <kpi.icon className={`h-4 w-4 sm:h-5 sm:w-5 ${kpi.color}`} />
+                </div>
+                <span className="text-xs sm:text-sm font-medium text-muted-foreground uppercase tracking-wide">{kpi.label}</span>
               </div>
-              <span className="text-xs sm:text-sm font-medium text-muted-foreground uppercase tracking-wide">Total Candidates</span>
+              {kpi.value === null ? (
+                <div className="h-10 skeleton-glass mb-1" />
+              ) : (
+                <div className="text-3xl sm:text-4xl font-bold text-foreground tracking-tight">{kpi.value}</div>
+              )}
+              <div className="text-xs text-primary/80 mt-1.5 font-medium">{kpi.sub}</div>
             </div>
-            <div className="text-3xl sm:text-4xl font-bold text-foreground">{loading ? "..." : metrics.totalCandidates}</div>
-            <div className="text-xs text-primary mt-1">+{metrics.candidatesThisWeek} this week</div>
-          </Card>
-
-          <Card className="p-4 sm:p-6 bg-card/50 backdrop-blur-sm border-border/30 hover:border-primary/50 transition-all duration-300 hover:shadow-[0_0_25px_rgba(62,207,142,0.2)] animate-fade-in-up" style={{ animationDelay: '0.2s' }}>
-            <div className="flex items-center gap-3 mb-3 sm:mb-4">
-              <div className="p-2 bg-primary/10 rounded-lg border border-primary/20">
-                <TrendingUp className="h-4 w-4 sm:h-5 sm:w-5 text-primary" />
-              </div>
-              <span className="text-xs sm:text-sm font-medium text-muted-foreground uppercase tracking-wide">Avg Fit Score</span>
-            </div>
-            <div className="text-3xl sm:text-4xl font-bold text-foreground">{loading ? "..." : `${metrics.avgFitScore}%`}</div>
-            <div className="text-xs text-muted-foreground mt-1">quality rate</div>
-          </Card>
-
-          <Card className="p-4 sm:p-6 bg-card/50 backdrop-blur-sm border-border/30 hover:border-primary/50 transition-all duration-300 hover:shadow-[0_0_25px_rgba(62,207,142,0.2)] animate-fade-in-up" style={{ animationDelay: '0.3s' }}>
-            <div className="flex items-center gap-3 mb-3 sm:mb-4">
-              <div className="p-2 bg-primary/10 rounded-lg border border-primary/20">
-                <Folder className="h-4 w-4 sm:h-5 sm:w-5 text-primary" />
-              </div>
-              <span className="text-xs sm:text-sm font-medium text-muted-foreground uppercase tracking-wide">Active Roles</span>
-            </div>
-            <div className="text-3xl sm:text-4xl font-bold text-foreground">{loading ? "..." : metrics.activeRecruitments}</div>
-            <div className="text-xs text-muted-foreground mt-1">open positions</div>
-          </Card>
-
-          <Card className="p-4 sm:p-6 bg-card/50 backdrop-blur-sm border-border/30 hover:border-primary/50 transition-all duration-300 hover:shadow-[0_0_25px_rgba(62,207,142,0.2)] animate-fade-in-up" style={{ animationDelay: '0.4s' }}>
-            <div className="flex items-center gap-3 mb-3 sm:mb-4">
-              <div className="p-2 bg-primary/10 rounded-lg border border-primary/20">
-                <Brain className="h-4 w-4 sm:h-5 sm:w-5 text-primary" />
-              </div>
-              <span className="text-xs sm:text-sm font-medium text-muted-foreground uppercase tracking-wide">AI Screening</span>
-            </div>
-            <div className="text-3xl sm:text-4xl font-bold text-foreground">100%</div>
-            <div className="text-xs text-muted-foreground mt-1">powered</div>
-          </Card>
+          ))}
         </div>
 
         {/* Quick Actions */}
-        <div className="flex flex-col sm:flex-row gap-3 mb-6 animate-fade-in-up" style={{ animationDelay: '0.5s' }}>
-          <Button onClick={() => navigate('/screening')} variant="outline" className="w-full sm:w-auto border-primary/30 hover:bg-primary/10 hover:border-primary hover:shadow-[0_0_15px_rgba(62,207,142,0.15)] transition-all duration-300" size="sm">
+        <div className="flex flex-col sm:flex-row gap-3 mb-6">
+          <Button onClick={() => navigate('/screening')} variant="outline" className="w-full sm:w-auto ripple-btn rounded-xl border-border hover:border-primary/40 hover:bg-primary/10 transition-all duration-300" size="sm">
             Upload Resume
           </Button>
-          <Button onClick={() => navigate('/lead-scraper')} variant="outline" className="w-full sm:w-auto border-primary/30 hover:bg-primary/10 hover:border-primary hover:shadow-[0_0_15px_rgba(62,207,142,0.15)] transition-all duration-300" size="sm">
+          <Button onClick={() => navigate('/lead-scraper')} variant="outline" className="w-full sm:w-auto ripple-btn rounded-xl border-border hover:border-primary/40 hover:bg-primary/10 transition-all duration-300" size="sm">
             Start Scraping
           </Button>
-          <Button onClick={() => navigate('/deep-search')} variant="outline" className="w-full sm:w-auto border-primary/30 hover:bg-primary/10 hover:border-primary hover:shadow-[0_0_15px_rgba(62,207,142,0.15)] transition-all duration-300" size="sm">
+          <Button onClick={() => navigate('/deep-search')} variant="outline" className="w-full sm:w-auto ripple-btn rounded-xl border-border hover:border-primary/40 hover:bg-primary/10 transition-all duration-300" size="sm">
             Deep Search
           </Button>
-          <Button onClick={() => navigate('/analytics')} variant="ghost" className="w-full sm:w-auto sm:ml-auto text-primary hover:bg-primary/10 hover:shadow-[0_0_15px_rgba(62,207,142,0.15)] transition-all duration-300" size="sm">
+          <Button onClick={() => navigate('/analytics')} variant="ghost" className="w-full sm:w-auto sm:ml-auto text-primary hover:bg-primary/10 transition-all duration-300" size="sm">
             View Analytics →
           </Button>
         </div>
@@ -180,7 +157,7 @@ const Dashboard = () => {
         <WeeklyActivityChart />
       </div>
 
-      {/* Candidate Intelligence Hub - Seamlessly Integrated */}
+      {/* Candidate Intelligence Hub */}
       <div className="border-t border-border/50 pt-8 mt-8">
         <ModernDashboard />
       </div>
