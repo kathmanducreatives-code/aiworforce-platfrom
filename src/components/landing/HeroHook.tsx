@@ -136,8 +136,6 @@ const HeroHook = () => {
             <span className="word inline-block opacity-0 whitespace-nowrap">RECRUITING</span>
             <span className="word inline-block opacity-0 whitespace-nowrap">AGENCIES</span>
             <span className="word inline-block opacity-0 whitespace-nowrap">ARE</span>
-          </div>
-          <div className="flex flex-wrap items-center justify-center gap-[clamp(0.4rem,1.2vw,0.8rem)] mt-2">
             <span className="word inline-block opacity-0 whitespace-nowrap text-emerald-600 relative">
               STEALING
               <span
@@ -145,6 +143,8 @@ const HeroHook = () => {
                 style={{ transform: 'scaleX(0)' }}
               />
             </span>
+          </div>
+          <div className="flex flex-wrap items-center justify-center gap-[clamp(0.4rem,1.2vw,0.8rem)] mt-2">
             <span className="word inline-block opacity-0 whitespace-nowrap">FROM</span>
             <span className="word inline-block opacity-0 whitespace-nowrap">
               <span className="bg-emerald-50 text-emerald-700 rounded-lg px-3 py-1 border border-emerald-200/60">

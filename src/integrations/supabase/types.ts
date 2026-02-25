@@ -2280,6 +2280,7 @@ export type Database = {
           step_number: number
           subject: string | null
           timezone: string | null
+          user_id: string | null
           user_timezone: string | null
           window_end: string | null
           window_start: string | null
@@ -2307,6 +2308,7 @@ export type Database = {
           step_number: number
           subject?: string | null
           timezone?: string | null
+          user_id?: string | null
           user_timezone?: string | null
           window_end?: string | null
           window_start?: string | null
@@ -2334,6 +2336,7 @@ export type Database = {
           step_number?: number
           subject?: string | null
           timezone?: string | null
+          user_id?: string | null
           user_timezone?: string | null
           window_end?: string | null
           window_start?: string | null
