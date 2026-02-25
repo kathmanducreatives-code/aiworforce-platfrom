@@ -67,6 +67,18 @@
   }
 }
 
+@keyframes widget-float {
+
+  0%,
+  100% {
+    transform: translateY(0px);
+  }
+
+  50% {
+    transform: translateY(-6px);
+  }
+}
+
 @keyframes float-gentle {
 
   0%,

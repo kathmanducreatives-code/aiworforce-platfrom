@@ -14,6 +14,8 @@ const candidates = [
     { name: 'Lisa Wang', title: 'Sr. React Developer', location: 'Denver, CO', yoe: '6 yrs', match: 81, tier: 'Good' },
 ];
 
+const filters = ['All Results', 'Excellent (2)', 'Strong (3)', 'Good (1)'];
+
 const ProductLookalike = () => {
     const sectionRef = useRef<HTMLDivElement>(null);
     const mockupRef = useRef<HTMLDivElement>(null);
@@ -25,91 +27,132 @@ const ProductLookalike = () => {
         const ctx = gsap.context(() => {
             // Text entrance
             gsap.fromTo(textRef.current, { opacity: 0, y: 30 }, {
-                opacity: 1, y: 0, duration: 0.8, ease: 'power3.out',
+                opacity: 1, y: 0, duration: 0.6, ease: 'expo.out',
                 scrollTrigger: { trigger: sectionRef.current, start: 'top 75%', toggleActions: 'play none none none' },
             });
 
-            // Mockup zoom-in from 60% scale
-            gsap.fromTo(mockupRef.current, {
-                opacity: 0, scale: 0.7, filter: 'blur(8px)',
-            }, {
-                opacity: 1, scale: 1, filter: 'blur(0px)', duration: 1.2, ease: 'power3.out',
-                scrollTrigger: { trigger: mockupRef.current, start: 'top 80%', toggleActions: 'play none none none' },
+            // ===== THE SHOWSTOPPER: pinned zoom-in =====
+            const tl = gsap.timeline({
+                scrollTrigger: {
+                    trigger: mockupRef.current,
+                    start: 'top 70%',
+                    end: '+=150%',
+                    pin: false,
+                    scrub: 1,
+                },
             });
 
-            // Candidate cards stagger
-            const cards = mockupRef.current?.querySelectorAll('.candidate-card');
-            if (cards) {
-                cards.forEach((card, i) => {
-                    gsap.fromTo(card, { opacity: 0, y: 20 }, {
-                        opacity: 1, y: 0, duration: 0.5, delay: 0.8 + i * 0.1,
-                        ease: 'power3.out',
-                        scrollTrigger: { trigger: mockupRef.current, start: 'top 70%', toggleActions: 'play none none none' },
+            // Phase 1: Zoom in from 55% and unblur
+            tl.fromTo(mockupRef.current, {
+                scale: 0.55, opacity: 0.4, filter: 'blur(6px)',
+            }, {
+                scale: 1, opacity: 1, filter: 'blur(0px)', duration: 0.4, ease: 'power3.out',
+            }, 0);
+
+            // Phase 2: Counters (handled by onUpdate)
+            let countersStarted = false;
+            ScrollTrigger.create({
+                trigger: mockupRef.current,
+                start: 'top 40%',
+                onEnter: () => {
+                    if (countersStarted) return;
+                    countersStarted = true;
+                    gsap.to({ val: 0 }, { val: 49, duration: 1.5, ease: 'power2.out', onUpdate: function () { setResultCount(Math.round(this.targets()[0].val)); } });
+                    gsap.to({ val: 0 }, { val: 42, duration: 1.5, delay: 0.2, ease: 'power2.out', onUpdate: function () { setAvgMatch(Math.round(this.targets()[0].val)); } });
+                },
+            });
+
+            // Phase 3: Filter pills pop in
+            const pills = mockupRef.current?.querySelectorAll('.filter-pill');
+            if (pills) {
+                pills.forEach((pill, i) => {
+                    gsap.fromTo(pill, { scale: 0, opacity: 0 }, {
+                        scale: 1, opacity: 1, duration: 0.3, delay: 1.2 + i * 0.08,
+                        ease: 'back.out(2)',
+                        scrollTrigger: { trigger: mockupRef.current, start: 'top 35%', toggleActions: 'play none none none' },
                     });
                 });
             }
 
-            // Match badges pop
+            // Phase 4: Candidate cards stagger in reading order
+            const cards = mockupRef.current?.querySelectorAll('.candidate-card');
+            if (cards) {
+                cards.forEach((card, i) => {
+                    gsap.fromTo(card, { opacity: 0, y: 25 }, {
+                        opacity: 1, y: 0, duration: 0.5, delay: 1.8 + i * 0.1,
+                        ease: 'power3.out',
+                        scrollTrigger: { trigger: mockupRef.current, start: 'top 30%', toggleActions: 'play none none none' },
+                    });
+                });
+            }
+
+            // Phase 5: Match badges pop separately with green flash
             const badges = mockupRef.current?.querySelectorAll('.match-badge');
             if (badges) {
                 badges.forEach((badge, i) => {
                     gsap.fromTo(badge, { scale: 0 }, {
-                        scale: 1, duration: 0.3, delay: 1.2 + i * 0.12,
-                        ease: 'back.out(2)',
-                        scrollTrigger: { trigger: mockupRef.current, start: 'top 70%', toggleActions: 'play none none none' },
+                        scale: 1, duration: 0.3, delay: 2.4 + i * 0.12,
+                        ease: 'back.out(2.5)',
+                        scrollTrigger: { trigger: mockupRef.current, start: 'top 30%', toggleActions: 'play none none none' },
+                    });
+                    // Green glow flash on badge
+                    gsap.fromTo(badge, { boxShadow: '0 0 0 0 rgba(5,150,105,0)' }, {
+                        boxShadow: '0 0 8px 2px rgba(5,150,105,0.4)', duration: 0.3, delay: 2.4 + i * 0.12,
+                        yoyo: true, repeat: 1,
+                        scrollTrigger: { trigger: mockupRef.current, start: 'top 30%', toggleActions: 'play none none none' },
                     });
                 });
             }
 
-            // Counter animations
-            ScrollTrigger.create({
-                trigger: mockupRef.current,
-                start: 'top 65%',
-                onEnter: () => {
-                    gsap.to({ val: 0 }, { val: 49, duration: 1.5, ease: 'power2.out', onUpdate: function () { setResultCount(Math.round(this.targets()[0].val)); } });
-                    gsap.to({ val: 0 }, { val: 42, duration: 1.5, delay: 0.3, ease: 'power2.out', onUpdate: function () { setAvgMatch(Math.round(this.targets()[0].val)); } });
-                },
-            });
+            // Phase 6: Action buttons pulse
+            const actionBtns = mockupRef.current?.querySelectorAll('.action-btn');
+            if (actionBtns) {
+                actionBtns.forEach((btn, i) => {
+                    gsap.fromTo(btn, { boxShadow: '0 0 0 0 rgba(5,150,105,0)' }, {
+                        boxShadow: '0 0 12px 3px rgba(5,150,105,0.3)', duration: 0.4, delay: 3.6 + i * 0.5,
+                        yoyo: true, repeat: 1,
+                        scrollTrigger: { trigger: mockupRef.current, start: 'top 30%', toggleActions: 'play none none none' },
+                    });
+                });
+            }
         }, sectionRef);
 
         return () => ctx.revert();
     }, []);
 
     return (
-        <section ref={sectionRef} className="relative bg-zinc-50/50 px-4 py-28 md:py-36 overflow-hidden">
+        <section ref={sectionRef} className="relative bg-zinc-50/50 px-4 py-28 md:py-40 overflow-hidden">
             {/* Green glow behind */}
             <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                <div className="w-[600px] h-[400px] bg-emerald-500/[0.04] blur-[100px] rounded-full" />
+                <div className="w-[700px] h-[500px] bg-emerald-500/[0.04] blur-[120px] rounded-full" />
             </div>
 
             <div className="max-w-6xl mx-auto relative z-10">
-                {/* Text — centered */}
-                <div ref={textRef} className="text-center mb-14 opacity-0">
-                    <p className="font-mono text-xs uppercase tracking-[0.25em] mb-4 text-emerald-600 font-semibold">
+                {/* Centered text */}
+                <div ref={textRef} className="text-center mb-16 opacity-0 max-w-[700px] mx-auto">
+                    <p className="font-mono text-xs uppercase tracking-[0.15em] mb-4 text-emerald-600 font-semibold">
                         ◆ Lookalike Engine
                     </p>
-                    <h2 className="font-sans font-extrabold text-[clamp(1.8rem,4.5vw,3.5rem)] leading-[1.05] tracking-[-0.03em] text-zinc-950 mb-5">
+                    <h2 className="font-sans font-extrabold text-[clamp(1.8rem,4.5vw,3.5rem)] leading-[1.1] tracking-[-0.03em] text-zinc-950 mb-5">
                         PASTE ONE PROFILE.<br />GET 2,000 RANKED MATCHES.
                     </h2>
-                    <p className="text-zinc-500 text-base md:text-lg leading-relaxed max-w-2xl mx-auto">
+                    <p className="text-[#4b5563] text-base md:text-lg leading-[1.7]">
                         This is what it looks like when you exhaust your entire addressable talent market. Every matching professional on LinkedIn — found, ranked, and ready to contact. In 15 minutes.
                     </p>
                 </div>
 
-                {/* Full-width Browser Mockup */}
-                <div ref={mockupRef} className="opacity-0 max-w-5xl mx-auto" style={{ perspective: '1200px' }}>
-                    <div className="rounded-xl overflow-hidden shadow-[0_20px_60px_rgba(0,0,0,0.12),0_8px_20px_rgba(0,0,0,0.06),0_0_120px_rgba(5,150,105,0.06)] border border-zinc-200/50">
+                {/* Full-width Browser Mockup — THE SHOWSTOPPER */}
+                <div ref={mockupRef} className="max-w-[90vw] mx-auto" style={{ transformOrigin: 'center center' }}>
+                    <div className="rounded-xl overflow-hidden shadow-[0_25px_60px_rgba(0,0,0,0.12),0_8px_24px_rgba(0,0,0,0.06),0_0_100px_rgba(5,150,105,0.06)] border border-zinc-200/50">
                         {/* Title bar */}
-                        <div className="bg-zinc-800 px-4 py-2.5 flex items-center gap-3">
+                        <div className="bg-[#1f2937] px-4 py-2.5 flex items-center gap-3">
                             <div className="flex gap-1.5">
-                                <div className="w-3 h-3 rounded-full bg-red-400" />
-                                <div className="w-3 h-3 rounded-full bg-yellow-400" />
-                                <div className="w-3 h-3 rounded-full bg-green-400" />
+                                <div className="w-3 h-3 rounded-full bg-[#ef4444]" />
+                                <div className="w-3 h-3 rounded-full bg-[#eab308]" />
+                                <div className="w-3 h-3 rounded-full bg-[#22c55e]" />
                             </div>
                             <div className="flex-1 text-center">
-                                <span className="text-xs text-zinc-400 bg-zinc-700/50 rounded-md px-3 py-1">
-                                    app.screeningpilot.com/lead-scraper
-                                </span>
+                                <span className="text-xs text-zinc-400 bg-zinc-700/50 rounded-md px-3 py-1">app.screeningpilot.com</span>
                             </div>
                         </div>
 
@@ -118,21 +161,21 @@ const ProductLookalike = () => {
                             {/* Header */}
                             <div className="flex items-center justify-between mb-4">
                                 <div>
-                                    <h3 className="text-sm font-bold text-zinc-900">Lookalike Results /  SaaS-founders</h3>
+                                    <h3 className="text-sm font-bold text-zinc-900">Lookalike Results / SaaS-founders</h3>
                                     <p className="text-[10px] text-zinc-400 mt-0.5">
                                         <span className="font-bold text-emerald-600 tabular-nums">{resultCount}</span> found · AVG MATCH <span className="font-bold text-emerald-600 tabular-nums">{avgMatch}%</span>
                                     </p>
                                 </div>
                                 <div className="flex gap-2">
-                                    <div className="bg-emerald-600 text-white text-[10px] font-semibold px-3 py-1.5 rounded-md">Find Emails</div>
-                                    <div className="bg-white border border-zinc-200 text-zinc-600 text-[10px] font-semibold px-3 py-1.5 rounded-md">Export CSV</div>
+                                    <div className="action-btn bg-emerald-600 text-white text-[10px] font-semibold px-3 py-1.5 rounded-md">Find Emails</div>
+                                    <div className="action-btn bg-white border border-zinc-200 text-zinc-600 text-[10px] font-semibold px-3 py-1.5 rounded-md">Export CSV</div>
                                 </div>
                             </div>
 
                             {/* Filter bar */}
                             <div className="flex gap-2 mb-4">
-                                {['All Results', 'Excellent (2)', 'Strong (3)', 'Good (1)'].map((f, i) => (
-                                    <div key={f} className={`text-[10px] px-3 py-1 rounded-full font-medium ${i === 0 ? 'bg-emerald-600 text-white' : 'bg-zinc-100 text-zinc-500'}`}>
+                                {filters.map((f, i) => (
+                                    <div key={f} className={`filter-pill text-[10px] px-3 py-1 rounded-full font-medium scale-0 ${i === 0 ? 'bg-emerald-600 text-white' : 'bg-zinc-100 text-zinc-500'}`}>
                                         {f}
                                     </div>
                                 ))}
@@ -153,8 +196,8 @@ const ProductLookalike = () => {
                                                 </div>
                                             </div>
                                             <span className={`match-badge text-[10px] font-bold px-2 py-0.5 rounded-full scale-0 ${c.tier === 'Excellent' ? 'bg-emerald-100 text-emerald-700' :
-                                                c.tier === 'Strong' ? 'bg-blue-100 text-blue-700' :
-                                                    'bg-zinc-100 text-zinc-600'
+                                                    c.tier === 'Strong' ? 'bg-blue-100 text-blue-700' :
+                                                        'bg-zinc-100 text-zinc-600'
                                                 }`}>
                                                 {c.match}%
                                             </span>

@@ -4,10 +4,9 @@ import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import { useEffect } from "react";
 import HeroHook from "@/components/landing/HeroHook";
-import SavingsCalculator from "@/components/landing/SavingsCalculator";
-import HowItWorks from "@/components/landing/HowItWorks";
 import OldVsNewComparison from "@/components/landing/OldVsNewComparison";
 import ProductDashboard from "@/components/landing/ProductDashboard";
+import SavingsCalculator from "@/components/landing/SavingsCalculator";
 import ProductScreening from "@/components/landing/ProductScreening";
 import ProductLookalike from "@/components/landing/ProductLookalike";
 import TimeMath from "@/components/landing/TimeMath";
@@ -46,35 +45,33 @@ const Landing = () => {
       <main className="relative z-10">
         {/* 2. Hero */}
         <HeroHook />
-        {/* 3. Money Math — Savings Calculator */}
-        <SavingsCalculator />
-        {/* 4. How It Works — 15-Minute Workflow */}
-        <HowItWorks />
-        {/* 5. Old Way vs New Way (pinned scroll) */}
+        {/* 3. Old Way vs New Way (pinned scroll) */}
         <OldVsNewComparison />
-        {/* 6. Product Showcase — Dashboard */}
+        {/* 4. Product Showcase — Dashboard */}
         <ProductDashboard />
-        {/* 7. Product Showcase — AI Job Screening */}
+        {/* ★ Floating Calculator Widget (between pages 1 & 2) */}
+        <SavingsCalculator />
+        {/* 5. Product Showcase — AI Job Screening */}
         <ProductScreening />
-        {/* 8. Product Showcase — Lookalike Results */}
+        {/* 6. Product Showcase — Lookalike Results */}
         <ProductLookalike />
-        {/* 9. Time Math — Comparison Table */}
+        {/* 7. Time Math — Comparison Table */}
         <TimeMath />
-        {/* 10. Full Feature Set */}
+        {/* 8. Full Feature Set */}
         <FeatureSet />
-        {/* 11. Social Proof */}
+        {/* 9. Social Proof */}
         <SocialProof />
-        {/* 12. Pricing */}
+        {/* 10. Pricing */}
         <PricingCard />
-        {/* 13. FAQ */}
+        {/* 11. FAQ */}
         <FAQSection />
-        {/* 14. Marquee Banner */}
+        {/* 12. Marquee Banner */}
         <MarqueeBanner />
-        {/* 15. Final CTA */}
+        {/* 13. Final CTA */}
         <FinalCTA />
       </main>
 
-      {/* 16. Footer */}
+      {/* 14. Footer */}
       <Footer />
     </div>
   );
