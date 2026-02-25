@@ -440,12 +440,12 @@ serve(async (req) => {
           console.log('n8n webhook success:', webhookResult);
         }
 
-      } catch (fetchError) {
+      } catch (fetchError: unknown) {
         clearTimeout(timeoutId);
-        if (fetchError.name === 'AbortError') {
+        if (fetchError instanceof Error && fetchError.name === 'AbortError') {
           console.warn('n8n webhook timed out (non-blocking), continuing to session creation');
         } else {
-          console.warn('n8n webhook network error (non-blocking):', fetchError.message);
+          console.warn('n8n webhook network error (non-blocking):', fetchError instanceof Error ? fetchError.message : 'Unknown error');
         }
       }
     } else {
@@ -513,9 +513,9 @@ serve(async (req) => {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
 
-  } catch (error) {
+  } catch (error: unknown) {
     console.error('Error in generate-screening-invite:', error);
-    return new Response(JSON.stringify({ error: error.message }), {
+    return new Response(JSON.stringify({ error: error instanceof Error ? error.message : 'Unknown error' }), {
       status: 500,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });

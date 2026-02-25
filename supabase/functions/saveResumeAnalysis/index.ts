@@ -16,6 +16,21 @@ serve(async (req) => {
   try {
     console.log('Save resume analysis function called');
     
+    // Extract user_id from auth header
+    const authHeader = req.headers.get('Authorization');
+    let userId: string | null = null;
+    
+    const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+    const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+    const supabase = createClient(supabaseUrl, supabaseServiceKey);
+    
+    if (authHeader) {
+      const token = authHeader.replace('Bearer ', '');
+      const { data: { user } } = await supabase.auth.getUser(token);
+      userId = user?.id || null;
+    }
+    console.log('Authenticated user_id:', userId);
+    
     const { analysisData } = await req.json();
     const requestId = analysisData?.[0]?.requestId || `edge_${Date.now()}`;
     console.log(`[${requestId}] Received analysis data:`, JSON.stringify(analysisData, null, 2));
@@ -23,11 +38,6 @@ serve(async (req) => {
     if (!analysisData || !Array.isArray(analysisData) || analysisData.length === 0) {
       throw new Error('Invalid analysis data: expected non-empty array');
     }
-
-    // Initialize Supabase client
-    const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
-    const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-    const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
     console.log(`[${requestId}] Processing`, analysisData.length, 'analysis records...');
 
@@ -59,7 +69,8 @@ serve(async (req) => {
         fit_score: analysis.fitScore || 0,
         overall_factor: analysis.overallFactor || analysis.fitScore || 0,
         justification: analysis.justification || null,
-        recruitment_name: finalRecruitmentName
+        recruitment_name: finalRecruitmentName,
+        user_id: userId
       };
     });
 
@@ -89,13 +100,14 @@ serve(async (req) => {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       }
     );
-  } catch (error) {
+  } catch (error: unknown) {
     const requestId = 'unknown';
+    const errMsg = error instanceof Error ? error.message : 'Unknown error';
     console.error(`[${requestId}] Error in save-resume-analysis function:`, error);
     return new Response(
       JSON.stringify({
         success: false,
-        error: error.message,
+        error: errMsg,
       }),
       {
         status: 500,
