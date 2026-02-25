@@ -29,14 +29,17 @@ const Landing = () => {
   }, [user, navigate]);
 
   return (
-    <div className="min-h-screen relative bg-white overflow-hidden">
+    <div className="min-h-screen relative bg-[#050505] overflow-hidden font-display">
       <NoiseOverlay />
 
-      {/* Floating background orbs */}
-      <div className="fixed inset-0 pointer-events-none z-0">
-        <div className="absolute w-[400px] h-[400px] rounded-full bg-emerald-500/[0.04] blur-[100px] top-[-5%] left-[-5%]" style={{ animation: 'float-slow 8s ease-in-out infinite' }} />
-        <div className="absolute w-[350px] h-[350px] rounded-full bg-emerald-600/[0.03] blur-[120px] top-[30%] right-[-5%]" style={{ animation: 'float-gentle 12s ease-in-out infinite' }} />
-        <div className="absolute w-[250px] h-[250px] rounded-full bg-emerald-400/[0.04] blur-[80px] bottom-[15%] left-[20%]" style={{ animation: 'float-slow 10s ease-in-out infinite 2s' }} />
+      {/* Animated mesh gradient blobs */}
+      <div className="fixed inset-0 pointer-events-none z-0 overflow-hidden">
+        <div className="absolute w-[800px] h-[800px] rounded-full top-[-20%] left-[-10%] opacity-30"
+          style={{ background: 'radial-gradient(circle, rgba(5,150,105,0.15) 0%, transparent 70%)', animation: 'mesh-drift 25s ease-in-out infinite' }} />
+        <div className="absolute w-[600px] h-[600px] rounded-full top-[40%] right-[-10%] opacity-25"
+          style={{ background: 'radial-gradient(circle, rgba(20,184,166,0.12) 0%, transparent 70%)', animation: 'mesh-drift 30s ease-in-out infinite reverse' }} />
+        <div className="absolute w-[500px] h-[500px] rounded-full bottom-[-10%] left-[30%] opacity-20"
+          style={{ background: 'radial-gradient(circle, rgba(16,185,129,0.1) 0%, transparent 70%)', animation: 'mesh-drift 20s ease-in-out infinite 5s' }} />
       </div>
 
       {/* 1. Sticky Nav */}
@@ -49,7 +52,7 @@ const Landing = () => {
         <OldVsNewComparison />
         {/* 4. Product Showcase — Dashboard */}
         <ProductDashboard />
-        {/* ★ Floating Calculator Widget (between pages 1 & 2) */}
+        {/* ★ Floating Calculator Notification */}
         <SavingsCalculator />
         {/* 5. Product Showcase — AI Job Screening */}
         <ProductScreening />

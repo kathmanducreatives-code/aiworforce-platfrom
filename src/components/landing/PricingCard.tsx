@@ -6,101 +6,53 @@ import { Check, ArrowRight } from 'lucide-react';
 
 gsap.registerPlugin(ScrollTrigger);
 
-const perks = [
-    'Unlimited hires',
-    'Unlimited lookalike searches',
-    'AI resume screening',
-    'Email reveal & auto-outreach',
-    'Pipeline dashboard',
-    'Team collaboration',
-    'Meeting management',
-    'Priority support',
-];
+const features = ['Unlimited hires', 'Unlimited searches', 'AI screening', 'Email reveal & outreach', 'Pipeline dashboard', 'Team collaboration', 'Meeting management', 'Priority support'];
 
 const PricingCard = () => {
     const navigate = useNavigate();
     const sectionRef = useRef<HTMLDivElement>(null);
     const cardRef = useRef<HTMLDivElement>(null);
-    const [priceVal, setPriceVal] = useState(0);
+    const [price, setPrice] = useState(0);
 
     useEffect(() => {
         const ctx = gsap.context(() => {
-            gsap.fromTo(cardRef.current, { opacity: 0, scale: 0.95, y: 30 }, {
-                opacity: 1, scale: 1, y: 0, duration: 0.8, ease: 'power3.out',
-                scrollTrigger: { trigger: sectionRef.current, start: 'top 70%', toggleActions: 'play none none none' },
+            gsap.fromTo(cardRef.current, { opacity: 0, y: 40, scale: 0.95 }, {
+                opacity: 1, y: 0, scale: 1, duration: 0.8, ease: 'back.out(1.4)',
+                scrollTrigger: { trigger: sectionRef.current, start: 'top 65%', toggleActions: 'play none none none' },
             });
-
-            // Price count up
             ScrollTrigger.create({
-                trigger: sectionRef.current,
-                start: 'top 65%',
-                onEnter: () => {
-                    gsap.to({ val: 0 }, {
-                        val: 149, duration: 1.5, ease: 'power2.out',
-                        onUpdate: function () { setPriceVal(Math.round(this.targets()[0].val)); },
-                    });
-                },
+                trigger: sectionRef.current, start: 'top 60%',
+                onEnter: () => { gsap.to({ val: 0 }, { val: 149, duration: 1.5, ease: 'power3.out', onUpdate: function () { setPrice(Math.round(this.targets()[0].val)); } }); },
             });
-
-            // Perk stagger
-            const checks = cardRef.current?.querySelectorAll('.perk-item');
-            if (checks) {
-                checks.forEach((el, i) => {
-                    gsap.fromTo(el, { opacity: 0, x: -10 }, {
-                        opacity: 1, x: 0, duration: 0.3, delay: 1.0 + i * 0.1,
-                        ease: 'power2.out',
-                        scrollTrigger: { trigger: sectionRef.current, start: 'top 65%', toggleActions: 'play none none none' },
-                    });
-                });
-            }
         }, sectionRef);
         return () => ctx.revert();
     }, []);
 
     return (
-        <section ref={sectionRef} className="relative bg-white px-4 py-28 md:py-36">
-            <div className="max-w-lg mx-auto">
-                <p className="font-mono text-xs uppercase tracking-[0.25em] mb-4 text-emerald-600 font-semibold text-center">
-                    ◆ Pricing
-                </p>
-                <h2 className="font-sans font-extrabold text-[clamp(1.6rem,4vw,2.5rem)] leading-[1.05] tracking-[-0.03em] text-zinc-950 text-center mb-12">
-                    ONE PLAN. NO PER-HIRE FEES.<br />NO SURPRISES.
-                </h2>
-
-                <div ref={cardRef} className="bg-white rounded-2xl p-8 md:p-10 border border-zinc-200/60 shadow-[0_16px_50px_rgba(0,0,0,0.08)] opacity-0">
-                    {/* Price */}
-                    <div className="text-center mb-8">
-                        <div className="font-mono font-extrabold text-5xl md:text-6xl text-emerald-600 tabular-nums tracking-tighter">
-                            €{priceVal}<span className="text-xl text-zinc-400 font-normal">/month</span>
-                        </div>
-                        <p className="text-sm text-zinc-400 mt-2">Billed monthly. Cancel anytime.</p>
-                    </div>
-
-                    {/* Features */}
-                    <div className="space-y-3 mb-8">
-                        {perks.map((p, i) => (
-                            <div key={i} className="perk-item flex items-center gap-3 opacity-0">
-                                <div className="w-5 h-5 rounded-full bg-emerald-100 flex items-center justify-center shrink-0">
-                                    <Check className="w-3 h-3 text-emerald-600" />
+        <section ref={sectionRef} id="pricing" className="relative px-4 py-28 md:py-36">
+            <div className="text-center mb-14">
+                <p className="font-mono text-xs uppercase tracking-[0.15em] mb-4 text-emerald-400 font-semibold">◆ Pricing</p>
+                <h2 className="font-display font-black text-[clamp(1.5rem,3.5vw,3rem)] leading-[1.1] tracking-[-0.03em] text-white">ONE PLAN. NO PER-HIRE FEES.</h2>
+            </div>
+            <div ref={cardRef} className="max-w-md mx-auto opacity-0">
+                <div className="glass-strong rounded-3xl p-8 text-center glow-green">
+                    <p className="font-mono text-6xl font-black text-emerald-400 tabular-nums mb-1">€{price}</p>
+                    <p className="text-sm text-white/30 mb-8">per month · Cancel anytime</p>
+                    <div className="space-y-3 mb-8 text-left">
+                        {features.map((f, i) => (
+                            <div key={i} className="flex items-center gap-3">
+                                <div className="w-5 h-5 rounded-full bg-emerald-500/15 flex items-center justify-center border border-emerald-500/20">
+                                    <Check className="w-3 h-3 text-emerald-400" />
                                 </div>
-                                <span className="text-sm text-zinc-700">{p}</span>
+                                <span className="text-sm text-white/50">{f}</span>
                             </div>
                         ))}
                     </div>
-
-                    {/* CTA */}
-                    <button
-                        onClick={() => navigate('/auth')}
-                        className="group w-full inline-flex items-center justify-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-base py-4 rounded-xl transition-all duration-300 hover:scale-[1.02] hover:shadow-[0_8px_30px_rgba(5,150,105,0.3)]"
-                    >
-                        Start Hiring Today
-                        <ArrowRight className="w-4 h-4 transition-transform duration-300 group-hover:translate-x-1" />
+                    <button onClick={() => navigate('/auth')} className="conic-border group w-full inline-flex items-center justify-center gap-2 bg-emerald-600 hover:bg-emerald-500 text-white font-semibold py-4 rounded-xl transition-all duration-300 hover:shadow-[0_8px_32px_rgba(5,150,105,0.4)]">
+                        Start Hiring Today <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
                     </button>
+                    <p className="text-xs text-white/20 mt-4">Agencies charge €15,000–€30,000 per hire.</p>
                 </div>
-
-                <p className="text-sm text-zinc-400 text-center mt-6">
-                    Compare: Agencies charge <span className="line-through">€15,000-€30,000 per hire</span>. You pay <strong className="text-emerald-600">€149/month total</strong>.
-                </p>
             </div>
         </section>
     );

@@ -1,49 +1,34 @@
-import { useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import gsap from 'gsap';
-import { ScrollTrigger } from 'gsap/ScrollTrigger';
 import { ArrowRight } from 'lucide-react';
-
-gsap.registerPlugin(ScrollTrigger);
 
 const FinalCTA = () => {
     const navigate = useNavigate();
-    const sectionRef = useRef<HTMLDivElement>(null);
-    const contentRef = useRef<HTMLDivElement>(null);
-
-    useEffect(() => {
-        const ctx = gsap.context(() => {
-            gsap.fromTo(contentRef.current, { opacity: 0, y: 40 }, {
-                opacity: 1, y: 0, duration: 0.8, ease: 'power3.out',
-                scrollTrigger: { trigger: sectionRef.current, start: 'top 75%', toggleActions: 'play none none none' },
-            });
-        }, sectionRef);
-        return () => ctx.revert();
-    }, []);
 
     return (
-        <section ref={sectionRef} className="relative px-4 py-28 md:py-36 overflow-hidden" style={{
-            background: 'linear-gradient(135deg, #ecfdf5 0%, #d1fae5 30%, #a7f3d0 70%, #6ee7b7 100%)',
-        }}>
-            <div className="absolute w-[500px] h-[500px] rounded-full bg-emerald-400/10 blur-[100px] top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2" />
+        <section className="relative px-4 py-28 md:py-36 overflow-hidden">
+            {/* Gradient glow */}
+            <div className="absolute inset-0 pointer-events-none">
+                <div className="absolute inset-0 bg-gradient-to-br from-emerald-500/[0.06] via-transparent to-teal-500/[0.04]" />
+                <div className="absolute w-[500px] h-[500px] rounded-full bg-emerald-500/[0.08] blur-[150px] top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2" />
+            </div>
 
-            <div ref={contentRef} className="max-w-3xl mx-auto text-center relative z-10 opacity-0">
-                <h2 className="font-sans font-extrabold text-[clamp(2rem,5vw,4rem)] leading-[1.05] tracking-[-0.03em] text-zinc-950 mb-6">
-                    READY TO FIRE YOUR<br />RECRUITING AGENCY?
+            <div className="relative z-10 text-center max-w-3xl mx-auto">
+                <h2 className="font-display font-black text-[clamp(1.8rem,4.5vw,3.5rem)] leading-[1.1] tracking-[-0.04em] text-white mb-6">
+                    READY TO FIRE YOUR<br /><span className="text-shimmer">RECRUITING AGENCY?</span>
                 </h2>
-                <p className="font-sans text-lg text-zinc-600 mb-10 max-w-xl mx-auto">
+                <p className="text-lg text-white/40 mb-10 max-w-xl mx-auto">
                     Stop paying €15,000+ per hire. Start hiring unlimited for €149/month.
                 </p>
                 <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
-                    <button onClick={() => navigate('/auth')} className="group inline-flex items-center gap-3 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-lg px-8 py-4 rounded-full transition-all duration-300 hover:scale-[1.03] hover:shadow-[0_8px_30px_rgba(5,150,105,0.35)] active:scale-[0.98]">
+                    <button onClick={() => navigate('/auth')} className="conic-border group inline-flex items-center gap-3 bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-lg px-10 py-4 rounded-full transition-all duration-300 hover:scale-[1.03] hover:shadow-[0_8px_40px_rgba(5,150,105,0.4)]">
                         Start Free Trial
-                        <ArrowRight className="w-5 h-5 transition-transform duration-300 group-hover:translate-x-1" />
+                        <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
                     </button>
-                    <button onClick={() => navigate('/get-demo')} className="inline-flex items-center gap-3 bg-transparent border-2 border-emerald-600 text-emerald-700 font-semibold text-lg px-8 py-4 rounded-full transition-all duration-300 hover:bg-emerald-600 hover:text-white hover:scale-[1.03] active:scale-[0.98]">
+                    <button onClick={() => navigate('/get-demo')} className="inline-flex items-center gap-2 bg-transparent border border-white/15 text-white/60 hover:text-white hover:border-white/30 font-semibold text-lg px-10 py-4 rounded-full transition-all duration-300 hover:bg-white/5">
                         Book a Demo
                     </button>
                 </div>
-                <p className="text-sm text-zinc-500 mt-6 font-medium">Cancel anytime · No per-hire fees · Setup in 5 minutes</p>
+                <p className="text-xs text-white/20 mt-6">Cancel anytime · No per-hire fees · Setup in 5 minutes</p>
             </div>
         </section>
     );
