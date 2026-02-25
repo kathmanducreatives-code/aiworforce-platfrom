@@ -175,9 +175,9 @@ Each question must:
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
 
-  } catch (error) {
+  } catch (error: unknown) {
     console.error('Error in generate-screening-questions:', error);
-    const msg = error.name === 'AbortError' ? 'AI generation timed out' : (error.message || 'Unknown error');
+    const msg = error instanceof Error && error.name === 'AbortError' ? 'AI generation timed out' : (error instanceof Error ? error.message : 'Unknown error');
     return new Response(JSON.stringify({ error: msg }), {
       status: 500,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
