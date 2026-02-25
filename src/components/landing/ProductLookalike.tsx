@@ -86,14 +86,13 @@ const ProductLookalike = () => {
                 {/* Text — centered */}
                 <div ref={textRef} className="text-center mb-14 opacity-0">
                     <p className="font-mono text-xs uppercase tracking-[0.25em] mb-4 text-emerald-600 font-semibold">
-                        ◆ ICP Lookalike Engine
+                        ◆ Lookalike Engine
                     </p>
                     <h2 className="font-sans font-extrabold text-[clamp(1.8rem,4.5vw,3.5rem)] leading-[1.05] tracking-[-0.03em] text-zinc-950 mb-5">
-                        FIND YOUR NEXT A-PLAYER<br />IN 8 MINUTES
+                        PASTE ONE PROFILE.<br />GET 2,000 RANKED MATCHES.
                     </h2>
                     <p className="text-zinc-500 text-base md:text-lg leading-relaxed max-w-2xl mx-auto">
-                        The engine analyzes your top performers' behavioral DNA — how they think, work, and solve problems.
-                        Then it scans thousands of profiles and ranks them by match score.
+                        This is what it looks like when you exhaust your entire addressable talent market. Every matching professional on LinkedIn — found, ranked, and ready to contact. In 15 minutes.
                     </p>
                 </div>
 
@@ -154,8 +153,8 @@ const ProductLookalike = () => {
                                                 </div>
                                             </div>
                                             <span className={`match-badge text-[10px] font-bold px-2 py-0.5 rounded-full scale-0 ${c.tier === 'Excellent' ? 'bg-emerald-100 text-emerald-700' :
-                                                    c.tier === 'Strong' ? 'bg-blue-100 text-blue-700' :
-                                                        'bg-zinc-100 text-zinc-600'
+                                                c.tier === 'Strong' ? 'bg-blue-100 text-blue-700' :
+                                                    'bg-zinc-100 text-zinc-600'
                                                 }`}>
                                                 {c.match}%
                                             </span>

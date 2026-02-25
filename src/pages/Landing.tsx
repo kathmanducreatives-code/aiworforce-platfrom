@@ -4,16 +4,18 @@ import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import { useEffect } from "react";
 import HeroHook from "@/components/landing/HeroHook";
+import SavingsCalculator from "@/components/landing/SavingsCalculator";
+import HowItWorks from "@/components/landing/HowItWorks";
 import OldVsNewComparison from "@/components/landing/OldVsNewComparison";
 import ProductDashboard from "@/components/landing/ProductDashboard";
 import ProductScreening from "@/components/landing/ProductScreening";
 import ProductLookalike from "@/components/landing/ProductLookalike";
-import BehavioralEngine from "@/components/landing/BehavioralEngine";
+import TimeMath from "@/components/landing/TimeMath";
+import FeatureSet from "@/components/landing/FeatureSet";
 import SocialProof from "@/components/landing/SocialProof";
-import SocialProofMetrics from "@/components/landing/SocialProofMetrics";
-import HowItWorks from "@/components/landing/HowItWorks";
-import MarqueeBanner from "@/components/landing/MarqueeBanner";
+import PricingCard from "@/components/landing/PricingCard";
 import FAQSection from "@/components/landing/FAQSection";
+import MarqueeBanner from "@/components/landing/MarqueeBanner";
 import FinalCTA from "@/components/landing/FinalCTA";
 import NoiseOverlay from "@/components/landing/NoiseOverlay";
 
@@ -44,31 +46,35 @@ const Landing = () => {
       <main className="relative z-10">
         {/* 2. Hero */}
         <HeroHook />
-        {/* 3. Old Way vs New Way (pinned scroll) */}
-        <OldVsNewComparison />
-        {/* 4. Product Showcase — Dashboard */}
-        <ProductDashboard />
-        {/* 5. Product Showcase — AI Job Screening */}
-        <ProductScreening />
-        {/* 6. Product Showcase — Lookalike Results */}
-        <ProductLookalike />
-        {/* 7. Core Technology Deep Dive */}
-        <BehavioralEngine />
-        {/* 8. Social Proof */}
-        <SocialProof />
-        {/* 9. The Numbers */}
-        <SocialProofMetrics />
-        {/* 10. How It Works */}
+        {/* 3. Money Math — Savings Calculator */}
+        <SavingsCalculator />
+        {/* 4. How It Works — 15-Minute Workflow */}
         <HowItWorks />
-        {/* 11. Marquee Banner */}
-        <MarqueeBanner />
-        {/* 12. FAQ */}
+        {/* 5. Old Way vs New Way (pinned scroll) */}
+        <OldVsNewComparison />
+        {/* 6. Product Showcase — Dashboard */}
+        <ProductDashboard />
+        {/* 7. Product Showcase — AI Job Screening */}
+        <ProductScreening />
+        {/* 8. Product Showcase — Lookalike Results */}
+        <ProductLookalike />
+        {/* 9. Time Math — Comparison Table */}
+        <TimeMath />
+        {/* 10. Full Feature Set */}
+        <FeatureSet />
+        {/* 11. Social Proof */}
+        <SocialProof />
+        {/* 12. Pricing */}
+        <PricingCard />
+        {/* 13. FAQ */}
         <FAQSection />
-        {/* 13. Final CTA */}
+        {/* 14. Marquee Banner */}
+        <MarqueeBanner />
+        {/* 15. Final CTA */}
         <FinalCTA />
       </main>
 
-      {/* 14. Footer */}
+      {/* 16. Footer */}
       <Footer />
     </div>
   );

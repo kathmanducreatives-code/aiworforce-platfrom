@@ -15,9 +15,12 @@ const Footer = () => {
               <span className="font-sans font-bold text-lg">ScreeningPilot</span>
             </div>
             <ul className="space-y-3">
-              <li><Link to="/features" className="text-white/60 hover:text-white text-sm transition-colors">Features</Link></li>
+              <li><Link to="/lead-scraper" className="text-white/60 hover:text-white text-sm transition-colors">Lookalike Search</Link></li>
+              <li><Link to="/features" className="text-white/60 hover:text-white text-sm transition-colors">AI Screening</Link></li>
               <li><Link to="/lead-scraper" className="text-white/60 hover:text-white text-sm transition-colors">Lead Scraper</Link></li>
               <li><Link to="/deep-search" className="text-white/60 hover:text-white text-sm transition-colors">Deep Search</Link></li>
+              <li><span className="text-white/60 text-sm">Pipeline</span></li>
+              <li><span className="text-white/60 text-sm">Collaboration</span></li>
               <li><Link to="/pricing" className="text-white/60 hover:text-white text-sm transition-colors">Pricing</Link></li>
             </ul>
           </div>
@@ -40,6 +43,7 @@ const Footer = () => {
               <li><span className="text-white/60 text-sm">Privacy Policy</span></li>
               <li><span className="text-white/60 text-sm">Terms of Service</span></li>
               <li><span className="text-white/60 text-sm">Security</span></li>
+              <li><span className="text-white/60 text-sm">GDPR</span></li>
             </ul>
           </div>
 
@@ -60,14 +64,9 @@ const Footer = () => {
           </div>
         </div>
 
-        {/* Bottom */}
         <div className="mt-12 pt-8 border-t border-white/10 flex flex-col md:flex-row items-center justify-between gap-4">
-          <p className="text-white/40 text-sm">
-            © {new Date().getFullYear()} ScreeningPilot. All rights reserved.
-          </p>
-          <p className="text-white/40 text-sm italic">
-            Built for founders who refuse to overpay.
-          </p>
+          <p className="text-white/40 text-sm">© {new Date().getFullYear()} ScreeningPilot. All rights reserved.</p>
+          <p className="text-white/40 text-sm italic">Built for founders who refuse to overpay.</p>
         </div>
       </div>
     </footer>

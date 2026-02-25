@@ -59,10 +59,10 @@ const ProductDashboard = () => {
                             ◆ Your Command Center
                         </p>
                         <h2 className="font-sans font-extrabold text-[clamp(1.8rem,4vw,3.2rem)] leading-[1.05] tracking-[-0.03em] text-zinc-950 mb-5">
-                            EVERYTHING YOU NEED.<br />ONE DASHBOARD.
+                            EVERYTHING.<br />ONE DASHBOARD.
                         </h2>
                         <p className="text-zinc-500 text-base md:text-lg leading-relaxed mb-8 max-w-md">
-                            Track candidates, monitor fit scores, manage active roles, and see AI screening results — all in real time. No spreadsheets. No agency middlemen.
+                            Track every candidate, monitor fit scores, manage active roles, and launch sourcing campaigns — all in one place. No spreadsheets. No agency portal. You control everything.
                         </p>
                         <div className="grid grid-cols-2 gap-3">
                             {statCards.map((s) => (
