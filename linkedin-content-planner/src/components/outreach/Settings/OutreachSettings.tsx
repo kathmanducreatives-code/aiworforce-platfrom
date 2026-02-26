@@ -1,16 +1,17 @@
 import { useState } from 'react';
 import { Save, Settings2, Globe, Link } from 'lucide-react';
 import type { OutreachSettings as OutreachSettingsType } from '../../../types/outreach';
+import { SCREENINGPILOT_PRODUCT_CONTEXT } from '../../../lib/outreachTemplates';
 import { toast } from 'sonner';
 
 export default function OutreachSettings() {
-    // Initial state with dummy values
+    // Initial state with ScreeningPilot product context
     const [settings, setSettings] = useState<OutreachSettingsType>({
         id: '1',
-        product_context: 'Content Command Center - an AI-powered desktop app that helps B2B SaaS teams create organic content and automate outbound sales through LinkedIn and Email.',
-        email_signature: 'Cheers,\nFounder & CEO\nContent Command Center',
-        default_cta: 'Open to a quick 10m chat next week?',
-        linkedin_daily_connect_limit: 20,
+        product_context: SCREENINGPILOT_PRODUCT_CONTEXT,
+        email_signature: 'Cheers,\nFounder & CEO\nScreeningPilot',
+        default_cta: 'Happy to show you the 15-minute version. What does your Thursday or Friday look like?',
+        linkedin_daily_connect_limit: 25,
         linkedin_daily_dm_limit: 40,
     });
 

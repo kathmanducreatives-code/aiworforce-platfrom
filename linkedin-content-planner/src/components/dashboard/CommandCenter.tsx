@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { LayoutDashboard, CheckCircle2, Circle, Mail, Linkedin, PhoneCall, Calendar, Play, Loader2, Sparkles, User, Activity } from 'lucide-react';
+import { useState } from 'react';
+import { LayoutDashboard, CheckCircle2, Circle, Mail, Linkedin, PhoneCall, Calendar, Play, Loader2, Sparkles, User, Activity, CalendarCheck } from 'lucide-react';
 import { toast } from 'sonner';
 
 import { useOutreachMetrics } from '../../hooks/useOutreachMetrics';
@@ -109,20 +109,20 @@ export default function CommandCenter() {
                 </div>
 
                 {/* Real-time Dialer Status Widget */}
-                <div style={{ 
-                    background: '#111', 
-                    border: '1px solid #2a2a2a', 
-                    borderRadius: '12px', 
+                <div style={{
+                    background: '#111',
+                    border: '1px solid #2a2a2a',
+                    borderRadius: '12px',
                     padding: '12px 20px',
                     display: 'flex',
                     alignItems: 'center',
                     gap: '24px'
                 }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                        <div style={{ 
-                            width: '8px', 
-                            height: '8px', 
-                            borderRadius: '50%', 
+                        <div style={{
+                            width: '8px',
+                            height: '8px',
+                            borderRadius: '50%',
                             background: dialerStatus?.is_active ? '#00e5a0' : '#444',
                             boxShadow: dialerStatus?.is_active ? '0 0 10px #00e5a0' : 'none'
                         }} />
@@ -150,10 +150,94 @@ export default function CommandCenter() {
                 </div>
             </div>
 
-            <div style={{ display: 'grid', gridTemplateColumns: 'minmax(300px, 1fr) minmax(300px, 1fr) minmax(300px, 1fr)', gap: '20px', marginBottom: '40px', flexShrink: 0 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '20px', marginBottom: '40px', flexShrink: 0 }}>
                 <ProgressBar label="Outreach Messages" current={metrics.completedOutreach} total={metrics.pendingOutreach + metrics.completedOutreach || 1} color="#3b82f6" />
                 <ProgressBar label="Calls Made" current={metrics.completedCalls} total={metrics.pendingCalls + metrics.completedCalls || 1} color="#00e5a0" />
                 <ProgressBar label="Content Published" current={metrics.completedContent} total={metrics.pendingContent + metrics.completedContent || 1} color="#f59e0b" />
+                <div style={{ background: '#141414', border: '1px solid #2a2a2a', borderRadius: '12px', padding: '16px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <span style={{ color: '#e0e0e0', fontSize: '13px', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '6px' }}>
+                            <CalendarCheck size={14} color="#a855f7" /> Meetings Booked
+                        </span>
+                        <span style={{ color: '#a855f7', fontSize: '24px', fontWeight: 800 }}>{metrics.meetingsBooked}</span>
+                    </div>
+                    <div style={{ height: '8px', background: '#222', borderRadius: '4px', overflow: 'hidden' }}>
+                        <div style={{ height: '100%', width: metrics.meetingsBooked > 0 ? '100%' : '0%', background: 'linear-gradient(90deg, #a855f7, #7c3aed)', borderRadius: '4px', transition: 'width 0.5s ease' }} />
+                    </div>
+                </div>
+            </div>
+
+            {/* Morning Briefing */}
+            <div style={{
+                background: 'linear-gradient(135deg, #141414, #1a1020)',
+                border: '1px solid #2a2a2a',
+                borderRadius: '16px',
+                padding: '20px 24px',
+                marginBottom: '24px',
+                flexShrink: 0,
+            }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '16px' }}>
+                    <Sparkles size={18} color="#f59e0b" />
+                    <h3 style={{ color: '#fff', fontSize: '15px', fontWeight: 700, margin: 0 }}>Today's Briefing</h3>
+                    <span style={{ fontSize: '10px', color: '#555', marginLeft: 'auto' }}>
+                        {new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' })}
+                    </span>
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '12px' }}>
+                    {[
+                        {
+                            icon: <Linkedin size={16} color="#0077b5" />,
+                            label: 'DMs to Send',
+                            value: allTasks.filter(t => !t.isMarketing && t.status === 'pending' && (t.channel === 'linkedin_dm' || t.channel === 'linkedin_connect')).length,
+                            color: '#0077b5',
+                        },
+                        {
+                            icon: <Calendar size={16} color="#a855f7" />,
+                            label: 'Content Going Live',
+                            value: metrics.pendingContent,
+                            color: '#a855f7',
+                        },
+                        {
+                            icon: <PhoneCall size={16} color="#00e5a0" />,
+                            label: 'Calls Queued',
+                            value: metrics.pendingCalls,
+                            color: '#00e5a0',
+                        },
+                        {
+                            icon: <CalendarCheck size={16} color="#f59e0b" />,
+                            label: 'Meetings Booked',
+                            value: metrics.meetingsBooked,
+                            color: '#f59e0b',
+                        },
+                    ].map((item, i) => (
+                        <div key={i} style={{
+                            background: '#111',
+                            border: '1px solid #222',
+                            borderRadius: '12px',
+                            padding: '14px 16px',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '12px',
+                        }}>
+                            <div style={{
+                                width: '36px', height: '36px', borderRadius: '10px',
+                                background: `${item.color}15`,
+                                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                flexShrink: 0,
+                            }}>
+                                {item.icon}
+                            </div>
+                            <div>
+                                <div style={{ color: item.color, fontSize: '22px', fontWeight: 800, lineHeight: 1 }}>
+                                    {item.value}
+                                </div>
+                                <div style={{ color: '#666', fontSize: '10px', fontWeight: 600, marginTop: '2px' }}>
+                                    {item.label}
+                                </div>
+                            </div>
+                        </div>
+                    ))}
+                </div>
             </div>
 
             <div style={{ display: 'flex', gap: '32px', flex: 1, minHeight: 0 }}>

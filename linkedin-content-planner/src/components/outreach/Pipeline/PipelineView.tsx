@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Upload, Plus, Search as ResearchIcon, Loader2 } from 'lucide-react';
+import { Upload, Plus, Search as ResearchIcon, Loader2, Download } from 'lucide-react';
 import { useOutreachLeads } from '../../../hooks/useOutreachLeads';
 import LeadTable from './LeadTable';
 import LeadImportModal from './LeadImportModal';
@@ -73,6 +73,47 @@ export default function PipelineView() {
         toast.success(`Research complete: ${successCount} successful, ${failCount} failed.`);
     };
 
+    const handleCloselyExport = () => {
+        const selected = selectedIds.length > 0
+            ? leads.filter(l => selectedIds.includes(l.id))
+            : leads;
+
+        if (selected.length === 0) {
+            toast.error('No leads to export!');
+            return;
+        }
+
+        // Closely CSV format: LinkedIn URL, First Name, Last Name, Company, Title, Connection Note, Tags
+        const headers = ['LinkedIn URL', 'First Name', 'Last Name', 'Company', 'Title', 'Connection Note', 'Tags'];
+        const rows = selected.map(lead => {
+            const names = (lead.contact_name || '').split(' ');
+            const firstName = names[0] || '';
+            const lastName = names.slice(1).join(' ') || '';
+            const tag = `tier-${lead.tier || 2},sp-${lead.id.slice(0, 8)}`;
+            const connNote = `Hi ${firstName} — saw ${lead.company || 'your company'} is growing. Always interesting to connect with founders in the ${lead.industry || 'tech'} space. Would love to connect.`;
+            return [
+                lead.linkedin_url || '',
+                firstName,
+                lastName,
+                lead.company || '',
+                lead.title || '',
+                `"${connNote.replace(/"/g, '""')}"`,
+                tag,
+            ].join(',');
+        });
+
+        const csv = [headers.join(','), ...rows].join('\n');
+        const blob = new Blob([csv], { type: 'text/csv' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `closely-export-${new Date().toISOString().slice(0, 10)}.csv`;
+        a.click();
+        URL.revokeObjectURL(url);
+
+        toast.success(`Exported ${selected.length} leads to Closely CSV!`);
+    };
+
     return (
         <div style={{ padding: "24px 24px 60px" }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", marginBottom: "24px" }}>
@@ -116,6 +157,18 @@ export default function PipelineView() {
                         }}
                     >
                         <Upload size={16} /> Import CSV
+                    </button>
+                    <button
+                        onClick={handleCloselyExport}
+                        style={{
+                            background: "linear-gradient(135deg, #3b82f6, #2563eb)",
+                            color: "#fff", border: "none",
+                            padding: "10px 16px", borderRadius: "8px", fontSize: "13px",
+                            fontWeight: 600, display: "flex", alignItems: "center", gap: "8px",
+                            cursor: "pointer", transition: "all 0.2s"
+                        }}
+                    >
+                        <Download size={16} /> Export to Closely
                     </button>
                     <button
                         style={{

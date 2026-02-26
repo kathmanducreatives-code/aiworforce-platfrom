@@ -1,140 +1,188 @@
-import { LayoutDashboard, BarChart3, Search, Brain, LogOut, Menu, X, MessageSquare, Calendar, Mail, Activity, Target, Share2, TrendingUp } from "lucide-react";
-import { NavLink } from "react-router-dom";
-import { useAuth } from "@/hooks/useAuth";
-import { useNavigate } from "react-router-dom";
-import { Button } from "@/components/ui/button";
-import { ScrollArea } from "@/components/ui/scroll-area";
-import { Badge } from "@/components/ui/badge";
+import { useState } from 'react';
+import { NavLink, useNavigate, useLocation } from 'react-router-dom';
+import { useAuth } from '@/hooks/useAuth';
+import { cn } from '@/lib/utils';
+import {
+  LayoutDashboard, Activity, Calendar, Search, Brain, Target, TrendingUp,
+  Mail, Share2, BarChart3, LogOut, Settings, HelpCircle, ChevronLeft, ChevronRight,
+  PanelLeftClose, PanelLeft, Command,
+} from 'lucide-react';
 
-interface SidebarProps {
-  isCollapsed: boolean;
-  onToggle: () => void;
-  onCollaborationToggle?: () => void;
-  onCloseCollaboration?: () => void;
-  showCollaboration?: boolean;
-  isMobile?: boolean;
+interface NavGroup {
+  label: string;
+  items: { path: string; icon: any; label: string }[];
 }
 
-const Sidebar = ({ isCollapsed, onToggle, onCollaborationToggle, onCloseCollaboration, showCollaboration, isMobile = false }: SidebarProps) => {
+const navGroups: NavGroup[] = [
+  {
+    label: 'Recruit',
+    items: [
+      { path: '/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
+      { path: '/screening-jobs', icon: Activity, label: 'Job Screening' },
+      { path: '/interview-scheduler', icon: Calendar, label: 'Interviews' },
+    ],
+  },
+  {
+    label: 'Source',
+    items: [
+      { path: '/lead-scraper', icon: Search, label: 'Lead Scraper' },
+      { path: '/deep-search', icon: Brain, label: 'Deep Search' },
+      { path: '/icp-intelligence', icon: Target, label: 'ICP Intelligence' },
+      { path: '/growth-signals', icon: TrendingUp, label: 'Growth Signals' },
+    ],
+  },
+  {
+    label: 'Engage',
+    items: [
+      { path: '/email-sequences', icon: Mail, label: 'Email Sequences' },
+      { path: '/job-distribution', icon: Share2, label: 'Job Distribution' },
+    ],
+  },
+  {
+    label: 'Analyze',
+    items: [
+      { path: '/analytics', icon: BarChart3, label: 'Analytics' },
+    ],
+  },
+];
+
+interface SidebarProps {
+  collapsed: boolean;
+  onToggle: () => void;
+  onOpenCommandPalette?: () => void;
+}
+
+const Sidebar = ({ collapsed, onToggle, onOpenCommandPalette }: SidebarProps) => {
   const { signOut, profile } = useAuth();
   const navigate = useNavigate();
-
-  const handleSignOut = async () => {
-    await signOut();
-    navigate("/");
-  };
-
-  const navItems = [
-    { to: "/dashboard", icon: LayoutDashboard, label: "Dashboard" },
-    { to: "/analytics", icon: BarChart3, label: "Analytics" },
-    { to: "/screening-jobs", icon: Activity, label: "Job Screening" },
-    { to: "/lead-scraper", icon: Search, label: "Lead Scraper" },
-    { to: "/icp-intelligence", icon: Target, label: "ICP Intelligence" },
-    { to: "/deep-search", icon: Brain, label: "Deep Search" },
-    { to: "/interview-scheduler", icon: Calendar, label: "Interviews" },
-    { to: "/email-sequences", icon: Mail, label: "Email Sequences" },
-    { to: "/job-distribution", icon: Share2, label: "Job Distribution" },
-    { to: "/growth-signals", icon: TrendingUp, label: "Growth Signals" },
-  ];
-
-  const handleCollaborationClick = (e: React.MouseEvent) => {
-    e.preventDefault();
-    onCollaborationToggle?.();
-  };
+  const location = useLocation();
 
   return (
     <aside
-      className={`${isMobile ? 'relative' : 'fixed left-0 top-0'} h-screen bg-card/95 backdrop-blur-xl ${!isMobile && 'border-r border-border/50 shadow-[0_0_30px_rgba(0,0,0,0.5)]'} flex flex-col transition-all duration-300 ${!isMobile && 'z-40'} ${isCollapsed && !isMobile ? 'w-16' : 'w-64'
-        }`}
+      className={cn(
+        'fixed left-0 top-0 h-screen z-40 flex flex-col border-r border-border bg-card/95 backdrop-blur-xl transition-all duration-300',
+        collapsed ? 'w-[64px]' : 'w-[248px]'
+      )}
     >
-      {/* Header with hamburger */}
-      <div className="p-5 border-b border-border/50 flex items-center justify-between min-h-[72px]">
-        {!isCollapsed && (
-          <div className="flex-1">
-            {profile?.logo_url ? (
-              <img
-                src={profile.logo_url}
-                alt="Client logo"
-                className="h-12 w-auto hover:scale-105 transition-transform duration-300"
-              />
-            ) : (
-              <h2 className="text-xl font-bold bg-gradient-to-r from-primary via-cyan-500 to-primary bg-clip-text text-transparent tracking-tight">
-                ScreeningPilot
-              </h2>
-            )}
+      {/* User Profile */}
+      <div className={cn('flex items-center gap-3 px-4 py-5 border-b border-border', collapsed && 'justify-center px-0')}>
+        {!collapsed && (
+          <div className="flex items-center gap-3 flex-1 min-w-0">
+            <div className="w-8 h-8 rounded-lg bg-primary/10 border border-primary/20 flex items-center justify-center text-sm font-bold text-primary flex-shrink-0">
+              {profile?.company_name?.[0] || 'S'}
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-semibold text-foreground truncate">{profile?.company_name || 'ScreeningPilot'}</p>
+              <p className="text-xs text-muted-foreground truncate">{profile?.full_name || 'Professional'}</p>
+            </div>
+            <span className="text-[10px] font-medium text-primary bg-primary/10 px-1.5 py-0.5 rounded flex-shrink-0">Pro</span>
           </div>
         )}
-        <Button
-          onClick={onToggle}
-          variant="ghost"
-          size="icon"
-          className="h-9 w-9 hover:bg-primary/10 hover:text-primary transition-all"
-        >
-          {isCollapsed ? <Menu className="h-5 w-5" /> : <X className="h-5 w-5" />}
-        </Button>
+        {collapsed && (
+          <div className="w-8 h-8 rounded-lg bg-primary/10 border border-primary/20 flex items-center justify-center text-sm font-bold text-primary">
+            {profile?.company_name?.[0] || 'S'}
+          </div>
+        )}
       </div>
 
-      {/* Navigation - No ScrollArea, fixed height */}
-      <nav className="flex-1 px-3 py-6 space-y-1 overflow-hidden">
-        {navItems.map((item) => (
-          <NavLink
-            key={item.to}
-            to={item.to}
-            end={item.to === "/dashboard"}
-            onClick={() => onCloseCollaboration?.()}
-            className={({ isActive }) =>
-              `group flex items-center gap-3 px-4 py-2.5 rounded-lg transition-all duration-300 relative ${isActive
-                ? "bg-primary text-primary-foreground shadow-[0_0_20px_rgba(62,207,142,0.2)]"
-                : "text-muted-foreground hover:bg-primary/10 hover:text-primary hover:shadow-[0_0_15px_rgba(62,207,142,0.15)]"
-              } ${isCollapsed ? 'justify-center' : ''}`
-            }
-            title={isCollapsed ? item.label : undefined}
-          >
-            {({ isActive }) => (
-              <>
-                {isActive && !isCollapsed && (
-                  <div className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-8 bg-primary-foreground rounded-r shadow-glow animate-pulse-glow" />
-                )}
-                <item.icon className="h-5 w-5 flex-shrink-0 group-hover:scale-110 transition-transform" />
-                {!isCollapsed && (
-                  <span className="font-medium">{item.label}</span>
-                )}
-              </>
-            )}
-          </NavLink>
-        ))}
-
-        {/* Collaboration Button */}
+      {/* Command Palette Shortcut */}
+      {!collapsed && onOpenCommandPalette && (
         <button
-          onClick={handleCollaborationClick}
-          className={`group flex items-center gap-3 px-4 py-2.5 rounded-lg transition-all duration-300 relative w-full ${showCollaboration
-            ? "bg-primary text-primary-foreground shadow-[0_0_20px_rgba(62,207,142,0.2)]"
-            : "text-muted-foreground hover:bg-primary/10 hover:text-primary hover:shadow-[0_0_15px_rgba(62,207,142,0.15)]"
-            } ${isCollapsed ? 'justify-center' : ''}`}
-          title={isCollapsed ? "Collaboration" : undefined}
+          onClick={onOpenCommandPalette}
+          className="mx-3 mt-3 flex items-center gap-2 px-3 py-2 rounded-lg border border-border bg-muted/50 text-sm text-muted-foreground hover:text-foreground hover:border-primary/30 transition-all"
         >
-          {showCollaboration && !isCollapsed && (
-            <div className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-8 bg-primary-foreground rounded-r shadow-glow animate-pulse-glow" />
-          )}
-          <MessageSquare className="h-5 w-5 flex-shrink-0 group-hover:scale-110 transition-transform" />
-          {!isCollapsed && (
-            <span className="font-medium">Collaboration</span>
-          )}
+          <Search className="h-3.5 w-3.5" />
+          <span className="flex-1 text-left">Search...</span>
+          <kbd className="text-[10px] bg-background border border-border rounded px-1 py-0.5 font-mono">⌘K</kbd>
         </button>
+      )}
+      {collapsed && onOpenCommandPalette && (
+        <button onClick={onOpenCommandPalette} className="mx-auto mt-3 p-2 rounded-lg hover:bg-muted transition-colors">
+          <Search className="h-4 w-4 text-muted-foreground" />
+        </button>
+      )}
+
+      {/* Navigation */}
+      <nav className="flex-1 overflow-y-auto px-3 py-3 space-y-5">
+        {navGroups.map((group) => (
+          <div key={group.label}>
+            {!collapsed && (
+              <p className="text-[10px] font-semibold text-muted-foreground/60 uppercase tracking-widest px-3 mb-1.5">
+                {group.label}
+              </p>
+            )}
+            <div className="space-y-0.5">
+              {group.items.map((item) => {
+                const isActive = location.pathname === item.path || location.pathname.startsWith(item.path + '/');
+                return (
+                  <NavLink
+                    key={item.path}
+                    to={item.path}
+                    className={cn(
+                      'flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-all duration-200 relative group',
+                      isActive
+                        ? 'bg-primary/10 text-primary'
+                        : 'text-muted-foreground hover:text-foreground hover:bg-muted/50',
+                      collapsed && 'justify-center px-2'
+                    )}
+                  >
+                    {/* Active indicator */}
+                    {isActive && (
+                      <div className="absolute left-0 top-1/2 -translate-y-1/2 w-[3px] h-5 bg-primary rounded-r-full" />
+                    )}
+                    <item.icon className={cn('h-4 w-4 flex-shrink-0', isActive ? 'text-primary' : 'text-muted-foreground group-hover:text-foreground')} />
+                    {!collapsed && <span className="truncate">{item.label}</span>}
+                  </NavLink>
+                );
+              })}
+            </div>
+          </div>
+        ))}
       </nav>
 
-      {/* Footer */}
-      <div className="p-4 border-t border-border/50">
-        <Button
-          onClick={handleSignOut}
-          variant="ghost"
-          className={`w-full gap-3 text-muted-foreground hover:text-primary hover:bg-primary/10 hover:shadow-[0_0_15px_rgba(62,207,142,0.15)] transition-all duration-300 ${isCollapsed ? 'justify-center px-0' : 'justify-start'
-            }`}
-          title={isCollapsed ? "Sign Out" : undefined}
+      {/* Bottom section */}
+      <div className="border-t border-border px-3 py-3 space-y-0.5">
+        <button
+          onClick={() => navigate('/settings')}
+          className={cn(
+            'flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-all w-full',
+            collapsed && 'justify-center px-2'
+          )}
         >
-          <LogOut className="h-5 w-5 flex-shrink-0" />
-          {!isCollapsed && <span className="font-medium">Sign Out</span>}
-        </Button>
+          <Settings className="h-4 w-4" />
+          {!collapsed && <span>Settings</span>}
+        </button>
+        <button
+          className={cn(
+            'flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-all w-full',
+            collapsed && 'justify-center px-2'
+          )}
+        >
+          <HelpCircle className="h-4 w-4" />
+          {!collapsed && <span>Help & Support</span>}
+        </button>
+        <button
+          onClick={signOut}
+          className={cn(
+            'flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium text-muted-foreground hover:text-red-500 hover:bg-red-500/5 transition-all w-full',
+            collapsed && 'justify-center px-2'
+          )}
+        >
+          <LogOut className="h-4 w-4" />
+          {!collapsed && <span>Sign Out</span>}
+        </button>
+        <div className="pt-1.5 border-t border-border mt-1.5">
+          <button
+            onClick={onToggle}
+            className={cn(
+              'flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-all w-full',
+              collapsed && 'justify-center px-2'
+            )}
+          >
+            {collapsed ? <PanelLeft className="h-4 w-4" /> : <PanelLeftClose className="h-4 w-4" />}
+            {!collapsed && <span>Collapse</span>}
+          </button>
+        </div>
       </div>
     </aside>
   );

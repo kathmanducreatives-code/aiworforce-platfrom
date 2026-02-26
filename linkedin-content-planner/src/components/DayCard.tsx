@@ -12,23 +12,23 @@ import type {
 
 /* ── Hero format config ─────────────────────────── */
 const HERO_FORMAT: Record<string, { label: string; color: string; icon: typeof BookOpen }> = {
-    "Monday":    { label: "Comic Strip",   color: "#7c3aed", icon: BookOpen },
-    "Tuesday":   { label: "Data Visual",   color: "#f97316", icon: BarChart2 },
-    "Wednesday": { label: "Carousel",      color: "#00e5a0", icon: Zap },
-    "Thursday":  { label: "Founder Story", color: "#3b82f6", icon: MessageSquare },
-    "Friday":    { label: "Short Video",   color: "#ef4444", icon: Film },
-    "Saturday":  { label: "Hot Take",      color: "#eab308", icon: Flame },
+    "Monday": { label: "Comic Strip", color: "#7c3aed", icon: BookOpen },
+    "Tuesday": { label: "Data Visual", color: "#f97316", icon: BarChart2 },
+    "Wednesday": { label: "Carousel", color: "#00e5a0", icon: Zap },
+    "Thursday": { label: "Founder Story", color: "#3b82f6", icon: MessageSquare },
+    "Friday": { label: "Short Video", color: "#ef4444", icon: Film },
+    "Saturday": { label: "Hot Take", color: "#eab308", icon: Flame },
 };
 
 type TabId = "caption" | "carousel" | "comic" | "datavisual" | "hottake" | "poll";
 
 const TABS: { id: TabId; label: string }[] = [
-    { id: "caption",    label: "Caption" },
-    { id: "carousel",   label: "Carousel" },
-    { id: "comic",      label: "Comic" },
+    { id: "caption", label: "Caption" },
+    { id: "carousel", label: "Carousel" },
+    { id: "comic", label: "Comic" },
     { id: "datavisual", label: "Data Visual" },
-    { id: "hottake",    label: "Hot Take" },
-    { id: "poll",       label: "Poll" },
+    { id: "hottake", label: "Hot Take" },
+    { id: "poll", label: "Poll" },
 ];
 
 /* ── Props ──────────────────────────────────────── */
@@ -42,6 +42,7 @@ interface DayCardProps {
     onFileChange: (index: number, base64: string, name: string, type: "image" | "video") => void;
     onRemoveFile: (index: number) => void;
     onTimeChange: (index: number, time: string) => void;
+    onDateChange?: (index: number, date: string) => void;
 }
 
 /* ════════════════════════════════════════════════
@@ -500,11 +501,11 @@ const PollTab = ({
    ════════════════════════════════════════════════ */
 const ContentChecklist = ({ day }: { day: DayPlan }) => {
     const items = [
-        { label: "Caption ready",    done: !!day.postCaption },
-        { label: "Media uploaded",   done: !!day.mediaBase64 },
-        { label: "Carousel built",   done: day.carouselScript && day.carouselScript.length > 0 },
-        { label: "Comic generated",  done: !!day.comicScript },
-        { label: "Scheduled",        done: day.status === "Posted" },
+        { label: "Caption ready", done: !!day.postCaption },
+        { label: "Media uploaded", done: !!day.mediaBase64 },
+        { label: "Carousel built", done: day.carouselScript && day.carouselScript.length > 0 },
+        { label: "Comic generated", done: !!day.comicScript },
+        { label: "Scheduled", done: day.status === "Posted" },
     ];
     return (
         <div style={{
@@ -535,7 +536,7 @@ const ContentChecklist = ({ day }: { day: DayPlan }) => {
 const DayCard = ({
     day, dayShort, index, copiedId,
     onStatusToggle, onCopy,
-    onFileChange, onRemoveFile, onTimeChange
+    onFileChange, onRemoveFile, onTimeChange, onDateChange
 }: DayCardProps) => {
     const [activeTab, setActiveTab] = useState<TabId>("caption");
     const [showManual, setShowManual] = useState(false);
@@ -606,13 +607,28 @@ const DayCard = ({
                 }} />
             </div>
 
-            {/* ── Time Picker Row ── */}
+            {/* ── Date + Time Picker Row ── */}
             <div style={{
-                display: "flex", alignItems: "center", justifyContent: "flex-end",
+                display: "flex", alignItems: "center", justifyContent: "space-between",
                 padding: "6px 14px",
                 borderBottom: "1px solid #1a1a1a",
                 background: "#111",
             }}>
+                {onDateChange && (
+                    <input
+                        type="date"
+                        value={day.scheduledDate || ""}
+                        onChange={(e) => onDateChange(index, e.target.value)}
+                        style={{
+                            background: "#1a1a1a", border: "1px solid #2a2a2a",
+                            borderRadius: "8px", padding: "4px 8px",
+                            color: day.scheduledDate ? "#00e5a0" : "#555",
+                            fontSize: "11px", fontWeight: 600,
+                            outline: "none", cursor: "pointer",
+                            fontFamily: "'Inter', sans-serif",
+                        }}
+                    />
+                )}
                 <TimePicker
                     value={day.scheduledTime || "08:00"}
                     onChange={(val) => onTimeChange(index, val)}
@@ -653,12 +669,12 @@ const DayCard = ({
                 overflowY: "auto",
                 scrollbarWidth: "thin",
             }}>
-                {activeTab === "caption"    && <CaptionTab    day={day} copiedId={copiedId} onCopy={onCopy} />}
-                {activeTab === "carousel"   && <CarouselTab   day={day} copiedId={copiedId} onCopy={onCopy} />}
-                {activeTab === "comic"      && <ComicTab      day={day} copiedId={copiedId} onCopy={onCopy} />}
+                {activeTab === "caption" && <CaptionTab day={day} copiedId={copiedId} onCopy={onCopy} />}
+                {activeTab === "carousel" && <CarouselTab day={day} copiedId={copiedId} onCopy={onCopy} />}
+                {activeTab === "comic" && <ComicTab day={day} copiedId={copiedId} onCopy={onCopy} />}
                 {activeTab === "datavisual" && <DataVisualTab day={day} copiedId={copiedId} onCopy={onCopy} />}
-                {activeTab === "hottake"    && <HotTakeTab    day={day} copiedId={copiedId} onCopy={onCopy} />}
-                {activeTab === "poll"       && <PollTab       day={day} copiedId={copiedId} onCopy={onCopy} />}
+                {activeTab === "hottake" && <HotTakeTab day={day} copiedId={copiedId} onCopy={onCopy} />}
+                {activeTab === "poll" && <PollTab day={day} copiedId={copiedId} onCopy={onCopy} />}
             </div>
 
             {/* ── Media Upload ── */}

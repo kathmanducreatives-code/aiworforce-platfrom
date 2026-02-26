@@ -65,4 +65,5 @@ export interface DayPlan {
     mediaName: string | null;
     mediaType: "image" | "video" | null;
     scheduledTime: string;
+    scheduledDate: string | null;
 }

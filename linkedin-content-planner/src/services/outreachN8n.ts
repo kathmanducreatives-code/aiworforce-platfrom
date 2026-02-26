@@ -2,6 +2,7 @@ import type { OutreachActivity } from '../types/outreach';
 
 const EMAIL_WEBHOOK_URL = import.meta.env.VITE_N8N_OUTREACH_EMAIL_WEBHOOK_URL;
 const LINKEDIN_WEBHOOK_URL = import.meta.env.VITE_N8N_OUTREACH_LINKEDIN_WEBHOOK_URL;
+const CAL_LINK = import.meta.env.VITE_CAL_BOOKING_LINK || '';
 
 export async function executeOutreachAction(activity: OutreachActivity, leadDetails: Record<string, any>) {
     const isEmail = activity.channel === 'email' || activity.action_type === 'send_email';
@@ -29,9 +30,13 @@ export async function executeOutreachAction(activity: OutreachActivity, leadDeta
         action_type: activity.action_type,
         channel: activity.channel,
         lead_id: activity.lead_id,
-        lead_info: leadDetails, // E.g., email address, linkedin url, name, etc.
+        activity_id: activity.id,
+        lead_info: leadDetails,
         subject: activity.subject,
         body: activity.body,
+        cal_link: CAL_LINK,
+        supabase_url: import.meta.env.VITE_SUPABASE_URL,
+        supabase_key: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
     };
 
     try {

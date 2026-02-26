@@ -2,69 +2,52 @@ import { ReactNode, useState, useEffect } from "react";
 import { useLocation } from "react-router-dom";
 import Sidebar from "./Sidebar";
 import MobileHeader from "./MobileHeader";
-import CollaborationHub from "./collaboration/CollaborationHub";
 import AuthenticatedBackground from "./AuthenticatedBackground";
+import CommandPalette from "./shared/CommandPalette";
 import { useIsMobile } from "@/hooks/use-mobile";
 
 interface MainLayoutProps {
   children: ReactNode;
 }
 
-// Routes that benefit from collapsed sidebar for more screen space
 const DATA_HEAVY_ROUTES = ['/lead-scraper', '/deep-search', '/candidates'];
 
 const MainLayout = ({ children }: MainLayoutProps) => {
   const isMobile = useIsMobile();
   const location = useLocation();
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
-  const [showCollaboration, setShowCollaboration] = useState(false);
+  const [commandOpen, setCommandOpen] = useState(false);
 
-  // Auto-collapse sidebar on data-heavy routes for more screen space
   useEffect(() => {
     if (DATA_HEAVY_ROUTES.includes(location.pathname)) {
       setIsSidebarCollapsed(true);
     }
   }, [location.pathname]);
 
-  // Auto-close collaboration panel when navigating to a different page
-  useEffect(() => {
-    setShowCollaboration(false);
-  }, [location.pathname]);
-
   return (
     <div className="min-h-screen w-full bg-background relative">
-      {/* Premium Background Effects */}
       <AuthenticatedBackground />
-      
+
+      {/* Command Palette (global) */}
+      <CommandPalette open={commandOpen} onOpenChange={setCommandOpen} />
+
       {/* Desktop Sidebar */}
       {!isMobile && (
-        <Sidebar 
-          isCollapsed={isSidebarCollapsed} 
+        <Sidebar
+          collapsed={isSidebarCollapsed}
           onToggle={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
-          onCollaborationToggle={() => setShowCollaboration(!showCollaboration)}
-          onCloseCollaboration={() => setShowCollaboration(false)}
-          showCollaboration={showCollaboration}
+          onOpenCommandPalette={() => setCommandOpen(true)}
         />
       )}
 
       {/* Mobile Header */}
       {isMobile && (
-        <MobileHeader 
-          onCollaborationToggle={() => setShowCollaboration(!showCollaboration)}
-          showCollaboration={showCollaboration}
-        />
+        <MobileHeader onOpenCommandPalette={() => setCommandOpen(true)} />
       )}
-      
-      <CollaborationHub 
-        isOpen={showCollaboration}
-        onClose={() => setShowCollaboration(false)} 
-        isSidebarCollapsed={isSidebarCollapsed}
-      />
-      
-      <main 
-        className={`min-h-screen overflow-auto transition-all duration-300 relative z-10 ${
-          isMobile ? 'ml-0 pt-[120px]' : isSidebarCollapsed ? 'ml-16' : 'ml-64'
-        }`}
+
+      <main
+        className={`min-h-screen overflow-auto transition-all duration-300 relative z-10 ${isMobile ? 'ml-0 pt-[72px]' : isSidebarCollapsed ? 'ml-16' : 'ml-[248px]'
+          }`}
       >
         <div className={isMobile ? 'px-4 py-6' : ''}>
           {children}

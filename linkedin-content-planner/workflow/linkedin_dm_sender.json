@@ -1,0 +1,167 @@
+{
+    "name": "LinkedIn DM Outreach Sender",
+    "nodes": [
+        {
+            "parameters": {
+                "httpMethod": "POST",
+                "path": "linkedin-dm-send",
+                "responseMode": "lastNode",
+                "options": {}
+            },
+            "id": "ldm-webhook",
+            "name": "Webhook - Send DM",
+            "type": "n8n-nodes-base.webhook",
+            "typeVersion": 2,
+            "position": [
+                0,
+                0
+            ],
+            "webhookId": "linkedin-dm-send"
+        },
+        {
+            "parameters": {
+                "jsCode": "// Extract lead info and message body from webhook payload\nconst input = $input.first().json.body;\n\nconst linkedinUrl = input.lead_info?.linkedin_url;\nconst contactName = input.lead_info?.contact_name;\nconst messageBody = input.body;\nconst activityId = input.activity_id;\nconst calLink = input.cal_link || '';\n\nif (!linkedinUrl || !messageBody) {\n  throw new Error('Missing linkedin_url or message body');\n}\n\n// Append Cal.com link if provided\nlet finalMessage = messageBody;\nif (calLink) {\n  finalMessage += `\\n\\nHappy to chat — pick a time that works: ${calLink}`;\n}\n\nreturn [{\n  json: {\n    linkedinUrl,\n    contactName,\n    message: finalMessage,\n    activityId,\n    supabaseUrl: input.supabase_url || '',\n    supabaseKey: input.supabase_key || ''\n  }\n}];"
+            },
+            "id": "ldm-prepare",
+            "name": "Prepare DM Payload",
+            "type": "n8n-nodes-base.code",
+            "typeVersion": 2,
+            "position": [
+                250,
+                0
+            ]
+        },
+        {
+            "parameters": {
+                "method": "POST",
+                "url": "https://api.phantombuster.com/api/v2/agents/launch",
+                "sendHeaders": true,
+                "headerParameters": {
+                    "parameters": [
+                        {
+                            "name": "X-Phantombuster-Key",
+                            "value": "={{ $env.PHANTOMBUSTER_API_KEY }}"
+                        },
+                        {
+                            "name": "Content-Type",
+                            "value": "application/json"
+                        }
+                    ]
+                },
+                "sendBody": true,
+                "specifyBody": "json",
+                "jsonBody": "={\n  \"id\": \"{{ $env.PHANTOMBUSTER_LINKEDIN_DM_AGENT_ID }}\",\n  \"argument\": {\n    \"sessionCookie\": \"{{ $env.LINKEDIN_SESSION_COOKIE }}\",\n    \"spreadsheetUrl\": \"\",\n    \"profileUrls\": [{{ JSON.stringify($json.linkedinUrl) }}],\n    \"message\": {{ JSON.stringify($json.message) }}\n  }\n}",
+                "options": {}
+            },
+            "id": "ldm-phantombuster",
+            "name": "Send via Phantombuster",
+            "type": "n8n-nodes-base.httpRequest",
+            "typeVersion": 4.1,
+            "position": [
+                500,
+                0
+            ]
+        },
+        {
+            "parameters": {
+                "method": "PATCH",
+                "url": "={{ $('Prepare DM Payload').item.json.supabaseUrl }}/rest/v1/outreach_activities?id=eq.{{ $('Prepare DM Payload').item.json.activityId }}",
+                "sendHeaders": true,
+                "headerParameters": {
+                    "parameters": [
+                        {
+                            "name": "apikey",
+                            "value": "={{ $('Prepare DM Payload').item.json.supabaseKey }}"
+                        },
+                        {
+                            "name": "Authorization",
+                            "value": "=Bearer {{ $('Prepare DM Payload').item.json.supabaseKey }}"
+                        },
+                        {
+                            "name": "Content-Type",
+                            "value": "application/json"
+                        },
+                        {
+                            "name": "Prefer",
+                            "value": "return=minimal"
+                        }
+                    ]
+                },
+                "sendBody": true,
+                "specifyBody": "json",
+                "jsonBody": "={\n  \"status\": \"sent\",\n  \"executed_date\": \"{{ $now.toISO() }}\"\n}",
+                "options": {}
+            },
+            "id": "ldm-update-status",
+            "name": "Mark Activity Sent",
+            "type": "n8n-nodes-base.httpRequest",
+            "typeVersion": 4.1,
+            "position": [
+                750,
+                0
+            ]
+        },
+        {
+            "parameters": {
+                "jsCode": "return [{ json: { success: true, message: `DM sent to ${$('Prepare DM Payload').item.json.contactName}`, activityId: $('Prepare DM Payload').item.json.activityId } }];"
+            },
+            "id": "ldm-response",
+            "name": "Format Response",
+            "type": "n8n-nodes-base.code",
+            "typeVersion": 2,
+            "position": [
+                1000,
+                0
+            ]
+        }
+    ],
+    "connections": {
+        "Webhook - Send DM": {
+            "main": [
+                [
+                    {
+                        "node": "Prepare DM Payload",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Prepare DM Payload": {
+            "main": [
+                [
+                    {
+                        "node": "Send via Phantombuster",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Send via Phantombuster": {
+            "main": [
+                [
+                    {
+                        "node": "Mark Activity Sent",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Mark Activity Sent": {
+            "main": [
+                [
+                    {
+                        "node": "Format Response",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        }
+    },
+    "settings": {
+        "executionOrder": "v1"
+    }
+}

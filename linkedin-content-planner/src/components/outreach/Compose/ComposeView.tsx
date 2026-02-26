@@ -1,9 +1,10 @@
 import { useState, useEffect } from 'react';
 import { useOutreachLeads } from '../../../hooks/useOutreachLeads';
 import { generateEmailDraft } from '../../../services/outreachGemini';
-import { Bot, User, Building, Copy, Check, Send, Loader2, Sparkles, RefreshCcw } from 'lucide-react';
+import { Bot, User, Building, Copy, Check, Send, Loader2, Sparkles, RefreshCcw, MessageCircle } from 'lucide-react';
 import { toast } from 'sonner';
 import type { OutreachLead } from '../../../types/outreach';
+import { REPLY_TEMPLATES } from '../../../lib/outreachTemplates';
 
 export default function ComposeView() {
     const { leads } = useOutreachLeads();
@@ -12,9 +13,9 @@ export default function ComposeView() {
 
     // AI Context Settings
     const [context, setContext] = useState({
-        product_name: 'Content Command Center',
-        value_prop: 'We help B2B teams accelerate revenue with an AI-powered outbound engine natively in an electron desktop app.',
-        sender_name: 'SaaS Founder',
+        product_name: 'ScreeningPilot',
+        value_prop: 'AI-powered recruiting OS that replaces recruitment agencies. Paste one LinkedIn profile → get hundreds of ranked matches with emails in under 15 minutes. €149/month flat, unlimited hires.',
+        sender_name: 'Founder',
     });
 
     const [isGenerating, setIsGenerating] = useState(false);
@@ -193,6 +194,48 @@ export default function ComposeView() {
                             onFocus={(e) => e.target.style.borderColor = '#3b82f6'}
                             onBlur={(e) => e.target.style.borderColor = '#333'}
                         />
+                    </div>
+
+                    {/* Reply Templates */}
+                    <div style={{ borderTop: '1px solid #2a2a2a', paddingTop: '16px' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px' }}>
+                            <MessageCircle size={14} color="#a855f7" />
+                            <span style={{ fontSize: '11px', fontWeight: 700, color: '#888', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                                Quick Reply Templates
+                            </span>
+                        </div>
+                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
+                            {REPLY_TEMPLATES.map(rt => {
+                                const firstName = selectedLead?.contact_name?.split(' ')[0] || '{first_name}';
+                                const calLink = import.meta.env.VITE_CAL_BOOKING_LINK || 'https://cal.com/your-link';
+                                const filledTemplate = rt.template
+                                    .replace(/{first_name}/g, firstName)
+                                    .replace(/{cal_link}/g, calLink);
+                                return (
+                                    <button
+                                        key={rt.id}
+                                        onClick={() => {
+                                            setDraft({ subject: `Re: ${rt.trigger}`, body: filledTemplate });
+                                            toast.success(`Loaded: ${rt.label}`);
+                                        }}
+                                        style={{
+                                            background: `${rt.color}12`,
+                                            border: `1px solid ${rt.color}33`,
+                                            color: rt.color,
+                                            padding: '6px 12px',
+                                            borderRadius: '8px',
+                                            fontSize: '11px',
+                                            fontWeight: 600,
+                                            cursor: 'pointer',
+                                            transition: 'all 0.2s',
+                                        }}
+                                        title={`When they say: "${rt.trigger}"`}
+                                    >
+                                        {rt.label}
+                                    </button>
+                                );
+                            })}
+                        </div>
                     </div>
                 </div>
 
