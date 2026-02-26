@@ -25,6 +25,10 @@ const Dashboard = () => {
     activeRecruitments: 0,
     candidatesThisWeek: 0,
     candidatesLastWeek: 0,
+    pipelineNew: 0,
+    pipelineScreened: 0,
+    pipelineInterviewed: 0,
+    pipelineHired: 0,
   });
   const [recentCandidates, setRecentCandidates] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -59,12 +63,26 @@ const Dashboard = () => {
 
         const uniqueRoles = new Set(candidates.map(c => c.recruitment_name).filter(Boolean));
 
+        // Pipeline stage counts from real current_stage data
+        let pipelineNew = 0, pipelineScreened = 0, pipelineInterviewed = 0, pipelineHired = 0;
+        candidates.forEach(c => {
+          const stage = (c.current_stage || 'new').toLowerCase();
+          if (stage === 'hired' || stage === 'placed') pipelineHired++;
+          else if (stage === 'interviewed' || stage === 'interview') pipelineInterviewed++;
+          else if (stage === 'screened' || stage === 'screening' || stage === 'reviewed') pipelineScreened++;
+          else pipelineNew++;
+        });
+
         setMetrics({
           totalCandidates: candidates.length,
           avgFitScore,
           activeRecruitments: uniqueRoles.size,
           candidatesThisWeek: thisWeek,
           candidatesLastWeek: lastWeek,
+          pipelineNew,
+          pipelineScreened,
+          pipelineInterviewed,
+          pipelineHired,
         });
 
         // Recent candidates for the table
@@ -229,10 +247,10 @@ const Dashboard = () => {
             ) : (
               <div className="space-y-3">
                 {[
-                  { stage: 'Sourced', count: metrics.totalCandidates, color: 'bg-blue-500', pct: 100 },
-                  { stage: 'Screened', count: Math.round(metrics.totalCandidates * 0.65), color: 'bg-emerald-500', pct: 65 },
-                  { stage: 'Interviewed', count: Math.round(metrics.totalCandidates * 0.2), color: 'bg-amber-500', pct: 20 },
-                  { stage: 'Hired', count: Math.round(metrics.totalCandidates * 0.08), color: 'bg-purple-500', pct: 8 },
+                  { stage: 'New / Sourced', count: metrics.pipelineNew, color: 'bg-blue-500', pct: metrics.totalCandidates > 0 ? Math.round((metrics.pipelineNew / metrics.totalCandidates) * 100) : 0 },
+                  { stage: 'Screened', count: metrics.pipelineScreened, color: 'bg-emerald-500', pct: metrics.totalCandidates > 0 ? Math.round((metrics.pipelineScreened / metrics.totalCandidates) * 100) : 0 },
+                  { stage: 'Interviewed', count: metrics.pipelineInterviewed, color: 'bg-amber-500', pct: metrics.totalCandidates > 0 ? Math.round((metrics.pipelineInterviewed / metrics.totalCandidates) * 100) : 0 },
+                  { stage: 'Hired', count: metrics.pipelineHired, color: 'bg-purple-500', pct: metrics.totalCandidates > 0 ? Math.round((metrics.pipelineHired / metrics.totalCandidates) * 100) : 0 },
                 ].map((s) => (
                   <div key={s.stage} className="space-y-1.5">
                     <div className="flex items-center justify-between text-xs">
