@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { supabase } from "@/integrations/supabase/client";
-import { Users, Target, TrendingUp, Clock, Award, Send, Brain, BarChart3, Search, Mail, CheckCircle, AlertTriangle, ArrowLeft } from "lucide-react";
+import { Users, Target, TrendingUp, Clock, Award, Send, Brain, BarChart3, Search, Mail, CheckCircle, AlertTriangle } from "lucide-react";
+import PageHeader from "@/components/shared/PageHeader";
+import MetricCard from "@/components/shared/MetricCard";
 import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 
 interface DashboardMetrics {
   totalCandidates: number;
@@ -53,7 +54,7 @@ const DataDashboard = () => {
   const fetchDashboardMetrics = async () => {
     try {
       setLoading(true);
-      
+
       const now = new Date();
       const oneWeekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
       const oneMonthAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
@@ -86,8 +87,8 @@ const DataDashboard = () => {
         const fitScore = c.fit_score as any;
         return typeof fitScore === 'object' && fitScore !== null ? (fitScore.score || 0) : 0;
       }).filter(score => score > 0) || [];
-      const averageFitScore = fitScores.length > 0 
-        ? Math.round(fitScores.reduce((a, b) => a + b, 0) / fitScores.length) 
+      const averageFitScore = fitScores.length > 0
+        ? Math.round(fitScores.reduce((a, b) => a + b, 0) / fitScores.length)
         : 0;
 
       const timeSavedThisMonth = candidatesThisMonth * 45;
@@ -97,17 +98,17 @@ const DataDashboard = () => {
         const score = typeof overall === 'object' && overall !== null ? (overall.score || 0) : 0;
         return score >= 70;
       }).length || 0;
-      const screeningToInterviewRate = totalCandidates > 0 
-        ? Math.round((interviewReady / totalCandidates) * 100) 
+      const screeningToInterviewRate = totalCandidates > 0
+        ? Math.round((interviewReady / totalCandidates) * 100)
         : 0;
 
-      const placementsThisMonth = placements?.filter(p => 
+      const placementsThisMonth = placements?.filter(p =>
         new Date(p.placement_date) >= oneMonthAgo
       ).length || 0;
 
       const totalPlacements = placements?.length || 0;
-      const placementConversionRate = totalCandidates > 0 
-        ? Math.round((totalPlacements / totalCandidates) * 100) 
+      const placementConversionRate = totalCandidates > 0
+        ? Math.round((totalPlacements / totalCandidates) * 100)
         : 0;
 
       const emailsSent = emails?.length || 0;
@@ -121,8 +122,8 @@ const DataDashboard = () => {
 
       // Stage distribution
       const stageDistribution = [
-        { 
-          stage: 'Initial Screening', 
+        {
+          stage: 'Initial Screening',
           count: candidates?.filter(c => {
             const overall = c.overall_factor as any;
             const score = typeof overall === 'object' && overall !== null ? (overall.score || 0) : 0;
@@ -130,8 +131,8 @@ const DataDashboard = () => {
           }).length || 0,
           percentage: 0
         },
-        { 
-          stage: 'Under Review', 
+        {
+          stage: 'Under Review',
           count: candidates?.filter(c => {
             const overall = c.overall_factor as any;
             const score = typeof overall === 'object' && overall !== null ? (overall.score || 0) : 0;
@@ -139,8 +140,8 @@ const DataDashboard = () => {
           }).length || 0,
           percentage: 0
         },
-        { 
-          stage: 'Interview Ready', 
+        {
+          stage: 'Interview Ready',
           count: candidates?.filter(c => {
             const overall = c.overall_factor as any;
             const score = typeof overall === 'object' && overall !== null ? (overall.score || 0) : 0;
@@ -148,8 +149,8 @@ const DataDashboard = () => {
           }).length || 0,
           percentage: 0
         },
-        { 
-          stage: 'Top Candidates', 
+        {
+          stage: 'Top Candidates',
           count: candidates?.filter(c => {
             const overall = c.overall_factor as any;
             const score = typeof overall === 'object' && overall !== null ? (overall.score || 0) : 0;
@@ -160,8 +161,8 @@ const DataDashboard = () => {
       ];
 
       stageDistribution.forEach(stage => {
-        stage.percentage = totalCandidates > 0 
-          ? Math.round((stage.count / totalCandidates) * 100) 
+        stage.percentage = totalCandidates > 0
+          ? Math.round((stage.count / totalCandidates) * 100)
           : 0;
       });
 
@@ -222,200 +223,28 @@ const DataDashboard = () => {
 
   return (
     <div className="min-h-screen bg-background">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
-        {/* Header */}
-        <div className="mb-8">
-          <div className="flex items-center gap-3 mb-3">
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={() => window.location.href = '/dashboard'}
-              className="hover:bg-primary/10"
-            >
-              <ArrowLeft className="h-5 w-5" />
-            </Button>
-            <div className="p-3 bg-primary/10 rounded-xl border border-primary/20">
-              <BarChart3 className="h-7 w-7 text-primary" />
-            </div>
-            <div>
-              <h1 className="text-3xl lg:text-4xl font-bold text-foreground">
-                Data Analytics
-              </h1>
-              <p className="text-muted-foreground text-sm mt-1">
-                Comprehensive recruitment insights and performance metrics
-              </p>
-            </div>
-          </div>
-        </div>
+      <div className="max-w-[1280px] mx-auto px-6 lg:px-8 py-6 space-y-6">
+        <PageHeader
+          title="Data Analytics"
+          subtitle="Comprehensive recruitment insights and performance metrics"
+          breadcrumbs={[{ label: 'Dashboard', href: '/dashboard' }, { label: 'Analytics' }]}
+        />
 
         {/* Main KPI Cards */}
-        <div className="grid gap-4 sm:gap-6 grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 mb-8">
-          <Card className="bg-card border-border hover:border-primary/50 transition-all duration-300 hover:shadow-[0_0_20px_rgba(62,207,142,0.15)]">
-            <CardHeader className="pb-3">
-              <CardTitle className="text-xs font-medium text-muted-foreground flex items-center gap-2">
-                <div className="p-1.5 bg-primary/10 rounded-lg">
-                  <Users className="h-4 w-4 text-primary" />
-                </div>
-                Total Candidates
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-2">
-              <div className="text-3xl font-bold text-foreground">
-                {metrics.totalCandidates}
-              </div>
-              <div className="flex gap-3 text-xs">
-                <div className="flex items-center gap-1">
-                  <div className="w-1.5 h-1.5 rounded-full bg-primary" />
-                  <span className="text-muted-foreground">Week:</span>
-                  <span className="font-semibold text-foreground">{metrics.candidatesThisWeek}</span>
-                </div>
-                <div className="flex items-center gap-1">
-                  <div className="w-1.5 h-1.5 rounded-full bg-primary/60" />
-                  <span className="text-muted-foreground">Month:</span>
-                  <span className="font-semibold text-foreground">{metrics.candidatesThisMonth}</span>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card className="bg-card border-border hover:border-primary/50 transition-all duration-300 hover:shadow-[0_0_20px_rgba(62,207,142,0.15)]">
-            <CardHeader className="pb-3">
-              <CardTitle className="text-xs font-medium text-muted-foreground flex items-center gap-2">
-                <div className="p-1.5 bg-primary/10 rounded-lg">
-                  <Target className="h-4 w-4 text-primary" />
-                </div>
-                Avg Fit Score
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-2">
-              <div className="flex items-baseline gap-2">
-                <div className="text-3xl font-bold text-foreground">
-                  {metrics.averageFitScore}%
-                </div>
-                <TrendingUp className="h-4 w-4 text-primary" />
-              </div>
-              <Progress value={metrics.averageFitScore} className="h-2 bg-muted" />
-              <p className="text-xs text-muted-foreground">
-                <span className="font-semibold text-primary">{metrics.highQualityCandidates}</span> high-quality (≥75)
-              </p>
-            </CardContent>
-          </Card>
-
-          <Card className="bg-card border-border hover:border-primary/50 transition-all duration-300 hover:shadow-[0_0_20px_rgba(62,207,142,0.15)]">
-            <CardHeader className="pb-3">
-              <CardTitle className="text-xs font-medium text-muted-foreground flex items-center gap-2">
-                <div className="p-1.5 bg-primary/10 rounded-lg">
-                  <Clock className="h-4 w-4 text-primary" />
-                </div>
-                Time Saved This Month
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-2">
-              <div className="text-3xl font-bold text-foreground">
-                {Math.round(metrics.timeSavedThisMonth / 60)}h
-              </div>
-              <p className="text-xs text-muted-foreground">
-                {metrics.timeSavedThisMonth} minutes total
-              </p>
-              <div className="flex items-center gap-2 px-2 py-1 bg-primary/5 rounded border border-primary/10">
-                <Clock className="h-3 w-3 text-primary" />
-                <span className="text-xs font-medium text-primary">
-                  45 min/candidate
-                </span>
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card className="bg-card border-border hover:border-primary/50 transition-all duration-300 hover:shadow-[0_0_20px_rgba(62,207,142,0.15)]">
-            <CardHeader className="pb-3">
-              <CardTitle className="text-xs font-medium text-muted-foreground flex items-center gap-2">
-                <div className="p-1.5 bg-primary/10 rounded-lg">
-                  <Award className="h-4 w-4 text-primary" />
-                </div>
-                Placements
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-2">
-              <div className="flex items-baseline gap-2">
-                <div className="text-3xl font-bold text-foreground">
-                  {metrics.placementsThisMonth}
-                </div>
-                <span className="text-xs text-muted-foreground">this month</span>
-              </div>
-              <Progress value={metrics.placementConversionRate} className="h-2 bg-muted" />
-              <p className="text-xs text-muted-foreground">
-                {metrics.placementConversionRate}% conversion rate
-              </p>
-            </CardContent>
-          </Card>
+        <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-4">
+          <MetricCard label="Total Candidates" value={metrics.totalCandidates} icon={<Users className="h-4 w-4 text-emerald-500" />} trend={{ value: metrics.candidatesThisWeek, label: 'this week' }} />
+          <MetricCard label="Avg Fit Score" value={`${metrics.averageFitScore}%`} icon={<Target className="h-4 w-4 text-teal-500" />} />
+          <MetricCard label="Time Saved" value={`${Math.round(metrics.timeSavedThisMonth / 60)}h`} icon={<Clock className="h-4 w-4 text-blue-500" />} />
+          <MetricCard label="Placements" value={metrics.placementsThisMonth} icon={<Award className="h-4 w-4 text-purple-500" />} trend={{ value: metrics.placementConversionRate, label: 'conversion' }} />
         </div>
 
-        {/* Secondary Metrics Row */}
-        <div className="grid gap-4 sm:gap-6 grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 mb-8">
-          <Card className="bg-card border-border hover:border-primary/50 transition-all duration-300">
-            <CardHeader className="pb-2">
-              <CardTitle className="text-xs font-medium text-muted-foreground">
-                Screening → Interview
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold text-primary">
-                {metrics.screeningToInterviewRate}%
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card className="bg-card border-border hover:border-primary/50 transition-all duration-300">
-            <CardHeader className="pb-2">
-              <CardTitle className="text-xs font-medium text-muted-foreground">
-                Emails Sent
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold text-primary">
-                {metrics.emailsSent}
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card className="bg-card border-border hover:border-primary/50 transition-all duration-300">
-            <CardHeader className="pb-2">
-              <CardTitle className="text-xs font-medium text-muted-foreground">
-                Leads Scraped
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold text-primary">
-                {metrics.leadsScraped}
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card className="bg-card border-border hover:border-primary/50 transition-all duration-300">
-            <CardHeader className="pb-2">
-              <CardTitle className="text-xs font-medium text-muted-foreground">
-                DeepSearch Runs
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold text-primary">
-                {metrics.deepSearchCount}
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card className="bg-card border-border hover:border-primary/50 transition-all duration-300">
-            <CardHeader className="pb-2">
-              <CardTitle className="text-xs font-medium text-muted-foreground">
-                Enrichment Score
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold text-primary">
-                {metrics.deepSearchEnrichmentScore}%
-              </div>
-            </CardContent>
-          </Card>
+        {/* Secondary Metrics */}
+        <div className="grid gap-4 grid-cols-2 sm:grid-cols-3 lg:grid-cols-5">
+          <MetricCard label="Screen→Interview" value={`${metrics.screeningToInterviewRate}%`} />
+          <MetricCard label="Emails Sent" value={metrics.emailsSent} />
+          <MetricCard label="Leads Scraped" value={metrics.leadsScraped} />
+          <MetricCard label="DeepSearch" value={metrics.deepSearchCount} />
+          <MetricCard label="Enrichment" value={`${metrics.deepSearchEnrichmentScore}%`} />
         </div>
 
         {/* Pipeline Health & Risk Factors */}
@@ -453,8 +282,8 @@ const DataDashboard = () => {
                           </Badge>
                         </div>
                       </div>
-                      <Progress 
-                        value={stage.percentage} 
+                      <Progress
+                        value={stage.percentage}
                         className="h-2 bg-muted"
                       />
                     </div>

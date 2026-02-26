@@ -1,6 +1,7 @@
 import { useEffect, useState, useCallback, useRef } from "react";
 import { useNavigate } from "react-router-dom";
-import { ArrowLeft, Search as SearchIcon, PanelLeftClose, PanelLeft, Database, Trash, Download, Brain } from "lucide-react";
+import { Search as SearchIcon, PanelLeftClose, PanelLeft, Database, Trash, Download, Brain } from "lucide-react";
+import PageHeader from "@/components/shared/PageHeader";
 import { Button } from "@/components/ui/button";
 import { toast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
@@ -534,76 +535,36 @@ export default function LeadScraper() {
   );
 
   return (
-    <div className="w-full min-h-screen bg-background relative selection:bg-primary/20">
-
-      {/* Background Ambience */}
-      <div className="fixed inset-0 pointer-events-none z-0">
-        <div className="absolute top-0 left-0 w-full h-[500px] bg-gradient-to-b from-primary/5 to-transparent opacity-60" />
-      </div>
+    <div className="w-full min-h-screen bg-background relative">
 
       {/* Header */}
-      <header className="border-b border-border/40 bg-background/60 backdrop-blur-md sticky top-0 z-40 transition-all duration-300">
-        <div className="max-w-[1800px] mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex items-center justify-between h-14 sm:h-16">
-            <div className="flex items-center gap-3 sm:gap-4 min-w-0">
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={() => navigate("/dashboard")}
-                className="h-9 w-9 rounded-xl hover:bg-primary/10 transition-all duration-200 shrink-0"
-              >
-                <ArrowLeft className="w-4 h-4" />
-              </Button>
-              <div className="flex items-center gap-3 min-w-0">
-                <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-gradient-to-br from-primary to-primary/70 flex items-center justify-center shadow-lg shadow-primary/20 shrink-0 ring-1 ring-white/10">
-                  <SearchIcon className="w-4 h-4 sm:w-5 sm:h-5 text-primary-foreground" />
-                </div>
-                <div className="min-w-0">
-                  <h1 className="text-base sm:text-lg font-semibold text-foreground truncate">
-                    Lead Scraper
-                  </h1>
-                </div>
-              </div>
-            </div>
-
-            <div className="flex items-center gap-2 shrink-0">
-              {/* Desktop Sidebar Toggle */}
-              {!isMobile && (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="gap-2 hidden lg:flex"
-                  onClick={() => setShowFiltersSidebar(!showFiltersSidebar)}
-                >
-                  {showFiltersSidebar ? (
-                    <>
-                      <PanelLeftClose className="w-4 h-4" />
-                      Hide Filters
-                    </>
-                  ) : (
-                    <>
-                      <PanelLeft className="w-4 h-4" />
-                      Show Filters
-                    </>
-                  )}
-                </Button>
-              )}
-
-              {/* Mobile Filter Sheet Toggle */}
-              <div className="lg:hidden">
-                <FiltersSheet
-                  open={filtersSheetOpen}
-                  onOpenChange={setFiltersSheetOpen}
-                  onApplyFilters={handleApplyFilters}
-                />
-              </div>
-            </div>
+      <div className="max-w-[1280px] mx-auto px-6 lg:px-8 pt-6">
+        <PageHeader
+          title="Lead Scraper"
+          subtitle={activeSessionName || 'AI-powered LinkedIn talent sourcing'}
+          breadcrumbs={[{ label: 'Dashboard', href: '/dashboard' }, { label: 'Lead Scraper' }]}
+          secondaryActions={[
+            ...(!isMobile ? [{
+              label: showFiltersSidebar ? 'Hide Filters' : 'Show Filters',
+              onClick: () => setShowFiltersSidebar(!showFiltersSidebar),
+              icon: showFiltersSidebar ? <PanelLeftClose className="w-4 h-4" /> : <PanelLeft className="w-4 h-4" />,
+            }] : []),
+          ]}
+        />
+        {/* Mobile Filter Sheet Toggle */}
+        {isMobile && (
+          <div className="mb-4">
+            <FiltersSheet
+              open={filtersSheetOpen}
+              onOpenChange={setFiltersSheetOpen}
+              onApplyFilters={handleApplyFilters}
+            />
           </div>
-        </div>
-      </header>
+        )}
+      </div>
 
       {/* Main Content */}
-      <div className="relative z-10 max-w-[1800px] mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-6">
+      <div className="relative z-10 max-w-[1280px] mx-auto px-6 lg:px-8 pb-6">
         <div className="flex gap-4 lg:gap-6">
           {/* Desktop Sidebar */}
           {!isMobile && showFiltersSidebar && (

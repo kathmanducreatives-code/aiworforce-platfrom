@@ -3,6 +3,8 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { Skeleton } from "@/components/ui/skeleton";
 import { TrendingUp, Flame, Users, BarChart3 } from "lucide-react";
+import PageHeader from "@/components/shared/PageHeader";
+import MetricCard from "@/components/shared/MetricCard";
 import GrowthFilters from "@/components/growth/GrowthFilters";
 import GrowthSignalTable from "@/components/growth/GrowthSignalTable";
 import AgencyCostCalculator from "@/components/growth/AgencyCostCalculator";
@@ -111,45 +113,23 @@ const GrowthSignals = () => {
   };
 
   return (
-    <div className="space-y-6 p-6 max-w-7xl mx-auto">
-      {/* Header */}
-      <div className="relative overflow-hidden rounded-2xl border border-border/50 bg-gradient-to-br from-card/80 via-card/60 to-orange-500/5 backdrop-blur-sm p-6 md:p-8">
-        <div className="absolute top-0 right-0 w-64 h-64 bg-orange-500/5 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2" />
-        <div className="relative">
-          <div className="flex items-center justify-between mb-4">
-            <div className="flex items-center gap-3">
-              <div className="h-10 w-10 rounded-xl bg-orange-500/15 border border-orange-500/25 flex items-center justify-center">
-                <TrendingUp className="h-5 w-5 text-orange-400" />
-              </div>
-              <div>
-                <h1 className="text-2xl font-bold">Growth Signals</h1>
-                <p className="text-sm text-muted-foreground">Hiring + funding intelligence for lead discovery</p>
-              </div>
-            </div>
-            {!seeded && companies.length > 0 && !loading && (
-              <Button variant="outline" size="sm" onClick={seedToDb} className="border-primary/30 hover:bg-primary/10">
-                Save Sample Data to DB
-              </Button>
-            )}
-          </div>
+    <div className="max-w-[1280px] mx-auto px-6 lg:px-8 py-6 space-y-6">
+      <PageHeader
+        title="Growth Signals"
+        subtitle="Hiring + funding intelligence for lead discovery"
+        breadcrumbs={[{ label: 'Dashboard', href: '/dashboard' }, { label: 'Growth Signals' }]}
+        secondaryActions={!seeded && companies.length > 0 && !loading ? [{
+          label: 'Save Sample Data',
+          onClick: seedToDb,
+        }] : []}
+      />
 
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-            {[
-              { icon: Users, label: "Companies", value: stats.total, color: "text-foreground" },
-              { icon: Flame, label: "Hot Leads", value: stats.hotLeads, color: "text-orange-400" },
-              { icon: BarChart3, label: "Avg Score", value: stats.avgScore, color: "text-primary" },
-              { icon: TrendingUp, label: "Total Roles", value: stats.totalRoles.toLocaleString(), color: "text-emerald-400" },
-            ].map(s => (
-              <div key={s.label} className="rounded-xl border border-border/50 bg-card/60 backdrop-blur-sm p-3">
-                <div className="flex items-center gap-2 mb-1">
-                  <s.icon className="h-3.5 w-3.5 text-muted-foreground" />
-                  <span className="text-xs text-muted-foreground">{s.label}</span>
-                </div>
-                <p className={`text-xl font-bold ${s.color}`}>{s.value}</p>
-              </div>
-            ))}
-          </div>
-        </div>
+      {/* Stats */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <MetricCard label="Companies" value={stats.total} icon={<Users className="h-4 w-4 text-blue-500" />} />
+        <MetricCard label="Hot Leads" value={stats.hotLeads} icon={<Flame className="h-4 w-4 text-orange-500" />} />
+        <MetricCard label="Avg Score" value={stats.avgScore} icon={<BarChart3 className="h-4 w-4 text-primary" />} />
+        <MetricCard label="Total Roles" value={stats.totalRoles.toLocaleString()} icon={<TrendingUp className="h-4 w-4 text-emerald-500" />} />
       </div>
 
       {/* Filters */}

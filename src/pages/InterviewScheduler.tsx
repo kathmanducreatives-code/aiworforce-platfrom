@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, Calendar, Plus, RefreshCw } from 'lucide-react';
+import { Calendar, Plus, RefreshCw } from 'lucide-react';
+import PageHeader from '@/components/shared/PageHeader';
 import { Button } from '@/components/ui/button';
 import { useInterviews } from '@/hooks/useInterviews';
 import InterviewCalendarView from '@/components/interview/InterviewCalendarView';
@@ -42,7 +43,7 @@ const InterviewScheduler = () => {
 
   const handleScheduleInterview = async (interviewData: Partial<Interview>, sendEmailInvite: boolean) => {
     const result = await scheduleInterview(interviewData, sendEmailInvite);
-    
+
     return result;
   };
 
@@ -57,32 +58,17 @@ const InterviewScheduler = () => {
 
   return (
     <div className="min-h-screen bg-background">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 py-6 sm:py-8">
-        {/* Header */}
-        <div className="flex flex-wrap items-center justify-between gap-4 mb-6">
-          <div className="flex items-center gap-4">
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={() => navigate('/dashboard')}
-              className="hover:bg-primary/10"
-            >
-              <ArrowLeft className="h-5 w-5" />
-            </Button>
-            <div>
-              <h1 className="text-2xl font-bold text-foreground">
-                Interview Scheduler
-              </h1>
-              <p className="text-muted-foreground">
-                Schedule and manage candidate interviews
-              </p>
-            </div>
-          </div>
-          <Button onClick={() => setIsScheduleDialogOpen(true)} className="whitespace-nowrap">
-            <Plus className="h-4 w-4 mr-2" />
-            Schedule Interview
-          </Button>
-        </div>
+      <div className="max-w-[1280px] mx-auto px-6 lg:px-8 py-6 space-y-6">
+        <PageHeader
+          title="Interview Scheduler"
+          subtitle="Schedule and manage candidate interviews"
+          breadcrumbs={[{ label: 'Dashboard', href: '/dashboard' }, { label: 'Interviews' }]}
+          primaryAction={{
+            label: 'Schedule Interview',
+            onClick: () => setIsScheduleDialogOpen(true),
+            icon: <Plus className="h-4 w-4" />,
+          }}
+        />
 
         <div className="grid grid-cols-1 lg:grid-cols-4 gap-4 mb-8">
           {/* Stats Cards */}

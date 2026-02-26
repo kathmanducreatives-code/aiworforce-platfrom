@@ -1,6 +1,8 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { Mail, Plus, Clock, Users, Send, Trash2, ArrowLeft, ChevronDown, ChevronUp, Eye, MousePointer, Play, RefreshCw } from "lucide-react";
+import { Mail, Plus, Clock, Users, Send, Trash2, ChevronDown, ChevronUp, Eye, MousePointer, Play, RefreshCw } from "lucide-react";
+import PageHeader from "@/components/shared/PageHeader";
+import MetricCard from "@/components/shared/MetricCard";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -66,7 +68,7 @@ const EmailSequences = () => {
   const fetchSequences = async () => {
     try {
       setLoading(true);
-      
+
       // Fetch emails
       const { data: emailsData, error: emailsError } = await supabase
         .from('scheduled_emails')
@@ -98,7 +100,7 @@ const EmailSequences = () => {
       const grouped = (emailsData || []).reduce((acc: Record<string, SequenceGroup>, email) => {
         const key = email.sequence_name || 'Unnamed';
         const emailTracking = trackingByEmail[email.id] || { opens: 0, clicks: 0 };
-        
+
         if (!acc[key]) {
           acc[key] = {
             sequence_name: email.sequence_name || 'Unnamed',
@@ -119,7 +121,7 @@ const EmailSequences = () => {
         if (email.status === 'sent') acc[key].sent_count++;
         acc[key].total_opens += emailTracking.opens;
         acc[key].total_clicks += emailTracking.clicks;
-        
+
         acc[key].emails.push({
           id: email.id,
           candidate_name: email.candidate_name,
@@ -263,124 +265,30 @@ const EmailSequences = () => {
 
   return (
     <div className="min-h-screen w-full bg-background">
-      <main className="container mx-auto px-4 sm:px-6 py-8 max-w-7xl animate-fade-in">
-        {/* Header */}
-        <div className="flex items-center justify-between mb-8">
-          <div className="flex items-center gap-4">
-            <Button
-              variant="ghost"
-              onClick={() => navigate("/")}
-              className="hover:bg-accent rounded-xl p-2"
-            >
-              <ArrowLeft className="h-5 w-5" />
-            </Button>
-            <div>
-              <h1 className="text-3xl font-bold text-foreground">Email Sequences</h1>
-              <p className="text-muted-foreground">Manage your automated email campaigns</p>
-            </div>
-          </div>
-          <div className="flex gap-2">
-            <Button
-              variant="outline"
-              onClick={fetchSequences}
-              disabled={loading}
-            >
-              <RefreshCw className={`h-4 w-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
-              Refresh
-            </Button>
-            <Button
-              onClick={handleSendPendingEmails}
-              disabled={sendingEmails || sequences.reduce((acc, s) => acc + s.pending_count, 0) === 0}
-            >
-              {sendingEmails ? (
-                <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
-              ) : (
-                <Play className="h-4 w-4 mr-2" />
-              )}
-              Send Pending Emails
-            </Button>
-          </div>
-        </div>
+      <main className="max-w-[1280px] mx-auto px-6 lg:px-8 py-6 space-y-6">
+        <PageHeader
+          title="Email Sequences"
+          subtitle="Manage your automated email campaigns"
+          breadcrumbs={[{ label: 'Dashboard', href: '/dashboard' }, { label: 'Email Sequences' }]}
+          primaryAction={{
+            label: sendingEmails ? 'Sending...' : 'Send Pending',
+            onClick: handleSendPendingEmails,
+            icon: sendingEmails ? <RefreshCw className="h-4 w-4 animate-spin" /> : <Play className="h-4 w-4" />,
+          }}
+          secondaryActions={[{
+            label: 'Refresh',
+            onClick: fetchSequences,
+            icon: <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />,
+          }]}
+        />
 
-        {/* Stats Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-5 gap-4 mb-8">
-          <Card>
-            <CardContent className="p-6">
-              <div className="flex items-center gap-4">
-                <div className="p-3 rounded-lg bg-primary/10">
-                  <Mail className="h-6 w-6 text-primary" />
-                </div>
-                <div>
-                  <p className="text-sm text-muted-foreground">Sequences</p>
-                  <p className="text-2xl font-bold">{sequences.length}</p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-          
-          <Card>
-            <CardContent className="p-6">
-              <div className="flex items-center gap-4">
-                <div className="p-3 rounded-lg bg-yellow-500/10">
-                  <Clock className="h-6 w-6 text-yellow-500" />
-                </div>
-                <div>
-                  <p className="text-sm text-muted-foreground">Pending</p>
-                  <p className="text-2xl font-bold">
-                    {sequences.reduce((acc, s) => acc + s.pending_count, 0)}
-                  </p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-          
-          <Card>
-            <CardContent className="p-6">
-              <div className="flex items-center gap-4">
-                <div className="p-3 rounded-lg bg-primary/10">
-                  <Send className="h-6 w-6 text-primary" />
-                </div>
-                <div>
-                  <p className="text-sm text-muted-foreground">Sent</p>
-                  <p className="text-2xl font-bold">
-                    {sequences.reduce((acc, s) => acc + s.sent_count, 0)}
-                  </p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardContent className="p-6">
-              <div className="flex items-center gap-4">
-                <div className="p-3 rounded-lg bg-blue-500/10">
-                  <Eye className="h-6 w-6 text-blue-500" />
-                </div>
-                <div>
-                  <p className="text-sm text-muted-foreground">Opens</p>
-                  <p className="text-2xl font-bold">
-                    {sequences.reduce((acc, s) => acc + s.total_opens, 0)}
-                  </p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardContent className="p-6">
-              <div className="flex items-center gap-4">
-                <div className="p-3 rounded-lg bg-purple-500/10">
-                  <MousePointer className="h-6 w-6 text-purple-500" />
-                </div>
-                <div>
-                  <p className="text-sm text-muted-foreground">Clicks</p>
-                  <p className="text-2xl font-bold">
-                    {sequences.reduce((acc, s) => acc + s.total_clicks, 0)}
-                  </p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
+        {/* Stats */}
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+          <MetricCard label="Sequences" value={sequences.length} icon={<Mail className="h-4 w-4 text-primary" />} />
+          <MetricCard label="Pending" value={sequences.reduce((acc, s) => acc + s.pending_count, 0)} icon={<Clock className="h-4 w-4 text-amber-500" />} />
+          <MetricCard label="Sent" value={sequences.reduce((acc, s) => acc + s.sent_count, 0)} icon={<Send className="h-4 w-4 text-emerald-500" />} />
+          <MetricCard label="Opens" value={sequences.reduce((acc, s) => acc + s.total_opens, 0)} icon={<Eye className="h-4 w-4 text-blue-500" />} />
+          <MetricCard label="Clicks" value={sequences.reduce((acc, s) => acc + s.total_clicks, 0)} icon={<MousePointer className="h-4 w-4 text-purple-500" />} />
         </div>
 
         {/* Create New Section */}
@@ -480,7 +388,7 @@ const EmailSequences = () => {
                             </div>
                           </div>
                         </div>
-                        
+
                         <div className="flex items-center gap-2">
                           <CollapsibleTrigger asChild>
                             <Button variant="ghost" size="icon">
@@ -491,7 +399,7 @@ const EmailSequences = () => {
                               )}
                             </Button>
                           </CollapsibleTrigger>
-                          
+
                           <AlertDialog>
                             <AlertDialogTrigger asChild>
                               <Button variant="ghost" size="icon" className="text-destructive hover:text-destructive">
@@ -518,7 +426,7 @@ const EmailSequences = () => {
                           </AlertDialog>
                         </div>
                       </div>
-                      
+
                       <CollapsibleContent>
                         <div className="border-t border-border p-4 bg-muted/20">
                           <p className="text-sm font-medium mb-3">Scheduled Emails</p>
@@ -526,47 +434,47 @@ const EmailSequences = () => {
                             {seq.emails
                               .sort((a, b) => a.candidate_name.localeCompare(b.candidate_name) || a.step_number - b.step_number)
                               .map((email) => (
-                              <div
-                                key={email.id}
-                                className="flex items-center justify-between p-3 rounded-lg bg-background border border-border/50"
-                              >
-                                <div className="flex-1 min-w-0">
-                                  <div className="flex items-center gap-2 flex-wrap">
-                                    <span className="font-medium text-sm truncate">{email.candidate_name}</span>
-                                    <Badge variant="outline" className="text-xs">Step {email.step_number}</Badge>
-                                    {getEmailStatusBadge(email.status)}
-                                    {email.opens > 0 && (
-                                      <span className="flex items-center gap-1 text-xs text-blue-500">
-                                        <Eye className="h-3 w-3" />
-                                        {email.opens}
-                                      </span>
-                                    )}
-                                    {email.clicks > 0 && (
-                                      <span className="flex items-center gap-1 text-xs text-purple-500">
-                                        <MousePointer className="h-3 w-3" />
-                                        {email.clicks}
-                                      </span>
-                                    )}
+                                <div
+                                  key={email.id}
+                                  className="flex items-center justify-between p-3 rounded-lg bg-background border border-border/50"
+                                >
+                                  <div className="flex-1 min-w-0">
+                                    <div className="flex items-center gap-2 flex-wrap">
+                                      <span className="font-medium text-sm truncate">{email.candidate_name}</span>
+                                      <Badge variant="outline" className="text-xs">Step {email.step_number}</Badge>
+                                      {getEmailStatusBadge(email.status)}
+                                      {email.opens > 0 && (
+                                        <span className="flex items-center gap-1 text-xs text-blue-500">
+                                          <Eye className="h-3 w-3" />
+                                          {email.opens}
+                                        </span>
+                                      )}
+                                      {email.clicks > 0 && (
+                                        <span className="flex items-center gap-1 text-xs text-purple-500">
+                                          <MousePointer className="h-3 w-3" />
+                                          {email.clicks}
+                                        </span>
+                                      )}
+                                    </div>
+                                    <p className="text-xs text-muted-foreground truncate mt-1">
+                                      {email.subject}
+                                    </p>
+                                    <p className="text-xs text-muted-foreground">
+                                      Scheduled: {format(new Date(email.send_time_utc), 'MMM d, yyyy h:mm a')}
+                                    </p>
                                   </div>
-                                  <p className="text-xs text-muted-foreground truncate mt-1">
-                                    {email.subject}
-                                  </p>
-                                  <p className="text-xs text-muted-foreground">
-                                    Scheduled: {format(new Date(email.send_time_utc), 'MMM d, yyyy h:mm a')}
-                                  </p>
+                                  {email.status === 'pending' && (
+                                    <Button
+                                      variant="ghost"
+                                      size="sm"
+                                      onClick={() => handleMarkAsSent(email.id)}
+                                      className="text-xs"
+                                    >
+                                      Mark Sent
+                                    </Button>
+                                  )}
                                 </div>
-                                {email.status === 'pending' && (
-                                  <Button
-                                    variant="ghost"
-                                    size="sm"
-                                    onClick={() => handleMarkAsSent(email.id)}
-                                    className="text-xs"
-                                  >
-                                    Mark Sent
-                                  </Button>
-                                )}
-                              </div>
-                            ))}
+                              ))}
                           </div>
                         </div>
                       </CollapsibleContent>

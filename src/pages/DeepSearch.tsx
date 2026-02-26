@@ -7,11 +7,12 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { 
-  Brain, Loader2, Users, FileText, Search, Sparkles, TrendingUp, 
-  CheckCircle2, Filter, ArrowLeft, Target, X, Keyboard, SortAsc,
+import {
+  Brain, Loader2, Users, FileText, Search, Sparkles, TrendingUp,
+  CheckCircle2, Filter, Target, X, Keyboard, SortAsc,
   ChevronDown, LayoutGrid, List
 } from "lucide-react";
+import PageHeader from "@/components/shared/PageHeader";
 import { deepSearchApi } from "@/services/deepSearchApi";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -19,7 +20,6 @@ import { Label } from "@/components/ui/label";
 import { CandidateCard } from "@/components/lead-scraper/CandidateCard";
 import { AnalyzedCandidateCard } from "@/components/lead-scraper/AnalyzedCandidateCard";
 import { SavedSearches } from "@/components/lead-scraper/SavedSearches";
-import PremiumBackground from "@/components/landing/PremiumBackground";
 import {
   Dialog,
   DialogContent,
@@ -144,7 +144,7 @@ export default function DeepSearch() {
   useEffect(() => {
     fetchCandidates();
     fetchAnalyzedResults();
-    
+
     const channel = supabase
       .channel('deep-search-updates')
       .on(
@@ -178,7 +178,7 @@ export default function DeepSearch() {
   const fetchCandidates = async (sessionId?: string | null) => {
     try {
       setLoading(true);
-      
+
       let linkedInQuery = supabase
         .from('linkedin_leads')
         .select('id, candidate_name, job_title, company, linkedin_url, experience_level, session_id')
@@ -186,17 +186,17 @@ export default function DeepSearch() {
 
       if (sessionId) {
         linkedInQuery = linkedInQuery.eq('session_id', sessionId);
-        
+
         const { data: sessionData } = await supabase
           .from("scraping_sessions")
           .select("name, search_criteria")
           .eq("id", sessionId)
           .maybeSingle();
-        
+
         if (sessionData) {
           setActiveSessionName(
-            sessionData.name || 
-            (sessionData.search_criteria as any)?.searchQuery || 
+            sessionData.name ||
+            (sessionData.search_criteria as any)?.searchQuery ||
             "Untitled Search"
           );
         }
@@ -278,13 +278,13 @@ export default function DeepSearch() {
       setProcessing(true);
       setShowPromptDialog(false);
       const allCandidates = [...linkedInCandidates, ...resumeCandidates];
-      
+
       for (const candidateId of selectedCandidates) {
         const candidate = allCandidates.find(c => c.id === candidateId);
         if (!candidate) continue;
 
         const isLinkedIn = linkedInCandidates.some(c => c.id === candidateId);
-        
+
         await deepSearchApi.runDeepSearch({
           candidateId: candidate.id,
           candidateName: candidate.candidate_name,
@@ -317,7 +317,7 @@ export default function DeepSearch() {
   }, [selectedCandidates, linkedInCandidates, resumeCandidates, evaluationPrompt, toast]);
 
   // Memoized filtered candidates
-  const filteredLinkedInCandidates = useMemo(() => 
+  const filteredLinkedInCandidates = useMemo(() =>
     linkedInCandidates.filter(c =>
       c.candidate_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
       c.company?.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -366,13 +366,10 @@ export default function DeepSearch() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-background flex items-center justify-center" role="status" aria-label="Loading candidates">
+      <div className="min-h-screen bg-background flex items-center justify-center">
         <div className="text-center space-y-4">
-          <div className="relative">
-            <Loader2 className="h-12 w-12 animate-spin text-primary mx-auto" />
-            <div className="absolute inset-0 h-12 w-12 mx-auto rounded-full bg-primary/20 animate-ping" />
-          </div>
-          <p className="text-muted-foreground animate-pulse">Loading candidates...</p>
+          <Loader2 className="h-10 w-10 animate-spin text-primary mx-auto" />
+          <p className="text-sm text-muted-foreground">Loading candidates...</p>
         </div>
       </div>
     );
@@ -383,111 +380,59 @@ export default function DeepSearch() {
 
   return (
     <TooltipProvider delayDuration={200}>
-      <div className="min-h-screen bg-background relative overflow-hidden">
-        <PremiumBackground />
+      <div className="min-h-screen bg-background">
 
-        {/* Compact Header */}
-        <header className="border-b border-border/50 bg-card/30 backdrop-blur-lg sticky top-0 z-10 shadow-sm">
-          <div className="container mx-auto px-4 py-4">
-            {/* Top row */}
-            <div className="flex items-center justify-between gap-4 mb-4">
-              <div className="flex items-center gap-3">
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      onClick={() => navigate("/dashboard")}
-                      className="hover:bg-primary/10"
-                      aria-label="Go back to dashboard"
-                    >
-                      <ArrowLeft className="w-5 h-5" />
-                    </Button>
-                  </TooltipTrigger>
-                  <TooltipContent>Back to Dashboard</TooltipContent>
-                </Tooltip>
-                
-                <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-primary to-cyan-500 flex items-center justify-center shadow-lg shadow-primary/20">
-                  <Brain className="w-6 h-6 text-white" />
-                </div>
-                <div>
-                  <h1 className="text-2xl font-bold bg-gradient-to-r from-primary via-cyan-500 to-primary bg-clip-text text-transparent">
-                    Deep Search AI
-                  </h1>
-                  <p className="text-muted-foreground text-xs">
-                    Advanced candidate intelligence
-                  </p>
-                </div>
-              </div>
+        {/* Header */}
+        <div className="max-w-[1280px] mx-auto px-6 lg:px-8 pt-6">
+          <PageHeader
+            title="Deep Search AI"
+            subtitle="Advanced candidate intelligence & analysis"
+            breadcrumbs={[{ label: 'Dashboard', href: '/dashboard' }, { label: 'Deep Search' }]}
+          />
 
-              {/* Compact Stats */}
-              <div className="hidden md:flex items-center gap-3">
-                <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-card/50 border border-border/50">
-                  <Users className="w-4 h-4 text-primary" />
-                  <span className="text-sm font-medium">{totalCandidates}</span>
-                  <span className="text-xs text-muted-foreground">candidates</span>
-                </div>
-                <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-card/50 border border-border/50">
-                  <CheckCircle2 className="w-4 h-4 text-cyan-500" />
-                  <span className="text-sm font-medium">{selectedCandidates.size}</span>
-                  <span className="text-xs text-muted-foreground">selected</span>
-                </div>
-                <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-card/50 border border-border/50">
-                  <TrendingUp className="w-4 h-4 text-green-500" />
-                  <span className="text-sm font-medium">{totalAnalyzed}</span>
-                  <span className="text-xs text-muted-foreground">analyzed</span>
-                </div>
-                
-                {/* Keyboard shortcuts hint */}
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-8 w-8"
-                      onClick={() => setShowKeyboardHints(!showKeyboardHints)}
-                      aria-label="Show keyboard shortcuts"
-                    >
-                      <Keyboard className="w-4 h-4 text-muted-foreground" />
-                    </Button>
-                  </TooltipTrigger>
-                  <TooltipContent side="bottom" className="max-w-xs">
-                    <div className="space-y-1 text-xs">
-                      <p><kbd className="px-1 bg-muted rounded">Ctrl+A</kbd> Select all</p>
-                      <p><kbd className="px-1 bg-muted rounded">Ctrl+F</kbd> Focus search</p>
-                      <p><kbd className="px-1 bg-muted rounded">Ctrl+Enter</kbd> Run deep search</p>
-                      <p><kbd className="px-1 bg-muted rounded">Esc</kbd> Clear selection</p>
-                    </div>
-                  </TooltipContent>
-                </Tooltip>
-              </div>
+          {/* Stats Row */}
+          <div className="flex items-center gap-3 mb-4 flex-wrap">
+            <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg border border-border bg-card/50 text-sm">
+              <Users className="w-4 h-4 text-primary" />
+              <span className="font-medium">{totalCandidates}</span>
+              <span className="text-xs text-muted-foreground">candidates</span>
             </div>
-
-            {/* View Toggle */}
-            <Tabs value={viewMode} onValueChange={(v) => setViewMode(v as any)} className="w-full">
-              <TabsList className="grid w-full grid-cols-2 h-10">
-                <TabsTrigger value="select" className="gap-2 text-sm">
-                  <Filter className="w-4 h-4" />
-                  Select Candidates
-                  {selectedCandidates.size > 0 && (
-                    <Badge variant="secondary" className="ml-1 h-5 px-1.5 text-xs">
-                      {selectedCandidates.size}
-                    </Badge>
-                  )}
-                </TabsTrigger>
-                <TabsTrigger value="analyzed" className="gap-2 text-sm">
-                  <Brain className="w-4 h-4" />
-                  Analyzed Results
-                  <Badge variant="secondary" className="ml-1 h-5 px-1.5 text-xs">
-                    {totalAnalyzed}
-                  </Badge>
-                </TabsTrigger>
-              </TabsList>
-            </Tabs>
+            <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg border border-border bg-card/50 text-sm">
+              <CheckCircle2 className="w-4 h-4 text-blue-500" />
+              <span className="font-medium">{selectedCandidates.size}</span>
+              <span className="text-xs text-muted-foreground">selected</span>
+            </div>
+            <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg border border-border bg-card/50 text-sm">
+              <TrendingUp className="w-4 h-4 text-emerald-500" />
+              <span className="font-medium">{totalAnalyzed}</span>
+              <span className="text-xs text-muted-foreground">analyzed</span>
+            </div>
           </div>
-        </header>
 
-        <main className="container mx-auto px-4 py-6 relative">
+          {/* View Toggle */}
+          <Tabs value={viewMode} onValueChange={(v) => setViewMode(v as any)} className="w-full mb-4">
+            <TabsList className="grid w-full grid-cols-2 h-10 border border-border">
+              <TabsTrigger value="select" className="gap-2 text-sm">
+                <Filter className="w-4 h-4" />
+                Select Candidates
+                {selectedCandidates.size > 0 && (
+                  <Badge variant="secondary" className="ml-1 h-5 px-1.5 text-xs">
+                    {selectedCandidates.size}
+                  </Badge>
+                )}
+              </TabsTrigger>
+              <TabsTrigger value="analyzed" className="gap-2 text-sm">
+                <Brain className="w-4 h-4" />
+                Analyzed Results
+                <Badge variant="secondary" className="ml-1 h-5 px-1.5 text-xs">
+                  {totalAnalyzed}
+                </Badge>
+              </TabsTrigger>
+            </TabsList>
+          </Tabs>
+        </div>
+
+        <main className="max-w-[1280px] mx-auto px-6 lg:px-8 pb-6">
           {viewMode === "select" ? (
             <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
               {/* Left Sidebar - Saved Searches */}
@@ -552,7 +497,7 @@ export default function DeepSearch() {
                         </Button>
                       </div>
                     </div>
-                    
+
                     {/* Active filters */}
                     <div className="flex flex-wrap items-center gap-2 mt-3">
                       {activeSessionName && (
@@ -600,15 +545,15 @@ export default function DeepSearch() {
                           </div>
                           <h3 className="text-lg font-semibold mb-2">No LinkedIn Candidates</h3>
                           <p className="text-muted-foreground text-sm max-w-md mx-auto mb-4">
-                            {searchTerm 
+                            {searchTerm
                               ? "No candidates match your search. Try adjusting your filters."
-                              : activeSessionName 
+                              : activeSessionName
                                 ? "No candidates in this search folder."
                                 : "Import candidates from LinkedIn to get started."}
                           </p>
                           {!searchTerm && !activeSessionName && (
-                            <Button 
-                              variant="outline" 
+                            <Button
+                              variant="outline"
                               onClick={() => navigate("/lead-scraper")}
                               className="gap-2"
                             >
@@ -619,7 +564,7 @@ export default function DeepSearch() {
                         </CardContent>
                       </Card>
                     ) : (
-                      <div 
+                      <div
                         className="grid md:grid-cols-2 xl:grid-cols-3 gap-3"
                         role="list"
                         aria-label="LinkedIn candidates"
@@ -652,13 +597,13 @@ export default function DeepSearch() {
                           </div>
                           <h3 className="text-lg font-semibold mb-2">No Resume Candidates</h3>
                           <p className="text-muted-foreground text-sm max-w-md mx-auto mb-4">
-                            {searchTerm 
+                            {searchTerm
                               ? "No candidates match your search. Try adjusting your filters."
                               : "Upload resumes to start screening candidates."}
                           </p>
                           {!searchTerm && (
-                            <Button 
-                              variant="outline" 
+                            <Button
+                              variant="outline"
                               onClick={() => navigate("/candidates")}
                               className="gap-2"
                             >
@@ -669,7 +614,7 @@ export default function DeepSearch() {
                         </CardContent>
                       </Card>
                     ) : (
-                      <div 
+                      <div
                         className="grid md:grid-cols-2 xl:grid-cols-3 gap-3"
                         role="list"
                         aria-label="Resume candidates"
@@ -707,8 +652,8 @@ export default function DeepSearch() {
                     <p className="text-muted-foreground text-sm max-w-md mx-auto mb-4">
                       Select candidates and run deep search to see AI-powered insights
                     </p>
-                    <Button 
-                      variant="outline" 
+                    <Button
+                      variant="outline"
                       onClick={() => setViewMode("select")}
                       className="gap-2"
                     >
@@ -720,7 +665,7 @@ export default function DeepSearch() {
               ) : (
                 <>
                   {/* Results Header with Sort */}
-                   <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+                  <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
                     <div className="flex items-center gap-3">
                       <h2 className="text-xl font-bold flex items-center gap-2">
                         <Brain className="w-5 h-5 text-primary" />
@@ -730,7 +675,7 @@ export default function DeepSearch() {
                         {allAnalyzedResults.length} analyzed
                       </Badge>
                     </div>
-                    
+
                     <div className="flex items-center gap-2">
                       <Select value={analyzedSortBy} onValueChange={(v) => setAnalyzedSortBy(v as SortOption)}>
                         <SelectTrigger className="w-[160px] h-9">
@@ -748,8 +693,8 @@ export default function DeepSearch() {
                       </Select>
                     </div>
                   </div>
-                  
-                  <div 
+
+                  <div
                     className="grid md:grid-cols-2 lg:grid-cols-3 gap-4"
                     role="list"
                     aria-label="Analyzed candidates"
@@ -769,7 +714,7 @@ export default function DeepSearch() {
 
           {/* Floating Action Panel */}
           {viewMode === "select" && selectedCandidates.size > 0 && (
-            <div 
+            <div
               className="fixed bottom-0 left-0 right-0 z-20 animate-slide-in-bottom"
               role="region"
               aria-label="Selection actions"
@@ -841,7 +786,7 @@ export default function DeepSearch() {
                   What specific skills or qualities are you looking for in these {selectedCandidates.size} candidate{selectedCandidates.size !== 1 ? 's' : ''}?
                 </DialogDescription>
               </DialogHeader>
-              
+
               <div className="py-4 space-y-4">
                 <div className="space-y-2">
                   <div className="flex items-center justify-between">
@@ -880,7 +825,7 @@ export default function DeepSearch() {
                         variant="outline"
                         size="sm"
                         className="h-7 text-xs hover:bg-primary/10 hover:border-primary/30"
-                        onClick={() => setEvaluationPrompt(prev => 
+                        onClick={() => setEvaluationPrompt(prev =>
                           prev ? `${prev}, ${suggestion.toLowerCase()}` : suggestion
                         )}
                       >

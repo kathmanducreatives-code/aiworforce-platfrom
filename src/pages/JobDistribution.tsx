@@ -4,6 +4,8 @@ import { useAuth } from "@/hooks/useAuth";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Share2, Linkedin, Globe, Briefcase, Rss, RefreshCw, ExternalLink, Trash2 } from "lucide-react";
+import PageHeader from "@/components/shared/PageHeader";
+import MetricCard from "@/components/shared/MetricCard";
 import DistributeJobDialog from "@/components/distribution/DistributeJobDialog";
 import DistributionStatusBadge from "@/components/distribution/DistributionStatusBadge";
 import FeedUrlCard from "@/components/distribution/FeedUrlCard";
@@ -101,34 +103,19 @@ const JobDistribution = () => {
   };
 
   return (
-    <div className="space-y-6 p-6 max-w-6xl mx-auto">
-      {/* Header */}
-      <div className="relative overflow-hidden rounded-2xl border border-border/50 bg-gradient-to-br from-card/80 via-card/60 to-primary/5 backdrop-blur-sm p-6 md:p-8">
-        <div className="absolute top-0 right-0 w-64 h-64 bg-primary/5 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2" />
-        <div className="relative">
-          <div className="flex items-center gap-3 mb-2">
-            <div className="h-10 w-10 rounded-xl bg-primary/15 border border-primary/25 flex items-center justify-center">
-              <Share2 className="h-5 w-5 text-primary" />
-            </div>
-            <div>
-              <h1 className="text-2xl font-bold">Job Distribution</h1>
-              <p className="text-sm text-muted-foreground">Track and manage multi-platform job postings</p>
-            </div>
-          </div>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mt-5">
-            {[
-              { label: "Total", value: stats.total, color: "text-foreground" },
-              { label: "Posted", value: stats.posted, color: "text-emerald-400" },
-              { label: "Pending", value: stats.pending, color: "text-amber-400" },
-              { label: "Failed", value: stats.failed, color: "text-destructive" },
-            ].map(s => (
-              <div key={s.label} className="rounded-xl border border-border/50 bg-card/60 backdrop-blur-sm p-3 text-center">
-                <p className={`text-xl font-bold ${s.color}`}>{s.value}</p>
-                <p className="text-xs text-muted-foreground">{s.label}</p>
-              </div>
-            ))}
-          </div>
-        </div>
+    <div className="max-w-[1280px] mx-auto px-6 lg:px-8 py-6 space-y-6">
+      <PageHeader
+        title="Job Distribution"
+        subtitle="Track and manage multi-platform job postings"
+        breadcrumbs={[{ label: 'Dashboard', href: '/dashboard' }, { label: 'Job Distribution' }]}
+      />
+
+      {/* Stats */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <MetricCard label="Total" value={stats.total} icon={<Share2 className="h-4 w-4 text-blue-500" />} />
+        <MetricCard label="Posted" value={stats.posted} icon={<Globe className="h-4 w-4 text-emerald-500" />} />
+        <MetricCard label="Pending" value={stats.pending} icon={<RefreshCw className="h-4 w-4 text-amber-500" />} />
+        <MetricCard label="Failed" value={stats.failed} icon={<Trash2 className="h-4 w-4 text-red-500" />} />
       </div>
 
       {/* Actions */}
