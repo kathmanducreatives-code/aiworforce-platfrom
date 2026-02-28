@@ -5,7 +5,7 @@ import { cn } from '@/lib/utils';
 import {
   LayoutDashboard, Activity, Calendar, Search, Brain, Target, TrendingUp,
   Mail, Share2, BarChart3, LogOut, Settings, HelpCircle, ChevronLeft, ChevronRight,
-  PanelLeftClose, PanelLeft, Command,
+  PanelLeftClose, PanelLeft, Command, Users,
 } from 'lucide-react';
 
 interface NavGroup {
@@ -20,6 +20,7 @@ const navGroups: NavGroup[] = [
       { path: '/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
       { path: '/screening-jobs', icon: Activity, label: 'Job Screening' },
       { path: '/interview-scheduler', icon: Calendar, label: 'Interviews' },
+      { path: '/expert-marketplace', icon: Users, label: 'Expert Interviews' },
     ],
   },
   {
@@ -69,10 +70,10 @@ const Sidebar = ({ collapsed, onToggle, onOpenCommandPalette }: SidebarProps) =>
         {!collapsed && (
           <div className="flex items-center gap-3 flex-1 min-w-0">
             <div className="w-8 h-8 rounded-lg bg-primary/10 border border-primary/20 flex items-center justify-center text-sm font-bold text-primary flex-shrink-0">
-              {profile?.company_name?.[0] || 'S'}
+              {profile?.full_name?.[0] || 'S'}
             </div>
             <div className="flex-1 min-w-0">
-              <p className="text-sm font-semibold text-foreground truncate">{profile?.company_name || 'ScreeningPilot'}</p>
+              <p className="text-sm font-semibold text-foreground truncate">{profile?.full_name || 'ScreeningPilot'}</p>
               <p className="text-xs text-muted-foreground truncate">{profile?.full_name || 'Professional'}</p>
             </div>
             <span className="text-[10px] font-medium text-primary bg-primary/10 px-1.5 py-0.5 rounded flex-shrink-0">Pro</span>
@@ -80,7 +81,7 @@ const Sidebar = ({ collapsed, onToggle, onOpenCommandPalette }: SidebarProps) =>
         )}
         {collapsed && (
           <div className="w-8 h-8 rounded-lg bg-primary/10 border border-primary/20 flex items-center justify-center text-sm font-bold text-primary">
-            {profile?.company_name?.[0] || 'S'}
+            {profile?.full_name?.[0] || 'S'}
           </div>
         )}
       </div>

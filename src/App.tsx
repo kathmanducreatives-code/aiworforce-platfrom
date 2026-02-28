@@ -39,6 +39,7 @@ import ScreeningJobs from "./pages/ScreeningJobs";
 import JobApplicants from "./pages/JobApplicants";
 import JobDistribution from "./pages/JobDistribution";
 import GrowthSignals from "./pages/GrowthSignals";
+import ExpertMarketplace from "./pages/ExpertMarketplace";
 const queryClient = new QueryClient();
 
 const App = () => (
@@ -200,6 +201,14 @@ const App = () => (
                     <ProtectedRoute>
                       <MainLayout>
                         <GrowthSignals />
+                      </MainLayout>
+                    </ProtectedRoute>
+                  } />
+
+                  <Route path="/expert-marketplace" element={
+                    <ProtectedRoute>
+                      <MainLayout>
+                        <ExpertMarketplace />
                       </MainLayout>
                     </ProtectedRoute>
                   } />
