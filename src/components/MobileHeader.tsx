@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import NotificationCenter from "./shared/NotificationCenter";
 import {
   LayoutDashboard, Activity, Calendar, Search, Brain, Target, TrendingUp,
-  Mail, Share2, BarChart3, LogOut, Menu, X, Command,
+  Mail, Share2, BarChart3, LogOut, Menu, X, Command, Users,
 } from "lucide-react";
 
 interface MobileHeaderProps {
@@ -70,10 +70,10 @@ const MobileHeader = ({ onOpenCommandPalette }: MobileHeaderProps) => {
           <div className="flex items-center justify-between px-4 py-3 border-b border-border">
             <div className="flex items-center gap-3">
               <div className="w-8 h-8 rounded-lg bg-primary/10 border border-primary/20 flex items-center justify-center text-sm font-bold text-primary">
-                {profile?.company_name?.[0] || 'S'}
+                {profile?.full_name?.[0] || 'S'}
               </div>
               <div>
-                <p className="text-sm font-semibold text-foreground">{profile?.company_name || 'ScreeningPilot'}</p>
+                <p className="text-sm font-semibold text-foreground">{profile?.full_name || 'ScreeningPilot'}</p>
                 <p className="text-xs text-muted-foreground">{profile?.full_name || ''}</p>
               </div>
             </div>
@@ -86,6 +86,7 @@ const MobileHeader = ({ onOpenCommandPalette }: MobileHeaderProps) => {
               { to: "/dashboard", icon: LayoutDashboard, label: "Dashboard" },
               { to: "/screening-jobs", icon: Activity, label: "Job Screening" },
               { to: "/interview-scheduler", icon: Calendar, label: "Interviews" },
+              { to: "/expert-marketplace", icon: Users, label: "Expert Interviews" },
               { to: "/lead-scraper", icon: Search, label: "Lead Scraper" },
               { to: "/deep-search", icon: Brain, label: "Deep Search" },
               { to: "/icp-intelligence", icon: Target, label: "ICP Intelligence" },
