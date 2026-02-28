@@ -1994,12 +1994,22 @@ export type Database = {
           created_at: string
           current_sequence_step: number | null
           email: string | null
+          generated_connection_note: string | null
+          generated_dm_step2: string | null
+          generated_dm_step3: string | null
+          generated_dm_step4: string | null
           id: string
           industry: string | null
           last_touch_date: string | null
+          linkedin_slug: string | null
           linkedin_url: string | null
           next_action_date: string | null
           notes: string | null
+          scrape_status: string | null
+          scrape_url: string | null
+          scraped_at: string | null
+          scraped_careers: string | null
+          scraped_homepage: string | null
           sequence_id: string | null
           signals: Json | null
           status: Database["public"]["Enums"]["lead_status"] | null
@@ -2018,12 +2028,22 @@ export type Database = {
           created_at?: string
           current_sequence_step?: number | null
           email?: string | null
+          generated_connection_note?: string | null
+          generated_dm_step2?: string | null
+          generated_dm_step3?: string | null
+          generated_dm_step4?: string | null
           id?: string
           industry?: string | null
           last_touch_date?: string | null
+          linkedin_slug?: string | null
           linkedin_url?: string | null
           next_action_date?: string | null
           notes?: string | null
+          scrape_status?: string | null
+          scrape_url?: string | null
+          scraped_at?: string | null
+          scraped_careers?: string | null
+          scraped_homepage?: string | null
           sequence_id?: string | null
           signals?: Json | null
           status?: Database["public"]["Enums"]["lead_status"] | null
@@ -2042,12 +2062,22 @@ export type Database = {
           created_at?: string
           current_sequence_step?: number | null
           email?: string | null
+          generated_connection_note?: string | null
+          generated_dm_step2?: string | null
+          generated_dm_step3?: string | null
+          generated_dm_step4?: string | null
           id?: string
           industry?: string | null
           last_touch_date?: string | null
+          linkedin_slug?: string | null
           linkedin_url?: string | null
           next_action_date?: string | null
           notes?: string | null
+          scrape_status?: string | null
+          scrape_url?: string | null
+          scraped_at?: string | null
+          scraped_careers?: string | null
+          scraped_homepage?: string | null
           sequence_id?: string | null
           signals?: Json | null
           status?: Database["public"]["Enums"]["lead_status"] | null
