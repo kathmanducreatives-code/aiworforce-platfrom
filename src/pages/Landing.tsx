@@ -9,6 +9,7 @@ import ProductDashboard from "@/components/landing/ProductDashboard";
 import SavingsCalculator from "@/components/landing/SavingsCalculator";
 import ProductScreening from "@/components/landing/ProductScreening";
 import ProductLookalike from "@/components/landing/ProductLookalike";
+import { ScrollJourneySection } from "@/components/landing/ScrollJourneySection";
 import TimeMath from "@/components/landing/TimeMath";
 import FeatureSet from "@/components/landing/FeatureSet";
 import SocialProof from "@/components/landing/SocialProof";
@@ -29,7 +30,7 @@ const Landing = () => {
   }, [user, navigate]);
 
   return (
-    <div className="min-h-screen relative bg-[#050505] overflow-hidden font-display">
+    <div className="min-h-screen relative bg-[#050505] overflow-x-hidden font-display">
       <NoiseOverlay />
 
       {/* Animated mesh gradient blobs */}
@@ -58,7 +59,11 @@ const Landing = () => {
         <ProductScreening />
         {/* 6. Product Showcase — Lookalike Results */}
         <ProductLookalike />
-        {/* 7. Time Math — Comparison Table */}
+
+        {/* 7. The 3D Scroll Journey Engine */}
+        <ScrollJourneySection />
+
+        {/* 8. Time Math — Comparison Table */}
         <TimeMath />
         {/* 8. Full Feature Set */}
         <FeatureSet />

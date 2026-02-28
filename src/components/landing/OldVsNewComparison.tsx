@@ -31,8 +31,8 @@ const OldVsNewComparison = () => {
   useEffect(() => {
     const ctx = gsap.context(() => {
       // Left card entrance
-      gsap.fromTo(leftRef.current, { opacity: 0, x: -60 }, {
-        opacity: 1, x: 0, duration: 0.7, ease: 'expo.out',
+      gsap.fromTo(leftRef.current, { opacity: 0, x: -60, filter: 'blur(10px)' }, {
+        opacity: 1, x: 0, filter: 'blur(0px)', duration: 1.0, ease: 'expo.out',
         scrollTrigger: { trigger: sectionRef.current, start: 'top 60%', toggleActions: 'play none none none' },
       });
       const leftItems = leftRef.current?.querySelectorAll('.opp-item');
@@ -60,8 +60,8 @@ const OldVsNewComparison = () => {
               clearInterval(interval);
               setPhase('complete');
               // Animate right card
-              gsap.fromTo(rightRef.current, { opacity: 0, x: 60 }, {
-                opacity: 1, x: 0, duration: 0.7, ease: 'expo.out',
+              gsap.fromTo(rightRef.current, { opacity: 0, x: 60, filter: 'blur(10px)' }, {
+                opacity: 1, x: 0, filter: 'blur(0px)', duration: 1.0, ease: 'expo.out',
               });
               const rightItems = rightRef.current?.querySelectorAll('.new-item');
               if (rightItems) {

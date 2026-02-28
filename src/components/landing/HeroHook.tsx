@@ -19,17 +19,17 @@ const HeroHook = () => {
     const ctx = gsap.context(() => {
       const words = headlineRef.current?.querySelectorAll('.word');
       if (words) {
-        gsap.fromTo(words, { opacity: 0, y: 50 }, {
-          opacity: 1, y: 0, stagger: 0.08, duration: 0.7, ease: 'power3.out', delay: 0.3,
+        gsap.fromTo(words, { opacity: 0, y: 60, filter: 'blur(10px)' }, {
+          opacity: 1, y: 0, filter: 'blur(0px)', stagger: 0.1, duration: 1.2, ease: 'expo.out', delay: 0.2,
         });
       }
       const underline = headlineRef.current?.querySelector('.stealing-underline');
       if (underline) {
-        gsap.fromTo(underline, { scaleX: 0 }, { scaleX: 1, duration: 0.8, ease: 'power2.out', delay: 1.0 });
+        gsap.fromTo(underline, { scaleX: 0 }, { scaleX: 1, duration: 1.2, ease: 'expo.out', delay: 1.0 });
       }
-      gsap.fromTo(subtextRef.current, { opacity: 0, y: 30 }, { opacity: 1, y: 0, duration: 0.8, delay: 1.2, ease: 'power2.out' });
-      gsap.fromTo(ctaRef.current, { opacity: 0, y: 20 }, { opacity: 1, y: 0, duration: 0.6, delay: 1.5, ease: 'power2.out' });
-      gsap.fromTo(statRef.current, { opacity: 0, y: 40, scale: 0.95 }, { opacity: 1, y: 0, scale: 1, duration: 0.8, delay: 1.8, ease: 'back.out(1.4)' });
+      gsap.fromTo(subtextRef.current, { opacity: 0, y: 30, filter: 'blur(5px)' }, { opacity: 1, y: 0, filter: 'blur(0px)', duration: 1.2, delay: 1.2, ease: 'power3.out' });
+      gsap.fromTo(ctaRef.current, { opacity: 0, y: 20 }, { opacity: 1, y: 0, duration: 1.0, delay: 1.5, ease: 'power3.out' });
+      gsap.fromTo(statRef.current, { opacity: 0, y: 40, scale: 0.95 }, { opacity: 1, y: 0, scale: 1, duration: 1.2, delay: 1.8, ease: 'back.out(1.2)' });
 
       ScrollTrigger.create({
         trigger: statRef.current,

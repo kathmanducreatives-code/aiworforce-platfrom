@@ -5,7 +5,8 @@ import { cn } from '@/lib/utils';
 import {
   LayoutDashboard, Activity, Calendar, Search, Brain, Target, TrendingUp,
   Mail, Share2, BarChart3, LogOut, Settings, HelpCircle, ChevronLeft, ChevronRight,
-  PanelLeftClose, PanelLeft, Command, Users,
+  PanelLeftClose, PanelLeft, Command, Users, CheckSquare, ShieldCheck, Video,
+  ClipboardList, Wallet, UserCircle, Briefcase
 } from 'lucide-react';
 
 interface NavGroup {
@@ -43,6 +44,32 @@ const navGroups: NavGroup[] = [
     label: 'Analyze',
     items: [
       { path: '/analytics', icon: BarChart3, label: 'Analytics' },
+    ],
+  },
+  {
+    label: 'Verify',
+    items: [
+      { path: '/verify', icon: CheckSquare, label: 'Verification Queue' },
+      { path: '/verify/results', icon: ShieldCheck, label: 'Results' },
+    ],
+  },
+  {
+    label: 'Expert Interviews',
+    items: [
+      { path: '/interviews', icon: LayoutDashboard, label: 'Dashboard' },
+      { path: '/interviews/marketplace', icon: Search, label: 'Find an Interviewer' },
+      { path: '/interviews/scheduled', icon: Calendar, label: 'Scheduled' },
+      { path: '/interviews/completed', icon: Video, label: 'Completed' },
+      { path: '/interviews/reports', icon: ClipboardList, label: 'Reports' },
+    ],
+  },
+  {
+    label: 'Interviewer Portal',
+    items: [
+      { path: '/portal/assignments', icon: Briefcase, label: 'My Assignments' },
+      { path: '/portal/submit', icon: ClipboardList, label: 'Submit Report' },
+      { path: '/portal/earnings', icon: Wallet, label: 'My Earnings' },
+      { path: '/portal/profile', icon: UserCircle, label: 'My Profile' },
     ],
   },
 ];

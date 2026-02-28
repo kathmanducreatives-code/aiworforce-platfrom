@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import gsap from 'gsap';
 import { ScrollTrigger } from 'gsap/ScrollTrigger';
 import { Linkedin, Mail, MapPin, Clock } from 'lucide-react';
+import { GyroTilt } from '../shared/GyroTilt';
 
 gsap.registerPlugin(ScrollTrigger);
 
@@ -25,8 +26,8 @@ const ProductLookalike = () => {
 
     useEffect(() => {
         const ctx = gsap.context(() => {
-            gsap.fromTo(textRef.current, { opacity: 0, y: 30 }, {
-                opacity: 1, y: 0, duration: 0.6, ease: 'expo.out',
+            gsap.fromTo(textRef.current, { opacity: 0, y: 30, filter: 'blur(10px)' }, {
+                opacity: 1, y: 0, filter: 'blur(0px)', duration: 1.0, ease: 'expo.out',
                 scrollTrigger: { trigger: sectionRef.current, start: 'top 75%', toggleActions: 'play none none none' },
             });
 
@@ -43,7 +44,7 @@ const ProductLookalike = () => {
             const pills = mockupRef.current?.querySelectorAll('.filter-pill');
             if (pills) { pills.forEach((pill, i) => { masterTL.fromTo(pill, { scale: 0, opacity: 0 }, { scale: 1, opacity: 1, duration: 0.35, ease: 'back.out(2.5)' }, 0.7 + i * 0.08); }); }
             const cards = mockupRef.current?.querySelectorAll('.candidate-card');
-            if (cards) { cards.forEach((card, i) => { masterTL.fromTo(card, { opacity: 0, y: 25, scale: 0.95 }, { opacity: 1, y: 0, scale: 1, duration: 0.5, ease: 'power3.out' }, 1.0 + i * 0.12); }); }
+            if (cards) { cards.forEach((card, i) => { masterTL.fromTo(card, { opacity: 0, y: 25, scale: 0.95, filter: 'blur(5px)' }, { opacity: 1, y: 0, scale: 1, filter: 'blur(0px)', duration: 0.8, ease: 'expo.out' }, 1.0 + i * 0.12); }); }
             const badges = mockupRef.current?.querySelectorAll('.match-badge');
             if (badges) {
                 badges.forEach((badge, i) => {
@@ -72,8 +73,8 @@ const ProductLookalike = () => {
                     </p>
                 </div>
 
-                <div ref={mockupRef} className="max-w-5xl mx-auto opacity-0" style={{ perspective: '1200px', transformOrigin: 'center center' }}>
-                    <div className="rounded-xl overflow-hidden glow-green-strong border border-white/[0.06]">
+                <div ref={mockupRef} className="max-w-5xl mx-auto opacity-0">
+                    <GyroTilt intensity={8} contentClassName="rounded-xl overflow-hidden glow-green-strong border border-white/[0.06] bg-[#0a0a0a]">
                         <div className="bg-white/[0.03] px-4 py-2.5 flex items-center gap-3 border-b border-white/[0.06]">
                             <div className="flex gap-1.5">
                                 <div className="w-3 h-3 rounded-full bg-red-400/60" />
@@ -83,7 +84,7 @@ const ProductLookalike = () => {
                             <div className="flex-1 text-center"><span className="text-xs text-white/30 bg-white/5 rounded-md px-3 py-1">app.screeningpilot.com</span></div>
                         </div>
 
-                        <div className="bg-[#0a0a0a] p-5">
+                        <div className="p-5">
                             <div className="flex items-center justify-between mb-4">
                                 <div>
                                     <h3 className="text-sm font-bold text-white">Lookalike Results / SaaS-founders</h3>
@@ -117,8 +118,8 @@ const ProductLookalike = () => {
                                                 </div>
                                             </div>
                                             <span className={`match-badge text-[10px] font-bold px-2 py-0.5 rounded-full scale-0 ${c.tier === 'Excellent' ? 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/20' :
-                                                    c.tier === 'Strong' ? 'bg-blue-500/15 text-blue-400 border border-blue-500/20' :
-                                                        'bg-white/[0.06] text-white/50 border border-white/10'
+                                                c.tier === 'Strong' ? 'bg-blue-500/15 text-blue-400 border border-blue-500/20' :
+                                                    'bg-white/[0.06] text-white/50 border border-white/10'
                                                 }`}>{c.match}%</span>
                                         </div>
                                         <div className="flex items-center gap-3 text-[10px] text-white/25 mb-2">
@@ -133,7 +134,7 @@ const ProductLookalike = () => {
                                 ))}
                             </div>
                         </div>
-                    </div>
+                    </GyroTilt>
                 </div>
             </div>
         </section>

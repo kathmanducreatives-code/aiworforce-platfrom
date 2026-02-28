@@ -40,6 +40,19 @@ import JobApplicants from "./pages/JobApplicants";
 import JobDistribution from "./pages/JobDistribution";
 import GrowthSignals from "./pages/GrowthSignals";
 import ExpertMarketplace from "./pages/ExpertMarketplace";
+import CandidateDossier from "./pages/candidates/CandidateDossier";
+// import VerifyQueue from "./pages/verify/VerifyQueue";
+// import VerifyResults from "./pages/verify/VerifyResults";
+// import InterviewDashboard from "./pages/interviews/InterviewDashboard";
+// import InterviewMarketplace from "./pages/interviews/InterviewMarketplace";
+// import ScheduledInterviews from "./pages/interviews/ScheduledInterviews";
+// import CompletedInterviews from "./pages/interviews/CompletedInterviews";
+// import InterviewReports from "./pages/interviews/InterviewReports";
+// import PortalAssignments from "./pages/portal/PortalAssignments";
+// import PortalSubmit from "./pages/portal/PortalSubmit";
+// import PortalEarnings from "./pages/portal/PortalEarnings";
+// import PortalProfile from "./pages/portal/PortalProfile";
+
 const queryClient = new QueryClient();
 
 const App = () => (
@@ -212,6 +225,23 @@ const App = () => (
                       </MainLayout>
                     </ProtectedRoute>
                   } />
+
+                  {/* Mission Control Candidate UI Routes */}
+                  <Route path="/candidates/:id" element={<ProtectedRoute><MainLayout><CandidateDossier /></MainLayout></ProtectedRoute>} />
+
+                  {/* <Route path="/verify" element={<ProtectedRoute><MainLayout><VerifyQueue /></MainLayout></ProtectedRoute>} /> */}
+                  {/* <Route path="/verify/results" element={<ProtectedRoute><MainLayout><VerifyResults /></MainLayout></ProtectedRoute>} /> */}
+
+                  {/* <Route path="/interviews" element={<ProtectedRoute><MainLayout><InterviewDashboard /></MainLayout></ProtectedRoute>} /> */}
+                  {/* <Route path="/interviews/marketplace" element={<ProtectedRoute><MainLayout><InterviewMarketplace /></MainLayout></ProtectedRoute>} /> */}
+                  {/* <Route path="/interviews/scheduled" element={<ProtectedRoute><MainLayout><ScheduledInterviews /></MainLayout></ProtectedRoute>} /> */}
+                  {/* <Route path="/interviews/completed" element={<ProtectedRoute><MainLayout><CompletedInterviews /></MainLayout></ProtectedRoute>} /> */}
+                  {/* <Route path="/interviews/reports" element={<ProtectedRoute><MainLayout><InterviewReports /></MainLayout></ProtectedRoute>} /> */}
+
+                  {/* <Route path="/portal/assignments" element={<ProtectedRoute><MainLayout><PortalAssignments /></MainLayout></ProtectedRoute>} /> */}
+                  {/* <Route path="/portal/submit" element={<ProtectedRoute><MainLayout><PortalSubmit /></MainLayout></ProtectedRoute>} /> */}
+                  {/* <Route path="/portal/earnings" element={<ProtectedRoute><MainLayout><PortalEarnings /></MainLayout></ProtectedRoute>} /> */}
+                  {/* <Route path="/portal/profile" element={<ProtectedRoute><MainLayout><PortalProfile /></MainLayout></ProtectedRoute>} /> */}
 
                   {/* Public pages - no auth required */}
                   <Route path="/apply/:slug" element={<CandidateApply />} />

@@ -24,20 +24,20 @@ export default function PerformanceDashboard() {
     const { metrics, loading } = useOutreachMetrics();
 
     const StatCard = ({ title, value, trend, icon: Icon }: any) => (
-        <div style={{ background: '#141414', border: '1px solid #2a2a2a', borderRadius: '16px', padding: '24px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
+        <div style={{ background: '#141416', border: '1px solid rgba(255,255,255,0.06)', borderRadius: '16px', padding: '24px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                 <div style={{ background: 'rgba(255,255,255,0.05)', padding: '10px', borderRadius: '12px', color: '#888' }}>
                     <Icon size={20} />
                 </div>
                 {trend && (
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '4px', color: '#00e5a0', fontSize: '13px', fontWeight: 600, background: 'rgba(0, 229, 160, 0.1)', padding: '4px 8px', borderRadius: '20px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '4px', color: '#00D4AA', fontSize: '13px', fontWeight: 600, background: 'rgba(0, 212, 170, 0.1)', padding: '4px 8px', borderRadius: '20px' }}>
                         <ArrowUpRight size={14} /> {trend}
                     </div>
                 )}
             </div>
             <div>
                 <h3 style={{ color: '#888', fontSize: '13px', fontWeight: 500, marginBottom: '4px' }}>{title}</h3>
-                <div style={{ color: '#fff', fontSize: '28px', fontWeight: 700 }}>{value}</div>
+                <div style={{ color: '#fff', fontSize: '28px', fontWeight: 700, fontFamily: '"SF Mono", "SFMono-Regular", ui-monospace, monospace' }}>{value}</div>
             </div>
         </div>
     );
@@ -109,22 +109,22 @@ export default function PerformanceDashboard() {
                 </div>
 
                 {/* Conversion Funnel */}
-                <div style={{ background: '#141414', border: '1px solid #2a2a2a', borderRadius: '16px', padding: '24px' }}>
+                <div style={{ background: '#141416', border: '1px solid rgba(255,255,255,0.06)', borderRadius: '16px', padding: '24px' }}>
                     <h3 style={{ color: '#fff', fontSize: '16px', fontWeight: 600, marginBottom: '24px' }}>Global Funnel</h3>
 
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
                         {[
-                            { label: 'Sent', value: 1284, pct: 100, color: '#444' },
-                            { label: 'Opened', value: 580, pct: 45, color: '#3b82f6' },
-                            { label: 'Replied', value: 52, pct: 4, color: '#a855f7' },
-                            { label: 'Meetings Booked', value: 15, pct: 1.1, color: '#00e5a0' }
+                            { label: 'Exported', value: 1284, pct: 100, color: '#444' },
+                            { label: 'Accepted', value: 580, pct: 45, color: '#3b82f6' },
+                            { label: 'Replied', value: 52, pct: 4, color: '#F5A623' },
+                            { label: 'Meetings Booked', value: 15, pct: 1.1, color: '#00D4AA' }
                         ].map((step, i) => (
                             <div key={i} style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                                 <div style={{ display: 'flex', justifyContent: 'space-between', color: '#fff', fontSize: '13px', fontWeight: 500 }}>
                                     <span>{step.label}</span>
                                     <span>{step.value} <span style={{ color: '#888', fontWeight: 400 }}>({step.pct}%)</span></span>
                                 </div>
-                                <div style={{ height: '8px', background: '#222', borderRadius: '4px', overflow: 'hidden' }}>
+                                <div style={{ height: '8px', background: 'rgba(255,255,255,0.06)', borderRadius: '4px', overflow: 'hidden' }}>
                                     <div style={{ height: '100%', width: `${step.pct}%`, background: step.color, borderRadius: '4px' }} />
                                 </div>
                             </div>

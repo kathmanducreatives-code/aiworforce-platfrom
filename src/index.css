@@ -1,6 +1,8 @@
 @import url("https://fonts.googleapis.com/css2?family=Inter+Tight:wght@400;500;600;700;800;900&display=swap");
 @import url("https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&display=swap");
-
+@import url("https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600;700&display=swap");
+@import url("https://fonts.googleapis.com/css2?family=Geist+Mono:wght@400;500;600;700&display=swap");
+@import url("https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800;900&display=swap");
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -294,6 +296,29 @@ All colors MUST be HSL.
     --glass-border: rgba(0, 255, 133, 0.1);
     --shadow-premium: 0 8px 32px rgba(0, 0, 0, 0.6);
     --shadow-glow: 0 0 30px rgba(0, 255, 133, 0.2);
+
+    /* Mission Control Palette Additions */
+    --bg-deepest: #08090A;
+    --bg-surface: #111214;
+    --bg-elevated: #1A1B1F;
+    --bg-input: #0E0F11;
+    --border-subtle: rgba(255, 255, 255, 0.05);
+    --border-hover: rgba(255, 255, 255, 0.10);
+    --border-active: rgba(0, 212, 170, 0.30);
+    --text-primary: #E8E8ED;
+    --text-secondary: #8B8B97;
+    --text-dim: #55555F;
+
+    /* Mission Control Status & Score Gradients */
+    --verified: #00D4AA;
+    --warning: #F5A623;
+    --danger: #EF4444;
+    --info: #3B82F6;
+    --premium: #A78BFA;
+    --score-excellent: linear-gradient(135deg, #00D4AA 0%, #00B894 100%);
+    --score-good: linear-gradient(135deg, #3B82F6 0%, #2563EB 100%);
+    --score-average: linear-gradient(135deg, #F5A623 0%, #D97706 100%);
+    --score-poor: linear-gradient(135deg, #EF4444 0%, #DC2626 100%);
 
     /* High Contrast White Background */
     --background: 0 0% 100%;

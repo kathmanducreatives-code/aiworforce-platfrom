@@ -4,9 +4,10 @@ import ContentPlanner from "./ContentPlanner";
 import OutreachLayout from "./components/outreach/OutreachLayout";
 import CommandCenter from "./components/dashboard/CommandCenter";
 import DialerView from "./components/dialer/DialerView";
+import VapiDialerView from "./components/dialer/VapiDialerView";
 
 function App() {
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'content' | 'outreach' | 'dialer'>('dashboard');
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'content' | 'outreach' | 'dialer' | 'ai-agent'>('dashboard');
 
   return (
     <div style={{ background: "#0d0d0d", minHeight: "100vh", display: "flex", flexDirection: "column" }}>
@@ -100,6 +101,23 @@ function App() {
         >
           Power Dialer
         </button>
+        <button
+          onClick={() => setActiveTab('ai-agent')}
+          style={{
+            background: "transparent",
+            border: "none",
+            color: activeTab === 'ai-agent' ? "#10b981" : "#888", // emerald green for AI
+            fontWeight: activeTab === 'ai-agent' ? 600 : 500,
+            fontSize: "13px",
+            height: "100%",
+            borderBottom: activeTab === 'ai-agent' ? "2px solid #10b981" : "2px solid transparent",
+            cursor: "pointer",
+            transition: "all 0.2s",
+            padding: "0 4px",
+          }}
+        >
+          AI Voice Agent
+        </button>
       </nav>
 
       <div style={{ flex: 1, display: "flex", flexDirection: "column" }}>
@@ -107,6 +125,7 @@ function App() {
         {activeTab === 'content' && <ContentPlanner />}
         {activeTab === 'outreach' && <OutreachLayout />}
         {activeTab === 'dialer' && <DialerView />}
+        {activeTab === 'ai-agent' && <VapiDialerView />}
       </div>
     </div>
   );

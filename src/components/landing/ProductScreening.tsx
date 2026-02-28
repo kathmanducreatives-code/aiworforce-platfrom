@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import gsap from 'gsap';
 import { ScrollTrigger } from 'gsap/ScrollTrigger';
+import { GyroTilt } from '../shared/GyroTilt';
 
 gsap.registerPlugin(ScrollTrigger);
 
@@ -32,10 +33,10 @@ const ProductScreening = () => {
             const masterTL = gsap.timeline({
                 scrollTrigger: { trigger: sectionRef.current, start: 'top 60%', toggleActions: 'play none none none' },
             });
-            masterTL.fromTo(mockupRef.current, { opacity: 0, x: -80, rotateY: 5, scale: 0.92 }, {
-                opacity: 1, x: 0, rotateY: 0, scale: 1, duration: 1, ease: 'expo.out',
+            masterTL.fromTo(mockupRef.current, { opacity: 0, x: -80, rotateY: 5, scale: 0.92, filter: 'blur(10px)' }, {
+                opacity: 1, x: 0, rotateY: 0, scale: 1, filter: 'blur(0px)', duration: 1.2, ease: 'expo.out',
             }, 0);
-            masterTL.fromTo(textRef.current, { opacity: 0, y: 40 }, { opacity: 1, y: 0, duration: 0.7, ease: 'expo.out' }, 0.15);
+            masterTL.fromTo(textRef.current, { opacity: 0, y: 40, filter: 'blur(10px)' }, { opacity: 1, y: 0, filter: 'blur(0px)', duration: 1.0, ease: 'expo.out' }, 0.15);
             if (lineRef.current) {
                 masterTL.fromTo(lineRef.current, { scaleY: 0 }, { scaleY: 1, duration: 1.4, ease: 'power3.out' }, 0.6);
             }
@@ -103,11 +104,11 @@ const ProductScreening = () => {
                         </div>
                     </div>
 
-                    <div ref={mockupRef} className="flex-[55] opacity-0 relative" style={{ perspective: '1200px' }}>
+                    <div ref={mockupRef} className="flex-[55] opacity-0 relative">
                         <div className={`absolute -top-3 right-4 z-20 bg-emerald-600 text-white text-xs font-semibold px-4 py-2.5 rounded-xl shadow-[0_8px_24px_rgba(5,150,105,0.3)] transition-all duration-500 ${showToast ? 'opacity-100 translate-y-0 scale-100' : 'opacity-0 -translate-y-4 scale-90'}`}>
                             ✓ Screening link created!
                         </div>
-                        <div className="rounded-xl overflow-hidden glow-green border border-white/[0.06]">
+                        <GyroTilt intensity={8} contentClassName="rounded-xl overflow-hidden glow-green border border-white/[0.06] bg-[#0a0a0a]">
                             <div className="bg-white/[0.03] px-4 py-2.5 flex items-center gap-3 border-b border-white/[0.06]">
                                 <div className="flex gap-1.5">
                                     <div className="w-3 h-3 rounded-full bg-red-400/60" />
@@ -116,7 +117,7 @@ const ProductScreening = () => {
                                 </div>
                                 <div className="flex-1 text-center"><span className="text-xs text-white/30 bg-white/5 rounded-md px-3 py-1">app.screeningpilot.com</span></div>
                             </div>
-                            <div className="bg-[#0a0a0a] p-6">
+                            <div className="p-6">
                                 <div className="flex items-center justify-between mb-5">
                                     <h3 className="text-sm font-bold text-white">Create New Screening</h3>
                                     <div className="flex gap-4 text-[10px] text-white/30">
@@ -156,7 +157,7 @@ const ProductScreening = () => {
                                         }`}>Generate Screening Link →</button>
                                 </div>
                             </div>
-                        </div>
+                        </GyroTilt>
                     </div>
                 </div>
             </div>

@@ -1,25 +1,63 @@
-import { useState } from 'react';
-import { Upload, Plus, Search as ResearchIcon, Loader2, Download } from 'lucide-react';
+import { useState, useMemo } from 'react';
 import { useOutreachLeads } from '../../../hooks/useOutreachLeads';
 import LeadTable from './LeadTable';
+import FilterBar from './FilterBar';
+import BulkActions from './BulkActions';
 import LeadImportModal from './LeadImportModal';
 import LeadDetailDrawer from './LeadDetailDrawer';
-import TodaysActions from './TodaysActions';
 import type { OutreachLead } from '../../../types/outreach';
-import { researchLeadSignals } from '../../../services/outreachGemini';
-import { toast } from 'sonner';
 
 export default function PipelineView() {
     const { leads, loading, fetchLeads, updateLead } = useOutreachLeads();
     const [isImportModalOpen, setIsImportModalOpen] = useState(false);
     const [selectedLead, setSelectedLead] = useState<OutreachLead | null>(null);
     const [selectedIds, setSelectedIds] = useState<string[]>([]);
-    const [isBatchResearching, setIsBatchResearching] = useState(false);
-    const [researchProgress, setResearchProgress] = useState({ current: 0, total: 0 });
 
+    // Filters State
+    const [searchTerm, setSearchTerm] = useState('');
+    const [tierFilter, setTierFilter] = useState('all');
+    const [statusFilter, setStatusFilter] = useState('all');
+    const [scrapeFilter, setScrapeFilter] = useState('all');
+
+    // Filter Logic
+    const filteredLeads = useMemo(() => {
+        return leads.filter(l => {
+            // Text Search
+            const textMatch = !searchTerm ||
+                l.company?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                l.contact_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                l.title?.toLowerCase().includes(searchTerm.toLowerCase());
+            if (!textMatch) return false;
+
+            // Tier
+            if (tierFilter !== 'all' && l.tier !== tierFilter) return false;
+
+            // Status
+            if (statusFilter !== 'all' && l.status !== statusFilter) return false;
+
+            // Scrape Status
+            if (scrapeFilter !== 'all') {
+                if (scrapeFilter === 'queued' && l.scrape_status !== null) return false;
+                if (scrapeFilter === 'success' && l.scrape_status !== 'success') return false;
+                if (scrapeFilter === 'failed_scrape' && l.scrape_status !== 'failed_scrape') return false;
+            }
+
+            return true;
+        })
+            .sort((a, b) => {
+                // Sort by tier first (tier_1 first), then created_at DESC
+                const tierMap: Record<string, number> = { 'tier_1': 1, 'tier_2': 2, 'tier_3': 3, 'unassigned': 4 };
+                const tA = tierMap[a.tier] || 4;
+                const tB = tierMap[b.tier] || 4;
+                if (tA !== tB) return tA - tB;
+                return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+            });
+    }, [leads, searchTerm, tierFilter, statusFilter, scrapeFilter]);
+
+    // Selection Handlers
     const handleSelectAll = (all: boolean) => {
         if (all) {
-            setSelectedIds(leads.map(l => l.id));
+            setSelectedIds(filteredLeads.map(l => l.id));
         } else {
             setSelectedIds([]);
         }
@@ -33,167 +71,95 @@ export default function PipelineView() {
         }
     };
 
-    const handleBatchResearch = async () => {
-        if (selectedIds.length === 0) return;
-
-        setIsBatchResearching(true);
-        setResearchProgress({ current: 0, total: selectedIds.length });
-
-        let successCount = 0;
-        let failCount = 0;
-
-        for (let i = 0; i < selectedIds.length; i++) {
-            const id = selectedIds[i];
-            const lead = leads.find(l => l.id === id);
-
-            if (lead && lead.company) {
-                setResearchProgress({ current: i + 1, total: selectedIds.length });
-                try {
-                    const newSignals = await researchLeadSignals(
-                        lead.company, lead.industry, lead.company_size,
-                        lead.contact_name, lead.title, lead.notes
-                    );
-                    await updateLead(lead.id, { signals: newSignals });
-                    successCount++;
-                } catch (error) {
-                    failCount++;
-                }
-
-                // Rate limiting delay (2 seconds per call as per plan)
-                if (i < selectedIds.length - 1) {
-                    await new Promise(resolve => setTimeout(resolve, 2000));
-                }
-            } else {
-                failCount++;
-            }
+    // Bulk Action Handlers
+    const handleAssignTier = async (tier: string) => {
+        for (const id of selectedIds) {
+            await updateLead(id, { tier: tier as any });
         }
-
-        setIsBatchResearching(false);
-        setSelectedIds([]);
-        toast.success(`Research complete: ${successCount} successful, ${failCount} failed.`);
     };
 
-    const handleCloselyExport = () => {
-        const selected = selectedIds.length > 0
-            ? leads.filter(l => selectedIds.includes(l.id))
-            : leads;
-
-        if (selected.length === 0) {
-            toast.error('No leads to export!');
-            return;
+    const handleChangeStatus = async (status: string) => {
+        for (const id of selectedIds) {
+            await updateLead(id, { status: status as any });
         }
+    };
 
-        // Closely CSV format: LinkedIn URL, First Name, Last Name, Company, Title, Connection Note, Tags
-        const headers = ['LinkedIn URL', 'First Name', 'Last Name', 'Company', 'Title', 'Connection Note', 'Tags'];
-        const rows = selected.map(lead => {
-            const names = (lead.contact_name || '').split(' ');
-            const firstName = names[0] || '';
-            const lastName = names.slice(1).join(' ') || '';
-            const tag = `tier-${lead.tier || 2},sp-${lead.id.slice(0, 8)}`;
-            const connNote = `Hi ${firstName} — saw ${lead.company || 'your company'} is growing. Always interesting to connect with founders in the ${lead.industry || 'tech'} space. Would love to connect.`;
-            return [
-                lead.linkedin_url || '',
-                firstName,
-                lastName,
-                lead.company || '',
-                lead.title || '',
-                `"${connNote.replace(/"/g, '""')}"`,
-                tag,
-            ].join(',');
-        });
-
-        const csv = [headers.join(','), ...rows].join('\n');
-        const blob = new Blob([csv], { type: 'text/csv' });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `closely-export-${new Date().toISOString().slice(0, 10)}.csv`;
-        a.click();
-        URL.revokeObjectURL(url);
-
-        toast.success(`Exported ${selected.length} leads to Closely CSV!`);
+    const handleDelete = async () => {
+        if (confirm(`Are you sure you want to delete ${selectedIds.length} leads?`)) {
+            // Need a hook method for this, for now just marking them dead
+            for (const id of selectedIds) {
+                await updateLead(id, { status: 'dead' });
+            }
+            setSelectedIds([]);
+        }
     };
 
     return (
-        <div style={{ padding: "24px 24px 60px" }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", marginBottom: "24px" }}>
+        <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+            {/* Header */}
+            <div style={{ padding: '32px 40px 24px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexShrink: 0 }}>
                 <div>
-                    <h1 style={{ fontSize: "24px", color: "#f0f0f0", fontWeight: 700, letterSpacing: "-0.5px", marginBottom: "4px" }}>
+                    <h1 style={{ fontSize: '28px', color: '#fff', fontWeight: 600, letterSpacing: '-0.02em', marginBottom: '8px', fontFamily: '"Cabinet Grotesk", "Satoshi", sans-serif' }}>
                         Pipeline
                     </h1>
-                    <p style={{ color: "#888", fontSize: "14px" }}>
-                        Manage outbound leads, view active sequences, and research signals.
-                    </p>
                 </div>
-
-                <div style={{ display: "flex", gap: "12px", alignItems: "center" }}>
-                    {selectedIds.length > 0 && (
-                        <div style={{ display: "flex", alignItems: "center", gap: "12px", background: "#1a1a1a", padding: "6px 12px", borderRadius: "8px", border: "1px solid #3b82f644" }}>
-                            <span style={{ color: "#a855f7", fontSize: "13px", fontWeight: 600 }}>
-                                {selectedIds.length} selected
-                            </span>
-                            <button
-                                onClick={handleBatchResearch}
-                                disabled={isBatchResearching}
-                                style={{
-                                    background: "#3b82f6", color: "#fff", border: "none",
-                                    padding: "6px 12px", borderRadius: "6px", fontSize: "12px",
-                                    fontWeight: 600, display: "flex", alignItems: "center", gap: "6px",
-                                    cursor: isBatchResearching ? "not-allowed" : "pointer"
-                                }}
-                            >
-                                {isBatchResearching ? <Loader2 size={14} className="animate-spin" /> : <ResearchIcon size={14} />}
-                                {isBatchResearching ? `Researching ${researchProgress.current}/${researchProgress.total}...` : "Research All"}
-                            </button>
-                        </div>
-                    )}
+                <div style={{ display: 'flex', gap: '12px' }}>
                     <button
                         onClick={() => setIsImportModalOpen(true)}
                         style={{
-                            background: "#222", color: "#e0e0e0", border: "1px solid #333",
-                            padding: "10px 16px", borderRadius: "8px", fontSize: "13px",
-                            fontWeight: 600, display: "flex", alignItems: "center", gap: "8px",
-                            cursor: "pointer", transition: "all 0.2s"
+                            background: '#141416', color: '#e0e0e0', border: '1px solid rgba(255,255,255,0.06)',
+                            padding: '10px 16px', borderRadius: '8px', fontSize: '13px',
+                            fontWeight: 600, cursor: 'pointer', transition: 'all 0.2s',
+                            boxShadow: '0 2px 8px rgba(0,0,0,0.2)'
                         }}
+                        onMouseOver={e => e.currentTarget.style.borderColor = 'rgba(255,255,255,0.15)'}
+                        onMouseOut={e => e.currentTarget.style.borderColor = 'rgba(255,255,255,0.06)'}
                     >
-                        <Upload size={16} /> Import CSV
+                        Import CSV
                     </button>
-                    <button
-                        onClick={handleCloselyExport}
-                        style={{
-                            background: "linear-gradient(135deg, #3b82f6, #2563eb)",
-                            color: "#fff", border: "none",
-                            padding: "10px 16px", borderRadius: "8px", fontSize: "13px",
-                            fontWeight: 600, display: "flex", alignItems: "center", gap: "8px",
-                            cursor: "pointer", transition: "all 0.2s"
-                        }}
-                    >
-                        <Download size={16} /> Export to Closely
-                    </button>
-                    <button
-                        style={{
-                            background: "#00e5a0", color: "#000", border: "none",
-                            padding: "10px 16px", borderRadius: "8px", fontSize: "13px",
-                            fontWeight: 600, display: "flex", alignItems: "center", gap: "8px",
-                            cursor: "pointer", transition: "all 0.2s"
-                        }}
-                    >
-                        <Plus size={16} /> Add Lead
-                    </button>
+                    {/* Note: Export to Closely moved to dedicated Export tab per spec */}
                 </div>
             </div>
 
-            <TodaysActions />
+            {/* Main Content Area */}
+            <div style={{ px: '40px', flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', padding: '0 40px 40px' }}>
+                <div style={{
+                    background: '#141416',
+                    border: '1px solid rgba(255,255,255,0.06)',
+                    borderRadius: '12px',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    flex: 1,
+                    overflow: 'hidden',
+                    boxShadow: '0 4px 24px rgba(0,0,0,0.2)'
+                }}>
+                    <FilterBar
+                        searchTerm={searchTerm} setSearchTerm={setSearchTerm}
+                        tierFilter={tierFilter} setTierFilter={setTierFilter}
+                        statusFilter={statusFilter} setStatusFilter={setStatusFilter}
+                        scrapeFilter={scrapeFilter} setScrapeFilter={setScrapeFilter}
+                    />
 
-            <LeadTable
-                leads={leads}
-                loading={loading}
-                selectedIds={selectedIds}
-                onSelectAll={handleSelectAll}
-                onSelect={handleSelect}
-                onUpdateTier={(id, tier) => updateLead(id, { tier })}
-                onRowClick={setSelectedLead}
-            />
+                    <BulkActions
+                        totalLeads={filteredLeads.length}
+                        selectedCount={selectedIds.length}
+                        onAssignTier={handleAssignTier}
+                        onChangeStatus={handleChangeStatus}
+                        onDelete={handleDelete}
+                    />
+
+                    <div style={{ flex: 1, overflowY: 'auto' }}>
+                        <LeadTable
+                            leads={filteredLeads}
+                            loading={loading}
+                            selectedIds={selectedIds}
+                            onSelectAll={handleSelectAll}
+                            onSelect={handleSelect}
+                            onRowClick={setSelectedLead}
+                        />
+                    </div>
+                </div>
+            </div>
 
             <LeadImportModal
                 isOpen={isImportModalOpen}

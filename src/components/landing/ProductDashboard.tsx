@@ -2,6 +2,7 @@ import { useEffect, useRef } from 'react';
 import gsap from 'gsap';
 import { ScrollTrigger } from 'gsap/ScrollTrigger';
 import { BarChart3, Target, Briefcase, Cpu } from 'lucide-react';
+import { GyroTilt } from '../shared/GyroTilt';
 
 gsap.registerPlugin(ScrollTrigger);
 
@@ -28,16 +29,16 @@ const ProductDashboard = () => {
 
     useEffect(() => {
         const ctx = gsap.context(() => {
-            gsap.fromTo(textRef.current, { opacity: 0, y: 40 }, {
-                opacity: 1, y: 0, duration: 0.7, ease: 'expo.out',
+            gsap.fromTo(textRef.current, { opacity: 0, y: 40, filter: 'blur(10px)' }, {
+                opacity: 1, y: 0, filter: 'blur(0px)', duration: 1.0, ease: 'expo.out',
                 scrollTrigger: { trigger: sectionRef.current, start: 'top 70%', toggleActions: 'play none none none' },
             });
 
             highlightRefs.current.forEach((el, i) => {
                 if (!el) return;
-                gsap.fromTo(el, { opacity: 0, x: -20, scale: 0.95 }, {
-                    opacity: 1, x: 0, scale: 1, duration: 0.5, delay: 0.4 + i * 0.12,
-                    ease: 'back.out(1.5)',
+                gsap.fromTo(el, { opacity: 0, x: -20, scale: 0.95, filter: 'blur(5px)' }, {
+                    opacity: 1, x: 0, scale: 1, filter: 'blur(0px)', duration: 0.8, delay: 0.4 + i * 0.12,
+                    ease: 'expo.out',
                     scrollTrigger: { trigger: sectionRef.current, start: 'top 65%', toggleActions: 'play none none none' },
                 });
             });
@@ -45,8 +46,8 @@ const ProductDashboard = () => {
             const masterTL = gsap.timeline({
                 scrollTrigger: { trigger: mockupRef.current, start: 'top 75%', toggleActions: 'play none none none' },
             });
-            masterTL.fromTo(mockupRef.current, { opacity: 0, x: 80, rotateY: -5, scale: 0.92 }, {
-                opacity: 1, x: 0, rotateY: 0, scale: 1, duration: 1, ease: 'expo.out',
+            masterTL.fromTo(mockupRef.current, { opacity: 0, x: 80, rotateY: -5, scale: 0.92, filter: 'blur(10px)' }, {
+                opacity: 1, x: 0, rotateY: 0, scale: 1, filter: 'blur(0px)', duration: 1.2, ease: 'expo.out',
             }, 0);
             const stats = mockupRef.current?.querySelectorAll('.dash-stat');
             if (stats) {
@@ -102,8 +103,8 @@ const ProductDashboard = () => {
                         </div>
                     </div>
 
-                    <div ref={mockupRef} className="flex-[55] opacity-0" style={{ perspective: '1200px' }}>
-                        <div className="rounded-xl overflow-hidden glow-green border border-white/[0.06]">
+                    <div ref={mockupRef} className="flex-[55] opacity-0">
+                        <GyroTilt intensity={8} contentClassName="rounded-xl overflow-hidden glow-green border border-white/[0.06] bg-[#0a0a0a]">
                             <div className="bg-white/[0.03] px-4 py-2.5 flex items-center gap-3 border-b border-white/[0.06]">
                                 <div className="flex gap-1.5">
                                     <div className="w-3 h-3 rounded-full bg-red-400/60" />
@@ -115,7 +116,7 @@ const ProductDashboard = () => {
                                 </div>
                             </div>
 
-                            <div className="bg-[#0a0a0a] p-5">
+                            <div className="p-5">
                                 <div className="grid grid-cols-4 gap-3 mb-4">
                                     {statCards.map((s, i) => (
                                         <div key={i} className="dash-stat glass rounded-lg p-3 opacity-20 transition-all hover:border-emerald-500/20">
@@ -151,7 +152,7 @@ const ProductDashboard = () => {
                                     ))}
                                 </div>
                             </div>
-                        </div>
+                        </GyroTilt>
                     </div>
                 </div>
             </div>

@@ -10,6 +10,9 @@ export interface OutreachLead {
     notes: string | null;
     tier: 'unassigned' | 'tier_1' | 'tier_2' | 'tier_3';
     status: 'not_started' | 'in_sequence' | 'replied' | 'meeting_booked' | 'closed' | 'dead';
+    scrape_status?: 'success' | 'failed_scrape' | 'in_progress' | null;
+    closely_connection_status?: 'none' | 'pending' | 'accepted' | null;
+    generated_sequence?: Array<{ step: number; dayOffset: number; content: string; approved?: boolean }>;
     signals: Signal[];
     sequence_id: string | null;
     current_sequence_step: number;
