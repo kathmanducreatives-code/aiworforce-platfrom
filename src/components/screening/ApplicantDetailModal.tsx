@@ -108,7 +108,7 @@ const ApplicantDetailModal = ({ application, job, open, onOpenChange, onUpdate }
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="w-full max-w-3xl max-h-[90vh] overflow-y-auto p-0 gap-0 border-border/60 bg-card/95 backdrop-blur-xl">
+      <DialogContent className="w-full max-w-full h-full rounded-none sm:max-w-3xl sm:h-auto sm:max-h-[90vh] sm:rounded-lg overflow-y-auto p-0 gap-0 border-none sm:border sm:border-border/60 bg-card/95 backdrop-blur-xl">
         {/* Premium Header */}
         <div className="relative overflow-hidden bg-gradient-to-br from-card via-card to-primary/5 border-b border-border/50 p-5 md:p-6">
           <div className="absolute inset-0 bg-gradient-to-r from-primary/3 to-transparent pointer-events-none" />

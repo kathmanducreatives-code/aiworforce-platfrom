@@ -63,7 +63,7 @@ const JobCard = ({ job, applicationCounts, onStatusToggle, onEdit, onDelete }: J
       {/* Left accent bar */}
       <div className={`absolute left-0 top-0 bottom-0 w-1 rounded-l-xl ${isActive ? "bg-primary" : "bg-muted-foreground/30"}`} />
 
-      <div className="pl-5 pr-4 py-4 md:py-5">
+      <div className="pl-4 pr-3 py-3 sm:pl-5 sm:pr-4 sm:py-4 md:py-5">
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
           {/* Left: Icon + Info */}
           <div className="flex items-start gap-3 min-w-0 flex-1">
@@ -119,7 +119,7 @@ const JobCard = ({ job, applicationCounts, onStatusToggle, onEdit, onDelete }: J
               variant="outline"
               size="sm"
               onClick={() => navigate(`/screening-jobs/${job.id}`)}
-              className="border-border/60 hover:border-primary/40 hover:bg-primary/5 hover:text-primary"
+              className="flex-1 sm:flex-none border-border/60 hover:border-primary/40 hover:bg-primary/5 hover:text-primary"
             >
               <Eye className="h-3.5 w-3.5 mr-1.5" />
               View Applicants
@@ -128,7 +128,7 @@ const JobCard = ({ job, applicationCounts, onStatusToggle, onEdit, onDelete }: J
             <AlertDialog>
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <Button variant="ghost" size="icon" className="h-8 w-8 border border-border/40 hover:border-border/70">
+                  <Button variant="ghost" size="icon" className="h-8 w-8 flex-shrink-0 border border-border/40 hover:border-border/70">
                     <MoreHorizontal className="h-4 w-4" />
                   </Button>
                 </DropdownMenuTrigger>

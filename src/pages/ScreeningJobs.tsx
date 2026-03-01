@@ -3,16 +3,19 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import CreateJobForm from "@/components/screening/CreateJobForm";
 import JobCard from "@/components/screening/JobCard";
-import { Briefcase, BarChart3, Users, TrendingUp, Pause, Plus } from "lucide-react";
+import { Briefcase, BarChart3, Users, TrendingUp, Pause, Plus, ArrowLeft } from "lucide-react";
 import { ScreeningAnalyticsDashboard } from "@/components/screening/analytics/ScreeningAnalyticsDashboard";
 import PageHeader from "@/components/shared/PageHeader";
 import MetricCard from "@/components/shared/MetricCard";
 import EmptyState from "@/components/shared/EmptyState";
 import SkeletonCard from "@/components/shared/SkeletonCard";
 import SlideOverPanel from "@/components/shared/SlideOverPanel";
+import { Dialog, DialogContent } from "@/components/ui/dialog";
+import { useIsMobile } from "@/hooks/use-mobile";
 
 const ScreeningJobs = () => {
   const { user } = useAuth();
+  const isMobile = useIsMobile();
   const [jobs, setJobs] = useState<any[]>([]);
   const [applications, setApplications] = useState<any[]>([]);
   const [appCounts, setAppCounts] = useState<Record<string, any>>({});
@@ -61,7 +64,7 @@ const ScreeningJobs = () => {
 
   if (showAnalytics) {
     return (
-      <div className="max-w-[1280px] mx-auto px-6 lg:px-8 py-6">
+      <div className="max-w-[1280px] mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-6">
         <ScreeningAnalyticsDashboard
           jobs={jobs}
           applications={applications}
@@ -72,7 +75,7 @@ const ScreeningJobs = () => {
   }
 
   return (
-    <div className="max-w-[1280px] mx-auto px-6 lg:px-8 py-6 space-y-6">
+    <div className="max-w-[1280px] mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-6 space-y-4 sm:space-y-6">
       <PageHeader
         title="Job Screening"
         subtitle="Create AI-powered screening links and manage applicants"
@@ -91,7 +94,7 @@ const ScreeningJobs = () => {
 
       {/* KPI Row */}
       {!loading && (
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
           <MetricCard
             label="Total Applicants"
             value={totalApplicants}
@@ -148,16 +151,41 @@ const ScreeningJobs = () => {
         )}
       </div>
 
-      {/* Create Job Slide-Over Panel */}
-      <SlideOverPanel
-        open={showCreatePanel}
-        onClose={() => setShowCreatePanel(false)}
-        title="Create Screening Job"
-        description="Configure your role and generate an AI screening link"
-        width="xl"
-      >
-        <CreateJobForm onJobCreated={() => { fetchJobs(); setShowCreatePanel(false); }} />
-      </SlideOverPanel>
+      {/* Create Job: Full-screen dialog on mobile, SlideOverPanel on desktop */}
+      {isMobile ? (
+        <Dialog open={showCreatePanel} onOpenChange={setShowCreatePanel}>
+          <DialogContent className="w-full h-full max-w-none max-h-none rounded-none p-0 gap-0 border-none bg-background flex flex-col [&>button]:hidden">
+            {/* Sticky header */}
+            <div className="flex items-center gap-3 px-4 py-3 border-b border-border bg-background sticky top-0 z-10 flex-shrink-0">
+              <button onClick={() => setShowCreatePanel(false)} className="p-1.5 rounded-lg hover:bg-muted transition-colors text-muted-foreground hover:text-foreground">
+                <ArrowLeft className="h-5 w-5" />
+              </button>
+              <div>
+                <h2 className="font-semibold text-foreground text-base">Create Screening Job</h2>
+                <p className="text-xs text-muted-foreground">Configure your role and generate an AI screening link</p>
+              </div>
+            </div>
+            {/* Scrollable body */}
+            <div className="flex-1 overflow-y-auto px-4 py-4">
+              <CreateJobForm
+                onJobCreated={() => { fetchJobs(); setShowCreatePanel(false); }}
+                onCancel={() => setShowCreatePanel(false)}
+                embedded
+              />
+            </div>
+          </DialogContent>
+        </Dialog>
+      ) : (
+        <SlideOverPanel
+          open={showCreatePanel}
+          onClose={() => setShowCreatePanel(false)}
+          title="Create Screening Job"
+          description="Configure your role and generate an AI screening link"
+          width="xl"
+        >
+          <CreateJobForm onJobCreated={() => { fetchJobs(); setShowCreatePanel(false); }} />
+        </SlideOverPanel>
+      )}
     </div>
   );
 };
