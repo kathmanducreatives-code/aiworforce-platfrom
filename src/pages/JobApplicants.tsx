@@ -107,7 +107,7 @@ const JobApplicants = () => {
   };
 
   if (loading) return (
-    <div className="max-w-[1280px] mx-auto px-6 lg:px-8 py-6 space-y-6">
+    <div className="max-w-[1280px] mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-6 space-y-6">
       <SkeletonCard variant="metric" count={4} className="grid grid-cols-2 md:grid-cols-4 gap-4" />
       <SkeletonCard variant="card" count={6} className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4" />
     </div>
@@ -116,7 +116,7 @@ const JobApplicants = () => {
   if (!job) return <div className="p-6 text-muted-foreground">Job not found</div>;
 
   return (
-    <div className="max-w-[1280px] mx-auto px-6 lg:px-8 py-6 space-y-6">
+    <div className="max-w-[1280px] mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-6 space-y-4 sm:space-y-6">
       <PageHeader
         title={job.title}
         subtitle={job.company_name}

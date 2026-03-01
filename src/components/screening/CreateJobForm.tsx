@@ -12,6 +12,9 @@ import DistributeJobDialog from "@/components/distribution/DistributeJobDialog";
 
 interface CreateJobFormProps {
   onJobCreated: () => void;
+  onCancel?: () => void;
+  /** When true, hides the collapsible header wrapper (used inside full-screen mobile dialog) */
+  embedded?: boolean;
 }
 
 const generateSlug = () => {
@@ -21,7 +24,7 @@ const generateSlug = () => {
   return Array.from(arr, v => chars[v % chars.length]).join('');
 };
 
-const CreateJobForm = ({ onJobCreated }: CreateJobFormProps) => {
+const CreateJobForm = ({ onJobCreated, onCancel, embedded }: CreateJobFormProps) => {
   const { user } = useAuth();
   const [title, setTitle] = useState("");
   const [companyName, setCompanyName] = useState("");
@@ -143,9 +146,128 @@ const CreateJobForm = ({ onJobCreated }: CreateJobFormProps) => {
     );
   }
 
+  // The actual form content (shared between embedded and collapsible modes)
+  const formContent = (
+    <form onSubmit={handleSubmit} className="space-y-6">
+      {/* Step 1: Basics */}
+      <div className="space-y-4">
+        <div className="flex items-center gap-2">
+          <span className="h-5 w-5 rounded-full bg-primary/20 border border-primary/30 text-primary text-xs font-bold flex items-center justify-center flex-shrink-0">1</span>
+          <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Basics</span>
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pl-7">
+          <div className="space-y-1.5">
+            <Label className="text-xs font-medium">Job Title <span className="text-destructive">*</span></Label>
+            <Input value={title} onChange={e => setTitle(e.target.value)} placeholder="e.g. Senior Frontend Engineer" className="border-border/60 bg-background/60 focus:border-primary/50" />
+          </div>
+          <div className="space-y-1.5">
+            <Label className="text-xs font-medium">Company Name <span className="text-destructive">*</span></Label>
+            <Input value={companyName} onChange={e => setCompanyName(e.target.value)} placeholder="e.g. Acme Corp" className="border-border/60 bg-background/60 focus:border-primary/50" />
+          </div>
+          <div className="space-y-1.5 md:col-span-2">
+            <Label className="text-xs font-medium">Job Description <span className="text-destructive">*</span></Label>
+            <Textarea value={description} onChange={e => setDescription(e.target.value)} placeholder="Describe the role, responsibilities, and what you're looking for..." rows={4} className="border-border/60 bg-background/60 focus:border-primary/50 resize-none" />
+          </div>
+        </div>
+      </div>
+
+      {/* Step 2: Requirements */}
+      <div className="space-y-4">
+        <div className="flex items-center gap-2">
+          <span className="h-5 w-5 rounded-full bg-primary/20 border border-primary/30 text-primary text-xs font-bold flex items-center justify-center flex-shrink-0">2</span>
+          <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Requirements</span>
+        </div>
+        <div className="pl-7 space-y-4">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="space-y-1.5">
+              <Label className="text-xs font-medium">Years of Experience</Label>
+              <Input type="number" min={0} value={requiredYears} onChange={e => setRequiredYears(parseInt(e.target.value) || 0)} className="border-border/60 bg-background/60 focus:border-primary/50" />
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs font-medium">Education</Label>
+              <Select value={education} onValueChange={setEducation}>
+                <SelectTrigger className="border-border/60 bg-background/60"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">None</SelectItem>
+                  <SelectItem value="high_school">High School</SelectItem>
+                  <SelectItem value="bachelors">Bachelor's</SelectItem>
+                  <SelectItem value="masters">Master's</SelectItem>
+                  <SelectItem value="phd">PhD</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs font-medium">Salary Range (optional)</Label>
+              <div className="flex gap-2">
+                <Input type="number" placeholder="Min" value={salaryMin} onChange={e => setSalaryMin(e.target.value)} className="border-border/60 bg-background/60 focus:border-primary/50" />
+                <Input type="number" placeholder="Max" value={salaryMax} onChange={e => setSalaryMax(e.target.value)} className="border-border/60 bg-background/60 focus:border-primary/50" />
+              </div>
+            </div>
+          </div>
+          <div className="space-y-2">
+            <Label className="text-xs font-medium">Required Skills <span className="text-muted-foreground font-normal">(press Enter to add)</span></Label>
+            <Input value={skillInput} onChange={e => setSkillInput(e.target.value)} onKeyDown={handleAddSkill} placeholder="Type a skill and press Enter..." className="border-border/60 bg-background/60 focus:border-primary/50" />
+            {skills.length > 0 && (
+              <div className="flex flex-wrap gap-1.5 mt-2">
+                {skills.map(s => (
+                  <span key={s} className="inline-flex items-center gap-1 text-xs px-2.5 py-1 rounded-full bg-primary/10 text-primary border border-primary/20 font-medium">
+                    {s}
+                    <button type="button" onClick={() => setSkills(skills.filter(x => x !== s))} className="hover:text-destructive transition-colors ml-0.5">
+                      <X className="h-3 w-3" />
+                    </button>
+                  </span>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* Step 3: Custom Questions */}
+      <div className="space-y-4">
+        <div className="flex items-center gap-2">
+          <span className="h-5 w-5 rounded-full bg-muted/60 border border-border/50 text-muted-foreground text-xs font-bold flex items-center justify-center flex-shrink-0">3</span>
+          <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Custom Questions <span className="normal-case font-normal">(optional, up to 3)</span></span>
+        </div>
+        <div className="pl-7 space-y-2">
+          {customQuestions.map((q, i) => (
+            <div key={i} className="flex gap-2">
+              <Input value={q} onChange={e => { const arr = [...customQuestions]; arr[i] = e.target.value; setCustomQuestions(arr); }} placeholder={`Question ${i + 1}`} className="border-border/60 bg-background/60 focus:border-primary/50" />
+              <Button type="button" variant="ghost" size="icon" className="h-10 w-10 border border-border/40 hover:border-destructive/40 hover:text-destructive" onClick={() => setCustomQuestions(customQuestions.filter((_, j) => j !== i))}>
+                <X className="h-4 w-4" />
+              </Button>
+            </div>
+          ))}
+          {customQuestions.length < 3 && (
+            <Button type="button" variant="outline" size="sm" onClick={() => setCustomQuestions([...customQuestions, ""])} className="border-dashed border-border/60 hover:border-primary/40 text-muted-foreground hover:text-primary">
+              <Plus className="h-4 w-4 mr-1" /> Add Question
+            </Button>
+          )}
+        </div>
+      </div>
+
+      {/* Submit */}
+      <div className="flex gap-3 pt-2 border-t border-border/40">
+        <Button type="submit" disabled={loading} className="flex-1 sm:flex-none sm:px-8">
+          {loading ? (
+            <span className="flex items-center gap-2"><span className="h-4 w-4 rounded-full border-2 border-primary-foreground/30 border-t-primary-foreground animate-spin" />Creating...</span>
+          ) : (
+            <span className="flex items-center gap-2"><Sparkles className="h-4 w-4" />Create Screening Link</span>
+          )}
+        </Button>
+        <Button type="button" variant="ghost" onClick={onCancel || (() => setIsExpanded(false))}>Cancel</Button>
+      </div>
+    </form>
+  );
+
+  // Embedded mode: render form directly without collapsible wrapper
+  if (embedded) {
+    return formContent;
+  }
+
+  // Default: collapsible wrapper
   return (
     <div className="rounded-xl border border-border/50 bg-card/60 backdrop-blur-sm overflow-hidden">
-      {/* Header — always visible, click to expand */}
       <button
         type="button"
         onClick={() => setIsExpanded(!isExpanded)}
@@ -167,115 +289,7 @@ const CreateJobForm = ({ onJobCreated }: CreateJobFormProps) => {
 
       {isExpanded && (
         <div className="border-t border-border/40 px-5 pb-6 pt-5 animate-fade-in">
-          <form onSubmit={handleSubmit} className="space-y-6">
-            {/* Step 1: Basics */}
-            <div className="space-y-4">
-              <div className="flex items-center gap-2">
-                <span className="h-5 w-5 rounded-full bg-primary/20 border border-primary/30 text-primary text-xs font-bold flex items-center justify-center flex-shrink-0">1</span>
-                <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Basics</span>
-              </div>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pl-7">
-                <div className="space-y-1.5">
-                  <Label className="text-xs font-medium">Job Title <span className="text-destructive">*</span></Label>
-                  <Input value={title} onChange={e => setTitle(e.target.value)} placeholder="e.g. Senior Frontend Engineer" className="border-border/60 bg-background/60 focus:border-primary/50" />
-                </div>
-                <div className="space-y-1.5">
-                  <Label className="text-xs font-medium">Company Name <span className="text-destructive">*</span></Label>
-                  <Input value={companyName} onChange={e => setCompanyName(e.target.value)} placeholder="e.g. Acme Corp" className="border-border/60 bg-background/60 focus:border-primary/50" />
-                </div>
-                <div className="space-y-1.5 md:col-span-2">
-                  <Label className="text-xs font-medium">Job Description <span className="text-destructive">*</span></Label>
-                  <Textarea value={description} onChange={e => setDescription(e.target.value)} placeholder="Describe the role, responsibilities, and what you're looking for..." rows={4} className="border-border/60 bg-background/60 focus:border-primary/50 resize-none" />
-                </div>
-              </div>
-            </div>
-
-            {/* Step 2: Requirements */}
-            <div className="space-y-4">
-              <div className="flex items-center gap-2">
-                <span className="h-5 w-5 rounded-full bg-primary/20 border border-primary/30 text-primary text-xs font-bold flex items-center justify-center flex-shrink-0">2</span>
-                <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Requirements</span>
-              </div>
-              <div className="pl-7 space-y-4">
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  <div className="space-y-1.5">
-                    <Label className="text-xs font-medium">Years of Experience</Label>
-                    <Input type="number" min={0} value={requiredYears} onChange={e => setRequiredYears(parseInt(e.target.value) || 0)} className="border-border/60 bg-background/60 focus:border-primary/50" />
-                  </div>
-                  <div className="space-y-1.5">
-                    <Label className="text-xs font-medium">Education</Label>
-                    <Select value={education} onValueChange={setEducation}>
-                      <SelectTrigger className="border-border/60 bg-background/60"><SelectValue /></SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="none">None</SelectItem>
-                        <SelectItem value="high_school">High School</SelectItem>
-                        <SelectItem value="bachelors">Bachelor's</SelectItem>
-                        <SelectItem value="masters">Master's</SelectItem>
-                        <SelectItem value="phd">PhD</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="space-y-1.5">
-                    <Label className="text-xs font-medium">Salary Range (optional)</Label>
-                    <div className="flex gap-2">
-                      <Input type="number" placeholder="Min" value={salaryMin} onChange={e => setSalaryMin(e.target.value)} className="border-border/60 bg-background/60 focus:border-primary/50" />
-                      <Input type="number" placeholder="Max" value={salaryMax} onChange={e => setSalaryMax(e.target.value)} className="border-border/60 bg-background/60 focus:border-primary/50" />
-                    </div>
-                  </div>
-                </div>
-                <div className="space-y-2">
-                  <Label className="text-xs font-medium">Required Skills <span className="text-muted-foreground font-normal">(press Enter to add)</span></Label>
-                  <Input value={skillInput} onChange={e => setSkillInput(e.target.value)} onKeyDown={handleAddSkill} placeholder="Type a skill and press Enter..." className="border-border/60 bg-background/60 focus:border-primary/50" />
-                  {skills.length > 0 && (
-                    <div className="flex flex-wrap gap-1.5 mt-2">
-                      {skills.map(s => (
-                        <span key={s} className="inline-flex items-center gap-1 text-xs px-2.5 py-1 rounded-full bg-primary/10 text-primary border border-primary/20 font-medium">
-                          {s}
-                          <button type="button" onClick={() => setSkills(skills.filter(x => x !== s))} className="hover:text-destructive transition-colors ml-0.5">
-                            <X className="h-3 w-3" />
-                          </button>
-                        </span>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              </div>
-            </div>
-
-            {/* Step 3: Custom Questions */}
-            <div className="space-y-4">
-              <div className="flex items-center gap-2">
-                <span className="h-5 w-5 rounded-full bg-muted/60 border border-border/50 text-muted-foreground text-xs font-bold flex items-center justify-center flex-shrink-0">3</span>
-                <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Custom Questions <span className="normal-case font-normal">(optional, up to 3)</span></span>
-              </div>
-              <div className="pl-7 space-y-2">
-                {customQuestions.map((q, i) => (
-                  <div key={i} className="flex gap-2">
-                    <Input value={q} onChange={e => { const arr = [...customQuestions]; arr[i] = e.target.value; setCustomQuestions(arr); }} placeholder={`Question ${i + 1}`} className="border-border/60 bg-background/60 focus:border-primary/50" />
-                    <Button type="button" variant="ghost" size="icon" className="h-10 w-10 border border-border/40 hover:border-destructive/40 hover:text-destructive" onClick={() => setCustomQuestions(customQuestions.filter((_, j) => j !== i))}>
-                      <X className="h-4 w-4" />
-                    </Button>
-                  </div>
-                ))}
-                {customQuestions.length < 3 && (
-                  <Button type="button" variant="outline" size="sm" onClick={() => setCustomQuestions([...customQuestions, ""])} className="border-dashed border-border/60 hover:border-primary/40 text-muted-foreground hover:text-primary">
-                    <Plus className="h-4 w-4 mr-1" /> Add Question
-                  </Button>
-                )}
-              </div>
-            </div>
-
-            <div className="flex gap-3 pt-2 border-t border-border/40">
-              <Button type="submit" disabled={loading} className="flex-1 sm:flex-none sm:px-8">
-                {loading ? (
-                  <span className="flex items-center gap-2"><span className="h-4 w-4 rounded-full border-2 border-primary-foreground/30 border-t-primary-foreground animate-spin" />Creating...</span>
-                ) : (
-                  <span className="flex items-center gap-2"><Sparkles className="h-4 w-4" />Create Screening Link</span>
-                )}
-              </Button>
-              <Button type="button" variant="ghost" onClick={() => setIsExpanded(false)}>Cancel</Button>
-            </div>
-          </form>
+          {formContent}
         </div>
       )}
     </div>
