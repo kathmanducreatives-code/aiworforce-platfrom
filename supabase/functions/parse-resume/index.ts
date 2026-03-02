@@ -1,14 +1,11 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version',
 };
 
 const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
-const SUPABASE_URL = Deno.env.get('SUPABASE_URL');
-const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
 
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
@@ -16,30 +13,41 @@ serve(async (req) => {
   }
 
   try {
-    const { file_content, file_name, application_id } = await req.json();
+    const { file_content_base64, file_name, job_id } = await req.json();
 
-    if (!file_content || !application_id) {
-      return new Response(JSON.stringify({ error: 'file_content and application_id are required' }), {
+    if (!file_content_base64) {
+      return new Response(JSON.stringify({ error: 'file_content_base64 is required' }), {
         status: 400,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
 
-    const supabase = createClient(SUPABASE_URL!, SUPABASE_SERVICE_ROLE_KEY!);
+    if (!LOVABLE_API_KEY) {
+      throw new Error('LOVABLE_API_KEY is not configured');
+    }
 
-    // Call AI to extract resume data
-    const aiResponse = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${LOVABLE_API_KEY}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        model: 'google/gemini-2.5-flash',
-        messages: [
-          {
-            role: 'system',
-            content: `You are a resume parser. Extract structured data from the resume text provided. Return ONLY valid JSON with this exact structure:
+    console.log(`Parsing resume: ${file_name || 'unknown'} for job: ${job_id || 'unknown'}`);
+
+    // Decode base64 to text for text-based extraction attempt
+    let resumeText = '';
+    try {
+      const binaryString = atob(file_content_base64);
+      // Try to extract readable text from the binary content
+      const bytes = new Uint8Array(binaryString.length);
+      for (let i = 0; i < binaryString.length; i++) {
+        bytes[i] = binaryString.charCodeAt(i);
+      }
+      const decoder = new TextDecoder('utf-8', { fatal: false });
+      resumeText = decoder.decode(bytes);
+    } catch {
+      resumeText = '';
+    }
+
+    // Determine if content is likely a PDF (binary) or readable text
+    const isPdf = file_name?.toLowerCase().endsWith('.pdf') || resumeText.startsWith('%PDF');
+    
+    // Build the AI request - use inline_data for PDFs so Gemini can read them natively
+    const systemPrompt = `You are a resume parser. Extract structured data from the resume provided. Return ONLY valid JSON with this exact structure:
 {
   "name": "Full Name",
   "email": "email@example.com",
@@ -69,29 +77,86 @@ serve(async (req) => {
   "highest_education_level": "None|High School|Bachelor's|Master's|PhD"
 }
 
-Be thorough and accurate. If information is not present, use null or empty arrays. Calculate total_years_experience by summing work history durations.`
-          },
-          {
-            role: 'user',
-            content: `Parse this resume and extract structured data:\n\n${file_content}`
-          }
-        ],
-        response_format: { type: "json_object" },
+Be thorough and accurate. If information is not present, use null or empty arrays. Calculate total_years_experience by summing work history durations.`;
+
+    let messages: any[];
+
+    if (isPdf) {
+      // For PDFs, send as base64 inline data so Gemini can process the document natively
+      const mimeType = file_name?.toLowerCase().endsWith('.docx')
+        ? 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+        : 'application/pdf';
+      
+      messages = [
+        { role: 'system', content: systemPrompt },
+        {
+          role: 'user',
+          content: [
+            {
+              type: 'file',
+              file: {
+                filename: file_name || 'resume.pdf',
+                file_data: `data:${mimeType};base64,${file_content_base64}`,
+              },
+            },
+            {
+              type: 'text',
+              text: 'Parse this resume document and extract all structured data as JSON.',
+            },
+          ],
+        },
+      ];
+    } else {
+      // For text-readable content (e.g. plain text resumes)
+      messages = [
+        { role: 'system', content: systemPrompt },
+        { role: 'user', content: `Parse this resume and extract structured data:\n\n${resumeText}` },
+      ];
+    }
+
+    const aiResponse = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${LOVABLE_API_KEY}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        model: 'google/gemini-2.5-flash',
+        messages,
       }),
     });
 
     if (!aiResponse.ok) {
       const errorText = await aiResponse.text();
       console.error('AI API error:', aiResponse.status, errorText);
+      
+      if (aiResponse.status === 429) {
+        return new Response(JSON.stringify({ error: 'Rate limit exceeded. Please try again in a moment.' }), {
+          status: 429,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+      if (aiResponse.status === 402) {
+        return new Response(JSON.stringify({ error: 'AI credits exhausted. Please contact support.' }), {
+          status: 402,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
       throw new Error('Failed to parse resume with AI');
     }
 
     const aiData = await aiResponse.json();
     const rawContent = aiData.choices?.[0]?.message?.content || '{}';
-    
+
+    // Strip markdown code fences if present
+    let jsonString = rawContent.trim();
+    if (jsonString.startsWith('```')) {
+      jsonString = jsonString.replace(/^```(?:json)?\s*/, '').replace(/\s*```$/, '');
+    }
+
     let extractedData;
     try {
-      extractedData = JSON.parse(rawContent);
+      extractedData = JSON.parse(jsonString);
     } catch {
       console.error('Failed to parse AI response as JSON:', rawContent);
       extractedData = {
@@ -109,23 +174,11 @@ Be thorough and accurate. If information is not present, use null or empty array
       };
     }
 
-    // Update the application with extracted data
-    const { error: updateError } = await supabase
-      .from('screening_applications')
-      .update({
-        extracted_data: extractedData,
-        status: 'resume_uploaded',
-      })
-      .eq('id', application_id);
+    console.log('Successfully parsed resume for:', extractedData.name || 'unknown');
 
-    if (updateError) {
-      console.error('Failed to update application:', updateError);
-      throw new Error('Failed to save extracted data');
-    }
-
-    return new Response(JSON.stringify({ 
-      success: true, 
-      extracted_data: extractedData 
+    return new Response(JSON.stringify({
+      success: true,
+      extracted_data: extractedData
     }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
