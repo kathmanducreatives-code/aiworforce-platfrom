@@ -1,38 +1,24 @@
 
 
-## Mobile Optimization for Job Screening
+## Fix: parse-resume Edge Function Mismatch
+
+### Root Cause
+The frontend (`ResumeUploadStep.tsx`) sends `{ file_content_base64, file_name, file_path, job_id }` but the edge function expects `{ file_content, file_name, application_id }` and tries to update a `screening_applications` row that doesn't exist yet (it's created *after* parsing completes in `CandidateApply.tsx`).
+
+Additionally, the CORS headers are missing required Supabase client headers, which can cause preflight failures.
 
 ### Changes
 
-#### 1. Full-Screen Create Job Form on Mobile
-**File: `src/pages/ScreeningJobs.tsx`**
-- On mobile, replace the `SlideOverPanel` with a full-screen overlay (using `Dialog` with `DialogContent` set to `w-full h-full max-w-none rounded-none` or a simple fixed div)
-- Use `useIsMobile()` to conditionally render full-screen dialog vs slide-over panel
-- Add a sticky header with back/close button and a sticky footer with the submit button
+**1. `supabase/functions/parse-resume/index.ts`** — Rewrite to match frontend contract:
+- Accept `file_content_base64` (base64-encoded PDF/DOCX) instead of `file_content`
+- Decode base64 to extract text for AI parsing
+- Remove the `screening_applications` update (the parent component handles this after parsing)
+- Accept `job_id` instead of `application_id` (for logging only)
+- Update CORS headers to include all required Supabase client headers
+- Return `{ success: true, extracted_data }` as the frontend expects
 
-**File: `src/components/screening/CreateJobForm.tsx`**
-- Remove the collapsible expand/collapse wrapper (the header button with Plus icon) since it's now opened from the page-level action
-- Accept an optional `onCancel` prop for the close button
-- Stack all form fields single-column (remove `md:grid-cols-2` and `md:grid-cols-3` grid splits -- already single-col on mobile, so this is fine)
-- Ensure the form body scrolls independently within the full-screen container
+**2. No frontend changes needed** — `ResumeUploadStep.tsx` and `CandidateApply.tsx` already have the correct flow: parse resume → create application → save extracted data.
 
-#### 2. ScreeningJobs Page Mobile Tweaks
-**File: `src/pages/ScreeningJobs.tsx`**
-- Reduce padding: `px-4 py-4` on mobile instead of `px-6 py-6`
-- KPI row: keep `grid-cols-1 sm:grid-cols-3` (already responsive)
-
-#### 3. JobCard Mobile Optimization
-**File: `src/components/screening/JobCard.tsx`**
-- Make the "View Applicants" button full-width on mobile with icon-only dropdown trigger
-- Tighten padding on small screens (`px-3 py-3` on mobile)
-
-#### 4. JobApplicants Page Mobile Tweaks
-**File: `src/pages/JobApplicants.tsx`**
-- Reduce container padding to `px-4` on mobile
-- Applicant grid: already `grid-cols-1` on mobile, no change needed
-- Filter tabs: already have horizontal scroll, keep as-is
-
-#### 5. ApplicantDetailModal Mobile
-**File: `src/components/screening/ApplicantDetailModal.tsx`**
-- Make the dialog full-screen on mobile (`max-w-full h-full rounded-none` on small screens)
+### Technical Detail
+The base64 content from a PDF is binary, so the edge function will decode it to a string representation for the AI. For PDFs, raw base64→text won't produce readable content, so the function will pass the base64 to the AI model with instructions to handle it, or we extract text client-side. Given the current flow sends base64, we'll decode to a best-effort text string and let Gemini handle extraction (Gemini can process base64 document content when properly formatted).
 
