@@ -6,9 +6,8 @@ interface TodaysActionsProps {
 }
 
 export default function TodaysActions({ leads }: TodaysActionsProps) {
-    // Determine the actionable segments based on the specification:
-    // 1. DMs to Review: Scraped successfully but sequence not yet approved/synced
-    const dmsToReview = leads.filter(l => l.scrape_status === 'success' && l.status === 'not_started' && (!l.closely_connection_status || l.closely_connection_status === 'none'));
+    // 1. DMs to Review: Needs personalization review
+    const dmsToReview = leads.filter(l => l.scrape_status === 'success' && l.status === 'not_started' && l.generated_connection_note && (!l.closely_connection_status || l.closely_connection_status === 'none'));
 
     // 2. Ready to Export: Sequence completed and ready for Closely
     const readyToExport = leads.filter(l => l.scrape_status === 'success' && l.status === 'not_started' && l.closely_connection_status === 'pending');
@@ -36,12 +35,12 @@ export default function TodaysActions({ leads }: TodaysActionsProps) {
                 <div style={{ background: `rgba(${color}, 0.1)`, color: `rgb(${color})`, padding: '10px', borderRadius: '10px' }}>
                     <Icon size={20} strokeWidth={2.5} />
                 </div>
-                <span style={{ fontSize: '28px', fontWeight: 600, color: '#fff', fontFamily: '"SF Mono", "SFMono-Regular", ui-monospace, monospace' }}>
+                <span style={{ fontSize: '28px', fontWeight: 600, color: '#ffffff', fontFamily: '"SF Mono", "SFMono-Regular", ui-monospace, monospace' }}>
                     {count}
                 </span>
             </div>
-            <h3 style={{ fontSize: '16px', color: '#fff', fontWeight: 600, marginBottom: '8px' }}>{title}</h3>
-            <p style={{ color: '#888', fontSize: '13px', lineHeight: '1.5', flex: 1, marginBottom: '20px' }}>
+            <h3 style={{ fontSize: '16px', color: '#ffffff', fontWeight: 600, marginBottom: '8px' }}>{title}</h3>
+            <p style={{ color: '#a1a1aa', fontSize: '13px', lineHeight: '1.5', flex: 1, marginBottom: '20px' }}>
                 {description}
             </p>
             <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: `rgb(${color})`, fontSize: '13px', fontWeight: 600, marginTop: 'auto' }}>
@@ -52,16 +51,16 @@ export default function TodaysActions({ leads }: TodaysActionsProps) {
 
     return (
         <div style={{ marginBottom: '32px' }}>
-            <h2 style={{ fontSize: '18px', color: '#fff', fontWeight: 600, letterSpacing: '-0.01em', marginBottom: '16px' }}>
+            <h2 style={{ fontSize: '18px', color: '#ffffff', fontWeight: 600, letterSpacing: '-0.01em', marginBottom: '16px' }}>
                 Action Items
             </h2>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '20px' }}>
                 <ActionCard
                     title="DMs to Review"
                     count={dmsToReview.length}
-                    description={`${dmsToReview.length} leads have been scraped and have AI-generated sequences ready for your approval.`}
+                    description={`${dmsToReview.length} leads are waiting in the Message Studio for final AI connection note approval.`}
                     icon={Edit3}
-                    color="0, 212, 170" // #00D4AA
+                    color="5, 150, 105" // #059669 (Emerald)
                     actionText="Go to Message Studio"
                 />
                 <ActionCard

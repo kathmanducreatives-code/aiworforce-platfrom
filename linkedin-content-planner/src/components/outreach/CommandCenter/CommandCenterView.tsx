@@ -16,15 +16,15 @@ export default function CommandCenterView() {
     }
 
     return (
-        <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflowY: 'auto' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflowY: 'auto', background: '#0a0a0b' }}>
             <div style={{ padding: '32px 40px 60px', maxWidth: '1400px', margin: '0 auto', width: '100%' }}>
 
                 {/* Header */}
                 <div style={{ marginBottom: '32px' }}>
-                    <h1 style={{ fontSize: '28px', color: '#fff', fontWeight: 600, letterSpacing: '-0.02em', marginBottom: '8px', fontFamily: '"Cabinet Grotesk", "Satoshi", sans-serif' }}>
+                    <h1 style={{ fontSize: '28px', color: '#ffffff', fontWeight: 600, letterSpacing: '-0.02em', marginBottom: '8px', fontFamily: '"Cabinet Grotesk", "Satoshi", sans-serif' }}>
                         Command Center
                     </h1>
-                    <p style={{ color: '#888', fontSize: '14px' }}>
+                    <p style={{ color: '#a1a1aa', fontSize: '14px' }}>
                         Overview of your automated outreach pipeline and recent activities.
                     </p>
                 </div>

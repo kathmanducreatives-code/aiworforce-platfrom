@@ -17,9 +17,9 @@ const ratingLabels: Record<string, string> = {
 };
 
 const ratingColors: Record<string, string> = {
-  strong_hire: 'text-emerald-600 bg-emerald-500/10 border-emerald-500/30',
+  strong_hire: 'text-green-600 bg-green-500/10 border-green-500/30',
   hire: 'text-blue-600 bg-blue-500/10 border-blue-500/30',
-  no_hire: 'text-amber-600 bg-amber-500/10 border-amber-500/30',
+  no_hire: 'text-yellow-600 bg-yellow-500/10 border-yellow-500/30',
   strong_no_hire: 'text-red-600 bg-red-500/10 border-red-500/30',
 };
 
@@ -82,7 +82,7 @@ const CompanyReviewPanel = () => {
                 {/* Scores */}
                 <div className="md:col-span-2 space-y-4">
                   <h4 className="font-semibold text-sm flex items-center gap-2">
-                    <Star className="h-4 w-4 text-amber-500" /> Expert Scorecard
+                    <Star className="h-4 w-4 text-yellow-500" /> Expert Scorecard
                   </h4>
                   {[
                     { label: 'Technical Skills', score: interview.scorecard.technicalSkills },
@@ -116,23 +116,23 @@ const CompanyReviewPanel = () => {
                   {/* Strengths & Concerns */}
                   <div className="grid grid-cols-2 gap-4 mt-3">
                     <div className="space-y-2">
-                      <h5 className="text-xs font-semibold text-emerald-600 flex items-center gap-1">
+                      <h5 className="text-xs font-semibold text-green-600 flex items-center gap-1">
                         <ThumbsUp className="h-3 w-3" /> Strengths
                       </h5>
                       {interview.scorecard.strengths.map((s, i) => (
                         <div key={i} className="flex items-start gap-1.5 text-xs text-muted-foreground">
-                          <CheckCircle2 className="h-3 w-3 text-emerald-500 mt-0.5 flex-shrink-0" />
+                          <CheckCircle2 className="h-3 w-3 text-green-500 mt-0.5 flex-shrink-0" />
                           {s}
                         </div>
                       ))}
                     </div>
                     <div className="space-y-2">
-                      <h5 className="text-xs font-semibold text-amber-600 flex items-center gap-1">
+                      <h5 className="text-xs font-semibold text-yellow-600 flex items-center gap-1">
                         <ThumbsDown className="h-3 w-3" /> Concerns
                       </h5>
                       {interview.scorecard.concerns.map((c, i) => (
                         <div key={i} className="flex items-start gap-1.5 text-xs text-muted-foreground">
-                          <AlertCircle className="h-3 w-3 text-amber-500 mt-0.5 flex-shrink-0" />
+                          <AlertCircle className="h-3 w-3 text-yellow-500 mt-0.5 flex-shrink-0" />
                           {c}
                         </div>
                       ))}
@@ -172,8 +172,8 @@ const CompanyReviewPanel = () => {
                       className={cn(
                         'w-full justify-center mt-2',
                         interview.status === 'verified_paid'
-                          ? 'border-emerald-500/30 text-emerald-600 bg-emerald-500/10'
-                          : 'border-amber-500/30 text-amber-600 bg-amber-500/10'
+                          ? 'border-green-500/30 text-green-600 bg-green-500/10'
+                          : 'border-yellow-500/30 text-yellow-600 bg-yellow-500/10'
                       )}
                     >
                       {interview.status === 'verified_paid' ? 'Paid & Released' : 'In Escrow'}

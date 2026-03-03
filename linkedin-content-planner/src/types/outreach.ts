@@ -11,6 +11,11 @@ export interface OutreachLead {
     tier: 'unassigned' | 'tier_1' | 'tier_2' | 'tier_3';
     status: 'not_started' | 'in_sequence' | 'replied' | 'meeting_booked' | 'closed' | 'dead';
     scrape_status?: 'success' | 'failed_scrape' | 'in_progress' | null;
+    scrape_url?: string | null;
+    scraped_homepage?: string | null;
+    scraped_careers?: string | null;
+    generated_connection_note?: string | null;
+    scraped_at?: string | null;
     closely_connection_status?: 'none' | 'pending' | 'accepted' | null;
     generated_sequence?: Array<{ step: number; dayOffset: number; content: string; approved?: boolean }>;
     signals: Signal[];
@@ -18,6 +23,16 @@ export interface OutreachLead {
     current_sequence_step: number;
     last_touch_date: string | null;
     next_action_date: string | null;
+    hiring_detected?: boolean | null;
+    open_roles?: string | null;
+    salary_range?: string | null;
+    uses_agency?: boolean | null;
+    agency_name?: string | null;
+    hiring_source?: string | null;
+    recent_news?: string | null;
+    founder_about?: string | null;
+    discovery_source?: string | null;
+    role_count?: number | null;
     created_at: string;
     updated_at: string;
 }

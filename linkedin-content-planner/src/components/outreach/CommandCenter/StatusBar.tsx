@@ -40,11 +40,11 @@ export default function StatusBar({ leads }: StatusBarProps) {
                             <div style={{ background: pill.bg, padding: '8px', borderRadius: '8px', color: pill.color }}>
                                 <Icon size={18} strokeWidth={2.5} />
                             </div>
-                            <span style={{ fontSize: '24px', fontWeight: 600, color: '#fff', fontFamily: '"SF Mono", "SFMono-Regular", ui-monospace, monospace' }}>
+                            <span style={{ fontSize: '24px', fontWeight: 600, color: '#ffffff', fontFamily: '"SF Mono", "SFMono-Regular", ui-monospace, monospace' }}>
                                 {pill.count}
                             </span>
                         </div>
-                        <span style={{ color: '#888', fontSize: '13px', fontWeight: 500 }}>{pill.label}</span>
+                        <span style={{ color: '#a1a1aa', fontSize: '13px', fontWeight: 500 }}>{pill.label}</span>
                     </div>
                 );
             })}

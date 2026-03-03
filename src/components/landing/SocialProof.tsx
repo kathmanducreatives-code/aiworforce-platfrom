@@ -40,7 +40,7 @@ const SocialProof = () => {
                 </div>
                 <div className="flex flex-wrap justify-center gap-8 mb-14">
                     {logos.map((logo) => (
-                        <span key={logo} className="text-sm font-display font-bold text-white/15 tracking-wide uppercase hover:text-white/30 transition-colors">{logo}</span>
+                        <span key={logo} className="text-sm font-display font-bold text-white/25 tracking-wide uppercase hover:text-white/40 transition-colors">{logo}</span>
                     ))}
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -51,7 +51,7 @@ const SocialProof = () => {
                             <div className="flex items-center justify-between">
                                 <div>
                                     <p className="text-sm font-semibold text-white">{t.name}</p>
-                                    <p className="text-xs text-white/30">{t.title}</p>
+                                    <p className="text-xs text-white/45">{t.title}</p>
                                 </div>
                                 <span className="text-[10px] font-mono font-bold text-emerald-400 bg-emerald-500/10 px-2 py-1 rounded border border-emerald-500/15">{t.metric}</span>
                             </div>

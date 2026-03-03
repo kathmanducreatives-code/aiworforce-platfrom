@@ -10,20 +10,23 @@ function App() {
   const [activeTab, setActiveTab] = useState<'dashboard' | 'content' | 'outreach' | 'dialer' | 'ai-agent'>('dashboard');
 
   return (
-    <div style={{ background: "#0d0d0d", minHeight: "100vh", display: "flex", flexDirection: "column" }}>
+    <div style={{ background: "#0a0a0b", minHeight: "100vh", display: "flex", flexDirection: "column", color: "#ffffff" }}>
       <Toaster
         position="top-right"
         toastOptions={{
           style: {
             fontFamily: "'Inter', sans-serif",
             borderRadius: "12px",
+            background: "#141416",
+            color: "#ffffff",
+            border: "1px solid rgba(255, 255, 255, 0.08)",
           },
         }}
       />
       {/* Global Navigation Bar */}
       <nav style={{
-        background: "#141414",
-        borderBottom: "1px solid #2a2a2a",
+        background: "#0a0a0b",
+        borderBottom: "1px solid rgba(255, 255, 255, 0.08)",
         padding: "0 24px",
         height: "48px",
         display: "flex",
@@ -32,13 +35,14 @@ function App() {
         position: "sticky",
         top: 0,
         zIndex: 40,
+        boxShadow: "0 1px 2px 0 rgba(0, 0, 0, 0.05)",
       }}>
         <button
           onClick={() => setActiveTab('dashboard')}
           style={{
             background: "transparent",
             border: "none",
-            color: activeTab === 'dashboard' ? "#3b82f6" : "#888",
+            color: activeTab === 'dashboard' ? "#3b82f6" : "#64748b",
             fontWeight: activeTab === 'dashboard' ? 600 : 500,
             fontSize: "13px",
             height: "100%",
@@ -55,11 +59,11 @@ function App() {
           style={{
             background: "transparent",
             border: "none",
-            color: activeTab === 'content' ? "#00e5a0" : "#888",
+            color: activeTab === 'content' ? "#059669" : "#64748b",
             fontWeight: activeTab === 'content' ? 600 : 500,
             fontSize: "13px",
             height: "100%",
-            borderBottom: activeTab === 'content' ? "2px solid #00e5a0" : "2px solid transparent",
+            borderBottom: activeTab === 'content' ? "2px solid #059669" : "2px solid transparent",
             cursor: "pointer",
             transition: "all 0.2s",
             padding: "0 4px",
@@ -72,11 +76,11 @@ function App() {
           style={{
             background: "transparent",
             border: "none",
-            color: activeTab === 'outreach' ? "#a855f7" : "#888",
+            color: activeTab === 'outreach' ? "#7c3aed" : "#64748b",
             fontWeight: activeTab === 'outreach' ? 600 : 500,
             fontSize: "13px",
             height: "100%",
-            borderBottom: activeTab === 'outreach' ? "2px solid #a855f7" : "2px solid transparent",
+            borderBottom: activeTab === 'outreach' ? "2px solid #7c3aed" : "2px solid transparent",
             cursor: "pointer",
             transition: "all 0.2s",
             padding: "0 4px",
@@ -89,11 +93,11 @@ function App() {
           style={{
             background: "transparent",
             border: "none",
-            color: activeTab === 'dialer' ? "#f59e0b" : "#888",
+            color: activeTab === 'dialer' ? "#d97706" : "#64748b",
             fontWeight: activeTab === 'dialer' ? 600 : 500,
             fontSize: "13px",
             height: "100%",
-            borderBottom: activeTab === 'dialer' ? "2px solid #f59e0b" : "2px solid transparent",
+            borderBottom: activeTab === 'dialer' ? "2px solid #d97706" : "2px solid transparent",
             cursor: "pointer",
             transition: "all 0.2s",
             padding: "0 4px",
@@ -106,11 +110,11 @@ function App() {
           style={{
             background: "transparent",
             border: "none",
-            color: activeTab === 'ai-agent' ? "#10b981" : "#888", // emerald green for AI
+            color: activeTab === 'ai-agent' ? "#059669" : "#64748b", // emerald green for AI
             fontWeight: activeTab === 'ai-agent' ? 600 : 500,
             fontSize: "13px",
             height: "100%",
-            borderBottom: activeTab === 'ai-agent' ? "2px solid #10b981" : "2px solid transparent",
+            borderBottom: activeTab === 'ai-agent' ? "2px solid #059669" : "2px solid transparent",
             cursor: "pointer",
             transition: "all 0.2s",
             padding: "0 4px",

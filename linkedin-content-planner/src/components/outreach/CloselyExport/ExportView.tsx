@@ -7,9 +7,9 @@ export default function ExportView() {
     const { leads, loading, updateLead } = useOutreachLeads();
     const [isExporting, setIsExporting] = useState(false);
 
-    // Leads ready for export: Scraped, generated sequence, and approved (closely_connection_status === 'pending')
     const readyLeads = leads.filter(l =>
-        l.scrape_status === 'success' &&
+        l.scrape_status === 'success' && // Change to whatever marks a ready lead now
+        (l.generated_connection_note) &&
         l.closely_connection_status === 'pending'
     );
 
@@ -29,9 +29,8 @@ export default function ExportView() {
                 const firstName = names[0] || '';
                 const lastName = names.slice(1).join(' ') || '';
 
-                // Get the approved connection message (Step 1 usually)
-                const connStep = lead.generated_sequence?.find(s => s.step === 1);
-                const connNote = connStep ? connStep.content : `Hi ${firstName}, saw you're at ${lead.company}. Would love to connect.`;
+                // Get the generated connection note
+                const connNote = lead.generated_connection_note || `Hi ${firstName}, saw you're at ${lead.company}. Would love to connect.`;
 
                 // Tag formatting for closely campaigns
                 const tag = `sp-linkedin-auto,tier-${lead.tier || 'unassigned'}`;
@@ -61,7 +60,6 @@ export default function ExportView() {
             // Post-export actions: Mark leads as in_sequence and closely_synced
             for (const lead of readyLeads) {
                 await updateLead(lead.id, {
-                    status: 'in_sequence',
                     closely_connection_status: 'none' // reset or set to accepted later via webhook
                 });
             }

@@ -25,8 +25,8 @@ const Header = () => {
 
   return (
     <header className={`fixed top-0 left-0 right-0 z-50 transition-all duration-500 ${scrolled
-        ? 'bg-[#050505]/80 backdrop-blur-2xl border-b border-white/[0.06] py-3'
-        : 'bg-transparent py-5'
+      ? 'bg-[#050505]/80 backdrop-blur-2xl border-b border-white/[0.06] py-3'
+      : 'bg-transparent py-5'
       }`}>
       <div className="max-w-7xl mx-auto px-6 flex items-center justify-between">
         {/* Logo */}
@@ -56,7 +56,7 @@ const Header = () => {
           ) : (
             <>
               <button onClick={() => navigate('/auth')} className="text-sm text-white/50 hover:text-white font-medium transition-colors">Sign In</button>
-              <button onClick={() => navigate('/auth')} className="conic-border bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-semibold px-5 py-2 rounded-full transition-all duration-300 hover:shadow-[0_4px_20px_rgba(5,150,105,0.3)]">
+              <button onClick={() => navigate('/auth')} className="liquid-fill-btn bg-emerald-600/20 border border-emerald-500/50 text-white text-sm font-semibold px-5 py-2 rounded-full transition-all duration-300 hover:shadow-[0_0_20px_rgba(5,150,105,0.5)]">
                 Start Free Trial
               </button>
             </>

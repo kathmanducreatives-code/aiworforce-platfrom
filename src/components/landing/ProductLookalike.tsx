@@ -1,8 +1,7 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef } from 'react';
 import gsap from 'gsap';
 import { ScrollTrigger } from 'gsap/ScrollTrigger';
 import { Linkedin, Mail, MapPin, Clock } from 'lucide-react';
-import { GyroTilt } from '../shared/GyroTilt';
 
 gsap.registerPlugin(ScrollTrigger);
 
@@ -19,62 +18,105 @@ const filters = ['All Results', 'Excellent (2)', 'Strong (3)', 'Good (1)'];
 
 const ProductLookalike = () => {
     const sectionRef = useRef<HTMLDivElement>(null);
-    const mockupRef = useRef<HTMLDivElement>(null);
-    const textRef = useRef<HTMLDivElement>(null);
-    const [resultCount, setResultCount] = useState(0);
-    const [avgMatch, setAvgMatch] = useState(0);
 
     useEffect(() => {
         const ctx = gsap.context(() => {
-            gsap.fromTo(textRef.current, { opacity: 0, y: 30, filter: 'blur(10px)' }, {
-                opacity: 1, y: 0, filter: 'blur(0px)', duration: 1.0, ease: 'expo.out',
-                scrollTrigger: { trigger: sectionRef.current, start: 'top 75%', toggleActions: 'play none none none' },
+            const tl = gsap.timeline({
+                scrollTrigger: {
+                    trigger: sectionRef.current,
+                    start: 'top top',
+                    end: '+=2000',
+                    pin: true,
+                    scrub: 2.5,
+                    anticipatePin: 1,
+                }
             });
 
-            const masterTL = gsap.timeline({
-                scrollTrigger: { trigger: mockupRef.current, start: 'top 80%', toggleActions: 'play none none none' },
-            });
-            masterTL.fromTo(mockupRef.current, { scale: 0.6, opacity: 0, filter: 'blur(6px)', rotateX: 3 }, {
-                scale: 1, opacity: 1, filter: 'blur(0px)', rotateX: 0, duration: 1.2, ease: 'expo.out',
-            }, 0);
-            masterTL.add(() => {
-                gsap.to({ val: 0 }, { val: 49, duration: 1.5, ease: 'power2.out', onUpdate: function () { setResultCount(Math.round(this.targets()[0].val)); } });
-                gsap.to({ val: 0 }, { val: 42, duration: 1.5, delay: 0.15, ease: 'power2.out', onUpdate: function () { setAvgMatch(Math.round(this.targets()[0].val)); } });
-            }, 0.5);
-            const pills = mockupRef.current?.querySelectorAll('.filter-pill');
-            if (pills) { pills.forEach((pill, i) => { masterTL.fromTo(pill, { scale: 0, opacity: 0 }, { scale: 1, opacity: 1, duration: 0.35, ease: 'back.out(2.5)' }, 0.7 + i * 0.08); }); }
-            const cards = mockupRef.current?.querySelectorAll('.candidate-card');
-            if (cards) { cards.forEach((card, i) => { masterTL.fromTo(card, { opacity: 0, y: 25, scale: 0.95, filter: 'blur(5px)' }, { opacity: 1, y: 0, scale: 1, filter: 'blur(0px)', duration: 0.8, ease: 'expo.out' }, 1.0 + i * 0.12); }); }
-            const badges = mockupRef.current?.querySelectorAll('.match-badge');
-            if (badges) {
-                badges.forEach((badge, i) => {
-                    masterTL.fromTo(badge, { scale: 0 }, { scale: 1, duration: 0.3, ease: 'back.out(3)' }, 1.4 + i * 0.12);
-                    masterTL.fromTo(badge, { boxShadow: '0 0 0 0 rgba(5,150,105,0)' }, { boxShadow: '0 0 10px 3px rgba(5,150,105,0.4)', duration: 0.25, yoyo: true, repeat: 1 }, 1.4 + i * 0.12);
+            // Power line grows from top to bottom
+            tl.fromTo('.look-power-line', { height: '0%' }, { height: '100%', duration: 10, ease: 'none' }, 0);
+
+            // Phase 0: Title fly in (0 → 2)
+            tl.fromTo('.look-title', { opacity: 0, y: 40 }, { opacity: 1, y: 0, duration: 1.5, ease: 'expo.out' }, 0);
+            tl.fromTo('.look-subtitle', { opacity: 0, y: 20 }, { opacity: 1, y: 0, duration: 1.5, ease: 'expo.out' }, 0.3);
+            tl.fromTo('.look-mockup', { opacity: 0, y: 60, scale: 0.9 }, { opacity: 1, y: 0, scale: 1, duration: 2, ease: 'expo.out' }, 0.5);
+
+            // Phase 1: Filter pills pop in (2 → 3)
+            const pills = sectionRef.current?.querySelectorAll('.filter-pill');
+            if (pills) {
+                pills.forEach((pill, i) => {
+                    tl.fromTo(pill, { scale: 0, opacity: 0 }, {
+                        scale: 1, opacity: 1, duration: 0.6, ease: 'back.out(2.5)'
+                    }, 2 + i * 0.15);
                 });
             }
+
+            // Phase 2: Candidate cards wave in left-to-right (3 → 8)
+            const cards = sectionRef.current?.querySelectorAll('.candidate-card');
+            if (cards) {
+                cards.forEach((card, i) => {
+                    // Card slides in from left
+                    tl.fromTo(card, { opacity: 0, x: -60, scale: 0.9, filter: 'blur(4px)' }, {
+                        opacity: 1, x: 0, scale: 1, filter: 'blur(0px)', duration: 1.2, ease: 'expo.out'
+                    }, 3 + i * 0.5);
+                });
+            }
+
+            // Phase 3: Match badges pulse in after their card (staggered)
+            const badges = sectionRef.current?.querySelectorAll('.match-badge');
+            if (badges) {
+                badges.forEach((badge, i) => {
+                    tl.fromTo(badge, { scale: 0 }, {
+                        scale: 1, duration: 0.4, ease: 'back.out(3)'
+                    }, 3.6 + i * 0.5);
+                    tl.fromTo(badge, { boxShadow: '0 0 0 0 rgba(34,197,94,0)' }, {
+                        boxShadow: '0 0 12px 3px rgba(34,197,94,0.4)', duration: 0.3, yoyo: true, repeat: 1
+                    }, 3.8 + i * 0.5);
+                });
+            }
+
+            // Phase 4: Counter animates (8 → 10)
+            tl.fromTo('.look-counter', { opacity: 0 }, { opacity: 1, duration: 1 }, 8);
+
         }, sectionRef);
         return () => ctx.revert();
     }, []);
 
     return (
-        <section ref={sectionRef} className="relative px-4 py-28 md:py-40 overflow-hidden">
-            <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                <div className="w-[700px] h-[500px] bg-emerald-500/[0.06] blur-[150px] rounded-full" />
+        <section
+            ref={sectionRef}
+            className="relative w-full h-screen overflow-hidden font-display"
+            style={{ background: '#000000' }}
+        >
+            {/* Blueprint Grid */}
+            <div className="absolute inset-0 pointer-events-none" style={{
+                backgroundImage: `linear-gradient(rgba(34,197,94,0.07) 1px, transparent 1px), linear-gradient(90deg, rgba(34,197,94,0.07) 1px, transparent 1px)`,
+                backgroundSize: '100px 100px',
+            }} />
+
+            {/* Vertical Power Line */}
+            <div className="absolute left-1/2 -translate-x-1/2 top-0 bottom-0 w-px bg-emerald-500/10 z-[5] pointer-events-none">
+                <div className="look-power-line relative w-full bg-emerald-500" style={{ height: '0%', boxShadow: '0 0 12px rgba(34,197,94,0.8), 0 0 24px rgba(34,197,94,0.4)' }}>
+                    <div className="absolute left-1/2 -translate-x-1/2 bottom-0 w-3 h-3 bg-emerald-400 rounded-full shadow-[0_0_20px_4px_rgba(34,197,94,0.8)] animate-ping" />
+                    <div className="absolute left-1/2 -translate-x-1/2 bottom-0 w-1.5 h-1.5 bg-white rounded-full shadow-[0_0_10px_rgba(255,255,255,1)]" />
+                </div>
             </div>
 
-            <div className="max-w-6xl mx-auto relative z-10">
-                <div ref={textRef} className="text-center mb-16 opacity-0 max-w-[700px] mx-auto">
-                    <p className="font-mono text-xs uppercase tracking-[0.15em] mb-4 text-emerald-400 font-semibold">◆ Lookalike Engine</p>
-                    <h2 className="font-display font-black text-[clamp(1.8rem,4.5vw,3.5rem)] leading-[1.1] tracking-[-0.03em] text-white mb-5">
+            <div className="relative z-10 w-full max-w-6xl mx-auto px-6 h-full flex flex-col justify-center">
+                {/* Title Block */}
+                <div className="text-center mb-10">
+                    <p className="look-title font-mono text-xs uppercase tracking-[0.2em] mb-4 text-emerald-400 font-semibold opacity-0">◆ Lookalike Engine</p>
+                    <h2 className="look-title font-display font-black text-[clamp(1.8rem,4.5vw,3.5rem)] leading-[1.1] tracking-[-0.03em] text-white mb-4 opacity-0">
                         PASTE ONE PROFILE.<br />GET 2,000 RANKED MATCHES.
                     </h2>
-                    <p className="text-white/40 text-base md:text-lg leading-[1.7]">
-                        This is what it looks like when you exhaust your entire addressable talent market. Every matching professional on LinkedIn — found, ranked, and ready to contact. In 15 minutes.
+                    <p className="look-subtitle text-white/50 text-base md:text-lg leading-[1.7] max-w-[700px] mx-auto opacity-0">
+                        Exhaust your entire addressable talent market. Every matching professional — found, ranked, and ready to contact. In 15 minutes.
                     </p>
                 </div>
 
-                <div ref={mockupRef} className="max-w-5xl mx-auto opacity-0">
-                    <GyroTilt intensity={8} contentClassName="rounded-xl overflow-hidden glow-green-strong border border-white/[0.06] bg-[#0a0a0a]">
+                {/* Mockup */}
+                <div className="look-mockup max-w-5xl mx-auto w-full opacity-0">
+                    <div className="rounded-xl overflow-hidden border border-white/[0.06] bg-[#0a0a0a] shadow-[0_0_60px_rgba(34,197,94,0.08)]">
+                        {/* Browser chrome */}
                         <div className="bg-white/[0.03] px-4 py-2.5 flex items-center gap-3 border-b border-white/[0.06]">
                             <div className="flex gap-1.5">
                                 <div className="w-3 h-3 rounded-full bg-red-400/60" />
@@ -85,25 +127,28 @@ const ProductLookalike = () => {
                         </div>
 
                         <div className="p-5">
+                            {/* Header */}
                             <div className="flex items-center justify-between mb-4">
                                 <div>
                                     <h3 className="text-sm font-bold text-white">Lookalike Results / SaaS-founders</h3>
-                                    <p className="text-[10px] text-white/30 mt-0.5">
-                                        <span className="font-bold text-emerald-400 tabular-nums">{resultCount}</span> found · AVG MATCH <span className="font-bold text-emerald-400 tabular-nums">{avgMatch}%</span>
+                                    <p className="look-counter text-[10px] text-white/30 mt-0.5 opacity-0">
+                                        <span className="font-bold text-emerald-400 tabular-nums">49</span> found · AVG MATCH <span className="font-bold text-emerald-400 tabular-nums">42%</span>
                                     </p>
                                 </div>
                                 <div className="flex gap-2">
-                                    <div className="action-btn bg-emerald-600/80 text-white text-[10px] font-semibold px-3 py-1.5 rounded-md">Find Emails</div>
-                                    <div className="action-btn glass text-white/60 text-[10px] font-semibold px-3 py-1.5 rounded-md">Export CSV</div>
+                                    <div className="bg-emerald-600/80 text-white text-[10px] font-semibold px-3 py-1.5 rounded-md">Find Emails</div>
+                                    <div className="glass text-white/60 text-[10px] font-semibold px-3 py-1.5 rounded-md">Export CSV</div>
                                 </div>
                             </div>
 
+                            {/* Filters */}
                             <div className="flex gap-2 mb-4">
                                 {filters.map((f, i) => (
-                                    <div key={f} className={`filter-pill text-[10px] px-3 py-1 rounded-full font-medium scale-0 ${i === 0 ? 'bg-emerald-600 text-white' : 'bg-white/[0.06] text-white/40'}`}>{f}</div>
+                                    <div key={f} className={`filter-pill text-[10px] px-3 py-1 rounded-full font-medium scale-0 opacity-0 ${i === 0 ? 'bg-emerald-600 text-white' : 'bg-white/[0.06] text-white/40'}`}>{f}</div>
                                 ))}
                             </div>
 
+                            {/* Candidate Cards */}
                             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
                                 {candidates.map((c, i) => (
                                     <div key={i} className="candidate-card glass rounded-lg p-3 opacity-0 hover:border-emerald-500/20 transition-all duration-300 hover:-translate-y-0.5">
@@ -134,7 +179,7 @@ const ProductLookalike = () => {
                                 ))}
                             </div>
                         </div>
-                    </GyroTilt>
+                    </div>
                 </div>
             </div>
         </section>

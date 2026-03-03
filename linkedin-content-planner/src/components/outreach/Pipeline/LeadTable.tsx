@@ -1,4 +1,3 @@
-import React from 'react';
 import StatusBadge from '../shared/StatusBadge';
 import TierDot from '../shared/TierDot';
 import ScrapeBadge from '../shared/ScrapeBadge';
@@ -26,34 +25,35 @@ export default function LeadTable({ leads, loading, selectedIds, onSelectAll, on
             <table style={{ width: "100%", borderCollapse: "collapse", textAlign: "left", fontSize: "13px" }}>
                 <thead>
                     <tr style={{
-                        borderBottom: "1px solid rgba(255,255,255,0.06)",
-                        color: "#666",
+                        borderBottom: "1px solid rgba(255, 255, 255, 0.08)",
+                        color: "#a1a1aa",
                         fontSize: "12px",
                         fontWeight: 600,
                         textTransform: "uppercase",
-                        letterSpacing: "0.05em"
+                        letterSpacing: "0.05em",
+                        background: "rgba(255, 255, 255, 0.02)"
                     }}>
-                        <th style={{ padding: "16px 20px", width: "40px" }}>
+                        <th style={{ padding: "12px 16px", width: "40px" }}>
                             <input
                                 type="checkbox"
                                 checked={allSelected}
                                 onChange={(e) => onSelectAll(e.target.checked)}
-                                style={{ cursor: "pointer", accentColor: "#00D4AA" }}
+                                style={{ cursor: "pointer", accentColor: "#059669" }}
                             />
                         </th>
-                        <th style={{ padding: "16px 20px", width: "25%" }}>Company</th>
-                        <th style={{ padding: "16px 20px", width: "20%" }}>Contact</th>
-                        <th style={{ padding: "16px 20px", width: "15%" }}>Title</th>
-                        <th style={{ padding: "16px 20px" }}>Tier</th>
-                        <th style={{ padding: "16px 20px" }}>Status</th>
-                        <th style={{ padding: "16px 20px", textAlign: "center" }}>Scrape</th>
-                        <th style={{ padding: "16px 20px", textAlign: "center" }}>LinkedIn</th>
+                        <th style={{ padding: "12px 16px", width: "25%" }}>Company</th>
+                        <th style={{ padding: "12px 16px", width: "20%" }}>Contact</th>
+                        <th style={{ padding: "12px 16px", width: "15%" }}>Title</th>
+                        <th style={{ padding: "12px 16px" }}>Tier</th>
+                        <th style={{ padding: "12px 16px" }}>Status</th>
+                        <th style={{ padding: "12px 16px", textAlign: "center" }}>Scrape</th>
+                        <th style={{ padding: "12px 16px", textAlign: "center" }}>LinkedIn</th>
                     </tr>
                 </thead>
                 <tbody>
                     {leads.length === 0 ? (
                         <tr>
-                            <td colSpan={8} style={{ padding: "60px", textAlign: "center", color: "#666" }}>
+                            <td colSpan={8} style={{ padding: "60px", textAlign: "center", color: "#a1a1aa" }}>
                                 No leads match your filters.
                             </td>
                         </tr>
@@ -64,52 +64,52 @@ export default function LeadTable({ leads, loading, selectedIds, onSelectAll, on
                                 <tr
                                     key={lead.id}
                                     style={{
-                                        borderBottom: "1px solid rgba(255,255,255,0.04)",
+                                        borderBottom: "1px solid rgba(255, 255, 255, 0.04)",
                                         transition: "background 150ms ease-out",
                                         cursor: "pointer",
-                                        background: isSelected ? "rgba(0, 212, 170, 0.04)" : "transparent",
-                                        borderLeft: isSelected ? "3px solid #00D4AA" : "3px solid transparent",
-                                        height: "52px"
+                                        background: isSelected ? "rgba(5, 150, 105, 0.1)" : "transparent",
+                                        borderLeft: isSelected ? "3px solid #059669" : "3px solid transparent",
+                                        height: "48px"
                                     }}
                                     onMouseEnter={e => {
-                                        if (!isSelected) e.currentTarget.style.background = "rgba(255,255,255,0.03)";
+                                        if (!isSelected) e.currentTarget.style.background = "rgba(255, 255, 255, 0.02)";
                                     }}
                                     onMouseLeave={e => {
                                         if (!isSelected) e.currentTarget.style.background = "transparent";
                                     }}
                                     onClick={() => onRowClick(lead)}
                                 >
-                                    <td style={{ padding: "0 20px" }} onClick={e => e.stopPropagation()}>
+                                    <td style={{ padding: "0 16px" }} onClick={e => e.stopPropagation()}>
                                         <input
                                             type="checkbox"
                                             checked={isSelected}
                                             onChange={(e) => onSelect(lead.id, e.target.checked)}
-                                            style={{ cursor: "pointer", accentColor: "#00D4AA" }}
+                                            style={{ cursor: "pointer", accentColor: "#059669" }}
                                         />
                                     </td>
-                                    <td style={{ padding: "0 20px" }}>
-                                        <div style={{ fontWeight: 600, color: "#fff" }}>{lead.company}</div>
+                                    <td style={{ padding: "0 16px" }}>
+                                        <div style={{ fontWeight: 500, color: "#ffffff" }}>{lead.company}</div>
                                     </td>
-                                    <td style={{ padding: "0 20px", color: "#e0e0e0" }}>
+                                    <td style={{ padding: "0 16px", color: "#a1a1aa" }}>
                                         {lead.contact_name}
                                     </td>
-                                    <td style={{ padding: "0 20px", color: "#888" }}>
+                                    <td style={{ padding: "0 16px", color: "#71717a" }}>
                                         {lead.title || "—"}
                                     </td>
-                                    <td style={{ padding: "0 20px" }}>
+                                    <td style={{ padding: "0 16px" }}>
                                         <TierDot tier={lead.tier} />
                                     </td>
-                                    <td style={{ padding: "0 20px" }}>
+                                    <td style={{ padding: "0 16px" }}>
                                         <StatusBadge status={lead.status} />
                                     </td>
-                                    <td style={{ padding: "0 20px", textAlign: "center" }}>
+                                    <td style={{ padding: "0 16px", textAlign: "center" }}>
                                         <div style={{ display: 'inline-block' }}>
-                                            <ScrapeBadge status={lead.scrape_status} />
+                                            <ScrapeBadge status={lead.scrape_status || null} />
                                         </div>
                                     </td>
-                                    <td style={{ padding: "0 20px", textAlign: "center" }}>
+                                    <td style={{ padding: "0 16px", textAlign: "center" }}>
                                         <div style={{ display: 'inline-block' }}>
-                                            <LinkedInBadge status={lead.closely_connection_status} />
+                                            <LinkedInBadge status={lead.closely_connection_status || null} />
                                         </div>
                                     </td>
                                 </tr>

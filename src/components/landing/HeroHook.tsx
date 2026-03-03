@@ -45,7 +45,7 @@ const HeroHook = () => {
   return (
     <section ref={sectionRef} className="relative min-h-screen flex flex-col items-center justify-center overflow-hidden pt-24 pb-16">
       <div className="relative z-20 text-center px-4 w-full max-w-5xl mx-auto">
-        <h1 ref={headlineRef} className="font-display font-black text-[clamp(2.2rem,5.5vw,5rem)] leading-[1.05] tracking-[-0.04em] text-white mb-8">
+        <h1 ref={headlineRef} className="text-glow-green font-display font-black text-[clamp(2.2rem,5.5vw,5rem)] leading-[1.05] tracking-[-0.04em] text-white mb-8">
           <div className="flex flex-wrap items-center justify-center gap-[clamp(0.4rem,1.2vw,0.8rem)]">
             <span className="word inline-block opacity-0">RECRUITING</span>
             <span className="word inline-block opacity-0">AGENCIES</span>
@@ -64,14 +64,14 @@ const HeroHook = () => {
         </h1>
 
         <div ref={subtextRef} className="opacity-0 mb-10">
-          <p className="font-display text-lg md:text-xl text-white/50 max-w-2xl mx-auto leading-relaxed">
+          <p className="font-display text-lg md:text-xl text-white/60 max-w-2xl mx-auto leading-relaxed">
             You're paying agencies €15,000–€30,000 per hire. ScreeningPilot does the same job in 15 minutes for <strong className="text-white">€149/month</strong>. Unlimited hires. No per-hire fees. No middlemen.
           </p>
         </div>
 
         <div ref={ctaRef} className="opacity-0 mb-16">
           <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
-            <button onClick={() => navigate('/auth')} className="conic-border group inline-flex items-center gap-3 bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-lg px-8 py-4 rounded-full transition-all duration-300 hover:scale-[1.03] hover:shadow-[0_8px_40px_rgba(5,150,105,0.4)] active:scale-[0.98]">
+            <button onClick={() => navigate('/auth')} className="liquid-fill-btn group inline-flex items-center gap-3 bg-emerald-600/20 border border-emerald-500/50 text-emerald-400 font-semibold text-lg px-8 py-4 rounded-full transition-all duration-300 hover:scale-[1.03] shadow-[0_0_30px_rgba(5,150,105,0.3)] active:scale-[0.98]">
               Start Hiring for €149/mo
               <ArrowRight className="w-5 h-5 transition-transform duration-300 group-hover:translate-x-1" />
             </button>
@@ -79,7 +79,7 @@ const HeroHook = () => {
               Book a Demo
             </button>
           </div>
-          <p className="text-sm text-white/25 mt-4 font-medium">
+          <p className="text-sm text-white/40 mt-4 font-medium">
             No per-hire fees · Cancel anytime · Replaces your agency from day one
           </p>
         </div>

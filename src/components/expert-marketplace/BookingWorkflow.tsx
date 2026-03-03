@@ -60,12 +60,12 @@ const BookingWorkflow = ({ expert, open, onClose }: BookingWorkflowProps) => {
           <div className="flex-1">
             <div className="flex items-center gap-1.5">
               <span className="font-medium text-sm">{expert.name}</span>
-              <ShieldCheck className="h-3.5 w-3.5 text-emerald-500" />
+              <ShieldCheck className="h-3.5 w-3.5 text-green-500" />
             </div>
             <p className="text-xs text-muted-foreground">{expert.title}</p>
           </div>
           <div className="flex items-center gap-1 text-sm">
-            <Star className="h-3.5 w-3.5 text-amber-500 fill-amber-500" />
+            <Star className="h-3.5 w-3.5 text-yellow-500 fill-yellow-500" />
             <span className="font-medium">{expert.qualityScore}</span>
           </div>
         </div>

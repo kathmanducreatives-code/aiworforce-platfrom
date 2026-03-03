@@ -20,7 +20,7 @@ const statusConfig: Record<string, { label: string; className: string }> = {
   },
   verified_paid: {
     label: 'Verified & Paid',
-    className: 'border-emerald-500/30 text-emerald-600 bg-emerald-500/10',
+    className: 'border-green-500/30 text-green-600 bg-green-500/10',
   },
 };
 

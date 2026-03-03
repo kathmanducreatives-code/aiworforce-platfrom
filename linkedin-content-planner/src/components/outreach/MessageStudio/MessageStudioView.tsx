@@ -10,12 +10,11 @@ export default function MessageStudioView() {
     const [editingMsgId, setEditingMsgId] = useState<string | null>(null);
     const [editableMsgText, setEditableMsgText] = useState('');
 
-    // Only show leads that have been successfully scraped and Have a generated sequence but haven't been synced to closely yet
+    // Only show leads that have been successfully scraped and Have a generated note but haven't been synced to closely yet
     const reviewQueue = leads.filter(l =>
         l.scrape_status === 'success' &&
         l.status === 'not_started' &&
-        l.generated_sequence &&
-        l.generated_sequence.length > 0 &&
+        l.generated_connection_note &&
         (!l.closely_connection_status || l.closely_connection_status === 'none')
     );
 
@@ -23,44 +22,29 @@ export default function MessageStudioView() {
         return <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', color: '#888' }}>Loading Review Queue...</div>;
     }
 
-    const startEditing = (leadId: string, stepIdx: number, text: string) => {
-        setEditingMsgId(`${leadId}-${stepIdx}`);
+    const startEditing = (leadId: string, text: string) => {
+        setEditingMsgId(leadId);
         setEditableMsgText(text);
     };
 
-    const saveEdit = async (leadId: string, stepIdx: number) => {
+    const saveEdit = async (leadId: string) => {
         const lead = leads.find(l => l.id === leadId);
-        if (!lead || !lead.generated_sequence) return;
+        if (!lead) return;
 
-        const newSeq = [...lead.generated_sequence];
-        newSeq[stepIdx] = { ...newSeq[stepIdx], content: editableMsgText };
-
-        await updateLead(leadId, { generated_sequence: newSeq });
+        await updateLead(leadId, { generated_connection_note: editableMsgText });
         setEditingMsgId(null);
         toast.success("Message Edit Saved");
     };
 
-    const toggleApproveStep = async (leadId: string, stepIdx: number) => {
+    const approveForLead = async (leadId: string) => {
         const lead = leads.find(l => l.id === leadId);
-        if (!lead || !lead.generated_sequence) return;
+        if (!lead) return;
 
-        const newSeq = [...lead.generated_sequence];
-        newSeq[stepIdx] = { ...newSeq[stepIdx], approved: !newSeq[stepIdx].approved };
-
-        await updateLead(leadId, { generated_sequence: newSeq });
-    };
-
-    const approveAllForLead = async (leadId: string) => {
-        const lead = leads.find(l => l.id === leadId);
-        if (!lead || !lead.generated_sequence) return;
-
-        const newSeq = lead.generated_sequence.map(s => ({ ...s, approved: true }));
-        // Also advance their closely connection status so they move to the Export tab
+        // Advance their closely connection status so they move to the Export tab
         await updateLead(leadId, {
-            generated_sequence: newSeq,
             closely_connection_status: 'pending'
         });
-        toast.success(`${lead.contact_name}'s sequence approved and ready for export!`);
+        toast.success(`${lead.contact_name}'s message approved and ready for export!`);
     };
 
     return (
@@ -100,8 +84,8 @@ export default function MessageStudioView() {
                 ) : (
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '32px' }}>
                         {reviewQueue.map(lead => {
-                            const sequence = lead.generated_sequence || [];
-                            const allApproved = sequence.every(s => s.approved);
+                            const isEditing = editingMsgId === lead.id;
+                            const msgContent = lead.generated_connection_note || '';
 
                             return (
                                 <div key={lead.id} style={{
@@ -131,120 +115,113 @@ export default function MessageStudioView() {
                                         </div>
                                         <div>
                                             <button
-                                                onClick={() => approveAllForLead(lead.id)}
-                                                disabled={allApproved}
+                                                onClick={() => approveForLead(lead.id)}
                                                 style={{
-                                                    background: allApproved ? '#222' : '#00D4AA',
-                                                    color: allApproved ? '#666' : '#000',
+                                                    background: '#00D4AA',
+                                                    color: '#000',
                                                     border: 'none', padding: '10px 20px', borderRadius: '8px',
-                                                    fontSize: '13px', fontWeight: 600, cursor: allApproved ? 'not-allowed' : 'pointer',
+                                                    fontSize: '13px', fontWeight: 600, cursor: 'pointer',
                                                     display: 'flex', alignItems: 'center', gap: '8px',
                                                     transition: 'all 0.2s',
-                                                    boxShadow: allApproved ? 'none' : '0 4px 12px rgba(0, 212, 170, 0.3)'
+                                                    boxShadow: '0 4px 12px rgba(0, 212, 170, 0.3)'
                                                 }}
                                             >
                                                 <CheckCircle2 size={16} />
-                                                {allApproved ? 'Approved & Ready' : 'Approve All & Mark Ready'}
+                                                Approve & Mark Ready
                                             </button>
                                         </div>
                                     </div>
 
-                                    {/* 4-Step Sequence Grid */}
-                                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1px', background: 'rgba(255,255,255,0.04)' }}>
-                                        {sequence.map((msg, idx) => {
-                                            const stepKey = `${lead.id}-${idx}`;
-                                            const isEditing = editingMsgId === stepKey;
-                                            const isApproved = msg.approved;
+                                    {/* Content Area */}
+                                    <div style={{ display: 'flex' }}>
+                                        {/* Context Column */}
+                                        <div style={{
+                                            width: '300px', borderRight: '1px solid rgba(255,255,255,0.04)',
+                                            padding: '24px', background: 'rgba(255,255,255,0.02)'
+                                        }}>
+                                            <h4 style={{ color: '#fff', fontSize: '12px', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '16px', fontWeight: 600 }}>AI Context</h4>
 
-                                            // Determine max chars based on typical LinkedIn limits
-                                            const maxChars = idx === 0 ? 300 : 1500; // First message usually shorter (conn request)
-
-                                            return (
-                                                <div key={idx} style={{
-                                                    background: '#141416', padding: '24px',
-                                                    position: 'relative', display: 'flex', flexDirection: 'column'
-                                                }}>
-                                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-                                                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                                            <div style={{
-                                                                width: '24px', height: '24px', borderRadius: '6px',
-                                                                background: 'rgba(255,255,255,0.06)', display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                                                fontSize: '11px', fontWeight: 600, color: '#aaa'
-                                                            }}>
-                                                                {idx + 1}
-                                                            </div>
-                                                            <span style={{ fontSize: '13px', color: '#888', fontWeight: 500, letterSpacing: '0.02em', textTransform: 'uppercase' }}>
-                                                                Day {msg.dayOffset}
-                                                            </span>
-                                                        </div>
-                                                        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                                                            {!isEditing && <CharCounter current={msg.content.length} max={maxChars} />}
-
-                                                            <button
-                                                                onClick={() => toggleApproveStep(lead.id, idx)}
-                                                                style={{
-                                                                    background: isApproved ? 'rgba(0, 212, 170, 0.1)' : 'transparent',
-                                                                    border: isApproved ? '1px solid rgba(0, 212, 170, 0.3)' : '1px solid rgba(255,255,255,0.1)',
-                                                                    color: isApproved ? '#00D4AA' : '#888',
-                                                                    padding: '4px 10px', borderRadius: '6px', fontSize: '11px', fontWeight: 600,
-                                                                    cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px',
-                                                                    transition: 'all 0.2s'
-                                                                }}
-                                                            >
-                                                                <CheckCircle2 size={12} /> {isApproved ? 'Approved' : 'Approve'}
-                                                            </button>
-                                                        </div>
+                                            <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                                                {lead.open_roles && (
+                                                    <div>
+                                                        <span style={{ display: 'block', fontSize: '11px', color: '#888', marginBottom: '4px' }}>Hiring Identified</span>
+                                                        <div style={{ fontSize: '13px', color: '#e0e0e0', lineHeight: 1.4 }}>{lead.open_roles}</div>
                                                     </div>
-
-                                                    <div style={{ flex: 1, position: 'relative' }}>
-                                                        {isEditing ? (
-                                                            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', height: '100%' }}>
-                                                                <textarea
-                                                                    value={editableMsgText}
-                                                                    onChange={e => setEditableMsgText(e.target.value)}
-                                                                    style={{
-                                                                        width: '100%', flex: 1, minHeight: '120px',
-                                                                        background: '#0a0a0b', border: '1px solid rgba(255,255,255,0.15)',
-                                                                        color: '#e0e0e0', padding: '16px', borderRadius: '8px',
-                                                                        fontSize: '14px', lineHeight: '1.6', outline: 'none', resize: 'none'
-                                                                    }}
-                                                                />
-                                                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                                                    <CharCounter current={editableMsgText.length} max={maxChars} />
-                                                                    <div style={{ display: 'flex', gap: '8px' }}>
-                                                                        <button onClick={() => setEditingMsgId(null)} style={{ background: 'transparent', color: '#888', border: 'none', fontSize: '13px', cursor: 'pointer', padding: '6px 12px' }}>Cancel</button>
-                                                                        <button onClick={() => saveEdit(lead.id, idx)} style={{ background: '#00D4AA', color: '#000', border: 'none', borderRadius: '6px', padding: '6px 16px', fontSize: '13px', fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px' }}><Save size={14} /> Save changes</button>
-                                                                    </div>
-                                                                </div>
-                                                            </div>
-                                                        ) : (
-                                                            <div
-                                                                onClick={() => !isApproved && startEditing(lead.id, idx, msg.content)}
-                                                                style={{
-                                                                    color: isApproved ? '#888' : '#e0e0e0', fontSize: '14px', lineHeight: '1.6',
-                                                                    whiteSpace: 'pre-wrap', padding: '16px', borderRadius: '8px',
-                                                                    background: isApproved ? 'transparent' : 'rgba(255,255,255,0.02)',
-                                                                    border: '1px solid transparent',
-                                                                    cursor: isApproved ? 'default' : 'text',
-                                                                    minHeight: '120px',
-                                                                    transition: 'all 0.2s'
-                                                                }}
-                                                                onMouseOver={e => { if (!isApproved) e.currentTarget.style.borderColor = 'rgba(255,255,255,0.1)' }}
-                                                                onMouseOut={e => { if (!isApproved) e.currentTarget.style.borderColor = 'transparent' }}
-                                                            >
-                                                                {msg.content}
-
-                                                                {!isApproved && (
-                                                                    <div style={{ position: 'absolute', bottom: '16px', right: '16px', opacity: 0.5, pointerEvents: 'none' }}>
-                                                                        <Edit3 size={14} color="#888" />
-                                                                    </div>
-                                                                )}
-                                                            </div>
-                                                        )}
+                                                )}
+                                                {lead.uses_agency && (
+                                                    <div>
+                                                        <span style={{ display: 'block', fontSize: '11px', color: '#059669', marginBottom: '4px', fontWeight: 600 }}>Agency User (Tier 1)</span>
+                                                        <div style={{ fontSize: '13px', color: '#e0e0e0', lineHeight: 1.4 }}>Spotted: {lead.agency_name || 'Agency keywords found'}</div>
                                                     </div>
+                                                )}
+                                                {lead.founder_about && (
+                                                    <div>
+                                                        <span style={{ display: 'block', fontSize: '11px', color: '#888', marginBottom: '4px' }}>Founder Intel</span>
+                                                        <div style={{ fontSize: '13px', color: '#bbb', fontStyle: 'italic', lineHeight: 1.5 }}>"{lead.founder_about}"</div>
+                                                    </div>
+                                                )}
+                                                {!lead.open_roles && !lead.uses_agency && !lead.founder_about && (
+                                                    <div style={{ fontSize: '13px', color: '#666' }}>Standard profile scrape.</div>
+                                                )}
+                                            </div>
+                                        </div>
+
+                                        {/* Editor Column */}
+                                        <div style={{ flex: 1, padding: '24px', position: 'relative', display: 'flex', flexDirection: 'column' }}>
+                                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+                                                <span style={{ fontSize: '13px', color: '#888', fontWeight: 500, letterSpacing: '0.02em', textTransform: 'uppercase' }}>
+                                                    Connection Note
+                                                </span>
+                                                <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                                                    {!isEditing && <CharCounter current={msgContent.length} max={300} />}
                                                 </div>
-                                            );
-                                        })}
+                                            </div>
+
+                                            <div style={{ flex: 1, position: 'relative' }}>
+                                                {isEditing ? (
+                                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', height: '100%' }}>
+                                                        <textarea
+                                                            value={editableMsgText}
+                                                            onChange={e => setEditableMsgText(e.target.value)}
+                                                            style={{
+                                                                width: '100%', flex: 1, minHeight: '120px',
+                                                                background: '#0a0a0b', border: '1px solid rgba(255,255,255,0.15)',
+                                                                color: '#e0e0e0', padding: '16px', borderRadius: '8px',
+                                                                fontSize: '14px', lineHeight: '1.6', outline: 'none', resize: 'none',
+                                                                boxSizing: 'border-box'
+                                                            }}
+                                                        />
+                                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                                            <CharCounter current={editableMsgText.length} max={300} />
+                                                            <div style={{ display: 'flex', gap: '8px' }}>
+                                                                <button onClick={() => setEditingMsgId(null)} style={{ background: 'transparent', color: '#888', border: 'none', fontSize: '13px', cursor: 'pointer', padding: '6px 12px' }}>Cancel</button>
+                                                                <button onClick={() => saveEdit(lead.id)} style={{ background: '#00D4AA', color: '#000', border: 'none', borderRadius: '6px', padding: '6px 16px', fontSize: '13px', fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px' }}><Save size={14} /> Save changes</button>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                ) : (
+                                                    <div
+                                                        onClick={() => startEditing(lead.id, msgContent)}
+                                                        style={{
+                                                            color: '#e0e0e0', fontSize: '14px', lineHeight: '1.6',
+                                                            whiteSpace: 'pre-wrap', padding: '16px', borderRadius: '8px',
+                                                            background: 'rgba(255,255,255,0.02)',
+                                                            border: '1px solid transparent',
+                                                            cursor: 'text',
+                                                            minHeight: '120px',
+                                                            transition: 'all 0.2s'
+                                                        }}
+                                                        onMouseOver={e => e.currentTarget.style.borderColor = 'rgba(255,255,255,0.1)'}
+                                                        onMouseOut={e => e.currentTarget.style.borderColor = 'transparent'}
+                                                    >
+                                                        {msgContent}
+                                                        <div style={{ position: 'absolute', bottom: '16px', right: '16px', opacity: 0.5, pointerEvents: 'none' }}>
+                                                            <Edit3 size={14} color="#888" />
+                                                        </div>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        </div>
                                     </div>
                                 </div>
                             );

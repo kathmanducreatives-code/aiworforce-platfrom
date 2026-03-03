@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Separator } from '@/components/ui/separator';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { Video, FileText, Clock, User, Mic, MicOff, VideoOff, PhoneOff, MessageSquare, Star } from 'lucide-react';
+import { Video, FileText, Clock, User, Mic, MicOff, VideoOff, PhoneOff, MessageSquare, Star, Navigation2, Play } from 'lucide-react';
 import { mockInterviewRequests, InterviewRequest } from './mockData';
 import { cn } from '@/lib/utils';
 import { format } from 'date-fns';
@@ -19,6 +19,9 @@ const InterviewHub = () => {
   const [camOn, setCamOn] = useState(true);
 
   const assignedInterviews = mockInterviewRequests.filter(r => r.expertId);
+  const liveInterviews = assignedInterviews.filter(i => i.status === 'in_progress');
+  const recordedInterviews = assignedInterviews.filter(i => i.status === 'recorded' || i.status === 'verified_paid');
+  const upcomingInterviews = assignedInterviews.filter(i => i.status === 'scheduled');
 
   return (
     <div className="space-y-6">
@@ -47,119 +50,186 @@ const InterviewHub = () => {
         </Card>
       </div>
 
-      {/* Interview List */}
-      <div className="space-y-3">
-        {assignedInterviews.map(interview => (
-          <Card key={interview.id} className="hover:shadow-sm transition-shadow">
-            <CardContent className="p-4">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-4">
-                  <div className="w-10 h-10 rounded-lg bg-accent/10 flex items-center justify-center">
-                    <User className="h-5 w-5 text-accent-foreground" />
+      {/* Live Now Section */}
+      {liveInterviews.length > 0 && (
+        <div className="space-y-4">
+          <div className="flex items-center gap-2">
+            <div className="w-2 h-2 bg-red-500 rounded-full animate-pulse" />
+            <h3 className="text-sm font-bold uppercase tracking-wider text-foreground">Live Shadowing Available</h3>
+          </div>
+          <div className="grid grid-cols-1 gap-4">
+            {liveInterviews.map(interview => (
+              <Card key={interview.id} className="border-red-500/20 bg-red-500/5 shadow-[0_0_15px_rgba(239,68,68,0.05)]">
+                <CardContent className="p-4">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-4">
+                      <div className="w-12 h-12 rounded-xl bg-background border border-border flex items-center justify-center relative">
+                        <User className="h-6 w-6 text-muted-foreground" />
+                        <div className="absolute -top-1 -right-1 w-3 h-3 bg-red-500 rounded-full border-2 border-background animate-pulse" />
+                      </div>
+                      <div>
+                        <h4 className="font-bold text-foreground">{interview.candidateName}</h4>
+                        <p className="text-sm text-muted-foreground">{interview.position} — <span className="text-primary font-medium">{interview.expertName}</span></p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <div className="flex -space-x-2 mr-4">
+                        {[1, 2].map(i => (
+                          <div key={i} title="Admin Shadowing" className="w-7 h-7 rounded-full border-2 border-background bg-muted flex items-center justify-center text-[10px] font-bold text-muted-foreground">
+                            A{i}
+                          </div>
+                        ))}
+                      </div>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="bg-background hover:bg-muted"
+                        onClick={() => {
+                          setSelectedInterview(interview);
+                          setVideoOpen(true);
+                        }}
+                      >
+                        <Navigation2 className="h-3.5 w-3.5 mr-1.5 text-primary fill-primary/20" />
+                        Shadow Live
+                      </Button>
+                      <Button size="sm" className="bg-primary hover:bg-primary/90">
+                        <Video className="h-3.5 w-3.5 mr-1.5" />
+                        Join Zoom
+                      </Button>
+                    </div>
                   </div>
-                  <div>
-                    <h4 className="font-medium text-foreground">{interview.candidateName}</h4>
-                    <p className="text-sm text-muted-foreground">{interview.position} — {interview.company}</p>
-                  </div>
-                </div>
-                <div className="flex items-center gap-3">
-                  <StatusBadge status={interview.status} />
-                  {interview.scheduledAt && (
-                    <span className="text-xs text-muted-foreground flex items-center gap-1">
-                      <Clock className="h-3 w-3" />
-                      {format(new Date(interview.scheduledAt), 'MMM d, h:mm a')}
-                    </span>
-                  )}
-                  {(interview.status === 'scheduled' || interview.status === 'in_progress') && (
-                    <Button
-                      size="sm"
-                      onClick={() => {
-                        setSelectedInterview(interview);
-                        setVideoOpen(true);
-                      }}
-                    >
-                      <Video className="h-3.5 w-3.5 mr-1.5" />
-                      {interview.status === 'in_progress' ? 'Rejoin' : 'Start Interview'}
-                    </Button>
-                  )}
-                  {interview.status === 'recorded' && (
-                    <Button size="sm" variant="outline" onClick={() => setSelectedInterview(interview)}>
-                      <FileText className="h-3.5 w-3.5 mr-1.5" />
-                      View Scorecard
-                    </Button>
-                  )}
-                </div>
-              </div>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        </div>
+      )}
 
-              {/* Tech Stack */}
-              <div className="flex gap-1.5 mt-3">
-                {interview.techStack.map(t => (
-                  <Badge key={t} variant="secondary" className="text-xs">{t}</Badge>
-                ))}
-                <span className="text-xs text-muted-foreground ml-2">
-                  AI Score: <span className="font-medium text-foreground">{interview.aiScreeningScore}%</span>
-                </span>
-              </div>
-            </CardContent>
-          </Card>
-        ))}
+      {/* Upcoming Sessions View */}
+      <div className="space-y-4">
+        <h3 className="text-sm font-bold uppercase tracking-wider text-muted-foreground">Upcoming Sessions</h3>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          {upcomingInterviews.map(interview => (
+            <Card key={interview.id} className="hover:border-border/80 transition-colors">
+              <CardContent className="p-4">
+                <div className="flex items-center justify-between mb-3">
+                  <StatusBadge status={interview.status} />
+                  <span className="text-xs font-mono text-muted-foreground flex items-center gap-1">
+                    <Clock className="h-3 w-3" />
+                    {interview.scheduledAt && format(new Date(interview.scheduledAt), 'MMM d, h:mm a')}
+                  </span>
+                </div>
+                <h4 className="font-medium text-foreground">{interview.candidateName}</h4>
+                <p className="text-xs text-muted-foreground mb-3">{interview.position}</p>
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                    <div className="w-5 h-5 rounded-full bg-primary/10 flex items-center justify-center text-[10px] font-bold text-primary">
+                      {interview.expertName?.split(' ').map(n => n[0]).join('')}
+                    </div>
+                    {interview.expertName}
+                  </div>
+                  <Button variant="ghost" size="sm" className="h-8 text-xs">Edit Details</Button>
+                </div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
       </div>
 
       {/* Video Interview Modal */}
       <Dialog open={videoOpen} onOpenChange={setVideoOpen}>
         <DialogContent className="max-w-4xl h-[80vh] flex flex-col">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <Video className="h-5 w-5 text-primary" />
-              Interview: {selectedInterview?.candidateName}
-              <Badge variant="outline" className="ml-2 text-xs">Recording</Badge>
+          <DialogHeader className="border-b border-border pb-4">
+            <DialogTitle className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-red-500/10 flex items-center justify-center">
+                  <Navigation2 className="h-5 w-5 text-red-500 fill-red-500/20 animate-pulse" />
+                </div>
+                <div>
+                  <p className="text-xs font-bold text-red-500 uppercase tracking-widest">Shadowing Live Room</p>
+                  <h3 className="text-lg font-bold text-foreground">{selectedInterview?.candidateName}</h3>
+                </div>
+              </div>
+              <div className="flex items-center gap-4">
+                <div className="text-right">
+                  <p className="text-[10px] text-muted-foreground uppercase tracking-widest font-bold">Duration</p>
+                  <p className="text-sm font-mono font-bold text-foreground">32:14</p>
+                </div>
+                <Badge variant="outline" className="text-xs border-green-500/30 text-green-500 bg-green-500/5">Secure Connection</Badge>
+              </div>
             </DialogTitle>
           </DialogHeader>
 
           <div className="flex-1 flex gap-4 min-h-0">
             {/* Video Area */}
             <div className="flex-1 flex flex-col">
-              <div className="flex-1 bg-muted/30 rounded-xl border border-border flex items-center justify-center relative">
-                <div className="text-center space-y-3">
-                  <div className="w-20 h-20 rounded-full bg-primary/10 flex items-center justify-center mx-auto">
-                    <Video className="h-8 w-8 text-primary" />
+              <div className="flex-1 bg-black rounded-xl border border-white/5 flex items-center justify-center relative shadow-2xl overflow-hidden">
+                {/* Simulated Video Feed Layer */}
+                <div className="absolute inset-0 bg-gradient-to-b from-transparent to-black/40 pointer-events-none z-10" />
+
+                <div className="relative z-20 text-center space-y-4">
+                  <div className="w-24 h-24 rounded-full bg-primary/10 border-2 border-primary/20 flex items-center justify-center mx-auto backdrop-blur-sm">
+                    <User className="h-10 w-10 text-primary" />
                   </div>
-                  <p className="text-sm text-muted-foreground">Video feed preview</p>
-                  <p className="text-xs text-muted-foreground">Camera and microphone ready</p>
+                  <div>
+                    <p className="text-sm font-bold text-white tracking-wide">Candidate: {selectedInterview?.candidateName}</p>
+                    <p className="text-xs text-white/60">Using Integrated WebRTC</p>
+                  </div>
+                  <div className="flex items-center justify-center gap-6 mt-4 opacity-50">
+                    <div className="flex flex-col items-center gap-1">
+                      <Mic className="h-4 w-4 text-white" />
+                      <div className="w-12 h-1 bg-green-500 rounded-full" />
+                    </div>
+                    <div className="flex flex-col items-center gap-1">
+                      <Video className="h-4 w-4 text-white" />
+                      <div className="w-12 h-1 bg-green-500 rounded-full" />
+                    </div>
+                  </div>
                 </div>
-                {/* Self view */}
-                <div className="absolute bottom-4 right-4 w-32 h-24 bg-muted rounded-lg border border-border flex items-center justify-center">
-                  <span className="text-xs text-muted-foreground">You</span>
+
+                {/* Expert Corner View */}
+                <div className="absolute top-4 right-4 w-48 aspect-video bg-zinc-900 rounded-lg border border-white/10 shadow-xl overflow-hidden z-30">
+                  <div className="absolute bottom-2 left-2 text-[8px] font-bold text-white bg-black/50 px-1 rounded uppercase tracking-widest">
+                    Expert: {selectedInterview?.expertName}
+                  </div>
+                  <div className="w-full h-full flex items-center justify-center border-t-2 border-primary/40">
+                    <User className="h-8 w-8 text-primary/40" />
+                  </div>
+                </div>
+
+                {/* Watermark/Status */}
+                <div className="absolute top-4 left-4 flex items-center gap-2 z-30">
+                  <div className="flex items-center gap-1.5 px-2 py-1 rounded bg-black/60 border border-white/10 backdrop-blur-md">
+                    <span className="w-2 h-2 bg-red-500 rounded-full animate-pulse" />
+                    <span className="text-[10px] font-mono font-bold text-white uppercase tracking-tighter">HD LIVE</span>
+                  </div>
                 </div>
               </div>
 
-              {/* Controls */}
-              <div className="flex items-center justify-center gap-3 mt-4">
-                <Button
-                  size="sm"
-                  variant={micOn ? 'outline' : 'destructive'}
-                  onClick={() => setMicOn(!micOn)}
-                  className="rounded-full w-10 h-10 p-0"
-                >
-                  {micOn ? <Mic className="h-4 w-4" /> : <MicOff className="h-4 w-4" />}
-                </Button>
-                <Button
-                  size="sm"
-                  variant={camOn ? 'outline' : 'destructive'}
-                  onClick={() => setCamOn(!camOn)}
-                  className="rounded-full w-10 h-10 p-0"
-                >
-                  {camOn ? <Video className="h-4 w-4" /> : <VideoOff className="h-4 w-4" />}
-                </Button>
-                <Button
-                  size="sm"
-                  variant="destructive"
-                  onClick={() => setVideoOpen(false)}
-                  className="rounded-full px-6"
-                >
-                  <PhoneOff className="h-4 w-4 mr-1.5" />
-                  End
-                </Button>
+              {/* Shadow Controls */}
+              <div className="flex items-center justify-between mt-4 px-2">
+                <div className="flex items-center gap-6">
+                  <div className="flex flex-col">
+                    <span className="text-[10px] text-muted-foreground uppercase font-bold tracking-widest">Your Mic</span>
+                    <span className="text-xs font-bold text-red-500">MUTED (Shadow Mode)</span>
+                  </div>
+                  <div className="flex flex-col">
+                    <span className="text-[10px] text-muted-foreground uppercase font-bold tracking-widest">Your Feed</span>
+                    <span className="text-xs font-bold text-muted-foreground">OFF (Invisible)</span>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-3">
+                  <Button variant="outline" size="sm" className="rounded-full h-10 w-10 p-0 border-border">
+                    <MessageSquare className="h-4 w-4" />
+                  </Button>
+                  <Button variant="secondary" size="sm" className="rounded-full px-6 font-bold h-10">
+                    Join Discussion
+                  </Button>
+                  <Button variant="destructive" size="sm" onClick={() => setVideoOpen(false)} className="rounded-full px-8 h-10 font-bold shadow-[0_4px_14px_rgba(239,68,68,0.25)]">
+                    Stop Shadowing
+                  </Button>
+                </div>
               </div>
             </div>
 
@@ -177,7 +247,7 @@ const InterviewHub = () => {
               />
               <div className="px-3 py-2 border-t border-border bg-muted/30">
                 <Button size="sm" variant="outline" className="w-full text-xs">
-                  <Star className="h-3 w-3 mr-1" /> Open Scorecard
+                  <Star className="h-3 w-3 mr-1 text-yellow-500" /> Open Scorecard
                 </Button>
               </div>
             </div>

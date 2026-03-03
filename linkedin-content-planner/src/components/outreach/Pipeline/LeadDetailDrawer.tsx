@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { X, Linkedin, Building, Mail, Users, Briefcase, MessageSquare, Clock, Edit2, Loader2, Save } from 'lucide-react';
+import { X, Linkedin, Briefcase, MessageSquare, Edit2, Loader2, Save } from 'lucide-react';
 import type { OutreachLead } from '../../../types/outreach';
 import StatusBadge from '../shared/StatusBadge';
 import TierDot from '../shared/TierDot';

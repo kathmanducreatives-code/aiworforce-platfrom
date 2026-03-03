@@ -4,12 +4,15 @@ import LeadTable from './LeadTable';
 import FilterBar from './FilterBar';
 import BulkActions from './BulkActions';
 import LeadImportModal from './LeadImportModal';
+import LeadDiscoverModal from './LeadDiscoverModal';
 import LeadDetailDrawer from './LeadDetailDrawer';
+import { Search } from 'lucide-react';
 import type { OutreachLead } from '../../../types/outreach';
 
 export default function PipelineView() {
     const { leads, loading, fetchLeads, updateLead } = useOutreachLeads();
     const [isImportModalOpen, setIsImportModalOpen] = useState(false);
+    const [isDiscoverModalOpen, setIsDiscoverModalOpen] = useState(false);
     const [selectedLead, setSelectedLead] = useState<OutreachLead | null>(null);
     const [selectedIds, setSelectedIds] = useState<string[]>([]);
 
@@ -105,15 +108,28 @@ export default function PipelineView() {
                 </div>
                 <div style={{ display: 'flex', gap: '12px' }}>
                     <button
-                        onClick={() => setIsImportModalOpen(true)}
+                        onClick={() => setIsDiscoverModalOpen(true)}
                         style={{
-                            background: '#141416', color: '#e0e0e0', border: '1px solid rgba(255,255,255,0.06)',
+                            background: '#059669', color: '#fff', border: 'none',
                             padding: '10px 16px', borderRadius: '8px', fontSize: '13px',
                             fontWeight: 600, cursor: 'pointer', transition: 'all 0.2s',
-                            boxShadow: '0 2px 8px rgba(0,0,0,0.2)'
+                            display: 'flex', alignItems: 'center', gap: '8px'
                         }}
-                        onMouseOver={e => e.currentTarget.style.borderColor = 'rgba(255,255,255,0.15)'}
-                        onMouseOut={e => e.currentTarget.style.borderColor = 'rgba(255,255,255,0.06)'}
+                        onMouseOver={e => e.currentTarget.style.transform = 'translateY(-1px)'}
+                        onMouseOut={e => e.currentTarget.style.transform = 'translateY(0)'}
+                    >
+                        <Search size={16} />
+                        Discover Leads AI
+                    </button>
+                    <button
+                        onClick={() => setIsImportModalOpen(true)}
+                        style={{
+                            background: 'rgba(255,255,255,0.05)', color: '#fff', border: '1px solid rgba(255,255,255,0.1)',
+                            padding: '10px 16px', borderRadius: '8px', fontSize: '13px',
+                            fontWeight: 600, cursor: 'pointer', transition: 'all 0.2s'
+                        }}
+                        onMouseOver={e => e.currentTarget.style.borderColor = 'rgba(255,255,255,0.2)'}
+                        onMouseOut={e => e.currentTarget.style.borderColor = 'rgba(255,255,255,0.1)'}
                     >
                         Import CSV
                     </button>
@@ -122,16 +138,16 @@ export default function PipelineView() {
             </div>
 
             {/* Main Content Area */}
-            <div style={{ px: '40px', flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', padding: '0 40px 40px' }}>
+            <div style={{ padding: '0 40px 40px', flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
                 <div style={{
-                    background: '#141416',
+                    background: '#1c1c1f',
                     border: '1px solid rgba(255,255,255,0.06)',
                     borderRadius: '12px',
                     display: 'flex',
                     flexDirection: 'column',
                     flex: 1,
                     overflow: 'hidden',
-                    boxShadow: '0 4px 24px rgba(0,0,0,0.2)'
+                    boxShadow: '0 8px 32px rgba(0,0,0,0.2)'
                 }}>
                     <FilterBar
                         searchTerm={searchTerm} setSearchTerm={setSearchTerm}
@@ -165,6 +181,12 @@ export default function PipelineView() {
                 isOpen={isImportModalOpen}
                 onClose={() => setIsImportModalOpen(false)}
                 onImportSuccess={fetchLeads}
+            />
+
+            <LeadDiscoverModal
+                isOpen={isDiscoverModalOpen}
+                onClose={() => setIsDiscoverModalOpen(false)}
+                onDiscoverSuccess={fetchLeads}
             />
 
             <LeadDetailDrawer

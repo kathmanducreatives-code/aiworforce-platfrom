@@ -1,0 +1,688 @@
+./PowerDialer_Walkthrough.md
+./README.md
+./agent-console.html
+./bun.lockb
+./components.json
+./debug_sessions.py
+./deploy.py
+./eslint.config.js
+./execution_645.json
+./finalize_v3.py
+./icp_lookalike_engine_original.json
+./icp_lookalike_engine_v2.json
+./icp_lookalike_engine_v3.json
+./icp_lookalike_engine_v3_final.json
+./icp_lookalike_engine_v4_final.json
+./index.html
+./linkedin-content-planner/README.md
+./linkedin-content-planner/dist-electron/main.js
+./linkedin-content-planner/electron/main.ts
+./linkedin-content-planner/electron/tsconfig.json
+./linkedin-content-planner/eslint.config.js
+./linkedin-content-planner/index.html
+./linkedin-content-planner/package-lock.json
+./linkedin-content-planner/package.json
+./linkedin-content-planner/public/vite.svg
+./linkedin-content-planner/release/Content Command Center-0.0.0-arm64-mac.zip
+./linkedin-content-planner/release/Content Command Center-0.0.0-arm64-mac.zip.blockmap
+./linkedin-content-planner/release/Content Command Center-0.0.0-arm64.dmg
+./linkedin-content-planner/release/Content Command Center-0.0.0-arm64.dmg.blockmap
+./linkedin-content-planner/release/builder-debug.yml
+./linkedin-content-planner/release/builder-effective-config.yaml
+./linkedin-content-planner/release/mac-arm64/Content Command Center.app/Contents/Frameworks/Content Command Center Helper (GPU).app/Contents/Info.plist
+./linkedin-content-planner/release/mac-arm64/Content Command Center.app/Contents/Frameworks/Content Command Center Helper (GPU).app/Contents/MacOS/Content Command Center Helper (GPU)
+./linkedin-content-planner/release/mac-arm64/Content Command Center.app/Contents/Frameworks/Content Command Center Helper (GPU).app/Contents/PkgInfo
+./linkedin-content-planner/release/mac-arm64/Content Command Center.app/Contents/Frameworks/Content Command Center Helper (GPU).app/Contents/_CodeSignature/CodeResources
+./linkedin-content-planner/release/mac-arm64/Content Command Center.app/Contents/Frameworks/Content Command Center Helper (Plugin).app/Contents/Info.plist
+./linkedin-content-planner/release/mac-arm64/Content Command Center.app/Contents/Frameworks/Content Command Center Helper (Plugin).app/Contents/MacOS/Content Command Center Helper (Plugin)
+./linkedin-content-planner/release/mac-arm64/Content Command Center.app/Contents/Frameworks/Content Command Center Helper (Plugin).app/Contents/PkgInfo
+./linkedin-content-planner/release/mac-arm64/Content Command Center.app/Contents/Frameworks/Content Command Center Helper (Plugin).app/Contents/_CodeSignature/CodeResources
+./linkedin-content-planner/release/mac-arm64/Content Command Center.app/Contents/Frameworks/Content Command Center Helper (Renderer).app/Contents/Info.plist
+./linkedin-content-planner/release/mac-arm64/Content Command Center.app/Contents/Frameworks/Content Command Center Helper (Renderer).app/Contents/MacOS/Content Command Center Helper (Renderer)
+./linkedin-content-planner/release/mac-arm64/Content Command Center.app/Contents/Frameworks/Content Command Center Helper (Renderer).app/Contents/PkgInfo
+./linkedin-content-planner/release/mac-arm64/Content Command Center.app/Contents/Frameworks/Content Command Center Helper (Renderer).app/Contents/_CodeSignature/CodeResources
+./linkedin-content-planner/release/mac-arm64/Content Command Center.app/Contents/Frameworks/Content Command Center Helper.app/Contents/Info.plist
+./linkedin-content-planner/release/mac-arm64/Content Command Center.app/Contents/Frameworks/Content Command Center Helper.app/Contents/MacOS/Content Command Center Helper
+./linkedin-content-planner/release/mac-arm64/Content Command Center.app/Contents/Frameworks/Content Command Center Helper.app/Contents/PkgInfo
+./linkedin-content-planner/release/mac-arm64/Content Command Center.app/Contents/Frameworks/Content Command Center Helper.app/Contents/_CodeSignature/CodeResources
+./linkedin-content-planner/release/mac-arm64/Content Command Center.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Electron Framework
+./linkedin-content-planner/release/mac-arm64/Content Command Center.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Helpers/chrome_crashpad_handler
+./linkedin-content-planner/release/mac-arm64/Content Command Center.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Libraries/libEGL.dylib
+./linkedin-content-planner/release/mac-arm64/Content Command Center.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Libraries/libGLESv2.dylib
+./linkedin-content-planner/release/mac-arm64/Content Command Center.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Libraries/libffmpeg.dylib
+./linkedin-content-planner/release/mac-arm64/Content Command Center.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Libraries/libvk_swiftshader.dylib
+./linkedin-content-planner/release/mac-arm64/Content Command Center.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Libraries/vk_swiftshader_icd.json
+./linkedin-content-planner/release/mac-arm64/Content Command Center.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/Info.plist
+./linkedin-content-planner/release/mac-arm64/Content Command Center.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/MainMenu.nib
+./linkedin-content-planner/release/mac-arm64/Content Command Center.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/af.lproj/locale.pak
+./linkedin-content-planner/release/mac-arm64/Content Command Center.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/af_FEMININE.lproj/locale.pak
+./linkedin-content-planner/release/mac-arm64/Content Command Center.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/af_MASCULINE.lproj/locale.pak
+./linkedin-content-planner/release/mac-arm64/Content Command Center.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/af_NEUTER.lproj/locale.pak
+./linkedin-content-planner/release/mac-arm64/Content Command Center.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/am.lproj/locale.pak
+./linkedin-content-planner/release/mac-arm64/Content Command Center.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/am_FEMININE.lproj/locale.pak
+./linkedin-content-planner/release/mac-arm64/Content Command Center.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/am_MASCULINE.lproj/locale.pak
+./linkedin-content-planner/release/mac-arm64/Content Command Center.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/am_NEUTER.lproj/locale.pak
+./linkedin-content-planner/release/mac-arm64/Content Command Center.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/ar.lproj/locale.pak
+./linkedin-content-planner/release/mac-arm64/Content Command Center.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/ar_FEMININE.lproj/locale.pak
+./linkedin-content-planner/release/mac-arm64/Content Command Center.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/ar_MASCULINE.lproj/locale.pak
+./linkedin-content-planner/release/mac-arm64/Content Command Center.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/ar_NEUTER.lproj/locale.pak
+./linkedin-content-planner/release/mac-arm64/Content Command Center.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/bg.lproj/locale.pak
+./linkedin-content-planner/release/mac-arm64/Content Command Center.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/bg_FEMININE.lproj/locale.pak
+./linkedin-content-planner/release/mac-arm64/Content Command Center.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/bg_MASCULINE.lproj/locale.pak
+./linkedin-content-planner/release/mac-arm64/Content Command Center.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/bg_NEUTER.lproj/locale.pak
+./linkedin-content-planner/release/mac-arm64/Content Command Center.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/bn.lproj/locale.pak
+./linkedin-content-planner/release/mac-arm64/Content Command Center.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/bn_FEMININE.lproj/locale.pak
+./linkedin-content-planner/release/mac-arm64/Content Command Center.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/bn_MASCULINE.lproj/locale.pak
+./linkedin-content-planner/release/mac-arm64/Content Command Center.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/bn_NEUTER.lproj/locale.pak
+./linkedin-content-planner/release/mac-arm64/Content Command Center.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/ca.lproj/locale.pak
+./linkedin-content-planner/release/mac-arm64/Content Command Center.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/ca_FEMININE.lproj/locale.pak
+./linkedin-content-planner/release/mac-arm64/Content Command Center.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/ca_MASCULINE.lproj/locale.pak
+./linkedin-content-planner/release/mac-arm64/Content Command Center.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/ca_NEUTER.lproj/locale.pak
+./linkedin-content-planner/release/mac-arm64/Content Command Center.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/chrome_100_percent.pak
+./linkedin-content-planner/release/mac-arm64/Content Command Center.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/chrome_200_percent.pak
+./linkedin-content-planner/release/mac-arm64/Content Command Center.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/cs.lproj/locale.pak
+./linkedin-content-planner/release/mac-arm64/Content Command Center.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/cs_FEMININE.lproj/locale.pak
+./linkedin-content-planner/release/mac-arm64/Content Command Center.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/cs_MASCULINE.lproj/locale.pak
+./linkedin-content-planner/release/mac-arm64/Content Command Center.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/cs_NEUTER.lproj/locale.pak
+./linkedin-content-planner/release/mac-arm64/Content Command Center.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/da.lproj/locale.pak
+./linkedin-content-planner/release/mac-arm64/Content Command Center.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/da_FEMININE.lproj/locale.pak
+./linkedin-content-planner/release/mac-arm64/Content Command Center.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/da_MASCULINE.lproj/locale.pak
+./linkedin-content-planner/release/mac-arm64/Content Command Center.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/da_NEUTER.lproj/locale.pak
+./linkedin-content-planner/release/mac-arm64/Content Command Center.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/de.lproj/locale.pak
+./linkedin-content-planner/release/mac-arm64/Content Command Center.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/de_FEMININE.lproj/locale.pak
+./linkedin-content-planner/release/mac-arm64/Content Command Center.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/de_MASCULINE.lproj/locale.pak
+./linkedin-content-planner/release/mac-arm64/Content Command Center.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/de_NEUTER.lproj/locale.pak
+./linkedin-content-planner/release/mac-arm64/Content Command Center.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/el.lproj/locale.pak
+./linkedin-content-planner/release/mac-arm64/Content Command Center.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/el_FEMININE.lproj/locale.pak
+./linkedin-content-planner/release/mac-arm64/Content Command Center.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/el_MASCULINE.lproj/locale.pak
+./linkedin-content-planner/release/mac-arm64/Content Command Center.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/el_NEUTER.lproj/locale.pak
+./linkedin-content-planner/release/mac-arm64/Content Command Center.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/en.lproj/locale.pak
+./linkedin-content-planner/release/mac-arm64/Content Command Center.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/en_FEMININE.lproj/locale.pak
+./linkedin-content-planner/release/mac-arm64/Content Command Center.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/en_GB.lproj/locale.pak
+./linkedin-content-planner/release/mac-arm64/Content Command Center.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/en_GB_FEMININE.lproj/locale.pak
+./linkedin-content-planner/release/mac-arm64/Content Command Center.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/en_GB_MASCULINE.lproj/locale.pak
+./linkedin-content-planner/release/mac-arm64/Content Command Center.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/en_GB_NEUTER.lproj/locale.pak
+./linkedin-content-planner/release/mac-arm64/Content Command Center.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/en_MASCULINE.lproj/locale.pak
+./linkedin-content-planner/release/mac-arm64/Content Command Center.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/en_NEUTER.lproj/locale.pak
+./linkedin-content-planner/release/mac-arm64/Content Command Center.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/es.lproj/locale.pak
+./linkedin-content-planner/release/mac-arm64/Content Command Center.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/es_419.lproj/locale.pak
+./linkedin-content-planner/release/mac-arm64/Content Command Center.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/es_419_FEMININE.lproj/locale.pak
+./linkedin-content-planner/release/mac-arm64/Content Command Center.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/es_419_MASCULINE.lproj/locale.pak
+./linkedin-content-planner/release/mac-arm64/Content Command Center.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/es_419_NEUTER.lproj/locale.pak
+./linkedin-content-planner/release/mac-arm64/Content Command Center.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/es_FEMININE.lproj/locale.pak
+./linkedin-content-planner/release/mac-arm64/Content Command Center.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/es_MASCULINE.lproj/locale.pak
+./linkedin-content-planner/release/mac-arm64/Content Command Center.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/es_NEUTER.lproj/locale.pak
+./linkedin-content-planner/release/mac-arm64/Content Command Center.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/et.lproj/locale.pak
+./linkedin-content-planner/release/mac-arm64/Content Command Center.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/et_FEMININE.lproj/locale.pak
+./linkedin-content-planner/release/mac-arm64/Content Command Center.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/et_MASCULINE.lproj/locale.pak
+./linkedin-content-planner/release/mac-arm64/Content Command Center.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/et_NEUTER.lproj/locale.pak
+./linkedin-content-planner/release/mac-arm64/Content Command Center.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/fa.lproj/locale.pak
+./linkedin-content-planner/release/mac-arm64/Content Command Center.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/fa_FEMININE.lproj/locale.pak
+./linkedin-content-planner/release/mac-arm64/Content Command Center.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/fa_MASCULINE.lproj/locale.pak
+./linkedin-content-planner/release/mac-arm64/Content Command Center.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/fa_NEUTER.lproj/locale.pak
+./linkedin-content-planner/release/mac-arm64/Content Command Center.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/fi.lproj/locale.pak
+./linkedin-content-planner/release/mac-arm64/Content Command Center.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/fi_FEMININE.lproj/locale.pak
+./linkedin-content-planner/release/mac-arm64/Content Command Center.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/fi_MASCULINE.lproj/locale.pak
+./linkedin-content-planner/release/mac-arm64/Content Command Center.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/fi_NEUTER.lproj/locale.pak
+./linkedin-content-planner/release/mac-arm64/Content Command Center.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/fil.lproj/locale.pak
+./linkedin-content-planner/release/mac-arm64/Content Command Center.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/fil_FEMININE.lproj/locale.pak
+./linkedin-content-planner/release/mac-arm64/Content Command Center.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/fil_MASCULINE.lproj/locale.pak
+./linkedin-content-planner/release/mac-arm64/Content Command Center.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/fil_NEUTER.lproj/locale.pak
+./linkedin-content-planner/release/mac-arm64/Content Command Center.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/fr.lproj/locale.pak
+./linkedin-content-planner/release/mac-arm64/Content Command Center.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/fr_FEMININE.lproj/locale.pak
+./linkedin-content-planner/release/mac-arm64/Content Command Center.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/fr_MASCULINE.lproj/locale.pak
+./linkedin-content-planner/release/mac-arm64/Content Command Center.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/fr_NEUTER.lproj/locale.pak
+./linkedin-content-planner/release/mac-arm64/Content Command Center.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/gu.lproj/locale.pak
+./linkedin-content-planner/release/mac-arm64/Content Command Center.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/gu_FEMININE.lproj/locale.pak
+./linkedin-content-planner/release/mac-arm64/Content Command Center.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/gu_MASCULINE.lproj/locale.pak
+./linkedin-content-planner/release/mac-arm64/Content Command Center.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/gu_NEUTER.lproj/locale.pak
+./linkedin-content-planner/release/mac-arm64/Content Command Center.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/he.lproj/locale.pak
+./linkedin-content-planner/release/mac-arm64/Content Command Center.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/he_FEMININE.lproj/locale.pak
+./linkedin-content-planner/release/mac-arm64/Content Command Center.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/he_MASCULINE.lproj/locale.pak
+./linkedin-content-planner/release/mac-arm64/Content Command Center.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/he_NEUTER.lproj/locale.pak
+./linkedin-content-planner/release/mac-arm64/Content Command Center.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/hi.lproj/locale.pak
+./linkedin-content-planner/release/mac-arm64/Content Command Center.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/hi_FEMININE.lproj/locale.pak
+./linkedin-content-planner/release/mac-arm64/Content Command Center.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/hi_MASCULINE.lproj/locale.pak
+./linkedin-content-planner/release/mac-arm64/Content Command Center.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/hi_NEUTER.lproj/locale.pak
+./linkedin-content-planner/release/mac-arm64/Content Command Center.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/hr.lproj/locale.pak
+./linkedin-content-planner/release/mac-arm64/Content Command Center.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/hr_FEMININE.lproj/locale.pak
+./linkedin-content-planner/release/mac-arm64/Content Command Center.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/hr_MASCULINE.lproj/locale.pak
+./linkedin-content-planner/release/mac-arm64/Content Command Center.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/hr_NEUTER.lproj/locale.pak
+./linkedin-content-planner/release/mac-arm64/Content Command Center.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/hu.lproj/locale.pak
+./linkedin-content-planner/release/mac-arm64/Content Command Center.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/hu_FEMININE.lproj/locale.pak
+./linkedin-content-planner/release/mac-arm64/Content Command Center.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/hu_MASCULINE.lproj/locale.pak
+./linkedin-content-planner/release/mac-arm64/Content Command Center.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/hu_NEUTER.lproj/locale.pak
+./linkedin-content-planner/release/mac-arm64/Content Command Center.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/icudtl.dat
+./linkedin-content-planner/release/mac-arm64/Content Command Center.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/id.lproj/locale.pak
+./linkedin-content-planner/release/mac-arm64/Content Command Center.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/id_FEMININE.lproj/locale.pak
+./linkedin-content-planner/release/mac-arm64/Content Command Center.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/id_MASCULINE.lproj/locale.pak
+./linkedin-content-planner/release/mac-arm64/Content Command Center.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/id_NEUTER.lproj/locale.pak
+./linkedin-content-planner/release/mac-arm64/Content Command Center.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/it.lproj/locale.pak
+./linkedin-content-planner/release/mac-arm64/Content Command Center.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/it_FEMININE.lproj/locale.pak
+./linkedin-content-planner/release/mac-arm64/Content Command Center.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/it_MASCULINE.lproj/locale.pak
+./linkedin-content-planner/release/mac-arm64/Content Command Center.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/it_NEUTER.lproj/locale.pak
+./linkedin-content-planner/release/mac-arm64/Content Command Center.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/ja.lproj/locale.pak
+./linkedin-content-planner/release/mac-arm64/Content Command Center.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/ja_FEMININE.lproj/locale.pak
+./linkedin-content-planner/release/mac-arm64/Content Command Center.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/ja_MASCULINE.lproj/locale.pak
+./linkedin-content-planner/release/mac-arm64/Content Command Center.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/ja_NEUTER.lproj/locale.pak
+./linkedin-content-planner/release/mac-arm64/Content Command Center.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/kn.lproj/locale.pak
+./linkedin-content-planner/release/mac-arm64/Content Command Center.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/kn_FEMININE.lproj/locale.pak
+./linkedin-content-planner/release/mac-arm64/Content Command Center.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/kn_MASCULINE.lproj/locale.pak
+./linkedin-content-planner/release/mac-arm64/Content Command Center.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/kn_NEUTER.lproj/locale.pak
+./linkedin-content-planner/release/mac-arm64/Content Command Center.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/ko.lproj/locale.pak
+./linkedin-content-planner/release/mac-arm64/Content Command Center.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/ko_FEMININE.lproj/locale.pak
+./linkedin-content-planner/release/mac-arm64/Content Command Center.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/ko_MASCULINE.lproj/locale.pak
+./linkedin-content-planner/release/mac-arm64/Content Command Center.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/ko_NEUTER.lproj/locale.pak
+./linkedin-content-planner/release/mac-arm64/Content Command Center.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/lt.lproj/locale.pak
+./linkedin-content-planner/release/mac-arm64/Content Command Center.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/lt_FEMININE.lproj/locale.pak
+./linkedin-content-planner/release/mac-arm64/Content Command Center.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/lt_MASCULINE.lproj/locale.pak
+./linkedin-content-planner/release/mac-arm64/Content Command Center.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/lt_NEUTER.lproj/locale.pak
+./linkedin-content-planner/release/mac-arm64/Content Command Center.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/lv.lproj/locale.pak
+./linkedin-content-planner/release/mac-arm64/Content Command Center.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/lv_FEMININE.lproj/locale.pak
+./linkedin-content-planner/release/mac-arm64/Content Command Center.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/lv_MASCULINE.lproj/locale.pak
+./linkedin-content-planner/release/mac-arm64/Content Command Center.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/lv_NEUTER.lproj/locale.pak
+./linkedin-content-planner/release/mac-arm64/Content Command Center.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/ml.lproj/locale.pak
+./linkedin-content-planner/release/mac-arm64/Content Command Center.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/ml_FEMININE.lproj/locale.pak
+./linkedin-content-planner/release/mac-arm64/Content Command Center.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/ml_MASCULINE.lproj/locale.pak
+./linkedin-content-planner/release/mac-arm64/Content Command Center.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/ml_NEUTER.lproj/locale.pak
+./linkedin-content-planner/release/mac-arm64/Content Command Center.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/mr.lproj/locale.pak
+./linkedin-content-planner/release/mac-arm64/Content Command Center.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/mr_FEMININE.lproj/locale.pak
+./linkedin-content-planner/release/mac-arm64/Content Command Center.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/mr_MASCULINE.lproj/locale.pak
+./linkedin-content-planner/release/mac-arm64/Content Command Center.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/mr_NEUTER.lproj/locale.pak
+./linkedin-content-planner/release/mac-arm64/Content Command Center.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/ms.lproj/locale.pak
+./linkedin-content-planner/release/mac-arm64/Content Command Center.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/ms_FEMININE.lproj/locale.pak
+./linkedin-content-planner/release/mac-arm64/Content Command Center.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/ms_MASCULINE.lproj/locale.pak
+./linkedin-content-planner/release/mac-arm64/Content Command Center.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/ms_NEUTER.lproj/locale.pak
+./linkedin-content-planner/release/mac-arm64/Content Command Center.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/nb.lproj/locale.pak
+./linkedin-content-planner/release/mac-arm64/Content Command Center.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/nb_FEMININE.lproj/locale.pak
+./linkedin-content-planner/release/mac-arm64/Content Command Center.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/nb_MASCULINE.lproj/locale.pak
+./linkedin-content-planner/release/mac-arm64/Content Command Center.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/nb_NEUTER.lproj/locale.pak
+./linkedin-content-planner/release/mac-arm64/Content Command Center.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/nl.lproj/locale.pak
+./linkedin-content-planner/release/mac-arm64/Content Command Center.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/nl_FEMININE.lproj/locale.pak
+./linkedin-content-planner/release/mac-arm64/Content Command Center.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/nl_MASCULINE.lproj/locale.pak
+./linkedin-content-planner/release/mac-arm64/Content Command Center.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/nl_NEUTER.lproj/locale.pak
+./linkedin-content-planner/release/mac-arm64/Content Command Center.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/pl.lproj/locale.pak
+./linkedin-content-planner/release/mac-arm64/Content Command Center.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/pl_FEMININE.lproj/locale.pak
+./linkedin-content-planner/release/mac-arm64/Content Command Center.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/pl_MASCULINE.lproj/locale.pak
+./linkedin-content-planner/release/mac-arm64/Content Command Center.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/pl_NEUTER.lproj/locale.pak
+./linkedin-content-planner/release/mac-arm64/Content Command Center.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/pt_BR.lproj/locale.pak
+./linkedin-content-planner/release/mac-arm64/Content Command Center.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/pt_BR_FEMININE.lproj/locale.pak
+./linkedin-content-planner/release/mac-arm64/Content Command Center.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/pt_BR_MASCULINE.lproj/locale.pak
+./linkedin-content-planner/release/mac-arm64/Content Command Center.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/pt_BR_NEUTER.lproj/locale.pak
+./linkedin-content-planner/release/mac-arm64/Content Command Center.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/pt_PT.lproj/locale.pak
+./linkedin-content-planner/release/mac-arm64/Content Command Center.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/pt_PT_FEMININE.lproj/locale.pak
+./linkedin-content-planner/release/mac-arm64/Content Command Center.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/pt_PT_MASCULINE.lproj/locale.pak
+./linkedin-content-planner/release/mac-arm64/Content Command Center.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/pt_PT_NEUTER.lproj/locale.pak
+./linkedin-content-planner/release/mac-arm64/Content Command Center.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/resources.pak
+./linkedin-content-planner/release/mac-arm64/Content Command Center.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/ro.lproj/locale.pak
+./linkedin-content-planner/release/mac-arm64/Content Command Center.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/ro_FEMININE.lproj/locale.pak
+./linkedin-content-planner/release/mac-arm64/Content Command Center.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/ro_MASCULINE.lproj/locale.pak
+./linkedin-content-planner/release/mac-arm64/Content Command Center.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/ro_NEUTER.lproj/locale.pak
+./linkedin-content-planner/release/mac-arm64/Content Command Center.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/ru.lproj/locale.pak
+./linkedin-content-planner/release/mac-arm64/Content Command Center.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/ru_FEMININE.lproj/locale.pak
+./linkedin-content-planner/release/mac-arm64/Content Command Center.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/ru_MASCULINE.lproj/locale.pak
+./linkedin-content-planner/release/mac-arm64/Content Command Center.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/ru_NEUTER.lproj/locale.pak
+./linkedin-content-planner/release/mac-arm64/Content Command Center.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/sk.lproj/locale.pak
+./linkedin-content-planner/release/mac-arm64/Content Command Center.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/sk_FEMININE.lproj/locale.pak
+./linkedin-content-planner/release/mac-arm64/Content Command Center.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/sk_MASCULINE.lproj/locale.pak
+./linkedin-content-planner/release/mac-arm64/Content Command Center.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/sk_NEUTER.lproj/locale.pak
+./linkedin-content-planner/release/mac-arm64/Content Command Center.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/sl.lproj/locale.pak
+./linkedin-content-planner/release/mac-arm64/Content Command Center.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/sl_FEMININE.lproj/locale.pak
+./linkedin-content-planner/release/mac-arm64/Content Command Center.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/sl_MASCULINE.lproj/locale.pak
+./linkedin-content-planner/release/mac-arm64/Content Command Center.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/sl_NEUTER.lproj/locale.pak
+./linkedin-content-planner/release/mac-arm64/Content Command Center.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/sr.lproj/locale.pak
+./linkedin-content-planner/release/mac-arm64/Content Command Center.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/sr_FEMININE.lproj/locale.pak
+./linkedin-content-planner/release/mac-arm64/Content Command Center.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/sr_MASCULINE.lproj/locale.pak
+./linkedin-content-planner/release/mac-arm64/Content Command Center.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/sr_NEUTER.lproj/locale.pak
+./linkedin-content-planner/release/mac-arm64/Content Command Center.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/sv.lproj/locale.pak
+./linkedin-content-planner/release/mac-arm64/Content Command Center.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/sv_FEMININE.lproj/locale.pak
+./linkedin-content-planner/release/mac-arm64/Content Command Center.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/sv_MASCULINE.lproj/locale.pak
+./linkedin-content-planner/release/mac-arm64/Content Command Center.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/sv_NEUTER.lproj/locale.pak
+./linkedin-content-planner/release/mac-arm64/Content Command Center.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/sw.lproj/locale.pak
+./linkedin-content-planner/release/mac-arm64/Content Command Center.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/sw_FEMININE.lproj/locale.pak
+./linkedin-content-planner/release/mac-arm64/Content Command Center.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/sw_MASCULINE.lproj/locale.pak
+./linkedin-content-planner/release/mac-arm64/Content Command Center.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/sw_NEUTER.lproj/locale.pak
+./linkedin-content-planner/release/mac-arm64/Content Command Center.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/ta.lproj/locale.pak
+./linkedin-content-planner/release/mac-arm64/Content Command Center.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/ta_FEMININE.lproj/locale.pak
+./linkedin-content-planner/release/mac-arm64/Content Command Center.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/ta_MASCULINE.lproj/locale.pak
+./linkedin-content-planner/release/mac-arm64/Content Command Center.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/ta_NEUTER.lproj/locale.pak
+./linkedin-content-planner/release/mac-arm64/Content Command Center.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/te.lproj/locale.pak
+./linkedin-content-planner/release/mac-arm64/Content Command Center.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/te_FEMININE.lproj/locale.pak
+./linkedin-content-planner/release/mac-arm64/Content Command Center.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/te_MASCULINE.lproj/locale.pak
+./linkedin-content-planner/release/mac-arm64/Content Command Center.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/te_NEUTER.lproj/locale.pak
+./linkedin-content-planner/release/mac-arm64/Content Command Center.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/th.lproj/locale.pak
+./linkedin-content-planner/release/mac-arm64/Content Command Center.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/th_FEMININE.lproj/locale.pak
+./linkedin-content-planner/release/mac-arm64/Content Command Center.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/th_MASCULINE.lproj/locale.pak
+./linkedin-content-planner/release/mac-arm64/Content Command Center.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/th_NEUTER.lproj/locale.pak
+./linkedin-content-planner/release/mac-arm64/Content Command Center.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/tr.lproj/locale.pak
+./linkedin-content-planner/release/mac-arm64/Content Command Center.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/tr_FEMININE.lproj/locale.pak
+./linkedin-content-planner/release/mac-arm64/Content Command Center.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/tr_MASCULINE.lproj/locale.pak
+./linkedin-content-planner/release/mac-arm64/Content Command Center.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/tr_NEUTER.lproj/locale.pak
+./linkedin-content-planner/release/mac-arm64/Content Command Center.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/uk.lproj/locale.pak
+./linkedin-content-planner/release/mac-arm64/Content Command Center.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/uk_FEMININE.lproj/locale.pak
+./linkedin-content-planner/release/mac-arm64/Content Command Center.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/uk_MASCULINE.lproj/locale.pak
+./linkedin-content-planner/release/mac-arm64/Content Command Center.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/uk_NEUTER.lproj/locale.pak
+./linkedin-content-planner/release/mac-arm64/Content Command Center.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/ur.lproj/locale.pak
+./linkedin-content-planner/release/mac-arm64/Content Command Center.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/ur_FEMININE.lproj/locale.pak
+./linkedin-content-planner/release/mac-arm64/Content Command Center.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/ur_MASCULINE.lproj/locale.pak
+./linkedin-content-planner/release/mac-arm64/Content Command Center.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/ur_NEUTER.lproj/locale.pak
+./linkedin-content-planner/release/mac-arm64/Content Command Center.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/v8_context_snapshot.arm64.bin
+./linkedin-content-planner/release/mac-arm64/Content Command Center.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/vi.lproj/locale.pak
+./linkedin-content-planner/release/mac-arm64/Content Command Center.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/vi_FEMININE.lproj/locale.pak
+./linkedin-content-planner/release/mac-arm64/Content Command Center.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/vi_MASCULINE.lproj/locale.pak
+./linkedin-content-planner/release/mac-arm64/Content Command Center.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/vi_NEUTER.lproj/locale.pak
+./linkedin-content-planner/release/mac-arm64/Content Command Center.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/zh_CN.lproj/locale.pak
+./linkedin-content-planner/release/mac-arm64/Content Command Center.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/zh_CN_FEMININE.lproj/locale.pak
+./linkedin-content-planner/release/mac-arm64/Content Command Center.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/zh_CN_MASCULINE.lproj/locale.pak
+./linkedin-content-planner/release/mac-arm64/Content Command Center.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/zh_CN_NEUTER.lproj/locale.pak
+./linkedin-content-planner/release/mac-arm64/Content Command Center.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/zh_TW.lproj/locale.pak
+./linkedin-content-planner/release/mac-arm64/Content Command Center.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/zh_TW_FEMININE.lproj/locale.pak
+./linkedin-content-planner/release/mac-arm64/Content Command Center.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/zh_TW_MASCULINE.lproj/locale.pak
+./linkedin-content-planner/release/mac-arm64/Content Command Center.app/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/zh_TW_NEUTER.lproj/locale.pak
+./linkedin-content-planner/release/mac-arm64/Content Command Center.app/Contents/Frameworks/Electron Framework.framework/Versions/A/_CodeSignature/CodeResources
+./linkedin-content-planner/release/mac-arm64/Content Command Center.app/Contents/Frameworks/Mantle.framework/Versions/A/Mantle
+./linkedin-content-planner/release/mac-arm64/Content Command Center.app/Contents/Frameworks/Mantle.framework/Versions/A/Resources/Info.plist
+./linkedin-content-planner/release/mac-arm64/Content Command Center.app/Contents/Frameworks/Mantle.framework/Versions/A/_CodeSignature/CodeResources
+./linkedin-content-planner/release/mac-arm64/Content Command Center.app/Contents/Frameworks/ReactiveObjC.framework/Versions/A/ReactiveObjC
+./linkedin-content-planner/release/mac-arm64/Content Command Center.app/Contents/Frameworks/ReactiveObjC.framework/Versions/A/Resources/Info.plist
+./linkedin-content-planner/release/mac-arm64/Content Command Center.app/Contents/Frameworks/ReactiveObjC.framework/Versions/A/_CodeSignature/CodeResources
+./linkedin-content-planner/release/mac-arm64/Content Command Center.app/Contents/Frameworks/Squirrel.framework/Versions/A/Resources/Info.plist
+./linkedin-content-planner/release/mac-arm64/Content Command Center.app/Contents/Frameworks/Squirrel.framework/Versions/A/Resources/ShipIt
+./linkedin-content-planner/release/mac-arm64/Content Command Center.app/Contents/Frameworks/Squirrel.framework/Versions/A/Squirrel
+./linkedin-content-planner/release/mac-arm64/Content Command Center.app/Contents/Frameworks/Squirrel.framework/Versions/A/_CodeSignature/CodeResources
+./linkedin-content-planner/release/mac-arm64/Content Command Center.app/Contents/Info.plist
+./linkedin-content-planner/release/mac-arm64/Content Command Center.app/Contents/MacOS/Content Command Center
+./linkedin-content-planner/release/mac-arm64/Content Command Center.app/Contents/PkgInfo
+./linkedin-content-planner/release/mac-arm64/Content Command Center.app/Contents/Resources/app.asar
+./linkedin-content-planner/release/mac-arm64/Content Command Center.app/Contents/Resources/electron.icns
+./linkedin-content-planner/release/mac-arm64/Content Command Center.app/Contents/_CodeSignature/CodeResources
+./linkedin-content-planner/src/App.tsx
+./linkedin-content-planner/src/ContentPlanner.tsx
+./linkedin-content-planner/src/ToggleSwitch.tsx
+./linkedin-content-planner/src/assets/react.svg
+./linkedin-content-planner/src/components/DayCard.tsx
+./linkedin-content-planner/src/components/GeminiChat.tsx
+./linkedin-content-planner/src/components/MediaUpload.tsx
+./linkedin-content-planner/src/components/StatCard.tsx
+./linkedin-content-planner/src/components/TimePicker.tsx
+./linkedin-content-planner/src/components/dashboard/CommandCenter.tsx
+./linkedin-content-planner/src/components/dashboard/MarketingAgent.tsx
+./linkedin-content-planner/src/components/dialer/DialerView.tsx
+./linkedin-content-planner/src/components/dialer/VapiDialerView.tsx
+./linkedin-content-planner/src/components/outreach/Compose/ComposeView.tsx
+./linkedin-content-planner/src/components/outreach/OutreachLayout.tsx
+./linkedin-content-planner/src/components/outreach/Performance/PerformanceDashboard.tsx
+./linkedin-content-planner/src/components/outreach/Pipeline/LeadDetailDrawer.tsx
+./linkedin-content-planner/src/components/outreach/Pipeline/LeadImportModal.tsx
+./linkedin-content-planner/src/components/outreach/Pipeline/LeadTable.tsx
+./linkedin-content-planner/src/components/outreach/Pipeline/PipelineView.tsx
+./linkedin-content-planner/src/components/outreach/Pipeline/TodaysActions.tsx
+./linkedin-content-planner/src/components/outreach/Sequences/SequenceEditor.tsx
+./linkedin-content-planner/src/components/outreach/Sequences/SequenceManager.tsx
+./linkedin-content-planner/src/components/outreach/Settings/OutreachSettings.tsx
+./linkedin-content-planner/src/components/outreach/shared/StatusBadge.tsx
+./linkedin-content-planner/src/components/outreach/shared/TierSelector.tsx
+./linkedin-content-planner/src/hooks/useDialerStatus.ts
+./linkedin-content-planner/src/hooks/useMarketingTasks.ts
+./linkedin-content-planner/src/hooks/useOutreachActivities.ts
+./linkedin-content-planner/src/hooks/useOutreachLeads.ts
+./linkedin-content-planner/src/hooks/useOutreachMetrics.ts
+./linkedin-content-planner/src/hooks/useOutreachSequences.ts
+./linkedin-content-planner/src/index.css
+./linkedin-content-planner/src/lib/outreachTemplates.ts
+./linkedin-content-planner/src/lib/postingEngine.ts
+./linkedin-content-planner/src/lib/supabase.ts
+./linkedin-content-planner/src/main.tsx
+./linkedin-content-planner/src/services/outreachGemini.ts
+./linkedin-content-planner/src/services/outreachN8n.ts
+./linkedin-content-planner/src/types.ts
+./linkedin-content-planner/src/types/marketing.ts
+./linkedin-content-planner/src/types/outreach.ts
+./linkedin-content-planner/supabase/migrations/linkedin_content_tables.sql
+./linkedin-content-planner/supabase/migrations/outreach_tables.sql
+./linkedin-content-planner/tsconfig.app.json
+./linkedin-content-planner/tsconfig.json
+./linkedin-content-planner/tsconfig.node.json
+./linkedin-content-planner/vite.config.ts
+./linkedin-content-planner/workflow/content_planner_workflow.json
+./linkedin-content-planner/workflow/linkedin_auto_publisher.json
+./linkedin-content-planner/workflow/linkedin_dm_sender.json
+./linkedin-content-planner/workflow/monthly_content_planner_workflow.json
+./linkedin-content-planner/workflow/schedule_linkedin_workflow.json
+./linkedin-content-planner/workflow/scheduler-blueprint.md
+./optimize_prompt_v3.py
+./optimize_v4.py
+./optimize_workflow.py
+./package-lock.json
+./package.json
+./postcss.config.js
+./project_files.txt
+./public/elinked-discovery-deck.html
+./public/favicon.ico
+./public/placeholder.svg
+./public/robots.txt
+./src/App.tsx
+./src/assets/hero-resume-screening.jpg
+./src/assets/hr20-asia-logo.png
+./src/components/AuthenticatedBackground.tsx
+./src/components/CandidateAnalysisDialog.tsx
+./src/components/ClientThemeProvider.tsx
+./src/components/Dashboard.tsx
+./src/components/FiltersSidebar.tsx
+./src/components/Header.tsx
+./src/components/IntelligenceBadge.tsx
+./src/components/InteractiveResumeMockup.tsx
+./src/components/MainLayout.tsx
+./src/components/MobileHeader.tsx
+./src/components/ModernDashboard.tsx
+./src/components/NavLink.tsx
+./src/components/ProtectedRoute.tsx
+./src/components/ResumeUpload.tsx
+./src/components/Sidebar.tsx
+./src/components/SupabaseTest.tsx
+./src/components/apply/JobLandingStep.tsx
+./src/components/apply/ResumeUploadStep.tsx
+./src/components/apply/ScreeningChatStep.tsx
+./src/components/apply/ThankYouStep.tsx
+./src/components/collaboration/AttachCandidateDialog.tsx
+./src/components/collaboration/CandidateAttachmentCard.tsx
+./src/components/collaboration/CandidateComments.tsx
+./src/components/collaboration/CollaborationHub.tsx
+./src/components/collaboration/ContactWarningDialog.tsx
+./src/components/collaboration/CreateRoomDialog.tsx
+./src/components/collaboration/MessageInput.tsx
+./src/components/collaboration/MessageList.tsx
+./src/components/collaboration/RoomList.tsx
+./src/components/collaboration/RoomMembersPanel.tsx
+./src/components/collaboration/RoomView.tsx
+./src/components/collaboration/StartDiscussionDialog.tsx
+./src/components/dashboard/WeeklyActivityChart.tsx
+./src/components/distribution/DistributeJobDialog.tsx
+./src/components/distribution/DistributionStatusBadge.tsx
+./src/components/distribution/FeedUrlCard.tsx
+./src/components/email-sequence/EmailEditor.tsx
+./src/components/email-sequence/EmailStepCard.tsx
+./src/components/email-sequence/TokenPicker.tsx
+./src/components/growth/AgencyCostCalculator.tsx
+./src/components/growth/GrowthFilters.tsx
+./src/components/growth/GrowthScoreBadge.tsx
+./src/components/growth/GrowthSignalTable.tsx
+./src/components/icp/CompanyBlueprintForm.tsx
+./src/components/icp/CreateICPDialog.tsx
+./src/components/icp/FeatureWeightForm.tsx
+./src/components/icp/ICPCandidateCard.tsx
+./src/components/icp/ICPCandidateModal.tsx
+./src/components/icp/ICPProfileCard.tsx
+./src/components/icp/LiveProcessLog.tsx
+./src/components/icp/LookalikeForm.tsx
+./src/components/icp/PersonaIntentForm.tsx
+./src/components/icp/ProfileDetailModal.tsx
+./src/components/icp/ProfileResultCard.tsx
+./src/components/icp/SmartScoringForm.tsx
+./src/components/icp/StrategyPreviewStep.tsx
+./src/components/icp/StrategyReviewStep.tsx
+./src/components/icp/TargetIndustrySelector.tsx
+./src/components/icp/TechStackForm.tsx
+./src/components/interview/AvailabilityCalendar.tsx
+./src/components/interview/GoogleCalendarConnect.tsx
+./src/components/interview/InterviewCalendarView.tsx
+./src/components/interview/InterviewNotesDialog.tsx
+./src/components/interview/InterviewTypeManager.tsx
+./src/components/interview/ScheduleInterviewDialog.tsx
+./src/components/interview/SimpleScheduleDialog.tsx
+./src/components/interview/UpcomingInterviews.tsx
+./src/components/landing/AnimatedCounter.tsx
+./src/components/landing/BackgroundEffects.tsx
+./src/components/landing/BehavioralEngine.tsx
+./src/components/landing/ClosingCTA.tsx
+./src/components/landing/CustomCursor.tsx
+./src/components/landing/FAQSection.tsx
+./src/components/landing/FeatureCard.tsx
+./src/components/landing/FeatureSet.tsx
+./src/components/landing/FinalCTA.tsx
+./src/components/landing/Footer.tsx
+./src/components/landing/HeroHook.tsx
+./src/components/landing/HowItWorks.tsx
+./src/components/landing/MarqueeBanner.tsx
+./src/components/landing/NoiseOverlay.tsx
+./src/components/landing/OldVsNewComparison.tsx
+./src/components/landing/PremiumBackground.tsx
+./src/components/landing/PricingCard.tsx
+./src/components/landing/ProductDashboard.tsx
+./src/components/landing/ProductLookalike.tsx
+./src/components/landing/ProductScreening.tsx
+./src/components/landing/SavingsCalculator.tsx
+./src/components/landing/SocialProof.tsx
+./src/components/landing/SocialProofMetrics.tsx
+./src/components/landing/TimeMath.tsx
+./src/components/landing/TypewriterText.tsx
+./src/components/lead-scraper/AISearchBar.tsx
+./src/components/lead-scraper/AnalyzedCandidateCard.tsx
+./src/components/lead-scraper/BulkActionBar.tsx
+./src/components/lead-scraper/CandidateCard.tsx
+./src/components/lead-scraper/CandidateDetailModal.tsx
+./src/components/lead-scraper/DeepSearchResults.tsx
+./src/components/lead-scraper/EliteLeadGrid.tsx
+./src/components/lead-scraper/FiltersSidebar.tsx
+./src/components/lead-scraper/HistoryPanel.tsx
+./src/components/lead-scraper/ICPLeadCard.tsx
+./src/components/lead-scraper/ICPLeadsGallery.tsx
+./src/components/lead-scraper/IndustryMultiSelect.tsx
+./src/components/lead-scraper/JobTitleMultiSelect.tsx
+./src/components/lead-scraper/LeadPeekSheet.tsx
+./src/components/lead-scraper/LeadTable.tsx
+./src/components/lead-scraper/LocationMultiSelect.tsx
+./src/components/lead-scraper/MatchScore.tsx
+./src/components/lead-scraper/NameSearchDialog.tsx
+./src/components/lead-scraper/RecentSearches.tsx
+./src/components/lead-scraper/SaveSearchCard.tsx
+./src/components/lead-scraper/SavedSearches.tsx
+./src/components/lead-scraper/ScrapingLoadingState.tsx
+./src/components/lead-scraper/SearchForm.tsx
+./src/components/lead-scraper/SearchHealth.tsx
+./src/components/lead-scraper/StatsCards.tsx
+./src/components/screening/ApplicantCard.tsx
+./src/components/screening/ApplicantDetailModal.tsx
+./src/components/screening/BehavioralAnalysisCard.tsx
+./src/components/screening/CreateJobForm.tsx
+./src/components/screening/InterviewQuestionsPanel.tsx
+./src/components/screening/JobCard.tsx
+./src/components/screening/ScreeningInviteDialog.tsx
+./src/components/screening/analytics/ConversionFunnelChart.tsx
+./src/components/screening/analytics/ScreeningAnalyticsDashboard.tsx
+./src/components/screening/analytics/TimeMetricsCard.tsx
+./src/components/shared/BulkActionBar.tsx
+./src/components/shared/CommandPalette.tsx
+./src/components/shared/EmptyState.tsx
+./src/components/shared/FilterBar.tsx
+./src/components/shared/MetricCard.tsx
+./src/components/shared/NotificationCenter.tsx
+./src/components/shared/PageHeader.tsx
+./src/components/shared/ScorePill.tsx
+./src/components/shared/SkeletonCard.tsx
+./src/components/shared/SlideOverPanel.tsx
+./src/components/shared/StatusBadge.tsx
+./src/components/ui/GradientSlider.tsx
+./src/components/ui/VerdantBackground.tsx
+./src/components/ui/accordion.tsx
+./src/components/ui/alert-dialog.tsx
+./src/components/ui/alert.tsx
+./src/components/ui/aspect-ratio.tsx
+./src/components/ui/avatar.tsx
+./src/components/ui/badge.tsx
+./src/components/ui/breadcrumb.tsx
+./src/components/ui/button.tsx
+./src/components/ui/calendar.tsx
+./src/components/ui/card.tsx
+./src/components/ui/carousel.tsx
+./src/components/ui/chart.tsx
+./src/components/ui/checkbox.tsx
+./src/components/ui/collapsible.tsx
+./src/components/ui/command.tsx
+./src/components/ui/context-menu.tsx
+./src/components/ui/dialog.tsx
+./src/components/ui/drawer.tsx
+./src/components/ui/dropdown-menu.tsx
+./src/components/ui/form.tsx
+./src/components/ui/hover-card.tsx
+./src/components/ui/input-otp.tsx
+./src/components/ui/input.tsx
+./src/components/ui/label.tsx
+./src/components/ui/menubar.tsx
+./src/components/ui/navigation-menu.tsx
+./src/components/ui/pagination.tsx
+./src/components/ui/popover.tsx
+./src/components/ui/progress.tsx
+./src/components/ui/radio-group.tsx
+./src/components/ui/resizable.tsx
+./src/components/ui/scroll-area.tsx
+./src/components/ui/select.tsx
+./src/components/ui/separator.tsx
+./src/components/ui/sheet.tsx
+./src/components/ui/sidebar.tsx
+./src/components/ui/skeleton.tsx
+./src/components/ui/slider.tsx
+./src/components/ui/sonner.tsx
+./src/components/ui/switch.tsx
+./src/components/ui/table.tsx
+./src/components/ui/tabs.tsx
+./src/components/ui/textarea.tsx
+./src/components/ui/toast.tsx
+./src/components/ui/toaster.tsx
+./src/components/ui/toggle-group.tsx
+./src/components/ui/toggle.tsx
+./src/components/ui/tooltip.tsx
+./src/components/ui/use-toast.ts
+./src/contexts/ClientContext.tsx
+./src/contexts/ThemeContext.tsx
+./src/data/industries.ts
+./src/data/locations.ts
+./src/data/taxonomy.ts
+./src/hooks/use-mobile.tsx
+./src/hooks/use-toast.ts
+./src/hooks/useAuth.tsx
+./src/hooks/useAvailability.ts
+./src/hooks/useGoogleCalendar.ts
+./src/hooks/useICPResults.ts
+./src/hooks/useICPSessions.ts
+./src/hooks/useInterviews.ts
+./src/index.css
+./src/integrations/supabase/client.ts
+./src/integrations/supabase/types.ts
+./src/lib/api/icp.ts
+./src/lib/api/screening.ts
+./src/lib/matchBadges.ts
+./src/lib/supabase.ts
+./src/lib/utils.ts
+./src/main.tsx
+./src/pages/Auth.tsx
+./src/pages/BookInterview.tsx
+./src/pages/CandidateApply.tsx
+./src/pages/Candidates.tsx
+./src/pages/ClientDetail.tsx
+./src/pages/ClientMetrics.tsx
+./src/pages/Dashboard.tsx
+./src/pages/DataDashboard.tsx
+./src/pages/DeepSearch.tsx
+./src/pages/EmailSequenceSetup.tsx
+./src/pages/EmailSequences.tsx
+./src/pages/Features.tsx
+./src/pages/FolderView.tsx
+./src/pages/GetDemo.tsx
+./src/pages/GoogleOAuthCallback.tsx
+./src/pages/GrowthSignals.tsx
+./src/pages/ICPCandidateDetail.tsx
+./src/pages/ICPManager.tsx
+./src/pages/ICPResultsPage.tsx
+./src/pages/InterviewScheduler.tsx
+./src/pages/InterviewSettings.tsx
+./src/pages/JobApplicants.tsx
+./src/pages/JobDistribution.tsx
+./src/pages/Landing.tsx
+./src/pages/LeadScraper.tsx
+./src/pages/NotFound.tsx
+./src/pages/Pricing.tsx
+./src/pages/ScreeningJobs.tsx
+./src/remotion/components/AnimatedCounter.tsx
+./src/remotion/components/AnimatedIcon.tsx
+./src/remotion/components/AnimatedText.tsx
+./src/remotion/components/GradientBackground.tsx
+./src/remotion/components/ProgressBar.tsx
+./src/services/candidateService.ts
+./src/services/deepSearchApi.ts
+./src/services/leadScraperApi.ts
+./src/services/n8nApi.ts
+./src/services/sessionApi.ts
+./src/types/AdaptiveScreening.ts
+./src/types/Collaboration.ts
+./src/types/Interview.ts
+./src/types/ResumeAnalysis.ts
+./src/types/icp.ts
+./src/vite-env.d.ts
+./supabase/config.toml
+./supabase/functions/adaptive-screening-chat/index.ts
+./supabase/functions/analyze-behavioral-signals/index.ts
+./supabase/functions/email-tracking/index.ts
+./supabase/functions/generate-screening-invite/index.ts
+./supabase/functions/generate-screening-questions/index.ts
+./supabase/functions/getResumeAnalysis/index.ts
+./supabase/functions/google-calendar-auth/index.ts
+./supabase/functions/google-calendar-events/index.ts
+./supabase/functions/job-feed/index.ts
+./supabase/functions/parse-resume/index.ts
+./supabase/functions/saveResumeAnalysis/index.ts
+./supabase/functions/screen-candidate/index.ts
+./supabase/functions/screening-notifications/index.ts
+./supabase/functions/send-interview-invite/index.ts
+./supabase/functions/send-scheduled-emails/index.ts
+./supabase/migrations/20240620120000_marketing_videos.sql
+./supabase/migrations/20250901090326_a2e0b97d-500f-4d2a-b252-35da2e0fd9dd.sql
+./supabase/migrations/20250902161534_5734d94a-5006-43eb-bed1-c5a2fa65bddd.sql
+./supabase/migrations/20250908103115_c531463e-c465-4b0f-9194-0629636f1063.sql
+./supabase/migrations/20250924112508_a3a0a4f2-7182-4907-ab86-fce0c646f3ac.sql
+./supabase/migrations/20250924165738_fcf4a843-6461-41d9-9cfb-759a1502913a.sql
+./supabase/migrations/20251006083227_9aa8e038-a4c3-4640-bfe1-2bb06504f92e.sql
+./supabase/migrations/20251013161043_7652666e-041f-4bcd-9dd5-0ddbe1fc5907.sql
+./supabase/migrations/20251014163421_9684a7e2-f793-4062-bda1-e1fb44ddd811.sql
+./supabase/migrations/20251014163527_b84b72ad-8873-4445-8b6e-d337603e340a.sql
+./supabase/migrations/20251014163551_d9ab7d83-9eca-40e4-b504-5eb682714ada.sql
+./supabase/migrations/20251017162321_e3fc32fe-c222-4157-b244-3445e98a3b6e.sql
+./supabase/migrations/20251018154603_294fef02-9012-4c2c-8532-11d07a8de982.sql
+./supabase/migrations/20251023082017_81b8fa50-23ca-4ceb-9051-3de3dbb657de.sql
+./supabase/migrations/20251121040559_7c2e98da-77e0-4910-a132-c3b73c4fec52.sql
+./supabase/migrations/20251123120335_a60a048c-7a9b-4eff-856b-e153dd342b2b.sql
+./supabase/migrations/20251123131022_a35b7646-49fb-43d1-ba1b-02e96611c959.sql
+./supabase/migrations/20251202150409_a69d266f-8803-4c85-b447-db927fd09595.sql
+./supabase/migrations/20251203133620_de4bbed0-1ef0-456f-908b-c310b4072041.sql
+./supabase/migrations/20251205102547_30b0673c-fcb7-4681-b383-8816d4b19920.sql
+./supabase/migrations/20251206094826_f5edfcd3-a602-424c-8263-53003125bc67.sql
+./supabase/migrations/20251206101250_92503281-2f21-4a14-8e3b-4a00025581cd.sql
+./supabase/migrations/20251209004316_f343a91a-e82b-4478-9387-b4c429d06c6b.sql
+./supabase/migrations/20251211173016_34ae9dc8-612a-4a70-90a4-04b5961e40b4.sql
+./supabase/migrations/20251220012716_9330afe4-4eb1-42ea-a044-ea34ed0e6565.sql
+./supabase/migrations/20251223234638_502ed15f-1a80-43ff-b11d-2969ebb4e273.sql
+./supabase/migrations/20251224000020_fa5d229e-b434-4f3a-a9e3-483365d96243.sql
+./supabase/migrations/20251224095158_5b83cb83-67d4-4e9e-bb07-da752ee6131c.sql
+./supabase/migrations/20251228022612_9d546d64-45c0-45ee-967a-ba2b0aef260b.sql
+./supabase/migrations/20251229161155_25847aa6-b29b-4319-8d75-dcad5807b733.sql
+./supabase/migrations/20260214141447_d3869193-dd49-4fa5-b4e5-c1d7eb1c4f9b.sql
+./supabase/migrations/20260214142823_705f2b92-59f7-4987-ad60-4b4da6a7b3d3.sql
+./supabase/migrations/20260219164639_3632834e-01f5-404d-a970-0aa174f5ffb6.sql
+./supabase/migrations/20260220094029_1d51e44c-50f0-483b-b1a5-8ba5a3c2d02d.sql
+./supabase/migrations/20260223160000_marketing_tasks.sql
+./supabase/migrations/20260223170000_enable_real_time_linkedin_posts.sql
+./supabase/migrations/20260225180000_add_scheduled_date_linkedin_posts.sql
+./supabase/migrations/outreach.sql
+./sync_trigger.txt
+./tailwind.config.ts
+./test_deploy/agent-console.html
+./test_deploy/deploy.py
+./tsconfig.app.json
+./tsconfig.json
+./tsconfig.node.json
+./update_workflow.py
+./vite.config.ts
+./workflow_deepsearch.json
+./workflow_deepsearch_updated.json
+./workflow_result.json
+./workflows/marketing_video_generator.json

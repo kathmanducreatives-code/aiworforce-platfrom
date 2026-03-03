@@ -23,14 +23,14 @@ export default function OutreachLayout() {
     ] as const;
 
     return (
-        <div style={{ display: "flex", flexDirection: "column", minHeight: "calc(100vh - 48px)", backgroundColor: "#0A0A0B" }}>
+        <div style={{ display: "flex", flexDirection: "column", minHeight: "calc(100vh - 48px)", backgroundColor: "#0a0a0b" }}>
 
             {/* Outreach Sub-Navigation */}
             <header style={{
                 position: "sticky", top: "48px", zIndex: 30, // Stacked below App.tsx nav
                 backgroundColor: "#141416",
-                borderBottom: "1px solid rgba(255,255,255,0.06)",
-                boxShadow: "0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)",
+                borderBottom: "1px solid rgba(255, 255, 255, 0.08)",
+                boxShadow: "0 1px 2px 0 rgba(0, 0, 0, 0.3)",
                 padding: "0 24px", height: "56px",
                 display: "flex", alignItems: "center", justifyContent: "space-between",
             }}>
@@ -45,8 +45,8 @@ export default function OutreachLayout() {
                                 style={{
                                     display: "flex", alignItems: "center", gap: "8px",
                                     height: "100%", background: "transparent", border: "none",
-                                    borderBottom: isActive ? "2px solid #00D4AA" : "2px solid transparent",
-                                    color: isActive ? "#00D4AA" : "#666",
+                                    borderBottom: isActive ? "2px solid #059669" : "2px solid transparent",
+                                    color: isActive ? "#059669" : "#a1a1aa",
                                     fontWeight: isActive ? 600 : 500,
                                     fontSize: "13px", cursor: "pointer", transition: "all 0.2s ease",
                                     position: "relative"

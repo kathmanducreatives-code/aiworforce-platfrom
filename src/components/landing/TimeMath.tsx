@@ -53,8 +53,8 @@ const TimeMath = () => {
                     </div>
                     {rows.map((row, i) => (
                         <div key={i} className={`time-row grid grid-cols-3 gap-0 px-6 py-4 opacity-0 border-b border-white/[0.03] last:border-0 ${row.highlight ? 'bg-emerald-500/[0.06]' : ''}`}>
-                            <span className={`text-sm ${row.highlight ? 'font-bold text-white' : 'text-white/50'}`}>{row.task}</span>
-                            <span className="text-sm text-white/25">{row.manual}</span>
+                            <span className={`text-sm ${row.highlight ? 'font-bold text-white' : 'text-white/60'}`}>{row.task}</span>
+                            <span className="text-sm text-white/40">{row.manual}</span>
                             <span className={`sp-cell text-sm font-semibold opacity-0 ${row.highlight ? 'text-emerald-400 text-base' : 'text-emerald-400/80'}`}>{row.sp}</span>
                         </div>
                     ))}

@@ -1,0 +1,2864 @@
+{
+  "name": "Outreach - Batch Scrape + DM Generator",
+  "nodes": [
+    {
+      "parameters": {
+        "operation": "getAll",
+        "tableId": "outreach_leads",
+        "filterType": "string",
+        "filterString": "scrape_status=is.null&status=neq.dead&tier=in.(tier_1,tier_2)"
+      },
+      "id": "fetch-unscraped-leads",
+      "name": "Fetch Unscraped Leads",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        224,
+        288
+      ],
+      "credentials": {
+        "supabaseApi": {
+          "id": "rZB4OtZ0XKnbuLgp",
+          "name": "Supabase account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "id": "split-in-batches-wf-a",
+      "name": "Split In Batches",
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [
+        528,
+        288
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "const lead = $input.first().json;\nconst company = (lead.company || '').toLowerCase();\n\nconst slug = company\n  .replace(/\\b(inc|incorporated|ltd|limited|llc|gmbh|oy|ab|as|aps|co|corp|corporation|group|holdings|plc|pty|pvt|s\\.?a\\.?|s\\.?r\\.?l\\.?|ag|se|nv|bv)\\b/gi, '')\n  .replace(/[^a-z0-9]/g, '')\n  .trim();\n\nconst scrapeUrl = lead.scrape_url || (slug ? `https://www.${slug}.com` : null);\n\nreturn [{\n  json: {\n    ...lead,\n    scrape_url: scrapeUrl,\n    company_slug: slug,\n    first_name: (lead.contact_name || '').split(' ')[0] || 'there'\n  }\n}];\n"
+      },
+      "id": "build-scrape-url",
+      "name": "Build Scrape URL",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        672,
+        144
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "scrape",
+        "url": "={{ $json.scrape_url }}",
+        "requestOptions": {
+          "timeout": 15000
+        }
+      },
+      "id": "scrape-homepage-wf-a",
+      "name": "Scrape Homepage",
+      "type": "@mendable/n8n-nodes-firecrawl.firecrawl",
+      "typeVersion": 1,
+      "position": [
+        880,
+        304
+      ],
+      "credentials": {
+        "firecrawlApi": {
+          "id": "UHI3DB2bm3hKTLOX",
+          "name": "Firecrawl account"
+        }
+      },
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "conditions": [
+          {
+            "id": "homepage-success-check",
+            "leftValue": "={{ $json.success }}",
+            "rightValue": true,
+            "operator": {
+              "type": "boolean",
+              "operation": "true",
+              "singleValue": true
+            }
+          }
+        ],
+        "options": {}
+      },
+      "id": "check-homepage-scrape",
+      "name": "Check Homepage Scrape",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        1072,
+        304
+      ]
+    },
+    {
+      "parameters": {
+        "amount": 2
+      },
+      "id": "wait-after-homepage",
+      "name": "Wait 2s After Homepage",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        1136,
+        128
+      ],
+      "webhookId": "2950464f-88bb-4856-ab77-fc9be18c2098"
+    },
+    {
+      "parameters": {
+        "operation": "scrape",
+        "url": "={{ $('Build Scrape URL').first().json.scrape_url + '/careers' }}",
+        "requestOptions": {
+          "timeout": 15000
+        }
+      },
+      "id": "scrape-careers-wf-a",
+      "name": "Scrape Careers Page",
+      "type": "@mendable/n8n-nodes-firecrawl.firecrawl",
+      "typeVersion": 1,
+      "position": [
+        1328,
+        128
+      ],
+      "credentials": {
+        "firecrawlApi": {
+          "id": "UHI3DB2bm3hKTLOX",
+          "name": "Firecrawl account"
+        }
+      },
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "amount": 2
+      },
+      "id": "wait-after-careers",
+      "name": "Wait 2s After Careers",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        1488,
+        128
+      ],
+      "webhookId": "7eccd988-ff1a-4477-874c-239214e81a51"
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "const lead = $('Build Scrape URL').first().json;\n\nlet homepageContent = '';\nlet careersContent = '';\n\ntry {\n  const homeResult = $('Scrape Homepage').first().json;\n  homepageContent = homeResult?.data?.markdown || homeResult?.markdown || '';\n} catch (e) { homepageContent = ''; }\n\ntry {\n  const careersResult = $('Scrape Careers Page').first().json;\n  careersContent = careersResult?.data?.markdown || careersResult?.markdown || '';\n} catch (e) { careersContent = ''; }\n\nhomepageContent = homepageContent.substring(0, 3000);\ncareersContent = careersContent.substring(0, 3000);\n\nreturn [{\n  json: {\n    ...lead,\n    homepage_markdown: homepageContent,\n    careers_markdown: careersContent,\n    has_homepage: homepageContent.length > 100,\n    has_careers: careersContent.length > 100\n  }\n}];\n"
+      },
+      "id": "extract-intelligence-wf-a",
+      "name": "Extract Intelligence",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1680,
+        128
+      ]
+    },
+    {
+      "parameters": {
+        "modelId": {
+          "__rl": true,
+          "value": "claude-sonnet-4-5-20250929",
+          "mode": "list",
+          "cachedResultName": "claude-sonnet-4-5-20250929"
+        },
+        "messages": {
+          "values": [
+            {
+              "content": "=Write ONE LinkedIn connection request note (max 300 characters) for this person.\n\nCONTACT:\n- Name: {{ $json.first_name }}\n- Title: {{ $json.title }}\n- Company: {{ $json.company }}\n- Industry: {{ $json.industry }}\n\nTHEIR WEBSITE (scraped):\n{{ $json.homepage_markdown || 'No website found' }}\n\nTHEIR CAREERS/JOBS PAGE (scraped):\n{{ $json.careers_markdown || 'No careers page found' }}\n\nRULES:\n1. Reference ONE specific thing from their website or an open job posting\n2. Connect it to the recruiting pain (agencies are expensive, hiring takes forever)\n3. Sound like a founder who genuinely finds their company interesting\n4. NO product name, NO pitch, NO links \u2014 just peer curiosity\n5. End with a natural reason to connect\n6. MUST be under 300 characters (this is a hard LinkedIn limit)\n\nIf they have open jobs \u2192 mention the specific role and hint at the hiring challenge\nIf no jobs visible \u2192 reference what their company does and connect it to growth/scaling\n\nExamples of GOOD messages:\n- \"Hi Erik \u2014 saw eLinked is hiring 3 electricians across Norway. Niche roles like that must be brutal to source. Curious how you handle it. Would love to connect.\"\n- \"Hi Sarah \u2014 Acme's product looks solid. Scaling from 30 to 50 people is where hiring either flies or breaks. Would be great to connect.\"\n\nExamples of BAD messages (never write these):\n- \"Hi! I noticed your profile and wanted to connect.\" (generic garbage)\n- \"I run a company that helps with recruiting...\" (too salesy)\n- \"Hope this finds you well!\" (corporate spam)\n\nReturn ONLY the message text. Nothing else. No quotes, no explanation."
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "generate-all-messages",
+      "name": "Generate All Messages",
+      "type": "@n8n/n8n-nodes-langchain.anthropic",
+      "typeVersion": 1,
+      "position": [
+        1840,
+        192
+      ],
+      "credentials": {
+        "anthropicApi": {
+          "id": "25K1oHcUbksyzUrz",
+          "name": "Anthropic account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "const ai = $input.first().json;\nconst lead = $('Extract Intelligence').first().json;\n\nlet message = '';\ntry {\n  message = ai.content?.[0]?.text || ai.text || '';\n  message = message.trim().replace(/^[\"']/g, '').replace(/[\"']$/g, '').trim();\n} catch (e) {\n  message = '';\n}\n\nif (!message) {\n  const name = lead.first_name || 'there';\n  const company = lead.company || 'your company';\n  message = `Hi ${name} \u2014 interesting what ${company} is building. Scaling teams is always the hard part. Would love to connect.`;\n}\n\nif (message.length > 300) {\n  message = message.substring(0, 297) + '...';\n}\n\nreturn [{\n  json: {\n    lead_id: lead.id,\n    scrape_url: lead.scrape_url,\n    homepage_markdown: lead.homepage_markdown,\n    careers_markdown: lead.careers_markdown,\n    generated_connection_note: message\n  }\n}];"
+      },
+      "id": "parse-ai-response",
+      "name": "Parse AI Response",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2176,
+        192
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "tableId": "outreach_leads",
+        "filterType": "string",
+        "filterString": "={{ \"id=eq.\" + $json.lead_id }}",
+        "fieldsUi": {
+          "fieldValues": [
+            {
+              "fieldId": "scrape_status",
+              "fieldValue": "success"
+            },
+            {
+              "fieldId": "scrape_url",
+              "fieldValue": "={{ $json.scrape_url }}"
+            },
+            {
+              "fieldId": "scraped_homepage",
+              "fieldValue": "={{ $json.homepage_markdown }}"
+            },
+            {
+              "fieldId": "scraped_careers",
+              "fieldValue": "={{ $json.careers_markdown }}"
+            },
+            {
+              "fieldId": "generated_connection_note",
+              "fieldValue": "={{ $json.generated_connection_note }}"
+            },
+            {
+              "fieldId": "scraped_at",
+              "fieldValue": "={{ new Date().toISOString() }}"
+            }
+          ]
+        }
+      },
+      "id": "store-everything-wf-a",
+      "name": "Store Everything",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        2544,
+        672
+      ],
+      "credentials": {
+        "supabaseApi": {
+          "id": "rZB4OtZ0XKnbuLgp",
+          "name": "Supabase account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "tableId": "outreach_leads",
+        "filterType": "string",
+        "filterString": "={{ \"id=eq.\" + $('Split In Batches').first().json.id }}",
+        "fieldsUi": {
+          "fieldValues": [
+            {
+              "fieldId": "scrape_status",
+              "fieldValue": "failed_scrape"
+            },
+            {
+              "fieldId": "updated_at",
+              "fieldValue": "={{ new Date().toISOString() }}"
+            }
+          ]
+        }
+      },
+      "id": "mark-failed-scrape-wf-a",
+      "name": "Mark Failed Scrape",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        1216,
+        608
+      ],
+      "credentials": {
+        "supabaseApi": {
+          "id": "rZB4OtZ0XKnbuLgp",
+          "name": "Supabase account"
+        }
+      },
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "// Add a new field called 'myNewField' to the JSON of the item\n$input.item.json.myNewField = 1;\n\nreturn $input.item;"
+      },
+      "id": "batch-complete-summary",
+      "name": "Batch Complete Summary",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        768,
+        448
+      ]
+    },
+    {
+      "parameters": {},
+      "id": "manual-trigger-wf-a",
+      "name": "Manual Trigger",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        -112,
+        528
+      ]
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "f6deaac1-f225-408e-9f6d-366833d2bc65",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        -112,
+        160
+      ],
+      "id": "044bf2d6-4fee-4305-8563-e1eb4391d0bc",
+      "name": "Webhook",
+      "webhookId": "f6deaac1-f225-408e-9f6d-366833d2bc65"
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "const payload = $input.first().json;\nconst items = payload.body?.leads || payload.leads || [];\nreturn items.map(lead => ({ json: lead }));"
+      },
+      "id": "extract-leads-from-webhook",
+      "name": "Extract Webhook Leads",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        80,
+        160
+      ]
+    }
+  ],
+  "pinData": {
+    "Webhook": [
+      {
+        "json": {
+          "headers": {
+            "host": "n8n.prasidha.me",
+            "user-agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.3 Safari/605.1.15",
+            "content-length": "95080",
+            "accept": "*/*",
+            "accept-encoding": "gzip, deflate, br, zstd",
+            "accept-language": "en-GB,en-US;q=0.9,en;q=0.8",
+            "content-type": "application/json",
+            "origin": "http://localhost:5173",
+            "priority": "u=3, i",
+            "referer": "http://localhost:5173/",
+            "sec-fetch-dest": "empty",
+            "sec-fetch-mode": "cors",
+            "sec-fetch-site": "cross-site",
+            "via": "2.0 Caddy",
+            "x-forwarded-for": "27.34.67.113",
+            "x-forwarded-host": "n8n.prasidha.me",
+            "x-forwarded-proto": "https"
+          },
+          "params": {},
+          "query": {},
+          "body": {
+            "leads": [
+              {
+                "id": "0541db79-b71c-4a7a-b122-bdb4a1b5112e",
+                "company": "Unknown Company",
+                "contact_name": "Jessica",
+                "title": "Chief People Officer",
+                "email": "jessicavail@yahoo.com",
+                "linkedin_url": "https://linkedin.com/in/jessica-bacher-084b10b",
+                "industry": null,
+                "company_size": null,
+                "notes": null,
+                "tier": "unassigned",
+                "status": "not_started",
+                "signals": [
+                  {
+                    "hook": "Noticed your team is actively expanding, particularly with several key People leadership roles \u2013 exciting times for growth!",
+                    "type": "hiring",
+                    "detail": "This indicates significant growth or a strategic shift in the company's people strategy, likely putting pressure on existing HR infrastructure, processes, and the CPO's team to scale effectively. It suggests a focus on talent acquisition, employee experience, and operational efficiency, all key areas for a CPO.",
+                    "summary": "The company is aggressively hiring for multiple senior People/HR roles, including a Head of Talent Acquisition and a VP of People Operations.",
+                    "confidence": "high",
+                    "date_detected": "2024-05-20"
+                  },
+                  {
+                    "hook": "Saw the news about your recent implementation of a new HRIS \u2013 how's the team adapting to the new system and maximizing its value?",
+                    "type": "tech_change",
+                    "detail": "While new technology aims to solve problems, it often creates new challenges around adoption, integration with other systems, or identifying gaps the new system doesn't fully address. A CPO would be focused on maximizing ROI and ensuring smooth operations post-implementation, potentially looking for complementary solutions or optimization strategies.",
+                    "summary": "The company recently announced or completed the implementation of a new HRIS or employee experience platform.",
+                    "confidence": "medium",
+                    "date_detected": "2024-04-15"
+                  },
+                  {
+                    "hook": "Really resonated with your recent article on 'Strategies for Employee Retention in Hybrid Work' \u2013 especially your point about fostering connection in distributed teams.",
+                    "type": "content_signal",
+                    "detail": "This directly highlights a current strategic priority and potential pain point for Jessica and her organization. It provides a clear entry point to discuss solutions related to retention, engagement, or hybrid work challenges, demonstrating that you understand her current focus.",
+                    "summary": "Jessica (or the company's People team) recently published an article or hosted a webinar discussing strategies for improving employee retention and engagement in a hybrid work environment.",
+                    "confidence": "high",
+                    "date_detected": "2024-05-10"
+                  },
+                  {
+                    "hook": "Given the recent industry reports on the growing talent shortage in [Generic Industry Type], I imagine you're focused on innovative strategies to attract and retain top talent.",
+                    "type": "pain_indicator",
+                    "detail": "Even without specific company data, industry trends directly impact a CPO's ability to attract, hire, and retain top talent. This signal suggests a likely challenge that Jessica is actively working to address, making her receptive to solutions that can mitigate these industry-wide pressures.",
+                    "summary": "Recent industry reports indicate a significant talent shortage and increasing competition for skilled professionals within the company's sector.",
+                    "confidence": "medium",
+                    "date_detected": "2024-05-01"
+                  }
+                ],
+                "sequence_id": null,
+                "current_sequence_step": 0,
+                "last_touch_date": null,
+                "next_action_date": null,
+                "created_at": "2026-02-28T02:58:42.967751+00:00",
+                "updated_at": "2026-02-28T10:18:59.140328+00:00",
+                "closely_synced": false,
+                "closely_connection_status": "none",
+                "closely_last_event": null,
+                "closely_last_event_at": null,
+                "linkedin_slug": null,
+                "scrape_status": null,
+                "scrape_url": null,
+                "scraped_homepage": null,
+                "scraped_careers": null,
+                "generated_connection_note": null,
+                "generated_dm_step2": null,
+                "generated_dm_step3": null,
+                "generated_dm_step4": null,
+                "scraped_at": null
+              },
+              {
+                "id": "ea3a4f8e-0a26-4067-bcf2-81b8ae31c841",
+                "company": "Unknown Company",
+                "contact_name": "Erika",
+                "title": "CEO",
+                "email": "vendettalove@yahoo.com",
+                "linkedin_url": "https://linkedin.com/in/eklotz",
+                "industry": null,
+                "company_size": null,
+                "notes": null,
+                "tier": "unassigned",
+                "status": "not_started",
+                "signals": [
+                  {
+                    "hook": "To help you craft a personalized outreach for Erika, could you please provide the specific name of the company you're targeting?",
+                    "type": "trigger_event",
+                    "detail": "To generate actionable outbound signals, I require a specific company name, industry, or additional context. The provided 'Unknown Company' and 'Unknown' industry prevent any meaningful research.",
+                    "summary": "Insufficient company information provided for research.",
+                    "confidence": "high",
+                    "date_detected": null
+                  }
+                ],
+                "sequence_id": null,
+                "current_sequence_step": 0,
+                "last_touch_date": null,
+                "next_action_date": null,
+                "created_at": "2026-02-28T02:58:42.967751+00:00",
+                "updated_at": "2026-02-28T10:14:13.756491+00:00",
+                "closely_synced": false,
+                "closely_connection_status": "none",
+                "closely_last_event": null,
+                "closely_last_event_at": null,
+                "linkedin_slug": null,
+                "scrape_status": null,
+                "scrape_url": null,
+                "scraped_homepage": null,
+                "scraped_careers": null,
+                "generated_connection_note": null,
+                "generated_dm_step2": null,
+                "generated_dm_step3": null,
+                "generated_dm_step4": null,
+                "scraped_at": null
+              },
+              {
+                "id": "8e0d9f6f-0c4c-49ea-938f-650b0525de61",
+                "company": "Unknown Company",
+                "contact_name": "Jesus",
+                "title": "Marketing & Business Development Director/ Speaker / Coach / Consultant",
+                "email": "jesalazarportillo@gmail.com",
+                "linkedin_url": "https://linkedin.com/in/jesus-salazar-84139652",
+                "industry": null,
+                "company_size": null,
+                "notes": null,
+                "tier": "unassigned",
+                "status": "not_started",
+                "signals": [
+                  {
+                    "hook": "Noticed your impressive work as a Speaker, Coach, and Consultant \u2013 how are you currently streamlining client acquisition and content leverage across those different hats?",
+                    "type": "pain_indicator",
+                    "detail": "Individuals with these roles often seek solutions for lead generation, CRM, content creation/repurposing, scheduling, and demonstrating value to clients. This indicates a potential need for tools that support personal branding, thought leadership, and client engagement.",
+                    "summary": "Jesus's diverse roles as Speaker, Coach, and Consultant suggest a need for efficient management of his personal brand, client pipeline, and content across multiple platforms.",
+                    "confidence": "high",
+                    "date_detected": null
+                  },
+                  {
+                    "hook": "As the Marketing & Business Development Director for Unknown Company, I imagine you're constantly looking for innovative ways to accelerate growth \u2013 what's your biggest focus for lead generation right now?",
+                    "type": "pain_indicator",
+                    "detail": "This role inherently involves challenges related to generating qualified leads, optimizing conversion funnels, market penetration, and proving marketing ROI. He is likely seeking solutions that can enhance these core functions for the company.",
+                    "summary": "As a Marketing & Business Development Director, Jesus is directly responsible for driving growth and expanding the market reach for Unknown Company.",
+                    "confidence": "high",
+                    "date_detected": null
+                  },
+                  {
+                    "hook": "Given your impressive blend of responsibilities as a Director and also a Speaker/Coach/Consultant, I'm curious how you manage to optimize your time and impact across all your ventures?",
+                    "type": "pain_indicator",
+                    "detail": "Managing multiple high-level responsibilities can lead to challenges in time management, resource allocation, and avoiding burnout. Solutions that offer automation, process streamlining, or enhanced productivity tools would be highly relevant to help him manage his diverse workload effectively.",
+                    "summary": "Jesus balances a demanding internal director role with external speaking, coaching, and consulting engagements, indicating a potential need for efficiency and automation.",
+                    "confidence": "high",
+                    "date_detected": null
+                  },
+                  {
+                    "hook": "As a Marketing & Business Development Consultant, you're likely always on the lookout for cutting-edge tools to recommend to your clients \u2013 have you explored solutions for [my solution area] recently?",
+                    "type": "trigger_event",
+                    "detail": "Consultants are often early evaluators of new technologies and strategies, either to implement in their own practice or to recommend to their clients. This makes him a prime candidate for learning about new solutions that could benefit his clients or enhance his own consulting services.",
+                    "summary": "As a consultant, Jesus likely advises clients on marketing and business development strategies, requiring him to stay updated on the latest tools and solutions.",
+                    "confidence": "medium",
+                    "date_detected": null
+                  }
+                ],
+                "sequence_id": null,
+                "current_sequence_step": 0,
+                "last_touch_date": null,
+                "next_action_date": null,
+                "created_at": "2026-02-28T02:58:42.967751+00:00",
+                "updated_at": "2026-02-28T10:14:28.798679+00:00",
+                "closely_synced": false,
+                "closely_connection_status": "none",
+                "closely_last_event": null,
+                "closely_last_event_at": null,
+                "linkedin_slug": null,
+                "scrape_status": null,
+                "scrape_url": null,
+                "scraped_homepage": null,
+                "scraped_careers": null,
+                "generated_connection_note": null,
+                "generated_dm_step2": null,
+                "generated_dm_step3": null,
+                "generated_dm_step4": null,
+                "scraped_at": null
+              },
+              {
+                "id": "793a40fb-aeb2-4edf-b2fc-bac5569a24a3",
+                "company": "Unknown Company",
+                "contact_name": "Chris",
+                "title": "CEO & Co-Founder",
+                "email": "krzysztof.parjaszewski@gmail.com",
+                "linkedin_url": "https://linkedin.com/in/chrisparjaszewski",
+                "industry": null,
+                "company_size": null,
+                "notes": null,
+                "tier": "unassigned",
+                "status": "not_started",
+                "signals": [
+                  {
+                    "hook": "Congratulations on Unknown Company's *hypothetical* recent Series A funding \u2013 exciting times for growth and innovation!",
+                    "type": "funding",
+                    "detail": "In a real scenario, new funding often signals a strategic pivot or accelerated growth, leading to increased budget for new solutions and a need to scale operations. As CEO, Chris would be directly involved in allocating these resources to drive expansion and improve efficiency.",
+                    "summary": "Hypothetically, Unknown Company recently secured a Series A funding round, indicating potential growth and expansion plans.",
+                    "confidence": "low",
+                    "date_detected": null
+                  },
+                  {
+                    "hook": "Noticed Unknown Company *might be* expanding its team significantly \u2013 what are your biggest priorities as you scale operations?",
+                    "type": "hiring",
+                    "detail": "In a real scenario, a surge in hiring, especially in growth-oriented departments, indicates the company is expanding its market reach or developing new offerings. This often creates new challenges around onboarding, team management, and ensuring productivity, which Chris, as CEO, would be keen to address.",
+                    "summary": "Hypothetically, Unknown Company is actively hiring for multiple roles in sales, marketing, and product development, suggesting a period of significant team expansion.",
+                    "confidence": "low",
+                    "date_detected": null
+                  },
+                  {
+                    "hook": "Just saw the *hypothetical* announcement about Unknown Company's new [Product/Feature Name] \u2013 how are you ensuring its successful adoption and impact for your customers?",
+                    "type": "content_signal",
+                    "detail": "In a real scenario, launching new products or features signifies a focus on innovation and market expansion. This often comes with challenges related to market adoption, customer success, and ensuring the new offering integrates smoothly with existing operations, all of which fall under Chris's strategic oversight.",
+                    "summary": "Hypothetically, Unknown Company announced a major new product feature or service offering, indicating a focus on innovation.",
+                    "confidence": "low",
+                    "date_detected": null
+                  }
+                ],
+                "sequence_id": null,
+                "current_sequence_step": 0,
+                "last_touch_date": null,
+                "next_action_date": null,
+                "created_at": "2026-02-28T02:58:42.967751+00:00",
+                "updated_at": "2026-02-28T10:13:37.402902+00:00",
+                "closely_synced": false,
+                "closely_connection_status": "none",
+                "closely_last_event": null,
+                "closely_last_event_at": null,
+                "linkedin_slug": null,
+                "scrape_status": null,
+                "scrape_url": null,
+                "scraped_homepage": null,
+                "scraped_careers": null,
+                "generated_connection_note": null,
+                "generated_dm_step2": null,
+                "generated_dm_step3": null,
+                "generated_dm_step4": null,
+                "scraped_at": null
+              },
+              {
+                "id": "e5f3670b-9785-4f7b-b66f-11a9f2c87ee5",
+                "company": "Unknown Company",
+                "contact_name": "Brendan",
+                "title": "Founder/Head of Talent Acquisition",
+                "email": "brendanrobrien@gmail.com",
+                "linkedin_url": "https://linkedin.com/in/brendanrobrien",
+                "industry": null,
+                "company_size": null,
+                "notes": null,
+                "tier": "unassigned",
+                "status": "not_started",
+                "signals": [],
+                "sequence_id": null,
+                "current_sequence_step": 0,
+                "last_touch_date": null,
+                "next_action_date": null,
+                "created_at": "2026-02-28T02:58:42.967751+00:00",
+                "updated_at": "2026-02-28T02:58:42.967751+00:00",
+                "closely_synced": false,
+                "closely_connection_status": "none",
+                "closely_last_event": null,
+                "closely_last_event_at": null,
+                "linkedin_slug": null,
+                "scrape_status": null,
+                "scrape_url": null,
+                "scraped_homepage": null,
+                "scraped_careers": null,
+                "generated_connection_note": null,
+                "generated_dm_step2": null,
+                "generated_dm_step3": null,
+                "generated_dm_step4": null,
+                "scraped_at": null
+              },
+              {
+                "id": "cf1ecd14-2e03-4367-a3ef-d5d815e7a60e",
+                "company": "Unknown Company",
+                "contact_name": "Tj",
+                "title": "Founder",
+                "email": "tjkastning@gmail.com",
+                "linkedin_url": "https://linkedin.com/in/tjkastning",
+                "industry": null,
+                "company_size": null,
+                "notes": null,
+                "tier": "unassigned",
+                "status": "not_started",
+                "signals": [],
+                "sequence_id": null,
+                "current_sequence_step": 0,
+                "last_touch_date": null,
+                "next_action_date": null,
+                "created_at": "2026-02-28T02:58:42.967751+00:00",
+                "updated_at": "2026-02-28T02:58:42.967751+00:00",
+                "closely_synced": false,
+                "closely_connection_status": "none",
+                "closely_last_event": null,
+                "closely_last_event_at": null,
+                "linkedin_slug": null,
+                "scrape_status": null,
+                "scrape_url": null,
+                "scraped_homepage": null,
+                "scraped_careers": null,
+                "generated_connection_note": null,
+                "generated_dm_step2": null,
+                "generated_dm_step3": null,
+                "generated_dm_step4": null,
+                "scraped_at": null
+              },
+              {
+                "id": "bfc6ed3e-ae33-44f3-a20a-1c25e8af0322",
+                "company": "Unknown Company",
+                "contact_name": "Daniel",
+                "title": "Creative Director",
+                "email": "hulld2@gmail.com",
+                "linkedin_url": "https://linkedin.com/in/daniel-hull-60582b18",
+                "industry": null,
+                "company_size": null,
+                "notes": null,
+                "tier": "unassigned",
+                "status": "not_started",
+                "signals": [],
+                "sequence_id": null,
+                "current_sequence_step": 0,
+                "last_touch_date": null,
+                "next_action_date": null,
+                "created_at": "2026-02-28T02:58:42.967751+00:00",
+                "updated_at": "2026-02-28T02:58:42.967751+00:00",
+                "closely_synced": false,
+                "closely_connection_status": "none",
+                "closely_last_event": null,
+                "closely_last_event_at": null,
+                "linkedin_slug": null,
+                "scrape_status": null,
+                "scrape_url": null,
+                "scraped_homepage": null,
+                "scraped_careers": null,
+                "generated_connection_note": null,
+                "generated_dm_step2": null,
+                "generated_dm_step3": null,
+                "generated_dm_step4": null,
+                "scraped_at": null
+              },
+              {
+                "id": "dceea85f-f537-4200-b452-8af222009c90",
+                "company": "Unknown Company",
+                "contact_name": "Chad",
+                "title": "Registered Nurse",
+                "email": "chawthorne41@gmail.com",
+                "linkedin_url": "https://linkedin.com/in/chad-hawthorne-bb1819126",
+                "industry": null,
+                "company_size": null,
+                "notes": null,
+                "tier": "unassigned",
+                "status": "not_started",
+                "signals": [],
+                "sequence_id": null,
+                "current_sequence_step": 0,
+                "last_touch_date": null,
+                "next_action_date": null,
+                "created_at": "2026-02-28T02:58:42.967751+00:00",
+                "updated_at": "2026-02-28T02:58:42.967751+00:00",
+                "closely_synced": false,
+                "closely_connection_status": "none",
+                "closely_last_event": null,
+                "closely_last_event_at": null,
+                "linkedin_slug": null,
+                "scrape_status": null,
+                "scrape_url": null,
+                "scraped_homepage": null,
+                "scraped_careers": null,
+                "generated_connection_note": null,
+                "generated_dm_step2": null,
+                "generated_dm_step3": null,
+                "generated_dm_step4": null,
+                "scraped_at": null
+              },
+              {
+                "id": "cba8d99d-733d-4701-b165-69d8ff796fff",
+                "company": "Unknown Company",
+                "contact_name": "James",
+                "title": "Vice President Human Resources",
+                "email": "jmarble76@gmail.com",
+                "linkedin_url": "https://linkedin.com/in/james-marble-shrm-cp",
+                "industry": null,
+                "company_size": null,
+                "notes": null,
+                "tier": "unassigned",
+                "status": "not_started",
+                "signals": [],
+                "sequence_id": null,
+                "current_sequence_step": 0,
+                "last_touch_date": null,
+                "next_action_date": null,
+                "created_at": "2026-02-28T02:58:42.967751+00:00",
+                "updated_at": "2026-02-28T02:58:42.967751+00:00",
+                "closely_synced": false,
+                "closely_connection_status": "none",
+                "closely_last_event": null,
+                "closely_last_event_at": null,
+                "linkedin_slug": null,
+                "scrape_status": null,
+                "scrape_url": null,
+                "scraped_homepage": null,
+                "scraped_careers": null,
+                "generated_connection_note": null,
+                "generated_dm_step2": null,
+                "generated_dm_step3": null,
+                "generated_dm_step4": null,
+                "scraped_at": null
+              },
+              {
+                "id": "15e00586-1b03-40f5-baaa-d80bb38827df",
+                "company": "Unknown Company",
+                "contact_name": "Genny",
+                "title": "Chief Executive Officer",
+                "email": "gennycast@hotmail.com",
+                "linkedin_url": "https://linkedin.com/in/genny-castellanos-esq-73b5a517",
+                "industry": null,
+                "company_size": null,
+                "notes": null,
+                "tier": "unassigned",
+                "status": "not_started",
+                "signals": [],
+                "sequence_id": null,
+                "current_sequence_step": 0,
+                "last_touch_date": null,
+                "next_action_date": null,
+                "created_at": "2026-02-28T02:58:42.967751+00:00",
+                "updated_at": "2026-02-28T02:58:42.967751+00:00",
+                "closely_synced": false,
+                "closely_connection_status": "none",
+                "closely_last_event": null,
+                "closely_last_event_at": null,
+                "linkedin_slug": null,
+                "scrape_status": null,
+                "scrape_url": null,
+                "scraped_homepage": null,
+                "scraped_careers": null,
+                "generated_connection_note": null,
+                "generated_dm_step2": null,
+                "generated_dm_step3": null,
+                "generated_dm_step4": null,
+                "scraped_at": null
+              },
+              {
+                "id": "79e4f8d1-3b57-4349-974b-3d00b72d1cc3",
+                "company": "Unknown Company",
+                "contact_name": "Jesse",
+                "title": "| The Recruiter Gunslinger |",
+                "email": "jesseolinger@yahoo.com",
+                "linkedin_url": "https://linkedin.com/in/jessejamesolinger",
+                "industry": null,
+                "company_size": null,
+                "notes": null,
+                "tier": "unassigned",
+                "status": "not_started",
+                "signals": [],
+                "sequence_id": null,
+                "current_sequence_step": 0,
+                "last_touch_date": null,
+                "next_action_date": null,
+                "created_at": "2026-02-28T02:58:42.967751+00:00",
+                "updated_at": "2026-02-28T02:58:42.967751+00:00",
+                "closely_synced": false,
+                "closely_connection_status": "none",
+                "closely_last_event": null,
+                "closely_last_event_at": null,
+                "linkedin_slug": null,
+                "scrape_status": null,
+                "scrape_url": null,
+                "scraped_homepage": null,
+                "scraped_careers": null,
+                "generated_connection_note": null,
+                "generated_dm_step2": null,
+                "generated_dm_step3": null,
+                "generated_dm_step4": null,
+                "scraped_at": null
+              },
+              {
+                "id": "ba0f6654-5da7-4c3d-bdff-6e936ed5c117",
+                "company": "Unknown Company",
+                "contact_name": "Becky",
+                "title": "Senior Managing Director",
+                "email": "becky.litvack@gmail.com",
+                "linkedin_url": "https://linkedin.com/in/beckygarson",
+                "industry": null,
+                "company_size": null,
+                "notes": null,
+                "tier": "unassigned",
+                "status": "not_started",
+                "signals": [
+                  {
+                    "hook": "Becky, while these are hypothetical examples for 'GlobalTech Solutions', if you could share your actual company name, I'd be happy to find specific, actionable insights for your outreach \u2013 are there any current initiatives you're focused on?",
+                    "type": "pain_indicator",
+                    "detail": "To provide actionable signals, a specific company name, industry, and ideally a website or LinkedIn profile are required for actual research. This entry clarifies the hypothetical nature of the following signals.",
+                    "summary": "The company was specified as 'Unknown Company' with 'Unknown' industry and size. Therefore, these signals are hypothetical examples for a generic B2B enterprise, 'GlobalTech Solutions', to demonstrate the requested format.",
+                    "confidence": "low",
+                    "date_detected": null
+                  },
+                  {
+                    "hook": "Becky, I noticed GlobalTech Solutions is hiring for a Head of Digital Transformation \u2013 are you currently exploring new strategies or partners to accelerate your cloud adoption initiatives?",
+                    "type": "hiring",
+                    "detail": "This indicates a strategic focus on modernizing infrastructure, adopting new technologies, or improving digital processes. Becky, as a Senior Managing Director, would likely be involved in or impacted by such large-scale strategic initiatives, potentially looking for solutions to facilitate these changes.",
+                    "summary": "GlobalTech Solutions is actively recruiting for a 'Head of Digital Transformation' and several 'Senior Cloud Architects' across various platforms.",
+                    "confidence": "high",
+                    "date_detected": "2023-10-25"
+                  },
+                  {
+                    "hook": "Becky, I found GlobalTech Solutions' whitepaper on AI ethics fascinating \u2013 are you currently evaluating solutions that help ensure responsible and compliant AI integration across your enterprise?",
+                    "type": "content_signal",
+                    "detail": "This highlights a strategic interest or concern in AI ethics, data governance, or responsible AI implementation. If your solution addresses these areas, it's a strong alignment. Becky, as a Senior Managing Director, would be concerned with the strategic implications and risks associated with AI deployment.",
+                    "summary": "GlobalTech Solutions recently published a whitepaper titled 'Navigating AI Ethics in Enterprise Solutions' on their corporate blog, emphasizing responsible AI deployment.",
+                    "confidence": "medium",
+                    "date_detected": "2023-10-18"
+                  },
+                  {
+                    "hook": "Becky, congratulations on GlobalTech Solutions' new cybersecurity partnership \u2013 are you also exploring ways to streamline the integration of new security protocols across your existing platforms?",
+                    "type": "trigger_event",
+                    "detail": "A new partnership often signals a focus on strengthening specific areas (like security), expanding capabilities, or addressing market demands. This could open doors for complementary solutions or indicate a need for integration support. Becky would be keen on leveraging such partnerships for strategic growth.",
+                    "summary": "GlobalTech Solutions announced a new strategic partnership with a leading cybersecurity firm to enhance their data protection offerings and expand their security portfolio.",
+                    "confidence": "high",
+                    "date_detected": "2023-10-05"
+                  }
+                ],
+                "sequence_id": null,
+                "current_sequence_step": 0,
+                "last_touch_date": null,
+                "next_action_date": null,
+                "created_at": "2026-02-28T02:58:42.967751+00:00",
+                "updated_at": "2026-02-28T10:16:21.346435+00:00",
+                "closely_synced": false,
+                "closely_connection_status": "none",
+                "closely_last_event": null,
+                "closely_last_event_at": null,
+                "linkedin_slug": null,
+                "scrape_status": null,
+                "scrape_url": null,
+                "scraped_homepage": null,
+                "scraped_careers": null,
+                "generated_connection_note": null,
+                "generated_dm_step2": null,
+                "generated_dm_step3": null,
+                "generated_dm_step4": null,
+                "scraped_at": null
+              },
+              {
+                "id": "da2c0b95-a575-4a36-b79d-0eb643ecd21c",
+                "company": "Unknown Company",
+                "contact_name": "Cody",
+                "title": "Director of Recruiting",
+                "email": "codylfriend@gmail.com",
+                "linkedin_url": "https://linkedin.com/in/codyfriend",
+                "industry": null,
+                "company_size": null,
+                "notes": null,
+                "tier": "unassigned",
+                "status": "not_started",
+                "signals": [
+                  {
+                    "hook": "Cody, I often hear from Directors of Recruiting that balancing rapid hiring with maintaining candidate quality is a constant challenge \u2013 how are you tackling that at [Company Name]?",
+                    "type": "pain_indicator",
+                    "detail": "Directors of Recruiting are constantly under pressure to meet aggressive hiring targets, reduce time-to-fill, and ensure the quality of new hires. This is a universal and ongoing challenge for the role, making it a strong entry point for solutions that improve efficiency, sourcing, or assessment.",
+                    "summary": "Companies often face challenges in scaling their hiring efforts efficiently while maintaining candidate quality.",
+                    "confidence": "high",
+                    "date_detected": null
+                  },
+                  {
+                    "hook": "Cody, with many companies finalizing their talent acquisition strategies for the upcoming year, I was curious if you're exploring new ways to optimize your recruiting process at [Company Name]?",
+                    "type": "trigger_event",
+                    "detail": "Around specific times of the year (e.g., Q4 for next year's budget, Q1 for execution), Directors of Recruiting evaluate their current tech stack, vendor relationships, and strategic initiatives. This period presents an opportunity to introduce solutions that align with upcoming goals or address identified gaps.",
+                    "summary": "Companies typically engage in annual planning and budgeting cycles, which include strategic reviews of talent acquisition processes and technology.",
+                    "confidence": "medium",
+                    "date_detected": null
+                  },
+                  {
+                    "hook": "Cody, I recently came across an article discussing the impact of candidate experience on offer acceptance rates, and it made me wonder how you're prioritizing that at [Company Name]?",
+                    "type": "pain_indicator",
+                    "detail": "A positive candidate experience and a strong employer brand are critical for attracting top talent and increasing offer acceptance rates. Directors of Recruiting are always looking for strategies and tools to enhance these areas, as they directly impact hiring success and company reputation.",
+                    "summary": "In a competitive talent market, Directors of Recruiting are continuously focused on improving candidate experience and strengthening employer branding.",
+                    "confidence": "high",
+                    "date_detected": null
+                  },
+                  {
+                    "hook": "Cody, I often speak with recruiting leaders who are looking for ways to get more out of their ATS or streamline their recruiting tech stack \u2013 is that something on your radar at [Company Name]?",
+                    "type": "pain_indicator",
+                    "detail": "Directors of Recruiting are responsible for ensuring their team has the right tools and that those tools are being used effectively. Common challenges include inefficient workflows, poor data quality, lack of integration between systems, or a desire to adopt AI/automation to boost recruiter productivity.",
+                    "summary": "Many recruiting teams struggle to fully leverage their existing ATS/CRM or are considering upgrades/integrations to improve efficiency and data insights.",
+                    "confidence": "high",
+                    "date_detected": null
+                  }
+                ],
+                "sequence_id": null,
+                "current_sequence_step": 0,
+                "last_touch_date": null,
+                "next_action_date": null,
+                "created_at": "2026-02-28T02:58:42.967751+00:00",
+                "updated_at": "2026-02-28T10:16:35.725368+00:00",
+                "closely_synced": false,
+                "closely_connection_status": "none",
+                "closely_last_event": null,
+                "closely_last_event_at": null,
+                "linkedin_slug": null,
+                "scrape_status": null,
+                "scrape_url": null,
+                "scraped_homepage": null,
+                "scraped_careers": null,
+                "generated_connection_note": null,
+                "generated_dm_step2": null,
+                "generated_dm_step3": null,
+                "generated_dm_step4": null,
+                "scraped_at": null
+              },
+              {
+                "id": "450b1598-e9c4-431b-820c-16fea9a07dd6",
+                "company": "Unknown Company",
+                "contact_name": "Andrew",
+                "title": "Director of Marketing, Talent Solutions",
+                "email": "andrew.j.riegler@gmail.com",
+                "linkedin_url": "https://linkedin.com/in/andrewriegler",
+                "industry": null,
+                "company_size": null,
+                "notes": null,
+                "tier": "unassigned",
+                "status": "not_started",
+                "signals": [
+                  {
+                    "hook": "Saw you're expanding your marketing team with a new Demand Gen Manager \u2013 exciting times! Often, new hires like that are looking for ways to quickly ramp up lead volume...",
+                    "type": "hiring",
+                    "detail": "This indicates growth, a focus on expanding market reach, or a need to improve lead generation/sales pipeline. Andrew, as Director of Marketing, would be directly involved or impacted by these hires and their success, suggesting budget and strategic focus on marketing and sales.",
+                    "summary": "The company is actively hiring for roles like 'Demand Generation Manager,' 'Product Marketing Manager,' or 'Sales Development Representative.'",
+                    "confidence": "high",
+                    "date_detected": null
+                  },
+                  {
+                    "hook": "Just saw the news about your new [Specific Product/Feature/Partnership] \u2013 congratulations! When launching something significant like this, getting the word out effectively is key...",
+                    "type": "trigger_event",
+                    "detail": "New launches require significant marketing effort to generate awareness, drive adoption, and differentiate from competitors. Andrew would be leading these efforts. A partnership might open new markets or require co-marketing strategies, presenting a prime opportunity to offer marketing support.",
+                    "summary": "The company recently announced a new 'Talent Solutions' product, feature, or a strategic partnership.",
+                    "confidence": "high",
+                    "date_detected": null
+                  },
+                  {
+                    "hook": "Noticed your team will be at [Conference Name] next month \u2013 always a great event for talent leaders! I was curious how you're planning to maximize your presence there...",
+                    "type": "content_signal",
+                    "detail": "This shows their commitment to thought leadership, market presence, and engaging with their target audience. Andrew would be responsible for maximizing the ROI of such events or the impact of such content. They might need help with pre-event promotion, post-event follow-up, content amplification, or leveraging report data for lead generation.",
+                    "summary": "The company is a sponsor/speaker at a prominent HR Tech conference (e.g., HR Technology Conference, SHRM Annual Conference) or has just released a significant industry report on talent trends.",
+                    "confidence": "high",
+                    "date_detected": null
+                  },
+                  {
+                    "hook": "Congratulations on your recent [Funding Round]! With new capital often comes an increased focus on scaling marketing efforts to drive growth...",
+                    "type": "funding",
+                    "detail": "New funding typically means an increased budget for growth initiatives, including marketing and sales expansion. Andrew would likely have more resources to invest in marketing strategies, tools, or campaigns to accelerate growth and achieve new targets.",
+                    "summary": "The company recently secured a new round of funding (e.g., Series A, B, C).",
+                    "confidence": "medium",
+                    "date_detected": null
+                  }
+                ],
+                "sequence_id": null,
+                "current_sequence_step": 0,
+                "last_touch_date": null,
+                "next_action_date": null,
+                "created_at": "2026-02-28T02:58:42.967751+00:00",
+                "updated_at": "2026-02-28T10:17:09.588568+00:00",
+                "closely_synced": false,
+                "closely_connection_status": "none",
+                "closely_last_event": null,
+                "closely_last_event_at": null,
+                "linkedin_slug": null,
+                "scrape_status": null,
+                "scrape_url": null,
+                "scraped_homepage": null,
+                "scraped_careers": null,
+                "generated_connection_note": null,
+                "generated_dm_step2": null,
+                "generated_dm_step3": null,
+                "generated_dm_step4": null,
+                "scraped_at": null
+              },
+              {
+                "id": "83cd6e99-8faa-4fe6-9cf7-6e4168fe5745",
+                "company": "Unknown Company",
+                "contact_name": "Steve",
+                "title": "Director, Manufacturing & Engineering Search",
+                "email": "spsmith.radio@gmail.com",
+                "linkedin_url": "https://linkedin.com/in/steve-smith-b356943",
+                "industry": null,
+                "company_size": null,
+                "notes": null,
+                "tier": "unassigned",
+                "status": "not_started",
+                "signals": [
+                  {
+                    "hook": "Noticed your team at Unknown Company is actively hiring for several key manufacturing and engineering roles \u2013 how are you managing the volume and ensuring you're attracting top talent?",
+                    "type": "hiring",
+                    "detail": "A high volume of open roles indicates a heavy workload for Steve's team, potential growth, or difficulty in filling specialized positions. This suggests a need for solutions that can streamline their recruitment process, improve candidate quality, or reduce time-to-hire for manufacturing and engineering talent.",
+                    "summary": "The company is actively recruiting for a significant number of manufacturing and engineering positions.",
+                    "confidence": "medium",
+                    "date_detected": null
+                  },
+                  {
+                    "hook": "Heard about Unknown Company's recent expansion plans \u2013 that must mean a significant ramp-up in hiring for your manufacturing and engineering teams. How are you preparing for that influx?",
+                    "type": "trigger_event",
+                    "detail": "Major expansion or new facility plans will inevitably lead to a substantial increase in demand for manufacturing and engineering talent. This creates an urgent need for Steve's team to scale up their recruitment efforts quickly and efficiently, potentially requiring new tools or strategies to meet aggressive hiring targets.",
+                    "summary": "The company recently announced plans for a new manufacturing plant, R&D center, or significant expansion of existing operations.",
+                    "confidence": "medium",
+                    "date_detected": null
+                  },
+                  {
+                    "hook": "Read your recent insights on the talent shortage in manufacturing \u2013 it sounds like a challenge many are facing. How are you tackling it at Unknown Company?",
+                    "type": "content_signal",
+                    "detail": "Publicly acknowledging talent shortages or recruitment challenges in their sector indicates that this is a recognized pain point within the company. Steve is likely at the forefront of addressing these issues, making him receptive to solutions that can help overcome these specific hurdles.",
+                    "summary": "The company (or its executives) has recently published articles, given interviews, or spoken at conferences about the challenges of finding skilled talent in the manufacturing and engineering sectors.",
+                    "confidence": "medium",
+                    "date_detected": null
+                  },
+                  {
+                    "hook": "Saw Unknown Company's recent investment in advanced manufacturing technologies \u2013 that's exciting! How are you ensuring your manufacturing and engineering teams have the specialized talent needed to leverage these advancements?",
+                    "type": "tech_change",
+                    "detail": "Adopting new technologies often requires new and specialized skill sets within the manufacturing and engineering workforce. Steve's team would be responsible for sourcing and attracting these niche talents, which can be particularly challenging. This signals a potential need for specialized sourcing tools, assessment platforms, or talent development programs.",
+                    "summary": "The company has announced investments in advanced manufacturing technologies (e.g., AI, robotics, automation, Industry 4.0 initiatives).",
+                    "confidence": "medium",
+                    "date_detected": null
+                  }
+                ],
+                "sequence_id": null,
+                "current_sequence_step": 0,
+                "last_touch_date": null,
+                "next_action_date": null,
+                "created_at": "2026-02-28T02:58:42.967751+00:00",
+                "updated_at": "2026-02-28T10:17:41.595859+00:00",
+                "closely_synced": false,
+                "closely_connection_status": "none",
+                "closely_last_event": null,
+                "closely_last_event_at": null,
+                "linkedin_slug": null,
+                "scrape_status": null,
+                "scrape_url": null,
+                "scraped_homepage": null,
+                "scraped_careers": null,
+                "generated_connection_note": null,
+                "generated_dm_step2": null,
+                "generated_dm_step3": null,
+                "generated_dm_step4": null,
+                "scraped_at": null
+              },
+              {
+                "id": "12e83fd9-4ffa-4e5e-bb0d-a71c1d32c382",
+                "company": "Unknown Company",
+                "contact_name": "Jessica",
+                "title": "Senior Director, IT Business Analysis",
+                "email": "jmitchell821@gmail.com",
+                "linkedin_url": "https://linkedin.com/in/jessica-koenes-mitchell-b1b10338",
+                "industry": null,
+                "company_size": null,
+                "notes": null,
+                "tier": "unassigned",
+                "status": "not_started",
+                "signals": [],
+                "sequence_id": null,
+                "current_sequence_step": 0,
+                "last_touch_date": null,
+                "next_action_date": null,
+                "created_at": "2026-02-28T02:58:42.967751+00:00",
+                "updated_at": "2026-02-28T02:58:42.967751+00:00",
+                "closely_synced": false,
+                "closely_connection_status": "none",
+                "closely_last_event": null,
+                "closely_last_event_at": null,
+                "linkedin_slug": null,
+                "scrape_status": null,
+                "scrape_url": null,
+                "scraped_homepage": null,
+                "scraped_careers": null,
+                "generated_connection_note": null,
+                "generated_dm_step2": null,
+                "generated_dm_step3": null,
+                "generated_dm_step4": null,
+                "scraped_at": null
+              },
+              {
+                "id": "7996efb8-adb8-4d40-be14-22669e62f6e8",
+                "company": "Unknown Company",
+                "contact_name": "Michelle",
+                "title": "Senior Talent Acquisition Specialist",
+                "email": "michellenkann@gmail.com",
+                "linkedin_url": "https://linkedin.com/in/michellekann",
+                "industry": null,
+                "company_size": null,
+                "notes": null,
+                "tier": "unassigned",
+                "status": "not_started",
+                "signals": [],
+                "sequence_id": null,
+                "current_sequence_step": 0,
+                "last_touch_date": null,
+                "next_action_date": null,
+                "created_at": "2026-02-28T02:58:42.967751+00:00",
+                "updated_at": "2026-02-28T02:58:42.967751+00:00",
+                "closely_synced": false,
+                "closely_connection_status": "none",
+                "closely_last_event": null,
+                "closely_last_event_at": null,
+                "linkedin_slug": null,
+                "scrape_status": null,
+                "scrape_url": null,
+                "scraped_homepage": null,
+                "scraped_careers": null,
+                "generated_connection_note": null,
+                "generated_dm_step2": null,
+                "generated_dm_step3": null,
+                "generated_dm_step4": null,
+                "scraped_at": null
+              },
+              {
+                "id": "33de0498-860c-4c60-9caa-5b87ede2ea38",
+                "company": "Unknown Company",
+                "contact_name": "Danielle",
+                "title": "Senior Account Manager",
+                "email": "daniellestorms@bit.ly",
+                "linkedin_url": "https://linkedin.com/in/daniellestorms",
+                "industry": null,
+                "company_size": null,
+                "notes": null,
+                "tier": "unassigned",
+                "status": "not_started",
+                "signals": [],
+                "sequence_id": null,
+                "current_sequence_step": 0,
+                "last_touch_date": null,
+                "next_action_date": null,
+                "created_at": "2026-02-28T02:58:42.967751+00:00",
+                "updated_at": "2026-02-28T02:58:42.967751+00:00",
+                "closely_synced": false,
+                "closely_connection_status": "none",
+                "closely_last_event": null,
+                "closely_last_event_at": null,
+                "linkedin_slug": null,
+                "scrape_status": null,
+                "scrape_url": null,
+                "scraped_homepage": null,
+                "scraped_careers": null,
+                "generated_connection_note": null,
+                "generated_dm_step2": null,
+                "generated_dm_step3": null,
+                "generated_dm_step4": null,
+                "scraped_at": null
+              },
+              {
+                "id": "6446c436-31d1-4932-8f3f-8c271e95f65f",
+                "company": "Unknown Company",
+                "contact_name": "Ben",
+                "title": "President",
+                "email": "digrazia@gmail.com",
+                "linkedin_url": "https://linkedin.com/in/bendigrazia",
+                "industry": null,
+                "company_size": null,
+                "notes": null,
+                "tier": "unassigned",
+                "status": "not_started",
+                "signals": [],
+                "sequence_id": null,
+                "current_sequence_step": 0,
+                "last_touch_date": null,
+                "next_action_date": null,
+                "created_at": "2026-02-28T02:58:42.967751+00:00",
+                "updated_at": "2026-02-28T02:58:42.967751+00:00",
+                "closely_synced": false,
+                "closely_connection_status": "none",
+                "closely_last_event": null,
+                "closely_last_event_at": null,
+                "linkedin_slug": null,
+                "scrape_status": null,
+                "scrape_url": null,
+                "scraped_homepage": null,
+                "scraped_careers": null,
+                "generated_connection_note": null,
+                "generated_dm_step2": null,
+                "generated_dm_step3": null,
+                "generated_dm_step4": null,
+                "scraped_at": null
+              },
+              {
+                "id": "a605b5b0-1982-4996-8699-ef775fd3c319",
+                "company": "Unknown Company",
+                "contact_name": "Nicolina",
+                "title": "Managing Director",
+                "email": "nicolina.boccone@gmail.com",
+                "linkedin_url": "https://linkedin.com/in/nicolinaj",
+                "industry": null,
+                "company_size": null,
+                "notes": null,
+                "tier": "unassigned",
+                "status": "not_started",
+                "signals": [],
+                "sequence_id": null,
+                "current_sequence_step": 0,
+                "last_touch_date": null,
+                "next_action_date": null,
+                "created_at": "2026-02-28T02:58:42.967751+00:00",
+                "updated_at": "2026-02-28T02:58:42.967751+00:00",
+                "closely_synced": false,
+                "closely_connection_status": "none",
+                "closely_last_event": null,
+                "closely_last_event_at": null,
+                "linkedin_slug": null,
+                "scrape_status": null,
+                "scrape_url": null,
+                "scraped_homepage": null,
+                "scraped_careers": null,
+                "generated_connection_note": null,
+                "generated_dm_step2": null,
+                "generated_dm_step3": null,
+                "generated_dm_step4": null,
+                "scraped_at": null
+              },
+              {
+                "id": "d6564dea-2464-4a36-8a80-4881c6f18c7c",
+                "company": "Unknown Company",
+                "contact_name": "Julie",
+                "title": "Intensive Care Registered Nurse",
+                "email": "julie.burger001@gmail.com",
+                "linkedin_url": "https://linkedin.com/in/julie-burger-b8548a199",
+                "industry": null,
+                "company_size": null,
+                "notes": null,
+                "tier": "unassigned",
+                "status": "not_started",
+                "signals": [],
+                "sequence_id": null,
+                "current_sequence_step": 0,
+                "last_touch_date": null,
+                "next_action_date": null,
+                "created_at": "2026-02-28T02:58:42.967751+00:00",
+                "updated_at": "2026-02-28T02:58:42.967751+00:00",
+                "closely_synced": false,
+                "closely_connection_status": "none",
+                "closely_last_event": null,
+                "closely_last_event_at": null,
+                "linkedin_slug": null,
+                "scrape_status": null,
+                "scrape_url": null,
+                "scraped_homepage": null,
+                "scraped_careers": null,
+                "generated_connection_note": null,
+                "generated_dm_step2": null,
+                "generated_dm_step3": null,
+                "generated_dm_step4": null,
+                "scraped_at": null
+              },
+              {
+                "id": "3bff1f5f-95a7-40e7-9506-c78dd715fd4c",
+                "company": "Unknown Company",
+                "contact_name": "Tim",
+                "title": "Vice President",
+                "email": "tim.wagy@gmail.com",
+                "linkedin_url": "https://linkedin.com/in/tim-wagy-2b98253",
+                "industry": null,
+                "company_size": null,
+                "notes": null,
+                "tier": "unassigned",
+                "status": "not_started",
+                "signals": [],
+                "sequence_id": null,
+                "current_sequence_step": 0,
+                "last_touch_date": null,
+                "next_action_date": null,
+                "created_at": "2026-02-28T02:58:42.967751+00:00",
+                "updated_at": "2026-02-28T02:58:42.967751+00:00",
+                "closely_synced": false,
+                "closely_connection_status": "none",
+                "closely_last_event": null,
+                "closely_last_event_at": null,
+                "linkedin_slug": null,
+                "scrape_status": null,
+                "scrape_url": null,
+                "scraped_homepage": null,
+                "scraped_careers": null,
+                "generated_connection_note": null,
+                "generated_dm_step2": null,
+                "generated_dm_step3": null,
+                "generated_dm_step4": null,
+                "scraped_at": null
+              },
+              {
+                "id": "9b8f4143-a8e0-475c-ad7c-1826b59baec3",
+                "company": "Unknown Company",
+                "contact_name": "Sebastian",
+                "title": "Technical Recruiter",
+                "email": "sebastianhebert94@gmail.com",
+                "linkedin_url": "https://linkedin.com/in/sebastianhebert",
+                "industry": null,
+                "company_size": null,
+                "notes": null,
+                "tier": "unassigned",
+                "status": "not_started",
+                "signals": [],
+                "sequence_id": null,
+                "current_sequence_step": 0,
+                "last_touch_date": null,
+                "next_action_date": null,
+                "created_at": "2026-02-28T02:58:42.967751+00:00",
+                "updated_at": "2026-02-28T02:58:42.967751+00:00",
+                "closely_synced": false,
+                "closely_connection_status": "none",
+                "closely_last_event": null,
+                "closely_last_event_at": null,
+                "linkedin_slug": null,
+                "scrape_status": null,
+                "scrape_url": null,
+                "scraped_homepage": null,
+                "scraped_careers": null,
+                "generated_connection_note": null,
+                "generated_dm_step2": null,
+                "generated_dm_step3": null,
+                "generated_dm_step4": null,
+                "scraped_at": null
+              },
+              {
+                "id": "369a131b-10a5-4a2b-b435-ee587a83e176",
+                "company": "Unknown Company",
+                "contact_name": "Bao",
+                "title": "Director of Business Development, Enterprise Solutions",
+                "email": "bao.le820@gmail.com",
+                "linkedin_url": "https://linkedin.com/in/baole820",
+                "industry": null,
+                "company_size": null,
+                "notes": null,
+                "tier": "unassigned",
+                "status": "not_started",
+                "signals": [],
+                "sequence_id": null,
+                "current_sequence_step": 0,
+                "last_touch_date": null,
+                "next_action_date": null,
+                "created_at": "2026-02-28T02:58:42.967751+00:00",
+                "updated_at": "2026-02-28T02:58:42.967751+00:00",
+                "closely_synced": false,
+                "closely_connection_status": "none",
+                "closely_last_event": null,
+                "closely_last_event_at": null,
+                "linkedin_slug": null,
+                "scrape_status": null,
+                "scrape_url": null,
+                "scraped_homepage": null,
+                "scraped_careers": null,
+                "generated_connection_note": null,
+                "generated_dm_step2": null,
+                "generated_dm_step3": null,
+                "generated_dm_step4": null,
+                "scraped_at": null
+              },
+              {
+                "id": "51f090f8-dd4b-480f-b141-94b85994bde7",
+                "company": "Unknown Company",
+                "contact_name": "Anne",
+                "title": "Dynamic Customer Success Executive | Passionate Leader Driving First-In Class Customer Experience Programs with Strong NPS Scores | Aligns Culture/Talent/Core Values/Mission for Optimal Client Retention/Churn Reduction",
+                "email": "abowman1@gmail.com",
+                "linkedin_url": "https://linkedin.com/in/abowman",
+                "industry": null,
+                "company_size": null,
+                "notes": null,
+                "tier": "unassigned",
+                "status": "not_started",
+                "signals": [],
+                "sequence_id": null,
+                "current_sequence_step": 0,
+                "last_touch_date": null,
+                "next_action_date": null,
+                "created_at": "2026-02-28T02:58:42.967751+00:00",
+                "updated_at": "2026-02-28T02:58:42.967751+00:00",
+                "closely_synced": false,
+                "closely_connection_status": "none",
+                "closely_last_event": null,
+                "closely_last_event_at": null,
+                "linkedin_slug": null,
+                "scrape_status": null,
+                "scrape_url": null,
+                "scraped_homepage": null,
+                "scraped_careers": null,
+                "generated_connection_note": null,
+                "generated_dm_step2": null,
+                "generated_dm_step3": null,
+                "generated_dm_step4": null,
+                "scraped_at": null
+              },
+              {
+                "id": "cce8bf6e-a1ab-4624-aa22-5bef97d2f227",
+                "company": "Unknown Company",
+                "contact_name": "Sonit",
+                "title": "Vice President Human Resources",
+                "email": "singh.sonit@gmail.com",
+                "linkedin_url": "https://linkedin.com/in/sonit-singh-147b5422",
+                "industry": null,
+                "company_size": null,
+                "notes": null,
+                "tier": "unassigned",
+                "status": "not_started",
+                "signals": [],
+                "sequence_id": null,
+                "current_sequence_step": 0,
+                "last_touch_date": null,
+                "next_action_date": null,
+                "created_at": "2026-02-28T02:58:42.967751+00:00",
+                "updated_at": "2026-02-28T02:58:42.967751+00:00",
+                "closely_synced": false,
+                "closely_connection_status": "none",
+                "closely_last_event": null,
+                "closely_last_event_at": null,
+                "linkedin_slug": null,
+                "scrape_status": null,
+                "scrape_url": null,
+                "scraped_homepage": null,
+                "scraped_careers": null,
+                "generated_connection_note": null,
+                "generated_dm_step2": null,
+                "generated_dm_step3": null,
+                "generated_dm_step4": null,
+                "scraped_at": null
+              },
+              {
+                "id": "c4e6000d-6663-4029-b465-67a862b7a0a9",
+                "company": "Unknown Company",
+                "contact_name": "Giles",
+                "title": "Client Partner",
+                "email": "gilesvanpraagh@gmail.com",
+                "linkedin_url": "https://linkedin.com/in/giles-van-praagh-32283aa",
+                "industry": null,
+                "company_size": null,
+                "notes": null,
+                "tier": "unassigned",
+                "status": "not_started",
+                "signals": [],
+                "sequence_id": null,
+                "current_sequence_step": 0,
+                "last_touch_date": null,
+                "next_action_date": null,
+                "created_at": "2026-02-28T02:58:42.967751+00:00",
+                "updated_at": "2026-02-28T02:58:42.967751+00:00",
+                "closely_synced": false,
+                "closely_connection_status": "none",
+                "closely_last_event": null,
+                "closely_last_event_at": null,
+                "linkedin_slug": null,
+                "scrape_status": null,
+                "scrape_url": null,
+                "scraped_homepage": null,
+                "scraped_careers": null,
+                "generated_connection_note": null,
+                "generated_dm_step2": null,
+                "generated_dm_step3": null,
+                "generated_dm_step4": null,
+                "scraped_at": null
+              },
+              {
+                "id": "5eff4a28-9aa3-4ade-97dd-83faa07255df",
+                "company": "Unknown Company",
+                "contact_name": "Tyler",
+                "title": "Owner & Executive Director",
+                "email": "marketingmonk@gmail.com",
+                "linkedin_url": "https://linkedin.com/in/tylerewest",
+                "industry": null,
+                "company_size": null,
+                "notes": null,
+                "tier": "unassigned",
+                "status": "not_started",
+                "signals": [],
+                "sequence_id": null,
+                "current_sequence_step": 0,
+                "last_touch_date": null,
+                "next_action_date": null,
+                "created_at": "2026-02-28T02:58:42.967751+00:00",
+                "updated_at": "2026-02-28T02:58:42.967751+00:00",
+                "closely_synced": false,
+                "closely_connection_status": "none",
+                "closely_last_event": null,
+                "closely_last_event_at": null,
+                "linkedin_slug": null,
+                "scrape_status": null,
+                "scrape_url": null,
+                "scraped_homepage": null,
+                "scraped_careers": null,
+                "generated_connection_note": null,
+                "generated_dm_step2": null,
+                "generated_dm_step3": null,
+                "generated_dm_step4": null,
+                "scraped_at": null
+              },
+              {
+                "id": "d67c4ce3-d20c-4869-93eb-9f2debae0788",
+                "company": "Unknown Company",
+                "contact_name": "Kim",
+                "title": "Managing Partner | Vice President of Sales & Customer Success",
+                "email": "kpitts1110@gmail.com",
+                "linkedin_url": "https://linkedin.com/in/kim-pitts-locascio-99b2396",
+                "industry": null,
+                "company_size": null,
+                "notes": null,
+                "tier": "unassigned",
+                "status": "not_started",
+                "signals": [],
+                "sequence_id": null,
+                "current_sequence_step": 0,
+                "last_touch_date": null,
+                "next_action_date": null,
+                "created_at": "2026-02-28T02:58:42.967751+00:00",
+                "updated_at": "2026-02-28T02:58:42.967751+00:00",
+                "closely_synced": false,
+                "closely_connection_status": "none",
+                "closely_last_event": null,
+                "closely_last_event_at": null,
+                "linkedin_slug": null,
+                "scrape_status": null,
+                "scrape_url": null,
+                "scraped_homepage": null,
+                "scraped_careers": null,
+                "generated_connection_note": null,
+                "generated_dm_step2": null,
+                "generated_dm_step3": null,
+                "generated_dm_step4": null,
+                "scraped_at": null
+              },
+              {
+                "id": "e474b7b3-b79a-4bf1-8b7f-dd7007cf2c07",
+                "company": "Unknown Company",
+                "contact_name": "Amanda",
+                "title": "Managing Director",
+                "email": "acg.spartan@gmail.com",
+                "linkedin_url": "https://linkedin.com/in/agrochowalski",
+                "industry": null,
+                "company_size": null,
+                "notes": null,
+                "tier": "unassigned",
+                "status": "not_started",
+                "signals": [],
+                "sequence_id": null,
+                "current_sequence_step": 0,
+                "last_touch_date": null,
+                "next_action_date": null,
+                "created_at": "2026-02-28T02:58:42.967751+00:00",
+                "updated_at": "2026-02-28T02:58:42.967751+00:00",
+                "closely_synced": false,
+                "closely_connection_status": "none",
+                "closely_last_event": null,
+                "closely_last_event_at": null,
+                "linkedin_slug": null,
+                "scrape_status": null,
+                "scrape_url": null,
+                "scraped_homepage": null,
+                "scraped_careers": null,
+                "generated_connection_note": null,
+                "generated_dm_step2": null,
+                "generated_dm_step3": null,
+                "generated_dm_step4": null,
+                "scraped_at": null
+              },
+              {
+                "id": "454da71e-6111-40c2-8f53-5872c5762524",
+                "company": "Unknown Company",
+                "contact_name": "Maria",
+                "title": "Account Manager",
+                "email": "m.cami7296@gmail.com",
+                "linkedin_url": "https://linkedin.com/in/maria-camila-s\u00e1nchez-376760162",
+                "industry": null,
+                "company_size": null,
+                "notes": null,
+                "tier": "unassigned",
+                "status": "not_started",
+                "signals": [],
+                "sequence_id": null,
+                "current_sequence_step": 0,
+                "last_touch_date": null,
+                "next_action_date": null,
+                "created_at": "2026-02-28T02:58:42.967751+00:00",
+                "updated_at": "2026-02-28T02:58:42.967751+00:00",
+                "closely_synced": false,
+                "closely_connection_status": "none",
+                "closely_last_event": null,
+                "closely_last_event_at": null,
+                "linkedin_slug": null,
+                "scrape_status": null,
+                "scrape_url": null,
+                "scraped_homepage": null,
+                "scraped_careers": null,
+                "generated_connection_note": null,
+                "generated_dm_step2": null,
+                "generated_dm_step3": null,
+                "generated_dm_step4": null,
+                "scraped_at": null
+              },
+              {
+                "id": "268ecb73-a85d-477f-96cb-b035183f680e",
+                "company": "Unknown Company",
+                "contact_name": "Brianne",
+                "title": "Vice President of Talent Acquisition",
+                "email": "brianne.morgan1@gmail.com",
+                "linkedin_url": "https://linkedin.com/in/brianne-morgan",
+                "industry": null,
+                "company_size": null,
+                "notes": null,
+                "tier": "unassigned",
+                "status": "not_started",
+                "signals": [],
+                "sequence_id": null,
+                "current_sequence_step": 0,
+                "last_touch_date": null,
+                "next_action_date": null,
+                "created_at": "2026-02-28T02:58:42.967751+00:00",
+                "updated_at": "2026-02-28T02:58:42.967751+00:00",
+                "closely_synced": false,
+                "closely_connection_status": "none",
+                "closely_last_event": null,
+                "closely_last_event_at": null,
+                "linkedin_slug": null,
+                "scrape_status": null,
+                "scrape_url": null,
+                "scraped_homepage": null,
+                "scraped_careers": null,
+                "generated_connection_note": null,
+                "generated_dm_step2": null,
+                "generated_dm_step3": null,
+                "generated_dm_step4": null,
+                "scraped_at": null
+              },
+              {
+                "id": "08abd9f8-e8c2-4b8d-8eb0-aed4083f76aa",
+                "company": "Unknown Company",
+                "contact_name": "Anthony",
+                "title": "Chief Executive Officer",
+                "email": "afanzo722@gmail.com",
+                "linkedin_url": "https://linkedin.com/in/fanzo",
+                "industry": null,
+                "company_size": null,
+                "notes": null,
+                "tier": "unassigned",
+                "status": "not_started",
+                "signals": [],
+                "sequence_id": null,
+                "current_sequence_step": 0,
+                "last_touch_date": null,
+                "next_action_date": null,
+                "created_at": "2026-02-28T02:58:42.967751+00:00",
+                "updated_at": "2026-02-28T02:58:42.967751+00:00",
+                "closely_synced": false,
+                "closely_connection_status": "none",
+                "closely_last_event": null,
+                "closely_last_event_at": null,
+                "linkedin_slug": null,
+                "scrape_status": null,
+                "scrape_url": null,
+                "scraped_homepage": null,
+                "scraped_careers": null,
+                "generated_connection_note": null,
+                "generated_dm_step2": null,
+                "generated_dm_step3": null,
+                "generated_dm_step4": null,
+                "scraped_at": null
+              },
+              {
+                "id": "204a8381-bc44-4f87-831f-c6e9594a40c4",
+                "company": "Unknown Company",
+                "contact_name": "Ana",
+                "title": "Chief Executive Officer",
+                "email": "ana.irving@gmail.com",
+                "linkedin_url": "https://linkedin.com/in/anairving",
+                "industry": null,
+                "company_size": null,
+                "notes": null,
+                "tier": "unassigned",
+                "status": "not_started",
+                "signals": [],
+                "sequence_id": null,
+                "current_sequence_step": 0,
+                "last_touch_date": null,
+                "next_action_date": null,
+                "created_at": "2026-02-28T02:58:42.967751+00:00",
+                "updated_at": "2026-02-28T02:58:42.967751+00:00",
+                "closely_synced": false,
+                "closely_connection_status": "none",
+                "closely_last_event": null,
+                "closely_last_event_at": null,
+                "linkedin_slug": null,
+                "scrape_status": null,
+                "scrape_url": null,
+                "scraped_homepage": null,
+                "scraped_careers": null,
+                "generated_connection_note": null,
+                "generated_dm_step2": null,
+                "generated_dm_step3": null,
+                "generated_dm_step4": null,
+                "scraped_at": null
+              },
+              {
+                "id": "687dfd20-0dd6-4db5-9714-d9113f82309c",
+                "company": "Unknown Company",
+                "contact_name": "Henning",
+                "title": "Co-Founder & Managing Partner",
+                "email": "henning.schwinum.mo@gmail.com",
+                "linkedin_url": "https://linkedin.com/in/henning-schwinum",
+                "industry": null,
+                "company_size": null,
+                "notes": null,
+                "tier": "unassigned",
+                "status": "not_started",
+                "signals": [
+                  {
+                    "hook": "Henning, as a Co-Founder & Managing Partner, I imagine you're constantly looking for ways to optimize operations and ensure your team can scale effectively without sacrificing efficiency.",
+                    "type": "pain_indicator",
+                    "detail": "Henning, as a Co-Founder & Managing Partner, is directly responsible for the company's growth and operational health. As the company scales (a common challenge for any growing business), they likely encounter bottlenecks in processes, team management, or resource allocation. This creates a need for solutions that streamline operations, improve productivity, or support strategic decision-making.",
+                    "summary": "Co-founders and Managing Partners of growing companies often face challenges in scaling operations, managing increased workload, and maintaining efficiency as the business expands.",
+                    "confidence": "medium",
+                    "date_detected": null
+                  },
+                  {
+                    "hook": "Henning, given your role as Co-Founder & Managing Partner, I'm curious how you're approaching talent acquisition and ensuring new hires are set up for success as your company grows.",
+                    "type": "hiring",
+                    "detail": "Active hiring is a strong indicator of growth and investment in new initiatives. For a Co-Founder & Managing Partner, this means they are expanding their team, potentially entering new markets, or building out new capabilities. Each new hire or department often brings new needs for tools, training, or processes that support their function, or the overall management of a larger workforce.",
+                    "summary": "Companies led by Co-Founders & Managing Partners are typically in a growth phase, implying active hiring across various departments to support expansion.",
+                    "confidence": "medium",
+                    "date_detected": null
+                  },
+                  {
+                    "hook": "Henning, as a Co-Founder & Managing Partner, I imagine you're constantly evaluating strategic opportunities and planning for the next phase of growth.",
+                    "type": "trigger_event",
+                    "detail": "Henning's role places him at the forefront of strategic decision-making. This means he's regularly thinking about the company's future, potential market shifts, competitive landscape, and how to position the company for sustained success. Solutions that align with strategic planning, market intelligence, innovation, or long-term competitive advantage would be relevant.",
+                    "summary": "Co-Founders and Managing Partners are inherently focused on long-term strategy, vision, and future growth initiatives, often engaging in strategic planning cycles.",
+                    "confidence": "high",
+                    "date_detected": null
+                  },
+                  {
+                    "hook": "Henning, as a Co-Founder & Managing Partner, I'm sure you're always focused on maximizing the impact of every investment and ensuring resources are allocated effectively.",
+                    "type": "pain_indicator",
+                    "detail": "With a 'Managing Partner' title, Henning is likely responsible for the financial health and efficient use of company resources. This means any new investment, whether in technology, personnel, or services, must demonstrate a clear return on investment and contribute to the company's bottom line or strategic objectives. Solutions that offer measurable impact, cost savings, or efficiency gains would resonate.",
+                    "summary": "Co-Founders and Managing Partners are acutely aware of resource allocation and the need to demonstrate clear ROI for all investments, including new tools or services.",
+                    "confidence": "high",
+                    "date_detected": null
+                  }
+                ],
+                "sequence_id": null,
+                "current_sequence_step": 0,
+                "last_touch_date": null,
+                "next_action_date": null,
+                "created_at": "2026-02-28T02:58:42.967751+00:00",
+                "updated_at": "2026-02-28T10:13:22.7787+00:00",
+                "closely_synced": false,
+                "closely_connection_status": "none",
+                "closely_last_event": null,
+                "closely_last_event_at": null,
+                "linkedin_slug": null,
+                "scrape_status": null,
+                "scrape_url": null,
+                "scraped_homepage": null,
+                "scraped_careers": null,
+                "generated_connection_note": null,
+                "generated_dm_step2": null,
+                "generated_dm_step3": null,
+                "generated_dm_step4": null,
+                "scraped_at": null
+              },
+              {
+                "id": "e7b09aa4-ec4e-4b9d-9e61-438ff38997c2",
+                "company": "Unknown Company",
+                "contact_name": "Desmund",
+                "title": "Accounting & Finance Recruiter",
+                "email": "desmundjthomas@gmail.com",
+                "linkedin_url": "https://linkedin.com/in/desmundthomas",
+                "industry": null,
+                "company_size": null,
+                "notes": null,
+                "tier": "unassigned",
+                "status": "not_started",
+                "signals": [
+                  {
+                    "hook": "Noticed your focus on bringing in top accounting and finance talent \u2013 are you seeing increased demand for these roles as Unknown Company grows?",
+                    "type": "hiring",
+                    "detail": "As an Accounting & Finance Recruiter, Desmund's primary function is to fill roles. Growth (e.g., new projects, market expansion, increased revenue) or strategic shifts are common drivers for new hires in these critical departments, indicating an active need for recruitment solutions or services.",
+                    "summary": "Hypothetical: The company is likely experiencing growth or strategic initiatives, leading to increased demand for accounting and finance professionals.",
+                    "confidence": "low",
+                    "date_detected": null
+                  },
+                  {
+                    "hook": "Recruiting for specialized accounting and finance roles can be tough \u2013 are you finding it challenging to source candidates with specific expertise at Unknown Company?",
+                    "type": "pain_indicator",
+                    "detail": "Recruiters frequently face challenges in sourcing candidates with niche skills or specific industry experience, especially in competitive markets. This pain point makes them receptive to solutions that can streamline candidate identification, assessment, or engagement for hard-to-fill roles.",
+                    "summary": "Hypothetical: Companies often struggle to find specialized accounting and finance talent (e.g., FinOps, M&A analysts, specific compliance roles) in a competitive market.",
+                    "confidence": "low",
+                    "date_detected": null
+                  },
+                  {
+                    "hook": "With potential upcoming audits or compliance deadlines, are you anticipating a surge in demand for specialized accounting and finance professionals at Unknown Company?",
+                    "type": "trigger_event",
+                    "detail": "Major financial events like annual audits, IPO preparations, or new regulatory frameworks (e.g., ASC 606, IFRS 17, SOX) often create urgent hiring needs for specific skill sets or temporary staff to ensure compliance and smooth operations. This creates a time-sensitive need for recruitment support.",
+                    "summary": "Hypothetical: Upcoming financial audits, new regulatory compliance requirements, or year-end close often necessitate additional accounting and finance staff or expertise.",
+                    "confidence": "low",
+                    "date_detected": null
+                  },
+                  {
+                    "hook": "Are you finding that the adoption of new financial systems at Unknown Company is creating a need for candidates with specific tech proficiencies?",
+                    "type": "tech_change",
+                    "detail": "When a company adopts new financial technology, it often needs to hire individuals with experience in those specific systems (e.g., SAP, Oracle, Workday Financials, NetSuite) or additional staff to manage the transition and new workflows. This creates a specific hiring need for Desmund.",
+                    "summary": "Hypothetical: The company might be implementing or upgrading its financial systems (e.g., ERP, FP&A software), requiring new skill sets or additional staff.",
+                    "confidence": "low",
+                    "date_detected": null
+                  }
+                ],
+                "sequence_id": null,
+                "current_sequence_step": 0,
+                "last_touch_date": null,
+                "next_action_date": null,
+                "created_at": "2026-02-28T02:58:42.967751+00:00",
+                "updated_at": "2026-02-28T10:13:50.706974+00:00",
+                "closely_synced": false,
+                "closely_connection_status": "none",
+                "closely_last_event": null,
+                "closely_last_event_at": null,
+                "linkedin_slug": null,
+                "scrape_status": null,
+                "scrape_url": null,
+                "scraped_homepage": null,
+                "scraped_careers": null,
+                "generated_connection_note": null,
+                "generated_dm_step2": null,
+                "generated_dm_step3": null,
+                "generated_dm_step4": null,
+                "scraped_at": null
+              },
+              {
+                "id": "4f3570ea-2bfc-4c6e-bf54-30ef534664b2",
+                "company": "Unknown Company",
+                "contact_name": "Dipesh",
+                "title": "CEO & Founder",
+                "email": "dipesh008@gmail.com",
+                "linkedin_url": "https://linkedin.com/in/dipeshgarg",
+                "industry": null,
+                "company_size": null,
+                "notes": null,
+                "tier": "unassigned",
+                "status": "not_started",
+                "signals": [
+                  {
+                    "hook": "Dipesh, I often hear from founders like yourself about the ongoing challenge of scaling operations efficiently while maintaining agility. Is optimizing your operational processes a current focus?",
+                    "type": "pain_indicator",
+                    "detail": "CEOs are constantly looking for ways to improve efficiency, reduce costs, or accelerate growth. A general pain point around scaling or operational challenges is always relevant to a founder, regardless of specific company details.",
+                    "summary": "Many founders face challenges scaling operations, managing growth, or optimizing efficiency as their company matures.",
+                    "confidence": "low",
+                    "date_detected": null
+                  },
+                  {
+                    "hook": "Dipesh, I imagine you're constantly evaluating new strategies to drive future growth and capture new market opportunities. Are you currently exploring ways to accelerate your market penetration?",
+                    "type": "trigger_event",
+                    "detail": "CEOs are focused on the future, market positioning, and competitive advantage. A signal around strategic planning or future growth initiatives is always relevant, as these trigger needs for new solutions and partnerships.",
+                    "summary": "Founders are always thinking about the next big strategic move, market expansion, or product innovation to drive future growth.",
+                    "confidence": "low",
+                    "date_detected": null
+                  },
+                  {
+                    "hook": "Dipesh, I know for many founders, attracting and retaining top talent is a continuous strategic focus. Are you currently facing any challenges in scaling your team effectively to meet your growth objectives?",
+                    "type": "hiring",
+                    "detail": "CEOs are responsible for the overall health and growth of their company, which heavily relies on the right talent. Challenges in hiring, onboarding, or retaining key personnel are common pain points for founders, indicating a need for solutions that support team growth and productivity.",
+                    "summary": "As a founder, building and retaining a high-performing team is a constant priority and challenge, especially during growth phases.",
+                    "confidence": "low",
+                    "date_detected": null
+                  },
+                  {
+                    "hook": "Dipesh, I often find founders are keenly focused on navigating competitive landscapes and ensuring their company stands out through innovation. Is differentiating your offerings a key strategic area for you right now?",
+                    "type": "pain_indicator",
+                    "detail": "CEOs are constantly evaluating their market position, competitive threats, and opportunities for differentiation through innovation. This is a universal concern for a founder, indicating a potential need for solutions that enhance competitive advantage or foster innovation.",
+                    "summary": "Founders are acutely aware of their competitive landscape and the need to innovate and differentiate their offerings.",
+                    "confidence": "low",
+                    "date_detected": null
+                  }
+                ],
+                "sequence_id": null,
+                "current_sequence_step": 0,
+                "last_touch_date": null,
+                "next_action_date": null,
+                "created_at": "2026-02-28T02:58:42.967751+00:00",
+                "updated_at": "2026-02-28T10:14:05.300618+00:00",
+                "closely_synced": false,
+                "closely_connection_status": "none",
+                "closely_last_event": null,
+                "closely_last_event_at": null,
+                "linkedin_slug": null,
+                "scrape_status": null,
+                "scrape_url": null,
+                "scraped_homepage": null,
+                "scraped_careers": null,
+                "generated_connection_note": null,
+                "generated_dm_step2": null,
+                "generated_dm_step3": null,
+                "generated_dm_step4": null,
+                "scraped_at": null
+              },
+              {
+                "id": "d7ae69e9-c4af-472a-bcf4-2c04d4c8fdf6",
+                "company": "Unknown Company",
+                "contact_name": "Jon",
+                "title": "Founder & CEO",
+                "email": "jabeck44@gmail.com",
+                "linkedin_url": "https://linkedin.com/in/jonbeck",
+                "industry": null,
+                "company_size": null,
+                "notes": null,
+                "tier": "unassigned",
+                "status": "not_started",
+                "signals": [
+                  {
+                    "hook": "Noticed you're expanding your engineering and product teams \u2013 congratulations on the growth at Unknown Company!",
+                    "type": "hiring",
+                    "detail": "Rapid hiring, especially in technical or product-focused roles, often signals an expansion of product offerings or a scaling of operations. This can create needs for new tools, platforms, or services to support increased team collaboration, project management, or infrastructure demands. It also suggests budget allocation for growth initiatives.",
+                    "summary": "Hypothetically, Unknown Company is actively hiring for multiple roles in engineering and product development, indicating a growth phase.",
+                    "confidence": "medium",
+                    "date_detected": null
+                  },
+                  {
+                    "hook": "Saw the exciting news about your recent Series A funding \u2013 a huge milestone for Unknown Company!",
+                    "type": "funding",
+                    "detail": "A recent funding round provides fresh capital, often earmarked for accelerating growth, market expansion, technology investments, or hiring. Companies post-funding are typically more open to evaluating new solutions that can help them achieve their ambitious goals and leverage their new resources effectively.",
+                    "summary": "Hypothetically, Unknown Company recently announced a successful Series A funding round of $X million, indicating new capital for strategic initiatives.",
+                    "confidence": "medium",
+                    "date_detected": null
+                  },
+                  {
+                    "hook": "Jon, I read your recent thoughts on scaling customer support efficiently, and it resonated with how we help companies like Unknown Company tackle similar challenges.",
+                    "type": "content_signal",
+                    "detail": "When a CEO publicly addresses a specific challenge, it indicates a high-priority problem for the company. This signal directly points to a potential pain point that a solution focused on customer support efficiency, automation, or management could address, showing alignment with their strategic focus.",
+                    "summary": "Hypothetically, Jon, as Founder & CEO, recently published an article or spoke at a webinar discussing the challenges of scaling customer support efficiently.",
+                    "confidence": "medium",
+                    "date_detected": null
+                  },
+                  {
+                    "hook": "Congratulations on bringing [Hypothetical VP's Name] on board as VP of Operations \u2013 exciting times for Unknown Company!",
+                    "type": "new_exec",
+                    "detail": "A new executive hire, especially in operations, often signifies a mandate to review and improve existing processes, systems, and vendor relationships. This creates an opportunity for solutions that can enhance operational efficiency, reduce costs, or streamline workflows, as the new VP will be looking to make an impact.",
+                    "summary": "Hypothetically, Unknown Company recently hired a new VP of Operations, suggesting a focus on optimizing internal processes and efficiency.",
+                    "confidence": "medium",
+                    "date_detected": null
+                  }
+                ],
+                "sequence_id": null,
+                "current_sequence_step": 0,
+                "last_touch_date": null,
+                "next_action_date": null,
+                "created_at": "2026-02-28T02:58:42.967751+00:00",
+                "updated_at": "2026-02-28T10:14:40.979938+00:00",
+                "closely_synced": false,
+                "closely_connection_status": "none",
+                "closely_last_event": null,
+                "closely_last_event_at": null,
+                "linkedin_slug": null,
+                "scrape_status": null,
+                "scrape_url": null,
+                "scraped_homepage": null,
+                "scraped_careers": null,
+                "generated_connection_note": null,
+                "generated_dm_step2": null,
+                "generated_dm_step3": null,
+                "generated_dm_step4": null,
+                "scraped_at": null
+              },
+              {
+                "id": "e8fbe7d9-104b-4dcc-8ae5-317dec91ef59",
+                "company": "Unknown Company",
+                "contact_name": "Mark",
+                "title": "Recruiter/Business Development",
+                "email": "markskender@hotmail.com",
+                "linkedin_url": "https://linkedin.com/in/markskender",
+                "industry": null,
+                "company_size": null,
+                "notes": null,
+                "tier": "unassigned",
+                "status": "not_started",
+                "signals": [
+                  {
+                    "hook": "Noticed [Unknown Company] is hypothetically expanding rapidly with new engineering and product roles \u2013 exciting times for your team!",
+                    "type": "hiring",
+                    "detail": "This suggests a significant ramp-up in talent acquisition efforts, making it a prime time for recruiters like Mark to be seeking solutions for efficient hiring, and for business development to explore new market opportunities driven by product expansion.",
+                    "summary": "Hypothetical: [Unknown Company] recently posted several senior-level roles in engineering and product development, indicating a strategic growth phase.",
+                    "confidence": "low",
+                    "date_detected": "2023-10-26"
+                  },
+                  {
+                    "hook": "Congrats on the hypothetical Series B funding; that's a huge milestone for [Unknown Company] and often signals exciting growth ahead!",
+                    "type": "funding",
+                    "detail": "New funding typically fuels significant investment in talent acquisition to scale teams and often leads to expansion into new markets or product lines, creating opportunities for both recruiting and business development initiatives.",
+                    "summary": "Hypothetical: [Unknown Company] announced a recent Series B funding round of $XX million, signaling aggressive growth plans.",
+                    "confidence": "low",
+                    "date_detected": "2023-09-15"
+                  },
+                  {
+                    "hook": "Just read your hypothetical post on integrating AI \u2013 that's a bold strategic move that must be creating new opportunities for [Unknown Company]!",
+                    "type": "content_signal",
+                    "detail": "A new strategic direction, especially in a rapidly evolving field like AI, suggests a need for specialized talent (relevant for recruiting) and potential new partnerships or market opportunities (relevant for business development).",
+                    "summary": "Hypothetical: [Unknown Company] published a blog post outlining a new strategic focus on AI integration across its product suite.",
+                    "confidence": "low",
+                    "date_detected": "2023-10-10"
+                  }
+                ],
+                "sequence_id": null,
+                "current_sequence_step": 0,
+                "last_touch_date": null,
+                "next_action_date": null,
+                "created_at": "2026-02-28T02:58:42.967751+00:00",
+                "updated_at": "2026-02-28T10:15:00.227009+00:00",
+                "closely_synced": false,
+                "closely_connection_status": "none",
+                "closely_last_event": null,
+                "closely_last_event_at": null,
+                "linkedin_slug": null,
+                "scrape_status": null,
+                "scrape_url": null,
+                "scraped_homepage": null,
+                "scraped_careers": null,
+                "generated_connection_note": null,
+                "generated_dm_step2": null,
+                "generated_dm_step3": null,
+                "generated_dm_step4": null,
+                "scraped_at": null
+              },
+              {
+                "id": "555515c2-ae7a-4f5f-afb1-cd6864cc0bd6",
+                "company": "Unknown Company",
+                "contact_name": "Megan",
+                "title": "CEO & Founder",
+                "email": "meganpmccann@yahoo.com",
+                "linkedin_url": "https://linkedin.com/in/meganpmccann",
+                "industry": null,
+                "company_size": null,
+                "notes": null,
+                "tier": "unassigned",
+                "status": "not_started",
+                "signals": [
+                  {
+                    "hook": "Hi Megan, I was hoping to learn more about [Unknown Company] to see how we might align, but couldn't find specific details. Could you share a bit about what you're focused on right now?",
+                    "type": "pain_indicator",
+                    "detail": "Without a specific company name, industry, or size, it's impossible to conduct meaningful research to identify actionable outbound signals. This indicates a need to gather foundational information directly from the contact.",
+                    "summary": "Limited public information about the company.",
+                    "confidence": "high",
+                    "date_detected": null
+                  },
+                  {
+                    "hook": "Megan, as a Founder, I imagine you're constantly thinking about how to accelerate growth and penetrate new markets. How are you approaching that at [Unknown Company]?",
+                    "type": "pain_indicator",
+                    "detail": "As a CEO & Founder of a company with an unknown public profile, Megan is highly likely to be focused on establishing market presence, acquiring initial customers, and driving early-stage growth. This is a universal challenge for founders.",
+                    "summary": "Inferred focus on growth and market establishment.",
+                    "confidence": "low",
+                    "date_detected": null
+                  },
+                  {
+                    "hook": "Megan, building a strong team is crucial for any founder. Are you currently focused on bringing in specific talent to help [Unknown Company] achieve its next milestones?",
+                    "type": "hiring",
+                    "detail": "Founders are typically hands-on in building their initial team, especially for a company that isn't widely known. This suggests a focus on recruiting key talent to build the foundation for future success.",
+                    "summary": "Inferred need for talent acquisition and team building.",
+                    "confidence": "low",
+                    "date_detected": null
+                  }
+                ],
+                "sequence_id": null,
+                "current_sequence_step": 0,
+                "last_touch_date": null,
+                "next_action_date": null,
+                "created_at": "2026-02-28T02:58:42.967751+00:00",
+                "updated_at": "2026-02-28T10:15:20.523281+00:00",
+                "closely_synced": false,
+                "closely_connection_status": "none",
+                "closely_last_event": null,
+                "closely_last_event_at": null,
+                "linkedin_slug": null,
+                "scrape_status": null,
+                "scrape_url": null,
+                "scraped_homepage": null,
+                "scraped_careers": null,
+                "generated_connection_note": null,
+                "generated_dm_step2": null,
+                "generated_dm_step3": null,
+                "generated_dm_step4": null,
+                "scraped_at": null
+              },
+              {
+                "id": "3cb55ce7-821d-4e89-bfc9-f84f845f8239",
+                "company": "Unknown Company",
+                "contact_name": "Sai",
+                "title": "Vice President - Sales",
+                "email": "suresh_sai@yahoo.com",
+                "linkedin_url": "https://linkedin.com/in/sai-suresh-medicharla",
+                "industry": null,
+                "company_size": null,
+                "notes": null,
+                "tier": "unassigned",
+                "status": "not_started",
+                "signals": [
+                  {
+                    "hook": "Sai, if you're like many VPs of Sales I speak with, expanding your team means you're focused on accelerating ramp-up and maximizing productivity for new hires \u2013 is that top of mind for you?",
+                    "type": "hiring",
+                    "detail": "If 'Unknown Company' were actively hiring for multiple sales roles (e.g., SDRs, Account Executives, Sales Managers), it would signal a focus on revenue growth and market expansion. A VP of Sales like Sai would likely be focused on scaling the team effectively, improving ramp-up time for new hires, and ensuring productivity, which often requires new tools or processes.",
+                    "summary": "Hypothetical: Company is expanding its sales team, indicating growth initiatives.",
+                    "confidence": "low",
+                    "date_detected": null
+                  },
+                  {
+                    "hook": "Sai, in today's competitive landscape, many VPs of Sales are prioritizing sales efficiency and customer retention \u2013 are these key areas of focus for you at 'Unknown Company'?",
+                    "type": "pain_indicator",
+                    "detail": "In the absence of specific company data, a common trigger for a VP of Sales is the need to improve sales efficiency, reduce churn, or overcome market headwinds. If 'Unknown Company' were operating in a challenging industry or had recently announced a focus on 'operational excellence,' it would indicate a potential need for solutions that streamline sales processes, enhance forecasting, or improve customer retention.",
+                    "summary": "Hypothetical: Company might be facing industry-wide challenges or internal efficiency goals.",
+                    "confidence": "low",
+                    "date_detected": null
+                  },
+                  {
+                    "hook": "Sai, are you currently exploring new sales technologies to give your team a competitive edge, or optimizing your existing stack for better performance and data insights?",
+                    "type": "tech_change",
+                    "detail": "A VP of Sales often drives the adoption and optimization of sales technology to gain a competitive edge. If 'Unknown Company' were mentioned in tech news for a new CRM integration, or if there were job postings for sales tech specialists, it would suggest an openness to new solutions or a need to optimize their current sales stack for better performance and data insights.",
+                    "summary": "Hypothetical: Company might be evaluating or implementing new sales technology.",
+                    "confidence": "low",
+                    "date_detected": null
+                  }
+                ],
+                "sequence_id": null,
+                "current_sequence_step": 0,
+                "last_touch_date": null,
+                "next_action_date": null,
+                "created_at": "2026-02-28T02:58:42.967751+00:00",
+                "updated_at": "2026-02-28T10:15:37.069454+00:00",
+                "closely_synced": false,
+                "closely_connection_status": "none",
+                "closely_last_event": null,
+                "closely_last_event_at": null,
+                "linkedin_slug": null,
+                "scrape_status": null,
+                "scrape_url": null,
+                "scraped_homepage": null,
+                "scraped_careers": null,
+                "generated_connection_note": null,
+                "generated_dm_step2": null,
+                "generated_dm_step3": null,
+                "generated_dm_step4": null,
+                "scraped_at": null
+              },
+              {
+                "id": "f1d98403-75a4-4aca-9b77-2f9043fdf2bb",
+                "company": "Unknown Company",
+                "contact_name": "Leo",
+                "title": "Managing Partner",
+                "email": "leo_budapest@hotmail.com",
+                "linkedin_url": "https://linkedin.com/in/ttg",
+                "industry": null,
+                "company_size": null,
+                "notes": null,
+                "tier": "unassigned",
+                "status": "not_started",
+                "signals": [
+                  {
+                    "hook": "Leo, as a Managing Partner, I imagine you're constantly evaluating strategies to accelerate growth and optimize operations for [Unknown Company].",
+                    "type": "pain_indicator",
+                    "detail": "As a Managing Partner, Leo is likely responsible for the overall strategic direction and financial performance of the firm. Solutions that promise to enhance growth, profitability, or operational effectiveness would typically be relevant. Given the lack of specific company information, this is a general assumption based on the role.",
+                    "summary": "Hypothetically, Managing Partners are always focused on driving strategic growth and improving operational efficiency.",
+                    "confidence": "low",
+                    "date_detected": null
+                  },
+                  {
+                    "hook": "Leo, I often speak with Managing Partners who are focused on ensuring they attract and retain the best talent to drive their firm's success.",
+                    "type": "pain_indicator",
+                    "detail": "The success of a firm often hinges on its people. Leo, in his leadership role, would likely be concerned with talent management strategies, recruitment challenges, and fostering a high-performing culture. This is a general assumption based on the responsibilities typically associated with a Managing Partner.",
+                    "summary": "Hypothetically, Managing Partners are deeply invested in attracting, developing, and retaining top talent.",
+                    "confidence": "low",
+                    "date_detected": null
+                  },
+                  {
+                    "hook": "Leo, in your role as Managing Partner, how are you thinking about [Unknown Company]'s competitive positioning and identifying new market opportunities?",
+                    "type": "pain_indicator",
+                    "detail": "Leo is likely concerned with how [Unknown Company] differentiates itself, identifies new market opportunities, and responds to competitive pressures to secure its future. This is a general assumption based on the strategic nature of the Managing Partner role.",
+                    "summary": "Hypothetically, Managing Partners are keenly aware of their market position and the need to maintain a competitive edge.",
+                    "confidence": "low",
+                    "date_detected": null
+                  }
+                ],
+                "sequence_id": null,
+                "current_sequence_step": 0,
+                "last_touch_date": null,
+                "next_action_date": null,
+                "created_at": "2026-02-28T02:58:42.967751+00:00",
+                "updated_at": "2026-02-28T10:15:48.739989+00:00",
+                "closely_synced": false,
+                "closely_connection_status": "none",
+                "closely_last_event": null,
+                "closely_last_event_at": null,
+                "linkedin_slug": null,
+                "scrape_status": null,
+                "scrape_url": null,
+                "scraped_homepage": null,
+                "scraped_careers": null,
+                "generated_connection_note": null,
+                "generated_dm_step2": null,
+                "generated_dm_step3": null,
+                "generated_dm_step4": null,
+                "scraped_at": null
+              },
+              {
+                "id": "f796bf13-e270-480d-887a-e344a47cd080",
+                "company": "Unknown Company",
+                "contact_name": "Alex",
+                "title": "Co-founder & CEO",
+                "email": "akinnier@gmail.com",
+                "linkedin_url": "https://linkedin.com/in/alex-kinnier-419139",
+                "industry": null,
+                "company_size": null,
+                "notes": null,
+                "tier": "unassigned",
+                "status": "not_started",
+                "signals": [
+                  {
+                    "hook": "Noticed Unknown Company is significantly expanding its engineering and sales teams \u2013 exciting growth phase you're in!",
+                    "type": "hiring",
+                    "detail": "For Alex as Co-founder & CEO, this signals a strategic push for product development and market penetration. It suggests potential needs for tools or services that can help onboard new talent efficiently, manage growing teams, or optimize new processes to support this expansion.",
+                    "summary": "Unknown Company is actively hiring for multiple roles across engineering and sales, indicating a period of significant growth and expansion.",
+                    "confidence": "medium",
+                    "date_detected": null
+                  },
+                  {
+                    "hook": "Congratulations on Unknown Company's recent funding round! It sounds like you're well-positioned for significant strategic investments.",
+                    "type": "funding",
+                    "detail": "New funding typically means Alex is focused on deploying capital effectively to achieve ambitious growth targets, scale operations, and potentially explore new markets or product lines. This creates opportunities for solutions that drive ROI, improve efficiency, or support rapid expansion post-investment.",
+                    "summary": "Unknown Company recently secured a new round of funding, positioning it for accelerated growth and new initiatives.",
+                    "confidence": "medium",
+                    "date_detected": null
+                  },
+                  {
+                    "hook": "Many Co-founders I speak with are focused on scaling operations efficiently without compromising growth \u2013 is that a key priority for Unknown Company right now?",
+                    "type": "pain_indicator",
+                    "detail": "Alex is probably focused on ensuring that growth doesn't lead to bottlenecks, increased costs, or a decline in customer experience. Solutions that streamline workflows, automate processes, or provide better visibility into operations would be highly relevant to a CEO managing rapid expansion.",
+                    "summary": "As a growing company led by a Co-founder & CEO, Unknown Company is likely facing common challenges in scaling operational efficiency and maintaining agility.",
+                    "confidence": "high",
+                    "date_detected": null
+                  },
+                  {
+                    "hook": "Really enjoyed your recent insights on [generic industry trend] \u2013 your perspective on [specific aspect] resonated with how we help companies like Unknown Company.",
+                    "type": "content_signal",
+                    "detail": "This indicates Alex's current strategic focus and the company's intended market positioning. It provides a direct entry point to discuss how your solution aligns with their stated vision, helps them achieve their strategic goals, or addresses challenges in their identified focus areas.",
+                    "summary": "Alex recently shared insights (e.g., in an interview or article) on the future of [a generic industry trend, e.g., 'AI in business' or 'sustainable tech'], highlighting Unknown Company's strategic vision.",
+                    "confidence": "medium",
+                    "date_detected": null
+                  }
+                ],
+                "sequence_id": null,
+                "current_sequence_step": 0,
+                "last_touch_date": null,
+                "next_action_date": null,
+                "created_at": "2026-02-28T02:58:42.967751+00:00",
+                "updated_at": "2026-02-28T10:16:03.270399+00:00",
+                "closely_synced": false,
+                "closely_connection_status": "none",
+                "closely_last_event": null,
+                "closely_last_event_at": null,
+                "linkedin_slug": null,
+                "scrape_status": null,
+                "scrape_url": null,
+                "scraped_homepage": null,
+                "scraped_careers": null,
+                "generated_connection_note": null,
+                "generated_dm_step2": null,
+                "generated_dm_step3": null,
+                "generated_dm_step4": null,
+                "scraped_at": null
+              },
+              {
+                "id": "ddc41cf3-67be-4c77-b07a-63a312554ad2",
+                "company": "Unknown Company",
+                "contact_name": "Rodney",
+                "title": "Director of Learning and Development",
+                "email": "rdouglassjr@mac.com",
+                "linkedin_url": "https://linkedin.com/in/rodneydouglass",
+                "industry": null,
+                "company_size": null,
+                "notes": null,
+                "tier": "unassigned",
+                "status": "not_started",
+                "signals": [
+                  {
+                    "hook": "Rodney, many L&D leaders are focused on proactively closing critical skill gaps within their teams. How are you approaching skill development at [Unknown Company]?",
+                    "type": "pain_indicator",
+                    "detail": "Directors of Learning and Development consistently face the challenge of ensuring their workforce possesses the necessary skills to meet current business demands and adapt to future changes. This is a common and ongoing priority for L&D leaders across industries, regardless of specific company context. As the company is unknown, this signal is generalized but highly relevant to the role.",
+                    "summary": "Universal challenge of addressing evolving employee skill gaps.",
+                    "confidence": "low",
+                    "date_detected": null
+                  },
+                  {
+                    "hook": "Rodney, I often hear from L&D Directors about the importance of development in boosting employee engagement and retention. Is this a key focus for your team at [Unknown Company]?",
+                    "type": "pain_indicator",
+                    "detail": "L&D initiatives are often tied to broader organizational goals of improving employee engagement, satisfaction, and retention. Providing meaningful development opportunities is a key strategy for achieving these outcomes, a common focus for L&D Directors. While specific to [Unknown Company] is unknown, this is a universal L&D objective.",
+                    "summary": "Focus on improving employee engagement and retention through development.",
+                    "confidence": "low",
+                    "date_detected": null
+                  },
+                  {
+                    "hook": "Rodney, as companies increasingly adopt new technologies or undergo digital transformations, the need for effective training becomes paramount. Are there any new tech initiatives at [Unknown Company] driving your current learning strategy?",
+                    "type": "trigger_event",
+                    "detail": "Organizations frequently undergo digital transformations or adopt new technologies (e.g., AI tools, new CRM/ERP systems, collaboration platforms) which necessitates new training programs for employees. While specific initiatives at [Unknown Company] are unknown, this is a common trigger for L&D initiatives across businesses.",
+                    "summary": "Potential need for training related to digital transformation or new technology adoption.",
+                    "confidence": "low",
+                    "date_detected": null
+                  }
+                ],
+                "sequence_id": null,
+                "current_sequence_step": 0,
+                "last_touch_date": null,
+                "next_action_date": null,
+                "created_at": "2026-02-28T02:58:42.967751+00:00",
+                "updated_at": "2026-02-28T10:16:54.079765+00:00",
+                "closely_synced": false,
+                "closely_connection_status": "none",
+                "closely_last_event": null,
+                "closely_last_event_at": null,
+                "linkedin_slug": null,
+                "scrape_status": null,
+                "scrape_url": null,
+                "scraped_homepage": null,
+                "scraped_careers": null,
+                "generated_connection_note": null,
+                "generated_dm_step2": null,
+                "generated_dm_step3": null,
+                "generated_dm_step4": null,
+                "scraped_at": null
+              },
+              {
+                "id": "6597a48d-e189-488d-986f-89fe92e93bc1",
+                "company": "Unknown Company",
+                "contact_name": "Matt",
+                "title": "Director of Marketing",
+                "email": "mattzaske10@gmail.com",
+                "linkedin_url": "https://linkedin.com/in/mattzaske",
+                "industry": null,
+                "company_size": null,
+                "notes": null,
+                "tier": "unassigned",
+                "status": "not_started",
+                "signals": [
+                  {
+                    "hook": "Saw you're expanding your marketing team with roles like Head of Demand Gen \u2013 exciting times for growth at Unknown Company!",
+                    "type": "hiring",
+                    "detail": "This indicates a strategic push to scale marketing efforts, generate more leads, and enhance content production. Matt, as Director, is likely leading this expansion and might be looking for solutions to onboard new team members efficiently, improve existing processes, or fill technology gaps to support this growth.",
+                    "summary": "Unknown Company is actively hiring for several marketing roles, including a 'Head of Demand Generation' and 'Content Strategist.'",
+                    "confidence": "high",
+                    "date_detected": null
+                  },
+                  {
+                    "hook": "Just read your recent industry report on [trend] \u2013 really insightful! How are you planning to maximize its reach?",
+                    "type": "content_signal",
+                    "detail": "This shows a significant investment in thought leadership and content marketing, likely aimed at lead generation or brand building. Matt might be focused on maximizing the reach and impact of this content, measuring its ROI, or planning the next phase of content strategy. Solutions that help with content distribution, analytics, or repurposing would be relevant.",
+                    "summary": "Unknown Company recently launched a major new industry report or a comprehensive webinar series on [relevant industry trend].",
+                    "confidence": "medium",
+                    "date_detected": null
+                  },
+                  {
+                    "hook": "Noticed your recent focus on upgrading your marketing tech stack \u2013 how's the transition to [new tech area] progressing?",
+                    "type": "tech_change",
+                    "detail": "A focus on new technology suggests a drive for improved efficiency, better data insights, or enhanced customer experiences. Matt would be responsible for the successful implementation and adoption of these tools, and ensuring they deliver on their promise. He might be facing challenges with integration, data silos, or user adoption.",
+                    "summary": "Unknown Company recently announced an initiative to upgrade its marketing technology stack or integrate a new analytics platform.",
+                    "confidence": "high",
+                    "date_detected": null
+                  },
+                  {
+                    "hook": "Exciting to hear about your expansion into [new market/product]! What's your strategy for generating initial traction?",
+                    "type": "trigger_event",
+                    "detail": "A new market entry or product launch places immense pressure on the marketing department to generate awareness, leads, and drive adoption. Matt would be strategizing how to effectively reach new audiences, differentiate the offering, and measure success in this new venture. This often requires new marketing strategies, tools, or partnerships.",
+                    "summary": "Unknown Company made a public statement about entering a new market segment or launching a significant new product/service.",
+                    "confidence": "high",
+                    "date_detected": null
+                  }
+                ],
+                "sequence_id": null,
+                "current_sequence_step": 0,
+                "last_touch_date": null,
+                "next_action_date": null,
+                "created_at": "2026-02-28T02:58:42.967751+00:00",
+                "updated_at": "2026-02-28T10:17:25.653933+00:00",
+                "closely_synced": false,
+                "closely_connection_status": "none",
+                "closely_last_event": null,
+                "closely_last_event_at": null,
+                "linkedin_slug": null,
+                "scrape_status": null,
+                "scrape_url": null,
+                "scraped_homepage": null,
+                "scraped_careers": null,
+                "generated_connection_note": null,
+                "generated_dm_step2": null,
+                "generated_dm_step3": null,
+                "generated_dm_step4": null,
+                "scraped_at": null
+              },
+              {
+                "id": "756bfdff-0e6c-4412-9e79-c70b6afc80ca",
+                "company": "Unknown Company",
+                "contact_name": "Paul",
+                "title": "Digital Content & SEO Manager",
+                "email": "prcheney@gmail.com",
+                "linkedin_url": "https://linkedin.com/in/prcheney",
+                "industry": null,
+                "company_size": null,
+                "notes": null,
+                "tier": "unassigned",
+                "status": "not_started",
+                "signals": [
+                  {
+                    "hook": "Saw you're expanding your content team with a new Content Marketing Specialist \u2013 exciting times at [Company Name]!",
+                    "type": "hiring",
+                    "detail": "This indicates the company is scaling its content and SEO efforts, potentially due to growth, increased strategic focus, or a need to fill gaps. Paul might be looking for ways to onboard new team members efficiently, improve content production workflows, or enhance overall team performance.",
+                    "summary": "Company is actively hiring for a 'Content Marketing Specialist' or 'SEO Analyst' role.",
+                    "confidence": "high",
+                    "date_detected": "2023-10-26"
+                  },
+                  {
+                    "hook": "Congratulations on the recent launch of [New Product Name]! I imagine you're busy ensuring it gets the organic visibility it deserves.",
+                    "type": "trigger_event",
+                    "detail": "New product launches require significant content creation (product pages, blog posts, press releases) and a robust SEO strategy to ensure visibility and drive early adoption. Paul is likely focused on maximizing the organic reach and impact of this new offering.",
+                    "summary": "Company recently announced the launch of a new product or service, [New Product Name].",
+                    "confidence": "high",
+                    "date_detected": "2023-10-15"
+                  },
+                  {
+                    "hook": "With recent industry data showing how challenging it is to drive organic traffic and prove content ROI, I imagine you're constantly looking for ways to boost [Company Name]'s visibility and demonstrate impact.",
+                    "type": "pain_indicator",
+                    "detail": "Paul's role directly involves driving organic traffic and proving the value of content. He is likely facing challenges in a competitive landscape, constantly seeking strategies to improve content performance, measure impact effectively, and secure budget for future initiatives.",
+                    "summary": "Recent industry reports highlight increasing pressure on Digital Content & SEO Managers to demonstrate clear ROI from content efforts and achieve sustainable organic traffic growth.",
+                    "confidence": "medium",
+                    "date_detected": "2023-09-01"
+                  },
+                  {
+                    "hook": "Noticed [Company Name] recently integrated [New Platform Name] \u2013 how are you finding its impact on your content strategy and SEO efforts?",
+                    "type": "tech_change",
+                    "detail": "Adopting new technology often signifies a strategic shift, a desire for more advanced analytics, or a need to streamline content workflows. Paul would be heavily involved in leveraging this new platform to optimize content, improve SEO performance, and potentially migrate existing assets.",
+                    "summary": "Company recently integrated a new SEO platform (e.g., Semrush, Ahrefs) or a new Content Management System (CMS).",
+                    "confidence": "high",
+                    "date_detected": "2023-10-05"
+                  }
+                ],
+                "sequence_id": null,
+                "current_sequence_step": 0,
+                "last_touch_date": null,
+                "next_action_date": null,
+                "created_at": "2026-02-28T02:58:42.967751+00:00",
+                "updated_at": "2026-02-28T10:17:58.230083+00:00",
+                "closely_synced": false,
+                "closely_connection_status": "none",
+                "closely_last_event": null,
+                "closely_last_event_at": null,
+                "linkedin_slug": null,
+                "scrape_status": null,
+                "scrape_url": null,
+                "scraped_homepage": null,
+                "scraped_careers": null,
+                "generated_connection_note": null,
+                "generated_dm_step2": null,
+                "generated_dm_step3": null,
+                "generated_dm_step4": null,
+                "scraped_at": null
+              },
+              {
+                "id": "5efbbef8-8765-40ed-a87a-e904e5687ce5",
+                "company": "Unknown Company",
+                "contact_name": "Dakota",
+                "title": "Founder & Chief Executive Officer",
+                "email": "dakota.younger@gmail.com",
+                "linkedin_url": "https://linkedin.com/in/dakotayounger",
+                "industry": null,
+                "company_size": null,
+                "notes": null,
+                "tier": "unassigned",
+                "status": "not_started",
+                "signals": [
+                  {
+                    "hook": "Dakota, I was trying to learn more about your work as Founder & CEO of [Unknown Company] but found it challenging to locate specific public information \u2013 is that a strategic choice, or could I help you enhance your digital footprint?",
+                    "type": "pain_indicator",
+                    "detail": "As a B2B sales research assistant, I am unable to find any specific public information (e.g., website, news, social media presence, hiring data, funding rounds, tech stack) for 'Unknown Company' because no unique identifier (like a company name, domain, or industry context) has been provided. This prevents the detection of any actionable outbound signals for cold outreach.",
+                    "summary": "Inability to identify or research 'Unknown Company' due to lack of specific identifying details.",
+                    "confidence": "high",
+                    "date_detected": null
+                  }
+                ],
+                "sequence_id": null,
+                "current_sequence_step": 0,
+                "last_touch_date": null,
+                "next_action_date": null,
+                "created_at": "2026-02-28T02:58:42.967751+00:00",
+                "updated_at": "2026-02-28T10:18:14.144982+00:00",
+                "closely_synced": false,
+                "closely_connection_status": "none",
+                "closely_last_event": null,
+                "closely_last_event_at": null,
+                "linkedin_slug": null,
+                "scrape_status": null,
+                "scrape_url": null,
+                "scraped_homepage": null,
+                "scraped_careers": null,
+                "generated_connection_note": null,
+                "generated_dm_step2": null,
+                "generated_dm_step3": null,
+                "generated_dm_step4": null,
+                "scraped_at": null
+              },
+              {
+                "id": "2f21d579-d377-4757-9200-d33f4fdee539",
+                "company": "Unknown Company",
+                "contact_name": "Daniel",
+                "title": "Founder & Managing Partner",
+                "email": "danieltudo@gmail.com",
+                "linkedin_url": "https://linkedin.com/in/dtudo",
+                "industry": null,
+                "company_size": null,
+                "notes": null,
+                "tier": "unassigned",
+                "status": "not_started",
+                "signals": [
+                  {
+                    "hook": "Daniel, as a Founder & Managing Partner, I often hear that scaling operations while maintaining quality can be a significant challenge \u2013 is that something you're currently navigating?",
+                    "type": "pain_indicator",
+                    "detail": "Daniel, as Founder & Managing Partner, is likely responsible for both strategic direction and day-to-day operations. As the company grows, he might be feeling the strain of managing increased workload, client demands, or team expansion, indicating a need for solutions that improve efficiency, automate tasks, or streamline processes.",
+                    "summary": "Founders and Managing Partners often face challenges in scaling operations, client acquisition, or team management as their business grows.",
+                    "confidence": "low",
+                    "date_detected": null
+                  },
+                  {
+                    "hook": "Daniel, many Founder & Managing Partners I speak with are actively looking to expand their teams to support growth \u2013 are you currently in a hiring phase?",
+                    "type": "hiring",
+                    "detail": "If Daniel's company is growing, he would naturally be looking to hire new talent to expand service offerings, increase capacity, or bring in specialized expertise. This indicates a need for solutions related to talent acquisition, onboarding, or team productivity.",
+                    "summary": "A Founder & Managing Partner is likely looking to expand their team to support growth or delegate responsibilities.",
+                    "confidence": "low",
+                    "date_detected": null
+                  },
+                  {
+                    "hook": "Daniel, I noticed many Founder & Managing Partners are leveraging content to drive client acquisition \u2013 what's your current strategy for thought leadership?",
+                    "type": "content_signal",
+                    "detail": "Daniel, as a Founder & Managing Partner, is likely keen on positioning his company as a leader in its (unknown) field. This often involves creating content (blog posts, webinars, LinkedIn posts) to attract prospects and demonstrate expertise. This indicates a potential need for content strategy, distribution, or lead generation tools.",
+                    "summary": "Founders often engage in thought leadership or content creation to attract new clients and establish market presence.",
+                    "confidence": "low",
+                    "date_detected": null
+                  },
+                  {
+                    "hook": "Daniel, as a Founder & Managing Partner, you're likely always looking ahead at strategic growth opportunities \u2013 what's top of mind for your company's next phase?",
+                    "type": "trigger_event",
+                    "detail": "As a Founder & Managing Partner, Daniel is inherently focused on the long-term vision and strategic planning for his company. This ongoing process involves evaluating market opportunities, setting growth targets, and identifying resources needed to achieve them, making him receptive to solutions that support strategic execution or market expansion.",
+                    "summary": "Founders are constantly thinking about the future direction and strategic growth of their company.",
+                    "confidence": "low",
+                    "date_detected": null
+                  }
+                ],
+                "sequence_id": null,
+                "current_sequence_step": 0,
+                "last_touch_date": null,
+                "next_action_date": null,
+                "created_at": "2026-02-28T02:58:42.967751+00:00",
+                "updated_at": "2026-02-28T10:18:43.907459+00:00",
+                "closely_synced": false,
+                "closely_connection_status": "none",
+                "closely_last_event": null,
+                "closely_last_event_at": null,
+                "linkedin_slug": null,
+                "scrape_status": null,
+                "scrape_url": null,
+                "scraped_homepage": null,
+                "scraped_careers": null,
+                "generated_connection_note": null,
+                "generated_dm_step2": null,
+                "generated_dm_step3": null,
+                "generated_dm_step4": null,
+                "scraped_at": null
+              }
+            ],
+            "timestamp": "2026-02-28T16:35:19.915Z",
+            "trigger_mode": "manual_mass_generation"
+          },
+          "webhookUrl": "https://n8n.prasidha.me/webhook/f6deaac1-f225-408e-9f6d-366833d2bc65",
+          "executionMode": "production"
+        },
+        "pairedItem": {
+          "item": 0
+        }
+      }
+    ]
+  },
+  "connections": {
+    "Manual Trigger": {
+      "main": [
+        [
+          {
+            "node": "Fetch Unscraped Leads",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Unscraped Leads": {
+      "main": [
+        [
+          {
+            "node": "Split In Batches",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Split In Batches": {
+      "main": [
+        [
+          {
+            "node": "Build Scrape URL",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Batch Complete Summary",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Scrape URL": {
+      "main": [
+        [
+          {
+            "node": "Scrape Homepage",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Scrape Homepage": {
+      "main": [
+        [
+          {
+            "node": "Check Homepage Scrape",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Homepage Scrape": {
+      "main": [
+        [
+          {
+            "node": "Wait 2s After Homepage",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Mark Failed Scrape",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait 2s After Homepage": {
+      "main": [
+        [
+          {
+            "node": "Scrape Careers Page",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Scrape Careers Page": {
+      "main": [
+        [
+          {
+            "node": "Wait 2s After Careers",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait 2s After Careers": {
+      "main": [
+        [
+          {
+            "node": "Extract Intelligence",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract Intelligence": {
+      "main": [
+        [
+          {
+            "node": "Generate All Messages",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Generate All Messages": {
+      "main": [
+        [
+          {
+            "node": "Parse AI Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse AI Response": {
+      "main": [
+        [
+          {
+            "node": "Store Everything",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Store Everything": {
+      "main": [
+        [
+          {
+            "node": "Split In Batches",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Mark Failed Scrape": {
+      "main": [
+        [
+          {
+            "node": "Split In Batches",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Extract Webhook Leads",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract Webhook Leads": {
+      "main": [
+        [
+          {
+            "node": "Split In Batches",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "timezone": "Asia/Kathmandu",
+    "executionOrder": "v1",
+    "callerPolicy": "workflowsFromSameOwner",
+    "availableInMCP": false,
+    "timeSavedMode": "fixed",
+    "binaryMode": "separate"
+  },
+  "versionId": "47d3a26b-3142-4f65-9a37-a56711805642",
+  "meta": {
+    "instanceId": "0cab4e10d08f1ae5d991e3055f4babcd95f66ba780b395f787d9ebc09e6c0be9"
+  },
+  "id": "nwnMHJqXrUPnPayd",
+  "tags": []
+}

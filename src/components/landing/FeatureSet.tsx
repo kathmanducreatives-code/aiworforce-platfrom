@@ -46,7 +46,7 @@ const FeatureSet = () => {
                         <div key={i} className="feat-card glass rounded-2xl p-6 opacity-0 group hover:border-emerald-500/20 hover:-translate-y-1 transition-all duration-300 cursor-default">
                             <f.icon className={`w-8 h-8 mb-4 ${f.color} transition-transform group-hover:scale-110`} />
                             <h3 className="font-display font-bold text-base text-white mb-2">{f.title}</h3>
-                            <p className="text-sm text-white/35 leading-relaxed">{f.desc}</p>
+                            <p className="text-sm text-white/50 leading-relaxed">{f.desc}</p>
                         </div>
                     ))}
                     <div className="feat-card glass rounded-2xl p-6 opacity-0 border-dashed !border-white/10 hover:border-emerald-500/15 transition-all duration-300">

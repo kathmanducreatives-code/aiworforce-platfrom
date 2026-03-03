@@ -1631,7 +1631,7 @@ body {
   /* Dot Grid Pattern */
   .dot-grid-pattern {
     background-image: radial-gradient(circle, rgba(255, 255, 255, 0.05) 1px, transparent 1px);
-    background-size: 30px 30px;
+    background-size: 80px 80px;
   }
 
   /* Starfield Background */
@@ -1704,4 +1704,212 @@ body {
     background: hsl(0 0% 100%);
     border: 2px solid hsl(174 72% 42%);
   }
+}
+
+/* --- DEEP SPACE HIGH-TECH OVERHAUL --- */
+
+/* Digital Blueprint Grid */
+.bg-deep-space {
+  background-color: #000000;
+}
+
+.glow-grid-overlay {
+  background-image:
+    linear-gradient(to right, rgba(0, 255, 0, 0.1) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(0, 255, 0, 0.1) 1px, transparent 1px);
+  background-size: 100px 100px;
+}
+
+/* Data Pulse Animation */
+@keyframes data-pulse {
+
+  0%,
+  100% {
+    opacity: 0;
+    transform: scale(0.8);
+  }
+
+  50% {
+    opacity: 1;
+    transform: scale(1.2);
+    box-shadow: 0 0 10px 2px rgba(0, 255, 0, 0.8);
+  }
+}
+
+.data-pulse-node {
+  animation: data-pulse 3s infinite ease-in-out;
+}
+
+/* Border Beam Animation */
+@property --border-angle {
+  syntax: "<angle>";
+  initial-value: 0turn;
+  inherits: false;
+}
+
+@keyframes border-beam-spin {
+  from {
+    --border-angle: 0turn;
+  }
+
+  to {
+    --border-angle: 1turn;
+  }
+}
+
+.border-beam-card {
+  position: relative;
+  border-radius: var(--radius);
+  background: rgba(0, 0, 0, 0.4);
+  backdrop-filter: blur(30px);
+  -webkit-backdrop-filter: blur(30px);
+  z-index: 10;
+}
+
+.border-beam-card::before {
+  content: "";
+  position: absolute;
+  inset: -1px;
+  border-radius: inherit;
+  background: conic-gradient(from var(--border-angle), transparent 25%, rgba(0, 255, 0, 0.8) 50%, transparent 75%);
+  animation: border-beam-spin 4s linear infinite;
+  z-index: -1;
+  -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  padding: 1px;
+}
+
+/* Radar Scan */
+@keyframes radar-scan {
+  0% {
+    transform: translateY(-100%);
+    opacity: 0;
+  }
+
+  10% {
+    opacity: 1;
+  }
+
+  90% {
+    opacity: 1;
+  }
+
+  100% {
+    transform: translateY(100%);
+    opacity: 0;
+  }
+}
+
+.radar-scan-line {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: rgba(0, 255, 0, 0.8);
+  box-shadow: 0 0 10px rgba(0, 255, 0, 0.8), 0 0 20px rgba(0, 255, 0, 0.6);
+  animation: radar-scan 2.5s linear infinite;
+  z-index: 20;
+}
+
+/* Liquid Fill Button Hover */
+.liquid-fill-btn {
+  position: relative;
+  overflow: hidden;
+  z-index: 1;
+  transition: color 0.3s ease;
+}
+
+.liquid-fill-btn::before {
+  content: "";
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 255, 0, 0.2);
+  transition: top 0.4s cubic-bezier(0.1, 0, 0.1, 1);
+  z-index: -1;
+}
+
+.liquid-fill-btn:hover::before {
+  top: 0;
+}
+
+.liquid-fill-btn:hover {
+  color: #ffffff;
+  text-shadow: 0 0 8px rgba(0, 255, 0, 0.8);
+}
+
+/* Text Glow */
+.text-glow-green {
+  text-shadow: 0 4px 12px rgba(34, 197, 94, 0.25), 0 2px 4px rgba(34, 197, 94, 0.4);
+}
+
+/* --- ARCHITECTURAL GRID OVERHAUL --- */
+
+.bg-deep-space {
+  background-color: #000000;
+}
+
+.glow-grid-overlay {
+  background-image:
+    linear-gradient(to right, rgba(0, 255, 0, 0.08) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(0, 255, 0, 0.08) 1px, transparent 1px);
+  background-size: 100px 100px;
+}
+
+.searchlight-overlay {
+  background: radial-gradient(600px circle at var(--mouse-x) var(--mouse-y), rgba(34, 197, 94, 0.15), transparent 50%);
+  z-index: 10;
+}
+
+/* Strict Layouts */
+.glass-grid-card {
+  background: rgba(0, 0, 0, 0.8);
+  backdrop-filter: blur(40px);
+  -webkit-backdrop-filter: blur(40px);
+  border: 1px solid rgba(0, 255, 0, 0.15);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+  display: grid;
+  gap: 1rem;
+}
+
+/* Large neon percentage counter */
+.scroll-percentage-counter {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10rem;
+  font-weight: 200;
+  color: transparent;
+  -webkit-text-stroke: 1px rgba(0, 255, 0, 0.2);
+  position: absolute;
+  bottom: -2rem;
+  right: -2rem;
+  z-index: 0;
+  pointer-events: none;
+  transition: all 0.1s linear;
+}
+
+.tilt-container {
+  perspective: 2000px;
+  transform-style: preserve-3d;
+}
+
+
+/* Global Fade & Slide Reveal */
+.reveal-fade-slide {
+  opacity: 0;
+  transform: translateY(20px);
+  transition: opacity 0.6s ease-out, transform 0.6s ease-out;
+}
+
+.reveal-fade-slide.is-revealed {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.text-zinc-muted {
+  color: #71717a;
+  /* zinc-500 */
 }

@@ -75,7 +75,7 @@ const ExpertDirectory = ({ onRequestExpert }: ExpertDirectoryProps) => {
                       <div className="flex items-center gap-2">
                         <h3 className="font-semibold text-foreground">{expert.name}</h3>
                         {expert.verified && (
-                          <ShieldCheck className="h-4 w-4 text-emerald-500" />
+                          <ShieldCheck className="h-4 w-4 text-green-500" />
                         )}
                       </div>
                       <p className="text-sm text-muted-foreground">{expert.title}</p>
@@ -85,8 +85,8 @@ const ExpertDirectory = ({ onRequestExpert }: ExpertDirectoryProps) => {
                       className={cn(
                         'text-xs flex-shrink-0',
                         expert.availability === 'Available'
-                          ? 'border-emerald-500/30 text-emerald-600 bg-emerald-500/10'
-                          : 'border-amber-500/30 text-amber-600 bg-amber-500/10'
+                          ? 'border-green-500/30 text-green-600 bg-green-500/10'
+                          : 'border-yellow-500/30 text-yellow-600 bg-yellow-500/10'
                       )}
                     >
                       {expert.availability}
@@ -96,7 +96,7 @@ const ExpertDirectory = ({ onRequestExpert }: ExpertDirectoryProps) => {
                   {/* Stats Row */}
                   <div className="flex items-center gap-4 mt-3 text-sm text-muted-foreground">
                     <span className="flex items-center gap-1">
-                      <Star className="h-3.5 w-3.5 text-amber-500 fill-amber-500" />
+                      <Star className="h-3.5 w-3.5 text-yellow-500 fill-yellow-500" />
                       <span className="font-medium text-foreground">{expert.qualityScore}</span>
                     </span>
                     <span className="flex items-center gap-1">
@@ -115,7 +115,7 @@ const ExpertDirectory = ({ onRequestExpert }: ExpertDirectoryProps) => {
                     <GraduationCap className="h-3.5 w-3.5" />
                     <span>{expert.degree} — {expert.university}</span>
                     {expert.degreeVerified && (
-                      <Badge variant="outline" className="text-[10px] px-1.5 py-0 border-emerald-500/30 text-emerald-600 bg-emerald-500/5">
+                      <Badge variant="outline" className="text-[10px] px-1.5 py-0 border-green-500/30 text-green-600 bg-green-500/5">
                         Verified
                       </Badge>
                     )}

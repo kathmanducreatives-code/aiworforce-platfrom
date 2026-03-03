@@ -1,5 +1,5 @@
 import { CheckCircle2, Clock, XCircle, PlayCircle, Inbox } from 'lucide-react';
-import type { OutreachLead } from '../../../types/outreach';
+
 
 export type LeadStatus = 'not_started' | 'in_sequence' | 'replied' | 'meeting_booked' | 'closed' | 'dead';
 
