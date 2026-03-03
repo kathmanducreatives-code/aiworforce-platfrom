@@ -46,32 +46,8 @@ const navGroups: NavGroup[] = [
       { path: '/analytics', icon: BarChart3, label: 'Analytics' },
     ],
   },
-  {
-    label: 'Verify',
-    items: [
-      { path: '/verify', icon: CheckSquare, label: 'Verification Queue' },
-      { path: '/verify/results', icon: ShieldCheck, label: 'Results' },
-    ],
-  },
-  {
-    label: 'Expert Interviews',
-    items: [
-      { path: '/interviews', icon: LayoutDashboard, label: 'Dashboard' },
-      { path: '/interviews/marketplace', icon: Search, label: 'Find an Interviewer' },
-      { path: '/interviews/scheduled', icon: Calendar, label: 'Scheduled' },
-      { path: '/interviews/completed', icon: Video, label: 'Completed' },
-      { path: '/interviews/reports', icon: ClipboardList, label: 'Reports' },
-    ],
-  },
-  {
-    label: 'Interviewer Portal',
-    items: [
-      { path: '/portal/assignments', icon: Briefcase, label: 'My Assignments' },
-      { path: '/portal/submit', icon: ClipboardList, label: 'Submit Report' },
-      { path: '/portal/earnings', icon: Wallet, label: 'My Earnings' },
-      { path: '/portal/profile', icon: UserCircle, label: 'My Profile' },
-    ],
-  },
+  // Verify, Expert Interviews, and Interviewer Portal sections are hidden
+  // until their backend pages are implemented. See audit report for details.
 ];
 
 interface SidebarProps {
@@ -170,16 +146,7 @@ const Sidebar = ({ collapsed, onToggle, onOpenCommandPalette }: SidebarProps) =>
 
       {/* Bottom section */}
       <div className="border-t border-border px-3 py-3 space-y-0.5">
-        <button
-          onClick={() => navigate('/settings')}
-          className={cn(
-            'flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-all w-full',
-            collapsed && 'justify-center px-2'
-          )}
-        >
-          <Settings className="h-4 w-4" />
-          {!collapsed && <span>Settings</span>}
-        </button>
+        {/* Settings button hidden until Settings page is implemented */}
         <button
           className={cn(
             'flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-all w-full',
