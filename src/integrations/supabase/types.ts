@@ -1984,6 +1984,7 @@ export type Database = {
       }
       outreach_leads: {
         Row: {
+          agency_name: string | null
           closely_connection_status: string | null
           closely_last_event: string | null
           closely_last_event_at: string | null
@@ -1993,11 +1994,15 @@ export type Database = {
           contact_name: string
           created_at: string
           current_sequence_step: number | null
+          discovery_source: string | null
           email: string | null
+          founder_about: string | null
           generated_connection_note: string | null
           generated_dm_step2: string | null
           generated_dm_step3: string | null
           generated_dm_step4: string | null
+          hiring_detected: boolean | null
+          hiring_source: string | null
           id: string
           industry: string | null
           last_touch_date: string | null
@@ -2005,6 +2010,10 @@ export type Database = {
           linkedin_url: string | null
           next_action_date: string | null
           notes: string | null
+          open_roles: string | null
+          recent_news: string | null
+          role_count: number | null
+          salary_range: string | null
           scrape_status: string | null
           scrape_url: string | null
           scraped_at: string | null
@@ -2016,8 +2025,10 @@ export type Database = {
           tier: Database["public"]["Enums"]["lead_tier"] | null
           title: string | null
           updated_at: string
+          uses_agency: boolean | null
         }
         Insert: {
+          agency_name?: string | null
           closely_connection_status?: string | null
           closely_last_event?: string | null
           closely_last_event_at?: string | null
@@ -2027,11 +2038,15 @@ export type Database = {
           contact_name: string
           created_at?: string
           current_sequence_step?: number | null
+          discovery_source?: string | null
           email?: string | null
+          founder_about?: string | null
           generated_connection_note?: string | null
           generated_dm_step2?: string | null
           generated_dm_step3?: string | null
           generated_dm_step4?: string | null
+          hiring_detected?: boolean | null
+          hiring_source?: string | null
           id?: string
           industry?: string | null
           last_touch_date?: string | null
@@ -2039,6 +2054,10 @@ export type Database = {
           linkedin_url?: string | null
           next_action_date?: string | null
           notes?: string | null
+          open_roles?: string | null
+          recent_news?: string | null
+          role_count?: number | null
+          salary_range?: string | null
           scrape_status?: string | null
           scrape_url?: string | null
           scraped_at?: string | null
@@ -2050,8 +2069,10 @@ export type Database = {
           tier?: Database["public"]["Enums"]["lead_tier"] | null
           title?: string | null
           updated_at?: string
+          uses_agency?: boolean | null
         }
         Update: {
+          agency_name?: string | null
           closely_connection_status?: string | null
           closely_last_event?: string | null
           closely_last_event_at?: string | null
@@ -2061,11 +2082,15 @@ export type Database = {
           contact_name?: string
           created_at?: string
           current_sequence_step?: number | null
+          discovery_source?: string | null
           email?: string | null
+          founder_about?: string | null
           generated_connection_note?: string | null
           generated_dm_step2?: string | null
           generated_dm_step3?: string | null
           generated_dm_step4?: string | null
+          hiring_detected?: boolean | null
+          hiring_source?: string | null
           id?: string
           industry?: string | null
           last_touch_date?: string | null
@@ -2073,6 +2098,10 @@ export type Database = {
           linkedin_url?: string | null
           next_action_date?: string | null
           notes?: string | null
+          open_roles?: string | null
+          recent_news?: string | null
+          role_count?: number | null
+          salary_range?: string | null
           scrape_status?: string | null
           scrape_url?: string | null
           scraped_at?: string | null
@@ -2084,6 +2113,7 @@ export type Database = {
           tier?: Database["public"]["Enums"]["lead_tier"] | null
           title?: string | null
           updated_at?: string
+          uses_agency?: boolean | null
         }
         Relationships: [
           {

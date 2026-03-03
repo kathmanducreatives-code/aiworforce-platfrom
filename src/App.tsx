@@ -25,6 +25,7 @@ import ClientDetail from "./pages/ClientDetail";
 import LeadScraper from "./pages/LeadScraper";
 import DeepSearch from "./pages/DeepSearch";
 import InterviewScheduler from "./pages/InterviewScheduler";
+import InterviewSettings from "./pages/InterviewSettings";
 import BookInterview from "./pages/BookInterview";
 import GoogleOAuthCallback from "./pages/GoogleOAuthCallback";
 import ProtectedRoute from "./components/ProtectedRoute";
@@ -184,6 +185,13 @@ const App = () => (
                     </ProtectedRoute>
                   } />
 
+                  <Route path="/interview-settings" element={
+                    <ProtectedRoute>
+                      <MainLayout>
+                        <InterviewSettings />
+                      </MainLayout>
+                    </ProtectedRoute>
+                  } />
                   <Route path="/screening-jobs" element={
                     <ProtectedRoute>
                       <MainLayout>

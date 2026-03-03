@@ -66,6 +66,14 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         await fetchProfile(session.user.id);
       }
       setLoading(false);
+    }).catch(async (error) => {
+      // Handle stale refresh tokens gracefully
+      console.warn('Session recovery failed, signing out:', error?.message);
+      await supabase.auth.signOut();
+      setSession(null);
+      setUser(null);
+      setProfile(null);
+      setLoading(false);
     });
 
     return () => subscription.unsubscribe();
