@@ -8,7 +8,7 @@ import gsap from "gsap";
 import { ScrollTrigger } from "gsap/ScrollTrigger";
 import HeroHook from "@/components/landing/HeroHook";
 import { TransformationSection } from "@/components/landing/TransformationSection";
-import { ExpertMarketplace } from "@/components/landing/ExpertMarketplace";
+
 import ProductDashboard from "@/components/landing/ProductDashboard";
 
 import ProductScreening from "@/components/landing/ProductScreening";
@@ -20,6 +20,7 @@ import PricingCard from "@/components/landing/PricingCard";
 import FAQSection from "@/components/landing/FAQSection";
 import MarqueeBanner from "@/components/landing/MarqueeBanner";
 import FinalCTA from "@/components/landing/FinalCTA";
+import { ExpertJourney } from "@/components/landing/ExpertJourney";
 
 gsap.registerPlugin(ScrollTrigger);
 
@@ -54,8 +55,8 @@ const Landing = () => {
         <ProductLookalike />
         <ProductScreening />
 
-        {/* Expert Marketplace (Climax) */}
-        <ExpertMarketplace />
+        {/* Expert Journey — 4-step scroll stack */}
+        <ExpertJourney />
 
         {/* 8. Time Math — Comparison Table */}
         <TimeMath />
