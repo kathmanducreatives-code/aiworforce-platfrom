@@ -30,13 +30,16 @@
   },
   "dependencies": {
     "@google/genai": "^1.42.0",
+    "@supabase/supabase-js": "^2.98.0",
+    "@tailwindcss/vite": "^4.2.1",
     "@types/papaparse": "^5.5.2",
     "lucide-react": "^0.574.0",
     "papaparse": "^5.5.3",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
     "recharts": "^3.7.0",
-    "sonner": "^2.0.7"
+    "sonner": "^2.0.7",
+    "tailwindcss": "^4.2.1"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.1",

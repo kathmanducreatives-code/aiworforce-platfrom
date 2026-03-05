@@ -38,7 +38,7 @@ const Landing = () => {
   }, [user, navigate]);
 
   return (
-    <div className="min-h-screen relative bg-deep-space overflow-clip font-display text-white">
+    <div className="min-h-screen relative bg-deep-space font-display text-white">
       <DigitalBlueprintBg />
 
       {/* 1. Sticky Nav */}

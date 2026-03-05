@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useLayoutEffect, useRef } from 'react';
 import gsap from 'gsap';
 import { ScrollTrigger } from 'gsap/ScrollTrigger';
 import { BadgeCheck, FileText, CheckCircle, ChevronRight, Mic, Star } from 'lucide-react';
@@ -59,7 +59,7 @@ export const ExpertMarketplace = () => {
     const powerLineRef = useRef<HTMLDivElement>(null);
     const powerDotRef = useRef<HTMLDivElement>(null);
 
-    useEffect(() => {
+    useLayoutEffect(() => {
         const ctx = gsap.context(() => {
             /* ── baseline hidden states ── */
             gsap.set(titleRef.current, { opacity: 0, y: 50 });
@@ -252,6 +252,9 @@ export const ExpertMarketplace = () => {
                 duration: 1.2,
                 ease: 'elastic.out(1,0.5)',
             }, 23.8);
+
+            /* — refresh scrolltrigger after layout is calculated — */
+            ScrollTrigger.refresh();
 
         }, sectionRef);
 

@@ -33,7 +33,7 @@ export default function LeadDiscoverModal({ isOpen, onClose, onDiscoverSuccess }
                 maxItems
             };
 
-            const response = await fetch('https://n8n.prasidha.me/webhook/outreach-discover', {
+            const response = await fetch(import.meta.env.VITE_N8N_OUTREACH_DISCOVER_WEBHOOK, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(body),

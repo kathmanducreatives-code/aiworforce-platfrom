@@ -6,7 +6,7 @@ import {
   LayoutDashboard, Activity, Calendar, Search, Brain, Target, TrendingUp,
   Mail, Share2, BarChart3, LogOut, Settings, HelpCircle, ChevronLeft, ChevronRight,
   PanelLeftClose, PanelLeft, Command, Users, CheckSquare, ShieldCheck, Video,
-  ClipboardList, Wallet, UserCircle, Briefcase
+  ClipboardList, Wallet, UserCircle, Briefcase, Crosshair, Zap
 } from 'lucide-react';
 
 interface NavGroup {
@@ -41,13 +41,18 @@ const navGroups: NavGroup[] = [
     ],
   },
   {
+    label: 'Growth & Outbound',
+    items: [
+      { path: '/post-interceptor', icon: Crosshair, label: 'Post Interceptor' },
+      { path: '/lead-crm', icon: Zap, label: 'Lead CRM' },
+    ],
+  },
+  {
     label: 'Analyze',
     items: [
       { path: '/analytics', icon: BarChart3, label: 'Analytics' },
     ],
   },
-  // Verify, Expert Interviews, and Interviewer Portal sections are hidden
-  // until their backend pages are implemented. See audit report for details.
 ];
 
 interface SidebarProps {

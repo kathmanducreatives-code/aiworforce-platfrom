@@ -1,138 +1,73 @@
 import { useState } from "react";
 import { Toaster } from "sonner";
+import Sidebar from "./components/layout/Sidebar";
+import type { TabId } from "./components/layout/Sidebar";
 import ContentPlanner from "./ContentPlanner";
 import OutreachLayout from "./components/outreach/OutreachLayout";
-import CommandCenter from "./components/dashboard/CommandCenter";
 import DialerView from "./components/dialer/DialerView";
 import VapiDialerView from "./components/dialer/VapiDialerView";
+import DashboardOverview from "./components/dashboard/DashboardOverview";
+import InterceptorPipeline from "./components/outreach/PostInterceptor/InterceptorPipeline";
+import LeadCRMView from "./components/outreach/LeadCRM/LeadCRMView";
+import SettingsView from "./components/settings/SettingsView";
+
+const ContentGenerator = () => (
+    <div className="flex flex-col items-center justify-center flex-1 text-slate-500 gap-4 p-16">
+        <div className="w-16 h-16 rounded-2xl bg-white/[0.03] border border-white/[0.08] flex items-center justify-center text-2xl">✍️</div>
+        <p className="text-white font-semibold">Content Generator</p>
+        <p className="text-sm text-center max-w-xs">AI-powered LinkedIn post generator coming soon.</p>
+    </div>
+);
 
 function App() {
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'content' | 'outreach' | 'dialer' | 'ai-agent'>('dashboard');
+    const [activeTab, setActiveTab] = useState<TabId>('dashboard');
+    const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
 
-  return (
-    <div style={{ background: "#0a0a0b", minHeight: "100vh", display: "flex", flexDirection: "column", color: "#ffffff" }}>
-      <Toaster
-        position="top-right"
-        toastOptions={{
-          style: {
-            fontFamily: "'Inter', sans-serif",
-            borderRadius: "12px",
-            background: "#141416",
-            color: "#ffffff",
-            border: "1px solid rgba(255, 255, 255, 0.08)",
-          },
-        }}
-      />
-      {/* Global Navigation Bar */}
-      <nav style={{
-        background: "#0a0a0b",
-        borderBottom: "1px solid rgba(255, 255, 255, 0.08)",
-        padding: "0 24px",
-        height: "48px",
-        display: "flex",
-        alignItems: "center",
-        gap: "24px",
-        position: "sticky",
-        top: 0,
-        zIndex: 40,
-        boxShadow: "0 1px 2px 0 rgba(0, 0, 0, 0.05)",
-      }}>
-        <button
-          onClick={() => setActiveTab('dashboard')}
-          style={{
-            background: "transparent",
-            border: "none",
-            color: activeTab === 'dashboard' ? "#3b82f6" : "#64748b",
-            fontWeight: activeTab === 'dashboard' ? 600 : 500,
-            fontSize: "13px",
-            height: "100%",
-            borderBottom: activeTab === 'dashboard' ? "2px solid #3b82f6" : "2px solid transparent",
-            cursor: "pointer",
-            transition: "all 0.2s",
-            padding: "0 4px",
-          }}
-        >
-          Command Center
-        </button>
-        <button
-          onClick={() => setActiveTab('content')}
-          style={{
-            background: "transparent",
-            border: "none",
-            color: activeTab === 'content' ? "#059669" : "#64748b",
-            fontWeight: activeTab === 'content' ? 600 : 500,
-            fontSize: "13px",
-            height: "100%",
-            borderBottom: activeTab === 'content' ? "2px solid #059669" : "2px solid transparent",
-            cursor: "pointer",
-            transition: "all 0.2s",
-            padding: "0 4px",
-          }}
-        >
-          Content Planner
-        </button>
-        <button
-          onClick={() => setActiveTab('outreach')}
-          style={{
-            background: "transparent",
-            border: "none",
-            color: activeTab === 'outreach' ? "#7c3aed" : "#64748b",
-            fontWeight: activeTab === 'outreach' ? 600 : 500,
-            fontSize: "13px",
-            height: "100%",
-            borderBottom: activeTab === 'outreach' ? "2px solid #7c3aed" : "2px solid transparent",
-            cursor: "pointer",
-            transition: "all 0.2s",
-            padding: "0 4px",
-          }}
-        >
-          Outreach Engine
-        </button>
-        <button
-          onClick={() => setActiveTab('dialer')}
-          style={{
-            background: "transparent",
-            border: "none",
-            color: activeTab === 'dialer' ? "#d97706" : "#64748b",
-            fontWeight: activeTab === 'dialer' ? 600 : 500,
-            fontSize: "13px",
-            height: "100%",
-            borderBottom: activeTab === 'dialer' ? "2px solid #d97706" : "2px solid transparent",
-            cursor: "pointer",
-            transition: "all 0.2s",
-            padding: "0 4px",
-          }}
-        >
-          Power Dialer
-        </button>
-        <button
-          onClick={() => setActiveTab('ai-agent')}
-          style={{
-            background: "transparent",
-            border: "none",
-            color: activeTab === 'ai-agent' ? "#059669" : "#64748b", // emerald green for AI
-            fontWeight: activeTab === 'ai-agent' ? 600 : 500,
-            fontSize: "13px",
-            height: "100%",
-            borderBottom: activeTab === 'ai-agent' ? "2px solid #059669" : "2px solid transparent",
-            cursor: "pointer",
-            transition: "all 0.2s",
-            padding: "0 4px",
-          }}
-        >
-          AI Voice Agent
-        </button>
-      </nav>
+    return (
+        <div className="flex min-h-screen bg-[#0a0a0b] text-white">
+            <Toaster
+                position="top-right"
+                toastOptions={{
+                    style: {
+                        fontFamily: "'Inter', sans-serif",
+                        borderRadius: "12px",
+                        background: "#1c1c1f",
+                        color: "#ffffff",
+                        border: "1px solid rgba(255,255,255,0.10)",
+                        fontSize: "13px",
+                    },
+                }}
+            />
 
-      <div style={{ flex: 1, display: "flex", flexDirection: "column" }}>
-        {activeTab === 'dashboard' && <CommandCenter />}
-        {activeTab === 'content' && <ContentPlanner />}
-        {activeTab === 'outreach' && <OutreachLayout />}
-        {activeTab === 'dialer' && <DialerView />}
-        {activeTab === 'ai-agent' && <VapiDialerView />}
-      </div>
-    </div>
-  );
+            <Sidebar
+                activeTab={activeTab}
+                onTabChange={setActiveTab}
+                collapsed={sidebarCollapsed}
+                setCollapsed={setSidebarCollapsed}
+            />
+
+            <main
+                className="flex flex-col flex-1 min-w-0 transition-[margin] duration-300 ease-[cubic-bezier(0.4,0,0.2,1)]"
+                style={{ marginLeft: sidebarCollapsed ? '72px' : '240px' }}
+            >
+                {activeTab === 'dashboard'          && <DashboardOverview />}
+                {activeTab === 'content-planner'    && <ContentPlanner />}
+                {activeTab === 'content-generator'  && <ContentGenerator />}
+                {activeTab === 'post-interceptor'   && <InterceptorPipeline />}
+                {activeTab === 'lead-crm'           && <LeadCRMView />}
+                {activeTab === 'outreach'           && <OutreachLayout />}
+                {activeTab === 'dialer'             && (
+                    <div className="flex flex-col flex-1">
+                        <DialerView />
+                        <div className="border-t border-white/[0.08] mt-5">
+                            <VapiDialerView />
+                        </div>
+                    </div>
+                )}
+                {activeTab === 'settings' && <SettingsView />}
+            </main>
+        </div>
+    );
 }
 
 export default App;

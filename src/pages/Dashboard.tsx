@@ -6,7 +6,7 @@ import { useTheme } from "@/contexts/ThemeContext";
 import {
   Users, TrendingUp, Folder, Brain, Moon, Sun,
   UserPlus, Mail, Search, Calendar, AlertCircle, ChevronRight,
-  ArrowUpRight, ArrowDownRight, Clock
+  ArrowUpRight, ArrowDownRight, Clock, Crosshair, Zap, MessageSquare
 } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import MetricCard from "@/components/shared/MetricCard";
@@ -14,6 +14,7 @@ import SkeletonCard from "@/components/shared/SkeletonCard";
 import ScorePill from "@/components/shared/ScorePill";
 import NotificationCenter from "@/components/shared/NotificationCenter";
 import { cn } from "@/lib/utils";
+import { fetchOutboundMetrics } from "@/services/interceptorService";
 
 const Dashboard = () => {
   const navigate = useNavigate();
@@ -30,11 +31,13 @@ const Dashboard = () => {
     pipelineInterviewed: 0,
     pipelineHired: 0,
   });
+  const [outbound, setOutbound] = useState<{ total: number; hotPending: number; dmsSent: number; last7: { date: string; count: number }[] } | null>(null);
   const [recentCandidates, setRecentCandidates] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     fetchDashboardData();
+    fetchOutboundMetrics().then(setOutbound).catch(() => null);
   }, []);
 
   const fetchDashboardData = async () => {
@@ -324,6 +327,63 @@ const Dashboard = () => {
             </div>
           )}
         </div>
+        {/* Outbound Metrics Panel */}
+        <div className="rounded-2xl border border-border bg-card/50 p-5 mt-4">
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-2">
+              <Crosshair className="h-4 w-4 text-primary" />
+              <h3 className="text-sm font-semibold text-foreground">Outbound Performance</h3>
+            </div>
+            <button onClick={() => navigate('/post-interceptor')} className="text-xs text-primary hover:text-primary/80 font-medium transition-colors">
+              Open Interceptor →
+            </button>
+          </div>
+          {!outbound ? (
+            <div className="grid grid-cols-3 gap-4 mb-5">
+              {[1, 2, 3].map(i => <div key={i} className="h-16 bg-muted rounded-xl animate-pulse" />)}
+            </div>
+          ) : (
+            <>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-5">
+                {[
+                  { label: 'Leads Intercepted', value: outbound.total, icon: <Crosshair className="h-4 w-4 text-primary" /> },
+                  { label: 'Hot Leads Pending', value: outbound.hotPending, icon: <Zap className="h-4 w-4 text-rose-400" /> },
+                  { label: 'DMs Sent', value: outbound.dmsSent, icon: <MessageSquare className="h-4 w-4 text-emerald-400" /> },
+                ].map(m => (
+                  <div key={m.label} className="rounded-xl border border-border bg-background/40 px-4 py-3 flex items-center gap-3">
+                    <div className="p-2 rounded-lg bg-muted/80">{m.icon}</div>
+                    <div>
+                      <p className="text-xl font-bold text-foreground tabular-nums">{m.value}</p>
+                      <p className="text-xs text-muted-foreground">{m.label}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+              {/* 7-day bar chart */}
+              <div>
+                <p className="text-xs text-muted-foreground mb-2">Leads last 7 days</p>
+                <div className="flex items-end gap-1 h-12">
+                  {outbound.last7.map(({ date, count }) => {
+                    const max = Math.max(...outbound.last7.map(d => d.count), 1);
+                    const pct = (count / max) * 100;
+                    return (
+                      <div key={date} className="flex-1 flex flex-col items-center gap-1 group" title={`${date}: ${count} leads`}>
+                        <div
+                          className="w-full rounded-t bg-primary/60 group-hover:bg-primary transition-colors"
+                          style={{ height: `${Math.max(pct, count > 0 ? 8 : 2)}%` }}
+                        />
+                        <p className="text-[9px] text-muted-foreground/60 tabular-nums">
+                          {new Date(date + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'short' }).slice(0, 1)}
+                        </p>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            </>
+          )}
+        </div>
+
       </div>
     </div>
   );

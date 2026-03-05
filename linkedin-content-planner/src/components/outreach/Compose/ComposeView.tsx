@@ -74,7 +74,7 @@ export default function ComposeView() {
 
         try {
             // Hit the n8n webhook
-            const response = await fetch('https://n8n.prasidha.me/webhook/8763f04c-764a-41aa-944d-c0782a26f3db', {
+            const response = await fetch(import.meta.env.VITE_N8N_OUTREACH_LINKEDIN_WEBHOOK_URL, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',

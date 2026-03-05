@@ -41,6 +41,8 @@ import JobApplicants from "./pages/JobApplicants";
 import JobDistribution from "./pages/JobDistribution";
 import GrowthSignals from "./pages/GrowthSignals";
 import ExpertMarketplace from "./pages/ExpertMarketplace";
+import PostInterceptor from "./pages/PostInterceptor";
+import LeadCRM from "./pages/LeadCRM";
 import CandidateDossier from "./pages/candidates/CandidateDossier";
 // import VerifyQueue from "./pages/verify/VerifyQueue";
 // import VerifyResults from "./pages/verify/VerifyResults";
@@ -230,6 +232,23 @@ const App = () => (
                     <ProtectedRoute>
                       <MainLayout>
                         <ExpertMarketplace />
+                      </MainLayout>
+                    </ProtectedRoute>
+                  } />
+
+                  {/* Growth & Outbound Routes */}
+                  <Route path="/post-interceptor" element={
+                    <ProtectedRoute>
+                      <MainLayout>
+                        <PostInterceptor />
+                      </MainLayout>
+                    </ProtectedRoute>
+                  } />
+
+                  <Route path="/lead-crm" element={
+                    <ProtectedRoute>
+                      <MainLayout>
+                        <LeadCRM />
                       </MainLayout>
                     </ProtectedRoute>
                   } />

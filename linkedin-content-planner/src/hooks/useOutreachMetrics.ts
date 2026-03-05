@@ -1,83 +1,82 @@
-import { useState, useEffect, useCallback } from "react";
-import { supabase } from "../lib/supabase";
-import { toast } from "sonner";
+import { useState, useEffect } from 'react';
+import { supabase } from '../lib/supabase';
+
+export interface OutreachMetrics {
+    totalLeads: number;
+    hotLeads: number;
+    interceptedLeads: number;
+    dmsGenerated: number;
+    inSequence: number;
+    acceptedConnections: number;
+    recentActivity: { type: string; name: string; time: string }[];
+}
 
 export function useOutreachMetrics() {
-    const [metrics, setMetrics] = useState({
+    const [metrics, setMetrics] = useState<OutreachMetrics>({
         totalLeads: 0,
-        messagesSent: 0,
-        repliesReceived: 0,
-        meetingsBooked: 0,
-        pendingCalls: 0,
-        pendingOutreach: 0,
-        pendingContent: 0, // Mocked for now since Content is elsewhere
-        completedCalls: 0,
-        completedOutreach: 0,
-        completedContent: 0,
+        hotLeads: 0,
+        interceptedLeads: 0,
+        dmsGenerated: 0,
+        inSequence: 0,
+        acceptedConnections: 0,
+        recentActivity: [],
     });
     const [loading, setLoading] = useState(true);
 
-    const fetchMetrics = useCallback(async () => {
-        setLoading(true);
-        try {
-            // Fetch total leads
-            const { count: totalLeads } = await supabase
-                .from('outreach_leads')
-                .select('*', { count: 'exact', head: true });
+    useEffect(() => {
+        async function fetchMetrics() {
+            setLoading(true);
+            try {
+                const [leadsRes, activitiesRes] = await Promise.all([
+                    supabase
+                        .from('outreach_leads')
+                        .select('id, tier, status, discovery_source, closely_connection_status, contact_name, company, created_at')
+                        .order('created_at', { ascending: false })
+                        .limit(200),
+                    supabase
+                        .from('outreach_activities')
+                        .select('id, action_type, status, created_at, outreach_leads(contact_name, company)')
+                        .order('created_at', { ascending: false })
+                        .limit(10),
+                ]);
 
-            // Fetch overall activities to calculate sent/replies
-            const { data: actions, error: actionsErr } = await supabase
-                .from('outreach_activities')
-                .select('status, channel, response_received');
+                const leads = leadsRes.data ?? [];
+                const activities = activitiesRes.data ?? [];
 
-            // Fetch leads with meetings
-            const { count: meetingsBooked } = await supabase
-                .from('outreach_leads')
-                .select('*', { count: 'exact', head: true })
-                .eq('status', 'meeting_booked');
+                const totalLeads = leads.length;
+                const hotLeads = leads.filter(l => l.tier === 'tier_1').length;
+                const interceptedLeads = leads.filter(l => l.discovery_source === 'competitor_post_intercept').length;
+                const inSequence = leads.filter(l => l.status === 'in_sequence').length;
+                const acceptedConnections = leads.filter(l => l.closely_connection_status === 'accepted').length;
 
-            if (actionsErr) throw actionsErr;
+                // Count generated DMs from activities
+                const dmsGenerated = activities.filter(a => a.action_type === 'generated_dm' || a.action_type === 'linkedin_connect').length;
 
-            const safeActions = actions || [];
+                // Build recent activity feed
+                const recentActivity = activities.slice(0, 5).map((a: any) => {
+                    const name = a.outreach_leads?.contact_name ?? a.outreach_leads?.company ?? 'Unknown';
+                    const typeLabel =
+                        a.action_type === 'generated_dm' ? 'Generated DM' :
+                        a.action_type === 'linkedin_connect' ? 'Sent Connection' :
+                        a.action_type === 'send_email' ? 'Sent Email' :
+                        a.action_type;
+                    const createdAt = new Date(a.created_at);
+                    const diffMs = Date.now() - createdAt.getTime();
+                    const diffMin = Math.floor(diffMs / 60000);
+                    const time = diffMin < 60 ? `${diffMin}m ago` : diffMin < 1440 ? `${Math.floor(diffMin / 60)}h ago` : `${Math.floor(diffMin / 1440)}d ago`;
+                    return { type: typeLabel, name, time };
+                });
 
-            // Stats
-            const messagesSent = safeActions.filter(a => a.status === 'sent').length;
-            const repliesReceived = safeActions.filter(a => a.response_received).length;
-
-            // Queue calculations today
-            const pendingCalls = safeActions.filter(a => a.status === 'pending' && a.channel === 'call').length;
-            const pendingOutreach = safeActions.filter(a => a.status === 'pending' && a.channel !== 'call').length;
-            const completedCalls = safeActions.filter(a => a.status === 'sent' && a.channel === 'call').length;
-            const completedOutreach = safeActions.filter(a => a.status === 'sent' && a.channel !== 'call').length;
-
-            setMetrics({
-                totalLeads: totalLeads || 0,
-                messagesSent,
-                repliesReceived,
-                meetingsBooked: meetingsBooked || 0,
-                pendingCalls,
-                pendingOutreach,
-                pendingContent: 2, // Dummy count
-                completedCalls,
-                completedOutreach,
-                completedContent: 1, // Dummy count
-            });
-
-        } catch (err: any) {
-            console.error("Error fetching metrics:", err);
-            toast.error("Failed to load metrics");
-        } finally {
-            setLoading(false);
+                setMetrics({ totalLeads, hotLeads, interceptedLeads, dmsGenerated, inSequence, acceptedConnections, recentActivity });
+            } catch (err) {
+                console.error('useOutreachMetrics error:', err);
+            } finally {
+                setLoading(false);
+            }
         }
+
+        fetchMetrics();
     }, []);
 
-    useEffect(() => {
-        fetchMetrics();
-    }, [fetchMetrics]);
-
-    return {
-        metrics,
-        loading,
-        fetchMetrics
-    };
+    return { metrics, loading };
 }

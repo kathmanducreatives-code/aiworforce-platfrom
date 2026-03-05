@@ -5,7 +5,7 @@ import { useDialerStatus } from '../../hooks/useDialerStatus';
 export default function DialerView() {
     const [iframeKey, setIframeKey] = useState(0);
     const { status, loading: _loading } = useDialerStatus();
-    const DIALER_URL = "https://n8n.prasidha.me/dialer";
+    const DIALER_URL = import.meta.env.VITE_DIALER_URL ?? "https://n8n.prasidha.me/dialer";
 
     return (
         <div style={{ display: 'flex', flexDirection: 'column', flex: 1, width: '100%', height: '100%' }}>

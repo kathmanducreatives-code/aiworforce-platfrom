@@ -36,7 +36,7 @@ export async function executeOutreachAction(activity: OutreachActivity, leadDeta
         body: activity.body,
         cal_link: CAL_LINK,
         supabase_url: import.meta.env.VITE_SUPABASE_URL,
-        supabase_key: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
+        supabase_key: import.meta.env.VITE_SUPABASE_ANON_KEY,
     };
 
     try {

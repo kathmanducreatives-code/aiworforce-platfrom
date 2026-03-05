@@ -33,6 +33,12 @@ export interface OutreachLead {
     founder_about?: string | null;
     discovery_source?: string | null;
     role_count?: number | null;
+    // Competitor Post Interceptor columns
+    source_post_url?: string | null;
+    source_post_author?: string | null;
+    original_comment?: string | null;
+    pain_point_detected?: string | null;
+    commenter_score?: number | null;
     created_at: string;
     updated_at: string;
 }

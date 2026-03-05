@@ -19,8 +19,8 @@ import GeminiChat from "./components/GeminiChat";
 import { generateSmartSchedule, getEngagementScore, getTimingInsight } from "./lib/postingEngine";
 import type { DayPlan, VideoIdea } from "./types";
 
-const WEBHOOK_GENERATE_MONTHLY = "https://n8n.prasidha.me/webhook/content-generate-monthly";
-const WEBHOOK_SCHEDULE = import.meta.env.VITE_N8N_CONTENT_SCHEDULE_WEBHOOK || "https://n8n.prasidha.me/webhook/schedule-linkedin";
+const WEBHOOK_GENERATE_MONTHLY = import.meta.env.VITE_N8N_CONTENT_GENERATE_MONTHLY_WEBHOOK;
+const WEBHOOK_SCHEDULE = import.meta.env.VITE_N8N_CONTENT_SCHEDULE_WEBHOOK;
 
 export const HERO_FORMAT: Record<string, { label: string; color: string; icon: any }> = {
     "Comic Strip": { label: "Comic Strip", color: "#7c3aed", icon: BookOpen },
@@ -217,7 +217,7 @@ const ContentPlanner = () => {
                 body: JSON.stringify({
                     chatInput: campaignGoal,
                     supabaseUrl: import.meta.env.VITE_SUPABASE_URL,
-                    supabaseKey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
+                    supabaseKey: import.meta.env.VITE_SUPABASE_ANON_KEY,
                     workspaceDir: "/Users/prasidha/screeningpilot/screeningpilot/linkedin-content-planner"
                 }),
             });
@@ -257,7 +257,7 @@ const ContentPlanner = () => {
                         format: p.contentFormat
                     })),
                     supabaseUrl: import.meta.env.VITE_SUPABASE_URL,
-                    supabaseKey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY
+                    supabaseKey: import.meta.env.VITE_SUPABASE_ANON_KEY
                 }),
             });
 
