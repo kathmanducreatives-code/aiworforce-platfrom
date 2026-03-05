@@ -9,15 +9,18 @@ import ToggleSwitch from "../ToggleSwitch";
 import type {
     DayPlan, CarouselSlide, ComicScript, DataVisual, HotTake, Poll, VideoIdea
 } from "../types";
+import { Card } from "./ui/Card";
+import { Badge } from "./ui/Badge";
+import { Button } from "./ui/Button";
 
 /* ── Hero format config ─────────────────────────── */
-const HERO_FORMAT: Record<string, { label: string; color: string; icon: typeof BookOpen }> = {
-    "Monday": { label: "Comic Strip", color: "#7c3aed", icon: BookOpen },
-    "Tuesday": { label: "Data Visual", color: "#f97316", icon: BarChart2 },
-    "Wednesday": { label: "Carousel", color: "#00e5a0", icon: Zap },
-    "Thursday": { label: "Founder Story", color: "#3b82f6", icon: MessageSquare },
-    "Friday": { label: "Short Video", color: "#ef4444", icon: Film },
-    "Saturday": { label: "Hot Take", color: "#eab308", icon: Flame },
+const HERO_FORMAT: Record<string, { label: string; variant: any; icon: typeof BookOpen }> = {
+    "Monday": { label: "Comic Strip", variant: "violet", icon: BookOpen },
+    "Tuesday": { label: "Data Visual", variant: "amber", icon: BarChart2 },
+    "Wednesday": { label: "Carousel", variant: "emerald", icon: Zap },
+    "Thursday": { label: "Founder Story", variant: "blue", icon: MessageSquare },
+    "Friday": { label: "Short Video", variant: "red", icon: Film },
+    "Saturday": { label: "Hot Take", variant: "amber", icon: Flame },
 };
 
 type TabId = "caption" | "carousel" | "comic" | "datavisual" | "hottake" | "poll";
@@ -57,27 +60,13 @@ const CopyBtn = ({
     return (
         <button
             onClick={(e) => { e.stopPropagation(); onCopy(text, id); }}
+            className={`
+                flex items-center justify-center w-6 h-6 rounded-md shrink-0 border transition-all duration-200 cursor-pointer
+                ${copied
+                    ? "bg-emerald-500/20 border-emerald-500/40 text-emerald-400"
+                    : "bg-white/[0.04] border-white/[0.08] text-slate-500 hover:text-emerald-400 hover:border-emerald-500/50"}
+            `}
             title="Copy to clipboard"
-            style={{
-                display: "inline-flex", alignItems: "center", justifyContent: "center",
-                width: "24px", height: "24px", borderRadius: "6px", flexShrink: 0,
-                border: "1px solid #2a2a2a",
-                background: copied ? "rgba(0,229,160,0.15)" : "#1e1e1e",
-                color: copied ? "#00e5a0" : "#555",
-                cursor: "pointer", transition: "all 0.15s ease",
-            }}
-            onMouseEnter={(e) => {
-                if (!copied) {
-                    e.currentTarget.style.borderColor = "#00e5a0";
-                    e.currentTarget.style.color = "#00e5a0";
-                }
-            }}
-            onMouseLeave={(e) => {
-                if (!copied) {
-                    e.currentTarget.style.borderColor = "#2a2a2a";
-                    e.currentTarget.style.color = "#555";
-                }
-            }}
         >
             {copied ? <Check size={11} /> : <Copy size={11} />}
         </button>
@@ -86,10 +75,7 @@ const CopyBtn = ({
 
 /* Field label */
 const FieldLabel = ({ label }: { label: string }) => (
-    <div style={{
-        fontSize: "9px", fontWeight: 700, textTransform: "uppercase",
-        letterSpacing: "0.08em", color: "#444", marginBottom: "4px",
-    }}>
+    <div className="text-[9px] font-black uppercase tracking-widest text-slate-600 mb-1.5">
         {label}
     </div>
 );
@@ -103,16 +89,15 @@ const TextField = ({
 }) => {
     if (!text) return null;
     return (
-        <div style={{ marginBottom: "10px" }}>
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "4px" }}>
+        <div className="mb-4">
+            <div className="flex items-center justify-between gap-2 mb-1">
                 <FieldLabel label={label} />
                 <CopyBtn text={text} id={fieldId} copiedId={copiedId} onCopy={onCopy} />
             </div>
-            <div style={{
-                background: "#1a1a1a", border: "1px solid #242424", borderRadius: "8px",
-                padding: "9px 11px", fontSize: "12px", color: "#ccc", lineHeight: 1.6,
-                whiteSpace: "pre-wrap", fontFamily: mono ? "'JetBrains Mono', 'Fira Code', monospace" : "inherit",
-            }}>
+            <div className={`
+                bg-white/[0.04] border border-white/[0.08] rounded-xl p-3 text-[12px] text-slate-300 leading-relaxed whitespace-pre-wrap
+                ${mono ? "font-mono" : "font-sans"}
+            `}>
                 {text}
             </div>
         </div>
@@ -127,7 +112,7 @@ const TextField = ({
 const CaptionTab = ({
     day, copiedId, onCopy
 }: { day: DayPlan; copiedId: string | null; onCopy: (t: string, i: string) => void }) => (
-    <div>
+    <div className="animate-fade-in">
         <TextField
             label="LinkedIn Post Caption"
             text={day.postCaption}
@@ -136,7 +121,8 @@ const CaptionTab = ({
             onCopy={onCopy}
         />
         {day.postCaption && (
-            <div style={{ fontSize: "10px", color: "#444", marginBottom: "10px" }}>
+            <div className="text-[10px] text-slate-600 font-medium mb-4 flex items-center gap-1.5">
+                <span className="w-1 h-1 rounded-full bg-slate-700" />
                 {day.postCaption.split(/\s+/).filter(Boolean).length} words
             </div>
         )}
@@ -148,7 +134,7 @@ const CaptionTab = ({
             onCopy={onCopy}
         />
         {day.videoIdea && (
-            <>
+            <div className="space-y-4">
                 <TextField
                     label="Video Concept"
                     text={(day.videoIdea as VideoIdea).concept}
@@ -177,10 +163,10 @@ const CaptionTab = ({
                     copiedId={copiedId}
                     onCopy={onCopy}
                 />
-            </>
+            </div>
         )}
         {!day.postCaption && (
-            <div style={{ textAlign: "center", padding: "24px 0", color: "#333", fontSize: "12px" }}>
+            <div className="text-center py-8 text-slate-600 text-xs italic">
                 No caption yet — click Generate Content Plan
             </div>
         )}
@@ -194,26 +180,19 @@ const CarouselTab = ({
     const slides: CarouselSlide[] = day.carouselScript || [];
     if (slides.length === 0) {
         return (
-            <div style={{ textAlign: "center", padding: "24px 0", color: "#333", fontSize: "12px" }}>
+            <div className="text-center py-8 text-slate-600 text-xs italic">
                 No carousel generated yet
             </div>
         );
     }
     return (
-        <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+        <div className="flex flex-col gap-3 animate-fade-in">
             {slides.map((slide, si) => (
-                <div key={si} style={{
-                    background: "#1a1a1a", border: "1px solid #242424",
-                    borderRadius: "10px", padding: "10px 12px",
-                }}>
-                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "6px" }}>
-                        <span style={{
-                            fontSize: "9px", fontWeight: 700, color: "#00e5a0",
-                            background: "rgba(0,229,160,0.1)", padding: "2px 7px",
-                            borderRadius: "99px", letterSpacing: "0.06em",
-                        }}>
+                <div key={si} className="bg-white/[0.04] border border-white/[0.08] rounded-2xl p-4 group hover:border-emerald-500/20 transition-colors">
+                    <div className="flex items-center justify-between mb-3">
+                        <Badge variant="emerald" className="bg-emerald-500/10 text-[9px] px-2 py-0.5 font-black uppercase">
                             SLIDE {slide.slideNumber}
-                        </span>
+                        </Badge>
                         <CopyBtn
                             text={`Slide ${slide.slideNumber}\n${slide.headline}\n${slide.subtext}\nDesign: ${slide.designNote}`}
                             id={`slide-${day.id}-${si}`}
@@ -221,13 +200,13 @@ const CarouselTab = ({
                             onCopy={onCopy}
                         />
                     </div>
-                    <div style={{ fontSize: "13px", fontWeight: 700, color: "#e0e0e0", marginBottom: "3px" }}>
+                    <div className="text-[13px] font-black text-white mb-1.5 leading-snug">
                         {slide.headline}
                     </div>
-                    <div style={{ fontSize: "11px", color: "#999", marginBottom: "5px", lineHeight: 1.5 }}>
+                    <div className="text-[11px] text-slate-400 mb-3 leading-relaxed">
                         {slide.subtext}
                     </div>
-                    <div style={{ fontSize: "10px", color: "#555", fontStyle: "italic" }}>
+                    <div className="text-[10px] text-slate-600 italic font-medium px-2 py-1.5 bg-black/20 rounded-lg">
                         Design: {slide.designNote}
                     </div>
                 </div>
@@ -243,29 +222,21 @@ const ComicTab = ({
     const comic: ComicScript | null = day.comicScript;
     if (!comic) {
         return (
-            <div style={{ textAlign: "center", padding: "24px 0", color: "#333", fontSize: "12px" }}>
+            <div className="text-center py-8 text-slate-600 text-xs italic">
                 No comic script generated yet
             </div>
         );
     }
     const panels = [comic.panel1, comic.panel2, comic.panel3];
     return (
-        <div>
-            <div style={{ display: "flex", flexDirection: "column", gap: "10px", marginBottom: "12px" }}>
+        <div className="animate-fade-in">
+            <div className="flex flex-col gap-3 mb-6">
                 {panels.map((panel, pi) => (
-                    <div key={pi} style={{
-                        background: "#1a1a1a", border: "1px solid #2a2020",
-                        borderRadius: "10px", padding: "10px 12px",
-                        borderLeft: "3px solid #7c3aed",
-                    }}>
-                        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "6px" }}>
-                            <span style={{
-                                fontSize: "9px", fontWeight: 700, color: "#7c3aed",
-                                background: "rgba(124,58,237,0.12)", padding: "2px 7px",
-                                borderRadius: "99px", letterSpacing: "0.06em",
-                            }}>
+                    <div key={pi} className="bg-white/[0.04] border-l-4 border-l-violet-500 border-r border-t border-b border-white/[0.08] rounded-xl p-4 group hover:bg-white/[0.06] transition-colors">
+                        <div className="flex items-center justify-between mb-2.5">
+                            <Badge variant="violet" className="text-[9px] font-black uppercase">
                                 PANEL {pi + 1}
-                            </span>
+                            </Badge>
                             <CopyBtn
                                 text={`Panel ${pi + 1}\nScene: ${panel.scene}\nDialogue: ${panel.dialogue}${panel.expression ? `\nExpression: ${panel.expression}` : ''}`}
                                 id={`panel-${day.id}-${pi}`}
@@ -273,14 +244,14 @@ const ComicTab = ({
                                 onCopy={onCopy}
                             />
                         </div>
-                        <div style={{ fontSize: "11px", color: "#999", marginBottom: "5px" }}>
-                            <span style={{ color: "#555", fontWeight: 600 }}>Scene: </span>{panel.scene}
+                        <div className="text-[11px] text-slate-400 mb-2 leading-relaxed">
+                            <span className="text-slate-600 font-black uppercase text-[9px] mr-1">Scene:</span>{panel.scene}
                         </div>
-                        <div style={{ fontSize: "12px", color: "#e0e0e0", fontWeight: 500 }}>
-                            <span style={{ color: "#555", fontWeight: 600 }}>Dialogue: </span>{panel.dialogue}
+                        <div className="text-[12px] text-slate-200 font-semibold leading-relaxed">
+                            <span className="text-slate-600 font-black uppercase text-[9px] mr-1">Dialogue:</span>"{panel.dialogue}"
                         </div>
                         {panel.expression && (
-                            <div style={{ fontSize: "10px", color: "#555", marginTop: "4px", fontStyle: "italic" }}>
+                            <div className="text-[10px] text-slate-600 mt-2.5 border-t border-white/[0.04] pt-2 italic">
                                 {panel.expression}
                             </div>
                         )}
@@ -289,11 +260,10 @@ const ComicTab = ({
             </div>
 
             {/* Comic Image Prompt + Generate button */}
-            <div style={{
-                background: "rgba(124,58,237,0.08)", border: "1px solid rgba(124,58,237,0.2)",
-                borderRadius: "10px", padding: "10px 12px", marginBottom: "10px",
-            }}>
-                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "6px" }}>
+            <div className="bg-violet-500/10 border border-violet-500/20 rounded-2xl p-5 mb-4 relative overflow-hidden group">
+                <div className="absolute top-0 right-0 w-24 h-24 bg-violet-600/10 blur-3xl rounded-full translate-x-12 -translate-y-12" />
+
+                <div className="flex items-center justify-between mb-3">
                     <FieldLabel label="DALL-E Comic Prompt" />
                     <CopyBtn
                         text={comic.comicImagePrompt}
@@ -302,36 +272,23 @@ const ComicTab = ({
                         onCopy={onCopy}
                     />
                 </div>
-                <div style={{ fontSize: "11px", color: "#b39ddb", lineHeight: 1.55, marginBottom: "10px" }}>
+                <div className="text-[11px] text-violet-300/80 leading-relaxed mb-5 font-medium">
                     {comic.comicImagePrompt}
                 </div>
-                <button
+                <Button
+                    variant="primary"
+                    size="sm"
+                    className="!bg-violet-600 !hover:bg-violet-500 !shadow-none w-full"
                     onClick={(e) => {
                         e.stopPropagation();
                         navigator.clipboard.writeText(comic.comicImagePrompt).then(() => {
                             onCopy(comic.comicImagePrompt, `comic-prompt-${day.id}`);
                         });
                     }}
-                    style={{
-                        display: "inline-flex", alignItems: "center", gap: "7px",
-                        background: "linear-gradient(135deg, #7c3aed, #6d28d9)",
-                        color: "#fff", border: "none", borderRadius: "8px",
-                        padding: "8px 14px", fontSize: "12px", fontWeight: 600,
-                        cursor: "pointer", boxShadow: "0 3px 10px rgba(124,58,237,0.3)",
-                        transition: "all 0.2s ease", fontFamily: "'Inter', sans-serif",
-                    }}
-                    onMouseEnter={(e) => {
-                        e.currentTarget.style.boxShadow = "0 5px 16px rgba(124,58,237,0.45)";
-                        e.currentTarget.style.transform = "translateY(-1px)";
-                    }}
-                    onMouseLeave={(e) => {
-                        e.currentTarget.style.boxShadow = "0 3px 10px rgba(124,58,237,0.3)";
-                        e.currentTarget.style.transform = "translateY(0)";
-                    }}
                 >
-                    <ClipboardCopy size={13} />
-                    Generate Comic Prompt
-                </button>
+                    <ClipboardCopy size={13} className="mr-2" />
+                    Copy Visual Prompt
+                </Button>
             </div>
         </div>
     );
@@ -344,21 +301,16 @@ const DataVisualTab = ({
     const dv: DataVisual | null = day.dataVisual;
     if (!dv) {
         return (
-            <div style={{ textAlign: "center", padding: "24px 0", color: "#333", fontSize: "12px" }}>
+            <div className="text-center py-8 text-slate-600 text-xs italic">
                 No data visual generated yet
             </div>
         );
     }
     return (
-        <div>
+        <div className="animate-fade-in">
             {/* Big stat number hero display */}
-            <div style={{
-                background: "#1a1a1a", border: "1px solid #2a1a0a",
-                borderRadius: "12px", padding: "16px",
-                textAlign: "center", marginBottom: "10px",
-                borderLeft: "3px solid #f97316",
-            }}>
-                <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: "6px" }}>
+            <div className="bg-white/[0.04] border-l-4 border-l-amber-500 border-r border-t border-b border-white/[0.08] rounded-2xl p-6 text-center mb-4 group hover:bg-white/[0.06] transition-colors">
+                <div className="flex justify-end mb-2">
                     <CopyBtn
                         text={`${dv.statNumber}\n${dv.statContext}`}
                         id={`dv-stat-${day.id}`}
@@ -366,10 +318,10 @@ const DataVisualTab = ({
                         onCopy={onCopy}
                     />
                 </div>
-                <div style={{ fontSize: "36px", fontWeight: 900, color: "#f97316", lineHeight: 1, marginBottom: "6px" }}>
+                <div className="text-4xl font-black text-amber-500 mb-2 drop-shadow-[0_0_15px_rgba(245,158,11,0.3)]">
                     {dv.statNumber}
                 </div>
-                <div style={{ fontSize: "12px", color: "#999", lineHeight: 1.5 }}>
+                <div className="text-[12px] text-slate-400 font-medium leading-relaxed max-w-[200px] mx-auto">
                     {dv.statContext}
                 </div>
             </div>
@@ -398,23 +350,19 @@ const HotTakeTab = ({
     const ht: HotTake | null = day.hotTake;
     if (!ht) {
         return (
-            <div style={{ textAlign: "center", padding: "24px 0", color: "#333", fontSize: "12px" }}>
+            <div className="text-center py-8 text-slate-600 text-xs italic">
                 No hot take generated yet
             </div>
         );
     }
     return (
-        <div>
-            <div style={{
-                background: "#1a1a10", border: "1px solid #2a2a10",
-                borderRadius: "12px", padding: "14px", marginBottom: "10px",
-                borderLeft: "3px solid #eab308",
-            }}>
-                <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: "8px", marginBottom: "4px" }}>
+        <div className="animate-fade-in">
+            <div className="bg-white/[0.04] border-l-4 border-l-amber-500 border-r border-t border-b border-white/[0.08] rounded-2xl p-5 mb-4">
+                <div className="flex items-center justify-between gap-2 mb-2.5">
                     <FieldLabel label="Unpopular Opinion" />
                     <CopyBtn text={ht.headline} id={`ht-head-${day.id}`} copiedId={copiedId} onCopy={onCopy} />
                 </div>
-                <div style={{ fontSize: "14px", fontWeight: 700, color: "#eab308", lineHeight: 1.4 }}>
+                <div className="text-[15px] font-black text-amber-400 leading-tight">
                     "{ht.headline}"
                 </div>
             </div>
@@ -443,44 +391,36 @@ const PollTab = ({
     const poll: Poll | null = day.poll;
     if (!poll) {
         return (
-            <div style={{ textAlign: "center", padding: "24px 0", color: "#333", fontSize: "12px" }}>
+            <div className="text-center py-8 text-slate-600 text-xs italic">
                 No poll generated yet
             </div>
         );
     }
-    const options = [poll.option1, poll.option2, poll.option3, poll.option4];
+    const options = [poll.option1, poll.option2, poll.option3, poll.option4].filter(Boolean);
     return (
-        <div>
-            <div style={{
-                background: "#1a1a1a", border: "1px solid #242424",
-                borderRadius: "12px", padding: "14px", marginBottom: "10px",
-            }}>
-                <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: "8px", marginBottom: "8px" }}>
-                    <FieldLabel label="Poll Question" />
+        <div className="animate-fade-in">
+            <div className="bg-white/[0.04] border border-white/[0.08] rounded-2xl p-5 mb-4 hover:border-white/[0.12] transition-colors">
+                <div className="flex items-start justify-between gap-4 mb-4">
+                    <div className="flex flex-col gap-1">
+                        <FieldLabel label="Poll Question" />
+                        <div className="text-[13px] font-bold text-white leading-snug">
+                            {poll.question}
+                        </div>
+                    </div>
                     <CopyBtn
-                        text={`${poll.question}\n1. ${poll.option1}\n2. ${poll.option2}\n3. ${poll.option3}\n4. ${poll.option4}`}
+                        text={`${poll.question}\n${options.map((o, i) => `${i + 1}. ${o}`).join('\n')}`}
                         id={`poll-q-${day.id}`}
                         copiedId={copiedId}
                         onCopy={onCopy}
                     />
                 </div>
-                <div style={{ fontSize: "13px", fontWeight: 600, color: "#e0e0e0", marginBottom: "10px" }}>
-                    {poll.question}
-                </div>
-                <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+                <div className="flex flex-col gap-2">
                     {options.map((opt, oi) => (
-                        <div key={oi} style={{
-                            display: "flex", alignItems: "center", gap: "8px",
-                            background: "#222", borderRadius: "7px", padding: "7px 10px",
-                            border: "1px solid #2a2a2a",
-                        }}>
-                            <span style={{
-                                width: "18px", height: "18px", borderRadius: "50%",
-                                background: "rgba(0,229,160,0.1)", border: "1px solid rgba(0,229,160,0.3)",
-                                display: "flex", alignItems: "center", justifyContent: "center",
-                                fontSize: "9px", fontWeight: 700, color: "#00e5a0", flexShrink: 0,
-                            }}>{oi + 1}</span>
-                            <span style={{ fontSize: "12px", color: "#ccc", flex: 1 }}>{opt}</span>
+                        <div key={oi} className="flex items-center gap-3 bg-white/[0.03] border border-white/[0.06] rounded-xl px-4 py-2.5 hover:bg-white/[0.06] transition-colors group">
+                            <span className="w-5 h-5 rounded-full bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center text-[10px] font-black text-emerald-400 shrink-0 group-hover:scale-110 transition-transform">
+                                {oi + 1}
+                            </span>
+                            <span className="text-[12px] text-slate-300 font-medium">{opt}</span>
                         </div>
                     ))}
                 </div>
@@ -501,28 +441,22 @@ const PollTab = ({
    ════════════════════════════════════════════════ */
 const ContentChecklist = ({ day }: { day: DayPlan }) => {
     const items = [
-        { label: "Caption ready", done: !!day.postCaption },
-        { label: "Media uploaded", done: !!day.mediaBase64 },
-        { label: "Carousel built", done: day.carouselScript && day.carouselScript.length > 0 },
-        { label: "Comic generated", done: !!day.comicScript },
-        { label: "Scheduled", done: day.status === "Posted" },
+        { label: "Caption", done: !!day.postCaption },
+        { label: "Media", done: !!day.mediaBase64 },
+        { label: "Carousel", done: day.carouselScript && day.carouselScript.length > 0 },
+        { label: "Comic", done: !!day.comicScript },
+        { label: "Posted", done: day.status === "Posted" },
     ];
     return (
-        <div style={{
-            borderTop: "1px solid #1e1e1e", paddingTop: "10px", marginTop: "4px",
-            display: "flex", flexWrap: "wrap", gap: "6px",
-        }}>
+        <div className="flex flex-wrap gap-2 pt-3 border-t border-white/[0.04]">
             {items.map((item, i) => (
-                <div key={i} style={{
-                    display: "flex", alignItems: "center", gap: "5px",
-                    fontSize: "10px", fontWeight: 500,
-                    color: item.done ? "#00e5a0" : "#3a3a3a",
-                    background: item.done ? "rgba(0,229,160,0.08)" : "#1a1a1a",
-                    border: `1px solid ${item.done ? "rgba(0,229,160,0.2)" : "#242424"}`,
-                    borderRadius: "6px", padding: "3px 8px",
-                    transition: "all 0.2s ease",
-                }}>
-                    <span style={{ fontSize: "11px" }}>{item.done ? "✓" : "○"}</span>
+                <div key={i} className={`
+                    flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[9px] font-black uppercase tracking-widest transition-all duration-300
+                    ${item.done
+                        ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20"
+                        : "bg-white/[0.02] text-slate-700 border border-transparent opacity-50"}
+                `}>
+                    <div className={`w-1 h-1 rounded-full ${item.done ? "bg-emerald-400 animate-pulse" : "bg-slate-800"}`} />
                     {item.label}
                 </div>
             ))}
@@ -545,116 +479,82 @@ const DayCard = ({
     const HeroIcon = hero?.icon;
     const isScheduled = day.status === "Posted";
 
-    const statusDot = isScheduled ? "#00e5a0" : day.postCaption ? "#f59e0b" : "#3a3a3a";
+    const statusColorClass = isScheduled ? "text-emerald-400" : day.postCaption ? "text-amber-400" : "text-slate-600";
+    const statusDotClass = isScheduled ? "bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]" : day.postCaption ? "bg-amber-500 shadow-[0_0_8px_rgba(245,158,11,0.5)]" : "bg-slate-800";
 
     return (
-        <div style={{
-            borderRadius: "18px",
-            border: `1px solid ${isScheduled ? "rgba(0,229,160,0.25)" : "#1e1e1e"}`,
-            background: "#141414",
-            boxShadow: isScheduled ? "0 0 20px rgba(0,229,160,0.06)" : "none",
-            transition: "all 0.25s ease",
-            overflow: "hidden",
-        }}>
-
+        <Card className={`
+            !p-0 overflow-hidden flex flex-col h-full group/card transition-all duration-300
+            ${isScheduled ? "border-emerald-500/30 bg-emerald-500/[0.02]" : "hover:border-white/[0.15]"}
+            shadow-xl
+        `}>
             {/* ── Card Header ── */}
-            <div style={{
-                display: "flex", alignItems: "center", gap: "10px",
-                padding: "12px 14px 10px",
-                borderBottom: "1px solid #1e1e1e",
-            }}>
+            <div className="flex items-center gap-3 p-4 border-b border-white/[0.08] bg-white/[0.01]">
                 {/* Day badge */}
-                <div style={{
-                    width: "32px", height: "32px", borderRadius: "9px", flexShrink: 0,
-                    display: "flex", alignItems: "center", justifyContent: "center",
-                    background: isScheduled ? "rgba(0,229,160,0.12)" : "#1e1e1e",
-                    fontSize: "9px", fontWeight: 800, color: isScheduled ? "#00e5a0" : "#555",
-                    textTransform: "uppercase", letterSpacing: "0.03em",
-                }}>
-                    {dayShort}
+                <div className={`
+                    w-10 h-10 rounded-xl flex items-center justify-center font-black text-[12px] uppercase shrink-0 transition-transform group-hover/card:scale-105
+                    ${isScheduled ? "bg-emerald-500/20 text-emerald-400" : "bg-white/[0.05] text-slate-500"}
+                `}>
+                    {dayShort.split(' ')[1]}
                 </div>
 
                 {/* Day name + status text */}
-                <div style={{ flex: 1 }}>
-                    <div style={{ fontSize: "14px", fontWeight: 700, color: "#e0e0e0", lineHeight: 1.2 }}>
+                <div className="flex-1">
+                    <div className="text-[15px] font-black text-white leading-none mb-1">
                         {day.day}
                     </div>
-                    <div style={{ fontSize: "10px", fontWeight: 600, color: statusDot, marginTop: "1px" }}>
-                        {isScheduled ? "Scheduled" : day.postCaption ? "Draft Ready" : "Empty"}
+                    <div className={`text-[10px] font-black uppercase tracking-wider ${statusColorClass} flex items-center gap-2`}>
+                        <div className={`w-1.5 h-1.5 rounded-full ${statusDotClass}`} />
+                        {isScheduled ? "Scheduled" : day.postCaption ? "Draft Ready" : "Drafting..."}
                     </div>
                 </div>
 
                 {/* Hero format badge */}
                 {hero && (
-                    <div style={{
-                        display: "inline-flex", alignItems: "center", gap: "4px",
-                        background: `${hero.color}14`, border: `1px solid ${hero.color}30`,
-                        borderRadius: "8px", padding: "3px 8px",
-                        fontSize: "9px", fontWeight: 700, color: hero.color,
-                        letterSpacing: "0.04em", textTransform: "uppercase",
-                    }}>
-                        <HeroIcon size={9} />
+                    <Badge variant={hero.variant} className="px-2.5 py-1 rounded-lg">
+                        <HeroIcon size={12} className="mr-1.5" />
                         {hero.label}
-                    </div>
+                    </Badge>
                 )}
-
-                {/* Status dot */}
-                <div style={{
-                    width: "8px", height: "8px", borderRadius: "50%",
-                    background: statusDot,
-                    boxShadow: day.postCaption || isScheduled ? `0 0 6px ${statusDot}88` : "none",
-                    flexShrink: 0,
-                }} />
             </div>
 
             {/* ── Date + Time Picker Row ── */}
-            <div style={{
-                display: "flex", alignItems: "center", justifyContent: "space-between",
-                padding: "6px 14px",
-                borderBottom: "1px solid #1a1a1a",
-                background: "#111",
-            }}>
+            <div className="flex items-center justify-between px-4 py-2 border-b border-white/[0.04] bg-black/20">
                 {onDateChange && (
-                    <input
-                        type="date"
-                        value={day.scheduledDate || ""}
-                        onChange={(e) => onDateChange(index, e.target.value)}
-                        style={{
-                            background: "#1a1a1a", border: "1px solid #2a2a2a",
-                            borderRadius: "8px", padding: "4px 8px",
-                            color: day.scheduledDate ? "#00e5a0" : "#555",
-                            fontSize: "11px", fontWeight: 600,
-                            outline: "none", cursor: "pointer",
-                            fontFamily: "'Inter', sans-serif",
-                        }}
-                    />
+                    <div className="relative group">
+                        <input
+                            type="date"
+                            value={day.scheduledDate || ""}
+                            onChange={(e) => onDateChange(index, e.target.value)}
+                            className={`
+                                bg-white/5 border border-white/10 rounded-lg px-2.5 py-1 text-[11px] font-black outline-none cursor-pointer transition-all hover:bg-white/10
+                                ${day.scheduledDate ? "text-emerald-400 border-emerald-500/30" : "text-slate-500"}
+                            `}
+                        />
+                    </div>
                 )}
-                <TimePicker
-                    value={day.scheduledTime || "08:00"}
-                    onChange={(val) => onTimeChange(index, val)}
-                />
+                <div className="scale-90 origin-right">
+                    <TimePicker
+                        value={day.scheduledTime || "08:00"}
+                        onChange={(val) => onTimeChange(index, val)}
+                    />
+                </div>
             </div>
 
             {/* ── Tab Row ── */}
-            <div style={{
-                display: "flex", gap: "4px", padding: "8px 10px 0",
-                overflowX: "auto", scrollbarWidth: "none",
-            }}>
+            <div className="flex gap-1.5 p-3 overflow-x-auto scrollbar-none scroll-smooth">
                 {TABS.map((tab) => {
                     const isActive = activeTab === tab.id;
                     return (
                         <button
                             key={tab.id}
                             onClick={() => setActiveTab(tab.id)}
-                            style={{
-                                padding: "4px 10px", borderRadius: "99px", border: "none",
-                                background: isActive ? "#00e5a0" : "#1e1e1e",
-                                color: isActive ? "#000" : "#555",
-                                fontSize: "10px", fontWeight: isActive ? 700 : 500,
-                                cursor: "pointer", whiteSpace: "nowrap",
-                                transition: "all 0.15s ease", flexShrink: 0,
-                                letterSpacing: isActive ? "0.02em" : "0",
-                            }}
+                            className={`
+                                px-3 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all duration-200 whitespace-nowrap cursor-pointer shrink-0
+                                ${isActive
+                                    ? "bg-white text-black shadow-lg shadow-white/10"
+                                    : "bg-white/[0.04] text-slate-500 hover:bg-white/[0.08] hover:text-slate-300"}
+                            `}
                         >
                             {tab.label}
                         </button>
@@ -663,12 +563,7 @@ const DayCard = ({
             </div>
 
             {/* ── Tab Content ── */}
-            <div style={{
-                padding: "12px 14px",
-                maxHeight: "380px",
-                overflowY: "auto",
-                scrollbarWidth: "thin",
-            }}>
+            <div className="flex-1 px-4 pb-4 max-h-[400px] overflow-y-auto scrollbar-thin scrollbar-thumb-white/10">
                 {activeTab === "caption" && <CaptionTab day={day} copiedId={copiedId} onCopy={onCopy} />}
                 {activeTab === "carousel" && <CarouselTab day={day} copiedId={copiedId} onCopy={onCopy} />}
                 {activeTab === "comic" && <ComicTab day={day} copiedId={copiedId} onCopy={onCopy} />}
@@ -677,52 +572,50 @@ const DayCard = ({
                 {activeTab === "poll" && <PollTab day={day} copiedId={copiedId} onCopy={onCopy} />}
             </div>
 
-            {/* ── Media Upload ── */}
-            <div style={{ padding: "0 14px 10px", borderTop: "1px solid #1a1a1a" }}>
-                <div style={{ fontSize: "9px", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", color: "#333", padding: "8px 0 6px" }}>
-                    <ImageIcon size={9} style={{ display: "inline", marginRight: "4px" }} />
-                    Visual Asset
-                </div>
-                <MediaUpload
-                    fileBase64={day.mediaBase64 || null}
-                    fileName={day.mediaName || null}
-                    fileType={day.mediaType || null}
-                    onUpload={(base64, name, type) => onFileChange(index, base64, name, type)}
-                    onRemove={() => onRemoveFile(index)}
-                />
-            </div>
-
-            {/* ── Content Checklist ── */}
-            <div style={{ padding: "0 14px 10px" }}>
-                <ContentChecklist day={day} />
-            </div>
-
-            {/* ── Manual Override (collapsible) ── */}
-            <div style={{ borderTop: "1px solid #1a1a1a" }}>
-                <button
-                    onClick={() => setShowManual(s => !s)}
-                    style={{
-                        width: "100%", display: "flex", alignItems: "center", justifyContent: "space-between",
-                        padding: "7px 14px", background: "transparent", border: "none",
-                        cursor: "pointer", color: "#333", fontSize: "10px", fontWeight: 500,
-                    }}
-                >
-                    Manual Override
-                    {showManual ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
-                </button>
-                {showManual && (
-                    <div style={{
-                        display: "flex", alignItems: "center", justifyContent: "space-between",
-                        padding: "0 14px 12px",
-                    }}>
-                        <span style={{ fontSize: "11px", color: "#444" }}>
-                            Mark as {isScheduled ? "Draft" : "Scheduled"}
-                        </span>
-                        <ToggleSwitch checked={isScheduled} onChange={() => onStatusToggle(index)} />
+            {/* ── Bottom Section ── */}
+            <div className="p-4 pt-0 mt-auto space-y-4">
+                {/* Media Upload */}
+                <div className="space-y-2">
+                    <div className="flex items-center gap-2 text-[9px] font-black uppercase tracking-widest text-slate-600">
+                        <ImageIcon size={11} className="text-slate-500" />
+                        Visual Asset
                     </div>
-                )}
+                    <div className="bg-black/20 rounded-2xl p-1 border border-white/[0.04]">
+                        <MediaUpload
+                            fileBase64={day.mediaBase64 || null}
+                            fileName={day.mediaName || null}
+                            fileType={day.mediaType || null}
+                            onUpload={(base64, name, type) => onFileChange(index, base64, name, type)}
+                            onRemove={() => onRemoveFile(index)}
+                        />
+                    </div>
+                </div>
+
+                {/* Content Checklist */}
+                <ContentChecklist day={day} />
+
+                {/* Manual Override (collapsible) */}
+                <div className="border-t border-white/[0.04] pt-1">
+                    <button
+                        onClick={() => setShowManual(s => !s)}
+                        className="w-full flex items-center justify-between py-2 text-slate-700 hover:text-slate-500 transition-colors cursor-pointer text-[9px] font-black uppercase tracking-widest"
+                    >
+                        <span>Manual Status Override</span>
+                        {showManual ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
+                    </button>
+                    {showManual && (
+                        <div className="flex items-center justify-between pb-2 animate-slide-down">
+                            <span className="text-[11px] text-slate-500 font-medium italic">
+                                Force status to {isScheduled ? "Draft" : "Scheduled"}
+                            </span>
+                            <div className="scale-75 origin-right">
+                                <ToggleSwitch checked={isScheduled} onChange={() => onStatusToggle(index)} />
+                            </div>
+                        </div>
+                    )}
+                </div>
             </div>
-        </div>
+        </Card>
     );
 };
 

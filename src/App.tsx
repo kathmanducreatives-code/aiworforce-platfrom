@@ -43,6 +43,7 @@ import GrowthSignals from "./pages/GrowthSignals";
 import ExpertMarketplace from "./pages/ExpertMarketplace";
 import PostInterceptor from "./pages/PostInterceptor";
 import LeadCRM from "./pages/LeadCRM";
+import OutreachEngine from "./pages/OutreachEngine";
 import CandidateDossier from "./pages/candidates/CandidateDossier";
 // import VerifyQueue from "./pages/verify/VerifyQueue";
 // import VerifyResults from "./pages/verify/VerifyResults";
@@ -249,6 +250,14 @@ const App = () => (
                     <ProtectedRoute>
                       <MainLayout>
                         <LeadCRM />
+                      </MainLayout>
+                    </ProtectedRoute>
+                  } />
+
+                  <Route path="/outreach-engine" element={
+                    <ProtectedRoute>
+                      <MainLayout>
+                        <OutreachEngine />
                       </MainLayout>
                     </ProtectedRoute>
                   } />

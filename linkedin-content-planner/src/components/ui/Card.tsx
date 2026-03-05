@@ -20,11 +20,14 @@ export const Card: React.FC<CardProps> = ({ children, className = '', hover = fa
     </div>
 );
 
-export const CardHeader: React.FC<{ title: string; subtitle?: string; action?: React.ReactNode }> = ({ title, subtitle, action }) => (
+export const CardHeader: React.FC<{ title: string; subtitle?: React.ReactNode; action?: React.ReactNode; icon?: React.ReactNode }> = ({ title, subtitle, action, icon }) => (
     <div className="flex items-start justify-between mb-5">
-        <div>
-            <h3 className="text-base font-semibold text-white">{title}</h3>
-            {subtitle && <p className="text-sm text-slate-400 mt-0.5">{subtitle}</p>}
+        <div className="flex items-start gap-3">
+            {icon && <div className="mt-1 shrink-0 text-slate-400 font-normal">{icon}</div>}
+            <div>
+                <h3 className="text-base font-semibold text-white">{title}</h3>
+                {subtitle && <div className="text-sm text-slate-400 mt-0.5">{subtitle}</div>}
+            </div>
         </div>
         {action && <div className="shrink-0">{action}</div>}
     </div>

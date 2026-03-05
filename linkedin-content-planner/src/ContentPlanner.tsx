@@ -11,6 +11,7 @@ import {
     Flame,
     Clock,
     TrendingUp,
+    Rocket,
 } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "./lib/supabase";
@@ -18,6 +19,9 @@ import DayCard from "./components/DayCard";
 import GeminiChat from "./components/GeminiChat";
 import { generateSmartSchedule, getEngagementScore, getTimingInsight } from "./lib/postingEngine";
 import type { DayPlan, VideoIdea } from "./types";
+import { Card, CardHeader } from "./components/ui/Card";
+import { Button } from "./components/ui/Button";
+import { PageHeader } from "./components/ui/PageHeader";
 
 const WEBHOOK_GENERATE_MONTHLY = import.meta.env.VITE_N8N_CONTENT_GENERATE_MONTHLY_WEBHOOK;
 const WEBHOOK_SCHEDULE = import.meta.env.VITE_N8N_CONTENT_SCHEDULE_WEBHOOK;
@@ -50,93 +54,82 @@ const ContentCalendar = ({ plan }: { plan: DayPlan[] }) => {
     }
 
     return (
-        <div style={{
-            background: "#141414", borderRadius: "16px",
-            border: "1px solid #2a2a2a", padding: "20px",
-            marginBottom: "24px"
-        }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '16px' }}>
-                <Calendar size={16} color="#a855f7" />
-                <span style={{ fontSize: '13px', fontWeight: 700, color: '#e0e0e0' }}>Content Calendar</span>
-                <span style={{ fontSize: '10px', color: '#555', marginLeft: 'auto' }}>
-                    <TrendingUp size={10} style={{ display: 'inline', marginRight: '4px' }} />
-                    Engagement score shown per cell
-                </span>
-            </div>
+        <Card className="mb-8">
+            <CardHeader
+                icon={<Calendar size={16} className="text-violet-400" />}
+                title="Content Calendar"
+                subtitle={
+                    <span className="flex items-center gap-1.5 text-[10px] text-slate-500 uppercase tracking-wider">
+                        <TrendingUp size={10} />
+                        Engagement score shown per cell
+                    </span>
+                }
+            />
 
-            {/* Week day headers */}
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: '4px', marginBottom: '6px' }}>
-                {weekDays.map(d => (
-                    <div key={d} style={{
-                        textAlign: 'center', fontSize: '9px', fontWeight: 700,
-                        color: d === 'Tue' || d === 'Wed' || d === 'Thu' ? '#00e5a0' : '#444',
-                        textTransform: 'uppercase', letterSpacing: '0.05em',
-                    }}>{d}</div>
+            <div className="flex flex-col gap-1.5">
+                {/* Week day headers */}
+                <div className="grid grid-cols-7 gap-1.5 mb-1">
+                    {weekDays.map(d => (
+                        <div key={d} className={`
+                            text-center text-[10px] font-bold uppercase tracking-widest
+                            ${d === 'Tue' || d === 'Wed' || d === 'Thu' ? 'text-emerald-500' : 'text-slate-600'}
+                        `}>
+                            {d}
+                        </div>
+                    ))}
+                </div>
+
+                {/* Week rows */}
+                {weeks.map((week, wi) => (
+                    <div key={wi} className="grid grid-cols-7 gap-1.5">
+                        {week.map((day, di) => {
+                            const globalIdx = wi * 7 + di;
+                            const format = day.contentFormat || 'Hot Take';
+                            const hero = HERO_FORMAT[format] || HERO_FORMAT['Hot Take'];
+                            const isScheduled = day.status === 'Posted';
+                            const hasContent = !!day.postCaption;
+                            const hasDate = !!day.scheduledDate;
+
+                            // Engagement score
+                            let engScore = 5;
+                            let engLabel = '';
+                            if (hasDate) {
+                                const dateObj = new Date(day.scheduledDate + 'T00:00:00');
+                                const result = getEngagementScore(dateObj);
+                                engScore = result.score;
+                                engLabel = getTimingInsight(day.scheduledTime || '08:00', dateObj.getDay());
+                            }
+
+                            const scoreColorClass = engScore >= 8 ? 'text-emerald-400 bg-emerald-400/10' : engScore >= 6 ? 'text-amber-400 bg-amber-400/10' : 'text-red-400 bg-red-400/10';
+                            const statusColor = isScheduled ? 'bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]' : hasContent ? 'bg-amber-500 shadow-[0_0_8px_rgba(245,158,11,0.5)]' : 'bg-slate-700';
+
+                            return (
+                                <div key={day.id} className={`
+                                    aspect-square rounded-xl flex flex-col items-center justify-center gap-1 relative transition-all duration-200 group
+                                    ${isScheduled ? 'bg-emerald-500/5 border-emerald-500/20' : hasContent ? 'bg-white/5 border-white/10' : 'bg-white/[0.02] border-white/[0.04]'}
+                                    border hover:border-white/30 cursor-default
+                                `}
+                                    title={hasDate ? `${day.scheduledDate} at ${day.scheduledTime}\nScore: ${engScore}/10\n${engLabel}` : `Day ${globalIdx + 1}`}
+                                >
+                                    <span className="text-[10px] font-black text-slate-600 group-hover:text-slate-400 transition-colors uppercase">{globalIdx + 1}</span>
+                                    <hero.icon size={14} style={{ color: hero.color }} className="drop-shadow-sm" />
+
+                                    {/* Engagement score badge */}
+                                    {hasDate && (
+                                        <span className={`text-[8px] font-black px-1.5 py-0.5 rounded ${scoreColorClass}`}>
+                                            {engScore}
+                                        </span>
+                                    )}
+
+                                    {/* Status dot */}
+                                    <div className={`absolute bottom-2 right-2 w-1.5 h-1.5 rounded-full ${statusColor}`} />
+                                </div>
+                            );
+                        })}
+                    </div>
                 ))}
             </div>
-
-            {/* Week rows */}
-            {weeks.map((week, wi) => (
-                <div key={wi} style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: '4px', marginBottom: '4px' }}>
-                    {week.map((day, di) => {
-                        const globalIdx = wi * 7 + di;
-                        const format = day.contentFormat || 'Hot Take';
-                        const hero = HERO_FORMAT[format] || HERO_FORMAT['Hot Take'];
-                        const isScheduled = day.status === 'Posted';
-                        const hasContent = !!day.postCaption;
-                        const hasDate = !!day.scheduledDate;
-
-                        // Engagement score
-                        let engScore = 5;
-                        let engLabel = '';
-                        if (hasDate) {
-                            const dateObj = new Date(day.scheduledDate + 'T00:00:00');
-                            const result = getEngagementScore(dateObj);
-                            engScore = result.score;
-                            engLabel = getTimingInsight(day.scheduledTime || '08:00', dateObj.getDay());
-                        }
-
-                        const scoreColor = engScore >= 8 ? '#00e5a0' : engScore >= 6 ? '#f59e0b' : '#ef4444';
-
-                        return (
-                            <div key={day.id} style={{
-                                aspectRatio: '1/1',
-                                background: isScheduled ? 'rgba(0,229,160,0.06)' : hasContent ? '#1a1a1a' : '#151515',
-                                border: `1px solid ${isScheduled ? '#00e5a033' : hasDate ? '#a855f733' : '#222'}`,
-                                borderRadius: '10px',
-                                display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
-                                gap: '3px', position: 'relative',
-                                transition: 'all 0.2s',
-                                cursor: 'default',
-                            }}
-                                title={hasDate ? `${day.scheduledDate} at ${day.scheduledTime}\nScore: ${engScore}/10\n${engLabel}` : `Day ${globalIdx + 1}`}
-                            >
-                                <span style={{ fontSize: '10px', fontWeight: 800, color: '#666' }}>{globalIdx + 1}</span>
-                                <hero.icon size={13} color={hero.color} />
-
-                                {/* Engagement score badge */}
-                                {hasDate && (
-                                    <span style={{
-                                        fontSize: '7px', fontWeight: 800,
-                                        color: scoreColor,
-                                        background: `${scoreColor}15`,
-                                        padding: '1px 4px', borderRadius: '4px',
-                                    }}>{engScore}/10</span>
-                                )}
-
-                                {/* Status dot */}
-                                <div style={{
-                                    position: 'absolute', bottom: '3px', right: '3px',
-                                    width: '5px', height: '5px', borderRadius: '50%',
-                                    background: isScheduled ? '#00e5a0' : hasContent ? '#f59e0b' : '#333',
-                                    boxShadow: isScheduled ? '0 0 4px #00e5a0' : 'none',
-                                }} />
-                            </div>
-                        );
-                    })}
-                </div>
-            ))}
-        </div>
+        </Card>
     );
 };
 
@@ -145,7 +138,7 @@ const ContentPlanner = () => {
     const [plan, setPlan] = useState<DayPlan[]>([]);
     const [generating, setGenerating] = useState(false);
     const [fetching, setFetching] = useState(false);
-    const [_scheduling, setScheduling] = useState(false);
+    const [scheduling, setScheduling] = useState(false);
     const [copiedId, _setCopiedId] = useState<string | null>(null);
 
     const fetchPlan = useCallback(async () => {
@@ -361,108 +354,99 @@ const ContentPlanner = () => {
     };
 
     return (
-        <div style={{ minHeight: "100vh", background: "#0d0d0d" }}>
-            <header style={{
-                position: "sticky", top: 0, zIndex: 30,
-                background: "rgba(13,13,13,0.92)",
-                backdropFilter: "blur(16px)",
-                borderBottom: "1px solid #1e1e1e",
-                padding: "0 24px", height: "64px",
-                display: "flex", alignItems: "center", gap: "14px",
-            }}>
-                <div style={{
-                    width: "40px", height: "40px", borderRadius: "12px",
-                    background: "linear-gradient(135deg, #a855f7, #7c3aed)",
-                    display: "flex", alignItems: "center", justifyContent: "center"
-                }}>
-                    <Calendar size={20} color="#fff" />
-                </div>
-                <div style={{ flex: 1 }}>
-                    <h1 style={{ fontSize: "17px", fontWeight: 700, color: "#fff" }}>Monthly Content Commander</h1>
-                    <p style={{ fontSize: "11px", color: "#555" }}>30-Day Automated Pipeline</p>
-                </div>
-            </header>
+        <div className="flex flex-col flex-1 bg-[#0a0a0b] animate-fade-in overflow-hidden">
+            <PageHeader
+                title="Content Planner"
+                subtitle="30-Day Automated Pipeline"
+                badge="Premium"
+                actions={
+                    <Button variant="secondary" size="md" onClick={fetchPlan} loading={fetching}>
+                        <RefreshCw size={14} className={fetching ? "animate-spin" : ""} />
+                        <span className="ml-2">Sync</span>
+                    </Button>
+                }
+            />
 
-            <main style={{ maxWidth: "1600px", margin: "0 auto", padding: "28px 24px" }}>
-                <section style={{
-                    background: "#141414", border: "1px solid #2a2a2a", borderRadius: "20px",
-                    padding: "24px", marginBottom: "32px"
-                }}>
-                    <label style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "11px", fontWeight: 700, color: "#a855f7", textTransform: "uppercase", marginBottom: "12px" }}>
-                        <Sparkles size={14} /> Global Monthly Strategy
-                    </label>
-                    <textarea
-                        value={campaignGoal}
-                        onChange={(e) => setCampaignGoal(e.target.value)}
-                        placeholder="Define your 30-day empire goal..."
-                        style={{
-                            width: "100%", background: "#1a1a1a", border: "1px solid #2a2a2a",
-                            borderRadius: "12px", padding: "16px", color: "#fff", fontSize: "14px",
-                            outline: "none", resize: "none"
-                        }}
-                        rows={3}
-                    />
-                    <div style={{ marginTop: "20px", display: "flex", gap: "12px", alignItems: "center" }}>
-                        <button
-                            onClick={handleGenerateMonthly}
-                            disabled={generating}
-                            style={{
-                                background: "linear-gradient(135deg, #a855f7, #7c3aed)",
-                                color: "#fff", border: "none", padding: "12px 24px",
-                                borderRadius: "10px", fontWeight: 700, cursor: "pointer"
-                            }}>
-                            {generating ? "Initializing Strategy..." : "Generate 30-Day Plan"}
-                        </button>
-                        <button
-                            onClick={handleSmartSchedule}
-                            style={{
-                                background: "linear-gradient(135deg, #f59e0b, #ef4444)",
-                                color: "#fff", border: "none", padding: "12px 24px",
-                                borderRadius: "10px", fontWeight: 700, cursor: "pointer",
-                                display: "flex", alignItems: "center", gap: "8px",
-                            }}>
-                            <Clock size={16} /> Smart Schedule (Viral Times)
-                        </button>
-                        <button
-                            onClick={handleScheduleAll}
-                            disabled={_scheduling}
-                            style={{
-                                background: "linear-gradient(135deg, #00e5a0, #00c08b)",
-                                color: "#000", border: "none", padding: "12px 24px",
-                                borderRadius: "10px", fontWeight: 700, cursor: "pointer"
-                            }}>
-                            {_scheduling ? "Scheduling..." : "Push to LinkedIn"}
-                        </button>
-                        <button
-                            onClick={fetchPlan}
-                            style={{ background: "#222", color: "#888", border: "1px solid #333", padding: "12px 20px", borderRadius: "10px", cursor: "pointer" }}>
-                            <RefreshCw size={16} className={fetching ? "animate-spin" : ""} />
-                        </button>
-                    </div>
-                </section>
+            <main className="flex-1 overflow-auto px-6 pb-8">
+                <div className="flex flex-col gap-6 max-w-[1600px] mx-auto pt-2">
+                    {/* Strategy Section */}
+                    <Card className="p-6 overflow-visible relative group">
+                        <div className="absolute inset-0 bg-gradient-to-r from-violet-600/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none" />
 
-                <ContentCalendar plan={plan} />
+                        <div className="flex items-center gap-2 mb-4">
+                            <Sparkles size={16} className="text-violet-400" />
+                            <h3 className="text-[11px] font-black uppercase tracking-widest text-violet-400">Monthly Strategy</h3>
+                        </div>
 
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 360px", gap: "32px" }}>
-                    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(380px, 1fr))", gap: "20px" }}>
-                        {plan.map((day, idx) => (
-                            <DayCard
-                                key={day.id}
-                                day={day}
-                                dayShort={`Day ${idx + 1}`}
-                                index={idx}
-                                copiedId={copiedId}
-                                onStatusToggle={handleStatusToggle}
-                                onCopy={() => { }}
-                                onFileChange={handleFileChange}
-                                onRemoveFile={handleRemoveFile}
-                                onTimeChange={handleTimeChange}
-                                onDateChange={handleDateChange}
-                            />
-                        ))}
-                    </div>
-                    <div style={{ position: "sticky", top: "88px", height: "calc(100vh - 120px)" }}>
-                        <GeminiChat />
+                        <textarea
+                            value={campaignGoal}
+                            onChange={(e) => setCampaignGoal(e.target.value)}
+                            placeholder="Define your 30-day empire goal (e.g., Launching a new B2B AI tool, targeting CTOs with controversial takes)..."
+                            className="w-full bg-white/[0.03] border border-white/[0.08] rounded-2xl p-4 text-sm text-white placeholder:text-slate-600 outline-none focus:border-violet-500/50 focus:bg-white/[0.05] transition-all resize-none mb-6"
+                            rows={3}
+                        />
+
+                        <div className="flex flex-wrap gap-3">
+                            <Button
+                                variant="primary"
+                                size="lg"
+                                onClick={handleGenerateMonthly}
+                                loading={generating}
+                                className="!bg-gradient-to-r !from-violet-600 !to-blue-600 !border-violet-400/20"
+                            >
+                                <Rocket size={16} className="mr-2" />
+                                Initiate 30-Day Strategy
+                            </Button>
+
+                            <Button
+                                variant="secondary"
+                                onClick={handleSmartSchedule}
+                                className="group hover:!border-amber-500/50 hover:!text-amber-400"
+                            >
+                                <Clock size={16} className="mr-2 group-hover:scale-110 transition-transform" />
+                                Smart Schedule (Viral Times)
+                            </Button>
+
+                            <Button
+                                variant="secondary"
+                                onClick={handleScheduleAll}
+                                loading={scheduling}
+                                className="group hover:!border-emerald-500/50 hover:!text-emerald-400"
+                            >
+                                <RefreshCw size={16} className={`mr-2 ${scheduling ? "animate-spin" : "group-hover:rotate-180 transition-transform duration-500"}`} />
+                                Push to LinkedIn
+                            </Button>
+                        </div>
+                    </Card>
+
+                    <ContentCalendar plan={plan} />
+
+                    <div className="grid grid-cols-1 xl:grid-cols-[1fr_360px] gap-8">
+                        {/* Day Cards Grid */}
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            {plan.map((day, idx) => (
+                                <DayCard
+                                    key={day.id}
+                                    day={day}
+                                    dayShort={`Day ${idx + 1}`}
+                                    index={idx}
+                                    copiedId={copiedId}
+                                    onStatusToggle={handleStatusToggle}
+                                    onCopy={() => { }}
+                                    onFileChange={handleFileChange}
+                                    onRemoveFile={handleRemoveFile}
+                                    onTimeChange={handleTimeChange}
+                                    onDateChange={handleDateChange}
+                                />
+                            ))}
+                        </div>
+
+                        {/* Sidebar Chat */}
+                        <div className="hidden xl:block">
+                            <div className="sticky top-4 h-[calc(100vh-160px)]">
+                                <GeminiChat />
+                            </div>
+                        </div>
                     </div>
                 </div>
             </main>

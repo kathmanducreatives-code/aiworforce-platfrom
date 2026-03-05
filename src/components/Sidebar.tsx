@@ -45,6 +45,7 @@ const navGroups: NavGroup[] = [
     items: [
       { path: '/post-interceptor', icon: Crosshair, label: 'Post Interceptor' },
       { path: '/lead-crm', icon: Zap, label: 'Lead CRM' },
+      { path: '/outreach-engine', icon: Zap, label: 'Outreach Engine' },
     ],
   },
   {

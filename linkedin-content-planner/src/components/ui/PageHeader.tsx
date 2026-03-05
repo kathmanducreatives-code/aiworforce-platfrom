@@ -8,7 +8,7 @@ interface PageHeaderProps {
 }
 
 export const PageHeader: React.FC<PageHeaderProps> = ({ title, subtitle, actions, badge }) => (
-    <div className="flex items-start justify-between px-10 pt-8 pb-6 shrink-0">
+    <div className="flex items-start justify-between px-6 pt-6 pb-4 shrink-0">
         <div className="flex items-center gap-3">
             <div>
                 <div className="flex items-center gap-2.5">

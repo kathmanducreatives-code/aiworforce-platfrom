@@ -1,6 +1,5 @@
 import React, { useState } from 'react';
-import { Save, Key, Webhook, Database, ExternalLink, CheckCircle, AlertCircle } from 'lucide-react';
-import { Button } from '../ui/Button';
+import { Key, Webhook, Database, ExternalLink, CheckCircle, AlertCircle } from 'lucide-react';
 import { Card, CardHeader } from '../ui/Card';
 import { PageHeader } from '../ui/PageHeader';
 import { Badge } from '../ui/Badge';
@@ -9,42 +8,46 @@ interface EnvEntry { key: string; label: string; value: string; hint?: string; s
 
 // Read from Vite env — read-only display (can't write to .env at runtime)
 const envValues: Record<string, string> = {
-    VITE_SUPABASE_URL:                       import.meta.env.VITE_SUPABASE_URL ?? '',
-    VITE_SUPABASE_ANON_KEY:                  import.meta.env.VITE_SUPABASE_ANON_KEY ?? '',
-    VITE_INTERCEPTOR_WEBHOOK_URL:            import.meta.env.VITE_INTERCEPTOR_WEBHOOK_URL ?? '',
-    VITE_N8N_OUTREACH_LINKEDIN_WEBHOOK_URL:  import.meta.env.VITE_N8N_OUTREACH_LINKEDIN_WEBHOOK_URL ?? '',
-    VITE_N8N_OUTREACH_DISCOVER_WEBHOOK:      import.meta.env.VITE_N8N_OUTREACH_DISCOVER_WEBHOOK ?? '',
-    VITE_N8N_OUTREACH_EMAIL_WEBHOOK_URL:     import.meta.env.VITE_N8N_OUTREACH_EMAIL_WEBHOOK_URL ?? '',
-    VITE_N8N_CONTENT_GENERATE_WEBHOOK:       import.meta.env.VITE_N8N_CONTENT_GENERATE_WEBHOOK ?? '',
-    VITE_DIALER_URL:                         import.meta.env.VITE_DIALER_URL ?? '',
-    VITE_GEMINI_API_KEY:                     import.meta.env.VITE_GEMINI_API_KEY ?? '',
-    VITE_CAL_BOOKING_LINK:                   import.meta.env.VITE_CAL_BOOKING_LINK ?? '',
+    VITE_SUPABASE_URL: import.meta.env.VITE_SUPABASE_URL ?? '',
+    VITE_SUPABASE_ANON_KEY: import.meta.env.VITE_SUPABASE_ANON_KEY ?? '',
+    VITE_INTERCEPTOR_WEBHOOK_URL: import.meta.env.VITE_INTERCEPTOR_WEBHOOK_URL ?? '',
+    VITE_N8N_OUTREACH_LINKEDIN_WEBHOOK_URL: import.meta.env.VITE_N8N_OUTREACH_LINKEDIN_WEBHOOK_URL ?? '',
+    VITE_N8N_OUTREACH_DISCOVER_WEBHOOK: import.meta.env.VITE_N8N_OUTREACH_DISCOVER_WEBHOOK ?? '',
+    VITE_N8N_OUTREACH_EMAIL_WEBHOOK_URL: import.meta.env.VITE_N8N_OUTREACH_EMAIL_WEBHOOK_URL ?? '',
+    VITE_N8N_CONTENT_GENERATE_WEBHOOK: import.meta.env.VITE_N8N_CONTENT_GENERATE_WEBHOOK ?? '',
+    VITE_N8N_CONTENT_GENERATE_MONTHLY_WEBHOOK: import.meta.env.VITE_N8N_CONTENT_GENERATE_MONTHLY_WEBHOOK ?? '',
+    VITE_N8N_CONTENT_SCHEDULE_WEBHOOK: import.meta.env.VITE_N8N_CONTENT_SCHEDULE_WEBHOOK ?? '',
+    VITE_DIALER_URL: import.meta.env.VITE_DIALER_URL ?? '',
+    VITE_GEMINI_API_KEY: import.meta.env.VITE_GEMINI_API_KEY ?? '',
+    VITE_CAL_BOOKING_LINK: import.meta.env.VITE_CAL_BOOKING_LINK ?? '',
 };
 
 const sections: { title: string; subtitle: string; icon: React.ReactNode; entries: EnvEntry[] }[] = [
     {
         title: 'Supabase', subtitle: 'Database connection', icon: <Database size={16} />,
         entries: [
-            { key: 'VITE_SUPABASE_URL',      label: 'Project URL',  value: envValues.VITE_SUPABASE_URL },
-            { key: 'VITE_SUPABASE_ANON_KEY', label: 'Anon Key',     value: envValues.VITE_SUPABASE_ANON_KEY, sensitive: true },
+            { key: 'VITE_SUPABASE_URL', label: 'Project URL', value: envValues.VITE_SUPABASE_URL },
+            { key: 'VITE_SUPABASE_ANON_KEY', label: 'Anon Key', value: envValues.VITE_SUPABASE_ANON_KEY, sensitive: true },
         ],
     },
     {
         title: 'n8n Webhooks', subtitle: 'Automation triggers', icon: <Webhook size={16} />,
         entries: [
-            { key: 'VITE_INTERCEPTOR_WEBHOOK_URL',           label: 'Post Interceptor',   value: envValues.VITE_INTERCEPTOR_WEBHOOK_URL },
-            { key: 'VITE_N8N_OUTREACH_LINKEDIN_WEBHOOK_URL', label: 'Batch Scrape + DM',  value: envValues.VITE_N8N_OUTREACH_LINKEDIN_WEBHOOK_URL },
-            { key: 'VITE_N8N_OUTREACH_DISCOVER_WEBHOOK',     label: 'AI Lead Discovery',  value: envValues.VITE_N8N_OUTREACH_DISCOVER_WEBHOOK },
-            { key: 'VITE_N8N_OUTREACH_EMAIL_WEBHOOK_URL',    label: 'Outreach Email',      value: envValues.VITE_N8N_OUTREACH_EMAIL_WEBHOOK_URL },
-            { key: 'VITE_N8N_CONTENT_GENERATE_WEBHOOK',      label: 'Content Generator',  value: envValues.VITE_N8N_CONTENT_GENERATE_WEBHOOK },
-            { key: 'VITE_DIALER_URL',                        label: 'Power Dialer iFrame',value: envValues.VITE_DIALER_URL },
+            { key: 'VITE_INTERCEPTOR_WEBHOOK_URL', label: 'Post Interceptor', value: envValues.VITE_INTERCEPTOR_WEBHOOK_URL },
+            { key: 'VITE_N8N_OUTREACH_LINKEDIN_WEBHOOK_URL', label: 'Batch Scrape + DM', value: envValues.VITE_N8N_OUTREACH_LINKEDIN_WEBHOOK_URL },
+            { key: 'VITE_N8N_OUTREACH_DISCOVER_WEBHOOK', label: 'AI Lead Discovery', value: envValues.VITE_N8N_OUTREACH_DISCOVER_WEBHOOK },
+            { key: 'VITE_N8N_OUTREACH_EMAIL_WEBHOOK_URL', label: 'Outreach Email', value: envValues.VITE_N8N_OUTREACH_EMAIL_WEBHOOK_URL },
+            { key: 'VITE_N8N_CONTENT_GENERATE_WEBHOOK', label: 'Single Post Generator', value: envValues.VITE_N8N_CONTENT_GENERATE_WEBHOOK },
+            { key: 'VITE_N8N_CONTENT_GENERATE_MONTHLY_WEBHOOK', label: 'Monthly Planner', value: envValues.VITE_N8N_CONTENT_GENERATE_MONTHLY_WEBHOOK },
+            { key: 'VITE_N8N_CONTENT_SCHEDULE_WEBHOOK', label: 'Content Scheduler', value: envValues.VITE_N8N_CONTENT_SCHEDULE_WEBHOOK },
+            { key: 'VITE_DIALER_URL', label: 'Power Dialer iFrame', value: envValues.VITE_DIALER_URL },
         ],
     },
     {
         title: 'API Keys', subtitle: 'External services', icon: <Key size={16} />,
         entries: [
-            { key: 'VITE_GEMINI_API_KEY',   label: 'Gemini API Key',    value: envValues.VITE_GEMINI_API_KEY,   sensitive: true },
-            { key: 'VITE_CAL_BOOKING_LINK', label: 'Cal.com Link',      value: envValues.VITE_CAL_BOOKING_LINK, hint: 'Used in outreach email CTAs' },
+            { key: 'VITE_GEMINI_API_KEY', label: 'Gemini API Key', value: envValues.VITE_GEMINI_API_KEY, sensitive: true },
+            { key: 'VITE_CAL_BOOKING_LINK', label: 'Cal.com Link', value: envValues.VITE_CAL_BOOKING_LINK, hint: 'Used in outreach email CTAs' },
         ],
     },
 ];
@@ -72,7 +75,7 @@ const SettingsView: React.FC = () => {
                 }
             />
 
-            <div className="flex flex-col gap-6 px-10 pb-10 max-w-3xl">
+            <div className="flex flex-col gap-6 px-6 pb-6 max-w-3xl">
                 {/* Status banner */}
                 <div className={[
                     'flex items-start gap-4 p-4 rounded-xl border text-sm',
@@ -150,7 +153,7 @@ const SettingsView: React.FC = () => {
                     <CardHeader title="Quick Links" subtitle="Open in browser" />
                     <div className="flex flex-wrap gap-3">
                         {[
-                            { label: 'n8n Dashboard',    url: 'https://n8n.prasidha.me' },
+                            { label: 'n8n Dashboard', url: 'https://n8n.prasidha.me' },
                             { label: 'Supabase Console', url: `https://supabase.com/dashboard/project/${envValues.VITE_SUPABASE_URL.split('.')[0].replace('https://', '')}` },
                         ].map(link => (
                             <a

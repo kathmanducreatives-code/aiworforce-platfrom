@@ -16,11 +16,11 @@ const LeadCRMView: React.FC = () => {
     const [activeTab, setActiveTab] = useState<TabFilter>('all');
 
     const filteredLeads = useMemo(() => leads.filter(l => {
-        if (activeTab === 'all')         return true;
-        if (activeTab === 'hot')         return l.tier === 'tier_1';
-        if (activeTab === 'warm')        return l.tier === 'tier_2';
+        if (activeTab === 'all') return true;
+        if (activeTab === 'hot') return l.tier === 'tier_1';
+        if (activeTab === 'warm') return l.tier === 'tier_2';
         if (activeTab === 'intercepted') return l.discovery_source === 'competitor_post_intercept';
-        if (activeTab === 'sent')        return l.status === 'in_sequence' || l.closely_connection_status === 'pending';
+        if (activeTab === 'sent') return l.status === 'in_sequence' || l.closely_connection_status === 'pending';
         return true;
     }), [leads, activeTab]);
 
@@ -41,11 +41,11 @@ const LeadCRMView: React.FC = () => {
     const scoreTier = (l: OutreachLead) => l.commenter_score ?? (l.tier === 'tier_1' ? 5 : l.tier === 'tier_2' ? 3 : 1);
 
     const tabs: { id: TabFilter; label: string }[] = [
-        { id: 'all',         label: `All (${leads.length})` },
-        { id: 'hot',         label: '🔥 Tier 1' },
-        { id: 'warm',        label: '👋 Tier 2' },
+        { id: 'all', label: `All (${leads.length})` },
+        { id: 'hot', label: '🔥 Tier 1' },
+        { id: 'warm', label: '👋 Tier 2' },
         { id: 'intercepted', label: '🎯 Intercepted' },
-        { id: 'sent',        label: '✉️ In Sequence' },
+        { id: 'sent', label: '✉️ In Sequence' },
     ];
 
     return (
@@ -65,7 +65,7 @@ const LeadCRMView: React.FC = () => {
                 }
             />
 
-            <div className="flex-1 flex flex-col overflow-hidden px-10 pb-10">
+            <div className="flex-1 flex flex-col overflow-hidden px-6 pb-6">
                 {/* Tab bar */}
                 <div className="flex border-b border-white/[0.08] mb-6 gap-6 shrink-0">
                     {tabs.map(tab => (
