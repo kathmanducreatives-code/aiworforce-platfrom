@@ -81,7 +81,7 @@ export async function fetchAllLeads(): Promise<OutreachLead[]> {
         .order('created_at', { ascending: false });
 
     if (error) throw new Error(error.message);
-    return (data || []) as OutreachLead[];
+    return (data || []) as unknown as OutreachLead[];
 }
 
 /** Update dm_sent flag after copying a DM */
