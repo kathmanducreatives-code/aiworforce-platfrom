@@ -98,13 +98,13 @@ export async function markAsSent(leadId: string): Promise<void> {
 export async function fetchOutboundMetrics() {
     const { data, error } = await supabase
         .from('outreach_leads')
-        .select('commenter_score, dm_sent, created_at, discovery_source');
+        .select('*');
 
     if (error) throw new Error(error.message);
 
-    const rows = data || [];
+    const rows = (data || []) as any[];
     const total = rows.length;
-    const hotPending = rows.filter(r => r.commenter_score >= 4 && !r.dm_sent).length;
+    const hotPending = rows.filter(r => (r.commenter_score ?? 0) >= 4 && !r.dm_sent).length;
     const dmsSent = rows.filter(r => r.dm_sent).length;
 
     // Last 7 days volume

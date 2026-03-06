@@ -1,18 +1,15 @@
 import { useState, useMemo } from 'react';
-import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Search, Play, FileText, Calendar, Clock, User, Download, ChevronLeft, MapPin } from 'lucide-react';
+import { Search, Play, Calendar, Clock, User, ChevronLeft, MapPin } from 'lucide-react';
 import { mockInterviewRequests, mockExperts, Expert } from './mockData';
 import { format } from 'date-fns';
-
-const zoomThumbnail = "/Users/prasidha/.gemini/antigravity/brain/56fe69e8-9ae9-4fe4-9ad4-caac2f995a40/zoom_meeting_thumbnail_1772466883160.png";
+import { motion } from 'framer-motion';
 
 const RecordingArchive = () => {
     const [searchQuery, setSearchQuery] = useState('');
     const [selectedExpert, setSelectedExpert] = useState<Expert | null>(null);
 
-    // Get all experts who have completed recordings
     const expertsWithRecordings = useMemo(() => {
         const expertIds = new Set(mockInterviewRequests
             .filter(i => i.status === 'recorded' || i.status === 'verified_paid')
@@ -22,7 +19,6 @@ const RecordingArchive = () => {
         return mockExperts.filter(e => expertIds.has(e.id));
     }, []);
 
-    // Filter experts based on search query (when in top-level view)
     const filteredExperts = useMemo(() => {
         return expertsWithRecordings.filter(e =>
             e.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -30,7 +26,6 @@ const RecordingArchive = () => {
         );
     }, [searchQuery, expertsWithRecordings]);
 
-    // Get recordings for the selected expert (when in drill-down view)
     const expertRecordings = useMemo(() => {
         if (!selectedExpert) return [];
         return mockInterviewRequests.filter(i =>
@@ -41,7 +36,6 @@ const RecordingArchive = () => {
         );
     }, [selectedExpert, searchQuery]);
 
-    // Global Stats
     const globalStats = [
         { label: 'Total Recordings', value: mockInterviewRequests.filter(i => i.status === 'recorded' || i.status === 'verified_paid').length, color: 'text-primary' },
         { label: 'Active Interviewers', value: expertsWithRecordings.length, color: 'text-blue-500' },
@@ -49,7 +43,7 @@ const RecordingArchive = () => {
     ];
 
     return (
-        <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
+        <div className="space-y-6">
             {/* Header & Search */}
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                 <div>
@@ -79,43 +73,48 @@ const RecordingArchive = () => {
                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                     <Input
                         placeholder={selectedExpert ? "Search candidates..." : "Search interviewers..."}
-                        className="pl-9 bg-card border-border"
+                        className="pl-9 bg-card/60 backdrop-blur-sm border-border/50"
                         value={searchQuery}
                         onChange={(e) => setSearchQuery(e.target.value)}
                     />
                 </div>
             </div>
 
-            {/* View Switching */}
             {!selectedExpert ? (
-                // --- TOP LEVEL: EXPERT GRID ---
                 <>
                     {/* Global Stats */}
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                         {globalStats.map((stat, i) => (
-                            <Card key={i} className="bg-card/50 backdrop-blur-sm border-border">
-                                <CardContent className="p-4">
-                                    <p className="text-[10px] uppercase tracking-widest font-bold text-muted-foreground mb-1">{stat.label}</p>
-                                    <p className={`text-2xl font-mono font-bold ${stat.color}`}>{stat.value}</p>
-                                </CardContent>
-                            </Card>
+                            <motion.div
+                                key={i}
+                                initial={{ opacity: 0, y: 12 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                transition={{ duration: 0.3, delay: i * 0.08 }}
+                                className="bg-card/60 backdrop-blur-sm border border-border/50 rounded-xl p-5"
+                            >
+                                <p className="text-[10px] uppercase tracking-widest font-bold text-muted-foreground mb-1">{stat.label}</p>
+                                <p className={`text-2xl font-mono font-bold ${stat.color}`}>{stat.value}</p>
+                            </motion.div>
                         ))}
                     </div>
 
                     {/* Interviewer Profiles */}
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                        {filteredExperts.map((expert) => {
-                            const expertSessionCount = mockInterviewRequests.filter(i => (i.status === 'recorded' || i.status === 'verified_paid') && i.expertId === expert.id).length;
+                        {filteredExperts.map((expert, i) => {
+                            const expertSessionCount = mockInterviewRequests.filter(int => (int.status === 'recorded' || int.status === 'verified_paid') && int.expertId === expert.id).length;
 
                             return (
-                                <Card
+                                <motion.div
                                     key={expert.id}
-                                    className="group bg-card border-border hover:border-primary/50 transition-all cursor-pointer shadow-sm hover:shadow-md"
+                                    initial={{ opacity: 0, y: 16 }}
+                                    animate={{ opacity: 1, y: 0 }}
+                                    transition={{ duration: 0.4, delay: i * 0.08 }}
+                                    className="group bg-card/60 backdrop-blur-sm border border-border/50 rounded-2xl hover:border-primary/40 hover:shadow-[0_8px_30px_rgba(5,148,103,0.08)] transition-all duration-200 hover:scale-[1.02] cursor-pointer overflow-hidden"
                                     onClick={() => { setSelectedExpert(expert); setSearchQuery(''); }}
                                 >
-                                    <CardContent className="p-6">
-                                        <div className="flex items-start gap-4 mb-4 border-b border-border/50 pb-4">
-                                            <div className="w-16 h-16 rounded-xl overflow-hidden border-2 border-primary/20 bg-muted shrink-0 group-hover:border-primary/50 transition-colors">
+                                    <div className="p-6">
+                                        <div className="flex items-start gap-4 mb-4 border-b border-border/30 pb-4">
+                                            <div className="w-16 h-16 rounded-xl overflow-hidden border-2 border-border/50 bg-muted shrink-0 group-hover:border-primary/40 transition-colors">
                                                 <img src={expert.avatar} alt={expert.name} className="w-full h-full object-cover" />
                                             </div>
                                             <div>
@@ -135,25 +134,24 @@ const RecordingArchive = () => {
                                             </div>
                                             <div className="text-right">
                                                 <p className="text-[10px] text-muted-foreground uppercase font-bold tracking-widest mb-1">Archived Sessions</p>
-                                                <span className="text-xl font-bold font-mono text-blue-500">{expertSessionCount}</span>
+                                                <span className="text-xl font-bold font-mono text-primary">{expertSessionCount}</span>
                                             </div>
                                         </div>
-                                    </CardContent>
-                                    <div className="px-6 py-3 bg-muted/20 border-t border-border mt-auto flex justify-between items-center group-hover:bg-primary/5 transition-colors">
+                                    </div>
+                                    <div className="px-6 py-3 bg-muted/10 border-t border-border/30 flex justify-between items-center group-hover:bg-primary/5 transition-colors">
                                         <span className="text-xs font-bold text-muted-foreground group-hover:text-primary transition-colors">View Library</span>
                                         <ChevronLeft className="h-4 w-4 rotate-180 text-muted-foreground group-hover:text-primary transition-colors" />
                                     </div>
-                                </Card>
-                            )
+                                </motion.div>
+                            );
                         })}
                     </div>
                 </>
             ) : (
-                // --- DRILL DOWN: EXPERT RECORDINGS ---
                 <>
                     {/* Expert Context Header */}
-                    <div className="flex items-center gap-4 bg-muted/20 border border-border rounded-xl p-4">
-                        <div className="w-12 h-12 rounded-full overflow-hidden border-2 border-background shadow-sm shrink-0">
+                    <div className="flex items-center gap-4 bg-card/60 backdrop-blur-sm border border-border/50 rounded-xl p-4">
+                        <div className="w-12 h-12 rounded-full overflow-hidden border-2 border-border/50 shadow-sm shrink-0">
                             <img src={selectedExpert.avatar} alt={selectedExpert.name} className="w-full h-full object-cover" />
                         </div>
                         <div className="flex-1">
@@ -167,28 +165,29 @@ const RecordingArchive = () => {
                     </div>
 
                     {/* Recording Grid */}
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 animate-in slide-in-from-right-4 duration-300">
-                        {expertRecordings.map((interview) => (
-                            <Card key={interview.id} className="group border-border bg-card hover:border-primary/40 transition-all overflow-hidden shadow-sm hover:shadow-md flex flex-col">
-                                {/* Zoom Thumbnail (No HD Badge) */}
-                                <div className="aspect-video bg-muted relative flex items-center justify-center overflow-hidden">
-                                    <img
-                                        src={zoomThumbnail}
-                                        alt="Zoom Meeting"
-                                        className="absolute inset-0 w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
-                                    />
-                                    <div className="absolute inset-0 bg-black/30 group-hover:bg-black/50 transition-colors z-10" />
-                                    <div className="absolute bottom-2 right-2 px-1.5 py-0.5 rounded bg-black/60 text-[10px] font-mono font-bold text-white z-20 border border-white/10 backdrop-blur-sm shadow-xl">
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                        {expertRecordings.map((interview, i) => (
+                            <motion.div
+                                key={interview.id}
+                                initial={{ opacity: 0, y: 16 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                transition={{ duration: 0.3, delay: i * 0.08 }}
+                                className="group bg-card/60 backdrop-blur-sm border border-border/50 rounded-2xl hover:border-primary/40 hover:shadow-[0_8px_30px_rgba(5,148,103,0.08)] transition-all duration-200 overflow-hidden flex flex-col"
+                            >
+                                {/* Gradient Thumbnail Placeholder */}
+                                <div className="aspect-video bg-gradient-to-br from-primary/15 to-accent/15 relative flex items-center justify-center overflow-hidden">
+                                    <div className="absolute inset-0 bg-gradient-to-t from-background/60 to-transparent z-10" />
+                                    <div className="absolute bottom-2 right-2 px-1.5 py-0.5 rounded bg-background/70 text-[10px] font-mono font-bold text-foreground z-20 border border-border/50 backdrop-blur-sm">
                                         {interview.duration}m
                                     </div>
                                     <button className="absolute inset-0 flex items-center justify-center z-20 opacity-0 group-hover:opacity-100 transition-opacity">
-                                        <div className="w-12 h-12 rounded-full bg-primary flex items-center justify-center shadow-[0_0_20px_rgba(167,139,250,0.5)] scale-90 group-hover:scale-100 transition-transform">
-                                            <Play className="h-6 w-6 text-white ml-1 fill-white" />
+                                        <div className="w-12 h-12 rounded-full bg-primary flex items-center justify-center shadow-[0_0_20px_rgba(5,148,103,0.4)] scale-90 group-hover:scale-100 transition-transform">
+                                            <Play className="h-6 w-6 text-primary-foreground ml-1 fill-primary-foreground" />
                                         </div>
                                     </button>
                                 </div>
 
-                                <CardContent className="p-5 flex-1 flex flex-col">
+                                <div className="p-5 flex-1 flex flex-col">
                                     <div className="flex justify-between items-start mb-4">
                                         <div>
                                             <h3 className="font-bold text-foreground leading-tight">{interview.candidateName}</h3>
@@ -207,29 +206,29 @@ const RecordingArchive = () => {
                                         </div>
                                     </div>
 
-                                    <div className="flex items-center gap-2 text-muted-foreground bg-muted/30 px-3 py-2 rounded-lg border border-border mb-5">
+                                    <div className="flex items-center gap-2 text-muted-foreground bg-muted/20 px-3 py-2 rounded-lg border border-border/50 mb-5">
                                         <Calendar className="h-4 w-4" />
                                         <span className="text-xs font-medium">{format(new Date(interview.scheduledAt || ''), 'MMMM d, yyyy  •  h:mm a')}</span>
                                     </div>
 
-                                    <div className="flex gap-2 pt-4 border-t border-border/50 mt-auto">
-                                        <Button variant="outline" size="sm" className="flex-1 h-9 text-xs font-bold border-primary/20 hover:bg-primary/5 text-primary group/btn shadow-sm">
+                                    <div className="flex gap-2 pt-4 border-t border-border/30 mt-auto">
+                                        <Button variant="outline" size="sm" className="flex-1 h-9 text-xs font-bold border-primary/20 hover:bg-primary/5 text-primary">
                                             RECAP
                                         </Button>
-                                        <Button size="sm" className="flex-1 h-9 text-xs font-bold shadow-[0_4px_10px_rgba(167,139,250,0.2)]">
+                                        <Button size="sm" className="flex-1 h-9 text-xs font-bold shadow-[0_4px_10px_rgba(5,148,103,0.15)]">
                                             VIEW REPORT
                                         </Button>
                                     </div>
-                                </CardContent>
-                            </Card>
+                                </div>
+                            </motion.div>
                         ))}
                     </div>
                     {expertRecordings.length === 0 && (
-                        <div className="py-20 text-center bg-card/30 rounded-2xl border-2 border-dashed border-border flex flex-col items-center mt-6">
+                        <div className="py-20 text-center bg-card/30 rounded-2xl border-2 border-dashed border-border/50 flex flex-col items-center mt-6">
                             <div className="w-16 h-16 rounded-full bg-muted flex items-center justify-center mb-4">
                                 <Search className="h-8 w-8 text-muted-foreground opacity-20" />
                             </div>
-                            <p className="text-muted-foreground font-medium">No archived recordings found for this candidate.</p>
+                            <p className="text-muted-foreground font-medium">No archived recordings found.</p>
                             <Button variant="link" onClick={() => setSearchQuery('')} className="mt-2 text-primary text-xs">Clear search</Button>
                         </div>
                     )}
