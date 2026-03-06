@@ -52,8 +52,9 @@ export async function scrapePost(postUrl: string): Promise<{ job_id?: string }> 
 export async function fetchLeads(postUrl?: string): Promise<OutreachLead[]> {
     let query = supabase
         .from('outreach_leads')
-        .select('*')
-        .eq('discovery_source', 'competitor_post_intercept')
+        .select('*') as any;
+
+    query = query.eq('discovery_source', 'competitor_post_intercept')
         .order('commenter_score', { ascending: false });
 
     if (postUrl) {
