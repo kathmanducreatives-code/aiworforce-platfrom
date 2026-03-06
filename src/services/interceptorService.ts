@@ -88,7 +88,7 @@ export async function fetchAllLeads(): Promise<OutreachLead[]> {
 export async function markAsSent(leadId: string): Promise<void> {
     const { error } = await supabase
         .from('outreach_leads')
-        .update({ dm_sent: true })
+        .update({ dm_sent: true } as any)
         .eq('id', leadId);
 
     if (error) throw new Error(error.message);
