@@ -68,9 +68,9 @@ export async function fetchLeads(postUrl?: string): Promise<OutreachLead[]> {
         score_signals: Array.isArray(row.score_signals)
             ? row.score_signals
             : typeof row.score_signals === 'string'
-                ? JSON.parse(row.score_signals).catch(() => [])
+                ? (() => { try { return JSON.parse(row.score_signals); } catch { return []; } })()
                 : [],
-    })) as OutreachLead[];
+    })) as unknown as OutreachLead[];
 }
 
 /** Fetch all outreach leads (for CRM page) */
