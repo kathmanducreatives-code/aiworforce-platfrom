@@ -1989,6 +1989,7 @@ export type Database = {
           closely_last_event: string | null
           closely_last_event_at: string | null
           closely_synced: boolean | null
+          commenter_score: number | null
           company: string
           company_size: string | null
           contact_name: string
@@ -2011,6 +2012,8 @@ export type Database = {
           next_action_date: string | null
           notes: string | null
           open_roles: string | null
+          original_comment: string | null
+          pain_point_detected: string | null
           recent_news: string | null
           role_count: number | null
           salary_range: string | null
@@ -2021,6 +2024,8 @@ export type Database = {
           scraped_homepage: string | null
           sequence_id: string | null
           signals: Json | null
+          source_post_author: string | null
+          source_post_url: string | null
           status: Database["public"]["Enums"]["lead_status"] | null
           tier: Database["public"]["Enums"]["lead_tier"] | null
           title: string | null
@@ -2033,6 +2038,7 @@ export type Database = {
           closely_last_event?: string | null
           closely_last_event_at?: string | null
           closely_synced?: boolean | null
+          commenter_score?: number | null
           company: string
           company_size?: string | null
           contact_name: string
@@ -2055,6 +2061,8 @@ export type Database = {
           next_action_date?: string | null
           notes?: string | null
           open_roles?: string | null
+          original_comment?: string | null
+          pain_point_detected?: string | null
           recent_news?: string | null
           role_count?: number | null
           salary_range?: string | null
@@ -2065,6 +2073,8 @@ export type Database = {
           scraped_homepage?: string | null
           sequence_id?: string | null
           signals?: Json | null
+          source_post_author?: string | null
+          source_post_url?: string | null
           status?: Database["public"]["Enums"]["lead_status"] | null
           tier?: Database["public"]["Enums"]["lead_tier"] | null
           title?: string | null
@@ -2077,6 +2087,7 @@ export type Database = {
           closely_last_event?: string | null
           closely_last_event_at?: string | null
           closely_synced?: boolean | null
+          commenter_score?: number | null
           company?: string
           company_size?: string | null
           contact_name?: string
@@ -2099,6 +2110,8 @@ export type Database = {
           next_action_date?: string | null
           notes?: string | null
           open_roles?: string | null
+          original_comment?: string | null
+          pain_point_detected?: string | null
           recent_news?: string | null
           role_count?: number | null
           salary_range?: string | null
@@ -2109,6 +2122,8 @@ export type Database = {
           scraped_homepage?: string | null
           sequence_id?: string | null
           signals?: Json | null
+          source_post_author?: string | null
+          source_post_url?: string | null
           status?: Database["public"]["Enums"]["lead_status"] | null
           tier?: Database["public"]["Enums"]["lead_tier"] | null
           title?: string | null
@@ -2828,6 +2843,81 @@ export type Database = {
           name?: string
           role_focus?: string | null
           updated_at?: string | null
+        }
+        Relationships: []
+      }
+      sp_outreach_leads_scored: {
+        Row: {
+          company: string | null
+          company_description: string | null
+          company_email: string | null
+          company_phone: string | null
+          company_size: string | null
+          company_website: string | null
+          created_at: string
+          dm_text: string | null
+          enriched_at: string | null
+          funding_stage: string | null
+          headline: string | null
+          id: string
+          linkedin_url: string
+          name: string
+          open_roles: string | null
+          score: number
+          scraped_at: string
+          signals: string | null
+          source: string
+          status: string
+          tech_stack: string | null
+          tier: string
+        }
+        Insert: {
+          company?: string | null
+          company_description?: string | null
+          company_email?: string | null
+          company_phone?: string | null
+          company_size?: string | null
+          company_website?: string | null
+          created_at?: string
+          dm_text?: string | null
+          enriched_at?: string | null
+          funding_stage?: string | null
+          headline?: string | null
+          id?: string
+          linkedin_url: string
+          name: string
+          open_roles?: string | null
+          score: number
+          scraped_at?: string
+          signals?: string | null
+          source?: string
+          status?: string
+          tech_stack?: string | null
+          tier: string
+        }
+        Update: {
+          company?: string | null
+          company_description?: string | null
+          company_email?: string | null
+          company_phone?: string | null
+          company_size?: string | null
+          company_website?: string | null
+          created_at?: string
+          dm_text?: string | null
+          enriched_at?: string | null
+          funding_stage?: string | null
+          headline?: string | null
+          id?: string
+          linkedin_url?: string
+          name?: string
+          open_roles?: string | null
+          score?: number
+          scraped_at?: string
+          signals?: string | null
+          source?: string
+          status?: string
+          tech_stack?: string | null
+          tier?: string
         }
         Relationships: []
       }

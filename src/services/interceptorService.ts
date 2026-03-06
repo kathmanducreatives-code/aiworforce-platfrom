@@ -52,8 +52,9 @@ export async function scrapePost(postUrl: string): Promise<{ job_id?: string }> 
 export async function fetchLeads(postUrl?: string): Promise<OutreachLead[]> {
     let query = supabase
         .from('outreach_leads')
-        .select('*')
-        .eq('discovery_source', 'competitor_post_intercept')
+        .select('*') as any;
+
+    query = query.eq('discovery_source', 'competitor_post_intercept')
         .order('commenter_score', { ascending: false });
 
     if (postUrl) {
@@ -68,9 +69,9 @@ export async function fetchLeads(postUrl?: string): Promise<OutreachLead[]> {
         score_signals: Array.isArray(row.score_signals)
             ? row.score_signals
             : typeof row.score_signals === 'string'
-                ? JSON.parse(row.score_signals).catch(() => [])
+                ? (() => { try { return JSON.parse(row.score_signals); } catch { return []; } })()
                 : [],
-    })) as OutreachLead[];
+    })) as unknown as OutreachLead[];
 }
 
 /** Fetch all outreach leads (for CRM page) */
@@ -81,14 +82,14 @@ export async function fetchAllLeads(): Promise<OutreachLead[]> {
         .order('created_at', { ascending: false });
 
     if (error) throw new Error(error.message);
-    return (data || []) as OutreachLead[];
+    return (data || []) as unknown as OutreachLead[];
 }
 
 /** Update dm_sent flag after copying a DM */
 export async function markAsSent(leadId: string): Promise<void> {
     const { error } = await supabase
         .from('outreach_leads')
-        .update({ dm_sent: true })
+        .update({ dm_sent: true } as any)
         .eq('id', leadId);
 
     if (error) throw new Error(error.message);
@@ -98,13 +99,13 @@ export async function markAsSent(leadId: string): Promise<void> {
 export async function fetchOutboundMetrics() {
     const { data, error } = await supabase
         .from('outreach_leads')
-        .select('commenter_score, dm_sent, created_at, discovery_source');
+        .select('*');
 
     if (error) throw new Error(error.message);
 
-    const rows = data || [];
+    const rows = (data || []) as any[];
     const total = rows.length;
-    const hotPending = rows.filter(r => r.commenter_score >= 4 && !r.dm_sent).length;
+    const hotPending = rows.filter(r => (r.commenter_score ?? 0) >= 4 && !r.dm_sent).length;
     const dmsSent = rows.filter(r => r.dm_sent).length;
 
     // Last 7 days volume
