@@ -35,9 +35,9 @@ export const TransformationSection = () => {
         if (!section) return;
 
         // Reset initial states
-        gsap.set(rightRef.current, { opacity: 0, x: 100, filter: 'blur(10px)' });
+        gsap.set(rightRef.current, { opacity: 0, x: 80 });
         gsap.set(newWayContainerRef.current?.querySelectorAll('.new-item'), { opacity: 0, x: 20 });
-        gsap.set(leftRef.current, { opacity: 1, filter: 'blur(0px)' });
+        gsap.set(leftRef.current, { opacity: 1 });
 
         const ctx = gsap.context(() => {
             // Main Scrub Timeline
@@ -45,14 +45,14 @@ export const TransformationSection = () => {
                 scrollTrigger: {
                     trigger: section,
                     start: 'center center',
-                    end: '+=1500', // 1500px of scroll space to scrub
+                    end: '+=1200',
                     pin: true,
-                    scrub: 1.5, // Liquid smooth scrub
+                    scrub: 0.8,
+                    fastScrollEnd: true,
                     onUpdate: (self) => {
                         const p = Math.round(self.progress * 100);
                         setProgress(p);
 
-                        // Dynamically change grid pulse speed based on progress (up to 50%)
                         if (p < 50) {
                             document.documentElement.style.setProperty('--grid-pulse', `${2 - (p / 50)}s`);
                         } else {
@@ -62,38 +62,36 @@ export const TransformationSection = () => {
                 }
             });
 
-            // 0 - 50%: Scanning Ring grows, Old way stays active
+            // 0 - 50%: Scanning Ring grows
             tl.to(ringRef.current, {
                 strokeDashoffset: 0,
                 duration: 0.5,
                 ease: "none"
             }, 0);
 
-            // 50% - 90%: Old way fades/blurs
+            // 30% - 60%: Old way fades (opacity only, no blur)
             tl.to(leftRef.current, {
-                opacity: 0.5,
-                filter: 'blur(8px)',
-                duration: 0.4
-            }, 0.5);
+                opacity: 0.3,
+                duration: 0.3
+            }, 0.3);
 
-            // 90% - 100%: New way flies in
+            // 55% - 85%: New way flies in (opacity only, no blur)
             tl.to(rightRef.current, {
                 opacity: 1,
                 x: 0,
-                filter: 'blur(0px)',
-                duration: 0.1,
+                duration: 0.3,
                 ease: "power2.out"
-            }, 0.9);
+            }, 0.55);
 
-            // Stagger in the new items right at the end
+            // Stagger in the new items
             if (newWayContainerRef.current) {
                 const items = newWayContainerRef.current.querySelectorAll('.new-item');
                 tl.to(items, {
                     opacity: 1,
                     x: 0,
                     stagger: 0.02,
-                    duration: 0.1
-                }, 0.95);
+                    duration: 0.15
+                }, 0.65);
             }
 
         }, section);
