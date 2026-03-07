@@ -30,16 +30,16 @@ const Header = () => {
       }`}>
       <div className="max-w-7xl mx-auto px-6 flex items-center justify-between">
         {/* Logo */}
-        <div className="flex items-center gap-2 cursor-pointer" onClick={() => navigate('/')}>
-          <div className="w-2.5 h-2.5 rounded-full bg-emerald-500 shadow-[0_0_12px_rgba(5,150,105,0.5)]" />
-          <span className="font-display font-bold text-lg text-white tracking-tight">ScreeningPilot</span>
+        <div className="flex items-center gap-2.5 cursor-pointer group" onClick={() => navigate('/')}>
+          <div className="w-2.5 h-2.5 rounded-full bg-emerald-500 shadow-[0_0_12px_rgba(5,150,105,0.6)] group-hover:scale-125 transition-transform" />
+          <span className="font-display font-black text-xl text-white tracking-tighter">ScreeningPilot</span>
         </div>
 
         {/* Desktop Nav */}
         <nav className="hidden md:flex items-center gap-8">
           {navItems.map((item) => (
             <a key={item.label} href={item.href}
-              className="text-sm text-white/40 hover:text-white font-medium transition-colors duration-300 relative group">
+              className="text-sm text-white/60 hover:text-white font-semibold transition-colors duration-300 relative group">
               {item.label}
               <span className="absolute -bottom-1 left-0 w-0 h-[1px] bg-emerald-500 group-hover:w-full transition-all duration-300" />
             </a>
@@ -55,8 +55,8 @@ const Header = () => {
             </>
           ) : (
             <>
-              <button onClick={() => navigate('/auth')} className="text-sm text-white/50 hover:text-white font-medium transition-colors">Sign In</button>
-              <button onClick={() => navigate('/auth')} className="liquid-fill-btn bg-emerald-600/20 border border-emerald-500/50 text-white text-sm font-semibold px-5 py-2 rounded-full transition-all duration-300 hover:shadow-[0_0_20px_rgba(5,150,105,0.5)]">
+              <button onClick={() => navigate('/auth')} className="text-sm text-white/60 hover:text-white font-semibold transition-colors">Sign In</button>
+              <button onClick={() => navigate('/auth')} className="liquid-fill-btn h-[40px] px-6 bg-emerald-600/20 border border-emerald-500/50 text-white text-sm font-semibold rounded-full transition-all duration-300 hover:shadow-[0_0_20px_rgba(5,150,105,0.5)] flex items-center justify-center">
                 Start Free Trial
               </button>
             </>

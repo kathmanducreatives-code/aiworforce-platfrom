@@ -15,10 +15,10 @@ const oldWayItems = [
 
 const newWayItems = [
     'Paste one profile → AI activates instantly',
-    '2,000+ candidates found in 15 minutes',
-    'All ranked by match score. Emails revealed.',
-    'Personalized outreach sent automatically',
-    'Hire your A-player. Pay zero agency fees.',
+    'AI scores all candidates instantly',
+    'Get ranked shortlist in 15 minutes',
+    'Zero agency fees',
+    'One dashboard, unlimited hires',
 ];
 
 export const TransformationSection = () => {
@@ -109,11 +109,11 @@ export const TransformationSection = () => {
     return (
         <section ref={sectionRef} className="relative w-full min-h-screen flex flex-col items-center justify-center px-4 overflow-hidden text-white font-display z-10">
 
-            <div className="text-center mb-16 w-full max-w-6xl">
-                <p className="font-mono text-xs uppercase tracking-[0.15em] mb-4 text-emerald-500 font-semibold flex items-center justify-center gap-2">
+            <div className="text-center mb-[60px] w-full max-w-6xl">
+                <p className="font-mono text-[11px] uppercase tracking-[0.2em] mb-4 text-emerald-500 font-semibold flex items-center justify-center gap-2">
                     THE TRANSFORMATION
                 </p>
-                <h2 className="font-black text-[clamp(2rem,4vw,3.5rem)] leading-[1.1] tracking-[-0.03em] text-white">
+                <h2 className="font-black text-[clamp(2.5rem,5vw,4.5rem)] leading-[1.0] tracking-[-0.05em] text-white">
                     FROM AGENCY DEPENDENCY<br />TO TOTAL CONTROL
                 </h2>
             </div>
@@ -121,25 +121,25 @@ export const TransformationSection = () => {
             <div className="w-full max-w-6xl grid grid-cols-1 lg:grid-cols-3 gap-8 items-center relative">
 
                 {/* Left — Old Way */}
-                <div ref={leftRef} className="will-change-transform">
-                    <div className="bg-black/80 backdrop-blur-md rounded-2xl p-8 border border-white/10 shadow-2xl relative overflow-hidden">
-                        <h3 className="font-display font-bold text-xl text-zinc-500 mb-6 uppercase tracking-wide">The Old Way</h3>
-                        <div className="space-y-4">
+                <div ref={leftRef} className="will-change-transform mt-4 lg:mt-8">
+                    <div className="bg-black/80 backdrop-blur-md rounded-2xl p-8 border border-white/10 shadow-2xl relative overflow-hidden h-full flex flex-col">
+                        <h3 className="font-display font-bold text-xl text-white/30 mb-6 uppercase tracking-wide">The Old Way</h3>
+                        <div className="space-y-4 flex-grow">
                             {oldWayItems.map((item, i) => (
                                 <div key={i} className="flex items-start gap-4 opp-item opacity-80">
                                     <XCircle className="w-5 h-5 text-zinc-600 shrink-0 mt-0.5" />
-                                    <span className="text-[15px] text-zinc-400 font-light">{item}</span>
+                                    <span className="text-[15px] text-white/40 font-light">{item}</span>
                                 </div>
                             ))}
                         </div>
-                        <div className="mt-8 font-mono text-xs text-zinc-500 border-t border-white/10 pt-4 bg-zinc-900/50 -mx-8 -mb-8 px-8 pb-8">
+                        <div className="mt-8 font-mono text-xs text-white/40 border-t border-white/10 pt-4 bg-zinc-900/50 -mx-8 -mb-8 px-8 pb-8">
                             COST: €82,000/year + 340 hours
                         </div>
                     </div>
                 </div>
 
                 {/* Center — The Interactive Scanner */}
-                <div className="flex flex-col items-center justify-center relative z-20 my-10 lg:my-0">
+                <div className="flex flex-col items-center justify-start relative z-20 my-10 lg:my-0 lg:mt-4">
                     <div className="relative w-[300px] h-[300px] md:w-[350px] md:h-[350px]">
                         {/* Background Track Circle */}
                         <svg className="w-full h-full -rotate-90" viewBox="0 0 340 340">
@@ -161,45 +161,49 @@ export const TransformationSection = () => {
                             />
                         </svg>
 
-                        {/* Inner Content */}
+                        {/* Inner Content Component (Fading) */}
                         <div className="absolute inset-0 flex flex-col items-center justify-center text-center">
-                            {progress < 100 ? (
-                                <>
+                            <div className="relative w-full h-full flex items-center justify-center">
+                                {/* Scanning State */}
+                                <div className={`absolute inset-0 flex flex-col items-center justify-center transition-all duration-[1500ms] ease-in-out ${progress < 100 ? 'opacity-100 scale-100' : 'opacity-0 scale-95 pointer-events-none'}`}>
                                     <p className="font-display font-bold text-lg text-emerald-500 mb-2">
                                         {progress < 30 ? 'SCANNING...' : progress < 70 ? 'ANALYZING...' : 'MATCHING...'}
                                     </p>
                                     <p className="font-mono text-5xl text-emerald-500 font-light tabular-nums tracking-tighter shadow-emerald-500/20 drop-shadow-lg [text-shadow:0_0_20px_rgba(34,197,94,0.4)]">
                                         {progress}%
                                     </p>
-                                </>
-                            ) : (
-                                <div className="flex flex-col items-center">
-                                    <p className="font-display font-bold text-xl text-emerald-500 mb-3 tracking-widest [text-shadow:0_0_15px_rgba(34,197,94,0.5)]">COMPLETE</p>
-                                    <CheckCircle className="w-16 h-16 text-emerald-500 animate-pulse [filter:drop-shadow(0_0_10px_rgba(34,197,94,0.6))]" />
                                 </div>
-                            )}
+                                {/* Complete State */}
+                                <div className={`absolute inset-0 flex flex-col items-center justify-center transition-all duration-[1500ms] ease-in-out ${progress === 100 ? 'opacity-100 scale-100' : 'opacity-0 scale-105 pointer-events-none'}`}>
+                                    <p className="font-display font-bold text-xl text-emerald-500 mb-3 tracking-widest [text-shadow:0_0_15px_rgba(34,197,94,0.5)]">COMPLETE</p>
+                                    <CheckCircle className="w-16 h-16 text-emerald-500 [filter:drop-shadow(0_0_10px_rgba(34,197,94,0.6))]" />
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </div>
 
                 {/* Right — New Way */}
-                <div ref={rightRef} className="will-change-transform relative z-30">
-                    <div ref={newWayContainerRef} className="bg-black/90 backdrop-blur-xl rounded-2xl p-8 border border-emerald-500/30 shadow-[0_0_40px_rgba(34,197,94,0.15)] relative overflow-hidden">
+                <div ref={rightRef} className="will-change-transform relative z-30 mt-4 lg:mt-8">
+                    <div ref={newWayContainerRef} className="bg-[#111] backdrop-blur-xl rounded-2xl p-8 border border-emerald-500/30 shadow-[0_0_40px_rgba(34,197,94,0.15)] relative overflow-hidden h-full flex flex-col">
                         {/* Glossy top edge */}
                         <div className="absolute top-0 left-0 right-0 h-[1px] bg-gradient-to-r from-transparent via-emerald-400 to-transparent opacity-50" />
 
-                        <h3 className="font-display font-bold text-xl text-emerald-500 mb-6 uppercase tracking-wide">The ScreeningPilot Way</h3>
-                        <div className="space-y-4">
+                        <h3 className="font-display font-black text-xl text-emerald-500 mb-6 uppercase tracking-wide">The ScreeningPilot Way</h3>
+                        <div className="space-y-4 flex-grow">
                             {newWayItems.map((item, i) => (
                                 <div key={i} className="flex items-start gap-4 new-item">
                                     <CheckCircle className="w-5 h-5 text-emerald-500 shrink-0 mt-0.5 drop-shadow-[0_0_8px_rgba(34,197,94,0.5)]" />
-                                    <span className="text-[15px] text-white font-medium drop-shadow-md">{item}</span>
+                                    <span className="text-[15px] text-white/90 font-medium drop-shadow-md">{item}</span>
                                 </div>
                             ))}
                         </div>
-                        <div className="mt-8 font-mono text-xs text-emerald-400 border-t border-emerald-500/20 pt-4 bg-emerald-950/30 -mx-8 -mb-8 px-8 pb-8 flex justify-between items-center">
-                            <span>COST: €149/month</span>
-                            <span className="px-2 py-1 bg-emerald-500/20 border border-emerald-500/30 rounded text-emerald-400">UNLIMITED HIRES</span>
+                        <div className="mt-8 font-mono text-xs border-t border-emerald-500/10 pt-6">
+                            <div className="bg-[#00C853] rounded-lg p-3 text-white shadow-[0_8px_20px_rgba(0,200,83,0.4)] flex justify-between items-center text-sm font-bold tracking-wide border border-white/20">
+                                <span>€149/MONTH</span>
+                                <span>·</span>
+                                <span>UNLIMITED HIRES</span>
+                            </div>
                         </div>
                     </div>
                 </div>

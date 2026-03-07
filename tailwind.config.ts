@@ -19,43 +19,43 @@ export default {
 		},
 		extend: {
 			colors: {
-				border: 'hsl(var(--border))',
+				border: 'rgba(100, 160, 255, 0.06)',
 				input: 'hsl(var(--input))',
 				ring: 'hsl(var(--ring))',
-				background: 'hsl(var(--background))',
-				foreground: 'hsl(var(--foreground))',
+				background: '#080B14',
+				foreground: '#FFFFFF',
 				primary: {
-					'100': 'hsl(var(--primary-100))',
-					'200': 'hsl(var(--primary-200))',
-					DEFAULT: 'hsl(var(--primary))',
-					foreground: 'hsl(var(--primary-foreground))',
-					light: 'hsl(var(--primary-light))',
-					dark: 'hsl(var(--primary-dark))'
+					'100': 'rgba(59, 130, 246, 0.1)',
+					'200': 'rgba(59, 130, 246, 0.2)',
+					DEFAULT: '#3B82F6', // Trust Blue
+					foreground: '#FFFFFF',
+					light: '#60A5FA',
+					dark: '#2563EB'
 				},
 				secondary: {
-					DEFAULT: 'hsl(var(--secondary))',
-					foreground: 'hsl(var(--secondary-foreground))'
-				},
-				destructive: {
-					DEFAULT: 'hsl(var(--destructive))',
-					foreground: 'hsl(var(--destructive-foreground))'
-				},
-				muted: {
-					DEFAULT: 'hsl(var(--muted))',
-					foreground: 'hsl(var(--muted-foreground))'
+					DEFAULT: '#10B981', // Success Emerald
+					foreground: '#FFFFFF'
 				},
 				accent: {
-					DEFAULT: 'hsl(var(--accent))',
-					foreground: 'hsl(var(--accent-foreground))',
-					secondary: 'hsl(var(--accent-secondary))'
+					DEFAULT: '#D4A417', // Expert Gold
+					foreground: '#0F1420',
+					secondary: 'rgba(212, 164, 23, 0.1)'
+				},
+				destructive: {
+					DEFAULT: '#F43F5E', // Rose
+					foreground: '#FFFFFF'
+				},
+				muted: {
+					DEFAULT: 'rgba(255, 255, 255, 0.05)',
+					foreground: 'rgba(255, 255, 255, 0.6)'
 				},
 				popover: {
-					DEFAULT: 'hsl(var(--popover))',
-					foreground: 'hsl(var(--popover-foreground))'
+					DEFAULT: '#0F1420', // Dossier Surface
+					foreground: '#FFFFFF'
 				},
 				card: {
-					DEFAULT: 'hsl(var(--card))',
-					foreground: 'hsl(var(--card-foreground))'
+					DEFAULT: '#0F1420', // Dossier Surface
+					foreground: '#FFFFFF'
 				},
 				sidebar: {
 					DEFAULT: 'hsl(var(--sidebar-background))',
@@ -93,16 +93,17 @@ export default {
 				'gradient-shimmer': 'var(--gradient-shimmer)'
 			},
 			boxShadow: {
-				xs: 'var(--shadow-xs)',
-				sm: 'var(--shadow-sm)',
-				md: 'var(--shadow-md)',
-				lg: 'var(--shadow-lg)',
-				xl: 'var(--shadow-xl)',
-				'2xl': 'var(--shadow-2xl)',
-				primary: 'var(--shadow-primary)',
-				'primary-lg': 'var(--shadow-primary-lg)',
-				glow: 'var(--shadow-glow)',
-				'2xs': 'var(--shadow-2xs)'
+				xs: 'none',
+				sm: 'none',
+				md: 'none',
+				lg: 'none',
+				xl: 'none',
+				'2xl': 'none',
+				primary: '0 0 15px rgba(59, 130, 246, 0.15)', // Soft blue glow
+				'primary-lg': '0 0 30px rgba(59, 130, 246, 0.25)',
+				glow: '0 0 20px rgba(255, 255, 255, 0.05)',
+				'2xs': 'none',
+				'emerald-glow': '0 0 20px rgba(16, 185, 129, 0.2)'
 			},
 			transitionTimingFunction: {
 				smooth: 'var(--transition-smooth)'
@@ -328,37 +329,20 @@ export default {
 			},
 			fontFamily: {
 				sans: [
-					'Outfit',
-					'Work Sans',
+					'"DM Sans"',
 					'ui-sans-serif',
 					'system-ui',
-					'-apple-system',
-					'BlinkMacSystemFont',
-					'Segoe UI',
-					'Roboto',
-					'Helvetica Neue',
-					'Arial',
-					'Noto Sans',
 					'sans-serif'
 				],
 				serif: [
-					'Lora',
+					'"Instrument Serif"',
 					'ui-serif',
 					'Georgia',
-					'Cambria',
-					'Times New Roman',
-					'Times',
 					'serif'
 				],
 				mono: [
-					'Inconsolata',
+					'"JetBrains Mono"',
 					'ui-monospace',
-					'SFMono-Regular',
-					'Menlo',
-					'Monaco',
-					'Consolas',
-					'Liberation Mono',
-					'Courier New',
 					'monospace'
 				]
 			}

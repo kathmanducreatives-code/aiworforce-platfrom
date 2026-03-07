@@ -12,19 +12,19 @@ const FinalCTA = () => {
                 <div className="absolute w-[500px] h-[500px] rounded-full bg-emerald-500/[0.08] blur-[150px] top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2" />
             </div>
 
-            <div className="relative z-10 text-center max-w-3xl mx-auto">
-                <h2 className="font-display font-black text-[clamp(1.8rem,4.5vw,3.5rem)] leading-[1.1] tracking-[-0.04em] text-white mb-6">
+            <div className="relative z-10 text-center max-w-6xl mx-auto">
+                <h2 className="font-display font-black text-[clamp(2.2rem,5vw,4.5rem)] leading-[1.0] tracking-[-0.05em] text-white mb-8">
                     READY TO FIRE YOUR<br /><span className="text-shimmer">RECRUITING AGENCY?</span>
                 </h2>
                 <p className="text-lg text-white/40 mb-10 max-w-xl mx-auto">
                     Stop paying €15,000+ per hire. Start hiring unlimited for €149/month.
                 </p>
                 <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
-                    <button onClick={() => navigate('/auth')} className="conic-border group inline-flex items-center gap-3 bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-lg px-10 py-4 rounded-full transition-all duration-300 hover:scale-[1.03] hover:shadow-[0_8px_40px_rgba(5,150,105,0.4)]">
+                    <button onClick={() => navigate('/auth')} className="conic-border group h-[44px] inline-flex items-center gap-3 bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-[15px] px-8 rounded-full transition-all duration-300 hover:scale-[1.03] hover:shadow-[0_8px_40px_rgba(5,150,105,0.4)]">
                         Start Free Trial
-                        <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
+                        <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
                     </button>
-                    <button onClick={() => navigate('/get-demo')} className="inline-flex items-center gap-2 bg-transparent border border-white/15 text-white/60 hover:text-white hover:border-white/30 font-semibold text-lg px-10 py-4 rounded-full transition-all duration-300 hover:bg-white/5">
+                    <button onClick={() => navigate('/get-demo')} className="h-[44px] inline-flex items-center gap-2 bg-transparent border border-white/15 text-white/60 hover:text-white hover:border-white/30 font-semibold text-[15px] px-8 rounded-full transition-all duration-300 hover:bg-white/5">
                         Book a Demo
                     </button>
                 </div>

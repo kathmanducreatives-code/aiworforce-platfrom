@@ -237,10 +237,80 @@ export const mockInterviewRequests: InterviewRequest[] = [
     expertId: 'exp-2',
     expertName: 'Marcus Johnson',
     scheduledAt: '2026-02-28T15:00:00Z',
-    duration: 60,
-    interviewFee: 130,
-    platformFee: 26,
-    totalEscrow: 156,
+  },
+];
+
+export interface HubSession {
+  id: string;
+  expertName: string;
+  candidateName: string;
+  position: string;
+  startTime: string;
+  status: 'live' | 'upcoming' | 'recent';
+  viewerCount?: number;
+}
+
+export const mockHubSessions: HubSession[] = [
+  {
+    id: 'hub-1',
+    expertName: 'Dr. Sarah Chen',
+    candidateName: 'Alex Rivera',
+    position: 'Backend Lead',
+    startTime: new Date().toISOString(),
+    status: 'live',
+    viewerCount: 12,
+  },
+  {
+    id: 'hub-2',
+    expertName: 'Marcus Johnson',
+    candidateName: 'Emily Watson',
+    position: 'Senior Frontend',
+    startTime: '2026-03-05T14:00:00Z',
+    status: 'upcoming',
+  },
+  {
+    id: 'hub-3',
+    expertName: 'Aisha Patel',
+    candidateName: 'David Park',
+    position: 'DevOps Architect',
+    startTime: '2026-02-28T10:00:00Z',
+    status: 'recent',
+  },
+];
+
+export interface CompanyReview {
+  id: string;
+  companyName: string;
+  logo: string;
+  rating: number;
+  comment: string;
+  expertName: string;
+}
+
+export const mockReviews: CompanyReview[] = [
+  {
+    id: 'rev-1',
+    companyName: 'TechFlow',
+    logo: 'https://logo.clearbit.com/techflow.ai',
+    rating: 5,
+    comment: "The interview quality was exceptional. Dr. Sarah provided deeper technical insights than our internal team could have.",
+    expertName: 'Dr. Sarah Chen',
+  },
+  {
+    id: 'rev-2',
+    companyName: 'Stripe',
+    logo: 'https://logo.clearbit.com/stripe.com',
+    rating: 4.8,
+    comment: "Marcus did a fantastic job assessing frontend architectural thinking. Saved us weeks of interviewing.",
+    expertName: 'Marcus Johnson',
+  },
+  {
+    id: 'rev-3',
+    companyName: 'Vercel',
+    logo: 'https://logo.clearbit.com/vercel.com',
+    rating: 5,
+    comment: "Aisha's DevOps screening was incredibly rigorous. We found exactly who we were looking for.",
+    expertName: 'Aisha Patel',
   },
   {
     id: 'req-6',

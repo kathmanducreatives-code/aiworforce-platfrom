@@ -11,6 +11,7 @@ const SavingsCalculator = () => {
     const triggerRef = useRef<HTMLDivElement>(null);
     const [isOpen, setIsOpen] = useState(false);
     const [hasTriggered, setHasTriggered] = useState(false);
+    const [isPastHero, setIsPastHero] = useState(false);
     const [hires, setHires] = useState(10);
     const [salary, setSalary] = useState(80000);
     const [displaySavings, setDisplaySavings] = useState(0);
@@ -20,6 +21,15 @@ const SavingsCalculator = () => {
     const spCost = 149 * 12;
     const savings = agencyCost - spCost;
     const extraHires = Math.floor(Math.max(0, savings) / salary);
+
+    useEffect(() => {
+        const handleScroll = () => {
+            setIsPastHero(window.scrollY > window.innerHeight * 0.8);
+        };
+        window.addEventListener('scroll', handleScroll, { passive: true });
+        handleScroll();
+        return () => window.removeEventListener('scroll', handleScroll);
+    }, []);
 
     useEffect(() => {
         const target = Math.max(0, savings);
@@ -55,7 +65,7 @@ const SavingsCalculator = () => {
         <>
             <div ref={triggerRef} className="h-0 w-0" />
 
-            <div className={`fixed bottom-6 right-6 z-50 transition-all duration-500 ${isOpen ? 'translate-y-0 opacity-100 scale-100' : 'translate-y-[120%] opacity-0 scale-95'}`}
+            <div className={`fixed bottom-6 right-6 z-50 transition-all duration-500 ${(isOpen && isPastHero) ? 'translate-y-0 opacity-100 scale-100 pointer-events-auto' : 'translate-y-[120%] opacity-0 scale-95 pointer-events-none'}`}
                 style={{ transitionTimingFunction: 'cubic-bezier(0.34, 1.56, 0.64, 1)' }}>
                 <div className="w-[340px] sm:w-[380px] glass-strong rounded-2xl overflow-hidden glow-green">
                     <div className="bg-emerald-600/90 backdrop-blur-lg px-4 py-3 flex items-center justify-between">
@@ -115,7 +125,7 @@ const SavingsCalculator = () => {
                 </div>
             </div>
 
-            {hasTriggered && !isOpen && (
+            {hasTriggered && !isOpen && isPastHero && (
                 <button onClick={() => setIsOpen(true)}
                     className="fixed bottom-6 right-6 z-50 w-14 h-14 bg-emerald-600 hover:bg-emerald-500 rounded-full shadow-[0_8px_24px_rgba(5,150,105,0.35)] flex items-center justify-center text-white transition-all duration-300 hover:scale-110 animate-bounce"
                     style={{ animationDuration: '2s' }}>

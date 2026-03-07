@@ -1,7 +1,8 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import gsap from 'gsap';
 import { ScrollTrigger } from 'gsap/ScrollTrigger';
 import { BarChart3, Target, Briefcase, Cpu } from 'lucide-react';
+import { GyroTilt } from '@/components/shared/GyroTilt';
 
 gsap.registerPlugin(ScrollTrigger);
 
@@ -13,10 +14,9 @@ const statCards = [
 ];
 
 const highlights = [
-    { icon: '📊', text: 'Real-time candidate pipeline' },
-    { icon: '🎯', text: 'AI fit scores auto-updated' },
-    { icon: '⚡', text: 'One-click: Upload, Scrape, Deep Search' },
-    { icon: '📈', text: 'Weekly activity tracking & charts' },
+    { text: 'Real-time AI scoring auto-updated' },
+    { text: 'Candidate pipeline & sourcing view' },
+    { text: 'One-click outreach & scheduling' },
 ];
 
 const barHeights = [40, 65, 45, 80, 55, 90, 70];
@@ -27,8 +27,19 @@ const activityItems = [
     '3 candidates shortlisted',
 ];
 
+const actionBtns = ['Run Scraper', 'Generate Outreach'];
+
 const ProductDashboard = () => {
     const sectionRef = useRef<HTMLDivElement>(null);
+
+    const [hoveredBar, setHoveredBar] = useState<number | null>(null);
+    const [activeBtn, setActiveBtn] = useState<string | null>(null);
+
+    const handleBtnClick = (btn: string) => {
+        if (activeBtn) return;
+        setActiveBtn(btn);
+        setTimeout(() => setActiveBtn(null), 1200);
+    };
 
     useEffect(() => {
         const ctx = gsap.context(() => {
@@ -94,9 +105,9 @@ const ProductDashboard = () => {
             const hlItems = sectionRef.current?.querySelectorAll('.dash-highlight');
             if (hlItems) {
                 hlItems.forEach((el, i) => {
-                    tl.fromTo(el, { opacity: 0, x: -20, scale: 0.95 }, {
-                        opacity: 1, x: 0, scale: 1, duration: 1, ease: 'expo.out'
-                    }, 11 + i * 0.3);
+                    tl.fromTo(el, { opacity: 0, x: -20 }, {
+                        opacity: 1, x: 0, duration: 1, ease: 'expo.out'
+                    }, 0.8 + i * 0.2); // Fades in quickly alongside the text block to balance height!
                 });
             }
 
@@ -128,20 +139,23 @@ const ProductDashboard = () => {
                 <div className="flex flex-col lg:flex-row items-center gap-12 lg:gap-16 w-full">
                     {/* LEFT: Text */}
                     <div className="flex-[45] dash-text-block opacity-0">
-                        <p className="dash-title font-mono text-xs uppercase tracking-[0.2em] mb-4 text-emerald-400 font-semibold opacity-0">
-                            ◆ Your Command Center
-                        </p>
-                        <h2 className="dash-title font-display font-black text-[clamp(1.8rem,4vw,3.2rem)] leading-[1.1] tracking-[-0.03em] text-white mb-5 opacity-0">
+                        <div className="dash-title inline-flex items-center gap-2 px-3 py-1.5 rounded-full border border-[#00c853]/40 bg-transparent mb-6 opacity-0">
+                            <div className="w-1.5 h-1.5 rounded-full bg-[#00c853]" />
+                            <span className="font-mono text-[11px] uppercase tracking-[2px] text-emerald-400 font-semibold mt-px">YOUR COMMAND CENTER</span>
+                        </div>
+                        <h2 className="dash-title font-display font-black text-[clamp(1.8rem,4vw,3.2rem)] leading-[1.0] tracking-[-0.04em] text-white mb-5 opacity-0">
                             EVERYTHING.<br />ONE DASHBOARD.
                         </h2>
-                        <p className="text-white/50 text-base md:text-lg leading-[1.7] mb-8 max-w-[480px]">
+                        <p className="text-white/60 text-base md:text-lg leading-[1.7] mb-8 max-w-[480px]">
                             Track every candidate, monitor fit scores, manage active roles, and launch sourcing campaigns — all in one place.
                         </p>
-                        <div className="space-y-3">
+                        <div className="space-y-4">
                             {highlights.map((h, i) => (
-                                <div key={i} className="dash-highlight flex items-center gap-3 opacity-0 glass rounded-xl px-4 py-3 hover:border-emerald-500/20 hover:-translate-y-0.5 transition-all duration-300 group">
-                                    <span className="text-lg">{h.icon}</span>
-                                    <span className="text-sm font-medium text-zinc-300 group-hover:text-white transition-colors">{h.text}</span>
+                                <div key={i} className="dash-highlight flex items-start gap-3 opacity-0">
+                                    <div className="w-5 h-5 rounded-full bg-[#00c853]/20 flex items-center justify-center shrink-0 mt-0.5 border border-[#00c853]/30">
+                                        <svg className="w-3 h-3 text-[#00c853]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>
+                                    </div>
+                                    <span className="text-[15px] font-medium text-white/90">{h.text}</span>
                                 </div>
                             ))}
                         </div>
@@ -149,56 +163,96 @@ const ProductDashboard = () => {
 
                     {/* RIGHT: Mockup */}
                     <div className="flex-[55] dash-mockup opacity-0">
-                        <div className="rounded-xl overflow-hidden border border-white/[0.06] bg-[#0a0a0a] shadow-[0_0_60px_rgba(34,197,94,0.08)]">
-                            {/* Browser chrome */}
-                            <div className="bg-white/[0.03] px-4 py-2.5 flex items-center gap-3 border-b border-white/[0.06]">
-                                <div className="flex gap-1.5">
-                                    <div className="w-3 h-3 rounded-full bg-red-400/60" />
-                                    <div className="w-3 h-3 rounded-full bg-yellow-400/60" />
-                                    <div className="w-3 h-3 rounded-full bg-green-400/60" />
-                                </div>
-                                <div className="flex-1 text-center">
-                                    <span className="text-xs text-white/30 bg-white/5 rounded-md px-3 py-1">app.screeningpilot.com</span>
-                                </div>
-                            </div>
+                        <GyroTilt intensity={15}>
+                            <div className="rounded-xl overflow-hidden border border-white/[0.1] bg-[#111111] shadow-[0_20px_60px_rgba(0,0,0,0.8),0_0_40px_rgba(34,197,94,0.15)] relative">
+                                {/* Soft glow behind mockup content to enhance contrast */}
+                                <div className="absolute top-0 right-0 w-64 h-64 bg-emerald-500/10 blur-[80px] rounded-full pointer-events-none" />
 
-                            <div className="p-5">
-                                {/* Stat Cards */}
-                                <div className="grid grid-cols-4 gap-3 mb-4">
-                                    {statCards.map((s, i) => (
-                                        <div key={i} className="dash-stat glass rounded-lg p-3 opacity-20 transition-all hover:border-emerald-500/20">
-                                            <p className="text-[10px] text-white/30 mb-1">{s.label}</p>
-                                            <p className="text-lg font-bold text-white tabular-nums">
-                                                {s.value.toLocaleString()}{s.suffix || ''}
-                                            </p>
+                                {/* Browser chrome */}
+                                <div className="bg-white/[0.04] px-4 py-2.5 flex items-center gap-3 border-b border-white/[0.08] relative z-10">
+                                    <div className="flex gap-1.5">
+                                        <div className="w-3 h-3 rounded-full bg-red-400/60" />
+                                        <div className="w-3 h-3 rounded-full bg-yellow-400/60" />
+                                        <div className="w-3 h-3 rounded-full bg-green-400/60" />
+                                    </div>
+                                    <div className="flex-1 text-center">
+                                        <span className="text-xs text-white/30 bg-white/5 rounded-md px-3 py-1 cursor-default select-none hover:bg-white/10 transition-colors">app.screeningpilot.com</span>
+                                    </div>
+                                </div>
+
+                                <div className="p-5">
+                                    {/* Stat Cards */}
+                                    <div className="grid grid-cols-4 gap-3 mb-4">
+                                        {statCards.map((s, i) => (
+                                            <div key={i} className="dash-stat glass rounded-lg p-3 opacity-20 transition-all hover:border-emerald-500/30 hover:shadow-[0_4px_15px_rgba(5,150,105,0.15)] hover:-translate-y-0.5 cursor-default group">
+                                                <p className="text-[10px] text-white/30 mb-1 group-hover:text-emerald-400/60 transition-colors">{s.label}</p>
+                                                <p className="text-lg font-bold text-white group-hover:text-emerald-400 transition-colors">
+                                                    {s.value.toLocaleString()}{s.suffix || ''}
+                                                </p>
+                                            </div>
+                                        ))}
+                                    </div>
+
+                                    <div className="flex gap-2 mb-4">
+                                        {actionBtns.map((btn) => (
+                                            <div
+                                                key={btn}
+                                                onClick={() => handleBtnClick(btn)}
+                                                className={`dash-btn text-[10px] font-semibold px-3 py-1.5 rounded-md cursor-pointer transition-all duration-300 select-none flex items-center justify-center min-w-[100px] ${activeBtn === btn
+                                                    ? 'bg-emerald-500 text-black scale-[0.98] shadow-[0_0_15px_rgba(16,185,129,0.5)]'
+                                                    : 'bg-emerald-600/80 text-white hover:bg-emerald-500'
+                                                    }`}
+                                            >
+                                                {activeBtn === btn ? 'Processing...' : btn}
+                                            </div>
+                                        ))}
+                                    </div>
+
+                                    {/* Bar Chart */}
+                                    <div className="glass rounded-lg p-4 mb-3 relative group">
+                                        <p className="text-[10px] text-white/30 mb-3 font-medium flex justify-between">
+                                            Weekly Activity
+                                            <span className="opacity-0 group-hover:opacity-100 transition-opacity text-emerald-400">Interactive</span>
+                                        </p>
+                                        <div className="flex items-end gap-1 h-16" onMouseLeave={() => setHoveredBar(null)}>
+                                            {barHeights.map((h, i) => (
+                                                <div
+                                                    key={i}
+                                                    onMouseEnter={() => setHoveredBar(i)}
+                                                    className={`chart-bar flex-1 rounded-t origin-bottom cursor-pointer transition-all duration-300 relative ${hoveredBar !== null && hoveredBar !== i
+                                                        ? 'opacity-30'
+                                                        : 'opacity-100 bg-emerald-500/30 hover:bg-emerald-400/50'
+                                                        }`}
+                                                    style={{ height: `${h}%`, transform: 'scaleY(0)' }}
+                                                >
+                                                    <div className="w-full bg-emerald-500/80 rounded-t transition-colors pointer-events-none" style={{ height: '60%' }} />
+
+                                                    {hoveredBar === i && (
+                                                        <div className="absolute -top-7 left-1/2 -translate-x-1/2 bg-white text-black text-[9px] font-bold px-2 py-1 rounded shadow-lg pointer-events-none z-10 whitespace-nowrap animate-in fade-in zoom-in-95 duration-200">
+                                                            {Math.round((h / 100) * 85)} users
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            ))}
                                         </div>
-                                    ))}
-                                </div>
+                                    </div>
 
-                                {/* Bar Chart */}
-                                <div className="glass rounded-lg p-4 mb-3">
-                                    <p className="text-[10px] text-white/30 mb-3 font-medium">Weekly Activity</p>
-                                    <div className="flex items-end gap-1 h-16">
-                                        {barHeights.map((h, i) => (
-                                            <div key={i} className="chart-bar flex-1 rounded-t origin-bottom" style={{ height: `${h}%`, transform: 'scaleY(0)' }}>
-                                                <div className="w-full h-full bg-gradient-to-t from-emerald-600/50 to-emerald-400/80 rounded-t" />
+                                    {/* Activity Feed */}
+                                    <div className="glass rounded-lg p-3 group hover:border-white/10 transition-colors">
+                                        <p className="text-[10px] text-white/30 mb-2 font-medium flex justify-between">
+                                            Recent Activity
+                                            <span className="text-white/20 hover:text-white/60 cursor-pointer transition-colors">View All</span>
+                                        </p>
+                                        {activityItems.map((a, i) => (
+                                            <div key={i} className="activity-item flex items-center gap-2 py-1.5 border-b border-white/[0.03] last:border-0 hover:bg-white/[0.02] -mx-2 px-2 rounded cursor-pointer transition-colors opacity-0">
+                                                <div className="activity-dot w-1.5 h-1.5 rounded-full bg-emerald-500 shadow-[0_0_6px_rgba(5,150,105,0.5)] scale-0" />
+                                                <p className="text-[10px] text-white/50">{a}</p>
                                             </div>
                                         ))}
                                     </div>
                                 </div>
-
-                                {/* Activity Feed */}
-                                <div className="glass rounded-lg p-3">
-                                    <p className="text-[10px] text-white/30 mb-2 font-medium">Recent Activity</p>
-                                    {activityItems.map((a, i) => (
-                                        <div key={i} className="activity-item flex items-center gap-2 py-1.5 border-b border-white/[0.03] last:border-0 opacity-0">
-                                            <div className="activity-dot w-1.5 h-1.5 rounded-full bg-emerald-500 shadow-[0_0_6px_rgba(5,150,105,0.5)] scale-0" />
-                                            <p className="text-[10px] text-white/50">{a}</p>
-                                        </div>
-                                    ))}
-                                </div>
                             </div>
-                        </div>
+                        </GyroTilt>
                     </div>
                 </div>
             </div>

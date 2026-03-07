@@ -44,8 +44,8 @@ const HeroHook = () => {
 
   return (
     <section ref={sectionRef} className="relative min-h-screen flex flex-col items-center justify-center overflow-hidden pt-24 pb-16">
-      <div className="relative z-20 text-center px-4 w-full max-w-5xl mx-auto">
-        <h1 ref={headlineRef} className="text-glow-green font-display font-black text-[clamp(2.2rem,5.5vw,5rem)] leading-[1.05] tracking-[-0.04em] text-white mb-8">
+      <div className="relative z-20 text-center px-4 w-full max-w-6xl mx-auto">
+        <h1 ref={headlineRef} className="text-glow-green font-display font-black text-[clamp(2.5rem,6vw,5.5rem)] leading-[1.0] tracking-[-0.05em] text-white mb-10">
           <div className="flex flex-wrap items-center justify-center gap-[clamp(0.4rem,1.2vw,0.8rem)]">
             <span className="word inline-block opacity-0">RECRUITING</span>
             <span className="word inline-block opacity-0">AGENCIES</span>
@@ -58,7 +58,7 @@ const HeroHook = () => {
             </span>
             <span className="word inline-block opacity-0">FROM</span>
             <span className="word inline-block opacity-0">
-              <span className="bg-emerald-500/10 text-emerald-400 rounded-lg px-3 py-1 border border-emerald-500/20">YOU</span>
+              <span className="bg-emerald-500/10 text-emerald-400 rounded-lg px-4 py-1.5 border border-emerald-500/20">YOU</span>
             </span>
           </div>
         </h1>
@@ -70,12 +70,12 @@ const HeroHook = () => {
         </div>
 
         <div ref={ctaRef} className="opacity-0 mb-16">
-          <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
-            <button onClick={() => navigate('/auth')} className="liquid-fill-btn group inline-flex items-center gap-3 bg-emerald-600/20 border border-emerald-500/50 text-emerald-400 font-semibold text-lg px-8 py-4 rounded-full transition-all duration-300 hover:scale-[1.03] shadow-[0_0_30px_rgba(5,150,105,0.3)] active:scale-[0.98]">
+          <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
+            <button onClick={() => navigate('/auth')} className="liquid-fill-btn group h-[44px] inline-flex items-center gap-3 bg-emerald-600 border border-emerald-400 text-white font-semibold text-[15px] px-8 rounded-full transition-all duration-300 hover:scale-[1.03] shadow-[0_4px_24px_rgba(5,150,105,0.4)] active:scale-[0.98]">
               Start Hiring for €149/mo
-              <ArrowRight className="w-5 h-5 transition-transform duration-300 group-hover:translate-x-1" />
+              <ArrowRight className="w-4 h-4 transition-transform duration-300 group-hover:translate-x-1" />
             </button>
-            <button onClick={() => navigate('/get-demo')} className="inline-flex items-center gap-2 bg-transparent border border-white/15 text-white/70 hover:text-white hover:border-white/30 font-semibold text-lg px-8 py-4 rounded-full transition-all duration-300 hover:bg-white/5 hover:scale-[1.03] active:scale-[0.98]">
+            <button onClick={() => navigate('/get-demo')} className="h-[44px] inline-flex items-center gap-2 bg-transparent border border-white/15 text-white/70 hover:text-white hover:border-white/30 font-semibold text-[15px] px-8 rounded-full transition-all duration-300 hover:bg-white/5 hover:scale-[1.03] active:scale-[0.98]">
               Book a Demo
             </button>
           </div>

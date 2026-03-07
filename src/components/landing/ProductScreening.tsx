@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 import gsap from 'gsap';
 import { ScrollTrigger } from 'gsap/ScrollTrigger';
+import { GyroTilt } from '../shared/GyroTilt';
+import { X, Loader2, Link as LinkIcon } from 'lucide-react';
 
 gsap.registerPlugin(ScrollTrigger);
 
@@ -17,10 +19,19 @@ const fullDesc = "We're looking for a senior engineer who...";
 
 const ProductScreening = () => {
     const sectionRef = useRef<HTMLDivElement>(null);
+    const mockupRef = useRef<HTMLDivElement>(null);
+    const textRef = useRef<HTMLDivElement>(null);
+    const lineRef = useRef<HTMLDivElement>(null);
+
+    // Interactive State
     const [activeStep, setActiveStep] = useState(0);
-    const [typedTitle, setTypedTitle] = useState('');
-    const [typedCompany, setTypedCompany] = useState('');
-    const [typedDesc, setTypedDesc] = useState('');
+    const [title, setTitle] = useState('Senior Frontend Engineer');
+    const [company, setCompany] = useState('Acme Corp');
+    const [desc, setDesc] = useState("We're looking for a senior engineer with strong React fundamentals and a deep understanding of system architecture...");
+    const [tags, setTags] = useState(['Experience: 5+ yr', 'Edu: BS CS', 'React / TS', 'Salary: $120K+']);
+
+    const [isGenerating, setIsGenerating] = useState(false);
+    const [showToast, setShowToast] = useState(false);
     const [btnGlow, setBtnGlow] = useState(false);
 
     useEffect(() => {
@@ -28,73 +39,46 @@ const ProductScreening = () => {
         if (!section) return;
 
         const ctx = gsap.context(() => {
-            const tl = gsap.timeline({
-                scrollTrigger: {
-                    trigger: section,
-                    start: 'top top',
-                    end: '+=2500',
-                    pin: true,
-                    scrub: 2.5,
-                    anticipatePin: 1,
-                    onUpdate: (self) => {
-                        const p = self.progress;
-                        // Step activation at scroll milestones
-                        if (p < 0.15) setActiveStep(0);
-                        else if (p < 0.25) setActiveStep(1);
-                        else if (p < 0.35) setActiveStep(2);
-                        else if (p < 0.5) setActiveStep(3);
-                        else setActiveStep(4);
-
-                        // Auto-typing synced to scroll progress
-                        if (p >= 0.28 && p < 0.5) {
-                            const typingProgress = (p - 0.28) / 0.22;
-                            const phase1 = Math.min(typingProgress / 0.4, 1);
-                            const phase2 = typingProgress > 0.4 ? Math.min((typingProgress - 0.4) / 0.25, 1) : 0;
-                            const phase3 = typingProgress > 0.65 ? Math.min((typingProgress - 0.65) / 0.35, 1) : 0;
-                            setTypedTitle(fullTitle.slice(0, Math.round(phase1 * fullTitle.length)));
-                            setTypedCompany(fullCompany.slice(0, Math.round(phase2 * fullCompany.length)));
-                            setTypedDesc(fullDesc.slice(0, Math.round(phase3 * fullDesc.length)));
-                        } else if (p < 0.28) {
-                            setTypedTitle(''); setTypedCompany(''); setTypedDesc('');
-                        }
-
-                        // Button glow at 85%+
-                        setBtnGlow(p >= 0.85);
-                    }
-                }
+            const masterTL = gsap.timeline({
+                scrollTrigger: { trigger: sectionRef.current, start: 'top 60%', toggleActions: 'play none none none' },
             });
-
-            // Power line grows from top to bottom
-            tl.fromTo('.scr-power-line', { height: '0%' }, { height: '100%', duration: 10, ease: 'none' }, 0);
-
-            // Phase 0: Fly in (0 → 2)
-            tl.fromTo('.scr-text', { opacity: 0, x: 40 }, { opacity: 1, x: 0, duration: 1.5, ease: 'expo.out' }, 0);
-            tl.fromTo('.scr-mockup', { opacity: 0, x: -60, scale: 0.92 }, { opacity: 1, x: 0, scale: 1, duration: 2, ease: 'expo.out' }, 0.3);
-
-            // Phase 1: Step line grows (2 → 5)
-            tl.fromTo('.scr-line-fill', { scaleY: 0 }, { scaleY: 1, duration: 3, ease: 'power3.out' }, 2);
-
-            // Phase 2: Requirement tags pop in (6 → 8)
-            const tags = section.querySelectorAll('.req-tag');
-            if (tags) {
-                tags.forEach((tag, i) => {
-                    tl.fromTo(tag, { opacity: 0, scale: 0 }, {
-                        opacity: 1, scale: 1, duration: 0.5, ease: 'back.out(2)'
-                    }, 6 + i * 0.2);
-                });
+            masterTL.fromTo(mockupRef.current, { opacity: 0, x: -80, rotateY: 5, scale: 0.92, filter: 'blur(10px)' }, {
+                opacity: 1, x: 0, rotateY: 0, scale: 1, filter: 'blur(0px)', duration: 1.2, ease: 'expo.out',
+            }, 0);
+            masterTL.fromTo(textRef.current, { opacity: 0, y: 40, filter: 'blur(10px)' }, { opacity: 1, y: 0, filter: 'blur(0px)', duration: 1.0, ease: 'expo.out' }, 0.15);
+            if (lineRef.current) {
+                masterTL.fromTo(lineRef.current, { scaleY: 0 }, { scaleY: 1, duration: 1.4, ease: 'power3.out' }, 0.6);
             }
+            masterTL.add(() => {
+                steps.forEach((_, idx) => { setTimeout(() => setActiveStep(idx + 1), idx * 350); });
+            }, 0.7);
 
-            // Phase 3: Button activation glow (8 → 10)
-            tl.fromTo('.scr-btn', { boxShadow: '0 0 0 0 rgba(34,197,94,0)' }, {
-                boxShadow: '0 0 30px rgba(34,197,94,0.5)', duration: 1
-            }, 8);
-
-        }, section);
-
+            // Tags pop in
+            const tagEls = mockupRef.current?.querySelectorAll('.req-tag');
+            if (tagEls) {
+                tagEls.forEach((tag, i) => { masterTL.fromTo(tag, { opacity: 0, scale: 0 }, { opacity: 1, scale: 1, duration: 0.3, ease: 'back.out(2)' }, 1.0 + i * 0.1); });
+            }
+        }, sectionRef);
         return () => ctx.revert();
     }, []);
 
-    const cursor = <span className="animate-pulse text-emerald-400 font-light">|</span>;
+    const handleGenerate = () => {
+        if (isGenerating || showToast) return;
+        setIsGenerating(true);
+        setActiveStep(3); // Update progress to "Generate link"
+        setTimeout(() => {
+            setIsGenerating(false);
+            setBtnGlow(true);
+            setShowToast(true);
+            setActiveStep(4); // Advance to final step
+            setTimeout(() => setBtnGlow(false), 600);
+            setTimeout(() => setShowToast(false), 3500);
+        }, 1500);
+    };
+
+    const removeTag = (tagToRemove: string) => {
+        setTags(tags.filter(t => t !== tagToRemove));
+    };
 
     return (
         <section
@@ -120,13 +104,16 @@ const ProductScreening = () => {
                 <div className="flex flex-col lg:flex-row-reverse items-center gap-12 lg:gap-16 w-full">
 
                     {/* RIGHT: Text + Steps */}
-                    <div className="flex-[45] scr-text opacity-0">
-                        <p className="font-mono text-xs uppercase tracking-[0.2em] mb-4 text-emerald-400 font-semibold">◆ AI Job Screening</p>
-                        <h2 className="font-display font-black text-[clamp(1.8rem,4vw,3.2rem)] leading-[1.1] tracking-[-0.03em] text-white mb-5">
+                    <div ref={textRef} className="flex-[45] scr-text opacity-0">
+                        <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full border border-[#00c853]/40 bg-transparent mb-6 opacity-0">
+                            <div className="w-1.5 h-1.5 rounded-full bg-[#00c853]" />
+                            <span className="font-mono text-[11px] uppercase tracking-[2px] text-emerald-400 font-semibold mt-px">AI JOB SCREENING</span>
+                        </div>
+                        <h2 className="font-display font-black text-[clamp(1.8rem,4vw,3.2rem)] leading-[1.0] tracking-[-0.04em] text-white mb-5">
                             CREATE A SCREENING<br />IN 60 SECONDS
                         </h2>
-                        <p className="text-white/50 text-base md:text-lg leading-[1.7] mb-8 max-w-[480px]">
-                            Configure your role, set requirements, and generate a shareable AI-screening link. Our engine handles the rest.
+                        <p className="text-white/60 text-base md:text-lg leading-[1.7] mb-8 max-w-[480px]">
+                            Configure your role, set requirements, and generate a shareable AI-screening link. Our engine handles the rest — reading, scoring, and ranking every applicant automatically. Try the form!
                         </p>
 
                         {/* Steps */}
@@ -149,70 +136,91 @@ const ProductScreening = () => {
                         </div>
                     </div>
 
-                    {/* LEFT: Mockup */}
-                    <div className="flex-[55] scr-mockup opacity-0">
-                        <div className="rounded-xl overflow-hidden border border-white/[0.06] bg-[#0a0a0a] shadow-[0_0_60px_rgba(34,197,94,0.08)]">
-                            {/* Browser chrome */}
+                    <div ref={mockupRef} className="flex-[55] opacity-0 relative group">
+                        <div className={`absolute -top-3 right-4 z-20 bg-emerald-600 text-white text-xs font-semibold px-4 py-2.5 rounded-xl shadow-[0_8px_24px_rgba(5,150,105,0.3)] border border-emerald-400/30 flex items-center gap-2 transition-all duration-500 ${showToast ? 'opacity-100 translate-y-0 scale-100' : 'opacity-0 -translate-y-4 scale-90'}`}>
+                            <LinkIcon className="w-3.5 h-3.5" /> Screening link copied!
+                        </div>
+
+                        <GyroTilt intensity={8} contentClassName="rounded-xl overflow-hidden glow-green border border-white/[0.06] bg-[#0a0a0a]">
                             <div className="bg-white/[0.03] px-4 py-2.5 flex items-center gap-3 border-b border-white/[0.06]">
                                 <div className="flex gap-1.5">
                                     <div className="w-3 h-3 rounded-full bg-red-400/60" />
                                     <div className="w-3 h-3 rounded-full bg-yellow-400/60" />
                                     <div className="w-3 h-3 rounded-full bg-green-400/60" />
                                 </div>
-                                <div className="flex-1 text-center"><span className="text-xs text-white/30 bg-white/5 rounded-md px-3 py-1">app.screeningpilot.com</span></div>
+                                <div className="flex-1 text-center"><span className="text-xs text-white/30 bg-white/5 rounded-md px-3 py-1 select-none">app.screeningpilot.com</span></div>
                             </div>
 
                             <div className="p-6">
                                 <div className="flex items-center justify-between mb-5">
-                                    <h3 className="text-sm font-bold text-white">Create New Screening</h3>
+                                    <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                                        Create New Screening
+                                    </h3>
                                     <div className="flex gap-4 text-[10px] text-white/30">
-                                        <span>Applicants: <strong className="text-white/60">348</strong></span>
-                                        <span>Active: <strong className="text-white/60">5</strong></span>
+                                        <span>Draft <strong className="text-white/60">Auto-saved</strong></span>
                                     </div>
                                 </div>
 
                                 <div className="space-y-4">
                                     <div>
-                                        <label className="text-[10px] text-white/30 font-medium mb-1 block">Job Title *</label>
-                                        <div className="border border-white/[0.08] rounded-lg px-3 py-2 text-sm text-white min-h-[36px] bg-white/[0.03]">
-                                            {typedTitle || <span className="text-white/15">e.g. Senior Engineer</span>}
-                                            {typedTitle.length > 0 && typedTitle.length < fullTitle.length && cursor}
-                                        </div>
+                                        <label className="text-[10px] text-white/40 font-medium mb-1.5 block uppercase tracking-wider">Job Title *</label>
+                                        <input
+                                            value={title}
+                                            onChange={(e) => setTitle(e.target.value)}
+                                            className="w-full border border-white/[0.1] rounded-lg px-3 py-2 text-sm text-white bg-white/[0.02] focus:bg-white/[0.05] focus:border-emerald-500/50 outline-none transition-all placeholder:text-white/20"
+                                            placeholder="e.g. Senior Frontend Engineer"
+                                        />
                                     </div>
                                     <div>
-                                        <label className="text-[10px] text-white/30 font-medium mb-1 block">Company Name *</label>
-                                        <div className="border border-white/[0.08] rounded-lg px-3 py-2 text-sm text-white min-h-[36px] bg-white/[0.03]">
-                                            {typedCompany || <span className="text-white/15">e.g. Acme Inc</span>}
-                                            {typedTitle.length >= fullTitle.length && typedCompany.length > 0 && typedCompany.length < fullCompany.length && cursor}
-                                        </div>
+                                        <label className="text-[10px] text-white/40 font-medium mb-1.5 block uppercase tracking-wider">Company Name *</label>
+                                        <input
+                                            value={company}
+                                            onChange={(e) => setCompany(e.target.value)}
+                                            className="w-full border border-white/[0.1] rounded-lg px-3 py-2 text-sm text-white bg-white/[0.02] focus:bg-white/[0.05] focus:border-emerald-500/50 outline-none transition-all placeholder:text-white/20"
+                                            placeholder="Your Company"
+                                        />
                                     </div>
                                     <div>
-                                        <label className="text-[10px] text-white/30 font-medium mb-1 block">Job Description</label>
-                                        <div className="border border-white/[0.08] rounded-lg px-3 py-2 text-xs text-white/60 min-h-[60px] bg-white/[0.03]">
-                                            {typedDesc || <span className="text-white/15">Describe the role...</span>}
-                                            {typedCompany.length >= fullCompany.length && typedDesc.length > 0 && typedDesc.length < fullDesc.length && cursor}
-                                        </div>
+                                        <label className="text-[10px] text-white/40 font-medium mb-1.5 block uppercase tracking-wider">Job Description</label>
+                                        <textarea
+                                            value={desc}
+                                            onChange={(e) => setDesc(e.target.value)}
+                                            className="w-full border border-white/[0.1] rounded-lg px-3 py-2 text-xs text-white/80 min-h-[70px] bg-white/[0.02] focus:bg-white/[0.05] focus:border-emerald-500/50 outline-none transition-all resize-none placeholder:text-white/20"
+                                            placeholder="Paste your JD here..."
+                                        />
                                     </div>
 
                                     <div className="border-t border-white/[0.06] pt-4">
-                                        <p className="text-[10px] text-white/30 font-medium mb-3">Requirements</p>
-                                        <div className="grid grid-cols-2 gap-2">
-                                            {['Experience: 5+ years', 'Education: BS CS', 'Skills: React, TS', 'Salary: $120-160K'].map((r) => (
-                                                <div key={r} className="req-tag bg-emerald-500/10 border border-emerald-500/20 rounded-md px-3 py-1.5 text-[10px] text-emerald-400 font-medium opacity-0 scale-0">{r}</div>
+                                        <p className="text-[10px] text-white/40 font-medium mb-3 uppercase tracking-wider">Requirements</p>
+                                        <div className="flex flex-wrap gap-2">
+                                            {tags.map((r) => (
+                                                <div key={r} onClick={() => removeTag(r)} className="req-tag group cursor-pointer bg-emerald-500/10 hover:bg-red-500/10 hover:border-red-500/30 border border-emerald-500/20 rounded-md px-2.5 py-1.5 text-[10px] text-emerald-400 font-medium transition-colors flex items-center gap-1.5">
+                                                    {r}
+                                                    <X className="w-3 h-3 opacity-50 group-hover:text-red-400 group-hover:opacity-100" />
+                                                </div>
                                             ))}
+                                            <button className="bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.1] rounded-md px-3 py-1.5 text-[10px] text-white/50 font-medium transition-colors border-dashed" onClick={() => setTags([...tags, 'New Requirement'])}>
+                                                + Add Requirement
+                                            </button>
                                         </div>
                                     </div>
-
-                                    <button className={`scr-btn w-full text-white text-xs font-semibold py-2.5 rounded-lg mt-2 transition-all duration-500 ${btnGlow ? 'bg-emerald-500 shadow-[0_0_24px_rgba(5,150,105,0.5)] scale-[1.02]' : 'bg-emerald-600'}`}>
-                                        Generate Screening Link →
+                                    <button
+                                        onClick={handleGenerate}
+                                        disabled={isGenerating || showToast || !title || !company}
+                                        className={`w-full h-[44px] flex items-center justify-center gap-2 text-white text-[14px] font-[600] rounded-full mt-2 transition-all duration-300 ${btnGlow ? 'bg-emerald-500 shadow-[0_0_24px_rgba(5,150,105,0.5)] scale-[1.02] text-black' :
+                                            isGenerating ? 'bg-emerald-600/50 cursor-not-allowed' :
+                                                'bg-[#00C853] hover:bg-emerald-500 hover:shadow-[0_4px_16px_rgba(5,150,105,0.4)]'
+                                            }`}>
+                                        {isGenerating ? <><Loader2 className="w-4 h-4 animate-spin" /> Generating AI Link...</> :
+                                            showToast ? 'Link Generated!' : 'Generate Screening Link →'}
                                     </button>
                                 </div>
                             </div>
-                        </div>
+                        </GyroTilt>
                     </div>
                 </div>
             </div>
-        </section>
+        </section >
     );
 };
 

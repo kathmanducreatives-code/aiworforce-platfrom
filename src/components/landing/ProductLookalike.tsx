@@ -50,15 +50,21 @@ const ProductLookalike = () => {
                 });
             }
 
-            // Phase 2: Candidate cards wave in left-to-right (3 → 8)
+            // Phase 2: Candidate cards wave in left-to-right (2 → 5)
             const cards = sectionRef.current?.querySelectorAll('.candidate-card');
             if (cards) {
                 cards.forEach((card, i) => {
-                    // Card slides in from left
-                    tl.fromTo(card, { opacity: 0, x: -60, scale: 0.9, filter: 'blur(4px)' }, {
-                        opacity: 1, x: 0, scale: 1, filter: 'blur(0px)', duration: 1.2, ease: 'expo.out'
-                    }, 3 + i * 0.5);
+                    // Card slides up quickly to fill empty space
+                    tl.fromTo(card, { opacity: 0, y: 20 }, {
+                        opacity: 1, y: 0, duration: 1, ease: 'expo.out'
+                    }, 2.5 + i * 0.15);
                 });
+            }
+
+            // Phase 2.5: Skeletons fade out
+            const skeletons = sectionRef.current?.querySelectorAll('.candidate-skeleton');
+            if (skeletons) {
+                tl.to(skeletons, { opacity: 0, duration: 0.5 }, 2.8);
             }
 
             // Phase 3: Match badges pulse in after their card (staggered)
@@ -67,15 +73,15 @@ const ProductLookalike = () => {
                 badges.forEach((badge, i) => {
                     tl.fromTo(badge, { scale: 0 }, {
                         scale: 1, duration: 0.4, ease: 'back.out(3)'
-                    }, 3.6 + i * 0.5);
+                    }, 3.0 + i * 0.15);
                     tl.fromTo(badge, { boxShadow: '0 0 0 0 rgba(34,197,94,0)' }, {
                         boxShadow: '0 0 12px 3px rgba(34,197,94,0.4)', duration: 0.3, yoyo: true, repeat: 1
-                    }, 3.8 + i * 0.5);
+                    }, 3.2 + i * 0.15);
                 });
             }
 
-            // Phase 4: Counter animates (8 → 10)
-            tl.fromTo('.look-counter', { opacity: 0 }, { opacity: 1, duration: 1 }, 8);
+            // Phase 4: Counter animates (5 → 6)
+            tl.fromTo('.look-counter', { opacity: 0 }, { opacity: 1, duration: 1 }, 5);
 
         }, sectionRef);
         return () => ctx.revert();
@@ -103,12 +109,15 @@ const ProductLookalike = () => {
 
             <div className="relative z-10 w-full max-w-6xl mx-auto px-6 h-full flex flex-col justify-center">
                 {/* Title Block */}
-                <div className="text-center mb-10">
-                    <p className="look-title font-mono text-xs uppercase tracking-[0.2em] mb-4 text-emerald-400 font-semibold opacity-0">◆ Lookalike Engine</p>
-                    <h2 className="look-title font-display font-black text-[clamp(1.8rem,4.5vw,3.5rem)] leading-[1.1] tracking-[-0.03em] text-white mb-4 opacity-0">
+                <div className="text-center mb-6">
+                    <div className="look-title inline-flex items-center gap-2 px-3 py-1.5 rounded-full border border-[#00c853]/40 bg-transparent mb-4 opacity-0 mx-auto">
+                        <div className="w-1.5 h-1.5 rounded-full bg-[#00c853]" />
+                        <span className="font-mono text-[11px] uppercase tracking-[2px] text-emerald-400 font-semibold mt-px">LOOKALIKE ENGINE</span>
+                    </div>
+                    <h2 className="look-title font-display font-black text-[clamp(1.8rem,4.5vw,3.5rem)] leading-[1.0] tracking-[-0.04em] text-white mb-3 opacity-0">
                         PASTE ONE PROFILE.<br />GET 2,000 RANKED MATCHES.
                     </h2>
-                    <p className="look-subtitle text-white/50 text-base md:text-lg leading-[1.7] max-w-[700px] mx-auto opacity-0">
+                    <p className="look-subtitle text-white/60 text-base md:text-lg leading-[1.7] max-w-[700px] mx-auto opacity-0">
                         Exhaust your entire addressable talent market. Every matching professional — found, ranked, and ready to contact. In 15 minutes.
                     </p>
                 </div>
@@ -148,35 +157,61 @@ const ProductLookalike = () => {
                                 ))}
                             </div>
 
-                            {/* Candidate Cards */}
-                            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-                                {candidates.map((c, i) => (
-                                    <div key={i} className="candidate-card glass rounded-lg p-3 opacity-0 hover:border-emerald-500/20 transition-all duration-300 hover:-translate-y-0.5">
-                                        <div className="flex items-start justify-between mb-2">
-                                            <div className="flex items-center gap-2">
-                                                <div className="w-8 h-8 rounded-full bg-gradient-to-br from-emerald-500/20 to-emerald-600/10 flex items-center justify-center text-[10px] font-bold text-emerald-400 border border-emerald-500/20">
-                                                    {c.name.split(' ').map(n => n[0]).join('')}
-                                                </div>
-                                                <div>
-                                                    <p className="text-xs font-semibold text-white">{c.name}</p>
-                                                    <p className="text-[10px] text-white/30">{c.title}</p>
+                            {/* Candidate Cards Grid with Skeletons */}
+                            <div className="relative">
+                                {/* Skeleton Layer (visible initially) */}
+                                <div className="absolute inset-0 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 pointer-events-none">
+                                    {[1, 2, 3, 4, 5, 6].map((i) => (
+                                        <div key={`skel-${i}`} className="candidate-skeleton glass rounded-lg p-3 opacity-50 flex flex-col space-y-3">
+                                            <div className="flex items-center gap-2 mb-1">
+                                                <div className="w-8 h-8 rounded-full bg-white/5 animate-pulse" />
+                                                <div className="space-y-1">
+                                                    <div className="h-3 w-20 bg-white/5 rounded animate-pulse" />
+                                                    <div className="h-2 w-24 bg-white/5 rounded animate-pulse" />
                                                 </div>
                                             </div>
-                                            <span className={`match-badge text-[10px] font-bold px-2 py-0.5 rounded-full scale-0 ${c.tier === 'Excellent' ? 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/20' :
-                                                c.tier === 'Strong' ? 'bg-blue-500/15 text-blue-400 border border-blue-500/20' :
-                                                    'bg-white/[0.06] text-white/50 border border-white/10'
-                                                }`}>{c.match}%</span>
+                                            <div className="flex gap-2">
+                                                <div className="h-2 w-16 bg-white/5 rounded animate-pulse" />
+                                                <div className="h-2 w-12 bg-white/5 rounded animate-pulse" />
+                                            </div>
+                                            <div className="flex gap-1.5 mt-1">
+                                                <div className="h-4 w-16 bg-white/5 rounded animate-pulse" />
+                                                <div className="h-4 w-20 bg-white/5 rounded animate-pulse" />
+                                            </div>
                                         </div>
-                                        <div className="flex items-center gap-3 text-[10px] text-white/25 mb-2">
-                                            <span className="flex items-center gap-1"><MapPin className="w-3 h-3" />{c.location}</span>
-                                            <span className="flex items-center gap-1"><Clock className="w-3 h-3" />{c.yoe}</span>
+                                    ))}
+                                </div>
+
+                                {/* Actual Cards */}
+                                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 relative z-10">
+                                    {candidates.map((c, i) => (
+                                        <div key={i} className="candidate-card glass rounded-lg p-3 opacity-0 hover:border-emerald-500/20 transition-all duration-300 hover:-translate-y-0.5 bg-[#111111]/80 backdrop-blur-md">
+                                            <div className="flex items-start justify-between mb-2">
+                                                <div className="flex items-center gap-2">
+                                                    <div className="w-8 h-8 rounded-full bg-gradient-to-br from-emerald-500/20 to-emerald-600/10 flex items-center justify-center text-[10px] font-bold text-emerald-400 border border-emerald-500/20">
+                                                        {c.name.split(' ').map(n => n[0]).join('')}
+                                                    </div>
+                                                    <div>
+                                                        <p className="text-xs font-semibold text-white">{c.name}</p>
+                                                        <p className="text-[10px] text-white/30">{c.title}</p>
+                                                    </div>
+                                                </div>
+                                                <span className={`match-badge text-[10px] font-bold px-2 py-0.5 rounded-full scale-0 ${c.tier === 'Excellent' ? 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/20' :
+                                                    c.tier === 'Strong' ? 'bg-blue-500/15 text-blue-400 border border-blue-500/20' :
+                                                        'bg-white/[0.06] text-white/50 border border-white/10'
+                                                    }`}>{c.match}%</span>
+                                            </div>
+                                            <div className="flex items-center gap-3 text-[10px] text-white/30 mb-2">
+                                                <span className="flex items-center gap-1"><MapPin className="w-3 h-3" />{c.location}</span>
+                                                <span className="flex items-center gap-1"><Clock className="w-3 h-3" />{c.yoe}</span>
+                                            </div>
+                                            <div className="flex gap-1.5">
+                                                <div className="flex items-center gap-1 text-[9px] text-blue-400 bg-blue-500/10 border border-blue-500/15 px-2 py-0.5 rounded transition-colors hover:bg-blue-500/20 cursor-pointer"><Linkedin className="w-2.5 h-2.5" /> LinkedIn</div>
+                                                <div className="flex items-center gap-1 text-[9px] text-white/60 bg-white/[0.04] border border-white/[0.08] px-2 py-0.5 rounded transition-colors hover:bg-white/10 cursor-pointer"><Mail className="w-2.5 h-2.5" /> Reveal Email</div>
+                                            </div>
                                         </div>
-                                        <div className="flex gap-1.5">
-                                            <div className="flex items-center gap-1 text-[9px] text-blue-400 bg-blue-500/10 border border-blue-500/15 px-2 py-0.5 rounded"><Linkedin className="w-2.5 h-2.5" /> LinkedIn</div>
-                                            <div className="flex items-center gap-1 text-[9px] text-white/40 bg-white/[0.04] border border-white/[0.08] px-2 py-0.5 rounded"><Mail className="w-2.5 h-2.5" /> Reveal Email</div>
-                                        </div>
-                                    </div>
-                                ))}
+                                    ))}
+                                </div>
                             </div>
                         </div>
                     </div>

@@ -26,7 +26,7 @@ const ExpertMarketplace = () => {
   ];
 
   return (
-    <div className="min-h-screen bg-background text-foreground pb-20 font-display">
+    <div className="min-h-screen bg-background text-foreground pb-20">
 
       {/* Premium Header with Glassmorphism */}
       <div className="relative overflow-hidden border-b border-border/50">
@@ -112,7 +112,7 @@ const ExpertMarketplace = () => {
               </div>
             </div>
 
-            {/* Expert Grid */}
+            {/* Structured Card Grid - Standardized */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
               {filteredExperts.map((expert, i) => (
                 <motion.div
@@ -127,27 +127,26 @@ const ExpertMarketplace = () => {
 
                   <div className="p-6 pl-7 flex-1 flex flex-col">
                     <div className="flex justify-between items-start mb-4">
-                      <div className="flex gap-3 items-center">
+                      <div className="flex gap-4 items-center">
                         <div className="w-14 h-14 rounded-full overflow-hidden border-2 border-border/50 bg-muted relative group-hover:border-primary/40 transition-colors">
                           <img src={`https://i.pravatar.cc/150?u=${expert.id}`} className="w-full h-full object-cover" alt="avatar" />
                           {expert.verified && (
-                            <div className="absolute -bottom-1 -right-1 bg-card rounded-full p-0.5">
-                              <ShieldCheck className="w-4 h-4 text-green-500" />
+                            <div className="absolute -bottom-1 -right-1 bg-card rounded-full p-0.5 border border-border">
+                              <ShieldCheck className="w-4 h-4 text-green-500 fill-green-500/10" />
                             </div>
                           )}
                         </div>
-                        <div>
-                          <h3 className="font-bold text-foreground leading-tight">{expert.name}</h3>
-                          <p className="text-xs text-muted-foreground">{expert.title}</p>
+                        <div className="min-w-0">
+                          <h3 className="text-base font-bold text-foreground truncate">{expert.name}</h3>
+                          <p className="text-xs text-muted-foreground truncate">{expert.title}</p>
                         </div>
                       </div>
                       <div className="text-right">
-                        <p className="text-lg font-mono font-bold text-foreground">${expert.hourlyRate}</p>
-                        <p className="text-[10px] text-muted-foreground/70 uppercase tracking-wider">/ hr</p>
+                        <p className="font-mono font-bold text-primary text-base">${expert.hourlyRate}<span className="text-[10px] text-muted-foreground font-sans font-normal ml-0.5">/hr</span></p>
                       </div>
                     </div>
 
-                    <p className="text-sm text-muted-foreground leading-relaxed mb-5 flex-1 line-clamp-2">
+                    <p className="text-sm text-muted-foreground leading-relaxed mb-6 flex-1 line-clamp-3 italic">
                       "{expert.bio}"
                     </p>
 
