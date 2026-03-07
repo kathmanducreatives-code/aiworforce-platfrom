@@ -119,7 +119,7 @@ export const TransformationSection = () => {
             <div className="w-full max-w-6xl grid grid-cols-1 lg:grid-cols-3 gap-8 items-center relative">
 
                 {/* Left — Old Way */}
-                <div ref={leftRef} className="will-change-transform mt-4 lg:mt-8">
+                <div ref={leftRef} className="mt-4 lg:mt-8">
                     <div className="bg-black/80 backdrop-blur-md rounded-2xl p-8 border border-white/10 shadow-2xl relative overflow-hidden h-full flex flex-col">
                         <h3 className="font-display font-bold text-xl text-white/30 mb-6 uppercase tracking-wide">The Old Way</h3>
                         <div className="space-y-4 flex-grow">
