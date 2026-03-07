@@ -48,10 +48,11 @@ const ProductDashboard = () => {
                 scrollTrigger: {
                     trigger: sectionRef.current,
                     start: 'top top',
-                    end: '+=2000',
+                    end: '+=1400',
                     pin: true,
-                    scrub: 2.5,
+                    scrub: 1.2,
                     anticipatePin: 1,
+                    fastScrollEnd: true,
                 }
             });
 

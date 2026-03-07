@@ -182,7 +182,7 @@ export const TransformationSection = () => {
                 </div>
 
                 {/* Right — New Way */}
-                <div ref={rightRef} className="will-change-transform relative z-30 mt-4 lg:mt-8">
+                <div ref={rightRef} className="relative z-30 mt-4 lg:mt-8">
                     <div ref={newWayContainerRef} className="bg-[#111] backdrop-blur-xl rounded-2xl p-8 border border-emerald-500/30 shadow-[0_0_40px_rgba(34,197,94,0.15)] relative overflow-hidden h-full flex flex-col">
                         {/* Glossy top edge */}
                         <div className="absolute top-0 left-0 right-0 h-[1px] bg-gradient-to-r from-transparent via-emerald-400 to-transparent opacity-50" />

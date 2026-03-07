@@ -959,12 +959,11 @@ export const ExpertJourney = () => {
               if (p > 0.05) card.classList.remove('jc-floating', 'jc-in-view');
               const rX = gsap.utils.clamp(-13, 0, -13 * p);
               const sc = gsap.utils.clamp(0.90, 1, 1 - 0.10 * p);
-              const br = gsap.utils.clamp(0.45, 1, 1 - 0.55 * p);
-              const bl = gsap.utils.clamp(0, 5, 5 * p);
+              const op = gsap.utils.clamp(0.15, 1, 1 - 0.85 * p);
               gsap.set(card, {
                 rotateX: rX,
                 scale: sc,
-                filter: `brightness(${br}) blur(${bl}px)`,
+                opacity: op,
               });
             },
           });

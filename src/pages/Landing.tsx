@@ -23,6 +23,7 @@ import FinalCTA from "@/components/landing/FinalCTA";
 import { ExpertJourney } from "@/components/landing/ExpertJourney";
 
 gsap.registerPlugin(ScrollTrigger);
+ScrollTrigger.config({ limitCallbacks: true });
 
 const Landing = () => {
   const navigate = useNavigate();
