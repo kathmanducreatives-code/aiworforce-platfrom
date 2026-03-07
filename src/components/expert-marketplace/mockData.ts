@@ -312,6 +312,9 @@ export const mockReviews: CompanyReview[] = [
     comment: "Aisha's DevOps screening was incredibly rigorous. We found exactly who we were looking for.",
     expertName: 'Aisha Patel',
   },
+];
+
+export const mockAdditionalRequests: InterviewRequest[] = [
   {
     id: 'req-6',
     candidateName: 'Jennifer Lopez',
@@ -427,7 +430,7 @@ export const mockReviews: CompanyReview[] = [
     status: 'in_progress',
     expertId: 'exp-3',
     expertName: 'Aisha Patel',
-    scheduledAt: '2026-03-02T14:30:00Z', // Today
+    scheduledAt: '2026-03-02T14:30:00Z',
     duration: 60,
     interviewFee: 140,
     platformFee: 28,
@@ -444,7 +447,7 @@ export const mockReviews: CompanyReview[] = [
     status: 'in_progress',
     expertId: 'exp-2',
     expertName: 'Marcus Johnson',
-    scheduledAt: '2026-03-02T15:00:00Z', // Today
+    scheduledAt: '2026-03-02T15:00:00Z',
     duration: 90,
     interviewFee: 130,
     platformFee: 26,
