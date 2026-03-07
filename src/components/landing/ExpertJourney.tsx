@@ -924,7 +924,8 @@ export const ExpertJourney = () => {
         /* Scroll into view → animate to flat, visible */
         ScrollTrigger.create({
           trigger: slot,
-          start: 'top 85%', /* Trigger earlier as requested */
+          start: 'top 80%',
+          refreshPriority: i,
           onEnter: () => {
             gsap.to(card, {
               rotateX: 0,
@@ -936,7 +937,6 @@ export const ExpertJourney = () => {
               delay: i * 0.1,
               onComplete: () => {
                 card.classList.add('jc-in-view');
-                /* Start idle float after entrance */
                 if (!prefersReduced) {
                   card.classList.add('jc-floating');
                 }
@@ -959,12 +959,11 @@ export const ExpertJourney = () => {
               if (p > 0.05) card.classList.remove('jc-floating', 'jc-in-view');
               const rX = gsap.utils.clamp(-13, 0, -13 * p);
               const sc = gsap.utils.clamp(0.90, 1, 1 - 0.10 * p);
-              const br = gsap.utils.clamp(0.45, 1, 1 - 0.55 * p);
-              const bl = gsap.utils.clamp(0, 5, 5 * p);
+              const op = gsap.utils.clamp(0.15, 1, 1 - 0.85 * p);
               gsap.set(card, {
                 rotateX: rX,
                 scale: sc,
-                filter: `brightness(${br}) blur(${bl}px)`,
+                opacity: op,
               });
             },
           });

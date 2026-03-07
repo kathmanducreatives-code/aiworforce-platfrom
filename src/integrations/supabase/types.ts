@@ -2921,6 +2921,108 @@ export type Database = {
         }
         Relationships: []
       }
+      sp_wellfound_leads: {
+        Row: {
+          applicant_count: number | null
+          company_description: string | null
+          company_name: string | null
+          company_url: string | null
+          company_website: string | null
+          created_at: string | null
+          date_posted: string | null
+          decision_maker_linkedin: string | null
+          decision_maker_name: string | null
+          decision_maker_title: string | null
+          dm_sent: boolean | null
+          dm_sent_at: string | null
+          enrichment_source: string | null
+          funding_amount: string | null
+          funding_stage: string | null
+          id: string
+          job_title: string | null
+          location: string | null
+          open_roles_count: number | null
+          personalized_dm: string | null
+          remote: boolean | null
+          reply_received: boolean | null
+          reply_text: string | null
+          salary_range: string | null
+          score: number | null
+          score_breakdown: Json | null
+          scrape_date: string | null
+          source: string | null
+          team_size: string | null
+          tech_stack: string[] | null
+          tier: string | null
+        }
+        Insert: {
+          applicant_count?: number | null
+          company_description?: string | null
+          company_name?: string | null
+          company_url?: string | null
+          company_website?: string | null
+          created_at?: string | null
+          date_posted?: string | null
+          decision_maker_linkedin?: string | null
+          decision_maker_name?: string | null
+          decision_maker_title?: string | null
+          dm_sent?: boolean | null
+          dm_sent_at?: string | null
+          enrichment_source?: string | null
+          funding_amount?: string | null
+          funding_stage?: string | null
+          id?: string
+          job_title?: string | null
+          location?: string | null
+          open_roles_count?: number | null
+          personalized_dm?: string | null
+          remote?: boolean | null
+          reply_received?: boolean | null
+          reply_text?: string | null
+          salary_range?: string | null
+          score?: number | null
+          score_breakdown?: Json | null
+          scrape_date?: string | null
+          source?: string | null
+          team_size?: string | null
+          tech_stack?: string[] | null
+          tier?: string | null
+        }
+        Update: {
+          applicant_count?: number | null
+          company_description?: string | null
+          company_name?: string | null
+          company_url?: string | null
+          company_website?: string | null
+          created_at?: string | null
+          date_posted?: string | null
+          decision_maker_linkedin?: string | null
+          decision_maker_name?: string | null
+          decision_maker_title?: string | null
+          dm_sent?: boolean | null
+          dm_sent_at?: string | null
+          enrichment_source?: string | null
+          funding_amount?: string | null
+          funding_stage?: string | null
+          id?: string
+          job_title?: string | null
+          location?: string | null
+          open_roles_count?: number | null
+          personalized_dm?: string | null
+          remote?: boolean | null
+          reply_received?: boolean | null
+          reply_text?: string | null
+          salary_range?: string | null
+          score?: number | null
+          score_breakdown?: Json | null
+          scrape_date?: string | null
+          source?: string | null
+          team_size?: string | null
+          tech_stack?: string[] | null
+          tier?: string | null
+        }
+        Relationships: []
+      }
     }
     Views: {
       outreach_channel_performance: {
