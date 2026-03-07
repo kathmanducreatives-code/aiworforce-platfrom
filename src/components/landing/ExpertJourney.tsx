@@ -924,7 +924,8 @@ export const ExpertJourney = () => {
         /* Scroll into view → animate to flat, visible */
         ScrollTrigger.create({
           trigger: slot,
-          start: 'top 85%', /* Trigger earlier as requested */
+          start: 'top 80%',
+          refreshPriority: i,
           onEnter: () => {
             gsap.to(card, {
               rotateX: 0,
@@ -936,7 +937,6 @@ export const ExpertJourney = () => {
               delay: i * 0.1,
               onComplete: () => {
                 card.classList.add('jc-in-view');
-                /* Start idle float after entrance */
                 if (!prefersReduced) {
                   card.classList.add('jc-floating');
                 }
