@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import gsap from "gsap";
 import { ScrollTrigger } from "gsap/ScrollTrigger";
 
@@ -14,8 +14,34 @@ const STYLES = `
 .journey-section {
   position: relative;
   background-color: #04060d;
-  background-image: radial-gradient(rgba(255,255,255,0.035) 1px, transparent 1px);
-  background-size: 28px 28px;
+  overflow: hidden;
+}
+
+/* ─── REACTIVE GRID LINES ─────────────────────────── */
+.grid-lines {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  justify-content: space-evenly;
+  pointer-events: none;
+  z-index: 1;
+}
+.grid-line {
+  width: 1px;
+  height: 100%;
+  background: rgba(255,255,255,0.03);
+  transition: opacity 0.8s ease, transform 0.8s ease, background 0.8s ease;
+  transform-origin: center center;
+}
+.journey-section.grid-glow .grid-line {
+  background: rgba(34,197,94,0.12);
+  opacity: 1;
+  transform: scaleY(1.02);
+}
+.journey-section.grid-glow .grid-line:nth-child(2),
+.journey-section.grid-glow .grid-line:nth-child(5) {
+  background: rgba(34,197,94,0.25);
+  box-shadow: 0 0 20px rgba(34,197,94,0.08);
 }
 
 /* ─── INTRO (not sticky) ──────────────────────────── */
@@ -72,10 +98,14 @@ const STYLES = `
   line-height: 1.65;
 }
 
-/* ─── STICKY CARD STACK ───────────────────────────── */
+/* ─── STICKY CARD STACK — 3D PERSPECTIVE CONTAINER ── */
 .journey-cards {
   position: relative;
   height: calc(4 * 100vh + 600px);
+  -webkit-perspective: 1200px;
+  perspective: 1200px;
+  -webkit-perspective-origin: 50% 40%;
+  perspective-origin: 50% 40%;
 }
 
 .slot {
@@ -85,10 +115,7 @@ const STYLES = `
   display: flex;
   align-items: center;
   justify-content: center;
-  -webkit-perspective: 1000px;
-  perspective: 1000px;
-  -webkit-perspective-origin: 50% 40%;
-  perspective-origin: 50% 40%;
+  /* No per-slot perspective — unified from parent */
 }
 .slot-1 { z-index: 10; }
 .slot-2 { z-index: 20; }
@@ -117,18 +144,20 @@ const STYLES = `
   transition: none; /* GSAP controls transitions */
 }
 
-/* ─── RIM-LIGHT SWEEP ──────────────────────────────── */
+/* ─── RIM-LIGHT SWEEP (enhanced) ───────────────────── */
 .journey-card::after {
   content: '';
   position: absolute;
   inset: -1px;
   border-radius: 24px;
-  background: linear-gradient(
-    130deg,
-    transparent 0%, transparent 40%,
-    rgba(255,255,255,0.12) 50%,
-    transparent 60%, transparent 100%
-  );
+  background:
+    linear-gradient(
+      130deg,
+      transparent 0%, transparent 38%,
+      rgba(255,255,255,0.18) 48%,
+      rgba(34,197,94,0.08) 52%,
+      transparent 62%, transparent 100%
+    );
   background-size: 300% 100%;
   background-position: 200% 0;
   pointer-events: none;
@@ -138,7 +167,7 @@ const STYLES = `
 }
 .journey-card.rim-active::after {
   opacity: 1;
-  animation: rim-sweep 1.6s cubic-bezier(0.25, 1, 0.5, 1) forwards;
+  animation: rim-sweep 2.2s cubic-bezier(0.25, 1, 0.5, 1) forwards;
 }
 @keyframes rim-sweep {
   from { background-position: 200% 0; }
@@ -165,7 +194,23 @@ const STYLES = `
 
 /* ─── INNER PANEL PARALLAX ─────────────────────────── */
 .card-right .ui-panel {
-  will-change: transform;
+  -webkit-transform-style: preserve-3d;
+  transform-style: preserve-3d;
+}
+
+/* ─── FLOATING SUB-ELEMENTS (translateZ parallax) ──── */
+.bar-fill,
+.fit-badge,
+.profile-card,
+.available-pill,
+.recording-pill,
+.pill-paid,
+.mini-stat-val,
+.btn-green-full,
+.pill-available,
+.step-dot.active-glow,
+.stars-inline {
+  transform: translateZ(50px);
 }
 
 /* ─── REDUCED MOTION ───────────────────────────────── */
@@ -174,6 +219,11 @@ const STYLES = `
   .journey-card.jc-floating,
   .journey-card::after,
   .card-right .ui-panel { animation: none !important; transition: opacity 0.4s ease !important; }
+  .bar-fill, .fit-badge, .profile-card, .available-pill,
+  .recording-pill, .pill-paid, .mini-stat-val, .btn-green-full,
+  .pill-available, .step-dot.active-glow, .stars-inline {
+    transform: none !important;
+  }
 }
 
 .journey-card-1 {
@@ -272,6 +322,8 @@ const STYLES = `
   align-items: stretch;
   position: relative;
   overflow: hidden;
+  -webkit-transform-style: preserve-3d;
+  transform-style: preserve-3d;
 }
 
 .ui-panel {
@@ -284,6 +336,8 @@ const STYLES = `
   position: relative;
   display: flex;
   flex-direction: column;
+  -webkit-transform-style: preserve-3d;
+  transform-style: preserve-3d;
 }
 
 /* ─── CARD 1: AVATAR CLOUD ────────────────────────── */
@@ -327,7 +381,7 @@ const STYLES = `
   position: absolute;
   top: 50%;
   left: 50%;
-  transform: translate(-50%, -50%);
+  transform: translate(-50%, -50%) translateZ(50px);
   width: 210px;
   background: rgba(99,102,241,0.08);
   border: 1px solid rgba(99,102,241,0.45);
@@ -374,6 +428,7 @@ const STYLES = `
   font-size: 11px;
   padding: 4px 12px;
   border-radius: 100px;
+  transform: translateZ(50px);
 }
 
 .available-pill::before {
@@ -431,12 +486,15 @@ const STYLES = `
   height: 6px;
   background: rgba(255,255,255,0.07);
   border-radius: 3px;
-  overflow: hidden;
+  overflow: visible;
+  -webkit-transform-style: preserve-3d;
+  transform-style: preserve-3d;
 }
 
 .bar-fill {
   height: 100%;
   border-radius: 3px;
+  transform: translateZ(50px);
 }
 .fill-teal  { background: linear-gradient(90deg, #0d9488, #2dd4bf); }
 .fill-indigo { background: linear-gradient(90deg, #4f46e5, #818cf8); }
@@ -455,6 +513,7 @@ const STYLES = `
   color: #2dd4bf;
   font-weight: 500;
   animation: glow-teal 2.5s ease infinite;
+  transform: translateZ(50px);
 }
 
 @keyframes glow-teal {
@@ -504,6 +563,7 @@ const STYLES = `
   padding: 5px 11px;
   border-radius: 100px;
   white-space: nowrap;
+  transform: translateZ(50px);
 }
 
 .recording-pill::before {
@@ -745,6 +805,7 @@ const STYLES = `
   background: rgba(34,197,94,0.12); border: 1px solid rgba(34,197,94,0.3);
   color: #4ade80; font-size: 10px; padding: 3px 9px; border-radius: 100px;
   white-space: nowrap; flex-shrink: 0;
+  transform: translateZ(50px);
 }
 .pill-available::before {
   content: ''; width: 5px; height: 5px;
@@ -768,6 +829,7 @@ const STYLES = `
   font-size: 12.5px; font-weight: 500; cursor: pointer;
   margin-top: 14px; transition: background 0.2s;
   animation: glow-green 2s ease infinite;
+  transform: translateZ(50px);
 }
 .btn-green-full:hover { background: rgba(34,197,94,0.18); }
 
@@ -785,7 +847,7 @@ const STYLES = `
   background: rgba(255,255,255,0.15); flex-shrink: 0;
 }
 .step-dot.active { background: #22c55e; }
-.step-dot.active-glow { background: #22c55e; box-shadow: 0 0 8px #22c55e; animation: pulse-dot 2s ease infinite; }
+.step-dot.active-glow { background: #22c55e; box-shadow: 0 0 8px #22c55e; animation: pulse-dot 2s ease infinite; transform: translateZ(50px); }
 .step-connector {
   flex: 1; height: 2px; background: rgba(255,255,255,0.08);
   margin: 0 4px;
@@ -826,7 +888,7 @@ const STYLES = `
   background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.06);
   border-radius: 10px; padding: 10px 12px; text-align: center;
 }
-.mini-stat-val { font-size: 20px; font-weight: 800; color: #fff; line-height: 1; margin-bottom: 2px; }
+.mini-stat-val { font-size: 20px; font-weight: 800; color: #fff; line-height: 1; margin-bottom: 2px; transform: translateZ(50px); }
 .mini-stat-label { font-size: 10px; color: rgba(255,255,255,0.35); }
 
 /* Paid pill */
@@ -835,11 +897,13 @@ const STYLES = `
   background: rgba(34,197,94,0.15); border: 1px solid #22c55e;
   color: #22c55e; font-size: 10px; padding: 3px 9px; border-radius: 100px;
   white-space: nowrap; flex-shrink: 0; font-weight: 500;
+  transform: translateZ(50px);
 }
 
 /* Star rating inline */
 .stars-inline {
   color: #fbbf24; font-size: 13px; letter-spacing: 2px; flex-shrink: 0;
+  transform: translateZ(50px);
 }
 
 .btn-outline-full {
@@ -905,6 +969,7 @@ export const ExpertJourney = () => {
     const ctx = gsap.context(() => {
       const cards = gsap.utils.toArray<HTMLElement>('.journey-card');
       const slots = gsap.utils.toArray<HTMLElement>('.slot');
+      const section = sectionRef.current;
 
       cards.forEach((card, i) => {
         const slot = slots[i];
@@ -912,10 +977,10 @@ export const ExpertJourney = () => {
         const panel = card.querySelector<HTMLElement>('.ui-panel');
 
         /* ── 1. 3D ENTRANCE ANIMATION ────────────────────── */
-        /* Initial hidden state */
         gsap.set(card, {
           rotateX: prefersReduced ? 0 : 8,
           y: prefersReduced ? 0 : 60,
+          z: prefersReduced ? 0 : -80,
           scale: prefersReduced ? 1 : 0.96,
           opacity: prefersReduced ? 1 : 0,
           transformOrigin: 'center bottom',
@@ -927,13 +992,20 @@ export const ExpertJourney = () => {
           start: 'top 80%',
           refreshPriority: i,
           onEnter: () => {
+            /* Toggle grid glow when card enters */
+            if (section) {
+              section.classList.add('grid-glow');
+              setTimeout(() => section.classList.remove('grid-glow'), 1200);
+            }
+
             gsap.to(card, {
               rotateX: 0,
               y: 0,
+              z: 0,
               scale: 1,
               opacity: 1,
-              duration: prefersReduced ? 0.3 : 0.7,
-              ease: 'cubic-bezier(0.22, 1, 0.36, 1)',
+              duration: prefersReduced ? 0.3 : 0.8,
+              ease: 'power2.inOut',
               delay: i * 0.1,
               onComplete: () => {
                 card.classList.add('jc-in-view');
@@ -946,7 +1018,7 @@ export const ExpertJourney = () => {
           once: true,
         });
 
-        /* ── 2. OUTGOING CARD RECEDE (scrub) ──────────────── */
+        /* ── 2. OUTGOING CARD 3D RECEDE (scrub) ───────────── */
         if (!isLast && !prefersReduced) {
           ScrollTrigger.create({
             trigger: slot,
@@ -957,13 +1029,22 @@ export const ExpertJourney = () => {
               const p = self.progress;
               /* Remove idle float while scrubbing */
               if (p > 0.05) card.classList.remove('jc-floating', 'jc-in-view');
-              const rX = gsap.utils.clamp(-13, 0, -13 * p);
-              const sc = gsap.utils.clamp(0.90, 1, 1 - 0.10 * p);
-              const op = gsap.utils.clamp(0.15, 1, 1 - 0.85 * p);
+
+              /* power2.inOut easing curve applied to progress */
+              const eased = p < 0.5
+                ? 2 * p * p
+                : 1 - Math.pow(-2 * p + 2, 2) / 2;
+
+              const rX = gsap.utils.clamp(-15, 0, -15 * eased);
+              const sc = gsap.utils.clamp(0.85, 1, 1 - 0.15 * eased);
+              const op = gsap.utils.clamp(0.4, 1, 1 - 0.6 * eased);
+              const tz = gsap.utils.clamp(-100, 0, -100 * eased);
+
               gsap.set(card, {
                 rotateX: rX,
                 scale: sc,
                 opacity: op,
+                z: tz,
               });
             },
           });
@@ -978,7 +1059,13 @@ export const ExpertJourney = () => {
               card.classList.remove('rim-active');
               void card.offsetWidth; /* reflow */
               card.classList.add('rim-active');
-              setTimeout(() => card.classList.remove('rim-active'), 1800);
+              setTimeout(() => card.classList.remove('rim-active'), 2400);
+
+              /* Reactive grid glow on rim entry */
+              if (section) {
+                section.classList.add('grid-glow');
+                setTimeout(() => section.classList.remove('grid-glow'), 1600);
+              }
             },
           });
         }
@@ -1007,6 +1094,16 @@ export const ExpertJourney = () => {
       <style>{STYLES}</style>
 
       <section className="journey-section" ref={sectionRef}>
+        {/* ── Reactive Grid Lines ─────────────────────────── */}
+        <div className="grid-lines">
+          <div className="grid-line" />
+          <div className="grid-line" />
+          <div className="grid-line" />
+          <div className="grid-line" />
+          <div className="grid-line" />
+          <div className="grid-line" />
+        </div>
+
         {/* ── Intro ──────────────────────────────────────── */}
         <div className="journey-intro">
           <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full border border-emerald-500/30 bg-emerald-500/5 mb-6">
