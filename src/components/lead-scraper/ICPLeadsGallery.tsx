@@ -73,7 +73,7 @@ export const ICPLeadsGallery = ({
                         placeholder="Search within results..."
                         value={searchQuery}
                         onChange={(e) => setSearchQuery(e.target.value)}
-                        className="bg-[#161616] border-white/10 focus-visible:ring-[#00FF85]/50 focus-visible:border-[#00FF85]/50 pl-9 rounded-xl h-9 text-sm"
+                        className="bg-card border-border focus-visible:ring-primary/50 focus-visible:border-primary/50 pl-9 rounded-xl h-9 text-sm"
                     />
                 </div>
 
