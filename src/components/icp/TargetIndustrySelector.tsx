@@ -496,7 +496,7 @@ export const TargetIndustrySelector = ({
             <X className="w-3 h-3" />
           </button>
         </Badge>)}
-        {INDUSTRY_CATEGORIES.flatMap(c => c.industries).filter(i => excludedIndustryIds.includes(i.id)).map(ind => <Badge key={ind.id} variant="destructive" className="gap-1 bg-red-50 text-red-600 border-red-200 hover:bg-red-100 animate-in fade-in zoom-in-50 duration-200">
+        {INDUSTRY_CATEGORIES.flatMap(c => c.industries).filter(i => excludedIndustryIds.includes(i.id)).map(ind => <Badge key={ind.id} variant="destructive" className="gap-1 bg-red-500/10 text-red-400 border-red-500/30 hover:bg-red-500/20 animate-in fade-in zoom-in-50 duration-200">
           <Minus className="w-3 h-3 text-red-500" />
           {ind.name}
           <X className="w-3 h-3 cursor-pointer ml-1 hover:text-red-800" onClick={e => {
