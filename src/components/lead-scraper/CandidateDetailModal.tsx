@@ -73,10 +73,10 @@ export const CandidateDetailModal = ({
 
     return (
         <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
-            <DialogContent className="max-w-[95vw] w-full h-[95vh] p-0 gap-0 bg-[#0B0B0B] border-[#00FF85]/20 text-foreground overflow-hidden rounded-xl shadow-[0_0_50px_rgba(0,0,0,0.8)] focus-visible:outline-none">
+            <DialogContent className="max-w-[95vw] w-full h-[95vh] p-0 gap-0 bg-background border-border text-foreground overflow-hidden rounded-xl shadow-2xl focus-visible:outline-none">
 
                 {/* 1. Header: Sticky Top Bar */}
-                <div className="flex items-center justify-between px-6 py-4 border-b border-white/10 bg-[#0B0B0B]/95 backdrop-blur-md z-50 sticky top-0 h-[80px]">
+                <div className="flex items-center justify-between px-6 py-4 border-b border-border bg-card/95 backdrop-blur-md z-50 sticky top-0 h-[80px]">
                     <div className="flex items-center gap-4">
                         <Button
                             variant="ghost"
