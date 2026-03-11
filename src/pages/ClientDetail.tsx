@@ -294,7 +294,7 @@ const ClientDetail = () => {
                       </div>
                     )}
                   </div>
-                ))
+                ))}
               </div>
             </CardContent>
           </Card>
