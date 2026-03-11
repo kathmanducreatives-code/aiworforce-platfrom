@@ -567,7 +567,7 @@ export const TargetIndustrySelector = ({
                 }} transition={{
                   duration: 0.3,
                   ease: [0.4, 0, 0.2, 1]
-                }} className="bg-gray-50/50">
+                }} className="bg-muted/50">
                   <div className="py-1">
                     {category.industries.map((industry, index) => {
                       const indStatus = getStatus(industry.id);
