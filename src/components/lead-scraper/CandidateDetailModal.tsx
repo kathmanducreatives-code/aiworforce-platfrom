@@ -82,12 +82,12 @@ export const CandidateDetailModal = ({
                             variant="ghost"
                             size="icon"
                             onClick={onClose}
-                            className="rounded-full hover:bg-white/10 text-muted-foreground hover:text-white"
+                            className="rounded-full hover:bg-muted text-muted-foreground hover:text-foreground"
                         >
                             <X className="w-5 h-5" />
                         </Button>
                         <div>
-                            <h2 className="text-xl font-bold tracking-tight text-white flex items-center gap-3">
+                            <h2 className="text-xl font-bold tracking-tight text-foreground flex items-center gap-3">
                                 {lead.candidate_name}
                                 {lead.match_score && (
                                     <Badge className="bg-[#00FF85]/10 text-[#00FF85] border-[#00FF85]/20 hover:bg-[#00FF85]/20 px-2 py-0.5 text-xs font-mono">
