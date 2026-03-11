@@ -380,7 +380,7 @@ const FolderView = () => {
                       <Button
                         variant="outline" 
                         size="sm"
-                        className="flex-1 hover:bg-cyan-50 hover:border-cyan-200 hover:text-cyan-700 transition-all duration-200 text-xs"
+                        className="flex-1 hover:bg-muted hover:border-border hover:text-foreground transition-all duration-200 text-xs"
                         onClick={(e) => {
                           e.stopPropagation();
                           window.open(candidate.resume, '_blank');
