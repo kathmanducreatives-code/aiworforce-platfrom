@@ -44,7 +44,7 @@ const InterceptionLoader = ({ onComplete }: InterceptionLoaderProps) => {
             {/* Terminal window */}
             <div className="w-full max-w-xl">
                 {/* Window chrome */}
-                <div className="flex items-center gap-1.5 px-4 py-3 bg-zinc-900 rounded-t-2xl border border-border">
+                <div className="flex items-center gap-1.5 px-4 py-3 bg-card rounded-t-2xl border border-border">
                     <div className="w-3 h-3 rounded-full bg-red-500/80" />
                     <div className="w-3 h-3 rounded-full bg-amber-400/80" />
                     <div className="w-3 h-3 rounded-full bg-emerald-500/80" />
@@ -55,7 +55,7 @@ const InterceptionLoader = ({ onComplete }: InterceptionLoaderProps) => {
                 </div>
 
                 {/* Terminal body */}
-                <div className="bg-zinc-950 border border-t-0 border-border rounded-b-2xl px-6 py-6 min-h-[280px] font-mono text-sm">
+                <div className="bg-background border border-t-0 border-border rounded-b-2xl px-6 py-6 min-h-[280px] font-mono text-sm">
                     <div className="space-y-2">
                         {STEPS.map((step, index) => {
                             const isVisible = visibleSteps.includes(index);

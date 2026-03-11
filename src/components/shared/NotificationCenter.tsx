@@ -26,7 +26,7 @@ const typeColors = {
     scrape: 'text-blue-500 bg-blue-500/10',
     email: 'text-purple-500 bg-purple-500/10',
     interview: 'text-amber-500 bg-amber-500/10',
-    system: 'text-slate-500 bg-slate-500/10',
+    system: 'text-muted-foreground bg-muted/70',
 };
 
 function timeAgo(dateStr: string): string {

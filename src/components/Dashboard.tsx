@@ -185,25 +185,25 @@ const Dashboard = () => {
   };
 
   const getFactorColor = (factor: number) => {
-    if (factor >= 8) return 'text-green-600';
-    if (factor >= 6) return 'text-blue-600';
-    if (factor >= 4) return 'text-yellow-600';
-    return 'text-red-600';
+    if (factor >= 8) return 'text-primary';
+    if (factor >= 6) return 'text-foreground';
+    if (factor >= 4) return 'text-muted-foreground';
+    return 'text-destructive';
   };
 
   const getFactorBadgeColor = (factor: number) => {
-    if (factor >= 8) return 'bg-green-100 text-green-800';
-    if (factor >= 6) return 'bg-blue-100 text-blue-800';
-    if (factor >= 4) return 'bg-yellow-100 text-yellow-800';
-    return 'bg-red-100 text-red-800';
+    if (factor >= 8) return 'bg-primary/15 text-primary';
+    if (factor >= 6) return 'bg-primary/10 text-primary';
+    if (factor >= 4) return 'bg-muted text-muted-foreground';
+    return 'bg-destructive/10 text-destructive';
   };
 
   const getScoreColor = (score: string) => {
     const lowerScore = score.toLowerCase();
-    if (lowerScore.includes('high')) return 'border-green-200 text-green-800 bg-green-50';
-    if (lowerScore.includes('medium')) return 'border-blue-200 text-blue-800 bg-blue-50';
-    if (lowerScore.includes('low')) return 'border-yellow-200 text-yellow-800 bg-yellow-50';
-    return 'border-gray-200 text-gray-600 bg-gray-50';
+    if (lowerScore.includes('high')) return 'border-primary/40 text-primary bg-primary/10';
+    if (lowerScore.includes('medium')) return 'border-primary/30 text-primary bg-primary/5';
+    if (lowerScore.includes('low')) return 'border-amber-500/30 text-amber-600 bg-amber-500/10';
+    return 'border-border text-muted-foreground bg-muted/40';
   };
 
   const filteredResumes = resumeData.filter(resume => {
@@ -248,8 +248,8 @@ const Dashboard = () => {
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
           <Card>
             <CardContent className="flex items-center p-6">
-              <div className="flex items-center justify-center w-12 h-12 bg-blue-100 rounded-lg mr-4">
-                <FileText className="h-6 w-6 text-blue-600" />
+              <div className="flex items-center justify-center w-12 h-12 bg-primary/10 rounded-lg mr-4">
+                <FileText className="h-6 w-6 text-primary" />
               </div>
               <div>
                 <p className="text-sm font-medium text-muted-foreground">Total Resumes</p>
@@ -260,8 +260,8 @@ const Dashboard = () => {
 
           <Card>
             <CardContent className="flex items-center p-6">
-              <div className="flex items-center justify-center w-12 h-12 bg-green-100 rounded-lg mr-4">
-                <CheckCircle className="h-6 w-6 text-green-600" />
+              <div className="flex items-center justify-center w-12 h-12 bg-primary/10 rounded-lg mr-4">
+                <CheckCircle className="h-6 w-6 text-primary" />
               </div>
               <div>
                 <p className="text-sm font-medium text-muted-foreground">High Scores (8+)</p>
@@ -274,8 +274,8 @@ const Dashboard = () => {
 
           <Card>
             <CardContent className="flex items-center p-6">
-              <div className="flex items-center justify-center w-12 h-12 bg-yellow-100 rounded-lg mr-4">
-                <AlertTriangle className="h-6 w-6 text-yellow-600" />
+              <div className="flex items-center justify-center w-12 h-12 bg-muted rounded-lg mr-4">
+                <AlertTriangle className="h-6 w-6 text-muted-foreground" />
               </div>
               <div>
                 <p className="text-sm font-medium text-muted-foreground">High Risk</p>
@@ -288,8 +288,8 @@ const Dashboard = () => {
 
           <Card>
             <CardContent className="flex items-center p-6">
-              <div className="flex items-center justify-center w-12 h-12 bg-purple-100 rounded-lg mr-4">
-                <TrendingUp className="h-6 w-6 text-purple-600" />
+              <div className="flex items-center justify-center w-12 h-12 bg-primary/10 rounded-lg mr-4">
+                <TrendingUp className="h-6 w-6 text-primary" />
               </div>
               <div>
                 <p className="text-sm font-medium text-muted-foreground">Avg Overall Score</p>
@@ -369,13 +369,13 @@ const Dashboard = () => {
                 {/* Strengths & Weaknesses */}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
-                    <p className="text-sm font-medium text-green-700 mb-3">Strengths</p>
-                    <div className="bg-green-50 p-3 rounded-lg">
+                    <p className="text-sm font-medium text-primary mb-3">Strengths</p>
+                    <div className="bg-primary/10 p-3 rounded-lg">
                       {resume.strengths && resume.strengths.length > 0 ? (
                         <ul className="text-sm text-muted-foreground space-y-1">
                           {resume.strengths.map((strength, index) => (
                             <li key={index} className="flex items-start">
-                              <span className="text-green-600 mr-2">•</span>
+                              <span className="text-primary mr-2">•</span>
                               <span>{strength}</span>
                             </li>
                           ))}
@@ -386,13 +386,13 @@ const Dashboard = () => {
                     </div>
                   </div>
                   <div>
-                    <p className="text-sm font-medium text-red-700 mb-3">Weaknesses</p>
-                    <div className="bg-red-50 p-3 rounded-lg">
+                    <p className="text-sm font-medium text-destructive mb-3">Weaknesses</p>
+                    <div className="bg-destructive/10 p-3 rounded-lg">
                       {resume.weaknesses && resume.weaknesses.length > 0 ? (
                         <ul className="text-sm text-muted-foreground space-y-1">
                           {resume.weaknesses.map((weakness, index) => (
                             <li key={index} className="flex items-start">
-                              <span className="text-red-600 mr-2">•</span>
+                              <span className="text-destructive mr-2">•</span>
                               <span>{weakness}</span>
                             </li>
                           ))}
@@ -439,7 +439,7 @@ const Dashboard = () => {
                     size="sm" 
                     variant="outline" 
                     onClick={() => handleDelete(resume.id!)}
-                    className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                    className="text-destructive hover:text-destructive hover:bg-destructive/10"
                   >
                     <Trash2 className="h-4 w-4" />
                   </Button>

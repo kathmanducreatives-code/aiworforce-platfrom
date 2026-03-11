@@ -113,7 +113,7 @@ const ClientMetrics = () => {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-50 to-white">
+      <div className="min-h-screen bg-background">
         <div className="max-w-7xl mx-auto px-6 py-12">
           <Skeleton className="h-12 w-64 mb-8" />
           <div className="grid gap-6 md:grid-cols-4 mb-8">
@@ -128,7 +128,7 @@ const ClientMetrics = () => {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-white">
+    <div className="min-h-screen bg-background">
       <div className="max-w-7xl mx-auto px-6 py-12">
         {/* Header */}
         <div className="mb-12 animate-fade-in-down">
@@ -139,16 +139,16 @@ const ClientMetrics = () => {
                   variant="ghost"
                   size="sm"
                   onClick={() => navigate('/data-dashboard')}
-                  className="gap-2 hover:bg-cyan-50 hover:text-cyan-700"
+                  className="gap-2 hover:bg-muted hover:text-foreground"
                 >
                   <ArrowLeft className="h-4 w-4" />
                   Back to Analytics
                 </Button>
               </div>
-              <h1 className="text-4xl font-bold bg-gradient-to-r from-slate-800 to-slate-600 bg-clip-text text-transparent mb-3">
+              <h1 className="text-4xl font-bold bg-gradient-to-r from-foreground to-muted-foreground bg-clip-text text-transparent mb-3">
                 Client-Centric Metrics
               </h1>
-              <p className="text-slate-600 text-lg font-medium">
+              <p className="text-muted-foreground text-lg font-medium">
                 Track performance and outcomes across all client relationships
               </p>
             </div>
@@ -165,92 +165,92 @@ const ClientMetrics = () => {
 
         {/* Top KPI Cards */}
         <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4 mb-8">
-          <Card className="backdrop-blur-sm bg-white/80 border border-slate-200/50 shadow-lg hover:shadow-xl transition-all duration-300 rounded-2xl overflow-hidden hover-lift animate-fade-in-up group">
+          <Card className="backdrop-blur-sm bg-card/90 border border-border/60 shadow-sm hover:shadow-md transition-all duration-300 rounded-2xl overflow-hidden hover-lift animate-fade-in-up group">
             <CardHeader className="pb-3">
-              <CardTitle className="text-sm font-medium text-slate-600 flex items-center gap-2">
-                <div className="p-2 bg-emerald-50 rounded-lg group-hover:scale-110 transition-transform">
-                  <Award className="h-4 w-4 text-emerald-500" />
+              <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
+                <div className="p-2 bg-primary/10 rounded-lg group-hover:scale-110 transition-transform">
+                  <Award className="h-4 w-4 text-primary" />
                 </div>
                 Total Placements
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="text-3xl font-bold bg-gradient-to-r from-emerald-600 to-emerald-500 bg-clip-text text-transparent mb-2">
+              <div className="text-3xl font-bold text-primary mb-2">
                 {totalPlacements}
               </div>
-              <p className="text-sm text-slate-500">Across {clients.length} client{clients.length !== 1 ? 's' : ''}</p>
+              <p className="text-sm text-muted-foreground">Across {clients.length} client{clients.length !== 1 ? 's' : ''}</p>
               <div className="mt-3">
-                <Progress 
-                  value={clients.length > 0 ? (totalPlacements / (clients.length * 15)) * 100 : 0} 
-                  className="h-2" 
+                <Progress
+                  value={clients.length > 0 ? (totalPlacements / (clients.length * 15)) * 100 : 0}
+                  className="h-2"
                 />
               </div>
             </CardContent>
           </Card>
 
-          <Card className="backdrop-blur-sm bg-white/80 border border-slate-200/50 shadow-lg hover:shadow-xl transition-all duration-300 rounded-2xl overflow-hidden hover-lift animate-fade-in-up animate-delay-100 group">
+          <Card className="backdrop-blur-sm bg-card/90 border border-border/60 shadow-sm hover:shadow-md transition-all duration-300 rounded-2xl overflow-hidden hover-lift animate-fade-in-up animate-delay-100 group">
             <CardHeader className="pb-3">
-              <CardTitle className="text-sm font-medium text-slate-600 flex items-center gap-2">
-                <div className="p-2 bg-cyan-50 rounded-lg group-hover:scale-110 transition-transform">
-                  <Clock className="h-4 w-4 text-cyan-500" />
+              <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
+                <div className="p-2 bg-primary/10 rounded-lg group-hover:scale-110 transition-transform">
+                  <Clock className="h-4 w-4 text-primary" />
                 </div>
                 Avg. Time-to-Fill
               </CardTitle>
             </CardHeader>
             <CardContent>
               <div className="flex items-baseline gap-2 mb-2">
-                <div className="text-3xl font-bold bg-gradient-to-r from-cyan-600 to-cyan-500 bg-clip-text text-transparent">
+                <div className="text-3xl font-bold text-primary">
                   {avgTimeToFillAll}
                 </div>
-                <span className="text-sm text-slate-500">days</span>
+                <span className="text-sm text-muted-foreground">days</span>
               </div>
-              <p className="text-sm text-slate-500 mb-2">Opening to placement</p>
-              <div className="flex items-center gap-2 px-3 py-1.5 bg-emerald-50 rounded-lg">
-                <TrendingUp className="h-3.5 w-3.5 text-emerald-600" />
-                <span className="text-sm font-medium text-emerald-600">Fast turnaround</span>
+              <p className="text-sm text-muted-foreground mb-2">Opening to placement</p>
+              <div className="flex items-center gap-2 px-3 py-1.5 bg-primary/10 rounded-lg">
+                <TrendingUp className="h-3.5 w-3.5 text-primary" />
+                <span className="text-sm font-medium text-primary">Fast turnaround</span>
               </div>
             </CardContent>
           </Card>
 
-          <Card className="backdrop-blur-sm bg-white/80 border border-slate-200/50 shadow-lg hover:shadow-xl transition-all duration-300 rounded-2xl overflow-hidden hover-lift animate-fade-in-up animate-delay-200 group">
+          <Card className="backdrop-blur-sm bg-card/90 border border-border/60 shadow-sm hover:shadow-md transition-all duration-300 rounded-2xl overflow-hidden hover-lift animate-fade-in-up animate-delay-200 group">
             <CardHeader className="pb-3">
-              <CardTitle className="text-sm font-medium text-slate-600 flex items-center gap-2">
-                <div className="p-2 bg-purple-50 rounded-lg group-hover:scale-110 transition-transform">
-                  <DollarSign className="h-4 w-4 text-purple-500" />
+              <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
+                <div className="p-2 bg-primary/10 rounded-lg group-hover:scale-110 transition-transform">
+                  <DollarSign className="h-4 w-4 text-primary" />
                 </div>
                 Avg. Cost Per Hire
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="text-3xl font-bold bg-gradient-to-r from-purple-600 to-purple-500 bg-clip-text text-transparent mb-2">
+              <div className="text-3xl font-bold text-primary mb-2">
                 ${avgCostPerHire > 0 ? avgCostPerHire.toLocaleString() : 'N/A'}
               </div>
-              <p className="text-sm text-slate-500">Per placement</p>
+              <p className="text-sm text-muted-foreground">Per placement</p>
               {avgCostPerHire === 0 && (
-                <Badge className="mt-3 bg-slate-100 text-slate-600">
+                <Badge className="mt-3 bg-muted text-muted-foreground hover:bg-muted/80">
                   No data yet
                 </Badge>
               )}
             </CardContent>
           </Card>
 
-          <Card className="backdrop-blur-sm bg-white/80 border border-slate-200/50 shadow-lg hover:shadow-xl transition-all duration-300 rounded-2xl overflow-hidden hover-lift animate-fade-in-up animate-delay-300 group">
+          <Card className="backdrop-blur-sm bg-card/90 border border-border/60 shadow-sm hover:shadow-md transition-all duration-300 rounded-2xl overflow-hidden hover-lift animate-fade-in-up animate-delay-300 group">
             <CardHeader className="pb-3">
-              <CardTitle className="text-sm font-medium text-slate-600 flex items-center gap-2">
-                <div className="p-2 bg-emerald-50 rounded-lg group-hover:scale-110 transition-transform">
-                  <Building2 className="h-4 w-4 text-emerald-500" />
+              <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
+                <div className="p-2 bg-primary/10 rounded-lg group-hover:scale-110 transition-transform">
+                  <Building2 className="h-4 w-4 text-primary" />
                 </div>
                 Active Positions
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="text-3xl font-bold bg-gradient-to-r from-emerald-600 to-emerald-500 bg-clip-text text-transparent mb-2">
+              <div className="text-3xl font-bold text-primary mb-2">
                 {totalActivePositions}
               </div>
-              <p className="text-sm text-slate-500 mb-2">Currently open</p>
-              <div className="flex items-center gap-2 px-3 py-1.5 bg-emerald-50 rounded-lg">
-                <Building2 className="h-3.5 w-3.5 text-emerald-600" />
-                <span className="text-sm font-medium text-emerald-600">
+              <p className="text-sm text-muted-foreground mb-2">Currently open</p>
+              <div className="flex items-center gap-2 px-3 py-1.5 bg-primary/10 rounded-lg">
+                <Building2 className="h-3.5 w-3.5 text-primary" />
+                <span className="text-sm font-medium text-primary">
                   {clients.filter(c => c.activePositions > 0).length} clients hiring
                 </span>
               </div>
@@ -259,10 +259,10 @@ const ClientMetrics = () => {
         </div>
 
         {/* Client Performance Table */}
-        <Card className="backdrop-blur-sm bg-white/80 border border-slate-200/50 shadow-lg rounded-2xl animate-fade-in-up animate-delay-200">
+        <Card className="backdrop-blur-sm bg-card/90 border border-border/60 shadow-sm rounded-2xl animate-fade-in-up animate-delay-200">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
-              <Building2 className="h-5 w-5 text-cyan-500" />
+              <Building2 className="h-5 w-5 text-primary" />
               Client Performance Overview
             </CardTitle>
             <CardDescription>Click on any client to view detailed breakdown</CardDescription>
@@ -283,50 +283,50 @@ const ClientMetrics = () => {
                 </TableHeader>
                 <TableBody>
                   {clients.map((client) => (
-                    <TableRow 
-                      key={client.id} 
-                      className="hover:bg-slate-50 cursor-pointer transition-colors group"
+                    <TableRow
+                      key={client.id}
+                      className="hover:bg-muted/40 cursor-pointer transition-colors group"
                       onClick={() => navigate(`/client/${client.id}`)}
                     >
                       <TableCell className="font-medium">
                         <div className="flex items-center gap-2">
-                          <div className="p-2 bg-slate-100 rounded-lg group-hover:bg-cyan-50 transition-colors">
-                            <Building2 className="h-4 w-4 text-slate-400 group-hover:text-cyan-500" />
+                          <div className="p-2 bg-muted rounded-lg group-hover:bg-primary/10 transition-colors">
+                            <Building2 className="h-4 w-4 text-muted-foreground group-hover:text-primary" />
                           </div>
-                          <span className="group-hover:text-cyan-600 transition-colors">{client.clientName}</span>
+                          <span className="group-hover:text-primary transition-colors">{client.clientName}</span>
                         </div>
                       </TableCell>
                       <TableCell className="text-center">
-                        <span className="font-semibold text-emerald-600">{client.placements}</span>
+                        <span className="font-semibold text-primary">{client.placements}</span>
                       </TableCell>
                       <TableCell className="text-center">
                         <div className="flex items-center justify-center gap-1">
-                          <Clock className="h-3.5 w-3.5 text-slate-400" />
-                          <span className={client.avgTimeToFill <= 21 && client.avgTimeToFill > 0 ? "text-emerald-600 font-medium" : "text-slate-600"}>
+                          <Clock className="h-3.5 w-3.5 text-muted-foreground" />
+                          <span className={client.avgTimeToFill <= 21 && client.avgTimeToFill > 0 ? "text-primary font-medium" : "text-muted-foreground"}>
                             {client.avgTimeToFill > 0 ? `${client.avgTimeToFill} days` : 'N/A'}
                           </span>
                         </div>
                       </TableCell>
                       <TableCell className="text-center">
-                        <span className="font-medium text-slate-700">
+                        <span className="font-medium text-foreground">
                           {client.costPerHire > 0 ? `$${client.costPerHire.toLocaleString()}` : 'N/A'}
                         </span>
                       </TableCell>
                       <TableCell className="text-center">
-                        <Badge variant="outline" className={client.activePositions > 0 ? "border-emerald-300 text-emerald-700 bg-emerald-50" : ""}>
+                        <Badge variant="outline" className={client.activePositions > 0 ? "border-primary/40 text-primary bg-primary/10" : ""}>
                           {client.activePositions}
                         </Badge>
                       </TableCell>
                       <TableCell className="text-center">
-                        <Badge 
+                        <Badge
                           className={
                             client.avgTimeToFill <= 21 && client.placements >= 10
-                              ? "bg-emerald-100 text-emerald-700 hover:bg-emerald-200"
+                              ? "bg-primary/20 text-primary hover:bg-primary/25"
                               : client.placements >= 8
-                              ? "bg-cyan-100 text-cyan-700 hover:bg-cyan-200"
+                              ? "bg-primary/15 text-primary hover:bg-primary/20"
                               : client.placements > 0
-                              ? "bg-emerald-100 text-emerald-700 hover:bg-emerald-200"
-                              : "bg-slate-100 text-slate-700 hover:bg-slate-200"
+                              ? "bg-primary/10 text-primary hover:bg-primary/15"
+                              : "bg-muted text-muted-foreground hover:bg-muted/80"
                           }
                         >
                           {client.avgTimeToFill <= 21 && client.placements >= 10
@@ -357,8 +357,8 @@ const ClientMetrics = () => {
                 </TableBody>
               </Table>
             ) : (
-              <div className="text-center py-12 text-slate-500">
-                <Building2 className="h-12 w-12 mx-auto mb-3 text-slate-300" />
+              <div className="text-center py-12 text-muted-foreground">
+                <Building2 className="h-12 w-12 mx-auto mb-3 text-muted-foreground/60" />
                 <p className="mb-4">No clients found</p>
                 <p className="text-sm">Add clients to start tracking metrics</p>
               </div>
@@ -368,10 +368,10 @@ const ClientMetrics = () => {
 
         {/* Additional Insights */}
         <div className="grid gap-6 lg:grid-cols-2 mt-8">
-          <Card className="backdrop-blur-sm bg-white/80 border border-slate-200/50 shadow-lg rounded-2xl">
+          <Card className="backdrop-blur-sm bg-card/90 border border-border/60 shadow-sm rounded-2xl">
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
-                <TrendingUp className="h-5 w-5 text-emerald-500" />
+                <TrendingUp className="h-5 w-5 text-primary" />
                 Top Performing Clients
               </CardTitle>
               <CardDescription>Based on total placements</CardDescription>
@@ -382,18 +382,18 @@ const ClientMetrics = () => {
                   .sort((a, b) => b.placements - a.placements)
                   .slice(0, 3)
                   .map((client, index) => (
-                    <div key={index} className="flex items-center justify-between p-3 bg-slate-50 rounded-lg">
+                    <div key={index} className="flex items-center justify-between p-3 bg-muted/40 rounded-lg">
                       <div className="flex items-center gap-3">
                         <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-sm ${
-                          index === 0 ? 'bg-amber-100 text-amber-700' :
-                          index === 1 ? 'bg-slate-200 text-slate-700' :
-                          'bg-orange-100 text-orange-700'
+                          index === 0 ? 'bg-amber-500/15 text-amber-500' :
+                          index === 1 ? 'bg-muted text-foreground' :
+                          'bg-orange-500/15 text-orange-500'
                         }`}>
                           {index + 1}
                         </div>
-                        <span className="text-sm font-medium text-slate-700">{client.clientName}</span>
+                        <span className="text-sm font-medium text-foreground">{client.clientName}</span>
                       </div>
-                      <Badge className="bg-emerald-100 text-emerald-700 hover:bg-emerald-200">
+                      <Badge className="bg-primary/15 text-primary hover:bg-primary/20">
                         {client.placements} placements
                       </Badge>
                     </div>
@@ -402,10 +402,10 @@ const ClientMetrics = () => {
             </CardContent>
           </Card>
 
-          <Card className="backdrop-blur-sm bg-white/80 border border-slate-200/50 shadow-lg rounded-2xl">
+          <Card className="backdrop-blur-sm bg-card/90 border border-border/60 shadow-sm rounded-2xl">
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
-                <Clock className="h-5 w-5 text-cyan-500" />
+                <Clock className="h-5 w-5 text-primary" />
                 Fastest Time-to-Fill
               </CardTitle>
               <CardDescription>Most efficient placement processes</CardDescription>
@@ -416,11 +416,11 @@ const ClientMetrics = () => {
                   .sort((a, b) => a.avgTimeToFill - b.avgTimeToFill)
                   .slice(0, 3)
                   .map((client, index) => (
-                    <div key={index} className="flex items-center justify-between p-3 bg-slate-50 rounded-lg">
-                      <span className="text-sm font-medium text-slate-700">{client.clientName}</span>
+                    <div key={index} className="flex items-center justify-between p-3 bg-muted/40 rounded-lg">
+                      <span className="text-sm font-medium text-foreground">{client.clientName}</span>
                       <div className="flex items-center gap-2">
-                        <Clock className="h-4 w-4 text-cyan-500" />
-                        <span className="text-sm font-semibold text-cyan-600">{client.avgTimeToFill} days</span>
+                        <Clock className="h-4 w-4 text-primary" />
+                        <span className="text-sm font-semibold text-primary">{client.avgTimeToFill} days</span>
                       </div>
                     </div>
                   ))}

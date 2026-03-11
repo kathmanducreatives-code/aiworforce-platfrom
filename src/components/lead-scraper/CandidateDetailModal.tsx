@@ -73,21 +73,21 @@ export const CandidateDetailModal = ({
 
     return (
         <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
-            <DialogContent className="max-w-[95vw] w-full h-[95vh] p-0 gap-0 bg-[#0B0B0B] border-[#00FF85]/20 text-foreground overflow-hidden rounded-xl shadow-[0_0_50px_rgba(0,0,0,0.8)] focus-visible:outline-none">
+            <DialogContent className="max-w-[95vw] w-full h-[95vh] p-0 gap-0 bg-background border-border text-foreground overflow-hidden rounded-xl shadow-2xl focus-visible:outline-none">
 
                 {/* 1. Header: Sticky Top Bar */}
-                <div className="flex items-center justify-between px-6 py-4 border-b border-white/10 bg-[#0B0B0B]/95 backdrop-blur-md z-50 sticky top-0 h-[80px]">
+                <div className="flex items-center justify-between px-6 py-4 border-b border-border bg-card/95 backdrop-blur-md z-50 sticky top-0 h-[80px]">
                     <div className="flex items-center gap-4">
                         <Button
                             variant="ghost"
                             size="icon"
                             onClick={onClose}
-                            className="rounded-full hover:bg-white/10 text-muted-foreground hover:text-white"
+                            className="rounded-full hover:bg-muted text-muted-foreground hover:text-foreground"
                         >
                             <X className="w-5 h-5" />
                         </Button>
                         <div>
-                            <h2 className="text-xl font-bold tracking-tight text-white flex items-center gap-3">
+                            <h2 className="text-xl font-bold tracking-tight text-foreground flex items-center gap-3">
                                 {lead.candidate_name}
                                 {lead.match_score && (
                                     <Badge className="bg-[#00FF85]/10 text-[#00FF85] border-[#00FF85]/20 hover:bg-[#00FF85]/20 px-2 py-0.5 text-xs font-mono">
@@ -100,8 +100,8 @@ export const CandidateDetailModal = ({
                                 {lead.job_title || "No Title"}
                                 {lead.company && (
                                     <>
-                                        <span className="w-1 h-1 rounded-full bg-white/20" />
-                                        <span className="text-white/60">{lead.company}</span>
+                                        <span className="w-1 h-1 rounded-full bg-muted-foreground/40" />
+                                        <span className="text-muted-foreground">{lead.company}</span>
                                     </>
                                 )}
                             </p>
@@ -114,7 +114,7 @@ export const CandidateDetailModal = ({
                             size="sm"
                             onClick={onPrev}
                             disabled={!hasPrev}
-                            className="bg-black border-white/10 text-white hover:bg-white/5 disabled:opacity-30 rounded-lg"
+                            className="bg-card border-border text-foreground hover:bg-muted disabled:opacity-30 rounded-lg"
                         >
                             <ChevronLeft className="w-4 h-4 mr-1" />
                             Prev
@@ -124,7 +124,7 @@ export const CandidateDetailModal = ({
                             size="sm"
                             onClick={onNext}
                             disabled={!hasNext}
-                            className="bg-black border-white/10 text-white hover:bg-white/5 disabled:opacity-30 rounded-lg"
+                            className="bg-card border-border text-foreground hover:bg-muted disabled:opacity-30 rounded-lg"
                         >
                             Next
                             <ChevronRight className="w-4 h-4 ml-1" />
@@ -136,7 +136,7 @@ export const CandidateDetailModal = ({
                 <div className="flex h-[calc(95vh-80px)] overflow-hidden">
 
                     {/* Left Column: Profile (30%) */}
-                    <div className="w-[350px] flex-shrink-0 border-r border-white/10 bg-black/20 p-6 space-y-8 overflow-y-auto">
+                    <div className="w-[350px] flex-shrink-0 border-r border-border bg-card/40 p-6 space-y-8 overflow-y-auto">
 
                         {/* Avatar */}
                         <div className="flex flex-col items-center text-center animate-in slide-in-from-left-4 duration-500">
@@ -174,7 +174,7 @@ export const CandidateDetailModal = ({
                                 {lead.contact_email && (
                                     <Button
                                         variant="outline"
-                                        className="flex-1 border-white/10 hover:bg-white/5 text-white rounded-xl"
+                                        className="flex-1 border-border hover:bg-muted text-foreground rounded-xl"
                                         onClick={() => window.location.href = `mailto:${lead.contact_email}`}
                                     >
                                         <Mail className="w-4 h-4 mr-2" />
@@ -184,7 +184,7 @@ export const CandidateDetailModal = ({
                             </div>
                         </div>
 
-                        <Separator className="bg-white/10" />
+                        <Separator className="bg-border" />
 
                         {/* Summary / Headline */}
                         <div className="space-y-3">
@@ -192,7 +192,7 @@ export const CandidateDetailModal = ({
                                 <Brain className="w-3.5 h-3.5" />
                                 About
                             </h3>
-                            <p className="text-sm leading-relaxed text-white/80">
+                            <p className="text-sm leading-relaxed text-muted-foreground">
                                 {lead.summary || lead.headline || "No summary available."}
                             </p>
                         </div>
@@ -206,11 +206,11 @@ export const CandidateDetailModal = ({
                             <section className="space-y-4">
                                 <div className="flex items-center gap-2 mb-2">
                                     <Sparkles className="w-5 h-5 text-[#00FF85]" />
-                                    <h3 className="text-lg font-semibold text-white">Why this match?</h3>
+                                    <h3 className="text-lg font-semibold text-foreground">Why this match?</h3>
                                 </div>
-                                <div className="bg-[#00FF85]/5 border border-[#00FF85]/20 rounded-xl p-6 relative overflow-hidden">
-                                    <div className="absolute top-0 right-0 w-32 h-32 bg-[#00FF85]/10 blur-[60px] rounded-full pointer-events-none" />
-                                    <p className="text-base text-white/90 leading-relaxed relative z-10">
+                                <div className="bg-primary/5 border border-primary/20 rounded-xl p-6 relative overflow-hidden">
+                                    <div className="absolute top-0 right-0 w-32 h-32 bg-primary/10 blur-[60px] rounded-full pointer-events-none" />
+                                    <p className="text-base text-foreground leading-relaxed relative z-10">
                                         {lead.match_reason ||
                                             "This candidate was selected based on their strong alignment with your required job titles and industry experience. Their profile suggests a high probability of fit for the role."}
                                     </p>
@@ -220,8 +220,8 @@ export const CandidateDetailModal = ({
                             {/* 2. Skills Cloud */}
                             {lead.skills && lead.skills.length > 0 && (
                                 <section className="space-y-4">
-                                    <h3 className="text-lg font-semibold text-white flex items-center gap-2">
-                                        <Brain className="w-5 h-5 text-purple-400" />
+                                    <h3 className="text-lg font-semibold text-foreground flex items-center gap-2">
+                                        <Brain className="w-5 h-5 text-primary" />
                                         Top Skills
                                     </h3>
                                     <div className="flex flex-wrap gap-2">
@@ -229,7 +229,7 @@ export const CandidateDetailModal = ({
                                             <Badge
                                                 key={i}
                                                 variant="secondary"
-                                                className="bg-white/5 hover:bg-white/10 text-white/80 border-white/5 py-1.5 px-3 rounded-lg text-sm"
+                                                className="bg-muted/70 hover:bg-muted text-foreground border-border/60 py-1.5 px-3 rounded-lg text-sm"
                                             >
                                                 {skill}
                                             </Badge>
@@ -240,12 +240,12 @@ export const CandidateDetailModal = ({
 
                             {/* 3. Work History Timeline */}
                             <section className="space-y-6">
-                                <h3 className="text-lg font-semibold text-white flex items-center gap-2">
-                                    <Briefcase className="w-5 h-5 text-blue-400" />
+                                <h3 className="text-lg font-semibold text-foreground flex items-center gap-2">
+                                    <Briefcase className="w-5 h-5 text-primary" />
                                     Experience
                                 </h3>
 
-                                <div className="space-y-6 relative pl-4 border-l border-white/10 ml-2">
+                                <div className="space-y-6 relative pl-4 border-l border-border ml-2">
                                     {/* Mock work history if none exists for demo */}
                                     {(lead.work_history && lead.work_history.length > 0 ? lead.work_history : [
                                         {
@@ -257,18 +257,18 @@ export const CandidateDetailModal = ({
                                     ]).map((job: any, i: number) => (
                                         <div key={i} className="relative pl-6">
                                             {/* Timeline dot */}
-                                            <div className="absolute -left-[21px] top-1.5 w-3 h-3 rounded-full bg-[#0B0B0B] border-2 border-white/20 group-hover:border-[#00FF85] transition-colors" />
+                                            <div className="absolute -left-[21px] top-1.5 w-3 h-3 rounded-full bg-card border-2 border-border group-hover:border-primary transition-colors" />
 
-                                            <div className="group rounded-xl p-4 hover:bg-white/5 transition-colors border border-transparent hover:border-white/5">
-                                                <h4 className="text-base font-semibold text-white">{job.title}</h4>
+                                            <div className="group rounded-xl p-4 hover:bg-muted/40 transition-colors border border-transparent hover:border-border">
+                                                <h4 className="text-base font-semibold text-foreground">{job.title}</h4>
                                                 <div className="flex items-center gap-2 text-sm text-muted-foreground mt-1 mb-2">
                                                     <Building2 className="w-3.5 h-3.5" />
                                                     <span>{job.company}</span>
-                                                    <span className="text-white/20">•</span>
+                                                    <span className="text-muted-foreground/40">•</span>
                                                     <span>{job.date || job.duration}</span>
                                                 </div>
                                                 {job.description && (
-                                                    <p className="text-sm text-white/60 leading-relaxed">
+                                                    <p className="text-sm text-muted-foreground leading-relaxed">
                                                         {job.description}
                                                     </p>
                                                 )}

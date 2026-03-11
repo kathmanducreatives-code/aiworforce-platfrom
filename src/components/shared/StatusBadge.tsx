@@ -14,9 +14,9 @@ const statusConfig: Record<string, { bg: string; text: string; dot: string }> = 
     sent: { bg: 'bg-blue-500/10', text: 'text-blue-700 dark:text-blue-400', dot: 'bg-blue-500' },
     scheduled: { bg: 'bg-blue-500/10', text: 'text-blue-700 dark:text-blue-400', dot: 'bg-blue-500' },
     pending: { bg: 'bg-amber-500/10', text: 'text-amber-700 dark:text-amber-400', dot: 'bg-amber-500' },
-    draft: { bg: 'bg-slate-500/10', text: 'text-slate-600 dark:text-slate-400', dot: 'bg-slate-400' },
-    paused: { bg: 'bg-slate-500/10', text: 'text-slate-600 dark:text-slate-400', dot: 'bg-slate-400' },
-    closed: { bg: 'bg-slate-500/10', text: 'text-slate-500 dark:text-slate-500', dot: 'bg-slate-400' },
+    draft: { bg: 'bg-muted/70', text: 'text-muted-foreground', dot: 'bg-muted-foreground' },
+    paused: { bg: 'bg-muted/70', text: 'text-muted-foreground', dot: 'bg-muted-foreground' },
+    closed: { bg: 'bg-muted/70', text: 'text-muted-foreground', dot: 'bg-muted-foreground' },
     error: { bg: 'bg-red-500/10', text: 'text-red-700 dark:text-red-400', dot: 'bg-red-500' },
 };
 

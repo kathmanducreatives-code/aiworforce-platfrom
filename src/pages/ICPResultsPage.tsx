@@ -500,7 +500,7 @@ const ICPResultsPage = () => {
                                                 { key: 'strong', label: 'Strong', emoji: '💪', cls: 'border-emerald-500/40 text-emerald-300 hover:bg-emerald-500/10' },
                                                 { key: 'good', label: 'Good', emoji: '👍', cls: 'border-blue-500/40 text-blue-300 hover:bg-blue-500/10' },
                                                 { key: 'potential', label: 'Potential', emoji: '👌', cls: 'border-amber-500/40 text-amber-300 hover:bg-amber-500/10' },
-                                                { key: 'fair', label: 'Fair', emoji: '🤝', cls: 'border-gray-500/40 text-gray-300 hover:bg-gray-500/10' },
+                                                { key: 'fair', label: 'Fair', emoji: '🤝', cls: 'border-border/60 text-muted-foreground hover:bg-muted/40' },
                                             ].map(chip => (
                                                 <button
                                                     key={chip.key}
@@ -626,7 +626,7 @@ const ICPResultsPage = () => {
                                                 { key: 'strong', label: 'Strong', emoji: '💪', cls: 'border-emerald-500/40 text-emerald-300 hover:bg-emerald-500/10' },
                                                 { key: 'good', label: 'Good', emoji: '👍', cls: 'border-blue-500/40 text-blue-300 hover:bg-blue-500/10' },
                                                 { key: 'potential', label: 'Potential', emoji: '👌', cls: 'border-amber-500/40 text-amber-300 hover:bg-amber-500/10' },
-                                                { key: 'fair', label: 'Fair', emoji: '🤝', cls: 'border-gray-500/40 text-gray-300 hover:bg-gray-500/10' },
+                                                { key: 'fair', label: 'Fair', emoji: '🤝', cls: 'border-border/60 text-muted-foreground hover:bg-muted/40' },
                                             ].map(chip => (
                                                 <button
                                                     key={chip.key}
