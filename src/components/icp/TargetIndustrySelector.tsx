@@ -612,12 +612,12 @@ const ToggleGroup = ({
   onExclude: () => void;
   onNeutral: () => void;
 }) => {
-  return <div className="flex items-center bg-white rounded-md border border-gray-200 p-0.5 h-6 shadow-sm">
-    <button type="button" onClick={status === 'included' ? onNeutral : onInclude} className={cn("h-full px-1.5 rounded-sm text-[10px] font-bold transition-all flex items-center gap-1", status === 'included' ? "bg-[#00FF85] text-black shadow-sm" : "text-gray-400 hover:text-emerald-600 hover:bg-emerald-50")} title="Include">
+  return <div className="flex items-center bg-card rounded-md border border-border p-0.5 h-6">
+    <button type="button" onClick={status === 'included' ? onNeutral : onInclude} className={cn("h-full px-1.5 rounded-sm text-[10px] font-bold transition-all flex items-center gap-1", status === 'included' ? "bg-primary text-white shadow-sm" : "text-muted-foreground hover:text-primary hover:bg-primary/10")} title="Include">
       <Plus className="w-3 h-3" />
     </button>
-    <div className="w-px h-3 bg-gray-200 mx-0.5" />
-    <button type="button" onClick={status === 'excluded' ? onNeutral : onExclude} className={cn("h-full px-1.5 rounded-sm text-[10px] font-bold transition-all flex items-center gap-1", status === 'excluded' ? "bg-red-500 text-white shadow-sm" : "text-gray-400 hover:text-red-600 hover:bg-red-50")} title="Exclude">
+    <div className="w-px h-3 bg-border mx-0.5" />
+    <button type="button" onClick={status === 'excluded' ? onNeutral : onExclude} className={cn("h-full px-1.5 rounded-sm text-[10px] font-bold transition-all flex items-center gap-1", status === 'excluded' ? "bg-red-500 text-white shadow-sm" : "text-muted-foreground hover:text-red-400 hover:bg-red-500/10")} title="Exclude">
       <Minus className="w-3 h-3" />
     </button>
   </div>;
