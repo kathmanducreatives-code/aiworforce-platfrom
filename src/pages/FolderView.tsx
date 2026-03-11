@@ -365,7 +365,7 @@ const FolderView = () => {
                             </span>
                           ))}
                           {skills.length > 2 && (
-                            <span className="px-2 py-1 bg-slate-50 text-slate-600 rounded-lg text-xs">
+                            <span className="px-2 py-1 bg-muted text-muted-foreground rounded-lg text-xs">
                               +{skills.length - 2} more
                             </span>
                           )}
