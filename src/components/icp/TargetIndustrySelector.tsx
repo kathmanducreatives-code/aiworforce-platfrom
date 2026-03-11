@@ -542,9 +542,9 @@ export const TargetIndustrySelector = ({
                   }} transition={{
                     duration: 0.2
                   }}>
-                    <ChevronRight className="w-4 h-4 text-gray-400" />
+                    <ChevronRight className="w-4 h-4 text-muted-foreground" />
                   </motion.div>
-                  <span className="text-sm font-semibold text-gray-800">{category.category}</span>
+                  <span className="text-sm font-semibold text-foreground">{category.category}</span>
                 </div>
 
                 {/* Category Toggles */}
