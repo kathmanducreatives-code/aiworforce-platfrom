@@ -68,7 +68,7 @@ const BehavioralAnalysisCard = ({ analysis, conversationLogs }: BehavioralAnalys
     score?: number; 
     evidence: any[] 
   }) => (
-    <Card className="bg-slate-800/50 border-slate-700">
+    <Card className="bg-card border-border">
       <CardContent className="p-4 lg:pt-5">
         <div className="flex items-start justify-between gap-3 mb-3">
           <div className="flex items-center gap-2 min-w-0 flex-1">
