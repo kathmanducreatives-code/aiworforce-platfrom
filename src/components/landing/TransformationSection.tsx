@@ -130,7 +130,7 @@ export const TransformationSection = () => {
                                 </div>
                             ))}
                         </div>
-                        <div className="mt-8 font-mono text-xs text-white/40 border-t border-white/10 pt-4 bg-zinc-900/50 -mx-8 -mb-8 px-8 pb-8">
+                        <div className="mt-8 font-mono text-xs text-white/40 border-t border-white/10 pt-4 bg-card/50 -mx-8 -mb-8 px-8 pb-8">
                             COST: €82,000/year + 340 hours
                         </div>
                     </div>
