@@ -207,9 +207,9 @@ const ProductScreening = () => {
                                     <button
                                         onClick={handleGenerate}
                                         disabled={isGenerating || showToast || !title || !company}
-                                        className={`w-full h-[44px] flex items-center justify-center gap-2 text-white text-[14px] font-[600] rounded-full mt-2 transition-all duration-300 ${btnGlow ? 'bg-emerald-500 shadow-[0_0_24px_rgba(5,150,105,0.5)] scale-[1.02] text-black' :
-                                            isGenerating ? 'bg-emerald-600/50 cursor-not-allowed' :
-                                                'bg-[#00C853] hover:bg-emerald-500 hover:shadow-[0_4px_16px_rgba(5,150,105,0.4)]'
+                                        className={`w-full h-[44px] flex items-center justify-center gap-2 text-white text-[14px] font-[600] rounded-full mt-2 transition-all duration-300 ${btnGlow ? 'bg-primary shadow-[0_0_24px_rgba(16,185,129,0.5)] scale-[1.02]' :
+                                            isGenerating ? 'bg-primary/50 cursor-not-allowed' :
+                                                'bg-primary hover:bg-primary/90 hover:shadow-[0_4px_16px_rgba(16,185,129,0.4)]'
                                             }`}>
                                         {isGenerating ? <><Loader2 className="w-4 h-4 animate-spin" /> Generating AI Link...</> :
                                             showToast ? 'Link Generated!' : 'Generate Screening Link →'}
