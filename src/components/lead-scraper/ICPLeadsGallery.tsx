@@ -82,7 +82,7 @@ export const ICPLeadsGallery = ({
                     onClick={onExport}
                     variant="outline"
                     size="sm"
-                    className="bg-[#161616] border-white/10 text-white hover:bg-[#00FF85]/10 hover:border-[#00FF85]/30 hover:text-[#00FF85] transition-all"
+                    className="bg-card border-border text-foreground hover:bg-primary/10 hover:border-primary/30 hover:text-primary transition-all"
                 >
                     <Download className="w-4 h-4 mr-2" />
                     Export All
