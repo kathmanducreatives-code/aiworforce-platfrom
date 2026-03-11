@@ -282,10 +282,10 @@ const FolderView = () => {
               return (
                 <Card 
                   key={candidate.id}
-                  className={`group backdrop-blur-sm bg-white/80 border shadow-lg hover:shadow-xl hover:shadow-cyan-500/10 transition-all duration-300 hover:scale-[1.02] rounded-xl cursor-pointer ${
+                  className={`group bg-card border transition-all duration-300 hover:scale-[1.02] rounded-xl cursor-pointer ${
                     selectedCandidates.has(candidate.id!) 
-                      ? 'border-cyan-400 bg-cyan-50/50 shadow-cyan-200/50' 
-                      : 'border-slate-200/50 hover:border-cyan-200'
+                      ? 'border-primary bg-primary/5 shadow-primary' 
+                      : 'border-border hover:border-primary/30'
                   }`}
                   style={{ animationDelay: `${index * 100}ms` }}
                 >
