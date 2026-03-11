@@ -105,9 +105,9 @@ const ProductScreening = () => {
 
                     {/* RIGHT: Text + Steps */}
                     <div ref={textRef} className="flex-[45] scr-text opacity-0">
-                        <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full border border-[#00c853]/40 bg-transparent mb-6 opacity-0">
-                            <div className="w-1.5 h-1.5 rounded-full bg-[#00c853]" />
-                            <span className="font-mono text-[11px] uppercase tracking-[2px] text-emerald-400 font-semibold mt-px">AI JOB SCREENING</span>
+                        <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full border border-primary/40 bg-transparent mb-6 opacity-0">
+                            <div className="w-1.5 h-1.5 rounded-full bg-primary" />
+                            <span className="font-mono text-[11px] uppercase tracking-[2px] text-primary font-semibold mt-px">AI JOB SCREENING</span>
                         </div>
                         <h2 className="font-display font-black text-[clamp(1.8rem,4vw,3.2rem)] leading-[1.0] tracking-[-0.04em] text-white mb-5">
                             CREATE A SCREENING<br />IN 60 SECONDS
