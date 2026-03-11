@@ -229,7 +229,7 @@ const BehavioralAnalysisCard = ({ analysis, conversationLogs }: BehavioralAnalys
                         <div className={`max-w-[85%] lg:max-w-[80%] rounded-lg px-3 py-2 lg:px-4 lg:py-3 ${
                           log.role === 'user' 
                             ? 'bg-primary/20 text-foreground' 
-                            : 'bg-slate-700 text-foreground'
+                            : 'bg-muted text-foreground'
                         }`}>
                           <p className="text-xs text-muted-foreground mb-1">
                             {log.role === 'user' ? 'Candidate' : 'Interviewer'}
