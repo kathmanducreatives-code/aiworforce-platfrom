@@ -489,7 +489,7 @@ export const TargetIndustrySelector = ({
       <div className="flex flex-wrap gap-2 min-h-[32px]">
         {INDUSTRY_CATEGORIES.flatMap(c => c.industries).filter(i => includedIndustryIds.includes(i.id)).map(ind => <Badge key={ind.id} variant="secondary" className="bg-primary/10 text-primary border border-primary/30 px-2 py-1 h-8 text-sm gap-1 hover:bg-primary/20 transition-colors animate-in fade-in zoom-in-50 duration-200">
           {ind.name}
-          <button type="button" className="ml-1 rounded-full p-0.5 hover:bg-[#00FF85]/20 hover:text-emerald-900 transition-colors" onClick={e => {
+          <button type="button" className="ml-1 rounded-full p-0.5 hover:bg-primary/20 hover:text-primary transition-colors" onClick={e => {
             e.stopPropagation();
             handleNeutral(ind.id);
           }}>
