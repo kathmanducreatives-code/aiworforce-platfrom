@@ -220,8 +220,8 @@ export const CandidateDetailModal = ({
                             {/* 2. Skills Cloud */}
                             {lead.skills && lead.skills.length > 0 && (
                                 <section className="space-y-4">
-                                    <h3 className="text-lg font-semibold text-white flex items-center gap-2">
-                                        <Brain className="w-5 h-5 text-purple-400" />
+                                    <h3 className="text-lg font-semibold text-foreground flex items-center gap-2">
+                                        <Brain className="w-5 h-5 text-primary" />
                                         Top Skills
                                     </h3>
                                     <div className="flex flex-wrap gap-2">
@@ -229,7 +229,7 @@ export const CandidateDetailModal = ({
                                             <Badge
                                                 key={i}
                                                 variant="secondary"
-                                                className="bg-white/5 hover:bg-white/10 text-white/80 border-white/5 py-1.5 px-3 rounded-lg text-sm"
+                                                className="bg-muted/70 hover:bg-muted text-foreground border-border/60 py-1.5 px-3 rounded-lg text-sm"
                                             >
                                                 {skill}
                                             </Badge>
