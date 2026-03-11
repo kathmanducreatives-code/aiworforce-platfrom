@@ -317,7 +317,7 @@ const FolderView = () => {
                           <Badge className={`${getStatusColor(fitScore)} text-xs font-medium w-fit`}>
                             {status}
                           </Badge>
-                          <span className="text-xs text-slate-500 truncate">
+                          <span className="text-xs text-muted-foreground truncate">
                             {folderName}
                           </span>
                         </div>
