@@ -580,8 +580,8 @@ export const TargetIndustrySelector = ({
                       }} transition={{
                         delay: index * 0.02,
                         duration: 0.2
-                      }} className="flex items-center justify-between pl-8 pr-3 py-2 hover:bg-gray-100 transition-colors group border-b border-gray-100 last:border-0 border-dashed">
-                        <span className={cn("text-sm transition-colors", indStatus === 'included' ? "text-emerald-700 font-medium" : "text-gray-600 group-hover:text-gray-900")}>
+                      }} className="flex items-center justify-between pl-8 pr-3 py-2 hover:bg-muted transition-colors group border-b border-border last:border-0 border-dashed">
+                        <span className={cn("text-sm transition-colors", indStatus === 'included' ? "text-primary font-medium" : "text-muted-foreground group-hover:text-foreground")}>
                           {industry.name}
                         </span>
                         <ToggleGroup status={indStatus} onInclude={() => handleInclude(industry.id)} onExclude={() => handleExclude(industry.id)} onNeutral={() => handleNeutral(industry.id)} />
