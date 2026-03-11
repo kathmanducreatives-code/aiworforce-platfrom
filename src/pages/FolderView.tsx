@@ -403,8 +403,8 @@ const FolderView = () => {
                         size="sm"
                         className={`px-3 transition-all duration-200 text-xs ${
                           selectedCandidates.has(candidate.id!) 
-                            ? 'bg-cyan-500 hover:bg-cyan-600 text-white' 
-                            : 'hover:bg-cyan-50 hover:border-cyan-200 hover:text-cyan-700'
+                            ? 'bg-primary hover:bg-primary/90 text-white' 
+                            : 'hover:bg-muted hover:border-border hover:text-foreground'
                         }`}
                         onClick={(e) => {
                           e.stopPropagation();
