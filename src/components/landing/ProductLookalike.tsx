@@ -186,7 +186,7 @@ const ProductLookalike = () => {
                                 {/* Actual Cards */}
                                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 relative z-10">
                                     {candidates.map((c, i) => (
-                                        <div key={i} className="candidate-card glass rounded-lg p-3 opacity-0 hover:border-emerald-500/20 transition-all duration-300 hover:-translate-y-0.5 bg-[#111111]/80 backdrop-blur-md">
+                                        <div key={i} className="candidate-card glass rounded-lg p-3 opacity-0 hover:border-primary/20 transition-all duration-300 hover:-translate-y-0.5 bg-card/80 backdrop-blur-md">
                                             <div className="flex items-start justify-between mb-2">
                                                 <div className="flex items-center gap-2">
                                                     <div className="w-8 h-8 rounded-full bg-gradient-to-br from-emerald-500/20 to-emerald-600/10 flex items-center justify-center text-[10px] font-bold text-emerald-400 border border-emerald-500/20">
