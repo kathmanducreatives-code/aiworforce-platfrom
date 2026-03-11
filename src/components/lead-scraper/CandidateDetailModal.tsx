@@ -192,7 +192,7 @@ export const CandidateDetailModal = ({
                                 <Brain className="w-3.5 h-3.5" />
                                 About
                             </h3>
-                            <p className="text-sm leading-relaxed text-white/80">
+                            <p className="text-sm leading-relaxed text-muted-foreground">
                                 {lead.summary || lead.headline || "No summary available."}
                             </p>
                         </div>
