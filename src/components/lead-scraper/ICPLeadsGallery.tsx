@@ -51,10 +51,10 @@ export const ICPLeadsGallery = ({
     };
 
     return (
-        <div className="min-h-screen bg-[#0B0B0B] text-foreground font-sans">
+        <div className="min-h-screen bg-background text-foreground font-sans">
 
             {/* 1. Sticky Control Bar */}
-            <header className="sticky top-14 z-30 bg-[#0B0B0B]/80 backdrop-blur-md border-b border-white/10 px-6 py-3 flex items-center justify-between">
+            <header className="sticky top-14 z-30 bg-background/80 backdrop-blur-md border-b border-border px-6 py-3 flex items-center justify-between">
 
                 {/* Left: Metadata Badge */}
                 <div className="flex items-center gap-3">
