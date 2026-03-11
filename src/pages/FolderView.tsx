@@ -255,11 +255,11 @@ const FolderView = () => {
         {/* No candidates message */}
         {candidates.length === 0 ? (
           <div className="text-center py-8 sm:py-12 px-4">
-            <div className="bg-white rounded-2xl shadow-lg p-6 sm:p-8 max-w-md mx-auto">
+            <div className="bg-card rounded-2xl border border-border p-6 sm:p-8 max-w-md mx-auto">
               <div className="mb-4">
-                <Users className="h-12 w-12 sm:h-16 sm:w-16 text-slate-300 mx-auto mb-4" />
-                <h3 className="text-lg sm:text-xl font-semibold text-slate-700 mb-2">No candidates found</h3>
-                <p className="text-sm sm:text-base text-slate-500">
+                <Users className="h-12 w-12 sm:h-16 sm:w-16 text-muted-foreground/40 mx-auto mb-4" />
+                <h3 className="text-lg sm:text-xl font-semibold text-foreground mb-2">No candidates found</h3>
+                <p className="text-sm sm:text-base text-muted-foreground">
                   No candidates have been analyzed for the "{folderName}" recruitment yet.
                 </p>
               </div>
