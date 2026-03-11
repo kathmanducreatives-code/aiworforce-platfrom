@@ -197,7 +197,7 @@ export const TransformationSection = () => {
                             ))}
                         </div>
                         <div className="mt-8 font-mono text-xs border-t border-emerald-500/10 pt-6">
-                            <div className="bg-[#00C853] rounded-lg p-3 text-white shadow-[0_8px_20px_rgba(0,200,83,0.4)] flex justify-between items-center text-sm font-bold tracking-wide border border-white/20">
+                            <div className="bg-primary rounded-lg p-3 text-white shadow-[0_8px_20px_rgba(16,185,129,0.4)] flex justify-between items-center text-sm font-bold tracking-wide border border-white/20">
                                 <span>€149/MONTH</span>
                                 <span>·</span>
                                 <span>UNLIMITED HIRES</span>

@@ -222,9 +222,9 @@ export const CandidateCard = ({
                 {type === 'resume' && (
                   <>
                     {fitScore !== undefined && fitScore !== null && (() => {
-                      let badge = { emoji: '🤔', color: 'text-gray-400 bg-gray-500/10 border-gray-500/50' };
+                      let badge = { emoji: '🤔', color: 'text-muted-foreground bg-muted border-border' };
 
-                      if (fitScore >= 75) badge = { emoji: '💪', color: 'text-[#00FF85] bg-[#00FF85]/10 border-[#00FF85]' };
+                      if (fitScore >= 75) badge = { emoji: '💪', color: 'text-primary bg-primary/10 border-primary' };
                       else if (fitScore >= 60) badge = { emoji: '👍', color: 'text-blue-400 bg-blue-500/10 border-blue-500/50' };
                       else if (fitScore >= 50) badge = { emoji: '👌', color: 'text-purple-400 bg-purple-500/10 border-purple-500/50' };
                       else if (fitScore >= 40) badge = { emoji: '🤝', color: 'text-orange-400 bg-gradient-to-r from-orange-500/10 to-amber-500/10 border-orange-500/50' };
