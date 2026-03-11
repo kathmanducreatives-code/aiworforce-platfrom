@@ -206,7 +206,7 @@ const FolderView = () => {
                   />
                   <label 
                     htmlFor="select-all" 
-                    className="text-sm sm:text-base font-medium text-slate-700 cursor-pointer"
+                    className="text-sm sm:text-base font-medium text-foreground cursor-pointer"
                   >
                     Select All ({candidates.length})
                   </label>
