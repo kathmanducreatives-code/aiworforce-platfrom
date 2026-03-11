@@ -46,7 +46,7 @@ const GradientSlider = React.forwardRef<
             {...props}
             onValueChange={handleValueChange}
         >
-            <SliderPrimitive.Track className="relative h-1 w-full grow overflow-hidden rounded-full bg-slate-800">
+            <SliderPrimitive.Track className="relative h-1 w-full grow overflow-hidden rounded-full bg-muted">
                 <SliderPrimitive.Range className="absolute h-full bg-gradient-to-r from-emerald-500 to-teal-500" />
             </SliderPrimitive.Track>
 
