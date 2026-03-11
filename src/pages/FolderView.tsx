@@ -222,7 +222,7 @@ const FolderView = () => {
                       variant="ghost"
                       size="sm"
                       onClick={() => setSelectedCandidates(new Set())}
-                      className="h-6 w-6 p-0 hover:bg-cyan-100 ml-1"
+                      className="h-6 w-6 p-0 hover:bg-primary/20 ml-1"
                     >
                       ×
                     </Button>
