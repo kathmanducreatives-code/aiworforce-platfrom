@@ -174,7 +174,7 @@ export const CandidateDetailModal = ({
                                 {lead.contact_email && (
                                     <Button
                                         variant="outline"
-                                        className="flex-1 border-white/10 hover:bg-white/5 text-white rounded-xl"
+                                        className="flex-1 border-border hover:bg-muted text-foreground rounded-xl"
                                         onClick={() => window.location.href = `mailto:${lead.contact_email}`}
                                     >
                                         <Mail className="w-4 h-4 mr-2" />
@@ -184,7 +184,7 @@ export const CandidateDetailModal = ({
                             </div>
                         </div>
 
-                        <Separator className="bg-white/10" />
+                        <Separator className="bg-border" />
 
                         {/* Summary / Headline */}
                         <div className="space-y-3">
