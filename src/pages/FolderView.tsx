@@ -338,7 +338,7 @@ const FolderView = () => {
                           <span className="truncate">{candidate.email}</span>
                         </div>
                       )}
-                      <div className="flex items-center justify-between text-slate-600 text-sm">
+                      <div className="flex items-center justify-between text-muted-foreground text-sm">
                         <div className="flex items-center gap-2">
                           <Calendar className="h-4 w-4 flex-shrink-0" />
                           <span className="text-xs sm:text-sm">
