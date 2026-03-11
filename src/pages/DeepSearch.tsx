@@ -398,7 +398,7 @@ export default function DeepSearch() {
               <span className="text-xs text-muted-foreground">candidates</span>
             </div>
             <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg border border-border bg-card/50 text-sm">
-              <CheckCircle2 className="w-4 h-4 text-blue-500" />
+              <CheckCircle2 className="w-4 h-4 text-primary" />
               <span className="font-medium">{selectedCandidates.size}</span>
               <span className="text-xs text-muted-foreground">selected</span>
             </div>
