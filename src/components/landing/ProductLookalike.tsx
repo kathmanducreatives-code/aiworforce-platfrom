@@ -111,9 +111,9 @@ const ProductLookalike = () => {
             <div className="relative z-10 w-full max-w-6xl mx-auto px-6 h-full flex flex-col justify-center">
                 {/* Title Block */}
                 <div className="text-center mb-6">
-                    <div className="look-title inline-flex items-center gap-2 px-3 py-1.5 rounded-full border border-[#00c853]/40 bg-transparent mb-4 opacity-0 mx-auto">
-                        <div className="w-1.5 h-1.5 rounded-full bg-[#00c853]" />
-                        <span className="font-mono text-[11px] uppercase tracking-[2px] text-emerald-400 font-semibold mt-px">LOOKALIKE ENGINE</span>
+                    <div className="look-title inline-flex items-center gap-2 px-3 py-1.5 rounded-full border border-primary/40 bg-transparent mb-4 opacity-0 mx-auto">
+                        <div className="w-1.5 h-1.5 rounded-full bg-primary" />
+                        <span className="font-mono text-[11px] uppercase tracking-[2px] text-primary font-semibold mt-px">LOOKALIKE ENGINE</span>
                     </div>
                     <h2 className="look-title font-display font-black text-[clamp(1.8rem,4.5vw,3.5rem)] leading-[1.0] tracking-[-0.04em] text-white mb-3 opacity-0">
                         PASTE ONE PROFILE.<br />GET 2,000 RANKED MATCHES.
