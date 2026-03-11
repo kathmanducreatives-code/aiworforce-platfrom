@@ -213,9 +213,9 @@ const FolderView = () => {
                 </div>
                 
                 {selectedCandidates.size > 0 && (
-                  <div className="flex items-center gap-2 bg-cyan-50 border border-cyan-200 rounded-lg px-3 py-2">
-                    <CheckSquare className="h-4 w-4 text-cyan-600" />
-                    <span className="text-sm font-medium text-cyan-700">
+                  <div className="flex items-center gap-2 bg-primary/10 border border-primary/20 rounded-lg px-3 py-2">
+                    <CheckSquare className="h-4 w-4 text-primary" />
+                    <span className="text-sm font-medium text-primary">
                       {selectedCandidates.size} selected
                     </span>
                     <Button
