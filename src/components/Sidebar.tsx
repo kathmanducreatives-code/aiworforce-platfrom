@@ -98,11 +98,11 @@ const Sidebar = ({ collapsed, onToggle, onOpenCommandPalette }: SidebarProps) =>
       {!collapsed && onOpenCommandPalette && (
         <button
           onClick={onOpenCommandPalette}
-          className="mx-3 mt-3 flex items-center gap-2 px-3 py-2 rounded-lg border border-border bg-muted/50 text-sm text-muted-foreground hover:text-foreground hover:border-primary/30 transition-all"
+          className="mx-3 mt-3 flex items-center gap-2 px-3 py-2 rounded-lg border border-border/60 bg-card/70 text-sm text-muted-foreground hover:text-foreground hover:border-primary/30 hover:bg-card transition-all"
         >
           <Search className="h-3.5 w-3.5" />
           <span className="flex-1 text-left">Search...</span>
-          <kbd className="text-[10px] bg-background border border-border rounded px-1 py-0.5 font-mono">⌘K</kbd>
+          <kbd className="text-[10px] bg-muted/70 border border-border rounded px-1 py-0.5 font-mono">⌘K</kbd>
         </button>
       )}
       {collapsed && onOpenCommandPalette && (

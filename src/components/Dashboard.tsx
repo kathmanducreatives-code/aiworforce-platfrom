@@ -200,10 +200,10 @@ const Dashboard = () => {
 
   const getScoreColor = (score: string) => {
     const lowerScore = score.toLowerCase();
-    if (lowerScore.includes('high')) return 'border-green-200 text-green-800 bg-green-50';
-    if (lowerScore.includes('medium')) return 'border-blue-200 text-blue-800 bg-blue-50';
-    if (lowerScore.includes('low')) return 'border-yellow-200 text-yellow-800 bg-yellow-50';
-    return 'border-gray-200 text-gray-600 bg-gray-50';
+    if (lowerScore.includes('high')) return 'border-primary/40 text-primary bg-primary/10';
+    if (lowerScore.includes('medium')) return 'border-primary/30 text-primary bg-primary/5';
+    if (lowerScore.includes('low')) return 'border-amber-500/30 text-amber-600 bg-amber-500/10';
+    return 'border-border text-muted-foreground bg-muted/40';
   };
 
   const filteredResumes = resumeData.filter(resume => {
