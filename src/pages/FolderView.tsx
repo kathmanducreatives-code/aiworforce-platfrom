@@ -345,7 +345,7 @@ const FolderView = () => {
                             {candidate.date ? formatDate(candidate.date) : 'Unknown'}
                           </span>
                         </div>
-                        <span className="text-xs text-slate-500 whitespace-nowrap">
+                        <span className="text-xs text-muted-foreground whitespace-nowrap">
                           Overall: {candidate.overallFactor}/10
                         </span>
                       </div>
