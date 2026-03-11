@@ -310,7 +310,7 @@ const FolderView = () => {
                     {/* Mobile-optimized header */}
                     <div className="flex items-start justify-between mb-3 gap-2">
                       <div className="flex-1 min-w-0">
-                        <h3 className="font-semibold text-slate-800 text-base sm:text-lg mb-1 group-hover:text-cyan-600 transition-colors duration-200 truncate pr-2">
+                        <h3 className="font-semibold text-foreground text-base sm:text-lg mb-1 group-hover:text-primary transition-colors duration-200 truncate pr-2">
                           {candidate.candidateName}
                         </h3>
                         <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-2 mb-2">
