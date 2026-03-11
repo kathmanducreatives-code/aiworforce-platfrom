@@ -50,11 +50,11 @@ export default {
 					foreground: 'rgba(255, 255, 255, 0.6)'
 				},
 				popover: {
-					DEFAULT: '#0F1420', // Dossier Surface
+					DEFAULT: '#0D0D0D',
 					foreground: '#FFFFFF'
 				},
 				card: {
-					DEFAULT: '#0F1420', // Dossier Surface
+					DEFAULT: '#0D0D0D',
 					foreground: '#FFFFFF'
 				},
 				sidebar: {
