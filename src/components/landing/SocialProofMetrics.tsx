@@ -49,12 +49,12 @@ const SocialProofMetrics = () => {
   }, []);
 
   return (
-    <section ref={sectionRef} className="relative bg-white px-4 py-28 md:py-36">
+    <section ref={sectionRef} className="relative bg-background px-4 py-28 md:py-36">
       <div className="max-w-5xl mx-auto">
-        <p className="font-mono text-xs uppercase tracking-[0.25em] mb-5 text-emerald-600 font-semibold">
+        <p className="font-mono text-xs uppercase tracking-[0.25em] mb-5 text-primary font-semibold">
           ◆ The Numbers
         </p>
-        <h2 className="font-sans font-extrabold text-[clamp(1.8rem,4.5vw,3.5rem)] leading-[1.05] tracking-[-0.03em] text-zinc-950 mb-16">
+        <h2 className="font-sans font-extrabold text-[clamp(1.8rem,4.5vw,3.5rem)] leading-[1.05] tracking-[-0.03em] text-foreground mb-16">
           WHAT HAPPENS WHEN YOU<br />FIRE YOUR RECRUITING AGENCY
         </h2>
 
@@ -63,16 +63,16 @@ const SocialProofMetrics = () => {
             <div
               key={i}
               ref={el => { cardRefs.current[i] = el; }}
-              className={`rounded-2xl p-8 text-center opacity-0 border transition-all duration-300 hover:-translate-y-1 hover:shadow-[0_8px_30px_rgba(0,0,0,0.06)] ${m.emphasis
-                  ? 'bg-emerald-50/60 border-emerald-200/40'
-                  : 'bg-white border-zinc-200/60'
+              className={`rounded-2xl p-8 text-center opacity-0 border transition-all duration-300 hover:-translate-y-1 hover:shadow-[0_8px_30px_rgba(16,185,129,0.08)] ${m.emphasis
+                  ? 'bg-primary/5 border-primary/20'
+                  : 'bg-card border-border'
                 }`}
             >
-              <div className="font-mono font-bold text-5xl md:text-7xl leading-none mb-3 text-emerald-600 tabular-nums tracking-tighter">
+              <div className="font-mono font-bold text-5xl md:text-7xl leading-none mb-3 text-primary tabular-nums tracking-tighter">
                 {m.display(counters[i])}
               </div>
-              <p className="font-sans font-medium text-base text-zinc-700 mb-1">{m.label}</p>
-              <p className="font-sans text-sm text-zinc-400">{m.sublabel}</p>
+              <p className="font-sans font-medium text-base text-foreground mb-1">{m.label}</p>
+              <p className="font-sans text-sm text-muted-foreground">{m.sublabel}</p>
             </div>
           ))}
         </div>
