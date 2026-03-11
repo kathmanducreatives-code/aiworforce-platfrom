@@ -126,7 +126,7 @@ const Dashboard = () => {
     }
     if (metrics.activeRecruitments > 0) {
       actions.push({
-        icon: <Folder className="h-4 w-4 text-blue-500" />,
+        icon: <Folder className="h-4 w-4 text-primary" />,
         title: `${metrics.activeRecruitments} active roles`,
         subtitle: 'Manage job screenings',
         path: '/screening-jobs',
@@ -205,7 +205,7 @@ const Dashboard = () => {
             <MetricCard
               label="Active Roles"
               value={metrics.activeRecruitments}
-              icon={<Folder className="h-4 w-4 text-blue-500" />}
+              icon={<Folder className="h-4 w-4 text-primary" />}
             />
             <MetricCard
               label="AI Screening"
@@ -250,7 +250,7 @@ const Dashboard = () => {
             ) : (
               <div className="space-y-3">
                 {[
-                  { stage: 'New / Sourced', count: metrics.pipelineNew, color: 'bg-blue-500', pct: metrics.totalCandidates > 0 ? Math.round((metrics.pipelineNew / metrics.totalCandidates) * 100) : 0 },
+                  { stage: 'New / Sourced', count: metrics.pipelineNew, color: 'bg-primary', pct: metrics.totalCandidates > 0 ? Math.round((metrics.pipelineNew / metrics.totalCandidates) * 100) : 0 },
                   { stage: 'Screened', count: metrics.pipelineScreened, color: 'bg-emerald-500', pct: metrics.totalCandidates > 0 ? Math.round((metrics.pipelineScreened / metrics.totalCandidates) * 100) : 0 },
                   { stage: 'Interviewed', count: metrics.pipelineInterviewed, color: 'bg-amber-500', pct: metrics.totalCandidates > 0 ? Math.round((metrics.pipelineInterviewed / metrics.totalCandidates) * 100) : 0 },
                   { stage: 'Hired', count: metrics.pipelineHired, color: 'bg-purple-500', pct: metrics.totalCandidates > 0 ? Math.round((metrics.pipelineHired / metrics.totalCandidates) * 100) : 0 },

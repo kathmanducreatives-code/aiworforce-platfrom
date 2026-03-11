@@ -19,21 +19,21 @@ export default {
 		},
 		extend: {
 			colors: {
-				border: 'rgba(100, 160, 255, 0.06)',
+			border: 'rgba(16, 185, 129, 0.06)',
 				input: 'hsl(var(--input))',
 				ring: 'hsl(var(--ring))',
-				background: '#080B14',
+				background: '#080808',
 				foreground: '#FFFFFF',
 				primary: {
-					'100': 'rgba(59, 130, 246, 0.1)',
-					'200': 'rgba(59, 130, 246, 0.2)',
-					DEFAULT: '#3B82F6', // Trust Blue
+					'100': 'rgba(16, 185, 129, 0.1)',
+					'200': 'rgba(16, 185, 129, 0.2)',
+					DEFAULT: '#10B981', // Emerald Green
 					foreground: '#FFFFFF',
-					light: '#60A5FA',
-					dark: '#2563EB'
+					light: '#34D399',
+					dark: '#059669'
 				},
 				secondary: {
-					DEFAULT: '#10B981', // Success Emerald
+					DEFAULT: '#14B8A5', // Teal Accent
 					foreground: '#FFFFFF'
 				},
 				accent: {
@@ -50,11 +50,11 @@ export default {
 					foreground: 'rgba(255, 255, 255, 0.6)'
 				},
 				popover: {
-					DEFAULT: '#0F1420', // Dossier Surface
+					DEFAULT: '#0D0D0D',
 					foreground: '#FFFFFF'
 				},
 				card: {
-					DEFAULT: '#0F1420', // Dossier Surface
+					DEFAULT: '#0D0D0D',
 					foreground: '#FFFFFF'
 				},
 				sidebar: {
@@ -99,8 +99,8 @@ export default {
 				lg: 'none',
 				xl: 'none',
 				'2xl': 'none',
-				primary: '0 0 15px rgba(59, 130, 246, 0.15)', // Soft blue glow
-				'primary-lg': '0 0 30px rgba(59, 130, 246, 0.25)',
+				primary: '0 0 15px rgba(16, 185, 129, 0.15)',
+				'primary-lg': '0 0 30px rgba(16, 185, 129, 0.25)',
 				glow: '0 0 20px rgba(255, 255, 255, 0.05)',
 				'2xs': 'none',
 				'emerald-glow': '0 0 20px rgba(16, 185, 129, 0.2)'
