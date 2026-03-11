@@ -297,7 +297,7 @@ const FolderView = () => {
                         checked={selectedCandidates.has(candidate.id!)}
                         onCheckedChange={(checked) => handleSelectCandidate(candidate.id!, checked as boolean)}
                         onClick={(e) => e.stopPropagation()}
-                        className="border-slate-300 data-[state=checked]:bg-cyan-500 data-[state=checked]:border-cyan-500"
+                        className="border-border data-[state=checked]:bg-primary data-[state=checked]:border-primary"
                       />
                       {selectedCandidates.has(candidate.id!) && (
                         <div className="flex items-center gap-1 bg-cyan-100 text-cyan-700 px-2 py-1 rounded-full text-xs font-medium">
