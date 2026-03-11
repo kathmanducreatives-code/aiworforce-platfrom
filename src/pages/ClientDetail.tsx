@@ -364,7 +364,7 @@ const ClientDetail = () => {
                         }
                       </TableCell>
                     </TableRow>
-                  ))
+                  ))}
                 </TableBody>
               </Table>
             ) : (
