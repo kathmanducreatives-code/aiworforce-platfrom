@@ -506,7 +506,7 @@ export const TargetIndustrySelector = ({
         </Badge>)}
 
         {/* Search Input inline with chips */}
-        <input ref={inputRef} type="text" className="bg-transparent border-none outline-none text-gray-900 placeholder:text-gray-400 h-8 min-w-[150px] flex-1 text-sm font-medium" placeholder={includedIndustryIds.length === 0 && excludedIndustryIds.length === 0 ? "Search industries..." : ""} value={searchQuery} onChange={e => setSearchQuery(e.target.value)} />
+        <input ref={inputRef} type="text" className="bg-transparent border-none outline-none text-foreground placeholder:text-muted-foreground h-8 min-w-[150px] flex-1 text-sm font-medium" placeholder={includedIndustryIds.length === 0 && excludedIndustryIds.length === 0 ? "Search industries..." : ""} value={searchQuery} onChange={e => setSearchQuery(e.target.value)} />
       </div>
     </div>
 
