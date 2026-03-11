@@ -476,13 +476,13 @@ export const TargetIndustrySelector = ({
     }
   };
 
-  return <div ref={containerRef} onClick={handleContainerClick} className={cn("relative transition-all duration-300 ease-out-quart rounded-xl border", isOpen ? "bg-white border-[#00FF85] shadow-[0_0_20px_rgba(0,255,133,0.2)] z-50 scale-[1.02]" : "bg-white border-gray-200 hover:border-[#00FF85]/60 hover:shadow-md")}>
+  return <div ref={containerRef} onClick={handleContainerClick} className={cn("relative transition-all duration-300 ease-out-quart rounded-xl border", isOpen ? "bg-card border-primary shadow-primary z-50 scale-[1.02]" : "bg-card border-border hover:border-primary/60 hover:shadow-md")}>
     {/* Header / Trigger Area */}
-    <div className="flex flex-col gap-3 p-4 cursor-text bg-white rounded-xl">
+    <div className="flex flex-col gap-3 p-4 cursor-text bg-card rounded-xl">
       <div className="flex items-start justify-between">
-        <div className="flex items-center gap-2 text-gray-900">
-          <Briefcase className="w-5 h-5 shrink-0 text-[#059467]" />
-          <span className="text-sm tracking-wide uppercase text-gray-700 font-bold">Target Industries</span>
+        <div className="flex items-center gap-2 text-foreground">
+          <Briefcase className="w-5 h-5 shrink-0 text-primary" />
+          <span className="text-sm tracking-wide uppercase text-foreground font-bold">Target Industries</span>
         </div>
       </div>
 
