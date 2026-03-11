@@ -369,13 +369,13 @@ const Dashboard = () => {
                 {/* Strengths & Weaknesses */}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
-                    <p className="text-sm font-medium text-green-700 mb-3">Strengths</p>
-                    <div className="bg-green-50 p-3 rounded-lg">
+                    <p className="text-sm font-medium text-primary mb-3">Strengths</p>
+                    <div className="bg-primary/10 p-3 rounded-lg">
                       {resume.strengths && resume.strengths.length > 0 ? (
                         <ul className="text-sm text-muted-foreground space-y-1">
                           {resume.strengths.map((strength, index) => (
                             <li key={index} className="flex items-start">
-                              <span className="text-green-600 mr-2">•</span>
+                              <span className="text-primary mr-2">•</span>
                               <span>{strength}</span>
                             </li>
                           ))}
@@ -386,13 +386,13 @@ const Dashboard = () => {
                     </div>
                   </div>
                   <div>
-                    <p className="text-sm font-medium text-red-700 mb-3">Weaknesses</p>
-                    <div className="bg-red-50 p-3 rounded-lg">
+                    <p className="text-sm font-medium text-destructive mb-3">Weaknesses</p>
+                    <div className="bg-destructive/10 p-3 rounded-lg">
                       {resume.weaknesses && resume.weaknesses.length > 0 ? (
                         <ul className="text-sm text-muted-foreground space-y-1">
                           {resume.weaknesses.map((weakness, index) => (
                             <li key={index} className="flex items-start">
-                              <span className="text-red-600 mr-2">•</span>
+                              <span className="text-destructive mr-2">•</span>
                               <span>{weakness}</span>
                             </li>
                           ))}
