@@ -390,7 +390,7 @@ const FolderView = () => {
                       </Button>
                       <Button
                         size="sm"
-                        className="flex-1 bg-gradient-to-r from-cyan-500 to-blue-500 hover:from-cyan-600 hover:to-blue-600 text-white transition-all duration-200 text-xs"
+                        className="flex-1 bg-gradient-to-r from-primary to-secondary hover:from-primary/90 hover:to-secondary/90 text-white transition-all duration-200 text-xs"
                         onClick={(e) => {
                           e.stopPropagation();
                           window.location.href = `mailto:${candidate.email}`;
