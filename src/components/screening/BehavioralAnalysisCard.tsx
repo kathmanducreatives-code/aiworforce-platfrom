@@ -211,9 +211,9 @@ const BehavioralAnalysisCard = ({ analysis, conversationLogs }: BehavioralAnalys
       {/* Conversation Transcript */}
       {conversationLogs && conversationLogs.length > 0 && (
         <Collapsible open={showTranscript} onOpenChange={setShowTranscript}>
-          <Card className="bg-slate-800/50 border-slate-700">
+          <Card className="bg-card border-border">
             <CollapsibleTrigger className="w-full">
-              <CardHeader className="cursor-pointer hover:bg-slate-700/30 transition-colors p-4 lg:p-6">
+              <CardHeader className="cursor-pointer hover:bg-muted transition-colors p-4 lg:p-6">
                 <CardTitle className="flex items-center justify-between text-base lg:text-lg">
                   <span>Full Conversation Transcript</span>
                   <ChevronDown className={`w-5 h-5 transition-transform flex-shrink-0 ${showTranscript ? 'rotate-180' : ''}`} />
