@@ -353,7 +353,7 @@ const FolderView = () => {
 
                     {/* Skills section - mobile optimized */}
                     <div className="mb-3 sm:mb-4">
-                      <p className="text-sm text-slate-600 mb-2">Key Skills</p>
+                      <p className="text-sm text-muted-foreground mb-2">Key Skills</p>
                       {skills.length > 0 ? (
                         <div className="flex flex-wrap gap-1.5 mb-2">
                           {skills.slice(0, 2).map((skill, i) => (
