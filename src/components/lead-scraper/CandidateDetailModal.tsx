@@ -240,12 +240,12 @@ export const CandidateDetailModal = ({
 
                             {/* 3. Work History Timeline */}
                             <section className="space-y-6">
-                                <h3 className="text-lg font-semibold text-white flex items-center gap-2">
-                                    <Briefcase className="w-5 h-5 text-blue-400" />
+                                <h3 className="text-lg font-semibold text-foreground flex items-center gap-2">
+                                    <Briefcase className="w-5 h-5 text-primary" />
                                     Experience
                                 </h3>
 
-                                <div className="space-y-6 relative pl-4 border-l border-white/10 ml-2">
+                                <div className="space-y-6 relative pl-4 border-l border-border ml-2">
                                     {/* Mock work history if none exists for demo */}
                                     {(lead.work_history && lead.work_history.length > 0 ? lead.work_history : [
                                         {
@@ -257,18 +257,18 @@ export const CandidateDetailModal = ({
                                     ]).map((job: any, i: number) => (
                                         <div key={i} className="relative pl-6">
                                             {/* Timeline dot */}
-                                            <div className="absolute -left-[21px] top-1.5 w-3 h-3 rounded-full bg-[#0B0B0B] border-2 border-white/20 group-hover:border-[#00FF85] transition-colors" />
+                                            <div className="absolute -left-[21px] top-1.5 w-3 h-3 rounded-full bg-card border-2 border-border group-hover:border-primary transition-colors" />
 
-                                            <div className="group rounded-xl p-4 hover:bg-white/5 transition-colors border border-transparent hover:border-white/5">
-                                                <h4 className="text-base font-semibold text-white">{job.title}</h4>
+                                            <div className="group rounded-xl p-4 hover:bg-muted/40 transition-colors border border-transparent hover:border-border">
+                                                <h4 className="text-base font-semibold text-foreground">{job.title}</h4>
                                                 <div className="flex items-center gap-2 text-sm text-muted-foreground mt-1 mb-2">
                                                     <Building2 className="w-3.5 h-3.5" />
                                                     <span>{job.company}</span>
-                                                    <span className="text-white/20">•</span>
+                                                    <span className="text-muted-foreground/40">•</span>
                                                     <span>{job.date || job.duration}</span>
                                                 </div>
                                                 {job.description && (
-                                                    <p className="text-sm text-white/60 leading-relaxed">
+                                                    <p className="text-sm text-muted-foreground leading-relaxed">
                                                         {job.description}
                                                     </p>
                                                 )}
