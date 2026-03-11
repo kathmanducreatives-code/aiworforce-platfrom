@@ -114,7 +114,7 @@ export const CandidateDetailModal = ({
                             size="sm"
                             onClick={onPrev}
                             disabled={!hasPrev}
-                            className="bg-black border-white/10 text-white hover:bg-white/5 disabled:opacity-30 rounded-lg"
+                            className="bg-card border-border text-foreground hover:bg-muted disabled:opacity-30 rounded-lg"
                         >
                             <ChevronLeft className="w-4 h-4 mr-1" />
                             Prev
@@ -124,7 +124,7 @@ export const CandidateDetailModal = ({
                             size="sm"
                             onClick={onNext}
                             disabled={!hasNext}
-                            className="bg-black border-white/10 text-white hover:bg-white/5 disabled:opacity-30 rounded-lg"
+                            className="bg-card border-border text-foreground hover:bg-muted disabled:opacity-30 rounded-lg"
                         >
                             Next
                             <ChevronRight className="w-4 h-4 ml-1" />
@@ -136,7 +136,7 @@ export const CandidateDetailModal = ({
                 <div className="flex h-[calc(95vh-80px)] overflow-hidden">
 
                     {/* Left Column: Profile (30%) */}
-                    <div className="w-[350px] flex-shrink-0 border-r border-white/10 bg-black/20 p-6 space-y-8 overflow-y-auto">
+                    <div className="w-[350px] flex-shrink-0 border-r border-border bg-card/40 p-6 space-y-8 overflow-y-auto">
 
                         {/* Avatar */}
                         <div className="flex flex-col items-center text-center animate-in slide-in-from-left-4 duration-500">
