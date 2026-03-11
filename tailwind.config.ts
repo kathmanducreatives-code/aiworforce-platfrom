@@ -99,8 +99,8 @@ export default {
 				lg: 'none',
 				xl: 'none',
 				'2xl': 'none',
-				primary: '0 0 15px rgba(59, 130, 246, 0.15)', // Soft blue glow
-				'primary-lg': '0 0 30px rgba(59, 130, 246, 0.25)',
+				primary: '0 0 15px rgba(16, 185, 129, 0.15)',
+				'primary-lg': '0 0 30px rgba(16, 185, 129, 0.25)',
 				glow: '0 0 20px rgba(255, 255, 255, 0.05)',
 				'2xs': 'none',
 				'emerald-glow': '0 0 20px rgba(16, 185, 129, 0.2)'
