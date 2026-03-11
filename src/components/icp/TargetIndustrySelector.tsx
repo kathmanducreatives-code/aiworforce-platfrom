@@ -592,7 +592,7 @@ export const TargetIndustrySelector = ({
               </AnimatePresence>
             </div>;
           })}
-          {filteredCategories.length === 0 && <div className="p-4 text-center text-sm text-gray-500">No industries found.</div>}
+          {filteredCategories.length === 0 && <div className="p-4 text-center text-sm text-muted-foreground">No industries found.</div>}
         </div>
       </motion.div>}
     </AnimatePresence>
