@@ -58,9 +58,9 @@ export const ICPLeadsGallery = ({
 
                 {/* Left: Metadata Badge */}
                 <div className="flex items-center gap-3">
-                    <div className="flex items-center gap-2 bg-[#00FF85]/10 border border-[#00FF85]/20 rounded-full pl-2 pr-3 py-1">
-                        <div className="w-1.5 h-1.5 rounded-full bg-[#00FF85] animate-pulse" />
-                        <span className="text-xs font-mono text-[#00FF85] uppercase tracking-wide">
+                    <div className="flex items-center gap-2 bg-primary/10 border border-primary/20 rounded-full pl-2 pr-3 py-1">
+                        <div className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse" />
+                        <span className="text-xs font-mono text-primary uppercase tracking-wide">
                             DNA Source: {lookalikeName}
                         </span>
                     </div>
