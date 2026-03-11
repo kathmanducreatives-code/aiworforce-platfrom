@@ -125,7 +125,7 @@ export const TransformationSection = () => {
                         <div className="space-y-4 flex-grow">
                             {oldWayItems.map((item, i) => (
                                 <div key={i} className="flex items-start gap-4 opp-item opacity-80">
-                                    <XCircle className="w-5 h-5 text-zinc-600 shrink-0 mt-0.5" />
+                                    <XCircle className="w-5 h-5 text-muted-foreground/60 shrink-0 mt-0.5" />
                                     <span className="text-[15px] text-white/40 font-light">{item}</span>
                                 </div>
                             ))}
