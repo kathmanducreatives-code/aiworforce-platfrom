@@ -206,11 +206,11 @@ export const CandidateDetailModal = ({
                             <section className="space-y-4">
                                 <div className="flex items-center gap-2 mb-2">
                                     <Sparkles className="w-5 h-5 text-[#00FF85]" />
-                                    <h3 className="text-lg font-semibold text-white">Why this match?</h3>
+                                    <h3 className="text-lg font-semibold text-foreground">Why this match?</h3>
                                 </div>
-                                <div className="bg-[#00FF85]/5 border border-[#00FF85]/20 rounded-xl p-6 relative overflow-hidden">
-                                    <div className="absolute top-0 right-0 w-32 h-32 bg-[#00FF85]/10 blur-[60px] rounded-full pointer-events-none" />
-                                    <p className="text-base text-white/90 leading-relaxed relative z-10">
+                                <div className="bg-primary/5 border border-primary/20 rounded-xl p-6 relative overflow-hidden">
+                                    <div className="absolute top-0 right-0 w-32 h-32 bg-primary/10 blur-[60px] rounded-full pointer-events-none" />
+                                    <p className="text-base text-foreground leading-relaxed relative z-10">
                                         {lead.match_reason ||
                                             "This candidate was selected based on their strong alignment with your required job titles and industry experience. Their profile suggests a high probability of fit for the role."}
                                     </p>
