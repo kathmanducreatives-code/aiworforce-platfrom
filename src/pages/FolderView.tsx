@@ -300,7 +300,7 @@ const FolderView = () => {
                         className="border-border data-[state=checked]:bg-primary data-[state=checked]:border-primary"
                       />
                       {selectedCandidates.has(candidate.id!) && (
-                        <div className="flex items-center gap-1 bg-cyan-100 text-cyan-700 px-2 py-1 rounded-full text-xs font-medium">
+                        <div className="flex items-center gap-1 bg-primary/15 text-primary px-2 py-1 rounded-full text-xs font-medium">
                           <CheckSquare className="h-3 w-3" />
                           Selected
                         </div>
