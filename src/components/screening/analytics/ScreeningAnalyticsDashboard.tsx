@@ -136,7 +136,7 @@ export const ScreeningAnalyticsDashboard = ({ jobs, applications, onBack }: Scre
                             const color =
                                 key === 'strong' ? 'bg-emerald-500' :
                                     key === 'good' ? 'bg-amber-500' :
-                                        key === 'maybe' ? 'bg-slate-400' : 'bg-red-500';
+                                        key === 'maybe' ? 'bg-muted-foreground' : 'bg-red-500';
 
                             const label =
                                 key === 'strong' ? 'Strong Fit' :
