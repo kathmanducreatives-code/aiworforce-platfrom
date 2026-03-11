@@ -359,7 +359,7 @@ const FolderView = () => {
                           {skills.slice(0, 2).map((skill, i) => (
                             <span 
                               key={i}
-                              className="px-2 py-1 bg-cyan-50 text-cyan-700 rounded-lg text-xs font-medium"
+                              className="px-2 py-1 bg-primary/10 text-primary rounded-lg text-xs font-medium"
                             >
                               {skill}
                             </span>
