@@ -100,8 +100,8 @@ export const CandidateDetailModal = ({
                                 {lead.job_title || "No Title"}
                                 {lead.company && (
                                     <>
-                                        <span className="w-1 h-1 rounded-full bg-white/20" />
-                                        <span className="text-white/60">{lead.company}</span>
+                                        <span className="w-1 h-1 rounded-full bg-muted-foreground/40" />
+                                        <span className="text-muted-foreground">{lead.company}</span>
                                     </>
                                 )}
                             </p>
