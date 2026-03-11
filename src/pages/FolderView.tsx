@@ -167,7 +167,7 @@ const FolderView = () => {
   }
 
   return (
-    <div className="min-h-screen w-full bg-gradient-to-br from-slate-50 via-white to-cyan-50">
+    <div className="min-h-screen w-full bg-background">
       <Header />
       
       <main className="container mx-auto px-3 sm:px-6 py-4 sm:py-8 pt-20 sm:pt-24 animate-fade-in max-w-7xl">
