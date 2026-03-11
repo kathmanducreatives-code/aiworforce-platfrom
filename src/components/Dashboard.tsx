@@ -248,8 +248,8 @@ const Dashboard = () => {
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
           <Card>
             <CardContent className="flex items-center p-6">
-              <div className="flex items-center justify-center w-12 h-12 bg-blue-100 rounded-lg mr-4">
-                <FileText className="h-6 w-6 text-blue-600" />
+              <div className="flex items-center justify-center w-12 h-12 bg-primary/10 rounded-lg mr-4">
+                <FileText className="h-6 w-6 text-primary" />
               </div>
               <div>
                 <p className="text-sm font-medium text-muted-foreground">Total Resumes</p>
@@ -260,8 +260,8 @@ const Dashboard = () => {
 
           <Card>
             <CardContent className="flex items-center p-6">
-              <div className="flex items-center justify-center w-12 h-12 bg-green-100 rounded-lg mr-4">
-                <CheckCircle className="h-6 w-6 text-green-600" />
+              <div className="flex items-center justify-center w-12 h-12 bg-primary/10 rounded-lg mr-4">
+                <CheckCircle className="h-6 w-6 text-primary" />
               </div>
               <div>
                 <p className="text-sm font-medium text-muted-foreground">High Scores (8+)</p>
@@ -274,8 +274,8 @@ const Dashboard = () => {
 
           <Card>
             <CardContent className="flex items-center p-6">
-              <div className="flex items-center justify-center w-12 h-12 bg-yellow-100 rounded-lg mr-4">
-                <AlertTriangle className="h-6 w-6 text-yellow-600" />
+              <div className="flex items-center justify-center w-12 h-12 bg-muted rounded-lg mr-4">
+                <AlertTriangle className="h-6 w-6 text-muted-foreground" />
               </div>
               <div>
                 <p className="text-sm font-medium text-muted-foreground">High Risk</p>
@@ -288,8 +288,8 @@ const Dashboard = () => {
 
           <Card>
             <CardContent className="flex items-center p-6">
-              <div className="flex items-center justify-center w-12 h-12 bg-purple-100 rounded-lg mr-4">
-                <TrendingUp className="h-6 w-6 text-purple-600" />
+              <div className="flex items-center justify-center w-12 h-12 bg-primary/10 rounded-lg mr-4">
+                <TrendingUp className="h-6 w-6 text-primary" />
               </div>
               <div>
                 <p className="text-sm font-medium text-muted-foreground">Avg Overall Score</p>
