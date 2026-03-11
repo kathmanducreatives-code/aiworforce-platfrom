@@ -303,7 +303,7 @@ class ICPAPIClient {
             session_id: sessionId
         });
 
-        const isDev = typeof process !== 'undefined' && process.env && process.env.NODE_ENV === 'development';
+        const isDev = import.meta.env?.DEV === true;
 
         // Mock fallback common structure
         if (!response.search_logic_dna && isDev) {

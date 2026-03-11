@@ -51,7 +51,7 @@ export const SupabaseTest = () => {
     // Check generic env vars (Vite/Next)
     const getEnv = (key: string, viteKey: string) => {
         if (typeof import.meta !== 'undefined' && import.meta.env && import.meta.env[viteKey]) return import.meta.env[viteKey];
-        if (typeof process !== 'undefined' && process.env && process.env[key]) return process.env[key];
+        if (typeof globalThis !== 'undefined' && (globalThis as any).process?.env?.[key]) return (globalThis as any).process.env[key];
         return null;
     };
 

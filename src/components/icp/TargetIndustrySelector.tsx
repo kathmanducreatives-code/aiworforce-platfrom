@@ -476,27 +476,27 @@ export const TargetIndustrySelector = ({
     }
   };
 
-  return <div ref={containerRef} onClick={handleContainerClick} className={cn("relative transition-all duration-300 ease-out-quart rounded-xl border", isOpen ? "bg-white border-[#00FF85] shadow-[0_0_20px_rgba(0,255,133,0.2)] z-50 scale-[1.02]" : "bg-white border-gray-200 hover:border-[#00FF85]/60 hover:shadow-md")}>
+  return <div ref={containerRef} onClick={handleContainerClick} className={cn("relative transition-all duration-300 ease-out-quart rounded-xl border", isOpen ? "bg-card border-primary shadow-primary z-50 scale-[1.02]" : "bg-card border-border hover:border-primary/60 hover:shadow-md")}>
     {/* Header / Trigger Area */}
-    <div className="flex flex-col gap-3 p-4 cursor-text bg-white rounded-xl">
+    <div className="flex flex-col gap-3 p-4 cursor-text bg-card rounded-xl">
       <div className="flex items-start justify-between">
-        <div className="flex items-center gap-2 text-gray-900">
-          <Briefcase className="w-5 h-5 shrink-0 text-[#059467]" />
-          <span className="text-sm tracking-wide uppercase text-gray-700 font-bold">Target Industries</span>
+        <div className="flex items-center gap-2 text-foreground">
+          <Briefcase className="w-5 h-5 shrink-0 text-primary" />
+          <span className="text-sm tracking-wide uppercase text-foreground font-bold">Target Industries</span>
         </div>
       </div>
 
       <div className="flex flex-wrap gap-2 min-h-[32px]">
-        {INDUSTRY_CATEGORIES.flatMap(c => c.industries).filter(i => includedIndustryIds.includes(i.id)).map(ind => <Badge key={ind.id} variant="secondary" className="bg-[#00FF85]/10 text-emerald-700 border border-[#00FF85]/30 px-2 py-1 h-8 text-sm gap-1 hover:bg-[#00FF85]/20 transition-colors animate-in fade-in zoom-in-50 duration-200">
+        {INDUSTRY_CATEGORIES.flatMap(c => c.industries).filter(i => includedIndustryIds.includes(i.id)).map(ind => <Badge key={ind.id} variant="secondary" className="bg-primary/10 text-primary border border-primary/30 px-2 py-1 h-8 text-sm gap-1 hover:bg-primary/20 transition-colors animate-in fade-in zoom-in-50 duration-200">
           {ind.name}
-          <button type="button" className="ml-1 rounded-full p-0.5 hover:bg-[#00FF85]/20 hover:text-emerald-900 transition-colors" onClick={e => {
+          <button type="button" className="ml-1 rounded-full p-0.5 hover:bg-primary/20 hover:text-primary transition-colors" onClick={e => {
             e.stopPropagation();
             handleNeutral(ind.id);
           }}>
             <X className="w-3 h-3" />
           </button>
         </Badge>)}
-        {INDUSTRY_CATEGORIES.flatMap(c => c.industries).filter(i => excludedIndustryIds.includes(i.id)).map(ind => <Badge key={ind.id} variant="destructive" className="gap-1 bg-red-50 text-red-600 border-red-200 hover:bg-red-100 animate-in fade-in zoom-in-50 duration-200">
+        {INDUSTRY_CATEGORIES.flatMap(c => c.industries).filter(i => excludedIndustryIds.includes(i.id)).map(ind => <Badge key={ind.id} variant="destructive" className="gap-1 bg-red-500/10 text-red-400 border-red-500/30 hover:bg-red-500/20 animate-in fade-in zoom-in-50 duration-200">
           <Minus className="w-3 h-3 text-red-500" />
           {ind.name}
           <X className="w-3 h-3 cursor-pointer ml-1 hover:text-red-800" onClick={e => {
@@ -506,7 +506,7 @@ export const TargetIndustrySelector = ({
         </Badge>)}
 
         {/* Search Input inline with chips */}
-        <input ref={inputRef} type="text" className="bg-transparent border-none outline-none text-gray-900 placeholder:text-gray-400 h-8 min-w-[150px] flex-1 text-sm font-medium" placeholder={includedIndustryIds.length === 0 && excludedIndustryIds.length === 0 ? "Search industries..." : ""} value={searchQuery} onChange={e => setSearchQuery(e.target.value)} />
+        <input ref={inputRef} type="text" className="bg-transparent border-none outline-none text-foreground placeholder:text-muted-foreground h-8 min-w-[150px] flex-1 text-sm font-medium" placeholder={includedIndustryIds.length === 0 && excludedIndustryIds.length === 0 ? "Search industries..." : ""} value={searchQuery} onChange={e => setSearchQuery(e.target.value)} />
       </div>
     </div>
 
@@ -524,15 +524,15 @@ export const TargetIndustrySelector = ({
       }} transition={{
         duration: 0.3,
         ease: "easeOut"
-      }} className={cn("overflow-hidden transition-all duration-300 ease-out-quart rounded-b-xl border-t border-gray-100 bg-gray-50/80 backdrop-blur-sm", isOpen ? "opacity-100" : "opacity-0")}>
+      }} className={cn("overflow-hidden transition-all duration-300 ease-out-quart rounded-b-xl border-t border-border bg-muted/50 backdrop-blur-sm", isOpen ? "opacity-100" : "opacity-0")}>
         <div className="max-h-[300px] overflow-y-auto custom-scrollbar p-2">
           {filteredCategories.map(category => {
             const isExpanded = activeCategory === category.categoryId;
             const childIds = category.industries.map(i => i.id);
             const status = getCategoryStatus(childIds);
-            return <div key={category.categoryId} className="border border-gray-200 bg-white rounded-lg overflow-hidden mb-2 shadow-sm">
+            return <div key={category.categoryId} className="border border-border bg-card rounded-lg overflow-hidden mb-2">
               {/* Category Header */}
-              <div className={cn("flex items-center justify-between px-3 py-2.5 cursor-pointer hover:bg-gray-50 transition-colors", isExpanded && "bg-gray-50 border-b border-gray-100")} onClick={e => {
+              <div className={cn("flex items-center justify-between px-3 py-2.5 cursor-pointer hover:bg-muted transition-colors", isExpanded && "bg-muted border-b border-border")} onClick={e => {
                 e.stopPropagation();
                 toggleCategory(category.categoryId);
               }}>
@@ -542,9 +542,9 @@ export const TargetIndustrySelector = ({
                   }} transition={{
                     duration: 0.2
                   }}>
-                    <ChevronRight className="w-4 h-4 text-gray-400" />
+                    <ChevronRight className="w-4 h-4 text-muted-foreground" />
                   </motion.div>
-                  <span className="text-sm font-semibold text-gray-800">{category.category}</span>
+                  <span className="text-sm font-semibold text-foreground">{category.category}</span>
                 </div>
 
                 {/* Category Toggles */}
@@ -567,7 +567,7 @@ export const TargetIndustrySelector = ({
                 }} transition={{
                   duration: 0.3,
                   ease: [0.4, 0, 0.2, 1]
-                }} className="bg-gray-50/50">
+                }} className="bg-muted/50">
                   <div className="py-1">
                     {category.industries.map((industry, index) => {
                       const indStatus = getStatus(industry.id);
@@ -580,8 +580,8 @@ export const TargetIndustrySelector = ({
                       }} transition={{
                         delay: index * 0.02,
                         duration: 0.2
-                      }} className="flex items-center justify-between pl-8 pr-3 py-2 hover:bg-gray-100 transition-colors group border-b border-gray-100 last:border-0 border-dashed">
-                        <span className={cn("text-sm transition-colors", indStatus === 'included' ? "text-emerald-700 font-medium" : "text-gray-600 group-hover:text-gray-900")}>
+                      }} className="flex items-center justify-between pl-8 pr-3 py-2 hover:bg-muted transition-colors group border-b border-border last:border-0 border-dashed">
+                        <span className={cn("text-sm transition-colors", indStatus === 'included' ? "text-primary font-medium" : "text-muted-foreground group-hover:text-foreground")}>
                           {industry.name}
                         </span>
                         <ToggleGroup status={indStatus} onInclude={() => handleInclude(industry.id)} onExclude={() => handleExclude(industry.id)} onNeutral={() => handleNeutral(industry.id)} />
@@ -592,7 +592,7 @@ export const TargetIndustrySelector = ({
               </AnimatePresence>
             </div>;
           })}
-          {filteredCategories.length === 0 && <div className="p-4 text-center text-sm text-gray-500">No industries found.</div>}
+          {filteredCategories.length === 0 && <div className="p-4 text-center text-sm text-muted-foreground">No industries found.</div>}
         </div>
       </motion.div>}
     </AnimatePresence>
@@ -612,12 +612,12 @@ const ToggleGroup = ({
   onExclude: () => void;
   onNeutral: () => void;
 }) => {
-  return <div className="flex items-center bg-white rounded-md border border-gray-200 p-0.5 h-6 shadow-sm">
-    <button type="button" onClick={status === 'included' ? onNeutral : onInclude} className={cn("h-full px-1.5 rounded-sm text-[10px] font-bold transition-all flex items-center gap-1", status === 'included' ? "bg-[#00FF85] text-black shadow-sm" : "text-gray-400 hover:text-emerald-600 hover:bg-emerald-50")} title="Include">
+  return <div className="flex items-center bg-card rounded-md border border-border p-0.5 h-6">
+    <button type="button" onClick={status === 'included' ? onNeutral : onInclude} className={cn("h-full px-1.5 rounded-sm text-[10px] font-bold transition-all flex items-center gap-1", status === 'included' ? "bg-primary text-white shadow-sm" : "text-muted-foreground hover:text-primary hover:bg-primary/10")} title="Include">
       <Plus className="w-3 h-3" />
     </button>
-    <div className="w-px h-3 bg-gray-200 mx-0.5" />
-    <button type="button" onClick={status === 'excluded' ? onNeutral : onExclude} className={cn("h-full px-1.5 rounded-sm text-[10px] font-bold transition-all flex items-center gap-1", status === 'excluded' ? "bg-red-500 text-white shadow-sm" : "text-gray-400 hover:text-red-600 hover:bg-red-50")} title="Exclude">
+    <div className="w-px h-3 bg-border mx-0.5" />
+    <button type="button" onClick={status === 'excluded' ? onNeutral : onExclude} className={cn("h-full px-1.5 rounded-sm text-[10px] font-bold transition-all flex items-center gap-1", status === 'excluded' ? "bg-red-500 text-white shadow-sm" : "text-muted-foreground hover:text-red-400 hover:bg-red-500/10")} title="Exclude">
       <Minus className="w-3 h-3" />
     </button>
   </div>;

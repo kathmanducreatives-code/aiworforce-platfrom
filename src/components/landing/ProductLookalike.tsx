@@ -111,9 +111,9 @@ const ProductLookalike = () => {
             <div className="relative z-10 w-full max-w-6xl mx-auto px-6 h-full flex flex-col justify-center">
                 {/* Title Block */}
                 <div className="text-center mb-6">
-                    <div className="look-title inline-flex items-center gap-2 px-3 py-1.5 rounded-full border border-[#00c853]/40 bg-transparent mb-4 opacity-0 mx-auto">
-                        <div className="w-1.5 h-1.5 rounded-full bg-[#00c853]" />
-                        <span className="font-mono text-[11px] uppercase tracking-[2px] text-emerald-400 font-semibold mt-px">LOOKALIKE ENGINE</span>
+                    <div className="look-title inline-flex items-center gap-2 px-3 py-1.5 rounded-full border border-primary/40 bg-transparent mb-4 opacity-0 mx-auto">
+                        <div className="w-1.5 h-1.5 rounded-full bg-primary" />
+                        <span className="font-mono text-[11px] uppercase tracking-[2px] text-primary font-semibold mt-px">LOOKALIKE ENGINE</span>
                     </div>
                     <h2 className="look-title font-display font-black text-[clamp(1.8rem,4.5vw,3.5rem)] leading-[1.0] tracking-[-0.04em] text-white mb-3 opacity-0">
                         PASTE ONE PROFILE.<br />GET 2,000 RANKED MATCHES.
@@ -125,7 +125,7 @@ const ProductLookalike = () => {
 
                 {/* Mockup */}
                 <div className="look-mockup max-w-5xl mx-auto w-full opacity-0">
-                    <div className="rounded-xl overflow-hidden border border-white/[0.06] bg-[#0a0a0a] shadow-[0_0_60px_rgba(34,197,94,0.08)]">
+                    <div className="rounded-xl overflow-hidden border border-border bg-background shadow-[0_0_60px_rgba(16,185,129,0.08)]">
                         {/* Browser chrome */}
                         <div className="bg-white/[0.03] px-4 py-2.5 flex items-center gap-3 border-b border-white/[0.06]">
                             <div className="flex gap-1.5">
@@ -186,7 +186,7 @@ const ProductLookalike = () => {
                                 {/* Actual Cards */}
                                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 relative z-10">
                                     {candidates.map((c, i) => (
-                                        <div key={i} className="candidate-card glass rounded-lg p-3 opacity-0 hover:border-emerald-500/20 transition-all duration-300 hover:-translate-y-0.5 bg-[#111111]/80 backdrop-blur-md">
+                                        <div key={i} className="candidate-card glass rounded-lg p-3 opacity-0 hover:border-primary/20 transition-all duration-300 hover:-translate-y-0.5 bg-card/80 backdrop-blur-md">
                                             <div className="flex items-start justify-between mb-2">
                                                 <div className="flex items-center gap-2">
                                                     <div className="w-8 h-8 rounded-full bg-gradient-to-br from-emerald-500/20 to-emerald-600/10 flex items-center justify-center text-[10px] font-bold text-emerald-400 border border-emerald-500/20">

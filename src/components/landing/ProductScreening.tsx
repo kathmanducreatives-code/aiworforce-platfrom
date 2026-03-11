@@ -105,9 +105,9 @@ const ProductScreening = () => {
 
                     {/* RIGHT: Text + Steps */}
                     <div ref={textRef} className="flex-[45] scr-text opacity-0">
-                        <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full border border-[#00c853]/40 bg-transparent mb-6 opacity-0">
-                            <div className="w-1.5 h-1.5 rounded-full bg-[#00c853]" />
-                            <span className="font-mono text-[11px] uppercase tracking-[2px] text-emerald-400 font-semibold mt-px">AI JOB SCREENING</span>
+                        <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full border border-primary/40 bg-transparent mb-6 opacity-0">
+                            <div className="w-1.5 h-1.5 rounded-full bg-primary" />
+                            <span className="font-mono text-[11px] uppercase tracking-[2px] text-primary font-semibold mt-px">AI JOB SCREENING</span>
                         </div>
                         <h2 className="font-display font-black text-[clamp(1.8rem,4vw,3.2rem)] leading-[1.0] tracking-[-0.04em] text-white mb-5">
                             CREATE A SCREENING<br />IN 60 SECONDS
@@ -141,7 +141,7 @@ const ProductScreening = () => {
                             <LinkIcon className="w-3.5 h-3.5" /> Screening link copied!
                         </div>
 
-                        <GyroTilt intensity={8} contentClassName="rounded-xl overflow-hidden glow-green border border-white/[0.06] bg-[#0a0a0a]">
+                        <GyroTilt intensity={8} contentClassName="rounded-xl overflow-hidden glow-green border border-border bg-background">
                             <div className="bg-white/[0.03] px-4 py-2.5 flex items-center gap-3 border-b border-white/[0.06]">
                                 <div className="flex gap-1.5">
                                     <div className="w-3 h-3 rounded-full bg-red-400/60" />
@@ -207,9 +207,9 @@ const ProductScreening = () => {
                                     <button
                                         onClick={handleGenerate}
                                         disabled={isGenerating || showToast || !title || !company}
-                                        className={`w-full h-[44px] flex items-center justify-center gap-2 text-white text-[14px] font-[600] rounded-full mt-2 transition-all duration-300 ${btnGlow ? 'bg-emerald-500 shadow-[0_0_24px_rgba(5,150,105,0.5)] scale-[1.02] text-black' :
-                                            isGenerating ? 'bg-emerald-600/50 cursor-not-allowed' :
-                                                'bg-[#00C853] hover:bg-emerald-500 hover:shadow-[0_4px_16px_rgba(5,150,105,0.4)]'
+                                        className={`w-full h-[44px] flex items-center justify-center gap-2 text-white text-[14px] font-[600] rounded-full mt-2 transition-all duration-300 ${btnGlow ? 'bg-primary shadow-[0_0_24px_rgba(16,185,129,0.5)] scale-[1.02]' :
+                                            isGenerating ? 'bg-primary/50 cursor-not-allowed' :
+                                                'bg-primary hover:bg-primary/90 hover:shadow-[0_4px_16px_rgba(16,185,129,0.4)]'
                                             }`}>
                                         {isGenerating ? <><Loader2 className="w-4 h-4 animate-spin" /> Generating AI Link...</> :
                                             showToast ? 'Link Generated!' : 'Generate Screening Link →'}
