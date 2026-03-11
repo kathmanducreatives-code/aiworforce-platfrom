@@ -185,17 +185,17 @@ const Dashboard = () => {
   };
 
   const getFactorColor = (factor: number) => {
-    if (factor >= 8) return 'text-green-600';
-    if (factor >= 6) return 'text-blue-600';
-    if (factor >= 4) return 'text-yellow-600';
-    return 'text-red-600';
+    if (factor >= 8) return 'text-primary';
+    if (factor >= 6) return 'text-foreground';
+    if (factor >= 4) return 'text-muted-foreground';
+    return 'text-destructive';
   };
 
   const getFactorBadgeColor = (factor: number) => {
-    if (factor >= 8) return 'bg-green-100 text-green-800';
-    if (factor >= 6) return 'bg-blue-100 text-blue-800';
-    if (factor >= 4) return 'bg-yellow-100 text-yellow-800';
-    return 'bg-red-100 text-red-800';
+    if (factor >= 8) return 'bg-primary/15 text-primary';
+    if (factor >= 6) return 'bg-primary/10 text-primary';
+    if (factor >= 4) return 'bg-muted text-muted-foreground';
+    return 'bg-destructive/10 text-destructive';
   };
 
   const getScoreColor = (score: string) => {
