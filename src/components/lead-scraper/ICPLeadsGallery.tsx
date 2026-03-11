@@ -68,7 +68,7 @@ export const ICPLeadsGallery = ({
 
                 {/* Center: Search */}
                 <div className="flex-1 max-w-md mx-6 relative group">
-                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground group-focus-within:text-[#00FF85] transition-colors" />
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground group-focus-within:text-primary transition-colors" />
                     <Input
                         placeholder="Search within results..."
                         value={searchQuery}
