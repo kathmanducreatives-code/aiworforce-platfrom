@@ -530,9 +530,9 @@ export const TargetIndustrySelector = ({
             const isExpanded = activeCategory === category.categoryId;
             const childIds = category.industries.map(i => i.id);
             const status = getCategoryStatus(childIds);
-            return <div key={category.categoryId} className="border border-gray-200 bg-white rounded-lg overflow-hidden mb-2 shadow-sm">
+            return <div key={category.categoryId} className="border border-border bg-card rounded-lg overflow-hidden mb-2">
               {/* Category Header */}
-              <div className={cn("flex items-center justify-between px-3 py-2.5 cursor-pointer hover:bg-gray-50 transition-colors", isExpanded && "bg-gray-50 border-b border-gray-100")} onClick={e => {
+              <div className={cn("flex items-center justify-between px-3 py-2.5 cursor-pointer hover:bg-muted transition-colors", isExpanded && "bg-muted border-b border-border")} onClick={e => {
                 e.stopPropagation();
                 toggleCategory(category.categoryId);
               }}>
