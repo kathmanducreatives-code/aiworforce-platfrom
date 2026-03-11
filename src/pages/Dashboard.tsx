@@ -126,7 +126,7 @@ const Dashboard = () => {
     }
     if (metrics.activeRecruitments > 0) {
       actions.push({
-        icon: <Folder className="h-4 w-4 text-blue-500" />,
+        icon: <Folder className="h-4 w-4 text-primary" />,
         title: `${metrics.activeRecruitments} active roles`,
         subtitle: 'Manage job screenings',
         path: '/screening-jobs',
