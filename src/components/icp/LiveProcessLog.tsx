@@ -22,7 +22,7 @@ export const LiveProcessLog = ({ status, onComplete }: LiveProcessLogProps) => {
     useEffect(() => {
         if (status !== 'running') return;
 
-        let interval: NodeJS.Timeout;
+        let interval: ReturnType<typeof setInterval>;
 
         const startTime = Date.now();
 

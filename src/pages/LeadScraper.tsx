@@ -89,7 +89,7 @@ export default function LeadScraper() {
   const lastToastTime = useRef(0);
   const pendingLeads = useRef<LinkedInLead[]>([]);
   const activeSessionIdRef = useRef<string | null>(null);
-  const scrapingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const scrapingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Keep ref in sync with state
   useEffect(() => {

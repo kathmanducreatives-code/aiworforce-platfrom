@@ -33,7 +33,7 @@ const ResumeUpload = () => {
   const { toast } = useToast();
 
   // Typing timeout for glow effect
-  const typingTimeoutRef = useState<NodeJS.Timeout | null>(null);
+  const typingTimeoutRef = useState<ReturnType<typeof setTimeout> | null>(null);
 
   const handleRequirementsChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     setRecruiterRequirements(e.target.value);
