@@ -371,7 +371,7 @@ const FolderView = () => {
                           )}
                         </div>
                       ) : (
-                        <p className="text-xs text-slate-500 mb-2">Skills extracted from analysis</p>
+                        <p className="text-xs text-muted-foreground mb-2">Skills extracted from analysis</p>
                       )}
                     </div>
 
