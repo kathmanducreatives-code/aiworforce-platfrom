@@ -105,7 +105,7 @@ const BehavioralAnalysisCard = ({ analysis, conversationLogs }: BehavioralAnalys
   return (
     <div className="space-y-5">
       {/* Overall Risk Level */}
-      <Card className="bg-slate-800/50 border-slate-700">
+      <Card className="bg-card border-border">
         <CardContent className="p-4 lg:p-6">
           <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
             <div className="min-w-0 flex-1">
