@@ -178,7 +178,7 @@ const InterviewHub = () => {
                     <p className="text-xs text-white/60">Using Integrated WebRTC</p>
                   </div>
                 </div>
-                <div className="absolute top-4 right-4 w-48 aspect-video bg-zinc-900 rounded-lg border border-border/20 shadow-xl overflow-hidden z-30">
+                <div className="absolute top-4 right-4 w-48 aspect-video bg-card rounded-lg border border-border/20 shadow-xl overflow-hidden z-30">
                   <div className="absolute bottom-2 left-2 text-[8px] font-bold text-white bg-black/50 px-1 rounded uppercase tracking-widest">
                     Expert: {selectedInterview?.expertName}
                   </div>

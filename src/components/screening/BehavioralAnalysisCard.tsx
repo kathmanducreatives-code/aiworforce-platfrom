@@ -68,7 +68,7 @@ const BehavioralAnalysisCard = ({ analysis, conversationLogs }: BehavioralAnalys
     score?: number; 
     evidence: any[] 
   }) => (
-    <Card className="bg-slate-800/50 border-slate-700">
+    <Card className="bg-card border-border">
       <CardContent className="p-4 lg:pt-5">
         <div className="flex items-start justify-between gap-3 mb-3">
           <div className="flex items-center gap-2 min-w-0 flex-1">
@@ -105,7 +105,7 @@ const BehavioralAnalysisCard = ({ analysis, conversationLogs }: BehavioralAnalys
   return (
     <div className="space-y-5">
       {/* Overall Risk Level */}
-      <Card className="bg-slate-800/50 border-slate-700">
+      <Card className="bg-card border-border">
         <CardContent className="p-4 lg:p-6">
           <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
             <div className="min-w-0 flex-1">
@@ -211,9 +211,9 @@ const BehavioralAnalysisCard = ({ analysis, conversationLogs }: BehavioralAnalys
       {/* Conversation Transcript */}
       {conversationLogs && conversationLogs.length > 0 && (
         <Collapsible open={showTranscript} onOpenChange={setShowTranscript}>
-          <Card className="bg-slate-800/50 border-slate-700">
+          <Card className="bg-card border-border">
             <CollapsibleTrigger className="w-full">
-              <CardHeader className="cursor-pointer hover:bg-slate-700/30 transition-colors p-4 lg:p-6">
+              <CardHeader className="cursor-pointer hover:bg-muted transition-colors p-4 lg:p-6">
                 <CardTitle className="flex items-center justify-between text-base lg:text-lg">
                   <span>Full Conversation Transcript</span>
                   <ChevronDown className={`w-5 h-5 transition-transform flex-shrink-0 ${showTranscript ? 'rotate-180' : ''}`} />
@@ -229,7 +229,7 @@ const BehavioralAnalysisCard = ({ analysis, conversationLogs }: BehavioralAnalys
                         <div className={`max-w-[85%] lg:max-w-[80%] rounded-lg px-3 py-2 lg:px-4 lg:py-3 ${
                           log.role === 'user' 
                             ? 'bg-primary/20 text-foreground' 
-                            : 'bg-slate-700 text-foreground'
+                            : 'bg-muted text-foreground'
                         }`}>
                           <p className="text-xs text-muted-foreground mb-1">
                             {log.role === 'user' ? 'Candidate' : 'Interviewer'}

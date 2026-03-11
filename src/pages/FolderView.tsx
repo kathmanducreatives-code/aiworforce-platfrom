@@ -82,10 +82,10 @@ const FolderView = () => {
   }, [folderName]);
 
   const getStatusColor = (score: number) => {
-    if (score >= 8) return "bg-green-100 text-green-800";
-    if (score >= 6) return "bg-blue-100 text-blue-800";
-    if (score >= 4) return "bg-yellow-100 text-yellow-800";
-    return "bg-red-100 text-red-800";
+    if (score >= 8) return "bg-green-500/15 text-green-400";
+    if (score >= 6) return "bg-blue-500/15 text-blue-400";
+    if (score >= 4) return "bg-yellow-500/15 text-yellow-400";
+    return "bg-red-500/15 text-red-400";
   };
 
   const getStatusText = (score: number) => {
@@ -154,12 +154,12 @@ const FolderView = () => {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-cyan-50">
+      <div className="min-h-screen bg-background">
         <Header />
         <div className="container mx-auto px-6 py-8 flex items-center justify-center">
           <div className="text-center">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-cyan-500 mx-auto mb-4"></div>
-            <p className="text-slate-600">Loading candidates...</p>
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
+            <p className="text-muted-foreground">Loading candidates...</p>
           </div>
         </div>
       </div>
@@ -167,7 +167,7 @@ const FolderView = () => {
   }
 
   return (
-    <div className="min-h-screen w-full bg-gradient-to-br from-slate-50 via-white to-cyan-50">
+    <div className="min-h-screen w-full bg-background">
       <Header />
       
       <main className="container mx-auto px-3 sm:px-6 py-4 sm:py-8 pt-20 sm:pt-24 animate-fade-in max-w-7xl">
@@ -178,15 +178,15 @@ const FolderView = () => {
             <Button
               variant="ghost"
               onClick={() => navigate("/dashboard")}
-              className="hover:bg-slate-100 hover:scale-105 transition-all duration-200 rounded-xl p-2 flex-shrink-0 mt-1"
+              className="hover:bg-muted hover:scale-105 transition-all duration-200 rounded-xl p-2 flex-shrink-0 mt-1"
             >
               <ArrowLeft className="h-4 w-4 sm:h-5 sm:w-5" />
             </Button>
             <div className="flex-1 min-w-0">
-              <h1 className="text-xl sm:text-2xl lg:text-3xl font-bold text-slate-800 mb-1 sm:mb-2 leading-tight">
+              <h1 className="text-xl sm:text-2xl lg:text-3xl font-bold text-foreground mb-1 sm:mb-2 leading-tight">
                 {folderName} Candidates
               </h1>
-              <p className="text-sm sm:text-base text-slate-600">
+              <p className="text-sm sm:text-base text-muted-foreground">
                 {candidates.length} candidate{candidates.length !== 1 ? 's' : ''} in this folder
               </p>
             </div>
@@ -202,27 +202,27 @@ const FolderView = () => {
                     id="select-all"
                     checked={selectedCandidates.size === candidates.length && candidates.length > 0}
                     onCheckedChange={handleSelectAll}
-                    className="border-slate-300 data-[state=checked]:bg-cyan-500 data-[state=checked]:border-cyan-500"
+                    className="border-border data-[state=checked]:bg-primary data-[state=checked]:border-primary"
                   />
                   <label 
                     htmlFor="select-all" 
-                    className="text-sm sm:text-base font-medium text-slate-700 cursor-pointer"
+                    className="text-sm sm:text-base font-medium text-foreground cursor-pointer"
                   >
                     Select All ({candidates.length})
                   </label>
                 </div>
                 
                 {selectedCandidates.size > 0 && (
-                  <div className="flex items-center gap-2 bg-cyan-50 border border-cyan-200 rounded-lg px-3 py-2">
-                    <CheckSquare className="h-4 w-4 text-cyan-600" />
-                    <span className="text-sm font-medium text-cyan-700">
+                  <div className="flex items-center gap-2 bg-primary/10 border border-primary/20 rounded-lg px-3 py-2">
+                    <CheckSquare className="h-4 w-4 text-primary" />
+                    <span className="text-sm font-medium text-primary">
                       {selectedCandidates.size} selected
                     </span>
                     <Button
                       variant="ghost"
                       size="sm"
                       onClick={() => setSelectedCandidates(new Set())}
-                      className="h-6 w-6 p-0 hover:bg-cyan-100 ml-1"
+                      className="h-6 w-6 p-0 hover:bg-primary/20 ml-1"
                     >
                       ×
                     </Button>
@@ -235,7 +235,7 @@ const FolderView = () => {
                 <Button
                   onClick={handlePushToEmailSequence}
                   disabled={selectedCandidates.size === 0}
-                  className="w-full sm:w-auto bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-600 hover:to-teal-600 text-white shadow-lg shadow-emerald-500/25 hover:shadow-xl hover:shadow-emerald-500/30 transition-all duration-300 rounded-xl font-medium px-4 sm:px-6 py-3 group disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="w-full sm:w-auto bg-gradient-to-r from-primary to-secondary hover:from-primary/90 hover:to-secondary/90 text-white shadow-lg shadow-primary/25 hover:shadow-xl hover:shadow-primary/30 transition-all duration-300 rounded-xl font-medium px-4 sm:px-6 py-3 group disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   <div className="flex items-center justify-center gap-2 text-sm sm:text-base">
                     <Mail className="h-4 w-4 sm:h-5 sm:w-5 group-hover:scale-110 transition-transform duration-200" />
@@ -255,11 +255,11 @@ const FolderView = () => {
         {/* No candidates message */}
         {candidates.length === 0 ? (
           <div className="text-center py-8 sm:py-12 px-4">
-            <div className="bg-white rounded-2xl shadow-lg p-6 sm:p-8 max-w-md mx-auto">
+            <div className="bg-card rounded-2xl border border-border p-6 sm:p-8 max-w-md mx-auto">
               <div className="mb-4">
-                <Users className="h-12 w-12 sm:h-16 sm:w-16 text-slate-300 mx-auto mb-4" />
-                <h3 className="text-lg sm:text-xl font-semibold text-slate-700 mb-2">No candidates found</h3>
-                <p className="text-sm sm:text-base text-slate-500">
+                <Users className="h-12 w-12 sm:h-16 sm:w-16 text-muted-foreground/40 mx-auto mb-4" />
+                <h3 className="text-lg sm:text-xl font-semibold text-foreground mb-2">No candidates found</h3>
+                <p className="text-sm sm:text-base text-muted-foreground">
                   No candidates have been analyzed for the "{folderName}" recruitment yet.
                 </p>
               </div>
@@ -282,10 +282,10 @@ const FolderView = () => {
               return (
                 <Card 
                   key={candidate.id}
-                  className={`group backdrop-blur-sm bg-white/80 border shadow-lg hover:shadow-xl hover:shadow-cyan-500/10 transition-all duration-300 hover:scale-[1.02] rounded-xl cursor-pointer ${
+                  className={`group bg-card border transition-all duration-300 hover:scale-[1.02] rounded-xl cursor-pointer ${
                     selectedCandidates.has(candidate.id!) 
-                      ? 'border-cyan-400 bg-cyan-50/50 shadow-cyan-200/50' 
-                      : 'border-slate-200/50 hover:border-cyan-200'
+                      ? 'border-primary bg-primary/5 shadow-primary' 
+                      : 'border-border hover:border-primary/30'
                   }`}
                   style={{ animationDelay: `${index * 100}ms` }}
                 >
@@ -297,10 +297,10 @@ const FolderView = () => {
                         checked={selectedCandidates.has(candidate.id!)}
                         onCheckedChange={(checked) => handleSelectCandidate(candidate.id!, checked as boolean)}
                         onClick={(e) => e.stopPropagation()}
-                        className="border-slate-300 data-[state=checked]:bg-cyan-500 data-[state=checked]:border-cyan-500"
+                        className="border-border data-[state=checked]:bg-primary data-[state=checked]:border-primary"
                       />
                       {selectedCandidates.has(candidate.id!) && (
-                        <div className="flex items-center gap-1 bg-cyan-100 text-cyan-700 px-2 py-1 rounded-full text-xs font-medium">
+                        <div className="flex items-center gap-1 bg-primary/15 text-primary px-2 py-1 rounded-full text-xs font-medium">
                           <CheckSquare className="h-3 w-3" />
                           Selected
                         </div>
@@ -310,21 +310,21 @@ const FolderView = () => {
                     {/* Mobile-optimized header */}
                     <div className="flex items-start justify-between mb-3 gap-2">
                       <div className="flex-1 min-w-0">
-                        <h3 className="font-semibold text-slate-800 text-base sm:text-lg mb-1 group-hover:text-cyan-600 transition-colors duration-200 truncate pr-2">
+                        <h3 className="font-semibold text-foreground text-base sm:text-lg mb-1 group-hover:text-primary transition-colors duration-200 truncate pr-2">
                           {candidate.candidateName}
                         </h3>
                         <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-2 mb-2">
                           <Badge className={`${getStatusColor(fitScore)} text-xs font-medium w-fit`}>
                             {status}
                           </Badge>
-                          <span className="text-xs text-slate-500 truncate">
+                          <span className="text-xs text-muted-foreground truncate">
                             {folderName}
                           </span>
                         </div>
                       </div>
                       <div className="flex items-center gap-1 text-amber-500 flex-shrink-0">
                         <Star className="h-4 w-4 fill-current" />
-                        <span className="text-sm font-medium text-slate-700">
+                        <span className="text-sm font-medium text-foreground">
                           {fitScore}/10
                         </span>
                       </div>
@@ -333,19 +333,19 @@ const FolderView = () => {
                     {/* Essential info - always visible */}
                     <div className="space-y-2 mb-3 sm:mb-4">
                       {candidate.email && (
-                        <div className="flex items-center gap-2 text-slate-600 text-sm">
+                        <div className="flex items-center gap-2 text-muted-foreground text-sm">
                           <User className="h-4 w-4 flex-shrink-0" />
                           <span className="truncate">{candidate.email}</span>
                         </div>
                       )}
-                      <div className="flex items-center justify-between text-slate-600 text-sm">
+                      <div className="flex items-center justify-between text-muted-foreground text-sm">
                         <div className="flex items-center gap-2">
                           <Calendar className="h-4 w-4 flex-shrink-0" />
                           <span className="text-xs sm:text-sm">
                             {candidate.date ? formatDate(candidate.date) : 'Unknown'}
                           </span>
                         </div>
-                        <span className="text-xs text-slate-500 whitespace-nowrap">
+                        <span className="text-xs text-muted-foreground whitespace-nowrap">
                           Overall: {candidate.overallFactor}/10
                         </span>
                       </div>
@@ -353,25 +353,25 @@ const FolderView = () => {
 
                     {/* Skills section - mobile optimized */}
                     <div className="mb-3 sm:mb-4">
-                      <p className="text-sm text-slate-600 mb-2">Key Skills</p>
+                      <p className="text-sm text-muted-foreground mb-2">Key Skills</p>
                       {skills.length > 0 ? (
                         <div className="flex flex-wrap gap-1.5 mb-2">
                           {skills.slice(0, 2).map((skill, i) => (
                             <span 
                               key={i}
-                              className="px-2 py-1 bg-cyan-50 text-cyan-700 rounded-lg text-xs font-medium"
+                              className="px-2 py-1 bg-primary/10 text-primary rounded-lg text-xs font-medium"
                             >
                               {skill}
                             </span>
                           ))}
                           {skills.length > 2 && (
-                            <span className="px-2 py-1 bg-slate-50 text-slate-600 rounded-lg text-xs">
+                            <span className="px-2 py-1 bg-muted text-muted-foreground rounded-lg text-xs">
                               +{skills.length - 2} more
                             </span>
                           )}
                         </div>
                       ) : (
-                        <p className="text-xs text-slate-500 mb-2">Skills extracted from analysis</p>
+                        <p className="text-xs text-muted-foreground mb-2">Skills extracted from analysis</p>
                       )}
                     </div>
 
@@ -380,7 +380,7 @@ const FolderView = () => {
                       <Button
                         variant="outline" 
                         size="sm"
-                        className="flex-1 hover:bg-cyan-50 hover:border-cyan-200 hover:text-cyan-700 transition-all duration-200 text-xs"
+                        className="flex-1 hover:bg-muted hover:border-border hover:text-foreground transition-all duration-200 text-xs"
                         onClick={(e) => {
                           e.stopPropagation();
                           window.open(candidate.resume, '_blank');
@@ -390,7 +390,7 @@ const FolderView = () => {
                       </Button>
                       <Button
                         size="sm"
-                        className="flex-1 bg-gradient-to-r from-cyan-500 to-blue-500 hover:from-cyan-600 hover:to-blue-600 text-white transition-all duration-200 text-xs"
+                        className="flex-1 bg-gradient-to-r from-primary to-secondary hover:from-primary/90 hover:to-secondary/90 text-white transition-all duration-200 text-xs"
                         onClick={(e) => {
                           e.stopPropagation();
                           window.location.href = `mailto:${candidate.email}`;
@@ -403,8 +403,8 @@ const FolderView = () => {
                         size="sm"
                         className={`px-3 transition-all duration-200 text-xs ${
                           selectedCandidates.has(candidate.id!) 
-                            ? 'bg-cyan-500 hover:bg-cyan-600 text-white' 
-                            : 'hover:bg-cyan-50 hover:border-cyan-200 hover:text-cyan-700'
+                            ? 'bg-primary hover:bg-primary/90 text-white' 
+                            : 'hover:bg-muted hover:border-border hover:text-foreground'
                         }`}
                         onClick={(e) => {
                           e.stopPropagation();

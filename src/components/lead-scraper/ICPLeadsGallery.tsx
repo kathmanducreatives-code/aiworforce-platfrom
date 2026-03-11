@@ -51,16 +51,16 @@ export const ICPLeadsGallery = ({
     };
 
     return (
-        <div className="min-h-screen bg-[#0B0B0B] text-foreground font-sans">
+        <div className="min-h-screen bg-background text-foreground font-sans">
 
             {/* 1. Sticky Control Bar */}
-            <header className="sticky top-14 z-30 bg-[#0B0B0B]/80 backdrop-blur-md border-b border-white/10 px-6 py-3 flex items-center justify-between">
+            <header className="sticky top-14 z-30 bg-background/80 backdrop-blur-md border-b border-border px-6 py-3 flex items-center justify-between">
 
                 {/* Left: Metadata Badge */}
                 <div className="flex items-center gap-3">
-                    <div className="flex items-center gap-2 bg-[#00FF85]/10 border border-[#00FF85]/20 rounded-full pl-2 pr-3 py-1">
-                        <div className="w-1.5 h-1.5 rounded-full bg-[#00FF85] animate-pulse" />
-                        <span className="text-xs font-mono text-[#00FF85] uppercase tracking-wide">
+                    <div className="flex items-center gap-2 bg-primary/10 border border-primary/20 rounded-full pl-2 pr-3 py-1">
+                        <div className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse" />
+                        <span className="text-xs font-mono text-primary uppercase tracking-wide">
                             DNA Source: {lookalikeName}
                         </span>
                     </div>
@@ -68,12 +68,12 @@ export const ICPLeadsGallery = ({
 
                 {/* Center: Search */}
                 <div className="flex-1 max-w-md mx-6 relative group">
-                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground group-focus-within:text-[#00FF85] transition-colors" />
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground group-focus-within:text-primary transition-colors" />
                     <Input
                         placeholder="Search within results..."
                         value={searchQuery}
                         onChange={(e) => setSearchQuery(e.target.value)}
-                        className="bg-[#161616] border-white/10 focus-visible:ring-[#00FF85]/50 focus-visible:border-[#00FF85]/50 pl-9 rounded-xl h-9 text-sm"
+                        className="bg-card border-border focus-visible:ring-primary/50 focus-visible:border-primary/50 pl-9 rounded-xl h-9 text-sm"
                     />
                 </div>
 
@@ -82,7 +82,7 @@ export const ICPLeadsGallery = ({
                     onClick={onExport}
                     variant="outline"
                     size="sm"
-                    className="bg-[#161616] border-white/10 text-white hover:bg-[#00FF85]/10 hover:border-[#00FF85]/30 hover:text-[#00FF85] transition-all"
+                    className="bg-card border-border text-foreground hover:bg-primary/10 hover:border-primary/30 hover:text-primary transition-all"
                 >
                     <Download className="w-4 h-4 mr-2" />
                     Export All
@@ -97,11 +97,11 @@ export const ICPLeadsGallery = ({
                         {/* Loading Progress */}
                         <div className="flex flex-col items-center justify-center py-12 space-y-4">
                             <div className="relative w-16 h-16">
-                                <div className="absolute inset-0 border-t-2 border-[#00FF85] rounded-full animate-spin" />
-                                <div className="absolute inset-2 border-r-2 border-[#00FF85]/50 rounded-full animate-spin reverse" />
-                                <Brain className="absolute inset-0 m-auto w-6 h-6 text-[#00FF85] animate-pulse" />
+                                <div className="absolute inset-0 border-t-2 border-primary rounded-full animate-spin" />
+                                <div className="absolute inset-2 border-r-2 border-primary/50 rounded-full animate-spin reverse" />
+                                <Brain className="absolute inset-0 m-auto w-6 h-6 text-primary animate-pulse" />
                             </div>
-                            <p className="text-[#00FF85] font-mono text-sm animate-pulse">
+                            <p className="text-primary font-mono text-sm animate-pulse">
                                 Analyzing LinkedIn DNA... [65%]
                             </p>
                         </div>
@@ -109,7 +109,7 @@ export const ICPLeadsGallery = ({
                         {/* Skeleton Grid */}
                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
                             {[...Array(8)].map((_, i) => (
-                                <div key={i} className="h-[280px] bg-[#161616] border border-white/5 rounded-xl p-4 space-y-4">
+                                <div key={i} className="h-[280px] bg-card border border-border rounded-xl p-4 space-y-4">
                                     <div className="flex gap-3">
                                         <Skeleton className="w-10 h-10 rounded-full bg-white/5" />
                                         <div className="space-y-2 flex-1">

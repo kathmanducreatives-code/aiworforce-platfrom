@@ -125,12 +125,12 @@ export const TransformationSection = () => {
                         <div className="space-y-4 flex-grow">
                             {oldWayItems.map((item, i) => (
                                 <div key={i} className="flex items-start gap-4 opp-item opacity-80">
-                                    <XCircle className="w-5 h-5 text-zinc-600 shrink-0 mt-0.5" />
+                                    <XCircle className="w-5 h-5 text-muted-foreground/60 shrink-0 mt-0.5" />
                                     <span className="text-[15px] text-white/40 font-light">{item}</span>
                                 </div>
                             ))}
                         </div>
-                        <div className="mt-8 font-mono text-xs text-white/40 border-t border-white/10 pt-4 bg-zinc-900/50 -mx-8 -mb-8 px-8 pb-8">
+                        <div className="mt-8 font-mono text-xs text-white/40 border-t border-white/10 pt-4 bg-card/50 -mx-8 -mb-8 px-8 pb-8">
                             COST: €82,000/year + 340 hours
                         </div>
                     </div>
@@ -183,7 +183,7 @@ export const TransformationSection = () => {
 
                 {/* Right — New Way */}
                 <div ref={rightRef} className="relative z-30 mt-4 lg:mt-8">
-                    <div ref={newWayContainerRef} className="bg-[#111] backdrop-blur-xl rounded-2xl p-8 border border-emerald-500/30 shadow-[0_0_40px_rgba(34,197,94,0.15)] relative overflow-hidden h-full flex flex-col">
+                    <div ref={newWayContainerRef} className="bg-card backdrop-blur-xl rounded-2xl p-8 border border-emerald-500/30 shadow-[0_0_40px_rgba(34,197,94,0.15)] relative overflow-hidden h-full flex flex-col">
                         {/* Glossy top edge */}
                         <div className="absolute top-0 left-0 right-0 h-[1px] bg-gradient-to-r from-transparent via-emerald-400 to-transparent opacity-50" />
 
@@ -197,7 +197,7 @@ export const TransformationSection = () => {
                             ))}
                         </div>
                         <div className="mt-8 font-mono text-xs border-t border-emerald-500/10 pt-6">
-                            <div className="bg-[#00C853] rounded-lg p-3 text-white shadow-[0_8px_20px_rgba(0,200,83,0.4)] flex justify-between items-center text-sm font-bold tracking-wide border border-white/20">
+                            <div className="bg-primary rounded-lg p-3 text-white shadow-[0_8px_20px_rgba(16,185,129,0.4)] flex justify-between items-center text-sm font-bold tracking-wide border border-white/20">
                                 <span>€149/MONTH</span>
                                 <span>·</span>
                                 <span>UNLIMITED HIRES</span>
