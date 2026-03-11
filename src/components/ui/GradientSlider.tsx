@@ -53,7 +53,7 @@ const GradientSlider = React.forwardRef<
             {/* Thumb with Tooltip */}
             <SliderPrimitive.Thumb className="relative block h-4 w-4 rounded-full border-[1.5px] border-emerald-600 bg-white ring-offset-background transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 hover:scale-125 duration-200 shadow-[0_0_10px_rgba(16,185,129,0.2)]">
                 <div
-                    className="absolute -top-8 left-1/2 -translate-x-1/2 bg-[#161616] border border-white/10 text-white font-medium text-[10px] px-2 py-0.5 rounded-md shadow-xl transition-all whitespace-nowrap"
+                    className="absolute -top-8 left-1/2 -translate-x-1/2 bg-card border border-border text-foreground font-medium text-[10px] px-2 py-0.5 rounded-md shadow-xl transition-all whitespace-nowrap"
                     style={{ transform: `translateX(-50%)` }}
                 >
                     {value[0]}

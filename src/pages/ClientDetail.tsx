@@ -55,9 +55,6 @@ const ClientDetail = () => {
 
   const fetchClientDetails = async () => {
     try {
-      setLoading(true);
-
-      // Fetch client data
       const { data: clientData, error: clientError } = await supabase
         .from('clients')
         .select('*')
@@ -67,29 +64,27 @@ const ClientDetail = () => {
       if (clientError) throw clientError;
       setClient(clientData);
 
-      // Fetch placements with candidate info
-      const { data: placementsData, error: placementsError } = await supabase
+      const { data: placementData, error: placementError } = await supabase
         .from('client_placements')
         .select(`
-          id,
-          position_title,
-          placement_date,
-          time_to_fill_days,
-          cost_per_hire,
+          *,
           candidate:resume_analyses(candidate_name, email)
         `)
         .eq('client_id', clientId)
         .order('placement_date', { ascending: false });
 
-      if (placementsError) throw placementsError;
-      setPlacements(placementsData || []);
+      if (placementError) throw placementError;
 
-      // Fetch active positions
+      const formattedPlacements = (placementData || []).map(p => ({
+        ...p,
+        candidate: Array.isArray(p.candidate) ? p.candidate[0] || null : p.candidate
+      }));
+      setPlacements(formattedPlacements);
+
       const { data: positionsData, error: positionsError } = await supabase
         .from('client_active_positions')
         .select('*')
         .eq('client_id', clientId)
-        .eq('status', 'open')
         .order('posted_date', { ascending: false });
 
       if (positionsError) throw positionsError;
@@ -118,7 +113,7 @@ const ClientDetail = () => {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-50 to-white">
+      <div className="min-h-screen bg-background">
         <div className="max-w-7xl mx-auto px-6 py-12">
           <Skeleton className="h-12 w-64 mb-8" />
           <div className="grid gap-6 md:grid-cols-4 mb-8">
@@ -134,9 +129,9 @@ const ClientDetail = () => {
 
   if (!client) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-50 to-white flex items-center justify-center">
+      <div className="min-h-screen bg-background flex items-center justify-center">
         <div className="text-center">
-          <p className="text-slate-600 mb-4">Client not found</p>
+          <p className="text-muted-foreground mb-4">Client not found</p>
           <Button onClick={() => navigate('/client-metrics')}>
             Back to Client Metrics
           </Button>
@@ -146,7 +141,7 @@ const ClientDetail = () => {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-white">
+    <div className="min-h-screen bg-background">
       <div className="max-w-7xl mx-auto px-6 py-12">
         {/* Header */}
         <div className="mb-12 animate-fade-in-down">
@@ -155,7 +150,7 @@ const ClientDetail = () => {
               variant="ghost"
               size="sm"
               onClick={() => navigate('/dashboard')}
-              className="gap-2 hover:bg-cyan-50 hover:text-cyan-700"
+              className="gap-2 hover:bg-muted hover:text-primary"
             >
               <ArrowLeft className="h-4 w-4" />
               Back to Dashboard
@@ -164,7 +159,7 @@ const ClientDetail = () => {
               variant="ghost"
               size="sm"
               onClick={() => navigate('/client-metrics')}
-              className="gap-2 hover:bg-cyan-50 hover:text-cyan-700"
+              className="gap-2 hover:bg-muted hover:text-primary"
             >
               <ArrowLeft className="h-4 w-4" />
               Back to Client Metrics
@@ -173,10 +168,10 @@ const ClientDetail = () => {
 
           <div className="flex items-start justify-between">
             <div>
-              <h1 className="text-4xl font-bold bg-gradient-to-r from-slate-800 to-slate-600 bg-clip-text text-transparent mb-3">
+              <h1 className="text-4xl font-bold text-foreground mb-3">
                 {client.client_name}
               </h1>
-              <div className="flex flex-wrap gap-4 text-sm text-slate-600">
+              <div className="flex flex-wrap gap-4 text-sm text-muted-foreground">
                 {client.contact_name && (
                   <div className="flex items-center gap-2">
                     <Users className="h-4 w-4" />
@@ -206,67 +201,67 @@ const ClientDetail = () => {
 
         {/* KPI Cards */}
         <div className="grid gap-6 md:grid-cols-4 mb-8 animate-fade-in-up">
-          <Card className="backdrop-blur-sm bg-white/80 border border-slate-200/50 shadow-lg hover:shadow-xl transition-all duration-300 rounded-2xl hover-lift">
+          <Card className="bg-card border-border hover:border-primary/20 transition-all duration-300 rounded-2xl">
             <CardHeader className="pb-3">
-              <CardTitle className="text-sm font-medium text-slate-600 flex items-center gap-2">
-                <Award className="h-4 w-4 text-emerald-500" />
+              <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
+                <Award className="h-4 w-4 text-primary" />
                 Total Placements
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="text-3xl font-bold text-slate-800">{metrics.totalPlacements}</div>
-              <p className="text-sm text-slate-500 mt-1">Successful hires</p>
+              <div className="text-3xl font-bold text-foreground">{metrics.totalPlacements}</div>
+              <p className="text-sm text-muted-foreground mt-1">Successful hires</p>
             </CardContent>
           </Card>
 
-          <Card className="backdrop-blur-sm bg-white/80 border border-slate-200/50 shadow-lg hover:shadow-xl transition-all duration-300 rounded-2xl hover-lift animate-delay-100">
+          <Card className="bg-card border-border hover:border-primary/20 transition-all duration-300 rounded-2xl animate-delay-100">
             <CardHeader className="pb-3">
-              <CardTitle className="text-sm font-medium text-slate-600 flex items-center gap-2">
-                <Clock className="h-4 w-4 text-cyan-500" />
+              <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
+                <Clock className="h-4 w-4 text-secondary" />
                 Avg. Time-to-Fill
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="text-3xl font-bold text-slate-800">{metrics.avgTimeToFill}</div>
-              <p className="text-sm text-slate-500 mt-1">Days on average</p>
+              <div className="text-3xl font-bold text-foreground">{metrics.avgTimeToFill}</div>
+              <p className="text-sm text-muted-foreground mt-1">Days on average</p>
             </CardContent>
           </Card>
 
-          <Card className="backdrop-blur-sm bg-white/80 border border-slate-200/50 shadow-lg hover:shadow-xl transition-all duration-300 rounded-2xl hover-lift animate-delay-200">
+          <Card className="bg-card border-border hover:border-primary/20 transition-all duration-300 rounded-2xl animate-delay-200">
             <CardHeader className="pb-3">
-              <CardTitle className="text-sm font-medium text-slate-600 flex items-center gap-2">
-                <DollarSign className="h-4 w-4 text-purple-500" />
+              <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
+                <DollarSign className="h-4 w-4 text-accent" />
                 Avg. Cost Per Hire
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="text-3xl font-bold text-slate-800">
+              <div className="text-3xl font-bold text-foreground">
                 ${metrics.avgCostPerHire > 0 ? metrics.avgCostPerHire.toLocaleString() : 'N/A'}
               </div>
-              <p className="text-sm text-slate-500 mt-1">Per placement</p>
+              <p className="text-sm text-muted-foreground mt-1">Per placement</p>
             </CardContent>
           </Card>
 
-          <Card className="backdrop-blur-sm bg-white/80 border border-slate-200/50 shadow-lg hover:shadow-xl transition-all duration-300 rounded-2xl hover-lift animate-delay-300">
+          <Card className="bg-card border-border hover:border-primary/20 transition-all duration-300 rounded-2xl animate-delay-300">
             <CardHeader className="pb-3">
-              <CardTitle className="text-sm font-medium text-slate-600 flex items-center gap-2">
-                <TrendingUp className="h-4 w-4 text-blue-500" />
+              <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
+                <TrendingUp className="h-4 w-4 text-primary" />
                 Active Positions
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="text-3xl font-bold text-slate-800">{activePositions.length}</div>
-              <p className="text-sm text-slate-500 mt-1">Currently open</p>
+              <div className="text-3xl font-bold text-foreground">{activePositions.length}</div>
+              <p className="text-sm text-muted-foreground mt-1">Currently open</p>
             </CardContent>
           </Card>
         </div>
 
         {/* Active Positions */}
         {activePositions.length > 0 && (
-          <Card className="backdrop-blur-sm bg-white/80 border border-slate-200/50 shadow-lg rounded-2xl mb-8 animate-fade-in-up animate-delay-200">
+          <Card className="bg-card border-border rounded-2xl mb-8 animate-fade-in-up animate-delay-200">
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
-                <TrendingUp className="h-5 w-5 text-cyan-500" />
+                <TrendingUp className="h-5 w-5 text-primary" />
                 Active Positions
               </CardTitle>
               <CardDescription>Currently open roles</CardDescription>
@@ -274,11 +269,11 @@ const ClientDetail = () => {
             <CardContent>
               <div className="space-y-4">
                 {activePositions.map((position) => (
-                  <div key={position.id} className="p-4 bg-slate-50 rounded-lg hover:bg-slate-100 transition-colors">
+                  <div key={position.id} className="p-4 bg-muted rounded-lg hover:bg-muted/80 transition-colors">
                     <div className="flex items-start justify-between mb-2">
                       <div>
-                        <h4 className="font-semibold text-slate-800">{position.position_title}</h4>
-                        <p className="text-sm text-slate-500">
+                        <h4 className="font-semibold text-foreground">{position.position_title}</h4>
+                        <p className="text-sm text-muted-foreground">
                           Posted {new Date(position.posted_date).toLocaleDateString()} • 
                           {Math.floor((new Date().getTime() - new Date(position.posted_date).getTime()) / (1000 * 60 * 60 * 24))} days open
                         </p>
@@ -292,24 +287,24 @@ const ClientDetail = () => {
                     {position.required_skills && position.required_skills.length > 0 && (
                       <div className="flex flex-wrap gap-2 mt-2">
                         {position.required_skills.map((skill, idx) => (
-                          <Badge key={idx} className="bg-cyan-100 text-cyan-700 hover:bg-cyan-200">
+                          <Badge key={idx} className="bg-primary/15 text-primary border-primary/30 hover:bg-primary/25">
                             {skill}
                           </Badge>
                         ))}
                       </div>
                     )}
                   </div>
-                ))}
+                ))
               </div>
             </CardContent>
           </Card>
         )}
 
         {/* Placement History */}
-        <Card className="backdrop-blur-sm bg-white/80 border border-slate-200/50 shadow-lg rounded-2xl animate-fade-in-up animate-delay-300">
+        <Card className="bg-card border-border rounded-2xl animate-fade-in-up animate-delay-300">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
-              <Award className="h-5 w-5 text-emerald-500" />
+              <Award className="h-5 w-5 text-primary" />
               Placement History
             </CardTitle>
             <CardDescription>All successful placements for this client</CardDescription>
@@ -328,20 +323,20 @@ const ClientDetail = () => {
                 </TableHeader>
                 <TableBody>
                   {placements.map((placement) => (
-                    <TableRow key={placement.id} className="hover:bg-slate-50">
+                    <TableRow key={placement.id} className="hover:bg-muted">
                       <TableCell className="font-medium">{placement.position_title}</TableCell>
                       <TableCell>
                         {placement.candidate ? (
                           <div>
-                            <div className="font-medium text-slate-800">
+                            <div className="font-medium text-foreground">
                               {placement.candidate.candidate_name}
                             </div>
                             {placement.candidate.email && (
-                              <div className="text-xs text-slate-500">{placement.candidate.email}</div>
+                              <div className="text-xs text-muted-foreground">{placement.candidate.email}</div>
                             )}
                           </div>
                         ) : (
-                          <span className="text-slate-400">N/A</span>
+                          <span className="text-muted-foreground">N/A</span>
                         )}
                       </TableCell>
                       <TableCell>{new Date(placement.placement_date).toLocaleDateString()}</TableCell>
@@ -350,31 +345,31 @@ const ClientDetail = () => {
                           <Badge 
                             className={
                               placement.time_to_fill_days <= 21
-                                ? "bg-emerald-100 text-emerald-700 hover:bg-emerald-200"
+                                ? "bg-primary/15 text-primary hover:bg-primary/25"
                                 : placement.time_to_fill_days <= 35
-                                ? "bg-cyan-100 text-cyan-700 hover:bg-cyan-200"
-                                : "bg-orange-100 text-orange-700 hover:bg-orange-200"
+                                ? "bg-secondary/15 text-secondary hover:bg-secondary/25"
+                                : "bg-orange-500/15 text-orange-400 hover:bg-orange-500/25"
                             }
                           >
                             {placement.time_to_fill_days} days
                           </Badge>
                         ) : (
-                          <span className="text-slate-400">N/A</span>
+                          <span className="text-muted-foreground">N/A</span>
                         )}
                       </TableCell>
                       <TableCell className="text-right font-medium">
                         {placement.cost_per_hire 
                           ? `$${Number(placement.cost_per_hire).toLocaleString()}`
-                          : <span className="text-slate-400">N/A</span>
+                          : <span className="text-muted-foreground">N/A</span>
                         }
                       </TableCell>
                     </TableRow>
-                  ))}
+                  ))
                 </TableBody>
               </Table>
             ) : (
-              <div className="text-center py-12 text-slate-500">
-                <Award className="h-12 w-12 mx-auto mb-3 text-slate-300" />
+              <div className="text-center py-12 text-muted-foreground">
+                <Award className="h-12 w-12 mx-auto mb-3 text-muted-foreground/40" />
                 <p>No placements yet for this client</p>
               </div>
             )}
