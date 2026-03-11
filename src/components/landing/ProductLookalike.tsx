@@ -125,7 +125,7 @@ const ProductLookalike = () => {
 
                 {/* Mockup */}
                 <div className="look-mockup max-w-5xl mx-auto w-full opacity-0">
-                    <div className="rounded-xl overflow-hidden border border-white/[0.06] bg-[#0a0a0a] shadow-[0_0_60px_rgba(34,197,94,0.08)]">
+                    <div className="rounded-xl overflow-hidden border border-border bg-background shadow-[0_0_60px_rgba(16,185,129,0.08)]">
                         {/* Browser chrome */}
                         <div className="bg-white/[0.03] px-4 py-2.5 flex items-center gap-3 border-b border-white/[0.06]">
                             <div className="flex gap-1.5">
