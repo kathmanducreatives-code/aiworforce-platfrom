@@ -82,10 +82,10 @@ const FolderView = () => {
   }, [folderName]);
 
   const getStatusColor = (score: number) => {
-    if (score >= 8) return "bg-green-100 text-green-800";
-    if (score >= 6) return "bg-blue-100 text-blue-800";
-    if (score >= 4) return "bg-yellow-100 text-yellow-800";
-    return "bg-red-100 text-red-800";
+    if (score >= 8) return "bg-green-500/15 text-green-400";
+    if (score >= 6) return "bg-blue-500/15 text-blue-400";
+    if (score >= 4) return "bg-yellow-500/15 text-yellow-400";
+    return "bg-red-500/15 text-red-400";
   };
 
   const getStatusText = (score: number) => {
