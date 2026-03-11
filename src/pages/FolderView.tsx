@@ -202,7 +202,7 @@ const FolderView = () => {
                     id="select-all"
                     checked={selectedCandidates.size === candidates.length && candidates.length > 0}
                     onCheckedChange={handleSelectAll}
-                    className="border-slate-300 data-[state=checked]:bg-cyan-500 data-[state=checked]:border-cyan-500"
+                    className="border-border data-[state=checked]:bg-primary data-[state=checked]:border-primary"
                   />
                   <label 
                     htmlFor="select-all" 
