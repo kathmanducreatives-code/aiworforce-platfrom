@@ -97,11 +97,11 @@ export const ICPLeadsGallery = ({
                         {/* Loading Progress */}
                         <div className="flex flex-col items-center justify-center py-12 space-y-4">
                             <div className="relative w-16 h-16">
-                                <div className="absolute inset-0 border-t-2 border-[#00FF85] rounded-full animate-spin" />
-                                <div className="absolute inset-2 border-r-2 border-[#00FF85]/50 rounded-full animate-spin reverse" />
-                                <Brain className="absolute inset-0 m-auto w-6 h-6 text-[#00FF85] animate-pulse" />
+                                <div className="absolute inset-0 border-t-2 border-primary rounded-full animate-spin" />
+                                <div className="absolute inset-2 border-r-2 border-primary/50 rounded-full animate-spin reverse" />
+                                <Brain className="absolute inset-0 m-auto w-6 h-6 text-primary animate-pulse" />
                             </div>
-                            <p className="text-[#00FF85] font-mono text-sm animate-pulse">
+                            <p className="text-primary font-mono text-sm animate-pulse">
                                 Analyzing LinkedIn DNA... [65%]
                             </p>
                         </div>
