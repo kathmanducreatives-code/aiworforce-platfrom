@@ -235,7 +235,7 @@ const FolderView = () => {
                 <Button
                   onClick={handlePushToEmailSequence}
                   disabled={selectedCandidates.size === 0}
-                  className="w-full sm:w-auto bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-600 hover:to-teal-600 text-white shadow-lg shadow-emerald-500/25 hover:shadow-xl hover:shadow-emerald-500/30 transition-all duration-300 rounded-xl font-medium px-4 sm:px-6 py-3 group disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="w-full sm:w-auto bg-gradient-to-r from-primary to-secondary hover:from-primary/90 hover:to-secondary/90 text-white shadow-lg shadow-primary/25 hover:shadow-xl hover:shadow-primary/30 transition-all duration-300 rounded-xl font-medium px-4 sm:px-6 py-3 group disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   <div className="flex items-center justify-center gap-2 text-sm sm:text-base">
                     <Mail className="h-4 w-4 sm:h-5 sm:w-5 group-hover:scale-110 transition-transform duration-200" />
