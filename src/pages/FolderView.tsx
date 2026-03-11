@@ -333,7 +333,7 @@ const FolderView = () => {
                     {/* Essential info - always visible */}
                     <div className="space-y-2 mb-3 sm:mb-4">
                       {candidate.email && (
-                        <div className="flex items-center gap-2 text-slate-600 text-sm">
+                        <div className="flex items-center gap-2 text-muted-foreground text-sm">
                           <User className="h-4 w-4 flex-shrink-0" />
                           <span className="truncate">{candidate.email}</span>
                         </div>
