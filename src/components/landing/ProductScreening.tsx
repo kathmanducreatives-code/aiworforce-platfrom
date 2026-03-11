@@ -141,7 +141,7 @@ const ProductScreening = () => {
                             <LinkIcon className="w-3.5 h-3.5" /> Screening link copied!
                         </div>
 
-                        <GyroTilt intensity={8} contentClassName="rounded-xl overflow-hidden glow-green border border-white/[0.06] bg-[#0a0a0a]">
+                        <GyroTilt intensity={8} contentClassName="rounded-xl overflow-hidden glow-green border border-border bg-background">
                             <div className="bg-white/[0.03] px-4 py-2.5 flex items-center gap-3 border-b border-white/[0.06]">
                                 <div className="flex gap-1.5">
                                     <div className="w-3 h-3 rounded-full bg-red-400/60" />
