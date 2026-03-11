@@ -524,7 +524,7 @@ export const TargetIndustrySelector = ({
       }} transition={{
         duration: 0.3,
         ease: "easeOut"
-      }} className={cn("overflow-hidden transition-all duration-300 ease-out-quart rounded-b-xl border-t border-gray-100 bg-gray-50/80 backdrop-blur-sm", isOpen ? "opacity-100" : "opacity-0")}>
+      }} className={cn("overflow-hidden transition-all duration-300 ease-out-quart rounded-b-xl border-t border-border bg-muted/50 backdrop-blur-sm", isOpen ? "opacity-100" : "opacity-0")}>
         <div className="max-h-[300px] overflow-y-auto custom-scrollbar p-2">
           {filteredCategories.map(category => {
             const isExpanded = activeCategory === category.categoryId;
