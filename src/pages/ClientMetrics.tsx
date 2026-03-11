@@ -313,7 +313,7 @@ const ClientMetrics = () => {
                         </span>
                       </TableCell>
                       <TableCell className="text-center">
-                        <Badge variant="outline" className={client.activePositions > 0 ? "border-blue-300 text-blue-700 bg-blue-50" : ""}>
+                        <Badge variant="outline" className={client.activePositions > 0 ? "border-emerald-300 text-emerald-700 bg-emerald-50" : ""}>
                           {client.activePositions}
                         </Badge>
                       </TableCell>
