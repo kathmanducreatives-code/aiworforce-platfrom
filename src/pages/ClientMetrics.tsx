@@ -237,20 +237,20 @@ const ClientMetrics = () => {
           <Card className="backdrop-blur-sm bg-white/80 border border-slate-200/50 shadow-lg hover:shadow-xl transition-all duration-300 rounded-2xl overflow-hidden hover-lift animate-fade-in-up animate-delay-300 group">
             <CardHeader className="pb-3">
               <CardTitle className="text-sm font-medium text-slate-600 flex items-center gap-2">
-                <div className="p-2 bg-blue-50 rounded-lg group-hover:scale-110 transition-transform">
-                  <Building2 className="h-4 w-4 text-blue-500" />
+                <div className="p-2 bg-emerald-50 rounded-lg group-hover:scale-110 transition-transform">
+                  <Building2 className="h-4 w-4 text-emerald-500" />
                 </div>
                 Active Positions
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="text-3xl font-bold bg-gradient-to-r from-blue-600 to-blue-500 bg-clip-text text-transparent mb-2">
+              <div className="text-3xl font-bold bg-gradient-to-r from-emerald-600 to-emerald-500 bg-clip-text text-transparent mb-2">
                 {totalActivePositions}
               </div>
               <p className="text-sm text-slate-500 mb-2">Currently open</p>
-              <div className="flex items-center gap-2 px-3 py-1.5 bg-blue-50 rounded-lg">
-                <Building2 className="h-3.5 w-3.5 text-blue-600" />
-                <span className="text-sm font-medium text-blue-600">
+              <div className="flex items-center gap-2 px-3 py-1.5 bg-emerald-50 rounded-lg">
+                <Building2 className="h-3.5 w-3.5 text-emerald-600" />
+                <span className="text-sm font-medium text-emerald-600">
                   {clients.filter(c => c.activePositions > 0).length} clients hiring
                 </span>
               </div>
