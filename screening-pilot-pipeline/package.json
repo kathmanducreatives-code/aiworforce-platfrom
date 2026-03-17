@@ -1,0 +1,11 @@
+{
+  "name": "screening-pilot-pipeline",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "tsc -p ./tsconfig.json",
+    "start": "node ./dist/index.js",
+    "run": "npm run build && npm run start"
+  }
+}

@@ -1,0 +1,4 @@
+interface:
+  display_name: "Skill Builder"
+  short_description: "Create or improve Codex skills"
+  default_prompt: "Create or optimize a Codex skill for this workflow."
