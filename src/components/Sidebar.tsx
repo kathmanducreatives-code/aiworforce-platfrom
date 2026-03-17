@@ -1,13 +1,13 @@
 import { useState } from 'react';
 import { NavLink, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
-import { cn } from '@/lib/utils';
 import {
   LayoutDashboard, Activity, Calendar, Search, Brain, Target, TrendingUp,
   Mail, Share2, BarChart3, LogOut, Settings, HelpCircle, ChevronLeft, ChevronRight,
   PanelLeftClose, PanelLeft, Command, Users, CheckSquare, ShieldCheck, Video,
-  ClipboardList, Wallet, UserCircle, Briefcase, Crosshair, Zap
+  ClipboardList, Wallet, UserCircle, Briefcase, Crosshair, Zap, Radar
 } from 'lucide-react';
+import { cn } from '@/lib/utils';
 
 interface NavGroup {
   label: string;
@@ -37,7 +37,6 @@ const navGroups: NavGroup[] = [
     label: 'Engage',
     items: [
       { path: '/email-sequences', icon: Mail, label: 'Email Sequences' },
-      { path: '/job-distribution', icon: Share2, label: 'Job Distribution' },
     ],
   },
   {
@@ -46,6 +45,13 @@ const navGroups: NavGroup[] = [
       { path: '/post-interceptor', icon: Crosshair, label: 'Post Interceptor' },
       { path: '/lead-crm', icon: Zap, label: 'Lead CRM' },
       { path: '/outreach-engine', icon: Zap, label: 'Outreach Engine' },
+    ],
+  },
+  {
+    label: 'Intelligence',
+    items: [
+      { path: '/distribution', icon: Share2, label: 'Job Distribution' },
+      { path: '/competitors', icon: Radar, label: 'Competitor Monitor' },
     ],
   },
   {

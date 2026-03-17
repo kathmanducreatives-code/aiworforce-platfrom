@@ -5,11 +5,11 @@ import { ScrollTrigger } from 'gsap/ScrollTrigger';
 gsap.registerPlugin(ScrollTrigger);
 
 const rows = [
-    { task: 'Finding candidates', manual: '3–4 weeks, 45 hours', sp: '12–15 minutes' },
-    { task: 'Screening 100 resumes', manual: '8–10 hours', sp: 'Instant (AI scores all)' },
-    { task: 'Finding emails', manual: '2–3 hours', sp: 'One click' },
-    { task: 'Personalized outreach', manual: '30 min per candidate', sp: 'Automated for all' },
-    { task: 'Full cycle', manual: '50–60 hours', sp: 'Under 1 hour', highlight: true },
+    { task: 'Resume screening', manual: 'Manual review across full applicant pile', sp: 'AI auto-filters low-fit candidates' },
+    { task: 'Candidate evaluation', manual: 'Recruiter + manager first-pass scoring', sp: 'Automated scoring with clear fit signals' },
+    { task: 'Pre-interview testing', manual: 'Ad-hoc early assessments', sp: 'AI-driven screening questions and answers' },
+    { task: 'Interview preparation', manual: 'Manual question prep for each candidate', sp: 'Instant interview blueprint generation' },
+    { task: 'Interviewer coordination', manual: 'Heavy recruiter scheduling overhead', sp: 'Expert marketplace + workflow automation', highlight: true },
 ];
 
 const TimeMath = () => {
@@ -42,14 +42,14 @@ const TimeMath = () => {
         <section ref={sectionRef} className="relative px-4 py-28 md:py-36">
             <div className="max-w-4xl mx-auto">
                 <div className="text-center mb-14">
-                    <p className="font-mono text-xs uppercase tracking-[0.15em] mb-4 text-emerald-400 font-semibold">◆ The Time Math</p>
+                    <p className="font-mono text-xs uppercase tracking-[0.15em] mb-4 text-emerald-400 font-semibold">◆ Result</p>
                     <h2 className="font-display font-black text-[clamp(1.5rem,3.5vw,3rem)] leading-[1.1] tracking-[-0.03em] text-white">
-                        WHAT TAKES YOUR AGENCY 4 WEEKS<br />TAKES US 15 MINUTES
+                        HIRING THAT TAKES HOURS, NOT WEEKS
                     </h2>
                 </div>
                 <div ref={tableRef} className="glass-strong rounded-2xl overflow-hidden">
                     <div className="grid grid-cols-3 gap-0 text-xs font-semibold text-white/30 uppercase tracking-wider px-6 py-4 border-b border-white/[0.06]">
-                        <span>Task</span><span>Manual / Agency</span><span className="text-emerald-400">ScreeningPilot</span>
+                        <span>Workflow</span><span>Traditional Hiring</span><span className="text-emerald-400">ScreeningPilot</span>
                     </div>
                     {rows.map((row, i) => (
                         <div key={i} className={`time-row grid grid-cols-3 gap-0 px-6 py-4 opacity-0 border-b border-white/[0.03] last:border-0 ${row.highlight ? 'bg-emerald-500/[0.06]' : ''}`}>
@@ -59,6 +59,9 @@ const TimeMath = () => {
                         </div>
                     ))}
                 </div>
+                <p className="text-center text-white/70 text-sm mt-6">
+                    Up to <span className="text-emerald-400 font-semibold">90% of hiring work completed automatically.</span>
+                </p>
             </div>
         </section>
     );

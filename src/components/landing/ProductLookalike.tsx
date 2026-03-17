@@ -114,12 +114,13 @@ const ProductLookalike = () => {
                     <div className="look-title inline-flex items-center gap-2 px-3 py-1.5 rounded-full border border-primary/40 bg-transparent mb-4 opacity-0 mx-auto">
                         <div className="w-1.5 h-1.5 rounded-full bg-primary" />
                         <span className="font-mono text-[11px] uppercase tracking-[2px] text-primary font-semibold mt-px">LOOKALIKE ENGINE</span>
+
                     </div>
                     <h2 className="look-title font-display font-black text-[clamp(1.8rem,4.5vw,3.5rem)] leading-[1.0] tracking-[-0.04em] text-white mb-3 opacity-0">
-                        PASTE ONE PROFILE.<br />GET 2,000 RANKED MATCHES.
+                        AI FILTERS OUT 95% OF<br />UNQUALIFIED CANDIDATES
                     </h2>
                     <p className="look-subtitle text-white/60 text-base md:text-lg leading-[1.7] max-w-[700px] mx-auto opacity-0">
-                        Exhaust your entire addressable talent market. Every matching professional — found, ranked, and ready to contact. In 15 minutes.
+                        ScreeningPilot evaluates resume quality, experience relevance, and screening answers automatically. Only top candidates move forward.
                     </p>
                 </div>
 
@@ -140,14 +141,14 @@ const ProductLookalike = () => {
                             {/* Header */}
                             <div className="flex items-center justify-between mb-4">
                                 <div>
-                                    <h3 className="text-sm font-bold text-white">Lookalike Results / SaaS-founders</h3>
+                                    <h3 className="text-sm font-bold text-white">AI Screening Queue / Frontend Engineer</h3>
                                     <p className="look-counter text-[10px] text-white/30 mt-0.5 opacity-0">
-                                        <span className="font-bold text-emerald-400 tabular-nums">49</span> found · AVG MATCH <span className="font-bold text-emerald-400 tabular-nums">42%</span>
+                                        <span className="font-bold text-emerald-400 tabular-nums">49</span> applicants · <span className="font-bold text-emerald-400 tabular-nums">95%</span> auto-filtered
                                     </p>
                                 </div>
                                 <div className="flex gap-2">
-                                    <div className="bg-emerald-600/80 text-white text-[10px] font-semibold px-3 py-1.5 rounded-md">Find Emails</div>
-                                    <div className="glass text-white/60 text-[10px] font-semibold px-3 py-1.5 rounded-md">Export CSV</div>
+                                    <div className="bg-emerald-600/80 text-white text-[10px] font-semibold px-3 py-1.5 rounded-md">Score Candidates</div>
+                                    <div className="glass text-white/60 text-[10px] font-semibold px-3 py-1.5 rounded-md">Export Shortlist</div>
                                 </div>
                             </div>
 
@@ -207,8 +208,8 @@ const ProductLookalike = () => {
                                                 <span className="flex items-center gap-1"><Clock className="w-3 h-3" />{c.yoe}</span>
                                             </div>
                                             <div className="flex gap-1.5">
-                                                <div className="flex items-center gap-1 text-[9px] text-blue-400 bg-blue-500/10 border border-blue-500/15 px-2 py-0.5 rounded transition-colors hover:bg-blue-500/20 cursor-pointer"><Linkedin className="w-2.5 h-2.5" /> LinkedIn</div>
-                                                <div className="flex items-center gap-1 text-[9px] text-white/60 bg-white/[0.04] border border-white/[0.08] px-2 py-0.5 rounded transition-colors hover:bg-white/10 cursor-pointer"><Mail className="w-2.5 h-2.5" /> Reveal Email</div>
+                                                <div className="flex items-center gap-1 text-[9px] text-blue-400 bg-blue-500/10 border border-blue-500/15 px-2 py-0.5 rounded transition-colors hover:bg-blue-500/20 cursor-pointer"><Linkedin className="w-2.5 h-2.5" /> Profile</div>
+                                                <div className="flex items-center gap-1 text-[9px] text-white/60 bg-white/[0.04] border border-white/[0.08] px-2 py-0.5 rounded transition-colors hover:bg-white/10 cursor-pointer"><Mail className="w-2.5 h-2.5" /> Review Answers</div>
                                             </div>
                                         </div>
                                     ))}

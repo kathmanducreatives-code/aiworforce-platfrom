@@ -1,28 +1,52 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap');
 @import "tailwindcss";
+
 
 /* ── Custom theme tokens for Tailwind v4 ─────── */
 @theme {
-  --color-bg: #0a0a0b;
-  --color-surface: #141416;
-  --color-surface-2: #1c1c1f;
-  --color-border: rgba(255, 255, 255, 0.08);
-  --color-border-hover: rgba(255, 255, 255, 0.15);
+  /* Backgrounds */
+  --color-bg: #08080a;
+  --color-surface: #111113;
+  --color-surface-2: #18181b;
+  --color-surface-3: #1f1f23;
 
+  /* Borders */
+  --color-border: rgba(255, 255, 255, 0.07);
+  --color-border-hover: rgba(255, 255, 255, 0.14);
+  --color-border-focus: rgba(59, 130, 246, 0.5);
+
+  /* Brand */
   --color-brand: #3b82f6;
-  --color-brand-glow: rgba(59, 130, 246, 0.3);
+  --color-brand-hover: #60a5fa;
+  --color-brand-glow: rgba(59, 130, 246, 0.35);
+  --color-brand-subtle: rgba(59, 130, 246, 0.12);
+
+  /* Accents */
   --color-violet: #8b5cf6;
   --color-emerald: #10b981;
   --color-amber: #f59e0b;
   --color-red: #ef4444;
   --color-cyan: #06b6d4;
+  --color-rose: #f43f5e;
 
-  --color-text-primary: #ffffff;
+  /* Text hierarchy */
+  --color-text-primary: #f1f5f9;
   --color-text-secondary: #94a3b8;
   --color-text-muted: #475569;
+  --color-text-xmuted: #2d3748;
 
+  /* Shadows */
+  --shadow-card: 0 1px 3px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(255, 255, 255, 0.06);
+  --shadow-modal: 0 20px 60px rgba(0, 0, 0, 0.7);
+  --shadow-brand: 0 0 20px rgba(59, 130, 246, 0.3);
+
+  /* Typography */
   --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --font-mono: 'SF Mono', 'SFMono-Regular', ui-monospace, monospace;
 
+  /* Easing */
   --ease-smooth: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 
 /* ── Global reset ──────────────────────────────── */
@@ -247,4 +271,249 @@ button {
 .focus-ring:focus-visible {
   outline: 2px solid rgba(59, 130, 246, 0.5);
   outline-offset: 2px;
+}
+
+/* ── Scrollable utility ──────────────────────── */
+.scrollable {
+  overflow-y: auto;
+  overflow-x: hidden;
+  flex: 1;
+  min-height: 0;
+}
+
+/* ── Page layout ─────────────────────────────── */
+.page-content {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+  padding: 2rem;
+  max-width: 1400px;
+  width: 100%;
+  margin: 0 auto;
+}
+
+/* ── Shimmer skeleton ────────────────────────── */
+.skeleton {
+  background: linear-gradient(90deg,
+      rgba(255, 255, 255, 0.04) 25%,
+      rgba(255, 255, 255, 0.08) 50%,
+      rgba(255, 255, 255, 0.04) 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.5s ease-in-out infinite;
+  border-radius: 6px;
+}
+
+/* ── Topbar glass ────────────────────────────── */
+.topbar {
+  position: sticky;
+  top: 0;
+  z-index: 40;
+  background: rgba(8, 8, 10, 0.85);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+/* ── Card interactive ────────────────────────── */
+.card-interactive {
+  transition: transform 0.2s var(--ease-smooth), box-shadow 0.2s;
+}
+
+.card-interactive:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-card);
+}
+
+/* ── Count-up animation ──────────────────────── */
+@keyframes count-up {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-count-up {
+  animation: count-up 0.5s var(--ease-smooth) both;
+}
+
+/* ── Glass card ──────────────────────────────────
+   "Cinematic SaaS" card with depth and blur.
+   Use this class on any card container.          */
+.glass-card {
+  background: linear-gradient(135deg,
+      rgba(255, 255, 255, 0.045) 0%,
+      rgba(255, 255, 255, 0.02) 100%);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  overflow: hidden;
+}
+
+.glass-card:hover {
+  border-color: rgba(255, 255, 255, 0.16);
+  background: linear-gradient(135deg,
+      rgba(255, 255, 255, 0.055) 0%,
+      rgba(255, 255, 255, 0.025) 100%);
+}
+
+/* ── Neon glow bars (pipeline / progress) ────── */
+.neon-bar {
+  position: relative;
+  transition: box-shadow 0.3s ease;
+}
+
+.neon-bar-blue {
+  box-shadow: 0 0 12px rgba(59, 130, 246, 0.45);
+}
+
+.neon-bar-green {
+  box-shadow: 0 0 12px rgba(16, 185, 129, 0.45);
+}
+
+.neon-bar-amber {
+  box-shadow: 0 0 12px rgba(245, 158, 11, 0.45);
+}
+
+.neon-bar-violet {
+  box-shadow: 0 0 12px rgba(139, 92, 246, 0.45);
+}
+
+.neon-bar-red {
+  box-shadow: 0 0 12px rgba(239, 68, 68, 0.45);
+}
+
+/* ── Slide-fade page transition ───────────────── */
+@keyframes slide-fade-in {
+  from {
+    opacity: 0;
+    transform: translateX(12px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes slide-fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.page-transition {
+  animation: slide-fade-in 0.28s var(--ease-smooth) both;
+  display: contents;
+}
+
+/* ── Stagger entrance ─────────────────────────── */
+@keyframes stagger-in {
+  from {
+    opacity: 0;
+    transform: translateY(14px) scale(0.98);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.stagger-child {
+  animation: stagger-in 0.45s var(--ease-smooth) both;
+}
+
+.stagger-1 {
+  animation-delay: 0.04s;
+}
+
+.stagger-2 {
+  animation-delay: 0.09s;
+}
+
+.stagger-3 {
+  animation-delay: 0.14s;
+}
+
+.stagger-4 {
+  animation-delay: 0.19s;
+}
+
+.stagger-5 {
+  animation-delay: 0.24s;
+}
+
+.stagger-6 {
+  animation-delay: 0.29s;
+}
+
+.stagger-7 {
+  animation-delay: 0.34s;
+}
+
+.stagger-8 {
+  animation-delay: 0.39s;
+}
+
+/* ── Warmth meter ring ────────────────────────── */
+.warmth-ring {
+  transition: stroke-dashoffset 0.8s var(--ease-smooth);
+  transform-origin: 50% 50%;
+  transform: rotate(-90deg);
+}
+
+/* ── Week-at-a-glance strip ───────────────────── */
+.week-cell {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  border-radius: 16px;
+  padding: 16px 10px;
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  background: rgba(255, 255, 255, 0.025);
+  transition: all 0.2s var(--ease-smooth);
+  cursor: pointer;
+  position: relative;
+  overflow: hidden;
+}
+
+.week-cell:hover {
+  border-color: rgba(255, 255, 255, 0.16);
+  background: rgba(255, 255, 255, 0.05);
+  transform: translateY(-2px);
+}
+
+.week-cell.active {
+  border-color: rgba(59, 130, 246, 0.4);
+  background: rgba(59, 130, 246, 0.1);
+}
+
+.week-cell.posted {
+  border-color: rgba(16, 185, 129, 0.35);
+  background: rgba(16, 185, 129, 0.07);
+}
+
+/* ── Bento module (post detail floating cards) ── */
+.bento-module {
+  border-radius: 18px;
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  padding: 20px;
+  background: linear-gradient(135deg,
+      rgba(255, 255, 255, 0.04) 0%,
+      rgba(255, 255, 255, 0.015) 100%);
+  box-shadow: 0 4px 24px -6px rgba(0, 0, 0, 0.4);
+  overflow: hidden;
 }

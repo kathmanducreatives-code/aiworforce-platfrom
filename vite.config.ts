@@ -17,6 +17,7 @@ export default defineConfig(({ mode }) => ({
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "./src"),
+      "undici": path.resolve(__dirname, "./src/lib/dummy.ts"),
     },
     dedupe: ["react", "react-dom"],
   },

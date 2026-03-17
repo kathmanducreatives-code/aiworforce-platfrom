@@ -6,19 +6,19 @@ import { CheckCircle, XCircle } from 'lucide-react';
 gsap.registerPlugin(ScrollTrigger);
 
 const oldWayItems = [
-    'Post job → wait 3–4 weeks',
-    'Agency sends 3 candidates → pay €15,000 upfront',
-    'Screen manually → 45 hours per search',
-    'Get 30–50 candidates. Maybe.',
-    'Bad hire → €60,000 lost. Repeat next quarter.',
+    'Most companies spend weeks screening resumes manually',
+    'Recruiting agencies charge large placement fees',
+    'Internal teams spend hours reviewing applications',
+    'Hiring managers interview candidates who should have been filtered earlier',
+    'Most early-stage hiring work is repetitive and manual',
 ];
 
 const newWayItems = [
-    'Paste one profile → AI activates instantly',
-    'AI scores all candidates instantly',
-    'Get ranked shortlist in 15 minutes',
-    'Zero agency fees',
-    'One dashboard, unlimited hires',
+    'Meet ScreeningPilot — your AI hiring engine',
+    'Automate resume review and candidate evaluation',
+    'Generate interview insights before interviews begin',
+    'Move only top-fit candidates to final rounds',
+    'Spend your time interviewing the best candidates',
 ];
 
 export const TransformationSection = () => {
@@ -109,10 +109,10 @@ export const TransformationSection = () => {
 
             <div className="text-center mb-[60px] w-full max-w-6xl">
                 <p className="font-mono text-[11px] uppercase tracking-[0.2em] mb-4 text-emerald-500 font-semibold flex items-center justify-center gap-2">
-                    THE TRANSFORMATION
+                    PROBLEM → SOLUTION
                 </p>
                 <h2 className="font-black text-[clamp(2.5rem,5vw,4.5rem)] leading-[1.0] tracking-[-0.05em] text-white">
-                    FROM AGENCY DEPENDENCY<br />TO TOTAL CONTROL
+                    HIRING IS SLOW, EXPENSIVE, AND MANUAL<br />MEET SCREENINGPILOT — YOUR AI HIRING ENGINE
                 </h2>
             </div>
 
@@ -121,7 +121,7 @@ export const TransformationSection = () => {
                 {/* Left — Old Way */}
                 <div ref={leftRef} className="mt-4 lg:mt-8">
                     <div className="bg-black/80 backdrop-blur-md rounded-2xl p-8 border border-white/10 shadow-2xl relative overflow-hidden h-full flex flex-col">
-                        <h3 className="font-display font-bold text-xl text-white/30 mb-6 uppercase tracking-wide">The Old Way</h3>
+                        <h3 className="font-display font-bold text-xl text-white/30 mb-6 uppercase tracking-wide">The Problem</h3>
                         <div className="space-y-4 flex-grow">
                             {oldWayItems.map((item, i) => (
                                 <div key={i} className="flex items-start gap-4 opp-item opacity-80">
@@ -132,6 +132,7 @@ export const TransformationSection = () => {
                         </div>
                         <div className="mt-8 font-mono text-xs text-white/40 border-t border-white/10 pt-4 bg-card/50 -mx-8 -mb-8 px-8 pb-8">
                             COST: €82,000/year + 340 hours
+
                         </div>
                     </div>
                 </div>
@@ -187,7 +188,7 @@ export const TransformationSection = () => {
                         {/* Glossy top edge */}
                         <div className="absolute top-0 left-0 right-0 h-[1px] bg-gradient-to-r from-transparent via-emerald-400 to-transparent opacity-50" />
 
-                        <h3 className="font-display font-black text-xl text-emerald-500 mb-6 uppercase tracking-wide">The ScreeningPilot Way</h3>
+                        <h3 className="font-display font-black text-xl text-emerald-500 mb-6 uppercase tracking-wide">The Solution</h3>
                         <div className="space-y-4 flex-grow">
                             {newWayItems.map((item, i) => (
                                 <div key={i} className="flex items-start gap-4 new-item">
@@ -200,7 +201,7 @@ export const TransformationSection = () => {
                             <div className="bg-primary rounded-lg p-3 text-white shadow-[0_8px_20px_rgba(16,185,129,0.4)] flex justify-between items-center text-sm font-bold tracking-wide border border-white/20">
                                 <span>€149/MONTH</span>
                                 <span>·</span>
-                                <span>UNLIMITED HIRES</span>
+                                <span>AI AUTOMATES MOST EARLY-STAGE HIRING</span>
                             </div>
                         </div>
                     </div>

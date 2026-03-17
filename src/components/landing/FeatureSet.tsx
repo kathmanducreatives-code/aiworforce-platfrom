@@ -1,64 +1,453 @@
-import { useEffect, useRef } from 'react';
+import { type ComponentType, useEffect, useRef } from 'react';
 import gsap from 'gsap';
 import { ScrollTrigger } from 'gsap/ScrollTrigger';
-import { Search, Bot, Mail, BarChart3, Users, Calendar, MessageSquare } from 'lucide-react';
+import { Clock3, Briefcase, Users, Target } from 'lucide-react';
 
 gsap.registerPlugin(ScrollTrigger);
 
-const features = [
-    { icon: Search, title: 'Lookalike Search', desc: 'One profile → 2,000+ ranked matches. Exhaust your entire talent market.', color: 'text-emerald-400' },
-    { icon: Bot, title: 'AI Screening', desc: '300 resumes scored in 8 minutes with match % and reasoning.', color: 'text-emerald-400' },
-    { icon: Mail, title: 'Email & Outreach', desc: 'One-click email reveal. Automated personalized sequences.', color: 'text-blue-400' },
-    { icon: BarChart3, title: 'Pipeline Dashboard', desc: 'Track every candidate: discovered → contacted → interviewing → hired.', color: 'text-purple-400' },
-    { icon: Users, title: 'Team Collaboration', desc: 'Notes, ratings, feedback. Everyone aligned on every candidate.', color: 'text-teal-400' },
-    { icon: Calendar, title: 'Meeting Management', desc: 'Schedule interviews directly. No back-and-forth.', color: 'text-amber-400' },
+type FeatureSlide = {
+  icon: ComponentType<{ className?: string }>;
+  title: string;
+  description: string;
+  bullets: string[];
+  stat: string;
+};
+
+const slides: FeatureSlide[] = [
+  {
+    icon: Clock3,
+    title: 'Hire Faster',
+    description: 'Reduce hiring cycles from weeks to hours by automating repetitive first-pass recruiting work.',
+    bullets: ['Faster candidate filtering', 'Faster shortlist decisions', 'Faster interview readiness'],
+    stat: 'Weeks → Hours',
+  },
+  {
+    icon: Briefcase,
+    title: 'Eliminate Recruiting Agencies',
+    description: 'Stop paying expensive placement fees for manual screening and early-stage candidate qualification.',
+    bullets: ['No per-hire agency dependency', 'Lower recruiting overhead', 'Internal process control'],
+    stat: 'No Agency Fees',
+  },
+  {
+    icon: Users,
+    title: 'No Large Recruiting Team Needed',
+    description: 'AI handles the bulk of screening and evaluation so lean teams can run high-volume hiring.',
+    bullets: ['Automated first-pass review', 'Structured AI scoring', 'Less manual coordination'],
+    stat: 'Lean Team Friendly',
+  },
+  {
+    icon: Target,
+    title: 'Interview Only Qualified Candidates',
+    description: 'ScreeningPilot filters out up to 95% of low-fit applicants automatically before final interviews.',
+    bullets: ['Score-based shortlisting', 'Better interview quality', 'Focused hiring manager time'],
+    stat: 'Up to 95% Auto-Filtered',
+  },
 ];
 
+const STYLES = `
+.features-3d-section {
+  position: relative;
+  min-height: 100vh;
+  background: #02060a;
+  perspective: 1500px;
+  overflow: clip;
+}
+
+.features-grid-background {
+  position: sticky;
+  top: 0;
+  height: 100vh;
+  z-index: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(circle at 25% 20%, rgba(0,255,150,0.1), transparent 45%),
+    radial-gradient(circle at 78% 26%, rgba(0,255,150,0.08), transparent 44%),
+    linear-gradient(rgba(0,255,150,0.05) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(0,255,150,0.05) 1px, transparent 1px);
+  background-size: 100% 100%, 100% 100%, 64px 64px, 64px 64px;
+}
+
+.features-wrapper {
+  position: relative;
+  z-index: 2;
+  height: 100vh;
+  transform-style: preserve-3d;
+}
+
+.fs-intro {
+  position: absolute;
+  top: 56px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: min(940px, 92vw);
+  text-align: center;
+  z-index: 18;
+}
+
+.fs-stage {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transform-style: preserve-3d;
+}
+
+.fs-card {
+  position: absolute;
+  width: min(900px, 92vw);
+  height: min(70vh, 600px);
+  border-radius: 24px;
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(0, 255, 150, 0.2);
+  box-shadow: 0 0 40px rgba(0, 255, 150, 0.15);
+  overflow: hidden;
+  display: grid;
+  grid-template-columns: 0.95fr 1.05fr;
+  will-change: transform, opacity;
+  transform-style: preserve-3d;
+}
+
+.fs-left {
+  padding: 34px;
+  border-right: 1px solid rgba(0,255,150,0.12);
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+
+.fs-right {
+  padding: 24px;
+  display: flex;
+  align-items: stretch;
+}
+
+.fs-panel {
+  width: 100%;
+  border-radius: 16px;
+  border: 1px solid rgba(255,255,255,0.1);
+  background: rgba(0,0,0,0.36);
+  padding: 16px;
+  display: grid;
+  gap: 10px;
+  transform-style: preserve-3d;
+}
+
+.fs-icon-wrap {
+  width: 46px;
+  height: 46px;
+  border-radius: 12px;
+  border: 1px solid rgba(0,255,150,0.3);
+  background: rgba(0,255,150,0.12);
+  display: grid;
+  place-items: center;
+  color: #34d399;
+}
+
+.fs-kicker {
+  margin-top: 14px;
+  font-size: 11px;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: #4ade80;
+}
+
+.fs-title {
+  margin-top: 12px;
+  font-size: clamp(1.55rem, 2.1vw, 2rem);
+  line-height: 1.05;
+  letter-spacing: -0.04em;
+  font-weight: 900;
+  color: #fff;
+}
+
+.fs-description {
+  margin-top: 12px;
+  color: rgba(255,255,255,0.68);
+  line-height: 1.62;
+  font-size: 14px;
+}
+
+.fs-bullets {
+  margin-top: 16px;
+  display: grid;
+  gap: 8px;
+}
+
+.fs-bullet {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  font-size: 12px;
+  color: rgba(255,255,255,0.78);
+}
+
+.fs-check {
+  color: #34d399;
+  line-height: 1.3;
+}
+
+.fs-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 0;
+  border-bottom: 1px solid rgba(255,255,255,0.08);
+}
+
+.fs-row:last-child {
+  border-bottom: none;
+}
+
+.fs-card-badge {
+  transform: translateZ(34px);
+  border-radius: 999px;
+  border: 1px solid rgba(0,255,150,0.35);
+  background: rgba(0,255,150,0.1);
+  color: #4ade80;
+  font-size: 10px;
+  padding: 4px 10px;
+  white-space: nowrap;
+}
+
+.fs-card-widget {
+  transform: translateZ(22px);
+  border-radius: 10px;
+  border: 1px solid rgba(255,255,255,0.11);
+  background: rgba(255,255,255,0.04);
+  padding: 8px 10px;
+  color: rgba(255,255,255,0.8);
+  font-size: 11px;
+}
+
+.fs-bar-track {
+  height: 6px;
+  border-radius: 999px;
+  background: rgba(255,255,255,0.1);
+  overflow: hidden;
+}
+
+.fs-card-bar {
+  height: 100%;
+  transform: translateZ(40px);
+  background: linear-gradient(90deg, #16a34a, #34d399);
+}
+
+@media (max-width: 1024px) {
+  .fs-card {
+    grid-template-columns: 1fr;
+    height: min(78vh, 700px);
+  }
+
+  .fs-left {
+    border-right: none;
+    border-bottom: 1px solid rgba(0,255,150,0.12);
+    padding: 22px;
+  }
+
+  .fs-right {
+    padding: 16px;
+  }
+}
+`;
+
 const FeatureSet = () => {
-    const sectionRef = useRef<HTMLDivElement>(null);
+  const sectionRef = useRef<HTMLElement>(null);
 
-    useEffect(() => {
-        const ctx = gsap.context(() => {
-            const cards = sectionRef.current?.querySelectorAll('.feat-card');
-            if (cards) {
-                cards.forEach((card, i) => {
-                    gsap.fromTo(card, { opacity: 0, y: 30, scale: 0.95 }, {
-                        opacity: 1, y: 0, scale: 1, duration: 0.5, delay: i * 0.1, ease: 'power3.out',
-                        scrollTrigger: { trigger: sectionRef.current, start: 'top 65%', toggleActions: 'play none none none' },
-                    });
-                });
-            }
-        }, sectionRef);
-        return () => ctx.revert();
-    }, []);
+  useEffect(() => {
+    const section = sectionRef.current;
+    if (!section) return;
 
-    return (
-        <section ref={sectionRef} className="relative px-4 py-28 md:py-36">
-            <div className="max-w-5xl mx-auto">
-                <div className="text-center mb-14">
-                    <p className="font-mono text-xs uppercase tracking-[0.15em] mb-4 text-emerald-400 font-semibold">◆ The Full Platform</p>
-                    <h2 className="font-display font-black text-[clamp(1.5rem,3.5vw,3rem)] leading-[1.1] tracking-[-0.03em] text-white">
-                        EVERY TOOL YOU NEED.<br />ONE SUBSCRIPTION.
-                    </h2>
-                </div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                    {features.map((f, i) => (
-                        <div key={i} className="feat-card glass rounded-2xl p-6 opacity-0 group hover:border-emerald-500/20 hover:-translate-y-1 transition-all duration-300 cursor-default">
-                            <f.icon className={`w-8 h-8 mb-4 ${f.color} transition-transform group-hover:scale-110`} />
-                            <h3 className="font-display font-bold text-base text-white mb-2">{f.title}</h3>
-                            <p className="text-sm text-white/50 leading-relaxed">{f.desc}</p>
-                        </div>
-                    ))}
-                    <div className="feat-card glass rounded-2xl p-6 opacity-0 border-dashed !border-white/10 hover:border-emerald-500/15 transition-all duration-300">
-                        <MessageSquare className="w-8 h-8 mb-4 text-white/20" />
-                        <h3 className="font-display font-bold text-base text-white/40 mb-2">AI Behavioral Screening</h3>
-                        <p className="text-sm text-white/20 leading-relaxed">Chat-based culture fit interviews.</p>
-                        <span className="inline-block mt-3 text-[10px] font-semibold text-white/25 bg-white/[0.04] border border-white/[0.08] px-3 py-1 rounded-full">Coming Soon</span>
+    const prefersReduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+    const ctx = gsap.context(() => {
+      const featureCards = gsap.utils.toArray<HTMLElement>('.fs-card');
+      const intro = section.querySelector<HTMLElement>('.fs-intro');
+
+      if (!featureCards.length) return;
+
+      gsap.set(featureCards, {
+        scale: 0.8,
+        opacity: 0,
+        y: 80,
+        rotateX: 6,
+        z: -120,
+        transformOrigin: 'center center',
+      });
+      gsap.set('.fs-focus-item', { opacity: 0, y: 16 });
+      featureCards.forEach((card, index) => gsap.set(card, { zIndex: index + 1 }));
+
+      const timeline = gsap.timeline({
+        defaults: { ease: 'power2.inOut' },
+        scrollTrigger: {
+          trigger: section,
+          start: 'top top',
+          end: '+=460%',
+          pin: true,
+          scrub: prefersReduced ? false : 1.1,
+          anticipatePin: 1,
+        },
+      });
+
+      if (intro) {
+        timeline.to(intro, { y: -56, opacity: 0.2, duration: 0.6 }, 0);
+      }
+
+      featureCards.forEach((card, index) => {
+        const point = index * 0.92;
+
+        timeline.fromTo(
+          card,
+          { scale: 0.8, opacity: 0, y: 80, rotateX: 6, z: -120 },
+          { scale: 1, opacity: 1, y: 0, rotateX: 0, z: 0, duration: 0.9 },
+          point,
+        );
+
+        timeline.to(card, { boxShadow: '0 0 48px rgba(0,255,150,0.2)', duration: 0.3 }, point + 0.3);
+
+        const focusNodes = card.querySelectorAll('.fs-focus-item');
+        if (focusNodes.length) {
+          timeline.to(
+            focusNodes,
+            { opacity: 1, y: 0, duration: 0.4, stagger: 0.05 },
+            point + 0.24,
+          );
+        }
+
+        if (index < featureCards.length - 1) {
+          timeline.to(
+            card,
+            { rotateX: -10, scale: 0.9, opacity: 0, y: -44, z: -220, duration: 0.82 },
+            point + 0.74,
+          );
+        }
+      });
+
+      featureCards.forEach((card, index) => {
+        const badges = card.querySelectorAll('.fs-card-badge');
+        const bars = card.querySelectorAll('.fs-card-bar');
+        const widgets = card.querySelectorAll('.fs-card-widget');
+
+        if (badges.length) {
+          gsap.to(badges, {
+            y: -20 - index * 3,
+            ease: 'none',
+            scrollTrigger: {
+              trigger: section,
+              start: 'top top',
+              end: '+=460%',
+              scrub: true,
+            },
+          });
+        }
+
+        if (bars.length) {
+          gsap.to(bars, {
+            y: -34 - index * 4,
+            ease: 'none',
+            scrollTrigger: {
+              trigger: section,
+              start: 'top top',
+              end: '+=460%',
+              scrub: true,
+            },
+          });
+        }
+
+        if (widgets.length) {
+          gsap.to(widgets, {
+            y: -16 - index * 3,
+            ease: 'none',
+            scrollTrigger: {
+              trigger: section,
+              start: 'top top',
+              end: '+=460%',
+              scrub: true,
+            },
+          });
+        }
+      });
+    }, sectionRef);
+
+    return () => ctx.revert();
+  }, []);
+
+  return (
+    <>
+      <style>{STYLES}</style>
+      <section id="features" className="features-3d-section" ref={sectionRef}>
+        <div className="features-grid-background" />
+
+        <div className="features-wrapper">
+          <div className="fs-intro">
+            <p className="font-mono text-xs uppercase tracking-[0.15em] mb-4 text-emerald-400 font-semibold">◆ Why Companies Use ScreeningPilot</p>
+            <h2 className="font-display font-black text-[clamp(1.9rem,4.2vw,3.4rem)] leading-[1.04] tracking-[-0.04em] text-white">
+              AUTOMATE 90% OF HIRING WORK
+              <span className="block text-emerald-400">AND FOCUS ON TOP CANDIDATES</span>
+            </h2>
+          </div>
+
+          <div className="fs-stage">
+            {slides.map((slide) => {
+              const Icon = slide.icon;
+              return (
+                <article className="fs-card" key={slide.title}>
+                  <div className="fs-left">
+                    <div className="fs-icon-wrap">
+                      <Icon className="w-5 h-5" />
                     </div>
-                </div>
-            </div>
-        </section>
-    );
+                    <div className="fs-kicker">Key Benefit</div>
+                    <h3 className="fs-title">{slide.title}</h3>
+                    <p className="fs-description">{slide.description}</p>
+                    <div className="fs-bullets">
+                      {slide.bullets.map((item) => (
+                        <div className="fs-bullet" key={item}>
+                          <span className="fs-check">✓</span>
+                          <span>{item}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="fs-right">
+                    <div className="fs-panel">
+                      <div className="fs-row fs-focus-item">
+                        <span className="text-xs text-white/75">Feature signal</span>
+                        <span className="fs-card-badge">{slide.stat}</span>
+                      </div>
+                      <div className="fs-row fs-focus-item">
+                        <span className="text-xs text-white/75">Activation speed</span>
+                        <span className="fs-card-badge">Fast</span>
+                      </div>
+                      <div className="fs-row fs-focus-item">
+                        <span className="text-xs text-white/75">Operational fit</span>
+                        <span className="fs-card-badge">High</span>
+                      </div>
+
+                      <div className="fs-focus-item">
+                        <div className="flex items-center justify-between text-xs text-white/75 mb-2">
+                          <span>Workflow readiness</span>
+                          <span>88%</span>
+                        </div>
+                        <div className="fs-bar-track">
+                          <div className="fs-card-bar" style={{ width: '88%' }} />
+                        </div>
+                      </div>
+
+                      <div className="fs-card-widget fs-focus-item">Connected to sourcing, screening, and decision flow</div>
+                    </div>
+                  </div>
+                </article>
+              );
+            })}
+          </div>
+        </div>
+      </section>
+    </>
+  );
 };
 
 export default FeatureSet;

@@ -17,7 +17,8 @@ import { toast } from "sonner";
 import { supabase } from "./lib/supabase";
 import DayCard from "./components/DayCard";
 import GeminiChat from "./components/GeminiChat";
-import { generateSmartSchedule, getEngagementScore, getTimingInsight } from "./lib/postingEngine";
+import { generateSmartSchedule, getEngagementScore } from "./lib/postingEngine";
+
 import type { DayPlan, VideoIdea } from "./types";
 import { Card, CardHeader } from "./components/ui/Card";
 import { Button } from "./components/ui/Button";
@@ -43,9 +44,10 @@ const parseVideoIdea = (raw: any): VideoIdea | null => {
     return raw as VideoIdea;
 };
 
-/* ── Content Calendar with Engagement Scores ── */
+/* ── Week-at-a-Glance + Bento Calendar ── */
 const ContentCalendar = ({ plan }: { plan: DayPlan[] }) => {
     const weekDays = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+    const [activeWeek, setActiveWeek] = useState(0);
 
     // Group posts by week
     const weeks: DayPlan[][] = [];
@@ -53,85 +55,190 @@ const ContentCalendar = ({ plan }: { plan: DayPlan[] }) => {
         weeks.push(plan.slice(i, Math.min(i + 7, plan.length)));
     }
 
+    const currentWeek = weeks[activeWeek] || [];
+
+    const bentoItems = currentWeek.filter(d => ['Comic Strip', 'Data Visual'].includes(d.contentFormat || ''));
+
+
     return (
-        <Card className="mb-8">
+        <Card className="overflow-hidden" glass>
             <CardHeader
-                icon={<Calendar size={16} className="text-violet-400" />}
+                icon={<Calendar size={15} className="text-violet-400" />}
                 title="Content Calendar"
-                subtitle={
-                    <span className="flex items-center gap-1.5 text-[10px] text-slate-500 uppercase tracking-wider">
-                        <TrendingUp size={10} />
-                        Engagement score shown per cell
-                    </span>
+                subtitle={`Week ${activeWeek + 1} of ${weeks.length} · ${currentWeek.filter(d => d.postCaption).length} posts ready`}
+                action={
+                    <div className="flex items-center gap-1">
+                        {weeks.map((_, wi) => (
+                            <button
+                                key={wi}
+                                onClick={() => setActiveWeek(wi)}
+                                className={[
+                                    'w-6 h-6 rounded-md text-[10px] font-bold transition-all',
+                                    wi === activeWeek
+                                        ? 'text-white'
+                                        : 'text-slate-600 hover:text-slate-400',
+                                ].join(' ')}
+                                style={wi === activeWeek
+                                    ? { background: 'rgba(59,130,246,0.3)', border: '1px solid rgba(59,130,246,0.4)' }
+                                    : { background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.07)' }
+                                }
+                            >
+                                {wi + 1}
+                            </button>
+                        ))}
+                    </div>
                 }
             />
 
-            <div className="flex flex-col gap-1.5">
-                {/* Week day headers */}
-                <div className="grid grid-cols-7 gap-1.5 mb-1">
-                    {weekDays.map(d => (
-                        <div key={d} className={`
-                            text-center text-[10px] font-bold uppercase tracking-widest
-                            ${d === 'Tue' || d === 'Wed' || d === 'Thu' ? 'text-emerald-500' : 'text-slate-600'}
-                        `}>
-                            {d}
+            {/* Week-at-a-Glance strip */}
+            <div className="grid grid-cols-7 gap-2 mb-6">
+                {weekDays.map((day, di) => {
+                    const post = currentWeek[di];
+                    if (!post) {
+                        return (
+                            <div key={di} className="week-cell opacity-30">
+                                <span className="text-[9px] font-bold text-slate-600 uppercase tracking-widest">{day}</span>
+                                <div className="w-6 h-6 rounded-lg bg-white/[0.04]" />
+                            </div>
+                        );
+                    }
+
+                    const format = post.contentFormat || 'Hot Take';
+                    const hero = HERO_FORMAT[format] || HERO_FORMAT['Hot Take'];
+                    const isPosted = post.status === 'Posted';
+                    const hasContent = !!post.postCaption;
+
+                    let engScore = 5;
+                    if (post.scheduledDate) {
+                        const dateObj = new Date(post.scheduledDate + 'T00:00:00');
+                        const result = getEngagementScore(dateObj);
+                        engScore = result.score;
+                    }
+
+                    const isBestDay = day === 'Tue' || day === 'Wed' || day === 'Thu';
+
+                    return (
+                        <div
+                            key={di}
+                            className={[
+                                'week-cell',
+                                isPosted ? 'posted' : hasContent ? 'active' : '',
+                            ].join(' ')}
+                            title={`${day}: ${format}${post.scheduledDate ? ` · ${post.scheduledDate}` : ''}`}
+                        >
+                            <span className={`text-[9px] font-bold uppercase tracking-widest ${isBestDay ? 'text-emerald-500' : 'text-slate-600'}`}>
+                                {day}
+                            </span>
+
+                            <div className="w-9 h-9 rounded-xl flex items-center justify-center" style={{ background: `${hero.color}18` }}>
+                                <hero.icon size={16} style={{ color: hero.color }} />
+                            </div>
+
+                            <span className="text-[9px] font-semibold text-slate-400 text-center leading-tight px-1 truncate w-full text-center">
+                                {format.split(' ')[0]}
+                            </span>
+
+                            {/* Engagement score chip */}
+                            <span className={`text-[8px] font-black px-1.5 py-0.5 rounded-full ${engScore >= 8 ? 'text-emerald-400 bg-emerald-400/10' :
+                                engScore >= 6 ? 'text-amber-400 bg-amber-400/10' :
+                                    'text-red-400 bg-red-400/10'
+                                }`}>
+                                {post.scheduledDate ? `${engScore}/10` : '–'}
+                            </span>
+
+                            {/* Status dot */}
+                            <div className={`absolute bottom-2 right-2 w-1.5 h-1.5 rounded-full ${isPosted ? 'bg-emerald-400 shadow-[0_0_6px_rgba(16,185,129,0.7)]' :
+                                hasContent ? 'bg-amber-400 shadow-[0_0_6px_rgba(245,158,11,0.7)]' :
+                                    'bg-white/10'
+                                }`} />
                         </div>
-                    ))}
-                </div>
+                    );
+                })}
+            </div>
 
-                {/* Week rows */}
-                {weeks.map((week, wi) => (
-                    <div key={wi} className="grid grid-cols-7 gap-1.5">
-                        {week.map((day, di) => {
-                            const globalIdx = wi * 7 + di;
-                            const format = day.contentFormat || 'Hot Take';
-                            const hero = HERO_FORMAT[format] || HERO_FORMAT['Hot Take'];
-                            const isScheduled = day.status === 'Posted';
-                            const hasContent = !!day.postCaption;
-                            const hasDate = !!day.scheduledDate;
+            {/* Bento modules — highlight Comic Strip & Data Visual */}
+            {bentoItems.length > 0 && (
+                <div>
+                    <p className="text-[9px] font-bold text-slate-600 uppercase tracking-widest mb-3">Featured Formats This Week</p>
+                    <div className={`grid gap-3 ${bentoItems.length === 1 ? 'grid-cols-1' : 'grid-cols-2'}`}>
+                        {bentoItems.map((post) => {
 
-                            // Engagement score
-                            let engScore = 5;
-                            let engLabel = '';
-                            if (hasDate) {
-                                const dateObj = new Date(day.scheduledDate + 'T00:00:00');
-                                const result = getEngagementScore(dateObj);
-                                engScore = result.score;
-                                engLabel = getTimingInsight(day.scheduledTime || '08:00', dateObj.getDay());
-                            }
-
-                            const scoreColorClass = engScore >= 8 ? 'text-emerald-400 bg-emerald-400/10' : engScore >= 6 ? 'text-amber-400 bg-amber-400/10' : 'text-red-400 bg-red-400/10';
-                            const statusColor = isScheduled ? 'bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]' : hasContent ? 'bg-amber-500 shadow-[0_0_8px_rgba(245,158,11,0.5)]' : 'bg-slate-700';
-
+                            const hero = HERO_FORMAT[post.contentFormat || ''] || HERO_FORMAT['Hot Take'];
                             return (
-                                <div key={day.id} className={`
-                                    aspect-square rounded-xl flex flex-col items-center justify-center gap-1 relative transition-all duration-200 group
-                                    ${isScheduled ? 'bg-emerald-500/5 border-emerald-500/20' : hasContent ? 'bg-white/5 border-white/10' : 'bg-white/[0.02] border-white/[0.04]'}
-                                    border hover:border-white/30 cursor-default
-                                `}
-                                    title={hasDate ? `${day.scheduledDate} at ${day.scheduledTime}\nScore: ${engScore}/10\n${engLabel}` : `Day ${globalIdx + 1}`}
-                                >
-                                    <span className="text-[10px] font-black text-slate-600 group-hover:text-slate-400 transition-colors uppercase">{globalIdx + 1}</span>
-                                    <hero.icon size={14} style={{ color: hero.color }} className="drop-shadow-sm" />
-
-                                    {/* Engagement score badge */}
-                                    {hasDate && (
-                                        <span className={`text-[8px] font-black px-1.5 py-0.5 rounded ${scoreColorClass}`}>
-                                            {engScore}
+                                <div key={post.id} className="bento-module group">
+                                    <div className="flex items-center gap-2 mb-3">
+                                        <div className="w-7 h-7 rounded-lg flex items-center justify-center" style={{ background: `${hero.color}20` }}>
+                                            <hero.icon size={13} style={{ color: hero.color }} />
+                                        </div>
+                                        <span className="text-[11px] font-bold text-white">{hero.label}</span>
+                                        <span
+                                            className="ml-auto text-[9px] font-bold px-1.5 py-0.5 rounded-full"
+                                            style={{ background: `${hero.color}20`, color: hero.color }}
+                                        >
+                                            Day {(activeWeek * 7) + (currentWeek.findIndex(d => d.id === post.id) + 1)}
                                         </span>
+                                    </div>
+                                    <p className="text-[12px] text-slate-300 leading-relaxed line-clamp-3">
+                                        {post.postCaption || <span className="text-slate-600 italic">No caption yet</span>}
+                                    </p>
+                                    {post.scheduledDate && (
+                                        <div className="flex items-center gap-1 mt-3 pt-3 border-t border-white/[0.07]">
+                                            <TrendingUp size={10} className="text-slate-600" />
+                                            <span className="text-[10px] text-slate-600">{post.scheduledDate} at {post.scheduledTime}</span>
+                                        </div>
                                     )}
-
-                                    {/* Status dot */}
-                                    <div className={`absolute bottom-2 right-2 w-1.5 h-1.5 rounded-full ${statusColor}`} />
                                 </div>
                             );
                         })}
                     </div>
-                ))}
-            </div>
+                </div>
+            )}
+
+            {/* Mini month grid (compact overview) */}
+            {weeks.length > 1 && (
+                <div className="mt-6 pt-4 border-t border-white/[0.06]">
+                    <p className="text-[9px] font-bold text-slate-600 uppercase tracking-widest mb-3">Full Month Overview</p>
+                    <div className="flex flex-col gap-1">
+                        <div className="grid grid-cols-7 gap-1 mb-1">
+                            {weekDays.map(d => (
+                                <div key={d} className={`text-center text-[9px] font-bold uppercase tracking-wider ${d === 'Tue' || d === 'Wed' || d === 'Thu' ? 'text-emerald-500/70' : 'text-slate-700'}`}>
+                                    {d[0]}
+                                </div>
+                            ))}
+                        </div>
+                        {weeks.map((week, wi) => (
+                            <div key={wi} className="grid grid-cols-7 gap-1">
+                                {week.map((day, di) => {
+                                    const format = day.contentFormat || 'Hot Take';
+                                    const hero = HERO_FORMAT[format] || HERO_FORMAT['Hot Take'];
+                                    const isPosted = day.status === 'Posted';
+                                    const hasContent = !!day.postCaption;
+                                    return (
+                                        <div
+                                            key={day.id}
+                                            onClick={() => setActiveWeek(wi)}
+                                            className={[
+                                                'aspect-square rounded-lg flex flex-col items-center justify-center gap-0.5 relative transition-all duration-200 cursor-pointer',
+                                                isPosted ? 'bg-emerald-500/10 border border-emerald-500/20' :
+                                                    hasContent ? 'bg-blue-500/10 border border-blue-500/15' :
+                                                        'bg-white/[0.02] border border-white/[0.04]',
+                                                wi === activeWeek ? 'ring-1 ring-white/20' : 'hover:border-white/15',
+                                            ].join(' ')}
+                                            title={`Day ${wi * 7 + di + 1}: ${format}`}
+                                        >
+                                            <hero.icon size={9} style={{ color: hero.color }} />
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            )}
         </Card>
     );
 };
+
 
 const ContentPlanner = () => {
     const [campaignGoal, setCampaignGoal] = useState("");

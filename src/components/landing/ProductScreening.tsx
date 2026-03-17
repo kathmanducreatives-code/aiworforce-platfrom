@@ -7,15 +7,15 @@ import { X, Loader2, Link as LinkIcon } from 'lucide-react';
 gsap.registerPlugin(ScrollTrigger);
 
 const steps = [
-    { num: 1, title: 'Define the role', desc: 'Job title, company, description' },
-    { num: 2, title: 'Set requirements', desc: 'Experience, education, skills, salary' },
-    { num: 3, title: 'Generate link', desc: 'Share with candidates or post anywhere' },
-    { num: 4, title: 'AI screens everyone', desc: 'Automatic scoring against your ICP' },
+    { num: 1, title: 'Define your ideal candidate', desc: 'Job description, required experience, key skills' },
+    { num: 2, title: 'Candidates apply via AI link', desc: 'Resume upload + personalized screening questions' },
+    { num: 3, title: 'AI filters out 95% of unqualified candidates', desc: 'Scoring based on resume, relevance, and answers' },
+    { num: 4, title: 'AI generates interview blueprint', desc: 'Verification questions + key evaluation areas' },
 ];
 
 const fullTitle = 'Senior Frontend Engineer';
 const fullCompany = 'Acme Corp';
-const fullDesc = "We're looking for a senior engineer who...";
+const fullDesc = "We're looking for a senior engineer with strong React fundamentals and a deep understanding of system architecture...";
 
 const ProductScreening = () => {
     const sectionRef = useRef<HTMLDivElement>(null);
@@ -37,27 +37,103 @@ const ProductScreening = () => {
     useEffect(() => {
         const section = sectionRef.current;
         if (!section) return;
+        const prefersReduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+        let lastStep = 0;
+        let lastTitle = '';
+        let lastCompany = '';
+        let lastDesc = '';
+        let lastGenerating = false;
+        let lastToast = false;
+        let lastGlow = false;
+
+        const typedValue = (source: string, progress: number, start: number, end: number) => {
+            if (progress <= start) return '';
+            if (progress >= end) return source;
+            const ratio = (progress - start) / (end - start);
+            const count = Math.max(1, Math.round(source.length * ratio));
+            return source.slice(0, count);
+        };
+
 
         const ctx = gsap.context(() => {
-            const masterTL = gsap.timeline({
-                scrollTrigger: { trigger: sectionRef.current, start: 'top 60%', toggleActions: 'play none none none' },
-            });
-            masterTL.fromTo(mockupRef.current, { opacity: 0, x: -80, rotateY: 5, scale: 0.92, filter: 'blur(10px)' }, {
-                opacity: 1, x: 0, rotateY: 0, scale: 1, filter: 'blur(0px)', duration: 1.2, ease: 'expo.out',
-            }, 0);
-            masterTL.fromTo(textRef.current, { opacity: 0, y: 40, filter: 'blur(10px)' }, { opacity: 1, y: 0, filter: 'blur(0px)', duration: 1.0, ease: 'expo.out' }, 0.15);
-            if (lineRef.current) {
-                masterTL.fromTo(lineRef.current, { scaleY: 0 }, { scaleY: 1, duration: 1.4, ease: 'power3.out' }, 0.6);
-            }
-            masterTL.add(() => {
-                steps.forEach((_, idx) => { setTimeout(() => setActiveStep(idx + 1), idx * 350); });
-            }, 0.7);
+            gsap.set('.scr-line-fill', { scaleY: 0, transformOrigin: 'top top' });
+            gsap.set('.scr-step-row', { opacity: prefersReduced ? 1 : 0.35, x: prefersReduced ? 0 : 28 });
+            gsap.set('.req-tag', { opacity: prefersReduced ? 1 : 0, scale: prefersReduced ? 1 : 0.92, y: prefersReduced ? 0 : 10 });
+            gsap.set('.scr-badge', { opacity: prefersReduced ? 1 : 0, y: prefersReduced ? 0 : 18 });
+            gsap.set('.scr-headline, .scr-subtext', { opacity: prefersReduced ? 1 : 0, y: prefersReduced ? 0 : 40, filter: prefersReduced ? 'none' : 'blur(8px)' });
 
-            // Tags pop in
-            const tagEls = mockupRef.current?.querySelectorAll('.req-tag');
-            if (tagEls) {
-                tagEls.forEach((tag, i) => { masterTL.fromTo(tag, { opacity: 0, scale: 0 }, { opacity: 1, scale: 1, duration: 0.3, ease: 'back.out(2)' }, 1.0 + i * 0.1); });
+            const masterTL = gsap.timeline({
+                scrollTrigger: {
+                    trigger: sectionRef.current,
+                    start: 'top top',
+                    end: '+=1850',
+                    pin: true,
+                    scrub: prefersReduced ? false : 1.1,
+                    anticipatePin: 1,
+                    fastScrollEnd: true,
+                    onUpdate: (self) => {
+                        const p = self.progress;
+                        const stepProgress = [0.17, 0.4, 0.64, 0.85];
+                        let nextStep = 1;
+                        if (p >= stepProgress[3]) nextStep = 4;
+                        else if (p >= stepProgress[2]) nextStep = 3;
+                        else if (p >= stepProgress[1]) nextStep = 2;
+
+                        if (nextStep !== lastStep) {
+                            setActiveStep(nextStep);
+                            lastStep = nextStep;
+                        }
+
+                        const typedTitle = typedValue(fullTitle, p, 0.08, 0.35);
+                        const typedCompany = typedValue(fullCompany, p, 0.18, 0.48);
+                        const typedDesc = typedValue(fullDesc, p, 0.26, 0.74);
+
+                        if (typedTitle !== lastTitle) {
+                            setTitle(typedTitle);
+                            lastTitle = typedTitle;
+                        }
+                        if (typedCompany !== lastCompany) {
+                            setCompany(typedCompany);
+                            lastCompany = typedCompany;
+                        }
+                        if (typedDesc !== lastDesc) {
+                            setDesc(typedDesc);
+                            lastDesc = typedDesc;
+                        }
+
+                        const shouldGenerate = p >= 0.74 && p < 0.89;
+                        const shouldToast = p >= 0.89;
+                        const shouldGlow = p >= 0.9;
+
+                        if (shouldGenerate !== lastGenerating) {
+                            setIsGenerating(shouldGenerate);
+                            lastGenerating = shouldGenerate;
+                        }
+                        if (shouldToast !== lastToast) {
+                            setShowToast(shouldToast);
+                            lastToast = shouldToast;
+                        }
+                        if (shouldGlow !== lastGlow) {
+                            setBtnGlow(shouldGlow);
+                            lastGlow = shouldGlow;
+                        }
+                    }
+                },
+            });
+
+            masterTL.fromTo('.scr-power-line', { height: '0%' }, { height: '100%', duration: 11, ease: 'none' }, 0);
+            masterTL.fromTo(mockupRef.current, { opacity: 0, x: -120, rotateY: 8, scale: 0.9, filter: 'blur(10px)' }, {
+                opacity: 1, x: 0, rotateY: 0, scale: 1, filter: 'blur(0px)', duration: 2.2, ease: 'expo.out',
+            }, 0);
+            masterTL.to('.scr-badge', { opacity: 1, y: 0, duration: 1, ease: 'power2.out' }, 0.35);
+            masterTL.to('.scr-headline, .scr-subtext', { opacity: 1, y: 0, filter: 'blur(0px)', duration: 1.2, stagger: 0.18, ease: 'power3.out' }, 0.45);
+            masterTL.to(textRef.current, { opacity: 1, duration: 0.4, ease: 'none' }, 0.5);
+            if (lineRef.current) {
+                masterTL.to(lineRef.current, { scaleY: 1, duration: 3.8, ease: 'none' }, 1.0);
             }
+            masterTL.to('.scr-step-row', { opacity: 1, x: 0, duration: 1.8, stagger: 0.28, ease: 'power3.out' }, 1.05);
+            masterTL.to('.req-tag', { opacity: 1, scale: 1, y: 0, duration: 0.8, stagger: 0.1, ease: 'back.out(1.8)' }, 2.8);
+            masterTL.fromTo('.scr-generate-btn', { scale: 0.98 }, { scale: 1.03, duration: 0.9, repeat: 1, yoyo: true, ease: 'power2.inOut' }, 6.8);
         }, sectionRef);
         return () => ctx.revert();
     }, []);
@@ -108,21 +184,22 @@ const ProductScreening = () => {
                         <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full border border-primary/40 bg-transparent mb-6 opacity-0">
                             <div className="w-1.5 h-1.5 rounded-full bg-primary" />
                             <span className="font-mono text-[11px] uppercase tracking-[2px] text-primary font-semibold mt-px">AI JOB SCREENING</span>
+
                         </div>
-                        <h2 className="font-display font-black text-[clamp(1.8rem,4vw,3.2rem)] leading-[1.0] tracking-[-0.04em] text-white mb-5">
-                            CREATE A SCREENING<br />IN 60 SECONDS
+                        <h2 className="scr-headline font-display font-black text-[clamp(1.8rem,4vw,3.2rem)] leading-[1.0] tracking-[-0.04em] text-white mb-5">
+                            STEP 1 — DEFINE YOUR IDEAL CANDIDATE<br />STEP 2 — CANDIDATES APPLY THROUGH AI LINK
                         </h2>
-                        <p className="text-white/60 text-base md:text-lg leading-[1.7] mb-8 max-w-[480px]">
-                            Configure your role, set requirements, and generate a shareable AI-screening link. Our engine handles the rest — reading, scoring, and ranking every applicant automatically. Try the form!
+                        <p className="scr-subtext text-white/60 text-base md:text-lg leading-[1.7] mb-8 max-w-[480px]">
+                            Enter your hiring requirements once. ScreeningPilot generates a candidate application link, analyzes resumes, and asks personalized screening questions automatically.
                         </p>
 
                         {/* Steps */}
                         <div className="relative pl-4">
                             <div className="absolute left-[15px] top-4 bottom-4 w-[2px] bg-white/[0.06]" />
-                            <div className="scr-line-fill absolute left-[15px] top-4 bottom-4 w-[2px] bg-emerald-500 origin-top" style={{ transform: 'scaleY(0)', boxShadow: '0 0 8px rgba(34,197,94,0.4)' }} />
+                            <div ref={lineRef} className="scr-line-fill absolute left-[15px] top-4 bottom-4 w-[2px] bg-emerald-500 origin-top" style={{ transform: 'scaleY(0)', boxShadow: '0 0 8px rgba(34,197,94,0.4)' }} />
 
                             {steps.map((step) => (
-                                <div key={step.num} className="flex items-start gap-4 py-3.5 relative">
+                                <div key={step.num} className="scr-step-row flex items-start gap-4 py-3.5 relative">
                                     <div className={`w-8 h-8 rounded-full flex items-center justify-center text-[12px] font-bold shrink-0 z-10 transition-all duration-500 ${activeStep >= step.num
                                         ? 'bg-emerald-600 text-white shadow-[0_0_16px_rgba(5,150,105,0.5)] scale-110'
                                         : 'bg-white/[0.06] text-white/30 scale-100'
@@ -210,9 +287,10 @@ const ProductScreening = () => {
                                         className={`w-full h-[44px] flex items-center justify-center gap-2 text-white text-[14px] font-[600] rounded-full mt-2 transition-all duration-300 ${btnGlow ? 'bg-primary shadow-[0_0_24px_rgba(16,185,129,0.5)] scale-[1.02]' :
                                             isGenerating ? 'bg-primary/50 cursor-not-allowed' :
                                                 'bg-primary hover:bg-primary/90 hover:shadow-[0_4px_16px_rgba(16,185,129,0.4)]'
+
                                             }`}>
                                         {isGenerating ? <><Loader2 className="w-4 h-4 animate-spin" /> Generating AI Link...</> :
-                                            showToast ? 'Link Generated!' : 'Generate Screening Link →'}
+                                            showToast ? 'Link Generated!' : 'Generate Candidate Screening Link →'}
                                     </button>
                                 </div>
                             </div>

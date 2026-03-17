@@ -6,7 +6,7 @@ const Footer = () => (
       <div>
         <h4 className="text-xs font-semibold uppercase tracking-wider text-white/25 mb-4">Product</h4>
         <div className="space-y-3">
-          {['Lookalike Search', 'AI Screening', 'Pipeline', 'Collaboration'].map((l) => (
+          {['AI Screening', 'Interview Blueprint', 'Expert Marketplace', 'Hiring Dashboard'].map((l) => (
             <a key={l} href="#" className="block text-sm text-white/30 hover:text-white/60 transition-colors">{l}</a>
           ))}
         </div>
@@ -43,7 +43,7 @@ const Footer = () => (
         <div className="w-2 h-2 rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(5,150,105,0.5)]" />
         <span className="text-xs text-white/20">© 2026 ScreeningPilot</span>
       </div>
-      <p className="text-xs text-white/15 italic">Built for founders who refuse to overpay.</p>
+      <p className="text-xs text-white/15 italic">Built to automate 90% of hiring work.</p>
     </div>
   </footer>
 );

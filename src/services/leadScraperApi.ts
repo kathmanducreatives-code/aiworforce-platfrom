@@ -23,15 +23,24 @@ export interface LeadScraperResponse {
   }>;
 }
 
-// n8n webhook URLs
-const N8N_LEAD_SCRAPER_WEBHOOK_URL = "https://n8n.prasidha.me/webhook/4e7f4a2b-3994-4dcd-945b-48f388139049";
-const N8N_ADVANCED_SEARCH_WEBHOOK_URL = "https://n8n.prasidha.me/webhook/advanced-firecrawl-search"; // Place-holder for now
+// n8n webhook URLs (override via environment for safer, per-environment setup)
+const N8N_LEAD_SCRAPER_WEBHOOK_URL =
+  import.meta.env.VITE_N8N_LEAD_SCRAPER_WEBHOOK_URL ||
+  "https://n8n.prasidha.me/webhook/4e7f4a2b-3994-4dcd-945b-48f388139049";
+
+const N8N_ADVANCED_SEARCH_WEBHOOK_URL =
+  import.meta.env.VITE_N8N_ADVANCED_SEARCH_WEBHOOK_URL ||
+  "https://n8n.prasidha.me/webhook/advanced-firecrawl-search";
 
 export const leadScraperApi = {
   async scrapeLeads(formData: LeadScraperFormData, sessionId?: string): Promise<LeadScraperResponse> {
     try {
       const mode = formData.mode || 'standard';
       const webhookUrl = mode === 'advanced' ? N8N_ADVANCED_SEARCH_WEBHOOK_URL : N8N_LEAD_SCRAPER_WEBHOOK_URL;
+
+      if (!webhookUrl) {
+        throw new Error(`Missing webhook URL for ${mode} mode`);
+      }
 
       const payload = {
         currentCompanies: formData.currentCompanies ?? [],

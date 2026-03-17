@@ -6,7 +6,16 @@ import { Check, ArrowRight } from 'lucide-react';
 
 gsap.registerPlugin(ScrollTrigger);
 
-const features = ['Unlimited hires', 'Unlimited searches', 'AI screening', 'Email reveal & outreach', 'Pipeline dashboard', 'Team collaboration', 'Meeting management', 'Priority support'];
+const features = [
+    'Unlimited screening campaigns',
+    'AI resume scoring',
+    'Personalized screening questions',
+    'Interview blueprint generation',
+    'Expert interviewer coordination',
+    'Candidate decision dashboard',
+    'Team collaboration',
+    'Priority support'
+];
 
 const PricingCard = () => {
     const navigate = useNavigate();
@@ -32,12 +41,12 @@ const PricingCard = () => {
         <section ref={sectionRef} id="pricing" className="relative px-4 py-28 md:py-36">
             <div className="text-center mb-14">
                 <p className="font-mono text-xs uppercase tracking-[0.15em] mb-4 text-emerald-400 font-semibold">◆ Pricing</p>
-                <h2 className="font-display font-black text-[clamp(1.5rem,3.5vw,3rem)] leading-[1.1] tracking-[-0.03em] text-white">ONE PLAN. NO PER-HIRE FEES.</h2>
+                <h2 className="font-display font-black text-[clamp(1.5rem,3.5vw,3rem)] leading-[1.1] tracking-[-0.03em] text-white">SIMPLE PRICING FOR AI-DRIVEN HIRING</h2>
             </div>
             <div ref={cardRef} className="max-w-md mx-auto opacity-0">
                 <div className="glass-strong rounded-3xl p-8 text-center glow-green">
                     <p className="font-mono text-6xl font-black text-emerald-400 tabular-nums mb-1">€{price}</p>
-                    <p className="text-sm text-white/30 mb-8">per month · Cancel anytime</p>
+                    <p className="text-sm text-white/30 mb-8">per month · no per-hire fees · cancel anytime</p>
                     <div className="space-y-3 mb-8 text-left">
                         {features.map((f, i) => (
                             <div key={i} className="flex items-center gap-3">
@@ -48,10 +57,10 @@ const PricingCard = () => {
                             </div>
                         ))}
                     </div>
-                    <button onClick={() => navigate('/auth')} className="conic-border group w-full inline-flex items-center justify-center gap-2 bg-emerald-600 hover:bg-emerald-500 text-white font-semibold py-4 rounded-xl transition-all duration-300 hover:shadow-[0_8px_32px_rgba(5,150,105,0.4)]">
-                        Start Hiring Today <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
+                    <button onClick={() => navigate('/get-demo')} className="conic-border group w-full inline-flex items-center justify-center gap-2 bg-emerald-600 hover:bg-emerald-500 text-white font-semibold py-4 rounded-xl transition-all duration-300 hover:shadow-[0_8px_32px_rgba(5,150,105,0.4)]">
+                        Start Screening Candidates <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
                     </button>
-                    <p className="text-xs text-white/20 mt-4">Agencies charge €15,000–€30,000 per hire.</p>
+                    <p className="text-xs text-white/20 mt-4">Built to automate up to 90% of repetitive recruiting work.</p>
                 </div>
             </div>
         </section>

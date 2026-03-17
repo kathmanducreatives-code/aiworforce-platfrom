@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
-import { Menu, X, Brain } from "lucide-react";
+import { Menu, X } from "lucide-react";
 
 const Header = () => {
   const navigate = useNavigate();
@@ -17,8 +17,8 @@ const Header = () => {
 
   const navItems = [
     { label: 'Features', href: '#features' },
-    { label: 'Lead Scraper', href: '/lead-scraper' },
-    { label: 'Deep Search', href: '/deep-search' },
+    { label: 'How It Works', href: '#hero-to-expert-sequence' },
+    { label: 'Expert Marketplace', href: '#hero-to-expert-sequence' },
     { label: 'Pricing', href: '#pricing' },
     { label: 'Get a Demo', href: '/get-demo' },
   ];
@@ -57,7 +57,7 @@ const Header = () => {
             <>
               <button onClick={() => navigate('/auth')} className="text-sm text-white/60 hover:text-white font-semibold transition-colors">Sign In</button>
               <button onClick={() => navigate('/auth')} className="liquid-fill-btn h-[40px] px-6 bg-emerald-600/20 border border-emerald-500/50 text-white text-sm font-semibold rounded-full transition-all duration-300 hover:shadow-[0_0_20px_rgba(5,150,105,0.5)] flex items-center justify-center">
-                Start Free Trial
+                Start Screening
               </button>
             </>
           )}
@@ -76,7 +76,7 @@ const Header = () => {
           ))}
           <div className="mt-4 flex gap-3">
             <button onClick={() => navigate('/auth')} className="text-sm text-white/60 hover:text-white font-medium">Sign In</button>
-            <button onClick={() => navigate('/auth')} className="bg-emerald-600 text-white text-sm font-semibold px-4 py-2 rounded-full">Start Free Trial</button>
+            <button onClick={() => navigate('/auth')} className="bg-emerald-600 text-white text-sm font-semibold px-4 py-2 rounded-full">Start Screening</button>
           </div>
         </div>
       )}

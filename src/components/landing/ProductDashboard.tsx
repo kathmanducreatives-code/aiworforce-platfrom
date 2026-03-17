@@ -7,27 +7,27 @@ import { GyroTilt } from '@/components/shared/GyroTilt';
 gsap.registerPlugin(ScrollTrigger);
 
 const statCards = [
-    { label: 'Total Candidates', value: 1247, icon: BarChart3 },
-    { label: 'Avg Fit Score', value: 87, suffix: '%', icon: Target },
-    { label: 'Active Roles', value: 12, icon: Briefcase },
-    { label: 'AI Screening', value: 100, suffix: '%', icon: Cpu },
+    { label: 'Applicants Screened', value: 1247, icon: BarChart3 },
+    { label: 'Auto-Filtered', value: 95, suffix: '%', icon: Target },
+    { label: 'Interview-Ready', value: 63, icon: Briefcase },
+    { label: 'Workflow Automated', value: 90, suffix: '%', icon: Cpu },
 ];
 
 const highlights = [
-    { text: 'Real-time AI scoring auto-updated' },
-    { text: 'Candidate pipeline & sourcing view' },
-    { text: 'One-click outreach & scheduling' },
+    { text: 'Track AI screening scores in real time' },
+    { text: 'Review interview blueprints before final rounds' },
+    { text: 'Coordinate expert interviewers in one dashboard' },
 ];
 
 const barHeights = [40, 65, 45, 80, 55, 90, 70];
 
 const activityItems = [
-    'New screening completed — Senior Engineer',
-    'ICP match found — 94% score',
-    '3 candidates shortlisted',
+    'AI scored 47 new applicants for Frontend Engineer',
+    'Interview blueprint generated for top 5 candidates',
+    '2 expert interviewers assigned and invited',
 ];
 
-const actionBtns = ['Run Scraper', 'Generate Outreach'];
+const actionBtns = ['Create Screening Link', 'Send to Experts'];
 
 const ProductDashboard = () => {
     const sectionRef = useRef<HTMLDivElement>(null);
@@ -142,13 +142,13 @@ const ProductDashboard = () => {
                     <div className="flex-[45] dash-text-block opacity-0">
                         <div className="dash-title inline-flex items-center gap-2 px-3 py-1.5 rounded-full border border-[#00c853]/40 bg-transparent mb-6 opacity-0">
                             <div className="w-1.5 h-1.5 rounded-full bg-[#00c853]" />
-                            <span className="font-mono text-[11px] uppercase tracking-[2px] text-emerald-400 font-semibold mt-px">YOUR COMMAND CENTER</span>
+                            <span className="font-mono text-[11px] uppercase tracking-[2px] text-emerald-400 font-semibold mt-px">MEET SCREENINGPILOT — YOUR AI HIRING ENGINE</span>
                         </div>
                         <h2 className="dash-title font-display font-black text-[clamp(1.8rem,4vw,3.2rem)] leading-[1.0] tracking-[-0.04em] text-white mb-5 opacity-0">
-                            EVERYTHING.<br />ONE DASHBOARD.
+                            AUTOMATE CANDIDATE SCREENING,<br />EVALUATION, AND HANDOFF.
                         </h2>
                         <p className="text-white/60 text-base md:text-lg leading-[1.7] mb-8 max-w-[480px]">
-                            Track every candidate, monitor fit scores, manage active roles, and launch sourcing campaigns — all in one place.
+                            Monitor AI screening scores, shortlist top-fit talent, prepare interview blueprints, and coordinate expert interviewers from one workspace.
                         </p>
                         <div className="space-y-4">
                             {highlights.map((h, i) => (
@@ -212,7 +212,7 @@ const ProductDashboard = () => {
                                     {/* Bar Chart */}
                                     <div className="glass rounded-lg p-4 mb-3 relative group">
                                         <p className="text-[10px] text-white/30 mb-3 font-medium flex justify-between">
-                                            Weekly Activity
+                                            Hiring Automation Progress
                                             <span className="opacity-0 group-hover:opacity-100 transition-opacity text-emerald-400">Interactive</span>
                                         </p>
                                         <div className="flex items-end gap-1 h-16" onMouseLeave={() => setHoveredBar(null)}>
@@ -230,7 +230,7 @@ const ProductDashboard = () => {
 
                                                     {hoveredBar === i && (
                                                         <div className="absolute -top-7 left-1/2 -translate-x-1/2 bg-white text-black text-[9px] font-bold px-2 py-1 rounded shadow-lg pointer-events-none z-10 whitespace-nowrap animate-in fade-in zoom-in-95 duration-200">
-                                                            {Math.round((h / 100) * 85)} users
+                                                            {Math.round((h / 100) * 85)} candidates
                                                         </div>
                                                     )}
                                                 </div>
@@ -242,7 +242,7 @@ const ProductDashboard = () => {
                                     <div className="glass rounded-lg p-3 group hover:border-white/10 transition-colors">
                                         <p className="text-[10px] text-white/30 mb-2 font-medium flex justify-between">
                                             Recent Activity
-                                            <span className="text-white/20 hover:text-white/60 cursor-pointer transition-colors">View All</span>
+                                            <span className="text-white/20 hover:text-white/60 cursor-pointer transition-colors">Open Timeline</span>
                                         </p>
                                         {activityItems.map((a, i) => (
                                             <div key={i} className="activity-item flex items-center gap-2 py-1.5 border-b border-white/[0.03] last:border-0 hover:bg-white/[0.02] -mx-2 px-2 rounded cursor-pointer transition-colors opacity-0">

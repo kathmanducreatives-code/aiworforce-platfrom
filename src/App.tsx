@@ -39,6 +39,7 @@ import ICPCandidateDetail from "./pages/ICPCandidateDetail";
 import ScreeningJobs from "./pages/ScreeningJobs";
 import JobApplicants from "./pages/JobApplicants";
 import JobDistribution from "./pages/JobDistribution";
+import CompetitorMonitor from "./pages/CompetitorMonitor";
 import GrowthSignals from "./pages/GrowthSignals";
 import ExpertMarketplace from "./pages/ExpertMarketplace";
 import PostInterceptor from "./pages/PostInterceptor";
@@ -213,10 +214,18 @@ const App = () => (
 
 
 
-                  <Route path="/job-distribution" element={
+                  <Route path="/distribution" element={
                     <ProtectedRoute>
                       <MainLayout>
                         <JobDistribution />
+                      </MainLayout>
+                    </ProtectedRoute>
+                  } />
+
+                  <Route path="/competitors" element={
+                    <ProtectedRoute>
+                      <MainLayout>
+                        <CompetitorMonitor />
                       </MainLayout>
                     </ProtectedRoute>
                   } />

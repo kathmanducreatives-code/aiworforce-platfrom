@@ -2,13 +2,13 @@ import { useState } from 'react';
 import { ChevronDown } from 'lucide-react';
 
 const faqs = [
-    { q: 'How does the lookalike engine work?', a: 'You paste the LinkedIn URL of your ideal candidate. Our AI analyzes their profile — skills, experience, seniority, industry — and then scans LinkedIn to find every matching professional. You get up to 2,000+ ranked results with match scores, emails revealed, and one-click outreach. All in about 15 minutes.' },
-    { q: 'How long does it actually take?', a: 'The lookalike search runs in 12–15 minutes for most queries. AI screening of 100+ resumes takes under 8 minutes. From "I need to hire someone" to "I have 2,000 ranked candidates with emails" — about 15 minutes total.' },
-    { q: 'How is this different from LinkedIn Recruiter?', a: 'LinkedIn Recruiter charges €8,000+/year and limits you to boolean keyword searches. ScreeningPilot uses behavioral AI matching — it understands role fit, not just keyword overlap. And we reveal emails and automate outreach. LinkedIn doesn\'t.' },
-    { q: 'How is this different from a recruitment agency?', a: 'Agencies charge €15,000–€30,000 per hire and take 4–8 weeks. ScreeningPilot costs €149/month for unlimited hires and delivers results in 15 minutes. You control the entire process. No middlemen.' },
-    { q: 'Can I really replace my agency with this?', a: 'Yes. That\'s exactly what it\'s built for. You get the same (usually better) candidate pipeline, for less than 1% of the cost, in a fraction of the time. Over 200 companies have already switched.' },
-    { q: 'What about candidate quality?', a: 'Our AI scores candidates on 12+ behavioral and technical dimensions. The match scores are transparent — you see exactly why each candidate was ranked. Most users report higher quality candidates than agency shortlists.' },
-    { q: 'Is there a free trial?', a: 'Yes. Start with a free trial — no credit card required. You\'ll have full access to lookalike search, AI screening, email reveal, and the pipeline dashboard. See the results before you commit.' },
+    { q: 'How does ScreeningPilot automate hiring?', a: 'You define your ideal candidate once, share an AI application link, and let ScreeningPilot handle screening, scoring, and interview prep. Your team focuses only on top candidates.' },
+    { q: 'What exactly gets automated?', a: 'Resume screening, candidate evaluation, pre-interview testing, interview blueprint generation, and interviewer coordination are automated in one workflow.' },
+    { q: 'How does the AI score candidates?', a: 'The system evaluates resume quality, experience relevance, and answers to personalized screening questions. Each candidate receives an AI screening score.' },
+    { q: 'What is the interview blueprint?', a: 'For qualified candidates, ScreeningPilot prepares claims to verify, suggested questions, and key evaluation areas so interviewers can validate candidate fit quickly.' },
+    { q: 'How does the expert interviewer marketplace work?', a: 'You can select fractional expert interviewers, send invitations, and schedule interviews from ScreeningPilot instead of building a large recruiting team.' },
+    { q: 'Can ScreeningPilot reduce agency dependency?', a: 'Yes. ScreeningPilot replaces most manual first-pass recruiting work so companies can reduce or eliminate agency usage.' },
+    { q: 'How much hiring work can be automated?', a: 'Teams can automate up to 90% of repetitive hiring workflow and spend interview time only on qualified candidates.' },
 ];
 
 const FAQSection = () => {

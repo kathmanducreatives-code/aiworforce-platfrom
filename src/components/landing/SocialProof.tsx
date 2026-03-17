@@ -6,9 +6,9 @@ import { Quote } from 'lucide-react';
 gsap.registerPlugin(ScrollTrigger);
 
 const testimonials = [
-    { quote: "We cancelled our agency contract after 2 weeks. ScreeningPilot found better candidates in 15 minutes than they did in 3 months.", name: "Marcus König", title: "CTO, Velora Technologies", metric: "Saved €82K/year" },
-    { quote: "In 48 hours, it surfaced 1,500 matches we'd never have found manually. The quality was better than any agency shortlist.", name: "Priya Sharma", title: "VP People, Helios SaaS", metric: "1,500 matches" },
-    { quote: "We went from paying €30K per hire to €149/month for unlimited. It's absurd how much value this delivers.", name: "Daniel Okonkwo", title: "Founder, Cortex AI", metric: "€30K → €149/mo" },
+    { quote: "We had 200+ applicants on one engineering role. ScreeningPilot helped us shortlist the right candidates in a single afternoon.", name: "Marcus König", title: "CTO, Velora Technologies", metric: "Hours to shortlist" },
+    { quote: "The fit scoring gave us clear reasons behind each recommendation, so hiring managers trusted the shortlist immediately.", name: "Priya Sharma", title: "VP People, Helios SaaS", metric: "Faster alignment" },
+    { quote: "Instead of paying large per-hire fees, we now run our screening workflow in-house with one platform and one process.", name: "Daniel Okonkwo", title: "Founder, Cortex AI", metric: "Lower hiring cost" },
 ];
 
 const logos = ['Velora', 'Helios', 'Cortex AI', 'DataSync', 'Lumina', 'NovaTech'];
@@ -36,7 +36,7 @@ const SocialProof = () => {
             <div className="max-w-5xl mx-auto">
                 <div className="text-center mb-14">
                     <p className="font-mono text-xs uppercase tracking-[0.15em] mb-4 text-emerald-400 font-semibold">◆ Social Proof</p>
-                    <h2 className="font-display font-black text-[clamp(1.5rem,3.5vw,3rem)] leading-[1.1] tracking-[-0.03em] text-white">TRUSTED BY GROWING TEAMS</h2>
+                    <h2 className="font-display font-black text-[clamp(1.5rem,3.5vw,3rem)] leading-[1.1] tracking-[-0.03em] text-white">TEAMS USING SCREENINGPILOT HIRE FASTER</h2>
                 </div>
                 <div className="flex flex-wrap justify-center gap-8 mb-14">
                     {logos.map((logo) => (
