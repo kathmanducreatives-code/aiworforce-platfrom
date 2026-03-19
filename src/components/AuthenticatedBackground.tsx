@@ -31,9 +31,9 @@ const AuthenticatedBackground = () => {
         }}
       />
       <div
-        className="absolute bottom-[-5%] right-[-5%] w-[800px] h-[800px] rounded-full blur-[180px] opacity-15 pointer-events-none"
+        className="absolute bottom-[-5%] right-[-5%] w-[800px] h-[800px] rounded-full blur-[180px] opacity-20 pointer-events-none"
         style={{
-          background: 'radial-gradient(circle, rgba(16, 185, 129, 0.3) 0%, transparent 70%)',
+          background: 'radial-gradient(circle, rgba(16, 185, 129, 0.4) 0%, transparent 70%)',
           animation: 'nebula-breathe 8s ease-in-out infinite 3s',
         }}
       />
