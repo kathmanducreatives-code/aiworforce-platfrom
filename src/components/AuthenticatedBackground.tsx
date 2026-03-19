@@ -62,7 +62,7 @@ const AuthenticatedBackground = () => {
         className="absolute inset-[-50%] w-[200%] h-[200%]"
         style={{
           backgroundImage: `
-            radial-gradient(ellipse 100px 100px at 70px 70px, rgba(16, 185, 129, 0.03) 0%, transparent 70%)
+            radial-gradient(ellipse 100px 100px at 70px 70px, rgba(16, 185, 129, 0.06) 0%, transparent 70%)
           `,
           backgroundSize: '140px 140px',
           animation: 'grid-drift 60s linear infinite',
