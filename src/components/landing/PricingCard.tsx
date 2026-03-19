@@ -8,11 +8,11 @@ gsap.registerPlugin(ScrollTrigger);
 
 const features = [
     'Unlimited screening campaigns',
-    'AI resume scoring',
-    'Personalized screening questions',
+    'AI candidate scoring (12+ criteria)',
+    'Auto-reject 95% of bad fits',
     'Interview blueprint generation',
-    'Expert interviewer coordination',
-    'Candidate decision dashboard',
+    'Expert interviewer marketplace',
+    'Full pipeline dashboard',
     'Team collaboration',
     'Priority support'
 ];
@@ -41,7 +41,7 @@ const PricingCard = () => {
         <section ref={sectionRef} id="pricing" className="relative px-4 py-28 md:py-36">
             <div className="text-center mb-14">
                 <p className="font-mono text-xs uppercase tracking-[0.15em] mb-4 text-emerald-400 font-semibold">◆ Pricing</p>
-                <h2 className="font-display font-black text-[clamp(1.5rem,3.5vw,3rem)] leading-[1.1] tracking-[-0.03em] text-white">SIMPLE PRICING FOR AI-DRIVEN HIRING</h2>
+                <h2 className="font-display font-black text-[clamp(1.5rem,3.5vw,3rem)] leading-[1.1] tracking-[-0.03em] text-white">LESS THAN YOUR AGENCY'S LUNCH BUDGET</h2>
             </div>
             <div ref={cardRef} className="max-w-md mx-auto opacity-0">
                 <div className="glass-strong rounded-3xl p-8 text-center glow-green">
@@ -58,9 +58,9 @@ const PricingCard = () => {
                         ))}
                     </div>
                     <button onClick={() => navigate('/get-demo')} className="conic-border group w-full inline-flex items-center justify-center gap-2 bg-emerald-600 hover:bg-emerald-500 text-white font-semibold py-4 rounded-xl transition-all duration-300 hover:shadow-[0_8px_32px_rgba(5,150,105,0.4)]">
-                        Start Screening Candidates <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
+                        Fire Your Agency Today <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
                     </button>
-                    <p className="text-xs text-white/20 mt-4">Built to automate up to 90% of repetitive recruiting work.</p>
+                    <p className="text-xs text-white/20 mt-4">Your agency charges €24,000 per hire. We charge €149/month. You do the math.</p>
                 </div>
             </div>
         </section>

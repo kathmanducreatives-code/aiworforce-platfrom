@@ -6,9 +6,9 @@ import { Quote } from 'lucide-react';
 gsap.registerPlugin(ScrollTrigger);
 
 const testimonials = [
-    { quote: "We had 200+ applicants on one engineering role. ScreeningPilot helped us shortlist the right candidates in a single afternoon.", name: "Marcus König", title: "CTO, Velora Technologies", metric: "Hours to shortlist" },
-    { quote: "The fit scoring gave us clear reasons behind each recommendation, so hiring managers trusted the shortlist immediately.", name: "Priya Sharma", title: "VP People, Helios SaaS", metric: "Faster alignment" },
-    { quote: "Instead of paying large per-hire fees, we now run our screening workflow in-house with one platform and one process.", name: "Daniel Okonkwo", title: "Founder, Cortex AI", metric: "Lower hiring cost" },
+    { quote: "We were paying our agency €8,200 per hire. ScreeningPilot replaced them in one afternoon. Same quality candidates, 97% less cost.", name: "Marcus König", title: "CTO, Velora Technologies", metric: "€80K saved/year" },
+    { quote: "Our agency took 6 weeks to send 5 mediocre profiles. ScreeningPilot scored 300 applicants in under a minute. We'll never go back.", name: "Priya Sharma", title: "VP People, Helios SaaS", metric: "6 weeks → 60 sec" },
+    { quote: "I was skeptical — but after seeing the AI reject the same candidates our team would have rejected, I cancelled our agency contract that week.", name: "Daniel Okonkwo", title: "Founder, Cortex AI", metric: "Agency cancelled" },
 ];
 
 const logos = ['Velora', 'Helios', 'Cortex AI', 'DataSync', 'Lumina', 'NovaTech'];
@@ -35,8 +35,8 @@ const SocialProof = () => {
         <section ref={sectionRef} className="relative px-4 py-28 md:py-36">
             <div className="max-w-5xl mx-auto">
                 <div className="text-center mb-14">
-                    <p className="font-mono text-xs uppercase tracking-[0.15em] mb-4 text-emerald-400 font-semibold">◆ Social Proof</p>
-                    <h2 className="font-display font-black text-[clamp(1.5rem,3.5vw,3rem)] leading-[1.1] tracking-[-0.03em] text-white">TEAMS USING SCREENINGPILOT HIRE FASTER</h2>
+                    <p className="font-mono text-xs uppercase tracking-[0.15em] mb-4 text-emerald-400 font-semibold">◆ Agency Refugees</p>
+                    <h2 className="font-display font-black text-[clamp(1.5rem,3.5vw,3rem)] leading-[1.1] tracking-[-0.03em] text-white">COMPANIES THAT FIRED THEIR AGENCY</h2>
                 </div>
                 <div className="flex flex-wrap justify-center gap-8 mb-14">
                     {logos.map((logo) => (
