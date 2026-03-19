@@ -24,9 +24,9 @@ const AuthenticatedBackground = () => {
     >
       {/* 1. Breathing Nebula Glows */}
       <div
-        className="absolute top-[-10%] left-1/2 -translate-x-1/2 w-[900px] h-[600px] rounded-full blur-[180px] opacity-20 pointer-events-none"
+       className="absolute top-[-10%] left-1/2 -translate-x-1/2 w-[900px] h-[600px] rounded-full blur-[180px] opacity-25 pointer-events-none"
         style={{
-          background: 'radial-gradient(circle, rgba(16, 185, 129, 0.35) 0%, transparent 70%)',
+          background: 'radial-gradient(circle, rgba(16, 185, 129, 0.45) 0%, transparent 70%)',
           animation: 'nebula-breathe 8s ease-in-out infinite',
         }}
       />
