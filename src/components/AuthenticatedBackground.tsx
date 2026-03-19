@@ -19,7 +19,7 @@ const AuthenticatedBackground = () => {
       className="fixed inset-0 pointer-events-none z-0 overflow-hidden"
       style={{
         background: isLight ? '#f8f8f8' : '#020202',
-        opacity: isLight ? 0.3 : 1,
+        opacity: isLight ? 0.35 : 1,
       }}
     >
       {/* 1. Breathing Nebula Glows */}
