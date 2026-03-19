@@ -1,160 +1,157 @@
 
 
-# Screening Pilot — Full Software Audit Report
+# Talent Intelligence + Competitor Intelligence — Implementation Plan
+
+## Overview
+
+Two new pages (`/talent-intel` and `/competitor-intel`) sharing a common scraper engine, backed by 4 new Supabase tables, with 10+ scraper modules using the existing Firecrawl client.
 
 ---
 
-## 1. ARCHITECTURE OVERVIEW
+## Phase 1: Database Migration
 
-The application is a **recruitment SaaS platform** built with React + Vite + Tailwind CSS, connected to an external Supabase project (`zbwsbnqqpkvdhqwavjke`). It has 15 edge functions, ~30 pages, and integrates with external n8n webhooks for lead scraping and deep search.
+Create 4 new tables via Supabase migration:
 
----
+1. **`talent_signals`** — stores talent movement signals (open_to_work, layoff, published_content, etc.) with candidate info, scoring, tier, action tracking, and optional role match to `screening_jobs`
+2. **`competitor_intel_signals`** — stores competitor intelligence signals (pricing_change, new_feature, executive_change, etc.) with importance levels and read/dismiss tracking, FK to `competitor_companies`
+3. **`competitor_profiles`** — rich competitor snapshot (positioning, pricing tiers as JSONB, features, team signals, G2 ratings, sentiment) with FK to `competitor_companies`
+4. **`pricing_history`** — time-series pricing snapshots per competitor with change detection
 
-## 2. WHAT IS WORKING
-
-### Authentication & Core Infrastructure
-- **Auth flow** (signup/login/logout via Supabase Auth) — functional
-- **Protected routes** with `ProtectedRoute` wrapper — functional
-- **Profile fetching** from `profiles` table on login — functional
-- **Theme system** (light/dark toggle) — functional
-- **Sidebar navigation** renders correctly for Recruit, Source, Engage, Analyze groups
-
-### Job Screening Module (Core Feature)
-- **Create Screening Job** (`/screening-jobs`) — functional, creates jobs with slug, stores in `screening_jobs` table
-- **Screening link generation** (public `/apply/:slug` route) — functional
-- **Candidate landing page** (`JobLandingStep`) — functional
-- **Resume upload to Supabase Storage** (`screening-resumes` bucket) — functional
-- **Resume parsing** (`parse-resume` edge function) — recently fixed, uses Gemini AI with base64 inline data for PDFs
-- **Duplicate application detection** by email — functional
-- **AI Screening Chat** (`screen-candidate` edge function) — functional with question generation, answer evaluation, and final scoring
-- **Applicant review dashboard** (`/screening-jobs/:jobId`) — functional with fit categories, detail modal, Q&A review
-
-### Dashboard
-- **Dashboard metrics** from `resume_analyses` table — functional (shows totals, averages, weekly trends)
-- **Recent candidates list** — functional
-
-### Interview Scheduler
-- **Schedule interviews** with calendar view — functional
-- **Interview CRUD** (create, cancel, update notes) — functional via `useInterviews` hook
-- **Email invites** via `send-interview-invite` edge function — functional
-
-### Email Sequences
-- **View/manage scheduled email sequences** from `scheduled_emails` table — functional
-- **Email tracking** (opens/clicks) via `email-tracking` edge function — functional
-
-### ICP Intelligence
-- **Session management** (create/delete ICP sessions) — functional
-- **Results viewing** — functional from `icp_lookalike_sessions` and `candidate_profiles` tables
-
-### Expert Marketplace
-- **UI prototype** with mock data — functional (Expert Directory, Booking Workflow, Interview Hub, Company Review Panel)
-- **No backend** — intentionally UI-only prototype
+All tables get RLS enabled with policies requiring `auth.uid() = user_id` (or join through `competitor_companies.user_id` for competitor tables). `competitor_profiles` and `pricing_history` need a user_id column added (not in original spec but required for RLS) or RLS via a security definer function that checks ownership through the `competitor_companies` FK.
 
 ---
 
-## 3. WHAT IS BROKEN OR HAS ISSUES
+## Phase 2: Scraper Engine — `src/lib/scrapers/`
 
-### Critical Issues
+All scrapers use the existing `firecrawl` client from `src/lib/firecrawl.ts` and `supabase` from `@/integrations/supabase/client`. Each accepts `user_id`, logs to `firecrawl_scrape_logs`, and returns a summary.
 
-**3.1. Broken Sidebar Navigation Links (Routes Don't Exist)**
-The sidebar contains navigation groups whose routes are **commented out** in `App.tsx` but still appear in the sidebar:
-- **Verify** section: `/verify`, `/verify/results` — routes commented out (lines 232-233)
-- **Expert Interviews** section: `/interviews`, `/interviews/marketplace`, `/interviews/scheduled`, `/interviews/completed`, `/interviews/reports` — routes commented out (lines 235-239)
-- **Interviewer Portal** section: `/portal/assignments`, `/portal/submit`, `/portal/earnings`, `/portal/profile` — routes commented out (lines 241-244)
+### Talent Scrapers (`src/lib/scrapers/talent/`)
 
-Clicking any of these links shows the 404 page. Console confirms: `404 Error: User attempted to access non-existent route: /portal/submit`
+| File | Firecrawl Method | Signal Type | Scoring Logic |
+|------|-----------------|-------------|---------------|
+| `openToWork.ts` | `search()` — "open to work" queries | `open_to_work` | Recency + seniority + engagement |
+| `layoffVictims.ts` | `scrapeUrl()` — layoffs.fyi | `layoff_victim` | Always 15 (HOT) |
+| `publishedContent.ts` | `search()` — dev.to, Medium, Substack | `published_content` | Recency + seniority + engagement |
+| `companyAcquired.ts` | `search()` — TechCrunch, Crunchbase | `company_acquired` | Recency-based (12 or 8) |
+| `spokeAtEvent.ts` | `search()` — conference sites | `spoke_at_event` | Recency + seniority |
+| `runAllTalentScrapers.ts` | Orchestrator | — | `Promise.all` all 5 |
 
-**3.2. `screen-candidate` Edge Function — Incomplete CORS Headers**
-The `screen-candidate` function uses old CORS headers missing the Supabase client platform headers:
-```
-'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type'
-```
-Should include: `x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version`
+### Competitor Scrapers (`src/lib/scrapers/competitors/`)
 
-This can cause CORS preflight failures on some browsers/versions during the screening chat step.
+| File | Method | Signal Type |
+|------|--------|-------------|
+| `pricingMonitor.ts` | `scrapeUrl()` on /pricing pages | `pricing_change` |
+| `productIntel.ts` | `scrapeUrl()` on /blog, /changelog, ProductHunt | `new_feature`, `content_published`, `positioning_shift` |
+| `reviewSentiment.ts` | `scrapeUrl()` on G2/Capterra | `review_trend` |
+| `executiveChanges.ts` | `search()` for exec moves | `executive_change` |
+| `hiringPatternAnalysis.ts` | Reads `competitor_job_postings` table | `new_job_posting` (pattern-level) |
+| `runAllCompetitorScrapers.ts` | Orchestrator | `Promise.all` all 5 |
 
-**3.3. `screening-resumes` Storage Bucket is Private — No Public Access for Candidates**
-The bucket is private (not public). Candidates uploading resumes via the public `/apply/:slug` route are **unauthenticated**. The upload `supabase.storage.from('screening-resumes').upload(...)` will fail with a 403 unless there's an RLS policy allowing anonymous uploads. Currently there's no evidence of such a policy.
-
-**3.4. Stale Auth Session — "Invalid Refresh Token" Errors**
-Console shows repeated `AuthApiError: Invalid Refresh Token: Refresh Token Not Found`. The auth provider doesn't handle this gracefully — it should catch this error and force sign-out/redirect to login instead of leaving the user in a broken state.
-
-### Medium Issues
-
-**3.5. Lead Scraper & Deep Search — External n8n Dependency**
-Both features depend on external n8n webhooks (`n8n.prasidha.me`):
-- Lead Scraper: `https://n8n.prasidha.me/webhook/4e7f4a2b-...`
-- Deep Search: `https://n8n.prasidha.me/webhook/21eba91f-...`
-- Resume Upload (legacy): `https://n8n.prasidha.me/webhook/4406aa6a-...`
-
-If this n8n instance is down or the webhooks are deactivated, these features silently fail. There's no health check or fallback.
-
-**3.6. Growth Signals — TypeScript Type Casting Workaround**
-`GrowthSignals.tsx` line 27: `.from("growth_signal_companies" as any)` — indicates the table may not be in the generated types file, meaning it could have been added manually or the types are stale.
-
-**3.7. Settings Route Doesn't Exist**
-Sidebar has a "Settings" button that navigates to `/settings` — no such route exists in `App.tsx`. Will show 404.
-
-**3.8. InterviewSettings Page Exists But Has No Route**
-`src/pages/InterviewSettings.tsx` exists as a file but is never imported or routed in `App.tsx`.
-
-**3.9. Dashboard Queries `resume_analyses` Table — Not in Schema**
-The Dashboard page queries `resume_analyses` table, but this table is not listed in the provided database schema. It either doesn't exist (causing silent empty data) or was added outside migration tracking.
-
-**3.10. `screening_applications` Insert — Missing `user_id` / RLS Concerns**
-When candidates create applications via the public route, the insert `{ job_id: job.id }` has no `user_id` since candidates aren't authenticated. The RLS policy on `screening_applications` must allow anonymous inserts — this needs verification.
-
-### Minor Issues
-
-**3.11. Candidates Page Shows Legacy ModernDashboard**
-`/candidates` just renders `<ModernDashboard />` which is the old resume analysis dashboard. The naming is confusing and doesn't match the current screening-centric architecture.
-
-**3.12. `generate-screening-questions` Uses Non-Existent Model**
-Line 117: `model: 'google/gemini-3-flash-preview'` — this model may not exist on the Lovable AI gateway, while other functions use `google/gemini-2.5-flash`.
-
-**3.13. Job Distribution — UI Only**
-The Job Distribution page creates records in `job_distribution_status` but has no actual integration with LinkedIn, Indeed, or Wellfound APIs. It's a tracking UI without real posting functionality.
-
-**3.14. Collaboration Hub Not Routed**
-Collaboration components exist (`src/components/collaboration/`) but there's no route to access them from the sidebar or App.tsx.
-
-**3.15. Google Calendar OAuth — Credentials Named Incorrectly**
-Secrets are named `CLEINT_ID` and `CLEINT_SECERT_CALENDER` (typos of "CLIENT"). They'll work as long as the edge functions reference the same misspelled names, but it's error-prone.
+Each competitor scraper iterates over `competitor_companies` rows for the user, inserts signals to `competitor_intel_signals`, and updates `competitor_profiles` where applicable.
 
 ---
 
-## 4. SUMMARY TABLE
+## Phase 3: Talent Intelligence Page — `/talent-intel`
 
-| Module | Status | Notes |
-|--------|--------|-------|
-| Auth/Login | ✅ Working | Stale refresh token not handled gracefully |
-| Dashboard | ⚠️ Partial | Depends on `resume_analyses` table (may be empty) |
-| Job Screening (Create) | ✅ Working | Full flow functional |
-| Resume Upload & Parse | ⚠️ Risk | Storage bucket RLS may block unauthenticated uploads |
-| AI Screening Chat | ⚠️ Risk | CORS headers incomplete on `screen-candidate` |
-| Applicant Review | ✅ Working | Fit categories, scores, Q&A all display |
-| Interview Scheduler | ✅ Working | Calendar, scheduling, email invites |
-| Email Sequences | ✅ Working | View, manage, tracking |
-| ICP Intelligence | ✅ Working | Session management, results |
-| Lead Scraper | ⚠️ External | Depends on n8n webhooks |
-| Deep Search | ⚠️ External | Depends on n8n webhooks |
-| Growth Signals | ✅ Working | Type casting workaround |
-| Job Distribution | ⚠️ UI Only | No real job board integrations |
-| Expert Marketplace | ✅ UI Only | Mock data prototype |
-| Verify section | ❌ Broken | Routes commented out, sidebar links lead to 404 |
-| Expert Interviews section | ❌ Broken | Routes commented out, sidebar links lead to 404 |
-| Interviewer Portal | ❌ Broken | Routes commented out, sidebar links lead to 404 |
-| Settings | ❌ Broken | No route exists |
-| Collaboration Hub | ❌ Hidden | Components exist but no route |
+**File**: `src/pages/TalentIntelligence.tsx`
+
+Uses existing design system components: `PageHeader`, `MetricCard`, `EmptyState`, `Badge`, `Button`, `Skeleton`.
+
+### Layout (top to bottom):
+1. **PageHeader** — "Talent Intelligence" + [Run Scrapers] + [Configure] buttons
+2. **MetricCard row** (4 cards) — New Signals Today, HOT Candidates, Matched to Open Roles, Actioned This Week
+3. **Role match dropdown** — fetches from `screening_jobs`, filters/sorts signals by `matched_job_id`
+4. **Signal type filter pills** — horizontal pill bar with unactioned counts per type
+5. **Signal cards** — 2-col grid (1-col mobile), each card shows candidate info, colored signal block (left border by type), role match %, and action buttons (Add to ICP, Add to Outreach, Dismiss)
+6. **EmptyState** — Users icon, "No talent signals yet", CTA to run scrapers
+
+### Sub-components (`src/components/talent-intel/`):
+- `TalentSignalCard.tsx` — individual signal card with actions
+- `SignalFilterPills.tsx` — horizontal filter bar
+- `RoleMatchFilter.tsx` — dropdown for screening_jobs
+
+### Actions:
+- **Add to ICP** — inserts to `icp_lookalike_sessions` with candidate as seed
+- **Add to Outreach** — inserts to `outreach_leads` with trigger_type and signal_summary
+- **Dismiss** — sets `is_dismissed = true`
 
 ---
 
-## 5. RECOMMENDED FIX PRIORITY
+## Phase 4: Competitor Intelligence Page — `/competitor-intel`
 
-1. **Remove or hide broken sidebar links** (Verify, Expert Interviews, Interviewer Portal, Settings) — immediate, causes 404 errors
-2. **Fix `screen-candidate` CORS headers** — could break the screening flow for candidates
-3. **Verify `screening-resumes` bucket allows unauthenticated uploads** — could block the entire candidate application flow
-4. **Handle stale refresh tokens** in `useAuth` — sign out user gracefully instead of leaving broken state
-5. **Fix `generate-screening-questions` model name** — `gemini-3-flash-preview` may not exist
-6. **Wire up InterviewSettings page** to a route or remove it
+**File**: `src/pages/CompetitorIntelligence.tsx`
+
+Distinct from existing `/competitors` (job posting tracker). Reuses `AddCompetitorModal` from existing competitor feature.
+
+### Layout (top to bottom):
+1. **PageHeader** — "Competitor Intelligence" + [Add Competitor] (reuses existing modal) + [Run Scan]
+2. **MetricCard row** (4 cards) — Competitors Tracked, Signals This Week, Pricing Changes, High Importance
+3. **High importance alert strip** — warning banner if any HIGH + unread signals exist
+4. **Competitor tabs** — one tab per `competitor_companies` row + "All" tab, each with unread badge
+5. **Signal feed** — grouped by type in collapsible sections (Pricing Changes, Product & Features, Hiring Patterns, Team Changes, Customer Sentiment, Positioning), each signal card shows company, importance badge, title, summary, source link, mark-as-read
+6. **Competitor profile cards** — full snapshot from `competitor_profiles` (positioning, pricing tiers, features, hiring summary, G2 rating, recent moves) with [Rescan] button
+7. **EmptyState** — Eye icon, "No competitor intelligence yet", CTA to add competitor
+
+### Sub-components (`src/components/competitor-intel/`):
+- `CompetitorIntelSignalCard.tsx`
+- `CompetitorProfileCard.tsx`
+- `SignalGroupSection.tsx` — collapsible section per signal type
+- `ImportanceAlertStrip.tsx`
+
+---
+
+## Phase 5: Routing & Navigation
+
+### `src/App.tsx`
+Add two new routes inside ProtectedRoute + MainLayout:
+- `/talent-intel` → `<TalentIntelligence />`
+- `/competitor-intel` → `<CompetitorIntelligence />`
+
+### `src/components/Sidebar.tsx`
+In the "Intelligence" nav group:
+- Add `{ path: '/talent-intel', icon: Users, label: 'Talent Intel' }` 
+- Add `{ path: '/competitor-intel', icon: Eye, label: 'Competitor Intel' }`
+- Rename existing "Competitor Monitor" label to "Job Tracker"
+
+---
+
+## Technical Notes
+
+- All new tables use `(supabase as any)` pattern matching existing codebase (tables not in generated types)
+- Tier assignment: score ≥ 15 = HOT, ≥ 8 = WARM, else COLD — computed in scraper before insert
+- Firecrawl calls happen client-side via the existing `BrowserFirecrawl` class (not edge functions) — matching existing pattern
+- All pages follow `bg-transparent` pattern for grid background visibility
+- Loading states use `<Skeleton>` components throughout
+- Mobile responsive: signal cards go single-column, filter pills scroll horizontally
+
+---
+
+## Files Created/Modified
+
+| Action | File |
+|--------|------|
+| Migration | 4 new tables + RLS policies |
+| Create | `src/lib/scrapers/talent/openToWork.ts` |
+| Create | `src/lib/scrapers/talent/layoffVictims.ts` |
+| Create | `src/lib/scrapers/talent/publishedContent.ts` |
+| Create | `src/lib/scrapers/talent/companyAcquired.ts` |
+| Create | `src/lib/scrapers/talent/spokeAtEvent.ts` |
+| Create | `src/lib/scrapers/talent/runAllTalentScrapers.ts` |
+| Create | `src/lib/scrapers/competitors/pricingMonitor.ts` |
+| Create | `src/lib/scrapers/competitors/productIntel.ts` |
+| Create | `src/lib/scrapers/competitors/reviewSentiment.ts` |
+| Create | `src/lib/scrapers/competitors/executiveChanges.ts` |
+| Create | `src/lib/scrapers/competitors/hiringPatternAnalysis.ts` |
+| Create | `src/lib/scrapers/competitors/runAllCompetitorScrapers.ts` |
+| Create | `src/pages/TalentIntelligence.tsx` |
+| Create | `src/pages/CompetitorIntelligence.tsx` |
+| Create | `src/components/talent-intel/TalentSignalCard.tsx` |
+| Create | `src/components/talent-intel/SignalFilterPills.tsx` |
+| Create | `src/components/talent-intel/RoleMatchFilter.tsx` |
+| Create | `src/components/competitor-intel/CompetitorIntelSignalCard.tsx` |
+| Create | `src/components/competitor-intel/CompetitorProfileCard.tsx` |
+| Create | `src/components/competitor-intel/SignalGroupSection.tsx` |
+| Create | `src/components/competitor-intel/ImportanceAlertStrip.tsx` |
+| Modify | `src/App.tsx` — add 2 routes |
+| Modify | `src/components/Sidebar.tsx` — add 2 nav items, rename 1 |
 
