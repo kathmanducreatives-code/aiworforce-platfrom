@@ -432,7 +432,7 @@ All colors MUST be HSL.
     --skeleton-base: rgba(255, 255, 255, 0.04);
     --skeleton-shine: rgba(255, 255, 255, 0.08);
 
-    --background: 0 0% 3%;
+    --background: 0 0% 1% / 0;
     --foreground: 0 0% 93%;
 
     --card: 0 0% 5%;
