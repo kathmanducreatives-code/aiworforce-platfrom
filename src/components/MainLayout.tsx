@@ -2,7 +2,6 @@ import { ReactNode, useState, useEffect } from "react";
 import { useLocation } from "react-router-dom";
 import Sidebar from "./Sidebar";
 import MobileHeader from "./MobileHeader";
-import AuthenticatedBackground from "./AuthenticatedBackground";
 import CommandPalette from "./shared/CommandPalette";
 import { useIsMobile } from "@/hooks/use-mobile";
 

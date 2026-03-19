@@ -30,6 +30,7 @@ import BookInterview from "./pages/BookInterview";
 import GoogleOAuthCallback from "./pages/GoogleOAuthCallback";
 import ProtectedRoute from "./components/ProtectedRoute";
 import MainLayout from "./components/MainLayout";
+import AuthenticatedBackground from "./components/AuthenticatedBackground";
 
 import CandidateApply from "./pages/CandidateApply";
 
