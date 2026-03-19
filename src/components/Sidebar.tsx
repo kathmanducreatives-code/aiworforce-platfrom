@@ -5,7 +5,7 @@ import {
   LayoutDashboard, Activity, Calendar, Search, Brain, Target, TrendingUp,
   Mail, Share2, BarChart3, LogOut, Settings, HelpCircle, ChevronLeft, ChevronRight,
   PanelLeftClose, PanelLeft, Command, Users, CheckSquare, ShieldCheck, Video,
-  ClipboardList, Wallet, UserCircle, Briefcase, Crosshair, Zap, Radar
+  ClipboardList, Wallet, UserCircle, Briefcase, Crosshair, Zap, Radar, Eye
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
