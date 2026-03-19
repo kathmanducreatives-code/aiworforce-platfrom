@@ -25,7 +25,6 @@ const MainLayout = ({ children }: MainLayoutProps) => {
 
   return (
     <div className="min-h-screen w-full bg-background relative">
-      <AuthenticatedBackground />
 
       {/* Command Palette (global) */}
       <CommandPalette open={commandOpen} onOpenChange={setCommandOpen} />
