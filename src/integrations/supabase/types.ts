@@ -695,6 +695,225 @@ export type Database = {
         }
         Relationships: []
       }
+      competitor_companies: {
+        Row: {
+          careers_url: string | null
+          company_name: string
+          crawl_status: string | null
+          created_at: string | null
+          id: string
+          last_crawled_at: string | null
+          user_id: string
+          website_url: string | null
+        }
+        Insert: {
+          careers_url?: string | null
+          company_name: string
+          crawl_status?: string | null
+          created_at?: string | null
+          id?: string
+          last_crawled_at?: string | null
+          user_id: string
+          website_url?: string | null
+        }
+        Update: {
+          careers_url?: string | null
+          company_name?: string
+          crawl_status?: string | null
+          created_at?: string | null
+          id?: string
+          last_crawled_at?: string | null
+          user_id?: string
+          website_url?: string | null
+        }
+        Relationships: []
+      }
+      competitor_intel_signals: {
+        Row: {
+          competitor_id: string | null
+          competitor_name: string | null
+          created_at: string | null
+          id: string
+          importance: string | null
+          is_dismissed: boolean | null
+          is_read: boolean | null
+          signal_data: Json | null
+          signal_date: string | null
+          signal_source_url: string | null
+          signal_summary: string | null
+          signal_title: string
+          signal_type: string
+          user_id: string
+        }
+        Insert: {
+          competitor_id?: string | null
+          competitor_name?: string | null
+          created_at?: string | null
+          id?: string
+          importance?: string | null
+          is_dismissed?: boolean | null
+          is_read?: boolean | null
+          signal_data?: Json | null
+          signal_date?: string | null
+          signal_source_url?: string | null
+          signal_summary?: string | null
+          signal_title: string
+          signal_type: string
+          user_id: string
+        }
+        Update: {
+          competitor_id?: string | null
+          competitor_name?: string | null
+          created_at?: string | null
+          id?: string
+          importance?: string | null
+          is_dismissed?: boolean | null
+          is_read?: boolean | null
+          signal_data?: Json | null
+          signal_date?: string | null
+          signal_source_url?: string | null
+          signal_summary?: string | null
+          signal_title?: string
+          signal_type?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "competitor_intel_signals_competitor_id_fkey"
+            columns: ["competitor_id"]
+            isOneToOne: false
+            referencedRelation: "competitor_companies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      competitor_job_postings: {
+        Row: {
+          competitor_id: string | null
+          created_at: string | null
+          department: string | null
+          id: string
+          job_title: string
+          job_url: string | null
+          location: string | null
+          scraped_at: string | null
+          user_id: string
+        }
+        Insert: {
+          competitor_id?: string | null
+          created_at?: string | null
+          department?: string | null
+          id?: string
+          job_title: string
+          job_url?: string | null
+          location?: string | null
+          scraped_at?: string | null
+          user_id: string
+        }
+        Update: {
+          competitor_id?: string | null
+          created_at?: string | null
+          department?: string | null
+          id?: string
+          job_title?: string
+          job_url?: string | null
+          location?: string | null
+          scraped_at?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "competitor_job_postings_competitor_id_fkey"
+            columns: ["competitor_id"]
+            isOneToOne: false
+            referencedRelation: "competitor_companies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      competitor_profiles: {
+        Row: {
+          competitor_id: string | null
+          engineering_headcount_estimate: number | null
+          g2_rating: number | null
+          g2_review_count: number | null
+          id: string
+          key_differentiators: Json | null
+          key_features: Json | null
+          last_full_scan_at: string | null
+          last_pricing_change_at: string | null
+          pricing_change_summary: string | null
+          pricing_model: string | null
+          pricing_tiers: Json | null
+          recent_executive_changes: Json | null
+          recent_launches: Json | null
+          tagline: string | null
+          target_market: string | null
+          top_complaints: Json | null
+          top_praise: Json | null
+          total_employees_estimate: number | null
+          updated_at: string | null
+          user_id: string
+          value_proposition: string | null
+        }
+        Insert: {
+          competitor_id?: string | null
+          engineering_headcount_estimate?: number | null
+          g2_rating?: number | null
+          g2_review_count?: number | null
+          id?: string
+          key_differentiators?: Json | null
+          key_features?: Json | null
+          last_full_scan_at?: string | null
+          last_pricing_change_at?: string | null
+          pricing_change_summary?: string | null
+          pricing_model?: string | null
+          pricing_tiers?: Json | null
+          recent_executive_changes?: Json | null
+          recent_launches?: Json | null
+          tagline?: string | null
+          target_market?: string | null
+          top_complaints?: Json | null
+          top_praise?: Json | null
+          total_employees_estimate?: number | null
+          updated_at?: string | null
+          user_id: string
+          value_proposition?: string | null
+        }
+        Update: {
+          competitor_id?: string | null
+          engineering_headcount_estimate?: number | null
+          g2_rating?: number | null
+          g2_review_count?: number | null
+          id?: string
+          key_differentiators?: Json | null
+          key_features?: Json | null
+          last_full_scan_at?: string | null
+          last_pricing_change_at?: string | null
+          pricing_change_summary?: string | null
+          pricing_model?: string | null
+          pricing_tiers?: Json | null
+          recent_executive_changes?: Json | null
+          recent_launches?: Json | null
+          tagline?: string | null
+          target_market?: string | null
+          top_complaints?: Json | null
+          top_praise?: Json | null
+          total_employees_estimate?: number | null
+          updated_at?: string | null
+          user_id?: string
+          value_proposition?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "competitor_profiles_competitor_id_fkey"
+            columns: ["competitor_id"]
+            isOneToOne: false
+            referencedRelation: "competitor_companies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       deep_search_analysis: {
         Row: {
           candidate_name: string | null
@@ -2212,6 +2431,47 @@ export type Database = {
         }
         Relationships: []
       }
+      pricing_history: {
+        Row: {
+          change_detected: boolean | null
+          change_summary: string | null
+          competitor_id: string | null
+          id: string
+          previous_entry_id: string | null
+          pricing_data: Json | null
+          scraped_at: string | null
+          user_id: string
+        }
+        Insert: {
+          change_detected?: boolean | null
+          change_summary?: string | null
+          competitor_id?: string | null
+          id?: string
+          previous_entry_id?: string | null
+          pricing_data?: Json | null
+          scraped_at?: string | null
+          user_id: string
+        }
+        Update: {
+          change_detected?: boolean | null
+          change_summary?: string | null
+          competitor_id?: string | null
+          id?: string
+          previous_entry_id?: string | null
+          pricing_data?: Json | null
+          scraped_at?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pricing_history_competitor_id_fkey"
+            columns: ["competitor_id"]
+            isOneToOne: false
+            referencedRelation: "competitor_companies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       profiles: {
         Row: {
           client_id: string | null
@@ -3022,6 +3282,92 @@ export type Database = {
           tier?: string | null
         }
         Relationships: []
+      }
+      talent_signals: {
+        Row: {
+          action_type: string | null
+          actioned_at: string | null
+          candidate_company: string | null
+          candidate_email: string | null
+          candidate_linkedin_url: string | null
+          candidate_location: string | null
+          candidate_name: string | null
+          candidate_photo_url: string | null
+          candidate_title: string | null
+          created_at: string | null
+          id: string
+          is_actioned: boolean | null
+          is_dismissed: boolean | null
+          matched_job_id: string | null
+          role_match_score: number | null
+          signal_detected_at: string | null
+          signal_score: number | null
+          signal_source_url: string | null
+          signal_summary: string | null
+          signal_title: string
+          signal_type: string
+          tier: string | null
+          user_id: string
+        }
+        Insert: {
+          action_type?: string | null
+          actioned_at?: string | null
+          candidate_company?: string | null
+          candidate_email?: string | null
+          candidate_linkedin_url?: string | null
+          candidate_location?: string | null
+          candidate_name?: string | null
+          candidate_photo_url?: string | null
+          candidate_title?: string | null
+          created_at?: string | null
+          id?: string
+          is_actioned?: boolean | null
+          is_dismissed?: boolean | null
+          matched_job_id?: string | null
+          role_match_score?: number | null
+          signal_detected_at?: string | null
+          signal_score?: number | null
+          signal_source_url?: string | null
+          signal_summary?: string | null
+          signal_title: string
+          signal_type: string
+          tier?: string | null
+          user_id: string
+        }
+        Update: {
+          action_type?: string | null
+          actioned_at?: string | null
+          candidate_company?: string | null
+          candidate_email?: string | null
+          candidate_linkedin_url?: string | null
+          candidate_location?: string | null
+          candidate_name?: string | null
+          candidate_photo_url?: string | null
+          candidate_title?: string | null
+          created_at?: string | null
+          id?: string
+          is_actioned?: boolean | null
+          is_dismissed?: boolean | null
+          matched_job_id?: string | null
+          role_match_score?: number | null
+          signal_detected_at?: string | null
+          signal_score?: number | null
+          signal_source_url?: string | null
+          signal_summary?: string | null
+          signal_title?: string
+          signal_type?: string
+          tier?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "talent_signals_matched_job_id_fkey"
+            columns: ["matched_job_id"]
+            isOneToOne: false
+            referencedRelation: "screening_jobs"
+            referencedColumns: ["id"]
+          },
+        ]
       }
     }
     Views: {

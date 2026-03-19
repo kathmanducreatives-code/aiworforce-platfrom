@@ -46,6 +46,8 @@ import ExpertMarketplace from "./pages/ExpertMarketplace";
 import PostInterceptor from "./pages/PostInterceptor";
 import LeadCRM from "./pages/LeadCRM";
 import OutreachEngine from "./pages/OutreachEngine";
+import TalentIntelligence from "./pages/TalentIntelligence";
+import CompetitorIntelligence from "./pages/CompetitorIntelligence";
 import CandidateDossier from "./pages/candidates/CandidateDossier";
 // import VerifyQueue from "./pages/verify/VerifyQueue";
 // import VerifyResults from "./pages/verify/VerifyResults";
@@ -229,6 +231,22 @@ const App = () => (
                       <ProtectedRoute>
                         <MainLayout>
                           <CompetitorMonitor />
+                        </MainLayout>
+                      </ProtectedRoute>
+                    } />
+
+                    <Route path="/talent-intel" element={
+                      <ProtectedRoute>
+                        <MainLayout>
+                          <TalentIntelligence />
+                        </MainLayout>
+                      </ProtectedRoute>
+                    } />
+
+                    <Route path="/competitor-intel" element={
+                      <ProtectedRoute>
+                        <MainLayout>
+                          <CompetitorIntelligence />
                         </MainLayout>
                       </ProtectedRoute>
                     } />

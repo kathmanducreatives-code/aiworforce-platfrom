@@ -5,7 +5,7 @@ import {
   LayoutDashboard, Activity, Calendar, Search, Brain, Target, TrendingUp,
   Mail, Share2, BarChart3, LogOut, Settings, HelpCircle, ChevronLeft, ChevronRight,
   PanelLeftClose, PanelLeft, Command, Users, CheckSquare, ShieldCheck, Video,
-  ClipboardList, Wallet, UserCircle, Briefcase, Crosshair, Zap, Radar
+  ClipboardList, Wallet, UserCircle, Briefcase, Crosshair, Zap, Radar, Eye
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -50,8 +50,10 @@ const navGroups: NavGroup[] = [
   {
     label: 'Intelligence',
     items: [
+      { path: '/talent-intel', icon: Users, label: 'Talent Intel' },
+      { path: '/competitor-intel', icon: Eye, label: 'Competitor Intel' },
       { path: '/distribution', icon: Share2, label: 'Job Distribution' },
-      { path: '/competitors', icon: Radar, label: 'Competitor Monitor' },
+      { path: '/competitors', icon: Radar, label: 'Job Tracker' },
     ],
   },
   {
