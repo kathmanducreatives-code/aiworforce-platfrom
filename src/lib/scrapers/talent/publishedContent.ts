@@ -33,7 +33,7 @@ export async function scrapePublishedContent(userId: string): Promise<ScraperRes
       const description = item.description || '';
 
       // Extract author from title patterns like "Author Name - Article Title"
-      const authorMatch = title.match(/by\s+([^|–-]+)/i) || description.match(/by\s+([^|–-,]+)/i);
+      const authorMatch = title.match(/by\s+([^|–\-]+)/i) || description.match(/by\s+([^|–\-,]+)/i);
       const authorName = authorMatch ? authorMatch[1].trim() : 'Author';
 
       let score = 8;
