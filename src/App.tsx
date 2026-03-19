@@ -71,7 +71,7 @@ const App = () => (
               <Toaster />
               <Sonner />
               <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
-                <div className="relative min-h-screen w-full bg-background isolate">
+                <div className="relative min-h-screen w-full">
                   <AuthenticatedBackground />
                   <Routes>
                     {/* Public Routes */}

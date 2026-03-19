@@ -75,7 +75,7 @@ export default function CompetitorMonitor() {
 
 
     return (
-        <div className="min-h-screen bg-background">
+        <div className="min-h-screen bg-transparent">
             <div className="max-w-[1280px] mx-auto px-6 lg:px-8 py-6 space-y-6">
                 <PageHeader
                     title="Competitor Intelligence"

@@ -154,7 +154,7 @@ const FolderView = () => {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-background">
+      <div className="min-h-screen bg-transparent">
         <Header />
         <div className="container mx-auto px-6 py-8 flex items-center justify-center">
           <div className="text-center">
@@ -167,7 +167,7 @@ const FolderView = () => {
   }
 
   return (
-    <div className="min-h-screen w-full bg-background">
+    <div className="min-h-screen w-full bg-transparent">
       <Header />
       
       <main className="container mx-auto px-3 sm:px-6 py-4 sm:py-8 pt-20 sm:pt-24 animate-fade-in max-w-7xl">

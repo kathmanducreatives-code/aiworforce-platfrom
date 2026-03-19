@@ -88,7 +88,7 @@ const GoogleOAuthCallback = () => {
   }, [searchParams, navigate]);
 
   return (
-    <div className="min-h-screen bg-background flex items-center justify-center p-4">
+    <div className="min-h-screen bg-transparent flex items-center justify-center p-4">
       <Card className="w-full max-w-md">
         <CardContent className="pt-6 text-center">
           {status === 'loading' && (

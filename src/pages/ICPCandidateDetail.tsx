@@ -238,7 +238,7 @@ const ICPCandidateDetail = () => {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-background p-8 flex flex-col items-center justify-center gap-4">
+      <div className="min-h-screen bg-transparent p-8 flex flex-col items-center justify-center gap-4">
         <Skeleton className="h-8 w-64 bg-card" />
         <Skeleton className="h-[400px] w-full max-w-5xl bg-card rounded-xl" />
       </div>
@@ -247,7 +247,7 @@ const ICPCandidateDetail = () => {
 
   if (!profile) {
     return (
-      <div className="min-h-screen bg-background flex flex-col items-center justify-center gap-4 text-foreground">
+      <div className="min-h-screen bg-transparent flex flex-col items-center justify-center gap-4 text-foreground">
         <p className="text-muted-foreground">Candidate not found.</p>
         <Button variant="outline" onClick={() => navigate(`/icp/results/${sessionId}`)}>
           <ArrowLeft className="w-4 h-4 mr-2" /> Back to Results
