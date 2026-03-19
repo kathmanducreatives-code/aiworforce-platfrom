@@ -487,10 +487,10 @@ All colors MUST be HSL.
     --skeleton-base: rgba(0, 0, 0, 0.04);
     --skeleton-shine: rgba(0, 0, 0, 0.08);
 
-    --background: 0 0% 98%;
+    --background: 0 0% 98% / 0.85;
     --foreground: 0 0% 8%;
 
-    --card: 0 0% 100%;
+    --card: 0 0% 100% / 0.9;
     --card-foreground: 0 0% 8%;
 
     --popover: 0 0% 100%;

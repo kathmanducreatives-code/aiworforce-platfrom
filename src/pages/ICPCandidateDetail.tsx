@@ -247,7 +247,7 @@ const ICPCandidateDetail = () => {
 
   if (!profile) {
     return (
-      <div className="min-h-screen bg-background flex flex-col items-center justify-center gap-4 text-foreground">
+      <div className="min-h-screen bg-transparent flex flex-col items-center justify-center gap-4 text-foreground">
         <p className="text-muted-foreground">Candidate not found.</p>
         <Button variant="outline" onClick={() => navigate(`/icp/results/${sessionId}`)}>
           <ArrowLeft className="w-4 h-4 mr-2" /> Back to Results

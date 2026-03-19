@@ -1,6 +1,27 @@
+import { useEffect, useState } from "react";
+
 const AuthenticatedBackground = () => {
+  const [isLight, setIsLight] = useState(false);
+
+  useEffect(() => {
+    const check = () => {
+      const theme = document.documentElement.getAttribute("data-theme");
+      setIsLight(theme === "light");
+    };
+    check();
+    const observer = new MutationObserver(check);
+    observer.observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
+    return () => observer.disconnect();
+  }, []);
+
   return (
-    <div className="fixed inset-0 pointer-events-none z-0 overflow-hidden bg-[#020202]">
+    <div
+      className="fixed inset-0 pointer-events-none z-0 overflow-hidden"
+      style={{
+        background: isLight ? '#f8f8f8' : '#020202',
+        opacity: isLight ? 0.3 : 1,
+      }}
+    >
       {/* 1. Breathing Nebula Glows */}
       <div
         className="absolute top-[-10%] left-1/2 -translate-x-1/2 w-[900px] h-[600px] rounded-full blur-[180px] opacity-20 pointer-events-none"

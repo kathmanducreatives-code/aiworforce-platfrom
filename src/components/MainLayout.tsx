@@ -24,7 +24,7 @@ const MainLayout = ({ children }: MainLayoutProps) => {
   }, [location.pathname]);
 
   return (
-    <div className="min-h-screen w-full bg-background relative">
+    <div className="min-h-screen w-full bg-transparent relative">
 
       {/* Command Palette (global) */}
       <CommandPalette open={commandOpen} onOpenChange={setCommandOpen} />

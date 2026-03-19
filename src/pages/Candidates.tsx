@@ -7,7 +7,7 @@ const Candidates = () => {
   const navigate = useNavigate();
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen bg-transparent">
       <div className="max-w-7xl mx-auto px-6 py-8">
         <Button
           variant="ghost"

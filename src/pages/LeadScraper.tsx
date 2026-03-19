@@ -535,7 +535,7 @@ export default function LeadScraper() {
   );
 
   return (
-    <div className="w-full min-h-screen bg-background relative">
+    <div className="w-full min-h-screen bg-transparent relative">
 
       {/* Header */}
       <div className="max-w-[1280px] mx-auto px-6 lg:px-8 pt-6">

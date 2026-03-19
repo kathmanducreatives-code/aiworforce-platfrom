@@ -264,7 +264,7 @@ const EmailSequences = () => {
   };
 
   return (
-    <div className="min-h-screen w-full bg-background">
+    <div className="min-h-screen w-full bg-transparent">
       <main className="max-w-[1280px] mx-auto px-6 lg:px-8 py-6 space-y-6">
         <PageHeader
           title="Email Sequences"
