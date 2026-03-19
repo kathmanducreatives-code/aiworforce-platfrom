@@ -232,35 +232,30 @@ export const ExpertJourney = () => {
         },
       });
 
-      // Stage 1
       tl.to('.stage-1', { opacity: 1, scale: 1, y: 0, duration: 0.75 })
         .to('.stage-1 .ui-badge', { y: -24, duration: 0.55 }, '<')
         .to('.stage-1 .ui-bar', { y: -34, duration: 0.55 }, '<')
         .to('.stage-1 .ui-widget', { y: -18, duration: 0.55 }, '<')
         .to('.stage-1', { rotateX: -15, scale: 0.85, y: -100, opacity: 0, duration: 0.7 });
 
-      // Stage 2
       tl.to('.stage-2', { opacity: 1, scale: 1, y: 0, duration: 0.75 })
         .to('.stage-2 .ui-badge', { y: -24, duration: 0.55 }, '<')
         .to('.stage-2 .ui-bar', { y: -34, duration: 0.55 }, '<')
         .to('.stage-2 .ui-widget', { y: -18, duration: 0.55 }, '<')
         .to('.stage-2', { rotateX: -15, scale: 0.85, y: -100, opacity: 0, duration: 0.7 });
 
-      // Stage 3
       tl.to('.stage-3', { opacity: 1, scale: 1, y: 0, duration: 0.75 })
         .to('.stage-3 .ui-badge', { y: -24, duration: 0.55 }, '<')
         .to('.stage-3 .ui-bar', { y: -34, duration: 0.55 }, '<')
         .to('.stage-3 .ui-widget', { y: -18, duration: 0.55 }, '<')
         .to('.stage-3', { rotateX: -15, scale: 0.85, y: -100, opacity: 0, duration: 0.7 });
 
-      // Stage 4
       tl.to('.stage-4', { opacity: 1, scale: 1, y: 0, duration: 0.75 })
         .to('.stage-4 .ui-badge', { y: -24, duration: 0.55 }, '<')
         .to('.stage-4 .ui-bar', { y: -34, duration: 0.55 }, '<')
         .to('.stage-4 .ui-widget', { y: -18, duration: 0.55 }, '<')
         .to('.stage-4', { boxShadow: '0 0 60px rgba(0,255,150,0.22)', duration: 0.6 });
 
-      // Keep subtle global depth motion tied to same pinned trigger (no extra child triggers)
       tl.to(uiBadges, { yPercent: -10, duration: 0.001 }, 0)
         .to(uiBars, { yPercent: -12, duration: 0.001 }, 0)
         .to(uiWidgets, { yPercent: -8, duration: 0.001 }, 0);
@@ -279,24 +274,24 @@ export const ExpertJourney = () => {
           <div className="sequence-stage stage-1">
             <div className="sequence-card">
               <div className="sequence-content">
-                <div className="seq-label">Stage 1 · AI Screening</div>
-                <h3 className="seq-title">AI Filters Out 95% of Unqualified Candidates</h3>
+                <div className="seq-label">Stage 1 · AI Does the Dirty Work</div>
+                <h3 className="seq-title">AI Rejects 95% of Bad Candidates Instantly</h3>
                 <p className="seq-copy">
-                  ScreeningPilot automatically evaluates resumes, experience relevance, and screening responses so only high-fit profiles move to interviews.
+                  Your agency takes 6 weeks to send you 5 profiles. ScreeningPilot scores every applicant in seconds and auto-rejects the ones that don't fit.
                 </p>
                 <div className="seq-bullets">
-                  <div className="seq-bullet"><span className="seq-bullet-mark">•</span><span>Resume quality</span></div>
-                  <div className="seq-bullet"><span className="seq-bullet-mark">•</span><span>Experience relevance</span></div>
-                  <div className="seq-bullet"><span className="seq-bullet-mark">•</span><span>Answers to screening questions</span></div>
+                  <div className="seq-bullet"><span className="seq-bullet-mark">•</span><span>Resume quality scoring</span></div>
+                  <div className="seq-bullet"><span className="seq-bullet-mark">•</span><span>Experience relevance matching</span></div>
+                  <div className="seq-bullet"><span className="seq-bullet-mark">•</span><span>Custom screening question answers</span></div>
                 </div>
-                <p className="seq-copy">Result: Every candidate receives an AI screening score.</p>
+                <p className="seq-copy">Result: Only top candidates reach your inbox. Zero agency markup.</p>
               </div>
               <div className="sequence-ui">
                 <div className="ui-panel">
-                  <div className="ui-row"><span className="text-xs text-white/80">Candidate: Alex R.</span><span className="ui-badge">Score 92</span></div>
-                  <div className="ui-row"><span className="text-xs text-white/80">Candidate: Sara P.</span><span className="ui-badge">Score 87</span></div>
-                  <div className="ui-row"><span className="text-xs text-white/80">Candidate: James K.</span><span className="ui-badge">Score 41</span></div>
-                  <div className="ui-widget">Auto-filtered queue updated in real time</div>
+                  <div className="ui-row"><span className="text-xs text-white/80">Alex R. — Strong fit</span><span className="ui-badge">Score 92</span></div>
+                  <div className="ui-row"><span className="text-xs text-white/80">Sara P. — Good fit</span><span className="ui-badge">Score 87</span></div>
+                  <div className="ui-row"><span className="text-xs text-white/80">James K. — Auto-rejected</span><span className="ui-badge">Score 41</span></div>
+                  <div className="ui-widget">247 candidates scored · 95% auto-rejected · 0 agency fees</div>
                 </div>
               </div>
             </div>
@@ -305,15 +300,15 @@ export const ExpertJourney = () => {
           <div className="sequence-stage stage-2">
             <div className="sequence-card">
               <div className="sequence-content">
-                <div className="seq-label">Stage 2 · Interview Blueprint</div>
-                <h3 className="seq-title">AI Generates an Interview Blueprint</h3>
+                <div className="seq-label">Stage 2 · Interview Prep Your Agency Never Gave You</div>
+                <h3 className="seq-title">AI Builds a Custom Interview Blueprint</h3>
                 <p className="seq-copy">
-                  For shortlisted candidates, ScreeningPilot prepares a structured guide with claim checks, verification questions, and focus areas.
+                  For every shortlisted candidate, AI generates a structured interview guide with claims to verify, suggested questions, and red flags to probe. Your agency never did this.
                 </p>
                 <div className="seq-bullets">
-                  <div className="seq-bullet"><span className="seq-bullet-mark">•</span><span>Claims made in the resume</span></div>
-                  <div className="seq-bullet"><span className="seq-bullet-mark">•</span><span>Suggested verification questions</span></div>
-                  <div className="seq-bullet"><span className="seq-bullet-mark">•</span><span>Key areas to evaluate</span></div>
+                  <div className="seq-bullet"><span className="seq-bullet-mark">•</span><span>Claims made in the resume to verify</span></div>
+                  <div className="seq-bullet"><span className="seq-bullet-mark">•</span><span>Suggested deep-dive questions</span></div>
+                  <div className="seq-bullet"><span className="seq-bullet-mark">•</span><span>Key evaluation areas per candidate</span></div>
                 </div>
               </div>
               <div className="sequence-ui">
@@ -331,15 +326,15 @@ export const ExpertJourney = () => {
           <div className="sequence-stage stage-3">
             <div className="sequence-card">
               <div className="sequence-content">
-                <div className="seq-label">Stage 3 · Expert Marketplace</div>
-                <h3 className="seq-title">Send Candidates to Expert Interviewers</h3>
+                <div className="seq-label">Stage 3 · Expert Interviewers on Demand</div>
+                <h3 className="seq-title">Tap Into Expert Interviewers — No Agency Needed</h3>
                 <p className="seq-copy">
-                  Instead of hiring full-time recruiters, teams can use fractional expert interviewers on demand directly from ScreeningPilot.
+                  Instead of paying agencies or building a massive recruiting team, use fractional expert interviewers on demand directly from ScreeningPilot.
                 </p>
                 <div className="seq-bullets">
-                  <div className="seq-bullet"><span className="seq-bullet-mark">•</span><span>Select interviewers</span></div>
-                  <div className="seq-bullet"><span className="seq-bullet-mark">•</span><span>Send interview invitations</span></div>
-                  <div className="seq-bullet"><span className="seq-bullet-mark">•</span><span>Schedule candidate interviews</span></div>
+                  <div className="seq-bullet"><span className="seq-bullet-mark">•</span><span>Browse and select expert interviewers</span></div>
+                  <div className="seq-bullet"><span className="seq-bullet-mark">•</span><span>Send interview invitations in one click</span></div>
+                  <div className="seq-bullet"><span className="seq-bullet-mark">•</span><span>Schedule and coordinate automatically</span></div>
                 </div>
               </div>
               <div className="sequence-ui">
@@ -347,7 +342,7 @@ export const ExpertJourney = () => {
                   <div className="ui-row"><span className="text-xs text-white/80">Sarah K. · Principal Engineer</span><span className="ui-badge">Available</span></div>
                   <div className="ui-row"><span className="text-xs text-white/80">Nisha R. · Staff Product Lead</span><span className="ui-badge">Available</span></div>
                   <div className="ui-row"><span className="text-xs text-white/80">Daniel M. · Senior Architect</span><span className="ui-badge">Invited</span></div>
-                  <div className="ui-widget">3 interview invitations generated</div>
+                  <div className="ui-widget">3 expert interviews scheduled — agency cost: €0</div>
                 </div>
               </div>
             </div>
@@ -356,24 +351,24 @@ export const ExpertJourney = () => {
           <div className="sequence-stage stage-4">
             <div className="sequence-card">
               <div className="sequence-content">
-                <div className="seq-label">Stage 4 · Final Interview Decision</div>
-                <h3 className="seq-title">Interviewers Conduct the Final Interview</h3>
+                <div className="seq-label">Stage 4 · The Agency is Dead</div>
+                <h3 className="seq-title">Make the Final Decision — Agency Free</h3>
                 <p className="seq-copy">
-                  Interviewers receive candidate resume, AI score, blueprint, and verification prompts inside one dashboard before approving or rejecting.
+                  Interviewers receive candidate resume, AI score, blueprint, and verification prompts. Approve or reject with full context. Your agency never gave you this level of control.
                 </p>
                 <div className="seq-bullets">
-                  <div className="seq-bullet"><span className="seq-bullet-mark">•</span><span>Candidate resume + AI results</span></div>
-                  <div className="seq-bullet"><span className="seq-bullet-mark">•</span><span>Suggested verification questions</span></div>
-                  <div className="seq-bullet"><span className="seq-bullet-mark">•</span><span>Approve / Reject decision flow</span></div>
+                  <div className="seq-bullet"><span className="seq-bullet-mark">•</span><span>Full candidate dossier + AI results</span></div>
+                  <div className="seq-bullet"><span className="seq-bullet-mark">•</span><span>Structured verification questions</span></div>
+                  <div className="seq-bullet"><span className="seq-bullet-mark">•</span><span>One-click Approve / Reject / Hold</span></div>
                 </div>
-                <p className="seq-copy"><strong className="text-white">90% of recruiting completed automatically.</strong></p>
+                <p className="seq-copy"><strong className="text-white">Total agency fees paid: €0. Total candidates screened: unlimited.</strong></p>
               </div>
               <div className="sequence-ui">
                 <div className="ui-panel">
                   <div className="ui-row"><span className="text-xs text-white/80">Candidate fit confidence</span><span className="ui-badge">High</span></div>
-                  <div className="ui-row"><span className="text-xs text-white/80">Interview completeness</span><span className="ui-badge">92%</span></div>
-                  <div className="ui-bar-track"><div className="ui-bar" style={{ width: '92%' }} /></div>
-                  <div className="ui-widget">Decision actions: Approve / Reject / Hold</div>
+                  <div className="ui-row"><span className="text-xs text-white/80">Agency fees saved</span><span className="ui-badge">€24,000</span></div>
+                  <div className="ui-bar-track"><div className="ui-bar" style={{ width: '97%' }} /></div>
+                  <div className="ui-widget">Decision: Approve / Reject / Hold — no middleman</div>
                 </div>
               </div>
             </div>

@@ -6,19 +6,19 @@ import { CheckCircle, XCircle } from 'lucide-react';
 gsap.registerPlugin(ScrollTrigger);
 
 const oldWayItems = [
-    'Most companies spend weeks screening resumes manually',
-    'Recruiting agencies charge large placement fees',
-    'Internal teams spend hours reviewing applications',
-    'Hiring managers interview candidates who should have been filtered earlier',
-    'Most early-stage hiring work is repetitive and manual',
+    'Agencies charge 20% of annual salary per hire',
+    'You wait 6–8 weeks for a shortlist of 5 candidates',
+    'Most agency candidates fail the first interview',
+    'Zero transparency into screening methodology',
+    'You\'re paying for LinkedIn searches you could do yourself',
 ];
 
 const newWayItems = [
-    'Meet ScreeningPilot — your AI hiring engine',
-    'Automate resume review and candidate evaluation',
-    'Generate interview insights before interviews begin',
-    'Move only top-fit candidates to final rounds',
-    'Spend your time interviewing the best candidates',
+    'Screen 500+ candidates in under 60 seconds',
+    'AI scores every applicant on 12+ criteria instantly',
+    'Only interview candidates who actually fit the role',
+    'Full transparency — see exactly why each candidate scored high',
+    'Replace your agency for €149/month, not €24,000/hire',
 ];
 
 export const TransformationSection = () => {
@@ -102,17 +102,16 @@ export const TransformationSection = () => {
     // Ring Math
     const radius = 160;
     const circumference = 2 * Math.PI * radius;
-    // Let CSS handle the dash offset via GSAP, but initialize it empty
 
     return (
         <section ref={sectionRef} className="relative w-full min-h-screen flex flex-col items-center justify-center px-4 overflow-hidden text-white font-display z-10">
 
             <div className="text-center mb-[60px] w-full max-w-6xl">
                 <p className="font-mono text-[11px] uppercase tracking-[0.2em] mb-4 text-emerald-500 font-semibold flex items-center justify-center gap-2">
-                    PROBLEM → SOLUTION
+                    THE PROBLEM → THE FIX
                 </p>
                 <h2 className="font-black text-[clamp(2.5rem,5vw,4.5rem)] leading-[1.0] tracking-[-0.05em] text-white">
-                    HIRING IS SLOW, EXPENSIVE, AND MANUAL<br />MEET SCREENINGPILOT — YOUR AI HIRING ENGINE
+                    AGENCIES ARE ROBBING YOU BLIND<br />HERE'S HOW YOU TAKE BACK CONTROL
                 </h2>
             </div>
 
@@ -121,7 +120,7 @@ export const TransformationSection = () => {
                 {/* Left — Old Way */}
                 <div ref={leftRef} className="mt-4 lg:mt-8">
                     <div className="bg-black/80 backdrop-blur-md rounded-2xl p-8 border border-white/10 shadow-2xl relative overflow-hidden h-full flex flex-col">
-                        <h3 className="font-display font-bold text-xl text-white/30 mb-6 uppercase tracking-wide">The Problem</h3>
+                        <h3 className="font-display font-bold text-xl text-white/30 mb-6 uppercase tracking-wide">The Agency Racket</h3>
                         <div className="space-y-4 flex-grow">
                             {oldWayItems.map((item, i) => (
                                 <div key={i} className="flex items-start gap-4 opp-item opacity-80">
@@ -131,8 +130,7 @@ export const TransformationSection = () => {
                             ))}
                         </div>
                         <div className="mt-8 font-mono text-xs text-white/40 border-t border-white/10 pt-4 bg-card/50 -mx-8 -mb-8 px-8 pb-8">
-                            COST: €82,000/year + 340 hours
-
+                            COST: €82,000/year + 340 hours wasted
                         </div>
                     </div>
                 </div>
@@ -140,10 +138,8 @@ export const TransformationSection = () => {
                 {/* Center — The Interactive Scanner */}
                 <div className="flex flex-col items-center justify-start relative z-20 my-10 lg:my-0 lg:mt-4">
                     <div className="relative w-[300px] h-[300px] md:w-[350px] md:h-[350px]">
-                        {/* Background Track Circle */}
                         <svg className="w-full h-full -rotate-90" viewBox="0 0 340 340">
                             <circle cx="170" cy="170" r="160" stroke="rgba(255,255,255,0.05)" strokeWidth="4" fill="none" />
-                            {/* Progress Circle (Controlled by GSAP) */}
                             <circle
                                 ref={ringRef}
                                 cx="170" cy="170" r="160"
@@ -160,21 +156,18 @@ export const TransformationSection = () => {
                             />
                         </svg>
 
-                        {/* Inner Content Component (Fading) */}
                         <div className="absolute inset-0 flex flex-col items-center justify-center text-center">
                             <div className="relative w-full h-full flex items-center justify-center">
-                                {/* Scanning State */}
                                 <div className={`absolute inset-0 flex flex-col items-center justify-center transition-all duration-[1500ms] ease-in-out ${progress < 100 ? 'opacity-100 scale-100' : 'opacity-0 scale-95 pointer-events-none'}`}>
                                     <p className="font-display font-bold text-lg text-emerald-500 mb-2">
-                                        {progress < 30 ? 'SCANNING...' : progress < 70 ? 'ANALYZING...' : 'MATCHING...'}
+                                        {progress < 30 ? 'SCANNING...' : progress < 70 ? 'ANALYZING...' : 'REPLACING...'}
                                     </p>
                                     <p className="font-mono text-5xl text-emerald-500 font-light tabular-nums tracking-tighter shadow-emerald-500/20 drop-shadow-lg [text-shadow:0_0_20px_rgba(34,197,94,0.4)]">
                                         {progress}%
                                     </p>
                                 </div>
-                                {/* Complete State */}
                                 <div className={`absolute inset-0 flex flex-col items-center justify-center transition-all duration-[1500ms] ease-in-out ${progress === 100 ? 'opacity-100 scale-100' : 'opacity-0 scale-105 pointer-events-none'}`}>
-                                    <p className="font-display font-bold text-xl text-emerald-500 mb-3 tracking-widest [text-shadow:0_0_15px_rgba(34,197,94,0.5)]">COMPLETE</p>
+                                    <p className="font-display font-bold text-xl text-emerald-500 mb-3 tracking-widest [text-shadow:0_0_15px_rgba(34,197,94,0.5)]">AGENCY REPLACED</p>
                                     <CheckCircle className="w-16 h-16 text-emerald-500 [filter:drop-shadow(0_0_10px_rgba(34,197,94,0.6))]" />
                                 </div>
                             </div>
@@ -185,10 +178,9 @@ export const TransformationSection = () => {
                 {/* Right — New Way */}
                 <div ref={rightRef} className="relative z-30 mt-4 lg:mt-8">
                     <div ref={newWayContainerRef} className="bg-card backdrop-blur-xl rounded-2xl p-8 border border-emerald-500/30 shadow-[0_0_40px_rgba(34,197,94,0.15)] relative overflow-hidden h-full flex flex-col">
-                        {/* Glossy top edge */}
                         <div className="absolute top-0 left-0 right-0 h-[1px] bg-gradient-to-r from-transparent via-emerald-400 to-transparent opacity-50" />
 
-                        <h3 className="font-display font-black text-xl text-emerald-500 mb-6 uppercase tracking-wide">The Solution</h3>
+                        <h3 className="font-display font-black text-xl text-emerald-500 mb-6 uppercase tracking-wide">The ScreeningPilot Way</h3>
                         <div className="space-y-4 flex-grow">
                             {newWayItems.map((item, i) => (
                                 <div key={i} className="flex items-start gap-4 new-item">
@@ -201,7 +193,7 @@ export const TransformationSection = () => {
                             <div className="bg-primary rounded-lg p-3 text-white shadow-[0_8px_20px_rgba(16,185,129,0.4)] flex justify-between items-center text-sm font-bold tracking-wide border border-white/20">
                                 <span>€149/MONTH</span>
                                 <span>·</span>
-                                <span>AI AUTOMATES MOST EARLY-STAGE HIRING</span>
+                                <span>AGENCIES CHARGE €24,000/HIRE</span>
                             </div>
                         </div>
                     </div>

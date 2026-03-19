@@ -16,31 +16,31 @@ type FeatureSlide = {
 const slides: FeatureSlide[] = [
   {
     icon: Clock3,
-    title: 'Hire Faster',
-    description: 'Reduce hiring cycles from weeks to hours by automating repetitive first-pass recruiting work.',
-    bullets: ['Faster candidate filtering', 'Faster shortlist decisions', 'Faster interview readiness'],
-    stat: 'Weeks → Hours',
+    title: 'Hire in Days, Not Months',
+    description: 'Agencies take 6–8 weeks to send you 5 profiles. ScreeningPilot scores hundreds of candidates in seconds.',
+    bullets: ['Instant candidate scoring', 'Same-day shortlists', 'No waiting for agency callbacks'],
+    stat: '8 weeks → 8 seconds',
   },
   {
     icon: Briefcase,
-    title: 'Eliminate Recruiting Agencies',
-    description: 'Stop paying expensive placement fees for manual screening and early-stage candidate qualification.',
-    bullets: ['No per-hire agency dependency', 'Lower recruiting overhead', 'Internal process control'],
-    stat: 'No Agency Fees',
+    title: 'Kill the 20% Agency Fee',
+    description: 'Stop paying €24,000 per hire for what is essentially a glorified LinkedIn search. Do it yourself for €149/month.',
+    bullets: ['No per-hire placement fees', '97% cheaper than agencies', 'Unlimited screenings included'],
+    stat: '€24K → €149/mo',
   },
   {
     icon: Users,
-    title: 'No Large Recruiting Team Needed',
-    description: 'AI handles the bulk of screening and evaluation so lean teams can run high-volume hiring.',
-    bullets: ['Automated first-pass review', 'Structured AI scoring', 'Less manual coordination'],
-    stat: 'Lean Team Friendly',
+    title: 'No Recruiter Army Needed',
+    description: 'One person with ScreeningPilot outperforms a team of 5 agency recruiters. AI handles the grunt work.',
+    bullets: ['AI screens every applicant', 'Auto-generated interview prep', 'One dashboard, zero chaos'],
+    stat: '1 Person = 5 Recruiters',
   },
   {
     icon: Target,
-    title: 'Interview Only Qualified Candidates',
-    description: 'ScreeningPilot filters out up to 95% of low-fit applicants automatically before final interviews.',
-    bullets: ['Score-based shortlisting', 'Better interview quality', 'Focused hiring manager time'],
-    stat: 'Up to 95% Auto-Filtered',
+    title: 'Only Interview the Best',
+    description: 'Agencies send you candidates who waste your time. ScreeningPilot auto-rejects 95% of bad fits before they reach you.',
+    bullets: ['AI-powered fit scoring', 'Only top candidates surface', 'Zero wasted interviews'],
+    stat: '95% Auto-Rejected',
   },
 ];
 
@@ -383,10 +383,10 @@ const FeatureSet = () => {
 
         <div className="features-wrapper">
           <div className="fs-intro">
-            <p className="font-mono text-xs uppercase tracking-[0.15em] mb-4 text-emerald-400 font-semibold">◆ Why Companies Use ScreeningPilot</p>
+            <p className="font-mono text-xs uppercase tracking-[0.15em] mb-4 text-emerald-400 font-semibold">◆ Why Smart Companies Ditch Agencies</p>
             <h2 className="font-display font-black text-[clamp(1.9rem,4.2vw,3.4rem)] leading-[1.04] tracking-[-0.04em] text-white">
-              AUTOMATE 90% OF HIRING WORK
-              <span className="block text-emerald-400">AND FOCUS ON TOP CANDIDATES</span>
+              EVERYTHING YOUR AGENCY DOES
+              <span className="block text-emerald-400">BUT 97% CHEAPER AND 10× FASTER</span>
             </h2>
           </div>
 
@@ -399,7 +399,7 @@ const FeatureSet = () => {
                     <div className="fs-icon-wrap">
                       <Icon className="w-5 h-5" />
                     </div>
-                    <div className="fs-kicker">Key Benefit</div>
+                    <div className="fs-kicker">Agency Killer</div>
                     <h3 className="fs-title">{slide.title}</h3>
                     <p className="fs-description">{slide.description}</p>
                     <div className="fs-bullets">
@@ -415,29 +415,29 @@ const FeatureSet = () => {
                   <div className="fs-right">
                     <div className="fs-panel">
                       <div className="fs-row fs-focus-item">
-                        <span className="text-xs text-white/75">Feature signal</span>
+                        <span className="text-xs text-white/75">Impact</span>
                         <span className="fs-card-badge">{slide.stat}</span>
                       </div>
                       <div className="fs-row fs-focus-item">
-                        <span className="text-xs text-white/75">Activation speed</span>
-                        <span className="fs-card-badge">Fast</span>
+                        <span className="text-xs text-white/75">Setup time</span>
+                        <span className="fs-card-badge">30 seconds</span>
                       </div>
                       <div className="fs-row fs-focus-item">
-                        <span className="text-xs text-white/75">Operational fit</span>
-                        <span className="fs-card-badge">High</span>
+                        <span className="text-xs text-white/75">Agency replacement</span>
+                        <span className="fs-card-badge">Complete</span>
                       </div>
 
                       <div className="fs-focus-item">
                         <div className="flex items-center justify-between text-xs text-white/75 mb-2">
-                          <span>Workflow readiness</span>
-                          <span>88%</span>
+                          <span>Agency fee eliminated</span>
+                          <span>97%</span>
                         </div>
                         <div className="fs-bar-track">
-                          <div className="fs-card-bar" style={{ width: '88%' }} />
+                          <div className="fs-card-bar" style={{ width: '97%' }} />
                         </div>
                       </div>
 
-                      <div className="fs-card-widget fs-focus-item">Connected to sourcing, screening, and decision flow</div>
+                      <div className="fs-card-widget fs-focus-item">Replaces sourcing, screening, and shortlisting agencies</div>
                     </div>
                   </div>
                 </article>

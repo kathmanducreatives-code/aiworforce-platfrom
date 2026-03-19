@@ -7,10 +7,10 @@ import { X, Loader2, Link as LinkIcon } from 'lucide-react';
 gsap.registerPlugin(ScrollTrigger);
 
 const steps = [
-    { num: 1, title: 'Define your ideal candidate', desc: 'Job description, required experience, key skills' },
-    { num: 2, title: 'Candidates apply via AI link', desc: 'Resume upload + personalized screening questions' },
-    { num: 3, title: 'AI filters out 95% of unqualified candidates', desc: 'Scoring based on resume, relevance, and answers' },
-    { num: 4, title: 'AI generates interview blueprint', desc: 'Verification questions + key evaluation areas' },
+    { num: 1, title: 'Paste your job description', desc: 'Title, requirements, salary — takes 30 seconds' },
+    { num: 2, title: 'AI generates screening criteria', desc: 'Custom questions + scoring rubric built automatically' },
+    { num: 3, title: 'Share the screening link', desc: 'Candidates apply through your branded AI link' },
+    { num: 4, title: 'AI rejects 95% of bad fits', desc: 'Only top candidates reach your inbox' },
 ];
 
 const fullTitle = 'Senior Frontend Engineer';
@@ -23,7 +23,6 @@ const ProductScreening = () => {
     const textRef = useRef<HTMLDivElement>(null);
     const lineRef = useRef<HTMLDivElement>(null);
 
-    // Interactive State
     const [activeStep, setActiveStep] = useState(0);
     const [title, setTitle] = useState('Senior Frontend Engineer');
     const [company, setCompany] = useState('Acme Corp');
@@ -53,7 +52,6 @@ const ProductScreening = () => {
             const count = Math.max(1, Math.round(source.length * ratio));
             return source.slice(0, count);
         };
-
 
         const ctx = gsap.context(() => {
             gsap.set('.scr-line-fill', { scaleY: 0, transformOrigin: 'top top' });
@@ -88,35 +86,17 @@ const ProductScreening = () => {
                         const typedCompany = typedValue(fullCompany, p, 0.18, 0.48);
                         const typedDesc = typedValue(fullDesc, p, 0.26, 0.74);
 
-                        if (typedTitle !== lastTitle) {
-                            setTitle(typedTitle);
-                            lastTitle = typedTitle;
-                        }
-                        if (typedCompany !== lastCompany) {
-                            setCompany(typedCompany);
-                            lastCompany = typedCompany;
-                        }
-                        if (typedDesc !== lastDesc) {
-                            setDesc(typedDesc);
-                            lastDesc = typedDesc;
-                        }
+                        if (typedTitle !== lastTitle) { setTitle(typedTitle); lastTitle = typedTitle; }
+                        if (typedCompany !== lastCompany) { setCompany(typedCompany); lastCompany = typedCompany; }
+                        if (typedDesc !== lastDesc) { setDesc(typedDesc); lastDesc = typedDesc; }
 
                         const shouldGenerate = p >= 0.74 && p < 0.89;
                         const shouldToast = p >= 0.89;
                         const shouldGlow = p >= 0.9;
 
-                        if (shouldGenerate !== lastGenerating) {
-                            setIsGenerating(shouldGenerate);
-                            lastGenerating = shouldGenerate;
-                        }
-                        if (shouldToast !== lastToast) {
-                            setShowToast(shouldToast);
-                            lastToast = shouldToast;
-                        }
-                        if (shouldGlow !== lastGlow) {
-                            setBtnGlow(shouldGlow);
-                            lastGlow = shouldGlow;
-                        }
+                        if (shouldGenerate !== lastGenerating) { setIsGenerating(shouldGenerate); lastGenerating = shouldGenerate; }
+                        if (shouldToast !== lastToast) { setShowToast(shouldToast); lastToast = shouldToast; }
+                        if (shouldGlow !== lastGlow) { setBtnGlow(shouldGlow); lastGlow = shouldGlow; }
                     }
                 },
             });
@@ -141,12 +121,12 @@ const ProductScreening = () => {
     const handleGenerate = () => {
         if (isGenerating || showToast) return;
         setIsGenerating(true);
-        setActiveStep(3); // Update progress to "Generate link"
+        setActiveStep(3);
         setTimeout(() => {
             setIsGenerating(false);
             setBtnGlow(true);
             setShowToast(true);
-            setActiveStep(4); // Advance to final step
+            setActiveStep(4);
             setTimeout(() => setBtnGlow(false), 600);
             setTimeout(() => setShowToast(false), 3500);
         }, 1500);
@@ -162,13 +142,11 @@ const ProductScreening = () => {
             className="relative w-full h-screen overflow-hidden font-display"
             style={{ background: '#000000' }}
         >
-            {/* Blueprint Grid */}
             <div className="absolute inset-0 pointer-events-none" style={{
                 backgroundImage: `linear-gradient(rgba(34,197,94,0.07) 1px, transparent 1px), linear-gradient(90deg, rgba(34,197,94,0.07) 1px, transparent 1px)`,
                 backgroundSize: '100px 100px',
             }} />
 
-            {/* Vertical Power Line */}
             <div className="absolute left-1/2 -translate-x-1/2 top-0 bottom-0 w-px bg-emerald-500/10 z-[5] pointer-events-none">
                 <div className="scr-power-line relative w-full bg-emerald-500" style={{ height: '0%', boxShadow: '0 0 12px rgba(34,197,94,0.8), 0 0 24px rgba(34,197,94,0.4)' }}>
                     <div className="absolute left-1/2 -translate-x-1/2 bottom-0 w-3 h-3 bg-emerald-400 rounded-full shadow-[0_0_20px_4px_rgba(34,197,94,0.8)] animate-ping" />
@@ -183,14 +161,13 @@ const ProductScreening = () => {
                     <div ref={textRef} className="flex-[45] scr-text opacity-0">
                         <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full border border-primary/40 bg-transparent mb-6 opacity-0">
                             <div className="w-1.5 h-1.5 rounded-full bg-primary" />
-                            <span className="font-mono text-[11px] uppercase tracking-[2px] text-primary font-semibold mt-px">AI JOB SCREENING</span>
-
+                            <span className="font-mono text-[11px] uppercase tracking-[2px] text-primary font-semibold mt-px">KILL THE AGENCY MIDDLEMAN</span>
                         </div>
                         <h2 className="scr-headline font-display font-black text-[clamp(1.8rem,4vw,3.2rem)] leading-[1.0] tracking-[-0.04em] text-white mb-5">
-                            STEP 1 — DEFINE YOUR IDEAL CANDIDATE<br />STEP 2 — CANDIDATES APPLY THROUGH AI LINK
+                            30 SECONDS TO SET UP.<br />95% OF BAD CANDIDATES GONE.
                         </h2>
                         <p className="scr-subtext text-white/60 text-base md:text-lg leading-[1.7] mb-8 max-w-[480px]">
-                            Enter your hiring requirements once. ScreeningPilot generates a candidate application link, analyzes resumes, and asks personalized screening questions automatically.
+                            Paste your job description. AI builds screening criteria, generates your application link, and auto-rejects unqualified candidates. Your agency charges €24K for this.
                         </p>
 
                         {/* Steps */}
@@ -268,7 +245,7 @@ const ProductScreening = () => {
                                     </div>
 
                                     <div className="border-t border-white/[0.06] pt-4">
-                                        <p className="text-[10px] text-white/40 font-medium mb-3 uppercase tracking-wider">Requirements</p>
+                                        <p className="text-[10px] text-white/40 font-medium mb-3 uppercase tracking-wider">Auto-Generated Requirements</p>
                                         <div className="flex flex-wrap gap-2">
                                             {tags.map((r) => (
                                                 <div key={r} onClick={() => removeTag(r)} className="req-tag group cursor-pointer bg-emerald-500/10 hover:bg-red-500/10 hover:border-red-500/30 border border-emerald-500/20 rounded-md px-2.5 py-1.5 text-[10px] text-emerald-400 font-medium transition-colors flex items-center gap-1.5">
@@ -277,20 +254,21 @@ const ProductScreening = () => {
                                                 </div>
                                             ))}
                                             <button className="bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.1] rounded-md px-3 py-1.5 text-[10px] text-white/50 font-medium transition-colors border-dashed" onClick={() => setTags([...tags, 'New Requirement'])}>
-                                                + Add Requirement
+                                                + Add
                                             </button>
                                         </div>
                                     </div>
                                     <button
                                         onClick={handleGenerate}
                                         disabled={isGenerating || showToast || !title || !company}
-                                        className={`w-full h-[44px] flex items-center justify-center gap-2 text-white text-[14px] font-[600] rounded-full mt-2 transition-all duration-300 ${btnGlow ? 'bg-primary shadow-[0_0_24px_rgba(16,185,129,0.5)] scale-[1.02]' :
-                                            isGenerating ? 'bg-primary/50 cursor-not-allowed' :
-                                                'bg-primary hover:bg-primary/90 hover:shadow-[0_4px_16px_rgba(16,185,129,0.4)]'
-
-                                            }`}>
-                                        {isGenerating ? <><Loader2 className="w-4 h-4 animate-spin" /> Generating AI Link...</> :
-                                            showToast ? 'Link Generated!' : 'Generate Candidate Screening Link →'}
+                                        className={`scr-generate-btn w-full mt-2 rounded-lg py-3 font-bold text-sm tracking-wide text-white transition-all duration-300 flex items-center justify-center gap-2
+                                            ${isGenerating ? 'bg-emerald-700 cursor-wait' : showToast ? 'bg-emerald-800 cursor-default' : 'bg-emerald-600 hover:bg-emerald-500 hover:shadow-[0_4px_24px_rgba(5,150,105,0.4)] cursor-pointer'}
+                                            ${btnGlow ? 'shadow-[0_0_30px_rgba(5,150,105,0.6)]' : ''}
+                                        `}
+                                    >
+                                        {isGenerating ? <><Loader2 className="w-4 h-4 animate-spin" /> Generating...</> :
+                                            showToast ? '✓ Link Ready — Agency Replaced' :
+                                                'Generate Screening Link'}
                                     </button>
                                 </div>
                             </div>
@@ -298,7 +276,7 @@ const ProductScreening = () => {
                     </div>
                 </div>
             </div>
-        </section >
+        </section>
     );
 };
 

@@ -7,27 +7,27 @@ import { GyroTilt } from '@/components/shared/GyroTilt';
 gsap.registerPlugin(ScrollTrigger);
 
 const statCards = [
-    { label: 'Applicants Screened', value: 1247, icon: BarChart3 },
-    { label: 'Auto-Filtered', value: 95, suffix: '%', icon: Target },
+    { label: 'Candidates Screened', value: 1247, icon: BarChart3 },
+    { label: 'Auto-Rejected', value: 95, suffix: '%', icon: Target },
     { label: 'Interview-Ready', value: 63, icon: Briefcase },
-    { label: 'Workflow Automated', value: 90, suffix: '%', icon: Cpu },
+    { label: 'Agency Cost Saved', value: 97, suffix: '%', icon: Cpu },
 ];
 
 const highlights = [
-    { text: 'Track AI screening scores in real time' },
-    { text: 'Review interview blueprints before final rounds' },
-    { text: 'Coordinate expert interviewers in one dashboard' },
+    { text: 'Track every candidate score in real time — no agency black box' },
+    { text: 'See exactly why each candidate was accepted or rejected' },
+    { text: 'Full pipeline visibility your agency never gave you' },
 ];
 
 const barHeights = [40, 65, 45, 80, 55, 90, 70];
 
 const activityItems = [
-    'AI scored 47 new applicants for Frontend Engineer',
-    'Interview blueprint generated for top 5 candidates',
-    '2 expert interviewers assigned and invited',
+    'AI rejected 47 unqualified applicants in 8 seconds',
+    '3 candidates scored 90%+ — moved to final round',
+    'Agency would have charged €72,000 for this search',
 ];
 
-const actionBtns = ['Create Screening Link', 'Send to Experts'];
+const actionBtns = ['Create Screening Link', 'Export Shortlist'];
 
 const ProductDashboard = () => {
     const sectionRef = useRef<HTMLDivElement>(null);
@@ -43,7 +43,6 @@ const ProductDashboard = () => {
 
     useEffect(() => {
         const ctx = gsap.context(() => {
-            // --- MASTER PINNED TIMELINE ---
             const tl = gsap.timeline({
                 scrollTrigger: {
                     trigger: sectionRef.current,
@@ -56,29 +55,23 @@ const ProductDashboard = () => {
                 }
             });
 
-            // Power line grows from top to bottom
             tl.fromTo('.dash-power-line', { height: '0%' }, { height: '100%', duration: 13, ease: 'none' }, 0);
-
-            // Phase 0: Title + mockup fly in (0 → 2)
             tl.fromTo('.dash-title', { opacity: 0, y: 40 }, { opacity: 1, y: 0, duration: 1.5, ease: 'expo.out' }, 0);
             tl.fromTo('.dash-mockup', { opacity: 0, y: 60, scale: 0.92 }, { opacity: 1, y: 0, scale: 1, duration: 2, ease: 'expo.out' }, 0.3);
             tl.fromTo('.dash-text-block', { opacity: 0, x: -40 }, { opacity: 1, x: 0, duration: 1.5, ease: 'expo.out' }, 0.5);
 
-            // Phase 1: Stat cards count up (2 → 5)
             const statEls = sectionRef.current?.querySelectorAll('.dash-stat');
             if (statEls) {
                 statEls.forEach((card, i) => {
                     tl.fromTo(card, { opacity: 0.2, y: 10, scale: 0.9 }, {
                         opacity: 1, y: 0, scale: 1, duration: 1, ease: 'back.out(1.5)'
                     }, 2 + i * 0.3);
-                    // Glow pulse
                     tl.fromTo(card, { boxShadow: '0 0 0 0 rgba(34,197,94,0)' }, {
                         boxShadow: '0 0 15px 2px rgba(34,197,94,0.3)', duration: 0.5, yoyo: true, repeat: 1
                     }, 2.5 + i * 0.3);
                 });
             }
 
-            // Phase 2: Bar charts rise from zero (5 → 8)
             const bars = sectionRef.current?.querySelectorAll('.chart-bar');
             if (bars) {
                 bars.forEach((bar, i) => {
@@ -88,27 +81,24 @@ const ProductDashboard = () => {
                 });
             }
 
-            // Phase 3: Activity feed items slide in (8 → 11)
             const actItems = sectionRef.current?.querySelectorAll('.activity-item');
             if (actItems) {
                 actItems.forEach((item, i) => {
                     tl.fromTo(item, { opacity: 0, x: 40 }, {
                         opacity: 1, x: 0, duration: 1, ease: 'power3.out'
                     }, 8 + i * 0.6);
-                    // Pulse the dot
                     tl.fromTo(item.querySelector('.activity-dot'), { scale: 0 }, {
                         scale: 1, duration: 0.3, ease: 'back.out(3)'
                     }, 8.3 + i * 0.6);
                 });
             }
 
-            // Phase 4: Highlights fade in staggered (11 → 13)
             const hlItems = sectionRef.current?.querySelectorAll('.dash-highlight');
             if (hlItems) {
                 hlItems.forEach((el, i) => {
                     tl.fromTo(el, { opacity: 0, x: -20 }, {
                         opacity: 1, x: 0, duration: 1, ease: 'expo.out'
-                    }, 0.8 + i * 0.2); // Fades in quickly alongside the text block to balance height!
+                    }, 0.8 + i * 0.2);
                 });
             }
 
@@ -122,13 +112,11 @@ const ProductDashboard = () => {
             className="relative w-full h-screen overflow-hidden font-display"
             style={{ background: '#000000' }}
         >
-            {/* Blueprint Grid */}
             <div className="absolute inset-0 pointer-events-none" style={{
                 backgroundImage: `linear-gradient(rgba(34,197,94,0.07) 1px, transparent 1px), linear-gradient(90deg, rgba(34,197,94,0.07) 1px, transparent 1px)`,
                 backgroundSize: '100px 100px',
             }} />
 
-            {/* Vertical Power Line */}
             <div className="absolute left-1/2 -translate-x-1/2 top-0 bottom-0 w-px bg-emerald-500/10 z-[5] pointer-events-none">
                 <div className="dash-power-line relative w-full bg-emerald-500" style={{ height: '0%', boxShadow: '0 0 12px rgba(34,197,94,0.8), 0 0 24px rgba(34,197,94,0.4)' }}>
                     <div className="absolute left-1/2 -translate-x-1/2 bottom-0 w-3 h-3 bg-emerald-400 rounded-full shadow-[0_0_20px_4px_rgba(34,197,94,0.8)] animate-ping" />
@@ -142,13 +130,13 @@ const ProductDashboard = () => {
                     <div className="flex-[45] dash-text-block opacity-0">
                         <div className="dash-title inline-flex items-center gap-2 px-3 py-1.5 rounded-full border border-[#00c853]/40 bg-transparent mb-6 opacity-0">
                             <div className="w-1.5 h-1.5 rounded-full bg-[#00c853]" />
-                            <span className="font-mono text-[11px] uppercase tracking-[2px] text-emerald-400 font-semibold mt-px">MEET SCREENINGPILOT — YOUR AI HIRING ENGINE</span>
+                            <span className="font-mono text-[11px] uppercase tracking-[2px] text-emerald-400 font-semibold mt-px">YOUR AGENCY REPLACEMENT</span>
                         </div>
                         <h2 className="dash-title font-display font-black text-[clamp(1.8rem,4vw,3.2rem)] leading-[1.0] tracking-[-0.04em] text-white mb-5 opacity-0">
-                            AUTOMATE CANDIDATE SCREENING,<br />EVALUATION, AND HANDOFF.
+                            EVERYTHING YOUR AGENCY DOES,<br />BUT 97% CHEAPER.
                         </h2>
                         <p className="text-white/60 text-base md:text-lg leading-[1.7] mb-8 max-w-[480px]">
-                            Monitor AI screening scores, shortlist top-fit talent, prepare interview blueprints, and coordinate expert interviewers from one workspace.
+                            Track every candidate, see every score, control every decision. No more waiting weeks for an agency to send you 5 mediocre profiles.
                         </p>
                         <div className="space-y-4">
                             {highlights.map((h, i) => (
@@ -166,10 +154,8 @@ const ProductDashboard = () => {
                     <div className="flex-[55] dash-mockup opacity-0">
                         <GyroTilt intensity={15}>
                             <div className="rounded-xl overflow-hidden border border-white/[0.1] bg-[#111111] shadow-[0_20px_60px_rgba(0,0,0,0.8),0_0_40px_rgba(34,197,94,0.15)] relative">
-                                {/* Soft glow behind mockup content to enhance contrast */}
                                 <div className="absolute top-0 right-0 w-64 h-64 bg-emerald-500/10 blur-[80px] rounded-full pointer-events-none" />
 
-                                {/* Browser chrome */}
                                 <div className="bg-white/[0.04] px-4 py-2.5 flex items-center gap-3 border-b border-white/[0.08] relative z-10">
                                     <div className="flex gap-1.5">
                                         <div className="w-3 h-3 rounded-full bg-red-400/60" />
@@ -182,7 +168,6 @@ const ProductDashboard = () => {
                                 </div>
 
                                 <div className="p-5">
-                                    {/* Stat Cards */}
                                     <div className="grid grid-cols-4 gap-3 mb-4">
                                         {statCards.map((s, i) => (
                                             <div key={i} className="dash-stat glass rounded-lg p-3 opacity-20 transition-all hover:border-emerald-500/30 hover:shadow-[0_4px_15px_rgba(5,150,105,0.15)] hover:-translate-y-0.5 cursor-default group">
@@ -209,10 +194,9 @@ const ProductDashboard = () => {
                                         ))}
                                     </div>
 
-                                    {/* Bar Chart */}
                                     <div className="glass rounded-lg p-4 mb-3 relative group">
                                         <p className="text-[10px] text-white/30 mb-3 font-medium flex justify-between">
-                                            Hiring Automation Progress
+                                            Agency Cost Savings
                                             <span className="opacity-0 group-hover:opacity-100 transition-opacity text-emerald-400">Interactive</span>
                                         </p>
                                         <div className="flex items-end gap-1 h-16" onMouseLeave={() => setHoveredBar(null)}>
@@ -230,7 +214,7 @@ const ProductDashboard = () => {
 
                                                     {hoveredBar === i && (
                                                         <div className="absolute -top-7 left-1/2 -translate-x-1/2 bg-white text-black text-[9px] font-bold px-2 py-1 rounded shadow-lg pointer-events-none z-10 whitespace-nowrap animate-in fade-in zoom-in-95 duration-200">
-                                                            {Math.round((h / 100) * 85)} candidates
+                                                            €{Math.round((h / 100) * 8200).toLocaleString()} saved
                                                         </div>
                                                     )}
                                                 </div>
@@ -238,7 +222,6 @@ const ProductDashboard = () => {
                                         </div>
                                     </div>
 
-                                    {/* Activity Feed */}
                                     <div className="glass rounded-lg p-3 group hover:border-white/10 transition-colors">
                                         <p className="text-[10px] text-white/30 mb-2 font-medium flex justify-between">
                                             Recent Activity

@@ -47,13 +47,13 @@ const HeroHook = () => {
       <div className="relative z-20 text-center px-4 w-full max-w-6xl mx-auto">
         <h1 ref={headlineRef} className="text-glow-green font-display font-black text-[clamp(2.5rem,6vw,5.5rem)] leading-[1.0] tracking-[-0.05em] text-white mb-10">
           <div className="flex flex-wrap items-center justify-center gap-[clamp(0.4rem,1.2vw,0.8rem)]">
-            <span className="word inline-block opacity-0">AUTOMATE</span>
-            <span className="word inline-block opacity-0">YOUR</span>
-            <span className="word inline-block opacity-0">HIRING</span>
+            <span className="word inline-block opacity-0">RECRUITING</span>
+            <span className="word inline-block opacity-0">AGENCIES</span>
+            <span className="word inline-block opacity-0">ARE</span>
           </div>
           <div className="flex flex-wrap items-center justify-center gap-[clamp(0.4rem,1.2vw,0.8rem)] mt-2">
             <span className="word inline-block opacity-0 text-shimmer relative">
-              PROCESS
+              STEALING FROM YOU
               <span className="headline-underline absolute -bottom-1 left-0 w-full h-2 bg-emerald-500/30 rounded-full origin-left" style={{ transform: 'scaleX(0)' }} />
             </span>
           </div>
@@ -61,28 +61,28 @@ const HeroHook = () => {
 
         <div ref={subtextRef} className="opacity-0 mb-10">
           <p className="font-display text-lg md:text-xl text-white/60 max-w-2xl mx-auto leading-relaxed">
-            Automate 90% of your hiring workflow. Source the entire internet, eliminate agency dependency, and access a global marketplace of expert interviewers, all in one place.
+            The average recruiting agency charges 20% of first-year salary. That's €24,000 per hire — for sending you the same LinkedIn results you could find yourself. We built the tool that makes them irrelevant.
           </p>
           <div className="mt-6 grid grid-cols-1 sm:grid-cols-2 gap-3 max-w-3xl mx-auto text-left">
-            <p className="text-sm text-white/70">• Filter out 95% of unqualified applicants automatically</p>
-            <p className="text-sm text-white/70">• Run AI-powered candidate screening</p>
-            <p className="text-sm text-white/70">• Generate structured interview blueprints instantly</p>
-            <p className="text-sm text-white/70">• Hire faster without recruiting agencies</p>
+            <p className="text-sm text-white/70">• 20% average agency fee per placement</p>
+            <p className="text-sm text-white/70">• €24,000 cost per senior hire</p>
+            <p className="text-sm text-white/70">• 340+ hours wasted on manual screening per year</p>
+            <p className="text-sm text-white/70">• 67% of agency candidates don't pass first interview</p>
           </div>
         </div>
 
         <div ref={ctaRef} className="opacity-0 mb-16">
           <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
             <button onClick={() => navigate('/get-demo')} className="liquid-fill-btn group h-[44px] inline-flex items-center gap-3 bg-emerald-600 border border-emerald-400 text-white font-semibold text-[15px] px-8 rounded-full transition-all duration-300 hover:scale-[1.03] shadow-[0_4px_24px_rgba(5,150,105,0.4)] active:scale-[0.98]">
-              Find the Top 1% Talent for your company
+              Stop Paying Agency Fees Forever
               <ArrowRight className="w-4 h-4 transition-transform duration-300 group-hover:translate-x-1" />
             </button>
             <button onClick={() => navigate('/auth')} className="h-[44px] inline-flex items-center gap-2 bg-transparent border border-white/15 text-white/70 hover:text-white hover:border-white/30 font-semibold text-[15px] px-8 rounded-full transition-all duration-300 hover:bg-white/5 hover:scale-[1.03] active:scale-[0.98]">
-              now
+              See How It Works
             </button>
           </div>
           <p className="text-sm text-white/40 mt-4 font-medium">
-            Automate candidate filtering, evaluation, and interview prep in one workflow
+            No credit card required · Replace your agency in 48 hours
           </p>
         </div>
 
@@ -90,11 +90,11 @@ const HeroHook = () => {
           <div className="glass-strong rounded-2xl p-8">
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
               <div className="text-center sm:border-r border-white/10">
-                <p className="text-xs text-white/30 uppercase tracking-wider font-semibold mb-2">Typical outsourced hiring cost (10 hires)</p>
+                <p className="text-xs text-white/30 uppercase tracking-wider font-semibold mb-2">Average agency cost (10 hires)</p>
                 <p className="font-mono font-bold text-3xl text-white/30 line-through tabular-nums">€{agencyVal.toLocaleString()}<span className="text-sm">/year</span></p>
               </div>
               <div className="text-center">
-                <p className="text-xs text-emerald-400/80 uppercase tracking-wider font-semibold mb-2">ScreeningPilot · platform cost</p>
+                <p className="text-xs text-emerald-400/80 uppercase tracking-wider font-semibold mb-2">ScreeningPilot · same results</p>
                 <p className="font-mono font-bold text-3xl text-emerald-400 tabular-nums">€1,788<span className="text-sm">/year</span></p>
               </div>
             </div>
