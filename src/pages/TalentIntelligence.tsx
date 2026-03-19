@@ -31,6 +31,7 @@ interface TalentSignal {
   tier: string;
   is_actioned: boolean;
   action_type: string | null;
+  actioned_at: string | null;
   is_dismissed: boolean;
   matched_job_id: string | null;
   role_match_score: number | null;

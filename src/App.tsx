@@ -235,6 +235,22 @@ const App = () => (
                       </ProtectedRoute>
                     } />
 
+                    <Route path="/talent-intel" element={
+                      <ProtectedRoute>
+                        <MainLayout>
+                          <TalentIntelligence />
+                        </MainLayout>
+                      </ProtectedRoute>
+                    } />
+
+                    <Route path="/competitor-intel" element={
+                      <ProtectedRoute>
+                        <MainLayout>
+                          <CompetitorIntelligence />
+                        </MainLayout>
+                      </ProtectedRoute>
+                    } />
+
                     <Route path="/growth-signals" element={
                       <ProtectedRoute>
                         <MainLayout>
