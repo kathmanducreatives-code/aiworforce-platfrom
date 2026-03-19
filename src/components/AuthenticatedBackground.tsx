@@ -50,8 +50,8 @@ const AuthenticatedBackground = () => {
         className="absolute inset-[-50%] w-[200%] h-[200%]"
         style={{
           backgroundImage: `
-            linear-gradient(rgba(16, 185, 129, 0.06) 1px, transparent 1px),
-            linear-gradient(90deg, rgba(16, 185, 129, 0.06) 1px, transparent 1px)
+            linear-gradient(rgba(16, 185, 129, 0.12) 1px, transparent 1px),
+            linear-gradient(90deg, rgba(16, 185, 129, 0.12) 1px, transparent 1px)
           `,
           backgroundSize: '140px 140px',
           animation: 'grid-drift 60s linear infinite',
