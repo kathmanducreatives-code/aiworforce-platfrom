@@ -1910,3 +1910,34 @@ body {
   color: #71717a;
   /* zinc-500 */
 }
+
+/* ====== AI Command Center Background Animations ====== */
+@keyframes grid-drift {
+  0% {
+    transform: translate(0, 0);
+  }
+  50% {
+    transform: translate(-70px, -70px);
+  }
+  100% {
+    transform: translate(0, 0);
+  }
+}
+
+@keyframes nebula-breathe {
+  0%, 100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.15);
+  }
+}
+
+@keyframes star-twinkle {
+  0%, 100% {
+    opacity: 0.2;
+  }
+  50% {
+    opacity: 0.8;
+  }
+}
