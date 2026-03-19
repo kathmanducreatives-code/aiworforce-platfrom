@@ -46,6 +46,8 @@ import ExpertMarketplace from "./pages/ExpertMarketplace";
 import PostInterceptor from "./pages/PostInterceptor";
 import LeadCRM from "./pages/LeadCRM";
 import OutreachEngine from "./pages/OutreachEngine";
+import TalentIntelligence from "./pages/TalentIntelligence";
+import CompetitorIntelligence from "./pages/CompetitorIntelligence";
 import CandidateDossier from "./pages/candidates/CandidateDossier";
 // import VerifyQueue from "./pages/verify/VerifyQueue";
 // import VerifyResults from "./pages/verify/VerifyResults";
