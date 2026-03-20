@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo } from 'react';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
-import { Users, Play, Settings, Briefcase, Filter } from 'lucide-react';
+import { Users, Play, Briefcase, Filter, AlertTriangle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -43,6 +43,8 @@ interface ScreeningJob {
   title: string;
 }
 
+const hasApiKey = !!import.meta.env.VITE_FIRECRAWL_API_KEY;
+
 const TalentIntelligence = () => {
   const { user } = useAuth();
   const [signals, setSignals] = useState<TalentSignal[]>([]);
@@ -69,13 +71,39 @@ const TalentIntelligence = () => {
 
   useEffect(() => { loadData(); }, [user]);
 
-  const handleRunScrapers = async () => {
+  // Realtime subscription
+  useEffect(() => {
     if (!user) return;
+
+    const channel = (supabase as any)
+      .channel('talent-signals-realtime')
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'talent_signals',
+          filter: `user_id=eq.${user.id}`,
+        },
+        (payload: any) => {
+          const newSignal = payload.new as TalentSignal;
+          setSignals(prev => [newSignal, ...prev]);
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [user]);
+
+  const handleRunScrapers = async () => {
+    if (!user || !hasApiKey) return;
     setRunning(true);
     toast.info('Running talent scrapers...');
     try {
       const result = await runAllTalentScrapers(user.id);
-      toast.success(`Found ${result.totalSignals} new signals`);
+      toast.success(`Found ${result.totalSignals} new signals in ${Math.round(result.duration_ms / 1000)}s`);
       if (result.errors.length) {
         toast.warning(`${result.errors.length} scraper errors occurred`);
       }
@@ -163,11 +191,21 @@ const TalentIntelligence = () => {
         title="Talent Intelligence"
         subtitle="Find candidates at the moment they are most likely to move"
         primaryAction={{
-          label: running ? 'Running...' : 'Run Scrapers',
+          label: running ? 'Scanning...' : 'Run Scrapers',
           onClick: handleRunScrapers,
           icon: <Play className="h-4 w-4" />,
         }}
       />
+
+      {/* API Key Missing Banner */}
+      {!hasApiKey && (
+        <div className="mb-6 flex items-center gap-3 rounded-xl border border-destructive/30 bg-destructive/5 px-4 py-3">
+          <AlertTriangle className="h-5 w-5 text-destructive shrink-0" />
+          <p className="text-sm text-destructive">
+            Firecrawl API key not configured. Add <code className="font-mono bg-destructive/10 px-1 rounded">VITE_FIRECRAWL_API_KEY</code> to your environment to enable live scraping.
+          </p>
+        </div>
+      )}
 
       {/* Metric Cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">

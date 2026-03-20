@@ -454,6 +454,99 @@ export type Database = {
           },
         ]
       }
+      codex_leads: {
+        Row: {
+          applicant_count: number | null
+          channel: string
+          company: string
+          company_description: string | null
+          created_at: string
+          data: Json
+          first_name: string | null
+          funding_amount: string | null
+          funding_stage: string | null
+          id: string
+          job_description: string | null
+          job_title: string | null
+          last_name: string | null
+          lead_score: number | null
+          lead_tier: string | null
+          open_roles_count: number | null
+          pain_angle: string | null
+          personalized_message: string
+          role_type: string | null
+          round_date: string | null
+          salary_range: string | null
+          signal_used: string | null
+          source_type: string | null
+          source_url: string
+          subject_line: string | null
+          title: string | null
+          updated_at: string
+          word_count: number | null
+        }
+        Insert: {
+          applicant_count?: number | null
+          channel?: string
+          company: string
+          company_description?: string | null
+          created_at?: string
+          data?: Json
+          first_name?: string | null
+          funding_amount?: string | null
+          funding_stage?: string | null
+          id?: string
+          job_description?: string | null
+          job_title?: string | null
+          last_name?: string | null
+          lead_score?: number | null
+          lead_tier?: string | null
+          open_roles_count?: number | null
+          pain_angle?: string | null
+          personalized_message: string
+          role_type?: string | null
+          round_date?: string | null
+          salary_range?: string | null
+          signal_used?: string | null
+          source_type?: string | null
+          source_url: string
+          subject_line?: string | null
+          title?: string | null
+          updated_at?: string
+          word_count?: number | null
+        }
+        Update: {
+          applicant_count?: number | null
+          channel?: string
+          company?: string
+          company_description?: string | null
+          created_at?: string
+          data?: Json
+          first_name?: string | null
+          funding_amount?: string | null
+          funding_stage?: string | null
+          id?: string
+          job_description?: string | null
+          job_title?: string | null
+          last_name?: string | null
+          lead_score?: number | null
+          lead_tier?: string | null
+          open_roles_count?: number | null
+          pain_angle?: string | null
+          personalized_message?: string
+          role_type?: string | null
+          round_date?: string | null
+          salary_range?: string | null
+          signal_used?: string | null
+          source_type?: string | null
+          source_url?: string
+          subject_line?: string | null
+          title?: string | null
+          updated_at?: string
+          word_count?: number | null
+        }
+        Relationships: []
+      }
       collaboration_candidate_attachments: {
         Row: {
           attached_at: string | null
