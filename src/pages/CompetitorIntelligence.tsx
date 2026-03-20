@@ -67,6 +67,8 @@ const SIGNAL_GROUPS = [
   { key: 'positioning_shift', label: 'Positioning' },
 ];
 
+const hasApiKey = !!import.meta.env.VITE_FIRECRAWL_API_KEY;
+
 const CompetitorIntelligence = () => {
   const { user } = useAuth();
   const [signals, setSignals] = useState<CompetitorSignal[]>([]);
@@ -95,13 +97,39 @@ const CompetitorIntelligence = () => {
 
   useEffect(() => { loadData(); }, [user]);
 
-  const handleRunScan = async () => {
+  // Realtime subscription
+  useEffect(() => {
     if (!user) return;
+
+    const channel = (supabase as any)
+      .channel('competitor-signals-realtime')
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'competitor_intel_signals',
+          filter: `user_id=eq.${user.id}`,
+        },
+        (payload: any) => {
+          const newSignal = payload.new as CompetitorSignal;
+          setSignals(prev => [newSignal, ...prev]);
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [user]);
+
+  const handleRunScan = async () => {
+    if (!user || !hasApiKey) return;
     setRunning(true);
     toast.info('Running competitor intelligence scan...');
     try {
       const result = await runAllCompetitorScrapers(user.id);
-      toast.success(`Found ${result.totalSignals} new signals`);
+      toast.success(`Found ${result.totalSignals} new signals in ${Math.round(result.duration_ms / 1000)}s`);
       await loadData();
     } catch (e: any) {
       toast.error('Scan failed: ' + e.message);
@@ -160,6 +188,16 @@ const CompetitorIntelligence = () => {
           variant: 'outline',
         }]}
       />
+
+      {/* API Key Missing Banner */}
+      {!hasApiKey && (
+        <div className="mb-6 flex items-center gap-3 rounded-xl border border-destructive/30 bg-destructive/5 px-4 py-3">
+          <AlertTriangle className="h-5 w-5 text-destructive shrink-0" />
+          <p className="text-sm text-destructive">
+            Firecrawl API key not configured. Add <code className="font-mono bg-destructive/10 px-1 rounded">VITE_FIRECRAWL_API_KEY</code> to your environment to enable live scanning.
+          </p>
+        </div>
+      )}
 
       {/* Metrics */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
