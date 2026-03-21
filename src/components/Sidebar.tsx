@@ -16,48 +16,38 @@ interface NavGroup {
 
 const navGroups: NavGroup[] = [
   {
-    label: 'Recruit',
+    label: 'Hire',
     items: [
       { path: '/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
-      { path: '/screening-jobs', icon: Activity, label: 'Job Screening' },
-      { path: '/interview-scheduler', icon: Calendar, label: 'Interviews' },
+      { path: '/screening-jobs', icon: Briefcase, label: 'Job Screening' },
+      { path: '/candidates', icon: Users, label: 'Candidates' },
       { path: '/expert-marketplace', icon: Users, label: 'Expert Interviews' },
+      { path: '/interview-scheduler', icon: Calendar, label: 'Interviews' },
     ],
   },
   {
-    label: 'Source',
+    label: 'Find',
     items: [
       { path: '/lead-scraper', icon: Search, label: 'Lead Scraper' },
-      { path: '/deep-search', icon: Brain, label: 'Deep Search' },
       { path: '/icp-intelligence', icon: Target, label: 'ICP Intelligence' },
+      { path: '/deep-search', icon: Brain, label: 'Deep Search' },
       { path: '/growth-signals', icon: TrendingUp, label: 'Growth Signals' },
+      { path: '/talent-intel', icon: Users, label: 'Talent Intel' },
+      { path: '/competitor-intel', icon: Eye, label: 'Competitor Intel' },
     ],
   },
   {
     label: 'Engage',
     items: [
       { path: '/email-sequences', icon: Mail, label: 'Email Sequences' },
-    ],
-  },
-  {
-    label: 'Growth & Outbound',
-    items: [
+      { path: '/distribution', icon: Share2, label: 'Job Distribution' },
       { path: '/post-interceptor', icon: Crosshair, label: 'Post Interceptor' },
       { path: '/lead-crm', icon: Zap, label: 'Lead CRM' },
-      { path: '/outreach-engine', icon: Zap, label: 'Outreach Engine' },
-    ],
-  },
-  {
-    label: 'Intelligence',
-    items: [
-      { path: '/talent-intel', icon: Users, label: 'Talent Intel' },
-      { path: '/competitor-intel', icon: Eye, label: 'Competitor Intel' },
-      { path: '/distribution', icon: Share2, label: 'Job Distribution' },
       { path: '/competitors', icon: Radar, label: 'Job Tracker' },
     ],
   },
   {
-    label: 'Analyze',
+    label: 'Insights',
     items: [
       { path: '/analytics', icon: BarChart3, label: 'Analytics' },
     ],
