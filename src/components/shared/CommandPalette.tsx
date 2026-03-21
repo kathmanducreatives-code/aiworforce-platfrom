@@ -8,7 +8,7 @@ import {
   Mail, Share2, BarChart3, Plus, Upload, Zap, Users, Eye, Crosshair, Radar, Briefcase, Loader2,
 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
-import { useDebounce } from '@/hooks/use-mobile';
+
 
 interface CommandPaletteProps {
   open: boolean;
