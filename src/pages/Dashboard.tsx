@@ -159,6 +159,9 @@ const Dashboard = () => {
     <div className="min-h-screen bg-transparent">
       <div className="max-w-[1280px] mx-auto px-6 lg:px-8 py-6">
 
+        {/* Onboarding Wizard — only shows for new users */}
+        <OnboardingWizard totalCandidates={metrics.totalCandidates} />
+
         {/* Welcome Header */}
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-8">
           <div className="flex items-center gap-4">
