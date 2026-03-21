@@ -2,10 +2,9 @@ import { useState } from 'react';
 import { NavLink, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import {
-  LayoutDashboard, Activity, Calendar, Search, Brain, Target, TrendingUp,
-  Mail, Share2, BarChart3, LogOut, Settings, HelpCircle, ChevronLeft, ChevronRight,
-  PanelLeftClose, PanelLeft, Command, Users, CheckSquare, ShieldCheck, Video,
-  ClipboardList, Wallet, UserCircle, Briefcase, Crosshair, Zap, Radar, Eye
+  LayoutDashboard, Calendar, Search, Brain, Target, TrendingUp,
+  Mail, Share2, BarChart3, LogOut, HelpCircle,
+  PanelLeftClose, PanelLeft, Users, Briefcase, Crosshair, Zap, Radar, Eye
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
