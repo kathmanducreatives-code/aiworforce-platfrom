@@ -22,6 +22,10 @@ import MarqueeBanner from "@/components/landing/MarqueeBanner";
 import FinalCTA from "@/components/landing/FinalCTA";
 import { ExpertJourney } from "@/components/landing/ExpertJourney";
 import MeetTheTeamSection from "@/components/landing/MeetTheTeamSection";
+import GlobalTrustBar from "@/components/landing/GlobalTrustBar";
+import EcosystemSection from "@/components/landing/EcosystemSection";
+import TeamsAtWorkSection from "@/components/landing/TeamsAtWorkSection";
+import GlobalSection from "@/components/landing/GlobalSection";
 
 gsap.registerPlugin(ScrollTrigger);
 ScrollTrigger.config({ limitCallbacks: true });
