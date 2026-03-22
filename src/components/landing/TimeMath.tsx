@@ -5,11 +5,11 @@ import { ScrollTrigger } from 'gsap/ScrollTrigger';
 gsap.registerPlugin(ScrollTrigger);
 
 const rows = [
-    { task: 'Candidate sourcing', manual: '40 hrs/month — agency sends 5 profiles', sp: 'AI scores 500+ candidates in seconds' },
-    { task: 'Resume screening', manual: '€24,000/hire — agency fee for manual review', sp: 'AI auto-rejects 95% of bad fits instantly' },
-    { task: 'Interview prep', manual: 'Zero prep — agency sends you blind', sp: 'Full interview blueprint generated per candidate' },
-    { task: 'Candidate pipeline', manual: 'Black box — you have no visibility', sp: 'Real-time dashboard with every score and reason' },
-    { task: 'Cost per hire', manual: '€8,200 average per placement', sp: '€149/month flat — unlimited screenings', highlight: true },
+    { task: 'Recruiting', manual: '€60,000/year + 6 weeks per hire', sp: 'Scout + Aria + Lens · Always active' },
+    { task: 'Outreach & Sales', manual: '€50,000/year SDR + low reply rates', sp: 'Radar + Penn + Relay · 34% reply rate' },
+    { task: 'Content & Marketing', manual: '€45,000/year + 2 posts per week', sp: 'Quill + Canvas + Pulse · Daily output' },
+    { task: 'Market Research', manual: '€40,000/year + weekly reports', sp: 'Hawk + Signal + Brief · Live, 24/7' },
+    { task: 'Total cost', manual: '€195,000/year + hiring time', sp: '€149/month · All five departments', highlight: true },
 ];
 
 const TimeMath = () => {
@@ -42,14 +42,14 @@ const TimeMath = () => {
         <section ref={sectionRef} className="relative px-4 py-28 md:py-36">
             <div className="max-w-4xl mx-auto">
                 <div className="text-center mb-14">
-                    <p className="font-mono text-xs uppercase tracking-[0.15em] mb-4 text-emerald-400 font-semibold">◆ The Math Doesn't Lie</p>
+                    <p className="font-mono text-xs uppercase tracking-[0.15em] mb-4 text-emerald-400 font-semibold">◆ THE MATH DOESN'T LIE</p>
                     <h2 className="font-display font-black text-[clamp(1.5rem,3.5vw,3rem)] leading-[1.1] tracking-[-0.03em] text-white">
-                        YOUR AGENCY VS. SCREENINGPILOT
+                        Your AI workforce vs. a human team.
                     </h2>
                 </div>
                 <div ref={tableRef} className="glass-strong rounded-2xl overflow-hidden">
                     <div className="grid grid-cols-3 gap-0 text-xs font-semibold text-white/30 uppercase tracking-wider px-6 py-4 border-b border-white/[0.06]">
-                        <span>Task</span><span>Recruiting Agency</span><span className="text-emerald-400">ScreeningPilot</span>
+                        <span>Task</span><span>Human Team</span><span className="text-emerald-400">Your AI Workforce</span>
                     </div>
                     {rows.map((row, i) => (
                         <div key={i} className={`time-row grid grid-cols-3 gap-0 px-6 py-4 opacity-0 border-b border-white/[0.03] last:border-0 ${row.highlight ? 'bg-emerald-500/[0.06]' : ''}`}>
@@ -60,7 +60,7 @@ const TimeMath = () => {
                     ))}
                 </div>
                 <p className="text-center text-white/70 text-sm mt-6">
-                    Companies using ScreeningPilot save an average of <span className="text-emerald-400 font-semibold">€80,000/year</span> in agency fees.
+                    You save <span className="text-emerald-400 font-semibold">€192,212 every year</span>. Same output. Same quality. No equity. No benefits. No notice period. No bad days.
                 </p>
             </div>
         </section>

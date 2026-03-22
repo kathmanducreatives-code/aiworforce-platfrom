@@ -6,19 +6,19 @@ import { CheckCircle, XCircle } from 'lucide-react';
 gsap.registerPlugin(ScrollTrigger);
 
 const oldWayItems = [
-    'Agencies charge 20% of annual salary per hire',
-    'You wait 6–8 weeks for a shortlist of 5 candidates',
-    'Most agency candidates fail the first interview',
-    'Zero transparency into screening methodology',
-    'You\'re paying for LinkedIn searches you could do yourself',
+    'Every AI tool you open knows nothing about your company',
+    'You spend more time briefing tools than building your business',
+    'Recruiting, outreach, content, research — you do it all manually',
+    'A recruiter costs €60K. An SDR costs €50K. A content person costs €45K.',
+    'Hiring costs too much. Not hiring costs more.',
 ];
 
 const newWayItems = [
-    'Screen 500+ candidates in under 60 seconds',
-    'AI scores every applicant on 12+ criteria instantly',
-    'Only interview candidates who actually fit the role',
-    'Full transparency — see exactly why each candidate scored high',
-    'Replace your agency for €149/month, not €24,000/hire',
+    'One Company Brain — tell us once, every agent knows forever',
+    'Five departments running simultaneously, 24/7',
+    'Fifteen agents with specific jobs, working together',
+    'Cross-department intelligence sharing — automatic',
+    'Your entire AI workforce costs €149/month. All five departments.',
 ];
 
 export const TransformationSection = () => {
@@ -34,13 +34,11 @@ export const TransformationSection = () => {
         const section = sectionRef.current;
         if (!section) return;
 
-        // Reset initial states
         gsap.set(rightRef.current, { opacity: 0, x: 80 });
         gsap.set(newWayContainerRef.current?.querySelectorAll('.new-item'), { opacity: 0, x: 20 });
         gsap.set(leftRef.current, { opacity: 1 });
 
         const ctx = gsap.context(() => {
-            // Main Scrub Timeline
             const tl = gsap.timeline({
                 scrollTrigger: {
                     trigger: section,
@@ -52,30 +50,21 @@ export const TransformationSection = () => {
                     onUpdate: (self) => {
                         const p = Math.round(self.progress * 100);
                         setProgress(p);
-
-                        if (p < 50) {
-                            document.documentElement.style.setProperty('--grid-pulse', `${2 - (p / 50)}s`);
-                        } else {
-                            document.documentElement.style.setProperty('--grid-pulse', '1s');
-                        }
                     }
                 }
             });
 
-            // 0 - 50%: Scanning Ring grows
             tl.to(ringRef.current, {
                 strokeDashoffset: 0,
                 duration: 0.5,
                 ease: "none"
             }, 0);
 
-            // 30% - 60%: Old way fades (opacity only, no blur)
             tl.to(leftRef.current, {
                 opacity: 0.3,
                 duration: 0.3
             }, 0.3);
 
-            // 55% - 85%: New way flies in (opacity only, no blur)
             tl.to(rightRef.current, {
                 opacity: 1,
                 x: 0,
@@ -83,7 +72,6 @@ export const TransformationSection = () => {
                 ease: "power2.out"
             }, 0.55);
 
-            // Stagger in the new items
             if (newWayContainerRef.current) {
                 const items = newWayContainerRef.current.querySelectorAll('.new-item');
                 tl.to(items, {
@@ -99,7 +87,6 @@ export const TransformationSection = () => {
         return () => ctx.revert();
     }, []);
 
-    // Ring Math
     const radius = 160;
     const circumference = 2 * Math.PI * radius;
 
@@ -108,19 +95,19 @@ export const TransformationSection = () => {
 
             <div className="text-center mb-[60px] w-full max-w-6xl">
                 <p className="font-mono text-[11px] uppercase tracking-[0.2em] mb-4 text-emerald-500 font-semibold flex items-center justify-center gap-2">
-                    THE PROBLEM → THE FIX
+                    THE REALITY
                 </p>
-                <h2 className="font-black text-[clamp(2.5rem,5vw,4.5rem)] leading-[1.0] tracking-[-0.05em] text-white">
-                    AGENCIES ARE ROBBING YOU BLIND<br />HERE'S HOW YOU TAKE BACK CONTROL
+                <h2 className="font-black text-[clamp(2rem,4.5vw,3.8rem)] leading-[1.05] tracking-[-0.04em] text-white">
+                    Right now you are the only connection<br />between tools that do not know each other.
                 </h2>
             </div>
 
             <div className="w-full max-w-6xl grid grid-cols-1 lg:grid-cols-3 gap-8 items-center relative">
 
-                {/* Left — Old Way */}
+                {/* Left — The Problem */}
                 <div ref={leftRef} className="mt-4 lg:mt-8">
                     <div className="bg-black/80 backdrop-blur-md rounded-2xl p-8 border border-white/10 shadow-2xl relative overflow-hidden h-full flex flex-col">
-                        <h3 className="font-display font-bold text-xl text-white/30 mb-6 uppercase tracking-wide">The Agency Racket</h3>
+                        <h3 className="font-display font-bold text-xl text-white/30 mb-6 uppercase tracking-wide">15 Tools. 15 Blank Slates.</h3>
                         <div className="space-y-4 flex-grow">
                             {oldWayItems.map((item, i) => (
                                 <div key={i} className="flex items-start gap-4 opp-item opacity-80">
@@ -130,7 +117,7 @@ export const TransformationSection = () => {
                             ))}
                         </div>
                         <div className="mt-8 font-mono text-xs text-white/40 border-t border-white/10 pt-4 bg-card/50 -mx-8 -mb-8 px-8 pb-8">
-                            COST: €82,000/year + 340 hours wasted
+                            COST: €195,000/year in human salaries + your sanity
                         </div>
                     </div>
                 </div>
@@ -160,14 +147,14 @@ export const TransformationSection = () => {
                             <div className="relative w-full h-full flex items-center justify-center">
                                 <div className={`absolute inset-0 flex flex-col items-center justify-center transition-all duration-[1500ms] ease-in-out ${progress < 100 ? 'opacity-100 scale-100' : 'opacity-0 scale-95 pointer-events-none'}`}>
                                     <p className="font-display font-bold text-lg text-emerald-500 mb-2">
-                                        {progress < 30 ? 'SCANNING...' : progress < 70 ? 'ANALYZING...' : 'REPLACING...'}
+                                        {progress < 30 ? 'ANALYZING...' : progress < 70 ? 'CONNECTING...' : 'BUILDING WORKFORCE...'}
                                     </p>
                                     <p className="font-mono text-5xl text-emerald-500 font-light tabular-nums tracking-tighter shadow-emerald-500/20 drop-shadow-lg [text-shadow:0_0_20px_rgba(34,197,94,0.4)]">
                                         {progress}%
                                     </p>
                                 </div>
                                 <div className={`absolute inset-0 flex flex-col items-center justify-center transition-all duration-[1500ms] ease-in-out ${progress === 100 ? 'opacity-100 scale-100' : 'opacity-0 scale-105 pointer-events-none'}`}>
-                                    <p className="font-display font-bold text-xl text-emerald-500 mb-3 tracking-widest [text-shadow:0_0_15px_rgba(34,197,94,0.5)]">AGENCY REPLACED</p>
+                                    <p className="font-display font-bold text-xl text-emerald-500 mb-3 tracking-widest [text-shadow:0_0_15px_rgba(34,197,94,0.5)]">WORKFORCE READY</p>
                                     <CheckCircle className="w-16 h-16 text-emerald-500 [filter:drop-shadow(0_0_10px_rgba(34,197,94,0.6))]" />
                                 </div>
                             </div>
@@ -175,12 +162,12 @@ export const TransformationSection = () => {
                     </div>
                 </div>
 
-                {/* Right — New Way */}
+                {/* Right — The Solution */}
                 <div ref={rightRef} className="relative z-30 mt-4 lg:mt-8">
                     <div ref={newWayContainerRef} className="bg-card backdrop-blur-xl rounded-2xl p-8 border border-emerald-500/30 shadow-[0_0_40px_rgba(34,197,94,0.15)] relative overflow-hidden h-full flex flex-col">
                         <div className="absolute top-0 left-0 right-0 h-[1px] bg-gradient-to-r from-transparent via-emerald-400 to-transparent opacity-50" />
 
-                        <h3 className="font-display font-black text-xl text-emerald-500 mb-6 uppercase tracking-wide">The ScreeningPilot Way</h3>
+                        <h3 className="font-display font-black text-xl text-emerald-500 mb-6 uppercase tracking-wide">The AI Workforce Way</h3>
                         <div className="space-y-4 flex-grow">
                             {newWayItems.map((item, i) => (
                                 <div key={i} className="flex items-start gap-4 new-item">
@@ -193,13 +180,18 @@ export const TransformationSection = () => {
                             <div className="bg-primary rounded-lg p-3 text-white shadow-[0_8px_20px_rgba(16,185,129,0.4)] flex justify-between items-center text-sm font-bold tracking-wide border border-white/20">
                                 <span>€149/MONTH</span>
                                 <span>·</span>
-                                <span>AGENCIES CHARGE €24,000/HIRE</span>
+                                <span>ALL FIVE DEPARTMENTS</span>
                             </div>
                         </div>
                     </div>
                 </div>
 
             </div>
+
+            {/* Transition line */}
+            <p className="text-center font-display font-bold text-xl md:text-2xl text-white/70 mt-16 max-w-lg mx-auto">
+                There is a better way to run a company.
+            </p>
         </section>
     );
 };

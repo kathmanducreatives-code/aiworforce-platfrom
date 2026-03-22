@@ -271,104 +271,108 @@ export const ExpertJourney = () => {
         <div className="sequence-viewport">
           <div className="blueprint-grid" />
 
+          {/* Stage 1 — Hawk: Competitor Monitoring */}
           <div className="sequence-stage stage-1">
             <div className="sequence-card">
               <div className="sequence-content">
-                <div className="seq-label">Stage 1 · AI Does the Dirty Work</div>
-                <h3 className="seq-title">AI Rejects 95% of Bad Candidates Instantly</h3>
+                <div className="seq-label">Intelligence · Hawk Agent</div>
+                <h3 className="seq-title">Knows what your competitors did last night.</h3>
                 <p className="seq-copy">
-                  Your agency takes 6 weeks to send you 5 profiles. ScreeningPilot scores every applicant in seconds and auto-rejects the ones that don't fit.
+                  Hawk monitors competitor pricing, product launches, hiring patterns, and G2 reviews — around the clock. You wake up to insights, not surprises.
                 </p>
                 <div className="seq-bullets">
-                  <div className="seq-bullet"><span className="seq-bullet-mark">•</span><span>Resume quality scoring</span></div>
-                  <div className="seq-bullet"><span className="seq-bullet-mark">•</span><span>Experience relevance matching</span></div>
-                  <div className="seq-bullet"><span className="seq-bullet-mark">•</span><span>Custom screening question answers</span></div>
+                  <div className="seq-bullet"><span className="seq-bullet-mark">•</span><span>Pricing change detection</span></div>
+                  <div className="seq-bullet"><span className="seq-bullet-mark">•</span><span>Hiring pattern analysis</span></div>
+                  <div className="seq-bullet"><span className="seq-bullet-mark">•</span><span>Product launch monitoring</span></div>
                 </div>
-                <p className="seq-copy">Result: Only top candidates reach your inbox. Zero agency markup.</p>
+                <p className="seq-copy">Result: 5 competitors monitored 24/7. Zero manual research.</p>
               </div>
               <div className="sequence-ui">
                 <div className="ui-panel">
-                  <div className="ui-row"><span className="text-xs text-white/80">Alex R. — Strong fit</span><span className="ui-badge">Score 92</span></div>
-                  <div className="ui-row"><span className="text-xs text-white/80">Sara P. — Good fit</span><span className="ui-badge">Score 87</span></div>
-                  <div className="ui-row"><span className="text-xs text-white/80">James K. — Auto-rejected</span><span className="ui-badge">Score 41</span></div>
-                  <div className="ui-widget">247 candidates scored · 95% auto-rejected · 0 agency fees</div>
+                  <div className="ui-row"><span className="text-xs text-white/80">Ashby — pricing dropped 20%</span><span className="ui-badge">Urgent</span></div>
+                  <div className="ui-row"><span className="text-xs text-white/80">Greenhouse — hired 6 engineers</span><span className="ui-badge">Flagged</span></div>
+                  <div className="ui-row"><span className="text-xs text-white/80">Lever — new product feature</span><span className="ui-badge">Monitor</span></div>
+                  <div className="ui-widget">5 competitors tracked · 3 signals detected this week</div>
                 </div>
               </div>
             </div>
           </div>
 
+          {/* Stage 2 — Signal: Market Intelligence */}
           <div className="sequence-stage stage-2">
             <div className="sequence-card">
               <div className="sequence-content">
-                <div className="seq-label">Stage 2 · Interview Prep Your Agency Never Gave You</div>
-                <h3 className="seq-title">AI Builds a Custom Interview Blueprint</h3>
+                <div className="seq-label">Intelligence · Signal Agent</div>
+                <h3 className="seq-title">Tracks market shifts in real time.</h3>
                 <p className="seq-copy">
-                  For every shortlisted candidate, AI generates a structured interview guide with claims to verify, suggested questions, and red flags to probe. Your agency never did this.
+                  Signal tracks talent markets, salary benchmarks, and industry funding — so you always know what the market looks like before you make a decision.
                 </p>
                 <div className="seq-bullets">
-                  <div className="seq-bullet"><span className="seq-bullet-mark">•</span><span>Claims made in the resume to verify</span></div>
-                  <div className="seq-bullet"><span className="seq-bullet-mark">•</span><span>Suggested deep-dive questions</span></div>
-                  <div className="seq-bullet"><span className="seq-bullet-mark">•</span><span>Key evaluation areas per candidate</span></div>
+                  <div className="seq-bullet"><span className="seq-bullet-mark">•</span><span>Salary benchmark updates</span></div>
+                  <div className="seq-bullet"><span className="seq-bullet-mark">•</span><span>Funding round tracking</span></div>
+                  <div className="seq-bullet"><span className="seq-bullet-mark">•</span><span>Talent market trends</span></div>
                 </div>
               </div>
               <div className="sequence-ui">
                 <div className="ui-panel">
-                  <div className="ui-widget">Blueprint: Senior Frontend Engineer</div>
-                  <div className="ui-row"><span className="text-xs text-white/80">React architecture depth</span><span className="ui-badge">Priority</span></div>
-                  <div className="ui-row"><span className="text-xs text-white/80">System design ownership</span><span className="ui-badge">Verify</span></div>
-                  <div className="ui-row"><span className="text-xs text-white/80">Cross-team communication</span><span className="ui-badge">Probe</span></div>
+                  <div className="ui-widget">Market Intelligence Dashboard</div>
+                  <div className="ui-row"><span className="text-xs text-white/80">Senior Engineer salary range</span><span className="ui-badge">$145K–$190K</span></div>
+                  <div className="ui-row"><span className="text-xs text-white/80">3 companies raised this week</span><span className="ui-badge">Tracked</span></div>
+                  <div className="ui-row"><span className="text-xs text-white/80">Open-to-work signals up 12%</span><span className="ui-badge">Trend</span></div>
                   <div className="ui-bar-track"><div className="ui-bar" style={{ width: '84%' }} /></div>
                 </div>
               </div>
             </div>
           </div>
 
+          {/* Stage 3 — Brief: Morning Report */}
           <div className="sequence-stage stage-3">
             <div className="sequence-card">
               <div className="sequence-content">
-                <div className="seq-label">Stage 3 · Expert Interviewers on Demand</div>
-                <h3 className="seq-title">Tap Into Expert Interviewers — No Agency Needed</h3>
+                <div className="seq-label">Intelligence · Brief Agent</div>
+                <h3 className="seq-title">Your 3-minute morning report. Every day at 7am.</h3>
                 <p className="seq-copy">
-                  Instead of paying agencies or building a massive recruiting team, use fractional expert interviewers on demand directly from ScreeningPilot.
+                  Brief synthesizes everything into your daily morning report. What happened overnight. What needs your attention. What can wait.
                 </p>
                 <div className="seq-bullets">
-                  <div className="seq-bullet"><span className="seq-bullet-mark">•</span><span>Browse and select expert interviewers</span></div>
-                  <div className="seq-bullet"><span className="seq-bullet-mark">•</span><span>Send interview invitations in one click</span></div>
-                  <div className="seq-bullet"><span className="seq-bullet-mark">•</span><span>Schedule and coordinate automatically</span></div>
+                  <div className="seq-bullet"><span className="seq-bullet-mark">•</span><span>Competitor moves overnight</span></div>
+                  <div className="seq-bullet"><span className="seq-bullet-mark">•</span><span>Action items prioritized</span></div>
+                  <div className="seq-bullet"><span className="seq-bullet-mark">•</span><span>Cross-department intelligence</span></div>
                 </div>
               </div>
               <div className="sequence-ui">
                 <div className="ui-panel">
-                  <div className="ui-row"><span className="text-xs text-white/80">Sarah K. · Principal Engineer</span><span className="ui-badge">Available</span></div>
-                  <div className="ui-row"><span className="text-xs text-white/80">Nisha R. · Staff Product Lead</span><span className="ui-badge">Available</span></div>
-                  <div className="ui-row"><span className="text-xs text-white/80">Daniel M. · Senior Architect</span><span className="ui-badge">Invited</span></div>
-                  <div className="ui-widget">3 expert interviews scheduled — agency cost: €0</div>
+                  <div className="ui-row"><span className="text-xs text-white/80">1 urgent signal</span><span className="ui-badge">Action</span></div>
+                  <div className="ui-row"><span className="text-xs text-white/80">2 informational updates</span><span className="ui-badge">FYI</span></div>
+                  <div className="ui-row"><span className="text-xs text-white/80">Growth: 47 leads found</span><span className="ui-badge">Summary</span></div>
+                  <div className="ui-widget">Morning brief · Delivered 7:00am · 3 min read</div>
                 </div>
               </div>
             </div>
           </div>
 
+          {/* Stage 4 — Full Intelligence Picture */}
           <div className="sequence-stage stage-4">
             <div className="sequence-card">
               <div className="sequence-content">
-                <div className="seq-label">Stage 4 · The Agency is Dead</div>
-                <h3 className="seq-title">Make the Final Decision — Agency Free</h3>
+                <div className="seq-label">Intelligence Department · Complete</div>
+                <h3 className="seq-title">Your research team never sleeps.</h3>
                 <p className="seq-copy">
-                  Interviewers receive candidate resume, AI score, blueprint, and verification prompts. Approve or reject with full context. Your agency never gave you this level of control.
+                  Three agents. Always watching. Always learning. Always briefing you on what matters — so you make decisions with full context, not gut feelings.
                 </p>
                 <div className="seq-bullets">
-                  <div className="seq-bullet"><span className="seq-bullet-mark">•</span><span>Full candidate dossier + AI results</span></div>
-                  <div className="seq-bullet"><span className="seq-bullet-mark">•</span><span>Structured verification questions</span></div>
-                  <div className="seq-bullet"><span className="seq-bullet-mark">•</span><span>One-click Approve / Reject / Hold</span></div>
+                  <div className="seq-bullet"><span className="seq-bullet-mark">•</span><span>Hawk: 5 competitors monitored 24/7</span></div>
+                  <div className="seq-bullet"><span className="seq-bullet-mark">•</span><span>Signal: Market data in real time</span></div>
+                  <div className="seq-bullet"><span className="seq-bullet-mark">•</span><span>Brief: Morning report at 7am daily</span></div>
                 </div>
-                <p className="seq-copy"><strong className="text-white">Total agency fees paid: €0. Total candidates screened: unlimited.</strong></p>
+                <p className="seq-copy"><strong className="text-white">Intelligence costs: €0 in research staff. Results: Better than a market researcher.</strong></p>
               </div>
               <div className="sequence-ui">
                 <div className="ui-panel">
-                  <div className="ui-row"><span className="text-xs text-white/80">Candidate fit confidence</span><span className="ui-badge">High</span></div>
-                  <div className="ui-row"><span className="text-xs text-white/80">Agency fees saved</span><span className="ui-badge">€24,000</span></div>
+                  <div className="ui-row"><span className="text-xs text-white/80">Competitor intelligence</span><span className="ui-badge">Live</span></div>
+                  <div className="ui-row"><span className="text-xs text-white/80">Market research saved</span><span className="ui-badge">€40K/yr</span></div>
                   <div className="ui-bar-track"><div className="ui-bar" style={{ width: '97%' }} /></div>
-                  <div className="ui-widget">Decision: Approve / Reject / Hold — no middleman</div>
+                  <div className="ui-widget">Intelligence Department: 3 agents · Always active</div>
                 </div>
               </div>
             </div>

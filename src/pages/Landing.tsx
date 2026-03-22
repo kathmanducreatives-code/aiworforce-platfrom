@@ -8,13 +8,9 @@ import gsap from "gsap";
 import { ScrollTrigger } from "gsap/ScrollTrigger";
 import HeroHook from "@/components/landing/HeroHook";
 import { TransformationSection } from "@/components/landing/TransformationSection";
-
-import ProductDashboard from "@/components/landing/ProductDashboard";
-
 import ProductScreening from "@/components/landing/ProductScreening";
 import ProductLookalike from "@/components/landing/ProductLookalike";
 import TimeMath from "@/components/landing/TimeMath";
-import FeatureSet from "@/components/landing/FeatureSet";
 import SocialProof from "@/components/landing/SocialProof";
 import PricingCard from "@/components/landing/PricingCard";
 import FAQSection from "@/components/landing/FAQSection";
@@ -26,6 +22,8 @@ import GlobalTrustBar from "@/components/landing/GlobalTrustBar";
 import EcosystemSection from "@/components/landing/EcosystemSection";
 import TeamsAtWorkSection from "@/components/landing/TeamsAtWorkSection";
 import GlobalSection from "@/components/landing/GlobalSection";
+import DayTimelineSection from "@/components/landing/DayTimelineSection";
+import AgentBuilderSection from "@/components/landing/AgentBuilderSection";
 
 gsap.registerPlugin(ScrollTrigger);
 ScrollTrigger.config({ limitCallbacks: true });
@@ -39,7 +37,6 @@ const Landing = () => {
     if (user) {
       navigate('/dashboard');
     }
-
     return () => { };
   }, [user, navigate]);
 
@@ -53,49 +50,43 @@ const Landing = () => {
       <main ref={mainRef} className="relative z-10 w-full">
         {/* 2. Hero */}
         <HeroHook />
-        {/* Global Trust Bar */}
+        {/* 3. Global Trust Bar */}
         <GlobalTrustBar />
-        {/* 3. The Transformation (pinned scrub) */}
-        <TransformationSection />
-
-        {/* PINNED INTERACTIVE STAGES */}
-        <ProductDashboard />
-        <ProductLookalike />
-        <ProductScreening />
-
-        {/* Expert Journey — 4-step scroll stack */}
-        <ExpertJourney />
-
-        {/* Meet The Team — AI office narrative */}
-        <MeetTheTeamSection />
-
-        {/* AI Tools Ecosystem */}
+        {/* 4. Ecosystem */}
         <EcosystemSection />
-
-        {/* Teams At Work */}
+        {/* 5. The Problem (Transformation) */}
+        <TransformationSection />
+        {/* 6. Meet Your Workforce */}
+        <MeetTheTeamSection />
+        {/* 7. Talent Department */}
+        <ProductLookalike />
+        {/* 8. Growth Department */}
+        <ProductScreening />
+        {/* 9. Intelligence Department */}
+        <ExpertJourney />
+        {/* 10. A Day With Your Workforce */}
+        <DayTimelineSection />
+        {/* 11. Teams At Work */}
         <TeamsAtWorkSection />
-
-        {/* 8. Time Math — Comparison Table */}
+        {/* 12. The Math */}
         <TimeMath />
-        {/* 8. Full Feature Set */}
-        <FeatureSet />
-        {/* 9. Social Proof */}
+        {/* 13. Social Proof */}
         <SocialProof />
-        {/* 10. Pricing */}
+        {/* 14. Custom Agent Builder */}
+        <AgentBuilderSection />
+        {/* 15. Pricing */}
         <PricingCard />
-        {/* 11. FAQ */}
+        {/* 16. FAQ */}
         <FAQSection />
-
-        {/* Global */}
+        {/* 17. Global */}
         <GlobalSection />
-
-        {/* 12. Marquee Banner */}
+        {/* 18. Marquee */}
         <MarqueeBanner />
-        {/* 13. Final CTA */}
+        {/* 19. Final CTA */}
         <FinalCTA />
       </main>
 
-      {/* 14. Footer */}
+      {/* 20. Footer */}
       <Footer />
     </div>
   );
