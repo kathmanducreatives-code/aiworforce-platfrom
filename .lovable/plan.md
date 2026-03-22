@@ -1,169 +1,155 @@
 
 
-# Plan: Complete Landing Page Overhaul — AI Workforce Platform
+# Plan: Redesign Ecosystem + Workforce Team Sections
 
 ## Scope
+Rewrite 2 existing files + update 1 file. No other sections touched.
 
-This is a content and narrative overhaul of every existing landing page section, plus 2 new sections. All animation rigs, SVG structures, and scroll effects are preserved. Only text, data arrays, and layout structures change.
+## Files Changed
 
-## Files Modified (15 files)
+| File | Change |
+|------|--------|
+| `src/components/landing/ToolLogos.tsx` | Full rewrite — 16 SVG logos with proper brand colors and recognizable geometric icons |
+| `src/components/landing/EcosystemSection.tsx` | Full rewrite — orbital system with 3 rings, CSS rotation, energy pulses, breathing center, hover dimming, department filter tabs |
+| `src/components/landing/MeetTheTeamSection.tsx` | Full rewrite — war room interface with fake chrome bar, sidebar, auto-cycling message feed, 9 agent profile cards, redesigned truth blocks |
 
-### Content-Only Updates (text/data replacements, keep all animation code)
+No changes to `Landing.tsx` — both sections stay in the same render positions (slots 4 and 6).
 
-**1. `src/components/Header.tsx`**
-- Update nav links: `How It Works | Departments | Pricing | Enterprise`
-- Change CTA button text: "Meet your workforce →"
-- Remove "Get a Demo" and "Ecosystem" and "Global" nav items
-- Keep language selector as-is
+---
 
-**2. `src/components/landing/HeroHook.tsx`**
-- Replace aggressive ALL CAPS agency headline with mixed-case workforce narrative
-- New headline: "You are doing the work / of ten people. / Now you don't have to." (line 3 in emerald)
-- New subheadline about 5 departments, 15 agents, one brain
-- Replace agency cost stats with animated agent presence row (5 avatar circles: Users, TrendingUp, Pen, Eye, BarChart2 with labels + pulsing rings + connection dots)
-- CTAs: "Build your AI workforce →" (primary), "See how it works" (secondary)
-- Trust line: "Trusted by founders from 50+ countries · Set up in 10 minutes · Cancel anytime"
-- Keep all GSAP entry animations exactly
+## Section 1: Ecosystem — "The Neural Network"
 
-**3. `src/components/landing/GlobalTrustBar.tsx`**
-- Update counter text: "Founders from N countries building with ScreeningPilot"
-- Keep everything else
+### ToolLogos.tsx Rewrite
+Each logo gets proper brand colors baked into the SVG (not just letter avatars):
+- Claude: terracotta circle (#CC785C) with flowing C curves
+- Gemini: blue-red gradient diamond/star shape
+- GPT-4: OpenAI green (#10A37F) with lotus/flower mark
+- Perplexity: teal (#20808D) with P mark
+- Firecrawl: flame orange-red (#FF4500) flame shape (keep existing, it's good)
+- Apify: bright green (#97D700) A mark
+- Hunter: orange (#F5A623) crosshair/target
+- Instantly: indigo (#6366F1) lightning bolt
+- ElevenLabs: dark (#1A1A2E) with sound bars (keep existing)
+- Replicate: dark (#393939) play triangle
+- Notion: white with dark N (keep existing)
+- Linear: purple (#5E6AD2) angular mark (keep existing)
+- GitHub: dark with octocat path (keep existing)
+- Cal.com: dark with calendar grid (keep existing)
+- Canva: teal (#00C4CC) C mark
+- Gamma: purple (#6C47FF) G mark
 
-**4. `src/components/landing/EcosystemSection.tsx`**
-- Update tab labels: Growth → Talent, rename rooms for new departments
-- Update closing line to reference "ScreeningPilot" instead of "Pilot"
-- Keep entire power grid, SVG, animations, hover tooltips
+### EcosystemSection.tsx — Orbital Layout
 
-**5. `src/components/landing/TransformationSection.tsx`**
-- This becomes Section 5 "The Problem" — repurpose the pinned scroll transformation
-- Replace oldWayItems/newWayItems with problem-focused content about 15 tools, 10 jobs, hiring costs
-- Keep the scroll-triggered progress ring and GSAP timeline
+**Structure:**
+- Center: 100px Pilot Brain node with green glow (`box-shadow: 0 0 60px rgba(0,255,148,0.3)`), breathing animation (CSS `alternate infinite`)
+- Ring 1 (r=180px): Claude, Gemini, GPT-4, Perplexity — 72px nodes
+- Ring 2 (r=280px): Firecrawl, Apify, Hunter, Instantly — 60px nodes  
+- Ring 3 (r=380px): 8 remaining tools — 48-52px nodes
+- Container: 800px diameter on desktop
 
-**6. `src/components/landing/ProductDashboard.tsx`**
-- Remove — or repurpose as command center visual. Simplest: remove from Landing.tsx render order
+**CSS Orbital Rotation:**
+- 3 wrapper divs, each with CSS `animation: spin Xs linear infinite`
+- Ring 1: 120s CW, Ring 2: 90s CCW (`reverse`), Ring 3: 150s CW
+- Each node inside has counter-rotation: `animation: counter-spin Xs linear infinite` to stay upright
+- Use CSS custom properties for duration per ring
 
-**7. `src/components/landing/ProductLookalike.tsx`**
-- Becomes Section 7 "Talent Department" — keep candidate card grid animation
-- Replace surrounding text with Talent Department narrative (Scout, Aria, Lens agents)
-- Update mock candidate data header text
-- Add 3 agent pills below body text
-- Add stat row (500+, 95%, 48hrs)
+**Energy Pulses (JS):**
+- `useEffect` with `setInterval` every 500ms, randomly selects a tool
+- Creates a small colored dot (div) that CSS-animates from tool position to center over 1.2s
+- Max 6 concurrent pulses, uses a ref array to track active ones
+- Pulse color matches tool's brand color
 
-**8. `src/components/landing/ProductScreening.tsx`**
-- Becomes Section 8 "Growth Department" — keep the scroll-triggered step sequence
-- Replace step text with Growth narrative (Radar, Penn, Relay agents)
-- Update mock card content for lead pipeline
-- Add 3 agent pills + stat row
+**Node Entrance Animation:**
+- IntersectionObserver triggers `inView`
+- Ring 1 nodes: Framer Motion `scale: 0→1, opacity: 0→1` delay 0.3s
+- Ring 2: delay 0.6s
+- Ring 3: delay 0.9s
+- Each node within a ring staggered by 0.08s
 
-**9. `src/components/landing/ExpertJourney.tsx`**
-- Becomes Section 9 "Intelligence Department" — keep the 4-step scroll stack animation
-- Replace card content with Intelligence narrative (Hawk, Signal, Brief agents)
-- Update stage titles and descriptions
+**Hover Interaction:**
+- `hoveredTool` state
+- Hovered node: `scale-110`, stronger glow via inline `boxShadow` in brand color
+- All other nodes: `opacity: 0.4` via CSS transition
+- Tooltip: dark card above node showing name, description, department pill (colored by dept)
+- Connection line from hovered tool to center brightens (rendered as an absolutely-positioned div or SVG line)
 
-**10. `src/components/landing/MeetTheTeamSection.tsx`**
-- Update headline, subheadline, three truths text, and closing CTA
-- Keep entire office diagram, connection lines, collaboration feed, mobile cards
-- Update agent names/bubbles to match new department framing
+**Department Filter Tabs:**
+- Same tab row as before, same mapping
+- When filtered: non-matching tools get `opacity: 0.15, scale: 0.85` via Framer Motion `animate`
+- Transition 400ms
 
-**11. `src/components/landing/TeamsAtWorkSection.tsx`**
-- Update eyebrow, headline, subheadline
-- Rename department cards: Talent, Growth, Content, Intelligence, Engineering
-- Update activity feed items per the spec
-- Keep all animation code
+**Mobile (<768px):**
+- Replace orbital with 4-column grid of tool cards
+- Each card: tool logo (40px) + name + sublabel
+- Brand colors preserved
+- No rotation animations
+- Pilot Brain card at top, larger
 
-**12. `src/components/landing/TimeMath.tsx`**
-- Replace comparison rows with workforce vs human team data
-- Update from agency comparison to full workforce comparison
-- Add savings counter: "€192,212"
+**Stats + Closing:** Keep existing content, same layout.
 
-**13. `src/components/landing/SocialProof.tsx`**
-- Replace testimonials with anonymized workforce testimonials
-- Replace company logos with stage/industry descriptors
-- Add disclaimer line about anonymization
+---
 
-**14. `src/components/landing/PricingCard.tsx`**
-- Expand from single card to 3-tier pricing (Founder €79, Startup €149, Business €349)
-- Add billing toggle (Monthly/Annual)
-- Update feature lists per spec
-- Keep GSAP entrance animation
+## Section 2: Workforce Team — "The War Room"
 
-**15. `src/components/landing/FAQSection.tsx`**
-- Replace 7 agency FAQs with 6 workforce FAQs
-- Keep custom accordion (already working)
+### MeetTheTeamSection.tsx — Complete Rewrite
 
-**16. `src/components/landing/GlobalSection.tsx`**
-- Update text to reference "AI workforce" instead of "AI team"
-- Keep world map, hubs, pulsing dots, columns
+**Headline:**
+- Eyebrow: "YOUR AI WORKFORCE"
+- Headline: "Meet the team running your company right now."
+- Subheadline: agent roles + €149/month line
 
-**17. `src/components/landing/FinalCTA.tsx`**
-- Replace green-bg with dark bg + green accent
-- Update all text to workforce narrative
-- Add secondary CTA for booking call
+**War Room Interface (Desktop):**
+Dark card container, max-w-[1100px], rounded-xl border.
 
-**18. `src/components/landing/Footer.tsx`**
-- Replace Product links: remove Expert Marketplace, add department names
-- Update tagline
+- **Top Chrome Bar:** 3 colored dots (red/yellow/green) + "ScreeningPilot Internal · 5 agents online" + green dot "All systems active" — monospace 12px
+- **Left Sidebar (~200px):** Department list with colored dots + agent count. Below: "AGENTS ONLINE" with small name list. Hidden on tablet/mobile.
+- **Main Feed Area:** Shows messages auto-cycling.
 
-**19. `src/components/landing/MarqueeBanner.tsx`**
-- Update ticker text to workforce messaging
-- Remove agency-specific language
+**Message Feed System:**
+- 8 messages defined in a data array (Signal, Radar, Penn, Scout, Hawk, Quill, Relay, Brief)
+- Each message: agent avatar (36px circle, dept color), agent name, dept tag, time, tool pills (20px brand-colored circles from ToolLogos), message text, "Passed to" indicator
+- `useState` tracks `visibleMessages` array (max 4 visible)
+- `useEffect` with `setInterval(2200ms)` adds next message, removes oldest when >4
+- Framer Motion `AnimatePresence` for enter (slide up 20px, fade in) and exit (fade out at top)
+- Top of feed has a gradient overlay (`bg-gradient-to-b from-[#0a0e14] to-transparent`) to fade out old messages
+- Loop restarts at message 8 → back to 1 after 18s total
+- Agent dot in sidebar pulses when that agent sends a message (track via `activeAgent` state)
 
-**20. `src/components/landing/FeatureSet.tsx`**
-- Remove from Landing.tsx render — content absorbed into department sections
+**Responsive War Room:**
+- Tablet (768-1024): hide sidebar, show dept names as horizontal tabs above feed
+- Mobile (<768): full-width feed only, 3 messages visible, reduced padding
 
-### New Files (2)
+**Agent Profile Cards (Below War Room):**
+- 9 cards in 3-col grid (desktop), 2-col (tablet), 1-col (mobile)
+- Each card: avatar (44px, lucide icon, dept-colored bg), name, title, department, job description, tool logos row (24px brand-colored circles), "Talks to" line
+- ACTIVE badge: green dot + text
+- Framer Motion `whileInView` stagger 0.08s per card, `viewport={{ once: true, margin: "-50px" }}`
 
-**21. `src/components/landing/DayTimelineSection.tsx`** (~300 lines)
-- Section 10: "A Day With Your AI Workforce"
-- Vertical timeline, alternating left/right on desktop, single column mobile
-- 15 timeline items from 7am to 5pm showing agent activities
-- Each item: time (monospace), agent avatar (colored by dept), action text, output card
-- Color-coded dots: green (done), amber (awaiting review), blue (founder decision), pulsing (in-progress)
-- Bottom summary card: 4 stats (47min, 1 meeting, 127 candidates, €0 fees)
-- Framer Motion `whileInView` with `viewport={{ once: true, margin: "-50px" }}` for each item
-- CTA: "Start your first Monday →"
+**Agent Data (9 agents):**
+- Talent: Scout (Search), Aria (MessageSquare), Lens (Eye)
+- Growth: Radar (Radio), Penn (PenLine), Relay (Send)
+- Intelligence: Hawk (Target), Signal (TrendingUp), Brief (FileText)
+- Each with: tools used (reference ToolLogos), "talks to" connections
 
-**22. `src/components/landing/AgentBuilderSection.tsx`** (~200 lines)
-- Section 14: "Custom Agent Builder Preview"
-- Dark mock UI card showing builder form (agent name, department, tools, prompt)
-- Horizontal scrolling template pills below
-- Framer Motion entrance animation
-- No interactivity needed — static visual mock
+**Department Colors:**
+- Talent: `emerald-400`
+- Growth: `blue-400`
+- Intelligence: `amber-400`
+- Content: `purple-400`
 
-### Updated Render Order in `src/pages/Landing.tsx`
+**Three Truth Blocks:** Brain, GitBranch, Crown icons — same pattern as before but with updated copy per spec.
 
-```
-Header
-HeroHook
-GlobalTrustBar
-EcosystemSection
-TransformationSection (repurposed as Problem)
-MeetTheTeamSection
-ProductLookalike (Talent Department)
-ProductScreening (Growth Department)  
-ExpertJourney (Intelligence Department)
-DayTimelineSection (NEW)
-TeamsAtWorkSection
-TimeMath
-SocialProof
-AgentBuilderSection (NEW)
-PricingCard
-FAQSection
-GlobalSection
-MarqueeBanner
-FinalCTA
-Footer
-```
+**Closing:** New quote text + CTA button, same `conic-border` style.
 
-Removed from render: `ProductDashboard`, `FeatureSet`
+**Collaboration Feed Ticker:** Removed (replaced by war room feed). Or kept below as secondary — will remove to avoid redundancy with the war room.
 
-## Key Technical Notes
+---
 
-- All existing GSAP ScrollTrigger timelines preserved — only data arrays and text strings change
-- All Framer Motion `whileInView` gets `viewport={{ once: true, margin: "-50px" }}` to fix black-section rendering bug
-- All multi-line headlines changed from ALL CAPS to Title Case
-- Green used as accent only — no full-section green backgrounds
-- PricingCard becomes 3-column grid with billing toggle (useState for monthly/annual)
-- No new dependencies added
-- Expert Marketplace references removed from all sections
+## Technical Notes
+- All Framer Motion `whileInView` uses `viewport={{ once: true, margin: "-50px" }}`
+- CSS orbital rotation: pure `@keyframes` in inline `<style>` tag within the component (or Tailwind arbitrary `animate-[spin_120s_linear_infinite]`)
+- Energy pulses: absolutely positioned divs with CSS transition, managed via refs for cleanup
+- No new dependencies
+- Tool brand colors are constants in ToolLogos.tsx, exported for reuse in both sections
+- Total estimated: ~400 lines EcosystemSection, ~500 lines MeetTheTeamSection, ~200 lines ToolLogos
 
