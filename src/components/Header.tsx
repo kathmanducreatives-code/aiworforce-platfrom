@@ -1,7 +1,13 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
-import { Menu, X } from "lucide-react";
+import { Menu, X, Globe } from "lucide-react";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
 const Header = () => {
   const navigate = useNavigate();
@@ -17,9 +23,10 @@ const Header = () => {
 
   const navItems = [
     { label: 'Features', href: '#features' },
+    { label: 'Ecosystem', href: '#ecosystem' },
     { label: 'How It Works', href: '#hero-to-expert-sequence' },
-    { label: 'Expert Marketplace', href: '#hero-to-expert-sequence' },
     { label: 'Pricing', href: '#pricing' },
+    { label: 'Global', href: '#global' },
     { label: 'Get a Demo', href: '/get-demo' },
   ];
 
