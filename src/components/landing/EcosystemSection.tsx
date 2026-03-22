@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
-import { motion, AnimatePresence } from "framer-motion";
-import { TOOL_BRANDS, TOOL_LOGO_MAP } from "./ToolLogos";
+import { motion, AnimatePresence, useScroll, useTransform } from "framer-motion";
+import { TOOL_BRANDS, ToolLogoImage } from "./ToolLogos";
 import { useIsMobile } from "@/hooks/use-mobile";
 
 interface OrbitalTool {
@@ -40,7 +40,6 @@ const RING_CONFIG = {
   3: { radius: 350, duration: 150, direction: "normal" as const, offsetAngle: Math.PI / 8 },
 };
 
-// Cross-connections by department
 const DEPT_CONNECTIONS: Record<string, [string, string][]> = {
   talent: [["claude","gemini"],["apify","firecrawl"],["gemini","apify"]],
   growth: [["claude","instantly"],["firecrawl","claude"],["hunter","instantly"]],
@@ -53,7 +52,6 @@ const getNodePosition = (index: number, total: number, radius: number, offsetAng
   return { x: Math.cos(angle) * radius, y: Math.sin(angle) * radius, angle };
 };
 
-// Precompute all node positions
 const NODE_POSITIONS: Record<string, { x: number; y: number }> = {};
 ([1, 2, 3] as const).forEach(ring => {
   const tools = ORBITAL_TOOLS.filter(t => t.ring === ring);
@@ -81,14 +79,24 @@ function useCountUp(target: number, duration = 1200, start = false) {
   return val;
 }
 
-const CENTER = 375; // center of 750px container
+const CENTER = 375;
 
 const EcosystemSection = () => {
   const sectionRef = useRef<HTMLDivElement>(null);
+  const orbitalRef = useRef<HTMLDivElement>(null);
   const [inView, setInView] = useState(false);
   const [activeTab, setActiveTab] = useState<string>("all");
   const [hoveredTool, setHoveredTool] = useState<string | null>(null);
   const isMobile = useIsMobile();
+
+  // Scroll-driven parallax for the orbital system
+  const { scrollYProgress } = useScroll({
+    target: sectionRef,
+    offset: ["start end", "end start"],
+  });
+  const orbitalRotate = useTransform(scrollYProgress, [0, 1], [0, 30]);
+  const orbitalScale = useTransform(scrollYProgress, [0, 0.3, 0.5, 0.8, 1], [0.85, 1, 1.02, 1, 0.95]);
+  const orbitalY = useTransform(scrollYProgress, [0, 0.3, 1], [60, 0, -40]);
 
   useEffect(() => {
     const el = sectionRef.current;
@@ -107,7 +115,6 @@ const EcosystemSection = () => {
 
   const stat1 = useCountUp(16, 1200, inView);
 
-  // Get cross-connection lines to render
   const crossConnections = useMemo(() => {
     const lines: { from: string; to: string; color: string; active: boolean }[] = [];
     Object.entries(DEPT_CONNECTIONS).forEach(([dept, pairs]) => {
@@ -115,11 +122,7 @@ const EcosystemSection = () => {
         const posA = NODE_POSITIONS[a];
         const posB = NODE_POSITIONS[b];
         if (posA && posB) {
-          lines.push({
-            from: a, to: b,
-            color: DEPT_COLORS[dept],
-            active: activeTab === dept,
-          });
+          lines.push({ from: a, to: b, color: DEPT_COLORS[dept], active: activeTab === dept });
         }
       });
     });
@@ -139,7 +142,13 @@ const EcosystemSection = () => {
       `}</style>
 
       <div className="max-w-[1100px] mx-auto px-6">
-        <div className="text-center mb-16">
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true, amount: 0.1 }}
+          transition={{ duration: 0.6 }}
+          className="text-center mb-16"
+        >
           <span className="font-mono text-xs uppercase tracking-[0.15em] text-emerald-400 mb-4 block">THE ECOSYSTEM</span>
           <h2 className="font-display font-black text-3xl md:text-5xl text-white leading-[1.1] mb-6">
             Every AI tool your business needs.<br />All plugged into one brain.
@@ -147,20 +156,28 @@ const EcosystemSection = () => {
           <p className="text-white/40 text-lg max-w-[600px] mx-auto leading-relaxed">
             ScreeningPilot connects the world's best AI tools and orchestrates them as a single coordinated team. Each tool knows what the others are doing. No switching. No re-explaining. No data lost between tabs.
           </p>
-        </div>
+        </motion.div>
 
-        {/* Orbital System — Desktop */}
+        {/* Orbital System — Desktop with scroll parallax */}
         {!isMobile && (
           <div className="hidden md:flex justify-center items-center mb-8">
-            <div className="relative" style={{ width: 750, height: 750 }}>
+            <motion.div
+              ref={orbitalRef}
+              className="relative"
+              style={{
+                width: 750, height: 750,
+                rotateX: orbitalRotate,
+                scale: orbitalScale,
+                y: orbitalY,
+                perspective: 1200,
+              }}
+            >
               {/* SVG layer for rings, connection lines, and cross-connections */}
               <svg className="absolute inset-0 w-full h-full pointer-events-none" viewBox="0 0 750 750">
-                {/* Orbital ring circles */}
                 {([1, 2, 3] as const).map(ring => (
                   <circle key={ring} cx={CENTER} cy={CENTER} r={RING_CONFIG[ring].radius}
                     fill="none" stroke="rgba(255,255,255,0.04)" strokeWidth="1" />
                 ))}
-                {/* Radial connection lines from center to each node */}
                 {ORBITAL_TOOLS.map(tool => {
                   const pos = NODE_POSITIONS[tool.id];
                   const active = isToolActive(tool);
@@ -176,7 +193,6 @@ const EcosystemSection = () => {
                     />
                   );
                 })}
-                {/* Department cross-connections */}
                 {crossConnections.map((conn, i) => {
                   const posA = NODE_POSITIONS[conn.from];
                   const posB = NODE_POSITIONS[conn.to];
@@ -210,7 +226,7 @@ const EcosystemSection = () => {
                 <span className="text-[10px] text-emerald-400/60 mt-1 font-mono">BRAIN</span>
               </motion.div>
 
-              {/* Orbital rings with tools */}
+              {/* Orbital rings with tools — real logos */}
               {([1, 2, 3] as const).map(ring => {
                 const ringTools = ORBITAL_TOOLS.filter(t => t.ring === ring);
                 const cfg = RING_CONFIG[ring];
@@ -228,10 +244,10 @@ const EcosystemSection = () => {
                     {ringTools.map((tool, i) => {
                       const pos = getNodePosition(i, ringTools.length, cfg.radius, cfg.offsetAngle);
                       const brand = TOOL_BRANDS[tool.id];
-                      const Logo = TOOL_LOGO_MAP[tool.id];
                       const active = isToolActive(tool);
                       const hovered = hoveredTool === tool.id;
                       const dimmed = hoveredTool !== null && !hovered;
+                      const logoSize = Math.round(tool.size * 0.55);
 
                       return (
                         <motion.div
@@ -253,15 +269,14 @@ const EcosystemSection = () => {
                           onMouseEnter={() => setHoveredTool(tool.id)}
                           onMouseLeave={() => setHoveredTool(null)}
                         >
-                          <div className="rounded-full flex items-center justify-center transition-all duration-300"
+                          <div className="rounded-full flex items-center justify-center transition-all duration-300 overflow-hidden"
                             style={{
                               width: tool.size, height: tool.size,
-                              background: brand.bg.startsWith("linear") ? brand.bg : undefined,
-                              backgroundColor: !brand.bg.startsWith("linear") ? brand.bg : undefined,
+                              background: "rgba(10,14,20,0.8)",
                               boxShadow: hovered ? `0 0 24px ${brand.bg}88, 0 0 48px ${brand.bg}44` : `0 0 8px ${brand.bg}22`,
-                              border: `2px solid ${hovered ? brand.bg : "rgba(255,255,255,0.1)"}`,
+                              border: `2px solid ${hovered ? brand.bg : "rgba(255,255,255,0.12)"}`,
                             }}>
-                            {Logo && <Logo width={tool.size * 0.5} height={tool.size * 0.5} />}
+                            <ToolLogoImage toolId={tool.id} size={logoSize} />
                           </div>
                           <span className="text-[9px] text-white/50 mt-1 font-medium whitespace-nowrap text-center">{brand.label}</span>
 
@@ -296,11 +311,11 @@ const EcosystemSection = () => {
 
               {/* Energy Pulses */}
               {inView && <EnergyPulses />}
-            </div>
+            </motion.div>
           </div>
         )}
 
-        {/* Mobile — 4-column grid */}
+        {/* Mobile — 4-column grid with real logos */}
         {isMobile && (
           <div className="md:hidden mb-8">
             <div className="flex flex-col items-center mb-6">
@@ -313,17 +328,17 @@ const EcosystemSection = () => {
             <div className="grid grid-cols-4 gap-3">
               {ORBITAL_TOOLS.map(tool => {
                 const brand = TOOL_BRANDS[tool.id];
-                const Logo = TOOL_LOGO_MAP[tool.id];
                 const active = isToolActive(tool);
                 return (
                   <motion.div key={tool.id}
                     initial={{ opacity: 0, scale: 0.8 }}
-                    animate={inView ? { opacity: active ? 1 : 0.3, scale: 1 } : {}}
+                    whileInView={{ opacity: active ? 1 : 0.3, scale: 1 }}
+                    viewport={{ once: true, amount: 0.1 }}
                     transition={{ duration: 0.4 }}
                     className="flex flex-col items-center gap-1">
-                    <div className="w-10 h-10 rounded-full flex items-center justify-center"
-                      style={{ backgroundColor: brand.bg, border: "1px solid rgba(255,255,255,0.1)" }}>
-                      {Logo && <Logo width={20} height={20} />}
+                    <div className="w-12 h-12 rounded-full flex items-center justify-center overflow-hidden"
+                      style={{ background: "rgba(10,14,20,0.8)", border: `1.5px solid ${brand.bg}44` }}>
+                      <ToolLogoImage toolId={tool.id} size={28} />
                     </div>
                     <span className="text-[9px] text-white/50 font-medium text-center leading-tight">{brand.label}</span>
                   </motion.div>
@@ -359,17 +374,27 @@ const EcosystemSection = () => {
             { num: "1", label: "Company Brain", sub: "Shared across every tool" },
             { num: "0", label: "Tabs to switch between", sub: "Everything runs from ScreeningPilot" },
           ].map(s => (
-            <div key={s.label} className="text-center">
+            <motion.div key={s.label}
+              initial={{ opacity: 0, y: 20 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true, amount: 0.1 }}
+              transition={{ duration: 0.5 }}
+              className="text-center">
               <div className="font-display font-black text-4xl text-white tabular-nums">{s.num}</div>
               <div className="text-sm text-white/60 font-semibold mt-1">{s.label}</div>
               <div className="text-xs text-white/30 mt-0.5">{s.sub}</div>
-            </div>
+            </motion.div>
           ))}
         </div>
 
-        <p className="text-center font-display font-bold text-xl md:text-2xl text-white/80 max-w-[560px] mx-auto leading-relaxed">
+        <motion.p
+          initial={{ opacity: 0, y: 20 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true, amount: 0.1 }}
+          transition={{ duration: 0.5 }}
+          className="text-center font-display font-bold text-xl md:text-2xl text-white/80 max-w-[560px] mx-auto leading-relaxed">
           You bring the vision.<br />ScreeningPilot brings the team.<br />Together you build something unstoppable.
-        </p>
+        </motion.p>
       </div>
     </section>
   );
