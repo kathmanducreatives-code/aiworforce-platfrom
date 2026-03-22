@@ -1,119 +1,267 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
-  TrendingUp, Users, Pen, BarChart2, User,
-  Brain, ArrowLeftRight, UserCheck, ArrowRight,
+  Search, MessageSquare, Eye, Radio, PenLine, Send,
+  Target, TrendingUp, FileText, Brain, GitBranch, Crown, ArrowRight,
 } from 'lucide-react';
+import { TOOL_BRANDS, TOOL_LOGO_MAP } from './ToolLogos';
 import { useIsMobile } from '@/hooks/use-mobile';
 
-const agents = [
-  { id: 'talent', name: 'Talent Dept', icon: Users, bubble: 'I screen 100 candidates while you sleep.', desk: { top: '8%', left: '18%' }, entryFrom: { x: -120, y: -80 } },
-  { id: 'growth', name: 'Growth Dept', icon: TrendingUp, bubble: 'I find leads before your competitors do.', desk: { top: '8%', left: '68%' }, entryFrom: { x: 120, y: -80 } },
-  { id: 'content', name: 'Content Dept', icon: Pen, bubble: 'I write in your voice. Always.', desk: { top: '62%', left: '10%' }, entryFrom: { x: -120, y: 80 } },
-  { id: 'intelligence', name: 'Intel Dept', icon: BarChart2, bubble: 'I know what your competitors did last night.', desk: { top: '62%', left: '76%' }, entryFrom: { x: 120, y: 80 } },
+// Department colors
+const DEPT = {
+  talent:       { color: "#34d399", label: "Talent",       bg: "rgba(52,211,153,0.12)" },
+  growth:       { color: "#60a5fa", label: "Growth",       bg: "rgba(96,165,250,0.12)" },
+  content:      { color: "#a78bfa", label: "Content",      bg: "rgba(167,139,250,0.12)" },
+  intelligence: { color: "#fbbf24", label: "Intelligence", bg: "rgba(251,191,36,0.12)" },
+} as const;
+
+type DeptKey = keyof typeof DEPT;
+
+interface Agent {
+  id: string;
+  name: string;
+  title: string;
+  department: DeptKey;
+  icon: React.ElementType;
+  job: string;
+  tools: string[];
+  talksTo: string[];
+}
+
+const AGENTS: Agent[] = [
+  { id: "scout", name: "Scout", title: "Talent Scout Agent", department: "talent", icon: Search, job: "Finds candidates matching your ICP across LinkedIn while you sleep.", tools: ["apify", "firecrawl"], talksTo: ["Aria"] },
+  { id: "aria", name: "Aria", title: "AI Screening Agent", department: "talent", icon: MessageSquare, job: "Runs async AI interviews with every applicant. Scores answers across 12 criteria.", tools: ["gemini", "claude"], talksTo: ["Lens"] },
+  { id: "lens", name: "Lens", title: "People Analyst Agent", department: "talent", icon: Eye, job: "Reads behavioral signals CVs never show. Flags ownership, clarity, culture fit.", tools: ["gemini", "claude"], talksTo: ["Founder"] },
+  { id: "radar", name: "Radar", title: "Lead Intelligence Agent", department: "growth", icon: Radio, job: "Monitors funding news, job postings, and LinkedIn for warm leads daily.", tools: ["firecrawl", "apify", "perplexity"], talksTo: ["Penn"] },
+  { id: "penn", name: "Penn", title: "Outreach Copywriter Agent", department: "growth", icon: PenLine, job: "Writes personalized cold emails referencing the exact trigger that made this lead hot.", tools: ["claude"], talksTo: ["Relay"] },
+  { id: "relay", name: "Relay", title: "Outreach Coordinator Agent", department: "growth", icon: Send, job: "Sends at optimal time, tracks replies, triggers follow-ups automatically.", tools: ["instantly", "hunter"], talksTo: ["Signal"] },
+  { id: "hawk", name: "Hawk", title: "Competitor Monitor Agent", department: "intelligence", icon: Target, job: "Watches competitor pricing, hiring, product, and reviews around the clock.", tools: ["firecrawl", "perplexity"], talksTo: ["Quill", "Brief"] },
+  { id: "signal", name: "Signal", title: "Market Intelligence Agent", department: "intelligence", icon: TrendingUp, job: "Tracks talent markets, salary benchmarks, and industry funding movements.", tools: ["firecrawl", "perplexity", "gpt4"], talksTo: ["Radar", "Brief"] },
+  { id: "brief", name: "Brief", title: "Morning Brief Agent", department: "intelligence", icon: FileText, job: "Synthesizes everything into a 3-minute daily report. Delivered at 7am. Every day.", tools: ["claude"], talksTo: ["Founder"] },
 ];
 
-const founder = { id: 'you', name: 'You', icon: User, desk: { top: '38%', left: '43%' } };
+interface FeedMessage {
+  agentId: string;
+  agentName: string;
+  department: DeptKey;
+  tools: string[];
+  time: string;
+  text: string;
+  passedTo?: string;
+  passedToDept?: DeptKey;
+}
 
-const connections = [
-  { from: 'you', to: 'talent' }, { from: 'you', to: 'growth' },
-  { from: 'you', to: 'content' }, { from: 'you', to: 'intelligence' },
-  { from: 'talent', to: 'intelligence' }, { from: 'growth', to: 'content' },
-  { from: 'talent', to: 'growth' }, { from: 'content', to: 'intelligence' },
+const MESSAGES: FeedMessage[] = [
+  { agentId: "signal", agentName: "Signal", department: "intelligence", tools: ["firecrawl", "perplexity"], time: "07:04 AM", text: "Market scan complete. Series A funding up 34% this week in SaaS. Identified 12 companies that raised in last 48 hours with 3+ open engineering roles. Passing high-priority leads to Radar.", passedTo: "Radar", passedToDept: "growth" },
+  { agentId: "radar", agentName: "Radar", department: "growth", tools: ["firecrawl", "apify"], time: "07:06 AM", text: "Received 12 leads from Signal. Running deep enrichment on each. Found decision makers for 9 of 12. Top lead: Acme Corp — €8M Series A, James Park Co-Founder. Trigger score: 28/30.", passedTo: "Penn", passedToDept: "growth" },
+  { agentId: "penn", agentName: "Penn", department: "growth", tools: ["claude"], time: "07:09 AM", text: "Outreach drafted for James Park using Acme's Series A trigger + his LinkedIn post as the hook. References his exact words: 'hiring is about to become my full time job'. Brand voice check: passed.", passedTo: "Relay", passedToDept: "growth" },
+  { agentId: "scout", agentName: "Scout", department: "talent", tools: ["apify", "firecrawl"], time: "07:11 AM", text: "ICP lookalike scan complete for Senior Engineer role. 127 candidates found across LinkedIn matching your profile. Similarity scores: 6 above 90%, 18 above 80%.", passedTo: "Aria", passedToDept: "talent" },
+  { agentId: "hawk", agentName: "Hawk", department: "intelligence", tools: ["firecrawl", "perplexity"], time: "07:15 AM", text: "Competitor alert: Ashby dropped Starter plan pricing by 22% — detected 40 minutes ago on their /pricing page. Previous: €49/month. Current: €38/month. This is their 3rd price change in 90 days.", passedTo: "Brief", passedToDept: "intelligence" },
+  { agentId: "relay", agentName: "Relay", department: "growth", tools: ["instantly"], time: "07:19 AM", text: "Email to james@acmecorp.com delivered. Open tracking active. Subject: 'saw the Series A this morning' — 31% above average open rate for this subject line format. Follow-up scheduled Thursday 9am." },
+  { agentId: "brief", agentName: "Brief", department: "intelligence", tools: ["claude"], time: "07:21 AM", text: "Morning brief compiled. Today's priorities: 1. James Park reply likely within 4hrs. 2. Competitor pricing change — response drafted. 3. 24 candidates in screening. Your attention needed: 2 items. Estimated review time: 8 minutes." },
+  { agentId: "aria", agentName: "Aria", department: "talent", tools: ["gemini", "claude"], time: "09:31 AM", text: "Screening 127 candidates asynchronously. AI interviews running in background. Candidates complete at their own pace. 14 completed so far — 3 scoring above 85%. Results ready by morning.", passedTo: "Lens", passedToDept: "talent" },
 ];
 
-const feedItems = [
-  { from: 'Talent', to: 'Intelligence', text: 'Competitor hired 6 engineers — adding to report' },
-  { from: 'Intelligence', to: 'Content', text: 'Competitor dropped pricing — drafting response post' },
-  { from: 'Growth', to: 'Talent', text: 'Lead also has open roles — flagging for recruiting' },
-  { from: 'Content', to: 'Growth', text: 'Top post angle: screening automation — converting well' },
-  { from: 'Intelligence', to: 'All', text: 'Weekly brief distributed — 4 action items assigned' },
-  { from: 'Growth', to: 'Intelligence', text: 'New funding round — 12 warm leads identified' },
-  { from: 'Content', to: 'Intelligence', text: 'Brand voice score 98% — consistency maintained' },
-  { from: 'Talent', to: 'Growth', text: 'Strong candidate also matches outreach ICP — flagged' },
+const DEPARTMENTS = [
+  { key: "talent" as DeptKey, label: "Talent", count: 3 },
+  { key: "growth" as DeptKey, label: "Growth", count: 3 },
+  { key: "content" as DeptKey, label: "Content", count: 2 },
+  { key: "intelligence" as DeptKey, label: "Intelligence", count: 3 },
 ];
 
 const truths = [
-  { icon: Brain, title: 'One brain. Shared by all.', body: 'Tell ScreeningPilot about your company once. Every agent in every department knows everything from that moment forward. What you tell one, all of them remember.' },
-  { icon: ArrowLeftRight, title: 'What one finds, all act on.', body: 'When your Talent agent finds a candidate signal your Growth agent checks if they are also a potential lead. When Intelligence spots a competitor move your Content agent writes about your advantage. Automatically.' },
-  { icon: UserCheck, title: 'You decide. They execute.', body: 'Your agents brief each other, hand off work, and surface only what needs a human decision. You are the founder making calls — not the messenger between fifteen tabs.' },
+  { icon: Brain, title: "One brain. Every agent knows everything.", body: "Tell ScreeningPilot about your company once. Your brand voice, your ICP, your competitors, your goals. From that moment every agent operates with full context — permanently. What you tell one, all of them remember." },
+  { icon: GitBranch, title: "They pass work to each other. You just decide.", body: "Scout finds candidates and passes them to Aria. Hawk spots a competitor move and tells Quill to draft a response. Radar finds a lead and Penn writes the email. The handoffs happen automatically — no configuration, no prompting, no tab switching." },
+  { icon: Crown, title: "You are the only human in the room.", body: "Your agents brief each other, execute the work, and surface only what needs a human decision. Eight minutes of reviewing their outputs replaces eight hours of doing the work yourself. You are the founder making calls — not the intern running between desks." },
 ];
-
-const getDeskCenter = (id: string) => {
-  const all = [founder, ...agents];
-  const a = all.find((x) => x.id === id);
-  if (!a) return { x: 50, y: 50 };
-  return { x: parseFloat(a.desk.left) + 7, y: parseFloat(a.desk.top) + 10 };
-};
 
 const MeetTheTeamSection = () => {
   const navigate = useNavigate();
   const isMobile = useIsMobile();
   const sectionRef = useRef<HTMLElement>(null);
-  const [phase, setPhase] = useState(0);
-  const hasPlayed = useRef(false);
+  const [inView, setInView] = useState(false);
 
   useEffect(() => {
     const el = sectionRef.current;
     if (!el) return;
-    const obs = new IntersectionObserver(
-      ([entry]) => { if (entry.isIntersecting && !hasPlayed.current) { hasPlayed.current = true; runSequence(); } },
-      { threshold: 0.25 },
-    );
+    const obs = new IntersectionObserver(([e]) => {
+      if (e.isIntersecting) { setInView(true); obs.disconnect(); }
+    }, { threshold: 0.1, rootMargin: "-50px" });
     obs.observe(el);
     return () => obs.disconnect();
-  }, []);
-
-  const runSequence = useCallback(() => {
-    setPhase(1);
-    setTimeout(() => setPhase(2), 1000);
-    setTimeout(() => setPhase(3), 5000);
-    setTimeout(() => setPhase(4), 7000);
-    setTimeout(() => setPhase(5), 10000);
   }, []);
 
   return (
     <section ref={sectionRef} className="relative w-full px-4 py-24 md:py-36 overflow-hidden">
       <div className="max-w-[1100px] mx-auto">
-        <div className="text-center mb-16">
-          <p className="font-mono text-xs uppercase tracking-[0.15em] text-emerald-400 mb-4">MEET THE TEAM</p>
+        {/* Headline */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={inView ? { opacity: 1, y: 0 } : {}}
+          transition={{ duration: 0.6 }}
+          viewport={{ once: true, margin: "-50px" }}
+          className="text-center mb-16"
+        >
+          <p className="font-mono text-xs uppercase tracking-[0.15em] text-emerald-400 mb-4">YOUR AI WORKFORCE</p>
           <h2 className="font-display font-black text-[clamp(1.8rem,4vw,3.2rem)] leading-[1.1] tracking-[-0.04em] text-white mb-6">
-            Five departments.<br />Fifteen agents.<br />One company that never sleeps.
+            Meet the team running<br />your company right now.
           </h2>
           <p className="text-white/40 text-base md:text-lg max-w-[600px] mx-auto leading-relaxed">
-            Your AI workforce arrives on day one fully briefed on your company. They know each other. They work together. They surface only what needs your attention.
+            Every agent has a role, a set of tools, and colleagues they work with. They pass information between departments automatically. You hired them all for €149/month.
           </p>
-        </div>
+        </motion.div>
 
-        {isMobile ? <MobileAgentCards phase={phase} /> : <DesktopOffice phase={phase} />}
-
-        <div className="mt-16 overflow-hidden">
-          <div className="overflow-hidden whitespace-nowrap">
-            <div className="ticker-track">
-              {[...feedItems, ...feedItems].map((item, i) => (
-                <FeedPill key={i} item={item} />
-              ))}
+        {/* War Room */}
+        <motion.div
+          initial={{ opacity: 0, y: 30 }}
+          animate={inView ? { opacity: 1, y: 0 } : {}}
+          transition={{ duration: 0.8, delay: 0.2 }}
+          className="rounded-2xl border border-white/[0.08] overflow-hidden mb-20"
+          style={{ background: "linear-gradient(180deg, #0a0e14 0%, #060a10 100%)" }}
+        >
+          {/* Chrome bar */}
+          <div className="flex items-center justify-between px-4 py-2.5 border-b border-white/[0.06]">
+            <div className="flex items-center gap-1.5">
+              <div className="w-3 h-3 rounded-full bg-red-500/70" />
+              <div className="w-3 h-3 rounded-full bg-yellow-500/70" />
+              <div className="w-3 h-3 rounded-full bg-green-500/70" />
+            </div>
+            <span className="font-mono text-[11px] text-white/30">ScreeningPilot Internal · 5 agents online</span>
+            <div className="flex items-center gap-1.5">
+              <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+              <span className="font-mono text-[10px] text-emerald-400/60">All systems active</span>
             </div>
           </div>
+
+          <div className="flex">
+            {/* Sidebar — desktop only */}
+            {!isMobile && (
+              <div className="w-[200px] border-r border-white/[0.06] p-4 hidden lg:block shrink-0">
+                <p className="font-mono text-[10px] uppercase tracking-[0.15em] text-white/20 mb-3">DEPARTMENTS</p>
+                {DEPARTMENTS.map(d => (
+                  <div key={d.key} className="flex items-center justify-between py-1.5">
+                    <div className="flex items-center gap-2">
+                      <div className="w-2 h-2 rounded-full" style={{ backgroundColor: DEPT[d.key].color }} />
+                      <span className="text-xs text-white/50">{d.label}</span>
+                    </div>
+                    <span className="text-[10px] text-white/20">{d.count}</span>
+                  </div>
+                ))}
+                <div className="flex items-center justify-between py-1.5 opacity-40">
+                  <div className="flex items-center gap-2">
+                    <div className="w-2 h-2 rounded-full bg-white/20" />
+                    <span className="text-xs text-white/30">Engineering</span>
+                  </div>
+                  <span className="text-[9px] text-white/15">Soon</span>
+                </div>
+
+                <p className="font-mono text-[10px] uppercase tracking-[0.15em] text-white/20 mt-6 mb-3">AGENTS ONLINE</p>
+                <div className="flex flex-wrap gap-1">
+                  {AGENTS.map(a => (
+                    <span key={a.id} className="text-[9px] px-1.5 py-0.5 rounded bg-white/[0.04] text-white/30">
+                      {a.name}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Message Feed */}
+            <div className="flex-1 min-w-0">
+              <MessageFeed inView={inView} isMobile={isMobile} />
+            </div>
+          </div>
+        </motion.div>
+
+        {/* Agent Profile Cards */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-20">
+          {AGENTS.map((agent, i) => (
+            <motion.div
+              key={agent.id}
+              initial={{ opacity: 0, y: 16 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true, margin: "-50px" }}
+              transition={{ duration: 0.4, delay: i * 0.08 }}
+              className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-5"
+            >
+              <div className="flex items-start justify-between mb-3">
+                <div className="flex items-center gap-3">
+                  <div className="w-11 h-11 rounded-full flex items-center justify-center"
+                    style={{ backgroundColor: DEPT[agent.department].bg }}>
+                    <agent.icon className="w-5 h-5" style={{ color: DEPT[agent.department].color }} />
+                  </div>
+                  <div>
+                    <p className="text-sm font-bold text-white">{agent.name}</p>
+                    <p className="text-[10px] text-white/30">{agent.title}</p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-1">
+                  <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                  <span className="text-[9px] text-emerald-400/60 font-mono">ACTIVE</span>
+                </div>
+              </div>
+
+              <p className="text-xs text-white/40 leading-relaxed mb-4">{agent.job}</p>
+
+              <div className="flex items-center gap-2 mb-3">
+                <span className="text-[9px] text-white/20 uppercase tracking-wider">Tools</span>
+                <div className="flex gap-1">
+                  {agent.tools.map(t => {
+                    const Logo = TOOL_LOGO_MAP[t];
+                    return (
+                      <div key={t} className="w-6 h-6 rounded-full flex items-center justify-center"
+                        style={{ backgroundColor: TOOL_BRANDS[t]?.bg || "#333", border: "1px solid rgba(255,255,255,0.06)" }}>
+                        {Logo && <Logo width={14} height={14} />}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
+              <div className="flex items-center gap-1.5">
+                <span className="text-[9px] text-white/20 uppercase tracking-wider">Talks to</span>
+                {agent.talksTo.map(name => {
+                  const target = AGENTS.find(a => a.name === name);
+                  const color = target ? DEPT[target.department].color : "#6b7280";
+                  return (
+                    <span key={name} className="text-[10px] font-medium" style={{ color }}>
+                      {name}
+                    </span>
+                  );
+                })}
+                {agent.talksTo.includes("Founder") && (
+                  <span className="text-[10px] font-medium text-white/50">Founder</span>
+                )}
+              </div>
+            </motion.div>
+          ))}
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-10 md:gap-12 mt-20">
-          {truths.map((t) => {
+        {/* Three Truth Blocks */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-10 md:gap-12 mb-20">
+          {truths.map((t, i) => {
             const Icon = t.icon;
             return (
-              <div key={t.title} className="text-center md:text-left">
+              <motion.div key={t.title}
+                initial={{ opacity: 0, y: 16 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                viewport={{ once: true, margin: "-50px" }}
+                transition={{ duration: 0.4, delay: i * 0.1 }}
+                className="text-center md:text-left"
+              >
                 <Icon className="w-7 h-7 text-emerald-400 mb-4 mx-auto md:mx-0" />
                 <h3 className="font-display font-bold text-white text-lg mb-2">{t.title}</h3>
                 <p className="text-white/40 text-sm leading-relaxed">{t.body}</p>
-              </div>
+              </motion.div>
             );
           })}
         </div>
 
-        <div className="text-center mt-20 max-w-[560px] mx-auto">
-          <p className="font-display text-xl md:text-2xl text-white/80 italic leading-snug mb-4">
-            "This is what a real team feels like."
+        {/* Closing */}
+        <div className="text-center max-w-[560px] mx-auto">
+          <p className="font-display text-xl md:text-2xl text-white/80 leading-snug mb-2">
+            This is not software.<br />This is your team.<br />They started work<br />the moment you signed up.
           </p>
           <p className="text-white/30 text-sm mb-8">Stop managing tools. Start leading a workforce.</p>
           <button onClick={() => navigate('/auth')} className="conic-border group h-[44px] inline-flex items-center gap-3 bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-[15px] px-8 rounded-full transition-all duration-300 hover:scale-[1.03] hover:shadow-[0_8px_40px_rgba(5,150,105,0.4)]">
@@ -125,157 +273,105 @@ const MeetTheTeamSection = () => {
   );
 };
 
-const DesktopOffice = ({ phase }: { phase: number }) => {
-  const [visibleAgents, setVisibleAgents] = useState<string[]>([]);
-  const [activeBubble, setActiveBubble] = useState<string | null>(null);
-  const [drawnLines, setDrawnLines] = useState<number>(0);
-  const [showWelcome, setShowWelcome] = useState(false);
+// Auto-cycling message feed
+const MessageFeed = ({ inView, isMobile }: { inView: boolean; isMobile: boolean }) => {
+  const maxVisible = isMobile ? 3 : 4;
+  const [visibleRange, setVisibleRange] = useState<number[]>([]);
 
   useEffect(() => {
-    if (phase < 2) return;
-    if (phase === 2) {
-      agents.forEach((a, i) => {
-        setTimeout(() => {
-          setVisibleAgents((prev) => [...prev, a.id]);
-          setActiveBubble(a.id);
-          setTimeout(() => setActiveBubble((cur) => (cur === a.id ? null : cur)), 1200);
-        }, i * 800);
+    if (!inView) return;
+    // Start with first message
+    setVisibleRange([0]);
+
+    const interval = setInterval(() => {
+      setVisibleRange(prev => {
+        const nextIdx = prev.length > 0 ? (prev[prev.length - 1] + 1) % MESSAGES.length : 0;
+        const next = [...prev, nextIdx];
+        if (next.length > maxVisible) next.shift();
+        return next;
       });
-    }
-    if (phase === 3) {
-      setShowWelcome(true);
-      setTimeout(() => setShowWelcome(false), 2000);
-    }
-    if (phase >= 4) {
-      connections.forEach((_, i) => {
-        setTimeout(() => setDrawnLines(i + 1), i * 300);
-      });
-    }
-  }, [phase]);
+    }, 2200);
+
+    return () => clearInterval(interval);
+  }, [inView, maxVisible]);
 
   return (
-    <motion.div
-      initial={{ opacity: 0 }}
-      animate={{ opacity: phase >= 1 ? 1 : 0 }}
-      transition={{ duration: 0.8 }}
-      className="relative w-full max-w-[700px] mx-auto aspect-[700/450] rounded-2xl border border-white/[0.06] overflow-hidden"
-      style={{ background: 'linear-gradient(180deg, #04060d 0%, #02050a 100%)' }}
-    >
-      <svg className="absolute inset-0 w-full h-full opacity-[0.04]" xmlns="http://www.w3.org/2000/svg">
-        <defs><pattern id="office-grid" width="40" height="40" patternUnits="userSpaceOnUse"><path d="M 40 0 L 0 0 0 40" fill="none" stroke="white" strokeWidth="0.5" /></pattern></defs>
-        <rect width="100%" height="100%" fill="url(#office-grid)" />
-      </svg>
-      <div className="absolute top-4 left-4 w-3 h-3 rounded-full bg-emerald-500/20" />
-      <div className="absolute bottom-4 right-4 w-3 h-3 rounded bg-white/[0.06]" />
+    <div className="relative overflow-hidden" style={{ height: isMobile ? 320 : 400 }}>
+      {/* Top fade */}
+      <div className="absolute top-0 left-0 right-0 h-12 z-10 pointer-events-none"
+        style={{ background: "linear-gradient(to bottom, #0a0e14, transparent)" }} />
 
-      <svg className="absolute inset-0 w-full h-full" xmlns="http://www.w3.org/2000/svg">
-        {connections.slice(0, drawnLines).map((c, i) => {
-          const from = getDeskCenter(c.from);
-          const to = getDeskCenter(c.to);
-          return <line key={i} x1={`${from.x}%`} y1={`${from.y}%`} x2={`${to.x}%`} y2={`${to.y}%`} stroke="rgba(52,211,153,0.25)" strokeWidth="1.5" className="animate-line-draw" style={{ '--line-delay': `${i * 0.1}s` } as React.CSSProperties} />;
-        })}
-        {phase >= 5 && connections.slice(0, drawnLines).map((c, i) => {
-          const from = getDeskCenter(c.from);
-          const to = getDeskCenter(c.to);
-          return (
-            <circle key={`dot-${i}`} r="2" fill="#34d399" opacity="0.6">
-              <animateMotion dur={`${3 + i * 0.3}s`} repeatCount="indefinite" path={`M${from.x * 7},${from.y * 4.5} L${to.x * 7},${to.y * 4.5}`} />
-            </circle>
-          );
-        })}
-      </svg>
+      <div className="p-4 flex flex-col justify-end h-full gap-3">
+        <AnimatePresence mode="popLayout">
+          {visibleRange.map(idx => {
+            const msg = MESSAGES[idx];
+            const dept = DEPT[msg.department];
+            return (
+              <motion.div
+                key={`${msg.agentId}-${idx}-${visibleRange.indexOf(idx)}`}
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -10 }}
+                transition={{ duration: 0.4, ease: "easeOut" }}
+                layout
+                className="rounded-xl border border-white/[0.05] bg-white/[0.02] p-4"
+              >
+                {/* Header */}
+                <div className="flex items-center justify-between mb-2">
+                  <div className="flex items-center gap-2">
+                    <div className="w-7 h-7 rounded-full flex items-center justify-center"
+                      style={{ backgroundColor: dept.bg }}>
+                      {(() => {
+                        const agent = AGENTS.find(a => a.id === msg.agentId);
+                        if (!agent) return null;
+                        const Icon = agent.icon;
+                        return <Icon className="w-3.5 h-3.5" style={{ color: dept.color }} />;
+                      })()}
+                    </div>
+                    <span className="text-xs font-bold" style={{ color: dept.color }}>{msg.agentName}</span>
+                    <span className="text-[10px] px-1.5 py-0.5 rounded-full" style={{ background: dept.bg, color: dept.color }}>{dept.label}</span>
+                  </div>
+                  <span className="font-mono text-[10px] text-white/20">{msg.time}</span>
+                </div>
 
-      <DeskNode agent={founder} isVisible={phase >= 1} isFounder showBubble={false} isAlive={phase >= 5} />
-      {agents.map((a) => (
-        <DeskNode key={a.id} agent={a} isVisible={visibleAgents.includes(a.id)} isFounder={false} showBubble={activeBubble === a.id} entryFrom={a.entryFrom} bubble={a.bubble} isAlive={phase >= 5} />
-      ))}
+                {/* Tool pills */}
+                <div className="flex gap-1 mb-2">
+                  {msg.tools.map(t => {
+                    const Logo = TOOL_LOGO_MAP[t];
+                    return (
+                      <div key={t} className="w-5 h-5 rounded-full flex items-center justify-center"
+                        style={{ backgroundColor: TOOL_BRANDS[t]?.bg || "#333" }}>
+                        {Logo && <Logo width={11} height={11} />}
+                      </div>
+                    );
+                  })}
+                </div>
 
-      <AnimatePresence>
-        {showWelcome && (
-          <motion.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.9 }} className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-30 bg-white/[0.08] backdrop-blur-md border border-white/[0.1] rounded-xl px-6 py-3 text-center">
-            <p className="text-sm font-semibold text-white">🎉 Welcome to ScreeningPilot HQ</p>
-            <p className="text-xs text-white/40">Your workforce is ready.</p>
-          </motion.div>
-        )}
-      </AnimatePresence>
+                {/* Text */}
+                <p className="text-xs text-white/50 leading-relaxed">{msg.text}</p>
 
-      <AnimatePresence>
-        {phase >= 5 && (
-          <motion.p initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 1, duration: 1 }} className="absolute bottom-5 left-1/2 -translate-x-1/2 text-xs text-white/30 text-center max-w-[280px]">
-            You are the only one who needs to be here. Your workforce handles the rest.
-          </motion.p>
-        )}
-      </AnimatePresence>
-    </motion.div>
-  );
-};
-
-interface DeskNodeProps {
-  agent: { id: string; name: string; icon: React.ElementType; desk: { top: string; left: string } };
-  isVisible: boolean; isFounder: boolean; showBubble: boolean;
-  entryFrom?: { x: number; y: number }; bubble?: string; isAlive: boolean;
-}
-
-const DeskNode = ({ agent, isVisible, isFounder, showBubble, entryFrom, bubble, isAlive }: DeskNodeProps) => {
-  const Icon = agent.icon;
-  const size = isFounder ? 'w-12 h-12' : 'w-10 h-10';
-  const ringColor = isFounder ? 'ring-emerald-400/60' : 'ring-emerald-500/40';
-
-  return (
-    <motion.div className="absolute z-10 flex flex-col items-center" style={{ top: agent.desk.top, left: agent.desk.left }}
-      initial={entryFrom ? { opacity: 0, x: entryFrom.x, y: entryFrom.y } : { opacity: 0 }}
-      animate={isVisible ? { opacity: 1, x: 0, y: 0, scale: [1, 1.08, 1] } : {}}
-      transition={{ duration: 0.5, ease: 'easeOut' }}
-    >
-      <AnimatePresence>
-        {showBubble && bubble && (
-          <motion.div initial={{ opacity: 0, scale: 0.8, y: 4 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.8 }} className="absolute -top-14 left-1/2 -translate-x-1/2 bg-white/[0.1] backdrop-blur-sm border border-white/[0.08] rounded-lg px-3 py-1.5 whitespace-nowrap z-20">
-            <p className="text-[10px] text-white/70">{bubble}</p>
-          </motion.div>
-        )}
-      </AnimatePresence>
-      <div className={`${size} rounded-full flex items-center justify-center bg-white/[0.06] border border-white/[0.1] relative ${isFounder ? 'border-emerald-500/40' : ''}`}>
-        <Icon className="w-4 h-4 text-emerald-400" />
-        {(isVisible || isFounder) && <span className={`absolute inset-0 rounded-full ring-2 ${ringColor} ${isAlive ? 'animate-[ping_2s_ease-in-out_infinite]' : ''} opacity-40`} />}
+                {/* Passed to */}
+                {msg.passedTo && msg.passedToDept && (
+                  <motion.div
+                    initial={{ opacity: 0, x: -8 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    transition={{ delay: 0.3, duration: 0.3 }}
+                    className="flex items-center gap-1.5 mt-2 pt-2 border-t border-white/[0.04]"
+                  >
+                    <ArrowRight className="w-3 h-3 text-white/20" />
+                    <span className="text-[10px] text-white/20">Passed to:</span>
+                    <span className="text-[10px] font-semibold" style={{ color: DEPT[msg.passedToDept].color }}>
+                      {msg.passedTo} · {DEPT[msg.passedToDept].label}
+                    </span>
+                  </motion.div>
+                )}
+              </motion.div>
+            );
+          })}
+        </AnimatePresence>
       </div>
-      <div className={`mt-1 px-3 py-1 rounded bg-white/[0.04] border border-white/[0.06] transition-all duration-500 ${isVisible ? 'border-emerald-500/20 bg-emerald-500/[0.03]' : ''}`}>
-        <p className="text-[9px] font-mono text-white/50 text-center whitespace-nowrap">{agent.name}</p>
-      </div>
-    </motion.div>
-  );
-};
-
-const MobileAgentCards = ({ phase }: { phase: number }) => {
-  const allAgents = [{ ...founder, bubble: 'The founder. The decision maker.' }, ...agents];
-  return (
-    <div className="relative flex flex-col items-center gap-1">
-      <div className="absolute top-0 bottom-0 left-1/2 -translate-x-1/2 w-px border-l border-dashed border-emerald-500/20 z-0" />
-      {allAgents.map((a, i) => {
-        const Icon = a.icon;
-        return (
-          <motion.div key={a.id} initial={{ opacity: 0, y: 20 }} animate={phase >= 2 || (a.id === 'you' && phase >= 1) ? { opacity: 1, y: 0 } : {}}
-            transition={{ delay: i * 0.15, duration: 0.4 }} className="relative z-10 flex items-center gap-4 w-full max-w-xs bg-white/[0.03] border border-white/[0.06] rounded-xl p-3 mb-2">
-            <div className="w-10 h-10 rounded-full bg-white/[0.06] border border-white/[0.1] flex items-center justify-center shrink-0">
-              <Icon className="w-4 h-4 text-emerald-400" />
-            </div>
-            <div>
-              <p className="text-sm font-semibold text-white">{a.name}</p>
-              <p className="text-[10px] text-white/40">{a.bubble}</p>
-            </div>
-          </motion.div>
-        );
-      })}
     </div>
   );
 };
-
-const FeedPill = ({ item }: { item: { from: string; to: string; text: string } }) => (
-  <span className="inline-flex items-center gap-2 mx-3 px-3 py-1.5 rounded-full bg-white/[0.03] border border-white/[0.06] whitespace-nowrap">
-    <span className="text-[10px] text-emerald-400 font-semibold">{item.from}</span>
-    <span className="text-[10px] text-white/20">→</span>
-    <span className="text-[10px] text-white/40 font-medium">{item.to}</span>
-    <span className="text-[10px] text-white/30">{item.text}</span>
-  </span>
-);
 
 export default MeetTheTeamSection;
