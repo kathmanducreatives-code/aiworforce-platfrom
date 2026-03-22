@@ -1,10 +1,7 @@
 import { useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import gsap from 'gsap';
-import { ScrollTrigger } from 'gsap/ScrollTrigger';
 import { ArrowRight, Users, TrendingUp, Pen, Eye, BarChart2 } from 'lucide-react';
-
-gsap.registerPlugin(ScrollTrigger);
 
 const deptAvatars = [
   { icon: Users, label: 'Talent', color: 'bg-emerald-500/20 border-emerald-500/40' },
@@ -40,23 +37,14 @@ const HeroHook = () => {
   return (
     <section ref={sectionRef} className="relative min-h-screen flex flex-col items-center justify-center overflow-hidden pt-24 pb-16">
       <div className="relative z-20 text-center px-4 w-full max-w-4xl mx-auto">
-        {/* Eyebrow */}
-        <p className="font-mono text-xs uppercase tracking-[0.15em] text-emerald-400 font-semibold mb-6">
-          THE AI WORKFORCE PLATFORM
-        </p>
+        <p className="font-mono text-xs uppercase tracking-[0.15em] text-emerald-400 font-semibold mb-6">THE AI WORKFORCE PLATFORM</p>
 
         <h1 ref={headlineRef} className="font-display font-black text-[clamp(2.5rem,6vw,5.5rem)] leading-[1.0] tracking-[-0.05em] text-white mb-10">
           <div className="flex flex-wrap items-center justify-center gap-[clamp(0.4rem,1.2vw,0.8rem)]">
-            <span className="word inline-block opacity-0">You</span>
-            <span className="word inline-block opacity-0">are</span>
-            <span className="word inline-block opacity-0">doing</span>
-            <span className="word inline-block opacity-0">the</span>
-            <span className="word inline-block opacity-0">work</span>
+            {['You','are','doing','the','work'].map(w => <span key={w} className="word inline-block opacity-0">{w}</span>)}
           </div>
           <div className="flex flex-wrap items-center justify-center gap-[clamp(0.4rem,1.2vw,0.8rem)] mt-2">
-            <span className="word inline-block opacity-0">of</span>
-            <span className="word inline-block opacity-0">ten</span>
-            <span className="word inline-block opacity-0">people.</span>
+            {['of','ten','people.'].map(w => <span key={w} className="word inline-block opacity-0">{w}</span>)}
           </div>
           <div className="flex flex-wrap items-center justify-center gap-[clamp(0.4rem,1.2vw,0.8rem)] mt-2">
             <span className="word inline-block opacity-0 text-emerald-400">Now you don't have to.</span>
@@ -71,27 +59,37 @@ const HeroHook = () => {
 
         {/* Agent presence row */}
         <div ref={agentRef} className="opacity-0 mb-12">
-          <div className="flex items-center justify-center gap-4 md:gap-6">
+          <div className="relative flex items-center justify-center gap-6 md:gap-8">
+            {/* Connecting line */}
+            <div className="absolute top-7 left-1/2 -translate-x-1/2 hidden md:block" style={{ width: `${(deptAvatars.length - 1) * 80}px`, height: 1 }}>
+              <div className="w-full h-px bg-emerald-500/20" />
+              <div className="absolute top-0 left-0 w-3 h-px bg-emerald-400 animate-[travelDot_3s_linear_infinite]"
+                style={{ boxShadow: "0 0 6px rgba(0,255,148,0.6)" }} />
+            </div>
+            <style>{`@keyframes travelDot { 0% { left: 0; } 100% { left: calc(100% - 12px); } }`}</style>
+
             {deptAvatars.map((dept, i) => {
               const Icon = dept.icon;
               return (
-                <div key={dept.label} className="flex flex-col items-center gap-2">
-                  <div className={`relative w-12 h-12 rounded-full ${dept.color} border flex items-center justify-center`}>
-                    <Icon className="w-5 h-5 text-white/80" />
-                    {/* Online ring */}
-                    <span className="absolute inset-0 rounded-full ring-2 ring-emerald-500/40 animate-[ping_2s_ease-in-out_infinite] opacity-40" />
+                <div key={dept.label} className="flex flex-col items-center gap-2 relative z-10">
+                  <div className="relative w-14 h-14 rounded-full flex items-center justify-center"
+                    style={{
+                      background: "rgba(0,255,148,0.1)",
+                      border: "1.5px solid rgba(0,255,148,0.4)",
+                    }}>
+                    <Icon className="w-6 h-6 text-emerald-400" />
+                    <span className="absolute inset-0 rounded-full animate-[pulseRing_2s_ease-in-out_infinite]"
+                      style={{
+                        animationDelay: `${i * 0.4}s`,
+                        boxShadow: "0 0 0 0 rgba(0,255,148,0.4)",
+                      }} />
                   </div>
-                  <span className="text-[10px] text-white/40 font-medium">{dept.label}</span>
-                  {/* Connection dot between avatars */}
-                  {i < deptAvatars.length - 1 && (
-                    <div className="absolute hidden md:block" style={{ left: `calc(50% + ${(i - 2) * 80 + 56}px)`, top: '50%' }}>
-                      <div className="w-1 h-1 rounded-full bg-emerald-500/40 animate-pulse" />
-                    </div>
-                  )}
+                  <span className="text-[11px] text-white/50 font-medium uppercase tracking-[0.1em]">{dept.label}</span>
                 </div>
               );
             })}
           </div>
+          <style>{`@keyframes pulseRing { 0% { box-shadow: 0 0 0 0 rgba(0,255,148,0.4); } 70% { box-shadow: 0 0 0 8px rgba(0,255,148,0); } 100% { box-shadow: 0 0 0 0 rgba(0,255,148,0); } }`}</style>
         </div>
 
         <div ref={ctaRef} className="opacity-0 mb-8">
