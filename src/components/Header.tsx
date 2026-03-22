@@ -68,6 +68,18 @@ const Header = () => {
               </button>
             </>
           )}
+          {/* Language selector */}
+          <DropdownMenu>
+            <DropdownMenuTrigger className="flex items-center gap-1 text-xs text-white/40 hover:text-white/60 transition-colors px-2 py-1 rounded-md border border-white/[0.06]">
+              <Globe className="w-3.5 h-3.5" /> EN
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="bg-[#0d1117] border-white/[0.08]">
+              <DropdownMenuItem className="text-white text-xs font-medium">English</DropdownMenuItem>
+              <DropdownMenuItem disabled className="text-white/20 text-xs">हिंदी — coming soon</DropdownMenuItem>
+              <DropdownMenuItem disabled className="text-white/20 text-xs">Deutsch — coming soon</DropdownMenuItem>
+              <DropdownMenuItem disabled className="text-white/20 text-xs">Português — coming soon</DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
 
         {/* Mobile */}
