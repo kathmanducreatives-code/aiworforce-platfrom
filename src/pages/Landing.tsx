@@ -21,6 +21,7 @@ import FAQSection from "@/components/landing/FAQSection";
 import MarqueeBanner from "@/components/landing/MarqueeBanner";
 import FinalCTA from "@/components/landing/FinalCTA";
 import { ExpertJourney } from "@/components/landing/ExpertJourney";
+import MeetTheTeamSection from "@/components/landing/MeetTheTeamSection";
 
 gsap.registerPlugin(ScrollTrigger);
 ScrollTrigger.config({ limitCallbacks: true });
@@ -58,6 +59,9 @@ const Landing = () => {
 
         {/* Expert Journey — 4-step scroll stack */}
         <ExpertJourney />
+
+        {/* Meet The Team — AI office narrative */}
+        <MeetTheTeamSection />
 
         {/* 8. Time Math — Comparison Table */}
         <TimeMath />
