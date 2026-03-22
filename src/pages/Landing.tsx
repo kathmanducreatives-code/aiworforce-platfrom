@@ -53,6 +53,8 @@ const Landing = () => {
       <main ref={mainRef} className="relative z-10 w-full">
         {/* 2. Hero */}
         <HeroHook />
+        {/* Global Trust Bar */}
+        <GlobalTrustBar />
         {/* 3. The Transformation (pinned scrub) */}
         <TransformationSection />
 
@@ -67,6 +69,12 @@ const Landing = () => {
         {/* Meet The Team — AI office narrative */}
         <MeetTheTeamSection />
 
+        {/* AI Tools Ecosystem */}
+        <EcosystemSection />
+
+        {/* Teams At Work */}
+        <TeamsAtWorkSection />
+
         {/* 8. Time Math — Comparison Table */}
         <TimeMath />
         {/* 8. Full Feature Set */}
@@ -77,6 +85,10 @@ const Landing = () => {
         <PricingCard />
         {/* 11. FAQ */}
         <FAQSection />
+
+        {/* Global */}
+        <GlobalSection />
+
         {/* 12. Marquee Banner */}
         <MarqueeBanner />
         {/* 13. Final CTA */}
