@@ -60,6 +60,9 @@ const Landing = () => {
         {/* Expert Journey — 4-step scroll stack */}
         <ExpertJourney />
 
+        {/* Meet The Team — AI office narrative */}
+        <MeetTheTeamSection />
+
         {/* 8. Time Math — Comparison Table */}
         <TimeMath />
         {/* 8. Full Feature Set */}
