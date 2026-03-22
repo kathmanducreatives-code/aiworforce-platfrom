@@ -8,7 +8,7 @@ const STYLES = `
 #hero-to-expert-sequence {
   position: relative;
   height: 400vh;
-  background: #04060d;
+  background: transparent;
 }
 #hero-to-expert-sequence .sequence-viewport {
   position: sticky;

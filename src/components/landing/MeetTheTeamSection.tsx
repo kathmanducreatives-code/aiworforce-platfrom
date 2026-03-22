@@ -119,7 +119,7 @@ const MeetTheTeamSection = () => {
   const allRevealed = currentStep >= MESSAGES.length - 1;
 
   return (
-    <section ref={sectionRef} className="relative w-full overflow-visible" style={{ background: "#080C10", borderBottom: "1px solid rgba(255,255,255,0.05)" }}>
+    <section ref={sectionRef} className="relative w-full overflow-visible" style={{ borderBottom: "1px solid rgba(255,255,255,0.05)" }}>
       {/* Headline — outside the pinned area */}
       <div className="px-4 pt-24 md:pt-36 pb-12">
         <div className="max-w-[1100px] mx-auto">

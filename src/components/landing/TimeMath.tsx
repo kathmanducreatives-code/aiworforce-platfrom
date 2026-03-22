@@ -68,7 +68,7 @@ const TimeMath = () => {
   }, []);
 
   return (
-    <section ref={sectionRef} className="relative px-4 py-28 md:py-36" style={{ background: "#0C1116", borderBottom: "1px solid rgba(255,255,255,0.05)" }}>
+    <section ref={sectionRef} className="relative px-4 py-28 md:py-36" style={{ borderBottom: "1px solid rgba(255,255,255,0.05)" }}>
       <div className="max-w-4xl mx-auto">
         <div className="text-center mb-14">
           <p className="font-mono text-xs uppercase tracking-[0.15em] mb-4 text-emerald-400 font-semibold">◆ THE MATH DOESN'T LIE</p>
