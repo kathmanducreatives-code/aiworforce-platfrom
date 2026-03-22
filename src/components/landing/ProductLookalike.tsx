@@ -82,6 +82,7 @@ const ProductLookalike = () => {
     return (
         <section
             ref={sectionRef}
+            id="departments"
             className="relative w-full h-screen overflow-hidden font-display"
             style={{ background: '#000000' }}
         >
@@ -101,13 +102,13 @@ const ProductLookalike = () => {
                 <div className="text-center mb-6">
                     <div className="look-title inline-flex items-center gap-2 px-3 py-1.5 rounded-full border border-primary/40 bg-transparent mb-4 opacity-0 mx-auto">
                         <div className="w-1.5 h-1.5 rounded-full bg-primary" />
-                        <span className="font-mono text-[11px] uppercase tracking-[2px] text-primary font-semibold mt-px">BETTER THAN ANY AGENCY SHORTLIST</span>
+                        <span className="font-mono text-[11px] uppercase tracking-[2px] text-primary font-semibold mt-px">TALENT DEPARTMENT</span>
                     </div>
                     <h2 className="look-title font-display font-black text-[clamp(1.8rem,4.5vw,3.5rem)] leading-[1.0] tracking-[-0.04em] text-white mb-3 opacity-0">
-                        YOUR AGENCY SENDS 5 PROFILES.<br />WE SCORE HUNDREDS IN SECONDS.
+                        Your recruiting team.<br />Always hiring. While you sleep.
                     </h2>
                     <p className="look-subtitle text-white/60 text-base md:text-lg leading-[1.7] max-w-[700px] mx-auto opacity-0">
-                        Stop waiting weeks for a recruiter to cherry-pick candidates. ScreeningPilot scores every applicant instantly and surfaces only the best fits.
+                        Scout finds candidates who match your ideal profile. Aria screens every applicant through an AI interview. Lens reads the behavioral signals that CVs never reveal. You receive a ranked shortlist.
                     </p>
                 </div>
 
@@ -119,15 +120,15 @@ const ProductLookalike = () => {
                                 <div className="w-3 h-3 rounded-full bg-yellow-400/60" />
                                 <div className="w-3 h-3 rounded-full bg-green-400/60" />
                             </div>
-                            <div className="flex-1 text-center"><span className="text-xs text-white/30 bg-white/5 rounded-md px-3 py-1">app.screeningpilot.com</span></div>
+                            <div className="flex-1 text-center"><span className="text-xs text-white/30 bg-white/5 rounded-md px-3 py-1">Talent Department · Scout Agent Active</span></div>
                         </div>
 
                         <div className="p-5">
                             <div className="flex items-center justify-between mb-4">
                                 <div>
-                                    <h3 className="text-sm font-bold text-white">Candidate Matches / Frontend Engineer</h3>
+                                    <h3 className="text-sm font-bold text-white">Agent Match / Senior Engineer</h3>
                                     <p className="look-counter text-[10px] text-white/30 mt-0.5 opacity-0">
-                                        <span className="font-bold text-emerald-400 tabular-nums">247</span> candidates scored · <span className="font-bold text-emerald-400 tabular-nums">6</span> top matches — agency would've sent 5 in 6 weeks
+                                        <span className="font-bold text-emerald-400 tabular-nums">127</span> candidates scored · <span className="font-bold text-emerald-400 tabular-nums">6</span> matches — Scout found these while you were in meetings
                                     </p>
                                 </div>
                                 <div className="flex gap-2">

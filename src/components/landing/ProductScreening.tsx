@@ -7,15 +7,15 @@ import { X, Loader2, Link as LinkIcon } from 'lucide-react';
 gsap.registerPlugin(ScrollTrigger);
 
 const steps = [
-    { num: 1, title: 'Paste your job description', desc: 'Title, requirements, salary — takes 30 seconds' },
-    { num: 2, title: 'AI generates screening criteria', desc: 'Custom questions + scoring rubric built automatically' },
-    { num: 3, title: 'Share the screening link', desc: 'Candidates apply through your branded AI link' },
-    { num: 4, title: 'AI rejects 95% of bad fits', desc: 'Only top candidates reach your inbox' },
+    { num: 1, title: 'Radar detects funding trigger', desc: 'Acme Corp raised €8M Series A — warm lead identified' },
+    { num: 2, title: 'Penn writes personalized outreach', desc: 'Email written in your voice, referencing the exact event' },
+    { num: 3, title: 'Relay sends at optimal time', desc: '9am delivery — highest open rate window' },
+    { num: 4, title: 'Reply received — meeting booked', desc: 'James Park replied. Calendar link sent automatically.' },
 ];
 
-const fullTitle = 'Senior Frontend Engineer';
-const fullCompany = 'Acme Corp';
-const fullDesc = "We're looking for a senior engineer with strong React fundamentals and a deep understanding of system architecture...";
+const fullTitle = 'Acme Corp — Series A Lead';
+const fullCompany = 'James Park, Co-Founder';
+const fullDesc = "Hi James — saw the Series A news this morning. With 4 open engineering roles, I imagine screening is about to become a full-time job...";
 
 const ProductScreening = () => {
     const sectionRef = useRef<HTMLDivElement>(null);
@@ -24,10 +24,10 @@ const ProductScreening = () => {
     const lineRef = useRef<HTMLDivElement>(null);
 
     const [activeStep, setActiveStep] = useState(0);
-    const [title, setTitle] = useState('Senior Frontend Engineer');
-    const [company, setCompany] = useState('Acme Corp');
-    const [desc, setDesc] = useState("We're looking for a senior engineer with strong React fundamentals and a deep understanding of system architecture...");
-    const [tags, setTags] = useState(['Experience: 5+ yr', 'Edu: BS CS', 'React / TS', 'Salary: $120K+']);
+    const [title, setTitle] = useState('Acme Corp — Series A Lead');
+    const [company, setCompany] = useState('James Park, Co-Founder');
+    const [desc, setDesc] = useState("Hi James — saw the Series A news this morning. With 4 open engineering roles, I imagine screening is about to become a full-time job...");
+    const [tags, setTags] = useState(['Series A: €8M', 'Open roles: 4', 'Industry: SaaS', 'Pain: screening']);
 
     const [isGenerating, setIsGenerating] = useState(false);
     const [showToast, setShowToast] = useState(false);
@@ -159,15 +159,15 @@ const ProductScreening = () => {
 
                     {/* RIGHT: Text + Steps */}
                     <div ref={textRef} className="flex-[45] scr-text opacity-0">
-                        <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full border border-primary/40 bg-transparent mb-6 opacity-0">
+                        <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full border border-primary/40 bg-transparent mb-6 opacity-0 scr-badge">
                             <div className="w-1.5 h-1.5 rounded-full bg-primary" />
-                            <span className="font-mono text-[11px] uppercase tracking-[2px] text-primary font-semibold mt-px">KILL THE AGENCY MIDDLEMAN</span>
+                            <span className="font-mono text-[11px] uppercase tracking-[2px] text-primary font-semibold mt-px">GROWTH DEPARTMENT</span>
                         </div>
                         <h2 className="scr-headline font-display font-black text-[clamp(1.8rem,4vw,3.2rem)] leading-[1.0] tracking-[-0.04em] text-white mb-5">
-                            30 SECONDS TO SET UP.<br />95% OF BAD CANDIDATES GONE.
+                            Your sales team.<br />Finding leads before<br />your competitors do.
                         </h2>
                         <p className="scr-subtext text-white/60 text-base md:text-lg leading-[1.7] mb-8 max-w-[480px]">
-                            Paste your job description. AI builds screening criteria, generates your application link, and auto-rejects unqualified candidates. Your agency charges €24K for this.
+                            Radar monitors funding announcements, job postings, and LinkedIn posts for companies that need you right now. Penn writes a personalized email. Relay sends it at the optimal time.
                         </p>
 
                         {/* Steps */}
@@ -192,7 +192,7 @@ const ProductScreening = () => {
 
                     <div ref={mockupRef} className="flex-[55] opacity-0 relative group">
                         <div className={`absolute -top-3 right-4 z-20 bg-emerald-600 text-white text-xs font-semibold px-4 py-2.5 rounded-xl shadow-[0_8px_24px_rgba(5,150,105,0.3)] border border-emerald-400/30 flex items-center gap-2 transition-all duration-500 ${showToast ? 'opacity-100 translate-y-0 scale-100' : 'opacity-0 -translate-y-4 scale-90'}`}>
-                            <LinkIcon className="w-3.5 h-3.5" /> Screening link copied!
+                            <LinkIcon className="w-3.5 h-3.5" /> Reply received — meeting booked!
                         </div>
 
                         <GyroTilt intensity={8} contentClassName="rounded-xl overflow-hidden glow-green border border-border bg-background">
@@ -202,50 +202,50 @@ const ProductScreening = () => {
                                     <div className="w-3 h-3 rounded-full bg-yellow-400/60" />
                                     <div className="w-3 h-3 rounded-full bg-green-400/60" />
                                 </div>
-                                <div className="flex-1 text-center"><span className="text-xs text-white/30 bg-white/5 rounded-md px-3 py-1 select-none">app.screeningpilot.com</span></div>
+                                <div className="flex-1 text-center"><span className="text-xs text-white/30 bg-white/5 rounded-md px-3 py-1 select-none">Growth Department · Radar Agent</span></div>
                             </div>
 
                             <div className="p-6">
                                 <div className="flex items-center justify-between mb-5">
                                     <h3 className="text-sm font-bold text-white flex items-center gap-2">
-                                        Create New Screening
+                                        Outreach Pipeline
                                     </h3>
                                     <div className="flex gap-4 text-[10px] text-white/30">
-                                        <span>Draft <strong className="text-white/60">Auto-saved</strong></span>
+                                        <span>Status <strong className="text-white/60">Active</strong></span>
                                     </div>
                                 </div>
 
                                 <div className="space-y-4">
                                     <div>
-                                        <label className="text-[10px] text-white/40 font-medium mb-1.5 block uppercase tracking-wider">Job Title *</label>
+                                        <label className="text-[10px] text-white/40 font-medium mb-1.5 block uppercase tracking-wider">Lead *</label>
                                         <input
                                             value={title}
                                             onChange={(e) => setTitle(e.target.value)}
                                             className="w-full border border-white/[0.1] rounded-lg px-3 py-2 text-sm text-white bg-white/[0.02] focus:bg-white/[0.05] focus:border-emerald-500/50 outline-none transition-all placeholder:text-white/20"
-                                            placeholder="e.g. Senior Frontend Engineer"
+                                            placeholder="e.g. Acme Corp"
                                         />
                                     </div>
                                     <div>
-                                        <label className="text-[10px] text-white/40 font-medium mb-1.5 block uppercase tracking-wider">Company Name *</label>
+                                        <label className="text-[10px] text-white/40 font-medium mb-1.5 block uppercase tracking-wider">Decision Maker *</label>
                                         <input
                                             value={company}
                                             onChange={(e) => setCompany(e.target.value)}
                                             className="w-full border border-white/[0.1] rounded-lg px-3 py-2 text-sm text-white bg-white/[0.02] focus:bg-white/[0.05] focus:border-emerald-500/50 outline-none transition-all placeholder:text-white/20"
-                                            placeholder="Your Company"
+                                            placeholder="Contact Name"
                                         />
                                     </div>
                                     <div>
-                                        <label className="text-[10px] text-white/40 font-medium mb-1.5 block uppercase tracking-wider">Job Description</label>
+                                        <label className="text-[10px] text-white/40 font-medium mb-1.5 block uppercase tracking-wider">Personalized Email</label>
                                         <textarea
                                             value={desc}
                                             onChange={(e) => setDesc(e.target.value)}
                                             className="w-full border border-white/[0.1] rounded-lg px-3 py-2 text-xs text-white/80 min-h-[70px] bg-white/[0.02] focus:bg-white/[0.05] focus:border-emerald-500/50 outline-none transition-all resize-none placeholder:text-white/20"
-                                            placeholder="Paste your JD here..."
+                                            placeholder="AI-generated outreach..."
                                         />
                                     </div>
 
                                     <div className="border-t border-white/[0.06] pt-4">
-                                        <p className="text-[10px] text-white/40 font-medium mb-3 uppercase tracking-wider">Auto-Generated Requirements</p>
+                                        <p className="text-[10px] text-white/40 font-medium mb-3 uppercase tracking-wider">Lead Signals Detected</p>
                                         <div className="flex flex-wrap gap-2">
                                             {tags.map((r) => (
                                                 <div key={r} onClick={() => removeTag(r)} className="req-tag group cursor-pointer bg-emerald-500/10 hover:bg-red-500/10 hover:border-red-500/30 border border-emerald-500/20 rounded-md px-2.5 py-1.5 text-[10px] text-emerald-400 font-medium transition-colors flex items-center gap-1.5">
@@ -253,9 +253,6 @@ const ProductScreening = () => {
                                                     <X className="w-3 h-3 opacity-50 group-hover:text-red-400 group-hover:opacity-100" />
                                                 </div>
                                             ))}
-                                            <button className="bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.1] rounded-md px-3 py-1.5 text-[10px] text-white/50 font-medium transition-colors border-dashed" onClick={() => setTags([...tags, 'New Requirement'])}>
-                                                + Add
-                                            </button>
                                         </div>
                                     </div>
                                     <button
@@ -266,9 +263,9 @@ const ProductScreening = () => {
                                             ${btnGlow ? 'shadow-[0_0_30px_rgba(5,150,105,0.6)]' : ''}
                                         `}
                                     >
-                                        {isGenerating ? <><Loader2 className="w-4 h-4 animate-spin" /> Generating...</> :
-                                            showToast ? '✓ Link Ready — Agency Replaced' :
-                                                'Generate Screening Link'}
+                                        {isGenerating ? <><Loader2 className="w-4 h-4 animate-spin" /> Sending...</> :
+                                            showToast ? '✓ Reply Received — Meeting Booked' :
+                                                'Send Outreach'}
                                     </button>
                                 </div>
                             </div>

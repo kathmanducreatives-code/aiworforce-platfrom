@@ -25,7 +25,7 @@ const GlobalTrustBar = () => {
         <div className="hidden md:flex items-center gap-2 shrink-0">
           <Globe className="w-4 h-4 text-emerald-400" />
           <span className="text-sm text-white/50 font-medium">
-            Founders from <span className="text-white font-bold tabular-nums">{count}</span> countries building with Pilot
+            Founders from <span className="text-white font-bold tabular-nums">{count}</span> countries building with ScreeningPilot
           </span>
         </div>
 

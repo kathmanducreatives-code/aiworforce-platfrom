@@ -6,12 +6,12 @@ import { Quote } from 'lucide-react';
 gsap.registerPlugin(ScrollTrigger);
 
 const testimonials = [
-    { quote: "We were paying our agency €8,200 per hire. ScreeningPilot replaced them in one afternoon. Same quality candidates, 97% less cost.", name: "Marcus König", title: "CTO, Velora Technologies", metric: "€80K saved/year" },
-    { quote: "Our agency took 6 weeks to send 5 mediocre profiles. ScreeningPilot scored 300 applicants in under a minute. We'll never go back.", name: "Priya Sharma", title: "VP People, Helios SaaS", metric: "6 weeks → 60 sec" },
-    { quote: "I was skeptical — but after seeing the AI reject the same candidates our team would have rejected, I cancelled our agency contract that week.", name: "Daniel Okonkwo", title: "Founder, Cortex AI", metric: "Agency cancelled" },
+    { quote: "I was doing 6 jobs. Now I review decisions. The talent department alone saved me €80,000 in agency fees in the first quarter.", name: "Co-Founder, Series A SaaS", metric: "€80K saved · Q1" },
+    { quote: "The agents brief each other. I did not believe that was real until I watched Hawk flag a competitor move and Quill write a response post without me asking. That was the moment I knew.", name: "Solo Founder, Developer Tools", metric: "Zero prompting required" },
+    { quote: "48 hours from posting the job to having a shortlist of 6 qualified candidates. Our recruiting agency took 6 weeks to do the same thing. We cancelled the contract that afternoon.", name: "VP People, Seed Fintech", metric: "6 weeks → 48 hours" },
 ];
 
-const logos = ['Velora', 'Helios', 'Cortex AI', 'DataSync', 'Lumina', 'NovaTech'];
+const stages = ['Series A · SaaS', 'Seed · Fintech', 'Solo · DevTools', 'Series B · Healthtech', 'Pre-seed · AI', 'Seed · E-commerce'];
 
 const SocialProof = () => {
     const sectionRef = useRef<HTMLDivElement>(null);
@@ -35,12 +35,14 @@ const SocialProof = () => {
         <section ref={sectionRef} className="relative px-4 py-28 md:py-36">
             <div className="max-w-5xl mx-auto">
                 <div className="text-center mb-14">
-                    <p className="font-mono text-xs uppercase tracking-[0.15em] mb-4 text-emerald-400 font-semibold">◆ Agency Refugees</p>
-                    <h2 className="font-display font-black text-[clamp(1.5rem,3.5vw,3rem)] leading-[1.1] tracking-[-0.03em] text-white">COMPANIES THAT FIRED THEIR AGENCY</h2>
+                    <p className="font-mono text-xs uppercase tracking-[0.15em] mb-4 text-emerald-400 font-semibold">◆ EARLY ADOPTERS</p>
+                    <h2 className="font-display font-black text-[clamp(1.5rem,3.5vw,3rem)] leading-[1.1] tracking-[-0.03em] text-white">
+                        Founders who replaced their team<br />with an AI workforce.
+                    </h2>
                 </div>
-                <div className="flex flex-wrap justify-center gap-8 mb-14">
-                    {logos.map((logo) => (
-                        <span key={logo} className="text-sm font-display font-bold text-white/25 tracking-wide uppercase hover:text-white/40 transition-colors">{logo}</span>
+                <div className="flex flex-wrap justify-center gap-4 mb-14">
+                    {stages.map((s) => (
+                        <span key={s} className="text-xs font-medium text-white/30 bg-white/[0.03] border border-white/[0.06] px-3 py-1.5 rounded-full">{s}</span>
                     ))}
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -50,14 +52,16 @@ const SocialProof = () => {
                             <p className="text-sm text-white/50 leading-relaxed mb-5 italic">"{t.quote}"</p>
                             <div className="flex items-center justify-between">
                                 <div>
-                                    <p className="text-sm font-semibold text-white">{t.name}</p>
-                                    <p className="text-xs text-white/45">{t.title}</p>
+                                    <p className="text-sm font-semibold text-white/60">{t.name}</p>
                                 </div>
                                 <span className="text-[10px] font-mono font-bold text-emerald-400 bg-emerald-500/10 px-2 py-1 rounded border border-emerald-500/15">{t.metric}</span>
                             </div>
                         </div>
                     ))}
                 </div>
+                <p className="text-center text-xs text-white/20 mt-8">
+                    Early access users · Outcomes verified · Names anonymized pending permission
+                </p>
             </div>
         </section>
     );

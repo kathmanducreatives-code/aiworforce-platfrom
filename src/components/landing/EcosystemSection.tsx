@@ -18,26 +18,26 @@ interface ToolNode {
 }
 
 const TOOLS: ToolNode[] = [
-  { id: "claude", name: "Claude", Logo: ClaudeLogo, ring: "inner", description: "Writing, analysis, and reasoning", status: "Connected", rooms: ["growth", "recruiting", "creative", "strategy"] },
-  { id: "gemini", name: "Gemini", Logo: GeminiLogo, ring: "inner", description: "AI screening and evaluation", status: "Connected", rooms: ["recruiting"] },
-  { id: "firecrawl", name: "Firecrawl", Logo: FirecrawlLogo, ring: "inner", description: "Web scraping and intelligence", status: "Connected", rooms: ["growth", "recruiting", "strategy"] },
-  { id: "apify", name: "Apify", Logo: ApifyLogo, ring: "inner", description: "LinkedIn data extraction", status: "Connected", rooms: ["growth", "recruiting"] },
+  { id: "claude", name: "Claude", Logo: ClaudeLogo, ring: "inner", description: "Writing, analysis, and reasoning", status: "Connected", rooms: ["talent", "growth", "content", "intelligence"] },
+  { id: "gemini", name: "Gemini", Logo: GeminiLogo, ring: "inner", description: "AI screening and evaluation", status: "Connected", rooms: ["talent"] },
+  { id: "firecrawl", name: "Firecrawl", Logo: FirecrawlLogo, ring: "inner", description: "Web scraping and intelligence", status: "Connected", rooms: ["growth", "talent", "intelligence"] },
+  { id: "apify", name: "Apify", Logo: ApifyLogo, ring: "inner", description: "LinkedIn data extraction", status: "Connected", rooms: ["growth", "talent"] },
   { id: "instantly", name: "Instantly", Logo: InstantlyLogo, ring: "inner", description: "Cold email sequences", status: "Connected", rooms: ["growth"] },
-  { id: "perplexity", name: "Perplexity", Logo: PerplexityLogo, ring: "inner", description: "Real-time research", status: "Connected", rooms: ["growth", "strategy"] },
-  { id: "elevenlabs", name: "ElevenLabs", Logo: ElevenLabsLogo, ring: "inner", description: "Voice and audio generation", status: "Connected", rooms: ["creative"] },
-  { id: "replicate", name: "Replicate", Logo: ReplicateLogo, ring: "inner", description: "Image and visual generation", status: "Connected", rooms: ["creative"] },
+  { id: "perplexity", name: "Perplexity", Logo: PerplexityLogo, ring: "inner", description: "Real-time research", status: "Connected", rooms: ["growth", "intelligence"] },
+  { id: "elevenlabs", name: "ElevenLabs", Logo: ElevenLabsLogo, ring: "inner", description: "Voice and audio generation", status: "Connected", rooms: ["content"] },
+  { id: "replicate", name: "Replicate", Logo: ReplicateLogo, ring: "inner", description: "Image and visual generation", status: "Connected", rooms: ["content"] },
   { id: "gpt4", name: "GPT-4", Logo: GPT4Logo, ring: "outer", description: "Specialized AI tasks", status: "Partner", rooms: [] },
-  { id: "notion", name: "Notion", Logo: NotionLogo, ring: "outer", description: "Documentation and knowledge", status: "Partner", rooms: ["strategy"] },
-  { id: "linear", name: "Linear", Logo: LinearLogo, ring: "outer", description: "Task and project tracking", status: "Partner", rooms: ["strategy"] },
+  { id: "notion", name: "Notion", Logo: NotionLogo, ring: "outer", description: "Documentation and knowledge", status: "Partner", rooms: ["intelligence"] },
+  { id: "linear", name: "Linear", Logo: LinearLogo, ring: "outer", description: "Task and project tracking", status: "Partner", rooms: ["intelligence"] },
   { id: "github", name: "GitHub", Logo: GitHubLogo, ring: "outer", description: "Code management", status: "Partner", rooms: [] },
   { id: "hunter", name: "Hunter.io", Logo: HunterLogo, ring: "outer", description: "Email discovery", status: "Partner", rooms: ["growth"] },
-  { id: "cal", name: "Cal.com", Logo: CalLogo, ring: "outer", description: "Meeting scheduling", status: "Partner", rooms: ["recruiting"] },
-  { id: "canva", name: "Canva", Logo: CanvaLogo, ring: "outer", description: "Design handoff", status: "Partner", rooms: ["creative"] },
-  { id: "gamma", name: "Gamma", Logo: GammaLogo, ring: "outer", description: "Presentation handoff", status: "Partner", rooms: ["creative"] },
+  { id: "cal", name: "Cal.com", Logo: CalLogo, ring: "outer", description: "Meeting scheduling", status: "Partner", rooms: ["talent"] },
+  { id: "canva", name: "Canva", Logo: CanvaLogo, ring: "outer", description: "Design handoff", status: "Partner", rooms: ["content"] },
+  { id: "gamma", name: "Gamma", Logo: GammaLogo, ring: "outer", description: "Presentation handoff", status: "Partner", rooms: ["content"] },
 ];
 
-const TABS = ["all", "growth", "recruiting", "creative", "strategy"] as const;
-const TAB_LABELS: Record<string, string> = { all: "All Tools", growth: "Growth Room", recruiting: "Recruiting Room", creative: "Creative Room", strategy: "Strategy Room" };
+const TABS = ["all", "talent", "growth", "content", "intelligence"] as const;
+const TAB_LABELS: Record<string, string> = { all: "All Tools", talent: "Talent", growth: "Growth", content: "Content", intelligence: "Intelligence" };
 
 const innerPositions = (cx: number, cy: number, r: number) =>
   Array.from({ length: 8 }, (_, i) => {
@@ -123,7 +123,7 @@ const EcosystemSection = () => {
             Every AI tool your business needs.<br />All plugged into one brain.
           </h2>
           <p className="text-white/40 text-lg max-w-[600px] mx-auto leading-relaxed">
-            Pilot connects the world's best AI tools and makes them work together as a single coordinated team. Each tool knows what the others are doing. No switching. No re-explaining. No data lost between tabs.
+            ScreeningPilot connects the world's best AI tools and makes them work together as a single coordinated team. Each tool knows what the others are doing. No switching. No re-explaining. No data lost between tabs.
           </p>
         </div>
 
@@ -290,7 +290,7 @@ const EcosystemSection = () => {
           ))}
         </div>
         {activeTab !== "all" && (
-          <p className="text-center text-xs text-white/30 mb-8">{activeCount} tools powering this room</p>
+          <p className="text-center text-xs text-white/30 mb-8">{activeCount} tools powering this department</p>
         )}
 
         {/* Stats */}
@@ -298,7 +298,7 @@ const EcosystemSection = () => {
           {[
             { num: `${stat1}+`, label: "AI tools connected", sub: "And growing every month" },
             { num: "1", label: "Company Brain", sub: "Shared across every tool" },
-            { num: `${stat3}`, label: "Tabs to switch between", sub: "Everything runs from Pilot" },
+            { num: `${stat3}`, label: "Tabs to switch between", sub: "Everything runs from ScreeningPilot" },
           ].map(s => (
             <div key={s.label} className="text-center">
               <div className="font-display font-black text-4xl text-white tabular-nums">{s.num}</div>
@@ -310,7 +310,7 @@ const EcosystemSection = () => {
 
         {/* Closing */}
         <p className="text-center font-display font-bold text-xl md:text-2xl text-white/80 max-w-[560px] mx-auto leading-relaxed">
-          You bring the vision.<br />Pilot brings the tools.<br />Together you build something unstoppable.
+          You bring the vision.<br />ScreeningPilot brings the team.<br />Together you build something unstoppable.
         </p>
       </div>
     </section>

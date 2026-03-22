@@ -6,65 +6,141 @@ import { Check, ArrowRight } from 'lucide-react';
 
 gsap.registerPlugin(ScrollTrigger);
 
-const features = [
-    'Unlimited screening campaigns',
-    'AI candidate scoring (12+ criteria)',
-    'Auto-reject 95% of bad fits',
-    'Interview blueprint generation',
-    'Expert interviewer marketplace',
-    'Full pipeline dashboard',
-    'Team collaboration',
-    'Priority support'
+const plans = [
+  {
+    name: 'Founder',
+    monthlyPrice: 79,
+    annualPrice: 63,
+    desc: 'For solo founders getting started',
+    features: [
+      'Talent Department (Scout + Aria + Lens)',
+      'Intelligence Department (Hawk + Signal + Brief)',
+      'Company Brain — full context storage',
+      '500 Firecrawl credits/month',
+      '50 AI screening interviews/month',
+      '1 custom agent',
+      'Email support',
+    ],
+    cta: 'Start free trial',
+    popular: false,
+  },
+  {
+    name: 'Startup',
+    monthlyPrice: 149,
+    annualPrice: 119,
+    desc: 'For founders running a full business',
+    features: [
+      'All 5 pre-built departments',
+      '15 AI agents fully active',
+      'Company Brain unlimited',
+      '2,000 Firecrawl credits/month',
+      'Unlimited AI screening',
+      'Unlimited custom agents',
+      'Cross-department intelligence sharing',
+      'Weekly AI performance brief',
+      'Priority support',
+    ],
+    cta: 'Build your workforce',
+    popular: true,
+  },
+  {
+    name: 'Business',
+    monthlyPrice: 349,
+    annualPrice: 279,
+    desc: 'For teams replacing or augmenting headcount',
+    features: [
+      'Everything in Startup plus:',
+      'Multiple company workspaces',
+      'White label for client delivery',
+      'Full API access',
+      'Custom agent publishing',
+      'Dedicated onboarding session',
+      'Slack support channel',
+      'SLA guarantees',
+    ],
+    cta: 'Talk to us',
+    popular: false,
+  },
 ];
 
 const PricingCard = () => {
-    const navigate = useNavigate();
-    const sectionRef = useRef<HTMLDivElement>(null);
-    const cardRef = useRef<HTMLDivElement>(null);
-    const [price, setPrice] = useState(0);
+  const navigate = useNavigate();
+  const sectionRef = useRef<HTMLDivElement>(null);
+  const cardRef = useRef<HTMLDivElement>(null);
+  const [isAnnual, setIsAnnual] = useState(false);
 
-    useEffect(() => {
-        const ctx = gsap.context(() => {
-            gsap.fromTo(cardRef.current, { opacity: 0, y: 40, scale: 0.95 }, {
-                opacity: 1, y: 0, scale: 1, duration: 0.8, ease: 'back.out(1.4)',
-                scrollTrigger: { trigger: sectionRef.current, start: 'top 65%', toggleActions: 'play none none none' },
-            });
-            ScrollTrigger.create({
-                trigger: sectionRef.current, start: 'top 60%',
-                onEnter: () => { gsap.to({ val: 0 }, { val: 149, duration: 1.5, ease: 'power3.out', onUpdate: function () { setPrice(Math.round(this.targets()[0].val)); } }); },
-            });
-        }, sectionRef);
-        return () => ctx.revert();
-    }, []);
+  useEffect(() => {
+    const ctx = gsap.context(() => {
+      gsap.fromTo(cardRef.current, { opacity: 0, y: 40, scale: 0.95 }, {
+        opacity: 1, y: 0, scale: 1, duration: 0.8, ease: 'back.out(1.4)',
+        scrollTrigger: { trigger: sectionRef.current, start: 'top 65%', toggleActions: 'play none none none' },
+      });
+    }, sectionRef);
+    return () => ctx.revert();
+  }, []);
 
-    return (
-        <section ref={sectionRef} id="pricing" className="relative px-4 py-28 md:py-36">
-            <div className="text-center mb-14">
-                <p className="font-mono text-xs uppercase tracking-[0.15em] mb-4 text-emerald-400 font-semibold">◆ Pricing</p>
-                <h2 className="font-display font-black text-[clamp(1.5rem,3.5vw,3rem)] leading-[1.1] tracking-[-0.03em] text-white">LESS THAN YOUR AGENCY'S LUNCH BUDGET</h2>
-            </div>
-            <div ref={cardRef} className="max-w-md mx-auto opacity-0">
-                <div className="glass-strong rounded-3xl p-8 text-center glow-green">
-                    <p className="font-mono text-6xl font-black text-emerald-400 tabular-nums mb-1">€{price}</p>
-                    <p className="text-sm text-white/30 mb-8">per month · no per-hire fees · cancel anytime</p>
-                    <div className="space-y-3 mb-8 text-left">
-                        {features.map((f, i) => (
-                            <div key={i} className="flex items-center gap-3">
-                                <div className="w-5 h-5 rounded-full bg-emerald-500/15 flex items-center justify-center border border-emerald-500/20">
-                                    <Check className="w-3 h-3 text-emerald-400" />
-                                </div>
-                                <span className="text-sm text-white/50">{f}</span>
-                            </div>
-                        ))}
+  return (
+    <section ref={sectionRef} id="pricing" className="relative px-4 py-28 md:py-36">
+      <div className="text-center mb-10">
+        <p className="font-mono text-xs uppercase tracking-[0.15em] mb-4 text-emerald-400 font-semibold">◆ PRICING</p>
+        <h2 className="font-display font-black text-[clamp(1.5rem,3.5vw,3rem)] leading-[1.1] tracking-[-0.03em] text-white">
+          Less than one month of one human employee.<br />For your entire AI workforce.
+        </h2>
+      </div>
+
+      {/* Billing toggle */}
+      <div className="flex items-center justify-center gap-3 mb-12">
+        <span className={`text-sm font-medium ${!isAnnual ? 'text-white' : 'text-white/40'}`}>Monthly</span>
+        <button onClick={() => setIsAnnual(!isAnnual)} className={`relative w-12 h-6 rounded-full transition-colors ${isAnnual ? 'bg-emerald-600' : 'bg-white/10'}`}>
+          <div className={`absolute top-1 w-4 h-4 rounded-full bg-white transition-transform ${isAnnual ? 'translate-x-7' : 'translate-x-1'}`} />
+        </button>
+        <span className={`text-sm font-medium ${isAnnual ? 'text-white' : 'text-white/40'}`}>Annual <span className="text-emerald-400 text-xs">2 months free</span></span>
+      </div>
+
+      <div ref={cardRef} className="max-w-5xl mx-auto opacity-0">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          {plans.map((plan) => (
+            <div key={plan.name} className={`glass-strong rounded-3xl p-6 md:p-8 relative ${plan.popular ? 'border-2 border-emerald-500/40 glow-green' : ''}`}>
+              {plan.popular && (
+                <span className="absolute -top-3 left-1/2 -translate-x-1/2 text-[10px] font-bold uppercase tracking-wider bg-emerald-600 text-white px-3 py-1 rounded-full">⭐ Popular</span>
+              )}
+              <h3 className="font-display font-bold text-lg text-white mb-1">{plan.name}</h3>
+              <p className="text-xs text-white/40 mb-4">{plan.desc}</p>
+              <p className="font-mono text-4xl font-black text-emerald-400 tabular-nums mb-1">
+                €{isAnnual ? plan.annualPrice : plan.monthlyPrice}
+                <span className="text-sm text-white/30 font-normal">/mo</span>
+              </p>
+              {isAnnual && <p className="text-[10px] text-white/30 mb-6">billed annually</p>}
+              {!isAnnual && <div className="mb-6" />}
+
+              <div className="space-y-2.5 mb-6">
+                {plan.features.map((f, i) => (
+                  <div key={i} className="flex items-start gap-2">
+                    <div className="w-4 h-4 rounded-full bg-emerald-500/15 flex items-center justify-center border border-emerald-500/20 shrink-0 mt-0.5">
+                      <Check className="w-2.5 h-2.5 text-emerald-400" />
                     </div>
-                    <button onClick={() => navigate('/get-demo')} className="conic-border group w-full inline-flex items-center justify-center gap-2 bg-emerald-600 hover:bg-emerald-500 text-white font-semibold py-4 rounded-xl transition-all duration-300 hover:shadow-[0_8px_32px_rgba(5,150,105,0.4)]">
-                        Fire Your Agency Today <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
-                    </button>
-                    <p className="text-xs text-white/20 mt-4">Your agency charges €24,000 per hire. We charge €149/month. You do the math.</p>
-                </div>
+                    <span className="text-xs text-white/50">{f}</span>
+                  </div>
+                ))}
+              </div>
+
+              <button onClick={() => navigate('/auth')} className={`w-full inline-flex items-center justify-center gap-2 font-semibold py-3 rounded-xl transition-all duration-300 text-sm ${
+                plan.popular
+                  ? 'bg-emerald-600 hover:bg-emerald-500 text-white hover:shadow-[0_8px_32px_rgba(5,150,105,0.4)]'
+                  : 'bg-white/[0.04] border border-white/[0.08] text-white/60 hover:text-white hover:bg-white/[0.08]'
+              }`}>
+                {plan.cta} <ArrowRight className="w-4 h-4" />
+              </button>
             </div>
-        </section>
-    );
+          ))}
+        </div>
+
+        <p className="text-center text-xs text-white/20 mt-8">
+          14-day free trial · No credit card required · If your AI workforce does not save you 10 hours in the first month we refund everything. No questions.
+        </p>
+      </div>
+    </section>
+  );
 };
 
 export default PricingCard;
