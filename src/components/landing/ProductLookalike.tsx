@@ -69,7 +69,7 @@ const ProductLookalike = () => {
   }, []);
 
   return (
-    <section ref={sectionRef} id="departments" className="relative w-full h-screen overflow-hidden font-display" style={{ background: '#000000' }}>
+    <section ref={sectionRef} id="departments" className="relative w-full h-screen overflow-hidden font-display">
       <div className="absolute inset-0 pointer-events-none" style={{
         backgroundImage: `linear-gradient(rgba(34,197,94,0.07) 1px, transparent 1px), linear-gradient(90deg, rgba(34,197,94,0.07) 1px, transparent 1px)`,
         backgroundSize: '100px 100px',

@@ -44,7 +44,7 @@ const PricingCard = () => {
   }, []);
 
   return (
-    <section ref={sectionRef} id="pricing" className="relative px-4 py-28 md:py-36" style={{ background: "#080C10", borderBottom: "1px solid rgba(255,255,255,0.05)" }}>
+    <section ref={sectionRef} id="pricing" className="relative px-4 py-28 md:py-36" style={{ borderBottom: "1px solid rgba(255,255,255,0.05)" }}>
       <div className="text-center mb-10">
         <p className="font-mono text-xs uppercase tracking-[0.15em] mb-4 text-emerald-400 font-semibold">◆ PRICING</p>
         <h2 className="font-display font-black text-[clamp(1.5rem,3.5vw,3rem)] leading-[1.1] tracking-[-0.03em] text-white">

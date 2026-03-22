@@ -33,7 +33,7 @@ export const TransformationSection = () => {
   }, []);
 
   return (
-    <section ref={sectionRef} className="relative w-full px-4 py-28 md:py-36 z-10" style={{ background: "#080C10", borderBottom: "1px solid rgba(255,255,255,0.05)" }}>
+    <section ref={sectionRef} className="relative w-full px-4 py-28 md:py-36 z-10" style={{ borderBottom: "1px solid rgba(255,255,255,0.05)" }}>
       <div className="max-w-5xl mx-auto">
         <motion.div initial={{ opacity: 0, y: 20 }} whileInView={{ opacity: 1, y: 0 }}
           viewport={{ once: true, amount: 0.1 }} transition={{ duration: 0.6 }}

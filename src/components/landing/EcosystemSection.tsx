@@ -127,7 +127,7 @@ const EcosystemSection = () => {
   }, [activeTab]);
 
   return (
-    <section ref={sectionRef} id="ecosystem" className="relative z-10 py-24 md:py-32" style={{ background: "#0C1116", borderBottom: "1px solid rgba(255,255,255,0.05)" }}>
+    <section ref={sectionRef} id="ecosystem" className="relative z-10 py-24 md:py-32" style={{ borderBottom: "1px solid rgba(255,255,255,0.05)" }}>
       <style>{`
         @keyframes orbit1 { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
         @keyframes orbit2 { from { transform: rotate(360deg); } to { transform: rotate(0deg); } }
