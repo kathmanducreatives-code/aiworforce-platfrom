@@ -1,7 +1,13 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
-import { Menu, X } from "lucide-react";
+import { Menu, X, Globe } from "lucide-react";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
 const Header = () => {
   const navigate = useNavigate();
@@ -17,9 +23,10 @@ const Header = () => {
 
   const navItems = [
     { label: 'Features', href: '#features' },
+    { label: 'Ecosystem', href: '#ecosystem' },
     { label: 'How It Works', href: '#hero-to-expert-sequence' },
-    { label: 'Expert Marketplace', href: '#hero-to-expert-sequence' },
     { label: 'Pricing', href: '#pricing' },
+    { label: 'Global', href: '#global' },
     { label: 'Get a Demo', href: '/get-demo' },
   ];
 
@@ -61,6 +68,18 @@ const Header = () => {
               </button>
             </>
           )}
+          {/* Language selector */}
+          <DropdownMenu>
+            <DropdownMenuTrigger className="flex items-center gap-1 text-xs text-white/40 hover:text-white/60 transition-colors px-2 py-1 rounded-md border border-white/[0.06]">
+              <Globe className="w-3.5 h-3.5" /> EN
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="bg-[#0d1117] border-white/[0.08]">
+              <DropdownMenuItem className="text-white text-xs font-medium">English</DropdownMenuItem>
+              <DropdownMenuItem disabled className="text-white/20 text-xs">हिंदी — coming soon</DropdownMenuItem>
+              <DropdownMenuItem disabled className="text-white/20 text-xs">Deutsch — coming soon</DropdownMenuItem>
+              <DropdownMenuItem disabled className="text-white/20 text-xs">Português — coming soon</DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
 
         {/* Mobile */}

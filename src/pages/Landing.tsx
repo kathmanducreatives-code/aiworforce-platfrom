@@ -22,6 +22,10 @@ import MarqueeBanner from "@/components/landing/MarqueeBanner";
 import FinalCTA from "@/components/landing/FinalCTA";
 import { ExpertJourney } from "@/components/landing/ExpertJourney";
 import MeetTheTeamSection from "@/components/landing/MeetTheTeamSection";
+import GlobalTrustBar from "@/components/landing/GlobalTrustBar";
+import EcosystemSection from "@/components/landing/EcosystemSection";
+import TeamsAtWorkSection from "@/components/landing/TeamsAtWorkSection";
+import GlobalSection from "@/components/landing/GlobalSection";
 
 gsap.registerPlugin(ScrollTrigger);
 ScrollTrigger.config({ limitCallbacks: true });
@@ -49,6 +53,8 @@ const Landing = () => {
       <main ref={mainRef} className="relative z-10 w-full">
         {/* 2. Hero */}
         <HeroHook />
+        {/* Global Trust Bar */}
+        <GlobalTrustBar />
         {/* 3. The Transformation (pinned scrub) */}
         <TransformationSection />
 
@@ -63,6 +69,12 @@ const Landing = () => {
         {/* Meet The Team — AI office narrative */}
         <MeetTheTeamSection />
 
+        {/* AI Tools Ecosystem */}
+        <EcosystemSection />
+
+        {/* Teams At Work */}
+        <TeamsAtWorkSection />
+
         {/* 8. Time Math — Comparison Table */}
         <TimeMath />
         {/* 8. Full Feature Set */}
@@ -73,6 +85,10 @@ const Landing = () => {
         <PricingCard />
         {/* 11. FAQ */}
         <FAQSection />
+
+        {/* Global */}
+        <GlobalSection />
+
         {/* 12. Marquee Banner */}
         <MarqueeBanner />
         {/* 13. Final CTA */}
