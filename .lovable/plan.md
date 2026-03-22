@@ -1,63 +1,87 @@
 
 
-# Plan: "Meet The Team" Landing Page Section
+# Plan: AI Tools Ecosystem + Global Brand Sections
 
-## Placement
+## Overview
 
-There is no "Company Brain" or "How It Works" section currently rendered in `Landing.tsx`. The logical placement is **after ExpertJourney and before TimeMath** — this transitions from product features into the emotional team narrative before the comparison/pricing flow.
+Add 5 new files and modify 2 existing files (Landing.tsx for section placement, Header.tsx for nav updates). All additions only — no existing sections modified.
 
-## Files Changed
+## New Files
 
-| File | Change |
-|------|--------|
-| `src/components/landing/MeetTheTeamSection.tsx` | **NEW** — Full section component (~600 lines) |
-| `src/pages/Landing.tsx` | Add import + render between ExpertJourney and TimeMath (2 lines changed) |
+### 1. `src/components/landing/ToolLogos.tsx`
+- 16 exported SVG logo components (ClaudeLogo, GeminiLogo, etc.)
+- Each: `viewBox="0 0 32 32"`, accepts `className` prop
+- Simple geometric approximations (letterforms, shapes) — no complex paths
+- Under 20 SVG elements each
 
-## Component Architecture
+### 2. `src/components/landing/GlobalTrustBar.tsx`
+- Placed after HeroHook, before TransformationSection
+- Left: animated counter "Founders from N countries" with Globe icon, N cycling 47-52
+- Center: auto-scrolling emoji flag strip using `ticker-track` CSS class (already exists for MarqueeBanner)
+- Right: 3 compliance badges (SOC2, GDPR, Encrypted)
+- Mobile: hide counter, flags full-width, badges below
 
-**MeetTheTeamSection.tsx** — Single self-contained component with 5 parts:
+### 3. `src/components/landing/EcosystemSection.tsx`
+- Placed after MeetTheTeamSection, before TimeMath
+- Power grid visual: center "Pilot" node + 2 concentric rings of tool logos (inner 8 bright, outer 8 muted)
+- SVG connection lines from each tool to center
+- Animation via IntersectionObserver + Framer Motion: center appears → inner ring staggers in with line draws → outer ring follows → permanent pulsing dots on lines
+- Hover tooltips per tool (name + description + Connected/Partner badge)
+- Tab filter row: All / Growth / Recruiting / Creative / Strategy — dims non-matching tools
+- 3 stat blocks below (16+, 1, 0) with counter animation
+- Closing quote text
+- Mobile: only inner ring shown, outer ring hidden
 
-### Part 1: Headline Block
-- Eyebrow "MEET THE TEAM" in `font-mono text-xs uppercase tracking-[0.15em] text-emerald-400` (matches SocialProof pattern)
-- Display headline + muted subheadline, max-w-[600px] centered
+### 4. `src/components/landing/TeamsAtWorkSection.tsx`
+- Placed after EcosystemSection, before TimeMath
+- 5 department cards in 2-col grid (desktop), 1-col (mobile)
+- Each card: dept icon + name, ACTIVE badge (pulsing green), tool logo row, auto-cycling activity feed (3 items, rotates every 3s via setInterval + Framer AnimatePresence)
+- Card 5 (Engineering) has "Coming Soon" badge + muted styling
+- "View Room" buttons link to `/auth?room=growth` etc.
+- Card 5 has "Join waitlist" button
 
-### Part 2: Office Floor Plan (Desktop) / Agent Cards (Mobile)
-- **Desktop (md+):** A relative-positioned container (700×450px) with dark bg, subtle grid overlay, 5 absolutely-positioned desks in pentagon formation
-- Each desk: rounded rect with SVG monitor icon, agent name label, 40px avatar circle with lucide icon (TrendingUp, Users, Pen, BarChart2, User) and pulsing green ring
-- Center desk (You/Founder) slightly larger with accent border
-- **Mobile (<md):** Vertical stack of 5 simple agent cards with dotted connecting line
+### 5. `src/components/landing/GlobalSection.tsx`
+- Placed before FinalCTA (second to last content section)
+- 3-column layout (Globe, Languages, Shield icons)
+- Inline SVG world map outline (simplified continental shapes)
+- 8-10 pulsing dots at startup hub coordinates
+- Faint connecting lines between dots
+- Mobile: 1-col, map simplified, 5 dots only
 
-### Part 3: Animation Sequence (Framer Motion + CSS)
-- IntersectionObserver triggers once on viewport entry
-- Phase 1 (0-1s): Office fades in, empty desks visible, Founder desk already lit
-- Phase 2 (1-5s): 4 agents slide in from edges to desks (staggered 0.8s), speech bubbles appear/fade (1.2s each)
-- Phase 3 (5-7s): "Welcome to Pilot HQ" notification center-fades
-- Phase 4 (7-10s): 8 SVG connection lines draw via strokeDashoffset (0.3s stagger), small dots pulse along lines via CSS animation
-- Phase 5 (10s+): Final state persists — all connections visible, green rings pulsing, closing label fades in
+## Modified Files
 
-### Part 4: Collaboration Feed
-- Horizontal auto-scrolling ticker (CSS `@keyframes`, same pattern as MarqueeBanner's `ticker-track`)
-- 10 pill cards showing agent→agent actions, duplicated in DOM for seamless loop
-- Each pill: dark bg, border, agent icons with ArrowRight between, muted action text
+### `src/pages/Landing.tsx`
+Add imports and render in order:
+```
+HeroHook
+GlobalTrustBar          ← NEW
+TransformationSection
+ProductDashboard / Lookalike / Screening
+ExpertJourney
+MeetTheTeamSection
+EcosystemSection        ← NEW
+TeamsAtWorkSection      ← NEW
+TimeMath
+FeatureSet
+SocialProof
+PricingCard
+FAQSection
+GlobalSection           ← NEW
+MarqueeBanner
+FinalCTA
+```
 
-### Part 5: Three Truths
-- 3-column grid (md+), single column mobile
-- Each: lucide icon (Brain, ArrowLeftRight, UserCheck) + title + body text
-- No card borders — clean minimal layout
+### `src/components/Header.tsx`
+- Add "Ecosystem" and "Global" nav items pointing to `#ecosystem` and `#global` anchors
+- Add language selector dropdown (shadcn DropdownMenu) far right: EN active, Hindi/Deutsch/Português greyed "coming soon"
 
-### Part 6: Closing CTA
-- Italic quote text centered, muted body below
-- Primary emerald button "Meet your AI team →" linking to `/auth` (same button style as FinalCTA)
-
-## Design Tokens Used (all existing)
-- Colors: `text-emerald-400`, `bg-emerald-600`, `text-white`, `text-white/40`, `border-white/[0.04]`
-- Fonts: `font-display font-black`, `font-mono text-xs uppercase tracking-[0.15em]`
-- Backgrounds: `#02060a` / `#04060d` range (matches FeatureSet/ExpertJourney)
-- Button: `conic-border` class + emerald hover glow (from FinalCTA)
-
-## No New Dependencies
-- Framer Motion (already installed) for entrance animations
-- Lucide React for icons
-- CSS @keyframes for feed scroll + line pulses + dot animations
-- Vanilla IntersectionObserver for trigger
+## Technical Notes
+- All animations: IntersectionObserver, fire once
+- Activity feed cycling: setInterval + Framer AnimatePresence for slide transitions
+- Flag scroll: reuse existing `ticker-track` CSS keyframes
+- Tool logo hover tooltips: absolute-positioned div, Framer opacity transition
+- World map: hand-drawn simplified SVG paths for continents (~50 path commands total)
+- Stats counters: requestAnimationFrame-based countUp on intersection
+- Zero new dependencies, zero new design tokens
+- Patterns match existing: `font-mono text-xs uppercase tracking-[0.15em] text-emerald-400` eyebrows, `font-display font-black` headlines, `conic-border` buttons
 
