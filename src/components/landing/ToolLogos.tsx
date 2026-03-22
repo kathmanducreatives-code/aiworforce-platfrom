@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState } from "react";
 
 interface LogoProps {
   className?: string;
@@ -6,6 +6,56 @@ interface LogoProps {
   height?: number;
 }
 
+// Brand colors and metadata exported for reuse
+export const TOOL_BRANDS: Record<string, { bg: string; color: string; label: string; sublabel: string; logo: string }> = {
+  claude:      { bg: "#CC785C", color: "#fff", label: "Claude",      sublabel: "Reasoning & Writing",   logo: "https://cdn.worldvectorlogo.com/logos/claude-ai-icon.svg" },
+  gemini:      { bg: "#4285F4", color: "#fff", label: "Gemini",      sublabel: "Screening & Analysis",  logo: "https://www.gstatic.com/lamda/images/gemini_sparkle_v002_d4735304ff6292a690345.svg" },
+  gpt4:        { bg: "#10A37F", color: "#fff", label: "GPT-4",       sublabel: "Specialized Tasks",     logo: "https://cdn.worldvectorlogo.com/logos/openai-2.svg" },
+  perplexity:  { bg: "#20808D", color: "#fff", label: "Perplexity",  sublabel: "Real-time Research",    logo: "https://cdn.worldvectorlogo.com/logos/perplexity-ai-icon.svg" },
+  firecrawl:   { bg: "#FF4500", color: "#fff", label: "Firecrawl",   sublabel: "Web Intelligence",      logo: "https://avatars.githubusercontent.com/u/158057725?s=200&v=4" },
+  apify:       { bg: "#97D700", color: "#fff", label: "Apify",       sublabel: "LinkedIn Scraping",     logo: "https://avatars.githubusercontent.com/u/38267582?s=200&v=4" },
+  hunter:      { bg: "#F5A623", color: "#fff", label: "Hunter.io",   sublabel: "Email Discovery",       logo: "https://cdn.worldvectorlogo.com/logos/hunter-logo-1.svg" },
+  instantly:   { bg: "#6366F1", color: "#fff", label: "Instantly",    sublabel: "Email Sequences",       logo: "https://images.g2crowd.com/uploads/product/image/social_landscape/social_landscape_2070aafd4809f4e0e27b3c83d5b89673/instantly-ai.png" },
+  elevenlabs:  { bg: "#1A1A2E", color: "#fff", label: "ElevenLabs",  sublabel: "Voice Generation",      logo: "https://avatars.githubusercontent.com/u/94662520?s=200&v=4" },
+  replicate:   { bg: "#393939", color: "#fff", label: "Replicate",   sublabel: "Image Generation",      logo: "https://avatars.githubusercontent.com/u/60199344?s=200&v=4" },
+  notion:      { bg: "#FFFFFF", color: "#000", label: "Notion",      sublabel: "Documentation",         logo: "https://cdn.worldvectorlogo.com/logos/notion-2.svg" },
+  linear:      { bg: "#5E6AD2", color: "#fff", label: "Linear",      sublabel: "Task Management",       logo: "https://cdn.worldvectorlogo.com/logos/linear-2.svg" },
+  github:      { bg: "#24292E", color: "#fff", label: "GitHub",      sublabel: "Code Management",       logo: "https://cdn.worldvectorlogo.com/logos/github-icon-1.svg" },
+  cal:         { bg: "#111827", color: "#fff", label: "Cal.com",      sublabel: "Scheduling",           logo: "https://avatars.githubusercontent.com/u/79145102?s=200&v=4" },
+  canva:       { bg: "#00C4CC", color: "#fff", label: "Canva",       sublabel: "Design Handoff",        logo: "https://cdn.worldvectorlogo.com/logos/canva-1.svg" },
+  gamma:       { bg: "#6C47FF", color: "#fff", label: "Gamma",       sublabel: "Presentations",         logo: "https://assets-global.website-files.com/627ad4d9ef927a5344f7220f/6489dae9c91c6e4b96b9ce0c_gamma-logo-mark.svg" },
+};
+
+// Reusable ToolLogoImage component with fallback
+export const ToolLogoImage: React.FC<{ toolId: string; size?: number; className?: string }> = ({ toolId, size = 32, className = "" }) => {
+  const [failed, setFailed] = useState(false);
+  const brand = TOOL_BRANDS[toolId];
+  if (!brand) return null;
+
+  if (failed) {
+    return (
+      <div className={`flex items-center justify-center font-bold ${className}`}
+        style={{ width: size, height: size, color: brand.color, fontSize: size * 0.4 }}>
+        {brand.label.charAt(0)}
+      </div>
+    );
+  }
+
+  return (
+    <img
+      src={brand.logo}
+      alt={brand.label}
+      width={size}
+      height={size}
+      loading="lazy"
+      className={`object-contain ${className}`}
+      style={{ width: size, height: size }}
+      onError={() => setFailed(true)}
+    />
+  );
+};
+
+// Legacy SVG components kept for backward compatibility
 const svgBase = (props: LogoProps) => ({
   viewBox: "0 0 32 32",
   width: props.width || 32,
@@ -14,26 +64,6 @@ const svgBase = (props: LogoProps) => ({
   fill: "none",
   xmlns: "http://www.w3.org/2000/svg",
 });
-
-// Brand colors exported for reuse in both Ecosystem and War Room sections
-export const TOOL_BRANDS: Record<string, { bg: string; color: string; label: string; sublabel: string }> = {
-  claude:      { bg: "#CC785C", color: "#fff", label: "Claude",      sublabel: "Reasoning & Writing" },
-  gemini:      { bg: "#4285F4", color: "#fff", label: "Gemini",      sublabel: "Screening & Analysis" },
-  gpt4:        { bg: "#10A37F", color: "#fff", label: "GPT-4",       sublabel: "Specialized Tasks" },
-  perplexity:  { bg: "#20808D", color: "#fff", label: "Perplexity",  sublabel: "Real-time Research" },
-  firecrawl:   { bg: "#FF4500", color: "#fff", label: "Firecrawl",   sublabel: "Web Intelligence" },
-  apify:       { bg: "#97D700", color: "#fff", label: "Apify",       sublabel: "LinkedIn Scraping" },
-  hunter:      { bg: "#F5A623", color: "#fff", label: "Hunter.io",   sublabel: "Email Discovery" },
-  instantly:   { bg: "#6366F1", color: "#fff", label: "Instantly",    sublabel: "Email Sequences" },
-  elevenlabs:  { bg: "#1A1A2E", color: "#fff", label: "ElevenLabs",  sublabel: "Voice Generation" },
-  replicate:   { bg: "#393939", color: "#fff", label: "Replicate",   sublabel: "Image Generation" },
-  notion:      { bg: "#FFFFFF", color: "#000", label: "Notion",      sublabel: "Documentation" },
-  linear:      { bg: "#5E6AD2", color: "#fff", label: "Linear",      sublabel: "Task Management" },
-  github:      { bg: "#24292E", color: "#fff", label: "GitHub",      sublabel: "Code Management" },
-  cal:         { bg: "#111827", color: "#fff", label: "Cal.com",      sublabel: "Scheduling" },
-  canva:       { bg: "#00C4CC", color: "#fff", label: "Canva",       sublabel: "Design Handoff" },
-  gamma:       { bg: "#6C47FF", color: "#fff", label: "Gamma",       sublabel: "Presentations" },
-};
 
 export const ClaudeLogo: React.FC<LogoProps> = (props) => (
   <svg {...svgBase(props)}>
