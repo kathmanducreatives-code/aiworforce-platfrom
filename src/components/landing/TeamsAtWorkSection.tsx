@@ -2,13 +2,13 @@ import { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Check, Loader, ArrowRight } from "lucide-react";
 import { useNavigate } from "react-router-dom";
-import { ClaudeLogo, FirecrawlLogo, InstantlyLogo, ApifyLogo, GeminiLogo, ReplicateLogo, ElevenLabsLogo, PerplexityLogo, NotionLogo, LinearLogo, GitHubLogo } from "./ToolLogos";
+import { ToolLogoImage } from "./ToolLogos";
 
 interface DeptCard {
   emoji: string;
   name: string;
   room: string;
-  tools: { Logo: React.FC<{ width?: number; height?: number }>; name: string }[];
+  tools: { id: string; name: string }[];
   activities: { done: boolean; text: string }[];
   comingSoon?: boolean;
 }
@@ -17,8 +17,8 @@ const DEPARTMENTS: DeptCard[] = [
   {
     emoji: "🎯", name: "Talent Department", room: "talent",
     tools: [
-      { Logo: ClaudeLogo, name: "Claude" }, { Logo: GeminiLogo, name: "Gemini" },
-      { Logo: ApifyLogo, name: "Apify" }, { Logo: FirecrawlLogo, name: "Firecrawl" },
+      { id: "claude", name: "Claude" }, { id: "gemini", name: "Gemini" },
+      { id: "apify", name: "Apify" }, { id: "firecrawl", name: "Firecrawl" },
     ],
     activities: [
       { done: true, text: "Scout found 34 candidates matching ICP" },
@@ -32,8 +32,8 @@ const DEPARTMENTS: DeptCard[] = [
   {
     emoji: "📣", name: "Growth Department", room: "growth",
     tools: [
-      { Logo: ClaudeLogo, name: "Claude" }, { Logo: FirecrawlLogo, name: "Firecrawl" },
-      { Logo: InstantlyLogo, name: "Instantly" }, { Logo: ApifyLogo, name: "Apify" },
+      { id: "claude", name: "Claude" }, { id: "firecrawl", name: "Firecrawl" },
+      { id: "instantly", name: "Instantly" }, { id: "apify", name: "Apify" },
     ],
     activities: [
       { done: true, text: "Radar found Acme Corp — Series A trigger" },
@@ -47,8 +47,8 @@ const DEPARTMENTS: DeptCard[] = [
   {
     emoji: "🎨", name: "Content Department", room: "content",
     tools: [
-      { Logo: ClaudeLogo, name: "Claude" }, { Logo: ReplicateLogo, name: "Replicate" },
-      { Logo: ElevenLabsLogo, name: "ElevenLabs" },
+      { id: "claude", name: "Claude" }, { id: "replicate", name: "Replicate" },
+      { id: "elevenlabs", name: "ElevenLabs" },
     ],
     activities: [
       { done: true, text: "Quill wrote LinkedIn post in your brand voice" },
@@ -62,8 +62,8 @@ const DEPARTMENTS: DeptCard[] = [
   {
     emoji: "🔍", name: "Intelligence Department", room: "intelligence",
     tools: [
-      { Logo: FirecrawlLogo, name: "Firecrawl" }, { Logo: PerplexityLogo, name: "Perplexity" },
-      { Logo: ClaudeLogo, name: "Claude" }, { Logo: NotionLogo, name: "Notion" },
+      { id: "firecrawl", name: "Firecrawl" }, { id: "perplexity", name: "Perplexity" },
+      { id: "claude", name: "Claude" }, { id: "notion", name: "Notion" },
     ],
     activities: [
       { done: true, text: "Hawk detected competitor pricing change" },
@@ -77,8 +77,8 @@ const DEPARTMENTS: DeptCard[] = [
   {
     emoji: "⚙️", name: "Engineering Department", room: "engineering", comingSoon: true,
     tools: [
-      { Logo: ClaudeLogo, name: "Claude" }, { Logo: GitHubLogo, name: "GitHub" },
-      { Logo: LinearLogo, name: "Linear" },
+      { id: "claude", name: "Claude" }, { id: "github", name: "GitHub" },
+      { id: "linear", name: "Linear" },
     ],
     activities: [
       { done: false, text: "Code generation from plain English" },
@@ -168,7 +168,7 @@ const TeamsAtWorkSection = () => {
                 <span className="text-[10px] text-white/20 uppercase tracking-wider mr-1">Tools:</span>
                 {dept.tools.slice(0, 3).map(t => (
                   <div key={t.name} className="w-6 h-6 rounded-full bg-white/[0.04] border border-white/[0.06] flex items-center justify-center" title={t.name}>
-                    <t.Logo width={16} height={16} />
+                    <ToolLogoImage toolId={t.id} size={16} />
                   </div>
                 ))}
                 {dept.tools.length > 3 && <span className="text-[10px] text-white/30 ml-1">+{dept.tools.length - 3} more</span>}
