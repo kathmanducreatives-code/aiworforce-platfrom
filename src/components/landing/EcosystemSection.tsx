@@ -12,22 +12,22 @@ interface OrbitalTool {
 }
 
 const ORBITAL_TOOLS: OrbitalTool[] = [
-  { id: "claude", ring: 1, size: 72, departments: ["talent","growth","content","intelligence"], description: "Writing, analysis, and reasoning engine" },
-  { id: "gemini", ring: 1, size: 72, departments: ["talent"], description: "AI screening and evaluation" },
-  { id: "gpt4", ring: 1, size: 68, departments: ["intelligence"], description: "Specialized AI tasks" },
-  { id: "perplexity", ring: 1, size: 64, departments: ["growth","intelligence"], description: "Real-time web research" },
-  { id: "firecrawl", ring: 2, size: 60, departments: ["growth","talent","intelligence"], description: "Web scraping & intelligence" },
-  { id: "apify", ring: 2, size: 60, departments: ["growth","talent"], description: "LinkedIn data extraction" },
-  { id: "hunter", ring: 2, size: 56, departments: ["growth"], description: "Email discovery & verification" },
-  { id: "instantly", ring: 2, size: 56, departments: ["growth"], description: "Cold email sequences" },
-  { id: "elevenlabs", ring: 3, size: 52, departments: ["content"], description: "Voice and audio generation" },
-  { id: "replicate", ring: 3, size: 52, departments: ["content"], description: "Image and visual generation" },
-  { id: "notion", ring: 3, size: 52, departments: ["intelligence"], description: "Documentation and knowledge" },
-  { id: "linear", ring: 3, size: 52, departments: ["intelligence"], description: "Task and project tracking" },
-  { id: "github", ring: 3, size: 52, departments: [], description: "Code management" },
-  { id: "cal", ring: 3, size: 48, departments: ["talent"], description: "Meeting scheduling" },
-  { id: "canva", ring: 3, size: 48, departments: ["content"], description: "Design handoff" },
-  { id: "gamma", ring: 3, size: 48, departments: ["content"], description: "Presentation generation" },
+  { id: "claude", ring: 1, size: 72, departments: ["talent","growth","content","intelligence"], description: "Writing, analysis, and reasoning engine powering all departments" },
+  { id: "gemini", ring: 1, size: 72, departments: ["talent"], description: "AI screening and candidate evaluation with deep analysis" },
+  { id: "gpt4", ring: 1, size: 68, departments: ["intelligence"], description: "Specialized AI tasks including competitor analysis" },
+  { id: "perplexity", ring: 1, size: 64, departments: ["growth","intelligence"], description: "Real-time web research and market intelligence" },
+  { id: "firecrawl", ring: 2, size: 60, departments: ["growth","talent","intelligence"], description: "Web scraping & intelligence gathering at scale" },
+  { id: "apify", ring: 2, size: 60, departments: ["growth","talent"], description: "LinkedIn data extraction and profile enrichment" },
+  { id: "hunter", ring: 2, size: 56, departments: ["growth"], description: "Email discovery & verification for outreach" },
+  { id: "instantly", ring: 2, size: 56, departments: ["growth"], description: "Cold email sequences with smart scheduling" },
+  { id: "elevenlabs", ring: 3, size: 52, departments: ["content"], description: "Voice and audio generation for media content" },
+  { id: "replicate", ring: 3, size: 52, departments: ["content"], description: "Image and visual generation via AI models" },
+  { id: "notion", ring: 3, size: 52, departments: ["intelligence"], description: "Documentation, knowledge base, and team wiki" },
+  { id: "linear", ring: 3, size: 52, departments: ["intelligence"], description: "Task and project tracking with automation" },
+  { id: "github", ring: 3, size: 52, departments: [], description: "Code management and deployment pipeline" },
+  { id: "cal", ring: 3, size: 48, departments: ["talent"], description: "Meeting scheduling with candidate self-booking" },
+  { id: "canva", ring: 3, size: 48, departments: ["content"], description: "Design handoff and brand asset creation" },
+  { id: "gamma", ring: 3, size: 48, departments: ["content"], description: "Presentation generation for client pitches" },
 ];
 
 const TABS = ["all", "talent", "growth", "content", "intelligence"] as const;
@@ -81,15 +81,74 @@ function useCountUp(target: number, duration = 1200, start = false) {
 
 const CENTER = 375;
 
+// ─── Detail Panel ───────────────────────────────────────────────────
+const ToolDetailPanel = ({ toolId, onClose }: { toolId: string; onClose: () => void }) => {
+  const brand = TOOL_BRANDS[toolId];
+  const tool = ORBITAL_TOOLS.find(t => t.id === toolId);
+  if (!brand || !tool) return null;
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 16, scale: 0.96 }}
+      animate={{ opacity: 1, y: 0, scale: 1 }}
+      exit={{ opacity: 0, y: 10, scale: 0.96 }}
+      transition={{ duration: 0.25, ease: "easeOut" }}
+      className="relative mx-auto max-w-lg mt-6 rounded-2xl border overflow-hidden"
+      style={{
+        background: "linear-gradient(135deg, rgba(10,14,20,0.95) 0%, rgba(15,20,30,0.95) 100%)",
+        borderColor: `${brand.bg}33`,
+        boxShadow: `0 0 40px ${brand.bg}15, 0 8px 32px rgba(0,0,0,0.4)`,
+      }}
+    >
+      <div className="p-5">
+        <div className="flex items-start gap-4">
+          <div className="w-14 h-14 rounded-xl flex items-center justify-center overflow-hidden shrink-0"
+            style={{ background: `${brand.bg}15`, border: `1.5px solid ${brand.bg}44` }}>
+            <ToolLogoImage toolId={toolId} size={36} />
+          </div>
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2">
+              <span className="font-display font-bold text-lg text-white">{brand.label}</span>
+              <span className="text-xs text-white/30 font-mono">{brand.sublabel}</span>
+            </div>
+            <p className="text-sm text-white/50 mt-1 leading-relaxed">{tool.description}</p>
+            <div className="flex gap-1.5 mt-3 flex-wrap">
+              {tool.departments.map(d => (
+                <span key={d} className="text-[10px] px-2.5 py-1 rounded-full font-semibold"
+                  style={{ background: `${DEPT_COLORS[d]}15`, color: DEPT_COLORS[d], border: `1px solid ${DEPT_COLORS[d]}25` }}>
+                  {d.charAt(0).toUpperCase() + d.slice(1)}
+                </span>
+              ))}
+            </div>
+            {brand.agents.length > 0 && (
+              <div className="flex items-center gap-2 mt-3">
+                <span className="text-[10px] text-white/25 font-mono uppercase tracking-wider">Used by</span>
+                <div className="flex gap-1.5">
+                  {brand.agents.map(a => (
+                    <span key={a} className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400/80 font-medium border border-emerald-500/15">{a}</span>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+          <button onClick={onClose} className="text-white/20 hover:text-white/50 transition-colors text-lg mt-0.5">✕</button>
+        </div>
+      </div>
+    </motion.div>
+  );
+};
+
+// ─── Main Section ───────────────────────────────────────────────────
 const EcosystemSection = () => {
   const sectionRef = useRef<HTMLDivElement>(null);
   const orbitalRef = useRef<HTMLDivElement>(null);
   const [inView, setInView] = useState(false);
   const [activeTab, setActiveTab] = useState<string>("all");
   const [hoveredTool, setHoveredTool] = useState<string | null>(null);
+  const [selectedTool, setSelectedTool] = useState<string | null>(null);
+  const [expandedMobileTool, setExpandedMobileTool] = useState<string | null>(null);
   const isMobile = useIsMobile();
 
-  // Scroll-driven parallax for the orbital system
   const { scrollYProgress } = useScroll({
     target: sectionRef,
     offset: ["start end", "end start"],
@@ -112,6 +171,10 @@ const EcosystemSection = () => {
     if (activeTab === "all") return true;
     return tool.departments.includes(activeTab);
   }, [activeTab]);
+
+  const handleToolClick = useCallback((toolId: string) => {
+    setSelectedTool(prev => prev === toolId ? null : toolId);
+  }, []);
 
   const stat1 = useCountUp(16, 1200, inView);
 
@@ -139,6 +202,20 @@ const EcosystemSection = () => {
           0% { transform: translate(0,0); opacity: 1; }
           100% { transform: translate(var(--tx), var(--ty)); opacity: 0; }
         }
+        @keyframes data-flow {
+          0% { stroke-dashoffset: 24; }
+          100% { stroke-dashoffset: 0; }
+        }
+        @keyframes shimmer {
+          0% { background-position: -200% 0; }
+          100% { background-position: 200% 0; }
+        }
+        @keyframes traveling-dot {
+          0% { offset-distance: 0%; opacity: 0; }
+          10% { opacity: 1; }
+          90% { opacity: 1; }
+          100% { offset-distance: 100%; opacity: 0; }
+        }
       `}</style>
 
       <div className="max-w-[1100px] mx-auto px-6">
@@ -154,7 +231,7 @@ const EcosystemSection = () => {
             Every AI tool your business needs.<br />All plugged into one brain.
           </h2>
           <p className="text-white/40 text-lg max-w-[600px] mx-auto leading-relaxed">
-            ScreeningPilot connects the world's best AI tools and orchestrates them as a single coordinated team. Each tool knows what the others are doing. No switching. No re-explaining. No data lost between tabs.
+            ScreeningPilot connects the world's best AI tools and orchestrates them as a single coordinated team. Click any tool to explore.
           </p>
         </motion.div>
 
@@ -171,42 +248,80 @@ const EcosystemSection = () => {
                 y: orbitalY,
                 perspective: 1200,
               }}
+              onClick={(e) => {
+                if (e.target === e.currentTarget) setSelectedTool(null);
+              }}
             >
               {/* SVG layer for rings, connection lines, and cross-connections */}
               <svg className="absolute inset-0 w-full h-full pointer-events-none" viewBox="0 0 750 750">
+                {/* Glow rings */}
                 {([1, 2, 3] as const).map(ring => (
-                  <circle key={ring} cx={CENTER} cy={CENTER} r={RING_CONFIG[ring].radius}
-                    fill="none" stroke="rgba(255,255,255,0.04)" strokeWidth="1" />
+                  <g key={`ring-group-${ring}`}>
+                    <circle cx={CENTER} cy={CENTER} r={RING_CONFIG[ring].radius}
+                      fill="none" stroke="rgba(16,185,129,0.06)" strokeWidth="12" filter="url(#ringGlow)" />
+                    <circle cx={CENTER} cy={CENTER} r={RING_CONFIG[ring].radius}
+                      fill="none" stroke="rgba(255,255,255,0.08)" strokeWidth="1"
+                      strokeDasharray="2 8" />
+                  </g>
                 ))}
+                <defs>
+                  <filter id="ringGlow">
+                    <feGaussianBlur stdDeviation="6" result="blur" />
+                    <feMerge><feMergeNode in="blur" /><feMergeNode in="SourceGraphic" /></feMerge>
+                  </filter>
+                </defs>
+
+                {/* Radial connection lines with data flow animation */}
                 {ORBITAL_TOOLS.map(tool => {
                   const pos = NODE_POSITIONS[tool.id];
                   const active = isToolActive(tool);
                   const hovered = hoveredTool === tool.id;
+                  const selected = selectedTool === tool.id;
+                  const isHighlighted = hovered || selected;
                   return (
                     <line key={`line-${tool.id}`}
                       x1={CENTER} y1={CENTER}
                       x2={CENTER + pos.x} y2={CENTER + pos.y}
-                      stroke={hovered ? TOOL_BRANDS[tool.id].bg : "rgba(0,255,148,0.12)"}
-                      strokeWidth={hovered ? 2 : 1}
-                      opacity={active ? (hoveredTool && !hovered ? 0.05 : 1) : 0.03}
-                      style={{ transition: "all 0.4s ease" }}
+                      stroke={isHighlighted ? TOOL_BRANDS[tool.id].bg : "rgba(0,255,148,0.12)"}
+                      strokeWidth={isHighlighted ? 2 : 1}
+                      strokeDasharray={isHighlighted ? "none" : "6 12"}
+                      opacity={active ? (hoveredTool && !isHighlighted ? 0.04 : (isHighlighted ? 1 : 0.5)) : 0.02}
+                      style={{
+                        transition: "all 0.4s ease",
+                        animation: isHighlighted ? "data-flow 0.8s linear infinite" : "none",
+                      }}
                     />
                   );
                 })}
+
+                {/* Cross-connections with traveling dot effect */}
                 {crossConnections.map((conn, i) => {
                   const posA = NODE_POSITIONS[conn.from];
                   const posB = NODE_POSITIONS[conn.to];
                   if (!posA || !posB) return null;
+                  const lineId = `cross-path-${i}`;
                   return (
-                    <line key={`cross-${i}`}
-                      x1={CENTER + posA.x} y1={CENTER + posA.y}
-                      x2={CENTER + posB.x} y2={CENTER + posB.y}
-                      stroke={conn.color}
-                      strokeWidth={conn.active ? 2 : 1}
-                      strokeDasharray={conn.active ? "none" : "4 6"}
-                      opacity={conn.active ? 0.6 : (activeTab === "all" ? 0.15 : 0.03)}
-                      style={{ transition: "all 0.4s ease" }}
-                    />
+                    <g key={`cross-${i}`}>
+                      <line
+                        x1={CENTER + posA.x} y1={CENTER + posA.y}
+                        x2={CENTER + posB.x} y2={CENTER + posB.y}
+                        stroke={conn.color}
+                        strokeWidth={conn.active ? 2 : 1}
+                        strokeDasharray={conn.active ? "none" : "4 6"}
+                        opacity={conn.active ? 0.6 : (activeTab === "all" ? 0.12 : 0.02)}
+                        style={{ transition: "all 0.4s ease" }}
+                      />
+                      {conn.active && (
+                        <>
+                          <path id={lineId} d={`M${CENTER + posA.x},${CENTER + posA.y} L${CENTER + posB.x},${CENTER + posB.y}`} fill="none" />
+                          <circle r="3" fill={conn.color} opacity="0.9">
+                            <animateMotion dur="2s" repeatCount="indefinite">
+                              <mpath href={`#${lineId}`} />
+                            </animateMotion>
+                          </circle>
+                        </>
+                      )}
+                    </g>
                   );
                 })}
               </svg>
@@ -226,7 +341,7 @@ const EcosystemSection = () => {
                 <span className="text-[10px] text-emerald-400/60 mt-1 font-mono">BRAIN</span>
               </motion.div>
 
-              {/* Orbital rings with tools — real logos */}
+              {/* Orbital rings with tools */}
               {([1, 2, 3] as const).map(ring => {
                 const ringTools = ORBITAL_TOOLS.filter(t => t.ring === ring);
                 const cfg = RING_CONFIG[ring];
@@ -246,16 +361,18 @@ const EcosystemSection = () => {
                       const brand = TOOL_BRANDS[tool.id];
                       const active = isToolActive(tool);
                       const hovered = hoveredTool === tool.id;
-                      const dimmed = hoveredTool !== null && !hovered;
-                      const logoSize = Math.round(tool.size * 0.55);
+                      const selected = selectedTool === tool.id;
+                      const isHighlighted = hovered || selected;
+                      const dimmed = (hoveredTool !== null && !hovered) || (selectedTool !== null && !selected);
+                      const logoSize = Math.max(36, Math.round(tool.size * 0.55));
 
                       return (
                         <motion.div
                           key={tool.id}
                           initial={{ scale: 0, opacity: 0 }}
                           animate={inView ? {
-                            scale: active ? (hovered ? 1.15 : 1) : 0.85,
-                            opacity: dimmed ? 0.2 : (active ? 1 : 0.15),
+                            scale: active ? (isHighlighted ? 1.2 : 1) : 0.6,
+                            opacity: dimmed ? 0.15 : (active ? 1 : 0.1),
                           } : {}}
                           transition={{ duration: 0.5, delay: ring * 0.3 + i * 0.08, ease: "easeOut" }}
                           className="absolute flex flex-col items-center cursor-pointer"
@@ -268,21 +385,29 @@ const EcosystemSection = () => {
                           }}
                           onMouseEnter={() => setHoveredTool(tool.id)}
                           onMouseLeave={() => setHoveredTool(null)}
+                          onClick={() => handleToolClick(tool.id)}
                         >
-                          <div className="rounded-full flex items-center justify-center transition-all duration-300 overflow-hidden"
+                          <div className="rounded-full flex items-center justify-center transition-all duration-300 overflow-hidden relative"
                             style={{
                               width: tool.size, height: tool.size,
-                              background: "rgba(10,14,20,0.8)",
-                              boxShadow: hovered ? `0 0 24px ${brand.bg}88, 0 0 48px ${brand.bg}44` : `0 0 8px ${brand.bg}22`,
-                              border: `2px solid ${hovered ? brand.bg : "rgba(255,255,255,0.12)"}`,
+                              background: "rgba(10,14,20,0.85)",
+                              boxShadow: isHighlighted
+                                ? `0 0 28px ${brand.bg}88, 0 0 56px ${brand.bg}44, inset 0 0 20px ${brand.bg}11`
+                                : `0 0 8px ${brand.bg}22`,
+                              border: `2px solid ${isHighlighted ? brand.bg : (selected ? `${brand.bg}88` : "rgba(255,255,255,0.12)")}`,
                             }}>
                             <ToolLogoImage toolId={tool.id} size={logoSize} />
+                            {/* Selected ring indicator */}
+                            {selected && (
+                              <div className="absolute inset-[-4px] rounded-full border-2 animate-pulse pointer-events-none"
+                                style={{ borderColor: `${brand.bg}88` }} />
+                            )}
                           </div>
                           <span className="text-[9px] text-white/50 mt-1 font-medium whitespace-nowrap text-center">{brand.label}</span>
 
-                          {/* Tooltip */}
+                          {/* Tooltip on hover (not when selected — detail panel shows instead) */}
                           <AnimatePresence>
-                            {hovered && (
+                            {hovered && !selected && (
                               <motion.div
                                 initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 4 }}
                                 transition={{ duration: 0.15 }}
@@ -299,6 +424,7 @@ const EcosystemSection = () => {
                                     </span>
                                   ))}
                                 </div>
+                                <p className="text-[10px] text-emerald-400/40 mt-2 italic">Click to explore →</p>
                               </motion.div>
                             )}
                           </AnimatePresence>
@@ -315,7 +441,16 @@ const EcosystemSection = () => {
           </div>
         )}
 
-        {/* Mobile — 4-column grid with real logos */}
+        {/* Selected tool detail panel — Desktop */}
+        {!isMobile && (
+          <AnimatePresence>
+            {selectedTool && (
+              <ToolDetailPanel toolId={selectedTool} onClose={() => setSelectedTool(null)} />
+            )}
+          </AnimatePresence>
+        )}
+
+        {/* Mobile — 4-column grid with tap-to-expand */}
         {isMobile && (
           <div className="md:hidden mb-8">
             <div className="flex flex-col items-center mb-6">
@@ -326,21 +461,64 @@ const EcosystemSection = () => {
               <span className="text-xs text-emerald-400/60 mt-1 font-mono">BRAIN</span>
             </div>
             <div className="grid grid-cols-4 gap-3">
-              {ORBITAL_TOOLS.map(tool => {
+              {ORBITAL_TOOLS.map((tool, idx) => {
                 const brand = TOOL_BRANDS[tool.id];
                 const active = isToolActive(tool);
+                const isExpanded = expandedMobileTool === tool.id;
                 return (
                   <motion.div key={tool.id}
                     initial={{ opacity: 0, scale: 0.8 }}
                     whileInView={{ opacity: active ? 1 : 0.3, scale: 1 }}
                     viewport={{ once: true, amount: 0.1 }}
-                    transition={{ duration: 0.4 }}
-                    className="flex flex-col items-center gap-1">
-                    <div className="w-12 h-12 rounded-full flex items-center justify-center overflow-hidden"
-                      style={{ background: "rgba(10,14,20,0.8)", border: `1.5px solid ${brand.bg}44` }}>
-                      <ToolLogoImage toolId={tool.id} size={28} />
+                    transition={{ duration: 0.4, delay: idx * 0.04 }}
+                    className={`flex flex-col items-center gap-1 cursor-pointer ${isExpanded ? "col-span-2 row-span-2" : ""}`}
+                    onClick={() => setExpandedMobileTool(prev => prev === tool.id ? null : tool.id)}
+                    style={{
+                      background: isExpanded ? "rgba(10,14,20,0.9)" : "transparent",
+                      borderRadius: isExpanded ? 16 : 0,
+                      border: isExpanded ? `1px solid ${brand.bg}33` : "none",
+                      padding: isExpanded ? 12 : 0,
+                      backgroundImage: !isExpanded ? "linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.02) 50%, transparent 100%)" : "none",
+                      backgroundSize: "200% 100%",
+                    }}
+                  >
+                    <div className={`rounded-full flex items-center justify-center overflow-hidden transition-all duration-300 ${isExpanded ? "w-14 h-14" : "w-12 h-12"}`}
+                      style={{
+                        background: "rgba(10,14,20,0.8)",
+                        border: `1.5px solid ${isExpanded ? brand.bg : `${brand.bg}44`}`,
+                        boxShadow: isExpanded ? `0 0 20px ${brand.bg}33` : "none",
+                      }}>
+                      <ToolLogoImage toolId={tool.id} size={isExpanded ? 32 : 28} />
                     </div>
-                    <span className="text-[9px] text-white/50 font-medium text-center leading-tight">{brand.label}</span>
+                    <span className={`font-medium text-center leading-tight ${isExpanded ? "text-xs text-white/70" : "text-[9px] text-white/50"}`}>{brand.label}</span>
+                    <AnimatePresence>
+                      {isExpanded && (
+                        <motion.div
+                          initial={{ opacity: 0, height: 0 }}
+                          animate={{ opacity: 1, height: "auto" }}
+                          exit={{ opacity: 0, height: 0 }}
+                          transition={{ duration: 0.2 }}
+                          className="w-full"
+                        >
+                          <p className="text-[10px] text-white/40 mt-1 text-center">{tool.description}</p>
+                          <div className="flex gap-1 mt-2 flex-wrap justify-center">
+                            {tool.departments.map(d => (
+                              <span key={d} className="text-[8px] px-1.5 py-0.5 rounded-full font-medium"
+                                style={{ background: `${DEPT_COLORS[d]}15`, color: DEPT_COLORS[d] }}>
+                                {d.charAt(0).toUpperCase() + d.slice(1)}
+                              </span>
+                            ))}
+                          </div>
+                          {brand.agents.length > 0 && (
+                            <div className="flex gap-1 mt-1.5 justify-center">
+                              {brand.agents.map(a => (
+                                <span key={a} className="text-[8px] px-1.5 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400/70 font-medium">{a}</span>
+                              ))}
+                            </div>
+                          )}
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
                   </motion.div>
                 );
               })}
@@ -351,7 +529,7 @@ const EcosystemSection = () => {
         {/* Tabs */}
         <div className="flex items-center gap-2 justify-center mt-8 mb-2 overflow-x-auto pb-2 no-scrollbar">
           {TABS.map(tab => (
-            <button key={tab} onClick={() => setActiveTab(tab)}
+            <button key={tab} onClick={() => { setActiveTab(tab); setSelectedTool(null); }}
               className={`px-4 py-2 rounded-full text-xs font-semibold transition-all duration-300 whitespace-nowrap ${
                 activeTab === tab
                   ? "bg-emerald-500/20 text-emerald-400 border border-emerald-500/40"
@@ -400,7 +578,7 @@ const EcosystemSection = () => {
   );
 };
 
-// Energy pulse component
+// ─── Energy Pulses ──────────────────────────────────────────────────
 const EnergyPulses = () => {
   const [pulses, setPulses] = useState<Array<{ id: number; toolId: string; x: number; y: number }>>([]);
   const nextId = useRef(0);
@@ -415,7 +593,7 @@ const EnergyPulses = () => {
       const id = nextId.current++;
       setPulses(prev => [...prev, { id, toolId: tool.id, x, y }].slice(-6));
       setTimeout(() => setPulses(prev => prev.filter(p => p.id !== id)), 1200);
-    }, 600);
+    }, 500);
     return () => clearInterval(interval);
   }, []);
 
@@ -424,15 +602,26 @@ const EnergyPulses = () => {
       {pulses.map(p => {
         const brand = TOOL_BRANDS[p.toolId];
         return (
-          <div key={p.id} className="absolute w-2 h-2 rounded-full z-30 pointer-events-none"
+          <div key={p.id} className="absolute rounded-full z-30 pointer-events-none"
             style={{
-              left: p.x, top: p.y,
+              left: p.x - 1, top: p.y - 1,
+              width: 6, height: 6,
               backgroundColor: brand.bg,
-              boxShadow: `0 0 8px ${brand.bg}`,
+              boxShadow: `0 0 12px ${brand.bg}, 0 0 4px ${brand.bg}`,
               animation: "pulse-to-center 1.2s ease-in forwards",
               ["--tx" as string]: `${CENTER - p.x}px`,
               ["--ty" as string]: `${CENTER - p.y}px`,
-            }} />
+            }}>
+            {/* Trail element */}
+            <div className="absolute inset-0 rounded-full pointer-events-none"
+              style={{
+                backgroundColor: brand.bg,
+                opacity: 0.4,
+                animation: "pulse-to-center 1.2s ease-in 0.1s forwards",
+                ["--tx" as string]: `${CENTER - p.x}px`,
+                ["--ty" as string]: `${CENTER - p.y}px`,
+              }} />
+          </div>
         );
       })}
     </>
