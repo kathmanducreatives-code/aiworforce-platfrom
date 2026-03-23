@@ -168,7 +168,7 @@ const TeamsAtWorkSection = () => {
                 <span className="text-[10px] text-white/20 uppercase tracking-wider mr-1">Tools:</span>
                 {dept.tools.slice(0, 3).map(t => (
                   <div key={t.name} className="w-6 h-6 rounded-full bg-white/[0.04] border border-white/[0.06] flex items-center justify-center" title={t.name}>
-                    <t.Logo width={16} height={16} />
+                    <ToolLogoImage toolId={t.id} size={16} />
                   </div>
                 ))}
                 {dept.tools.length > 3 && <span className="text-[10px] text-white/30 ml-1">+{dept.tools.length - 3} more</span>}
