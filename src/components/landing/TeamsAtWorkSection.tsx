@@ -2,13 +2,13 @@ import { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Check, Loader, ArrowRight } from "lucide-react";
 import { useNavigate } from "react-router-dom";
-import { ClaudeLogo, FirecrawlLogo, InstantlyLogo, ApifyLogo, GeminiLogo, ReplicateLogo, ElevenLabsLogo, PerplexityLogo, NotionLogo, LinearLogo, GitHubLogo } from "./ToolLogos";
+import { ToolLogoImage } from "./ToolLogos";
 
 interface DeptCard {
   emoji: string;
   name: string;
   room: string;
-  tools: { Logo: React.FC<{ width?: number; height?: number }>; name: string }[];
+  tools: { id: string; name: string }[];
   activities: { done: boolean; text: string }[];
   comingSoon?: boolean;
 }
