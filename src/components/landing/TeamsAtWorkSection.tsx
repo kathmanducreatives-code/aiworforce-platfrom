@@ -17,8 +17,8 @@ const DEPARTMENTS: DeptCard[] = [
   {
     emoji: "🎯", name: "Talent Department", room: "talent",
     tools: [
-      { Logo: ClaudeLogo, name: "Claude" }, { Logo: GeminiLogo, name: "Gemini" },
-      { Logo: ApifyLogo, name: "Apify" }, { Logo: FirecrawlLogo, name: "Firecrawl" },
+      { id: "claude", name: "Claude" }, { id: "gemini", name: "Gemini" },
+      { id: "apify", name: "Apify" }, { id: "firecrawl", name: "Firecrawl" },
     ],
     activities: [
       { done: true, text: "Scout found 34 candidates matching ICP" },
@@ -32,8 +32,8 @@ const DEPARTMENTS: DeptCard[] = [
   {
     emoji: "📣", name: "Growth Department", room: "growth",
     tools: [
-      { Logo: ClaudeLogo, name: "Claude" }, { Logo: FirecrawlLogo, name: "Firecrawl" },
-      { Logo: InstantlyLogo, name: "Instantly" }, { Logo: ApifyLogo, name: "Apify" },
+      { id: "claude", name: "Claude" }, { id: "firecrawl", name: "Firecrawl" },
+      { id: "instantly", name: "Instantly" }, { id: "apify", name: "Apify" },
     ],
     activities: [
       { done: true, text: "Radar found Acme Corp — Series A trigger" },
@@ -47,8 +47,8 @@ const DEPARTMENTS: DeptCard[] = [
   {
     emoji: "🎨", name: "Content Department", room: "content",
     tools: [
-      { Logo: ClaudeLogo, name: "Claude" }, { Logo: ReplicateLogo, name: "Replicate" },
-      { Logo: ElevenLabsLogo, name: "ElevenLabs" },
+      { id: "claude", name: "Claude" }, { id: "replicate", name: "Replicate" },
+      { id: "elevenlabs", name: "ElevenLabs" },
     ],
     activities: [
       { done: true, text: "Quill wrote LinkedIn post in your brand voice" },
@@ -62,8 +62,8 @@ const DEPARTMENTS: DeptCard[] = [
   {
     emoji: "🔍", name: "Intelligence Department", room: "intelligence",
     tools: [
-      { Logo: FirecrawlLogo, name: "Firecrawl" }, { Logo: PerplexityLogo, name: "Perplexity" },
-      { Logo: ClaudeLogo, name: "Claude" }, { Logo: NotionLogo, name: "Notion" },
+      { id: "firecrawl", name: "Firecrawl" }, { id: "perplexity", name: "Perplexity" },
+      { id: "claude", name: "Claude" }, { id: "notion", name: "Notion" },
     ],
     activities: [
       { done: true, text: "Hawk detected competitor pricing change" },
@@ -77,8 +77,8 @@ const DEPARTMENTS: DeptCard[] = [
   {
     emoji: "⚙️", name: "Engineering Department", room: "engineering", comingSoon: true,
     tools: [
-      { Logo: ClaudeLogo, name: "Claude" }, { Logo: GitHubLogo, name: "GitHub" },
-      { Logo: LinearLogo, name: "Linear" },
+      { id: "claude", name: "Claude" }, { id: "github", name: "GitHub" },
+      { id: "linear", name: "Linear" },
     ],
     activities: [
       { done: false, text: "Code generation from plain English" },
