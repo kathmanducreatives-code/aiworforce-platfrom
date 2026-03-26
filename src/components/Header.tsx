@@ -30,13 +30,13 @@ const Header = () => {
 
   return (
     <header className={`fixed top-0 left-0 right-0 z-50 transition-all duration-500 ${scrolled
-      ? 'bg-background/80 backdrop-blur-2xl border-b border-border py-3'
+      ? 'glass-strong border-b border-white/5 py-3'
       : 'bg-transparent py-5'
       }`}>
       <div className="max-w-7xl mx-auto px-6 flex items-center justify-between">
         {/* Logo */}
         <div className="flex items-center gap-2.5 cursor-pointer group" onClick={() => navigate('/')}>
-          <div className="w-2.5 h-2.5 rounded-full bg-emerald-500 shadow-[0_0_12px_rgba(5,150,105,0.6)] group-hover:scale-125 transition-transform animate-pulse" />
+          <div className="w-2.5 h-2.5 rounded-full bg-[#298799] shadow-[0_0_10px_rgba(41,135,153,0.6)] group-hover:scale-125 transition-transform animate-pulse" />
           <span className="font-display font-black text-xl text-white tracking-tighter">ScreeningPilot</span>
         </div>
 
@@ -46,7 +46,7 @@ const Header = () => {
             <a key={item.label} href={item.href}
               className="text-sm text-white/60 hover:text-white font-semibold transition-colors duration-300 relative group">
               {item.label}
-              <span className="absolute -bottom-1 left-0 w-0 h-[1px] bg-emerald-500 group-hover:w-full transition-all duration-300" />
+              <span className="absolute -bottom-1 left-0 w-0 h-[1px] bg-[#298799] group-hover:w-full transition-all duration-300" />
             </a>
           ))}
         </nav>
@@ -61,7 +61,7 @@ const Header = () => {
           ) : (
             <>
               <button onClick={() => navigate('/auth')} className="text-sm text-white/60 hover:text-white font-semibold transition-colors">Sign In</button>
-              <button onClick={() => navigate('/auth')} className="liquid-fill-btn h-[40px] px-6 bg-emerald-600/20 border border-emerald-500/50 text-white text-sm font-semibold rounded-full transition-all duration-300 hover:shadow-[0_0_20px_rgba(5,150,105,0.5)] flex items-center justify-center">
+              <button onClick={() => navigate('/auth')} className="glass-button-green h-[42px] px-6 text-white text-sm font-semibold rounded-full transition-all duration-300 border border-[#298799]/20 shadow-[0_12px_28px_rgba(0,0,0,0.28),0_0_16px_rgba(41,135,153,0.08)] flex items-center justify-center">
                 Meet your workforce →
               </button>
             </>
@@ -93,7 +93,7 @@ const Header = () => {
           ))}
           <div className="mt-4 flex gap-3">
             <button onClick={() => navigate('/auth')} className="text-sm text-white/60 hover:text-white font-medium">Sign In</button>
-            <button onClick={() => navigate('/auth')} className="bg-emerald-600 text-white text-sm font-semibold px-4 py-2 rounded-full">Meet your workforce →</button>
+            <button onClick={() => navigate('/auth')} className="glass-button-green text-white text-sm font-semibold px-4 py-2 rounded-full border border-[#298799]/20">Meet your workforce →</button>
           </div>
         </div>
       )}

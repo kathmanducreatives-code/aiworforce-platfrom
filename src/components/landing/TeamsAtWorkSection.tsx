@@ -134,52 +134,61 @@ const TeamsAtWorkSection = () => {
   }, []);
 
   return (
-    <section ref={sectionRef} className="relative z-10 py-24 md:py-32">
+    <section ref={sectionRef} className="relative z-10 py-16 md:py-24 bg-black overflow-hidden">
       <div className="max-w-[1100px] mx-auto px-6">
-        <div className="text-center mb-16">
-          <span className="font-mono text-xs uppercase tracking-[0.15em] text-emerald-400 mb-4 block">YOUR DEPARTMENTS, LIVE</span>
-          <h2 className="font-display font-black text-3xl md:text-5xl text-white leading-[1.1] mb-6">
-            Five teams running simultaneously.<br />All sharing intelligence.<br />All working in your voice.
+        <div className="text-center mb-20">
+          <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full border border-accent-mint/40 bg-accent-mint/5 mb-8">
+            <span className="font-mono text-[10px] uppercase tracking-[0.2em] text-accent-mint font-bold">CROSS-DEPARTMENT INTELLIGENCE</span>
+          </div>
+          <h2 className="font-display font-bold text-4xl md:text-6xl text-white leading-[1.0] mb-8 tracking-tight">
+            Five teams, one brain.
           </h2>
-          <p className="text-white/40 text-lg max-w-[600px] mx-auto leading-relaxed">
-            While you focus on what matters, your AI workforce handles recruiting, growth, content, research, and strategy — simultaneously, automatically.
+          <p className="text-white/40 text-lg max-w-[600px] mx-auto leading-relaxed font-medium">
+            While you focus on what matters, your AI workforce handles recruiting, growth, content, research, and strategy — simultaneously.
           </p>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           {DEPARTMENTS.map((dept, di) => (
             <motion.div key={dept.room} initial={{ opacity: 0, y: 24 }} animate={inView ? { opacity: 1, y: 0 } : {}}
-              transition={{ duration: 0.5, delay: di * 0.1 }}
-              className={`rounded-2xl border border-white/[0.06] bg-white/[0.02] p-5 ${dept.comingSoon ? "opacity-60" : ""} ${di === 4 ? "md:col-span-2 md:max-w-[540px] md:mx-auto" : ""}`}>
-              <div className="flex items-center justify-between mb-4">
-                <div className="flex items-center gap-2">
-                  <span className="text-lg">{dept.emoji}</span>
-                  <span className="font-display font-bold text-sm text-white">{dept.name}</span>
+              transition={{ duration: 0.6, delay: di * 0.1, ease: [0.23, 1, 0.32, 1] }}
+              className={`glass-card-premium rounded-3xl p-8 group hover:-translate-y-2 transition-all duration-500 ${dept.comingSoon ? "opacity-40" : ""} ${di === 4 ? "md:col-span-2 md:max-w-[540px] md:mx-auto" : ""}`}>
+              <div className="flex items-center justify-between mb-8">
+                <div className="flex items-center gap-4">
+                  <span className="text-2xl grayscale group-hover:grayscale-0 transition-all">{dept.emoji}</span>
+                  <span className="font-display font-black text-sm text-white uppercase tracking-widest">{dept.name}</span>
                 </div>
                 {dept.comingSoon ? (
-                  <span className="text-[10px] px-2 py-0.5 rounded-full bg-white/[0.06] text-white/30 font-medium">COMING SOON</span>
+                  <span className="text-[9px] px-2 py-1 rounded-md bg-white/5 text-white/20 font-black uppercase tracking-widest border border-white/5">COMING SOON</span>
                 ) : (
-                  <span className="flex items-center gap-1.5 text-[10px] text-emerald-400 font-medium">
-                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />ACTIVE
-                  </span>
+                  <div className="flex items-center gap-1.5 px-2 py-1 rounded-md bg-accent-mint/5 border border-accent-mint/20">
+                    <div className="w-1.5 h-1.5 rounded-full bg-accent-mint animate-pulse" />
+                    <span className="text-[9px] text-accent-mint font-black tracking-widest uppercase">ACTIVE</span>
+                  </div>
                 )}
               </div>
-              <div className="flex items-center gap-2 mb-4">
-                <span className="text-[10px] text-white/20 uppercase tracking-wider mr-1">Tools:</span>
-                {dept.tools.slice(0, 3).map(t => (
-                  <div key={t.name} className="w-6 h-6 rounded-full bg-white/[0.04] border border-white/[0.06] flex items-center justify-center" title={t.name}>
-                    <ToolLogoImage toolId={t.id} size={16} />
-                  </div>
-                ))}
-                {dept.tools.length > 3 && <span className="text-[10px] text-white/30 ml-1">+{dept.tools.length - 3} more</span>}
+              
+              <div className="flex items-center gap-3 mb-8">
+                <span className="text-[9px] font-black text-white/10 uppercase tracking-[0.2em] mr-1">STACK</span>
+                <div className="flex gap-2">
+                  {dept.tools.slice(0, 3).map(t => (
+                    <div key={t.name} className="w-7 h-7 rounded-lg bg-white/5 border border-white/10 flex items-center justify-center p-1.5 grayscale group-hover:grayscale-0 transition-all">
+                      <ToolLogoImage toolId={t.id} size={16} />
+                    </div>
+                  ))}
+                  {dept.tools.length > 3 && <span className="text-[9px] font-black text-white/20 ml-1 mt-2 tracking-tighter">+{dept.tools.length - 3}</span>}
+                </div>
               </div>
-              <div className="h-px bg-white/[0.04] mb-3" />
-              <ActivityFeed activities={dept.activities} comingSoon={dept.comingSoon} />
-              <div className="mt-4">
+
+              <div className="pt-8 border-t border-white/5 mt-8">
+                <ActivityFeed activities={dept.activities} comingSoon={dept.comingSoon} />
+              </div>
+
+              <div className="mt-8 pt-8 border-t border-white/5">
                 {dept.comingSoon ? (
-                  <button onClick={() => navigate("/auth")} className="text-xs text-white/30 font-medium hover:text-white/50 transition-colors flex items-center gap-1">Join waitlist <ArrowRight className="w-3 h-3" /></button>
+                  <button onClick={() => navigate("/auth")} className="text-[10px] font-black uppercase tracking-[0.2em] text-white/20 hover:text-white transition-colors flex items-center gap-2">Join waitlist <ArrowRight className="w-3.5 h-3.5" /></button>
                 ) : (
-                  <button onClick={() => navigate(`/auth?room=${dept.room}`)} className="text-xs text-emerald-400/80 font-medium hover:text-emerald-400 transition-colors flex items-center gap-1">View Department <ArrowRight className="w-3 h-3" /></button>
+                  <button onClick={() => navigate(`/auth?room=${dept.room}`)} className="text-[10px] font-black uppercase tracking-[0.2em] text-accent-mint hover:text-white transition-colors flex items-center gap-2">Initialize Department <ArrowRight className="w-3.5 h-3.5" /></button>
                 )}
               </div>
             </motion.div>

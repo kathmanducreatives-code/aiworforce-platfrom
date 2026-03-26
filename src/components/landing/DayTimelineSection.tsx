@@ -1,130 +1,244 @@
-import { motion } from 'framer-motion';
-import { useNavigate } from 'react-router-dom';
-import { ArrowRight, Check, Clock, AlertTriangle } from 'lucide-react';
-import { Users, TrendingUp, Pen, Eye, BarChart2, User } from 'lucide-react';
+import { useRef } from 'react';
+import { motion, useScroll, useTransform } from 'framer-motion';
+import { useIsMobile } from '@/hooks/use-mobile';
 
-const timeline = [
-  { time: '7:00 AM', agent: 'Brief', dept: 'Intelligence', color: 'bg-amber-500/20 border-amber-500/40', action: 'Morning brief delivered', output: '3 signals need attention today. 1 urgent. 2 informational.', status: 'done' },
-  { time: '7:12 AM', agent: 'You', dept: 'Founder', color: 'bg-blue-500/20 border-blue-500/40', action: 'Reviewed brief. Approved Growth agent to pursue Acme Corp lead.', output: '', status: 'decision' },
-  { time: '7:13 AM', agent: 'Radar', dept: 'Growth', color: 'bg-emerald-500/20 border-emerald-500/40', action: 'Lead research initiated for Acme Corp', output: 'Found: James Park, Co-Founder. Trigger: €8M Series A. Pain signal: posted about screening chaos.', status: 'done' },
-  { time: '7:45 AM', agent: 'Penn', dept: 'Growth', color: 'bg-emerald-500/20 border-emerald-500/40', action: 'Personalized outreach drafted', output: 'Email written in your voice. References: the raise, 4 open roles, and James\'s exact post from last week.', status: 'review' },
-  { time: '8:02 AM', agent: 'You', dept: 'Founder', color: 'bg-blue-500/20 border-blue-500/40', action: 'Approved. Sent.', output: '', status: 'decision' },
-  { time: '8:03 AM', agent: 'Relay', dept: 'Growth', color: 'bg-emerald-500/20 border-emerald-500/40', action: 'Email delivered to james@acmecorp.com', output: 'Sent. Open tracking active. Follow-up scheduled: Thursday 9am if no reply.', status: 'done' },
-  { time: '9:30 AM', agent: 'Scout', dept: 'Talent', color: 'bg-purple-500/20 border-purple-500/40', action: 'Lookalike candidate scan complete', output: '127 candidates found matching your Senior Engineer ICP. Sending to Aria for screening.', status: 'done' },
-  { time: '9:31 AM', agent: 'Aria', dept: 'Talent', color: 'bg-purple-500/20 border-purple-500/40', action: 'Screening 127 candidates asynchronously', output: 'AI interviews running in background. Results ready by morning.', status: 'progress' },
-  { time: '11:00 AM', agent: 'Hawk', dept: 'Intelligence', color: 'bg-amber-500/20 border-amber-500/40', action: 'Competitor alert detected', output: 'Ashby dropped their starter plan price by 20% this morning. Flagged for your awareness.', status: 'review' },
-  { time: '11:05 AM', agent: 'Quill', dept: 'Content', color: 'bg-pink-500/20 border-pink-500/40', action: 'Response content drafted', output: 'LinkedIn post written: why our pricing model benefits you more. Ready for your review.', status: 'review' },
-  { time: '2:30 PM', agent: 'You', dept: 'Founder', color: 'bg-blue-500/20 border-blue-500/40', action: 'Approved post. Minor edit to closing line.', output: '', status: 'decision' },
-  { time: '2:32 PM', agent: 'Pulse', dept: 'Content', color: 'bg-pink-500/20 border-pink-500/40', action: 'Scheduled for tomorrow 9am', output: 'Posted at peak engagement window. Performance data by Wednesday.', status: 'done' },
-  { time: '4:45 PM', agent: 'Relay', dept: 'Growth', color: 'bg-emerald-500/20 border-emerald-500/40', action: 'Reply received from James Park', output: 'He replied. Interested. Suggested a call Thursday 2pm. Calendar link sent automatically.', status: 'done' },
-  { time: '5:00 PM', agent: 'Atlas', dept: 'Command', color: 'bg-emerald-500/20 border-emerald-500/40', action: 'End of day summary ready', output: 'Today: 1 meeting booked. 127 candidates in screening. 1 post scheduled. 3 competitor signals. Your time: 47 minutes.', status: 'done' },
+type ActorRole = 'founder' | 'agent';
+
+interface TimelineNode {
+    id: string;
+    time: string;
+    side: 'left' | 'right';
+    role: ActorRole;
+    agentName: string;
+    department: string;
+    accent: string;
+    message: string;
+    secondary?: string;
+    isFounder?: boolean;
+}
+
+const TIMELINE_NODES: TimelineNode[] = [
+    {
+        id: "n1", time: "07:00 AM", side: "right", role: "agent",
+        agentName: "Brief Agent", department: "Intelligence Dept", accent: "#00FF94",
+        message: "Morning brief delivered.",
+        secondary: "3 signals need attention today, 1 urgent, 2 informational."
+    },
+    {
+        id: "n2", time: "07:12 AM", side: "left", role: "founder",
+        agentName: "You", department: "Founder / Admin", accent: "#4285F4",
+        message: "Reviewed brief. Approved Growth agent to pursue Acme Corp lead.",
+        isFounder: true
+    },
+    {
+        id: "n3", time: "07:13 AM", side: "right", role: "agent",
+        agentName: "Radar", department: "Growth Dept", accent: "#00FF94",
+        message: "Lead research initiated for Acme Corp.",
+        secondary: "Found James Park, Co-Founder. Trigger: €8M Series A. Pain signal isolated."
+    },
+    {
+        id: "n4", time: "07:45 AM", side: "left", role: "agent",
+        agentName: "Penn", department: "Growth Dept", accent: "#F59E0B",
+        message: "Personalized outreach drafted.",
+        secondary: "Sequence hook references the specific hiring pain signal and Series A timing."
+    },
+    {
+        id: "n5", time: "09:10 AM", side: "right", role: "agent",
+        agentName: "Scout", department: "Talent Dept", accent: "#97D700",
+        message: "Talent shortlist refreshed against updated ICP.",
+        secondary: "Scraped 145 competitors. 12 tier-1 candidates identified."
+    },
+    {
+        id: "n6", time: "11:30 AM", side: "left", role: "agent",
+        agentName: "Aria", department: "Evaluate Dept", accent: "#CC785C",
+        message: "Candidate evaluations updated and queued for founder review."
+    }
 ];
 
-const statusIcon = (s: string) => {
-  if (s === 'done') return <Check className="w-3 h-3 text-emerald-400" />;
-  if (s === 'review') return <AlertTriangle className="w-3 h-3 text-amber-400" />;
-  if (s === 'decision') return <User className="w-3 h-3 text-blue-400" />;
-  return <Clock className="w-3 h-3 text-white/40 animate-pulse" />;
-};
-
-const statusColor = (s: string) => {
-  if (s === 'done') return 'bg-emerald-500';
-  if (s === 'review') return 'bg-amber-500';
-  if (s === 'decision') return 'bg-blue-500';
-  return 'bg-white/40 animate-pulse';
-};
-
 const DayTimelineSection = () => {
-  const navigate = useNavigate();
+    const sectionRef = useRef<HTMLElement>(null);
+    const isMobile = useIsMobile();
+    
+    const { scrollYProgress } = useScroll({
+        target: sectionRef,
+        offset: ["start start", "end end"]
+    });
 
-  return (
-    <section id="day-timeline" className="relative z-10 py-24 md:py-32">
-      <div className="max-w-[900px] mx-auto px-6">
-        <div className="text-center mb-16">
-          <span className="font-mono text-xs uppercase tracking-[0.15em] text-emerald-400 mb-4 block">A MONDAY WITH YOUR WORKFORCE</span>
-          <h2 className="font-display font-black text-3xl md:text-5xl text-white leading-[1.1] mb-6">
-            47 minutes of your time.<br />A full week of work done.
-          </h2>
-          <p className="text-white/40 text-lg max-w-[560px] mx-auto leading-relaxed">
-            This is what your AI workforce does on a typical day. The founder's only job is to review and decide.
-          </p>
-        </div>
+    const yTranslation = useTransform(scrollYProgress, [0.1, 0.95], ["0%", isMobile ? "-65%" : "-35%"]);
 
-        {/* Timeline */}
-        <div className="relative">
-          <div className="absolute left-4 md:left-1/2 md:-translate-x-px top-0 bottom-0 w-px bg-white/[0.06]" />
-
-          {timeline.map((item, i) => (
-            <motion.div
-              key={i}
-              initial={{ opacity: 0, y: 20 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true, margin: "-50px" }}
-              transition={{ duration: 0.4, delay: i * 0.05 }}
-              className={`relative flex items-start gap-4 mb-6 ${i % 2 === 0 ? 'md:flex-row' : 'md:flex-row-reverse'} md:gap-8`}
-            >
-              {/* Dot on timeline */}
-              <div className="absolute left-4 md:left-1/2 -translate-x-1/2 mt-2 z-10">
-                <div className={`w-3 h-3 rounded-full ${statusColor(item.status)} shadow-lg`} />
-              </div>
-
-              {/* Time */}
-              <div className={`hidden md:block w-[calc(50%-24px)] ${i % 2 === 0 ? 'text-right pr-4' : 'text-left pl-4'}`}>
-                <span className="font-mono text-xs text-white/30">{item.time}</span>
-              </div>
-
-              {/* Card */}
-              <div className={`ml-10 md:ml-0 md:w-[calc(50%-24px)] ${i % 2 === 0 ? '' : ''}`}>
-                <div className={`rounded-xl border p-4 ${item.status === 'decision' ? 'border-blue-500/20 bg-blue-500/[0.03]' : 'border-white/[0.06] bg-white/[0.02]'}`}>
-                  <div className="flex items-center gap-2 mb-2">
-                    <span className="md:hidden font-mono text-[10px] text-white/30">{item.time}</span>
-                    <div className={`w-6 h-6 rounded-full ${item.color} border flex items-center justify-center`}>
-                      {statusIcon(item.status)}
-                    </div>
-                    <span className="text-xs font-bold text-white">{item.agent}</span>
-                    <span className="text-[10px] text-white/30 px-1.5 py-0.5 rounded bg-white/[0.04]">{item.dept}</span>
-                  </div>
-                  <p className="text-sm text-white/70 font-medium">{item.action}</p>
-                  {item.output && (
-                    <p className="text-xs text-white/30 mt-1.5 leading-relaxed">{item.output}</p>
-                  )}
+    return (
+        <section ref={sectionRef} id="daily-brief" className="relative w-full h-[400vh] bg-transparent border-t border-white/5">
+            <div className="sticky top-0 w-full h-screen overflow-hidden flex flex-col py-16 md:py-24">
+                
+                {/* ── HEADER ── */}
+                <div className="relative z-20 text-center shrink-0 mb-8 md:mb-16 px-6">
+                    <span className="font-mono text-[10px] uppercase tracking-[0.3em] text-accent-mint font-bold mb-4 md:mb-6 block">
+                        A MONDAY WITH YOUR WORKFORCE
+                    </span>
+                    <h2 className="text-4xl md:text-5xl lg:text-7xl font-display font-black text-white leading-[1.05] tracking-tight mb-4 max-w-4xl mx-auto">
+                        47 minutes of your time.<br className="hidden md:block"/> A full week of work done.
+                    </h2>
+                    <p className="text-lg md:text-xl text-white/40 leading-relaxed font-medium">
+                        The AI handles the volume. You handle the decisions.
+                    </p>
                 </div>
-              </div>
-            </motion.div>
-          ))}
-        </div>
 
-        {/* Summary card */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          whileInView={{ opacity: 1, y: 0 }}
-          viewport={{ once: true, margin: "-50px" }}
-          className="mt-12 rounded-2xl border border-emerald-500/20 bg-emerald-500/[0.03] p-8"
-        >
-          <h3 className="font-display font-bold text-lg text-white text-center mb-6">Your Monday. By the numbers.</h3>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-6 text-center">
-            {[
-              { num: '47 min', label: 'Your time invested' },
-              { num: '1', label: 'Meeting booked' },
-              { num: '127', label: 'Candidates screened' },
-              { num: '€0', label: 'Agency fees paid' },
-            ].map(s => (
-              <div key={s.label}>
-                <div className="font-mono font-black text-2xl text-emerald-400 tabular-nums">{s.num}</div>
-                <div className="text-xs text-white/40 mt-1">{s.label}</div>
-              </div>
-            ))}
-          </div>
-          <p className="text-center text-sm text-white/30 mt-6">Your AI workforce handled the rest.</p>
-          <div className="text-center mt-6">
-            <button onClick={() => navigate('/auth')} className="conic-border group h-[44px] inline-flex items-center gap-3 bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-[15px] px-8 rounded-full transition-all duration-300 hover:scale-[1.03] hover:shadow-[0_8px_40px_rgba(5,150,105,0.4)]">
-              Start your first Monday <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
-            </button>
-          </div>
-        </motion.div>
-      </div>
-    </section>
-  );
+                {/* ── TIMELINE TREE ── */}
+                <motion.div 
+                    className="relative w-full max-w-5xl mx-auto flex-1 px-4 md:px-0 mt-8"
+                    style={{ y: yTranslation }}
+                >
+                    {/* Spine background */}
+                    <div className="absolute left-6 md:left-1/2 top-0 bottom-[-200px] w-[2px] bg-white/[0.05] -translate-x-1/2 rounded-full" />
+                    
+                    {/* Spine fill */}
+                    <motion.div 
+                        style={{ scaleY: useTransform(scrollYProgress, [0.1, 0.95], [0, 1]) }}
+                        className="absolute left-6 md:left-1/2 top-0 bottom-[-200px] w-[2px] bg-accent-mint -translate-x-1/2 origin-top shadow-[0_0_15px_rgba(0,255,148,0.5)] rounded-full" 
+                    />
+
+                    {/* Nodes Array */}
+                    <div className="flex flex-col gap-8 md:gap-12 relative z-10 pt-4 pb-32">
+                        {TIMELINE_NODES.map((node, i) => (
+                            <TimelineNode 
+                                key={node.id} 
+                                node={node} 
+                                index={i} 
+                                total={TIMELINE_NODES.length} 
+                                scrollYProgress={scrollYProgress} 
+                                isMobile={isMobile}
+                            />
+                        ))}
+                    </div>
+                </motion.div>
+
+                {/* Bottom Fade Gradient */}
+                <div className="absolute bottom-0 left-0 w-full h-40 bg-gradient-to-t from-[#050505] to-transparent pointer-events-none z-30" />
+            </div>
+        </section>
+    );
+};
+
+const TimelineNode = ({ node, index, total, scrollYProgress, isMobile }: any) => {
+    // Reveal mapping
+    const start = 0.15 + (index * 0.13); 
+    
+    const opacity = useTransform(
+        scrollYProgress,
+        [start - 0.05, start, start + 0.1, start + 0.25],
+        [0, 1, 1, 0.5]
+    );
+    
+    const y = useTransform(
+        scrollYProgress,
+        [start - 0.05, start],
+        [40, 0]
+    );
+
+    const scale = useTransform(
+        scrollYProgress,
+        [start - 0.05, start],
+        [0.95, 1]
+    );
+
+    const activeColor = node.accent;
+    const inactiveColor = "rgba(255,255,255,0)";
+    const semiActiveColor = `rgba(255,255,255,0.05)`;
+
+    const borderColor = useTransform(
+        scrollYProgress,
+        [start - 0.05, start, start + 0.1, start + 0.25],
+        [inactiveColor, activeColor, activeColor, semiActiveColor]
+    );
+
+    const glowShadow = useTransform(
+        scrollYProgress,
+        [start - 0.05, start, start + 0.1, start + 0.25],
+        ["0 0 0px rgba(0,0,0,0)", `0 0 30px ${activeColor}25`, `0 0 30px ${activeColor}25`, "0 0 0px rgba(0,0,0,0)"]
+    );
+
+    const dotBg = useTransform(
+        scrollYProgress,
+        [start - 0.05, start, start + 0.1, start + 0.25],
+        ["#000000", activeColor, activeColor, "#111111"]
+    );
+
+    const dotShadow = useTransform(
+        scrollYProgress,
+        [start - 0.05, start, start + 0.1, start + 0.25],
+        ["0 0 0px rgba(0,0,0,0)", `0 0 15px ${activeColor}`, `0 0 15px ${activeColor}`, "0 0 0px rgba(0,0,0,0)"]
+    );
+
+    const isRight = isMobile ? true : node.side === 'right';
+
+    return (
+        <div className={`flex w-full ${isRight ? 'md:justify-end' : 'md:justify-start'} relative pl-16 md:pl-0 min-h-[140px] items-center`}>
+            
+            {/* Horizontal Connector Line */}
+            <motion.div 
+                style={{ opacity, backgroundColor: borderColor }}
+                className={`absolute top-1/2 -translate-y-1/2 w-6 md:w-[calc(6%+1rem)] h-[1px] z-0 ${isRight ? 'left-6 md:left-1/2' : 'right-0 md:right-1/2'}`}
+            />
+
+            {/* Spine Dot */}
+            <div className="absolute top-1/2 -translate-y-1/2 left-6 md:left-[50%] -translate-x-1/2 flex items-center justify-center z-10 w-8 h-8 pointer-events-none">
+                <motion.div 
+                    style={{ backgroundColor: dotBg, boxShadow: dotShadow }}
+                    className="w-3 h-3 rounded-full border-2 border-black" 
+                />
+            </div>
+
+            {/* Message Card */}
+            <motion.div
+                style={{ opacity, y, scale }}
+                className={`w-full md:w-[calc(50%-3rem)] flex flex-col z-20`}
+            >
+                <motion.div
+                    style={{ borderColor, boxShadow: glowShadow }}
+                    className="w-full glass-card-premium rounded-[1.5rem] p-6 md:p-8 flex flex-col gap-4 bg-white/[0.02] border transition-all duration-300"
+                >
+                    {/* Actor Profile Head */}
+                    <div className="flex items-center justify-between mb-2">
+                        <div className="flex items-center gap-3">
+                            <div 
+                                className="w-10 h-10 rounded-[1.2rem] flex items-center justify-center shrink-0"
+                                style={{ 
+                                    background: `radial-gradient(circle, ${node.accent}30 0%, transparent 80%)`, 
+                                    border: `1px solid ${node.accent}40`,
+                                    boxShadow: `0 0 20px ${node.accent}20` 
+                                }}
+                            >
+                                <div className="w-2 h-2 rounded-full" style={{ background: node.accent }} />
+                            </div>
+                            <div className="flex flex-col">
+                                <span className={`font-display font-black text-[15px] md:text-base tracking-wide uppercase ${node.isFounder ? 'text-white' : 'text-white/90'}`}>
+                                    {node.agentName}
+                                </span>
+                                <span className="font-mono text-[9px] md:text-[10px] uppercase tracking-widest text-[#A1A1AA] mt-0.5">
+                                    {node.department}
+                                </span>
+                            </div>
+                        </div>
+                        <div className="font-mono text-[10px] font-bold tracking-widest text-[#A1A1AA] bg-[#050505] border border-white/5 shadow-inner px-2 py-1 rounded-md">
+                            {node.time}
+                        </div>
+                    </div>
+
+                    {/* Message Body */}
+                    <h4 className="text-white/80 font-medium leading-[1.6] text-sm md:text-base tracking-[-0.01em]">
+                        {node.message}
+                    </h4>
+
+                    {/* Secondary Data Detail */}
+                    {node.secondary && (
+                        <p className="text-[#A1A1AA] text-xs md:text-sm leading-relaxed mt-1 border-l-2 pl-4 py-0.5" style={{ borderColor: `${node.accent}40` }}>
+                            {node.secondary}
+                        </p>
+                    )}
+                </motion.div>
+            </motion.div>
+        </div>
+    );
 };
 
 export default DayTimelineSection;

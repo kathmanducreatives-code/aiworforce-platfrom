@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
-import { motion } from "framer-motion";
-import { Globe, Languages, Shield } from "lucide-react";
+import { motion, AnimatePresence } from "framer-motion";
+import { Globe, Languages, Shield, Target, MessageSquare, PenLine, Search, FileText } from "lucide-react";
 
 const HUBS = [
   { name: "San Francisco", x: 15, y: 38 },
@@ -12,7 +12,16 @@ const HUBS = [
   { name: "Dubai", x: 60, y: 42 },
   { name: "Bangalore", x: 70, y: 52 },
   { name: "Singapore", x: 77, y: 56 },
-  { name: "Toronto", x: 20, y: 32 },
+  { name: "Tokyo", x: 88, y: 38 },
+];
+
+const AGENT_MESSAGES = [
+    { text: "Hawk detecting pricing change in", city: "London", icon: Target, color: "#fbbf24" },
+    { text: "Penn sending outreach to", city: "Berlin", icon: PenLine, color: "#60a5fa" },
+    { text: "Aria analyzing candidate in", city: "Tokyo", icon: MessageSquare, color: "#a78bfa" },
+    { text: "Radar identifying leads in", city: "San Francisco", icon: Search, color: "#60a5fa" },
+    { text: "Scout scraping profiles in", city: "New York", icon: Search, color: "#34d399" },
+    { text: "Brief analyzing markets in", city: "Tel Aviv", icon: FileText, color: "#fbbf24" },
 ];
 
 const COLUMNS = [
@@ -31,6 +40,7 @@ M 48,42 Q 52,40 55,42 L 58,48 Q 56,55 52,58 L 48,56 Q 45,50 48,42 Z
 const GlobalSection = () => {
   const ref = useRef<HTMLDivElement>(null);
   const [inView, setInView] = useState(false);
+  const [activeMessageIndex, setActiveMessageIndex] = useState(0);
 
   useEffect(() => {
     const el = ref.current;
@@ -42,54 +52,112 @@ const GlobalSection = () => {
     return () => obs.disconnect();
   }, []);
 
+  // Cycle messages
+  useEffect(() => {
+     if (!inView) return;
+     const interval = setInterval(() => {
+         setActiveMessageIndex(prev => (prev + 1) % AGENT_MESSAGES.length);
+     }, 3000);
+     return () => clearInterval(interval);
+  }, [inView]);
+
   return (
-    <section ref={ref} id="global" className="relative z-10 py-24 md:py-32">
-      <div className="max-w-[1100px] mx-auto px-6">
-        <div className="text-center mb-16">
-          <span className="font-mono text-xs uppercase tracking-[0.15em] text-emerald-400 mb-4 block">BUILT FOR THE WORLD</span>
-          <h2 className="font-display font-black text-3xl md:text-5xl text-white leading-[1.1] mb-6">
-            One founder in Mumbai. One in Berlin.<br />One in São Paulo. One in Toronto.<br />Same AI workforce. Same results.
+    <section ref={ref} id="global" className="relative z-10 py-16 md:py-24 bg-[#000502]">
+      <div className="max-w-[1200px] mx-auto px-6">
+        <div className="text-center mb-20">
+          <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full border border-accent-mint/40 bg-accent-mint/5 mb-8">
+            <span className="font-mono text-[10px] uppercase tracking-[0.2em] text-accent-mint font-bold">BUILT FOR THE WORLD</span>
+          </div>
+          <h2 className="font-display font-bold text-4xl md:text-6xl text-white leading-[1.0] mb-8 tracking-tight">
+            One workforce. Every timezone.
           </h2>
-          <p className="text-white/40 text-lg max-w-[600px] mx-auto leading-relaxed">
-            Your AI workforce works in every timezone, speaks every market's language, and never needs a local office.
+          <p className="text-white/40 text-lg max-w-[600px] mx-auto leading-relaxed font-medium">
+             Your AI workforce works in every timezone, speaks every market's language, and never needs a local office.
           </p>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-10 mb-20">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-12 mb-24 max-w-5xl mx-auto">
           {COLUMNS.map((col, i) => (
             <motion.div key={col.title} initial={{ opacity: 0, y: 20 }} animate={inView ? { opacity: 1, y: 0 } : {}}
-              transition={{ duration: 0.5, delay: i * 0.15 }} className="text-center md:text-left"
+              transition={{ duration: 0.6, delay: i * 0.15, ease: [0.23, 1, 0.32, 1] }} className="text-center md:text-left group"
             >
-              <col.Icon className="w-7 h-7 text-emerald-400 mb-4 mx-auto md:mx-0" />
-              <h3 className="font-display font-bold text-lg text-white mb-2">{col.title}</h3>
-              <p className="text-sm text-white/40 leading-relaxed">{col.body}</p>
+              <div className="w-12 h-12 rounded-2xl bg-accent-mint/5 border border-accent-mint/20 flex items-center justify-center mb-6 mx-auto md:mx-0 group-hover:bg-accent-mint/10 group-hover:border-accent-mint/40 transition-all">
+                 <col.Icon className="w-6 h-6 text-accent-mint" />
+              </div>
+              <h3 className="font-display font-bold text-xl text-white mb-4 tracking-tight">{col.title}</h3>
+              <p className="text-sm text-white/40 leading-relaxed font-medium">{col.body}</p>
             </motion.div>
           ))}
         </div>
 
-        <motion.div initial={{ opacity: 0 }} animate={inView ? { opacity: 1 } : {}} transition={{ duration: 0.8, delay: 0.5 }}
-          className="relative w-full mx-auto" style={{ maxWidth: 800 }}>
-          <svg viewBox="0 0 100 80" className="w-full h-auto" preserveAspectRatio="xMidYMid meet">
-            <path d={WORLD_MAP_PATH} fill="none" stroke="white" strokeWidth="0.3" opacity="0.1" />
-            {HUBS.slice(0, -1).map((hub, i) => {
-              const next = HUBS[(i + 2) % HUBS.length];
-              return <line key={`conn-${i}`} x1={hub.x} y1={hub.y} x2={next.x} y2={next.y} stroke="white" strokeWidth="0.15" opacity="0.08" />;
-            })}
-            {HUBS.map((hub, i) => (
-              <g key={hub.name}>
-                <circle cx={hub.x} cy={hub.y} r="0.8" fill="#34d399" opacity="0.8">
-                  <animate attributeName="r" values="0.6;1.2;0.6" dur={`${2 + i * 0.3}s`} repeatCount="indefinite" />
-                  <animate attributeName="opacity" values="0.8;0.3;0.8" dur={`${2 + i * 0.3}s`} repeatCount="indefinite" />
-                </circle>
-                <text x={hub.x} y={hub.y + 2.5} textAnchor="middle" fill="white" fontSize="1.8" opacity="0.25">{hub.name}</text>
-              </g>
-            ))}
-          </svg>
+        <motion.div initial={{ opacity: 0 }} animate={inView ? { opacity: 1 } : {}} transition={{ duration: 1.2, delay: 0.5 }}
+          className="relative w-full mx-auto p-4 md:p-12 rounded-[2rem] border border-accent-mint/20 bg-[#060606] shadow-[inset_0_0_60px_rgba(0,255,148,0.04),_0_50px_100px_rgba(0,0,0,0.8)]" style={{ maxWidth: 1000 }}>
+          
+          {/* Map Container */}
+          <div className="relative w-full aspect-[5/3] md:aspect-[2/1]">
+              <svg viewBox="0 0 100 80" className="w-full h-full absolute inset-0" preserveAspectRatio="xMidYMid meet">
+                  <path d={WORLD_MAP_PATH} fill="none" stroke="white" strokeWidth="0.2" opacity="0.05" />
+                  {HUBS.slice(0, -1).map((hub, i) => {
+                  const next = HUBS[(i + 2) % HUBS.length];
+                  return <line key={`conn-${i}`} x1={hub.x} y1={hub.y} x2={next.x} y2={next.y} stroke="white" strokeWidth="0.1" opacity="0.04" />;
+                  })}
+                  {HUBS.map((hub, i) => (
+                  <g key={hub.name}>
+                      <circle cx={hub.x} cy={hub.y} r="0.6" fill="#00FF94" opacity="0.5">
+                      <animate attributeName="r" values="0.4;1.2;0.4" dur={`${3 + i * 0.4}s`} repeatCount="indefinite" />
+                      <animate attributeName="opacity" values="0.8;0.2;0.8" dur={`${3 + i * 0.4}s`} repeatCount="indefinite" />
+                      </circle>
+                  </g>
+                  ))}
+              </svg>
+
+              {/* Floating Messages Over Map */}
+              <AnimatePresence mode="wait">
+                  {AGENT_MESSAGES.map((msg, i) => {
+                      if (i !== activeMessageIndex) return null;
+                      const hub = HUBS.find(h => h.name === msg.city);
+                      if (!hub) return null;
+                      const Icon = msg.icon;
+
+                      return (
+                          <motion.div 
+                              key={i}
+                              initial={{ opacity: 0, y: 10, scale: 0.9 }}
+                              animate={{ opacity: 1, y: 0, scale: 1 }}
+                              exit={{ opacity: 0, scale: 0.9, transition: { duration: 0.2 } }}
+                              transition={{ duration: 0.5, type: "spring", bounce: 0.4 }}
+                              className="absolute z-20"
+                              style={{ 
+                                  left: `${hub.x}%`, 
+                                  top: `${hub.y}%`,
+                                  transform: 'translate(-50%, -100%)',
+                                  marginTop: '-15px' 
+                              }}
+                          >
+                              {/* Pulse origin */}
+                              <div className="absolute left-1/2 bottom-0 w-1 h-1 bg-white rounded-full translate-x-1/2 translate-y-2 blur-[1px]">
+                                  <div className="absolute inset-0 bg-white rounded-full animate-ping" />
+                              </div>
+
+                              <div className="flex items-center gap-3 py-2 px-3 bg-black/80 backdrop-blur-md border border-white/10 rounded-xl shadow-2xl min-w-[200px] md:min-w-[280px]">
+                                  <div className="w-8 h-8 rounded-lg border border-white/5 flex items-center justify-center shrink-0" style={{ backgroundColor: `${msg.color}15` }}>
+                                      <Icon className="w-4 h-4" style={{ color: msg.color }} />
+                                  </div>
+                                  <div>
+                                      <p className="text-[10px] md:text-xs text-white/90 font-medium leading-tight whitespace-nowrap">
+                                          {msg.text} <span className="font-bold text-white">{msg.city}</span>...
+                                      </p>
+                                  </div>
+                              </div>
+                          </motion.div>
+                      )
+                  })}
+              </AnimatePresence>
+          </div>
         </motion.div>
 
-        <div className="text-center mt-6">
-          <p className="text-sm text-white/30">Join founders from <span className="text-white/60 font-semibold">50+ countries</span></p>
-          <p className="text-2xl mt-2 opacity-60">🇺🇸 🇬🇧 🇮🇳 🇨🇦 🇦🇺 🇩🇪 🇸🇬 🇧🇷 🇮🇱 🇦🇪</p>
+        <div className="text-center mt-12 bg-white/[0.02] py-4 rounded-full border border-white/5 max-w-lg mx-auto">
+          <p className="text-[9px] font-black text-white/20 uppercase tracking-[0.3em]">Agents actively observing 40+ markets</p>
         </div>
       </div>
     </section>
