@@ -44,7 +44,7 @@ const PricingCard = () => {
   }, []);
 
   return (
-    <section ref={sectionRef} id="pricing" className="relative px-6 py-16 md:py-24 bg-black overflow-hidden border-t border-white/5">
+    <section ref={sectionRef} id="pricing" className="relative px-6 py-16 md:py-24 bg-transparent overflow-hidden border-t border-white/5">
       <div className="max-w-6xl mx-auto">
         <div className="text-center mb-20">
           <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full border border-accent-mint/40 bg-accent-mint/5 mb-8">

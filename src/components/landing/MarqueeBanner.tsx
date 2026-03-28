@@ -2,7 +2,7 @@ const row1 = '5 DEPARTMENTS · 15 AGENTS · 1 COMPANY BRAIN ◆ YOUR ENTIRE AI W
 const row2 = 'TALENT · GROWTH · CONTENT · INTELLIGENCE · COMMAND ◆ SET UP IN 10 MINUTES ◆ CANCEL ANYTIME ◆ ';
 
 const MarqueeBanner = () => (
-    <section className="py-12 md:py-16 overflow-hidden border-y border-white/5 bg-black">
+    <section className="py-12 md:py-16 overflow-hidden border-y border-white/5 bg-galaxy-void/80 backdrop-blur-sm">
         <div className="overflow-hidden whitespace-nowrap mb-4">
             <div className="ticker-track">
                 {[...Array(6)].map((_, i) => (

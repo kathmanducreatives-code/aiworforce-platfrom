@@ -219,7 +219,7 @@ const TimelineNode = ({ node, index, total, scrollYProgress, isMobile }: any) =>
                                 </span>
                             </div>
                         </div>
-                        <div className="font-mono text-[10px] font-bold tracking-widest text-[#A1A1AA] bg-[#050505] border border-white/5 shadow-inner px-2 py-1 rounded-md">
+                        <div className="font-mono text-[10px] font-bold tracking-widest text-[#A1A1AA] bg-galaxy-void border border-white/5 shadow-inner px-2 py-1 rounded-md">
                             {node.time}
                         </div>
                     </div>

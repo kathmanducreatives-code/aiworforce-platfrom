@@ -48,6 +48,9 @@ import LeadCRM from "./pages/LeadCRM";
 import OutreachEngine from "./pages/OutreachEngine";
 import TalentIntelligence from "./pages/TalentIntelligence";
 import CompetitorIntelligence from "./pages/CompetitorIntelligence";
+import CommandCenter from "./pages/CommandCenter";
+import TalentDepartment from "./pages/TalentDepartment";
+import AgentStudio from "./pages/AgentStudio";
 import CandidateDossier from "./pages/candidates/CandidateDossier";
 // import VerifyQueue from "./pages/verify/VerifyQueue";
 // import VerifyResults from "./pages/verify/VerifyResults";
@@ -84,10 +87,29 @@ const App = () => (
                     <Route path="/get-demo" element={<GetDemo />} />
 
                     {/* Protected Routes with MainLayout */}
+                    {/* Command Center (new default dashboard) */}
                     <Route path="/dashboard" element={
                       <ProtectedRoute>
                         <MainLayout>
-                          <Dashboard />
+                          <CommandCenter />
+                        </MainLayout>
+                      </ProtectedRoute>
+                    } />
+
+                    {/* Agent Studio */}
+                    <Route path="/agent-studio" element={
+                      <ProtectedRoute>
+                        <MainLayout>
+                          <AgentStudio />
+                        </MainLayout>
+                      </ProtectedRoute>
+                    } />
+
+                    {/* Department detail views */}
+                    <Route path="/departments/talent" element={
+                      <ProtectedRoute>
+                        <MainLayout>
+                          <TalentDepartment />
                         </MainLayout>
                       </ProtectedRoute>
                     } />

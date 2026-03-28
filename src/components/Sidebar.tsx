@@ -4,7 +4,7 @@ import { useAuth } from '@/hooks/useAuth';
 import {
   LayoutDashboard, Calendar, Search, Brain, Target, TrendingUp,
   Mail, Share2, BarChart3, LogOut, HelpCircle,
-  PanelLeftClose, PanelLeft, Users, Briefcase, Crosshair, Zap, Radar, Eye
+  PanelLeftClose, PanelLeft, Users, Briefcase, Crosshair, Zap, Radar, Eye, Bot
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -15,34 +15,42 @@ interface NavGroup {
 
 const navGroups: NavGroup[] = [
   {
-    label: 'Hire',
+    label: '',
     items: [
-      { path: '/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
+      { path: '/dashboard', icon: LayoutDashboard, label: 'Command Center' },
+      { path: '/agent-studio', icon: Bot, label: 'Agent Studio' },
+    ],
+  },
+  {
+    label: 'Talent',
+    items: [
+      { path: '/departments/talent', icon: Target, label: 'Talent Dept' },
       { path: '/screening-jobs', icon: Briefcase, label: 'Job Screening' },
       { path: '/candidates', icon: Users, label: 'Candidates' },
+      { path: '/lead-scraper', icon: Search, label: 'Scout (Source)' },
+      { path: '/icp-intelligence', icon: Target, label: 'ICP Intelligence' },
+      { path: '/deep-search', icon: Brain, label: 'Deep Search' },
       { path: '/expert-marketplace', icon: Users, label: 'Expert Interviews' },
       { path: '/interview-scheduler', icon: Calendar, label: 'Interviews' },
     ],
   },
   {
-    label: 'Find',
-    items: [
-      { path: '/lead-scraper', icon: Search, label: 'Lead Scraper' },
-      { path: '/icp-intelligence', icon: Target, label: 'ICP Intelligence' },
-      { path: '/deep-search', icon: Brain, label: 'Deep Search' },
-      { path: '/growth-signals', icon: TrendingUp, label: 'Growth Signals' },
-      { path: '/talent-intel', icon: Users, label: 'Talent Intel' },
-      { path: '/competitor-intel', icon: Eye, label: 'Competitor Intel' },
-    ],
-  },
-  {
-    label: 'Engage',
+    label: 'Growth',
     items: [
       { path: '/email-sequences', icon: Mail, label: 'Email Sequences' },
       { path: '/distribution', icon: Share2, label: 'Job Distribution' },
       { path: '/post-interceptor', icon: Crosshair, label: 'Post Interceptor' },
       { path: '/lead-crm', icon: Zap, label: 'Lead CRM' },
+      { path: '/outreach-engine', icon: Mail, label: 'Outreach Engine' },
+    ],
+  },
+  {
+    label: 'Intelligence',
+    items: [
+      { path: '/competitor-intel', icon: Eye, label: 'Competitor Intel' },
       { path: '/competitors', icon: Radar, label: 'Job Tracker' },
+      { path: '/growth-signals', icon: TrendingUp, label: 'Growth Signals' },
+      { path: '/talent-intel', icon: Users, label: 'Talent Intel' },
     ],
   },
   {

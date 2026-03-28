@@ -98,8 +98,8 @@ const TimeMath = () => {
   }, [inView]);
 
   return (
-    <section ref={sectionRef} className="relative px-6 py-16 md:py-24 bg-black overflow-hidden border-t border-white/5 min-h-[80vh] flex flex-col items-center justify-center">
-      <div className="absolute inset-0 z-0 pointer-events-none" style={{ background: "linear-gradient(to bottom, var(--bg-fiesta-dark) 0%, #000000 100%)" }} />
+    <section ref={sectionRef} className="relative px-6 py-16 md:py-24 bg-transparent overflow-hidden border-t border-white/5 min-h-[80vh] flex flex-col items-center justify-center">
+      <div className="absolute inset-0 z-0 pointer-events-none" style={{ background: "linear-gradient(to bottom, var(--bg-fiesta-dark) 0%, var(--bg-galaxy-void) 100%)" }} />
       
       {/* Soundwave Data Visualization */ }
       <div className="absolute inset-0 z-0 pointer-events-none flex items-center justify-center opacity-10 blur-[1px]">

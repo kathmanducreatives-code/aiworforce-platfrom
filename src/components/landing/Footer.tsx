@@ -1,7 +1,7 @@
 import { Twitter, Linkedin, Mail } from 'lucide-react';
 
 const Footer = () => (
-  <footer className="relative border-t border-white/5 bg-black px-6 py-24">
+  <footer className="relative border-t border-white/5 bg-galaxy-void px-6 py-24">
     <div className="max-w-6xl mx-auto grid grid-cols-1 md:grid-cols-12 gap-16 mb-24">
       {/* Brand Column */}
       <div className="md:col-span-4">

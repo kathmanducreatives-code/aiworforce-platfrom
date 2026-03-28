@@ -7,20 +7,40 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Premium dark mode font system */
+/* ═══════════════════════════════════════════════════
+   Design Tokens — AI Fiesta Design System
+   Background:  #030A0C (void) › #0F4450 (mid) › #298799 (teal glow)
+   Brand green: #00FF94 (neon mint — UI elements, CTAs, accents)
+   ═══════════════════════════════════════════════════ */
 :root {
-  --bg-black: #000000;
-  --bg-fiesta-dark: #010508;
-  --bg-galaxy-void: #030A0C;
-  --glow-bright: #298799;
-  --glow-mid: #0F4450;
-  --accent-mint: #298799;
-  --accent-lime: #0F4450;
-  --accent-cyan: #00E5FF;
-  --glass-bg: rgba(7, 13, 15, 0.58);
-  --glass-border: rgba(255, 255, 255, 0.11);
-  --glass-border-tint: rgba(41, 135, 153, 0.14);
-  --grid-color: #111111;
+  /* Backgrounds */
+  --bg-black:        #000000;
+  --bg-fiesta-dark:  #010508;
+  --bg-galaxy-void:  #030A0C;   /* deepest dark — canvas base */
+  --bg-surface:      rgba(7, 13, 15, 0.72);
+
+  /* Teal atmospheric palette (background glows, grid, arc) */
+  --teal-bright:     #298799;   /* #298799 — primary atmosphere glow */
+  --teal-mid:        #0F4450;   /* #0F4450 — mid-depth glow */
+  --glow-bright:     #298799;   /* alias */
+  --glow-mid:        #0F4450;   /* alias */
+
+  /* Brand green (UI elements: buttons, borders, data pulses) */
+  --accent-mint:     #00FF94;   /* FIXED: was wrongly #298799 */
+  --accent-neon:     #00FF94;   /* alias for clarity */
+
+  /* Legacy / misc */
+  --accent-lime:     #0F4450;
+  --accent-cyan:     #00E5FF;
+
+  /* Glass system */
+  --glass-bg:          rgba(7, 13, 15, 0.60);
+  --glass-border:      rgba(255, 255, 255, 0.09);
+  --glass-border-tint: rgba(41, 135, 153, 0.16);
+  --glass-border-mint: rgba(0, 255, 148, 0.20);
+
+  /* Grid */
+  --grid-color: rgba(41, 135, 153, 0.045);
 }
 
 .font-display {

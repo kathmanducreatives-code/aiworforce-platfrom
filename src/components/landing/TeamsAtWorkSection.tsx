@@ -134,7 +134,7 @@ const TeamsAtWorkSection = () => {
   }, []);
 
   return (
-    <section ref={sectionRef} className="relative z-10 py-16 md:py-24 bg-black overflow-hidden">
+    <section ref={sectionRef} className="relative z-10 py-16 md:py-24 bg-transparent overflow-hidden">
       <div className="max-w-[1100px] mx-auto px-6">
         <div className="text-center mb-20">
           <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full border border-accent-mint/40 bg-accent-mint/5 mb-8">

@@ -176,7 +176,7 @@ const AgentBuilderSection = () => {
           </div>
 
           {/* Right: Live Preview */}
-           <div className="glass-card-premium rounded-3xl border-white/10 shadow-[0_40px_100px_rgba(0,0,0,0.8)] overflow-hidden flex flex-col bg-[#050505]">
+           <div className="glass-card-premium rounded-3xl border-white/10 shadow-[0_40px_100px_rgba(0,0,0,0.8)] overflow-hidden flex flex-col bg-galaxy-void">
                <div className="bg-white/[0.02] px-6 py-4 flex items-center justify-between border-b border-white/5">
                 <span className="text-[10px] font-black text-white/40 uppercase tracking-widest leading-none mt-1">Live Agent Preview</span>
                 <div className="flex gap-2">

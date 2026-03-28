@@ -39,7 +39,7 @@ const GlobalTrustBar = () => {
   }, [text, isTyping, msgIndex]);
 
   return (
-    <section className="relative z-10 w-full border-y border-white/5 bg-[#030303] py-5 overflow-hidden">
+    <section className="relative z-10 w-full border-y border-white/5 bg-galaxy-void/80 backdrop-blur-sm py-5 overflow-hidden">
       
       {/* Live Activity Feed */}
       <div className="max-w-7xl mx-auto px-6 flex items-center justify-center mb-4">
@@ -52,8 +52,8 @@ const GlobalTrustBar = () => {
 
       {/* Flag ticker */}
       <div className="w-full overflow-hidden relative h-6 flex items-center">
-        <div className="absolute left-0 top-0 bottom-0 w-24 bg-gradient-to-r from-[#030303] to-transparent z-10 pointer-events-none" />
-        <div className="absolute right-0 top-0 bottom-0 w-24 bg-gradient-to-l from-[#030303] to-transparent z-10 pointer-events-none" />
+        <div className="absolute left-0 top-0 bottom-0 w-24 bg-gradient-to-r from-galaxy-void to-transparent z-10 pointer-events-none" />
+        <div className="absolute right-0 top-0 bottom-0 w-24 bg-gradient-to-l from-galaxy-void to-transparent z-10 pointer-events-none" />
         
         <div className="flex whitespace-nowrap animate-[ticker-scroll_40s_linear_infinite] items-center">
           {[...flagItems, ...flagItems, ...flagItems, ...flagItems].map((flag, i) => (

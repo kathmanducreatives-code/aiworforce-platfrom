@@ -107,7 +107,7 @@ const ProductDashboard = () => {
     }, []);
 
     return (
-    <section ref={sectionRef} className="relative w-full py-24 md:py-48 bg-black overflow-hidden border-t border-white/5">
+    <section ref={sectionRef} className="relative w-full py-24 md:py-48 bg-transparent overflow-hidden border-t border-white/5">
       <div className="max-w-6xl mx-auto px-6 grid grid-cols-1 lg:grid-cols-2 gap-16 items-center">
         
         {/* TEXT CONTENT (LEFT) */}

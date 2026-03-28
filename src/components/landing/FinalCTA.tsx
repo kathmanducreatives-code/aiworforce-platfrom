@@ -41,7 +41,7 @@ const FinalCTA = () => {
     }, [isInView]);
 
     return (
-    <section ref={sectionRef} className="relative px-6 py-16 md:py-24 overflow-hidden bg-black">
+    <section ref={sectionRef} className="relative px-6 py-16 md:py-24 overflow-hidden bg-transparent">
       {/* High-Contrast Radial Glow */}
       <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full max-w-4xl h-[800px] pointer-events-none">
         <div className="absolute inset-0 bg-accent-mint/[0.05] blur-[160px] rounded-full scale-150" />

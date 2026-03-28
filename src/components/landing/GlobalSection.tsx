@@ -62,7 +62,7 @@ const GlobalSection = () => {
   }, [inView]);
 
   return (
-    <section ref={ref} id="global" className="relative z-10 py-16 md:py-24 bg-[#000502]">
+    <section ref={ref} id="global" className="relative z-10 py-16 md:py-24 bg-transparent">
       <div className="max-w-[1200px] mx-auto px-6">
         <div className="text-center mb-20">
           <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full border border-accent-mint/40 bg-accent-mint/5 mb-8">
@@ -91,7 +91,7 @@ const GlobalSection = () => {
         </div>
 
         <motion.div initial={{ opacity: 0 }} animate={inView ? { opacity: 1 } : {}} transition={{ duration: 1.2, delay: 0.5 }}
-          className="relative w-full mx-auto p-4 md:p-12 rounded-[2rem] border border-accent-mint/20 bg-[#060606] shadow-[inset_0_0_60px_rgba(0,255,148,0.04),_0_50px_100px_rgba(0,0,0,0.8)]" style={{ maxWidth: 1000 }}>
+          className="relative w-full mx-auto p-4 md:p-12 rounded-[2rem] border border-accent-mint/20 bg-galaxy-void/90 backdrop-blur-xl shadow-[inset_0_0_60px_rgba(0,255,148,0.04),_0_50px_100px_rgba(0,0,0,0.8)]" style={{ maxWidth: 1000 }}>
           
           {/* Map Container */}
           <div className="relative w-full aspect-[5/3] md:aspect-[2/1]">

@@ -22,8 +22,15 @@ export default {
 			border: 'rgba(16, 185, 129, 0.06)',
 				input: 'hsl(var(--input))',
 				ring: 'hsl(var(--ring))',
-				background: '#080808',
+				background: '#030A0C',
 				foreground: '#FFFFFF',
+				/* ── AI Fiesta Design Tokens ── */
+				'accent-mint':   '#00FF94',   /* brand green — buttons, borders, glows */
+				'accent-neon':   '#00FF94',   /* alias */
+				'accent-cyan':   '#00E5FF',   /* secondary highlight */
+				'teal-bright':   '#298799',   /* atmospheric teal — background glows */
+				'teal-mid':      '#0F4450',   /* mid-depth teal */
+				'galaxy-void':   '#030A0C',   /* deepest dark */
 				primary: {
 					'100': 'rgba(16, 185, 129, 0.1)',
 					'200': 'rgba(16, 185, 129, 0.2)',
