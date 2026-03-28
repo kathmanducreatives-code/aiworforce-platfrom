@@ -21,6 +21,25 @@
   --glass-border: rgba(255, 255, 255, 0.11);
   --glass-border-tint: rgba(41, 135, 153, 0.14);
   --grid-color: #111111;
+
+  /* Command Center Departments */
+  --bg-tertiary: #1a2332;
+  --talent-primary: #10b981;
+  --talent-glow: rgba(16, 185, 129, 0.15);
+
+  --growth-primary: #3b82f6; 
+  --growth-glow: rgba(59, 130, 246, 0.15);
+
+  --content-primary: #8b5cf6;
+  --content-glow: rgba(139, 92, 246, 0.15);
+
+  --intelligence-primary: #f59e0b;
+  --intelligence-glow: rgba(245, 158, 11, 0.15);
+
+  --command-primary: #ec4899;
+  --command-glow: rgba(236, 72, 153, 0.15);
+  
+  --border-subtle: rgba(255, 255, 255, 0.05);
 }
 
 .font-display {
@@ -312,6 +331,30 @@ html {
   50% { opacity: 0.3; }
 }
 
+@keyframes bootCursorBlink {
+  0%, 45% { opacity: 1; }
+  46%, 100% { opacity: 0; }
+}
+
+@keyframes bootDotPulse {
+  0% {
+    transform: scale(0.55);
+    box-shadow: 0 0 0 hsl(var(--primary) / 0);
+  }
+  60% {
+    transform: scale(1.08);
+    box-shadow:
+      0 0 12px hsl(var(--primary) / 0.55),
+      0 0 24px hsl(var(--primary) / 0.22);
+  }
+  100% {
+    transform: scale(1);
+    box-shadow:
+      0 0 10px hsl(var(--primary) / 0.42),
+      0 0 18px hsl(var(--primary) / 0.16);
+  }
+}
+
 @keyframes floatCard {
   0%, 100% { transform: translateY(0px); }
   50% { transform: translateY(-8px); }
@@ -396,6 +439,16 @@ html {
   );
 }
 
+.hero-top-aura {
+  background: radial-gradient(
+    ellipse 52% 84% at 50% 0%,
+    hsl(var(--primary) / 0.12) 0%,
+    hsl(var(--primary) / 0.06) 18%,
+    transparent 62%
+  );
+  filter: blur(28px);
+}
+
 .hero-star-layer {
   transition: transform 0.15s ease-out;
   will-change: transform;
@@ -426,6 +479,19 @@ html {
   );
   pointer-events: none;
   filter: blur(18px);
+}
+
+.hero-boot-cursor {
+  animation: bootCursorBlink 0.92s steps(1, end) infinite;
+}
+
+.hero-boot-dot {
+  transition: background 0.24s ease, box-shadow 0.24s ease, transform 0.24s ease;
+}
+
+.hero-boot-dot-active {
+  background: hsl(var(--primary));
+  animation: bootDotPulse 0.55s cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
 .hero-powered-pill {
@@ -2457,4 +2523,38 @@ body {
   50% {
     opacity: 0.8;
   }
+}
+
+/* ====== AI Command Center Utilities ====== */
+/* Glassmorphism cards */
+.glass-card {
+  background: rgba(255, 255, 255, 0.03);
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.4);
+}
+
+/* Glow effects for active states */
+.glow-talent {
+  box-shadow: 0 0 24px var(--talent-glow),
+              0 4px 24px rgba(0, 0, 0, 0.4);
+}
+
+/* Subtle animations */
+.hover-lift {
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+.hover-lift:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+}
+
+/* Micro-interactions */
+.pulse-badge {
+  animation: badge-pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+@keyframes badge-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.6; }
 }

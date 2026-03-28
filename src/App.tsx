@@ -8,7 +8,8 @@ import { ClientProvider } from "./contexts/ClientContext";
 import { ClientThemeProvider } from "./components/ClientThemeProvider";
 import { ThemeProvider } from "./contexts/ThemeContext";
 import Landing from "./pages/Landing";
-import Dashboard from "./pages/Dashboard";
+import CommandCenter from "./pages/CommandCenter";
+import TalentDepartment from "./pages/TalentDepartment";
 
 import Candidates from "./pages/Candidates";
 import Features from "./pages/Features";
@@ -87,7 +88,15 @@ const App = () => (
                     <Route path="/dashboard" element={
                       <ProtectedRoute>
                         <MainLayout>
-                          <Dashboard />
+                          <CommandCenter />
+                        </MainLayout>
+                      </ProtectedRoute>
+                    } />
+
+                    <Route path="/departments/talent" element={
+                      <ProtectedRoute>
+                        <MainLayout>
+                          <TalentDepartment />
                         </MainLayout>
                       </ProtectedRoute>
                     } />

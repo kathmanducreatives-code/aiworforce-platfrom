@@ -7,7 +7,7 @@ import { useTheme } from "@/contexts/ThemeContext";
 import {
   Users, TrendingUp, Folder, Brain, Moon, Sun,
   UserPlus, Mail, Search, Calendar, AlertCircle, ChevronRight,
-  ArrowUpRight, ArrowDownRight, Clock, Crosshair, Zap, MessageSquare
+  ArrowUpRight, ArrowDownRight, Clock, Crosshair, Zap, MessageSquare, Target, Plus
 } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import MetricCard from "@/components/shared/MetricCard";
@@ -16,8 +16,41 @@ import ScorePill from "@/components/shared/ScorePill";
 import NotificationCenter from "@/components/shared/NotificationCenter";
 import { cn } from "@/lib/utils";
 import { fetchOutboundMetrics } from "@/services/interceptorService";
+import { Link } from "react-router-dom";
 
-const Dashboard = () => {
+function AgentCard({ name, role, avatar, status, lastActive, todayStats, href }: any) {
+  return (
+    <Link to={href} className="glass-card rounded-2xl p-5 border-emerald-500/20 bg-[#1a2332]/50 hover:bg-[#1a2332]/80 transition-all hover-lift group relative overflow-hidden">
+      <div className="absolute top-0 right-0 w-32 h-32 bg-emerald-500/5 rounded-full blur-2xl group-hover:bg-emerald-500/10 transition-colors pointer-events-none" />
+      <div className="flex items-start justify-between relative z-10 w-full mb-4">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded-full bg-gradient-to-br from-emerald-400 to-emerald-600 flex items-center justify-center text-white font-bold text-lg shadow-sm">
+            {avatar ? <img src={avatar} alt={name} className="w-full h-full rounded-full" /> : name[0]}
+          </div>
+          <div>
+            <h3 className="text-base font-bold text-white leading-tight">{name}</h3>
+            <p className="text-[11px] font-medium text-emerald-500 uppercase tracking-wider">{role}</p>
+          </div>
+        </div>
+        <div className="flex flex-col items-end">
+          <div className="flex items-center gap-1.5 border border-white/10 px-2 py-0.5 rounded-full bg-black/20">
+            <span className={cn("w-1.5 h-1.5 rounded-full", status === 'active' ? "bg-emerald-500 pulse-badge" : "bg-zinc-500")} />
+            <span className="text-[10px] font-bold uppercase tracking-wider text-zinc-300">{status}</span>
+          </div>
+          <p className="text-[10px] text-zinc-500 mt-1">Active {lastActive}</p>
+        </div>
+      </div>
+      <div className="flex items-center gap-2 pt-4 border-t border-white/5 relative z-10">
+        <div className="p-1 rounded bg-emerald-500/10 text-emerald-500">
+          <Zap className="h-3 w-3" />
+        </div>
+        <p className="text-xs font-semibold text-zinc-300">Today: <span className="text-white">{todayStats}</span></p>
+      </div>
+    </Link>
+  );
+}
+
+const TalentDepartment = () => {
   const navigate = useNavigate();
   const { profile } = useAuth();
   const { theme, toggleTheme } = useTheme();
@@ -162,8 +195,71 @@ const Dashboard = () => {
         {/* Onboarding Wizard — only shows for new users */}
         <OnboardingWizard totalCandidates={metrics.totalCandidates} />
 
-        {/* Welcome Header */}
-        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-8">
+        {/* Talent Department Header */}
+        <div className="mb-8 animate-in fade-in slide-in-from-bottom-2 duration-500">
+          <div className="flex items-center gap-2 text-xs font-medium text-zinc-400 mb-4 px-1 py-1 w-fit rounded-lg bg-white/5 border border-white/10">
+            <Link to="/dashboard" className="hover:text-white transition-colors px-2 py-1 rounded hover:bg-white/10">Command Center</Link>
+            <span className="text-zinc-600 mx-1">/</span>
+            <span className="text-emerald-400 font-semibold px-2 py-1 bg-emerald-500/10 rounded">Talent Department</span>
+          </div>
+
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+            <div>
+              <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-white flex items-center gap-3">
+                <div className="p-2 rounded-xl bg-emerald-500/10 border border-emerald-500/20">
+                  <Target className="h-6 w-6 text-emerald-500" />
+                </div>
+                Talent Department
+              </h1>
+              <p className="text-sm text-zinc-400 mt-2 flex items-center gap-2">
+                Your AI recruiting team <span className="text-zinc-600">•</span> <span className="text-emerald-400 font-medium">3 agents active</span>
+              </p>
+            </div>
+            <div className="flex items-center gap-3">
+              <button className="px-4 py-2 text-sm font-semibold rounded-lg border border-white/10 bg-white/5 text-white hover:bg-white/10 transition-colors hover-lift relative overflow-hidden">
+                View All Agents
+              </button>
+              <button onClick={() => navigate('/screening-jobs')} className="px-4 py-2 text-sm font-semibold rounded-lg bg-emerald-500 text-white hover:bg-emerald-600 shadow-[0_0_15px_rgba(16,185,129,0.3)] hover:shadow-[0_0_25px_rgba(16,185,129,0.5)] transition-all hover-lift flex items-center gap-2">
+                <Plus className="h-4 w-4" />
+                Create Screening Job
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {/* Agent Cards Row */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
+          <AgentCard 
+            name="Scout"
+            role="Candidate Sourcing Agent"
+            avatar={null}
+            status="active"
+            lastActive="2 min ago"
+            todayStats={`Sourced ${metrics.totalCandidates > 0 ? '47' : '0'} candidates`}
+            href="/lead-scraper"
+          />
+          <AgentCard 
+            name="Aria"
+            role="AI Screening Agent"
+            avatar={null}
+            status="active"
+            lastActive="Just now"
+            todayStats={`Completed ${metrics.pipelineScreened} screenings`}
+            href="/candidates"
+          />
+          <AgentCard 
+            name="Expert Interviewer"
+            role="Human Interview Coordinator"
+            avatar={null}
+            status="idle"
+            lastActive="1 day ago"
+            todayStats={`${metrics.pipelineInterviewed} interviews scheduled`}
+            href="/interview-scheduler"
+          />
+        </div>
+
+        {/* Welcome Header (Legacy/Secondary) */}
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-8 pt-6 border-t border-white/5">
           <div className="flex items-center gap-4">
             {profile?.logo_url && (
               <img src={profile.logo_url} alt="Logo" className="h-10 w-auto" />
@@ -393,4 +489,4 @@ const Dashboard = () => {
   );
 };
 
-export default Dashboard;
+export default TalentDepartment;
