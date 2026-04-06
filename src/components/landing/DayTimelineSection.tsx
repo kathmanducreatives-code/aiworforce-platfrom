@@ -20,37 +20,37 @@ interface TimelineNode {
 const TIMELINE_NODES: TimelineNode[] = [
     {
         id: "n1", time: "07:00 AM", side: "right", role: "agent",
-        agentName: "Brief Agent", department: "Intelligence Dept", accent: "#00FF94",
+        agentName: "Brief Agent", department: "Intelligence Dept", accent: "#10B981",
         message: "Morning brief delivered.",
         secondary: "3 signals need attention today, 1 urgent, 2 informational."
     },
     {
         id: "n2", time: "07:12 AM", side: "left", role: "founder",
-        agentName: "You", department: "Founder / Admin", accent: "#4285F4",
+        agentName: "You", department: "Founder / Admin", accent: "#10B981",
         message: "Reviewed brief. Approved Growth agent to pursue Acme Corp lead.",
         isFounder: true
     },
     {
         id: "n3", time: "07:13 AM", side: "right", role: "agent",
-        agentName: "Radar", department: "Growth Dept", accent: "#00FF94",
+        agentName: "Radar", department: "Growth Dept", accent: "#10B981",
         message: "Lead research initiated for Acme Corp.",
         secondary: "Found James Park, Co-Founder. Trigger: €8M Series A. Pain signal isolated."
     },
     {
         id: "n4", time: "07:45 AM", side: "left", role: "agent",
-        agentName: "Penn", department: "Growth Dept", accent: "#F59E0B",
+        agentName: "Penn", department: "Growth Dept", accent: "#34D399",
         message: "Personalized outreach drafted.",
         secondary: "Sequence hook references the specific hiring pain signal and Series A timing."
     },
     {
         id: "n5", time: "09:10 AM", side: "right", role: "agent",
-        agentName: "Scout", department: "Talent Dept", accent: "#97D700",
+        agentName: "Scout", department: "Talent Dept", accent: "#10B981",
         message: "Talent shortlist refreshed against updated ICP.",
         secondary: "Scraped 145 competitors. 12 tier-1 candidates identified."
     },
     {
         id: "n6", time: "11:30 AM", side: "left", role: "agent",
-        agentName: "Aria", department: "Evaluate Dept", accent: "#CC785C",
+        agentName: "Aria", department: "Evaluate Dept", accent: "#6EE7B7",
         message: "Candidate evaluations updated and queued for founder review."
     }
 ];
@@ -94,7 +94,7 @@ const DayTimelineSection = () => {
                     {/* Spine fill */}
                     <motion.div 
                         style={{ scaleY: useTransform(scrollYProgress, [0.1, 0.95], [0, 1]) }}
-                        className="absolute left-6 md:left-1/2 top-0 bottom-[-200px] w-[2px] bg-accent-mint -translate-x-1/2 origin-top shadow-[0_0_15px_rgba(0,255,148,0.5)] rounded-full" 
+                        className="absolute left-6 md:left-1/2 top-0 bottom-[-200px] w-[2px] bg-accent-mint -translate-x-1/2 origin-top shadow-[0_0_15px_rgba(16,185,129,0.5)] rounded-full" 
                     />
 
                     {/* Nodes Array */}

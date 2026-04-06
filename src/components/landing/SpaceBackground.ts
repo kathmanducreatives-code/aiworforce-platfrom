@@ -10,7 +10,7 @@ type ParticleSeed = {
   yRatio: number;
   radius: number;
   alpha: number;
-  tint: "white" | "teal";
+  tint: "white" | "emerald";
 };
 
 type PulsingParticle = ParticleSeed & {
@@ -261,7 +261,7 @@ class SpaceBackground {
         yRatio,
         radius: 0.3 + rng() * 0.9,
         alpha: 0.15 + rng() * 0.4,
-        tint: rng() > 0.68 ? "teal" : "white",
+        tint: rng() > 0.68 ? "emerald" : "white",
       };
 
       if (pulseIndices.has(index)) {
@@ -395,7 +395,7 @@ class SpaceBackground {
       const x = particle.xRatio * this.width;
       const y = particle.yRatio * this.height;
       const color =
-        particle.tint === "teal"
+        particle.tint === "emerald"
           ? `rgba(52, 211, 153, ${particle.alpha.toFixed(3)})`
           : `rgba(255, 255, 255, ${particle.alpha.toFixed(3)})`;
 
@@ -439,7 +439,7 @@ class SpaceBackground {
       const eased = (Math.sin(progress * Math.PI * 2) + 1) * 0.5;
       const alpha = particle.minAlpha + (particle.maxAlpha - particle.minAlpha) * eased;
       const color =
-        particle.tint === "teal"
+        particle.tint === "emerald"
           ? `rgba(52, 211, 153, ${alpha.toFixed(3)})`
           : `rgba(255, 255, 255, ${alpha.toFixed(3)})`;
       const radius = Math.max(1.8, particle.radius + 2.5);
@@ -447,9 +447,9 @@ class SpaceBackground {
       this.ctx.save();
       this.ctx.beginPath();
       this.ctx.fillStyle = color;
-      this.ctx.shadowBlur = particle.tint === "teal" ? 8 : 4;
+      this.ctx.shadowBlur = particle.tint === "emerald" ? 8 : 4;
       this.ctx.shadowColor =
-        particle.tint === "teal"
+        particle.tint === "emerald"
           ? "rgba(16, 185, 129, 0.22)"
           : "rgba(255, 255, 255, 0.1)";
       this.ctx.arc(x, y, particle.radius, 0, Math.PI * 2);

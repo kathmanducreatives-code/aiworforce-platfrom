@@ -54,7 +54,7 @@ const AgentBuilderSection = () => {
     <section id="customization" className="relative z-10 py-16 md:py-24 bg-transparent overflow-hidden border-t border-white/5">
       {/* Blueprint Grid Background */}
       <div className="absolute inset-0 opacity-[0.03] pointer-events-none" style={{
-        backgroundImage: `linear-gradient(#00FF94 1px, transparent 1px), linear-gradient(90deg, #00FF94 1px, transparent 1px)`,
+        backgroundImage: `linear-gradient(#10B981 1px, transparent 1px), linear-gradient(90deg, #10B981 1px, transparent 1px)`,
         backgroundSize: '40px 40px'
       }} />
 
@@ -191,7 +191,7 @@ const AgentBuilderSection = () => {
                 
                 {/* Visualizer rings */}
                 <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-80 h-80 rounded-full border border-white/5 flex items-center justify-center opacity-50 pointer-events-none">
-                    <div className={`w-56 h-56 rounded-full border border-white/5 flex items-center justify-center transition-all duration-1000 ${step === 3 ? 'border-accent-mint/30 shadow-[0_0_50px_rgba(0,255,148,0.1)] rotate-180' : ''}`}>
+                    <div className={`w-56 h-56 rounded-full border border-white/5 flex items-center justify-center transition-all duration-1000 ${step === 3 ? 'border-accent-mint/30 shadow-[0_0_50px_rgba(16,185,129,0.1)] rotate-180' : ''}`}>
                         <div className={`w-32 h-32 rounded-full border flex items-center justify-center transition-all duration-1000 ${step === 3 ? 'border-accent-mint/50 bg-accent-mint/5 -rotate-90' : 'border-white/10 bg-white/[0.02]'}`}>
                             
                         </div>
@@ -199,7 +199,7 @@ const AgentBuilderSection = () => {
                 </div>
 
                 <div className={`relative z-10 w-20 h-20 rounded-2xl flex items-center justify-center transition-all duration-1000 mb-8 border backdrop-blur-md shadow-2xl
-                    ${step === 3 ? 'bg-[#00FF94] border-[#00FF94] shadow-[0_0_40px_rgba(0,255,148,0.4)] scale-110' : 'bg-white/5 border-white/10 scale-100'}
+                    ${step === 3 ? 'bg-[#10B981] border-[#10B981] shadow-[0_0_40px_rgba(16,185,129,0.4)] scale-110' : 'bg-white/5 border-white/10 scale-100'}
                 `}>
                     <Cpu className={`w-10 h-10 ${step === 3 ? 'text-black' : 'text-white/30'}`} />
                 </div>

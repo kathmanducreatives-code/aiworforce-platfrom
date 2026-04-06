@@ -1,11 +1,14 @@
 import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ArrowRight, Check, Loader2 } from 'lucide-react';
+import { supabase } from '@/integrations/supabase/client';
+import { useToast } from '@/hooks/use-toast';
 
 const EmailCapture = () => {
   const [email, setEmail] = useState('');
   const [status, setStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
   const [errorMsg, setErrorMsg] = useState('');
+  const { toast } = useToast();
 
   const isValidEmail = (value: string) =>
     /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
@@ -19,9 +22,37 @@ const EmailCapture = () => {
     setErrorMsg('');
     setStatus('loading');
 
-    // TODO: wire to real email capture API / Supabase / Mailchimp
-    await new Promise(r => setTimeout(r, 1200));
-    setStatus('success');
+    try {
+      const { error } = await supabase
+        .from('codex_leads')
+        .insert([{ 
+          company: 'LANDING_PAGE_WAITLIST',
+          personalized_message: `Inbound waitlist: ${email}`,
+          source_url: window.location.href,
+          data: { 
+            email,
+            source: 'landing_page_footer',
+            timestamp: new Date().toISOString(),
+          } 
+        }]);
+
+      if (error) throw error;
+      
+      setStatus('success');
+      toast({
+        title: "Success",
+        description: "You've been added to our early access list.",
+      });
+    } catch (err: any) {
+      console.error('Email capture error:', err);
+      setStatus('error');
+      setErrorMsg(err.message || 'Failed to capture email. Please try again.');
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: "Something went wrong. Please try again.",
+      });
+    }
   };
 
   return (

@@ -566,7 +566,7 @@ html {
 }
 
 .hero-gradient-glow {
-  background: linear-gradient(135deg, #ffffff 0%, #e0faf0 28%, #a0e8c8 55%, #00FF94 85%, #00cc78 100%);
+  background: linear-gradient(135deg, #ffffff 0%, #e0faf0 28%, #a0e8c8 55%, #10B981 85%, #059669 100%);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;

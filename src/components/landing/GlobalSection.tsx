@@ -16,12 +16,12 @@ const HUBS = [
 ];
 
 const AGENT_MESSAGES = [
-    { text: "Hawk detecting pricing change in", city: "London", icon: Target, color: "#fbbf24" },
-    { text: "Penn sending outreach to", city: "Berlin", icon: PenLine, color: "#60a5fa" },
-    { text: "Aria analyzing candidate in", city: "Tokyo", icon: MessageSquare, color: "#a78bfa" },
-    { text: "Radar identifying leads in", city: "San Francisco", icon: Search, color: "#60a5fa" },
-    { text: "Scout scraping profiles in", city: "New York", icon: Search, color: "#34d399" },
-    { text: "Brief analyzing markets in", city: "Tel Aviv", icon: FileText, color: "#fbbf24" },
+    { text: "Hawk detecting pricing change in", city: "London", icon: Target, color: "#059669" },
+    { text: "Penn sending outreach to", city: "Berlin", icon: PenLine, color: "#10B981" },
+    { text: "Aria analyzing candidate in", city: "Tokyo", icon: MessageSquare, color: "#34D399" },
+    { text: "Radar identifying leads in", city: "San Francisco", icon: Search, color: "#10B981" },
+    { text: "Scout scraping profiles in", city: "New York", icon: Search, color: "#34D399" },
+    { text: "Brief analyzing markets in", city: "Tel Aviv", icon: FileText, color: "#059669" },
 ];
 
 const COLUMNS = [
@@ -91,7 +91,7 @@ const GlobalSection = () => {
         </div>
 
         <motion.div initial={{ opacity: 0 }} animate={inView ? { opacity: 1 } : {}} transition={{ duration: 1.2, delay: 0.5 }}
-          className="relative w-full mx-auto p-4 md:p-12 rounded-[2rem] border border-accent-mint/20 bg-galaxy-void/90 backdrop-blur-xl shadow-[inset_0_0_60px_rgba(0,255,148,0.04),_0_50px_100px_rgba(0,0,0,0.8)]" style={{ maxWidth: 1000 }}>
+          className="relative w-full mx-auto p-4 md:p-12 rounded-[2rem] border border-accent-mint/20 bg-galaxy-void/90 backdrop-blur-xl shadow-[inset_0_0_60px_rgba(16,185,129,0.04),_0_50px_100px_rgba(0,0,0,0.8)]" style={{ maxWidth: 1000 }}>
           
           {/* Map Container */}
           <div className="relative w-full aspect-[5/3] md:aspect-[2/1]">
@@ -99,17 +99,17 @@ const GlobalSection = () => {
                   <path d={WORLD_MAP_PATH} fill="none" stroke="white" strokeWidth="0.2" opacity="0.05" />
                   {HUBS.slice(0, -1).map((hub, i) => {
                   const next = HUBS[(i + 2) % HUBS.length];
-                  return <line key={`conn-${i}`} x1={hub.x} y1={hub.y} x2={next.x} y2={next.y} stroke="#00FF94" strokeWidth="0.12" opacity="0.07" />;
+                  return <line key={`conn-${i}`} x1={hub.x} y1={hub.y} x2={next.x} y2={next.y} stroke="#10B981" strokeWidth="0.12" opacity="0.07" />;
                   })}
                   {HUBS.map((hub, i) => (
                   <g key={hub.name}>
                       {/* Glow ring */}
-                      <circle cx={hub.x} cy={hub.y} r="1.8" fill="#00FF94" opacity="0.06">
+                      <circle cx={hub.x} cy={hub.y} r="1.8" fill="#10B981" opacity="0.06">
                         <animate attributeName="r" values="1.2;3;1.2" dur={`${3 + i * 0.4}s`} repeatCount="indefinite" />
                         <animate attributeName="opacity" values="0.08;0.02;0.08" dur={`${3 + i * 0.4}s`} repeatCount="indefinite" />
                       </circle>
                       {/* Core dot */}
-                      <circle cx={hub.x} cy={hub.y} r="0.7" fill="#00FF94" opacity="0.75">
+                      <circle cx={hub.x} cy={hub.y} r="0.7" fill="#10B981" opacity="0.75">
                         <animate attributeName="opacity" values="0.9;0.4;0.9" dur={`${3 + i * 0.4}s`} repeatCount="indefinite" />
                       </circle>
                       {/* City label */}

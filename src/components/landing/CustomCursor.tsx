@@ -1,46 +1,49 @@
-import { useEffect, useRef } from 'react';
-import gsap from 'gsap';
+import { useEffect } from 'react';
+import { motion, useMotionValue, useSpring } from 'framer-motion';
 
 const CustomCursor = () => {
-  const glowRef = useRef<HTMLDivElement>(null);
+    const mouseX = useMotionValue(0);
+    const mouseY = useMotionValue(0);
 
-  useEffect(() => {
-    const isTouchDevice = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
-    if (isTouchDevice) return;
+    const springConfig = { damping: 25, stiffness: 150, mass: 0.5 };
+    const cursorX = useSpring(mouseX, springConfig);
+    const cursorY = useSpring(mouseY, springConfig);
 
-    const glow = glowRef.current;
-    if (!glow) return;
+    useEffect(() => {
+        const handleMouseMove = (e: MouseEvent) => {
+            mouseX.set(e.clientX - 10);
+            mouseY.set(e.clientY - 10);
+        };
 
-    // quickTo is highly optimized for mouse tracking
-    const xTo = gsap.quickTo(glow, "x", { duration: 0.15, ease: "power2.out" });
-    const yTo = gsap.quickTo(glow, "y", { duration: 0.15, ease: "power2.out" });
+        window.addEventListener('mousemove', handleMouseMove);
+        return () => window.removeEventListener('mousemove', handleMouseMove);
+    }, [mouseX, mouseY]);
 
-    const onMove = (e: MouseEvent) => {
-      xTo(e.clientX);
-      yTo(e.clientY);
-    };
-
-    window.addEventListener('mousemove', onMove, { passive: true });
-    return () => {
-      window.removeEventListener('mousemove', onMove);
-    };
-  }, []);
-
-  const isTouchDevice = typeof window !== 'undefined' && ('ontouchstart' in window || navigator.maxTouchPoints > 0);
-  if (isTouchDevice) return null;
-
-  return (
-    <div
-      ref={glowRef}
-      className="fixed top-0 left-0 pointer-events-none z-[1] transform -translate-x-1/2 -translate-y-1/2"
-      style={{
-        width: '800px',
-        height: '800px',
-        background: 'radial-gradient(circle, rgba(0, 255, 148, 0.08) 0%, rgba(0, 255, 148, 0.03) 25%, transparent 60%)',
-        mixBlendMode: 'screen',
-      }}
-    />
-  );
+    return (
+        <>
+            {/* The primary cursor dot */}
+            <motion.div
+                className="fixed top-0 left-0 w-5 h-5 bg-accent-mint rounded-full pointer-events-none z-[9999] mix-blend-screen"
+                style={{
+                    x: cursorX,
+                    y: cursorY,
+                    boxShadow: '0 0 20px rgba(16, 185, 129, 0.8), 0 0 40px rgba(16, 185, 129, 0.4)'
+                }}
+            />
+            {/* The large trailing glow */}
+            <motion.div
+                className="fixed top-0 left-0 w-[400px] h-[400px] rounded-full pointer-events-none z-[9998] opacity-20"
+                style={{
+                    x: cursorX,
+                    y: cursorY,
+                    translateX: '-47.5%',
+                    translateY: '-47.5%',
+                    background: 'radial-gradient(circle, rgba(16, 185, 129, 0.4) 0%, transparent 70%)',
+                    filter: 'blur(40px)'
+                }}
+            />
+        </>
+    );
 };
 
 export default CustomCursor;

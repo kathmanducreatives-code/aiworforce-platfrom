@@ -59,7 +59,7 @@ const GlobalTrustBar = () => {
           {[...flagItems, ...flagItems, ...flagItems, ...flagItems].map((flag, i) => (
             <div key={i} className="flex items-center gap-2 mx-6 opacity-40 grayscale transition-all hover:opacity-100 hover:grayscale-0">
               <span className="text-sm">{flag}</span>
-              <span className="w-1.5 h-1.5 rounded-full bg-accent-mint shadow-[0_0_8px_rgba(0,255,148,0.6)] animate-pulse" />
+              <span className="w-1.5 h-1.5 rounded-full bg-accent-mint shadow-[0_0_8px_rgba(16,185,129,0.6)] animate-pulse" />
             </div>
           ))}
         </div>

@@ -15,7 +15,7 @@ const ParticleBurst = () => {
             {particles.map(p => (
                 <motion.div
                     key={p.id}
-                    className="absolute rounded-full bg-accent-mint shadow-[0_0_15px_rgba(0,255,148,0.8)]"
+                    className="absolute rounded-full bg-accent-mint shadow-[0_0_15px_rgba(16,185,129,0.8)]"
                     style={{ width: p.size, height: p.size }}
                     initial={{ x: 0, y: 0, opacity: 1, scale: 0 }}
                     animate={{ 
@@ -103,7 +103,7 @@ const TimeMath = () => {
       
       {/* Soundwave Data Visualization */ }
       <div className="absolute inset-0 z-0 pointer-events-none flex items-center justify-center opacity-10 blur-[1px]">
-        <svg viewBox="0 0 1000 200" preserveAspectRatio="none" className="w-full h-full text-accent-cyan opacity-40 animate-[pulse_4s_ease-in-out_infinite]">
+        <svg viewBox="0 0 1000 200" preserveAspectRatio="none" className="w-full h-full text-emerald-500/20 opacity-40 animate-[pulse_4s_ease-in-out_infinite]">
           <path d="M0 100 Q 50 150 100 100 T 200 100 T 300 50 T 400 100 T 500 150 T 600 100 T 700 20 T 800 100 T 900 180 T 1000 100" fill="none" stroke="currentColor" strokeWidth="4" />
           <path d="M0 100 Q 50 50 100 100 T 200 150 T 300 100 T 400 50 T 500 100 T 600 180 T 700 100 T 800 20 T 900 100 T 1000 100" fill="none" stroke="currentColor" strokeWidth="2" opacity="0.5" />
         </svg>
@@ -158,11 +158,11 @@ const TimeMath = () => {
 
             {/* RIGHT COLUMN: The New Way */}
             <div className="relative flex flex-col items-center">
-                <div className="text-[10px] font-mono font-bold text-accent-cyan/60 uppercase tracking-[0.3em] mb-4">Pilot AI Workforce</div>
+                <div className="text-[10px] font-mono font-bold text-emerald-500/60 uppercase tracking-[0.3em] mb-4">Pilot AI Workforce</div>
                 
                 <div 
-                  className="font-jetbrains font-bold text-6xl md:text-8xl tracking-tight text-accent-mint tabular-nums"
-                  style={{ textShadow: '0 0 30px rgba(0,255,148,0.8), 0 0 60px rgba(0,229,255,0.4)', color: '#D4FFEA' }}
+                  className="font-jetbrains font-bold text-6xl md:text-8xl tracking-tight text-emerald-400 tabular-nums"
+                  style={{ textShadow: '0 0 30px rgba(16,185,129,0.5), 0 0 60px rgba(16,185,129,0.2)', color: '#10B981' }}
                 >
                     {showRight ? `€${rightCount.toLocaleString()}` : <span className="opacity-0">€1,788</span>}
                 </div>
@@ -181,8 +181,8 @@ const TimeMath = () => {
                     transition={{ duration: 1, delay: 0.5 }}
                     className="mt-32 text-center"
                 >
-                    <div className="inline-flex items-center gap-3 px-6 py-3 rounded-full fiesta-halo backdrop-blur-md bg-accent-cyan/10 border border-accent-cyan/30">
-                        <div className="w-3 h-3 rounded-full bg-accent-cyan animate-pulse shadow-[0_0_10px_#00E5FF]" />
+                    <div className="inline-flex items-center gap-3 px-6 py-3 rounded-full glow-sm backdrop-blur-md bg-emerald-500/10 border border-emerald-500/30">
+                        <div className="w-3 h-3 rounded-full bg-emerald-400 animate-pulse shadow-[0_0_10px_#10B981]" />
                         <span className="font-jetbrains font-bold text-white tracking-widest uppercase text-sm">Total Savings: €303,212</span>
                     </div>
 

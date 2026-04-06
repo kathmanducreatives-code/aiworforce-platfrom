@@ -87,7 +87,7 @@ const EcosystemSection = () => {
   const logoSize = isMobile ? 21 : 25;
   const coreSize = isMobile ? 88 : 128;
   const surge    = stage === 5;
-  const MINT     = "#00FF94";
+  const MINT     = "#10B981";
 
   // CSS pixel coord of a SVG-space point for absolute node positioning
   const svgToCss = (svgX: number, svgY: number) => ({
@@ -122,16 +122,16 @@ const EcosystemSection = () => {
         }
         @keyframes hbreathe {
           0%,100% {
-            box-shadow: 0 0 0 1px rgba(0,255,148,0.12),
-                        0 0 44px rgba(0,255,148,0.22),
-                        0 0 90px rgba(0,255,148,0.08),
-                        inset 0 0 32px rgba(0,255,148,0.12);
+            box-shadow: 0 0 0 1px rgba(16,185,129,0.12),
+                        0 0 44px rgba(16,185,129,0.22),
+                        0 0 90px rgba(16,185,129,0.08),
+                        inset 0 0 32px rgba(16,185,129,0.12);
           }
           50% {
-            box-shadow: 0 0 0 1px rgba(0,255,148,0.3),
-                        0 0 72px rgba(0,255,148,0.4),
-                        0 0 140px rgba(0,255,148,0.14),
-                        inset 0 0 48px rgba(0,255,148,0.24);
+            box-shadow: 0 0 0 1px rgba(16,185,129,0.3),
+                        0 0 72px rgba(16,185,129,0.4),
+                        0 0 140px rgba(16,185,129,0.14),
+                        inset 0 0 48px rgba(16,185,129,0.24);
           }
         }
         @keyframes orbhalo {
@@ -145,7 +145,7 @@ const EcosystemSection = () => {
         {/* ── ATMOSPHERE ── */}
         <div className="absolute inset-0 pointer-events-none z-0">
           <div className="absolute inset-0" style={{
-            background: "radial-gradient(ellipse 90% 80% at 50% 50%, rgba(0,255,148,0.055) 0%, rgba(3,7,10,0.96) 52%, #03070A 100%)",
+            background: "radial-gradient(ellipse 90% 80% at 50% 50%, rgba(16,185,129,0.055) 0%, rgba(3,7,10,0.96) 52%, #03070A 100%)",
           }}/>
           <div className="absolute inset-0" style={{
             backgroundImage: `
@@ -155,7 +155,7 @@ const EcosystemSection = () => {
           }}/>
           <div className="absolute inset-0 transition-all duration-[2000ms]" style={{
             background: `radial-gradient(ellipse 560px 420px at 50% 50%, ${
-              surge ? "rgba(0,255,148,0.12)" : "rgba(0,255,148,0.065)"
+              surge ? "rgba(16,185,129,0.12)" : "rgba(16,185,129,0.065)"
             } 0%, transparent 60%)`,
           }}/>
         </div>
@@ -187,9 +187,9 @@ const EcosystemSection = () => {
           >
             {/* Ring A — inner atmosphere */}
             {[
-              { w: isMobile ? 176 : 416, anim: "rs1 24s linear infinite",  border: "rgba(0,255,148,0.16)", shadow: "0 0 14px rgba(0,255,148,0.06)" },
-              { w: isMobile ? 272 : 644, anim: "rs2 32s linear infinite",  border: "rgba(0,255,148,0.10)", shadow: "none" },
-              { w: isMobile ? 358 : 844, anim: "rs3 40s linear infinite",  border: "rgba(0,255,148,0.07)", shadow: "none" },
+              { w: isMobile ? 176 : 416, anim: "rs1 24s linear infinite",  border: "rgba(16,185,129,0.16)", shadow: "0 0 14px rgba(16,185,129,0.06)" },
+              { w: isMobile ? 272 : 644, anim: "rs2 32s linear infinite",  border: "rgba(16,185,129,0.10)", shadow: "none" },
+              { w: isMobile ? 358 : 844, anim: "rs3 40s linear infinite",  border: "rgba(16,185,129,0.07)", shadow: "none" },
             ].map(({ w, anim, border, shadow }, i) => (
               <div
                 key={i}
@@ -255,7 +255,7 @@ const EcosystemSection = () => {
                     transition={{ duration: 1.2 }}
                     x1={cx + pa.x} y1={cy + pa.y}
                     x2={cx + pb.x} y2={cy + pb.y}
-                    stroke="rgba(0,255,148,0.08)" strokeWidth="1" strokeDasharray="3 10"
+                    stroke="rgba(16,185,129,0.08)" strokeWidth="1" strokeDasharray="3 10"
                   />
                 );
               })}
@@ -277,7 +277,7 @@ const EcosystemSection = () => {
                 <g key={`cable-${tool.id}`}>
                   {/* base cable */}
                   <path d={d} fill="none"
-                    stroke={isH ? "rgba(0,255,148,0.55)" : "rgba(0,255,148,0.13)"}
+                    stroke={isH ? "rgba(16,185,129,0.55)" : "rgba(16,185,129,0.13)"}
                     strokeWidth={isH ? 1.5 : 1}
                     filter={isH ? "url(#hoverGlow)" : undefined}
                     style={{ transition: "stroke 0.35s, stroke-width 0.35s" }}
@@ -285,7 +285,7 @@ const EcosystemSection = () => {
                   {/* hover soft bloom */}
                   {isH && (
                     <path d={d} fill="none"
-                      stroke="rgba(0,255,148,0.22)" strokeWidth="6"
+                      stroke="rgba(16,185,129,0.22)" strokeWidth="6"
                       filter="url(#hoverGlow)"
                     />
                   )}
@@ -319,7 +319,7 @@ const EcosystemSection = () => {
             const r       = getR(tool.r, isMobile);
             const pos     = toXY(tool.angle, r);
             const brand   = TOOL_BRANDS[tool.id];
-            const glowHex = brand?.bg ?? "#00FF94";
+            const glowHex = brand?.bg ?? "#10B981";
 
             const { left, top } = svgToCss(cx + pos.x, cy + pos.y);
 
@@ -347,9 +347,9 @@ const EcosystemSection = () => {
                       width: nodeSize, height: nodeSize, borderRadius: "50%",
                       background: "rgba(10,16,12,0.72)",
                       backdropFilter: "blur(20px) saturate(150%)",
-                      border: `1px solid ${isH ? "rgba(0,255,148,0.65)" : "rgba(0,255,148,0.22)"}`,
+                      border: `1px solid ${isH ? "rgba(16,185,129,0.65)" : "rgba(16,185,129,0.22)"}`,
                       boxShadow: isH
-                        ? `0 0 0 1px rgba(0,255,148,0.14), 0 0 28px rgba(0,255,148,0.42), 0 8px 28px rgba(0,0,0,0.55), inset 0 1px 0 rgba(255,255,255,0.09)`
+                        ? `0 0 0 1px rgba(16,185,129,0.14), 0 0 28px rgba(16,185,129,0.42), 0 8px 28px rgba(0,0,0,0.55), inset 0 1px 0 rgba(255,255,255,0.09)`
                         : `0 6px 22px rgba(0,0,0,0.55), inset 0 1px 0 rgba(255,255,255,0.06)`,
                       transition: "all 0.3s cubic-bezier(0.23,1,0.32,1)",
                     }}
@@ -408,8 +408,8 @@ const EcosystemSection = () => {
                         style={{
                           background: "rgba(5,8,7,0.94)",
                           backdropFilter: "blur(20px)",
-                          border: "1px solid rgba(0,255,148,0.18)",
-                          boxShadow: `0 20px 52px rgba(0,0,0,0.42), 0 0 22px ${glowHex}1A`,
+                          border: "1px solid rgba(16,185,129,0.18)",
+                          boxShadow: `0 20px 52px rgba(0,0,0,0.42), 0 0 22px rgba(16, 185, 129, 0.1)`,
                         }}
                       >
                         <div className="font-bold tracking-tight text-white mb-1" style={{ fontSize: 15 }}>
@@ -440,7 +440,7 @@ const EcosystemSection = () => {
               style={{
                 top: "50%", left: "50%",
                 width: coreSize * 2.9, height: coreSize * 2.9,
-                background: "radial-gradient(ellipse, rgba(0,255,148,0.11) 0%, transparent 65%)",
+                background: "radial-gradient(ellipse, rgba(16,185,129,0.11) 0%, transparent 65%)",
                 filter: "blur(32px)",
                 animation: "orbhalo 3.8s ease-in-out infinite",
               }}
@@ -456,9 +456,9 @@ const EcosystemSection = () => {
                   from 0deg,
                   transparent 0%,
                   transparent 28%,
-                  rgba(0,255,148,0.40) 42%,
-                  rgba(0,255,148,0.75) 50%,
-                  rgba(0,255,148,0.40) 58%,
+                  rgba(16,185,129,0.40) 42%,
+                  rgba(16,185,129,0.75) 50%,
+                  rgba(16,185,129,0.40) 58%,
                   transparent 72%,
                   transparent 100%
                 )`,
@@ -473,11 +473,11 @@ const EcosystemSection = () => {
               style={{
                 width: coreSize, height: coreSize,
                 background: [
-                  "radial-gradient(circle at 30% 26%, rgba(0,255,148,0.36) 0%, rgba(0,255,148,0.04) 38%, transparent 58%)",
+                  "radial-gradient(circle at 30% 26%, rgba(16,185,129,0.36) 0%, rgba(16,185,129,0.04) 38%, transparent 58%)",
                   "radial-gradient(circle at 70% 74%, rgba(0,28,18,0.88) 0%, #040d07 55%)",
                   "#030a06",
                 ].join(", "),
-                border: surge ? "1px solid rgba(0,255,148,0.48)" : "1px solid rgba(0,255,148,0.26)",
+                border: surge ? "1px solid rgba(16,185,129,0.48)" : "1px solid rgba(16,185,129,0.26)",
                 animation: "hbreathe 3.2s ease-in-out infinite",
               }}
             >
@@ -485,7 +485,7 @@ const EcosystemSection = () => {
               <div
                 className="absolute inset-[-18%] rounded-full"
                 style={{
-                  background: "conic-gradient(from var(--conic-angle), rgba(255,255,255,0.03), rgba(0,255,148,0.44), rgba(0,255,148,0.06), rgba(255,255,255,0.04), rgba(0,255,148,0.3), rgba(255,255,255,0.03))",
+                  background: "conic-gradient(from var(--conic-angle), rgba(255,255,255,0.03), rgba(16,185,129,0.44), rgba(16,185,129,0.06), rgba(255,255,255,0.04), rgba(16,185,129,0.3), rgba(255,255,255,0.03))",
                   animation: "conic-spin 14s linear infinite",
                 }}
               />
@@ -494,7 +494,7 @@ const EcosystemSection = () => {
                 className="absolute pointer-events-none"
                 style={{
                   inset: "14%", borderRadius: "50%",
-                  boxShadow: "inset 0 0 20px rgba(0,255,148,0.52), 0 0 22px rgba(0,255,148,0.28)",
+                  boxShadow: "inset 0 0 20px rgba(16,185,129,0.52), 0 0 22px rgba(16,185,129,0.28)",
                   border: "1px solid rgba(255,255,255,0.055)",
                 }}
               />
@@ -504,7 +504,7 @@ const EcosystemSection = () => {
                 style={{
                   top: "11%", left: "19%", width: "31%", height: "21%",
                   borderRadius: "50%",
-                  background: "rgba(0,255,148,0.2)",
+                  background: "rgba(16,185,129,0.2)",
                   filter: "blur(7px)",
                   transform: "rotate(-18deg)",
                 }}
@@ -515,7 +515,7 @@ const EcosystemSection = () => {
                   className="font-black leading-none tracking-tighter text-white"
                   style={{
                     fontSize: isMobile ? 20 : 30,
-                    textShadow: "0 0 18px rgba(0,255,148,0.35)",
+                    textShadow: "0 0 18px rgba(16,185,129,0.35)",
                   }}
                 >
                   Pilot

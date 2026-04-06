@@ -20,35 +20,35 @@ interface AgentDef {
 
 const AGENTS: AgentDef[] = [
   {
-    id: "scout", name: "Scout", role: "Talent Scout", accent: "#97D700",
+    id: "scout", name: "Scout", role: "Talent Scout", accent: "#34D399", // Emerald Light
     desc: "Finds top candidates, scans signals, and builds talent shortlists across the web.",
     actions: ["Sources high-fit candidates", "Enriches public profiles", "Scans hiring signals", "Assembles shortlists"],
     tools: ["apify", "firecrawl", "github"],
     statusLine: "Scanning 1,247 profiles…",
   },
   {
-    id: "aria", name: "Aria", role: "AI Screener", accent: "#CC785C",
+    id: "aria", name: "Aria", role: "AI Screener", accent: "#10B981", // Emerald Primary
     desc: "Evaluates candidates, reasons through fit, and produces structured screening insight.",
     actions: ["Screens against role criteria", "Summarizes strengths & risks", "Compares candidate quality", "Produces evaluation notes"],
     tools: ["claude", "gemini"],
     statusLine: "Evaluating candidate #38…",
   },
   {
-    id: "radar", name: "Radar", role: "Intelligence Lead", accent: "#4285F4",
+    id: "radar", name: "Radar", role: "Intelligence Lead", accent: "#059669", // Emerald Dark
     desc: "Monitors markets, competitors, and external signals to keep your team ahead.",
     actions: ["Tracks competitor moves", "Monitors pricing changes", "Captures market intelligence", "Delivers signal summaries"],
     tools: ["firecrawl", "gpt4", "notion"],
     statusLine: "3 new signals detected",
   },
   {
-    id: "penn", name: "Penn", role: "Outreach Writer", accent: "#6366F1",
+    id: "penn", name: "Penn", role: "Outreach Writer", accent: "#10B981", // Emerald Primary
     desc: "Turns intelligence into persuasive outreach, messages, and campaign-ready copy.",
     actions: ["Drafts outbound sequences", "Personalizes messaging", "Rewrites by persona", "Prepares send-ready content"],
     tools: ["claude", "instantly", "elevenlabs"],
     statusLine: "Drafting sequence v3…",
   },
   {
-    id: "constructor", name: "Constructor", role: "Build Your Own", accent: "#00FF94",
+    id: "constructor", name: "Constructor", role: "Build Your Own", accent: "#10B981",
     desc: "Design the role, choose the tools, and create a custom AI employee for any function in your business.",
     actions: ["Define the role", "Assign tools", "Describe responsibilities", "Launch employee"],
     tools: ["claude", "gpt4", "gemini", "firecrawl", "apify", "instantly", "elevenlabs", "notion", "linear", "github", "nanobanana"],
@@ -149,10 +149,10 @@ const DepartmentRevealSection = () => {
           <div
             className="absolute inset-0 rounded-2xl overflow-hidden pointer-events-none z-0"
             style={{
-              border: "1px solid rgba(0,255,148,0.12)",
+              border: "1px solid rgba(16,185,129,0.12)",
               background: "rgba(10,10,10,0.3)",
               backdropFilter: "blur(40px) saturate(140%)",
-              boxShadow: "0 0 80px rgba(0,255,148,0.04), 0 40px 120px rgba(0,0,0,0.6), inset 0 1px 1px rgba(255,255,255,0.06)",
+              boxShadow: "0 0 80px rgba(16,185,129,0.04), 0 40px 120px rgba(0,0,0,0.6), inset 0 1px 1px rgba(255,255,255,0.06)",
             }}
           />
 
@@ -206,7 +206,7 @@ const DepartmentRevealSection = () => {
                     className="w-full h-full fiesta-halo transition-all duration-500 rounded-2xl overflow-hidden"
                     style={{
                       background: `rgba(20, 25, 22, 0.4)`,
-                      borderTop: `1px solid rgba(0, 255, 148, 0.3)`,
+                      borderTop: `1px solid rgba(16, 185, 129, 0.3)`,
                       backdropFilter: `blur(24px)`,
                       WebkitBackdropFilter: `blur(24px)`,
                     }}
@@ -342,9 +342,9 @@ const AgentWindow = ({ agent, isActive, isMobile }: { agent: AgentDef; isActive:
                   className="w-9 h-9 md:w-10 md:h-10 rounded-lg border flex items-center justify-center"
                   title={brand.label}
                   style={{
-                    background: "rgba(10,10,10,0.8)",
-                    borderColor: `${brand.bg}30`,
-                    boxShadow: `0 0 10px ${brand.bg}10`,
+                    background: "rgba(16, 185, 129, 0.03)",
+                    borderColor: "rgba(16, 185, 129, 0.2)",
+                    boxShadow: "0 0 15px rgba(16, 185, 129, 0.05)",
                   }}
                 >
                   <img
@@ -493,7 +493,7 @@ const ConstructorWindow = ({ agent, isActive, isMobile }: { agent: AgentDef; isA
           className="font-display font-black tracking-tight leading-none"
           style={{
             fontSize: isMobile ? 28 : 52,
-            background: "linear-gradient(135deg, #fff 30%, #00FF94 100%)",
+            background: "linear-gradient(135deg, #fff 30%, #10B981 100%)",
             WebkitBackgroundClip: "text",
             WebkitTextFillColor: "transparent",
           }}
@@ -539,9 +539,9 @@ const ConstructorWindow = ({ agent, isActive, isMobile }: { agent: AgentDef; isA
                 style={{
                   width: isMobile ? 44 : 56,
                   height: isMobile ? 44 : 56,
-                  background: "rgba(10,10,10,0.8)",
-                  borderColor: `${brand.bg}25`,
-                  boxShadow: `0 0 8px ${brand.bg}08`,
+                  background: "rgba(16, 185, 129, 0.03)",
+                  borderColor: "rgba(16, 185, 129, 0.2)",
+                  boxShadow: "0 0 12px rgba(16, 185, 129, 0.05)",
                 }}
               >
                 <img
@@ -575,16 +575,16 @@ const ConstructorWindow = ({ agent, isActive, isMobile }: { agent: AgentDef; isA
           onClick={() => navigate('/auth')}
           className="px-8 py-3.5 rounded-xl font-display font-bold text-[14px] tracking-tight transition-all duration-300 cursor-pointer relative overflow-hidden group"
           style={{
-            background: "rgba(0,255,148,0.1)",
-            border: "1px solid rgba(0,255,148,0.3)",
-            color: "#00FF94",
-            boxShadow: "0 0 30px rgba(0,255,148,0.08)",
+            background: "rgba(16,185,129,0.1)",
+            border: "1px solid rgba(16,185,129,0.3)",
+            color: "#10B981",
+            boxShadow: "0 0 30px rgba(16,185,129,0.08)",
           }}
         >
           <span className="relative z-10">Start Building →</span>
           <div
             className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-300"
-            style={{ background: "linear-gradient(135deg, rgba(0,255,148,0.15), rgba(0,255,148,0.05))" }}
+            style={{ background: "linear-gradient(135deg, rgba(16,185,129,0.15), rgba(16,185,129,0.05))" }}
           />
         </button>
       </motion.div>

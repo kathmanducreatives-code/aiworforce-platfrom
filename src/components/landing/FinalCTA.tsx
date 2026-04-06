@@ -4,11 +4,11 @@ import { motion, useInView } from 'framer-motion';
 import { ArrowRight, Search, PenLine, Target, FileText, MessageSquare } from 'lucide-react';
 
 const AGENTS_SEQUENCE = [
-  { id: 'Scout', icon: Search, color: '#34d399', text: "I've found 14 leads while you read this page." },
-  { id: 'Penn', icon: PenLine, color: '#60a5fa', text: "I've drafted their emails." },
-  { id: 'Hawk', icon: Target, color: '#fbbf24', text: "I've checked their competitor's pricing." },
-  { id: 'Brief', icon: FileText, color: '#fbbf24', text: "Your summary is ready." },
-  { id: 'Aria', icon: MessageSquare, color: '#a78bfa', text: "We're standing by." },
+  { id: 'Scout', icon: Search, color: '#10B981', text: "I've found 14 leads while you read this page." },
+  { id: 'Penn', icon: PenLine, color: '#34D399', text: "I've drafted their emails." },
+  { id: 'Hawk', icon: Target, color: '#059669', text: "I've checked their competitor's pricing." },
+  { id: 'Brief', icon: FileText, color: '#10B981', text: "Your summary is ready." },
+  { id: 'Aria', icon: MessageSquare, color: '#6EE7B7', text: "We're standing by." },
 ];
 
 const FinalCTA = () => {
