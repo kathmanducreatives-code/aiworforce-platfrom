@@ -8,12 +8,12 @@ import { TOOL_BRANDS } from "./ToolLogos";
 ───────────────────────────────────────────── */
 const TOOLS = [
   // INNER — AI Models (r 140)
-  { id: "claude",     angle: 210, r: 140, ring: 1, role: "Reasoning & Writing",     use: "Used across orchestration and decision layers",           activeStages: [2,3,4,5] },
-  { id: "gpt4",       angle: 330, r: 140, ring: 1, role: "Specialized Tasks",       use: "Used for targeted high-precision workflows",              activeStages: [2,3,4,5] },
-  { id: "gemini",     angle:  90, r: 140, ring: 1, role: "Screening & Analysis",    use: "Used for evaluation and multimodal reasoning",            activeStages: [2,3,4,5] },
+  { id: "claude",     angle:  30, r: 140, ring: 1, role: "Reasoning & Writing",     use: "Used across orchestration and decision layers",           activeStages: [2,3,4,5] },
+  { id: "gpt4",       angle: 150, r: 140, ring: 1, role: "Specialized Tasks",       use: "Used for targeted high-precision workflows",              activeStages: [2,3,4,5] },
+  { id: "gemini",     angle: 270, r: 140, ring: 1, role: "Screening & Analysis",    use: "Used for evaluation and multimodal reasoning",            activeStages: [2,3,4,5] },
   // MIDDLE — Data (r 260)
-  { id: "firecrawl",  angle: 225, r: 260, ring: 2, role: "Web Intelligence",        use: "Used to monitor and enrich live web data",                activeStages: [3,4,5] },
-  { id: "apify",      angle:  45, r: 260, ring: 2, role: "LinkedIn Extraction",     use: "Used to source and structure profile data at scale",      activeStages: [3,4,5] },
+  { id: "firecrawl",  angle:  90, r: 260, ring: 2, role: "Web Intelligence",        use: "Used to monitor and enrich live web data",                activeStages: [3,4,5] },
+  { id: "apify",      angle: 210, r: 260, ring: 2, role: "LinkedIn Extraction",     use: "Used to source and structure profile data at scale",      activeStages: [3,4,5] },
   // OUTER — Execution (r 390)
   { id: "nanobanana", angle:   0, r: 390, ring: 3, role: "Visual Creation",         use: "Used to generate branded content assets",                 activeStages: [4,5] },
   { id: "elevenlabs", angle:  60, r: 390, ring: 3, role: "Voice Generation",        use: "Used for spoken content and audio output",                activeStages: [4,5] },
@@ -383,12 +383,14 @@ const EcosystemSection = () => {
 
                   {/* label */}
                   <span
-                    className="font-mono whitespace-nowrap select-none text-center"
+                    className="font-mono select-none text-center leading-[1.1]"
                     style={{
                       fontSize: isMobile ? 8 : 10,
                       letterSpacing: "0.07em",
                       color: isH ? "#fff" : "rgba(255,255,255,0.4)",
                       transition: "color 0.3s",
+                      maxWidth: isMobile ? "54px" : "80px",
+                      wordBreak: "break-word"
                     }}
                   >
                     {brand?.label ?? tool.id}

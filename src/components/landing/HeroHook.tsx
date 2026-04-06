@@ -62,11 +62,11 @@ const POWERED_BY_TOOLS = [
     fallback: "G",
   },
   {
-    id: "banana",
-    name: "Banana",
-    logo: "https://logo.clearbit.com/nanobanana.ai",
-    glow: "#FFAA00",
-    fallback: "B",
+    id: "midjourney",
+    name: "Midjourney",
+    logo: "https://logo.clearbit.com/midjourney.com",
+    glow: "#000080",
+    fallback: "Mj",
   },
   {
     id: "elevenlabs",
@@ -236,40 +236,10 @@ const HeroHook = () => {
     const section = sectionRef.current;
     if (!section) return;
 
-    const updateLayerTransforms = (xPercent: number, yPercent: number) => {
-      const motionScale = window.innerWidth < 768 ? 0.4 : 1;
-
-      if (farStarsRef.current) {
-        farStarsRef.current.style.transform = `translate(${xPercent * 8 * motionScale}px, ${yPercent * 8 * motionScale}px)`;
-      }
-      if (midStarsRef.current) {
-        midStarsRef.current.style.transform = `translate(${xPercent * 16 * motionScale}px, ${yPercent * 16 * motionScale}px)`;
-      }
-      if (closeStarsRef.current) {
-        closeStarsRef.current.style.transform = `translate(${xPercent * 28 * motionScale}px, ${yPercent * 28 * motionScale}px)`;
-      }
-    };
-
-    mouseHandlerRef.current = (event: MouseEvent) => {
-      const xPercent = event.clientX / window.innerWidth - 0.5;
-      const yPercent = event.clientY / window.innerHeight - 0.5;
-      updateLayerTransforms(xPercent, yPercent);
-    };
-
-    leaveHandlerRef.current = () => updateLayerTransforms(0, 0);
-
-    const moveHandler = mouseHandlerRef.current;
-    const leaveHandler = leaveHandlerRef.current;
-
-    if (!moveHandler || !leaveHandler) return;
-
-    section.addEventListener("mousemove", moveHandler, { passive: true });
-    section.addEventListener("mouseleave", leaveHandler);
-
-    return () => {
-      section.removeEventListener("mousemove", moveHandler);
-      section.removeEventListener("mouseleave", leaveHandler);
-    };
+    // Stars are static. Parallax removed to satisfy "only glow moves with cursor"
+    if (farStarsRef.current) farStarsRef.current.style.transform = `translate(0px, 0px)`;
+    if (midStarsRef.current) midStarsRef.current.style.transform = `translate(0px, 0px)`;
+    if (closeStarsRef.current) closeStarsRef.current.style.transform = `translate(0px, 0px)`;
   }, []);
 
   return (
@@ -378,71 +348,81 @@ const HeroHook = () => {
       </div>
 
       <div className="relative z-10 mx-auto flex w-full max-w-6xl flex-col items-center text-center">
-        <div className="hero-system-pill mb-6 inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.04] px-4 py-2 backdrop-blur-xl shadow-[0_12px_28px_rgba(0,0,0,0.24)]">
-          <Sparkles className="h-3.5 w-3.5 text-primary" />
-          <span className="font-mono text-[10px] uppercase tracking-[0.3em] text-white/65">
+        <div 
+          className="hero-system-pill mb-8 inline-flex items-center gap-2.5 rounded-full px-5 py-2.5 ring-1 ring-white/10"
+          style={{
+            background: "rgba(255, 255, 255, 0.03)",
+            backdropFilter: "blur(16px)",
+            WebkitBackdropFilter: "blur(16px)",
+            boxShadow: "0 8px 32px -4px rgba(0, 0, 0, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.1)",
+          }}
+        >
+          <Sparkles className="h-4 w-4 text-primary" />
+          <span className="font-mono text-[11px] uppercase tracking-[0.3em] text-white/70">
             AI Workforce OS
           </span>
         </div>
 
-        <h1 className="hero-headline max-w-5xl text-[clamp(2.9rem,7.2vw,6.4rem)] font-bold leading-[0.95] tracking-[-0.04em] text-white">
+        <h1 className="hero-headline max-w-5xl text-[clamp(2.5rem,7vw,6.4rem)] font-bold leading-[1.1] tracking-[-0.04em] text-white">
           You are doing the work of ten people.
         </h1>
 
-        <div className="hero-green-line relative mb-5 mt-3 w-full">
+        <div className="hero-green-line relative mb-6 mt-4 w-full">
           <div className="hero-primary-line-halo absolute inset-x-[18%] inset-y-0 rounded-full" />
-          <span className="hero-primary-glow relative z-10 inline-block px-8 py-2 text-[clamp(2.2rem,6vw,5.45rem)] font-black leading-[0.95] tracking-[-0.04em]">
+          <span className="hero-primary-glow relative z-10 inline-block px-4 sm:px-8 py-2 text-[clamp(2rem,6vw,5.45rem)] font-black leading-[1.05] tracking-[-0.04em]">
             Now you don&apos;t have to.
           </span>
         </div>
 
-        <p className="hero-subheadline mx-auto mb-6 max-w-[480px] px-4 text-center text-[18px] font-medium leading-[1.6] text-white/60">
+        <p className="hero-subheadline mx-auto mb-8 max-w-[480px] px-4 text-center text-[18px] font-medium leading-[1.6] text-white/60">
           Five departments. Fifteen agents. One company brain. Set up in 10 minutes.
         </p>
 
-        <div className="mb-7 flex flex-wrap justify-center gap-3">
+        <div className="mb-10 flex flex-nowrap sm:flex-wrap justify-start sm:justify-center gap-4 sm:gap-6 w-full overflow-x-auto pb-6 sm:pb-0 px-4 sm:px-0 snap-x" style={{ scrollbarWidth: 'none' }}>
           {DEPARTMENT_CARDS.map((card, index) => {
             const Icon = card.icon;
 
             return (
               <div
                 key={card.id}
-                className={`hero-floating-card ${index === 2 ? "hidden min-[480px]:block" : ""}`}
+                className="hero-floating-card shrink-0 snap-center"
               >
                 <div
-                  className="hero-floating-card-inner relative w-[148px] rounded-[10px] bg-white/[0.04] px-[14px] py-[12px] text-left backdrop-blur-[20px]"
+                  className="hero-floating-card-inner relative w-[148px] sm:w-[160px] rounded-[16px] px-[14px] py-[14px] pl-[26px] text-left ring-1 ring-white/10"
                   style={{
-                    border: "1px solid rgba(255,255,255,0.08)",
-                    boxShadow: "0 16px 28px rgba(0, 0, 0, 0.24)",
+                    background: "rgba(255, 255, 255, 0.03)",
+                    backdropFilter: "blur(16px)",
+                    WebkitBackdropFilter: "blur(16px)",
+                    boxShadow: "0 8px 32px -4px rgba(0, 0, 0, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.1)",
                     animationDelay: card.floatDelay,
                   }}
                 >
                   <div
-                    className="absolute inset-y-[10px] left-[9px] w-[2px] rounded-full"
+                    className="absolute inset-y-[14px] left-[12px] w-[2px] rounded-full"
                     style={{ background: card.accent }}
                   />
-                  <div className="pl-3">
+                  <div>
                     <div className="mb-2 flex items-center gap-2">
-                      <Icon className="h-3 w-3" style={{ color: card.accent }} />
+                      <Icon className="h-3.5 w-3.5" style={{ color: card.accent }} />
                       <span
-                        className="font-mono text-[9px] uppercase tracking-[0.18em]"
+                        className="font-mono text-[9px] sm:text-[10px] uppercase tracking-[0.18em]"
                         style={{ color: card.accent }}
                       >
                         {card.label}
                       </span>
                     </div>
-                    <div className="space-y-[2px] text-[12px] leading-[1.4] text-white">
+                    <div className="space-y-[3px] text-[12px] sm:text-[13px] leading-[1.4] text-white/90">
                       {card.lines.map((line) => (
                         <div key={line}>{line}</div>
                       ))}
                     </div>
-                    <div className="mt-3 flex items-center gap-2">
+                    <div className="mt-4 flex items-center gap-2">
                       <span
                         className="block h-[6px] w-[6px] rounded-full hero-card-pulse"
                         style={{ background: card.accent, color: card.accent }}
                       />
                       <span
-                        className="font-mono text-[9px] uppercase tracking-[0.15em]"
+                        className="font-mono text-[9.5px] uppercase tracking-[0.15em]"
                         style={{ color: card.accent }}
                       >
                         ACTIVE
@@ -455,24 +435,34 @@ const HeroHook = () => {
           })}
         </div>
 
-        <div className="hero-powered-pill mb-7 inline-flex flex-wrap items-center justify-center gap-[14px] rounded-[100px] bg-white/[0.05] px-[20px] py-[10px] backdrop-blur-[10px]">
-          <span className="text-[10px] uppercase tracking-[0.1em] text-white/45">
+        <div 
+          className="hero-powered-pill mb-10 w-[min(100%,_580px)] sm:w-auto inline-flex flex-wrap items-center justify-center gap-x-5 gap-y-3 rounded-[24px] sm:rounded-full px-6 py-3 ring-1 ring-white/10"
+          style={{
+            background: "rgba(255, 255, 255, 0.03)",
+            backdropFilter: "blur(16px)",
+            WebkitBackdropFilter: "blur(16px)",
+            boxShadow: "0 8px 32px -4px rgba(0, 0, 0, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.1)",
+          }}
+        >
+          <span className="text-[10.5px] uppercase tracking-[0.15em] text-white/50 w-full sm:w-auto text-center shrink-0">
             Powered by
           </span>
-          {POWERED_BY_TOOLS.map((tool, index) => (
-            <div key={tool.id} className="flex items-center gap-[14px]">
-              <PoweredTool tool={tool} />
-              {index < POWERED_BY_TOOLS.length - 1 ? (
-                <span className="block h-[3px] w-[3px] rounded-full bg-primary/80" />
-              ) : null}
-            </div>
-          ))}
+          <div className="flex flex-row items-center justify-center gap-4 sm:gap-5 shrink-0 flex-wrap">
+            {POWERED_BY_TOOLS.map((tool, index) => (
+              <div key={tool.id} className="flex items-center gap-4 sm:gap-5">
+                <PoweredTool tool={tool} />
+                {index < POWERED_BY_TOOLS.length - 1 ? (
+                  <span className="hidden sm:block h-[3px] w-[3px] rounded-full bg-primary/50" />
+                ) : null}
+              </div>
+            ))}
+          </div>
         </div>
 
-        <div className="mb-0 flex w-full max-w-[540px] flex-col items-center justify-center gap-3 px-2 sm:flex-row">
+        <div className="mb-4 flex w-full max-w-[540px] flex-col items-center justify-center gap-4 px-4 sm:flex-row">
           <button
             onClick={() => navigate("/auth")}
-            className="hero-primary-cta primary-cta-shimmer h-[52px] w-full rounded-[12px] px-8 text-[16px] font-bold text-black sm:w-auto"
+            className="hero-primary-cta primary-cta-shimmer flex items-center justify-center h-[56px] w-full rounded-[14px] px-8 text-[16px] font-bold text-black sm:w-auto transition-transform hover:scale-105"
           >
             <span className="relative z-10 flex items-center justify-center">
               Build your AI workforce <ArrowRight className="ml-2 h-4 w-4" />
@@ -480,10 +470,15 @@ const HeroHook = () => {
           </button>
 
           <button
-            onClick={() => navigate("/features")}
-            className="hero-secondary-cta h-[52px] w-full rounded-[12px] px-7 text-[16px] font-medium sm:w-auto"
+            onClick={() => navigate("/get-demo")}
+            className="hero-secondary-cta flex items-center justify-center h-[56px] w-full rounded-[14px] px-8 text-[16px] font-medium sm:w-auto ring-1 ring-white/10 transition-all hover:bg-white/10"
+            style={{
+              background: "rgba(255, 255, 255, 0.03)",
+              backdropFilter: "blur(16px)",
+              WebkitBackdropFilter: "blur(16px)",
+            }}
           >
-            See how it works
+            Book a 15-min demo
           </button>
         </div>
 
@@ -492,7 +487,7 @@ const HeroHook = () => {
           <span className="hidden text-primary md:inline">·</span>
           <span>No credit card</span>
           <span className="hidden text-primary md:inline">·</span>
-          <span>Set up in 10 minutes</span>
+          <span>Cancel anytime</span>
         </div>
       </div>
     </section>

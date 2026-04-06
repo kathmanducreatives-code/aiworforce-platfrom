@@ -99,14 +99,32 @@ const GlobalSection = () => {
                   <path d={WORLD_MAP_PATH} fill="none" stroke="white" strokeWidth="0.2" opacity="0.05" />
                   {HUBS.slice(0, -1).map((hub, i) => {
                   const next = HUBS[(i + 2) % HUBS.length];
-                  return <line key={`conn-${i}`} x1={hub.x} y1={hub.y} x2={next.x} y2={next.y} stroke="white" strokeWidth="0.1" opacity="0.04" />;
+                  return <line key={`conn-${i}`} x1={hub.x} y1={hub.y} x2={next.x} y2={next.y} stroke="#00FF94" strokeWidth="0.12" opacity="0.07" />;
                   })}
                   {HUBS.map((hub, i) => (
                   <g key={hub.name}>
-                      <circle cx={hub.x} cy={hub.y} r="0.6" fill="#00FF94" opacity="0.5">
-                      <animate attributeName="r" values="0.4;1.2;0.4" dur={`${3 + i * 0.4}s`} repeatCount="indefinite" />
-                      <animate attributeName="opacity" values="0.8;0.2;0.8" dur={`${3 + i * 0.4}s`} repeatCount="indefinite" />
+                      {/* Glow ring */}
+                      <circle cx={hub.x} cy={hub.y} r="1.8" fill="#00FF94" opacity="0.06">
+                        <animate attributeName="r" values="1.2;3;1.2" dur={`${3 + i * 0.4}s`} repeatCount="indefinite" />
+                        <animate attributeName="opacity" values="0.08;0.02;0.08" dur={`${3 + i * 0.4}s`} repeatCount="indefinite" />
                       </circle>
+                      {/* Core dot */}
+                      <circle cx={hub.x} cy={hub.y} r="0.7" fill="#00FF94" opacity="0.75">
+                        <animate attributeName="opacity" values="0.9;0.4;0.9" dur={`${3 + i * 0.4}s`} repeatCount="indefinite" />
+                      </circle>
+                      {/* City label */}
+                      <text
+                        x={hub.x}
+                        y={hub.y + 2.8}
+                        textAnchor="middle"
+                        fontSize="1.8"
+                        fill="white"
+                        opacity="0.22"
+                        fontFamily="monospace"
+                        className="hidden md:block"
+                      >
+                        {hub.name}
+                      </text>
                   </g>
                   ))}
               </svg>

@@ -64,10 +64,10 @@ const DayTimelineSection = () => {
         offset: ["start start", "end end"]
     });
 
-    const yTranslation = useTransform(scrollYProgress, [0.1, 0.95], ["0%", isMobile ? "-65%" : "-35%"]);
+    const yTranslation = useTransform(scrollYProgress, [0.1, 0.95], ["0%", isMobile ? "-50%" : "-35%"]);
 
     return (
-        <section ref={sectionRef} id="daily-brief" className="relative w-full h-[400vh] bg-transparent border-t border-white/5">
+        <section ref={sectionRef} id="daily-brief" className="relative w-full h-[350vh] md:h-[400vh] bg-transparent border-t border-white/5">
             <div className="sticky top-0 w-full h-screen overflow-hidden flex flex-col py-16 md:py-24">
                 
                 {/* ── HEADER ── */}

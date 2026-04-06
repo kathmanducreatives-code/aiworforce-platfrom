@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 
 const ParticleBurst = () => {
-    const particles = useMemo(() => Array.from({ length: 100 }).map((_, i) => ({
+    const particles = useMemo(() => Array.from({ length: 40 }).map((_, i) => ({
         id: i,
         angle: Math.random() * Math.PI * 2,
         velocity: 100 + Math.random() * 300,
@@ -184,6 +184,20 @@ const TimeMath = () => {
                     <div className="inline-flex items-center gap-3 px-6 py-3 rounded-full fiesta-halo backdrop-blur-md bg-accent-cyan/10 border border-accent-cyan/30">
                         <div className="w-3 h-3 rounded-full bg-accent-cyan animate-pulse shadow-[0_0_10px_#00E5FF]" />
                         <span className="font-jetbrains font-bold text-white tracking-widest uppercase text-sm">Total Savings: €303,212</span>
+                    </div>
+
+                    {/* Credibility breakdown */}
+                    <div className="mt-10 grid grid-cols-3 gap-6 max-w-lg mx-auto">
+                        {[
+                            { value: '5', label: 'Team roles replaced' },
+                            { value: '€61K', label: 'Avg salary each' },
+                            { value: '€149/mo', label: 'Startup plan cost' },
+                        ].map(({ value, label }) => (
+                            <div key={label} className="text-center">
+                                <div className="text-accent-mint font-black text-2xl tracking-tight">{value}</div>
+                                <div className="text-white/30 text-[10px] font-bold uppercase tracking-widest mt-1">{label}</div>
+                            </div>
+                        ))}
                     </div>
                 </motion.div>
             )}

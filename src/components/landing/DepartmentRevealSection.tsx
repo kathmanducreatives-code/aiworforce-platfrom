@@ -1,4 +1,5 @@
 import { useRef, useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence, useScroll, useTransform } from "framer-motion";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { TOOL_BRANDS } from "./ToolLogos";
@@ -475,6 +476,7 @@ const PANEL_DATA: Record<string, { icon: string; title: string; sub: string; bad
    Constructor Window (Window 5)
    ═══════════════════════════════════════════════════ */
 const ConstructorWindow = ({ agent, isActive, isMobile }: { agent: AgentDef; isActive: boolean; isMobile: boolean }) => {
+  const navigate = useNavigate();
   const allTools = agent.tools;
 
   return (
@@ -570,6 +572,7 @@ const ConstructorWindow = ({ agent, isActive, isMobile }: { agent: AgentDef; isA
         transition={{ delay: 1.2, duration: 0.5 }}
       >
         <button
+          onClick={() => navigate('/auth')}
           className="px-8 py-3.5 rounded-xl font-display font-bold text-[14px] tracking-tight transition-all duration-300 cursor-pointer relative overflow-hidden group"
           style={{
             background: "rgba(0,255,148,0.1)",

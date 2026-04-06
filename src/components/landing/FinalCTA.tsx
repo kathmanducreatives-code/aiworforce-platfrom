@@ -16,6 +16,7 @@ const FinalCTA = () => {
     const sectionRef = useRef<HTMLElement>(null);
     const isInView = useInView(sectionRef, { once: true, amount: 0.5 });
     const [currentTypingIndex, setCurrentTypingIndex] = useState(-1);
+    const [forceShowCTA, setForceShowCTA] = useState(false);
 
     // Sequence trigger
     useEffect(() => {
@@ -37,7 +38,10 @@ const FinalCTA = () => {
 
         runSequence();
 
-        return () => { isActive = false; }
+        // Safety net: show the CTA button after max wait even if animation didn't complete
+        const safeguard = setTimeout(() => setForceShowCTA(true), 7500);
+
+        return () => { isActive = false; clearTimeout(safeguard); }
     }, [isInView]);
 
     return (
@@ -97,7 +101,7 @@ const FinalCTA = () => {
 
         <motion.div
            initial={{ opacity: 0, scale: 0.9 }}
-           animate={currentTypingIndex === AGENTS_SEQUENCE.length - 1 ? { opacity: 1, scale: 1 } : { opacity: 0, scale: 0.9 }}
+           animate={(currentTypingIndex === AGENTS_SEQUENCE.length - 1 || forceShowCTA) ? { opacity: 1, scale: 1 } : { opacity: 0, scale: 0.9 }}
            transition={{ duration: 0.8, type: "spring", bounce: 0.5 }}
            className="flex flex-col sm:flex-row items-center justify-center gap-6 w-full"
         >

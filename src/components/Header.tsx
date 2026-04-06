@@ -16,7 +16,7 @@ const Header = () => {
   const [scrolled, setScrolled] = useState(false);
 
   useEffect(() => {
-    const onScroll = () => setScrolled(window.scrollY > 60);
+    const onScroll = () => setScrolled(window.scrollY > 80);
     window.addEventListener('scroll', onScroll, { passive: true });
     return () => window.removeEventListener('scroll', onScroll);
   }, []);
@@ -36,23 +36,23 @@ const Header = () => {
       <div className="max-w-7xl mx-auto px-6 flex items-center justify-between">
         {/* Logo */}
         <div className="flex items-center gap-2.5 cursor-pointer group" onClick={() => navigate('/')}>
-          <div className="w-2.5 h-2.5 rounded-full bg-[#298799] shadow-[0_0_10px_rgba(41,135,153,0.6)] group-hover:scale-125 transition-transform animate-pulse" />
+          <div className="w-2.5 h-2.5 rounded-full bg-accent-mint shadow-[0_0_10px_rgba(16,185,129,0.7)] group-hover:scale-125 transition-transform animate-pulse" />
           <span className="font-display font-black text-xl text-white tracking-tighter">ScreeningPilot</span>
         </div>
 
         {/* Desktop Nav */}
-        <nav className="hidden md:flex items-center gap-8">
+        <nav className="hidden lg:flex items-center gap-8">
           {navItems.map((item) => (
             <a key={item.label} href={item.href}
               className="text-sm text-white/60 hover:text-white font-semibold transition-colors duration-300 relative group">
               {item.label}
-              <span className="absolute -bottom-1 left-0 w-0 h-[1px] bg-[#298799] group-hover:w-full transition-all duration-300" />
+              <span className="absolute -bottom-1 left-0 w-0 h-[1px] bg-accent-mint group-hover:w-full transition-all duration-300" />
             </a>
           ))}
         </nav>
 
         {/* Right */}
-        <div className="hidden md:flex items-center gap-4">
+        <div className="hidden lg:flex items-center gap-4">
           {user ? (
             <>
               <button onClick={() => navigate('/dashboard')} className="text-sm text-white/50 hover:text-white font-medium transition-colors">Dashboard</button>
@@ -61,8 +61,24 @@ const Header = () => {
           ) : (
             <>
               <button onClick={() => navigate('/auth')} className="text-sm text-white/60 hover:text-white font-semibold transition-colors">Sign In</button>
-              <button onClick={() => navigate('/auth')} className="glass-button-green h-[42px] px-6 text-white text-sm font-semibold rounded-full transition-all duration-300 border border-[#298799]/20 shadow-[0_12px_28px_rgba(0,0,0,0.28),0_0_16px_rgba(41,135,153,0.08)] flex items-center justify-center">
-                Meet your workforce →
+              {/* Demo link — appears always */}
+              <button
+                onClick={() => navigate('/get-demo')}
+                className="text-sm text-white/50 hover:text-white font-semibold transition-colors hidden xl:block"
+              >
+                Get a demo
+              </button>
+              {/* Primary CTA — ghost until scrolled, then solid green */}
+              <button
+                onClick={() => navigate('/auth')}
+                className={`h-[42px] px-6 text-sm font-black uppercase tracking-widest rounded-full transition-all duration-500 flex items-center justify-center gap-2 ${
+                  scrolled
+                    ? 'bg-accent-mint text-black shadow-[0_0_30px_rgba(16,185,129,0.45)] hover:shadow-[0_0_50px_rgba(16,185,129,0.65)] hover:scale-105'
+                    : 'glass-button-green text-white border border-white/10 shadow-[0_8px_32px_-4px_rgba(0,0,0,0.2),inset_0_1px_0_rgba(255,255,255,0.1)]'
+                }`}
+                style={scrolled ? {} : { background: 'rgba(255,255,255,0.03)', backdropFilter: 'blur(16px)' }}
+              >
+                {scrolled ? 'Start Free →' : 'Meet your workforce →'}
               </button>
             </>
           )}
@@ -81,19 +97,20 @@ const Header = () => {
         </div>
 
         {/* Mobile */}
-        <button className="md:hidden p-2 text-white/50 hover:text-white rounded-lg transition-colors" onClick={() => setIsMenuOpen(!isMenuOpen)}>
+        <button className="lg:hidden p-2 text-white/50 hover:text-white rounded-lg transition-colors" onClick={() => setIsMenuOpen(!isMenuOpen)}>
           {isMenuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
         </button>
       </div>
 
       {isMenuOpen && (
-        <div className="md:hidden mx-4 mt-2 glass rounded-2xl p-4">
+        <div className="lg:hidden mx-4 mt-2 glass rounded-2xl p-4">
           {navItems.map((item) => (
             <a key={item.label} href={item.href} className="block py-3 text-sm text-white/60 hover:text-white font-medium border-b border-white/5 last:border-0">{item.label}</a>
           ))}
           <div className="mt-4 flex gap-3">
             <button onClick={() => navigate('/auth')} className="text-sm text-white/60 hover:text-white font-medium">Sign In</button>
-            <button onClick={() => navigate('/auth')} className="glass-button-green text-white text-sm font-semibold px-4 py-2 rounded-full border border-[#298799]/20">Meet your workforce →</button>
+            <button onClick={() => navigate('/get-demo')} className="text-sm text-white/60 hover:text-white font-medium border border-white/10 px-3 py-1.5 rounded-full transition-colors">Get Demo</button>
+            <button onClick={() => navigate('/auth')} className="glass-button-green text-white text-sm font-semibold px-4 py-2 rounded-full border border-accent-mint/20">Start Free →</button>
           </div>
         </div>
       )}

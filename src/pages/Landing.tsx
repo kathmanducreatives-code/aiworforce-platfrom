@@ -1,8 +1,9 @@
 import Header from "@/components/Header";
 import Footer from "@/components/landing/Footer";
+import CustomCursor from "@/components/landing/CustomCursor";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, lazy, Suspense } from "react";
 import gsap from "gsap";
 import { ScrollTrigger } from "gsap/ScrollTrigger";
 import HeroHook from "@/components/landing/HeroHook";
@@ -13,13 +14,16 @@ import FAQSection from "@/components/landing/FAQSection";
 import MarqueeBanner from "@/components/landing/MarqueeBanner";
 import FinalCTA from "@/components/landing/FinalCTA";
 import GlobalTrustBar from "@/components/landing/GlobalTrustBar";
-import EcosystemSection from "@/components/landing/EcosystemSection";
-import DepartmentRevealSection from "@/components/landing/DepartmentRevealSection";
-import TeamsAtWorkSection from "@/components/landing/TeamsAtWorkSection";
 import GlobalSection from "@/components/landing/GlobalSection";
-import DayTimelineSection from "@/components/landing/DayTimelineSection";
-import AgentBuilderSection from "@/components/landing/AgentBuilderSection";
+import EmailCapture from "@/components/landing/EmailCapture";
 import FiestaBackground from "@/components/landing/FiestaBackground";
+
+// Lazily loaded heavy sections (animation-heavy, below the fold)
+const EcosystemSection        = lazy(() => import("@/components/landing/EcosystemSection"));
+const DepartmentRevealSection = lazy(() => import("@/components/landing/DepartmentRevealSection"));
+const AgentBuilderSection     = lazy(() => import("@/components/landing/AgentBuilderSection"));
+const DayTimelineSection      = lazy(() => import("@/components/landing/DayTimelineSection"));
+const TeamsAtWorkSection      = lazy(() => import("@/components/landing/TeamsAtWorkSection"));
 
 gsap.registerPlugin(ScrollTrigger);
 ScrollTrigger.config({ limitCallbacks: true });
@@ -40,6 +44,9 @@ const Landing = () => {
     <div 
       className="min-h-screen relative isolate bg-transparent font-display text-white selection:bg-accent-mint selection:text-black"
     >
+      {/* ═══ CUSTOM CURSOR ═══ */}
+      <CustomCursor />
+
       {/* ═══ GLOBAL ATMOSPHERE SYSTEM ═══ */}
       <FiestaBackground />
 
@@ -52,15 +59,25 @@ const Landing = () => {
         {/* 3. Global Trust Bar */}
         <GlobalTrustBar />
         {/* 4. Ecosystem */}
-        <EcosystemSection />
-        {/* 5. Department Reveal (AI WORKFORCE) */}
-        <DepartmentRevealSection />
-        {/* 17. Custom Agent Builder (LABORATORY) */}
-        <AgentBuilderSection />
-        {/* 13. A Day With Your Workforce */}
-        <DayTimelineSection />
-        {/* 14. Teams At Work */}
-        <TeamsAtWorkSection />
+        <Suspense fallback={<div className="h-screen" />}>
+          <EcosystemSection />
+        </Suspense>
+        {/* 5. Department Reveal */}
+        <Suspense fallback={<div className="h-screen" />}>
+          <DepartmentRevealSection />
+        </Suspense>
+        {/* 6. Agent Builder  */}
+        <Suspense fallback={<div className="min-h-[60vh]" />}>
+          <AgentBuilderSection />
+        </Suspense>
+        {/* 7. Day Timeline */}
+        <Suspense fallback={<div className="min-h-[60vh]" />}>
+          <DayTimelineSection />
+        </Suspense>
+        {/* 8. Teams At Work */}
+        <Suspense fallback={<div className="min-h-[40vh]" />}>
+          <TeamsAtWorkSection />
+        </Suspense>
         {/* 15. The Math */}
         <TimeMath />
         {/* 16. Social Proof */}
@@ -71,7 +88,9 @@ const Landing = () => {
         <FAQSection />
         {/* 20. Global */}
         <GlobalSection />
-        {/* 21. Marquee */}
+        {/* 21. Email Capture */}
+        <EmailCapture />
+        {/* 22. Marquee */}
         <MarqueeBanner />
         {/* 22. Final CTA */}
         <FinalCTA />

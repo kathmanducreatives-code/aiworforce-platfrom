@@ -25,11 +25,11 @@ export default {
 				background: '#030A0C',
 				foreground: '#FFFFFF',
 				/* ── AI Fiesta Design Tokens ── */
-				'accent-mint':   '#00FF94',   /* brand green — buttons, borders, glows */
-				'accent-neon':   '#00FF94',   /* alias */
-				'accent-cyan':   '#00E5FF',   /* secondary highlight */
-				'teal-bright':   '#298799',   /* atmospheric teal — background glows */
-				'teal-mid':      '#0F4450',   /* mid-depth teal */
+				'accent-mint':   '#10B981',   /* emerald-500 — buttons, borders, glows */
+				'accent-neon':   '#34D399',   /* emerald-400 — secondary accent */
+				'accent-cyan':   '#6EE7B7',   /* emerald-300 — light accent */
+				'teal-bright':   '#065F46',   /* deep emerald atmosphere glow */
+				'teal-mid':      '#022C22',   /* darkest emerald void */
 				'galaxy-void':   '#030A0C',   /* deepest dark */
 				primary: {
 					'100': 'rgba(16, 185, 129, 0.1)',

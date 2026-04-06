@@ -32,6 +32,9 @@ const PricingCard = () => {
   const sectionRef = useRef<HTMLDivElement>(null);
   const cardRef = useRef<HTMLDivElement>(null);
   const [isAnnual, setIsAnnual] = useState(false);
+  const [currency, setCurrency] = useState<'USD' | 'EUR'>('USD');
+  const rate = currency === 'USD' ? 1.08 : 1;
+  const symbol = currency === 'USD' ? '$' : '€';
 
   useEffect(() => {
     const ctx = gsap.context(() => {
@@ -58,17 +61,35 @@ const PricingCard = () => {
           </p>
         </div>
 
-        <div className="flex items-center justify-center gap-4 mb-16">
-          <span className={`text-[10px] font-black uppercase tracking-widest transition-colors ${!isAnnual ? 'text-white' : 'text-white/20'}`}>Monthly</span>
-          <button onClick={() => setIsAnnual(!isAnnual)} className={`relative w-14 h-7 rounded-full transition-all duration-300 ${isAnnual ? 'bg-accent-mint' : 'bg-white/10'}`}>
-            <div className={`absolute top-1 w-5 h-5 rounded-full bg-white transition-transform duration-300 ${isAnnual ? 'translate-x-8 shadow-[0_0_10px_rgba(255,255,255,1)]' : 'translate-x-1'}`} />
-          </button>
-          <span className={`text-[10px] font-black uppercase tracking-widest transition-colors ${isAnnual ? 'text-white' : 'text-white/20'}`}>Annual <span className="text-accent-mint text-[9px] ml-1">(-20%)</span></span>
+        <div className="flex flex-col sm:flex-row items-center justify-center gap-4 mb-16">
+          {/* Billing Toggle */}
+          <div className="flex items-center gap-4">
+            <span className={`text-[10px] font-black uppercase tracking-widest transition-colors ${!isAnnual ? 'text-white' : 'text-white/20'}`}>Monthly</span>
+            <button onClick={() => setIsAnnual(!isAnnual)} className={`relative w-14 h-7 rounded-full transition-all duration-300 ${isAnnual ? 'bg-accent-mint' : 'bg-white/10'}`}>
+              <div className={`absolute top-1 w-5 h-5 rounded-full bg-white transition-transform duration-300 ${isAnnual ? 'translate-x-8 shadow-[0_0_10px_rgba(255,255,255,1)]' : 'translate-x-1'}`} />
+            </button>
+            <span className={`text-[10px] font-black uppercase tracking-widest transition-colors ${isAnnual ? 'text-white' : 'text-white/20'}`}>Annual <span className="text-accent-mint text-[9px] ml-1">(-20%)</span></span>
+          </div>
+
+          {/* Currency Toggle */}
+          <div className="flex items-center gap-1 p-1 rounded-full bg-white/5 border border-white/10">
+            {(['USD', 'EUR'] as const).map((c) => (
+              <button
+                key={c}
+                onClick={() => setCurrency(c)}
+                className={`px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest transition-all duration-200 ${
+                  currency === c ? 'bg-white text-black shadow' : 'text-white/30 hover:text-white/60'
+                }`}
+              >
+                {c === 'USD' ? '🇺🇸 USD' : '🇪🇺 EUR'}
+              </button>
+            ))}
+          </div>
         </div>
 
         <div ref={cardRef} className="grid grid-cols-1 md:grid-cols-3 gap-6">
           {plans.map((plan) => (
-            <div key={plan.name} className={`glass-card-premium rounded-[2rem] p-10 relative transition-all duration-500 hover:-translate-y-2 ${plan.popular ? 'border-accent-mint/30 shadow-[0_50px_100px_rgba(0,255,148,0.05)]' : 'border-white/5'}`}>
+            <div key={plan.name} className={`glass-card-premium rounded-[2rem] p-10 relative transition-all duration-500 hover:-translate-y-2 ${plan.popular ? 'border-accent-mint/30 shadow-[0_50px_100px_rgba(0,255,148,0.05)]' : 'border-white/5 hover:border-white/15 hover:shadow-[0_30px_80px_rgba(255,255,255,0.02)]'}`}>
               {plan.popular && (
                 <div className="absolute -top-4 left-1/2 -translate-x-1/2 px-4 py-1.5 bg-accent-mint rounded-full shadow-[0_10px_30px_rgba(0,255,148,0.3)]">
                    <span className="text-[10px] font-black uppercase tracking-widest text-black mt-px">INITIALIZE STARTUP</span>
@@ -78,10 +99,16 @@ const PricingCard = () => {
               <h3 className="font-display font-bold text-xl text-white mb-2">{plan.name}</h3>
               <p className="text-xs text-white/30 mb-8 font-medium leading-relaxed">{plan.desc}</p>
               
-              <div className="flex items-baseline gap-1 mb-8">
-                <span className="text-5xl font-black text-white tracking-tighter">€{isAnnual ? plan.annualPrice : plan.monthlyPrice}</span>
+              <div className="flex items-baseline gap-1 mb-1">
+                <span className="text-5xl font-black text-white tracking-tighter">{symbol}{Math.round((isAnnual ? plan.annualPrice : plan.monthlyPrice) * rate)}</span>
                 <span className="text-[10px] font-black text-white/20 uppercase tracking-widest">/mo</span>
               </div>
+              {isAnnual && (
+                <p className="text-[9px] font-bold text-accent-mint uppercase tracking-widest mb-6">
+                  Billed {symbol}{Math.round(plan.annualPrice * rate * 12)}/yr · Save {symbol}{Math.round((plan.monthlyPrice - plan.annualPrice) * rate * 12)}
+                </p>
+              )}
+              {!isAnnual && <div className="mb-8" />}
 
               <div className="space-y-4 mb-12">
                 {plan.features.map((f, i) => (
