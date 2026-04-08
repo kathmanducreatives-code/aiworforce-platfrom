@@ -114,13 +114,13 @@
   .call-avatar.idle      { background:var(--surface2);   color:var(--text-muted); }
   .call-name  { text-align:center; font-size:19px; font-weight:700; margin-bottom:3px; }
   .call-phone { text-align:center; font-size:13px; color:var(--text-muted); margin-bottom:18px; font-family:monospace; }
-  .status-badge { display:flex; align-items:center; gap:7px; padding:7px 14px; border-radius:999px; font-size:13px; font-weight:600; width:fit-content; margin:0 auto 18px; }
-  .status-badge.dialing   { background:var(--blue-dim);   color:var(--blue);   }
-  .status-badge.ringing   { background:var(--yellow-dim); color:var(--yellow); }
-  .status-badge.answered  { background:var(--blue-dim);   color:var(--blue);   }
-  .status-badge.live      { background:var(--purple-dim); color:var(--purple); }
-  .status-badge.voicemail { background:var(--yellow-dim); color:var(--yellow); }
-  .status-badge.idle      { background:var(--surface2);   color:var(--text-muted); }
+  .cc-status-badge { display:flex; align-items:center; gap:7px; padding:7px 14px; border-radius:999px; font-size:13px; font-weight:600; width:fit-content; margin:0 auto 18px; }
+  .cc-status-badge.dialing   { background:var(--blue-dim);   color:var(--blue);   }
+  .cc-status-badge.ringing   { background:var(--yellow-dim); color:var(--yellow); }
+  .cc-status-badge.answered  { background:var(--blue-dim);   color:var(--blue);   }
+  .cc-status-badge.live      { background:var(--purple-dim); color:var(--purple); }
+  .cc-status-badge.voicemail { background:var(--yellow-dim); color:var(--yellow); }
+  .cc-status-badge.idle      { background:var(--surface2);   color:var(--text-muted); }
   .status-dot { width:7px; height:7px; border-radius:50%; background:currentColor; }
   .status-dot.animated { animation:pulse 1s infinite; }
   .call-timer { text-align:center; font-size:26px; font-weight:700; font-family:monospace; color:var(--text-muted); }
@@ -1119,7 +1119,7 @@ function renderCurrentCall(call) {
     <div class="call-avatar ${cfg.cls}">${getInitials(call.name)}</div>
     <div class="call-name">${esc(call.name||'Unknown')}</div>
     <div class="call-phone">${esc(call.phone||'')}</div>
-    <div class="status-badge ${cfg.cls}">
+    <div class="cc-status-badge ${cfg.cls}">
       <div class="status-dot ${cfg.anim?'animated':''}"></div>
       ${esc(call.status_label||cfg.label)}
     </div>
