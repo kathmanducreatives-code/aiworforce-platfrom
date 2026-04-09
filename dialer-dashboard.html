@@ -940,8 +940,14 @@ function setLeadFilter(status) {
 
 function renderLeadsList() {
   const list  = document.getElementById('leads-list');
-  const empty = document.getElementById('leads-empty');
   if (!list) return;
+  // Re-find or recreate the empty placeholder (innerHTML wipes it on first render)
+  let empty = document.getElementById('leads-empty');
+  if (!empty) {
+    empty = document.createElement('div');
+    empty.id = 'leads-empty';
+    empty.className = 'leads-empty';
+  }
 
   if (leadsFiltered.length === 0) {
     empty.style.display = '';
