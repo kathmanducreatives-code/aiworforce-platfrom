@@ -292,6 +292,9 @@
     animation: breathe-blue 1.6s ease-in-out infinite;
     border-left-color: var(--blue);
   }
+  @media (prefers-reduced-motion: reduce) {
+    .lead-row.calling-now { animation: none; background: var(--blue-dim); }
+  }
 </style>
 </head>
 <body>
