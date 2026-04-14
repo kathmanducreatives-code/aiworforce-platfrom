@@ -283,6 +283,15 @@
   .status-badge.completed  { background:var(--green-dim);  color:var(--green); }
   .status-badge.do_not_call{ background:var(--red-dim);    color:var(--red); }
   .status-badge.pending    { background:var(--surface2);   color:var(--text-muted); border:1px solid var(--border); }
+  /* ── Live call highlight ── */
+  @keyframes breathe-blue {
+    0%, 100% { background: transparent; }
+    50%       { background: var(--blue-dim); }
+  }
+  .lead-row.calling-now {
+    animation: breathe-blue 1.6s ease-in-out infinite;
+    border-left-color: var(--blue);
+  }
 </style>
 </head>
 <body>
