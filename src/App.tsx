@@ -29,7 +29,7 @@ import InterviewSettings from "./pages/InterviewSettings";
 import BookInterview from "./pages/BookInterview";
 import GoogleOAuthCallback from "./pages/GoogleOAuthCallback";
 import ProtectedRoute from "./components/ProtectedRoute";
-import MainLayout from "./components/MainLayout";
+import CommandCanvas from "./components/CommandCanvas";
 import AuthenticatedBackground from "./components/AuthenticatedBackground";
 
 import CandidateApply from "./pages/CandidateApply";
@@ -86,31 +86,31 @@ const App = () => (
                     <Route path="/pricing" element={<Pricing />} />
                     <Route path="/get-demo" element={<GetDemo />} />
 
-                    {/* Protected Routes with MainLayout */}
+                    {/* Protected Routes with CommandCanvas */}
                     {/* Command Center (new default dashboard) */}
                     <Route path="/dashboard" element={
                       <ProtectedRoute>
-                        <MainLayout>
+                        <CommandCanvas>
                           <CommandCenter />
-                        </MainLayout>
+                        </CommandCanvas>
                       </ProtectedRoute>
                     } />
 
                     {/* Agent Studio */}
                     <Route path="/agent-studio" element={
                       <ProtectedRoute>
-                        <MainLayout>
+                        <CommandCanvas>
                           <AgentStudio />
-                        </MainLayout>
+                        </CommandCanvas>
                       </ProtectedRoute>
                     } />
 
                     {/* Department detail views */}
                     <Route path="/departments/talent" element={
                       <ProtectedRoute>
-                        <MainLayout>
+                        <CommandCanvas>
                           <TalentDepartment />
-                        </MainLayout>
+                        </CommandCanvas>
                       </ProtectedRoute>
                     } />
 
@@ -118,73 +118,73 @@ const App = () => (
 
                     <Route path="/candidates" element={
                       <ProtectedRoute>
-                        <MainLayout>
+                        <CommandCanvas>
                           <Candidates />
-                        </MainLayout>
+                        </CommandCanvas>
                       </ProtectedRoute>
                     } />
 
                     <Route path="/analytics" element={
                       <ProtectedRoute>
-                        <MainLayout>
+                        <CommandCanvas>
                           <DataDashboard />
-                        </MainLayout>
+                        </CommandCanvas>
                       </ProtectedRoute>
                     } />
 
                     <Route path="/folder/:folderName" element={
                       <ProtectedRoute>
-                        <MainLayout>
+                        <CommandCanvas>
                           <FolderView />
-                        </MainLayout>
+                        </CommandCanvas>
                       </ProtectedRoute>
                     } />
 
                     <Route path="/email-sequence/:folderName" element={
                       <ProtectedRoute>
-                        <MainLayout>
+                        <CommandCanvas>
                           <EmailSequenceSetup />
-                        </MainLayout>
+                        </CommandCanvas>
                       </ProtectedRoute>
                     } />
 
                     <Route path="/client-metrics" element={
                       <ProtectedRoute>
-                        <MainLayout>
+                        <CommandCanvas>
                           <ClientMetrics />
-                        </MainLayout>
+                        </CommandCanvas>
                       </ProtectedRoute>
                     } />
 
                     <Route path="/client/:clientId" element={
                       <ProtectedRoute>
-                        <MainLayout>
+                        <CommandCanvas>
                           <ClientDetail />
-                        </MainLayout>
+                        </CommandCanvas>
                       </ProtectedRoute>
                     } />
 
                     <Route path="/lead-scraper" element={
                       <ProtectedRoute>
-                        <MainLayout>
+                        <CommandCanvas>
                           <LeadScraper />
-                        </MainLayout>
+                        </CommandCanvas>
                       </ProtectedRoute>
                     } />
 
                     <Route path="/deep-search" element={
                       <ProtectedRoute>
-                        <MainLayout>
+                        <CommandCanvas>
                           <DeepSearch />
-                        </MainLayout>
+                        </CommandCanvas>
                       </ProtectedRoute>
                     } />
 
                     <Route path="/icp-intelligence" element={
                       <ProtectedRoute>
-                        <MainLayout>
+                        <CommandCanvas>
                           <ICPManager />
-                        </MainLayout>
+                        </CommandCanvas>
                       </ProtectedRoute>
                     } />
 
@@ -202,40 +202,40 @@ const App = () => (
 
                     <Route path="/email-sequences" element={
                       <ProtectedRoute>
-                        <MainLayout>
+                        <CommandCanvas>
                           <EmailSequences />
-                        </MainLayout>
+                        </CommandCanvas>
                       </ProtectedRoute>
                     } />
 
                     <Route path="/interview-scheduler" element={
                       <ProtectedRoute>
-                        <MainLayout>
+                        <CommandCanvas>
                           <InterviewScheduler />
-                        </MainLayout>
+                        </CommandCanvas>
                       </ProtectedRoute>
                     } />
 
                     <Route path="/interview-settings" element={
                       <ProtectedRoute>
-                        <MainLayout>
+                        <CommandCanvas>
                           <InterviewSettings />
-                        </MainLayout>
+                        </CommandCanvas>
                       </ProtectedRoute>
                     } />
                     <Route path="/screening-jobs" element={
                       <ProtectedRoute>
-                        <MainLayout>
+                        <CommandCanvas>
                           <ScreeningJobs />
-                        </MainLayout>
+                        </CommandCanvas>
                       </ProtectedRoute>
                     } />
 
                     <Route path="/screening-jobs/:jobId" element={
                       <ProtectedRoute>
-                        <MainLayout>
+                        <CommandCanvas>
                           <JobApplicants />
-                        </MainLayout>
+                        </CommandCanvas>
                       </ProtectedRoute>
                     } />
 
@@ -243,79 +243,79 @@ const App = () => (
 
                     <Route path="/distribution" element={
                       <ProtectedRoute>
-                        <MainLayout>
+                        <CommandCanvas>
                           <JobDistribution />
-                        </MainLayout>
+                        </CommandCanvas>
                       </ProtectedRoute>
                     } />
 
                     <Route path="/competitors" element={
                       <ProtectedRoute>
-                        <MainLayout>
+                        <CommandCanvas>
                           <CompetitorMonitor />
-                        </MainLayout>
+                        </CommandCanvas>
                       </ProtectedRoute>
                     } />
 
                     <Route path="/talent-intel" element={
                       <ProtectedRoute>
-                        <MainLayout>
+                        <CommandCanvas>
                           <TalentIntelligence />
-                        </MainLayout>
+                        </CommandCanvas>
                       </ProtectedRoute>
                     } />
 
                     <Route path="/competitor-intel" element={
                       <ProtectedRoute>
-                        <MainLayout>
+                        <CommandCanvas>
                           <CompetitorIntelligence />
-                        </MainLayout>
+                        </CommandCanvas>
                       </ProtectedRoute>
                     } />
 
                     <Route path="/growth-signals" element={
                       <ProtectedRoute>
-                        <MainLayout>
+                        <CommandCanvas>
                           <GrowthSignals />
-                        </MainLayout>
+                        </CommandCanvas>
                       </ProtectedRoute>
                     } />
 
                     <Route path="/expert-marketplace" element={
                       <ProtectedRoute>
-                        <MainLayout>
+                        <CommandCanvas>
                           <ExpertMarketplace />
-                        </MainLayout>
+                        </CommandCanvas>
                       </ProtectedRoute>
                     } />
 
                     {/* Growth & Outbound Routes */}
                     <Route path="/post-interceptor" element={
                       <ProtectedRoute>
-                        <MainLayout>
+                        <CommandCanvas>
                           <PostInterceptor />
-                        </MainLayout>
+                        </CommandCanvas>
                       </ProtectedRoute>
                     } />
 
                     <Route path="/lead-crm" element={
                       <ProtectedRoute>
-                        <MainLayout>
+                        <CommandCanvas>
                           <LeadCRM />
-                        </MainLayout>
+                        </CommandCanvas>
                       </ProtectedRoute>
                     } />
 
                     <Route path="/outreach-engine" element={
                       <ProtectedRoute>
-                        <MainLayout>
+                        <CommandCanvas>
                           <OutreachEngine />
-                        </MainLayout>
+                        </CommandCanvas>
                       </ProtectedRoute>
                     } />
 
                     {/* Mission Control Candidate UI Routes */}
-                    <Route path="/candidates/:id" element={<ProtectedRoute><MainLayout><CandidateDossier /></MainLayout></ProtectedRoute>} />
+                    <Route path="/candidates/:id" element={<ProtectedRoute><CommandCanvas><CandidateDossier /></CommandCanvas></ProtectedRoute>} />
 
                     {/* <Route path="/verify" element={<ProtectedRoute><MainLayout><VerifyQueue /></MainLayout></ProtectedRoute>} /> */}
                     {/* <Route path="/verify/results" element={<ProtectedRoute><MainLayout><VerifyResults /></MainLayout></ProtectedRoute>} /> */}

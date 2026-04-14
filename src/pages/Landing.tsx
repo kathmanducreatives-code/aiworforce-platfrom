@@ -3,7 +3,7 @@ import Footer from "@/components/landing/Footer";
 import CustomCursor from "@/components/landing/CustomCursor";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
-import { useEffect, useRef, lazy, Suspense } from "react";
+import { useEffect, useRef, useState, lazy, Suspense } from "react";
 import gsap from "gsap";
 import { ScrollTrigger } from "gsap/ScrollTrigger";
 import HeroHook from "@/components/landing/HeroHook";
@@ -32,6 +32,7 @@ const Landing = () => {
   const navigate = useNavigate();
   const { user } = useAuth();
   const mainRef = useRef<HTMLElement>(null);
+  const [scrollProgress, setScrollProgress] = useState(0);
 
   useEffect(() => {
     if (user) {
@@ -40,10 +41,34 @@ const Landing = () => {
     return () => { };
   }, [user, navigate]);
 
+  // Track scroll progress for the progress bar
+  useEffect(() => {
+    const handleScroll = () => {
+      const scrollTop = window.scrollY;
+      const docHeight = document.documentElement.scrollHeight - window.innerHeight;
+      if (docHeight > 0) {
+        setScrollProgress(Math.min(scrollTop / docHeight, 1));
+      }
+    };
+    window.addEventListener('scroll', handleScroll, { passive: true });
+    return () => window.removeEventListener('scroll', handleScroll);
+  }, []);
+
   return (
     <div 
       className="min-h-screen relative isolate bg-transparent font-display text-white selection:bg-accent-mint selection:text-black"
     >
+      {/* ═══ SCROLL PROGRESS BAR ═══ */}
+      <div
+        className="fixed top-0 left-0 h-[2px] z-[9999] pointer-events-none"
+        style={{
+          width: `${scrollProgress * 100}%`,
+          background: 'linear-gradient(90deg, rgba(16,185,129,0.6), #10B981, rgba(0,255,148,0.8))',
+          boxShadow: '0 0 8px rgba(16,185,129,0.5), 0 0 20px rgba(16,185,129,0.2)',
+          transition: 'width 60ms linear',
+        }}
+      />
+
       {/* ═══ CUSTOM CURSOR ═══ */}
       <CustomCursor />
 
@@ -103,3 +128,4 @@ const Landing = () => {
 };
 
 export default Landing;
+

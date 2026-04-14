@@ -16,43 +16,49 @@ interface AgentDef {
   tools: string[];
   statusLine: string;
   accent: string;
+  image: string;
 }
 
 const AGENTS: AgentDef[] = [
   {
-    id: "scout", name: "Scout", role: "Talent Scout", accent: "#34D399", // Emerald Light
+    id: "scout", name: "Scout", role: "Talent Scout", accent: "#00FF94", // Pilot Green
     desc: "Finds top candidates, scans signals, and builds talent shortlists across the web.",
     actions: ["Sources high-fit candidates", "Enriches public profiles", "Scans hiring signals", "Assembles shortlists"],
     tools: ["apify", "firecrawl", "github"],
     statusLine: "Scanning 1,247 profiles…",
+    image: "/assets/agents/scout.png",
   },
   {
-    id: "aria", name: "Aria", role: "AI Screener", accent: "#10B981", // Emerald Primary
+    id: "aria", name: "Aria", role: "AI Screener", accent: "#00FF94", // Pilot Green
     desc: "Evaluates candidates, reasons through fit, and produces structured screening insight.",
     actions: ["Screens against role criteria", "Summarizes strengths & risks", "Compares candidate quality", "Produces evaluation notes"],
     tools: ["claude", "gemini"],
     statusLine: "Evaluating candidate #38…",
+    image: "/assets/agents/aria.png",
   },
   {
-    id: "radar", name: "Radar", role: "Intelligence Lead", accent: "#059669", // Emerald Dark
+    id: "radar", name: "Radar", role: "Intelligence Lead", accent: "#00FF94", // Pilot Green
     desc: "Monitors markets, competitors, and external signals to keep your team ahead.",
     actions: ["Tracks competitor moves", "Monitors pricing changes", "Captures market intelligence", "Delivers signal summaries"],
     tools: ["firecrawl", "gpt4", "notion"],
     statusLine: "3 new signals detected",
+    image: "/assets/agents/radar.png",
   },
   {
-    id: "penn", name: "Penn", role: "Outreach Writer", accent: "#10B981", // Emerald Primary
+    id: "penn", name: "Penn", role: "Outreach Writer", accent: "#00FF94", // Pilot Green
     desc: "Turns intelligence into persuasive outreach, messages, and campaign-ready copy.",
     actions: ["Drafts outbound sequences", "Personalizes messaging", "Rewrites by persona", "Prepares send-ready content"],
     tools: ["claude", "instantly", "elevenlabs"],
     statusLine: "Drafting sequence v3…",
+    image: "/assets/agents/penn.png",
   },
   {
-    id: "constructor", name: "Constructor", role: "Build Your Own", accent: "#10B981",
+    id: "constructor", name: "Constructor", role: "Build Your Own", accent: "#00FF94", // Pilot Green
     desc: "Design the role, choose the tools, and create a custom AI employee for any function in your business.",
     actions: ["Define the role", "Assign tools", "Describe responsibilities", "Launch employee"],
     tools: ["claude", "gpt4", "gemini", "firecrawl", "apify", "instantly", "elevenlabs", "notion", "linear", "github", "nanobanana"],
     statusLine: "Ready to configure",
+    image: "/assets/agents/constructor.png",
   },
 ];
 
@@ -69,12 +75,24 @@ const DepartmentRevealSection = () => {
     offset: ["start start", "end end"],
   });
 
+  const [scrollTriggered, setScrollTriggered] = useState(false);
+  const [fallbackVisible, setFallbackVisible] = useState(false);
+
   useEffect(() => {
     return scrollYProgress.on("change", (p) => {
+      setScrollTriggered(true);
       const idx = Math.min(4, Math.max(0, Math.floor(p * 5)));
       if (idx !== activeIdx) setActiveIdx(idx);
     });
   }, [scrollYProgress, activeIdx]);
+
+  // Fallback: show static grid if scroll hasn't triggered within 2s
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      if (!scrollTriggered) setFallbackVisible(true);
+    }, 2000);
+    return () => clearTimeout(timer);
+  }, [scrollTriggered]);
 
   const [mousePos, setMousePos] = useState({ x: 0.5, y: 0.5 });
   const rafRef = useRef<number>(0);
@@ -109,10 +127,46 @@ const DepartmentRevealSection = () => {
       ref={sectionRef}
       id="department-reveal"
       className="relative w-full"
-      style={{ height: "400vh" }}
+      style={{ height: "200vh" }}
     >
       {/* ── Sticky viewport ── */}
       <div className="sticky top-0 w-full h-screen overflow-hidden flex items-center justify-center">
+
+        {/* ── FALLBACK: Static responsive grid if scroll hasn't triggered ── */}
+        {fallbackVisible && !scrollTriggered && (
+          <div className="absolute inset-0 z-[100] flex flex-col items-center justify-center bg-[#03070A] p-6 overflow-y-auto">
+            <span className="font-mono text-[10px] uppercase tracking-[0.5em] font-bold mb-6" style={{ color: '#00FF94', opacity: 0.5 }}>
+              AI WORKFORCE
+            </span>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 max-w-4xl w-full">
+              {AGENTS.map((agent) => (
+                <div
+                  key={agent.id}
+                  className="rounded-2xl p-6 border"
+                  style={{
+                    background: 'rgba(20, 25, 22, 0.4)',
+                    borderColor: 'rgba(16, 185, 129, 0.15)',
+                    backdropFilter: 'blur(24px)',
+                  }}
+                >
+                  <div className="flex items-center gap-4 mb-3">
+                    <div
+                      className="w-12 h-12 rounded-full overflow-hidden flex-shrink-0"
+                      style={{ border: `2px solid ${agent.accent}40`, background: '#030507' }}
+                    >
+                      <img src={agent.image} alt={agent.name} className="w-full h-full object-cover" onError={(e) => { e.currentTarget.style.display = 'none'; }} />
+                    </div>
+                    <div>
+                      <h3 className="font-display font-black text-lg text-white">{agent.name}</h3>
+                      <span className="font-mono text-[10px] uppercase tracking-[0.2em] text-white/40">{agent.role}</span>
+                    </div>
+                  </div>
+                  <p className="text-[13px] text-white/40 leading-relaxed">{agent.desc}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
         {/* Atmosphere is now global in Landing.tsx */}
 
 
@@ -239,16 +293,28 @@ const AgentWindow = ({ agent, isActive, isMobile }: { agent: AgentDef; isActive:
         {/* Avatar Circle */}
         <div className="relative mb-6 md:mb-8" style={{ width: isMobile ? 72 : 100, height: isMobile ? 72 : 100 }}>
           <div
-            className="w-full h-full rounded-full flex items-center justify-center relative overflow-hidden"
+            className="w-full h-full rounded-full flex items-center justify-center relative overflow-hidden bg-[#030507]"
             style={{
-              background: `radial-gradient(circle, ${agent.accent}18 0%, transparent 70%)`,
               border: `2px solid ${agent.accent}40`,
-              boxShadow: `0 0 30px ${agent.accent}20`,
+              boxShadow: `0 0 30px ${agent.accent}30`,
             }}
           >
+            <div className="absolute inset-0" style={{ background: `radial-gradient(circle, ${agent.accent}30 0%, transparent 70%)` }} />
+            <img 
+              src={agent.image} 
+              alt={agent.name} 
+              className="w-full h-full object-cover relative z-10"
+              onError={(e) => {
+                e.currentTarget.style.display = 'none';
+                if (e.currentTarget.nextElementSibling) {
+                   (e.currentTarget.nextElementSibling as HTMLElement).style.display = 'flex';
+                }
+              }}
+            />
+            {/* Fallback character text if image fails/pending */}
             <span
-              className="font-display font-black"
-              style={{ fontSize: isMobile ? 28 : 38, color: agent.accent }}
+              className="font-display font-black absolute inset-0 flex items-center justify-center relative z-20"
+              style={{ fontSize: isMobile ? 28 : 38, color: agent.accent, display: 'none' }}
             >
               {agent.name.charAt(0)}
             </span>
@@ -482,7 +548,43 @@ const ConstructorWindow = ({ agent, isActive, isMobile }: { agent: AgentDef; isA
   return (
     <div className={`w-full h-full flex flex-col items-center justify-center p-6 md:p-12 text-center`}>
 
-      {/* Headline */}
+      {/* Headline & Agent Portrait (For Constructor) */}
+      <motion.div
+        initial={{ opacity: 0, scale: 0.8 }}
+        animate={isActive ? { opacity: 1, scale: 1 } : {}}
+        transition={{ delay: 0.1, duration: 0.6 }}
+        className="mb-6 relative"
+        style={{ width: isMobile ? 72 : 100, height: isMobile ? 72 : 100 }}
+      >
+        <div
+          className="w-full h-full rounded-full flex items-center justify-center relative overflow-hidden bg-[#030507]"
+          style={{
+            border: `2px solid ${agent.accent}40`,
+            boxShadow: `0 0 30px ${agent.accent}30`,
+          }}
+        >
+          <div className="absolute inset-0" style={{ background: `radial-gradient(circle, ${agent.accent}30 0%, transparent 70%)` }} />
+          <img 
+            src={agent.image} 
+            alt={agent.name} 
+            className="w-full h-full object-cover relative z-10"
+            onError={(e) => {
+              e.currentTarget.style.display = 'none';
+              if (e.currentTarget.nextElementSibling) {
+                 (e.currentTarget.nextElementSibling as HTMLElement).style.display = 'flex';
+              }
+            }}
+          />
+          {/* Fallback character text if image fails/pending */}
+          <span
+            className="font-display font-black absolute inset-0 flex items-center justify-center relative z-20"
+            style={{ fontSize: isMobile ? 28 : 38, color: agent.accent, display: 'none' }}
+          >
+            W
+          </span>
+        </div>
+      </motion.div>
+
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={isActive ? { opacity: 1, y: 0 } : {}}
@@ -493,7 +595,7 @@ const ConstructorWindow = ({ agent, isActive, isMobile }: { agent: AgentDef; isA
           className="font-display font-black tracking-tight leading-none"
           style={{
             fontSize: isMobile ? 28 : 52,
-            background: "linear-gradient(135deg, #fff 30%, #10B981 100%)",
+            background: "linear-gradient(135deg, #fff 30%, #00FF94 100%)",
             WebkitBackgroundClip: "text",
             WebkitTextFillColor: "transparent",
           }}

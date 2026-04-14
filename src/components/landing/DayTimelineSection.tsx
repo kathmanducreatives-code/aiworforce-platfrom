@@ -1,4 +1,4 @@
-import { useRef } from 'react';
+import { useRef, useState, useEffect } from 'react';
 import { motion, useScroll, useTransform } from 'framer-motion';
 import { useIsMobile } from '@/hooks/use-mobile';
 
@@ -58,17 +58,58 @@ const TIMELINE_NODES: TimelineNode[] = [
 const DayTimelineSection = () => {
     const sectionRef = useRef<HTMLElement>(null);
     const isMobile = useIsMobile();
+    const [scrollTriggered, setScrollTriggered] = useState(false);
+    const [fallbackVisible, setFallbackVisible] = useState(false);
     
     const { scrollYProgress } = useScroll({
         target: sectionRef,
         offset: ["start start", "end end"]
     });
 
+    // Track if scroll has engaged
+    useEffect(() => {
+        return scrollYProgress.on("change", () => {
+            if (!scrollTriggered) setScrollTriggered(true);
+        });
+    }, [scrollYProgress, scrollTriggered]);
+
+    // Fallback: show all timeline items if scroll hasn't triggered within 2s
+    useEffect(() => {
+        const timer = setTimeout(() => {
+            if (!scrollTriggered) setFallbackVisible(true);
+        }, 2000);
+        return () => clearTimeout(timer);
+    }, [scrollTriggered]);
+
     const yTranslation = useTransform(scrollYProgress, [0.1, 0.95], ["0%", isMobile ? "-50%" : "-35%"]);
 
     return (
-        <section ref={sectionRef} id="daily-brief" className="relative w-full h-[350vh] md:h-[400vh] bg-transparent border-t border-white/5">
+        <section ref={sectionRef} id="daily-brief" className="relative w-full h-[200vh] bg-transparent border-t border-white/5">
             <div className="sticky top-0 w-full h-screen overflow-hidden flex flex-col py-16 md:py-24">
+
+                {/* ── FALLBACK: Show all timeline items statically ── */}
+                {fallbackVisible && !scrollTriggered && (
+                    <div className="absolute inset-0 z-[100] flex flex-col items-center bg-[#03070A] p-6 pt-16 overflow-y-auto">
+                        <span className="font-mono text-[10px] uppercase tracking-[0.3em] text-[#10B981] font-bold mb-4 block">A MONDAY WITH YOUR WORKFORCE</span>
+                        <h2 className="text-3xl md:text-5xl font-display font-black text-white leading-[1.05] tracking-tight mb-8 text-center">47 minutes of your time.<br/>A full week of work done.</h2>
+                        <div className="w-full max-w-3xl flex flex-col gap-4">
+                            {TIMELINE_NODES.map((node) => (
+                                <div key={node.id} className="rounded-2xl border p-5" style={{ background: 'rgba(255,255,255,0.02)', borderColor: `${node.accent}30` }}>
+                                    <div className="flex items-center justify-between mb-2">
+                                        <div className="flex items-center gap-3">
+                                            <div className="w-2 h-2 rounded-full" style={{ background: node.accent }} />
+                                            <span className="font-display font-black text-sm text-white uppercase">{node.agentName}</span>
+                                            <span className="font-mono text-[9px] text-white/30 uppercase tracking-widest">{node.department}</span>
+                                        </div>
+                                        <span className="font-mono text-[10px] text-white/30">{node.time}</span>
+                                    </div>
+                                    <p className="text-sm text-white/70">{node.message}</p>
+                                    {node.secondary && <p className="text-xs text-white/30 mt-1 border-l-2 pl-3" style={{ borderColor: `${node.accent}40` }}>{node.secondary}</p>}
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                )}
                 
                 {/* ── HEADER ── */}
                 <div className="relative z-20 text-center shrink-0 mb-8 md:mb-16 px-6">
@@ -120,8 +161,8 @@ const DayTimelineSection = () => {
 };
 
 const TimelineNode = ({ node, index, total, scrollYProgress, isMobile }: any) => {
-    // Reveal mapping
-    const start = 0.15 + (index * 0.13); 
+    // Reveal mapping — compressed for shorter scroll distance
+    const start = 0.12 + (index * 0.14); 
     
     const opacity = useTransform(
         scrollYProgress,

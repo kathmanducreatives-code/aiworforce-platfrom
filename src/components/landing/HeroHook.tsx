@@ -245,7 +245,7 @@ const HeroHook = () => {
   return (
     <section
       ref={sectionRef}
-      className="hero-scanline relative flex min-h-screen items-center justify-center overflow-hidden bg-transparent px-4 pb-24 pt-24 md:px-6"
+      className="hero-scanline relative flex min-h-screen items-center justify-center overflow-hidden overflow-x-hidden bg-transparent px-4 pb-24 pt-24 md:px-6"
     >
       <div className="pointer-events-none absolute inset-0 overflow-hidden">
         <div ref={farStarsRef} className="hero-star-layer absolute -inset-[6%]">
@@ -301,7 +301,7 @@ const HeroHook = () => {
         <div className="hero-floor-radial absolute inset-x-0 bottom-[20%] h-[14rem]" />
         <div className="absolute inset-x-0 bottom-0 h-[38vh] overflow-hidden">
           <div className="hero-floor-horizon absolute inset-x-[20%] top-[14%] h-px" />
-          <div className="hero-floor-grid absolute inset-[-12%]" />
+          <div className="hero-floor-grid absolute inset-[-12%] max-w-full lg:max-w-none" />
         </div>
 
         <div className="hero-orbit-shell pointer-events-none absolute bottom-[8%] right-[-2%] h-[240px] w-[360px] md:h-[320px] md:w-[520px]">

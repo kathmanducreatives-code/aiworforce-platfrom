@@ -1,0 +1,1244 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Power Dialer — Live Monitor</title>
+<style>
+  :root {
+    --bg: #0d0f14;
+    --surface: #161920;
+    --surface2: #1e2230;
+    --border: #2a2f3d;
+    --text: #e8eaf0;
+    --text-muted: #6b7280;
+    --green: #22c55e;
+    --green-dim: rgba(34,197,94,.12);
+    --yellow: #f59e0b;
+    --yellow-dim: rgba(245,158,11,.12);
+    --red: #ef4444;
+    --red-dim: rgba(239,68,68,.12);
+    --blue: #3b82f6;
+    --blue-dim: rgba(59,130,246,.12);
+    --purple: #a855f7;
+    --purple-dim: rgba(168,85,247,.12);
+    --orange: #f97316;
+    --orange-dim: rgba(249,115,22,.12);
+    --teal: #14b8a6;
+    --teal-dim: rgba(20,184,166,.12);
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--text); font-family: 'Inter', -apple-system, sans-serif; min-height: 100vh; }
+
+  header {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 14px 24px; border-bottom: 1px solid var(--border);
+    background: var(--surface); position: sticky; top: 0; z-index: 10;
+  }
+  .logo { display: flex; align-items: center; gap: 9px; font-weight: 700; font-size: 17px; }
+  .logo-dot { width: 9px; height: 9px; border-radius: 50%; background: var(--green); box-shadow: 0 0 8px var(--green); animation: pulse 2s infinite; }
+  @keyframes pulse { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:.6;transform:scale(.85)} }
+  .hdr-right { display: flex; align-items: center; gap: 12px; font-size: 13px; color: var(--text-muted); }
+  .stop-btn { display:flex; align-items:center; gap:7px; padding:8px 18px; border-radius:8px; font-size:13px; font-weight:700; border:none; cursor:pointer; transition:all .2s; letter-spacing:.02em; }
+  .stop-btn.stop  { background:var(--red-dim); color:var(--red); border:1px solid var(--red); }
+  .stop-btn.stop:hover  { background:var(--red); color:#fff; }
+  .stop-btn.resume{ background:var(--green-dim); color:var(--green); border:1px solid var(--green); }
+  .stop-btn.resume:hover{ background:var(--green); color:#000; }
+  .stop-btn:disabled { opacity:.4; cursor:not-allowed; }
+  .conn-pill { display: flex; align-items: center; gap: 6px; }
+  .dot-live   { width: 7px; height: 7px; border-radius: 50%; background: var(--green); animation: pulse 1.4s infinite; }
+  .dot-offline{ width: 7px; height: 7px; border-radius: 50%; background: var(--text-muted); }
+
+  /* ── WebRTC header pill ── */
+  .rtc-pill { display:flex; align-items:center; gap:6px; padding:5px 11px; border-radius:99px; font-size:12px; font-weight:600; border:1px solid var(--border); background:var(--surface2); cursor:pointer; transition:all .2s; white-space:nowrap; }
+  .rtc-pill:hover { border-color:var(--blue); }
+  .rtc-pill .rtc-dot { width:7px; height:7px; border-radius:50%; }
+  .rtc-pill.disconnected .rtc-dot { background:var(--text-muted); }
+  .rtc-pill.connecting   .rtc-dot { background:var(--yellow); animation:pulse .8s infinite; }
+  .rtc-pill.registered   .rtc-dot { background:var(--green); animation:pulse 2s infinite; box-shadow:0 0 6px var(--green); }
+  .rtc-pill.ringing      .rtc-dot { background:var(--purple); animation:pulse .5s infinite; }
+  .rtc-pill.active       .rtc-dot { background:var(--purple); animation:pulse 1s infinite; }
+  .rtc-pill.ringing  { border-color:var(--purple); animation:ring-border .6s ease-in-out infinite alternate; }
+  @keyframes ring-border { from{box-shadow:0 0 0 0 rgba(168,85,247,0)} to{box-shadow:0 0 0 3px rgba(168,85,247,.35)} }
+
+  main { padding: 20px 24px; max-width: 1500px; margin: 0 auto; }
+
+  /* ── Stats row ── */
+  .stats-grid { display: grid; grid-template-columns: repeat(6,1fr); gap: 12px; margin-bottom: 18px; }
+  @media(max-width:1100px){.stats-grid{grid-template-columns:repeat(3,1fr)}}
+  @media(max-width:600px) {.stats-grid{grid-template-columns:repeat(2,1fr)}}
+  .stat-card { background:var(--surface); border:1px solid var(--border); border-radius:12px; padding:16px 14px; text-align:center; }
+  .stat-value { font-size:30px; font-weight:700; line-height:1; }
+  .stat-label { font-size:11px; color:var(--text-muted); margin-top:5px; text-transform:uppercase; letter-spacing:.05em; }
+  .stat-card.called   .stat-value { color:var(--blue); }
+  .stat-card.answered .stat-value { color:var(--green); }
+  .stat-card.voicemail .stat-value { color:var(--yellow); }
+  .stat-card.no-answer .stat-value { color:var(--orange); }
+  .stat-card.busy     .stat-value { color:var(--red); }
+  .stat-card.rate     .stat-value { color:var(--purple); }
+
+  /* ── Balance row ── */
+  .balance-row { display:grid; grid-template-columns:1fr 1fr 1fr; gap:12px; margin-bottom:18px; }
+  @media(max-width:800px){.balance-row{grid-template-columns:1fr 1fr}}
+  .balance-card { background:var(--surface); border:1px solid var(--border); border-radius:12px; padding:18px 20px; }
+  .balance-card.main-balance { border-color: var(--teal); background: linear-gradient(135deg, var(--surface) 0%, rgba(20,184,166,.06) 100%); }
+  .bc-label { font-size:11px; color:var(--text-muted); text-transform:uppercase; letter-spacing:.06em; margin-bottom:8px; }
+  .bc-value { font-size:28px; font-weight:700; color:var(--teal); font-family:monospace; letter-spacing:-.02em; }
+  .bc-value.spend { color:var(--red); }
+  .bc-value.pending { color:var(--yellow); font-size:22px; }
+  .bc-sub { font-size:12px; color:var(--text-muted); margin-top:4px; }
+  .bc-badge { display:inline-flex; align-items:center; gap:5px; font-size:12px; font-weight:600;
+    padding:3px 10px; border-radius:99px; margin-top:8px; }
+  .bc-badge.ok    { background:var(--green-dim); color:var(--green); }
+  .bc-badge.warn  { background:var(--yellow-dim); color:var(--yellow); }
+  .bc-badge.low   { background:var(--red-dim); color:var(--red); }
+
+  /* ── Two-col layout ── */
+  .content-grid { display:grid; grid-template-columns:360px 1fr; gap:18px; }
+  @media(max-width:900px){.content-grid{grid-template-columns:1fr}}
+
+  /* ── Current call card ── */
+  .cc-card { background:var(--surface); border:1px solid var(--border); border-radius:14px; padding:22px; height:fit-content; transition:border-color .3s,box-shadow .3s; }
+  .cc-card.active-call  { border-color:var(--green); box-shadow:0 0 20px rgba(34,197,94,.1); }
+  .cc-card.live-answer  { border-color:var(--purple); box-shadow:0 0 24px rgba(168,85,247,.15); animation:live-glow 1.5s ease-in-out infinite alternate; }
+  @keyframes live-glow { from{box-shadow:0 0 16px rgba(168,85,247,.15)} to{box-shadow:0 0 32px rgba(168,85,247,.3)} }
+  .cc-card.voicemail-call { border-color:var(--yellow); box-shadow:0 0 16px rgba(245,158,11,.1); }
+  .section-title { font-size:11px; font-weight:600; text-transform:uppercase; letter-spacing:.08em; color:var(--text-muted); margin-bottom:14px; }
+  .call-avatar { width:60px; height:60px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:22px; font-weight:700; margin:0 auto 14px; transition:background .3s; }
+  .call-avatar.dialing   { background:var(--blue-dim);   color:var(--blue); }
+  .call-avatar.ringing   { background:var(--yellow-dim); color:var(--yellow); animation:ring-shake .5s ease-in-out infinite; }
+  @keyframes ring-shake { 0%,100%{transform:rotate(0)} 20%{transform:rotate(-12deg)} 40%{transform:rotate(12deg)} 60%{transform:rotate(-8deg)} 80%{transform:rotate(8deg)} }
+  .call-avatar.answered  { background:var(--blue-dim);   color:var(--blue); }
+  .call-avatar.live      { background:var(--purple-dim); color:var(--purple); }
+  .call-avatar.voicemail { background:var(--yellow-dim); color:var(--yellow); }
+  .call-avatar.idle      { background:var(--surface2);   color:var(--text-muted); }
+  .call-name  { text-align:center; font-size:19px; font-weight:700; margin-bottom:3px; }
+  .call-phone { text-align:center; font-size:13px; color:var(--text-muted); margin-bottom:18px; font-family:monospace; }
+  .cc-status-badge { display:flex; align-items:center; gap:7px; padding:7px 14px; border-radius:999px; font-size:13px; font-weight:600; width:fit-content; margin:0 auto 18px; }
+  .cc-status-badge.dialing   { background:var(--blue-dim);   color:var(--blue);   }
+  .cc-status-badge.ringing   { background:var(--yellow-dim); color:var(--yellow); }
+  .cc-status-badge.answered  { background:var(--blue-dim);   color:var(--blue);   }
+  .cc-status-badge.live      { background:var(--purple-dim); color:var(--purple); }
+  .cc-status-badge.voicemail { background:var(--yellow-dim); color:var(--yellow); }
+  .cc-status-badge.idle      { background:var(--surface2);   color:var(--text-muted); }
+  .status-dot { width:7px; height:7px; border-radius:50%; background:currentColor; }
+  .status-dot.animated { animation:pulse 1s infinite; }
+  .call-timer { text-align:center; font-size:26px; font-weight:700; font-family:monospace; color:var(--text-muted); }
+  .call-timer.active { color:var(--text); }
+  .idle-msg { text-align:center; color:var(--text-muted); font-size:14px; padding:18px 0; }
+  .idle-msg span { display:block; font-size:32px; margin-bottom:6px; }
+
+  /* ── Right column — tabs ── */
+  .right-col { display:flex; flex-direction:column; gap:18px; }
+  .tabbed-card { background:var(--surface); border:1px solid var(--border); border-radius:14px; overflow:hidden; }
+  .tab-bar { display:flex; border-bottom:1px solid var(--border); }
+  .tab-btn { flex:1; padding:12px 10px; font-size:13px; font-weight:600; color:var(--text-muted); background:none; border:none; cursor:pointer; transition:color .15s,background .15s; }
+  .tab-btn:hover { background:var(--surface2); color:var(--text); }
+  .tab-btn.active { color:var(--text); border-bottom:2px solid var(--blue); background:var(--surface2); }
+  .tab-pane { display:none; padding:16px; }
+  .tab-pane.active { display:block; }
+
+  /* ── Tables ── */
+  .data-table { width:100%; border-collapse:collapse; }
+  .data-table th { font-size:11px; text-transform:uppercase; letter-spacing:.07em; color:var(--text-muted); font-weight:600; padding:0 10px 10px; text-align:left; border-bottom:1px solid var(--border); }
+  .data-table td { padding:10px 10px; border-bottom:1px solid rgba(42,47,61,.5); font-size:13px; }
+  .data-table tr:last-child td { border-bottom:none; }
+  .data-table tr:hover td { background:var(--surface2); }
+  .data-table tr.new-row td { animation:highlight-new .8s ease-out; }
+  @keyframes highlight-new { from{background:rgba(59,130,246,.15)} to{background:transparent} }
+
+  .outcome-pill { display:inline-flex; align-items:center; gap:5px; padding:3px 9px; border-radius:99px; font-size:12px; font-weight:600; }
+  .outcome-pill.answered        { background:var(--green-dim);  color:var(--green);  }
+  .outcome-pill.voicemail       { background:var(--yellow-dim); color:var(--yellow); }
+  .outcome-pill.no_answer       { background:var(--orange-dim); color:var(--orange); }
+  .outcome-pill.busy            { background:var(--red-dim);    color:var(--red);    }
+  .outcome-pill.failed          { background:var(--red-dim);    color:var(--red);    }
+  .outcome-pill.hangup          { background:var(--surface2);   color:var(--text-muted); }
+  .outcome-pill.human,.outcome-pill.human_residence,.outcome-pill.human_business { background:var(--green-dim); color:var(--green); }
+
+  .amd-tag   { font-size:11px; color:var(--text-muted); font-family:monospace; }
+  .time-cell { font-size:12px; color:var(--text-muted); font-family:monospace; white-space:nowrap; }
+  .mono      { font-family:monospace; font-size:13px; }
+  .spend-neg { color:var(--red); font-weight:600; }
+  .spend-pos { color:var(--green); font-weight:600; }
+  .empty-log { text-align:center; padding:36px 0; color:var(--text-muted); font-size:14px; }
+  .empty-log span { display:block; font-size:28px; margin-bottom:6px; }
+  .log-count  { font-size:12px; color:var(--text-muted); background:var(--surface2); padding:3px 10px; border-radius:99px; }
+
+  .error-banner { display:none; background:var(--red-dim); border:1px solid var(--red); color:var(--red); padding:9px 14px; border-radius:8px; font-size:13px; margin-bottom:14px; }
+  .error-banner.visible { display:block; }
+
+  /* ── WebRTC Phone Tab ── */
+  .phone-panel { display:flex; flex-direction:column; gap:16px; }
+  .phone-status-row { display:flex; align-items:center; justify-content:space-between; padding:14px 16px; background:var(--surface2); border-radius:10px; border:1px solid var(--border); }
+  .phone-status-label { font-size:13px; font-weight:600; }
+  .phone-status-label.disconnected { color:var(--text-muted); }
+  .phone-status-label.connecting   { color:var(--yellow); }
+  .phone-status-label.registered   { color:var(--green); }
+  .phone-status-label.ringing      { color:var(--purple); }
+  .phone-status-label.active       { color:var(--purple); }
+
+  .phone-connect-btn { padding:7px 16px; border-radius:8px; font-size:13px; font-weight:700; border:none; cursor:pointer; transition:all .2s; }
+  .phone-connect-btn.connect    { background:var(--blue-dim); color:var(--blue); border:1px solid var(--blue); }
+  .phone-connect-btn.connect:hover { background:var(--blue); color:#fff; }
+  .phone-connect-btn.disconnect { background:var(--surface); color:var(--text-muted); border:1px solid var(--border); }
+  .phone-connect-btn.disconnect:hover { border-color:var(--red); color:var(--red); }
+
+  .cred-group { display:flex; flex-direction:column; gap:6px; }
+  .cred-label { font-size:11px; color:var(--text-muted); text-transform:uppercase; letter-spacing:.06em; }
+  .cred-input { width:100%; background:var(--surface2); border:1px solid var(--border); color:var(--text); padding:9px 12px; border-radius:8px; font-size:13px; font-family:inherit; outline:none; transition:border-color .15s; }
+  .cred-input:focus { border-color:var(--blue); }
+  .cred-input[readonly] { opacity:.6; cursor:default; }
+
+  .save-cred-btn { padding:8px 18px; border-radius:8px; font-size:13px; font-weight:700; background:var(--blue-dim); color:var(--blue); border:1px solid var(--blue); cursor:pointer; transition:all .2s; }
+  .save-cred-btn:hover { background:var(--blue); color:#fff; }
+
+  .phone-info { font-size:12px; color:var(--text-muted); line-height:1.5; padding:10px 14px; background:var(--surface2); border-radius:8px; border:1px solid var(--border); }
+  .phone-info strong { color:var(--text); }
+
+  /* ── Active call controls (in Phone tab) ── */
+  .live-call-controls { display:none; flex-direction:column; gap:12px; padding:16px; background:linear-gradient(135deg,var(--surface2),rgba(168,85,247,.06)); border-radius:12px; border:1px solid var(--purple); }
+  .live-call-controls.visible { display:flex; }
+  .live-call-who { font-size:15px; font-weight:700; text-align:center; }
+  .live-call-timer-rtc { text-align:center; font-size:24px; font-weight:700; font-family:monospace; color:var(--purple); }
+  .call-btns { display:flex; gap:10px; justify-content:center; }
+  .call-btn { padding:10px 22px; border-radius:10px; font-size:14px; font-weight:700; border:none; cursor:pointer; transition:all .2s; }
+  .call-btn.mute   { background:var(--yellow-dim); color:var(--yellow); border:1px solid var(--yellow); }
+  .call-btn.mute:hover   { background:var(--yellow); color:#000; }
+  .call-btn.muted  { background:var(--yellow); color:#000; }
+  .call-btn.hangup { background:var(--red-dim); color:var(--red); border:1px solid var(--red); }
+  .call-btn.hangup:hover { background:var(--red); color:#fff; }
+
+  /* ── Incoming call modal ── */
+  .incoming-modal { display:none; position:fixed; inset:0; z-index:999; background:rgba(0,0,0,.75); backdrop-filter:blur(6px); align-items:center; justify-content:center; }
+  .incoming-modal.visible { display:flex; }
+  .incoming-card { background:var(--surface); border:2px solid var(--purple); border-radius:20px; padding:36px 40px; text-align:center; max-width:360px; width:90%; box-shadow:0 0 60px rgba(168,85,247,.3); animation:modal-in .25s ease-out; }
+  @keyframes modal-in { from{transform:scale(.9);opacity:0} to{transform:scale(1);opacity:1} }
+  .incoming-ring { width:80px; height:80px; border-radius:50%; background:var(--purple-dim); border:2px solid var(--purple); display:flex; align-items:center; justify-content:center; font-size:36px; margin:0 auto 18px; animation:ring-pulse 1s ease-in-out infinite; }
+  @keyframes ring-pulse { 0%,100%{transform:scale(1);box-shadow:0 0 0 0 rgba(168,85,247,.4)} 50%{transform:scale(1.08);box-shadow:0 0 0 12px rgba(168,85,247,0)} }
+  .incoming-label { font-size:12px; color:var(--purple); font-weight:700; text-transform:uppercase; letter-spacing:.1em; margin-bottom:8px; }
+  .incoming-name  { font-size:22px; font-weight:800; margin-bottom:4px; }
+  .incoming-from  { font-size:14px; color:var(--text-muted); font-family:monospace; margin-bottom:24px; }
+  .incoming-btns  { display:flex; gap:14px; justify-content:center; }
+  .answer-btn  { flex:1; padding:14px; border-radius:12px; font-size:16px; font-weight:800; border:none; cursor:pointer; background:var(--green); color:#000; transition:all .2s; }
+  .answer-btn:hover  { transform:scale(1.04); box-shadow:0 4px 20px rgba(34,197,94,.4); }
+  .reject-btn  { flex:1; padding:14px; border-radius:12px; font-size:16px; font-weight:800; border:none; cursor:pointer; background:var(--red-dim); color:var(--red); border:1px solid var(--red); transition:all .2s; }
+  .reject-btn:hover  { background:var(--red); color:#fff; }
+
+  ::-webkit-scrollbar { width:5px; }
+  ::-webkit-scrollbar-track { background:var(--bg); }
+  ::-webkit-scrollbar-thumb { background:var(--border); border-radius:3px; }
+
+  /* ── Leads CRM tab ── */
+  .leads-crm { display:flex; height:500px; gap:0; overflow:hidden; }
+
+  .leads-list-col { width:240px; min-width:200px; border-right:1px solid var(--border); display:flex; flex-direction:column; }
+  .leads-search-row { padding:10px 10px 6px; }
+  .leads-search { width:100%; background:var(--surface2); border:1px solid var(--border); border-radius:8px; padding:7px 10px; color:var(--text); font-size:12px; outline:none; }
+  .leads-search:focus { border-color:var(--blue); }
+
+  .leads-filter-chips { display:flex; flex-wrap:wrap; gap:4px; padding:0 10px 8px; }
+  .leads-chip { background:var(--surface2); border:1px solid var(--border); border-radius:20px; padding:2px 9px; font-size:10px; color:var(--text-muted); cursor:pointer; transition:all .15s; }
+  .leads-chip.active { background:var(--blue-dim); border-color:var(--blue); color:var(--blue); }
+  .leads-chip:hover:not(.active) { border-color:var(--text-muted); color:var(--text); }
+
+  .leads-list { flex:1; overflow-y:auto; }
+  .leads-empty { padding:20px; text-align:center; color:var(--text-muted); font-size:12px; }
+
+  .lead-row { padding:10px 12px; border-bottom:1px solid var(--border); cursor:pointer; transition:background .1s; border-left:2px solid transparent; }
+  .lead-row:hover { background:var(--surface2); }
+  .lead-row.selected { background:var(--surface2); border-left-color:var(--blue); }
+  .lead-row-name { font-size:12px; font-weight:600; }
+  .lead-row-company { font-size:11px; color:var(--text-muted); margin-top:1px; }
+  .lead-row-meta { display:flex; align-items:center; justify-content:space-between; margin-top:4px; }
+  .lead-row-attempts { font-size:10px; color:var(--text-muted); }
+
+  .leads-detail-col { flex:1; overflow-y:auto; padding:16px; }
+  .leads-detail-empty { display:flex; flex-direction:column; align-items:center; justify-content:center; height:100%; }
+  .leads-detail-body { }
+
+  .lead-detail-header { margin-bottom:14px; padding-bottom:12px; border-bottom:1px solid var(--border); }
+  .lead-detail-name { font-size:18px; font-weight:800; }
+  .lead-detail-title { font-size:12px; color:var(--text-muted); margin-top:2px; }
+  .lead-detail-status-row { display:flex; align-items:center; gap:10px; margin-top:8px; }
+
+  .lead-detail-grid { display:grid; grid-template-columns:1fr 1fr; gap:8px 16px; margin-bottom:14px; }
+  .lead-detail-field { font-size:12px; }
+  .lead-detail-field .ldf-label { color:var(--text-muted); font-size:10px; text-transform:uppercase; letter-spacing:.04em; margin-bottom:2px; }
+  .lead-detail-field .ldf-val { font-weight:500; word-break:break-word; }
+  .lead-detail-field a { color:var(--blue); text-decoration:none; }
+  .lead-detail-field a:hover { text-decoration:underline; }
+
+  .lead-detail-notes { background:var(--surface2); border:1px solid var(--border); border-radius:8px; padding:10px 12px; font-size:12px; color:var(--text-muted); }
+  .lead-detail-notes .ldf-label { color:var(--text-muted); font-size:10px; text-transform:uppercase; letter-spacing:.04em; margin-bottom:6px; }
+  .lead-detail-notes .notes-text { color:var(--text); font-size:12px; line-height:1.5; }
+
+  /* Status badge (reused across list and detail) */
+  .status-badge { display:inline-block; padding:2px 8px; border-radius:20px; font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:.04em; }
+  .status-badge.calling    { background:var(--blue-dim);   color:var(--blue); }
+  .status-badge.voicemail  { background:var(--yellow-dim); color:var(--yellow); }
+  .status-badge.no_answer  { background:var(--orange-dim); color:var(--orange); }
+  .status-badge.busy       { background:var(--red-dim);    color:var(--red); }
+  .status-badge.answered   { background:var(--green-dim);  color:var(--green); }
+  .status-badge.completed  { background:var(--green-dim);  color:var(--green); }
+  .status-badge.do_not_call{ background:var(--red-dim);    color:var(--red); }
+  .status-badge.pending    { background:var(--surface2);   color:var(--text-muted); border:1px solid var(--border); }
+  /* ── Live call highlight ── */
+  @keyframes breathe-blue {
+    0%, 100% { background: transparent; }
+    50%       { background: var(--blue-dim); }
+  }
+  .lead-row.calling-now {
+    animation: breathe-blue 1.6s ease-in-out infinite;
+    border-left-color: var(--blue);
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .lead-row.calling-now { animation: none; background: var(--blue-dim); }
+  }
+</style>
+</head>
+<body>
+
+<!-- Remote audio for WebRTC calls -->
+<audio id="rtc-audio" autoplay playsinline style="display:none"></audio>
+
+<!-- ── Incoming call modal ── -->
+<div class="incoming-modal" id="incoming-modal">
+  <div class="incoming-card">
+    <div class="incoming-ring">📞</div>
+    <div class="incoming-label">Incoming Transfer</div>
+    <div class="incoming-name" id="modal-caller-name">Lead Name</div>
+    <div class="incoming-from" id="modal-caller-from">+1 (000) 000-0000</div>
+    <div class="incoming-btns">
+      <button class="answer-btn" onclick="answerCall()">✅ Answer</button>
+      <button class="reject-btn" onclick="rejectCall()">✕ Reject</button>
+    </div>
+  </div>
+</div>
+
+<header>
+  <div class="logo">
+    <div class="logo-dot"></div>
+    Power Dialer — Live Monitor
+  </div>
+  <div class="hdr-right">
+    <button class="stop-btn" id="stop-btn" onclick="dialerBtnClick()">⏹ Stop Dialer</button>
+    <!-- WebRTC status pill — click to jump to Phone tab -->
+    <div class="rtc-pill disconnected" id="rtc-pill" onclick="switchTab('phone')" title="Click to manage phone">
+      <div class="rtc-dot"></div>
+      <span id="rtc-pill-label">Phone Off</span>
+    </div>
+    <div class="conn-pill" id="conn-pill">
+      <div class="dot-offline" id="conn-dot"></div>
+      <span id="conn-label">Connecting...</span>
+    </div>
+    <span id="last-update" style="font-size:12px"></span>
+  </div>
+</header>
+
+<main>
+  <div class="error-banner" id="error-banner">Unable to reach n8n. Retrying...</div>
+
+  <!-- Call stats -->
+  <div class="stats-grid">
+    <div class="stat-card called">  <div class="stat-value" id="s-total">0</div>   <div class="stat-label">Total Called</div></div>
+    <div class="stat-card answered"><div class="stat-value" id="s-ans">0</div>     <div class="stat-label">Answered</div></div>
+    <div class="stat-card voicemail"><div class="stat-value" id="s-vm">0</div>     <div class="stat-label">Voicemail</div></div>
+    <div class="stat-card no-answer"><div class="stat-value" id="s-na">0</div>     <div class="stat-label">No Answer</div></div>
+    <div class="stat-card busy">    <div class="stat-value" id="s-busy">0</div>    <div class="stat-label">Busy</div></div>
+    <div class="stat-card rate">    <div class="stat-value" id="s-rate">0%</div>   <div class="stat-label">Answer Rate</div></div>
+  </div>
+
+  <!-- Balance row -->
+  <div class="balance-row">
+    <div class="balance-card main-balance">
+      <div class="bc-label">💳 Telnyx Balance</div>
+      <div class="bc-value" id="b-available">—</div>
+      <div class="bc-sub" id="b-currency">USD</div>
+      <div id="b-badge"></div>
+    </div>
+    <div class="balance-card">
+      <div class="bc-label">🔥 Session Spend</div>
+      <div class="bc-value spend" id="b-spend">$0.0000</div>
+      <div class="bc-sub" id="b-calls-cost">Since dashboard opened</div>
+    </div>
+    <div class="balance-card">
+      <div class="bc-label">⏳ Pending</div>
+      <div class="bc-value pending" id="b-pending">$0.00</div>
+      <div class="bc-sub">Calls in progress / unbilled</div>
+    </div>
+  </div>
+
+  <div class="content-grid">
+    <!-- Current call -->
+    <div class="cc-card" id="call-card">
+      <div class="section-title">Current Call</div>
+      <div id="call-content">
+        <div class="idle-msg"><span>📵</span>No active call</div>
+      </div>
+    </div>
+
+    <!-- Tabbed right panel -->
+    <div class="right-col">
+      <div class="tabbed-card">
+        <div class="tab-bar">
+          <button class="tab-btn active" onclick="switchTab('calls')">📞 Call Log <span id="calls-badge" style="font-size:11px;opacity:.7"></span></button>
+          <button class="tab-btn" onclick="switchTab('leads')" id="leads-tab-btn">👥 Leads</button>
+          <button class="tab-btn" onclick="switchTab('balance')">💰 Balance History</button>
+          <button class="tab-btn" onclick="switchTab('phone')" id="phone-tab-btn">🎙 Phone</button>
+        </div>
+
+        <!-- Call log tab -->
+        <div class="tab-pane active" id="tab-calls">
+          <div class="empty-log" id="empty-calls"><span>📋</span>No calls yet this session</div>
+          <table class="data-table" id="call-table" style="display:none">
+            <thead><tr>
+              <th>Name</th><th>Phone</th><th>Outcome</th><th>AMD</th><th>Time</th>
+            </tr></thead>
+            <tbody id="call-body"></tbody>
+          </table>
+        </div>
+
+        <!-- Balance history tab -->
+        <div class="tab-pane" id="tab-balance">
+          <div class="empty-log" id="empty-balance"><span>📊</span>No balance history yet</div>
+          <table class="data-table" id="balance-table" style="display:none">
+            <thead><tr>
+              <th>Time</th><th>Balance</th><th>Change</th><th>Pending</th>
+            </tr></thead>
+            <tbody id="balance-body"></tbody>
+          </table>
+        </div>
+
+        <!-- Leads CRM tab -->
+        <div class="tab-pane" id="tab-leads">
+          <div class="leads-crm">
+            <!-- Left: list -->
+            <div class="leads-list-col">
+              <div class="leads-search-row">
+                <input class="leads-search" id="leads-search" type="text" placeholder="🔍 Search leads..." oninput="filterLeads()"/>
+              </div>
+              <div class="leads-filter-chips" id="leads-filter-chips">
+                <button class="leads-chip active" data-status="all" onclick="setLeadFilter('all')">All</button>
+                <button class="leads-chip" data-status="" onclick="setLeadFilter('')">Pending</button>
+                <button class="leads-chip" data-status="calling" onclick="setLeadFilter('calling')">Calling</button>
+                <button class="leads-chip" data-status="voicemail" onclick="setLeadFilter('voicemail')">Voicemail</button>
+                <button class="leads-chip" data-status="answered" onclick="setLeadFilter('answered')">Answered</button>
+                <button class="leads-chip" data-status="no_answer" onclick="setLeadFilter('no_answer')">No Answer</button>
+              </div>
+              <div class="leads-list" id="leads-list">
+                <div class="leads-empty" id="leads-empty">Loading leads...</div>
+              </div>
+            </div>
+            <!-- Right: detail -->
+            <div class="leads-detail-col" id="leads-detail-col">
+              <div class="leads-detail-empty" id="leads-detail-empty">
+                <span style="font-size:32px">👆</span>
+                <div style="margin-top:8px;color:var(--text-muted);font-size:13px">Select a lead to view details</div>
+              </div>
+              <div class="leads-detail-body" id="leads-detail-body" style="display:none"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Phone / WebRTC tab -->
+        <div class="tab-pane" id="tab-phone">
+          <div class="phone-panel">
+
+            <!-- Status row -->
+            <div class="phone-status-row">
+              <div>
+                <div style="font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:4px">WebRTC Status</div>
+                <div class="phone-status-label disconnected" id="phone-status-label">● Disconnected</div>
+              </div>
+              <button class="phone-connect-btn connect" id="phone-connect-btn" onclick="toggleRTCConnect()">Connect</button>
+            </div>
+
+            <!-- Active call controls (shown when on call) -->
+            <div class="live-call-controls" id="live-call-controls">
+              <div class="incoming-label" style="text-align:center">🟢 Live Call</div>
+              <div class="live-call-who" id="lc-who">—</div>
+              <div class="live-call-timer-rtc" id="lc-timer">0:00</div>
+              <div class="call-btns">
+                <button class="call-btn mute" id="mute-btn" onclick="toggleMute()">🎤 Mute</button>
+                <button class="call-btn hangup" onclick="hangupCall()">📵 Hang Up</button>
+              </div>
+            </div>
+
+            <!-- Credentials -->
+            <div>
+              <div style="font-size:12px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:10px">SIP Credentials</div>
+              <div style="display:flex;flex-direction:column;gap:10px;">
+                <div class="cred-group">
+                  <div class="cred-label">Username</div>
+                  <input class="cred-input" id="sip-login" value="userprasidha13243" readonly/>
+                </div>
+                <div class="cred-group">
+                  <div class="cred-label">Password <span style="color:var(--text-muted);font-weight:400">(from Telnyx portal)</span></div>
+                  <input class="cred-input" id="sip-password" type="password" placeholder="Paste your SIP password here"/>
+                </div>
+                <button class="save-cred-btn" onclick="saveCredentials()">💾 Save & Connect</button>
+              </div>
+            </div>
+
+            <div class="phone-info">
+              <strong>Where to find your SIP password:</strong><br>
+              Telnyx Portal → Voice → SIP Connections → your connection → <em>Credentials</em> tab → copy the password.
+              <br><br>
+              The SIP URI <strong>sip:userprasidha13243@sip.telnyx.com</strong> stays the same in n8n — nothing else changes.
+            </div>
+
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+</main>
+
+<!-- Telnyx WebRTC SDK -->
+<script src="https://cdn.jsdelivr.net/npm/@telnyx/webrtc/lib/bundle.js"></script>
+
+<script>
+// ────────────────────────────────────────────────────────────────────────────
+//  DASHBOARD CONFIG
+// ────────────────────────────────────────────────────────────────────────────
+const STATUS_URL = 'https://n8n.prasidha.me/webhook/dialer-status';
+const LEADS_URL  = 'https://n8n.prasidha.me/webhook/dialer-leads';
+const LEADS_POLL_MS = 30000;
+const STOP_URL   = 'https://n8n.prasidha.me/webhook/dialer-stop';
+const START_URL  = 'https://n8n.prasidha.me/webhook/dial-next-lead';
+const POLL_MS    = 2500;
+const SIP_LOGIN  = 'userprasidha13243';
+
+// dialerState: 'idle' | 'running' | 'stopping' | 'stopped'
+let dialerState = localStorage.getItem('dialer_state') || 'idle';
+// 'stopping' in localStorage means the page reloaded mid-stop — treat as stopped
+if (dialerState === 'stopping') dialerState = 'stopped';
+let timerInterval  = null;
+let callStartAt    = null;
+let prevLogLen     = 0;
+let prevBalHistory = 0;
+let isOnline       = false;
+
+let leadsData        = [];       // all leads from sheet
+let leadsFiltered    = [];       // after search + status filter
+let selectedLeadIdx  = null;     // index into leadsFiltered
+let activeLeadFilter = 'all';    // current status filter value
+let leadsTimer       = null;
+let activeCallPhone  = null;     // digits-only phone of lead currently being dialed
+
+// ────────────────────────────────────────────────────────────────────────────
+//  WEBRTC STATE
+// ────────────────────────────────────────────────────────────────────────────
+let telnyxClient  = null;
+let activeCall    = null;
+let rtcState      = 'disconnected'; // disconnected | connecting | registered | ringing | active
+let rtcCallTimer  = null;
+let rtcCallStart  = null;
+
+// Load saved password on startup
+window.addEventListener('DOMContentLoaded', () => {
+  updateDialerBtn();
+  startLeadsPolling();
+  const saved = localStorage.getItem('telnyx_sip_pw');
+  if (saved) {
+    document.getElementById('sip-password').value = saved;
+    setTimeout(initWebRTC, 800);
+  }
+});
+
+function saveCredentials() {
+  const pw = document.getElementById('sip-password').value.trim();
+  if (!pw) { alert('Please enter your SIP password first.'); return; }
+  localStorage.setItem('telnyx_sip_pw', pw);
+  initWebRTC();
+}
+
+function toggleRTCConnect() {
+  if (rtcState === 'disconnected') {
+    const pw = document.getElementById('sip-password').value.trim();
+    if (!pw) {
+      switchTab('phone');
+      document.getElementById('sip-password').focus();
+      return;
+    }
+    initWebRTC();
+  } else {
+    disconnectWebRTC();
+  }
+}
+
+function initWebRTC() {
+  const pw = document.getElementById('sip-password').value.trim()
+          || localStorage.getItem('telnyx_sip_pw');
+  if (!pw) return;
+
+  // Tear down any existing client
+  if (telnyxClient) {
+    try { telnyxClient.disconnect(); } catch(e) {}
+    telnyxClient = null;
+  }
+
+  setRTCState('connecting');
+
+  // SDK exposes TelnyxRTC under the TelnyxWebRTC namespace
+  const RTC = (typeof TelnyxRTC !== 'undefined') ? TelnyxRTC
+            : (window.TelnyxWebRTC && window.TelnyxWebRTC.TelnyxRTC) ? window.TelnyxWebRTC.TelnyxRTC
+            : null;
+
+  if (!RTC) {
+    setRTCState('disconnected');
+    showRTCError('Telnyx WebRTC SDK failed to load. Check your internet connection and refresh.');
+    return;
+  }
+
+  try {
+    telnyxClient = new RTC({
+      login:    SIP_LOGIN,
+      password: pw,
+    });
+
+    // Attach remote audio
+    telnyxClient.remoteElement = 'rtc-audio';
+
+    telnyxClient.on('telnyx.ready', () => {
+      setRTCState('registered');
+    });
+
+    telnyxClient.on('telnyx.error', (err) => {
+      console.error('Telnyx error:', err);
+      setRTCState('disconnected');
+      showRTCError('Connection error — check your SIP password.');
+    });
+
+    telnyxClient.on('telnyx.socket.close', () => {
+      if (rtcState !== 'disconnected') setRTCState('disconnected');
+    });
+
+    telnyxClient.on('telnyx.notification', (notification) => {
+      if (notification.type !== 'callUpdate') return;
+      const call = notification.call;
+      activeCall = call;
+
+      switch (call.state) {
+        case 'ringing':
+          if (call.direction === 'inbound') showIncomingCall(call);
+          break;
+        case 'active':
+          hideIncomingModal();
+          setRTCState('active');
+          startRTCTimer();
+          updateLiveControls(call);
+          attachRemoteAudio(call); // ensure audio stream is attached on every active event
+          break;
+        case 'hangup':
+        case 'destroy':
+        case 'purge':
+          hideIncomingModal();
+          stopRTCTimer();
+          activeCall = null;
+          setRTCState('registered');
+          hideLiveControls();
+          break;
+      }
+    });
+
+    telnyxClient.connect();
+  } catch(e) {
+    console.error('Failed to init TelnyxRTC:', e);
+    setRTCState('disconnected');
+    showRTCError('Connection failed: ' + (e.message || 'check your SIP password and try again.'));
+  }
+}
+
+function disconnectWebRTC() {
+  if (telnyxClient) {
+    try { telnyxClient.disconnect(); } catch(e) {}
+    telnyxClient = null;
+  }
+  activeCall = null;
+  setRTCState('disconnected');
+  hideIncomingModal();
+  hideLiveControls();
+}
+
+// ── Incoming call ────────────────────────────────────────────────────────────
+function showIncomingCall(call) {
+  setRTCState('ringing');
+  const from = call.from || 'Unknown';
+  // Try to match the caller to the current lead in the dashboard
+  const nameEl = document.getElementById('modal-caller-name');
+  const fromEl = document.getElementById('modal-caller-from');
+  // Check if dashboard has a current call name to use
+  const currentName = document.querySelector('#call-content .call-name');
+  nameEl.textContent = currentName ? currentName.textContent : 'Lead Calling';
+  fromEl.textContent = from;
+  document.getElementById('incoming-modal').classList.add('visible');
+  // Switch to phone tab so user sees controls
+  switchTab('phone');
+}
+
+function hideIncomingModal() {
+  document.getElementById('incoming-modal').classList.remove('visible');
+}
+
+function answerCall() {
+  if (!activeCall) return;
+  hideIncomingModal();
+  activeCall.answer();
+  // Manually attach remote stream — remoteElement on client doesn't always propagate
+  attachRemoteAudio(activeCall);
+}
+
+function attachRemoteAudio(call) {
+  const audioEl = document.getElementById('rtc-audio');
+  if (!audioEl) return;
+  // Try immediately, then retry after SDP negotiation settles
+  function tryAttach() {
+    const stream = call.remoteStream || (call.peer && call.peer.remoteStream);
+    if (stream) {
+      audioEl.srcObject = stream;
+      audioEl.play().catch(e => console.warn('Audio play blocked:', e));
+      return true;
+    }
+    return false;
+  }
+  if (!tryAttach()) {
+    let retries = 0;
+    const iv = setInterval(() => {
+      if (tryAttach() || ++retries > 10) clearInterval(iv);
+    }, 300);
+  }
+}
+
+function rejectCall() {
+  if (!activeCall) return;
+  activeCall.hangup();
+  hideIncomingModal();
+  setRTCState('registered');
+}
+
+function hangupCall() {
+  if (!activeCall) return;
+  activeCall.hangup();
+}
+
+function toggleMute() {
+  if (!activeCall) return;
+  const btn = document.getElementById('mute-btn');
+  if (activeCall.isAudioMuted) {
+    activeCall.unmuteAudio();
+    btn.textContent = '🎤 Mute';
+    btn.className = 'call-btn mute';
+  } else {
+    activeCall.muteAudio();
+    btn.textContent = '🔇 Unmuted';
+    btn.className = 'call-btn muted';
+  }
+}
+
+// ── Live controls ─────────────────────────────────────────────────────────────
+function updateLiveControls(call) {
+  const ctrl = document.getElementById('live-call-controls');
+  ctrl.classList.add('visible');
+  const who = document.querySelector('#call-content .call-name');
+  document.getElementById('lc-who').textContent = who ? who.textContent : (call.from || 'Live Call');
+}
+
+function hideLiveControls() {
+  document.getElementById('live-call-controls').classList.remove('visible');
+  document.getElementById('mute-btn').textContent = '🎤 Mute';
+  document.getElementById('mute-btn').className = 'call-btn mute';
+}
+
+// ── RTC timer ─────────────────────────────────────────────────────────────────
+function startRTCTimer() {
+  rtcCallStart = Date.now();
+  stopRTCTimer();
+  rtcCallTimer = setInterval(() => {
+    const s = Math.floor((Date.now() - rtcCallStart) / 1000);
+    document.getElementById('lc-timer').textContent =
+      Math.floor(s/60) + ':' + String(s%60).padStart(2,'0');
+  }, 500);
+}
+
+function stopRTCTimer() {
+  if (rtcCallTimer) { clearInterval(rtcCallTimer); rtcCallTimer = null; }
+  rtcCallStart = null;
+  document.getElementById('lc-timer').textContent = '0:00';
+}
+
+// ── RTC UI state ─────────────────────────────────────────────────────────────
+function setRTCState(state) {
+  rtcState = state;
+  const pill     = document.getElementById('rtc-pill');
+  const pillLbl  = document.getElementById('rtc-pill-label');
+  const statusLbl= document.getElementById('phone-status-label');
+  const connectBtn = document.getElementById('phone-connect-btn');
+  const tabBtn   = document.getElementById('phone-tab-btn');
+
+  const cfg = {
+    disconnected: { pill:'Phone Off',    status:'● Disconnected', btnTxt:'Connect',    btnCls:'connect',    tabLbl:'🎙 Phone' },
+    connecting:   { pill:'Connecting…',  status:'◌ Connecting…',  btnTxt:'Connecting…',btnCls:'disconnect', tabLbl:'🎙 Phone' },
+    registered:   { pill:'Phone Ready',  status:'● Registered',   btnTxt:'Disconnect', btnCls:'disconnect', tabLbl:'🎙 Phone ✓' },
+    ringing:      { pill:'Incoming Call',status:'● Incoming Call', btnTxt:'Disconnect', btnCls:'disconnect', tabLbl:'📳 Ringing!' },
+    active:       { pill:'On Call',      status:'● Live Call',     btnTxt:'Disconnect', btnCls:'disconnect', tabLbl:'🟢 On Call' },
+  }[state] || { pill:'Phone Off', status:'● Disconnected', btnTxt:'Connect', btnCls:'connect', tabLbl:'🎙 Phone' };
+
+  pill.className     = `rtc-pill ${state}`;
+  pillLbl.textContent = cfg.pill;
+  statusLbl.className = `phone-status-label ${state}`;
+  statusLbl.textContent = cfg.status;
+  connectBtn.textContent = cfg.btnTxt;
+  connectBtn.className   = `phone-connect-btn ${cfg.btnCls}`;
+  tabBtn.textContent     = cfg.tabLbl;
+}
+
+function showRTCError(msg) {
+  const banner = document.getElementById('error-banner');
+  banner.textContent = '🎙 ' + msg;
+  banner.classList.add('visible');
+  setTimeout(() => banner.classList.remove('visible'), 5000);
+}
+
+// ────────────────────────────────────────────────────────────────────────────
+//  DIALER START / STOP / RESUME
+// ────────────────────────────────────────────────────────────────────────────
+function setDialerState(state) {
+  dialerState = state;
+  localStorage.setItem('dialer_state', state);
+  updateDialerBtn();
+}
+
+function updateDialerBtn() {
+  const btn = document.getElementById('stop-btn');
+  if (dialerState === 'running') {
+    btn.className = 'stop-btn stop';
+    btn.innerHTML = '⏹ Stop Dialer';
+    btn.disabled = false;
+  } else if (dialerState === 'stopping') {
+    btn.className = 'stop-btn stop';
+    btn.innerHTML = '⏳ Stopping...';
+    btn.disabled = false; // allow re-click to resend stop
+  } else if (dialerState === 'stopped') {
+    btn.className = 'stop-btn resume';
+    btn.innerHTML = '↺ Resume Dialer';
+    btn.disabled = false;
+  } else {
+    // idle
+    btn.className = 'stop-btn resume';
+    btn.innerHTML = '▶ Start Dialer';
+    btn.disabled = false;
+  }
+}
+
+async function dialerBtnClick() {
+  const btn = document.getElementById('stop-btn');
+  btn.disabled = true;
+  try {
+    if (dialerState === 'running' || dialerState === 'stopping') {
+      // Stop the dialer — wait for acknowledgement
+      const res = await fetch(STOP_URL, {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ action: 'stop' })
+      });
+      if (res.ok) {
+        setDialerState('stopping');
+        showRTCError('⏳ Stop sent — waiting for current call to finish...');
+      }
+    } else {
+      // Start (fresh) or Resume
+      const isFresh = (dialerState === 'idle');
+
+      // Fresh start: call dialer-stop with action='fresh' to clear session blacklist
+      // Resume: just clear the stop flag
+      const stopAction = isFresh ? 'fresh' : 'resume';
+      await fetch(STOP_URL, {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ action: stopAction })
+      }).catch(() => {});
+
+      // Fire dial-next-lead
+      const res = await fetch(START_URL, {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({})
+      });
+
+      if (res.ok || res.status === 0) {
+        setDialerState('running');
+        showRTCError(isFresh ? '▶ Dialer started!' : '↺ Dialer resumed!');
+      } else {
+        throw new Error('HTTP ' + res.status);
+      }
+    }
+  } catch(e) {
+    console.error('Dialer control failed:', e);
+    showRTCError('❌ Dialer control failed: ' + (e.message || 'check console'));
+  }
+  btn.disabled = false;
+}
+
+// ────────────────────────────────────────────────────────────────────────────
+//  TAB SWITCHING
+// ────────────────────────────────────────────────────────────────────────────
+const TAB_NAMES = ['calls', 'leads', 'balance', 'phone'];
+function switchTab(name) {
+  document.querySelectorAll('.tab-btn').forEach((b, i) =>
+    b.classList.toggle('active', TAB_NAMES[i] === name));
+  document.querySelectorAll('.tab-pane').forEach(p => p.classList.remove('active'));
+  document.getElementById('tab-' + name).classList.add('active');
+}
+
+// ────────────────────────────────────────────────────────────────────────────
+//  LEADS CRM
+// ────────────────────────────────────────────────────────────────────────────
+function syncActiveLeadHighlight() {
+  const list = document.getElementById('leads-list');
+  if (!list) return;
+  list.querySelectorAll('.lead-row[data-phone]').forEach(row => {
+    const match = activeCallPhone && row.dataset.phone === activeCallPhone;
+    row.classList.toggle('calling-now', !!match);
+  });
+}
+
+async function fetchLeads() {
+  try {
+    const res = await fetch(LEADS_URL);
+    if (!res.ok) return;
+    const data = await res.json();
+    leadsData = data.leads || [];
+    // Update tab badge
+    const btn = document.getElementById('leads-tab-btn');
+    if (btn) btn.textContent = `👥 Leads (${leadsData.length})`;
+    applyLeadFilter();
+  } catch(e) {
+    console.warn('fetchLeads error:', e);
+  }
+}
+
+function startLeadsPolling() {
+  fetchLeads();
+  leadsTimer = setInterval(fetchLeads, LEADS_POLL_MS);
+}
+
+function leadCol(row, ...keys) {
+  for (const k of keys) {
+    const found = Object.keys(row).find(rk => rk.trim().toLowerCase() === k.toLowerCase());
+    if (found && row[found] !== undefined && row[found] !== null && String(row[found]).trim() !== '')
+      return String(row[found]).trim();
+  }
+  return '';
+}
+
+function leadStatus(row) {
+  return leadCol(row, 'status').toLowerCase() || 'pending';
+}
+
+function leadStatusBadge(status) {
+  const cls = status || 'pending';
+  const label = status ? status.replace(/_/g, ' ') : 'Pending';
+  return `<span class="status-badge ${cls}">${label}</span>`;
+}
+
+function applyLeadFilter() {
+  const query = (document.getElementById('leads-search')?.value || '').toLowerCase();
+  leadsFiltered = leadsData.filter(row => {
+    const name    = leadCol(row, 'name').toLowerCase();
+    const company = leadCol(row, 'company').toLowerCase();
+    const phone   = leadCol(row, 'phone').toLowerCase();
+    const matchesSearch = !query || name.includes(query) || company.includes(query) || phone.includes(query);
+    const status  = leadStatus(row);
+    const matchesFilter = activeLeadFilter === 'all' ||
+      (activeLeadFilter === '' ? (status === 'pending' || status === '') : status === activeLeadFilter);
+    return matchesSearch && matchesFilter;
+  });
+  renderLeadsList();
+}
+
+function filterLeads() { applyLeadFilter(); }
+
+function setLeadFilter(status) {
+  activeLeadFilter = status;
+  document.querySelectorAll('.leads-chip').forEach(chip => {
+    chip.classList.toggle('active', chip.dataset.status === status);
+  });
+  applyLeadFilter();
+}
+
+function renderLeadsList() {
+  const list  = document.getElementById('leads-list');
+  if (!list) return;
+  // Re-find or recreate the empty placeholder (innerHTML wipes it on first render)
+  let empty = document.getElementById('leads-empty');
+  if (!empty) {
+    empty = document.createElement('div');
+    empty.id = 'leads-empty';
+    empty.className = 'leads-empty';
+  }
+
+  if (leadsFiltered.length === 0) {
+    empty.style.display = '';
+    list.innerHTML = '';
+    list.appendChild(empty);
+    empty.textContent = leadsData.length === 0 ? 'Loading leads...' : 'No leads match filter.';
+    return;
+  }
+
+  empty.style.display = 'none';
+  list.innerHTML = leadsFiltered.map((row, i) => {
+    const name     = leadCol(row, 'name') || '—';
+    const company  = leadCol(row, 'company') || '';
+    const status   = leadStatus(row);
+    const attempts = leadCol(row, 'attempt_count') || '0';
+    const selected = selectedLeadIdx === i ? ' selected' : '';
+    const phone = (leadCol(row, 'phone') || '').replace(/\D/g, '');
+    return `<div class="lead-row${selected}" data-phone="${phone}" onclick="selectLead(${i})">
+      <div class="lead-row-name">${esc(name)}</div>
+      ${company ? `<div class="lead-row-company">${esc(company)}</div>` : ''}
+      <div class="lead-row-meta">
+        ${leadStatusBadge(status)}
+        <span class="lead-row-attempts">${esc(attempts)} attempt${attempts === '1' ? '' : 's'}</span>
+      </div>
+    </div>`;
+  }).join('');
+  syncActiveLeadHighlight();
+}
+
+function selectLead(idx) {
+  selectedLeadIdx = idx;
+  renderLeadsList();
+  renderLeadDetail(leadsFiltered[idx]);
+}
+
+function renderLeadDetail(row) {
+  const empty  = document.getElementById('leads-detail-empty');
+  const body   = document.getElementById('leads-detail-body');
+  if (!row) { empty.style.display='flex'; body.style.display='none'; return; }
+  empty.style.display = 'none';
+  body.style.display  = '';
+
+  const name      = leadCol(row, 'name') || '—';
+  const jobTitle  = leadCol(row, 'job title', 'job_title') || '';
+  const company   = leadCol(row, 'company') || '';
+  const status    = leadStatus(row);
+  const phone     = leadCol(row, 'phone') || '—';
+  const location  = leadCol(row, 'location') || '';
+  const attempts  = leadCol(row, 'attempt_count') || '0';
+  const lastCalled= leadCol(row, 'last_called') || '';
+  const linkedin  = leadCol(row, 'linked url', 'linkedin_url', 'linkedin url') || '';
+  const website   = leadCol(row, 'company website', 'company_website') || '';
+  const industry  = leadCol(row, 'industry') || '';
+  const teamSize  = leadCol(row, 'team size', 'team_size') || '';
+  const revenue   = leadCol(row, 'revenue range', 'revenue_range') || '';
+  const notes     = leadCol(row, 'notes') || '';
+  const email     = leadCol(row, 'company email', 'company_email', 'direct email #1') || '';
+
+  const field = (label, val, link) => val ? `
+    <div class="lead-detail-field">
+      <div class="ldf-label">${label}</div>
+      <div class="ldf-val">${link ? `<a href="${esc(link)}" target="_blank">${esc(val)}</a>` : esc(val)}</div>
+    </div>` : '';
+
+  body.innerHTML = `
+    <div class="lead-detail-header">
+      <div class="lead-detail-name">${esc(name)}</div>
+      ${jobTitle || company ? `<div class="lead-detail-title">${esc([jobTitle, company].filter(Boolean).join(' · '))}</div>` : ''}
+      <div class="lead-detail-status-row">
+        ${leadStatusBadge(status)}
+        <span style="font-size:11px;color:var(--text-muted)">${esc(attempts)} attempt${attempts==='1'?'':'s'}${lastCalled ? ' · last ' + timeStr(lastCalled) : ''}</span>
+      </div>
+    </div>
+    <div class="lead-detail-grid">
+      ${field('Phone', phone)}
+      ${field('Location', location)}
+      ${field('LinkedIn', linkedin ? 'View Profile ↗' : '', linkedin)}
+      ${field('Website', website ? website.replace(/^https?:\/\//, '') : '', website)}
+      ${field('Industry', industry)}
+      ${field('Team Size', teamSize)}
+      ${field('Revenue', revenue)}
+      ${field('Email', email)}
+    </div>
+    ${notes ? `<div class="lead-detail-notes"><div class="ldf-label">Notes</div><div class="notes-text">${esc(notes)}</div></div>` : ''}
+  `;
+}
+
+// ────────────────────────────────────────────────────────────────────────────
+//  HELPERS
+// ────────────────────────────────────────────────────────────────────────────
+const esc    = s => String(s??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+const fmt$   = v => v == null ? '—' : '$' + parseFloat(v).toFixed(4);
+const fmtShort$ = v => v == null ? '—' : '$' + parseFloat(v).toFixed(2);
+function timeStr(iso) {
+  if (!iso) return '';
+  return new Date(iso).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit',second:'2-digit'});
+}
+function elapsed(iso) {
+  if (!iso) return '0:00';
+  const s = Math.floor((Date.now() - new Date(iso).getTime()) / 1000);
+  return Math.floor(s/60) + ':' + String(s%60).padStart(2,'0');
+}
+function getInitials(n) { return (n||'?').split(' ').map(w=>w[0]).join('').slice(0,2).toUpperCase(); }
+function outcomeClass(o) {
+  const x = (o||'').toLowerCase();
+  if (['human','human_residence','human_business','answered_without_amd'].includes(x)) return 'answered';
+  return x || 'hangup';
+}
+function outcomeIcon(o) {
+  return {answered:'✅',voicemail:'📬',no_answer:'📵',busy:'🔴',failed:'❌',hangup:'📴'}[outcomeClass(o)] || '📞';
+}
+const statusCfg = {
+  dialing:      {cls:'dialing',  icon:'📲', label:'Dialing...',                  anim:true},
+  ringing:      {cls:'ringing',  icon:'🔔', label:'Ringing...',                  anim:true},
+  answered_amd: {cls:'answered', icon:'🎙', label:'Answered — AMD Screening...', anim:true},
+  live_answer:  {cls:'live',     icon:'🟢', label:'Human Answered — Your Phone is Ringing!', anim:true},
+  voicemail:    {cls:'voicemail',icon:'📬', label:'Voicemail — Skipping...',     anim:false},
+};
+
+// ────────────────────────────────────────────────────────────────────────────
+//  RENDER FUNCTIONS
+// ────────────────────────────────────────────────────────────────────────────
+function renderBalance(b) {
+  if (!b || b.error) return;
+  const avail = parseFloat(b.available ?? 0);
+  document.getElementById('b-available').textContent = fmtShort$(avail);
+  document.getElementById('b-currency').textContent  = b.currency || 'USD';
+  document.getElementById('b-spend').textContent     = fmt$(b.session_spend ?? 0);
+  document.getElementById('b-pending').textContent   = fmtShort$(b.pending ?? 0);
+
+  const badge = document.getElementById('b-badge');
+  if (avail > 10)      badge.innerHTML = '<div class="bc-badge ok">✅ Healthy</div>';
+  else if (avail > 2)  badge.innerHTML = '<div class="bc-badge warn">⚠️ Low Balance</div>';
+  else                 badge.innerHTML = '<div class="bc-badge low">🚨 Critical — Top Up Now</div>';
+
+  const hist  = (b.history || []);
+  const empty = document.getElementById('empty-balance');
+  const table = document.getElementById('balance-table');
+  const tbody = document.getElementById('balance-body');
+  if (!hist.length) { table.style.display='none'; empty.style.display='block'; return; }
+  table.style.display='table'; empty.style.display='none';
+  tbody.innerHTML = hist.map((row, i) => {
+    const prev   = hist[i+1];
+    const change = prev ? (row.available - prev.available) : null;
+    const changeHtml = change === null ? '<span style="color:var(--text-muted)">—</span>'
+      : change < -0.0001
+        ? `<span class="spend-neg">-$${Math.abs(change).toFixed(4)}</span>`
+        : change > 0.0001
+          ? `<span class="spend-pos">+$${change.toFixed(4)}</span>`
+          : '<span style="color:var(--text-muted)">$0.00</span>';
+    return `<tr>
+      <td class="time-cell">${timeStr(row.at)}</td>
+      <td class="mono">${fmtShort$(row.available)}</td>
+      <td>${changeHtml}</td>
+      <td class="mono" style="color:var(--text-muted)">${fmtShort$(row.pending)}</td>
+    </tr>`;
+  }).join('');
+}
+
+function renderCurrentCall(call) {
+  const card    = document.getElementById('call-card');
+  const content = document.getElementById('call-content');
+  if (!call) {
+    card.className = 'cc-card';
+    content.innerHTML = '<div class="idle-msg"><span>📵</span>No active call</div>';
+    clearInterval(timerInterval); timerInterval = null; callStartAt = null;
+    return;
+  }
+  const cfg = statusCfg[call.status] || {cls:'dialing',icon:'📞',label:call.status_label||call.status,anim:false};
+  card.className = 'cc-card ' + (call.status==='live_answer' ? 'live-answer' : call.status==='voicemail' ? 'voicemail-call' : 'active-call');
+  if (call.started_at !== callStartAt) {
+    callStartAt = call.started_at;
+    clearInterval(timerInterval);
+    timerInterval = setInterval(()=>{ const el=document.getElementById('call-timer'); if(el) el.textContent=elapsed(callStartAt); }, 500);
+  }
+  content.innerHTML = `
+    <div class="call-avatar ${cfg.cls}">${getInitials(call.name)}</div>
+    <div class="call-name">${esc(call.name||'Unknown')}</div>
+    <div class="call-phone">${esc(call.phone||'')}</div>
+    <div class="cc-status-badge ${cfg.cls}">
+      <div class="status-dot ${cfg.anim?'animated':''}"></div>
+      ${esc(call.status_label||cfg.label)}
+    </div>
+    <div class="call-timer active" id="call-timer">${elapsed(call.started_at)}</div>`;
+}
+
+function renderCallLog(log) {
+  const tbody = document.getElementById('call-body');
+  const table = document.getElementById('call-table');
+  const empty = document.getElementById('empty-calls');
+  const badge = document.getElementById('calls-badge');
+  badge.textContent = log.length ? `(${log.length})` : '';
+  if (!log.length) { table.style.display='none'; empty.style.display='block'; return; }
+  table.style.display='table'; empty.style.display='none';
+  const isNew = log.length > prevLogLen; prevLogLen = log.length;
+  tbody.innerHTML = log.map((e,i)=>{
+    const oc = outcomeClass(e.outcome);
+    return `<tr class="${isNew&&i===0?'new-row':''}">
+      <td><strong>${esc(e.name||'—')}</strong></td>
+      <td class="mono" style="color:#9ca3af">${esc(e.phone||'—')}</td>
+      <td><span class="outcome-pill ${oc}">${outcomeIcon(e.outcome)} ${esc(e.outcome_label||e.outcome||'?')}</span></td>
+      <td><span class="amd-tag">${esc(e.amd_result||'—')}</span></td>
+      <td class="time-cell">${timeStr(e.at)}</td>
+    </tr>`;
+  }).join('');
+}
+
+function renderStats(s) {
+  document.getElementById('s-total').textContent = s.total_called||0;
+  document.getElementById('s-ans').textContent   = s.answered||0;
+  document.getElementById('s-vm').textContent    = s.voicemail||0;
+  document.getElementById('s-na').textContent    = s.no_answer||0;
+  document.getElementById('s-busy').textContent  = s.busy||0;
+  document.getElementById('s-rate').textContent  = (s.answer_rate??0)+'%';
+}
+
+function setOnline(v) {
+  if (isOnline===v) return; isOnline=v;
+  document.getElementById('conn-dot').className   = v ? 'dot-live' : 'dot-offline';
+  document.getElementById('conn-label').textContent = v ? 'Live' : 'Offline';
+  document.getElementById('error-banner').classList.toggle('visible', !v);
+}
+
+// ────────────────────────────────────────────────────────────────────────────
+//  POLL
+// ────────────────────────────────────────────────────────────────────────────
+async function poll() {
+  try {
+    const res  = await fetch(STATUS_URL, {cache:'no-store'});
+    if (!res.ok) throw new Error('HTTP '+res.status);
+    const data = await res.json();
+    setOnline(true);
+    document.getElementById('last-update').textContent =
+      'Updated ' + new Date().toLocaleTimeString([],{hour:'2-digit',minute:'2-digit',second:'2-digit'});
+    renderStats(data.stats||{});
+    renderCurrentCall(data.current_call||null);
+    renderCallLog(data.session_log||[]);
+    renderBalance(data.balance||null);
+    activeCallPhone = data.current_call?.phone?.replace(/\D/g, '') || null;
+    syncActiveLeadHighlight();
+    // Sync button state from live server data — fixes localStorage drift
+    if (data.current_call) {
+      // Server has an active call → sync to running ONLY if we weren't mid-stop
+      // Don't override 'stopping' state — user clicked stop, we're waiting for this call to end
+      if (dialerState === 'idle' || dialerState === 'stopped') setDialerState('running');
+    } else if (dialerState === 'stopping') {
+      // We requested a stop and the call has now ended — confirm stopped
+      setDialerState('stopped');
+      showRTCError('⏹ Dialer stopped.');
+    }
+    // Legacy: respect explicit stopped field if the API ever adds it
+    if (data.stopped === true  && dialerState === 'running')  setDialerState('stopped');
+    if (data.stopped === false && dialerState === 'stopped')  setDialerState('running');
+  } catch(e) {
+    setOnline(false);
+  }
+}
+
+poll();
+setInterval(poll, POLL_MS);
+</script>
+</body>
+</html>

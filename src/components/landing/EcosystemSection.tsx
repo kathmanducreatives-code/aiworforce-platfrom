@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { motion, AnimatePresence, useScroll } from "framer-motion";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { TOOL_BRANDS } from "./ToolLogos";
@@ -64,6 +64,8 @@ const EcosystemSection = () => {
   const isMobile = useIsMobile();
   const [stage, setStage]   = useState(1);
   const [hovered, setHovered] = useState<string | null>(null);
+  const [scrollTriggered, setScrollTriggered] = useState(false);
+  const [fallbackVisible, setFallbackVisible] = useState(false);
 
   const { scrollYProgress } = useScroll({
     target: sectionRef,
@@ -72,11 +74,20 @@ const EcosystemSection = () => {
 
   useEffect(
     () =>
-      scrollYProgress.on("change", (p) =>
-        setStage(Math.min(5, Math.max(1, Math.ceil(p * 5))))
-      ),
+      scrollYProgress.on("change", (p) => {
+        setScrollTriggered(true);
+        setStage(Math.min(5, Math.max(1, Math.ceil(p * 5))));
+      }),
     [scrollYProgress]
   );
+
+  // Fallback: if scroll hasn't triggered within 2s, show static layout
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      if (!scrollTriggered) setFallbackVisible(true);
+    }, 2000);
+    return () => clearTimeout(timer);
+  }, [scrollTriggered]);
 
   // Layout constants
   const SVG_W    = isMobile ? 380 : 900;
@@ -100,7 +111,7 @@ const EcosystemSection = () => {
       ref={sectionRef}
       id="ecosystem"
       className="relative w-full"
-      style={{ height: "500vh", background: "transparent" }}
+      style={{ height: "250vh", background: "transparent" }}
     >
       {/* ── KEYFRAMES injected once ── */}
       <style>{`
@@ -141,6 +152,39 @@ const EcosystemSection = () => {
       `}</style>
 
       <div className="sticky top-0 w-full h-screen overflow-hidden flex items-center justify-center">
+
+        {/* ── FALLBACK: Static grid if scroll hasn't triggered ── */}
+        {fallbackVisible && !scrollTriggered && (
+          <div className="absolute inset-0 z-[100] flex flex-col items-center justify-center bg-[#03070A] p-8">
+            <span className="font-mono text-[10px] uppercase tracking-[0.5em] font-bold mb-8" style={{ color: '#10B981', opacity: 0.5 }}>
+              FULL SYSTEM
+            </span>
+            <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 gap-6 max-w-3xl">
+              {TOOLS.map((tool) => {
+                const brand = TOOL_BRANDS[tool.id];
+                return (
+                  <div key={tool.id} className="flex flex-col items-center gap-2">
+                    <div
+                      className="w-14 h-14 rounded-full flex items-center justify-center overflow-hidden"
+                      style={{
+                        background: 'rgba(10,16,12,0.72)',
+                        border: '1px solid rgba(16,185,129,0.22)',
+                        boxShadow: '0 6px 22px rgba(0,0,0,0.55)',
+                      }}
+                    >
+                      {brand?.logo ? (
+                        <img src={brand.logo} alt={brand.label} className="w-6 h-6 object-contain" loading="lazy" />
+                      ) : (
+                        <span className="text-white/60 font-bold text-sm">{tool.id.charAt(0).toUpperCase()}</span>
+                      )}
+                    </div>
+                    <span className="font-mono text-[9px] text-white/40 text-center">{brand?.label ?? tool.id}</span>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
 
         {/* ── ATMOSPHERE ── */}
         <div className="absolute inset-0 pointer-events-none z-0">
