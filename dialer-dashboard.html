@@ -986,7 +986,7 @@ function renderLeadsList() {
     const status   = leadStatus(row);
     const attempts = leadCol(row, 'attempt_count') || '0';
     const selected = selectedLeadIdx === i ? ' selected' : '';
-    const phone = leadCol(row, 'phone').replace(/\D/g, '');
+    const phone = (leadCol(row, 'phone') || '').replace(/\D/g, '');
     return `<div class="lead-row${selected}" data-phone="${phone}" onclick="selectLead(${i})">
       <div class="lead-row-name">${esc(name)}</div>
       ${company ? `<div class="lead-row-company">${esc(company)}</div>` : ''}
