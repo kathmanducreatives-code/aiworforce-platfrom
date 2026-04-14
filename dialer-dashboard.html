@@ -524,6 +524,7 @@ let leadsFiltered    = [];       // after search + status filter
 let selectedLeadIdx  = null;     // index into leadsFiltered
 let activeLeadFilter = 'all';    // current status filter value
 let leadsTimer       = null;
+let activeCallPhone  = null;     // digits-only phone of lead currently being dialed
 
 // ────────────────────────────────────────────────────────────────────────────
 //  WEBRTC STATE
@@ -976,7 +977,8 @@ function renderLeadsList() {
     const status   = leadStatus(row);
     const attempts = leadCol(row, 'attempt_count') || '0';
     const selected = selectedLeadIdx === i ? ' selected' : '';
-    return `<div class="lead-row${selected}" onclick="selectLead(${i})">
+    const phone = leadCol(row, 'phone').replace(/\D/g, '');
+    return `<div class="lead-row${selected}" data-phone="${phone}" onclick="selectLead(${i})">
       <div class="lead-row-name">${esc(name)}</div>
       ${company ? `<div class="lead-row-company">${esc(company)}</div>` : ''}
       <div class="lead-row-meta">
