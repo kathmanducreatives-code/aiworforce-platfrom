@@ -887,6 +887,15 @@ function switchTab(name) {
 // ────────────────────────────────────────────────────────────────────────────
 //  LEADS CRM
 // ────────────────────────────────────────────────────────────────────────────
+function syncActiveLeadHighlight() {
+  const list = document.getElementById('leads-list');
+  if (!list) return;
+  list.querySelectorAll('.lead-row[data-phone]').forEach(row => {
+    const match = activeCallPhone && row.dataset.phone === activeCallPhone;
+    row.classList.toggle('calling-now', !!match);
+  });
+}
+
 async function fetchLeads() {
   try {
     const res = await fetch(LEADS_URL);
@@ -987,6 +996,7 @@ function renderLeadsList() {
       </div>
     </div>`;
   }).join('');
+  syncActiveLeadHighlight();
 }
 
 function selectLead(idx) {
@@ -1198,6 +1208,8 @@ async function poll() {
     renderCurrentCall(data.current_call||null);
     renderCallLog(data.session_log||[]);
     renderBalance(data.balance||null);
+    activeCallPhone = data.current_call?.phone?.replace(/\D/g, '') || null;
+    syncActiveLeadHighlight();
     // Sync dialer state from n8n if provided
     if (data.stopped === true  && dialerState === 'running') setDialerState('stopped');
     if (data.stopped === false && dialerState === 'stopped')  setDialerState('running');
