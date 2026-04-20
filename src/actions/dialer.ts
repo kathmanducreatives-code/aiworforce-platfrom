@@ -3,12 +3,9 @@
  * Aligns with the Hub & Spoke architecture: Frontend -> Action -> n8n/Supabase
  */
 
-'use server'
-
 import { signAndPostWebhook } from './_webhook';
 
-// These should move to a shared constants file eventually
-const N8N_BASE_URL = process.env.N8N_BASE_URL || 'https://n8n.prasidha.me';
+const N8N_BASE_URL = 'https://n8n.prasidha.me';
 const DIALER_START_URL = `${N8N_BASE_URL}/webhook/power-dialer-start`;
 const DIALER_STOP_URL = `${N8N_BASE_URL}/webhook/power-dialer-stop`;
 

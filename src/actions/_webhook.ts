@@ -1,6 +1,7 @@
 /**
- * Internal helper for signing and posting webhooks to n8n.
- * Implements HMAC-SHA256 signature for security.
+ * Browser-safe helper for posting webhooks to n8n.
+ * Note: HMAC signing must happen server-side (e.g. in a Supabase Edge Function),
+ * since secrets cannot be exposed to the browser.
  */
 
 export interface N8nPayload {
@@ -14,30 +15,10 @@ export async function signAndPostWebhook(
   payload: N8nPayload,
 ): Promise<void> {
   const body = JSON.stringify(payload);
-  const secret = process.env.N8N_WEBHOOK_SECRET;
-  
-  if (!secret) {
-    console.warn('[signAndPostWebhook] N8N_WEBHOOK_SECRET not set. Posting without signature.');
-    await fetch(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body,
-    });
-    return;
-  }
-
-  // Node.js crypto for server-side signing
-  const crypto = await import('crypto');
-  const hmac = crypto.createHmac('sha256', secret);
-  hmac.update(body);
-  const sigHex = hmac.digest('hex');
 
   const res = await fetch(url, {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'X-ScreeningPilot-Signature': sigHex,
-    },
+    headers: { 'Content-Type': 'application/json' },
     body,
   });
 
