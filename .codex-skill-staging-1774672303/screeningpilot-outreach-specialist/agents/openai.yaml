@@ -1,0 +1,6 @@
+interface:
+  display_name: "Outreach"
+  short_description: "Find and enrich high-intent startup leads"
+  default_prompt: "Use $screeningpilot-outreach-specialist to find and enrich high-intent ScreeningPilot leads from LinkedIn, startup job boards, and company websites."
+policy:
+  allow_implicit_invocation: true

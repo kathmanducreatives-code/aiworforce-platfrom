@@ -73,7 +73,7 @@ const SavingsCalculator = () => {
                             <Calculator className="w-4 h-4 text-white/80" />
                             <span className="text-white font-semibold text-sm">How much are you overpaying?</span>
                         </div>
-                        <button onClick={() => setIsOpen(false)} className="text-white/60 hover:text-white transition-colors p-0.5"><X className="w-4 h-4" /></button>
+                        <button aria-label="Close savings calculator" onClick={() => setIsOpen(false)} className="text-white/60 hover:text-white transition-colors p-0.5"><X className="w-4 h-4" /></button>
                     </div>
 
                     <div className="p-5">
@@ -113,7 +113,7 @@ const SavingsCalculator = () => {
                                 €{displaySavings.toLocaleString()}<span className="text-xs text-emerald-400/50 font-normal">/yr</span>
                             </p>
                             {extraHires > 0 && (
-                                <p className="text-[11px] text-white/30 mt-1">That's <strong className="text-white/60">{extraHires}</strong> more engineer{extraHires > 1 ? 's' : ''}.</p>
+                                <p className="text-[11px] text-white/50 mt-1">That's <strong className="text-white/70">{extraHires}</strong> more engineer{extraHires > 1 ? 's' : ''}.</p>
                             )}
                         </div>
 

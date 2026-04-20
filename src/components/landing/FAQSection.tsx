@@ -34,7 +34,7 @@ const FAQSection = () => {
                 className="w-full flex items-center justify-between px-8 py-6 text-left hover:bg-white/[0.02] transition-colors"
               >
                 <span className="font-display font-bold text-base text-white/90 pr-4">{faq.q}</span>
-                <ChevronDown className={`w-5 h-5 shrink-0 transition-transform duration-500 ${openIndex === i ? 'rotate-180 text-accent-mint' : 'text-white/20'}`} />
+                <ChevronDown className={`w-5 h-5 shrink-0 transition-transform duration-500 ${openIndex === i ? 'rotate-180 text-accent-mint' : 'text-white/50'}`} />
               </button>
               <AnimatePresence>
                 {openIndex === i && (

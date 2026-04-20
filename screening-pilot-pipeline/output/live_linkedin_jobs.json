@@ -1,0 +1,156 @@
+{
+  "generated_at": "2026-03-28T07:15:45.226Z",
+  "count": 15,
+  "leads": [
+    {
+      "company_name": "ChannelFlex",
+      "role_title": "Founding Software Engineer",
+      "company_url": "https://www.linkedin.com/company/channelflex",
+      "evidence_url": "https://www.linkedin.com/jobs/view/4390956037/",
+      "recency_days": 0,
+      "applicants": 87,
+      "score": 10,
+      "signal_summary": "Founding Software Engineer posted 0d ago, 87 applicants"
+    },
+    {
+      "company_name": "Stealth Startup",
+      "role_title": "Founding Machine Learning Engineer [33007]",
+      "company_url": "https://www.linkedin.com/company/stealth-startupsssss",
+      "evidence_url": "https://www.linkedin.com/jobs/view/4392297074/",
+      "recency_days": 0,
+      "applicants": 75,
+      "score": 10,
+      "signal_summary": "Founding Machine Learning Engineer [33007] posted 0d ago, 75 applicants"
+    },
+    {
+      "company_name": "Pretorin",
+      "role_title": "Founding Engineer",
+      "company_url": "https://www.linkedin.com/company/pretorin",
+      "evidence_url": "https://www.linkedin.com/jobs/view/4391221709/",
+      "recency_days": 0,
+      "applicants": 25,
+      "score": 10,
+      "signal_summary": "Founding Engineer posted 0d ago, 25 applicants"
+    },
+    {
+      "company_name": "Jobright.ai",
+      "role_title": "Founding AI Engineer",
+      "company_url": "https://www.linkedin.com/company/jobright-ai",
+      "evidence_url": "https://www.linkedin.com/jobs/view/4391212196/",
+      "recency_days": 0,
+      "applicants": 25,
+      "score": 10,
+      "signal_summary": "Founding AI Engineer posted 0d ago, 25 applicants"
+    },
+    {
+      "company_name": "Storm3",
+      "role_title": "Founding Engineer",
+      "company_url": "https://www.linkedin.com/company/storm3",
+      "evidence_url": "https://www.linkedin.com/jobs/view/4391598247/",
+      "recency_days": 0,
+      "applicants": 63,
+      "score": 10,
+      "signal_summary": "Founding Engineer posted 0d ago, 63 applicants"
+    },
+    {
+      "company_name": "Sartre Group",
+      "role_title": "Founding Engineer | Python / JavaScript | LLM Systems | San Francisco",
+      "company_url": "https://www.linkedin.com/company/sartre-group",
+      "evidence_url": "https://www.linkedin.com/jobs/view/4391580768/",
+      "recency_days": 0,
+      "applicants": 54,
+      "score": 10,
+      "signal_summary": "Founding Engineer | Python / JavaScript | LLM Systems | San Francisco posted 0d ago, 54 applicants"
+    },
+    {
+      "company_name": "Jack",
+      "role_title": "Founding Engineer",
+      "company_url": "https://www.linkedin.com/company/searchwithjack",
+      "evidence_url": "https://www.linkedin.com/jobs/view/4385298653/",
+      "recency_days": 0,
+      "applicants": 176,
+      "score": 10,
+      "signal_summary": "Founding Engineer posted 0d ago, 176 applicants"
+    },
+    {
+      "company_name": "Berkley Hunt",
+      "role_title": "Founding Software Engineer",
+      "company_url": "https://www.linkedin.com/company/berkleyhunt",
+      "evidence_url": "https://www.linkedin.com/jobs/view/4391771354/",
+      "recency_days": 0,
+      "applicants": 200,
+      "score": 10,
+      "signal_summary": "Founding Software Engineer posted 0d ago, 200 applicants"
+    },
+    {
+      "company_name": "Berkley Hunt",
+      "role_title": "Founding Full Stack Engineer",
+      "company_url": "https://www.linkedin.com/company/berkleyhunt",
+      "evidence_url": "https://www.linkedin.com/jobs/view/4389086678/",
+      "recency_days": 0,
+      "applicants": 200,
+      "score": 10,
+      "signal_summary": "Founding Full Stack Engineer posted 0d ago, 200 applicants"
+    },
+    {
+      "company_name": "Revic",
+      "role_title": "Founding GTM AI Engineer",
+      "company_url": "https://www.linkedin.com/company/revic-ai",
+      "evidence_url": "https://www.linkedin.com/jobs/view/4391558313/",
+      "recency_days": 0,
+      "applicants": 78,
+      "score": 10,
+      "signal_summary": "Founding GTM AI Engineer posted 0d ago, 78 applicants"
+    },
+    {
+      "company_name": "Jobright.ai",
+      "role_title": "Founding Backend Engineer",
+      "company_url": "https://www.linkedin.com/company/jobright-ai",
+      "evidence_url": "https://www.linkedin.com/jobs/view/4391204582/",
+      "recency_days": 0,
+      "applicants": 25,
+      "score": 10,
+      "signal_summary": "Founding Backend Engineer posted 0d ago, 25 applicants"
+    },
+    {
+      "company_name": "Reflexive Concepts",
+      "role_title": "Software Engineer 0",
+      "company_url": "https://www.linkedin.com/company/reflexive-concepts",
+      "evidence_url": "https://www.linkedin.com/jobs/view/4392058423/",
+      "recency_days": 0,
+      "applicants": 25,
+      "score": 10,
+      "signal_summary": "Software Engineer 0 posted 0d ago, 25 applicants"
+    },
+    {
+      "company_name": "hackajob",
+      "role_title": "Senior Lead Software Engineer - Java",
+      "company_url": "https://www.linkedin.com/company/hackajob",
+      "evidence_url": "https://www.linkedin.com/jobs/view/4391258006/",
+      "recency_days": 0,
+      "applicants": 25,
+      "score": 10,
+      "signal_summary": "Senior Lead Software Engineer - Java posted 0d ago, 25 applicants"
+    },
+    {
+      "company_name": "Reflexive Concepts",
+      "role_title": "Software Engineer I",
+      "company_url": "https://www.linkedin.com/company/reflexive-concepts",
+      "evidence_url": "https://www.linkedin.com/jobs/view/4392042931/",
+      "recency_days": 0,
+      "applicants": 25,
+      "score": 10,
+      "signal_summary": "Software Engineer I posted 0d ago, 25 applicants"
+    },
+    {
+      "company_name": "VetScribe",
+      "role_title": "Senior Software Engineer",
+      "company_url": "https://www.linkedin.com/company/vet-scribe",
+      "evidence_url": "https://www.linkedin.com/jobs/view/4391254135/",
+      "recency_days": 0,
+      "applicants": 25,
+      "score": 10,
+      "signal_summary": "Senior Software Engineer posted 0d ago, 25 applicants"
+    }
+  ]
+}

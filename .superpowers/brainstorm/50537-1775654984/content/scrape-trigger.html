@@ -1,0 +1,26 @@
+<h2>How do you want to trigger lead scraping?</h2>
+<p class="subtitle">When you say "scrape leads via Firecrawl," how does the process start?</p>
+
+<div class="options">
+  <div class="option" data-choice="a" onclick="toggleSelect(this)">
+    <div class="letter">A</div>
+    <div class="content">
+      <h3>Type a URL or search query in the dashboard</h3>
+      <p>You type something like <em>"YC startups hiring SDRs"</em> or paste a LinkedIn search URL directly into the Leads tab — Firecrawl scrapes it and populates the leads table in real time.</p>
+    </div>
+  </div>
+  <div class="option" data-choice="b" onclick="toggleSelect(this)">
+    <div class="letter">B</div>
+    <div class="content">
+      <h3>Tell Claude in chat, Claude runs it</h3>
+      <p>You say "scrape YC batch W25 CEOs" in this chat — Claude fires the Firecrawl job, enriches the leads, and pushes them into the Leads tab automatically.</p>
+    </div>
+  </div>
+  <div class="option" data-choice="c" onclick="toggleSelect(this)">
+    <div class="letter">C</div>
+    <div class="content">
+      <h3>Both — chat triggers scrape, dashboard shows results</h3>
+      <p>You give Claude a scraping instruction, Claude runs Firecrawl + enrichment in the background, and the Leads tab live-updates as results come in.</p>
+    </div>
+  </div>
+</div>

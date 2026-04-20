@@ -1,0 +1,7 @@
+interface:
+  display_name: "SP Outreach QA"
+  short_description: "Audit and maintain the outreach pipeline"
+  default_prompt: "Use $sp-outreach to audit, dry-run, or improve the ScreeningPilot outreach workflow and sending pipeline."
+
+policy:
+  allow_implicit_invocation: false

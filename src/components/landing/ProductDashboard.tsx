@@ -154,7 +154,7 @@ const ProductDashboard = () => {
                 <div className="w-3 h-3 rounded-full bg-yellow-500/30" />
                 <div className="w-3 h-3 rounded-full bg-green-500/30" />
               </div>
-              <div className="text-[10px] font-black text-white/20 uppercase tracking-widest">Founder Control Panel</div>
+              <div className="text-[10px] font-black text-white/40 uppercase tracking-widest">Founder Control Panel</div>
             </div>
 
             <div className="p-8">
@@ -165,7 +165,7 @@ const ProductDashboard = () => {
                   { label: 'Screened', val: '1,247', sub: 'Across 4 roles' },
                 ].map((s, i) => (
                   <div key={i} className="p-5 rounded-2xl bg-white/5 border border-white/5">
-                    <p className="text-[10px] text-white/30 font-bold uppercase mb-2 tracking-widest">{s.label}</p>
+                    <p className="text-[10px] text-white/50 font-bold uppercase mb-2 tracking-widest">{s.label}</p>
                     <p className="text-2xl font-black text-white mb-1">{s.val}</p>
                     <p className="text-[10px] text-accent-mint font-bold uppercase">{s.sub}</p>
                   </div>
@@ -175,7 +175,7 @@ const ProductDashboard = () => {
               {/* Minimalist Graph */}
               <div className="mb-8 p-6 rounded-2xl bg-white/[0.02] border border-white/5">
                 <div className="flex justify-between items-center mb-6">
-                   <p className="text-[10px] text-white/30 font-bold uppercase tracking-widest">Cumulative Savings</p>
+                   <p className="text-[10px] text-white/50 font-bold uppercase tracking-widest">Cumulative Savings</p>
                    <div className="flex gap-2">
                       <div className="w-2 h-2 rounded-full bg-accent-mint" />
                       <div className="w-2 h-2 rounded-full bg-white/10" />
@@ -190,7 +190,7 @@ const ProductDashboard = () => {
 
               {/* Live Activity Feed */}
               <div className="space-y-4">
-                 <p className="text-[10px] text-white/30 font-bold uppercase tracking-widest mb-4">Agent Activity Feed</p>
+                 <p className="text-[10px] text-white/50 font-bold uppercase tracking-widest mb-4">Agent Activity Feed</p>
                  {[
                    'Aria rejected 47 unqualified applicants in 8s',
                    'Penn drafted personalized outreach for 12 leads',

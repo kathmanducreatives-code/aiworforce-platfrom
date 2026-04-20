@@ -511,8 +511,10 @@ const START_URL  = 'https://n8n.prasidha.me/webhook/dial-next-lead';
 const POLL_MS    = 2500;
 const SIP_LOGIN  = 'userprasidha13243';
 
-// dialerState: 'idle' | 'running' | 'stopped'
+// dialerState: 'idle' | 'running' | 'stopping' | 'stopped'
 let dialerState = localStorage.getItem('dialer_state') || 'idle';
+// 'stopping' in localStorage means the page reloaded mid-stop — treat as stopped
+if (dialerState === 'stopping') dialerState = 'stopped';
 let timerInterval  = null;
 let callStartAt    = null;
 let prevLogLen     = 0;
@@ -814,13 +816,20 @@ function updateDialerBtn() {
   if (dialerState === 'running') {
     btn.className = 'stop-btn stop';
     btn.innerHTML = '⏹ Stop Dialer';
+    btn.disabled = false;
+  } else if (dialerState === 'stopping') {
+    btn.className = 'stop-btn stop';
+    btn.innerHTML = '⏳ Stopping...';
+    btn.disabled = false; // allow re-click to resend stop
   } else if (dialerState === 'stopped') {
     btn.className = 'stop-btn resume';
     btn.innerHTML = '↺ Resume Dialer';
+    btn.disabled = false;
   } else {
     // idle
     btn.className = 'stop-btn resume';
     btn.innerHTML = '▶ Start Dialer';
+    btn.disabled = false;
   }
 }
 
@@ -828,7 +837,7 @@ async function dialerBtnClick() {
   const btn = document.getElementById('stop-btn');
   btn.disabled = true;
   try {
-    if (dialerState === 'running') {
+    if (dialerState === 'running' || dialerState === 'stopping') {
       // Stop the dialer — wait for acknowledgement
       const res = await fetch(STOP_URL, {
         method: 'POST',
@@ -836,8 +845,8 @@ async function dialerBtnClick() {
         body: JSON.stringify({ action: 'stop' })
       });
       if (res.ok) {
-        setDialerState('stopped');
-        showRTCError('⏹ Dialer stopped.');
+        setDialerState('stopping');
+        showRTCError('⏳ Stop sent — waiting for current call to finish...');
       }
     } else {
       // Start (fresh) or Resume
@@ -1210,8 +1219,18 @@ async function poll() {
     renderBalance(data.balance||null);
     activeCallPhone = data.current_call?.phone?.replace(/\D/g, '') || null;
     syncActiveLeadHighlight();
-    // Sync dialer state from n8n if provided
-    if (data.stopped === true  && dialerState === 'running') setDialerState('stopped');
+    // Sync button state from live server data — fixes localStorage drift
+    if (data.current_call) {
+      // Server has an active call → sync to running ONLY if we weren't mid-stop
+      // Don't override 'stopping' state — user clicked stop, we're waiting for this call to end
+      if (dialerState === 'idle' || dialerState === 'stopped') setDialerState('running');
+    } else if (dialerState === 'stopping') {
+      // We requested a stop and the call has now ended — confirm stopped
+      setDialerState('stopped');
+      showRTCError('⏹ Dialer stopped.');
+    }
+    // Legacy: respect explicit stopped field if the API ever adds it
+    if (data.stopped === true  && dialerState === 'running')  setDialerState('stopped');
     if (data.stopped === false && dialerState === 'stopped')  setDialerState('running');
   } catch(e) {
     setOnline(false);

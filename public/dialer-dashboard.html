@@ -1,0 +1,451 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Power Dialer — Live Monitor</title>
+<style>
+  :root {
+    --bg: #0d0f14;
+    --surface: #161920;
+    --surface2: #1e2230;
+    --border: #2a2f3d;
+    --text: #e8eaf0;
+    --text-muted: #6b7280;
+    --green: #22c55e;
+    --green-dim: rgba(34,197,94,.12);
+    --yellow: #f59e0b;
+    --yellow-dim: rgba(245,158,11,.12);
+    --red: #ef4444;
+    --red-dim: rgba(239,68,68,.12);
+    --blue: #3b82f6;
+    --blue-dim: rgba(59,130,246,.12);
+    --purple: #a855f7;
+    --purple-dim: rgba(168,85,247,.12);
+    --orange: #f97316;
+    --orange-dim: rgba(249,115,22,.12);
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--text); font-family: 'Inter', -apple-system, sans-serif; min-height: 100vh; }
+
+  /* Header */
+  header {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 16px 28px; border-bottom: 1px solid var(--border);
+    background: var(--surface);
+  }
+  .logo { display: flex; align-items: center; gap: 10px; font-weight: 700; font-size: 18px; }
+  .logo-dot { width: 10px; height: 10px; border-radius: 50%; background: var(--green); box-shadow: 0 0 8px var(--green); animation: pulse 2s infinite; }
+  @keyframes pulse { 0%,100% { opacity:1; transform:scale(1); } 50% { opacity:.6; transform:scale(.85); } }
+  .status-bar { display: flex; align-items: center; gap: 16px; font-size: 13px; color: var(--text-muted); }
+  .status-indicator { display: flex; align-items: center; gap: 6px; }
+  .dot-live { width: 7px; height: 7px; border-radius: 50%; background: var(--green); animation: pulse 1.5s infinite; }
+  .dot-offline { width: 7px; height: 7px; border-radius: 50%; background: var(--text-muted); }
+  #last-update { font-size: 12px; }
+
+  /* Layout */
+  main { padding: 24px 28px; max-width: 1400px; margin: 0 auto; }
+
+  /* Stats row */
+  .stats-grid { display: grid; grid-template-columns: repeat(6, 1fr); gap: 14px; margin-bottom: 24px; }
+  @media (max-width: 1100px) { .stats-grid { grid-template-columns: repeat(3, 1fr); } }
+  @media (max-width: 600px)  { .stats-grid { grid-template-columns: repeat(2, 1fr); } }
+
+  .stat-card {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 12px; padding: 18px 16px; text-align: center;
+    transition: border-color .2s;
+  }
+  .stat-card:hover { border-color: #3a4050; }
+  .stat-value { font-size: 32px; font-weight: 700; line-height: 1; }
+  .stat-label { font-size: 12px; color: var(--text-muted); margin-top: 6px; text-transform: uppercase; letter-spacing: .05em; }
+  .stat-card.called  .stat-value { color: var(--blue); }
+  .stat-card.answered .stat-value { color: var(--green); }
+  .stat-card.voicemail .stat-value { color: var(--yellow); }
+  .stat-card.no-answer .stat-value { color: var(--orange); }
+  .stat-card.busy .stat-value { color: var(--red); }
+  .stat-card.rate .stat-value { color: var(--purple); }
+
+  /* Two-column layout */
+  .content-grid { display: grid; grid-template-columns: 380px 1fr; gap: 20px; }
+  @media (max-width: 900px) { .content-grid { grid-template-columns: 1fr; } }
+
+  /* Current call card */
+  .current-call-card {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 14px; padding: 24px; height: fit-content;
+    transition: border-color .3s, box-shadow .3s;
+  }
+  .current-call-card.active-call { border-color: var(--green); box-shadow: 0 0 20px rgba(34,197,94,.1); }
+  .current-call-card.live-answer { border-color: var(--purple); box-shadow: 0 0 24px rgba(168,85,247,.15); animation: live-glow 1.5s ease-in-out infinite alternate; }
+  @keyframes live-glow { from { box-shadow: 0 0 16px rgba(168,85,247,.15); } to { box-shadow: 0 0 32px rgba(168,85,247,.3); } }
+  .current-call-card.voicemail-call { border-color: var(--yellow); box-shadow: 0 0 16px rgba(245,158,11,.1); }
+  .current-call-card.idle-card { border-color: var(--border); }
+
+  .card-section-title { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .08em; color: var(--text-muted); margin-bottom: 16px; }
+
+  .call-avatar {
+    width: 64px; height: 64px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 26px; font-weight: 700; margin: 0 auto 16px; background: var(--surface2);
+    transition: background .3s;
+  }
+  .call-avatar.dialing   { background: var(--blue-dim); color: var(--blue); }
+  .call-avatar.ringing   { background: var(--yellow-dim); color: var(--yellow); animation: ring-shake .5s ease-in-out infinite; }
+  @keyframes ring-shake { 0%,100%{transform:rotate(0)} 20%{transform:rotate(-12deg)} 40%{transform:rotate(12deg)} 60%{transform:rotate(-8deg)} 80%{transform:rotate(8deg)} }
+  .call-avatar.answered  { background: var(--blue-dim); color: var(--blue); }
+  .call-avatar.live      { background: var(--purple-dim); color: var(--purple); }
+  .call-avatar.voicemail { background: var(--yellow-dim); color: var(--yellow); }
+  .call-avatar.idle      { background: var(--surface2); color: var(--text-muted); }
+
+  .call-name { text-align: center; font-size: 20px; font-weight: 700; margin-bottom: 4px; }
+  .call-phone { text-align: center; font-size: 14px; color: var(--text-muted); margin-bottom: 20px; font-family: monospace; letter-spacing: .05em; }
+
+  .status-badge {
+    display: inline-flex; align-items: center; gap: 7px;
+    padding: 7px 14px; border-radius: 999px; font-size: 13px; font-weight: 600;
+    margin: 0 auto; display: flex; justify-content: center; width: fit-content;
+    margin: 0 auto 20px;
+  }
+  .status-badge.dialing  { background: var(--blue-dim);   color: var(--blue);   }
+  .status-badge.ringing  { background: var(--yellow-dim); color: var(--yellow); }
+  .status-badge.answered { background: var(--blue-dim);   color: var(--blue);   }
+  .status-badge.live     { background: var(--purple-dim); color: var(--purple); }
+  .status-badge.voicemail{ background: var(--yellow-dim); color: var(--yellow); }
+  .status-badge.idle     { background: var(--surface2);   color: var(--text-muted); }
+  .status-dot { width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
+  .status-dot.animated   { animation: pulse 1s infinite; }
+
+  .call-timer { text-align: center; font-size: 28px; font-weight: 700; font-family: monospace; color: var(--text-muted); letter-spacing: .05em; }
+  .call-timer.active { color: var(--text); }
+
+  .idle-msg { text-align: center; color: var(--text-muted); font-size: 14px; padding: 20px 0; }
+  .idle-msg span { display: block; font-size: 36px; margin-bottom: 8px; }
+
+  /* Session log */
+  .log-card {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 14px; padding: 24px;
+  }
+  .log-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; }
+  .log-count { font-size: 12px; color: var(--text-muted); background: var(--surface2); padding: 3px 10px; border-radius: 99px; }
+
+  .log-table { width: 100%; border-collapse: collapse; }
+  .log-table th { font-size: 11px; text-transform: uppercase; letter-spacing: .07em; color: var(--text-muted); font-weight: 600; padding: 0 12px 10px; text-align: left; border-bottom: 1px solid var(--border); }
+  .log-table td { padding: 11px 12px; border-bottom: 1px solid rgba(42,47,61,.5); font-size: 14px; }
+  .log-table tr:last-child td { border-bottom: none; }
+  .log-table tr { transition: background .15s; }
+  .log-table tr:hover td { background: var(--surface2); }
+  .log-table tr.new-row td { animation: highlight-new .8s ease-out; }
+  @keyframes highlight-new { from { background: rgba(59,130,246,.15); } to { background: transparent; } }
+
+  .outcome-pill {
+    display: inline-flex; align-items: center; gap: 5px;
+    padding: 3px 10px; border-radius: 99px; font-size: 12px; font-weight: 600;
+  }
+  .outcome-pill.answered  { background: var(--green-dim);  color: var(--green);  }
+  .outcome-pill.voicemail { background: var(--yellow-dim); color: var(--yellow); }
+  .outcome-pill.no_answer { background: var(--orange-dim); color: var(--orange); }
+  .outcome-pill.busy      { background: var(--red-dim);    color: var(--red);    }
+  .outcome-pill.failed    { background: var(--red-dim);    color: var(--red);    }
+  .outcome-pill.hangup    { background: var(--surface2);   color: var(--text-muted); }
+  .outcome-pill.human     { background: var(--green-dim);  color: var(--green);  }
+  .outcome-pill.human_residence { background: var(--green-dim); color: var(--green); }
+  .outcome-pill.human_business  { background: var(--green-dim); color: var(--green); }
+
+  .amd-tag { font-size: 11px; color: var(--text-muted); font-family: monospace; }
+
+  .time-cell { font-size: 12px; color: var(--text-muted); font-family: monospace; white-space: nowrap; }
+
+  .empty-log { text-align: center; padding: 40px 0; color: var(--text-muted); font-size: 14px; }
+  .empty-log span { display: block; font-size: 32px; margin-bottom: 8px; }
+
+  /* Error banner */
+  .error-banner { display: none; background: var(--red-dim); border: 1px solid var(--red); color: var(--red); padding: 10px 16px; border-radius: 8px; font-size: 13px; margin-bottom: 16px; }
+  .error-banner.visible { display: block; }
+
+  /* Scrollbar */
+  ::-webkit-scrollbar { width: 6px; }
+  ::-webkit-scrollbar-track { background: var(--bg); }
+  ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">
+    <div class="logo-dot"></div>
+    Power Dialer — Live Monitor
+  </div>
+  <div class="status-bar">
+    <div class="status-indicator" id="conn-indicator">
+      <div class="dot-offline" id="conn-dot"></div>
+      <span id="conn-label">Connecting...</span>
+    </div>
+    <span id="last-update"></span>
+  </div>
+</header>
+
+<main>
+  <div class="error-banner" id="error-banner">Unable to reach n8n. Retrying...</div>
+
+  <!-- Stats -->
+  <div class="stats-grid">
+    <div class="stat-card called">
+      <div class="stat-value" id="stat-total">0</div>
+      <div class="stat-label">Total Called</div>
+    </div>
+    <div class="stat-card answered">
+      <div class="stat-value" id="stat-answered">0</div>
+      <div class="stat-label">Answered</div>
+    </div>
+    <div class="stat-card voicemail">
+      <div class="stat-value" id="stat-voicemail">0</div>
+      <div class="stat-label">Voicemail</div>
+    </div>
+    <div class="stat-card no-answer">
+      <div class="stat-value" id="stat-no-answer">0</div>
+      <div class="stat-label">No Answer</div>
+    </div>
+    <div class="stat-card busy">
+      <div class="stat-value" id="stat-busy">0</div>
+      <div class="stat-label">Busy</div>
+    </div>
+    <div class="stat-card rate">
+      <div class="stat-value" id="stat-rate">0%</div>
+      <div class="stat-label">Answer Rate</div>
+    </div>
+  </div>
+
+  <div class="content-grid">
+    <!-- Current Call -->
+    <div class="current-call-card idle-card" id="call-card">
+      <div class="card-section-title">Current Call</div>
+      <div id="call-content">
+        <div class="idle-msg">
+          <span>📵</span>
+          No active call
+        </div>
+      </div>
+    </div>
+
+    <!-- Session Log -->
+    <div class="log-card">
+      <div class="log-header">
+        <div class="card-section-title" style="margin-bottom:0">Session Log</div>
+        <div class="log-count" id="log-count">0 calls</div>
+      </div>
+      <div id="log-container">
+        <div class="empty-log" id="empty-log">
+          <span>📋</span>
+          No calls yet this session
+        </div>
+        <table class="log-table" id="log-table" style="display:none">
+          <thead>
+            <tr>
+              <th>Name</th>
+              <th>Phone</th>
+              <th>Outcome</th>
+              <th>AMD</th>
+              <th>Time</th>
+            </tr>
+          </thead>
+          <tbody id="log-body"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</main>
+
+<script>
+const STATUS_URL = 'https://n8n.prasidha.me/webhook/dialer-status';
+const POLL_MS    = 2000;
+
+let timerInterval = null;
+let callStartAt   = null;
+let prevLogLength = 0;
+let prevCallPhone = null;
+let isOnline      = false;
+
+// ── Helpers ──────────────────────────────────────────────────────────────────
+function fmt(n) { return String(n ?? 0); }
+
+function elapsed(isoStr) {
+  if (!isoStr) return '0:00';
+  const secs = Math.floor((Date.now() - new Date(isoStr).getTime()) / 1000);
+  const m = Math.floor(secs / 60);
+  const s = secs % 60;
+  return `${m}:${s.toString().padStart(2, '0')}`;
+}
+
+function timeAgo(isoStr) {
+  if (!isoStr) return '';
+  const d = new Date(isoStr);
+  return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+}
+
+function outcomeClass(outcome) {
+  const o = (outcome || '').toLowerCase();
+  if (['human','human_residence','human_business','answered_without_amd'].includes(o)) return 'answered';
+  return o || 'hangup';
+}
+
+function outcomeIcon(outcome) {
+  const o = outcomeClass(outcome);
+  const icons = { answered:'✅', voicemail:'📬', no_answer:'📵', busy:'🔴', failed:'❌', hangup:'📴' };
+  return icons[o] || '📞';
+}
+
+function getInitials(name) {
+  if (!name) return '?';
+  return name.split(' ').map(w => w[0]).join('').slice(0,2).toUpperCase();
+}
+
+// ── Status badge config ───────────────────────────────────────────────────────
+const statusConfig = {
+  dialing:      { cls:'dialing',   icon:'📲', label:'Dialing...',                animated:true  },
+  ringing:      { cls:'ringing',   icon:'🔔', label:'Ringing...',                animated:true  },
+  answered_amd: { cls:'answered',  icon:'🎙', label:'Answered — AMD Screening...',animated:true  },
+  live_answer:  { cls:'live',      icon:'🟢', label:'You Are Live!',             animated:true  },
+  voicemail:    { cls:'voicemail', icon:'📬', label:'Voicemail Detected',         animated:false },
+};
+
+// ── Render current call ───────────────────────────────────────────────────────
+function renderCurrentCall(call) {
+  const card = document.getElementById('call-card');
+  const content = document.getElementById('call-content');
+
+  if (!call) {
+    card.className = 'current-call-card idle-card';
+    content.innerHTML = '<div class="idle-msg"><span>📵</span>No active call</div>';
+    clearInterval(timerInterval); timerInterval = null; callStartAt = null;
+    return;
+  }
+
+  const cfg = statusConfig[call.status] || { cls:'dialing', icon:'📞', label: call.status_label || call.status, animated: false };
+
+  // set card border
+  if (call.status === 'live_answer') card.className = 'current-call-card live-answer';
+  else if (['ringing','answered_amd'].includes(call.status)) card.className = 'current-call-card active-call';
+  else if (call.status === 'voicemail') card.className = 'current-call-card voicemail-call';
+  else card.className = 'current-call-card active-call';
+
+  // start/keep timer
+  if (call.started_at && call.started_at !== callStartAt) {
+    callStartAt = call.started_at;
+    clearInterval(timerInterval);
+    timerInterval = setInterval(() => {
+      const el = document.getElementById('call-timer');
+      if (el) el.textContent = elapsed(callStartAt);
+    }, 500);
+  }
+
+  content.innerHTML = `
+    <div class="call-avatar ${cfg.cls}">${getInitials(call.name)}</div>
+    <div class="call-name">${escHtml(call.name || 'Unknown')}</div>
+    <div class="call-phone">${escHtml(call.phone || '')}</div>
+    <div class="status-badge ${cfg.cls}">
+      <div class="status-dot ${cfg.animated ? 'animated' : ''}"></div>
+      ${escHtml(call.status_label || cfg.label)}
+    </div>
+    <div class="call-timer active" id="call-timer">${elapsed(call.started_at)}</div>
+  `;
+}
+
+// ── Render session log ────────────────────────────────────────────────────────
+function renderLog(log) {
+  const tbody   = document.getElementById('log-body');
+  const table   = document.getElementById('log-table');
+  const empty   = document.getElementById('empty-log');
+  const counter = document.getElementById('log-count');
+
+  counter.textContent = `${log.length} call${log.length !== 1 ? 's' : ''}`;
+
+  if (!log.length) {
+    table.style.display = 'none';
+    empty.style.display = 'block';
+    return;
+  }
+  table.style.display = 'table';
+  empty.style.display = 'none';
+
+  const isNewEntry = log.length > prevLogLength;
+  prevLogLength = log.length;
+
+  tbody.innerHTML = log.map((entry, i) => {
+    const oc = outcomeClass(entry.outcome);
+    const label = entry.outcome_label || entry.outcome || 'Unknown';
+    const isNew = isNewEntry && i === 0;
+    return `
+    <tr class="${isNew ? 'new-row' : ''}">
+      <td><strong>${escHtml(entry.name || '—')}</strong></td>
+      <td style="font-family:monospace;font-size:13px;color:#9ca3af">${escHtml(entry.phone || '—')}</td>
+      <td>
+        <span class="outcome-pill ${oc}">
+          ${outcomeIcon(entry.outcome)} ${escHtml(label)}
+        </span>
+      </td>
+      <td><span class="amd-tag">${escHtml(entry.amd_result || '—')}</span></td>
+      <td class="time-cell">${timeAgo(entry.at)}</td>
+    </tr>`;
+  }).join('');
+}
+
+// ── Render stats ──────────────────────────────────────────────────────────────
+function renderStats(stats) {
+  document.getElementById('stat-total').textContent    = fmt(stats.total_called);
+  document.getElementById('stat-answered').textContent = fmt(stats.answered);
+  document.getElementById('stat-voicemail').textContent= fmt(stats.voicemail);
+  document.getElementById('stat-no-answer').textContent= fmt(stats.no_answer);
+  document.getElementById('stat-busy').textContent     = fmt(stats.busy);
+  document.getElementById('stat-rate').textContent     = `${stats.answer_rate ?? 0}%`;
+}
+
+// ── Connection indicator ──────────────────────────────────────────────────────
+function setOnline(val) {
+  if (isOnline === val) return;
+  isOnline = val;
+  const dot   = document.getElementById('conn-dot');
+  const label = document.getElementById('conn-label');
+  const banner= document.getElementById('error-banner');
+  if (val) {
+    dot.className = 'dot-live';
+    label.textContent = 'Live';
+    banner.classList.remove('visible');
+  } else {
+    dot.className = 'dot-offline';
+    label.textContent = 'Offline';
+    banner.classList.add('visible');
+  }
+}
+
+function escHtml(str) {
+  return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+// ── Poll ──────────────────────────────────────────────────────────────────────
+async function poll() {
+  try {
+    const res = await fetch(STATUS_URL, { cache: 'no-store' });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = await res.json();
+    setOnline(true);
+
+    document.getElementById('last-update').textContent =
+      'Updated ' + new Date().toLocaleTimeString([], {hour:'2-digit', minute:'2-digit', second:'2-digit'});
+
+    renderStats(data.stats || {});
+    renderCurrentCall(data.current_call || null);
+    renderLog(data.session_log || []);
+  } catch (e) {
+    setOnline(false);
+    console.error('[dialer-dashboard] poll error:', e.message);
+  }
+}
+
+// Start
+poll();
+setInterval(poll, POLL_MS);
+</script>
+</body>
+</html>

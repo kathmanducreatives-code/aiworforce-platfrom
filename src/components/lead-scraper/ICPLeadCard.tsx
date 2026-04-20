@@ -1,5 +1,5 @@
 import { motion } from "framer-motion";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import {
     ExternalLink,
@@ -40,7 +40,6 @@ export const ICPLeadCard = ({ lead, onClick }: ICPLeadCardProps) => {
             <div className="p-4 space-y-4 relative z-10">
                 <div className="flex items-start gap-3">
                     <Avatar className="w-10 h-10 border border-border">
-                        <AvatarImage src={lead.linkedin_url ? `https://logo.clearbit.com/${new URL(lead.linkedin_url).hostname}` : undefined} />
                         <AvatarFallback className="bg-muted text-primary text-xs font-bold">
                             {lead.candidate_name.charAt(0)}
                         </AvatarFallback>

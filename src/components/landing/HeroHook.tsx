@@ -44,35 +44,35 @@ const POWERED_BY_TOOLS = [
   {
     id: "claude",
     name: "Claude",
-    logo: "https://logo.clearbit.com/anthropic.com",
+    logo: "/tool-logos/claude.svg",
     glow: "#CC785C",
     fallback: "C",
   },
   {
     id: "gpt4",
     name: "GPT-4",
-    logo: "https://logo.clearbit.com/openai.com",
+    logo: "/tool-logos/gpt4.svg",
     glow: "#10A37F",
     fallback: "G",
   },
   {
     id: "gemini",
     name: "Gemini",
-    logo: "https://logo.clearbit.com/deepmind.google",
+    logo: "/tool-logos/gemini.svg",
     glow: "#4285F4",
     fallback: "G",
   },
   {
     id: "banana",
     name: "Nano Banana",
-    logo: "https://logo.clearbit.com/nanobanana.ai",
+    logo: "/tool-logos/nanobanana.svg",
     glow: "#FFAA00",
     fallback: "B",
   },
   {
     id: "elevenlabs",
     name: "11Labs",
-    logo: "https://logo.clearbit.com/elevenlabs.io",
+    logo: "/tool-logos/elevenlabs.svg",
     glow: "#9333EA",
     fallback: "1",
   },
@@ -464,7 +464,8 @@ const HeroHook = () => {
       </div>
 
       <div className="relative z-10 mx-auto flex w-full max-w-6xl flex-col items-center text-center">
-        <div className="hero-system-pill mb-5 font-mono text-[10px] uppercase tracking-[0.42em] text-white/46 md:text-[11px]">
+        <div className="hero-system-pill mb-5 inline-flex items-center gap-2 rounded-full border border-teal-400/30 bg-teal-500/10 px-4 py-1.5 font-mono text-[10px] uppercase tracking-[0.42em] text-teal-300 backdrop-blur-sm md:text-[11px]">
+          <span className="h-1.5 w-1.5 rounded-full bg-teal-400 shadow-[0_0_6px_rgba(45,212,191,0.6)]" />
           THE AI WORKFORCE PLATFORM
         </div>
 
@@ -475,9 +476,9 @@ const HeroHook = () => {
 
         <div className="hero-green-line relative mb-5 mt-3 w-full">
           <div className="hero-primary-line-halo absolute inset-x-[18%] inset-y-0 rounded-full" />
-          <span className="hero-primary-glow relative z-10 inline-block px-4 py-2 text-[clamp(3.05rem,8.2vw,8.2rem)] font-black leading-[0.9] tracking-[-0.05em]">
+          <h2 className="hero-primary-glow relative z-10 inline-block px-4 py-2 text-[clamp(3.05rem,8.2vw,8.2rem)] font-black leading-[0.9] tracking-[-0.05em]">
             Now you don&apos;t have to.
-          </span>
+          </h2>
         </div>
 
         <p className="hero-subheadline mx-auto mb-6 max-w-[480px] px-4 text-center text-[18px] font-medium leading-[1.6] text-white/60">
