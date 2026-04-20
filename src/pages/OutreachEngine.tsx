@@ -8,7 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
 import {
     Zap, Search, Target, Users, Mail, Settings, Activity,
-    MessageSquare, CheckCircle, BarChart3, AlertTriangle, ShieldCheck
+    MessageSquare, CheckCircle, BarChart3, AlertTriangle, ShieldCheck, Phone
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { PowerDialerTab } from '@/components/growth/PowerDialerTab';
