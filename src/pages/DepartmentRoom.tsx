@@ -1,11 +1,11 @@
 import { useEffect, useMemo, useState } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams } from 'react-router-dom';
 import { useWorkspace } from '@/contexts/WorkspaceContext';
 import { useAgents } from '@/hooks/useAgents';
 import { useAllPlans } from '@/hooks/usePlans';
 import { useActivityFeed } from '@/hooks/useActivityFeed';
 import {
-  submitInstruction, fetchTasksForPlan, type DBPlan, type DBTask,
+  submitInstruction, fetchTasksForPlan, type DBPlan,
 } from '@/lib/orchestration';
 import { AGENT_BY_NAME, deptRing, deptDot, type AgentDept } from '@/data/agentProfiles';
 import ChatComposer, { type ComposerSubmit } from '@/components/chat/ChatComposer';
