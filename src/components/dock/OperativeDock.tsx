@@ -1,7 +1,10 @@
-import { useRef, useState, useEffect } from 'react';
+import { useRef, useState, useEffect, useMemo } from 'react';
 import { motion, useMotionValue, useTransform, useSpring, AnimatePresence } from 'framer-motion';
 import { Plus } from 'lucide-react';
 import { DOCK_AGENTS, DockAgent, deptColor } from '@/data/dockAgents';
+import { AGENT_BY_ID } from '@/data/agentProfiles';
+import { useAgents } from '@/hooks/useAgents';
+import { useWorkspace } from '@/contexts/WorkspaceContext';
 import AgentHoverCard from './AgentHoverCard';
 import AgentDrawer from './AgentDrawer';
 import AgentAvatar from '@/components/agents/AgentAvatar';
