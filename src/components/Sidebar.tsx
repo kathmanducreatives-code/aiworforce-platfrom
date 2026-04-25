@@ -1,8 +1,6 @@
 import { useState } from 'react';
 import { NavLink, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
-import { useAuth } from "@/hooks/useAuth";
-import { useTheme } from "@/contexts/ThemeContext";
 import {
   LayoutDashboard, Target, TrendingUp, Palette, Brain,
   Search, Users, SearchCheck, Mail, HelpCircle, LogOut,
