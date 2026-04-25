@@ -4,7 +4,7 @@
 import { supabase } from '@/integrations/supabase/client';
 import type { RealtimeChannel } from '@supabase/supabase-js';
 
-export type AgentDept = 'talent' | 'growth' | 'intelligence' | 'content';
+export type AgentDept = 'talent' | 'growth' | 'intelligence' | 'content' | 'operations';
 export type AgentStatus = 'idle' | 'running' | 'awaiting_approval' | 'error';
 
 export interface DBAgent {
