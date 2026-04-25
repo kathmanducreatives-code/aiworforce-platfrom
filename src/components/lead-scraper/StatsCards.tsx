@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Users, Clock, TrendingUp } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
+import { useDebouncedCallback } from "@/hooks/useDebouncedCallback";
 
 interface StatCardProps {
   icon: React.ReactNode;
@@ -53,57 +54,64 @@ export const StatsCards = () => {
   const [recentScrapes, setRecentScrapes] = useState(0);
   const [successRate, setSuccessRate] = useState(0);
 
+  const fetchStats = async () => {
+    // Estimated count: uses Postgres pg_class stats (sub-millisecond, no scan).
+    const { count: leadsCount } = await supabase
+      .from("linkedin_leads")
+      .select("*", { count: "estimated", head: true });
+
+    const sevenDaysAgo = new Date();
+    sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+
+    const { count: sessionsCount } = await supabase
+      .from("scraping_sessions")
+      .select("*", { count: "estimated", head: true })
+      .gte("created_at", sevenDaysAgo.toISOString());
+
+    // Success rate: two head-only count queries instead of full table scan.
+    const [{ count: completedCount }, { count: totalCount }] = await Promise.all([
+      supabase
+        .from("scraping_sessions")
+        .select("*", { count: "estimated", head: true })
+        .eq("status", "completed"),
+      supabase
+        .from("scraping_sessions")
+        .select("*", { count: "estimated", head: true }),
+    ]);
+
+    const rate = totalCount && totalCount > 0
+      ? Math.round(((completedCount || 0) / totalCount) * 100)
+      : 0;
+
+    setTotalLeads(leadsCount || 0);
+    setRecentScrapes(sessionsCount || 0);
+    setSuccessRate(rate);
+  };
+
+  const debouncedFetch = useDebouncedCallback(fetchStats, 500);
+
   useEffect(() => {
-    const fetchStats = async () => {
-      // Fetch total leads
-      const { count: leadsCount } = await supabase
-        .from("linkedin_leads")
-        .select("*", { count: "exact", head: true });
-      
-      // Fetch recent scrapes (last 7 days)
-      const sevenDaysAgo = new Date();
-      sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
-      
-      const { count: sessionsCount } = await supabase
-        .from("scraping_sessions")
-        .select("*", { count: "exact", head: true })
-        .gte("created_at", sevenDaysAgo.toISOString());
-      
-      // Fetch success rate
-      const { data: sessions } = await supabase
-        .from("scraping_sessions")
-        .select("status");
-      
-      const completed = sessions?.filter(s => s.status === "completed").length || 0;
-      const total = sessions?.length || 1;
-      const rate = Math.round((completed / total) * 100);
-
-      setTotalLeads(leadsCount || 0);
-      setRecentScrapes(sessionsCount || 0);
-      setSuccessRate(rate);
-    };
-
     fetchStats();
 
-    // Set up realtime subscription for updates
+    // Realtime: refetch only on INSERT (debounced) — coalesces burst writes.
     const channel = supabase
       .channel("stats-updates")
       .on(
         "postgres_changes",
-        { event: "*", schema: "public", table: "linkedin_leads" },
-        () => fetchStats()
+        { event: "INSERT", schema: "public", table: "linkedin_leads" },
+        () => debouncedFetch(),
       )
       .on(
         "postgres_changes",
-        { event: "*", schema: "public", table: "scraping_sessions" },
-        () => fetchStats()
+        { event: "INSERT", schema: "public", table: "scraping_sessions" },
+        () => debouncedFetch(),
       )
       .subscribe();
 
     return () => {
       supabase.removeChannel(channel);
     };
-  }, []);
+  }, [debouncedFetch]);
 
   return (
     <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 lg:gap-4">

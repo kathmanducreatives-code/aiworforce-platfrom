@@ -59,7 +59,7 @@ const ClientMetrics = () => {
           // Get active positions count
           const { count: activeCount, error: activeError } = await supabase
             .from('client_active_positions')
-            .select('*', { count: 'exact', head: true })
+            .select('*', { count: 'estimated', head: true })
             .eq('client_id', client.id)
             .eq('status', 'open');
 

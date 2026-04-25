@@ -59,6 +59,8 @@ const DataDashboard = () => {
       const oneWeekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
       const oneMonthAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
 
+      // Tightened reads: only required columns, monthly bound where possible, hard cap of 5000 rows.
+      const monthIso = oneMonthAgo.toISOString();
       const [
         { data: candidates },
         { data: placements },
@@ -66,11 +68,11 @@ const DataDashboard = () => {
         { data: linkedinLeads },
         { data: deepSearchResults }
       ] = await Promise.all([
-        supabase.from('resume_analyses').select('*'),
-        supabase.from('client_placements').select('*'),
-        supabase.from('scheduled_emails').select('*'),
-        supabase.from('linkedin_leads').select('*'),
-        supabase.from('deep_search_results').select('*')
+        supabase.from('resume_analyses').select('id, created_at, fit_score, overall_factor').limit(5000),
+        supabase.from('client_placements').select('id, placement_date').gte('placement_date', monthIso).limit(5000),
+        supabase.from('scheduled_emails').select('id, created_at').gte('created_at', monthIso).limit(5000),
+        supabase.from('linkedin_leads').select('id, created_at').gte('created_at', monthIso).limit(5000),
+        supabase.from('deep_search_results').select('id, fit_score, created_at').gte('created_at', monthIso).limit(5000)
       ]);
 
       const totalCandidates = candidates?.length || 0;
