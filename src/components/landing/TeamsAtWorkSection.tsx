@@ -2,13 +2,13 @@ import { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Check, Loader, ArrowRight } from "lucide-react";
 import { useNavigate } from "react-router-dom";
-import { ToolLogoImage } from "./ToolLogos";
+import { ClaudeLogo, FirecrawlLogo, InstantlyLogo, ApifyLogo, GeminiLogo, ReplicateLogo, ElevenLabsLogo, PerplexityLogo, NotionLogo, LinearLogo, GitHubLogo } from "./ToolLogos";
 
 interface DeptCard {
   emoji: string;
   name: string;
   room: string;
-  tools: { id: string; name: string }[];
+  tools: { Logo: React.FC<{ width?: number; height?: number }>; name: string }[];
   activities: { done: boolean; text: string }[];
   comingSoon?: boolean;
 }
@@ -17,8 +17,8 @@ const DEPARTMENTS: DeptCard[] = [
   {
     emoji: "🎯", name: "Talent Department", room: "talent",
     tools: [
-      { id: "claude", name: "Claude" }, { id: "gemini", name: "Gemini" },
-      { id: "apify", name: "Apify" }, { id: "firecrawl", name: "Firecrawl" },
+      { Logo: ClaudeLogo, name: "Claude" }, { Logo: GeminiLogo, name: "Gemini" },
+      { Logo: ApifyLogo, name: "Apify" }, { Logo: FirecrawlLogo, name: "Firecrawl" },
     ],
     activities: [
       { done: true, text: "Scout found 34 candidates matching ICP" },
@@ -32,8 +32,8 @@ const DEPARTMENTS: DeptCard[] = [
   {
     emoji: "📣", name: "Growth Department", room: "growth",
     tools: [
-      { id: "claude", name: "Claude" }, { id: "firecrawl", name: "Firecrawl" },
-      { id: "instantly", name: "Instantly" }, { id: "apify", name: "Apify" },
+      { Logo: ClaudeLogo, name: "Claude" }, { Logo: FirecrawlLogo, name: "Firecrawl" },
+      { Logo: InstantlyLogo, name: "Instantly" }, { Logo: ApifyLogo, name: "Apify" },
     ],
     activities: [
       { done: true, text: "Radar found Acme Corp — Series A trigger" },
@@ -47,8 +47,8 @@ const DEPARTMENTS: DeptCard[] = [
   {
     emoji: "🎨", name: "Content Department", room: "content",
     tools: [
-      { id: "claude", name: "Claude" }, { id: "replicate", name: "Replicate" },
-      { id: "elevenlabs", name: "ElevenLabs" },
+      { Logo: ClaudeLogo, name: "Claude" }, { Logo: ReplicateLogo, name: "Replicate" },
+      { Logo: ElevenLabsLogo, name: "ElevenLabs" },
     ],
     activities: [
       { done: true, text: "Quill wrote LinkedIn post in your brand voice" },
@@ -62,8 +62,8 @@ const DEPARTMENTS: DeptCard[] = [
   {
     emoji: "🔍", name: "Intelligence Department", room: "intelligence",
     tools: [
-      { id: "firecrawl", name: "Firecrawl" }, { id: "perplexity", name: "Perplexity" },
-      { id: "claude", name: "Claude" }, { id: "notion", name: "Notion" },
+      { Logo: FirecrawlLogo, name: "Firecrawl" }, { Logo: PerplexityLogo, name: "Perplexity" },
+      { Logo: ClaudeLogo, name: "Claude" }, { Logo: NotionLogo, name: "Notion" },
     ],
     activities: [
       { done: true, text: "Hawk detected competitor pricing change" },
@@ -77,8 +77,8 @@ const DEPARTMENTS: DeptCard[] = [
   {
     emoji: "⚙️", name: "Engineering Department", room: "engineering", comingSoon: true,
     tools: [
-      { id: "claude", name: "Claude" }, { id: "github", name: "GitHub" },
-      { id: "linear", name: "Linear" },
+      { Logo: ClaudeLogo, name: "Claude" }, { Logo: GitHubLogo, name: "GitHub" },
+      { Logo: LinearLogo, name: "Linear" },
     ],
     activities: [
       { done: false, text: "Code generation from plain English" },
@@ -134,61 +134,52 @@ const TeamsAtWorkSection = () => {
   }, []);
 
   return (
-    <section ref={sectionRef} className="relative z-10 py-16 md:py-24 bg-black overflow-hidden">
+    <section ref={sectionRef} className="relative z-10 py-24 md:py-32">
       <div className="max-w-[1100px] mx-auto px-6">
-        <div className="text-center mb-20">
-          <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full border border-accent-mint/40 bg-accent-mint/5 mb-8">
-            <span className="font-mono text-[10px] uppercase tracking-[0.2em] text-accent-mint font-bold">CROSS-DEPARTMENT INTELLIGENCE</span>
-          </div>
-          <h2 className="font-display font-bold text-4xl md:text-6xl text-white leading-[1.0] mb-8 tracking-tight">
-            Five teams, one brain.
+        <div className="text-center mb-16">
+          <span className="font-mono text-xs uppercase tracking-[0.15em] text-emerald-400 mb-4 block">YOUR DEPARTMENTS, LIVE</span>
+          <h2 className="font-display font-black text-3xl md:text-5xl text-white leading-[1.1] mb-6">
+            Five teams running simultaneously.<br />All sharing intelligence.<br />All working in your voice.
           </h2>
-          <p className="text-white/40 text-lg max-w-[600px] mx-auto leading-relaxed font-medium">
-            While you focus on what matters, your AI workforce handles recruiting, growth, content, research, and strategy — simultaneously.
+          <p className="text-white/40 text-lg max-w-[600px] mx-auto leading-relaxed">
+            While you focus on what matters, your AI workforce handles recruiting, growth, content, research, and strategy — simultaneously, automatically.
           </p>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
           {DEPARTMENTS.map((dept, di) => (
             <motion.div key={dept.room} initial={{ opacity: 0, y: 24 }} animate={inView ? { opacity: 1, y: 0 } : {}}
-              transition={{ duration: 0.6, delay: di * 0.1, ease: [0.23, 1, 0.32, 1] }}
-              className={`glass-card-premium rounded-3xl p-8 group hover:-translate-y-2 transition-all duration-500 ${dept.comingSoon ? "opacity-40" : ""} ${di === 4 ? "md:col-span-2 md:max-w-[540px] md:mx-auto" : ""}`}>
-              <div className="flex items-center justify-between mb-8">
-                <div className="flex items-center gap-4">
-                  <span className="text-2xl grayscale group-hover:grayscale-0 transition-all">{dept.emoji}</span>
-                  <span className="font-display font-black text-sm text-white uppercase tracking-widest">{dept.name}</span>
+              transition={{ duration: 0.5, delay: di * 0.1 }}
+              className={`rounded-2xl border border-white/[0.06] bg-white/[0.02] p-5 ${dept.comingSoon ? "opacity-60" : ""} ${di === 4 ? "md:col-span-2 md:max-w-[540px] md:mx-auto" : ""}`}>
+              <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center gap-2">
+                  <span className="text-lg">{dept.emoji}</span>
+                  <span className="font-display font-bold text-sm text-white">{dept.name}</span>
                 </div>
                 {dept.comingSoon ? (
-                  <span className="text-[9px] px-2 py-1 rounded-md bg-white/5 text-white/20 font-black uppercase tracking-widest border border-white/5">COMING SOON</span>
+                  <span className="text-[10px] px-2 py-0.5 rounded-full bg-white/[0.06] text-white/30 font-medium">COMING SOON</span>
                 ) : (
-                  <div className="flex items-center gap-1.5 px-2 py-1 rounded-md bg-accent-mint/5 border border-accent-mint/20">
-                    <div className="w-1.5 h-1.5 rounded-full bg-accent-mint animate-pulse" />
-                    <span className="text-[9px] text-accent-mint font-black tracking-widest uppercase">ACTIVE</span>
-                  </div>
+                  <span className="flex items-center gap-1.5 text-[10px] text-emerald-400 font-medium">
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />ACTIVE
+                  </span>
                 )}
               </div>
-              
-              <div className="flex items-center gap-3 mb-8">
-                <span className="text-[9px] font-black text-white/10 uppercase tracking-[0.2em] mr-1">STACK</span>
-                <div className="flex gap-2">
-                  {dept.tools.slice(0, 3).map(t => (
-                    <div key={t.name} className="w-7 h-7 rounded-lg bg-white/5 border border-white/10 flex items-center justify-center p-1.5 grayscale group-hover:grayscale-0 transition-all">
-                      <ToolLogoImage toolId={t.id} size={16} />
-                    </div>
-                  ))}
-                  {dept.tools.length > 3 && <span className="text-[9px] font-black text-white/20 ml-1 mt-2 tracking-tighter">+{dept.tools.length - 3}</span>}
-                </div>
+              <div className="flex items-center gap-2 mb-4">
+                <span className="text-[10px] text-white/20 uppercase tracking-wider mr-1">Tools:</span>
+                {dept.tools.slice(0, 3).map(t => (
+                  <div key={t.name} className="w-6 h-6 rounded-full bg-white/[0.04] border border-white/[0.06] flex items-center justify-center" title={t.name}>
+                    <t.Logo width={16} height={16} />
+                  </div>
+                ))}
+                {dept.tools.length > 3 && <span className="text-[10px] text-white/30 ml-1">+{dept.tools.length - 3} more</span>}
               </div>
-
-              <div className="pt-8 border-t border-white/5 mt-8">
-                <ActivityFeed activities={dept.activities} comingSoon={dept.comingSoon} />
-              </div>
-
-              <div className="mt-8 pt-8 border-t border-white/5">
+              <div className="h-px bg-white/[0.04] mb-3" />
+              <ActivityFeed activities={dept.activities} comingSoon={dept.comingSoon} />
+              <div className="mt-4">
                 {dept.comingSoon ? (
-                  <button onClick={() => navigate("/auth")} className="text-[10px] font-black uppercase tracking-[0.2em] text-white/20 hover:text-white transition-colors flex items-center gap-2">Join waitlist <ArrowRight className="w-3.5 h-3.5" /></button>
+                  <button onClick={() => navigate("/auth")} className="text-xs text-white/30 font-medium hover:text-white/50 transition-colors flex items-center gap-1">Join waitlist <ArrowRight className="w-3 h-3" /></button>
                 ) : (
-                  <button onClick={() => navigate(`/auth?room=${dept.room}`)} className="text-[10px] font-black uppercase tracking-[0.2em] text-accent-mint hover:text-white transition-colors flex items-center gap-2">Initialize Department <ArrowRight className="w-3.5 h-3.5" /></button>
+                  <button onClick={() => navigate(`/auth?room=${dept.room}`)} className="text-xs text-emerald-400/80 font-medium hover:text-emerald-400 transition-colors flex items-center gap-1">View Department <ArrowRight className="w-3 h-3" /></button>
                 )}
               </div>
             </motion.div>

@@ -47,18 +47,14 @@ const SocialProof = () => {
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                     {testimonials.map((t, i) => (
-                        <div key={i} className="test-card glass-card-premium rounded-3xl p-8 opacity-0 transition-all duration-500 hover:border-accent-mint/30 flex flex-col justify-between">
-                            <div>
-                               <div className="flex gap-1 mb-6">
-                                  {[1,2,3,4,5].map(s => <div key={s} className="w-1.5 h-1.5 rounded-full bg-accent-mint" />)}
-                               </div>
-                               <p className="text-white/60 text-base leading-relaxed mb-10 font-medium italic">"{t.quote}"</p>
-                            </div>
-                            <div className="flex items-center justify-between mt-auto pt-6 border-t border-white/5">
+                        <div key={i} className="test-card glass rounded-2xl p-6 opacity-0 border-l-2 border-l-emerald-500/30 hover:border-l-emerald-500/60 transition-all duration-300">
+                            <Quote className="w-5 h-5 text-emerald-500/30 mb-4" />
+                            <p className="text-sm text-white/50 leading-relaxed mb-5 italic">"{t.quote}"</p>
+                            <div className="flex items-center justify-between">
                                 <div>
-                                    <p className="text-xs font-black text-white uppercase tracking-widest">{t.name}</p>
+                                    <p className="text-sm font-semibold text-white/60">{t.name}</p>
                                 </div>
-                                <span className="text-[9px] font-black text-accent-mint bg-accent-mint/5 px-2 py-1 rounded border border-accent-mint/20 uppercase tracking-tighter">{t.metric}</span>
+                                <span className="text-[10px] font-mono font-bold text-emerald-400 bg-emerald-500/10 px-2 py-1 rounded border border-emerald-500/15">{t.metric}</span>
                             </div>
                         </div>
                     ))}

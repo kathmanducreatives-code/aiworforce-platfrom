@@ -8,8 +8,7 @@ import { ClientProvider } from "./contexts/ClientContext";
 import { ClientThemeProvider } from "./components/ClientThemeProvider";
 import { ThemeProvider } from "./contexts/ThemeContext";
 import Landing from "./pages/Landing";
-import CommandCenter from "./pages/CommandCenter";
-import TalentDepartment from "./pages/TalentDepartment";
+import Dashboard from "./pages/Dashboard";
 
 import Candidates from "./pages/Candidates";
 import Features from "./pages/Features";
@@ -50,7 +49,6 @@ import OutreachEngine from "./pages/OutreachEngine";
 import TalentIntelligence from "./pages/TalentIntelligence";
 import CompetitorIntelligence from "./pages/CompetitorIntelligence";
 import CandidateDossier from "./pages/candidates/CandidateDossier";
-import AwaitingYou from "./pages/AwaitingYou";
 // import VerifyQueue from "./pages/verify/VerifyQueue";
 // import VerifyResults from "./pages/verify/VerifyResults";
 // import InterviewDashboard from "./pages/interviews/InterviewDashboard";
@@ -89,23 +87,7 @@ const App = () => (
                     <Route path="/dashboard" element={
                       <ProtectedRoute>
                         <MainLayout>
-                          <CommandCenter />
-                        </MainLayout>
-                      </ProtectedRoute>
-                    } />
-
-                    <Route path="/awaiting-you" element={
-                      <ProtectedRoute>
-                        <MainLayout>
-                          <AwaitingYou />
-                        </MainLayout>
-                      </ProtectedRoute>
-                    } />
-
-                    <Route path="/departments/talent" element={
-                      <ProtectedRoute>
-                        <MainLayout>
-                          <TalentDepartment />
+                          <Dashboard />
                         </MainLayout>
                       </ProtectedRoute>
                     } />

@@ -44,67 +44,73 @@ const PricingCard = () => {
   }, []);
 
   return (
-    <section ref={sectionRef} id="pricing" className="relative px-6 py-16 md:py-24 bg-black overflow-hidden border-t border-white/5">
-      <div className="max-w-6xl mx-auto">
-        <div className="text-center mb-20">
-          <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full border border-accent-mint/40 bg-accent-mint/5 mb-8">
-            <span className="font-mono text-[10px] uppercase tracking-[0.2em] text-accent-mint font-bold">PREMIUM ACCESS</span>
-          </div>
-          <h2 className="font-display font-bold text-[clamp(2rem,4.5vw,3.5rem)] text-white leading-[1.0] mb-8 tracking-tight">
-            Less than one month of one employee.
-          </h2>
-          <p className="text-white/40 text-lg max-w-2xl mx-auto leading-relaxed font-medium">
-             For your entire AI workforce. Unlimited scalability. No overhead.
-          </p>
-        </div>
+    <section ref={sectionRef} id="pricing" className="relative px-4 py-28 md:py-36" style={{ borderBottom: "1px solid rgba(255,255,255,0.05)" }}>
+      <div className="text-center mb-10">
+        <p className="font-mono text-xs uppercase tracking-[0.15em] mb-4 text-emerald-400 font-semibold">◆ PRICING</p>
+        <h2 className="font-display font-black text-[clamp(1.5rem,3.5vw,3rem)] leading-[1.1] tracking-[-0.03em] text-white">
+          Less than one month of one human employee.<br />For your entire AI workforce.
+        </h2>
+      </div>
 
-        <div className="flex items-center justify-center gap-4 mb-16">
-          <span className={`text-[10px] font-black uppercase tracking-widest transition-colors ${!isAnnual ? 'text-white' : 'text-white/20'}`}>Monthly</span>
-          <button onClick={() => setIsAnnual(!isAnnual)} className={`relative w-14 h-7 rounded-full transition-all duration-300 ${isAnnual ? 'bg-accent-mint' : 'bg-white/10'}`}>
-            <div className={`absolute top-1 w-5 h-5 rounded-full bg-white transition-transform duration-300 ${isAnnual ? 'translate-x-8 shadow-[0_0_10px_rgba(255,255,255,1)]' : 'translate-x-1'}`} />
-          </button>
-          <span className={`text-[10px] font-black uppercase tracking-widest transition-colors ${isAnnual ? 'text-white' : 'text-white/20'}`}>Annual <span className="text-accent-mint text-[9px] ml-1">(-20%)</span></span>
-        </div>
+      <div className="flex items-center justify-center gap-3 mb-12">
+        <span className={`text-sm font-medium ${!isAnnual ? 'text-white' : 'text-white/40'}`}>Monthly</span>
+        <button onClick={() => setIsAnnual(!isAnnual)} className={`relative w-12 h-6 rounded-full transition-colors ${isAnnual ? 'bg-emerald-600' : 'bg-white/10'}`}>
+          <div className={`absolute top-1 w-4 h-4 rounded-full bg-white transition-transform ${isAnnual ? 'translate-x-7' : 'translate-x-1'}`} />
+        </button>
+        <span className={`text-sm font-medium ${isAnnual ? 'text-white' : 'text-white/40'}`}>Annual <span className="text-emerald-400 text-xs">2 months free</span></span>
+      </div>
 
-        <div ref={cardRef} className="grid grid-cols-1 md:grid-cols-3 gap-6">
+      <div ref={cardRef} className="max-w-5xl mx-auto opacity-0">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           {plans.map((plan) => (
-            <div key={plan.name} className={`glass-card-premium rounded-[2rem] p-10 relative transition-all duration-500 hover:-translate-y-2 ${plan.popular ? 'border-accent-mint/30 shadow-[0_50px_100px_rgba(0,255,148,0.05)]' : 'border-white/5'}`}>
+            <div key={plan.name} className="rounded-3xl p-6 md:p-8 relative"
+              style={{
+                background: "rgba(255,255,255,0.02)",
+                border: plan.popular ? "1px solid rgba(0,255,148,0.35)" : "1px solid rgba(255,255,255,0.06)",
+                boxShadow: plan.popular ? "0 0 40px rgba(0,255,148,0.08)" : "none",
+                transform: plan.popular ? "scale(1.02)" : "scale(1)",
+              }}>
               {plan.popular && (
-                <div className="absolute -top-4 left-1/2 -translate-x-1/2 px-4 py-1.5 bg-accent-mint rounded-full shadow-[0_10px_30px_rgba(0,255,148,0.3)]">
-                   <span className="text-[10px] font-black uppercase tracking-widest text-black mt-px">INITIALIZE STARTUP</span>
-                </div>
+                <span className="absolute -top-3.5 left-1/2 -translate-x-1/2 text-[10px] font-bold uppercase tracking-wider px-4 py-1.5 rounded-full"
+                  style={{ background: "#10b981", color: "#022c22" }}>
+                  ⭐ Most Popular
+                </span>
               )}
-              
-              <h3 className="font-display font-bold text-xl text-white mb-2">{plan.name}</h3>
-              <p className="text-xs text-white/30 mb-8 font-medium leading-relaxed">{plan.desc}</p>
-              
-              <div className="flex items-baseline gap-1 mb-8">
-                <span className="text-5xl font-black text-white tracking-tighter">€{isAnnual ? plan.annualPrice : plan.monthlyPrice}</span>
-                <span className="text-[10px] font-black text-white/20 uppercase tracking-widest">/mo</span>
-              </div>
+              <h3 className="font-display font-bold text-lg text-white mb-1">{plan.name}</h3>
+              <p className="text-xs text-white/40 mb-4">{plan.desc}</p>
+              <p className="tabular-nums mb-1">
+                <span className="font-mono font-black text-white" style={{ fontSize: 52 }}>
+                  €{isAnnual ? plan.annualPrice : plan.monthlyPrice}
+                </span>
+                <span className="text-sm text-white/30 font-normal">/mo</span>
+              </p>
+              {isAnnual && <p className="text-[10px] text-white/30 mb-6">billed annually</p>}
+              {!isAnnual && <div className="mb-6" />}
 
-              <div className="space-y-4 mb-12">
+              <div className="space-y-2.5 mb-6">
                 {plan.features.map((f, i) => (
-                  <div key={i} className="flex items-start gap-3">
-                    <Check className="w-3.5 h-3.5 text-accent-mint shrink-0 mt-0.5" />
-                    <span className="text-xs text-white/50 font-medium">{f}</span>
+                  <div key={i} className="flex items-start gap-2">
+                    <div className="w-4 h-4 rounded-full bg-emerald-500/15 flex items-center justify-center border border-emerald-500/20 shrink-0 mt-0.5">
+                      <Check className="w-2.5 h-2.5 text-emerald-400" />
+                    </div>
+                    <span className="text-xs text-white/50">{f}</span>
                   </div>
                 ))}
               </div>
 
-              <button 
-                onClick={() => navigate('/auth')} 
-                className={`w-full py-4 rounded-xl text-xs font-black uppercase tracking-[0.2em] transition-all duration-300 ${
-                  plan.popular 
-                    ? 'bg-accent-mint text-black shadow-[0_15px_40px_rgba(0,255,148,0.2)] hover:shadow-[0_20px_60px_rgba(0,255,148,0.4)]' 
-                    : 'bg-white/5 text-white/60 hover:bg-white/10'
-                }`}
-              >
-                {plan.cta}
+              <button onClick={() => navigate('/auth')} className={`w-full inline-flex items-center justify-center gap-2 font-semibold py-3 rounded-xl transition-all duration-300 text-sm ${
+                plan.popular
+                  ? 'bg-emerald-600 hover:bg-emerald-500 text-white hover:shadow-[0_8px_32px_rgba(5,150,105,0.4)]'
+                  : 'bg-white/[0.04] border border-white/[0.08] text-white/60 hover:text-white hover:bg-white/[0.08]'
+              }`}>
+                {plan.cta} <ArrowRight className="w-4 h-4" />
               </button>
             </div>
           ))}
         </div>
+        <p className="text-center text-xs text-white/20 mt-8">
+          14-day free trial · No credit card required · If your AI workforce does not save you 10 hours in the first month we refund everything. No questions.
+        </p>
       </div>
     </section>
   );

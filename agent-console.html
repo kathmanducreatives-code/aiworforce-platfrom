@@ -13,36 +13,45 @@
         href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&display=swap"
         rel="stylesheet">
     <style>
+        /* ── Reset ───────────────────────────────────────────────── */
+        *,
+        *::before,
+        *::after {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
         :root {
-            --font: 'Inter', -apple-system, system-ui, sans-serif;
-            --bg: #0d0f14;
-            --bg-panel: #161920;
-            --bg-hover: #1e2230;
-            --bg-active: #2a2f3d;
-            --border: #2a2f3d;
-            --text: #e8eaf0;
-            --text-secondary: #9ca3af;
-            --text-muted: #6b7280;
-            --accent: #3b82f6;
-            --accent-light: rgba(59,130,246,0.1);
-            --accent-dark: #2563eb;
-            --green: #22c55e;
-            --green-light: rgba(34,197,94,0.1);
-            --green-bg: rgba(34,197,94,0.1);
-            --red: #ef4444;
-            --red-light: rgba(239,68,68,0.1);
-            --red-bg: rgba(239,68,68,0.1);
-            --amber: #f59e0b;
-            --amber-bg: rgba(245,158,11,0.1);
+            --font: 'DM Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+            --bg: #ffffff;
+            --bg-panel: #f7f8fa;
+            --bg-hover: #f0f2f5;
+            --bg-active: #edf1fb;
+            --border: #e3e6ec;
+            --text: #111318;
+            --text-secondary: #555d6e;
+            --text-muted: #8b93a5;
+            --accent: #3B6FE8;
+            --accent-light: #edf1fb;
+            --accent-dark: #2d5bc5;
+            --green: #16a34a;
+            --green-light: #ecfdf5;
+            --green-bg: #dcfce7;
+            --red: #dc2626;
+            --red-light: #fef2f2;
+            --red-bg: #fee2e2;
+            --amber: #d97706;
+            --amber-bg: #fef3c7;
             --gray: #6b7280;
-            --gray-bg: #1e2230;
-            --shadow-sm: 0 1px 2px rgba(0,0,0,0.1);
-            --shadow-md: 0 4px 12px rgba(0,0,0,0.2);
-            --shadow-lg: 0 8px 24px rgba(0,0,0,0.3);
-            --radius: 12px;
-            --radius-sm: 8px;
-            --radius-lg: 16px;
-            --transition: 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+            --gray-bg: #e5e7eb;
+            --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.04);
+            --shadow-md: 0 2px 8px rgba(0, 0, 0, 0.06);
+            --shadow-lg: 0 4px 16px rgba(0, 0, 0, 0.08);
+            --radius: 10px;
+            --radius-sm: 6px;
+            --radius-lg: 14px;
+            --transition: 0.2s ease;
         }
 
         html,
@@ -1424,9 +1433,8 @@
             TOKEN_PATH: '/webhook/softphone-token',
             LEADS_PATH: '/webhook/get-leads',
             START_PATH: '/webhook/power-dialer-start',
-            STOP_PATH: '/webhook/power-dialer-stop',
             DIALER_SECRET: 'my-secret-123',
-            POLL_INTERVAL: 2500
+            POLL_INTERVAL: 5000
         };
 
         // ═══════════════════════════════════════════════════════════════
@@ -1862,27 +1870,6 @@
                 }
 
                 const data = JSON.parse(text);
-
-                // WATCHDOG Logic: Check for transfer_failed and auto-restart if dialer is supposed to be running
-                if (dialerRunning && data.session_log && data.session_log.length > 0) {
-                    const latestLog = data.session_log[0];
-                    if (latestLog.outcome === 'transfer_failed' && latestLog.at !== window._lastFailedTransferAt) {
-                        window._lastFailedTransferAt = latestLog.at;
-                        devLog('⚠️ Detected transfer_failed in backend. Loop broke. Auto-restart in 3s...', 'warn');
-                        
-                        let secondsLeft = 3;
-                        const updateWatchdog = () => {
-                            setSoftphoneStatus('error', `Retrying in ${secondsLeft}s...`);
-                            if (secondsLeft > 0) {
-                                secondsLeft--;
-                                setTimeout(updateWatchdog, 1000);
-                            } else {
-                                if (dialerRunning) startDialer(); // Jumpstart
-                            }
-                        };
-                        updateWatchdog();
-                    }
-                }
 
                 let leads = [];
                 if (Array.isArray(data)) {

@@ -8,10 +8,9 @@ import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
 import {
     Zap, Search, Target, Users, Mail, Settings, Activity,
-    MessageSquare, CheckCircle, BarChart3, AlertTriangle, ShieldCheck, Phone
+    MessageSquare, CheckCircle, BarChart3, AlertTriangle, ShieldCheck
 } from 'lucide-react';
 import { toast } from 'sonner';
-import { PowerDialerTab } from '@/components/growth/PowerDialerTab';
 
 // Mock Data / Types
 type Lead = {
@@ -106,10 +105,6 @@ const OutreachEngine = () => {
                     </TabsTrigger>
                     <TabsTrigger value="settings" className="data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:shadow-none border-b-2 border-transparent rounded-none px-4 py-2">
                         Settings
-                    </TabsTrigger>
-                    <TabsTrigger value="power-dialer" className="data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:shadow-none border-b-2 border-transparent rounded-none px-4 py-2 flex items-center gap-2">
-                        <Phone className="w-4 h-4" />
-                        Power Dialer
                     </TabsTrigger>
                 </TabsList>
 
@@ -418,11 +413,6 @@ const OutreachEngine = () => {
                             </CardContent>
                         </Card>
                     </div>
-                </TabsContent>
-
-                {/* Power Dialer Tab */}
-                <TabsContent value="power-dialer" className="space-y-6">
-                    <PowerDialerTab />
                 </TabsContent>
             </Tabs>
         </div>

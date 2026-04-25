@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import gsap from 'gsap';
 import { ScrollTrigger } from 'gsap/ScrollTrigger';
-import { BarChart3, Target, Briefcase, Cpu, Check } from 'lucide-react';
+import { BarChart3, Target, Briefcase, Cpu } from 'lucide-react';
 import { GyroTilt } from '@/components/shared/GyroTilt';
 
 gsap.registerPlugin(ScrollTrigger);
@@ -107,107 +107,140 @@ const ProductDashboard = () => {
     }, []);
 
     return (
-    <section ref={sectionRef} className="relative w-full py-24 md:py-48 bg-black overflow-hidden border-t border-white/5">
-      <div className="max-w-6xl mx-auto px-6 grid grid-cols-1 lg:grid-cols-2 gap-16 items-center">
-        
-        {/* TEXT CONTENT (LEFT) */}
-        <div>
-          <div className="look-title inline-flex items-center gap-2 px-3 py-1.5 rounded-full border border-accent-mint/40 bg-accent-mint/5 mb-8">
-            <div className="w-1.5 h-1.5 rounded-full bg-accent-mint animate-pulse" />
-            <span className="font-mono text-[10px] uppercase tracking-[0.2em] text-accent-mint font-bold mt-px">COMMAND CENTER</span>
-          </div>
-          
-          <h2 className="font-display font-bold text-4xl md:text-6xl text-white leading-[1.0] mb-8 tracking-tight">
-            Everything your agency does, but 97% cheaper.
-          </h2>
-          
-          <p className="text-white/40 text-lg leading-relaxed mb-12 max-w-md">
-            Track every candidate, see every score, control every decision. No more waiting weeks for an agency to send you 5 mediocre profiles.
-          </p>
+        <section
+            ref={sectionRef}
+            className="relative w-full h-screen overflow-hidden font-display"
+            style={{ background: '#000000' }}
+        >
+            <div className="absolute inset-0 pointer-events-none" style={{
+                backgroundImage: `linear-gradient(rgba(34,197,94,0.07) 1px, transparent 1px), linear-gradient(90deg, rgba(34,197,94,0.07) 1px, transparent 1px)`,
+                backgroundSize: '100px 100px',
+            }} />
 
-          <div className="space-y-6">
-            {[
-              'Track every candidate score in real time — no agency black box',
-              'See exactly why each candidate was accepted or rejected',
-              'Full pipeline visibility your agency never gave you',
-            ].map((text, i) => (
-              <div key={i} className="flex items-start gap-3">
-                <div className="w-5 h-5 rounded-full bg-accent-mint/10 flex items-center justify-center shrink-0 mt-1 border border-accent-mint/20">
-                  <Check className="w-3 h-3 text-accent-mint" />
+            <div className="absolute left-1/2 -translate-x-1/2 top-0 bottom-0 w-px bg-emerald-500/10 z-[5] pointer-events-none">
+                <div className="dash-power-line relative w-full bg-emerald-500" style={{ height: '0%', boxShadow: '0 0 12px rgba(34,197,94,0.8), 0 0 24px rgba(34,197,94,0.4)' }}>
+                    <div className="absolute left-1/2 -translate-x-1/2 bottom-0 w-3 h-3 bg-emerald-400 rounded-full shadow-[0_0_20px_4px_rgba(34,197,94,0.8)] animate-ping" />
+                    <div className="absolute left-1/2 -translate-x-1/2 bottom-0 w-1.5 h-1.5 bg-white rounded-full shadow-[0_0_10px_rgba(255,255,255,1)]" />
                 </div>
-                <span className="text-white/80 font-medium">{text}</span>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        {/* MOCKUP (RIGHT) */}
-        <div className="relative">
-          {/* Large Glow */}
-          <div className="absolute -inset-24 bg-accent-mint/[0.03] blur-[120px] rounded-full pointer-events-none" />
-          
-          <div className="glass-card-premium rounded-3xl border-white/10 shadow-[0_50px_120px_rgba(0,0,0,0.9)] overflow-hidden scale-105 lg:scale-110">
-            {/* macOS Bar */}
-            <div className="bg-white/[0.05] px-6 py-4 flex items-center justify-between border-b border-white/10">
-              <div className="flex gap-2">
-                <div className="w-3 h-3 rounded-full bg-red-500/30" />
-                <div className="w-3 h-3 rounded-full bg-yellow-500/30" />
-                <div className="w-3 h-3 rounded-full bg-green-500/30" />
-              </div>
-              <div className="text-[10px] font-black text-white/40 uppercase tracking-widest">Founder Control Panel</div>
             </div>
 
-            <div className="p-8">
-              {/* Stats Grid */}
-              <div className="grid grid-cols-2 gap-4 mb-8">
-                {[
-                  { label: 'Agency Savings', val: '€92,400', sub: '+12% this month' },
-                  { label: 'Screened', val: '1,247', sub: 'Across 4 roles' },
-                ].map((s, i) => (
-                  <div key={i} className="p-5 rounded-2xl bg-white/5 border border-white/5">
-                    <p className="text-[10px] text-white/50 font-bold uppercase mb-2 tracking-widest">{s.label}</p>
-                    <p className="text-2xl font-black text-white mb-1">{s.val}</p>
-                    <p className="text-[10px] text-accent-mint font-bold uppercase">{s.sub}</p>
-                  </div>
-                ))}
-              </div>
+            <div className="relative z-10 w-full max-w-6xl mx-auto px-6 h-full flex items-center">
+                <div className="flex flex-col lg:flex-row items-center gap-12 lg:gap-16 w-full">
+                    {/* LEFT: Text */}
+                    <div className="flex-[45] dash-text-block opacity-0">
+                        <div className="dash-title inline-flex items-center gap-2 px-3 py-1.5 rounded-full border border-[#00c853]/40 bg-transparent mb-6 opacity-0">
+                            <div className="w-1.5 h-1.5 rounded-full bg-[#00c853]" />
+                            <span className="font-mono text-[11px] uppercase tracking-[2px] text-emerald-400 font-semibold mt-px">YOUR AGENCY REPLACEMENT</span>
+                        </div>
+                        <h2 className="dash-title font-display font-black text-[clamp(1.8rem,4vw,3.2rem)] leading-[1.0] tracking-[-0.04em] text-white mb-5 opacity-0">
+                            EVERYTHING YOUR AGENCY DOES,<br />BUT 97% CHEAPER.
+                        </h2>
+                        <p className="text-white/60 text-base md:text-lg leading-[1.7] mb-8 max-w-[480px]">
+                            Track every candidate, see every score, control every decision. No more waiting weeks for an agency to send you 5 mediocre profiles.
+                        </p>
+                        <div className="space-y-4">
+                            {highlights.map((h, i) => (
+                                <div key={i} className="dash-highlight flex items-start gap-3 opacity-0">
+                                    <div className="w-5 h-5 rounded-full bg-[#00c853]/20 flex items-center justify-center shrink-0 mt-0.5 border border-[#00c853]/30">
+                                        <svg className="w-3 h-3 text-[#00c853]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>
+                                    </div>
+                                    <span className="text-[15px] font-medium text-white/90">{h.text}</span>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
 
-              {/* Minimalist Graph */}
-              <div className="mb-8 p-6 rounded-2xl bg-white/[0.02] border border-white/5">
-                <div className="flex justify-between items-center mb-6">
-                   <p className="text-[10px] text-white/50 font-bold uppercase tracking-widest">Cumulative Savings</p>
-                   <div className="flex gap-2">
-                      <div className="w-2 h-2 rounded-full bg-accent-mint" />
-                      <div className="w-2 h-2 rounded-full bg-white/10" />
-                   </div>
-                </div>
-                <div className="flex items-end gap-2 h-32">
-                   {[30, 45, 35, 60, 50, 85, 75, 95].map((h, i) => (
-                     <div key={i} className="flex-1 bg-accent-mint/10 border-t border-accent-mint/40 rounded-t-sm transition-all hover:bg-accent-mint/30" style={{ height: `${h}%` }} />
-                   ))}
-                </div>
-              </div>
+                    {/* RIGHT: Mockup */}
+                    <div className="flex-[55] dash-mockup opacity-0">
+                        <GyroTilt intensity={15}>
+                            <div className="rounded-xl overflow-hidden border border-white/[0.1] bg-[#111111] shadow-[0_20px_60px_rgba(0,0,0,0.8),0_0_40px_rgba(34,197,94,0.15)] relative">
+                                <div className="absolute top-0 right-0 w-64 h-64 bg-emerald-500/10 blur-[80px] rounded-full pointer-events-none" />
 
-              {/* Live Activity Feed */}
-              <div className="space-y-4">
-                 <p className="text-[10px] text-white/50 font-bold uppercase tracking-widest mb-4">Agent Activity Feed</p>
-                 {[
-                   'Aria rejected 47 unqualified applicants in 8s',
-                   'Penn drafted personalized outreach for 12 leads',
-                   'Hawk detected competitor pricing shift (+20%)',
-                 ].map((t, i) => (
-                   <div key={i} className="flex items-center gap-4 text-xs">
-                      <div className="w-1.5 h-1.5 rounded-full bg-accent-mint animate-pulse" />
-                      <span className="text-white/60 font-medium">{t}</span>
-                   </div>
-                 ))}
-              </div>
+                                <div className="bg-white/[0.04] px-4 py-2.5 flex items-center gap-3 border-b border-white/[0.08] relative z-10">
+                                    <div className="flex gap-1.5">
+                                        <div className="w-3 h-3 rounded-full bg-red-400/60" />
+                                        <div className="w-3 h-3 rounded-full bg-yellow-400/60" />
+                                        <div className="w-3 h-3 rounded-full bg-green-400/60" />
+                                    </div>
+                                    <div className="flex-1 text-center">
+                                        <span className="text-xs text-white/30 bg-white/5 rounded-md px-3 py-1 cursor-default select-none hover:bg-white/10 transition-colors">app.screeningpilot.com</span>
+                                    </div>
+                                </div>
+
+                                <div className="p-5">
+                                    <div className="grid grid-cols-4 gap-3 mb-4">
+                                        {statCards.map((s, i) => (
+                                            <div key={i} className="dash-stat glass rounded-lg p-3 opacity-20 transition-all hover:border-emerald-500/30 hover:shadow-[0_4px_15px_rgba(5,150,105,0.15)] hover:-translate-y-0.5 cursor-default group">
+                                                <p className="text-[10px] text-white/30 mb-1 group-hover:text-emerald-400/60 transition-colors">{s.label}</p>
+                                                <p className="text-lg font-bold text-white group-hover:text-emerald-400 transition-colors">
+                                                    {s.value.toLocaleString()}{s.suffix || ''}
+                                                </p>
+                                            </div>
+                                        ))}
+                                    </div>
+
+                                    <div className="flex gap-2 mb-4">
+                                        {actionBtns.map((btn) => (
+                                            <div
+                                                key={btn}
+                                                onClick={() => handleBtnClick(btn)}
+                                                className={`dash-btn text-[10px] font-semibold px-3 py-1.5 rounded-md cursor-pointer transition-all duration-300 select-none flex items-center justify-center min-w-[100px] ${activeBtn === btn
+                                                    ? 'bg-emerald-500 text-black scale-[0.98] shadow-[0_0_15px_rgba(16,185,129,0.5)]'
+                                                    : 'bg-emerald-600/80 text-white hover:bg-emerald-500'
+                                                    }`}
+                                            >
+                                                {activeBtn === btn ? 'Processing...' : btn}
+                                            </div>
+                                        ))}
+                                    </div>
+
+                                    <div className="glass rounded-lg p-4 mb-3 relative group">
+                                        <p className="text-[10px] text-white/30 mb-3 font-medium flex justify-between">
+                                            Agency Cost Savings
+                                            <span className="opacity-0 group-hover:opacity-100 transition-opacity text-emerald-400">Interactive</span>
+                                        </p>
+                                        <div className="flex items-end gap-1 h-16" onMouseLeave={() => setHoveredBar(null)}>
+                                            {barHeights.map((h, i) => (
+                                                <div
+                                                    key={i}
+                                                    onMouseEnter={() => setHoveredBar(i)}
+                                                    className={`chart-bar flex-1 rounded-t origin-bottom cursor-pointer transition-all duration-300 relative ${hoveredBar !== null && hoveredBar !== i
+                                                        ? 'opacity-30'
+                                                        : 'opacity-100 bg-emerald-500/30 hover:bg-emerald-400/50'
+                                                        }`}
+                                                    style={{ height: `${h}%`, transform: 'scaleY(0)' }}
+                                                >
+                                                    <div className="w-full bg-emerald-500/80 rounded-t transition-colors pointer-events-none" style={{ height: '60%' }} />
+
+                                                    {hoveredBar === i && (
+                                                        <div className="absolute -top-7 left-1/2 -translate-x-1/2 bg-white text-black text-[9px] font-bold px-2 py-1 rounded shadow-lg pointer-events-none z-10 whitespace-nowrap animate-in fade-in zoom-in-95 duration-200">
+                                                            €{Math.round((h / 100) * 8200).toLocaleString()} saved
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+
+                                    <div className="glass rounded-lg p-3 group hover:border-white/10 transition-colors">
+                                        <p className="text-[10px] text-white/30 mb-2 font-medium flex justify-between">
+                                            Recent Activity
+                                            <span className="text-white/20 hover:text-white/60 cursor-pointer transition-colors">Open Timeline</span>
+                                        </p>
+                                        {activityItems.map((a, i) => (
+                                            <div key={i} className="activity-item flex items-center gap-2 py-1.5 border-b border-white/[0.03] last:border-0 hover:bg-white/[0.02] -mx-2 px-2 rounded cursor-pointer transition-colors opacity-0">
+                                                <div className="activity-dot w-1.5 h-1.5 rounded-full bg-emerald-500 shadow-[0_0_6px_rgba(5,150,105,0.5)] scale-0" />
+                                                <p className="text-[10px] text-white/50">{a}</p>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            </div>
+                        </GyroTilt>
+                    </div>
+                </div>
             </div>
-          </div>
-        </div>
-
-      </div>
-    </section>
+        </section>
     );
 };
 

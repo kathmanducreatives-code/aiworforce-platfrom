@@ -458,7 +458,7 @@ export const mockReviews: CompanyReview[] = [
   {
     id: 'rev-1',
     companyName: 'TechFlow',
-    logo: '/tool-logos/techflow.svg',
+    logo: 'https://logo.clearbit.com/techflow.ai',
     rating: 5,
     comment: "The interview quality was exceptional. Dr. Sarah provided deeper technical insights than our internal team could have.",
     expertName: 'Dr. Sarah Chen',
@@ -466,7 +466,7 @@ export const mockReviews: CompanyReview[] = [
   {
     id: 'rev-2',
     companyName: 'Stripe',
-    logo: '/tool-logos/stripe.svg',
+    logo: 'https://logo.clearbit.com/stripe.com',
     rating: 4.8,
     comment: "Marcus did a fantastic job assessing frontend architectural thinking. Saved us weeks of interviewing.",
     expertName: 'Marcus Johnson',
@@ -474,7 +474,7 @@ export const mockReviews: CompanyReview[] = [
   {
     id: 'rev-3',
     companyName: 'Vercel',
-    logo: '/tool-logos/vercel.svg',
+    logo: 'https://logo.clearbit.com/vercel.com',
     rating: 5,
     comment: "Aisha's DevOps screening was incredibly rigorous. We found exactly who we were looking for.",
     expertName: 'Aisha Patel',

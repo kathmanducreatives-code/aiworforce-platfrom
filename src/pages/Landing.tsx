@@ -1,25 +1,29 @@
-import LandingHeader from "@/components/landing/LandingHeader";
+import Header from "@/components/Header";
 import Footer from "@/components/landing/Footer";
+import { DigitalBlueprintBg } from "@/components/shared/DigitalBlueprintBg";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import { useEffect, useRef } from "react";
 import gsap from "gsap";
 import { ScrollTrigger } from "gsap/ScrollTrigger";
 import HeroHook from "@/components/landing/HeroHook";
+import { TransformationSection } from "@/components/landing/TransformationSection";
+import ProductScreening from "@/components/landing/ProductScreening";
+import ProductLookalike from "@/components/landing/ProductLookalike";
 import TimeMath from "@/components/landing/TimeMath";
 import SocialProof from "@/components/landing/SocialProof";
 import PricingCard from "@/components/landing/PricingCard";
 import FAQSection from "@/components/landing/FAQSection";
 import MarqueeBanner from "@/components/landing/MarqueeBanner";
 import FinalCTA from "@/components/landing/FinalCTA";
+import { ExpertJourney } from "@/components/landing/ExpertJourney";
+import MeetTheTeamSection from "@/components/landing/MeetTheTeamSection";
 import GlobalTrustBar from "@/components/landing/GlobalTrustBar";
 import EcosystemSection from "@/components/landing/EcosystemSection";
-import DepartmentRevealSection from "@/components/landing/DepartmentRevealSection";
 import TeamsAtWorkSection from "@/components/landing/TeamsAtWorkSection";
 import GlobalSection from "@/components/landing/GlobalSection";
 import DayTimelineSection from "@/components/landing/DayTimelineSection";
 import AgentBuilderSection from "@/components/landing/AgentBuilderSection";
-import FiestaBackground from "@/components/landing/FiestaBackground";
 
 gsap.registerPlugin(ScrollTrigger);
 ScrollTrigger.config({ limitCallbacks: true });
@@ -37,14 +41,11 @@ const Landing = () => {
   }, [user, navigate]);
 
   return (
-    <div 
-      className="min-h-screen relative isolate bg-transparent font-display text-white selection:bg-accent-mint selection:text-black"
-    >
-      {/* ═══ GLOBAL ATMOSPHERE SYSTEM ═══ */}
-      <FiestaBackground />
+    <div className="min-h-screen relative bg-deep-space font-display text-white">
+      <DigitalBlueprintBg />
 
       {/* 1. Sticky Nav */}
-      <LandingHeader />
+      <Header />
 
       <main ref={mainRef} className="relative z-10 w-full">
         {/* 2. Hero */}
@@ -53,31 +54,39 @@ const Landing = () => {
         <GlobalTrustBar />
         {/* 4. Ecosystem */}
         <EcosystemSection />
-        {/* 5. Department Reveal (AI WORKFORCE) */}
-        <DepartmentRevealSection />
-        {/* 17. Custom Agent Builder (LABORATORY) */}
-        <AgentBuilderSection />
-        {/* 13. A Day With Your Workforce */}
+        {/* 5. The Problem (Transformation) */}
+        <TransformationSection />
+        {/* 6. Meet Your Workforce */}
+        <MeetTheTeamSection />
+        {/* 7. Talent Department */}
+        <ProductLookalike />
+        {/* 8. Growth Department */}
+        <ProductScreening />
+        {/* 9. Intelligence Department */}
+        <ExpertJourney />
+        {/* 10. A Day With Your Workforce */}
         <DayTimelineSection />
-        {/* 14. Teams At Work */}
+        {/* 11. Teams At Work */}
         <TeamsAtWorkSection />
-        {/* 15. The Math */}
+        {/* 12. The Math */}
         <TimeMath />
-        {/* 16. Social Proof */}
+        {/* 13. Social Proof */}
         <SocialProof />
-        {/* 18. Pricing */}
+        {/* 14. Custom Agent Builder */}
+        <AgentBuilderSection />
+        {/* 15. Pricing */}
         <PricingCard />
-        {/* 19. FAQ */}
+        {/* 16. FAQ */}
         <FAQSection />
-        {/* 20. Global */}
+        {/* 17. Global */}
         <GlobalSection />
-        {/* 21. Marquee */}
+        {/* 18. Marquee */}
         <MarqueeBanner />
-        {/* 22. Final CTA */}
+        {/* 19. Final CTA */}
         <FinalCTA />
       </main>
 
-      {/* 23. Footer */}
+      {/* 20. Footer */}
       <Footer />
     </div>
   );

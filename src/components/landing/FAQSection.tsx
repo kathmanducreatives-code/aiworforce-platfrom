@@ -15,26 +15,19 @@ const FAQSection = () => {
   const [openIndex, setOpenIndex] = useState<number | null>(null);
 
   return (
-    <section className="relative px-6 py-16 md:py-24 bg-black">
+    <section className="relative px-4 py-28 md:py-36" style={{ borderBottom: "1px solid rgba(255,255,255,0.05)" }}>
       <div className="max-w-3xl mx-auto">
-        <div className="text-center mb-20">
-          <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full border border-accent-mint/40 bg-accent-mint/5 mb-6">
-            <span className="font-mono text-[10px] uppercase tracking-[0.2em] text-accent-mint font-bold">QUESTIONS & ANSWERS</span>
-          </div>
-          <h2 className="font-display font-bold text-[clamp(2rem,4.5vw,3.25rem)] text-white leading-tight tracking-tight">
-            Commonly asked.
-          </h2>
+        <div className="text-center mb-14">
+          <p className="font-mono text-xs uppercase tracking-[0.15em] mb-4 text-emerald-400 font-semibold">◆ FAQ</p>
+          <h2 className="font-display font-black text-[clamp(1.5rem,3.5vw,3rem)] leading-[1.1] tracking-[-0.03em] text-white">Questions we get every day.</h2>
         </div>
-
-        <div className="space-y-4">
+        <div className="space-y-2">
           {faqs.map((faq, i) => (
-            <div key={i} className="glass-card-premium rounded-2xl border-white/5 overflow-hidden transition-all duration-300">
-              <button 
-                onClick={() => setOpenIndex(openIndex === i ? null : i)} 
-                className="w-full flex items-center justify-between px-8 py-6 text-left hover:bg-white/[0.02] transition-colors"
-              >
-                <span className="font-display font-bold text-base text-white/90 pr-4">{faq.q}</span>
-                <ChevronDown className={`w-5 h-5 shrink-0 transition-transform duration-500 ${openIndex === i ? 'rotate-180 text-accent-mint' : 'text-white/20'}`} />
+            <div key={i} className={`rounded-xl overflow-hidden transition-all duration-300 ${openIndex === i ? 'border-l-2 border-l-emerald-500/50' : ''}`}
+              style={{ background: "rgba(255,255,255,0.03)", border: openIndex === i ? undefined : "1px solid rgba(255,255,255,0.05)" }}>
+              <button onClick={() => setOpenIndex(openIndex === i ? null : i)} className="w-full flex items-center justify-between px-6 py-4 text-left">
+                <span className="font-display font-semibold text-sm text-white/70 pr-4">{faq.q}</span>
+                <ChevronDown className={`w-4 h-4 shrink-0 transition-transform duration-300 ${openIndex === i ? 'rotate-180 text-emerald-400' : 'text-white/30'}`} />
               </button>
               <AnimatePresence>
                 {openIndex === i && (
@@ -42,12 +35,10 @@ const FAQSection = () => {
                     initial={{ height: 0, opacity: 0 }}
                     animate={{ height: 'auto', opacity: 1 }}
                     exit={{ height: 0, opacity: 0 }}
-                    transition={{ duration: 0.4, ease: [0.23, 1, 0.32, 1] }}
+                    transition={{ duration: 0.3, ease: 'easeInOut' }}
                     className="overflow-hidden"
                   >
-                    <div className="px-8 pb-8 pt-2">
-                       <p className="text-white/40 leading-relaxed font-medium">{faq.a}</p>
-                    </div>
+                    <p className="px-6 pb-5 text-sm text-white/40 leading-relaxed">{faq.a}</p>
                   </motion.div>
                 )}
               </AnimatePresence>

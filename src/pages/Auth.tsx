@@ -67,25 +67,10 @@ const Auth = () => {
         });
       }
     } catch (error: any) {
-      console.error('Auth error:', error);
-      let description = 'Something went wrong. Please try again.';
-
-      if (error?.message) {
-        description = error.message;
-      } else if (error?.error_description) {
-        description = error.error_description;
-      } else if (error?.status === 504 || error?.name === 'AuthRetryableFetchError') {
-        description = 'Authentication service is temporarily unavailable. Please try again in a moment.';
-      } else if (error?.name === 'TypeError' && /load failed|fetch/i.test(String(error?.message))) {
-        description = 'Network issue reaching the authentication service. Check your connection and retry.';
-      } else if (typeof error === 'string') {
-        description = error;
-      }
-
       toast({
-        title: 'Authentication failed',
-        description,
-        variant: 'destructive',
+        title: "Error",
+        description: error.message,
+        variant: "destructive",
       });
     } finally {
       setLoading(false);
@@ -93,7 +78,7 @@ const Auth = () => {
   };
 
   return (
-    <div className="relative z-10 min-h-screen bg-gradient-to-br from-background via-background to-primary/5 flex items-center justify-center p-4">
+    <div className="min-h-screen bg-gradient-to-br from-background via-background to-primary/5 flex items-center justify-center p-4">
       <Button
         variant="ghost"
         onClick={() => navigate('/')}

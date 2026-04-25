@@ -1,194 +1,105 @@
-import { useEffect, useRef, useState, useMemo } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { useEffect, useRef, useState } from 'react';
+import gsap from 'gsap';
+import { ScrollTrigger } from 'gsap/ScrollTrigger';
 
-const ParticleBurst = () => {
-    const particles = useMemo(() => Array.from({ length: 100 }).map((_, i) => ({
-        id: i,
-        angle: Math.random() * Math.PI * 2,
-        velocity: 100 + Math.random() * 300,
-        size: 3 + Math.random() * 6,
-        delay: Math.random() * 0.1
-    })), []);
+gsap.registerPlugin(ScrollTrigger);
 
-    return (
-        <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-50">
-            {particles.map(p => (
-                <motion.div
-                    key={p.id}
-                    className="absolute rounded-full bg-accent-mint shadow-[0_0_15px_rgba(0,255,148,0.8)]"
-                    style={{ width: p.size, height: p.size }}
-                    initial={{ x: 0, y: 0, opacity: 1, scale: 0 }}
-                    animate={{ 
-                        x: Math.cos(p.angle) * p.velocity, 
-                        y: Math.sin(p.angle) * p.velocity,
-                        opacity: 0,
-                        scale: 1 
-                    }}
-                    transition={{ duration: 1.5 + Math.random(), delay: p.delay, ease: "easeOut" }}
-                />
-            ))}
-        </div>
-    )
-};
+const rows = [
+  { task: 'Recruiting', manual: '€60,000/year + 6 weeks per hire', sp: 'Scout + Aria + Lens · Always active' },
+  { task: 'Outreach & Sales', manual: '€50,000/year SDR + low reply rates', sp: 'Radar + Penn + Relay · 34% reply rate' },
+  { task: 'Content & Marketing', manual: '€45,000/year + 2 posts per week', sp: 'Quill + Canvas + Pulse · Daily output' },
+  { task: 'Market Research', manual: '€40,000/year + weekly reports', sp: 'Hawk + Signal + Brief · Live, 24/7' },
+  { task: 'Total cost', manual: '€195,000/year + hiring time', sp: '€149/month · All five departments', highlight: true },
+];
 
 const TimeMath = () => {
   const sectionRef = useRef<HTMLDivElement>(null);
+  const tableRef = useRef<HTMLDivElement>(null);
   const [inView, setInView] = useState(false);
-  const [leftCount, setLeftCount] = useState(0);
-  const [rightCount, setRightCount] = useState(0);
-  const [showX, setShowX] = useState(false);
-  const [showRight, setShowRight] = useState(false);
-  const [showParticles, setShowParticles] = useState(false);
+  const [count, setCount] = useState(0);
 
   useEffect(() => {
     const el = sectionRef.current;
     if (!el) return;
     const obs = new IntersectionObserver(([e]) => {
       if (e.isIntersecting) { setInView(true); obs.disconnect(); }
-    }, { threshold: 0.5 });
+    }, { threshold: 0.1, rootMargin: "-50px" });
     obs.observe(el);
     return () => obs.disconnect();
   }, []);
 
+  // Counter animation
   useEffect(() => {
     if (!inView) return;
-
-    // Sequence
-    // 1. Count up left (0 to 305000) over 2s
-    let raf1: number;
+    const target = 192212;
+    const duration = 800;
+    let raf: number;
     const t0 = performance.now();
-    const step1 = (now: number) => {
-      const p = Math.min((now - t0) / 2000, 1);
-      // easeOutExpo
-      const eased = p === 1 ? 1 : 1 - Math.pow(2, -10 * p);
-      setLeftCount(Math.round(305000 * eased));
-      
-      if (p < 1) {
-        raf1 = requestAnimationFrame(step1);
-      } else {
-        // 2. Show Red X
-        setTimeout(() => {
-            setShowX(true);
-            
-            // 3. Reveal Right Side
-            setTimeout(() => {
-                setShowRight(true);
-                
-                // 4. Count up right side rapidly
-                const t2 = performance.now();
-                const step2 = (now2: number) => {
-                    const p2 = Math.min((now2 - t2) / 1000, 1);
-                    const eased2 = p2 === 1 ? 1 : 1 - Math.pow(2, -10 * p2);
-                    setRightCount(Math.round(1788 * eased2));
-                    if (p2 < 1) requestAnimationFrame(step2);
-                    else {
-                        // 5. Particles!
-                        setShowParticles(true);
-                    }
-                };
-                requestAnimationFrame(step2);
-                
-            }, 800);
-        }, 500);
-      }
+    const step = (now: number) => {
+      const p = Math.min((now - t0) / duration, 1);
+      const eased = 1 - Math.pow(1 - p, 3);
+      setCount(Math.round(target * eased));
+      if (p < 1) raf = requestAnimationFrame(step);
     };
-    raf1 = requestAnimationFrame(step1);
-
-    return () => cancelAnimationFrame(raf1);
+    raf = requestAnimationFrame(step);
+    return () => cancelAnimationFrame(raf);
   }, [inView]);
 
-  return (
-    <section ref={sectionRef} className="relative px-6 py-16 md:py-24 bg-black overflow-hidden border-t border-white/5 min-h-[80vh] flex flex-col items-center justify-center">
-      <div className="absolute inset-0 z-0 pointer-events-none" style={{ background: "linear-gradient(to bottom, var(--bg-fiesta-dark) 0%, #000000 100%)" }} />
-      
-      {/* Soundwave Data Visualization */ }
-      <div className="absolute inset-0 z-0 pointer-events-none flex items-center justify-center opacity-10 blur-[1px]">
-        <svg viewBox="0 0 1000 200" preserveAspectRatio="none" className="w-full h-full text-accent-cyan opacity-40 animate-[pulse_4s_ease-in-out_infinite]">
-          <path d="M0 100 Q 50 150 100 100 T 200 100 T 300 50 T 400 100 T 500 150 T 600 100 T 700 20 T 800 100 T 900 180 T 1000 100" fill="none" stroke="currentColor" strokeWidth="4" />
-          <path d="M0 100 Q 50 50 100 100 T 200 150 T 300 100 T 400 50 T 500 100 T 600 180 T 700 100 T 800 20 T 900 100 T 1000 100" fill="none" stroke="currentColor" strokeWidth="2" opacity="0.5" />
-        </svg>
-      </div>
+  useEffect(() => {
+    const ctx = gsap.context(() => {
+      const rowEls = tableRef.current?.querySelectorAll('.time-row');
+      if (rowEls) {
+        rowEls.forEach((row, i) => {
+          gsap.fromTo(row, { opacity: 0, x: -20 }, {
+            opacity: 1, x: 0, duration: 0.5, delay: i * 0.15, ease: 'power3.out',
+            scrollTrigger: { trigger: tableRef.current, start: 'top 70%', toggleActions: 'play none none none' },
+          });
+          const spCell = row.querySelector('.sp-cell');
+          if (spCell) {
+            gsap.fromTo(spCell, { opacity: 0, x: 30 }, {
+              opacity: 1, x: 0, duration: 0.4, delay: 0.3 + i * 0.15, ease: 'power3.out',
+              scrollTrigger: { trigger: tableRef.current, start: 'top 70%', toggleActions: 'play none none none' },
+            });
+          }
+        });
+      }
+    }, sectionRef);
+    return () => ctx.revert();
+  }, []);
 
-      <div className="w-full max-w-6xl mx-auto relative z-10">
-        
-        <div className="text-center mb-32">
-          <span className="font-mono text-[10px] uppercase tracking-[0.3em] text-accent-mint font-bold mb-6 block">THE MATH</span>
-          <h2 className="font-display font-black text-5xl md:text-7xl text-white tracking-tighter mb-8 leading-[1.0]">
-            The cost of doing it the old way.
+  return (
+    <section ref={sectionRef} className="relative px-4 py-28 md:py-36" style={{ borderBottom: "1px solid rgba(255,255,255,0.05)" }}>
+      <div className="max-w-4xl mx-auto">
+        <div className="text-center mb-14">
+          <p className="font-mono text-xs uppercase tracking-[0.15em] mb-4 text-emerald-400 font-semibold">◆ THE MATH DOESN'T LIE</p>
+          <h2 className="font-display font-black text-[clamp(1.5rem,3.5vw,3rem)] leading-[1.1] tracking-[-0.03em] text-white">
+            Your AI workforce vs. a human team.
           </h2>
         </div>
 
-        <div className="flex flex-col md:flex-row items-center justify-center gap-12 md:gap-24 relative">
-            
-            {/* LEFT COLUMN: The Old Way */}
-            <div className="relative flex flex-col items-center">
-                <div className="text-[10px] font-mono font-bold text-red-500/50 uppercase tracking-[0.3em] mb-4">Human Team (Annual)</div>
-                <div 
-                    className={`font-jetbrains font-bold text-6xl md:text-8xl tracking-tight transition-colors duration-500 ${showX ? 'text-white/20' : 'text-red-500'} tabular-nums`}
-                    style={{ textShadow: showX ? 'none' : '0 0 20px rgba(239,68,68,0.6)' }}
-                >
-                    €{leftCount.toLocaleString()}
-                </div>
-                
-                {/* Aggressive Red X */}
-                {showX && (
-                    <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                        <svg className="w-[120%] h-[120%] absolute -inset-[10%] overflow-visible">
-                            <motion.line 
-                                x1="10%" y1="90%" x2="90%" y2="10%" 
-                                stroke="#EF4444" strokeWidth="12" strokeLinecap="round"
-                                initial={{ strokeDasharray: 500, strokeDashoffset: 500 }}
-                                animate={{ strokeDashoffset: 0 }}
-                                transition={{ duration: 0.4, ease: "easeOut" }}
-                            />
-                            <motion.line 
-                                x1="10%" y1="10%" x2="90%" y2="90%" 
-                                stroke="#EF4444" strokeWidth="12" strokeLinecap="round"
-                                initial={{ strokeDasharray: 500, strokeDashoffset: 500 }}
-                                animate={{ strokeDashoffset: 0 }}
-                                transition={{ duration: 0.4, delay: 0.2, ease: "easeOut" }}
-                            />
-                        </svg>
-                    </div>
-                )}
-            </div>
-
-            {/* DIVIDER */}
-            <div className="w-full md:w-px h-px md:h-32 bg-white/10" />
-
-            {/* RIGHT COLUMN: The New Way */}
-            <div className="relative flex flex-col items-center">
-                <div className="text-[10px] font-mono font-bold text-accent-cyan/60 uppercase tracking-[0.3em] mb-4">Pilot AI Workforce</div>
-                
-                <div 
-                  className="font-jetbrains font-bold text-6xl md:text-8xl tracking-tight text-accent-mint tabular-nums"
-                  style={{ textShadow: '0 0 30px rgba(0,255,148,0.8), 0 0 60px rgba(0,229,255,0.4)', color: '#D4FFEA' }}
-                >
-                    {showRight ? `€${rightCount.toLocaleString()}` : <span className="opacity-0">€1,788</span>}
-                </div>
-
-                {showParticles && <ParticleBurst />}
-            </div>
-
+        {/* Big savings number */}
+        <div className="text-center mb-12">
+          <div className="font-display font-black text-[clamp(3rem,8vw,5rem)] text-emerald-400 tabular-nums tracking-tight leading-none">
+            €{count.toLocaleString()}
+          </div>
+          <div className="text-lg text-white/40 mt-2">saved every year vs a human team</div>
         </div>
 
-        
-        <AnimatePresence>
-            {showParticles && (
-                <motion.div 
-                    initial={{ opacity: 0, y: 20 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ duration: 1, delay: 0.5 }}
-                    className="mt-32 text-center"
-                >
-                    <div className="inline-flex items-center gap-3 px-6 py-3 rounded-full fiesta-halo backdrop-blur-md bg-accent-cyan/10 border border-accent-cyan/30">
-                        <div className="w-3 h-3 rounded-full bg-accent-cyan animate-pulse shadow-[0_0_10px_#00E5FF]" />
-                        <span className="font-jetbrains font-bold text-white tracking-widest uppercase text-sm">Total Savings: €303,212</span>
-                    </div>
-                </motion.div>
-            )}
-        </AnimatePresence>
-        
+        <div ref={tableRef} className="glass-strong rounded-2xl overflow-hidden">
+          <div className="grid grid-cols-3 gap-0 text-xs font-semibold text-white/30 uppercase tracking-wider px-6 py-4 border-b border-white/[0.06]">
+            <span>Task</span><span>Human Team</span><span className="text-emerald-400">Your AI Workforce</span>
+          </div>
+          {rows.map((row, i) => (
+            <div key={i} className={`time-row grid grid-cols-3 gap-0 px-6 py-4 border-b border-white/[0.03] last:border-0 ${row.highlight ? 'bg-emerald-500/[0.06]' : ''}`}>
+              <span className={`text-sm ${row.highlight ? 'font-bold text-white' : 'text-white/60'}`}>{row.task}</span>
+              <span className="text-sm text-white/40">{row.manual}</span>
+              <span className={`sp-cell text-sm font-semibold ${row.highlight ? 'text-emerald-400 text-base' : 'text-emerald-400/80'}`}>{row.sp}</span>
+            </div>
+          ))}
+        </div>
+        <p className="text-center text-white/70 text-sm mt-6">
+          Same output. Same quality. No equity. No benefits. No notice period. No bad days.
+        </p>
       </div>
     </section>
   );
