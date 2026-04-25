@@ -284,7 +284,11 @@ export default function CommandCenter() {
 
             <div className="glass-card rounded-2xl p-6 border-white/5 bg-[#1a2332]/60">
               <div className="relative border-l border-white/10 ml-4 space-y-8 py-2">
-                {mockActivityFeed.map((item, idx) => (
+                {mockActivityFeed.map((item, idx) => {
+                  if (item.kind === 'handoff') {
+                    return <HandoffFeedItem key={idx} event={item} />;
+                  }
+                  return (
                   <div key={idx} className="relative pl-6">
                     {/* Timeline Dot */}
                     <div className={cn(
@@ -336,7 +340,8 @@ export default function CommandCenter() {
                       </button>
                     )}
                   </div>
-                ))}
+                  );
+                })}
               </div>
             </div>
           </div>
