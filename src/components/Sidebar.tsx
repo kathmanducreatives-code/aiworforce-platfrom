@@ -237,6 +237,7 @@ export default function Sidebar({ collapsed, onToggle, onOpenCommandPalette }: S
                         <span className={cn(
                           "flex-shrink-0 text-[9px] uppercase tracking-wider font-bold px-1.5 py-0.5 rounded-sm z-10",
                           item.badge === 'soon' ? 'bg-zinc-800 text-zinc-400' :
+                          (item as any).color === 'amber' ? 'bg-amber-500/15 text-amber-400 border border-amber-500/30' :
                           isActive ? 'bg-black/20' : 'bg-primary/10 text-primary'
                         )}>
                           {item.badge}

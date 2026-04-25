@@ -50,6 +50,7 @@ import OutreachEngine from "./pages/OutreachEngine";
 import TalentIntelligence from "./pages/TalentIntelligence";
 import CompetitorIntelligence from "./pages/CompetitorIntelligence";
 import CandidateDossier from "./pages/candidates/CandidateDossier";
+import AwaitingYou from "./pages/AwaitingYou";
 // import VerifyQueue from "./pages/verify/VerifyQueue";
 // import VerifyResults from "./pages/verify/VerifyResults";
 // import InterviewDashboard from "./pages/interviews/InterviewDashboard";
@@ -89,6 +90,14 @@ const App = () => (
                       <ProtectedRoute>
                         <MainLayout>
                           <CommandCenter />
+                        </MainLayout>
+                      </ProtectedRoute>
+                    } />
+
+                    <Route path="/awaiting-you" element={
+                      <ProtectedRoute>
+                        <MainLayout>
+                          <AwaitingYou />
                         </MainLayout>
                       </ProtectedRoute>
                     } />
