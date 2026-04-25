@@ -23,6 +23,7 @@ const DEPT_META: Record<AgentDept, { label: string; tagline: string }> = {
   growth:       { label: 'Growth',       tagline: 'Outreach, leads & pipeline' },
   intelligence: { label: 'Intelligence', tagline: 'Competitor & market signals' },
   content:      { label: 'Content',      tagline: 'Posts, copy & brand voice' },
+  operations:   { label: 'Operations',   tagline: 'Workflow automation & ops' },
 };
 
 const COLUMNS: { id: 'todo' | 'in_progress' | 'awaiting' | 'done'; label: string; statuses: DBPlan['status'][] }[] = [
@@ -38,7 +39,7 @@ interface PlanWithAgents extends DBPlan {
   doneSteps: number;
 }
 
-const VALID_DEPTS: AgentDept[] = ['talent', 'growth', 'intelligence', 'content'];
+const VALID_DEPTS: AgentDept[] = ['talent', 'growth', 'intelligence', 'content', 'operations'];
 
 export default function DepartmentRoom() {
   const { dept } = useParams<{ dept: string }>();
