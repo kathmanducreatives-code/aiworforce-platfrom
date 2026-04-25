@@ -1,34 +1,35 @@
-import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Check, Eye, Inbox } from 'lucide-react';
-import { cn } from '@/lib/utils';
+import { Check, Eye, Inbox, X } from 'lucide-react';
 import { toast } from 'sonner';
-import { deptColor, DockDept } from '@/data/dockAgents';
 import AgentAvatar from '@/components/agents/AgentAvatar';
-
-interface ApprovalItem {
-  id: string;
-  agent: string;
-  dept: DockDept;
-  description: string;
-}
-
-const INITIAL: ApprovalItem[] = [
-  { id: '1', agent: 'Aria', dept: 'talent', description: 'Aria shortlisted 3 candidates — approve to send interview invites' },
-  { id: '2', agent: 'Penn', dept: 'growth', description: 'Penn drafted 5 outreach emails for Series A leads — approve to send' },
-  { id: '3', agent: 'Scout', dept: 'talent', description: 'Scout sourced 18 SaaS founders in London — approve to add to CRM' },
-  { id: '4', agent: 'Hawk', dept: 'intelligence', description: 'Hawk flagged 2 competitor pricing changes — approve to alert team' },
-];
+import { useWorkspace } from '@/contexts/WorkspaceContext';
+import { useApprovals } from '@/hooks/useApprovals';
+import { decideApproval } from '@/lib/orchestration';
+import { useState } from 'react';
 
 export default function AwaitingYou() {
-  const [items, setItems] = useState<ApprovalItem[]>(INITIAL);
+  const { workspaceId, loading: wsLoading } = useWorkspace();
+  const { approvals, loading } = useApprovals(workspaceId);
+  const [pendingIds, setPendingIds] = useState<Set<string>>(new Set());
 
-  const remove = (id: string, action: 'approved' | 'review') => {
-    setItems((p) => p.filter((i) => i.id !== id));
-    toast(action === 'approved' ? 'Approved' : 'Opening for review', {
-      description: action === 'approved' ? 'Your AI workforce is on it.' : 'Loading the full output...',
-    });
+  const decide = async (id: string, action: 'approve' | 'reject') => {
+    setPendingIds((p) => new Set(p).add(id));
+    try {
+      await decideApproval(id, action);
+      toast(action === 'approve' ? 'Approved' : 'Rejected', {
+        description: action === 'approve'
+          ? 'Your AI workforce is on it.'
+          : 'The plan has been halted.',
+      });
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : 'Something went wrong';
+      toast.error('Failed to update', { description: msg });
+      setPendingIds((p) => { const n = new Set(p); n.delete(id); return n; });
+    }
   };
+
+  const isReady = !wsLoading && !loading;
+  const visible = approvals.filter((a) => !pendingIds.has(a.id));
 
   return (
     <div className="min-h-screen bg-transparent pb-24">
@@ -40,15 +41,16 @@ export default function AwaitingYou() {
           <div>
             <h1 className="text-2xl font-bold text-foreground tracking-tight">Awaiting Your Approval</h1>
             <p className="text-sm text-muted-foreground mt-1">
-              Your AI workforce completed work and needs your green light. {items.length} item{items.length === 1 ? '' : 's'} pending.
+              Your AI workforce completed work and needs your green light.{' '}
+              {isReady && `${visible.length} item${visible.length === 1 ? '' : 's'} pending.`}
             </p>
           </div>
         </div>
 
         <div className="space-y-3">
           <AnimatePresence>
-            {items.map((item) => {
-              const dept = deptColor[item.dept];
+            {visible.map((item) => {
+              const agentName = item.title.split(' ')[0] || 'Agent';
               return (
                 <motion.div
                   key={item.id}
@@ -60,22 +62,24 @@ export default function AwaitingYou() {
                   className="relative flex items-center gap-4 rounded-xl border border-border bg-card/80 pl-4 pr-3 py-3.5 border-l-[3px] border-l-amber-500/70"
                 >
                   <div className="flex items-center gap-3 shrink-0 min-w-[110px]">
-                    <AgentAvatar agentName={item.agent} size="sm" />
-                    <span className="text-sm font-semibold text-foreground">{item.agent}</span>
+                    <AgentAvatar agentName={agentName} size="sm" />
+                    <span className="text-sm font-semibold text-foreground">{agentName}</span>
                   </div>
 
-                  <p className="flex-1 text-sm text-muted-foreground leading-snug">{item.description}</p>
+                  <p className="flex-1 text-sm text-muted-foreground leading-snug">
+                    {item.description ?? item.title}
+                  </p>
 
                   <div className="flex items-center gap-2 shrink-0">
                     <button
-                      onClick={() => remove(item.id, 'review')}
+                      onClick={() => decide(item.id, 'reject')}
                       className="flex items-center gap-1.5 text-xs font-semibold py-2 px-3 rounded-lg bg-muted hover:bg-muted/80 text-foreground transition-colors"
                     >
-                      <Eye className="h-3 w-3" />
-                      Review first
+                      <X className="h-3 w-3" />
+                      Reject
                     </button>
                     <button
-                      onClick={() => remove(item.id, 'approved')}
+                      onClick={() => decide(item.id, 'approve')}
                       className="flex items-center gap-1.5 text-xs font-semibold py-2 px-3 rounded-lg bg-emerald-500 hover:bg-emerald-600 text-white transition-colors shadow-[0_0_15px_rgba(16,185,129,0.3)]"
                     >
                       <Check className="h-3 w-3" />
@@ -87,7 +91,7 @@ export default function AwaitingYou() {
             })}
           </AnimatePresence>
 
-          {items.length === 0 && (
+          {isReady && visible.length === 0 && (
             <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}

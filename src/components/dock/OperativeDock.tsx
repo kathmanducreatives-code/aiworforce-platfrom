@@ -1,7 +1,10 @@
-import { useRef, useState, useEffect } from 'react';
+import { useRef, useState, useEffect, useMemo } from 'react';
 import { motion, useMotionValue, useTransform, useSpring, AnimatePresence } from 'framer-motion';
 import { Plus } from 'lucide-react';
 import { DOCK_AGENTS, DockAgent, deptColor } from '@/data/dockAgents';
+import { AGENT_BY_ID } from '@/data/agentProfiles';
+import { useAgents } from '@/hooks/useAgents';
+import { useWorkspace } from '@/contexts/WorkspaceContext';
 import AgentHoverCard from './AgentHoverCard';
 import AgentDrawer from './AgentDrawer';
 import AgentAvatar from '@/components/agents/AgentAvatar';
@@ -75,6 +78,35 @@ export default function OperativeDock() {
   const [openAgent, setOpenAgent] = useState<DockAgent | null>(null);
   const dismissTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  const { workspaceId } = useWorkspace();
+  const { agents: liveAgents } = useAgents(workspaceId);
+
+  // Merge live DB agent rows with static profile assets (image, role).
+  // If we don't have any live data yet, fall back to the static seed list
+  // so the dock never appears empty.
+  const dockAgents = useMemo<DockAgent[]>(() => {
+    if (!liveAgents || liveAgents.length === 0) return DOCK_AGENTS;
+    return liveAgents
+      .map((row) => {
+        const profile = AGENT_BY_ID[row.slug];
+        if (!profile) return null;
+        return {
+          id: row.slug,
+          name: row.name,
+          role: profile.role,
+          department: row.department,
+          model: row.model as DockAgent['model'],
+          image: profile.image,
+          currentTask: row.current_task ?? 'Idle — ready for tasks',
+          progress: row.progress ?? 0,
+          status: (row.status === 'running' || row.status === 'awaiting_approval') ? 'active' : 'idle',
+          href: '/dashboard',
+          recentActivity: [],
+        } as DockAgent;
+      })
+      .filter((x): x is DockAgent => x !== null);
+  }, [liveAgents]);
+
   const cancelDismiss = () => {
     if (dismissTimer.current) {
       clearTimeout(dismissTimer.current);
@@ -121,7 +153,7 @@ export default function OperativeDock() {
           transition={{ type: 'spring', stiffness: 220, damping: 24, delay: 0.2 }}
           className="flex items-end gap-3 px-4 py-2.5 rounded-2xl border border-border/60 bg-card/70 backdrop-blur-2xl shadow-[0_20px_60px_hsl(var(--background)/0.7)]"
         >
-          {DOCK_AGENTS.map((agent) => (
+          {dockAgents.map((agent) => (
             <DockItem
               key={agent.id}
               agent={agent}

@@ -11,6 +11,9 @@ import { supabase } from '@/integrations/supabase/client';
 import { motion } from 'framer-motion';
 import { DOCK_AGENTS, deptColor } from '@/data/dockAgents';
 import { cn } from '@/lib/utils';
+import { useWorkspace } from '@/contexts/WorkspaceContext';
+import { submitInstruction } from '@/lib/orchestration';
+import { toast } from 'sonner';
 
 
 interface CommandPaletteProps {
@@ -90,6 +93,8 @@ const CommandPalette = ({ open, onOpenChange }: CommandPaletteProps) => {
   const [results, setResults] = useState<SearchResult[]>([]);
   const [searching, setSearching] = useState(false);
   const [reply, setReply] = useState<{ agent: typeof DOCK_AGENTS[number]; text: string; q: string } | null>(null);
+  const [submitting, setSubmitting] = useState(false);
+  const { workspaceId } = useWorkspace();
 
   // Global keyboard shortcut
   useEffect(() => {
@@ -117,10 +122,30 @@ const CommandPalette = ({ open, onOpenChange }: CommandPaletteProps) => {
     if (!open) setReply(null);
   }, [open]);
 
-  const runCommand = (text: string) => {
-    if (!text.trim()) return;
+  const runCommand = async (text: string) => {
+    if (!text.trim() || submitting) return;
     const agent = routeAgentForQuery(text);
-    setReply({ agent, text: generateMockReply(text, agent), q: text });
+
+    if (!workspaceId) {
+      toast.error('Workspace not ready', { description: 'Try again in a moment.' });
+      return;
+    }
+
+    setSubmitting(true);
+    setReply({ agent, text: 'Planning…', q: text });
+    try {
+      const result = await submitInstruction(workspaceId, text);
+      setReply({ agent, text: result.plan_summary, q: text });
+      toast.success('Plan created', {
+        description: `${result.plan_summary} · ${result.steps_count} step${result.steps_count === 1 ? '' : 's'}`,
+      });
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : 'Failed to dispatch';
+      setReply({ agent, text: `Failed: ${msg}`, q: text });
+      toast.error('Could not dispatch', { description: msg });
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   // Search Supabase when query changes

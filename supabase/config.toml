@@ -84,3 +84,12 @@ verify_jwt = false
 
 [functions.job-feed]
 verify_jwt = false
+
+[functions.orchestrate]
+verify_jwt = false
+
+[functions.run-agent]
+verify_jwt = false
+
+[functions.approve-and-continue]
+verify_jwt = false
