@@ -145,6 +145,16 @@ export default function DeepSearch() {
     fetchCandidates();
     fetchAnalyzedResults();
 
+    // Debounce burst events to one refetch (Disk IO optimization).
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    const debouncedRefetch = () => {
+      if (timer) clearTimeout(timer);
+      timer = setTimeout(() => {
+        fetchCandidates();
+        setRefreshTrigger((prev) => prev + 1);
+      }, 300);
+    };
+
     const channel = supabase
       .channel('deep-search-updates')
       .on(
@@ -159,18 +169,16 @@ export default function DeepSearch() {
       .on(
         'postgres_changes',
         {
-          event: '*',
+          event: 'INSERT',
           schema: 'public',
           table: 'linkedin_leads',
         },
-        () => {
-          fetchCandidates();
-          setRefreshTrigger((prev) => prev + 1);
-        }
+        debouncedRefetch
       )
       .subscribe();
 
     return () => {
+      if (timer) clearTimeout(timer);
       supabase.removeChannel(channel);
     };
   }, [handleAnalysisUpdate]);

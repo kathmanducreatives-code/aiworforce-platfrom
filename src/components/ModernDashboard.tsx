@@ -199,7 +199,7 @@ const ModernDashboard = () => {
         error
       } = await supabase.from('resume_analyses').select('*').order('created_at', {
         ascending: false
-      });
+      }).limit(500);
       if (error) {
         throw new Error(`Failed to fetch resume data: ${error.message}`);
       }
