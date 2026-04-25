@@ -1,5 +1,6 @@
 import { motion } from 'framer-motion';
 import { cn } from '@/lib/utils';
+import AgentAvatar from '@/components/agents/AgentAvatar';
 
 export interface HandoffEvent {
   type: 'handoff';
@@ -34,12 +35,7 @@ export default function HandoffFeedItem({ event }: { event: HandoffEvent }) {
       </span>
 
       <div className="flex items-center gap-3 mb-2.5">
-        <div className={cn(
-          'w-7 h-7 rounded-full flex items-center justify-center text-[10px] font-bold text-white shrink-0',
-          deptBg[event.from.dept],
-        )}>
-          {event.from.agent[0]}
-        </div>
+        <AgentAvatar agentName={event.from.agent} size="sm" />
 
         <svg width="60" height="14" viewBox="0 0 60 14" className="shrink-0">
           <line
@@ -54,12 +50,7 @@ export default function HandoffFeedItem({ event }: { event: HandoffEvent }) {
           <path d="M50 3 L57 7 L50 11" fill="none" className={cn(deptStroke[event.to.dept])} strokeWidth="1.5" strokeLinejoin="round" strokeLinecap="round" />
         </svg>
 
-        <div className={cn(
-          'w-7 h-7 rounded-full flex items-center justify-center text-[10px] font-bold text-white shrink-0',
-          deptBg[event.to.dept],
-        )}>
-          {event.to.agent[0]}
-        </div>
+        <AgentAvatar agentName={event.to.agent} size="sm" />
 
         <span className="text-[11px] text-zinc-500 font-mono ml-auto mr-16">{event.time}</span>
       </div>

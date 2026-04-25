@@ -4,6 +4,7 @@ import { Check, Eye, Inbox } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 import { deptColor, DockDept } from '@/data/dockAgents';
+import AgentAvatar from '@/components/agents/AgentAvatar';
 
 interface ApprovalItem {
   id: string;
@@ -59,12 +60,7 @@ export default function AwaitingYou() {
                   className="relative flex items-center gap-4 rounded-xl border border-border bg-card/80 pl-4 pr-3 py-3.5 border-l-[3px] border-l-amber-500/70"
                 >
                   <div className="flex items-center gap-3 shrink-0 min-w-[110px]">
-                    <div className={cn(
-                      'w-9 h-9 rounded-full ring-2 flex items-center justify-center text-xs font-bold text-white bg-gradient-to-br',
-                      dept.ring, dept.bg,
-                    )}>
-                      {item.agent[0]}
-                    </div>
+                    <AgentAvatar agentName={item.agent} size="sm" />
                     <span className="text-sm font-semibold text-foreground">{item.agent}</span>
                   </div>
 
