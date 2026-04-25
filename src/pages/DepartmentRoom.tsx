@@ -42,14 +42,10 @@ const VALID_DEPTS: AgentDept[] = ['talent', 'growth', 'intelligence', 'content']
 
 export default function DepartmentRoom() {
   const { dept } = useParams<{ dept: string }>();
-  const navigate = useNavigate();
-  const { workspaceId } = useWorkspace();
-
-  if (!dept || !VALID_DEPTS.includes(dept as AgentDept)) {
-    return <div className="p-8 text-muted-foreground">Unknown department.</div>;
-  }
-  const department = dept as AgentDept;
+  const isValid = !!dept && VALID_DEPTS.includes(dept as AgentDept);
+  const department = (isValid ? dept : 'talent') as AgentDept;
   const meta = DEPT_META[department];
+  const { workspaceId } = useWorkspace();
 
   const { agents } = useAgents(workspaceId);
   const { plans } = useAllPlans(workspaceId, 100);
