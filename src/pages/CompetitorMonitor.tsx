@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
+import { useDebouncedCallback } from "@/hooks/useDebouncedCallback";
 import { Plus, Radar, Building, Briefcase, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -22,7 +23,14 @@ export default function CompetitorMonitor() {
         const { data } = await (supabase as any).from("competitor_companies").select("*").eq("user_id", user.id).order("created_at", { ascending: false });
         if (data) setCompetitors(data);
 
-        const { data: jobs } = await (supabase as any).from("competitor_job_postings").select("job_title, is_new, first_seen_at");
+        // Bound the title aggregation: only last 30 days, capped at 2000 rows.
+        const oneMonthAgo = new Date();
+        oneMonthAgo.setDate(oneMonthAgo.getDate() - 30);
+        const { data: jobs } = await (supabase as any)
+            .from("competitor_job_postings")
+            .select("job_title")
+            .gte("first_seen_at", oneMonthAgo.toISOString())
+            .limit(2000);
 
         // Process top titles
         if (jobs) {
@@ -39,11 +47,29 @@ export default function CompetitorMonitor() {
         setLoading(false);
     };
 
+    const debouncedLoad = useDebouncedCallback(loadCompetitors, 500);
+
     useEffect(() => {
         loadCompetitors();
-        const interval = setInterval(loadCompetitors, 15000);
-        return () => clearInterval(interval);
-    }, [user]);
+        if (!user) return;
+        // Realtime: refetch only on new rows (replaces 15s polling).
+        const channel = (supabase as any)
+            .channel(`competitor-monitor-${user.id}`)
+            .on(
+                'postgres_changes',
+                { event: 'INSERT', schema: 'public', table: 'competitor_companies', filter: `user_id=eq.${user.id}` },
+                () => debouncedLoad(),
+            )
+            .on(
+                'postgres_changes',
+                { event: 'INSERT', schema: 'public', table: 'competitor_job_postings' },
+                () => debouncedLoad(),
+            )
+            .subscribe();
+        return () => {
+            supabase.removeChannel(channel);
+        };
+    }, [user, debouncedLoad]);
 
     // Derived stats
     const totalTracked = competitors.length;
@@ -64,7 +90,7 @@ export default function CompetitorMonitor() {
             // Note: competitor_job_postings doesn't have user_id, join requires complex RPC or just rely on RLS.
             // Assuming RLS restricts to user's competitors jobs.
             const { count } = await (supabase as any).from("competitor_job_postings")
-                .select("*", { count: "exact", head: true })
+                .select("*", { count: "estimated", head: true })
                 .eq("is_new", true)
                 .gte("first_seen_at", oneWeekAgo.toISOString());
 
