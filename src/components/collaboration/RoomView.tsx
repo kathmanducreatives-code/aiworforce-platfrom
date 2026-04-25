@@ -99,23 +99,28 @@ const RoomView = ({ room, onBack }: RoomViewProps) => {
   };
 
   const subscribeToAttachments = () => {
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    const debouncedFetch = () => {
+      if (timer) clearTimeout(timer);
+      timer = setTimeout(() => fetchAttachments(), 300);
+    };
+
     const channel = supabase
       .channel(`room-attachments-${room.id}`)
       .on(
         'postgres_changes',
         {
-          event: '*',
+          event: 'INSERT',
           schema: 'public',
           table: 'collaboration_candidate_attachments',
           filter: `room_id=eq.${room.id}`,
         },
-        () => {
-          fetchAttachments();
-        }
+        debouncedFetch,
       )
       .subscribe();
 
     return () => {
+      if (timer) clearTimeout(timer);
       supabase.removeChannel(channel);
     };
   };
