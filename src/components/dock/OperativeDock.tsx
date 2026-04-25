@@ -4,6 +4,7 @@ import { Plus } from 'lucide-react';
 import { DOCK_AGENTS, DockAgent, deptColor } from '@/data/dockAgents';
 import AgentHoverCard from './AgentHoverCard';
 import AgentDrawer from './AgentDrawer';
+import AgentAvatar from '@/components/agents/AgentAvatar';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 
@@ -49,10 +50,15 @@ function DockItem({ agent, mouseX, onHover, onClick }: DockItemProps) {
       </motion.div>
 
       <div className={cn(
-        'w-full h-full rounded-full ring-2 flex items-center justify-center text-sm font-bold text-primary-foreground bg-gradient-to-br shadow-[0_4px_20px_hsl(var(--background)/0.6)]',
-        dept.ring, dept.bg,
+        'w-full h-full rounded-full ring-2 overflow-hidden bg-card shadow-[0_4px_20px_hsl(var(--background)/0.6)]',
+        dept.ring,
       )}>
-        {agent.name[0]}
+        <img
+          src={agent.image}
+          alt={agent.name}
+          className="w-full h-full object-cover"
+          draggable={false}
+        />
       </div>
 
       <span className={cn(
