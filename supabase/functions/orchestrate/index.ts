@@ -107,7 +107,7 @@ Deno.serve(async (req) => {
     if (userErr || !userData?.user?.id) return json({ error: 'Unauthorized' }, 401);
     const userId = userData.user.id;
 
-    const { user_instruction, workspace_id } = body ?? {};
+    const { user_instruction, workspace_id, target_agent_slug } = body ?? {};
     if (typeof user_instruction !== 'string' || user_instruction.trim().length === 0) {
       return json({ error: 'user_instruction is required' }, 400);
     }
@@ -135,7 +135,19 @@ Deno.serve(async (req) => {
       return json({ error: 'No agents in workspace' }, 400);
     }
 
-    const plan = await planWithAI(user_instruction, agentRows);
+    // If a specific agent was targeted (e.g. via @ mention), skip the planner
+    // and create a single-step plan assigned to that agent.
+    let plan: { plan_summary: string; steps: { agent_slug: string; description: string }[] };
+    if (typeof target_agent_slug === 'string') {
+      const target = agentRows.find((a) => a.slug === target_agent_slug);
+      if (!target) return json({ error: `Unknown agent slug: ${target_agent_slug}` }, 400);
+      plan = {
+        plan_summary: `${target.name}: ${user_instruction.slice(0, 110)}`,
+        steps: [{ agent_slug: target.slug, description: user_instruction }],
+      };
+    } else {
+      plan = await planWithAI(user_instruction, agentRows);
+    }
 
     // Insert plan
     const { data: planRow, error: planErr } = await admin
@@ -151,7 +163,6 @@ Deno.serve(async (req) => {
       .single();
     if (planErr || !planRow) return json({ error: planErr?.message ?? 'plan insert failed' }, 500);
 
-    // Insert tasks
     const tasksToInsert = plan.steps.map((s, i) => {
       const a = agentRows.find((ag) => ag.slug === s.agent_slug) ?? agentRows[0];
       return {
@@ -168,7 +179,6 @@ Deno.serve(async (req) => {
       .select('id, step_index');
     if (tasksErr) return json({ error: tasksErr.message }, 500);
 
-    // Activity: plan_created
     await admin.from('activity_feed').insert({
       workspace_id,
       plan_id: planRow.id,
@@ -178,21 +188,25 @@ Deno.serve(async (req) => {
       metadata: { steps: plan.steps },
     });
 
-    // Mark plan executing and kick off first task asynchronously
     await admin.from('task_plans').update({ status: 'executing' }).eq('id', planRow.id);
 
     const firstTask = insertedTasks?.sort((a, b) => a.step_index - b.step_index)[0];
     if (firstTask) {
-      // Fire-and-forget; don't await
       admin.functions
         .invoke('run-agent', { body: { task_id: firstTask.id } })
         .catch((e) => console.error('run-agent kick failed', e));
     }
 
+    const stepsWithNames = plan.steps.map((s) => {
+      const a = agentRows.find((ag) => ag.slug === s.agent_slug);
+      return { agent_slug: s.agent_slug, agent_name: a?.name ?? s.agent_slug, description: s.description };
+    });
+
     return json({
       plan_id: planRow.id,
       plan_summary: plan.plan_summary,
       steps_count: plan.steps.length,
+      steps: stepsWithNames,
     });
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
