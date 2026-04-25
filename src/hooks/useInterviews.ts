@@ -288,24 +288,29 @@ export function useInterviews() {
     loadData();
   }, []);
 
-  // Subscribe to realtime updates
+  // Subscribe to realtime updates (INSERT-only + debounced to coalesce bursts).
   useEffect(() => {
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    const debouncedFetch = () => {
+      if (timer) clearTimeout(timer);
+      timer = setTimeout(() => fetchInterviews(), 300);
+    };
+
     const channel = supabase
       .channel('interviews-changes')
       .on(
         'postgres_changes',
         {
-          event: '*',
+          event: 'INSERT',
           schema: 'public',
           table: 'interviews',
         },
-        () => {
-          fetchInterviews();
-        }
+        debouncedFetch,
       )
       .subscribe();
 
     return () => {
+      if (timer) clearTimeout(timer);
       supabase.removeChannel(channel);
     };
   }, []);
