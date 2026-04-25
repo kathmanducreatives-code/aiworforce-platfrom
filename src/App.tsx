@@ -93,6 +93,13 @@ const App = () => (
                       </ProtectedRoute>
                     } />
 
+                    <Route path="/awaiting-you" element={
+                      <ProtectedRoute>
+                        <MainLayout>
+                          <AwaitingYou />
+                        </MainLayout>
+                      </ProtectedRoute>
+                    } />
 
 
                     <Route path="/candidates" element={
