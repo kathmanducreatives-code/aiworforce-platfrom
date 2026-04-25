@@ -10,6 +10,7 @@ import AgentDrawer from './AgentDrawer';
 import AgentAvatar from '@/components/agents/AgentAvatar';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
+import { openAgentBuilder } from '@/hooks/useAgentBuilder';
 
 interface DockItemProps {
   agent: DockAgent;
@@ -135,9 +136,7 @@ export default function OperativeDock() {
   };
 
   const handleDeploy = () => {
-    toast('Deploy a new agent', {
-      description: 'Choose a department to spin up a new operative.',
-    });
+    openAgentBuilder();
   };
 
   useEffect(() => () => cancelDismiss(), []);

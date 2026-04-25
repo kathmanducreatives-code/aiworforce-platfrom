@@ -1,134 +1,152 @@
-# Connect ScreeningPilot Frontend → Supabase Orchestration Layer
 
-This plan adds the missing **agent orchestration backend** (tables, RLS, edge functions) and rewires the existing dock, dashboard feed, awaiting-you inbox, and command bar to consume real Supabase data with realtime updates. Existing recruiter features (resume_analyses, ICP, leads, screening jobs, etc.) are **untouched**.
+# Agent Builder Panel — Implementation Plan
+
+A right-side slide-in panel triggered by "+ New Agent" buttons across the app (sidebar, dock, department rooms). Walks the user through 6 steps to configure and deploy a custom AI agent into their workspace.
 
 ---
 
-## 1. Database Schema (single migration)
+## 1. Database Migration
 
-All 8 tables are scoped to a `workspaces` table. RLS enforces "user must be a member of the workspace". A `workspace_members` join table + `is_workspace_member(uid, ws)` SECURITY DEFINER function is added to avoid recursive RLS (per project memory `rls-security-definer-function`).
+**File:** `supabase/migrations/<timestamp>_agent_builder_fields.sql`
 
-**Tables**
+Extend the existing `agents` and `agent_capabilities` tables to support custom user-built agents.
 
-| Table | Key columns |
+```sql
+-- agents: add builder fields
+ALTER TABLE public.agents
+  ADD COLUMN IF NOT EXISTS role_prompt   text,
+  ADD COLUMN IF NOT EXISTS tools         text[] NOT NULL DEFAULT '{}',
+  ADD COLUMN IF NOT EXISTS trigger_type  text NOT NULL DEFAULT 'on_demand',
+  ADD COLUMN IF NOT EXISTS avatar_color  text NOT NULL DEFAULT 'emerald',
+  ADD COLUMN IF NOT EXISTS is_default    boolean NOT NULL DEFAULT false;
+
+-- Allow new "operations" department alongside existing four
+ALTER TABLE public.agents DROP CONSTRAINT IF EXISTS agents_department_check;
+ALTER TABLE public.agents
+  ADD CONSTRAINT agents_department_check
+  CHECK (department IN ('talent','growth','intelligence','content','operations'));
+
+-- agent_capabilities: add typing + priority fields
+ALTER TABLE public.agent_capabilities
+  ADD COLUMN IF NOT EXISTS input_type  text,
+  ADD COLUMN IF NOT EXISTS output_type text,
+  ADD COLUMN IF NOT EXISTS priority    int NOT NULL DEFAULT 1;
+```
+
+Existing seeded agents (Aria, Scout, Penn, Hawk, Scribe) will be flagged via a follow-up `UPDATE` to `is_default = true`.
+
+---
+
+## 2. Resolved Spec ↔ Codebase Discrepancies
+
+| Topic | Resolution |
 |---|---|
-| `workspaces` | `id uuid pk`, `name text`, `owner_id uuid → auth.users`, `created_at` |
-| `workspace_members` | `workspace_id`, `user_id`, `role text`, unique(workspace_id,user_id) |
-| `agents` | `id uuid pk`, `workspace_id`, `slug text` (aria/scout/penn/hawk/scribe), `name`, `department text` (talent/growth/intelligence/content), `model text` (gpt-4o/claude-sonnet/claude-haiku/gemini-pro), `status text` ('idle'\|'running'\|'awaiting_approval'\|'error'), `current_task text`, `progress int`, `last_active_at` |
-| `agent_capabilities` | `id`, `agent_id`, `capability text`, `tool text`, `enabled bool` |
-| `task_plans` | `id`, `workspace_id`, `user_instruction text`, `plan_summary text`, `status text` ('planning'\|'executing'\|'awaiting_approval'\|'complete'\|'failed'), `created_by uuid`, `created_at`, `completed_at` |
-| `tasks` | `id`, `plan_id`, `agent_id`, `step_index int`, `description text`, `status text` ('pending'\|'running'\|'complete'\|'failed'\|'skipped'), `input jsonb`, `output jsonb`, `started_at`, `finished_at` |
-| `activity_feed` | `id`, `workspace_id`, `plan_id` (nullable), `agent_id` (nullable), `event_type text` (`plan_created`\|`agent_started`\|`handoff`\|`awaiting_approval`\|`approved`\|`rejected`\|`plan_complete`), `title text`, `body text`, `metadata jsonb`, `created_at` |
-| `handoffs` | `id`, `plan_id`, `from_agent_id`, `to_agent_id`, `payload jsonb`, `created_at` |
-| `approvals` | `id`, `workspace_id`, `plan_id`, `agent_id`, `task_id` (nullable), `title text`, `description text`, `payload jsonb`, `status text` ('pending'\|'approved'\|'rejected'), `decided_by uuid`, `decided_at` |
-
-**RLS** — Enabled on all 8 tables; policies use `public.is_workspace_member(auth.uid(), workspace_id)` for SELECT, and `is_workspace_member(...) AND auth.uid() IS NOT NULL` for write. `workspaces` itself uses `owner_id = auth.uid() OR id IN (select workspace_id from workspace_members where user_id = auth.uid())`.
-
-**Auto-provisioning** — A trigger on `auth.users` (extending the existing `handle_new_user` pattern) creates a default workspace per new user, inserts them as `owner` in `workspace_members`, and seeds 5 default agents (Aria, Scout, Penn, Hawk, Scribe) with their canonical departments + models matching `src/data/dockAgents.ts`. A backfill block at the bottom of the migration provisions the same for existing users so the dock isn't empty for the current account.
-
-**Realtime** — `ALTER PUBLICATION supabase_realtime ADD TABLE` for `agents`, `activity_feed`, `approvals`, `task_plans` (+ `REPLICA IDENTITY FULL`).
+| `workspace_id` (spec hardcodes `…0001`) | Use `useWorkspace().workspaceId` so RLS + multi-tenant isolation continue to work. The hardcoded ID in the spec is treated as illustrative. |
+| "Operations" department (not in current enum) | Added to DB constraint + UI maps. Uses a neutral slate ring color. |
+| Step count (spec says "5 steps" then lists 6) | Build all **6 steps** as listed in the spec body. |
+| Missing `agents` columns | Added via migration above. |
+| Missing `agent_capabilities` columns | Added via migration above. |
 
 ---
 
-## 2. Edge Functions (3 new)
+## 3. Data Layer
 
-All in `supabase/functions/<name>/index.ts`, using `verify_jwt = false` + in-code `getClaims` validation, modern CORS headers, and Zod input validation per project standards.
+**File:** `src/lib/orchestration.ts` (extend)
 
-### `orchestrate`
-- **Input**: `{ user_instruction: string, workspace_id: string }`
-- **Auth**: requires JWT; verifies `is_workspace_member`.
-- **Does**:
-  1. Calls Lovable AI Gateway (`gemini-2.5-flash` per `ai-model-standards`) to produce a structured plan: `{ plan_summary, steps: [{ agent_slug, description }] }`.
-  2. Inserts `task_plans` row (status=`planning`), inserts N `tasks`, inserts `activity_feed` event `plan_created`.
-  3. Updates plan status to `executing`, then asynchronously invokes `run-agent` for the first step via `supabase.functions.invoke()` (fire-and-forget — no `await`).
-  4. Returns `{ plan_id, plan_summary, steps_count }` to the frontend.
+Add a `createAgent` helper that:
+1. Inserts the agent row with all builder fields
+2. Bulk-inserts the capability rows referencing the new `agent.id`
+3. Returns the created `DBAgent`
 
-### `run-agent` (called by orchestrate; never directly from frontend)
-- **Input**: `{ task_id: string }`
-- **Does**: Marks task `running`, sets agent `status=running`, inserts `activity_feed` (`agent_started`). Calls AI Gateway to "execute" the step (mock-actionable output for now: returns a structured JSON describing what was done). On completion:
-  - If the step requires approval (e.g. "send emails", "post outreach", "schedule interview"), creates an `approvals` row, sets agent `status=awaiting_approval`, inserts `activity_feed` (`awaiting_approval`), and stops.
-  - Otherwise marks task `complete`, inserts a `handoffs` row + `activity_feed` (`handoff`) if a next step exists, sets next agent, and recursively invokes itself for the next task.
-  - When no next task: marks plan `complete`, inserts `activity_feed` (`plan_complete`), sets agent back to `idle`.
+```ts
+export interface CreateAgentInput {
+  workspaceId: string;
+  name: string;
+  department: AgentDept | 'operations';
+  rolePrompt: string;
+  model: string;
+  avatarColor: string;
+  tools: string[];
+  capabilities: { capability: string; input_type: string; output_type: string }[];
+}
 
-### `approve-and-continue`
-- **Input**: `{ approval_id: string, action: 'approve' | 'reject' }`
-- **Does**: Verifies workspace membership, updates approval row (`status`, `decided_by`, `decided_at`), inserts `activity_feed` (`approved` | `rejected`). On approve, resumes by invoking `run-agent` for the next pending task in the plan; on reject, marks plan `failed` and resets agent to `idle`.
+export async function createAgent(input: CreateAgentInput): Promise<DBAgent> { /* … */ }
+```
 
-`supabase/config.toml` — add the 3 functions with `verify_jwt = false`.
-
----
-
-## 3. Frontend Wiring
-
-### A. `src/lib/orchestration.ts` (new)
-Centralized data layer:
-- `getCurrentWorkspaceId()` — returns the auth user's first workspace id (cached in `useState` via context below).
-- `fetchAgents(workspaceId)`, `fetchActivityFeed(workspaceId, limit=50)`, `fetchPendingApprovals(workspaceId)`, `fetchCurrentPlan(workspaceId)`.
-- `subscribeAgents`, `subscribeActivityFeed`, `subscribeApprovals`, `subscribePlans` — return unsubscribe fns; use `supabase.channel(...).on('postgres_changes', ...)`.
-- `submitInstruction(text)` → `supabase.functions.invoke('orchestrate', ...)`.
-- `decideApproval(id, action)` → `supabase.functions.invoke('approve-and-continue', ...)`.
-
-### B. `src/contexts/WorkspaceContext.tsx` (new)
-Provides `{ workspaceId, loading }` to the tree by querying `workspace_members` for `auth.uid()`. Mounted inside `AuthProvider` in `App.tsx`.
-
-### C. Operative Dock — `src/components/dock/OperativeDock.tsx`
-- Replace static `DOCK_AGENTS` with `useAgents(workspaceId)` hook backed by `fetchAgents` + `subscribeAgents`.
-- Map DB agent rows → existing `DockAgent` shape using the `slug` to look up image/role from `agentProfiles.ts` (kept as a static profile registry).
-- `status === 'running' || 'awaiting_approval'` → pulsing dot; else static. Department color ring stays driven by `department`.
-- Hover card / drawer pull `current_task`, `progress`, `model`, `name` directly from the row.
-
-### D. Command Bar — `src/components/dock/CommandBar.tsx` + `CommandPalette.tsx`
-- Add a controlled text input + submit handler inside the existing palette flow. On submit:
-  ```ts
-  const { data } = await submitInstruction(text);
-  toast.success('Plan created', { description: data.plan_summary });
-  ```
-- Keep the existing `command-bar:prefill` event so dock-driven prefill still works.
-
-### E. Awaiting You Inbox — `src/pages/AwaitingYou.tsx`
-- Replace the hardcoded `INITIAL` array with `useApprovals(workspaceId)` (fetch + subscribe).
-- "Approve" / "Reject" buttons call `decideApproval(id, 'approve' | 'reject')`. Optimistic removal stays for snappy UX; sonner toast on success/error.
-- Pending count is exposed via context so the sidebar/dock can show a badge.
-
-### F. Activity Feed (Dashboard) — `src/components/dashboard/HandoffFeedItem.tsx` + Dashboard
-- Generalize `HandoffFeedItem` to render any `event_type`: switch on `event_type` for icon, color stripe, and layout (handoff stays two-agent; others use a single-agent compact card).
-- Replace the hardcoded `HANDOFF_EVENTS` in `Dashboard.tsx` with a `useActivityFeed(workspaceId, 20)` hook that prepends new realtime inserts at the top with a fade-in.
-
-### G. Verification Panel — `src/components/dev/VerificationPanel.tsx` (new)
-- Fixed bottom-right card, only renders when `import.meta.env.DEV`.
-- On mount, runs 8 lightweight `select count` queries (one per orchestration table) + a `supabase.functions.invoke('orchestrate', { /* dry-run flag */ })` ping (orchestrate accepts `{ ping: true }` and returns `{ ok: true }` without creating a plan).
-- Shows green ✓ + row count per table, red ✗ + error message on failure. Dismiss button hides for the session (sessionStorage flag).
-- Mounted in `App.tsx` next to `<AuthenticatedBackground />`, gated on `import.meta.env.DEV`.
+Also extend `AgentDept` type to include `'operations'` and add color tokens for it in `agentProfiles.ts`.
 
 ---
 
-## 4. Files Touched
+## 4. UI Components
 
-**Created**
-- `supabase/migrations/<timestamp>_orchestration_layer.sql`
-- `supabase/functions/orchestrate/index.ts`
-- `supabase/functions/run-agent/index.ts`
-- `supabase/functions/approve-and-continue/index.ts`
-- `src/lib/orchestration.ts`
-- `src/contexts/WorkspaceContext.tsx`
-- `src/hooks/useAgents.ts`, `useActivityFeed.ts`, `useApprovals.ts`
-- `src/components/dev/VerificationPanel.tsx`
+### Trigger hook
+**`src/hooks/useAgentBuilder.ts`** — small zustand-style store exposing `{ open, openBuilder(prefill?), closeBuilder() }` so any component (sidebar, dock, department room) can launch the panel and optionally prefill the department.
+
+### Panel shell
+**`src/components/agents/AgentBuilderPanel.tsx`**
+- Wraps the existing `SlideOverPanel` (right-side, ~480px desktop, full-width mobile, dark backdrop)
+- Holds the wizard state (`formData`, `currentStep`, `errors`)
+- Renders the **step progress bar** (6 segments, completed = emerald)
+- Footer: `Back` / `Next` buttons, with `Next` becoming **"Deploy Agent"** on step 6
+- Validates the current step before allowing `Next`
+- On deploy: calls `createAgent`, then swaps body to a **success screen**
+
+### Step components (in `src/components/agents/builder/`)
+1. **`Step1Identity.tsx`** — name input + 8-swatch color picker + live `AgentAvatar` preview
+2. **`Step2Department.tsx`** — 5 selectable cards (Talent, Growth, Content, Intelligence, Operations) with icon + one-liner
+3. **`Step3RolePrompt.tsx`** — large textarea, char counter, 50-char minimum, helper tip
+4. **`Step4Model.tsx`** — 4 selectable model cards (`claude-haiku-4-5-20251001`, `claude-sonnet-4-5-20251001`, `gpt-4o`, `gemini-1.5-pro`) using `ModelBadge` icons
+5. **`Step5Capabilities.tsx`** — table with rows `{capability, input_type, output_type}`, "Add Row" up to 5, helper text + worked example
+6. **`Step6Tools.tsx`** — toggle cards for `web_search`, `firecrawl`, `email_sender`, `slack_notification`, `elevenlabs_voice`; "Skip for now" link
+7. **`SuccessScreen.tsx`** — shows new agent avatar, "<Name> is deployed and ready", summary (department, model, capability count, tools enabled), Close button
+
+### Validation
+Inline red error messages under each field. `Next`/`Deploy` disabled until step is valid.
+
+| Step | Rule |
+|---|---|
+| 1 | name required (1–60 chars) |
+| 2 | department required |
+| 3 | role prompt ≥ 50 chars |
+| 4 | model selected |
+| 5 | ≥ 1 fully filled capability row (all 3 columns) |
+| 6 | optional |
+
+---
+
+## 5. Integration points
+
+- **`src/components/MainLayout.tsx`** — mount `<AgentBuilderPanel />` once at root so any trigger opens it
+- **`src/components/Sidebar.tsx`** — add a "+ New Agent" button in the Departments section
+- **`src/components/dock/OperativeDock.tsx`** — add a `+` tile at the end of the agent row
+- **`src/pages/DepartmentRoom.tsx`** — add a "+ New Agent" button in the room header that prefills `department` for step 2
+
+After deploy, the existing `subscribeAgents` realtime subscription will automatically:
+- Add the new agent to the dock
+- Make it appear in its department room
+- Make it available to the orchestrator via the new `agent_capabilities` rows
+
+---
+
+## 6. Files
+
+**New**
+- `supabase/migrations/<ts>_agent_builder_fields.sql`
+- `src/hooks/useAgentBuilder.ts`
+- `src/components/agents/AgentBuilderPanel.tsx`
+- `src/components/agents/builder/Step1Identity.tsx`
+- `src/components/agents/builder/Step2Department.tsx`
+- `src/components/agents/builder/Step3RolePrompt.tsx`
+- `src/components/agents/builder/Step4Model.tsx`
+- `src/components/agents/builder/Step5Capabilities.tsx`
+- `src/components/agents/builder/Step6Tools.tsx`
+- `src/components/agents/builder/SuccessScreen.tsx`
+- `src/components/agents/builder/StepProgress.tsx`
 
 **Modified**
-- `supabase/config.toml` (register 3 functions)
-- `src/App.tsx` (mount `WorkspaceProvider`, `VerificationPanel`)
-- `src/components/dock/OperativeDock.tsx` (live agents)
-- `src/components/dock/CommandBar.tsx` + `src/components/shared/CommandPalette.tsx` (submit → orchestrate)
-- `src/pages/AwaitingYou.tsx` (live approvals)
-- `src/pages/Dashboard.tsx` (live activity feed)
-- `src/components/dashboard/HandoffFeedItem.tsx` (generalize event types)
-- `src/data/dockAgents.ts` (kept as static profile fallback; runtime data now flows from DB)
-
----
-
-## 5. Out of Scope / Notes
-- Existing tables (`resume_analyses`, ICP, leads, screening jobs) are untouched.
-- The Lovable AI Gateway secret (`LOVABLE_API_KEY`) is already provisioned for this project — no new secret required.
-- The orchestrate/run-agent loop is intentionally simple (sequential plan execution). Parallel fan-out, retries, and tool-calling can be layered on later without schema changes.
-
-**Ready to switch to default mode and execute?** Reply *approve* and I'll ship the migration, the 3 edge functions, and the frontend wiring in one pass.
+- `src/lib/orchestration.ts` (add `createAgent`, extend types)
+- `src/data/agentProfiles.ts` (add `operations` dept color tokens)
+- `src/components/MainLayout.tsx` (mount panel)
+- `src/components/Sidebar.tsx` (+ New Agent trigger)
+- `src/components/dock/OperativeDock.tsx` (+ tile)
+- `src/pages/DepartmentRoom.tsx` (+ button with department prefill)

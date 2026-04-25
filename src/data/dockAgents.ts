@@ -92,6 +92,7 @@ export const deptColor: Record<DockDept, { ring: string; dot: string; text: stri
   growth:       { ring: 'ring-blue-500/70',    dot: 'bg-blue-500',    text: 'text-blue-400',    bg: 'from-blue-500/30 to-blue-700/30',       border: 'border-blue-500/40' },
   content:      { ring: 'ring-violet-500/70',  dot: 'bg-violet-500',  text: 'text-violet-400',  bg: 'from-violet-500/30 to-violet-700/30',   border: 'border-violet-500/40' },
   intelligence: { ring: 'ring-amber-500/70',   dot: 'bg-amber-500',   text: 'text-amber-400',   bg: 'from-amber-500/30 to-amber-700/30',     border: 'border-amber-500/40' },
+  operations:   { ring: 'ring-slate-400/70',   dot: 'bg-slate-400',   text: 'text-slate-300',   bg: 'from-slate-400/30 to-slate-700/30',     border: 'border-slate-400/40' },
 };
 
 // Legacy text-only badge (kept for any consumer not yet migrated to <ModelBadge/>)

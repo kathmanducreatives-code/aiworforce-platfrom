@@ -4,7 +4,7 @@
 import { supabase } from '@/integrations/supabase/client';
 import type { RealtimeChannel } from '@supabase/supabase-js';
 
-export type AgentDept = 'talent' | 'growth' | 'intelligence' | 'content';
+export type AgentDept = 'talent' | 'growth' | 'intelligence' | 'content' | 'operations';
 export type AgentStatus = 'idle' | 'running' | 'awaiting_approval' | 'error';
 
 export interface DBAgent {
@@ -239,4 +239,86 @@ export async function pingOrchestrate() {
   const { data, error } = await supabase.functions.invoke('orchestrate', { body: { ping: true } });
   if (error) throw error;
   return data as { ok: boolean };
+}
+
+// ---------------- Agent Builder ----------------
+export interface CreateAgentCapability {
+  capability: string;
+  input_type: string;
+  output_type: string;
+  priority?: number;
+}
+
+export interface CreateAgentInput {
+  workspaceId: string;
+  name: string;
+  department: AgentDept;
+  rolePrompt: string;
+  model: string;
+  avatarColor: string;
+  tools: string[];
+  triggerType?: string;
+  capabilities: CreateAgentCapability[];
+}
+
+function slugify(name: string): string {
+  return name
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 40) || `agent-${Date.now().toString(36)}`;
+}
+
+export async function createAgent(input: CreateAgentInput): Promise<DBAgent> {
+  const baseSlug = slugify(input.name);
+  // Ensure uniqueness within the workspace by appending a short suffix if needed.
+  let slug = baseSlug;
+  for (let i = 0; i < 3; i++) {
+    const { data: existing } = await supabase
+      .from('agents' as any)
+      .select('id')
+      .eq('workspace_id', input.workspaceId)
+      .eq('slug', slug)
+      .maybeSingle();
+    if (!existing) break;
+    slug = `${baseSlug}-${Math.random().toString(36).slice(2, 5)}`;
+  }
+
+  const { data: agent, error } = await supabase
+    .from('agents' as any)
+    .insert({
+      workspace_id: input.workspaceId,
+      slug,
+      name: input.name,
+      department: input.department,
+      model: input.model,
+      role_prompt: input.rolePrompt,
+      avatar_color: input.avatarColor,
+      tools: input.tools,
+      trigger_type: input.triggerType ?? 'on_demand',
+      is_default: false,
+      status: 'idle',
+      progress: 0,
+    })
+    .select('*')
+    .single();
+
+  if (error || !agent) throw error ?? new Error('Failed to create agent');
+
+  if (input.capabilities.length > 0) {
+    const rows = input.capabilities.map((c, idx) => ({
+      agent_id: (agent as any).id,
+      capability: c.capability,
+      input_type: c.input_type,
+      output_type: c.output_type,
+      priority: c.priority ?? idx + 1,
+      enabled: true,
+    }));
+    const { error: capErr } = await supabase
+      .from('agent_capabilities' as any)
+      .insert(rows);
+    if (capErr) throw capErr;
+  }
+
+  return agent as unknown as DBAgent;
 }
