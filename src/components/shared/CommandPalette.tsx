@@ -5,10 +5,48 @@ import {
 } from '@/components/ui/command';
 import {
   LayoutDashboard, Activity, Calendar, Search, Brain, Target, TrendingUp,
-  Mail, Share2, BarChart3, Plus, Upload, Zap, Users, Eye, Crosshair, Radar, Briefcase, Loader2,
+  Mail, Share2, BarChart3, Plus, Upload, Zap, Users, Eye, Crosshair, Radar, Briefcase, Loader2, Sparkles,
 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
+import { motion } from 'framer-motion';
+import { DOCK_AGENTS, deptColor } from '@/data/dockAgents';
+import { cn } from '@/lib/utils';
 
+
+const SUGGESTED_COMMANDS = [
+  'Ask Scout to source 20 SaaS founders in London',
+  "Tell Penn to write outreach for today's leads",
+  'Show me what Aria did today',
+  'Deploy a new agent in Growth',
+  "Summarize today's intel signals",
+];
+
+const routeAgentForQuery = (q: string) => {
+  const lc = q.toLowerCase();
+  return (
+    DOCK_AGENTS.find((a) => lc.includes(a.name.toLowerCase())) ?? DOCK_AGENTS[0]
+  );
+};
+
+const generateMockReply = (q: string, agent: typeof DOCK_AGENTS[number]) => {
+  const lc = q.toLowerCase();
+  if (lc.includes('what') && lc.includes('today')) {
+    return `Today I ${agent.recentActivity.slice(0, 2).map(a => a.text.toLowerCase()).join(' and ')}. Currently ${agent.currentTask.toLowerCase()}.`;
+  }
+  if (lc.includes('source') || lc.includes('find')) {
+    return `On it. Spinning up a sourcing run now — I'll surface qualified leads in your CRM within ~3 minutes.`;
+  }
+  if (lc.includes('write') || lc.includes('draft')) {
+    return `Drafting now. I'll prep variants and drop them in Awaiting You for your approval.`;
+  }
+  if (lc.includes('summarize') || lc.includes('summary')) {
+    return `Quick read: 2 competitor signals, 1 hiring trend, 0 urgent alerts. Full brief is in Intelligence.`;
+  }
+  if (lc.includes('deploy')) {
+    return `Got it — opening the deploy panel. Pick a department and I'll provision the operative.`;
+  }
+  return `On it. I'll handle "${q}" and ping you when it's ready for review.`;
+};
 
 interface CommandPaletteProps {
   open: boolean;
@@ -53,6 +91,7 @@ const CommandPalette = ({ open, onOpenChange }: CommandPaletteProps) => {
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<SearchResult[]>([]);
   const [searching, setSearching] = useState(false);
+  const [reply, setReply] = useState<{ agent: typeof DOCK_AGENTS[number]; text: string; q: string } | null>(null);
 
   // Global keyboard shortcut
   useEffect(() => {
@@ -65,6 +104,27 @@ const CommandPalette = ({ open, onOpenChange }: CommandPaletteProps) => {
     document.addEventListener('keydown', handleKeyDown);
     return () => document.removeEventListener('keydown', handleKeyDown);
   }, [open, onOpenChange]);
+
+  // Listen for prefill events from the dock
+  useEffect(() => {
+    const handlePrefill = (e: Event) => {
+      const detail = (e as CustomEvent).detail;
+      if (detail?.text) setQuery(detail.text);
+    };
+    window.addEventListener('command-bar:prefill', handlePrefill);
+    return () => window.removeEventListener('command-bar:prefill', handlePrefill);
+  }, []);
+
+  // Reset reply when palette closes
+  useEffect(() => {
+    if (!open) setReply(null);
+  }, [open]);
+
+  const runCommand = (text: string) => {
+    if (!text.trim()) return;
+    const agent = routeAgentForQuery(text);
+    setReply({ agent, text: generateMockReply(text, agent), q: text });
+  };
 
   // Search Supabase when query changes
   useEffect(() => {
@@ -158,19 +218,66 @@ const CommandPalette = ({ open, onOpenChange }: CommandPaletteProps) => {
 
   return (
     <CommandDialog open={open} onOpenChange={onOpenChange}>
-      <CommandInput
-        placeholder="Search candidates, leads, jobs, or navigate..."
-        value={query}
-        onValueChange={setQuery}
-      />
+      <div onKeyDown={(e) => { if (e.key === 'Enter' && query.trim() && results.length === 0) { e.preventDefault(); runCommand(query); } }}>
+        <CommandInput
+          placeholder="Command your workforce... try 'Tell Aria to screen new applicants'"
+          value={query}
+          onValueChange={(v) => { setQuery(v); if (reply) setReply(null); }}
+        />
+      </div>
+
+      {/* Inline agent reply */}
+      {reply && (
+        <motion.div
+          initial={{ opacity: 0, y: -4 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="px-4 py-3 border-b border-white/5 bg-emerald-500/5"
+        >
+          <div className="flex items-start gap-3">
+            <div className={cn(
+              'w-8 h-8 rounded-full ring-2 flex items-center justify-center text-[11px] font-bold text-white shrink-0 bg-gradient-to-br',
+              deptColor[reply.agent.department].ring, deptColor[reply.agent.department].bg,
+            )}>
+              {reply.agent.name[0]}
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-[11px] font-semibold text-zinc-400">
+                <span className="text-white">{reply.agent.name}</span> · replying
+              </p>
+              <p className="text-sm text-zinc-200 mt-1 leading-relaxed">{reply.text}</p>
+            </div>
+          </div>
+        </motion.div>
+      )}
+
       <CommandList>
+        {/* Suggested commands */}
+        {!reply && results.length === 0 && (
+          <div className="px-3 py-2.5 border-b border-white/5">
+            <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground mb-2 px-1 flex items-center gap-1.5">
+              <Sparkles className="h-3 w-3" /> Try a command
+            </p>
+            <div className="flex flex-wrap gap-1.5">
+              {SUGGESTED_COMMANDS.map((cmd) => (
+                <button
+                  key={cmd}
+                  onClick={() => { setQuery(cmd); runCommand(cmd); }}
+                  className="text-[11px] px-2.5 py-1.5 rounded-md bg-white/5 hover:bg-emerald-500/15 hover:text-emerald-300 border border-white/10 hover:border-emerald-500/30 text-zinc-300 transition-all text-left"
+                >
+                  {cmd}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
         <CommandEmpty>
           {searching ? (
             <div className="flex items-center justify-center gap-2 py-4 text-muted-foreground">
               <Loader2 className="h-4 w-4 animate-spin" /> Searching...
             </div>
           ) : (
-            'No results found.'
+            <span className="text-xs">Press Enter to send as a command</span>
           )}
         </CommandEmpty>
 

@@ -10,6 +10,7 @@ import NotificationCenter from "@/components/shared/NotificationCenter";
 import { Link, useNavigate } from "react-router-dom";
 import { cn } from "@/lib/utils";
 import CountUp from 'react-countup';
+import HandoffFeedItem, { HandoffEvent } from "@/components/command-center/HandoffFeedItem";
 
 // Mock Data as structured in the plan
 const mockDepartments = [
@@ -63,7 +64,22 @@ const mockDepartments = [
   }
 ];
 
-const mockActivityFeed = [
+type FeedItem =
+  | {
+      kind?: 'activity';
+      time: string;
+      agent: string;
+      department: string;
+      action: string;
+      details: string;
+      cta?: string;
+      href?: string;
+      badge: string | null;
+      disabled?: boolean;
+    }
+  | (HandoffEvent & { kind: 'handoff' });
+
+const mockActivityFeed: FeedItem[] = [
   {
     time: '9:31 AM',
     agent: 'Aria',
@@ -75,6 +91,12 @@ const mockActivityFeed = [
     badge: null
   },
   {
+    kind: 'handoff',
+    time: '9:15 AM',
+    from: { agent: 'Scout', dept: 'talent', action: 'Sourced 18 leads matching ICP' },
+    to: { agent: 'Aria', dept: 'talent', action: 'Now screening them in batch' },
+  },
+  {
     time: '7:45 AM',
     agent: 'Penn',
     department: 'growth',
@@ -82,6 +104,12 @@ const mockActivityFeed = [
     details: 'Targeting Series A companies • Ready for review',
     badge: 'needs-approval',
     disabled: true
+  },
+  {
+    kind: 'handoff',
+    time: '7:20 AM',
+    from: { agent: 'Brief', dept: 'intelligence', action: 'Flagged 2 hot signals overnight' },
+    to: { agent: 'Penn', dept: 'growth', action: 'Drafting outreach for matching leads' },
   },
   {
     time: '7:00 AM',
@@ -256,7 +284,11 @@ export default function CommandCenter() {
 
             <div className="glass-card rounded-2xl p-6 border-white/5 bg-[#1a2332]/60">
               <div className="relative border-l border-white/10 ml-4 space-y-8 py-2">
-                {mockActivityFeed.map((item, idx) => (
+                {mockActivityFeed.map((item, idx) => {
+                  if (item.kind === 'handoff') {
+                    return <HandoffFeedItem key={idx} event={item} />;
+                  }
+                  return (
                   <div key={idx} className="relative pl-6">
                     {/* Timeline Dot */}
                     <div className={cn(
@@ -308,7 +340,8 @@ export default function CommandCenter() {
                       </button>
                     )}
                   </div>
-                ))}
+                  );
+                })}
               </div>
             </div>
           </div>
