@@ -164,6 +164,19 @@ const Sidebar = ({ collapsed, onToggle, onOpenCommandPalette }: SidebarProps) =>
                   </NavLink>
                 );
               })}
+              {group.label === 'Departments' && (
+                <button
+                  onClick={() => openAgentBuilder()}
+                  className={cn(
+                    'mt-1 flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium text-emerald-400 hover:bg-emerald-500/10 hover:text-emerald-300 transition-all w-full border border-dashed border-emerald-500/30',
+                    collapsed && 'justify-center px-2',
+                  )}
+                  aria-label="New agent"
+                >
+                  <Plus className="h-4 w-4 flex-shrink-0" />
+                  {!collapsed && <span className="truncate flex-1 text-left">New Agent</span>}
+                </button>
+              )}
             </div>
           </div>
         ))}
