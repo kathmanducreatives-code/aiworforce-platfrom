@@ -4,7 +4,7 @@ import pennImg from '@/assets/agents/penn.png';
 import hawkImg from '@/assets/agents/hawk.png';
 import scribeImg from '@/assets/agents/scribe.png';
 
-export type AgentDept = 'talent' | 'growth' | 'content' | 'intelligence';
+export type AgentDept = 'talent' | 'growth' | 'content' | 'intelligence' | 'operations';
 export type AgentModelKey = 'gpt-4o' | 'claude-sonnet' | 'claude-haiku' | 'gemini-pro';
 
 export interface AgentProfile {
@@ -35,6 +35,7 @@ export const deptRing: Record<AgentDept, string> = {
   growth:       'ring-blue-500/70',
   intelligence: 'ring-amber-500/70',
   content:      'ring-violet-500/70',
+  operations:   'ring-slate-400/70',
 };
 
 export const deptDot: Record<AgentDept, string> = {
@@ -42,6 +43,7 @@ export const deptDot: Record<AgentDept, string> = {
   growth:       'bg-blue-500',
   intelligence: 'bg-amber-500',
   content:      'bg-violet-500',
+  operations:   'bg-slate-400',
 };
 
 export const deptText: Record<AgentDept, string> = {
@@ -49,4 +51,5 @@ export const deptText: Record<AgentDept, string> = {
   growth:       'text-blue-400',
   intelligence: 'text-amber-400',
   content:      'text-violet-400',
+  operations:   'text-slate-300',
 };
