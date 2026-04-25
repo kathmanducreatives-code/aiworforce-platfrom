@@ -139,7 +139,17 @@ const Sidebar = ({ collapsed, onToggle, onOpenCommandPalette }: SidebarProps) =>
                       <div className="absolute left-0 top-1/2 -translate-y-1/2 w-[3px] h-5 bg-primary rounded-r-full" />
                     )}
                     <item.icon className={cn('h-4 w-4 flex-shrink-0', isActive ? 'text-primary' : 'text-muted-foreground group-hover:text-foreground')} />
-                    {!collapsed && <span className="truncate">{item.label}</span>}
+                    {!collapsed && <span className="truncate flex-1">{item.label}</span>}
+                    {!collapsed && item.badge && (
+                      <span className={cn(
+                        'text-[10px] font-bold px-1.5 py-0.5 rounded border tabular-nums',
+                        item.badgeColor === 'amber'
+                          ? 'bg-amber-500/10 text-amber-400 border-amber-500/20'
+                          : 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20',
+                      )}>
+                        {item.badge}
+                      </span>
+                    )}
                   </NavLink>
                 );
               })}

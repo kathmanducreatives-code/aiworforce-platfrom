@@ -9,6 +9,7 @@ import { ClientThemeProvider } from "./components/ClientThemeProvider";
 import { ThemeProvider } from "./contexts/ThemeContext";
 import Landing from "./pages/Landing";
 import Dashboard from "./pages/Dashboard";
+import AwaitingYou from "./pages/AwaitingYou";
 
 import Candidates from "./pages/Candidates";
 import Features from "./pages/Features";
