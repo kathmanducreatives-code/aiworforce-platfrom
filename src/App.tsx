@@ -340,6 +340,7 @@ const App = () => (
               </BrowserRouter>
             </ClientThemeProvider>
           </ClientProvider>
+          </WorkspaceProvider>
         </AuthProvider>
       </TooltipProvider>
     </ThemeProvider>
