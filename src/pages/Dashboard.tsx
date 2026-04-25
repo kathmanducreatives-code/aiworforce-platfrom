@@ -17,8 +17,10 @@ import NotificationCenter from "@/components/shared/NotificationCenter";
 import { cn } from "@/lib/utils";
 import { fetchOutboundMetrics } from "@/services/interceptorService";
 import HandoffFeedItem, { HandoffEvent } from "@/components/dashboard/HandoffFeedItem";
+import { useWorkspace } from "@/contexts/WorkspaceContext";
+import { useActivityFeed } from "@/hooks/useActivityFeed";
 
-const HANDOFF_EVENTS: HandoffEvent[] = [
+const FALLBACK_HANDOFFS: HandoffEvent[] = [
   {
     type: 'handoff', time: '9:15 AM',
     from: { agent: 'Scout', dept: 'talent', action: 'Sourced 18 leads matching ICP' },
@@ -35,6 +37,8 @@ const Dashboard = () => {
   const navigate = useNavigate();
   const { profile } = useAuth();
   const { theme, toggleTheme } = useTheme();
+  const { workspaceId } = useWorkspace();
+  const { events: liveEvents } = useActivityFeed(workspaceId, 30);
   const [metrics, setMetrics] = useState({
     totalCandidates: 0,
     avgFitScore: 0,
@@ -415,7 +419,9 @@ const Dashboard = () => {
             </span>
           </div>
           <div className="space-y-3">
-            {HANDOFF_EVENTS.map((ev, i) => <HandoffFeedItem key={i} event={ev} />)}
+            {liveEvents.length === 0
+              ? FALLBACK_HANDOFFS.map((ev, i) => <HandoffFeedItem key={`fb-${i}`} event={ev} />)
+              : liveEvents.map((ev) => <HandoffFeedItem key={ev.id} event={ev} />)}
           </div>
         </div>
 
