@@ -7,6 +7,8 @@ import { AuthProvider } from "./hooks/useAuth";
 import { ClientProvider } from "./contexts/ClientContext";
 import { ClientThemeProvider } from "./components/ClientThemeProvider";
 import { ThemeProvider } from "./contexts/ThemeContext";
+import { WorkspaceProvider } from "./contexts/WorkspaceContext";
+import VerificationPanel from "./components/dev/VerificationPanel";
 import Landing from "./pages/Landing";
 import Dashboard from "./pages/Dashboard";
 import AwaitingYou from "./pages/AwaitingYou";
@@ -69,13 +71,15 @@ const App = () => (
     <ThemeProvider>
       <TooltipProvider>
         <AuthProvider>
-          <ClientProvider>
-            <ClientThemeProvider>
-              <Toaster />
-              <Sonner />
-              <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
-                <div className="relative min-h-screen w-full">
-                  <AuthenticatedBackground />
+          <WorkspaceProvider>
+            <ClientProvider>
+              <ClientThemeProvider>
+                <Toaster />
+                <Sonner />
+                {import.meta.env.DEV && <VerificationPanel />}
+                <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+                  <div className="relative min-h-screen w-full">
+                    <AuthenticatedBackground />
                   <Routes>
                     {/* Public Routes */}
                     <Route path="/" element={<Landing />} />

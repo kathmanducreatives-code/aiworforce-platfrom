@@ -30,11 +30,10 @@ const SESSION_KEY = 'lov_verification_dismissed';
 
 export default function VerificationPanel() {
   const [open, setOpen] = useState(true);
-  const [checks, setChecks] = useState<CheckRow[]>(
-    TABLES.map((t) => ({ name: t, state: 'idle', detail: '…' })).concat([
-      { name: 'orchestrate fn', state: 'idle', detail: '…' },
-    ]),
-  );
+  const [checks, setChecks] = useState<CheckRow[]>([
+    ...TABLES.map<CheckRow>((t) => ({ name: t, state: 'idle', detail: '…' })),
+    { name: 'orchestrate fn', state: 'idle', detail: '…' },
+  ]);
   const [running, setRunning] = useState(true);
 
   useEffect(() => {
