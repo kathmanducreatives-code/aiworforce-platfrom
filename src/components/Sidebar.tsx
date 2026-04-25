@@ -33,6 +33,13 @@ const navigation: NavSectionType[] = [
         path: '/dashboard',
         icon: LayoutDashboard,
         badge: 'new'
+      },
+      {
+        label: 'Awaiting You',
+        path: '/awaiting-you',
+        icon: Inbox,
+        badge: '4',
+        color: 'amber' as any,
       }
     ]
   },
