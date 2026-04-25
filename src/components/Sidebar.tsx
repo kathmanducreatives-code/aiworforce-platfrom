@@ -4,13 +4,13 @@ import { useAuth } from '@/hooks/useAuth';
 import {
   LayoutDashboard, Calendar, Search, Brain, Target, TrendingUp,
   Mail, Share2, BarChart3, LogOut, HelpCircle,
-  PanelLeftClose, PanelLeft, Users, Briefcase, Crosshair, Zap, Radar, Eye
+  PanelLeftClose, PanelLeft, Users, Briefcase, Crosshair, Zap, Radar, Eye, Inbox
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 interface NavGroup {
   label: string;
-  items: { path: string; icon: any; label: string }[];
+  items: { path: string; icon: any; label: string; badge?: string; badgeColor?: 'amber' | 'emerald' }[];
 }
 
 const navGroups: NavGroup[] = [
@@ -18,6 +18,7 @@ const navGroups: NavGroup[] = [
     label: 'Hire',
     items: [
       { path: '/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
+      { path: '/awaiting-you', icon: Inbox, label: 'Awaiting You', badge: '4', badgeColor: 'amber' },
       { path: '/screening-jobs', icon: Briefcase, label: 'Job Screening' },
       { path: '/candidates', icon: Users, label: 'Candidates' },
       { path: '/expert-marketplace', icon: Users, label: 'Expert Interviews' },
