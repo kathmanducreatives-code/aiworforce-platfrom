@@ -144,7 +144,7 @@ export default function OperativeDock() {
 
   return (
     <>
-      <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-50 hidden md:block">
+      <div className="fixed bottom-3 right-4 z-40 hidden md:block">
         <motion.div
           onMouseMove={(e) => mouseX.set(e.clientX)}
           onMouseLeave={() => { mouseX.set(Infinity); scheduleDismiss(); }}
