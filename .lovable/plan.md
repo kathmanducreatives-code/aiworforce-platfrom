@@ -1,59 +1,76 @@
-# 🩹 Disk IO Remediation Plan
+# Wire Real Agent Photos & AI Logos Across the Product
 
-Targeted edits to 7 hot-path files. No schema changes, no logic changes — purely query optimization. Expected IO reduction: **60–80%** on dashboard + competitor pages.
+## 1. Asset extraction & placement
+- Copy `user-uploads://agents.zip` and `user-uploads://logos.zip` into `/tmp/`, unzip them, and move the normalized images into the project:
+  - `src/assets/agents/` → `aria.png`, `scout.png`, `penn.png`, `hawk.png`, `scribe.png`
+  - `src/assets/ai-logos/` → `openai.png`, `claude.png`, `gemini.png`, `firecrawl.png`, `elevenlabs.png`
+- Verify each file decodes correctly (image dimensions printed during script).
 
----
+## 2. Centralized data registries (new files)
+- `src/data/agentProfiles.ts` — single source of truth per agent: `id`, `name`, `role`, `department`, `image` (imported asset), `model` key. Re-export `deptColor` map (emerald → Talent, blue → Growth, amber → Intel, violet → Content).
+- `src/data/aiModelLogos.ts` — model registry: `gpt-4o`, `claude-sonnet`, `claude-haiku`, `gemini-pro` with `label`, `logo` (imported asset), `pillClassName`.
+- `src/data/aiToolLogos.ts` — tool registry for the builder: `web-scraping` (Firecrawl), `voice` (ElevenLabs).
 
-## 1. `src/pages/CompetitorMonitor.tsx` — Kill the 15s poller
-- **Remove** `setInterval(loadCompetitors, 15000)` (line 44) — biggest single offender; refetches 2 unbounded tables every 15s on every open tab.
-- **Replace** with a Supabase realtime subscription on `competitor_companies` + `competitor_job_postings` filtered to `event: 'INSERT'`, with a 500ms debounce on `loadCompetitors`.
-- **Tighten** the `competitor_job_postings` select on line 25: change `.select("job_title, is_new, first_seen_at")` to add `.limit(2000)` and `.gte('first_seen_at', oneMonthAgo)`.
+## 3. Update `src/data/dockAgents.ts`
+- Switch `DockModel` union to `'gpt-4o' | 'claude-sonnet' | 'claude-haiku' | 'gemini-pro'`.
+- Reassign per spec: Scout → `gpt-4o`, Aria → `claude-sonnet`, Penn → `claude-haiku`, Hawk → `gemini-pro`, Scribe → `claude-sonnet`.
+- Add `image` field referencing imported asset (or read from `agentProfiles.ts`).
+- Keep `deptColor` and existing rings/borders intact (no logic changes).
 
-## 2. `src/components/lead-scraper/StatsCards.tsx`
-- Lines 61, 69: change `count: "exact"` → `count: "estimated"` (Postgres uses `pg_class` stats — sub-millisecond).
-- Lines 73–75: replace `.select("status")` (full table scan) with two separate `count: 'estimated'` head queries: one with `.eq('status','completed')`, one total. Compute rate from those.
-- Lines 91–100: change both realtime listeners from `event: "*"` → `event: "INSERT"`. Add a 500ms debounce to `fetchStats` so burst inserts during scraping don't re-trigger 5 full queries per row.
+## 4. New reusable components
+- `src/components/agents/AgentAvatar.tsx` — circular `<img>` with department-colored ring; sizes `sm` (32px), `md` (48px), `lg` (96px), `xl` (160px); status dot overlay; graceful fallback to initial if image missing.
+- `src/components/agents/ModelBadge.tsx` — pill: 16–20px logo + label, themed via `pillClassName`.
+- `src/components/agents/PoweredByStrip.tsx` — horizontal logo strip used on landing.
 
-## 3. `src/pages/CompetitorMonitor.tsx` (count fix)
-- Line 67: `count: "exact"` → `count: "estimated"`.
+## 5. Replace initial-letter avatars
+- `src/components/dock/OperativeDock.tsx` → use `AgentAvatar size="md"` with department ring.
+- `src/components/dock/AgentHoverCard.tsx` → swap `{agent.name[0]}` block for `AgentAvatar size="md"`; replace `modelBadge` text pill with `<ModelBadge>`.
+- `src/components/dock/AgentDrawer.tsx` → larger `AgentAvatar size="lg"` in header, `<ModelBadge>` in "Powered by" row.
+- `src/components/dashboard/HandoffFeedItem.tsx` → 32px `AgentAvatar size="sm"` next to log entries (resolve agent by name/id; fallback initial when agent not in registry).
+- `src/pages/AwaitingYou.tsx` → same 32px treatment in inbox rows.
 
-## 4. `src/pages/ClientMetrics.tsx`
-- Line 62: `count: 'exact'` → `count: 'estimated'`.
+## 6. Landing page upgrades
+- `src/components/landing/MeetTheTeamSection.tsx` → render the 5 agent portraits as large circular avatars (xl), name + role caption, department ring color. Preserve existing War Room scroll-pinned animation by only swapping the avatar visual, not the layout/keyframes.
+- `src/components/landing/AgentBuilderSection.tsx` → 
+  - Model selector cards now show real logos via `ModelBadge` (OpenAI / Claude / Gemini).
+  - Tools grid renders Firecrawl logo on the "Web Scraping / Deep Search" tool card and ElevenLabs logo on the "Voice / Audio" tool card.
+- `src/components/landing/ToolLogos.tsx` → migrate any external CDN URLs to local imports for the 5 logos we now own.
+- Add a `<PoweredByStrip>` underneath the hero or "Meet the team" section.
 
-## 5. `src/pages/DataDashboard.tsx` — Tighten 5 unbounded reads
-- Lines 69–73: rewrite the `Promise.all` to:
-  - Select only required columns (e.g. `resume_analyses`: `id, created_at, fit_score, overall_factor`; `client_placements`: `id, placement_date`; `scheduled_emails`: `id`; `linkedin_leads`: `id`; `deep_search_results`: `id, fit_score`).
-  - Add `.gte('created_at', oneMonthAgo.toISOString())` where the metric is monthly-bound.
-  - Add `.limit(5000)` as a safety ceiling on each query.
+## 7. Department ring color map (per spec)
+- Talent (Aria, Scout) → emerald `ring-emerald-500/70`
+- Growth (Penn) → blue `ring-blue-500/70` (matches existing token; spec says "electric blue")
+- Intelligence (Hawk) → amber `ring-amber-500/70`
+- Content (Scribe) → violet `ring-violet-500/70`
+(These already exist in `dockAgents.ts` `deptColor` — reused as-is.)
 
-## 6. `src/components/ModernDashboard.tsx`
-- Line 200: `from('resume_analyses').select('*').order('created_at', {ascending:false})` → add `.limit(500)`. Dashboard only paginates 10/page client-side; loading entire table is wasteful.
+## 8. Verification
+- Run `bunx tsc --noEmit` to confirm types compile after the `DockModel` union change.
+- Visual smoke: dock avatars render with rings, hover card shows photo + model logo, landing "Meet the team" shows portraits, agent builder shows real model & tool logos.
+- Confirm no remaining `{agent.name[0]}` initial-letter placeholders in dock/drawer/feed.
 
-## 7. Realtime wildcard narrowing (debounce + INSERT-only)
-Add a small shared `useDebouncedCallback` (or inline `setTimeout` ref) and apply to:
-- `src/hooks/useInterviews.ts` line 298 → `event: 'INSERT'` + 300ms debounce on `fetchInterviews`.
-- `src/pages/DeepSearch.tsx` line 162 → `event: 'INSERT'` + 300ms debounce.
-- `src/components/lead-scraper/DeepSearchResults.tsx` line 52 → keep as-is (it routes payload by id, doesn't refetch — already cheap).
-- `src/components/collaboration/RoomView.tsx` line 107 → `event: 'INSERT'` + 300ms debounce (attachments rarely update/delete).
+## Files created
+- `src/assets/agents/{aria,scout,penn,hawk,scribe}.png`
+- `src/assets/ai-logos/{openai,claude,gemini,firecrawl,elevenlabs}.png`
+- `src/data/agentProfiles.ts`
+- `src/data/aiModelLogos.ts`
+- `src/data/aiToolLogos.ts`
+- `src/components/agents/AgentAvatar.tsx`
+- `src/components/agents/ModelBadge.tsx`
+- `src/components/agents/PoweredByStrip.tsx`
 
----
-
-## Files modified (6)
-1. `src/pages/CompetitorMonitor.tsx` — remove poller, add realtime, narrow query, fix count
-2. `src/components/lead-scraper/StatsCards.tsx` — estimated counts, INSERT-only, debounce
-3. `src/pages/ClientMetrics.tsx` — estimated count
-4. `src/pages/DataDashboard.tsx` — column lists + date filters + limits
-5. `src/components/ModernDashboard.tsx` — add limit(500)
-6. `src/hooks/useInterviews.ts` — INSERT-only + debounce
-7. `src/pages/DeepSearch.tsx` — INSERT-only + debounce
-8. `src/components/collaboration/RoomView.tsx` — INSERT-only + debounce
+## Files modified
+- `src/data/dockAgents.ts`
+- `src/components/dock/OperativeDock.tsx`
+- `src/components/dock/AgentHoverCard.tsx`
+- `src/components/dock/AgentDrawer.tsx`
+- `src/components/dashboard/HandoffFeedItem.tsx`
+- `src/pages/AwaitingYou.tsx`
+- `src/components/landing/MeetTheTeamSection.tsx`
+- `src/components/landing/AgentBuilderSection.tsx`
+- `src/components/landing/ToolLogos.tsx`
 
 ## Out of scope (intentionally untouched)
-- Scraper rate-limiting (low impact vs. above; can do as follow-up).
-- `SupabaseTest.tsx` (dev/debug component, rarely loaded).
-- Edge functions (read-side dominates IO based on audit).
-
-## Verification after changes
-- `bunx tsc --noEmit` for type safety.
-- Manually open Competitor Monitor + Lead Scraper Stats and confirm data still updates (realtime now drives it instead of poll).
-- No UI/visual changes expected.
+- No backend / Supabase / RLS changes.
+- No route changes.
+- No GSAP keyframe rewrites in `ExpertJourney.tsx` or scroll-pinned War Room timing — only avatar visuals swap.

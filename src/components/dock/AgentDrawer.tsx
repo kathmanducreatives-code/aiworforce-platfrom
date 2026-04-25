@@ -1,9 +1,10 @@
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
-import { DockAgent, deptColor, modelBadge } from '@/data/dockAgents';
+import { DockAgent, deptColor } from '@/data/dockAgents';
 import { cn } from '@/lib/utils';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { ArrowRight, Send } from 'lucide-react';
+import ModelBadge from '@/components/agents/ModelBadge';
 
 interface Props {
   agent: DockAgent | null;
@@ -16,7 +17,6 @@ export default function AgentDrawer({ agent, open, onOpenChange, onSendCommand }
   const navigate = useNavigate();
   if (!agent) return null;
   const dept = deptColor[agent.department];
-  const model = modelBadge[agent.model];
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
@@ -27,10 +27,10 @@ export default function AgentDrawer({ agent, open, onOpenChange, onSendCommand }
         <SheetHeader className="p-5 border-b border-border/40">
           <div className="flex items-center gap-3">
             <div className={cn(
-              'w-12 h-12 rounded-full ring-2 flex items-center justify-center text-sm font-bold text-primary-foreground shrink-0 bg-gradient-to-br',
-              dept.ring, dept.bg,
+              'w-14 h-14 rounded-full ring-2 overflow-hidden shrink-0 bg-card',
+              dept.ring,
             )}>
-              {agent.name[0]}
+              <img src={agent.image} alt={agent.name} className="w-full h-full object-cover" />
             </div>
             <div className="flex-1 min-w-0 text-left">
               <SheetTitle className="text-foreground text-base font-semibold">{agent.name}</SheetTitle>
@@ -66,9 +66,7 @@ export default function AgentDrawer({ agent, open, onOpenChange, onSendCommand }
 
           <div className="flex items-center gap-2">
             <span className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">Powered by</span>
-            <span className={cn('text-[10px] font-semibold px-2 py-0.5 rounded border', model.className)}>
-              {model.label}
-            </span>
+            <ModelBadge model={agent.model} size="md" />
           </div>
 
           <div>

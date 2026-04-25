@@ -1,8 +1,9 @@
 import { motion } from 'framer-motion';
 import { createPortal } from 'react-dom';
 import { useEffect, useState } from 'react';
-import { DockAgent, deptColor, modelBadge } from '@/data/dockAgents';
+import { DockAgent, deptColor } from '@/data/dockAgents';
 import { cn } from '@/lib/utils';
+import ModelBadge from '@/components/agents/ModelBadge';
 
 interface Props {
   agent: DockAgent;
@@ -18,7 +19,6 @@ export default function AgentHoverCard({
 }: Props) {
   const [progress, setProgress] = useState(0);
   const dept = deptColor[agent.department];
-  const model = modelBadge[agent.model];
 
   useEffect(() => {
     const t = setTimeout(() => setProgress(agent.progress), 80);
@@ -46,10 +46,10 @@ export default function AgentHoverCard({
       <div className="rounded-2xl border border-border/60 bg-card/95 backdrop-blur-2xl shadow-[0_20px_60px_hsl(var(--background)/0.7)] overflow-hidden">
         <div className="p-4 flex items-start gap-3 border-b border-border/40">
           <div className={cn(
-            'w-12 h-12 rounded-full ring-2 flex items-center justify-center text-sm font-bold text-primary-foreground shrink-0 bg-gradient-to-br',
-            dept.ring, dept.bg,
+            'w-12 h-12 rounded-full ring-2 overflow-hidden shrink-0 bg-card',
+            dept.ring,
           )}>
-            {agent.name[0]}
+            <img src={agent.image} alt={agent.name} className="w-full h-full object-cover" />
           </div>
           <div className="flex-1 min-w-0">
             <p className="text-sm font-semibold text-foreground leading-tight">{agent.name}</p>
@@ -78,9 +78,7 @@ export default function AgentHoverCard({
 
         <div className="px-4 py-2 flex items-center gap-2 border-t border-border/40">
           <span className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">Powered by</span>
-          <span className={cn('text-[10px] font-semibold px-1.5 py-0.5 rounded border', model.className)}>
-            {model.label}
-          </span>
+          <ModelBadge model={agent.model} />
         </div>
 
         <div className="p-3 grid grid-cols-2 gap-2 border-t border-border/40 bg-background/40">

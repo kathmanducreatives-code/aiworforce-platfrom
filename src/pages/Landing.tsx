@@ -24,6 +24,7 @@ import TeamsAtWorkSection from "@/components/landing/TeamsAtWorkSection";
 import GlobalSection from "@/components/landing/GlobalSection";
 import DayTimelineSection from "@/components/landing/DayTimelineSection";
 import AgentBuilderSection from "@/components/landing/AgentBuilderSection";
+import MeetYourAITeamSection from "@/components/landing/MeetYourAITeamSection";
 
 gsap.registerPlugin(ScrollTrigger);
 ScrollTrigger.config({ limitCallbacks: true });
@@ -56,7 +57,9 @@ const Landing = () => {
         <EcosystemSection />
         {/* 5. The Problem (Transformation) */}
         <TransformationSection />
-        {/* 6. Meet Your Workforce */}
+        {/* 6. Meet Your AI Team — portraits + powered by */}
+        <MeetYourAITeamSection />
+        {/* 6b. War Room workforce simulation */}
         <MeetTheTeamSection />
         {/* 7. Talent Department */}
         <ProductLookalike />
