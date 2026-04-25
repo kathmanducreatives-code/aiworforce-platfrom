@@ -1,8 +1,22 @@
 import { motion } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
 import { ArrowRight, Check } from 'lucide-react';
+import { AI_MODELS } from '@/data/aiModelLogos';
+import { AI_TOOLS } from '@/data/aiToolLogos';
+import { cn } from '@/lib/utils';
 
 const templates = ['📧 Customer Success', '💰 Fundraising', '🤝 Partnerships', '📞 Cold Calling', '📱 Community Management', '🌍 Localization', '+ 200 more templates'];
+
+const MODEL_OPTIONS = [
+  { ...AI_MODELS['gpt-4o'],        selected: false },
+  { ...AI_MODELS['claude-sonnet'], selected: true  },
+  { ...AI_MODELS['gemini-pro'],    selected: false },
+];
+
+const TOOL_OPTIONS = [
+  { ...AI_TOOLS.firecrawl,  selected: true,  badge: 'Web Scraping' },
+  { ...AI_TOOLS.elevenlabs, selected: false, badge: 'Voice'        },
+];
 
 const AgentBuilderSection = () => {
   const navigate = useNavigate();
@@ -16,7 +30,7 @@ const AgentBuilderSection = () => {
             Pre-built departments for the most<br />common jobs. Custom agents for<br />everything specific to you.
           </h2>
           <p className="text-white/40 text-lg max-w-[600px] mx-auto leading-relaxed">
-            Every business has functions that do not fit a template. The agent builder lets you create any agent in four steps — name it, assign the AI tools, write the prompt once, and your new agent joins the workforce immediately.
+            Every business has functions that do not fit a template. The agent builder lets you create any agent in four steps — name it, pick the AI model, plug in your tools, write the prompt once, and your new agent joins the workforce immediately.
           </p>
         </div>
 
@@ -24,7 +38,7 @@ const AgentBuilderSection = () => {
         <motion.div
           initial={{ opacity: 0, y: 30 }}
           whileInView={{ opacity: 1, y: 0 }}
-          viewport={{ once: true, margin: "-50px" }}
+          viewport={{ once: true, margin: '-50px' }}
           transition={{ duration: 0.6 }}
           className="max-w-xl mx-auto"
         >
@@ -43,15 +57,59 @@ const AgentBuilderSection = () => {
                 <label className="text-[10px] text-white/40 font-medium mb-1 block uppercase tracking-wider">Department</label>
                 <div className="w-full border border-white/[0.1] rounded-lg px-3 py-2 text-sm text-white/60 bg-white/[0.02]">Custom ▾</div>
               </div>
+
+              {/* Model selector — real logos */}
               <div>
-                <label className="text-[10px] text-white/40 font-medium mb-1 block uppercase tracking-wider">Assign tools</label>
-                <div className="flex gap-2">
-                  {['Claude ✓', 'Notion ✓', 'Slack ✓'].map(t => (
-                    <span key={t} className="text-[10px] bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 px-2 py-1 rounded-md font-medium">{t}</span>
+                <label className="text-[10px] text-white/40 font-medium mb-1.5 block uppercase tracking-wider">AI Model</label>
+                <div className="grid grid-cols-3 gap-2">
+                  {MODEL_OPTIONS.map((m) => (
+                    <div
+                      key={m.key}
+                      className={cn(
+                        'flex items-center gap-2 px-2.5 py-2 rounded-lg border text-xs font-medium transition-all',
+                        m.selected
+                          ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-300'
+                          : 'border-white/[0.08] bg-white/[0.02] text-white/50',
+                      )}
+                    >
+                      <span className={cn('w-5 h-5 rounded-sm flex items-center justify-center overflow-hidden', m.chipBg)}>
+                        <img src={m.logo} alt={m.label} className="w-4 h-4 object-contain" />
+                      </span>
+                      <span className="truncate">{m.label}</span>
+                      {m.selected && <Check className="w-3 h-3 ml-auto shrink-0" />}
+                    </div>
                   ))}
-                  <span className="text-[10px] bg-white/[0.04] border border-white/[0.08] text-white/40 px-2 py-1 rounded-md font-medium border-dashed">+ Add</span>
                 </div>
               </div>
+
+              {/* Tools selector — real logos */}
+              <div>
+                <label className="text-[10px] text-white/40 font-medium mb-1.5 block uppercase tracking-wider">Assign tools</label>
+                <div className="grid grid-cols-2 gap-2">
+                  {TOOL_OPTIONS.map((t) => (
+                    <div
+                      key={t.key}
+                      className={cn(
+                        'flex items-center gap-2 px-2.5 py-2 rounded-lg border transition-all',
+                        t.selected
+                          ? 'border-emerald-500/40 bg-emerald-500/10'
+                          : 'border-white/[0.08] bg-white/[0.02]',
+                      )}
+                    >
+                      <span className="w-6 h-6 rounded-md bg-white flex items-center justify-center overflow-hidden shrink-0">
+                        <img src={t.logo} alt={t.label} className="w-4 h-4 object-contain" />
+                      </span>
+                      <div className="flex-1 min-w-0">
+                        <p className={cn('text-xs font-semibold truncate', t.selected ? 'text-emerald-300' : 'text-white/70')}>{t.label}</p>
+                        <p className="text-[10px] text-white/40 truncate">{t.badge}</p>
+                      </div>
+                      {t.selected && <Check className="w-3 h-3 text-emerald-400 shrink-0" />}
+                    </div>
+                  ))}
+                </div>
+                <button className="mt-2 text-[10px] text-white/40 hover:text-white/60 font-medium">+ Add another tool</button>
+              </div>
+
               <div>
                 <label className="text-[10px] text-white/40 font-medium mb-1 block uppercase tracking-wider">Agent prompt</label>
                 <div className="w-full border border-white/[0.1] rounded-lg px-3 py-2 text-xs text-white/60 bg-white/[0.02] min-h-[60px]">
@@ -70,7 +128,10 @@ const AgentBuilderSection = () => {
                 </div>
               </div>
 
-              <button className="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-semibold py-3 rounded-xl text-sm transition-all flex items-center justify-center gap-2">
+              <button
+                onClick={() => navigate('/auth')}
+                className="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-semibold py-3 rounded-xl text-sm transition-all flex items-center justify-center gap-2"
+              >
                 Create Agent <ArrowRight className="w-4 h-4" />
               </button>
             </div>
