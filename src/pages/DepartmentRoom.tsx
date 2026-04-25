@@ -17,6 +17,8 @@ import {
 } from '@/components/ui/dialog';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
+import { Plus } from 'lucide-react';
+import { openAgentBuilder } from '@/hooks/useAgentBuilder';
 
 const DEPT_META: Record<AgentDept, { label: string; tagline: string }> = {
   talent:       { label: 'Talent',       tagline: 'Sourcing, screening & shortlists' },
