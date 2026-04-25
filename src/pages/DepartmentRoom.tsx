@@ -149,20 +149,28 @@ export default function DepartmentRoom() {
           <span className={cn('h-2.5 w-2.5 rounded-full', deptDot[department])} />
           <h1 className="text-xl font-semibold text-foreground">{meta.label}</h1>
           <span className="text-sm text-muted-foreground">· {meta.tagline}</span>
-          <div className="ml-auto flex -space-x-2">
-            {deptAgents.map((a) => {
-              const profile = AGENT_BY_NAME[a.name.toLowerCase()];
-              if (!profile) return null;
-              return (
-                <img
-                  key={a.id}
-                  src={profile.image}
-                  alt={a.name}
-                  title={`${a.name} · ${a.status}`}
-                  className={cn('h-7 w-7 rounded-full ring-2 ring-background object-cover', deptRing[department])}
-                />
-              );
-            })}
+          <div className="ml-auto flex items-center gap-3">
+            <div className="flex -space-x-2">
+              {deptAgents.map((a) => {
+                const profile = AGENT_BY_NAME[a.name.toLowerCase()];
+                if (!profile) return null;
+                return (
+                  <img
+                    key={a.id}
+                    src={profile.image}
+                    alt={a.name}
+                    title={`${a.name} · ${a.status}`}
+                    className={cn('h-7 w-7 rounded-full ring-2 ring-background object-cover', deptRing[department])}
+                  />
+                );
+              })}
+            </div>
+            <button
+              onClick={() => openAgentBuilder({ department })}
+              className="inline-flex items-center gap-1.5 rounded-lg border border-emerald-500/40 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-300 px-2.5 py-1.5 text-xs font-semibold transition"
+            >
+              <Plus className="h-3.5 w-3.5" /> New Agent
+            </button>
           </div>
         </div>
       </div>
