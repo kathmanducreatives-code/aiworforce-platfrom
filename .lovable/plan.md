@@ -1,155 +1,112 @@
 
+## 📋 Plan: Operative Dock & Live AI Workforce Layer (Re-implementation)
 
-# Plan: Redesign Ecosystem + Workforce Team Sections
+The previous implementation was lost when the landing page was reverted. The current dashboard route `/dashboard` renders **`src/pages/Dashboard.tsx`** (not `CommandCenter.tsx`), so the handoff feed work targets that file. Everything else matches the original plan. `framer-motion` v12 is installed.
 
-## Scope
-Rewrite 2 existing files + update 1 file. No other sections touched.
-
-## Files Changed
-
-| File | Change |
-|------|--------|
-| `src/components/landing/ToolLogos.tsx` | Full rewrite — 16 SVG logos with proper brand colors and recognizable geometric icons |
-| `src/components/landing/EcosystemSection.tsx` | Full rewrite — orbital system with 3 rings, CSS rotation, energy pulses, breathing center, hover dimming, department filter tabs |
-| `src/components/landing/MeetTheTeamSection.tsx` | Full rewrite — war room interface with fake chrome bar, sidebar, auto-cycling message feed, 9 agent profile cards, redesigned truth blocks |
-
-No changes to `Landing.tsx` — both sections stay in the same render positions (slots 4 and 6).
+### Existing state preserved
+- `MainLayout.tsx`, `Sidebar.tsx`, existing `CommandPalette.tsx` (live Supabase search), `Dashboard.tsx` layout — all metric/department/activity cards untouched
+- Verdant dark theme, semantic tokens, all routes
 
 ---
 
-## Section 1: Ecosystem — "The Neural Network"
+### Change 1 — Operative Dock (macOS-style)
 
-### ToolLogos.tsx Rewrite
-Each logo gets proper brand colors baked into the SVG (not just letter avatars):
-- Claude: terracotta circle (#CC785C) with flowing C curves
-- Gemini: blue-red gradient diamond/star shape
-- GPT-4: OpenAI green (#10A37F) with lotus/flower mark
-- Perplexity: teal (#20808D) with P mark
-- Firecrawl: flame orange-red (#FF4500) flame shape (keep existing, it's good)
-- Apify: bright green (#97D700) A mark
-- Hunter: orange (#F5A623) crosshair/target
-- Instantly: indigo (#6366F1) lightning bolt
-- ElevenLabs: dark (#1A1A2E) with sound bars (keep existing)
-- Replicate: dark (#393939) play triangle
-- Notion: white with dark N (keep existing)
-- Linear: purple (#5E6AD2) angular mark (keep existing)
-- GitHub: dark with octocat path (keep existing)
-- Cal.com: dark with calendar grid (keep existing)
-- Canva: teal (#00C4CC) C mark
-- Gamma: purple (#6C47FF) G mark
+**New `src/data/dockAgents.ts`** — exports 5 agents (Aria/Talent, Scout/Talent, Penn/Growth, Hawk/Intel, Scribe/Content) with: id, name, role tagline, department, model (`gpt-4o | claude | gemini | llama`), currentTask, progress 0-100, status (`active | idle`), recentActivity[].
 
-### EcosystemSection.tsx — Orbital Layout
+**New `src/components/dock/OperativeDock.tsx`**
+- Fixed `bottom-4 left-1/2 -translate-x-1/2 z-[60]` floating pill
+- `backdrop-blur-2xl bg-[#13151C]/70 border border-white/[0.07] rounded-2xl px-3 py-2 shadow-2xl`
+- 5 agent buttons + a `+` deploy button at the right
+- Each avatar: 48px circle with **department-colored ring-2** (Talent emerald, Growth blue, Content violet, Intel amber). Initials fallback (no `/agents/*.png` on disk).
+- Pulsing status dot bottom-right (emerald active / zinc idle)
+- **Magnification**: track mouse X via `onMouseMove`; `useTransform` on each item's distance from cursor → scale (1 → 1.6 hovered, ~1.3 neighbors), spring `{ stiffness: 300, damping: 20 }`
+- Click → opens `AgentDrawer`
 
-**Structure:**
-- Center: 100px Pilot Brain node with green glow (`box-shadow: 0 0 60px rgba(0,255,148,0.3)`), breathing animation (CSS `alternate infinite`)
-- Ring 1 (r=180px): Claude, Gemini, GPT-4, Perplexity — 72px nodes
-- Ring 2 (r=280px): Firecrawl, Apify, Hunter, Instantly — 60px nodes  
-- Ring 3 (r=380px): 8 remaining tools — 48-52px nodes
-- Container: 800px diameter on desktop
+**New `src/components/dock/AgentHoverCard.tsx`** (Change 5)
+- Portaled to `document.body` via `createPortal`, positioned with `getBoundingClientRect`
+- 48px avatar + name, role tagline, current task, animated progress bar (framer width animation)
+- "Powered by" pill with model-specific colors (GPT-4o emerald, Claude coral, Gemini blue, Llama violet)
+- Two action buttons: "View output", "Send command"
+- Hover-bridge: stays open when cursor moves avatar↔card; closes on `onMouseLeave` of wrapping group with 150ms timeout
 
-**CSS Orbital Rotation:**
-- 3 wrapper divs, each with CSS `animation: spin Xs linear infinite`
-- Ring 1: 120s CW, Ring 2: 90s CCW (`reverse`), Ring 3: 150s CW
-- Each node inside has counter-rotation: `animation: counter-spin Xs linear infinite` to stay upright
-- Use CSS custom properties for duration per ring
+**New `src/components/dock/AgentDrawer.tsx`**
+- Right-side `Sheet` (`w-[420px]`) with avatar header, status pill, current task + progress bar, last 5 activity log entries, "Powered by" badge, and "View full output" / "Send command" buttons (the latter dispatches `command-bar:prefill` event)
 
-**Energy Pulses (JS):**
-- `useEffect` with `setInterval` every 500ms, randomly selects a tool
-- Creates a small colored dot (div) that CSS-animates from tool position to center over 1.2s
-- Max 6 concurrent pulses, uses a ref array to track active ones
-- Pulse color matches tool's brand color
-
-**Node Entrance Animation:**
-- IntersectionObserver triggers `inView`
-- Ring 1 nodes: Framer Motion `scale: 0→1, opacity: 0→1` delay 0.3s
-- Ring 2: delay 0.6s
-- Ring 3: delay 0.9s
-- Each node within a ring staggered by 0.08s
-
-**Hover Interaction:**
-- `hoveredTool` state
-- Hovered node: `scale-110`, stronger glow via inline `boxShadow` in brand color
-- All other nodes: `opacity: 0.4` via CSS transition
-- Tooltip: dark card above node showing name, description, department pill (colored by dept)
-- Connection line from hovered tool to center brightens (rendered as an absolutely-positioned div or SVG line)
-
-**Department Filter Tabs:**
-- Same tab row as before, same mapping
-- When filtered: non-matching tools get `opacity: 0.15, scale: 0.85` via Framer Motion `animate`
-- Transition 400ms
-
-**Mobile (<768px):**
-- Replace orbital with 4-column grid of tool cards
-- Each card: tool logo (40px) + name + sublabel
-- Brand colors preserved
-- No rotation animations
-- Pilot Brain card at top, larger
-
-**Stats + Closing:** Keep existing content, same layout.
+**Mount**: `<OperativeDock />` added to `src/components/MainLayout.tsx` after `<main>`.
 
 ---
 
-## Section 2: Workforce Team — "The War Room"
+### Change 2 — "Awaiting You" Inbox
 
-### MeetTheTeamSection.tsx — Complete Rewrite
+**`src/components/Sidebar.tsx`**: add nav item `{ label: 'Awaiting You', path: '/awaiting-you', icon: Inbox, badge: '4', badgeColor: 'amber' }`. Extend badge classnames to support amber variant: `bg-amber-500/10 text-amber-400 border border-amber-500/20`.
 
-**Headline:**
-- Eyebrow: "YOUR AI WORKFORCE"
-- Headline: "Meet the team running your company right now."
-- Subheadline: agent roles + €149/month line
+**New `src/pages/AwaitingYou.tsx`**
+- Header "Awaiting Your Approval" + subtext
+- 4 mock approval cards (Aria/Penn/Scout/Hawk), each: `border-l-2 border-amber-500/60` glass surface, agent avatar + name, one-line context, **Approve** (emerald) + **Review first** (ghost outline) buttons
+- Approve → toast + framer exit animation removing the card
 
-**War Room Interface (Desktop):**
-Dark card container, max-w-[1100px], rounded-xl border.
-
-- **Top Chrome Bar:** 3 colored dots (red/yellow/green) + "ScreeningPilot Internal · 5 agents online" + green dot "All systems active" — monospace 12px
-- **Left Sidebar (~200px):** Department list with colored dots + agent count. Below: "AGENTS ONLINE" with small name list. Hidden on tablet/mobile.
-- **Main Feed Area:** Shows messages auto-cycling.
-
-**Message Feed System:**
-- 8 messages defined in a data array (Signal, Radar, Penn, Scout, Hawk, Quill, Relay, Brief)
-- Each message: agent avatar (36px circle, dept color), agent name, dept tag, time, tool pills (20px brand-colored circles from ToolLogos), message text, "Passed to" indicator
-- `useState` tracks `visibleMessages` array (max 4 visible)
-- `useEffect` with `setInterval(2200ms)` adds next message, removes oldest when >4
-- Framer Motion `AnimatePresence` for enter (slide up 20px, fade in) and exit (fade out at top)
-- Top of feed has a gradient overlay (`bg-gradient-to-b from-[#0a0e14] to-transparent`) to fade out old messages
-- Loop restarts at message 8 → back to 1 after 18s total
-- Agent dot in sidebar pulses when that agent sends a message (track via `activeAgent` state)
-
-**Responsive War Room:**
-- Tablet (768-1024): hide sidebar, show dept names as horizontal tabs above feed
-- Mobile (<768): full-width feed only, 3 messages visible, reduced padding
-
-**Agent Profile Cards (Below War Room):**
-- 9 cards in 3-col grid (desktop), 2-col (tablet), 1-col (mobile)
-- Each card: avatar (44px, lucide icon, dept-colored bg), name, title, department, job description, tool logos row (24px brand-colored circles), "Talks to" line
-- ACTIVE badge: green dot + text
-- Framer Motion `whileInView` stagger 0.08s per card, `viewport={{ once: true, margin: "-50px" }}`
-
-**Agent Data (9 agents):**
-- Talent: Scout (Search), Aria (MessageSquare), Lens (Eye)
-- Growth: Radar (Radio), Penn (PenLine), Relay (Send)
-- Intelligence: Hawk (Target), Signal (TrendingUp), Brief (FileText)
-- Each with: tools used (reference ToolLogos), "talks to" connections
-
-**Department Colors:**
-- Talent: `emerald-400`
-- Growth: `blue-400`
-- Intelligence: `amber-400`
-- Content: `purple-400`
-
-**Three Truth Blocks:** Brain, GitBranch, Crown icons — same pattern as before but with updated copy per spec.
-
-**Closing:** New quote text + CTA button, same `conic-border` style.
-
-**Collaboration Feed Ticker:** Removed (replaced by war room feed). Or kept below as secondary — will remove to avoid redundancy with the war room.
+**`src/App.tsx`**: add `<Route path="/awaiting-you" element={<ProtectedRoute><MainLayout><AwaitingYou /></MainLayout></ProtectedRoute>} />`.
 
 ---
 
-## Technical Notes
-- All Framer Motion `whileInView` uses `viewport={{ once: true, margin: "-50px" }}`
-- CSS orbital rotation: pure `@keyframes` in inline `<style>` tag within the component (or Tailwind arbitrary `animate-[spin_120s_linear_infinite]`)
-- Energy pulses: absolutely positioned divs with CSS transition, managed via refs for cleanup
-- No new dependencies
-- Tool brand colors are constants in ToolLogos.tsx, exported for reuse in both sections
-- Total estimated: ~400 lines EcosystemSection, ~500 lines MeetTheTeamSection, ~200 lines ToolLogos
+### Change 3 — Command Bar
 
+**New `src/components/dock/CommandBar.tsx`**
+- Mounted in `MainLayout.tsx` as a top bar (right of sidebar): styled input reading `"Command your workforce... (⌘K)"` in monospace
+- Click or ⌘K → opens existing `CommandPalette` in enhanced mode
+
+**Edit `src/components/shared/CommandPalette.tsx`**: add `enhanced?: boolean` prop. When true and no live results yet, render:
+1. Suggested command chips (5 prompts: "Ask Scout to source 20 SaaS founders…", "Tell Penn to write outreach…", "Show me what Aria did today", "Deploy a new agent in Growth", "Summarize today's intel signals")
+2. On Enter → inline mock response card with relevant agent avatar + reply (keyword routing to Scout/Penn/Aria/Hawk/Scribe; Aria fallback). No real LLM call.
+3. Listen for `command-bar:prefill` window event to populate query.
+
+Existing live Supabase search remains intact below.
+
+---
+
+### Change 4 — Handoff Connector in Live Feed
+
+**Edit `src/pages/Dashboard.tsx`**: extend the activity feed mock array with `type: 'regular' | 'handoff'` discriminator. Add 2 handoff items:
+- Scout (talent) `sourced 18 leads` → Aria (talent) `now screening them` — 9:15 AM
+- Brief/Hawk (intel) `flagged 2 hot signals` → Penn (growth) `drafting outreach` — 8:30 AM
+
+**New `src/components/dashboard/HandoffFeedItem.tsx`**
+- Card `bg-[#1a2332]/85 border-white/10`
+- Two avatar circles connected by SVG line with **animated dashed arrow**: `<line stroke-dasharray>` + framer-motion animating `stroke-dashoffset` infinite (work-in-transit feel)
+- Below: sender action (left) → receiver task (right)
+- Top-right `HANDOFF` badge in muted zinc
+- Render selector in Dashboard's feed: `item.type === 'handoff' ? <HandoffFeedItem/> : existing card`
+
+---
+
+### Change 5 — Agent Persona Hover Card
+
+Covered in Change 1. Reiterates: portaled, hover-bridged, model-colored "Powered by" pill, animated progress bar, fade-up entrance.
+
+---
+
+### File summary
+
+**New (7)**:
+1. `src/data/dockAgents.ts`
+2. `src/components/dock/OperativeDock.tsx`
+3. `src/components/dock/AgentHoverCard.tsx`
+4. `src/components/dock/AgentDrawer.tsx`
+5. `src/components/dock/CommandBar.tsx`
+6. `src/components/dashboard/HandoffFeedItem.tsx`
+7. `src/pages/AwaitingYou.tsx`
+
+**Modified (4)**:
+1. `src/components/MainLayout.tsx` — mount `<OperativeDock />` and `<CommandBar />`
+2. `src/components/Sidebar.tsx` — add "Awaiting You" item with amber badge variant
+3. `src/components/shared/CommandPalette.tsx` — `enhanced` mode (chips + inline reply + prefill listener)
+4. `src/pages/Dashboard.tsx` — extend feed with handoff items, render via `HandoffFeedItem`
+5. `src/App.tsx` — add `/awaiting-you` route
+
+### Tech & guardrails
+- All animations via framer-motion v12 (springs, fade, stroke-dashoffset loop)
+- Strict semantic-token / Verdant-palette adherence; department accents match existing dashboard
+- No backend / data-model changes — all new content is mock-driven
+- Avatar fallbacks render colored initials (no `/agents/*.png` on disk)
+- Dock z-index 60: above page content, below Radix dialogs/sheets so the agent drawer + palette open above it
+- Browser-safe types throughout (`ReturnType<typeof setTimeout>`)
