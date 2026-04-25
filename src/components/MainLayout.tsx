@@ -5,6 +5,7 @@ import MobileHeader from "./MobileHeader";
 import CommandPalette from "./shared/CommandPalette";
 import CommandBar from "./dock/CommandBar";
 import OperativeDock from "./dock/OperativeDock";
+import GlobalChatBar from "./chat/GlobalChatBar";
 import { useIsMobile } from "@/hooks/use-mobile";
 
 interface MainLayoutProps {
@@ -56,12 +57,15 @@ const MainLayout = ({ children }: MainLayoutProps) => {
           </div>
         )}
 
-        <div className={isMobile ? 'px-4 py-6' : ''}>
+        <div className={isMobile ? 'px-4 py-6 pb-32' : 'pb-32'}>
           {children}
         </div>
       </main>
 
-      {/* Operative Dock (desktop only) */}
+      {/* Global Chat Bar (persistent bottom input) */}
+      <GlobalChatBar />
+
+      {/* Operative Dock (desktop only) — sits beside the chat bar */}
       {!isMobile && <OperativeDock />}
     </div>
   );

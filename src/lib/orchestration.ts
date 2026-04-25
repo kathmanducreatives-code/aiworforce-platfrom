@@ -126,13 +126,105 @@ export const subscribeActivityFeed = (ws: string, cb: () => void) => subscribeTa
 export const subscribeApprovals = (ws: string, cb: () => void) => subscribeTable('approvals', ws, cb);
 export const subscribePlans = (ws: string, cb: () => void) => subscribeTable('task_plans', ws, cb);
 
+// ---------------- Plans / Tasks ----------------
+export interface DBPlan {
+  id: string;
+  workspace_id: string;
+  user_instruction: string;
+  plan_summary: string | null;
+  status: 'planning' | 'executing' | 'awaiting_approval' | 'complete' | 'failed';
+  created_by: string | null;
+  created_at: string;
+  completed_at: string | null;
+}
+
+export interface DBTask {
+  id: string;
+  plan_id: string;
+  agent_id: string | null;
+  step_index: number;
+  description: string;
+  status: 'pending' | 'running' | 'complete' | 'failed' | 'skipped';
+  input: any;
+  output: any;
+  started_at: string | null;
+  finished_at: string | null;
+  created_at: string;
+}
+
+export async function fetchPlans(workspaceId: string, limit = 50): Promise<DBPlan[]> {
+  const { data, error } = await supabase
+    .from('task_plans' as any)
+    .select('*')
+    .eq('workspace_id', workspaceId)
+    .order('created_at', { ascending: false })
+    .limit(limit);
+  if (error) { console.error('fetchPlans', error); return []; }
+  return (data ?? []) as unknown as DBPlan[];
+}
+
+export async function fetchPlan(planId: string): Promise<DBPlan | null> {
+  const { data, error } = await supabase
+    .from('task_plans' as any).select('*').eq('id', planId).maybeSingle();
+  if (error) { console.error('fetchPlan', error); return null; }
+  return (data as unknown as DBPlan) ?? null;
+}
+
+export async function fetchTasksForPlan(planId: string): Promise<DBTask[]> {
+  const { data, error } = await supabase
+    .from('tasks' as any).select('*').eq('plan_id', planId).order('step_index', { ascending: true });
+  if (error) { console.error('fetchTasksForPlan', error); return []; }
+  return (data ?? []) as unknown as DBTask[];
+}
+
+export async function fetchActivityForPlan(planId: string): Promise<DBActivity[]> {
+  const { data, error } = await supabase
+    .from('activity_feed' as any).select('*').eq('plan_id', planId)
+    .order('created_at', { ascending: true });
+  if (error) { console.error('fetchActivityForPlan', error); return []; }
+  return (data ?? []) as unknown as DBActivity[];
+}
+
+export async function fetchApprovalsForPlan(planId: string): Promise<DBApproval[]> {
+  const { data, error } = await supabase
+    .from('approvals' as any).select('*').eq('plan_id', planId)
+    .order('created_at', { ascending: false });
+  if (error) { console.error('fetchApprovalsForPlan', error); return []; }
+  return (data ?? []) as unknown as DBApproval[];
+}
+
+export const subscribePlan = (planId: string, cb: () => void) => {
+  const ch = supabase.channel(`realtime:plan:${planId}`)
+    .on('postgres_changes' as any, { event: '*', schema: 'public', table: 'task_plans', filter: `id=eq.${planId}` }, cb)
+    .on('postgres_changes' as any, { event: '*', schema: 'public', table: 'tasks', filter: `plan_id=eq.${planId}` }, cb)
+    .on('postgres_changes' as any, { event: '*', schema: 'public', table: 'activity_feed', filter: `plan_id=eq.${planId}` }, cb)
+    .on('postgres_changes' as any, { event: '*', schema: 'public', table: 'approvals', filter: `plan_id=eq.${planId}` }, cb)
+    .subscribe();
+  return () => { supabase.removeChannel(ch); };
+};
+
 // ---------------- Edge function calls ----------------
-export async function submitInstruction(workspaceId: string, userInstruction: string) {
+export interface SubmitResult {
+  plan_id: string;
+  plan_summary: string;
+  steps_count: number;
+  steps?: { agent_slug: string; agent_name: string; description: string }[];
+}
+
+export async function submitInstruction(
+  workspaceId: string,
+  userInstruction: string,
+  opts?: { agentSlug?: string },
+): Promise<SubmitResult> {
   const { data, error } = await supabase.functions.invoke('orchestrate', {
-    body: { workspace_id: workspaceId, user_instruction: userInstruction },
+    body: {
+      workspace_id: workspaceId,
+      user_instruction: userInstruction,
+      ...(opts?.agentSlug ? { target_agent_slug: opts.agentSlug } : {}),
+    },
   });
   if (error) throw error;
-  return data as { plan_id: string; plan_summary: string; steps_count: number };
+  return data as SubmitResult;
 }
 
 export async function decideApproval(approvalId: string, action: 'approve' | 'reject') {

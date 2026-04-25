@@ -4,7 +4,8 @@ import { useAuth } from '@/hooks/useAuth';
 import {
   LayoutDashboard, Calendar, Search, Brain, Target, TrendingUp,
   Mail, Share2, BarChart3, LogOut, HelpCircle,
-  PanelLeftClose, PanelLeft, Users, Briefcase, Crosshair, Zap, Radar, Eye, Inbox
+  PanelLeftClose, PanelLeft, Users, Briefcase, Crosshair, Zap, Radar, Eye, Inbox,
+  Sparkles, Megaphone, BookOpen,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -23,6 +24,15 @@ const navGroups: NavGroup[] = [
       { path: '/candidates', icon: Users, label: 'Candidates' },
       { path: '/expert-marketplace', icon: Users, label: 'Expert Interviews' },
       { path: '/interview-scheduler', icon: Calendar, label: 'Interviews' },
+    ],
+  },
+  {
+    label: 'Departments',
+    items: [
+      { path: '/rooms/talent',       icon: Sparkles,  label: 'Talent' },
+      { path: '/rooms/growth',       icon: Megaphone, label: 'Growth' },
+      { path: '/rooms/intelligence', icon: Eye,       label: 'Intelligence' },
+      { path: '/rooms/content',      icon: BookOpen,  label: 'Content' },
     ],
   },
   {

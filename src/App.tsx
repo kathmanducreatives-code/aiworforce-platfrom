@@ -52,6 +52,8 @@ import OutreachEngine from "./pages/OutreachEngine";
 import TalentIntelligence from "./pages/TalentIntelligence";
 import CompetitorIntelligence from "./pages/CompetitorIntelligence";
 import CandidateDossier from "./pages/candidates/CandidateDossier";
+import DepartmentRoom from "./pages/DepartmentRoom";
+import TaskPlanPage from "./pages/TaskPlanPage";
 // import VerifyQueue from "./pages/verify/VerifyQueue";
 // import VerifyResults from "./pages/verify/VerifyResults";
 // import InterviewDashboard from "./pages/interviews/InterviewDashboard";
@@ -306,6 +308,24 @@ const App = () => (
 
                     {/* Mission Control Candidate UI Routes */}
                     <Route path="/candidates/:id" element={<ProtectedRoute><MainLayout><CandidateDossier /></MainLayout></ProtectedRoute>} />
+
+                    {/* Department rooms (Talent / Growth / Intelligence / Content) */}
+                    <Route path="/rooms/:dept" element={
+                      <ProtectedRoute>
+                        <MainLayout>
+                          <DepartmentRoom />
+                        </MainLayout>
+                      </ProtectedRoute>
+                    } />
+
+                    {/* Task plan detail */}
+                    <Route path="/plans/:planId" element={
+                      <ProtectedRoute>
+                        <MainLayout>
+                          <TaskPlanPage />
+                        </MainLayout>
+                      </ProtectedRoute>
+                    } />
 
                     {/* <Route path="/verify" element={<ProtectedRoute><MainLayout><VerifyQueue /></MainLayout></ProtectedRoute>} /> */}
                     {/* <Route path="/verify/results" element={<ProtectedRoute><MainLayout><VerifyResults /></MainLayout></ProtectedRoute>} /> */}
