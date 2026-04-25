@@ -36,28 +36,28 @@ function DockItem({ agent, mouseX, onHover, onClick }: DockItemProps) {
       style={{ width: size, height: size }}
       onMouseEnter={() => ref.current && onHover(agent, ref.current.getBoundingClientRect())}
       onClick={() => onClick(agent)}
-      className="relative shrink-0 outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/60 rounded-full"
+      className="relative shrink-0 outline-none focus-visible:ring-2 focus-visible:ring-primary/60 focus-visible:ring-offset-2 focus-visible:ring-offset-background rounded-full"
       aria-label={`${agent.name} · ${agent.currentTask}`}
     >
       <motion.div
         style={{ opacity: labelOpacity }}
         className="absolute left-1/2 -translate-x-1/2 -top-9 whitespace-nowrap pointer-events-none"
       >
-        <div className="px-2.5 py-1 rounded-md bg-[#13151C]/95 backdrop-blur-md border border-white/10 text-[11px] font-medium text-white shadow-lg">
-          <span className="text-zinc-400">{agent.name} · </span>{agent.currentTask}
+        <div className="px-2.5 py-1 rounded-md bg-card/95 backdrop-blur-md border border-border/60 text-[11px] font-medium text-foreground shadow-lg">
+          <span className="text-muted-foreground">{agent.name} · </span>{agent.currentTask}
         </div>
       </motion.div>
 
       <div className={cn(
-        'w-full h-full rounded-full ring-2 flex items-center justify-center text-sm font-bold text-white bg-gradient-to-br shadow-[0_4px_20px_rgba(0,0,0,0.4)]',
+        'w-full h-full rounded-full ring-2 flex items-center justify-center text-sm font-bold text-primary-foreground bg-gradient-to-br shadow-[0_4px_20px_hsl(var(--background)/0.6)]',
         dept.ring, dept.bg,
       )}>
         {agent.name[0]}
       </div>
 
       <span className={cn(
-        'absolute bottom-0.5 right-0.5 w-2.5 h-2.5 rounded-full border-2 border-[#13151C]',
-        agent.status === 'active' ? `${dept.dot} animate-pulse` : 'bg-zinc-600',
+        'absolute bottom-0.5 right-0.5 w-2.5 h-2.5 rounded-full border-2 border-card',
+        agent.status === 'active' ? `${dept.dot} animate-pulse` : 'bg-muted',
       )} />
     </motion.button>
   );
@@ -113,7 +113,7 @@ export default function OperativeDock() {
           initial={{ y: 80, opacity: 0 }}
           animate={{ y: 0, opacity: 1 }}
           transition={{ type: 'spring', stiffness: 220, damping: 24, delay: 0.2 }}
-          className="flex items-end gap-3 px-4 py-2.5 rounded-2xl border border-white/10 bg-[#13151C]/70 backdrop-blur-2xl shadow-[0_20px_60px_rgba(0,0,0,0.6)]"
+          className="flex items-end gap-3 px-4 py-2.5 rounded-2xl border border-border/60 bg-card/70 backdrop-blur-2xl shadow-[0_20px_60px_hsl(var(--background)/0.7)]"
         >
           {DOCK_AGENTS.map((agent) => (
             <DockItem
@@ -125,11 +125,11 @@ export default function OperativeDock() {
             />
           ))}
 
-          <div className="self-stretch w-px bg-white/10 mx-1" />
+          <div className="self-stretch w-px bg-border/60 mx-1" />
 
           <button
             onClick={handleDeploy}
-            className="shrink-0 w-11 h-11 rounded-full border border-dashed border-white/20 bg-white/[0.03] hover:bg-white/10 hover:border-white/40 flex items-center justify-center text-zinc-400 hover:text-white transition-all"
+            className="shrink-0 w-11 h-11 rounded-full border border-dashed border-border bg-foreground/[0.03] hover:bg-foreground/10 hover:border-primary/50 hover:text-primary flex items-center justify-center text-muted-foreground transition-all duration-200"
             aria-label="Deploy new agent"
           >
             <Plus className="h-5 w-5" />

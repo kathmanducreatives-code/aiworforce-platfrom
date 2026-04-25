@@ -125,11 +125,11 @@ const MeetTheTeamSection = () => {
         <div className="max-w-[1100px] mx-auto">
           <motion.div initial={{ opacity: 0, y: 20 }} whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true, amount: 0.1 }} transition={{ duration: 0.6 }} className="text-center">
-            <p className="font-mono text-xs uppercase tracking-[0.15em] text-emerald-400 mb-4">YOUR AI WORKFORCE</p>
-            <h2 className="font-display font-black text-[clamp(1.8rem,4vw,3.2rem)] leading-[1.1] tracking-[-0.04em] text-white mb-6">
+            <p className="font-mono text-xs uppercase tracking-[0.15em] text-primary mb-4">YOUR AI WORKFORCE</p>
+            <h2 className="font-display font-black text-[clamp(1.8rem,4vw,3.2rem)] leading-[1.1] tracking-[-0.04em] text-foreground mb-6">
               Meet the team running<br />your company right now.
             </h2>
-            <p className="text-white/40 text-base md:text-lg max-w-[600px] mx-auto leading-relaxed">
+            <p className="text-foreground/40 text-base md:text-lg max-w-[600px] mx-auto leading-relaxed">
               Every agent has a role, a set of tools, and colleagues they work with. They pass information between departments automatically. You hired them all for €149/month.
             </p>
           </motion.div>
@@ -149,10 +149,10 @@ const MeetTheTeamSection = () => {
                   <div className="w-3 h-3 rounded-full bg-yellow-500/70" />
                   <div className="w-3 h-3 rounded-full bg-green-500/70" />
                 </div>
-                <span className="font-mono text-[11px] text-white/30">ScreeningPilot Internal · 5 agents online</span>
+                <span className="font-mono text-[11px] text-foreground/30">ScreeningPilot Internal · 5 agents online</span>
                 <div className="flex items-center gap-1.5">
-                  <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-                  <span className="font-mono text-[10px] text-emerald-400/60">All systems active</span>
+                  <div className="w-2 h-2 rounded-full bg-primary animate-pulse" />
+                  <span className="font-mono text-[10px] text-primary/60">All systems active</span>
                 </div>
               </div>
 

@@ -37,9 +37,9 @@ const HeroHook = () => {
   return (
     <section ref={sectionRef} className="relative min-h-screen flex flex-col items-center justify-center overflow-hidden pt-24 pb-16">
       <div className="relative z-20 text-center px-4 w-full max-w-4xl mx-auto">
-        <p className="font-mono text-xs uppercase tracking-[0.15em] text-emerald-400 font-semibold mb-6">THE AI WORKFORCE PLATFORM</p>
+        <p className="font-mono text-xs uppercase tracking-[0.15em] text-primary font-semibold mb-6">THE AI WORKFORCE PLATFORM</p>
 
-        <h1 ref={headlineRef} className="font-display font-black text-[clamp(2.5rem,6vw,5.5rem)] leading-[1.0] tracking-[-0.05em] text-white mb-10">
+        <h1 ref={headlineRef} className="font-display font-black text-[clamp(2.5rem,6vw,5.5rem)] leading-[1.0] tracking-[-0.05em] text-foreground mb-10">
           <div className="flex flex-wrap items-center justify-center gap-[clamp(0.4rem,1.2vw,0.8rem)]">
             {['You','are','doing','the','work'].map(w => <span key={w} className="word inline-block opacity-0">{w}</span>)}
           </div>
@@ -47,12 +47,12 @@ const HeroHook = () => {
             {['of','ten','people.'].map(w => <span key={w} className="word inline-block opacity-0">{w}</span>)}
           </div>
           <div className="flex flex-wrap items-center justify-center gap-[clamp(0.4rem,1.2vw,0.8rem)] mt-2">
-            <span className="word inline-block opacity-0 text-emerald-400">Now you don't have to.</span>
+            <span className="word inline-block opacity-0 text-primary">Now you don't have to.</span>
           </div>
         </h1>
 
         <div ref={subtextRef} className="opacity-0 mb-10">
-          <p className="font-display text-lg md:text-xl text-white/60 max-w-2xl mx-auto leading-relaxed">
+          <p className="font-display text-lg md:text-xl text-foreground/60 max-w-2xl mx-auto leading-relaxed">
             ScreeningPilot gives you a full AI workforce — five departments, fifteen agents, one company brain. They recruit, sell, create, research, and report. You make the decisions. They do everything else.
           </p>
         </div>
@@ -62,9 +62,9 @@ const HeroHook = () => {
           <div className="relative flex items-center justify-center gap-6 md:gap-8">
             {/* Connecting line */}
             <div className="absolute top-7 left-1/2 -translate-x-1/2 hidden md:block" style={{ width: `${(deptAvatars.length - 1) * 80}px`, height: 1 }}>
-              <div className="w-full h-px bg-emerald-500/20" />
-              <div className="absolute top-0 left-0 w-3 h-px bg-emerald-400 animate-[travelDot_3s_linear_infinite]"
-                style={{ boxShadow: "0 0 6px rgba(0,255,148,0.6)" }} />
+              <div className="w-full h-px bg-primary/20" />
+              <div className="absolute top-0 left-0 w-3 h-px bg-primary animate-[travelDot_3s_linear_infinite]"
+                style={{ boxShadow: "0 0 6px hsl(var(--primary) / 0.6)" }} />
             </div>
             <style>{`@keyframes travelDot { 0% { left: 0; } 100% { left: calc(100% - 12px); } }`}</style>
 
@@ -72,37 +72,32 @@ const HeroHook = () => {
               const Icon = dept.icon;
               return (
                 <div key={dept.label} className="flex flex-col items-center gap-2 relative z-10">
-                  <div className="relative w-14 h-14 rounded-full flex items-center justify-center"
-                    style={{
-                      background: "rgba(0,255,148,0.1)",
-                      border: "1.5px solid rgba(0,255,148,0.4)",
-                    }}>
-                    <Icon className="w-6 h-6 text-emerald-400" />
+                  <div className="relative w-14 h-14 rounded-full flex items-center justify-center bg-primary/10 border-[1.5px] border-primary/40">
+                    <Icon className="w-6 h-6 text-primary" />
                     <span className="absolute inset-0 rounded-full animate-[pulseRing_2s_ease-in-out_infinite]"
                       style={{
                         animationDelay: `${i * 0.4}s`,
-                        boxShadow: "0 0 0 0 rgba(0,255,148,0.4)",
                       }} />
                   </div>
-                  <span className="text-[11px] text-white/50 font-medium uppercase tracking-[0.1em]">{dept.label}</span>
+                  <span className="text-[11px] text-foreground/50 font-medium uppercase tracking-[0.1em]">{dept.label}</span>
                 </div>
               );
             })}
           </div>
-          <style>{`@keyframes pulseRing { 0% { box-shadow: 0 0 0 0 rgba(0,255,148,0.4); } 70% { box-shadow: 0 0 0 8px rgba(0,255,148,0); } 100% { box-shadow: 0 0 0 0 rgba(0,255,148,0); } }`}</style>
+          <style>{`@keyframes pulseRing { 0% { box-shadow: 0 0 0 0 hsl(var(--primary) / 0.4); } 70% { box-shadow: 0 0 0 8px hsl(var(--primary) / 0); } 100% { box-shadow: 0 0 0 0 hsl(var(--primary) / 0); } }`}</style>
         </div>
 
         <div ref={ctaRef} className="opacity-0 mb-8">
           <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
-            <button onClick={() => navigate('/auth')} className="liquid-fill-btn group h-[44px] inline-flex items-center gap-3 bg-emerald-600 border border-emerald-400 text-white font-semibold text-[15px] px-8 rounded-full transition-all duration-300 hover:scale-[1.03] shadow-[0_4px_24px_rgba(5,150,105,0.4)] active:scale-[0.98]">
+            <button onClick={() => navigate('/auth')} className="liquid-fill-btn group h-[44px] inline-flex items-center gap-3 bg-primary hover:bg-primary/90 border border-primary/60 text-primary-foreground font-semibold text-[15px] px-8 rounded-full transition-all duration-300 hover:scale-[1.03] shadow-[0_4px_24px_hsl(var(--primary)/0.35)] active:scale-[0.98]">
               Build your AI workforce
               <ArrowRight className="w-4 h-4 transition-transform duration-300 group-hover:translate-x-1" />
             </button>
-            <a href="#day-timeline" className="h-[44px] inline-flex items-center gap-2 bg-transparent border border-white/15 text-white/70 hover:text-white hover:border-white/30 font-semibold text-[15px] px-8 rounded-full transition-all duration-300 hover:bg-white/5 hover:scale-[1.03] active:scale-[0.98]">
+            <a href="#day-timeline" className="h-[44px] inline-flex items-center gap-2 bg-transparent border border-border text-foreground/70 hover:text-foreground hover:border-foreground/30 font-semibold text-[15px] px-8 rounded-full transition-all duration-300 hover:bg-foreground/5 hover:scale-[1.03] active:scale-[0.98]">
               See how it works
             </a>
           </div>
-          <p className="text-sm text-white/40 mt-4 font-medium">
+          <p className="text-sm text-foreground/40 mt-4 font-medium">
             Trusted by founders from 50+ countries · Set up in 10 minutes · Cancel anytime
           </p>
         </div>
