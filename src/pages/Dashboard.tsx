@@ -16,6 +16,20 @@ import ScorePill from "@/components/shared/ScorePill";
 import NotificationCenter from "@/components/shared/NotificationCenter";
 import { cn } from "@/lib/utils";
 import { fetchOutboundMetrics } from "@/services/interceptorService";
+import HandoffFeedItem, { HandoffEvent } from "@/components/dashboard/HandoffFeedItem";
+
+const HANDOFF_EVENTS: HandoffEvent[] = [
+  {
+    type: 'handoff', time: '9:15 AM',
+    from: { agent: 'Scout', dept: 'talent', action: 'Sourced 18 leads matching ICP' },
+    to: { agent: 'Aria', dept: 'talent', action: 'Now screening them in batch' },
+  },
+  {
+    type: 'handoff', time: '8:30 AM',
+    from: { agent: 'Hawk', dept: 'intelligence', action: 'Flagged 2 hot signals overnight' },
+    to: { agent: 'Penn', dept: 'growth', action: 'Drafting outreach for matching leads' },
+  },
+];
 
 const Dashboard = () => {
   const navigate = useNavigate();
@@ -386,6 +400,23 @@ const Dashboard = () => {
               </div>
             </>
           )}
+        </div>
+
+        {/* Live Workforce Activity — Handoffs */}
+        <div className="mt-6 rounded-2xl border border-border bg-card/60 backdrop-blur p-5">
+          <div className="flex items-center justify-between mb-4">
+            <div>
+              <h3 className="text-base font-bold text-foreground">Live Workforce Activity</h3>
+              <p className="text-xs text-muted-foreground mt-0.5">Your AI agents handing work to each other in real time</p>
+            </div>
+            <span className="text-[10px] font-semibold uppercase tracking-wider text-emerald-400 flex items-center gap-1.5">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+              Live
+            </span>
+          </div>
+          <div className="space-y-3">
+            {HANDOFF_EVENTS.map((ev, i) => <HandoffFeedItem key={i} event={ev} />)}
+          </div>
         </div>
 
       </div>

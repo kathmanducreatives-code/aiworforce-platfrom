@@ -4,13 +4,13 @@ import { useAuth } from '@/hooks/useAuth';
 import {
   LayoutDashboard, Calendar, Search, Brain, Target, TrendingUp,
   Mail, Share2, BarChart3, LogOut, HelpCircle,
-  PanelLeftClose, PanelLeft, Users, Briefcase, Crosshair, Zap, Radar, Eye
+  PanelLeftClose, PanelLeft, Users, Briefcase, Crosshair, Zap, Radar, Eye, Inbox
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 interface NavGroup {
   label: string;
-  items: { path: string; icon: any; label: string }[];
+  items: { path: string; icon: any; label: string; badge?: string; badgeColor?: 'amber' | 'emerald' }[];
 }
 
 const navGroups: NavGroup[] = [
@@ -18,6 +18,7 @@ const navGroups: NavGroup[] = [
     label: 'Hire',
     items: [
       { path: '/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
+      { path: '/awaiting-you', icon: Inbox, label: 'Awaiting You', badge: '4', badgeColor: 'amber' },
       { path: '/screening-jobs', icon: Briefcase, label: 'Job Screening' },
       { path: '/candidates', icon: Users, label: 'Candidates' },
       { path: '/expert-marketplace', icon: Users, label: 'Expert Interviews' },
@@ -138,7 +139,17 @@ const Sidebar = ({ collapsed, onToggle, onOpenCommandPalette }: SidebarProps) =>
                       <div className="absolute left-0 top-1/2 -translate-y-1/2 w-[3px] h-5 bg-primary rounded-r-full" />
                     )}
                     <item.icon className={cn('h-4 w-4 flex-shrink-0', isActive ? 'text-primary' : 'text-muted-foreground group-hover:text-foreground')} />
-                    {!collapsed && <span className="truncate">{item.label}</span>}
+                    {!collapsed && <span className="truncate flex-1">{item.label}</span>}
+                    {!collapsed && item.badge && (
+                      <span className={cn(
+                        'text-[10px] font-bold px-1.5 py-0.5 rounded border tabular-nums',
+                        item.badgeColor === 'amber'
+                          ? 'bg-amber-500/10 text-amber-400 border-amber-500/20'
+                          : 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20',
+                      )}>
+                        {item.badge}
+                      </span>
+                    )}
                   </NavLink>
                 );
               })}
