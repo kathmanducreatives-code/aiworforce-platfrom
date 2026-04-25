@@ -5,9 +5,10 @@ import {
   LayoutDashboard, Calendar, Search, Brain, Target, TrendingUp,
   Mail, Share2, BarChart3, LogOut, HelpCircle,
   PanelLeftClose, PanelLeft, Users, Briefcase, Crosshair, Zap, Radar, Eye, Inbox,
-  Sparkles, Megaphone, BookOpen,
+  Sparkles, Megaphone, BookOpen, Plus,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { openAgentBuilder } from '@/hooks/useAgentBuilder';
 
 interface NavGroup {
   label: string;
