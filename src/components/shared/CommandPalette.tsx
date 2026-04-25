@@ -91,6 +91,7 @@ const CommandPalette = ({ open, onOpenChange }: CommandPaletteProps) => {
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<SearchResult[]>([]);
   const [searching, setSearching] = useState(false);
+  const [reply, setReply] = useState<{ agent: typeof DOCK_AGENTS[number]; text: string; q: string } | null>(null);
 
   // Global keyboard shortcut
   useEffect(() => {
@@ -103,6 +104,27 @@ const CommandPalette = ({ open, onOpenChange }: CommandPaletteProps) => {
     document.addEventListener('keydown', handleKeyDown);
     return () => document.removeEventListener('keydown', handleKeyDown);
   }, [open, onOpenChange]);
+
+  // Listen for prefill events from the dock
+  useEffect(() => {
+    const handlePrefill = (e: Event) => {
+      const detail = (e as CustomEvent).detail;
+      if (detail?.text) setQuery(detail.text);
+    };
+    window.addEventListener('command-bar:prefill', handlePrefill);
+    return () => window.removeEventListener('command-bar:prefill', handlePrefill);
+  }, []);
+
+  // Reset reply when palette closes
+  useEffect(() => {
+    if (!open) setReply(null);
+  }, [open]);
+
+  const runCommand = (text: string) => {
+    if (!text.trim()) return;
+    const agent = routeAgentForQuery(text);
+    setReply({ agent, text: generateMockReply(text, agent), q: text });
+  };
 
   // Search Supabase when query changes
   useEffect(() => {
