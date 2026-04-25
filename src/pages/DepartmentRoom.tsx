@@ -135,6 +135,10 @@ export default function DepartmentRoom() {
     }
   };
 
+  if (!isValid) {
+    return <div className="p-8 text-muted-foreground">Unknown department.</div>;
+  }
+
   return (
     <>
       <div className="px-6 py-5 border-b border-border/50">
