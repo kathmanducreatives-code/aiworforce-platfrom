@@ -157,7 +157,7 @@ const GlobalSection = () => {
         </motion.div>
 
         <div className="text-center mt-12 bg-white/[0.02] py-4 rounded-full border border-white/5 max-w-lg mx-auto">
-          <p className="text-[9px] font-black text-white/40 uppercase tracking-[0.3em]">Agents actively observing 40+ markets</p>
+          <p className="text-[9px] font-black text-white/20 uppercase tracking-[0.3em]">Agents actively observing 40+ markets</p>
         </div>
       </div>
     </section>

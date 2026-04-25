@@ -59,17 +59,11 @@ const PricingCard = () => {
         </div>
 
         <div className="flex items-center justify-center gap-4 mb-16">
-          <span className={`text-[10px] font-black uppercase tracking-widest transition-colors ${!isAnnual ? 'text-white' : 'text-white/50'}`}>Monthly</span>
-          <button
-            role="switch"
-            aria-checked={isAnnual}
-            aria-label="Toggle annual billing"
-            onClick={() => setIsAnnual(!isAnnual)}
-            className={`relative w-14 h-7 rounded-full transition-all duration-300 ${isAnnual ? 'bg-accent-mint' : 'bg-white/10'}`}
-          >
+          <span className={`text-[10px] font-black uppercase tracking-widest transition-colors ${!isAnnual ? 'text-white' : 'text-white/20'}`}>Monthly</span>
+          <button onClick={() => setIsAnnual(!isAnnual)} className={`relative w-14 h-7 rounded-full transition-all duration-300 ${isAnnual ? 'bg-accent-mint' : 'bg-white/10'}`}>
             <div className={`absolute top-1 w-5 h-5 rounded-full bg-white transition-transform duration-300 ${isAnnual ? 'translate-x-8 shadow-[0_0_10px_rgba(255,255,255,1)]' : 'translate-x-1'}`} />
           </button>
-          <span className={`text-[10px] font-black uppercase tracking-widest transition-colors ${isAnnual ? 'text-white' : 'text-white/50'}`}>Annual <span className="text-accent-mint text-[9px] ml-1">(-20%)</span></span>
+          <span className={`text-[10px] font-black uppercase tracking-widest transition-colors ${isAnnual ? 'text-white' : 'text-white/20'}`}>Annual <span className="text-accent-mint text-[9px] ml-1">(-20%)</span></span>
         </div>
 
         <div ref={cardRef} className="grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -82,33 +76,32 @@ const PricingCard = () => {
               )}
               
               <h3 className="font-display font-bold text-xl text-white mb-2">{plan.name}</h3>
-              <p className="text-xs text-white/50 mb-8 font-medium leading-relaxed">{plan.desc}</p>
+              <p className="text-xs text-white/30 mb-8 font-medium leading-relaxed">{plan.desc}</p>
               
               <div className="flex items-baseline gap-1 mb-8">
                 <span className="text-5xl font-black text-white tracking-tighter">€{isAnnual ? plan.annualPrice : plan.monthlyPrice}</span>
-                <span className="text-[10px] font-black text-white/50 uppercase tracking-widest">/mo</span>
+                <span className="text-[10px] font-black text-white/20 uppercase tracking-widest">/mo</span>
               </div>
 
               <div className="space-y-4 mb-12">
                 {plan.features.map((f, i) => (
                   <div key={i} className="flex items-start gap-3">
                     <Check className="w-3.5 h-3.5 text-accent-mint shrink-0 mt-0.5" />
-                    <span className="text-sm text-white/60 font-medium">{f}</span>
+                    <span className="text-xs text-white/50 font-medium">{f}</span>
                   </div>
                 ))}
               </div>
 
-              <button
-                onClick={() => navigate('/auth')}
+              <button 
+                onClick={() => navigate('/auth')} 
                 className={`w-full py-4 rounded-xl text-xs font-black uppercase tracking-[0.2em] transition-all duration-300 ${
-                  plan.popular
-                    ? 'bg-accent-mint text-black shadow-[0_15px_40px_rgba(0,255,148,0.2)] hover:shadow-[0_20px_60px_rgba(0,255,148,0.4)]'
+                  plan.popular 
+                    ? 'bg-accent-mint text-black shadow-[0_15px_40px_rgba(0,255,148,0.2)] hover:shadow-[0_20px_60px_rgba(0,255,148,0.4)]' 
                     : 'bg-white/5 text-white/60 hover:bg-white/10'
                 }`}
               >
                 {plan.cta}
               </button>
-              <p className="text-[10px] text-white/40 text-center mt-3 font-medium tracking-wide">Per workspace · cancel anytime</p>
             </div>
           ))}
         </div>

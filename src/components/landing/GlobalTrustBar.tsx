@@ -19,7 +19,7 @@ const GlobalTrustBar = () => {
   // Typewriter effect
   useEffect(() => {
     const currentMsg = MESSAGES[msgIndex];
-    let timeout: ReturnType<typeof setTimeout>;
+    let timeout: NodeJS.Timeout;
 
     if (isTyping) {
       if (text.length < currentMsg.length) {

@@ -87,15 +87,15 @@ const AgentBuilderSection = () => {
 
             <div className="p-8 space-y-8 flex-1">
                 <div>
-                    <label className="text-[10px] text-white/50 font-black uppercase tracking-widest mb-3 block">Agent Designation</label>
+                    <label className="text-[10px] text-white/30 font-black uppercase tracking-widest mb-3 block">Agent Designation</label>
                     <div className="bg-white/5 border border-white/10 rounded-xl px-4 py-3.5 text-white font-bold text-sm tracking-tight flex items-center justify-between">
                         Customer Success Agent
-                        <Terminal className="w-4 h-4 text-white/40" />
+                        <Terminal className="w-4 h-4 text-white/20" />
                     </div>
                 </div>
 
                 <div>
-                    <label className="text-[10px] text-white/50 font-black uppercase tracking-widest mb-3 block">Primary Toolset</label>
+                    <label className="text-[10px] text-white/30 font-black uppercase tracking-widest mb-3 block">Primary Toolset</label>
                     <div className="flex gap-3">
                         <div className="w-12 h-12 rounded-xl bg-white/5 border border-white/10 flex items-center justify-center">
                             <ToolLogoImage toolId="claude" size={24} />
@@ -129,14 +129,14 @@ const AgentBuilderSection = () => {
                             </AnimatePresence>
                         </div>
                         <div className="w-12 h-12 rounded-xl bg-white/[0.02] border border-white/5 border-dashed flex items-center justify-center">
-                            <span className="text-white/40 text-xs font-bold">+</span>
+                            <span className="text-white/20 text-xs font-bold">+</span>
                         </div>
                     </div>
                 </div>
 
                 <div>
                     <div className="flex items-center justify-between mb-3">
-                        <label className="text-[10px] text-white/50 font-black uppercase tracking-widest block">Directives</label>
+                        <label className="text-[10px] text-white/30 font-black uppercase tracking-widest block">Directives</label>
                         <span className="text-[9px] font-mono text-accent-mint bg-accent-mint/10 px-2 py-0.5 rounded uppercase">Auto-Save</span>
                     </div>
                     <div className="bg-black/50 border border-white/10 rounded-xl overflow-hidden min-h-[160px] relative flex">
@@ -201,7 +201,7 @@ const AgentBuilderSection = () => {
                 <div className={`relative z-10 w-20 h-20 rounded-2xl flex items-center justify-center transition-all duration-1000 mb-8 border backdrop-blur-md shadow-2xl
                     ${step === 3 ? 'bg-[#00FF94] border-[#00FF94] shadow-[0_0_40px_rgba(0,255,148,0.4)] scale-110' : 'bg-white/5 border-white/10 scale-100'}
                 `}>
-                    <Cpu className={`w-10 h-10 ${step === 3 ? 'text-black' : 'text-white/50'}`} />
+                    <Cpu className={`w-10 h-10 ${step === 3 ? 'text-black' : 'text-white/30'}`} />
                 </div>
 
                 <div className="relative z-10 text-center w-full">
@@ -214,7 +214,7 @@ const AgentBuilderSection = () => {
                                 exit={{ opacity: 0, y: -10 }}
                                 className="flex flex-col items-center gap-4"
                             >
-                                <div className="text-white/50 font-mono text-sm uppercase tracking-widest font-bold">
+                                <div className="text-white/30 font-mono text-sm uppercase tracking-widest font-bold">
                                     Awaiting Compilation...
                                 </div>
                                 {/* Terminal scanline */}
@@ -260,7 +260,7 @@ const AgentBuilderSection = () => {
               {t}
             </div>
           ))}
-          <div className="px-5 py-2.5 rounded-full bg-transparent border border-white/5 text-[10px] text-white/40 font-bold uppercase tracking-widest">+ 150 More Presets</div>
+          <div className="px-5 py-2.5 rounded-full bg-transparent border border-white/5 text-[10px] text-white/20 font-bold uppercase tracking-widest">+ 150 More Presets</div>
         </div>
       </div>
     </section>

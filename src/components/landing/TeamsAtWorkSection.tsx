@@ -109,7 +109,7 @@ const ActivityFeed = ({ activities, comingSoon }: { activities: DeptCard["activi
         {visible.map((a, i) => (
           <motion.div key={`${idx}-${i}`} initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -12 }} transition={{ duration: 0.3 }}
             className={`flex items-start gap-2 text-xs ${comingSoon ? "opacity-40" : ""}`}>
-            {a.done ? <Check className="w-3.5 h-3.5 text-emerald-400 shrink-0 mt-0.5" /> : <Loader className="w-3.5 h-3.5 text-white/50 shrink-0 mt-0.5 animate-spin" />}
+            {a.done ? <Check className="w-3.5 h-3.5 text-emerald-400 shrink-0 mt-0.5" /> : <Loader className="w-3.5 h-3.5 text-white/30 shrink-0 mt-0.5 animate-spin" />}
             <span className="text-white/50">{a.text}</span>
           </motion.div>
         ))}
@@ -159,7 +159,7 @@ const TeamsAtWorkSection = () => {
                   <span className="font-display font-black text-sm text-white uppercase tracking-widest">{dept.name}</span>
                 </div>
                 {dept.comingSoon ? (
-                  <span className="text-[9px] px-2 py-1 rounded-md bg-white/5 text-white/40 font-black uppercase tracking-widest border border-white/5">COMING SOON</span>
+                  <span className="text-[9px] px-2 py-1 rounded-md bg-white/5 text-white/20 font-black uppercase tracking-widest border border-white/5">COMING SOON</span>
                 ) : (
                   <div className="flex items-center gap-1.5 px-2 py-1 rounded-md bg-accent-mint/5 border border-accent-mint/20">
                     <div className="w-1.5 h-1.5 rounded-full bg-accent-mint animate-pulse" />
@@ -169,14 +169,14 @@ const TeamsAtWorkSection = () => {
               </div>
               
               <div className="flex items-center gap-3 mb-8">
-                <span className="text-[9px] font-black text-white/40 uppercase tracking-[0.2em] mr-1">STACK</span>
+                <span className="text-[9px] font-black text-white/10 uppercase tracking-[0.2em] mr-1">STACK</span>
                 <div className="flex gap-2">
                   {dept.tools.slice(0, 3).map(t => (
                     <div key={t.name} className="w-7 h-7 rounded-lg bg-white/5 border border-white/10 flex items-center justify-center p-1.5 grayscale group-hover:grayscale-0 transition-all">
                       <ToolLogoImage toolId={t.id} size={16} />
                     </div>
                   ))}
-                  {dept.tools.length > 3 && <span className="text-[9px] font-black text-white/40 ml-1 mt-2 tracking-tighter">+{dept.tools.length - 3}</span>}
+                  {dept.tools.length > 3 && <span className="text-[9px] font-black text-white/20 ml-1 mt-2 tracking-tighter">+{dept.tools.length - 3}</span>}
                 </div>
               </div>
 
@@ -186,7 +186,7 @@ const TeamsAtWorkSection = () => {
 
               <div className="mt-8 pt-8 border-t border-white/5">
                 {dept.comingSoon ? (
-                  <button onClick={() => navigate("/auth")} className="text-[10px] font-black uppercase tracking-[0.2em] text-white/40 hover:text-white transition-colors flex items-center gap-2">Join waitlist <ArrowRight className="w-3.5 h-3.5" /></button>
+                  <button onClick={() => navigate("/auth")} className="text-[10px] font-black uppercase tracking-[0.2em] text-white/20 hover:text-white transition-colors flex items-center gap-2">Join waitlist <ArrowRight className="w-3.5 h-3.5" /></button>
                 ) : (
                   <button onClick={() => navigate(`/auth?room=${dept.room}`)} className="text-[10px] font-black uppercase tracking-[0.2em] text-accent-mint hover:text-white transition-colors flex items-center gap-2">Initialize Department <ArrowRight className="w-3.5 h-3.5" /></button>
                 )}

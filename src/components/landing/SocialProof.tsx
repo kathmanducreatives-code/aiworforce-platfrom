@@ -1,6 +1,8 @@
 import { useEffect, useRef } from 'react';
 import gsap from 'gsap';
 import { ScrollTrigger } from 'gsap/ScrollTrigger';
+import { Quote } from 'lucide-react';
+
 gsap.registerPlugin(ScrollTrigger);
 
 const testimonials = [
@@ -40,7 +42,7 @@ const SocialProof = () => {
                 </div>
                 <div className="flex flex-wrap justify-center gap-4 mb-14">
                     {stages.map((s) => (
-                        <span key={s} className="text-xs font-medium text-white/50 bg-white/[0.04] border border-white/[0.08] px-3 py-1.5 rounded-full">{s}</span>
+                        <span key={s} className="text-xs font-medium text-white/30 bg-white/[0.03] border border-white/[0.06] px-3 py-1.5 rounded-full">{s}</span>
                     ))}
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -61,7 +63,7 @@ const SocialProof = () => {
                         </div>
                     ))}
                 </div>
-                <p className="text-center text-xs text-white/40 mt-8">
+                <p className="text-center text-xs text-white/20 mt-8">
                     Early access users · Outcomes verified · Names anonymized pending permission
                 </p>
             </div>

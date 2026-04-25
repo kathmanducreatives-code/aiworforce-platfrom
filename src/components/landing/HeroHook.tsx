@@ -4,13 +4,12 @@ import gsap from "gsap";
 import {
   ArrowRight,
   Eye,
+  Sparkles,
   TrendingUp,
   Users,
 } from "lucide-react";
 
 const ENTRANCE_EASE = "cubic-bezier(0.22, 1, 0.36, 1)";
-const BOOT_TEXT = "Assembling your AI team...";
-const BOOT_DOTS = [0, 1, 2, 3, 4];
 
 const STAR_LAYER_ONE = Array.from({ length: 120 }, (_, index) => ({
   id: `far-${index}`,
@@ -44,35 +43,35 @@ const POWERED_BY_TOOLS = [
   {
     id: "claude",
     name: "Claude",
-    logo: "/tool-logos/claude.svg",
+    logo: "https://logo.clearbit.com/anthropic.com",
     glow: "#CC785C",
     fallback: "C",
   },
   {
     id: "gpt4",
     name: "GPT-4",
-    logo: "/tool-logos/gpt4.svg",
+    logo: "https://logo.clearbit.com/openai.com",
     glow: "#10A37F",
     fallback: "G",
   },
   {
     id: "gemini",
     name: "Gemini",
-    logo: "/tool-logos/gemini.svg",
+    logo: "https://logo.clearbit.com/deepmind.google",
     glow: "#4285F4",
     fallback: "G",
   },
   {
     id: "banana",
-    name: "Nano Banana",
-    logo: "/tool-logos/nanobanana.svg",
+    name: "Banana",
+    logo: "https://logo.clearbit.com/nanobanana.ai",
     glow: "#FFAA00",
     fallback: "B",
   },
   {
     id: "elevenlabs",
     name: "11Labs",
-    logo: "/tool-logos/elevenlabs.svg",
+    logo: "https://logo.clearbit.com/elevenlabs.io",
     glow: "#9333EA",
     fallback: "1",
   },
@@ -133,7 +132,7 @@ const PoweredTool = ({
           onError={() => setFailed(true)}
         />
       )}
-      <span className="whitespace-nowrap text-[9px] leading-none text-white/70">{tool.name}</span>
+      <span className="text-[9px] leading-none text-white/70">{tool.name}</span>
     </div>
   );
 };
@@ -146,50 +145,6 @@ const HeroHook = () => {
   const closeStarsRef = useRef<HTMLDivElement>(null);
   const mouseHandlerRef = useRef<((event: MouseEvent) => void) | null>(null);
   const leaveHandlerRef = useRef<(() => void) | null>(null);
-  const [bootLine, setBootLine] = useState("");
-  const [visibleBootDots, setVisibleBootDots] = useState(0);
-  const [bootComplete, setBootComplete] = useState(false);
-
-  useEffect(() => {
-    const timeouts: number[] = [];
-    let index = 0;
-
-    const typeNext = () => {
-      if (index >= BOOT_TEXT.length) {
-        timeouts.push(
-          window.setTimeout(() => {
-            BOOT_DOTS.forEach((_, dotIndex) => {
-              timeouts.push(
-                window.setTimeout(() => {
-                  setVisibleBootDots(dotIndex + 1);
-                }, dotIndex * 130)
-              );
-            });
-
-            timeouts.push(
-              window.setTimeout(() => {
-                setBootComplete(true);
-              }, BOOT_DOTS.length * 130 + 340)
-            );
-          }, 300)
-        );
-
-        return;
-      }
-
-      index += 1;
-      setBootLine(BOOT_TEXT.slice(0, index));
-
-      const nextDelay = BOOT_TEXT[index - 1] === "." ? 90 : 52;
-      timeouts.push(window.setTimeout(typeNext, nextDelay));
-    };
-
-    timeouts.push(window.setTimeout(typeNext, 220));
-
-    return () => {
-      timeouts.forEach((timeout) => window.clearTimeout(timeout));
-    };
-  }, []);
 
   useEffect(() => {
     const ctx = gsap.context(() => {
@@ -209,9 +164,6 @@ const HeroHook = () => {
         { opacity: 0, y: 12 }
       );
       gsap.set(".hero-floating-card", { opacity: 0, y: 16 });
-      gsap.set(".hero-logo-group", { opacity: 0, y: 6 });
-
-      if (!bootComplete) return;
 
       const timeline = gsap.timeline({ defaults: { duration: 0.45, ease: ENTRANCE_EASE } });
 
@@ -219,25 +171,25 @@ const HeroHook = () => {
         ".hero-system-pill",
         { opacity: 0, y: 12 },
         { opacity: 1, y: 0 },
-        0
+        0.1
       );
       timeline.fromTo(
         ".hero-headline",
         { opacity: 0, y: 20 },
         { opacity: 1, y: 0 },
-        0.12
+        0.2
       );
       timeline.fromTo(
         ".hero-green-line",
         { opacity: 0, y: 20 },
         { opacity: 1, y: 0 },
-        0.24
+        0.35
       );
       timeline.fromTo(
         ".hero-subheadline",
         { opacity: 0, y: 10 },
         { opacity: 1, y: 0 },
-        0.38
+        0.5
       );
       timeline.to(
         ".hero-floating-card",
@@ -248,48 +200,37 @@ const HeroHook = () => {
           duration: 0.45,
           ease: ENTRANCE_EASE,
         },
-        0.52
+        0.9
       );
       timeline.fromTo(
         ".hero-powered-pill",
         { opacity: 0, y: 10 },
         { opacity: 1, y: 0 },
-        0.68
-      );
-      timeline.to(
-        ".hero-logo-group",
-        {
-          opacity: 1,
-          y: 0,
-          stagger: 0.1,
-          duration: 0.35,
-          ease: ENTRANCE_EASE,
-        },
         0.8
       );
       timeline.fromTo(
         ".hero-primary-cta",
         { opacity: 0, y: 10 },
         { opacity: 1, y: 0 },
-        0.88
+        0.9
       );
       timeline.fromTo(
         ".hero-secondary-cta",
         { opacity: 0, y: 10 },
         { opacity: 1, y: 0 },
-        0.96
+        0.98
       );
-      timeline.fromTo(".hero-trust", { opacity: 0 }, { opacity: 1, y: 0 }, 1.06);
+      timeline.fromTo(".hero-trust", { opacity: 0 }, { opacity: 1, y: 0 }, 1.05);
       timeline.fromTo(
         [".hero-orbit-label", ".hero-orbit-shell"],
         { opacity: 0 },
         { opacity: 1, y: 0 },
-        1.12
+        1.1
       );
     }, sectionRef);
 
     return () => ctx.revert();
-  }, [bootComplete]);
+  }, []);
 
   useEffect(() => {
     const section = sectionRef.current;
@@ -337,8 +278,6 @@ const HeroHook = () => {
       className="hero-scanline relative flex min-h-screen items-center justify-center overflow-hidden bg-transparent px-4 pb-24 pt-24 md:px-6"
     >
       <div className="pointer-events-none absolute inset-0 overflow-hidden">
-        <div className="hero-top-aura absolute inset-x-[12%] top-[-18%] h-[24rem] md:h-[30rem]" />
-
         <div ref={farStarsRef} className="hero-star-layer absolute -inset-[6%]">
           {STAR_LAYER_ONE.map((star) => (
             <span
@@ -438,47 +377,23 @@ const HeroHook = () => {
         </div>
       </div>
 
-      <div
-        className="pointer-events-none absolute inset-0 z-20 flex items-center justify-center bg-[#030405] transition-opacity duration-500"
-        style={{ opacity: bootComplete ? 0 : 1 }}
-        aria-hidden={bootComplete}
-      >
-        <div className="flex flex-col items-center gap-6 text-center">
-          <div className="font-mono text-[clamp(0.95rem,1.8vw,1.2rem)] tracking-[0.18em] text-white/84">
-            {bootLine}
-            <span className="hero-boot-cursor ml-1 inline-block h-[1.05em] w-[2px] translate-y-[2px] bg-primary align-middle" />
-          </div>
-          <div className="flex items-center gap-3">
-            {BOOT_DOTS.map((dotIndex) => {
-              const active = visibleBootDots > dotIndex;
-
-              return (
-                <span
-                  key={dotIndex}
-                  className={`hero-boot-dot block h-[10px] w-[10px] rounded-full ${active ? "hero-boot-dot-active" : "bg-primary/10"}`}
-                />
-              );
-            })}
-          </div>
-        </div>
-      </div>
-
       <div className="relative z-10 mx-auto flex w-full max-w-6xl flex-col items-center text-center">
-        <div className="hero-system-pill mb-5 inline-flex items-center gap-2 rounded-full border border-teal-400/30 bg-teal-500/10 px-4 py-1.5 font-mono text-[10px] uppercase tracking-[0.42em] text-teal-300 backdrop-blur-sm md:text-[11px]">
-          <span className="h-1.5 w-1.5 rounded-full bg-teal-400 shadow-[0_0_6px_rgba(45,212,191,0.6)]" />
-          THE AI WORKFORCE PLATFORM
+        <div className="hero-system-pill mb-6 inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.04] px-4 py-2 backdrop-blur-xl shadow-[0_12px_28px_rgba(0,0,0,0.24)]">
+          <Sparkles className="h-3.5 w-3.5 text-primary" />
+          <span className="font-mono text-[10px] uppercase tracking-[0.3em] text-white/65">
+            AI Workforce OS
+          </span>
         </div>
 
         <h1 className="hero-headline max-w-5xl text-[clamp(2.9rem,7.2vw,6.4rem)] font-bold leading-[0.95] tracking-[-0.04em] text-white">
-          <span className="block">You are doing the work</span>
-          <span className="mt-1 block">of ten people.</span>
+          You are doing the work of ten people.
         </h1>
 
         <div className="hero-green-line relative mb-5 mt-3 w-full">
           <div className="hero-primary-line-halo absolute inset-x-[18%] inset-y-0 rounded-full" />
-          <h2 className="hero-primary-glow relative z-10 inline-block px-4 py-2 text-[clamp(3.05rem,8.2vw,8.2rem)] font-black leading-[0.9] tracking-[-0.05em]">
+          <span className="hero-primary-glow relative z-10 inline-block px-8 py-2 text-[clamp(2.2rem,6vw,5.45rem)] font-black leading-[0.95] tracking-[-0.04em]">
             Now you don&apos;t have to.
-          </h2>
+          </span>
         </div>
 
         <p className="hero-subheadline mx-auto mb-6 max-w-[480px] px-4 text-center text-[18px] font-medium leading-[1.6] text-white/60">
@@ -573,11 +488,11 @@ const HeroHook = () => {
         </div>
 
         <div className="hero-trust mt-[14px] flex flex-col items-center justify-center gap-1 text-[12px] tracking-[0.02em] text-white/60 md:flex-row md:gap-2">
-          <span>Set up in 10 minutes</span>
+          <span>14-day free trial</span>
           <span className="hidden text-primary md:inline">·</span>
           <span>No credit card</span>
           <span className="hidden text-primary md:inline">·</span>
-          <span>Join 50+ countries</span>
+          <span>Set up in 10 minutes</span>
         </div>
       </div>
     </section>

@@ -325,7 +325,7 @@ const AgentWindow = ({ agent, isActive, isMobile }: { agent: AgentDef; isActive:
 
         {/* Tool Stack */}
         <div>
-          <span className="font-mono text-[9px] uppercase tracking-[0.3em] text-white/40 font-bold block mb-3">
+          <span className="font-mono text-[9px] uppercase tracking-[0.3em] text-white/20 font-bold block mb-3">
             TOOL STACK
           </span>
           <div className="flex gap-2.5 flex-wrap">
@@ -401,7 +401,7 @@ const LivePanel = ({ agent, isActive }: { agent: AgentDef; isActive: boolean }) 
           className="w-2 h-2 rounded-full animate-pulse"
           style={{ background: agent.accent }}
         />
-        <span className="font-mono text-[10px] uppercase tracking-[0.2em] text-white/50 font-bold">
+        <span className="font-mono text-[10px] uppercase tracking-[0.2em] text-white/30 font-bold">
           {agent.statusLine}
         </span>
       </div>
@@ -428,7 +428,7 @@ const LivePanel = ({ agent, isActive }: { agent: AgentDef; isActive: boolean }) 
             </div>
             <div className="flex-1 min-w-0">
               <div className="text-[12px] text-white/70 font-medium truncate">{row.title}</div>
-              <div className="text-[10px] text-white/45 truncate">{row.sub}</div>
+              <div className="text-[10px] text-white/30 truncate">{row.sub}</div>
             </div>
             <div
               className="text-[10px] font-mono font-bold px-2 py-0.5 rounded"
