@@ -68,7 +68,7 @@ const DataDashboard = () => {
         { data: linkedinLeads },
         { data: deepSearchResults }
       ] = await Promise.all([
-        supabase.from('resume_analyses').select('id, created_at, fit_score, overall_factor').limit(5000),
+        supabase.from('resume_analyses').select('id, created_at, fit_score, overall_factor, risk_factor').limit(5000),
         supabase.from('client_placements').select('id, placement_date').gte('placement_date', monthIso).limit(5000),
         supabase.from('scheduled_emails').select('id, created_at').gte('created_at', monthIso).limit(5000),
         supabase.from('linkedin_leads').select('id, created_at').gte('created_at', monthIso).limit(5000),
