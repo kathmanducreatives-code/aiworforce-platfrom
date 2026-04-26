@@ -77,22 +77,25 @@ const Auth = () => {
     }
   };
 
+  const fieldClassName =
+    "h-11 border-white/15 bg-white/[0.04] text-white placeholder:text-white/45 shadow-inner shadow-black/20 focus-visible:border-emerald-400 focus-visible:bg-white/[0.06]";
+
   return (
-    <div className="min-h-screen bg-gradient-to-br from-background via-background to-primary/5 flex items-center justify-center p-4">
+    <div className="relative z-10 flex min-h-screen items-center justify-center overflow-hidden bg-transparent p-4 text-white">
       <Button
         variant="ghost"
         onClick={() => navigate('/')}
-        className="absolute top-4 left-4 flex items-center gap-2 text-muted-foreground hover:text-foreground"
+        className="absolute left-4 top-4 flex items-center gap-2 text-white/65 hover:bg-white/5 hover:text-white"
       >
         <ArrowLeft className="w-4 h-4" />
         Back to Home
       </Button>
-      <Card className="w-full max-w-md">
+      <Card className="w-full max-w-md border-white/10 bg-[#0D0D0D]/95 text-white shadow-2xl shadow-black/40 backdrop-blur-xl">
         <CardHeader className="space-y-1">
           <CardTitle className="text-2xl text-center">
             {isLogin ? 'Welcome Back' : 'Create Account'}
           </CardTitle>
-          <CardDescription className="text-center">
+          <CardDescription className="text-center text-white/55">
             {isLogin 
               ? 'Enter your credentials to access your dashboard' 
               : 'Sign up to start using our AI-powered recruitment system'
@@ -103,7 +106,7 @@ const Auth = () => {
           <form onSubmit={handleAuth} className="space-y-4">
             {!isLogin && (
               <div className="space-y-2">
-                <Label htmlFor="fullName">Full Name</Label>
+                <Label htmlFor="fullName" className="text-white/75">Full Name</Label>
                 <Input
                   id="fullName"
                   type="text"
@@ -111,11 +114,12 @@ const Auth = () => {
                   value={fullName}
                   onChange={(e) => setFullName(e.target.value)}
                   required={!isLogin}
+                  className={fieldClassName}
                 />
               </div>
             )}
             <div className="space-y-2">
-              <Label htmlFor="email">Email</Label>
+              <Label htmlFor="email" className="text-white/75">Email</Label>
               <Input
                 id="email"
                 type="email"
@@ -123,10 +127,11 @@ const Auth = () => {
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 required
+                className={fieldClassName}
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="password">Password</Label>
+              <Label htmlFor="password" className="text-white/75">Password</Label>
               <Input
                 id="password"
                 type="password"
@@ -135,11 +140,12 @@ const Auth = () => {
                 onChange={(e) => setPassword(e.target.value)}
                 required
                 minLength={6}
+                className={fieldClassName}
               />
             </div>
             <Button
-              type="submit" 
-              className="w-full" 
+              type="submit"
+              className="h-11 w-full bg-emerald-500 text-white hover:bg-emerald-400"
               disabled={loading}
             >
               {loading ? 'Please wait...' : (isLogin ? 'Sign In' : 'Sign Up')}
@@ -150,7 +156,7 @@ const Auth = () => {
             <Button
               variant="link"
               onClick={() => setIsLogin(!isLogin)}
-              className="text-sm"
+              className="text-sm text-emerald-300 hover:text-emerald-200"
             >
               {isLogin 
                 ? "Don't have an account? Sign up" 

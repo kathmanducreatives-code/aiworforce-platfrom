@@ -9,6 +9,12 @@ create table if not exists public.workspaces (
   created_at timestamptz not null default now()
 );
 
+-- Some deployed projects already have earlier ScreeningPilot tables. Keep this
+-- migration safe for both fresh databases and those older table shapes.
+alter table public.workspaces
+  add column if not exists owner_id uuid references auth.users(id) on delete cascade,
+  add column if not exists created_at timestamptz not null default now();
+
 create table if not exists public.workspace_members (
   id uuid primary key default gen_random_uuid(),
   workspace_id uuid not null references public.workspaces(id) on delete cascade,
@@ -18,8 +24,17 @@ create table if not exists public.workspace_members (
   unique (workspace_id, user_id)
 );
 
+alter table public.workspace_members
+  add column if not exists workspace_id uuid references public.workspaces(id) on delete cascade,
+  add column if not exists user_id uuid references auth.users(id) on delete cascade,
+  add column if not exists role text not null default 'member',
+  add column if not exists created_at timestamptz not null default now();
+
 create index if not exists workspace_members_user_idx on public.workspace_members(user_id);
 create index if not exists workspace_members_ws_idx on public.workspace_members(workspace_id);
+create unique index if not exists workspace_members_workspace_user_unique_idx
+  on public.workspace_members(workspace_id, user_id)
+  where workspace_id is not null and user_id is not null;
 
 create or replace function public.is_workspace_member(_user_id uuid, _workspace_id uuid)
 returns boolean language sql stable security definer set search_path = public as $$
@@ -41,6 +56,25 @@ create table if not exists public.agents (
   created_at timestamptz not null default now(),
   unique (workspace_id, slug)
 );
+
+alter table public.agents
+  add column if not exists workspace_id uuid references public.workspaces(id) on delete cascade,
+  add column if not exists slug text,
+  add column if not exists department text not null default 'talent',
+  add column if not exists status text not null default 'idle',
+  add column if not exists current_task text,
+  add column if not exists progress int not null default 0,
+  add column if not exists last_active_at timestamptz,
+  add column if not exists created_at timestamptz not null default now();
+
+update public.agents
+set slug = lower(regexp_replace(coalesce(slug, name, id::text), '[^a-z0-9]+', '-', 'g'))
+where slug is null;
+
+create unique index if not exists agents_workspace_slug_unique_idx
+  on public.agents(workspace_id, slug)
+  where workspace_id is not null and slug is not null;
+
 create index if not exists agents_ws_idx on public.agents(workspace_id);
 
 create table if not exists public.agent_capabilities (
@@ -52,6 +86,13 @@ create table if not exists public.agent_capabilities (
   created_at timestamptz not null default now()
 );
 
+alter table public.agent_capabilities
+  add column if not exists agent_id uuid references public.agents(id) on delete cascade,
+  add column if not exists capability text,
+  add column if not exists tool text,
+  add column if not exists enabled boolean not null default true,
+  add column if not exists created_at timestamptz not null default now();
+
 create table if not exists public.task_plans (
   id uuid primary key default gen_random_uuid(),
   workspace_id uuid not null references public.workspaces(id) on delete cascade,
@@ -62,6 +103,28 @@ create table if not exists public.task_plans (
   created_at timestamptz not null default now(),
   completed_at timestamptz
 );
+
+alter table public.task_plans
+  add column if not exists workspace_id uuid references public.workspaces(id) on delete cascade,
+  add column if not exists user_instruction text,
+  add column if not exists plan_summary text,
+  add column if not exists status text not null default 'planning',
+  add column if not exists created_by uuid references auth.users(id) on delete set null,
+  add column if not exists created_at timestamptz not null default now(),
+  add column if not exists completed_at timestamptz;
+
+do $$
+begin
+  if exists (
+    select 1 from information_schema.columns
+    where table_schema = 'public'
+      and table_name = 'task_plans'
+      and column_name = 'goal'
+  ) then
+    alter table public.task_plans alter column goal drop not null;
+  end if;
+end $$;
+
 create index if not exists task_plans_ws_idx on public.task_plans(workspace_id);
 
 create table if not exists public.tasks (
@@ -77,6 +140,42 @@ create table if not exists public.tasks (
   finished_at timestamptz,
   created_at timestamptz not null default now()
 );
+
+alter table public.tasks
+  add column if not exists plan_id uuid references public.task_plans(id) on delete cascade,
+  add column if not exists agent_id uuid references public.agents(id) on delete set null,
+  add column if not exists step_index int not null default 0,
+  add column if not exists description text,
+  add column if not exists status text not null default 'pending',
+  add column if not exists input jsonb,
+  add column if not exists output jsonb,
+  add column if not exists started_at timestamptz,
+  add column if not exists finished_at timestamptz,
+  add column if not exists created_at timestamptz not null default now();
+
+do $$
+begin
+  if exists (
+    select 1 from information_schema.columns
+    where table_schema = 'public'
+      and table_name = 'tasks'
+      and column_name = 'input'
+      and data_type <> 'jsonb'
+  ) then
+    alter table public.tasks alter column input type jsonb using to_jsonb(input);
+  end if;
+
+  if exists (
+    select 1 from information_schema.columns
+    where table_schema = 'public'
+      and table_name = 'tasks'
+      and column_name = 'output'
+      and data_type <> 'jsonb'
+  ) then
+    alter table public.tasks alter column output type jsonb using to_jsonb(output);
+  end if;
+end $$;
+
 create index if not exists tasks_plan_idx on public.tasks(plan_id);
 
 create table if not exists public.activity_feed (
@@ -92,6 +191,17 @@ create table if not exists public.activity_feed (
   metadata jsonb,
   created_at timestamptz not null default now()
 );
+
+alter table public.activity_feed
+  add column if not exists workspace_id uuid references public.workspaces(id) on delete cascade,
+  add column if not exists plan_id uuid references public.task_plans(id) on delete cascade,
+  add column if not exists agent_id uuid references public.agents(id) on delete set null,
+  add column if not exists event_type text,
+  add column if not exists title text,
+  add column if not exists body text,
+  add column if not exists metadata jsonb,
+  add column if not exists created_at timestamptz not null default now();
+
 create index if not exists activity_feed_ws_created_idx on public.activity_feed(workspace_id, created_at desc);
 
 create table if not exists public.handoffs (
@@ -102,6 +212,13 @@ create table if not exists public.handoffs (
   payload jsonb,
   created_at timestamptz not null default now()
 );
+
+alter table public.handoffs
+  add column if not exists plan_id uuid references public.task_plans(id) on delete cascade,
+  add column if not exists from_agent_id uuid references public.agents(id) on delete set null,
+  add column if not exists to_agent_id uuid references public.agents(id) on delete set null,
+  add column if not exists payload jsonb,
+  add column if not exists created_at timestamptz not null default now();
 
 create table if not exists public.approvals (
   id uuid primary key default gen_random_uuid(),
@@ -117,6 +234,20 @@ create table if not exists public.approvals (
   decided_at timestamptz,
   created_at timestamptz not null default now()
 );
+
+alter table public.approvals
+  add column if not exists workspace_id uuid references public.workspaces(id) on delete cascade,
+  add column if not exists plan_id uuid references public.task_plans(id) on delete cascade,
+  add column if not exists agent_id uuid references public.agents(id) on delete set null,
+  add column if not exists task_id uuid references public.tasks(id) on delete cascade,
+  add column if not exists title text,
+  add column if not exists description text,
+  add column if not exists payload jsonb,
+  add column if not exists status text not null default 'pending',
+  add column if not exists decided_by uuid references auth.users(id) on delete set null,
+  add column if not exists decided_at timestamptz,
+  add column if not exists created_at timestamptz not null default now();
+
 create index if not exists approvals_ws_status_idx on public.approvals(workspace_id, status);
 
 alter table public.workspaces           enable row level security;

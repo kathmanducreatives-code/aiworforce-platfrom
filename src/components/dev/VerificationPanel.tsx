@@ -29,6 +29,7 @@ interface CheckRow {
 const SESSION_KEY = 'lov_verification_dismissed';
 
 export default function VerificationPanel() {
+  const isAuthRoute = typeof window !== 'undefined' && window.location.pathname === '/auth';
   const [open, setOpen] = useState(true);
   const [checks, setChecks] = useState<CheckRow[]>([
     ...TABLES.map<CheckRow>((t) => ({ name: t, state: 'idle', detail: '…' })),
@@ -43,7 +44,7 @@ export default function VerificationPanel() {
   }, []);
 
   useEffect(() => {
-    if (!open) return;
+    if (!open || isAuthRoute) return;
     let cancelled = false;
     (async () => {
       setRunning(true);
@@ -78,9 +79,9 @@ export default function VerificationPanel() {
       }
     })();
     return () => { cancelled = true; };
-  }, [open]);
+  }, [open, isAuthRoute]);
 
-  if (!open) return null;
+  if (!open || isAuthRoute) return null;
 
   const failures = checks.filter((c) => c.state === 'fail').length;
 

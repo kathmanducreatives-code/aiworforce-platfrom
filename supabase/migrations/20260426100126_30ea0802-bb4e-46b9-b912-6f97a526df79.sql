@@ -297,6 +297,9 @@ CREATE TABLE IF NOT EXISTS public.agent_runs (
 ALTER TABLE public.agents ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.task_plans ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.agent_runs ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Authed manage agents" ON public.agents;
+DROP POLICY IF EXISTS "Authed manage task_plans" ON public.task_plans;
+DROP POLICY IF EXISTS "Authed manage agent_runs" ON public.agent_runs;
 CREATE POLICY "Authed manage agents" ON public.agents FOR ALL TO authenticated USING (true) WITH CHECK (true);
 CREATE POLICY "Authed manage task_plans" ON public.task_plans FOR ALL TO authenticated USING (true) WITH CHECK (true);
 CREATE POLICY "Authed manage agent_runs" ON public.agent_runs FOR ALL TO authenticated USING (true) WITH CHECK (true);
