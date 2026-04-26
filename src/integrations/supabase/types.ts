@@ -17,10 +17,13 @@ export type Database = {
       adaptive_screening_sessions: {
         Row: {
           candidate_id: string | null
+          company: string | null
           completed_at: string | null
+          contact_name: string | null
           created_at: string | null
           id: string
           job_id: string | null
+          profile_name: string | null
           role_briefing: Json | null
           scenario_config: Json | null
           session_status: string | null
@@ -28,10 +31,13 @@ export type Database = {
         }
         Insert: {
           candidate_id?: string | null
+          company?: string | null
           completed_at?: string | null
+          contact_name?: string | null
           created_at?: string | null
           id?: string
           job_id?: string | null
+          profile_name?: string | null
           role_briefing?: Json | null
           scenario_config?: Json | null
           session_status?: string | null
@@ -39,14 +45,104 @@ export type Database = {
         }
         Update: {
           candidate_id?: string | null
+          company?: string | null
           completed_at?: string | null
+          contact_name?: string | null
           created_at?: string | null
           id?: string
           job_id?: string | null
+          profile_name?: string | null
           role_briefing?: Json | null
           scenario_config?: Json | null
           session_status?: string | null
           total_score?: number | null
+        }
+        Relationships: []
+      }
+      agent_runs: {
+        Row: {
+          agent_id: string | null
+          completed_at: string | null
+          id: string
+          input: Json | null
+          output: Json | null
+          started_at: string | null
+          status: string | null
+          task_plan_id: string | null
+        }
+        Insert: {
+          agent_id?: string | null
+          completed_at?: string | null
+          id?: string
+          input?: Json | null
+          output?: Json | null
+          started_at?: string | null
+          status?: string | null
+          task_plan_id?: string | null
+        }
+        Update: {
+          agent_id?: string | null
+          completed_at?: string | null
+          id?: string
+          input?: Json | null
+          output?: Json | null
+          started_at?: string | null
+          status?: string | null
+          task_plan_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "agent_runs_agent_id_fkey"
+            columns: ["agent_id"]
+            isOneToOne: false
+            referencedRelation: "agents"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "agent_runs_task_plan_id_fkey"
+            columns: ["task_plan_id"]
+            isOneToOne: false
+            referencedRelation: "task_plans"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      agents: {
+        Row: {
+          capabilities: Json | null
+          config: Json | null
+          created_at: string | null
+          id: string
+          is_active: boolean | null
+          model: string
+          name: string
+          role: string | null
+          system_prompt: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          capabilities?: Json | null
+          config?: Json | null
+          created_at?: string | null
+          id?: string
+          is_active?: boolean | null
+          model?: string
+          name: string
+          role?: string | null
+          system_prompt?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          capabilities?: Json | null
+          config?: Json | null
+          created_at?: string | null
+          id?: string
+          is_active?: boolean | null
+          model?: string
+          name?: string
+          role?: string | null
+          system_prompt?: string | null
+          updated_at?: string | null
         }
         Relationships: []
       }
@@ -87,6 +183,57 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      candidate_profiles: {
+        Row: {
+          created_at: string | null
+          current_company: string | null
+          current_title: string | null
+          enriched_data: Json | null
+          full_name: string | null
+          headline: string | null
+          id: string
+          inserted_at: string | null
+          linkedin_url: string | null
+          location: string | null
+          profile_name: string | null
+          raw_data: Json | null
+          session_id: string | null
+          similarity_score: number | null
+        }
+        Insert: {
+          created_at?: string | null
+          current_company?: string | null
+          current_title?: string | null
+          enriched_data?: Json | null
+          full_name?: string | null
+          headline?: string | null
+          id?: string
+          inserted_at?: string | null
+          linkedin_url?: string | null
+          location?: string | null
+          profile_name?: string | null
+          raw_data?: Json | null
+          session_id?: string | null
+          similarity_score?: number | null
+        }
+        Update: {
+          created_at?: string | null
+          current_company?: string | null
+          current_title?: string | null
+          enriched_data?: Json | null
+          full_name?: string | null
+          headline?: string | null
+          id?: string
+          inserted_at?: string | null
+          linkedin_url?: string | null
+          location?: string | null
+          profile_name?: string | null
+          raw_data?: Json | null
+          session_id?: string | null
+          similarity_score?: number | null
+        }
+        Relationships: []
       }
       client_active_positions: {
         Row: {
@@ -469,6 +616,116 @@ export type Database = {
         }
         Relationships: []
       }
+      competitor_companies: {
+        Row: {
+          created_at: string | null
+          id: string
+          industry: string | null
+          metadata: Json | null
+          name: string
+          website: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          industry?: string | null
+          metadata?: Json | null
+          name: string
+          website?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          industry?: string | null
+          metadata?: Json | null
+          name?: string
+          website?: string | null
+        }
+        Relationships: []
+      }
+      competitor_intel_signals: {
+        Row: {
+          company_id: string | null
+          created_at: string | null
+          id: string
+          payload: Json | null
+          signal_type: string | null
+        }
+        Insert: {
+          company_id?: string | null
+          created_at?: string | null
+          id?: string
+          payload?: Json | null
+          signal_type?: string | null
+        }
+        Update: {
+          company_id?: string | null
+          created_at?: string | null
+          id?: string
+          payload?: Json | null
+          signal_type?: string | null
+        }
+        Relationships: []
+      }
+      competitor_job_postings: {
+        Row: {
+          company_id: string | null
+          created_at: string | null
+          id: string
+          metadata: Json | null
+          posted_at: string | null
+          title: string | null
+          url: string | null
+        }
+        Insert: {
+          company_id?: string | null
+          created_at?: string | null
+          id?: string
+          metadata?: Json | null
+          posted_at?: string | null
+          title?: string | null
+          url?: string | null
+        }
+        Update: {
+          company_id?: string | null
+          created_at?: string | null
+          id?: string
+          metadata?: Json | null
+          posted_at?: string | null
+          title?: string | null
+          url?: string | null
+        }
+        Relationships: []
+      }
+      competitor_profiles: {
+        Row: {
+          company_id: string | null
+          created_at: string | null
+          id: string
+          profile_data: Json | null
+        }
+        Insert: {
+          company_id?: string | null
+          created_at?: string | null
+          id?: string
+          profile_data?: Json | null
+        }
+        Update: {
+          company_id?: string | null
+          created_at?: string | null
+          id?: string
+          profile_data?: Json | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "competitor_profiles_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "competitor_companies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       deep_search_analysis: {
         Row: {
           created_at: string
@@ -596,6 +853,30 @@ export type Database = {
           },
         ]
       }
+      firecrawl_scrape_logs: {
+        Row: {
+          created_at: string | null
+          id: string
+          payload: Json | null
+          status: string | null
+          url: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          payload?: Json | null
+          status?: string | null
+          url?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          payload?: Json | null
+          status?: string | null
+          url?: string | null
+        }
+        Relationships: []
+      }
       google_calendar_tokens: {
         Row: {
           access_token: string
@@ -626,6 +907,99 @@ export type Database = {
           token_expiry?: string
           updated_at?: string | null
           user_id?: string
+        }
+        Relationships: []
+      }
+      growth_signal_companies: {
+        Row: {
+          company_name: string
+          created_at: string | null
+          growth_score: number | null
+          id: string
+          industry: string | null
+          metadata: Json | null
+          signals: Json | null
+          updated_at: string | null
+          website: string | null
+        }
+        Insert: {
+          company_name: string
+          created_at?: string | null
+          growth_score?: number | null
+          id?: string
+          industry?: string | null
+          metadata?: Json | null
+          signals?: Json | null
+          updated_at?: string | null
+          website?: string | null
+        }
+        Update: {
+          company_name?: string
+          created_at?: string | null
+          growth_score?: number | null
+          id?: string
+          industry?: string | null
+          metadata?: Json | null
+          signals?: Json | null
+          updated_at?: string | null
+          website?: string | null
+        }
+        Relationships: []
+      }
+      icp_lookalike_sessions: {
+        Row: {
+          company_location: Json | null
+          company_size: string | null
+          config: Json | null
+          created_at: string | null
+          hiring_intensity: string | null
+          id: string
+          industry_names: Json | null
+          profile_name: string | null
+          results_count: number | null
+          scrape_status: string | null
+          session_id: string
+          status: string | null
+          strong_matches_count: number | null
+          target_industry: Json | null
+          updated_at: string | null
+          user_id: string | null
+        }
+        Insert: {
+          company_location?: Json | null
+          company_size?: string | null
+          config?: Json | null
+          created_at?: string | null
+          hiring_intensity?: string | null
+          id?: string
+          industry_names?: Json | null
+          profile_name?: string | null
+          results_count?: number | null
+          scrape_status?: string | null
+          session_id: string
+          status?: string | null
+          strong_matches_count?: number | null
+          target_industry?: Json | null
+          updated_at?: string | null
+          user_id?: string | null
+        }
+        Update: {
+          company_location?: Json | null
+          company_size?: string | null
+          config?: Json | null
+          created_at?: string | null
+          hiring_intensity?: string | null
+          id?: string
+          industry_names?: Json | null
+          profile_name?: string | null
+          results_count?: number | null
+          scrape_status?: string | null
+          session_id?: string
+          status?: string | null
+          strong_matches_count?: number | null
+          target_industry?: Json | null
+          updated_at?: string | null
+          user_id?: string | null
         }
         Relationships: []
       }
@@ -882,6 +1256,87 @@ export type Database = {
           },
         ]
       }
+      job_distribution_postings: {
+        Row: {
+          created_at: string | null
+          id: string
+          job_id: string | null
+          metadata: Json | null
+          platform: string | null
+          posted_at: string | null
+          url: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          job_id?: string | null
+          metadata?: Json | null
+          platform?: string | null
+          posted_at?: string | null
+          url?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          job_id?: string | null
+          metadata?: Json | null
+          platform?: string | null
+          posted_at?: string | null
+          url?: string | null
+        }
+        Relationships: []
+      }
+      job_distribution_status: {
+        Row: {
+          created_at: string | null
+          external_url: string | null
+          id: string
+          job_id: string | null
+          metadata: Json | null
+          platform: string
+          status: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          external_url?: string | null
+          id?: string
+          job_id?: string | null
+          metadata?: Json | null
+          platform: string
+          status?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          external_url?: string | null
+          id?: string
+          job_id?: string | null
+          metadata?: Json | null
+          platform?: string
+          status?: string | null
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
+      job_market_intelligence: {
+        Row: {
+          created_at: string | null
+          data: Json | null
+          id: string
+        }
+        Insert: {
+          created_at?: string | null
+          data?: Json | null
+          id?: string
+        }
+        Update: {
+          created_at?: string | null
+          data?: Json | null
+          id?: string
+        }
+        Relationships: []
+      }
       job_postings: {
         Row: {
           created_at: string | null
@@ -1013,6 +1468,45 @@ export type Database = {
         }
         Relationships: []
       }
+      marketing_tasks: {
+        Row: {
+          created_at: string | null
+          description: string | null
+          due_date: string | null
+          id: string
+          metadata: Json | null
+          priority: string | null
+          status: string | null
+          title: string
+          updated_at: string | null
+          user_id: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          description?: string | null
+          due_date?: string | null
+          id?: string
+          metadata?: Json | null
+          priority?: string | null
+          status?: string | null
+          title: string
+          updated_at?: string | null
+          user_id?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          description?: string | null
+          due_date?: string | null
+          id?: string
+          metadata?: Json | null
+          priority?: string | null
+          status?: string | null
+          title?: string
+          updated_at?: string | null
+          user_id?: string | null
+        }
+        Relationships: []
+      }
       marketing_videos: {
         Row: {
           background_video_url: string | null
@@ -1046,6 +1540,236 @@ export type Database = {
           id?: string
           script?: Json | null
           thumbnail_url?: string | null
+        }
+        Relationships: []
+      }
+      outreach_activities: {
+        Row: {
+          action_type: string
+          body: string | null
+          channel: string
+          created_at: string
+          executed_date: string | null
+          id: string
+          lead_id: string
+          response_received: boolean | null
+          response_text: string | null
+          scheduled_date: string | null
+          sequence_id: string | null
+          status: Database["public"]["Enums"]["activity_status"] | null
+          step_number: number | null
+          subject: string | null
+        }
+        Insert: {
+          action_type: string
+          body?: string | null
+          channel: string
+          created_at?: string
+          executed_date?: string | null
+          id?: string
+          lead_id: string
+          response_received?: boolean | null
+          response_text?: string | null
+          scheduled_date?: string | null
+          sequence_id?: string | null
+          status?: Database["public"]["Enums"]["activity_status"] | null
+          step_number?: number | null
+          subject?: string | null
+        }
+        Update: {
+          action_type?: string
+          body?: string | null
+          channel?: string
+          created_at?: string
+          executed_date?: string | null
+          id?: string
+          lead_id?: string
+          response_received?: boolean | null
+          response_text?: string | null
+          scheduled_date?: string | null
+          sequence_id?: string | null
+          status?: Database["public"]["Enums"]["activity_status"] | null
+          step_number?: number | null
+          subject?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "outreach_activities_lead_id_fkey"
+            columns: ["lead_id"]
+            isOneToOne: false
+            referencedRelation: "outreach_leads"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "outreach_activities_sequence_id_fkey"
+            columns: ["sequence_id"]
+            isOneToOne: false
+            referencedRelation: "outreach_sequences"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      outreach_leads: {
+        Row: {
+          company: string
+          company_size: string | null
+          contact_name: string
+          created_at: string
+          current_sequence_step: number | null
+          email: string | null
+          id: string
+          industry: string | null
+          last_touch_date: string | null
+          linkedin_url: string | null
+          next_action_date: string | null
+          notes: string | null
+          sequence_id: string | null
+          signals: Json | null
+          status: Database["public"]["Enums"]["lead_status"] | null
+          tier: Database["public"]["Enums"]["lead_tier"] | null
+          title: string | null
+          updated_at: string
+        }
+        Insert: {
+          company: string
+          company_size?: string | null
+          contact_name: string
+          created_at?: string
+          current_sequence_step?: number | null
+          email?: string | null
+          id?: string
+          industry?: string | null
+          last_touch_date?: string | null
+          linkedin_url?: string | null
+          next_action_date?: string | null
+          notes?: string | null
+          sequence_id?: string | null
+          signals?: Json | null
+          status?: Database["public"]["Enums"]["lead_status"] | null
+          tier?: Database["public"]["Enums"]["lead_tier"] | null
+          title?: string | null
+          updated_at?: string
+        }
+        Update: {
+          company?: string
+          company_size?: string | null
+          contact_name?: string
+          created_at?: string
+          current_sequence_step?: number | null
+          email?: string | null
+          id?: string
+          industry?: string | null
+          last_touch_date?: string | null
+          linkedin_url?: string | null
+          next_action_date?: string | null
+          notes?: string | null
+          sequence_id?: string | null
+          signals?: Json | null
+          status?: Database["public"]["Enums"]["lead_status"] | null
+          tier?: Database["public"]["Enums"]["lead_tier"] | null
+          title?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "outreach_leads_sequence_id_fkey"
+            columns: ["sequence_id"]
+            isOneToOne: false
+            referencedRelation: "outreach_sequences"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      outreach_sequences: {
+        Row: {
+          created_at: string
+          description: string | null
+          id: string
+          leads_enrolled: number | null
+          name: string
+          settings: Json | null
+          status: Database["public"]["Enums"]["sequence_status"] | null
+          steps: Json | null
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          description?: string | null
+          id?: string
+          leads_enrolled?: number | null
+          name: string
+          settings?: Json | null
+          status?: Database["public"]["Enums"]["sequence_status"] | null
+          steps?: Json | null
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          description?: string | null
+          id?: string
+          leads_enrolled?: number | null
+          name?: string
+          settings?: Json | null
+          status?: Database["public"]["Enums"]["sequence_status"] | null
+          steps?: Json | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      outreach_settings: {
+        Row: {
+          created_at: string
+          default_cta: string | null
+          email_signature: string | null
+          id: string
+          linkedin_daily_connect_limit: number | null
+          linkedin_daily_dm_limit: number | null
+          product_context: string | null
+          updated_at: string
+          user_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          default_cta?: string | null
+          email_signature?: string | null
+          id?: string
+          linkedin_daily_connect_limit?: number | null
+          linkedin_daily_dm_limit?: number | null
+          product_context?: string | null
+          updated_at?: string
+          user_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          default_cta?: string | null
+          email_signature?: string | null
+          id?: string
+          linkedin_daily_connect_limit?: number | null
+          linkedin_daily_dm_limit?: number | null
+          product_context?: string | null
+          updated_at?: string
+          user_id?: string | null
+        }
+        Relationships: []
+      }
+      pricing_history: {
+        Row: {
+          company_id: string | null
+          id: string
+          observed_at: string | null
+          price_data: Json | null
+        }
+        Insert: {
+          company_id?: string | null
+          id?: string
+          observed_at?: string | null
+          price_data?: Json | null
+        }
+        Update: {
+          company_id?: string | null
+          id?: string
+          observed_at?: string | null
+          price_data?: Json | null
         }
         Relationships: []
       }
@@ -1168,14 +1892,18 @@ export type Database = {
       scheduled_emails: {
         Row: {
           body: string | null
+          candidate_email: string | null
           candidate_id: string | null
           candidate_name: string | null
           created_at: string
+          folder_name: string | null
           id: string
           recipient_email: string | null
           scheduled_send_time: string | null
           send_time_utc: string | null
+          sequence_created_at: string | null
           sequence_id: string | null
+          sequence_name: string | null
           status: string | null
           step_number: number | null
           subject: string | null
@@ -1183,14 +1911,18 @@ export type Database = {
         }
         Insert: {
           body?: string | null
+          candidate_email?: string | null
           candidate_id?: string | null
           candidate_name?: string | null
           created_at?: string
+          folder_name?: string | null
           id?: string
           recipient_email?: string | null
           scheduled_send_time?: string | null
           send_time_utc?: string | null
+          sequence_created_at?: string | null
           sequence_id?: string | null
+          sequence_name?: string | null
           status?: string | null
           step_number?: number | null
           subject?: string | null
@@ -1198,14 +1930,18 @@ export type Database = {
         }
         Update: {
           body?: string | null
+          candidate_email?: string | null
           candidate_id?: string | null
           candidate_name?: string | null
           created_at?: string
+          folder_name?: string | null
           id?: string
           recipient_email?: string | null
           scheduled_send_time?: string | null
           send_time_utc?: string | null
+          sequence_created_at?: string | null
           sequence_id?: string | null
+          sequence_name?: string | null
           status?: string | null
           step_number?: number | null
           subject?: string | null
@@ -1219,6 +1955,7 @@ export type Database = {
           created_at: string | null
           id: string
           name: string | null
+          scrape_run_id: string | null
           search_criteria: Json
           status: string | null
           total_leads: number | null
@@ -1229,6 +1966,7 @@ export type Database = {
           created_at?: string | null
           id?: string
           name?: string | null
+          scrape_run_id?: string | null
           search_criteria: Json
           status?: string | null
           total_leads?: number | null
@@ -1239,6 +1977,7 @@ export type Database = {
           created_at?: string | null
           id?: string
           name?: string | null
+          scrape_run_id?: string | null
           search_criteria?: Json
           status?: string | null
           total_leads?: number | null
@@ -1554,6 +2293,60 @@ export type Database = {
         }
         Relationships: []
       }
+      talent_signals: {
+        Row: {
+          company_id: string | null
+          created_at: string | null
+          id: string
+          payload: Json | null
+          signal_type: string | null
+        }
+        Insert: {
+          company_id?: string | null
+          created_at?: string | null
+          id?: string
+          payload?: Json | null
+          signal_type?: string | null
+        }
+        Update: {
+          company_id?: string | null
+          created_at?: string | null
+          id?: string
+          payload?: Json | null
+          signal_type?: string | null
+        }
+        Relationships: []
+      }
+      task_plans: {
+        Row: {
+          created_at: string | null
+          goal: string
+          id: string
+          status: string | null
+          steps: Json | null
+          updated_at: string | null
+          user_id: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          goal: string
+          id?: string
+          status?: string | null
+          steps?: Json | null
+          updated_at?: string | null
+          user_id?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          goal?: string
+          id?: string
+          status?: string | null
+          steps?: Json | null
+          updated_at?: string | null
+          user_id?: string | null
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
@@ -1571,6 +2364,14 @@ export type Database = {
           secondary_color: string
         }[]
       }
+      get_room_member_profiles: {
+        Args: { room_uuid: string }
+        Returns: {
+          full_name: string
+          logo_url: string
+          user_id: string
+        }[]
+      }
       get_user_client_id: { Args: { user_uuid: string }; Returns: string }
       is_room_member: {
         Args: { _room_id: string; _user_id: string }
@@ -1578,6 +2379,7 @@ export type Database = {
       }
     }
     Enums: {
+      activity_status: "pending" | "sent" | "skipped" | "failed"
       candidate_source: "resume_screening" | "deep_search" | "linkedin_scraper"
       interview_location_type: "video" | "phone" | "in_person"
       interview_status:
@@ -1586,7 +2388,16 @@ export type Database = {
         | "cancelled"
         | "no_show"
         | "rescheduled"
+      lead_status:
+        | "not_started"
+        | "in_sequence"
+        | "replied"
+        | "meeting_booked"
+        | "closed"
+        | "dead"
+      lead_tier: "unassigned" | "tier_1" | "tier_2" | "tier_3"
       reminder_type: "24h" | "1h" | "15min"
+      sequence_status: "draft" | "active" | "paused"
       slot_status: "available" | "booked" | "blocked"
     }
     CompositeTypes: {
@@ -1715,6 +2526,7 @@ export type CompositeTypes<
 export const Constants = {
   public: {
     Enums: {
+      activity_status: ["pending", "sent", "skipped", "failed"],
       candidate_source: ["resume_screening", "deep_search", "linkedin_scraper"],
       interview_location_type: ["video", "phone", "in_person"],
       interview_status: [
@@ -1724,7 +2536,17 @@ export const Constants = {
         "no_show",
         "rescheduled",
       ],
+      lead_status: [
+        "not_started",
+        "in_sequence",
+        "replied",
+        "meeting_booked",
+        "closed",
+        "dead",
+      ],
+      lead_tier: ["unassigned", "tier_1", "tier_2", "tier_3"],
       reminder_type: ["24h", "1h", "15min"],
+      sequence_status: ["draft", "active", "paused"],
       slot_status: ["available", "booked", "blocked"],
     },
   },
