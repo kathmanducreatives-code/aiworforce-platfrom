@@ -198,6 +198,7 @@ export type Database = {
           location: string | null
           profile_name: string | null
           raw_data: Json | null
+          scrape_run_id: string | null
           session_id: string | null
           similarity_score: number | null
         }
@@ -214,6 +215,7 @@ export type Database = {
           location?: string | null
           profile_name?: string | null
           raw_data?: Json | null
+          scrape_run_id?: string | null
           session_id?: string | null
           similarity_score?: number | null
         }
@@ -230,6 +232,7 @@ export type Database = {
           location?: string | null
           profile_name?: string | null
           raw_data?: Json | null
+          scrape_run_id?: string | null
           session_id?: string | null
           similarity_score?: number | null
         }
