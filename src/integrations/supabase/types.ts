@@ -14,7 +14,373 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      candidate_notes: {
+        Row: {
+          candidate_id: string | null
+          content: string
+          created_at: string | null
+          created_by: string | null
+          created_by_name: string | null
+          id: string
+          updated_at: string | null
+        }
+        Insert: {
+          candidate_id?: string | null
+          content: string
+          created_at?: string | null
+          created_by?: string | null
+          created_by_name?: string | null
+          id?: string
+          updated_at?: string | null
+        }
+        Update: {
+          candidate_id?: string | null
+          content?: string
+          created_at?: string | null
+          created_by?: string | null
+          created_by_name?: string | null
+          id?: string
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "candidate_notes_candidate_id_fkey"
+            columns: ["candidate_id"]
+            isOneToOne: false
+            referencedRelation: "resume_analyses"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      client_active_positions: {
+        Row: {
+          budget_range: string | null
+          client_id: string | null
+          created_at: string | null
+          id: string
+          position_level: string | null
+          position_title: string
+          posted_date: string
+          required_skills: string[] | null
+          status: string | null
+        }
+        Insert: {
+          budget_range?: string | null
+          client_id?: string | null
+          created_at?: string | null
+          id?: string
+          position_level?: string | null
+          position_title: string
+          posted_date: string
+          required_skills?: string[] | null
+          status?: string | null
+        }
+        Update: {
+          budget_range?: string | null
+          client_id?: string | null
+          created_at?: string | null
+          id?: string
+          position_level?: string | null
+          position_title?: string
+          posted_date?: string
+          required_skills?: string[] | null
+          status?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "client_active_positions_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      client_placements: {
+        Row: {
+          candidate_id: string | null
+          client_id: string | null
+          cost_per_hire: number | null
+          created_at: string | null
+          id: string
+          placement_date: string
+          position_opened_date: string | null
+          position_title: string
+          time_to_fill_days: number | null
+        }
+        Insert: {
+          candidate_id?: string | null
+          client_id?: string | null
+          cost_per_hire?: number | null
+          created_at?: string | null
+          id?: string
+          placement_date: string
+          position_opened_date?: string | null
+          position_title: string
+          time_to_fill_days?: number | null
+        }
+        Update: {
+          candidate_id?: string | null
+          client_id?: string | null
+          cost_per_hire?: number | null
+          created_at?: string | null
+          id?: string
+          placement_date?: string
+          position_opened_date?: string | null
+          position_title?: string
+          time_to_fill_days?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "client_placements_candidate_id_fkey"
+            columns: ["candidate_id"]
+            isOneToOne: false
+            referencedRelation: "resume_analyses"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "client_placements_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      clients: {
+        Row: {
+          client_name: string
+          contact_email: string | null
+          contact_name: string | null
+          created_at: string | null
+          id: string
+          industry: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          client_name: string
+          contact_email?: string | null
+          contact_name?: string | null
+          created_at?: string | null
+          id?: string
+          industry?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          client_name?: string
+          contact_email?: string | null
+          contact_name?: string | null
+          created_at?: string | null
+          id?: string
+          industry?: string | null
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
+      deep_search_analysis: {
+        Row: {
+          created_at: string
+          id: string
+          query: string | null
+          result: Json | null
+          user_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          query?: string | null
+          result?: Json | null
+          user_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          query?: string | null
+          result?: Json | null
+          user_id?: string | null
+        }
+        Relationships: []
+      }
+      linkedin_posts: {
+        Row: {
+          content: string | null
+          created_at: string
+          id: string
+          scheduled_at: string | null
+          status: string | null
+          user_id: string | null
+        }
+        Insert: {
+          content?: string | null
+          created_at?: string
+          id?: string
+          scheduled_at?: string | null
+          status?: string | null
+          user_id?: string | null
+        }
+        Update: {
+          content?: string | null
+          created_at?: string
+          id?: string
+          scheduled_at?: string | null
+          status?: string | null
+          user_id?: string | null
+        }
+        Relationships: []
+      }
+      marketing_videos: {
+        Row: {
+          background_video_url: string | null
+          created_at: string | null
+          duration: number | null
+          feature_name: string
+          final_video_url: string | null
+          has_motion_graphics: boolean | null
+          id: string
+          script: Json | null
+          thumbnail_url: string | null
+        }
+        Insert: {
+          background_video_url?: string | null
+          created_at?: string | null
+          duration?: number | null
+          feature_name: string
+          final_video_url?: string | null
+          has_motion_graphics?: boolean | null
+          id?: string
+          script?: Json | null
+          thumbnail_url?: string | null
+        }
+        Update: {
+          background_video_url?: string | null
+          created_at?: string | null
+          duration?: number | null
+          feature_name?: string
+          final_video_url?: string | null
+          has_motion_graphics?: boolean | null
+          id?: string
+          script?: Json | null
+          thumbnail_url?: string | null
+        }
+        Relationships: []
+      }
+      resume_analyses: {
+        Row: {
+          candidate_name: string
+          created_at: string
+          current_stage: string | null
+          email: string | null
+          email_clicked: boolean | null
+          email_opened: boolean | null
+          fit_score: number | null
+          id: string
+          justification: string | null
+          nurturing_stage: string | null
+          overall_factor: number | null
+          processing_time_minutes: number | null
+          recruitment_name: string | null
+          resume: string | null
+          reward_factor: number | null
+          risk_factor: number | null
+          screening_type: string | null
+          status: string | null
+          status_updated_at: string | null
+          status_updated_by: string | null
+          strengths: string | null
+          weaknesses: string | null
+        }
+        Insert: {
+          candidate_name: string
+          created_at?: string
+          current_stage?: string | null
+          email?: string | null
+          email_clicked?: boolean | null
+          email_opened?: boolean | null
+          fit_score?: number | null
+          id?: string
+          justification?: string | null
+          nurturing_stage?: string | null
+          overall_factor?: number | null
+          processing_time_minutes?: number | null
+          recruitment_name?: string | null
+          resume?: string | null
+          reward_factor?: number | null
+          risk_factor?: number | null
+          screening_type?: string | null
+          status?: string | null
+          status_updated_at?: string | null
+          status_updated_by?: string | null
+          strengths?: string | null
+          weaknesses?: string | null
+        }
+        Update: {
+          candidate_name?: string
+          created_at?: string
+          current_stage?: string | null
+          email?: string | null
+          email_clicked?: boolean | null
+          email_opened?: boolean | null
+          fit_score?: number | null
+          id?: string
+          justification?: string | null
+          nurturing_stage?: string | null
+          overall_factor?: number | null
+          processing_time_minutes?: number | null
+          recruitment_name?: string | null
+          resume?: string | null
+          reward_factor?: number | null
+          risk_factor?: number | null
+          screening_type?: string | null
+          status?: string | null
+          status_updated_at?: string | null
+          status_updated_by?: string | null
+          strengths?: string | null
+          weaknesses?: string | null
+        }
+        Relationships: []
+      }
+      scheduled_emails: {
+        Row: {
+          body: string | null
+          candidate_id: string | null
+          created_at: string
+          id: string
+          recipient_email: string | null
+          scheduled_send_time: string | null
+          send_time_utc: string | null
+          sequence_id: string | null
+          status: string | null
+          step_number: number | null
+          subject: string | null
+        }
+        Insert: {
+          body?: string | null
+          candidate_id?: string | null
+          created_at?: string
+          id?: string
+          recipient_email?: string | null
+          scheduled_send_time?: string | null
+          send_time_utc?: string | null
+          sequence_id?: string | null
+          status?: string | null
+          step_number?: number | null
+          subject?: string | null
+        }
+        Update: {
+          body?: string | null
+          candidate_id?: string | null
+          created_at?: string
+          id?: string
+          recipient_email?: string | null
+          scheduled_send_time?: string | null
+          send_time_utc?: string | null
+          sequence_id?: string | null
+          status?: string | null
+          step_number?: number | null
+          subject?: string | null
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
