@@ -1,0 +1,1 @@
+ALTER TABLE public.candidate_profiles ADD COLUMN IF NOT EXISTS scrape_run_id text;
