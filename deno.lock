@@ -85,7 +85,7 @@
         "npm:@radix-ui/react-tooltip@^1.2.8",
         "npm:@remotion/cli@4",
         "npm:@remotion/renderer@4",
-        "npm:@supabase/supabase-js@^2.95.0",
+        "npm:@supabase/supabase-js@^2.104.1",
         "npm:@tailwindcss/typography@~0.5.16",
         "npm:@tanstack/react-query@^5.83.0",
         "npm:@types/node@^22.16.5",
