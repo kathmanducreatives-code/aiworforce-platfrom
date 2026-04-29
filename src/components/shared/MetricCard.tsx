@@ -13,13 +13,17 @@ interface MetricCardProps {
     className?: string;
 }
 
-const MetricCard = ({ label, value, icon, trend, className }: MetricCardProps) => {
+interface ExtendedProps extends MetricCardProps {
+    valueColor?: 'default' | 'primary';
+}
+
+const MetricCard = ({ label, value, icon, trend, className, valueColor = 'default' }: ExtendedProps) => {
     const trendColor = trend
         ? trend.value > 0
-            ? 'text-emerald-600 dark:text-emerald-400'
+            ? 'text-emerald-400'
             : trend.value < 0
-                ? 'text-red-500 dark:text-red-400'
-                : 'text-muted-foreground'
+                ? 'text-rose-400'
+                : 'text-text-tertiary'
         : '';
 
     const TrendIcon = trend
@@ -28,37 +32,35 @@ const MetricCard = ({ label, value, icon, trend, className }: MetricCardProps) =
 
     return (
         <div className={cn(
-            'rounded-2xl border border-border bg-card/50 p-5 sm:p-6 transition-all duration-200',
-            'hover:border-primary/20 hover:shadow-sm',
-            className
+            'rounded-xl border border-border-subtle bg-card p-5 transition-colors',
+            'hover:border-border',
+            className,
         )}>
-            {/* Label row */}
-            <div className="flex items-center gap-2.5 mb-3 sm:mb-4">
+            <div className="flex items-start justify-between mb-3">
+                <span className="font-label">{label}</span>
                 {icon && (
-                    <div className="p-2 rounded-xl bg-primary/10 border border-primary/10">
+                    <div className="w-7 h-7 rounded-full flex items-center justify-center bg-white/[0.04]">
                         {icon}
                     </div>
                 )}
-                <span className="text-xs sm:text-sm font-medium text-muted-foreground uppercase tracking-wider">
-                    {label}
-                </span>
             </div>
 
-            {/* Value */}
             {value === null ? (
-                <div className="h-10 skeleton-glass rounded-lg mb-1" />
+                <div className="h-8 bg-white/[0.04] animate-pulse rounded mb-1" />
             ) : (
-                <div className="text-3xl sm:text-4xl font-bold text-foreground tracking-tight tabular-nums">
+                <div className={cn(
+                    'text-[32px] leading-none font-semibold tracking-tight tabular-nums',
+                    valueColor === 'primary' ? 'text-primary' : 'text-foreground',
+                )}>
                     {value}
                 </div>
             )}
 
-            {/* Trend */}
             {trend && (
-                <div className={cn('flex items-center gap-1 mt-1.5 text-xs font-medium', trendColor)}>
+                <div className={cn('flex items-center gap-1 mt-3 text-[12px]', trendColor)}>
                     {TrendIcon && <TrendIcon className="h-3 w-3" />}
-                    <span>{trend.value > 0 ? '+' : ''}{trend.value}%</span>
-                    {trend.label && <span className="text-muted-foreground ml-1">{trend.label}</span>}
+                    <span className="font-medium">{trend.value > 0 ? '+' : ''}{trend.value}%</span>
+                    {trend.label && <span className="text-text-tertiary ml-1">{trend.label}</span>}
                 </div>
             )}
         </div>
