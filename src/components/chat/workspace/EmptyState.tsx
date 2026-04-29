@@ -1,6 +1,7 @@
 import { AGENT_PROFILES, deptRing, deptText } from '@/data/agentProfiles';
 import { Sparkles, Users, TrendingUp, Eye, FileText } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { toast } from 'sonner';
 
 const CARDS = [
   { icon: Users, label: '@Scout', text: 'Find 10 React engineers in London', dept: 'talent' as const },
