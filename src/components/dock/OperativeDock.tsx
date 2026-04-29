@@ -54,9 +54,13 @@ function DockItem({ agent, mouseX, onHover, onClick }: DockItemProps) {
       </motion.div>
 
       <div className={cn(
-        'w-full h-full rounded-full ring-2 overflow-hidden bg-card shadow-[0_4px_20px_hsl(var(--background)/0.6)]',
-        dept.ring,
-      )}>
+        'w-full h-full rounded-full overflow-hidden bg-card transition-shadow',
+      )}
+      style={{
+        boxShadow: agent.status === 'active'
+          ? `0 0 0 2px ${dept.hex ?? '#10B981'}, 0 0 12px ${dept.hex ?? '#10B981'}66`
+          : `0 0 0 2px ${dept.hex ?? '#10B981'}80`,
+      }}>
         <img
           src={agent.image}
           alt={agent.name}
@@ -65,10 +69,12 @@ function DockItem({ agent, mouseX, onHover, onClick }: DockItemProps) {
         />
       </div>
 
-      <span className={cn(
-        'absolute bottom-0.5 right-0.5 w-2.5 h-2.5 rounded-full border-2 border-card',
-        agent.status === 'active' ? `${dept.dot} animate-pulse` : 'bg-muted',
-      )} />
+      {agent.status === 'active' && (
+        <span className={cn(
+          'absolute bottom-0 right-0 w-2 h-2 rounded-full border-2 border-card animate-pulse',
+          dept.dot,
+        )} />
+      )}
     </motion.button>
   );
 }
