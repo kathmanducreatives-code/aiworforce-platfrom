@@ -1,122 +1,125 @@
-# ScreeningPilot Premium Visual Redesign
+## Departments Redesign — Team Rooms
 
-A pure visual + layout pass — zero changes to routes, hooks, edge functions, queries, or component props. We retune the design tokens once, then restyle four surfaces: Sidebar, Dashboard, Chat Workspace, and Operative Dock.
+Transform "Departments" from sidebar nav links into a true 2-step experience: a **Departments Overview** page (4 living team room cards) → **Department Room** (already exists, will be polished into header / kanban / live activity). All data is real-time via existing Supabase subscriptions; no backend changes.
 
-## 1. Design tokens (`src/index.css` + `tailwind.config.ts`)
+### Routing & Sidebar
 
-Update only the **dark theme** token block (`.dark { ... }` around line 435) to the new palette. Light theme untouched.
+- Add new route `/departments` → renders new `DepartmentsOverview` page.
+- In `Sidebar.tsx`, change the **Departments** group so the group label itself is clickable (navigates to `/departments`). Keep the 4 child links (`Talent / Growth / Intelligence / Content`) as quick-jumps directly into a room — exactly as the prompt requests.
+- Keep existing `/rooms/:dept` route — that's where rooms live.
 
+### Step 1 — Departments Overview Page
+
+New file: `src/pages/DepartmentsOverview.tsx`
+
+Layout:
 ```text
---background        → 220 24% 5%      (#080B0F)
---card              → 215 22% 7%      (#0D1117)  ← surface
---popover           → 215 22% 7%
---muted             → 213 19% 10%     (#131920)  ← elevated
---accent            → 215 22% 13%     (#1A2332)  ← hover
---border            → 0 0% 100% / 0.10
---border-subtle*    → 0 0% 100% / 0.06   (new var)
---border-accent*    → 158 64% 42% / 0.30 (new var)
---primary           → 158 84% 39%    (#10B981 emerald)
---foreground        → 213 30% 96%    (#F0F6FC)
---muted-foreground  → 215 9% 53%     (#7D8590)
---text-tertiary*    → 215 11% 32%    (#484F58)  (new var)
+┌─────────────────────────────────────────────────┐
+│  Departments                                    │
+│  Your AI team rooms                             │
+│                                                 │
+│  [12 active tasks]  [3 agents running]  [2 ⏳]  │
+├─────────────────────────────────────────────────┤
+│ ┌──────────────┐ ┌──────────────┐               │
+│ │  TALENT      │ │  GROWTH      │               │
+│ │  ● ● ●       │ │  ● ●         │               │
+│ │  Aria is …   │ │  Penn wrote… │               │
+│ │  3 active    │ │  1 active    │               │
+│ │  ▓▓▓▓▓░░░    │ │  ▓▓░░░░░░    │               │
+│ └──────────────┘ └──────────────┘               │
+│ ┌──────────────┐ ┌──────────────┐               │
+│ │ INTELLIGENCE │ │  CONTENT     │               │
+│ └──────────────┘ └──────────────┘               │
+└─────────────────────────────────────────────────┘
 ```
 
-Add a `.font-label` utility (11px / uppercase / tracking-[0.08em] / text-tertiary) and shadow utilities `.shadow-card`, `.shadow-elevated`, `.shadow-glow-emerald` matching the spec. Wire `border-subtle`, `border-accent`, `text-tertiary` into `tailwind.config.ts` `extend.colors` so existing `bg-card / border-border / text-foreground` keep working but new tokens are available.
+Top **summary row** (3 KPIs):
+- Total active tasks across all departments — count of `task_plans` where status ∈ `planning | executing`.
+- Total agents currently running — `agents.status === 'running'`.
+- Total items awaiting your approval — `approvals.status === 'pending'` (amber).
 
-This means most components inherit the refresh automatically — we then surgically restyle the four hero surfaces.
+Pulls data from already-wired hooks: `useAgents`, `useAllPlans`, `useActivityFeed`, `useApprovals` (workspace-scoped, real-time).
 
-## 2. Sidebar (`src/components/Sidebar.tsx`)
+**`DepartmentCard` component** (new: `src/components/department/DepartmentCard.tsx`):
+- Large rounded-2xl card, `bg-card/70 backdrop-blur-md`, subtle border.
+- Department-specific accent (left border + soft inner glow, no harsh fill):
+  - Talent → blue-violet (`#8B7BFF`)
+  - Growth → emerald green (`#10B981`)
+  - Intelligence → teal (`#14B8A6`)
+  - Content → purple (`#A855F7`)
+- Header row: department icon (subtle, low-opacity) + name + "X agents".
+- Agent avatar row (small 24px circles) — running ones get a pulsing accent ring + tiny dot.
+- One-line status: latest `activity_feed` event whose `agent_id` belongs to this department's agents — formatted as "Aria is screening 8 candidates" (use event title/body).
+- Counts row: `N active` (executing plans) + amber pill `N awaiting` only if > 0.
+- Recent output preview: last completed task output (one line, truncated). Falls back to last activity body.
+- Bottom: thin progress bar — % of today's plans that are `complete` over total today. Subtle, accent-colored.
+- Hover: `translate-y-[-2px]`, border brightens, soft accent shadow. Click → navigate to `/rooms/{dept}`.
 
-- Background = `bg-background` (no panel separation).
-- Top: 28px gradient avatar + workspace name (13px / 500) + outline-only PRO pill (text-primary green, no fill).
-- Section labels: `font-label` style, `mt-5 mb-1 pl-3`, no bold.
-- Nav items: `h-8 px-3 rounded-md`. Inactive `text-muted-foreground hover:bg-white/[0.04]`. Active `bg-[#1A2332] text-foreground border-l-2 border-primary` (compensate padding-left so text doesn't shift).
-- 16px icons, color follows text state. Strip every `font-semibold`/`font-bold`.
-- "Awaiting You" badge → tiny amber pill (`bg-amber-900/60 text-amber-200 text-[10px] font-semibold px-1.5 py-px`).
-- "New Agent" becomes a nav-style row with `Plus` icon, emerald text, hover `bg-emerald-500/[0.08]`.
-- Bottom utility group (Help / Sign Out / Collapse) separated by `border-t border-white/[0.06]`, smaller text, `text-muted-foreground`.
+**Empty state** for a card with no activity yet: "Quiet for now — give the team a task."
 
-## 3. Dashboard (`src/pages/Dashboard.tsx` + dashboard subcomponents under `src/components/dashboard/`)
+### Step 2 — Department Room Polish
 
-Remove the Getting Started card permanently after dismissal (persist a `localStorage` flag — already pattern in OnboardingWizard, reuse if possible; otherwise simple `localStorage.setItem('dash.gs.dismissed','1')` check on mount).
+Refactor `src/pages/DepartmentRoom.tsx` to match the prompt's three-section layout exactly. The data plumbing already exists; we restructure visuals and add breadcrumb.
 
-Page becomes (no card wrappers around the page header):
+**Section 1 — Room Header**
+- Breadcrumb: `Departments > Talent` (with back arrow, links to `/departments`).
+- Large department name (28px), agent avatar row beside it — colored ring if running, gray if idle. Click avatar → opens `AgentHoverCard` / agent detail.
+- Right side: **Start Task** button → focuses the bottom composer (pre-filled `restrictDepartment={dept}`).
+- Below header: live status line — current activity (e.g. "Aria is screening 8 candidates · Penn drafting outreach").
 
-```text
-[Top bar]   Good morning, Prasidha (22/600)            [☾] [🔔•] [⚙]
-            Thursday, April 30 (13 / muted)
+**Section 2 — Work Board (kanban, left)**
 
-[Metrics row — 4 columns, gap-4]
- ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌──────────┐
- │ LABEL  ◐ │ │ LABEL  ◐ │ │ LABEL  ◐ │ │ AI SCREEN│
- │  142     │ │   38     │ │  12      │ │  100%(g) │
- │ ▲ 12% …  │ │ ▼ 4% …   │ │ ▲ 8% …   │ │ ▲ 0% …   │
- └──────────┘ └──────────┘ └──────────┘ └──────────┘
+Replace the current 4 status-only columns with **department-specific workflows**:
+- Talent: `Sourced → Screened → Reviewed → Outreach Ready`
+- Growth: `Leads Found → Qualified → Outreach Sent → Replied`
+- Intelligence: `Monitoring → Analysing → Report Ready → Delivered`
+- Content: `Brief → Drafting → Review → Published`
 
-[Activity 60%]                            [Your Team 40%]
- Activity              View all            Your Team
- ─ row (avatar | text + ts | pill) ─       ┌ agent card ┐
- ─ row ───────────────────────────         ┌ agent card ┐
- ─ row ───────────────────────────         ┌ agent card ┐
-                                            ┌ agent card ┐
-                                            ┌ agent card ┐
+Mapping rule (simple, deterministic from existing data — no backend change):
+- Each column maps to a combination of `task_plans.status` + presence/absence of `approvals` for that plan.
+- Column 1 = `planning`. Column 2 = `executing` (no awaiting approval). Column 3 = `awaiting_approval`. Column 4 = `complete`.
+- The visible **column labels** change per department; the underlying buckets are the same.
+
+Card UI:
+- Title (instruction), agent avatar(s), small progress dots `Step X of Y`.
+- Amber dot in corner if it has a pending approval.
+- Click → opens existing `PlanDetailView` dialog (already wired) which already supports approve/reject.
+- Cards re-bucket automatically as plan status changes (already realtime via `useAllPlans` + `subscribePlans`).
+
+**Section 3 — Live Activity (right panel)**
+- Top: agent status cards for this department (name, current_task, running/idle pulse). Already partially via `AgentRoster` — restyle into compact stacked cards.
+- Middle: chronological activity stream. Style `event_type === 'handoff'` distinctly — render as a small connector row "Aria → Penn" with an arrow icon and accent line.
+- Bottom: `ChatComposer` with `restrictDepartment={dept}` (already in place). `@` shows only this department's agents (already supported).
+
+### Visual System
+
+Reuse existing tokens from `src/index.css` and `tailwind.config.ts` (pitch-black surface, emerald primary, glassmorphism). Per-department accent colors are scoped to that department's surfaces only — they don't override global emerald primary.
+
+Add a small helper `src/lib/departmentTheme.ts`:
+```ts
+export const DEPT_THEME = {
+  talent:       { hex: '#8B7BFF', label: 'Talent',       icon: Users,    workflow: ['Sourced','Screened','Reviewed','Outreach Ready'] },
+  growth:       { hex: '#10B981', label: 'Growth',       icon: TrendingUp, workflow: ['Leads Found','Qualified','Outreach Sent','Replied'] },
+  intelligence: { hex: '#14B8A6', label: 'Intelligence', icon: Eye,      workflow: ['Monitoring','Analysing','Report Ready','Delivered'] },
+  content:      { hex: '#A855F7', label: 'Content',      icon: BookOpen, workflow: ['Brief','Drafting','Review','Published'] },
+};
 ```
 
-Metric card: `bg-card border border-white/[0.06] rounded-xl p-5`, no shadow. Top row label (`font-label`) + 28px tinted icon circle. Number `text-3xl font-semibold`. Bottom delta row with green/red arrow + `vs last week` in tertiary. AI Screening number colored `text-primary`.
+### Files to Create / Edit
 
-Activity column: header label + "View all" link (both 13px). Each event rendered as a flex row (no card), separated by `border-b border-white/[0.06] py-3`. Empty state: centered "No activity yet" / subtext / single emerald-bordered button "Give your first command" → dispatches the existing `Cmd+K` event to open the chat workspace.
+Create:
+- `src/pages/DepartmentsOverview.tsx`
+- `src/components/department/DepartmentCard.tsx`
+- `src/components/department/DepartmentSummaryBar.tsx`
+- `src/lib/departmentTheme.ts`
 
-Your Team column: 5 stacked agent cards (`bg-card border border-white/[0.06] rounded-lg p-3 px-4 flex items-center gap-3`). 36px avatar (initial in agent color), name (14/500) + dept (12/muted), Idle/Running pill (Running = emerald with pulsing dot), tiny model badge on far right. Hover → `border-emerald-500/30 bg-[#131920]`. Reuses existing `useAgents(workspaceId)` data.
+Edit:
+- `src/App.tsx` — add `/departments` route.
+- `src/components/Sidebar.tsx` — make "Departments" group label a `NavLink` to `/departments`; keep child quick-links.
+- `src/pages/DepartmentRoom.tsx` — add breadcrumb + back arrow, restructure header, swap kanban column labels per-department via `DEPT_THEME[dept].workflow`, polish right-side activity feed (handoff rendering, agent status cards).
 
-## 4. Chat Workspace (`src/components/chat/workspace/*`)
+### Out of Scope
 
-`ChatWorkspace.tsx` container:
-- Add a fixed `bg-black/60 backdrop-blur-sm` backdrop layer behind the drawer (drawer mode only).
-- Drawer surface: `bg-background rounded-t-2xl border-t border-emerald-500/20` with `box-shadow: inset 0 1px 0 rgba(16,185,129,0.15), 0 -30px 80px -20px rgba(0,0,0,0.6)`.
-- Drag handle: 36×4, `bg-white/15 hover:bg-white/30 rounded-sm mx-auto mt-2`.
-
-`ConversationsSidebar.tsx`:
-- 200px wide, `bg-card border-r border-white/[0.06]`, no header.
-- "CONVERSATIONS" `font-label` (12 16 8 padding).
-- Filter tabs replaced with three inline text links separated by `·`. Active = emerald, others = tertiary, no pill.
-- Conversation rows: `h-10 px-3` flex (color dot + truncated text + 11px tertiary timestamp on the right). Hover `bg-white/[0.04]`. Active `bg-[#131920]`.
-- "CHANNELS" section: `#` glyph in tertiary (or dept color when active) + 13px name. Active row `text-foreground bg-white/[0.04]`.
-- "YOUR TEAM" bottom: 5 × 28px avatars in a row, evenly spaced, 2px ring in agent color when running, tooltip with name.
-
-`ConversationView.tsx` / `ChannelView.tsx` thread area:
-- Channel header: `px-5 py-4 border-b border-white/[0.06]`, colored `#`, 18/600 name, 13/muted description, agent roster avatars right + "N agents idle" tertiary status.
-- Messages padding `p-5`, scrollable.
-
-Bubbles (`bubbles/UserBubble.tsx`, `bubbles/AgentBubble.tsx`):
-- **User**: right-aligned, `bg-[#131920] border border-white/[0.08] rounded-[12px_12px_2px_12px] px-4 py-3 max-w-[70%] text-sm`. `@` mentions → existing `MentionPill` restyled to `bg-emerald-500/15 text-primary px-1.5 py-px rounded`.
-- **Agent**: left-aligned. 28px agent-color avatar floats left. Agent name above content (12/500 in agent accent color). Content `bg-card border border-white/[0.08] rounded-[2px_12px_12px_12px] px-4 py-3 max-w-[75%]`.
-- **Thinking**: three 6px dots in agent color, 4px gap, sequential scale animation (Tailwind keyframes added in step 1).
-- **Working**: small card — tiny model badge top right, 13/muted task text, thin progress bar `h-1 bg-white/[0.06]` with agent-color gradient fill + shimmer.
-- **HandoffRow** (`bubbles/HandoffRow.tsx`): center, two 24px avatars with thin line + traveling emerald dot animation, "handoff" label below in tertiary 11px.
-- **SystemMessage**: center `── text ──`, 11/tertiary, no background.
-
-`ChatComposerPro.tsx` input bar:
-- Wrapper `bg-card border-t border-white/[0.08] px-4 py-3`.
-- Three suggested-prompt chips above input (only when input empty + view kind = empty/conversation): `bg-white/[0.04] border border-white/[0.08] rounded-full px-3.5 py-1.5 text-[13px] text-muted-foreground hover:text-foreground hover:border-white/[0.16]`.
-- Context chip (when present): emerald-tinted pill per spec, with × dismiss on hover.
-- Textarea: transparent, no border, tertiary placeholder, 14px, caret emerald (`caret-primary`).
-- Right icons: 20px, tertiary → secondary on hover.
-- Send button appears with `motion` scale-in only when there's text: 28px emerald circle with white arrow.
-
-## 5. Operative Dock (`src/components/dock/OperativeDock.tsx`)
-
-- Container: `rounded-2xl bg-card/80 backdrop-blur-2xl border border-white/[0.08]` (already close — retune colors only).
-- Each `DockItem` avatar: keep magnification, but ring becomes `2px solid <agentColor>`. When agent is running add `box-shadow: 0 0 8px <agentColor>` via inline style. Idle = solid ring, no glow. Status dot kept but smaller (8px) and only shown when running.
-- "+" button: 36px dashed-border circle, `text-muted-foreground hover:text-primary hover:border-emerald-500/50`.
-
-## 6. Implementation order & guardrails
-
-1. Tokens + tailwind extension + new `font-label`/shadow/keyframe utilities (single file each).
-2. Sidebar restyle (no markup-structure changes beyond wrapper classes + the New Agent row).
-3. Dashboard layout: refactor markup into TopBar, MetricsRow, ActivityList, TeamColumn — but every data hook stays exactly as-is.
-4. Chat workspace surface + bubbles + composer — restyle existing components, do not rename exports or change props.
-5. Operative dock ring/glow tweak.
-
-**Untouched**: `src/contexts/ChatWorkspaceContext.tsx`, `src/lib/chatMessageStream.ts`, `src/hooks/*`, all edge functions, all routing, all Supabase calls.
-
-After implementation we'll spot-check `/dashboard`, open the chat drawer (Cmd+K), open a channel, and trigger the agent dock to verify visuals at the 1067×775 viewport currently in use.
+- No edge function or DB changes.
+- No changes to the chat workspace, agent builder, or dock.
+- Approve/reject UX reuses existing `PlanDetailView`.
