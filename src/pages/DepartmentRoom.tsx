@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useState } from 'react';
-import { useParams } from 'react-router-dom';
+import { useEffect, useMemo, useState, useRef } from 'react';
+import { useParams, Link } from 'react-router-dom';
 import { useWorkspace } from '@/contexts/WorkspaceContext';
 import { useAgents } from '@/hooks/useAgents';
 import { useAllPlans } from '@/hooks/usePlans';
@@ -17,9 +17,10 @@ import {
 } from '@/components/ui/dialog';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
-import { Plus } from 'lucide-react';
+import { Plus, ChevronLeft, ChevronRight, ArrowRight, Play } from 'lucide-react';
 import { openAgentBuilder } from '@/hooks/useAgentBuilder';
 import AgentRoster from '@/components/department/AgentRoster';
+import { getDeptTheme } from '@/lib/departmentTheme';
 
 const DEPT_META: Record<AgentDept, { label: string; tagline: string }> = {
   talent:       { label: 'Talent',       tagline: 'Sourcing, screening & shortlists' },
