@@ -30,50 +30,55 @@ const MainLayout = ({ children }: MainLayoutProps) => {
   }, [location.pathname]);
 
   return (
-    <div className="min-h-screen w-full bg-transparent relative">
-      {/* Command Palette (global) */}
-      <CommandPalette open={commandOpen} onOpenChange={setCommandOpen} />
+    <ChatWorkspaceProvider>
+      <div className="min-h-screen w-full bg-transparent relative">
+        {/* Command Palette (global) */}
+        <CommandPalette open={commandOpen} onOpenChange={setCommandOpen} />
 
-      {/* Desktop Sidebar */}
-      {!isMobile && (
-        <Sidebar
-          collapsed={isSidebarCollapsed}
-          onToggle={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
-          onOpenCommandPalette={() => setCommandOpen(true)}
-        />
-      )}
-
-      {/* Mobile Header */}
-      {isMobile && (
-        <MobileHeader onOpenCommandPalette={() => setCommandOpen(true)} />
-      )}
-
-      <main
-        className={`min-h-screen overflow-auto transition-all duration-300 relative z-10 ${
-          isMobile ? 'ml-0 pt-[72px]' : isSidebarCollapsed ? 'ml-16' : 'ml-[248px]'
-        }`}
-      >
-        {/* Top Command Bar */}
+        {/* Desktop Sidebar */}
         {!isMobile && (
-          <div className="sticky top-0 z-30 backdrop-blur-xl bg-card/60 border-b border-border px-6 py-2.5 flex items-center justify-end">
-            <CommandBar onOpen={() => setCommandOpen(true)} />
-          </div>
+          <Sidebar
+            collapsed={isSidebarCollapsed}
+            onToggle={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
+            onOpenCommandPalette={() => setCommandOpen(true)}
+          />
         )}
 
-        <div className={isMobile ? 'px-4 py-6 pb-32' : 'pb-32'}>
-          {children}
-        </div>
-      </main>
+        {/* Mobile Header */}
+        {isMobile && (
+          <MobileHeader onOpenCommandPalette={() => setCommandOpen(true)} />
+        )}
 
-      {/* Global Chat Bar (persistent bottom input) */}
-      <GlobalChatBar />
+        <main
+          className={`min-h-screen overflow-auto transition-all duration-300 relative z-10 ${
+            isMobile ? 'ml-0 pt-[72px]' : isSidebarCollapsed ? 'ml-16' : 'ml-[248px]'
+          }`}
+        >
+          {/* Top Command Bar */}
+          {!isMobile && (
+            <div className="sticky top-0 z-30 backdrop-blur-xl bg-card/60 border-b border-border px-6 py-2.5 flex items-center justify-end">
+              <CommandBar onOpen={() => setCommandOpen(true)} />
+            </div>
+          )}
 
-      {/* Operative Dock (desktop only) — sits beside the chat bar */}
-      {!isMobile && <OperativeDock />}
+          <div className={isMobile ? 'px-4 py-6 pb-32' : 'pb-32'}>
+            {children}
+          </div>
+        </main>
 
-      {/* Agent Builder full-screen takeover (mounted globally) */}
-      <AgentBuilderModal />
-    </div>
+        {/* Persistent bottom command bar (hidden when workspace is open) */}
+        <GlobalChatBar />
+
+        {/* Full Chat Workspace drawer / fullscreen */}
+        <ChatWorkspace />
+
+        {/* Operative Dock (desktop only) — sits beside the chat bar */}
+        {!isMobile && <OperativeDock />}
+
+        {/* Agent Builder full-screen takeover (mounted globally) */}
+        <AgentBuilderModal />
+      </div>
+    </ChatWorkspaceProvider>
   );
 };
 
