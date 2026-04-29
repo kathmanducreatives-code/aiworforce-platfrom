@@ -47,6 +47,17 @@ export default function ChatWorkspace() {
 
   return (
     <TooltipProvider delayDuration={300}>
+      {/* Backdrop (drawer mode only) */}
+      {!isFull && (
+        <motion.div
+          key="chat-backdrop"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          onClick={close}
+          className="fixed inset-0 z-30 bg-black/60 backdrop-blur-sm"
+        />
+      )}
       <AnimatePresence>
         <motion.div
           key="chat-workspace"
@@ -57,9 +68,9 @@ export default function ChatWorkspace() {
           transition={{ type: 'spring', stiffness: 260, damping: 30 }}
           className={cn(
             'fixed left-0 right-0 bottom-0 z-40',
-            'border-t border-primary/30',
-            'bg-background/85 backdrop-blur-2xl',
-            'shadow-[0_-30px_80px_-20px_hsl(var(--primary)/0.18),inset_0_1px_0_hsl(var(--primary)/0.4)]',
+            'border-t border-emerald-500/20',
+            'bg-background',
+            'rounded-t-2xl drawer-edge-glow',
             'flex flex-col',
           )}
           role="dialog"
@@ -73,10 +84,10 @@ export default function ChatWorkspace() {
               onPointerMove={onPointerMove}
               onPointerUp={onPointerUp}
               onDoubleClick={toggleFullscreen}
-              className="flex items-center justify-center h-3 cursor-ns-resize group"
+              className="flex items-center justify-center pt-2 pb-1 cursor-ns-resize group"
               title="Drag to resize · double-click for fullscreen"
             >
-              <div className="h-1 w-12 rounded-full bg-border/70 group-hover:bg-primary/60 transition-colors" />
+              <div className="h-1 w-9 rounded-sm bg-white/15 group-hover:bg-white/30 transition-colors" />
             </div>
           )}
 
