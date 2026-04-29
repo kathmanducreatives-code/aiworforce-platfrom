@@ -307,6 +307,29 @@ export default function DepartmentRoom() {
             {deptEvents.map((e) => {
               const name = e.agent_id ? agentNameById.get(e.agent_id) : undefined;
               const isHandoff = e.event_type === 'handoff';
+
+              if (isHandoff) {
+                const fromName = (e.metadata as any)?.from_agent_name ?? name;
+                const toName = (e.metadata as any)?.to_agent_name ?? (e.body?.match(/→\s*([A-Za-z]+)/)?.[1]);
+                return (
+                  <div
+                    key={e.id}
+                    className="flex items-center gap-2 py-1 px-2 rounded-lg"
+                    style={{ background: `linear-gradient(90deg, ${theme.hex}10, transparent)` }}
+                  >
+                    <span className="text-[10px] uppercase tracking-widest font-semibold" style={{ color: theme.hex }}>
+                      Handoff
+                    </span>
+                    <span className="text-xs text-foreground font-medium">{fromName ?? '—'}</span>
+                    <ArrowRight className="h-3 w-3 text-muted-foreground" />
+                    <span className="text-xs text-foreground font-medium">{toName ?? '—'}</span>
+                    <span className="text-[10px] text-muted-foreground ml-auto truncate max-w-[140px]">
+                      {e.title}
+                    </span>
+                  </div>
+                );
+              }
+
               return (
                 <ChatBubble
                   key={e.id}
@@ -314,7 +337,6 @@ export default function DepartmentRoom() {
                   agentName={name}
                   text={e.body || e.title}
                   timestamp={e.created_at}
-                  nested={isHandoff}
                 />
               );
             })}
@@ -337,12 +359,12 @@ export default function DepartmentRoom() {
             )}
           </div>
 
-          <div className="p-3 border-t border-border/50">
+          <div ref={composerRef} className="p-3 border-t border-border/50">
             <ChatComposer
               onSubmit={handleSubmit}
               restrictDepartment={department}
               compact
-              placeholder={`Message #${meta.label.toLowerCase()} — type @ to mention`}
+              placeholder={`Message #${theme.label.toLowerCase()} — type @ to mention`}
             />
           </div>
         </div>
