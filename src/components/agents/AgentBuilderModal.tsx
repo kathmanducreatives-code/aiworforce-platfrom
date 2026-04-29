@@ -14,18 +14,18 @@ import { useWorkspace } from '@/contexts/WorkspaceContext';
 import { createAgent } from '@/lib/orchestration';
 import type { AgentDept } from '@/data/agentProfiles';
 
-import CharacterCard from './CharacterCard';
-import StepDots from './StepDots';
-import Step1Identity from './Step1Identity';
-import Step2Department from './Step2Department';
-import Step3Role from './Step3Role';
-import Step4Model from './Step4Model';
-import Step5Capabilities from './Step5Capabilities';
-import Step6Tools from './Step6Tools';
-import Step7Skills from './Step7Skills';
-import DeployScreen from './DeployScreen';
-import { DEPARTMENTS } from './constants';
-import { TOTAL_STEPS, type BuilderForm } from './types';
+import CharacterCard from './builder/v2/CharacterCard';
+import StepDots from './builder/v2/StepDots';
+import Step1Identity from './builder/v2/Step1Identity';
+import Step2Department from './builder/v2/Step2Department';
+import Step3Role from './builder/v2/Step3Role';
+import Step4Model from './builder/v2/Step4Model';
+import Step5Capabilities from './builder/v2/Step5Capabilities';
+import Step6Tools from './builder/v2/Step6Tools';
+import Step7Skills from './builder/v2/Step7Skills';
+import DeployScreen from './builder/v2/DeployScreen';
+import { DEPARTMENTS } from './builder/v2/constants';
+import { TOTAL_STEPS, type BuilderForm } from './builder/v2/types';
 
 const initialForm = (dept?: AgentDept): BuilderForm => ({
   name: '',
