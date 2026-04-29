@@ -6,7 +6,9 @@ import CommandPalette from "./shared/CommandPalette";
 import CommandBar from "./dock/CommandBar";
 import OperativeDock from "./dock/OperativeDock";
 import GlobalChatBar from "./chat/GlobalChatBar";
+import ChatWorkspace from "./chat/workspace/ChatWorkspace";
 import AgentBuilderModal from "./agents/AgentBuilderModal";
+import { ChatWorkspaceProvider } from "@/contexts/ChatWorkspaceContext";
 import { useIsMobile } from "@/hooks/use-mobile";
 
 interface MainLayoutProps {
