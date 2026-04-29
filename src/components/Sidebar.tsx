@@ -124,9 +124,23 @@ const Sidebar = ({ collapsed, onToggle, onOpenCommandPalette }: SidebarProps) =>
           <div key={group.label} className="mt-5 first:mt-1">
             {!collapsed && (
               <div className="flex items-center justify-between pl-3 pr-2 mb-1">
-                <p className="font-label">
-                  {group.label}
-                </p>
+                {group.label === 'Departments' ? (
+                  <NavLink
+                    to="/departments"
+                    className={cn(
+                      'font-label transition-colors',
+                      location.pathname === '/departments'
+                        ? 'text-primary'
+                        : 'hover:text-foreground',
+                    )}
+                  >
+                    {group.label}
+                  </NavLink>
+                ) : (
+                  <p className="font-label">
+                    {group.label}
+                  </p>
+                )}
                 {group.label === 'Hire' && (
                   <span className="text-[10px] font-semibold tracking-wide text-amber-200 bg-amber-900/60 px-1.5 py-px rounded-full">
                     Awaiting You
