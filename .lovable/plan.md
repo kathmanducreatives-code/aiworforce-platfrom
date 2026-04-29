@@ -1,128 +1,210 @@
 
-# Agent Builder v2 — Cinematic Character Creator
+## AI Workforce Chat — Frontend Build Plan
 
-Rebuild the Agent Builder as a full-screen, two-column experience that feels like crafting a living AI employee. Backend, edge functions, and the existing `createAgent` contract are untouched — the new UI is purely a visual and UX rewrite that maps onto the same Supabase insert.
+A Slack × Claude × command-center chat experience that opens from the existing bottom command bar as a spring-animated drawer, expandable to full screen. Pure frontend; wires to the existing `orchestrate` edge function, `run-agent` is invoked only via the orchestrator (single-agent plans for direct mentions, since `run-agent` itself only accepts `task_id`), and `activity_feed` / `task_plans` / `tasks` / `approvals` realtime tables.
 
-## What stays the same (do not touch)
-
-- `supabase/functions/*` and any edge function code
-- `src/lib/orchestration.ts` `createAgent(...)` signature and DB schema
-- `useAgentBuilder` open/close pub-sub API (`openAgentBuilder`, `closeAgentBuilder`)
-- Realtime agent subscription on the `agents` table
-- Existing pages, routes, and dock behavior outside the builder itself
-
-## What changes
-
-### 1. Replace the slide-over with a full-screen takeover
-
-- New file: `src/components/agents/AgentBuilderModal.tsx` — replaces the current `SlideOverPanel`-based `AgentBuilderPanel.tsx`.
-- Mounted from `src/components/MainLayout.tsx` (swap the import; same `<AgentBuilderModal />` placement).
-- A fixed `inset-0 z-[80]` overlay with backdrop blur and pitch-black wash.
-- Centered cinematic frame (`max-w-[1280px]`, glassmorphic, rounded-2xl) split 40 / 60 with `framer-motion` mount animation (fade + slight scale).
-- Escape and outside-click after step 2 trigger an in-modal exit confirm: "Abandon this agent? Your progress will be lost." with Keep building / Discard.
-
-### 2. Left column — Live Character Card (40%)
-
-New file: `src/components/agents/builder/v2/CharacterCard.tsx`. Pure presentational, driven by current form state.
-
-- Large circular avatar (size ~160px) with chosen identity color and the first letter of the name in white. Pulses softly when empty.
-- Name in display font below; fades + scales in once Step 1 is valid.
-- Department pill (color-mapped using `deptDot`/`deptText` from `agentProfiles.ts`) slides in after Step 2.
-- "Brain" excerpt card (first ~140 chars of role prompt) reveals after Step 3.
-- Model badge with provider logo from `aiModelLogos.ts` reveals after Step 4.
-- Capability chips row reveals after Step 5 (each chip = capability name).
-- Tool badges row reveals after Step 6.
-- Skill icon grid reveals after Step 7.
-- Bottom: "Agent Readiness" circular SVG progress ring filling green as steps complete (`completedSteps / 7 * 100`).
-- All reveals use a small `Reveal` wrapper (framer-motion `initial={{opacity:0, y:8, scale:0.96}} animate={...}`).
-
-### 3. Right column — Step Engine (60%)
-
-New file: `src/components/agents/builder/v2/StepShell.tsx` handles:
-
-- Top progress bar with 7 dots + labels (Identity, Department, Role, Model, Capabilities, Tools, Skills). Completed = green filled, current = pulsing emerald, future = dim. Clicking a completed dot jumps to that step.
-- Animated step container using framer-motion `AnimatePresence` with horizontal slide between steps.
-- Fixed Back / Next footer. Keyboard: Enter / ArrowRight = Next (when valid), ArrowLeft = Back, Escape = exit confirm.
-
-Each step is its own file under `src/components/agents/builder/v2/`:
-
-| Step | File | Notes |
-|---|---|---|
-| 1 Identity | `Step1Identity.tsx` | Large autofocused name input + 8-color swatch row (emerald, violet, blue, amber, coral, teal, pink, slate). Hover previews on character card via local hover state lifted into form. |
-| 2 Department | `Step2Department.tsx` | 5 large cards (Talent / Growth / Intelligence / Content / Operations). Each shows existing agents from `AGENT_PROFILES` filtered by department as small avatar stack; Operations shows "Be the first." Selected card: emerald border + glow. |
-| 3 Role | `Step3Role.tsx` | Large textarea, 3 starter template chips (Sourcing / Outreach / Research) that fill the textarea, char counter with 50-char minimum, tip card. |
-| 4 Model | `Step4Model.tsx` | 2x2 grid of large model cards (Claude Haiku, Claude Sonnet, GPT-4o, Gemini Pro). Each: provider logo, name, speed dots, cost $-signs, "Best for" line, conditional "Recommended for [department]" emerald badge. Selected card: glowing border in provider brand color. Maps to existing `AgentModelKey` strings stored in DB. |
-| 5 Capabilities | `Step5Capabilities.tsx` | 3-column table (capability, input, output) with up to 8 rows + delete button. Below: "Examples for [department]" section with 3 click-to-add chips per department (full lists per the spec). |
-| 6 Tools | `Step6Tools.tsx` | 6 tool cards in 2 columns (Firecrawl, Web Search, Email Sender, Slack, ElevenLabs Voice, Webhook). Each: icon, name, one-liner, toggle. "Requires API key" amber badge where relevant (Firecrawl, Email, Slack, ElevenLabs). Webhook reveals a URL input when toggled on. Skip-for-now link. Stored as string array (`tools`) and a `tool_config` JSON kept locally for the next step. |
-| 7 Skills | `Step7Skills.tsx` | Masonry-ish grid of skill cards (Firecrawl Scraping, Web Search, Email Writing, Candidate Scoring, Content Writing, Research & Analysis, Competitor Monitoring, Lead Enrichment). Equip button toggles to "Equipped" (emerald). Each card has an inline accordion "Configure" panel with 2-3 fields specific to the skill. Equipped count surfaces as a badge on the step dot. |
-
-### 4. Deploy screen + animation
-
-New file: `src/components/agents/builder/v2/DeployScreen.tsx`.
-
-- After step 7, show a centered enlarged Character Card + 4-section summary (Identity / Brain / Capabilities / Equipped Skills with config in small gray text under each chip).
-- Large full-width emerald "Deploy Agent" button with subtle pulse.
-- On click: call existing `createAgent(...)` from `src/lib/orchestration.ts` with the same payload shape used today (skills + tool_config are kept in local form state but only `tools: string[]` and `capabilities` are passed to the existing API to avoid backend changes).
-- Play deployment animation: framer-motion `motion.div` with `layoutId` flies the avatar from the deploy screen down to the dock position (target = bounding rect of the dock; computed once on click).
-- Then show success state: "{Name} has joined your workforce" + which department room, plus two buttons: "Go to {Department} room" (router push to `/department/{dept}`) and "Build another agent" (resets the wizard).
-
-### 5. Department roster section
-
-Edit `src/pages/DepartmentRoom.tsx`:
-
-- Add a new `AgentRoster` block at the top, just below the existing quick action bar.
-- Uses existing `useAgents()` hook (or `fetchAgents` + the existing realtime subscription on `agents`) filtered by current `department`.
-- Each roster card: colored avatar circle (first letter), name, model badge, status dot (idle/running) using `deptDot` mapping.
-- Click → opens an Agent profile side panel (reuse existing slide-over component used elsewhere; if none exists for agents, render a minimal `Sheet` that shows name, department, model, role prompt, capabilities; this is purely a UI surface, no new backend).
-- "New" green badge for 24h post-`created_at`.
-- New agent appears automatically because the agents subscription already invalidates the list.
-
-### 6. Cleanup / housekeeping
-
-- Keep old wizard files (`Step1Identity.tsx`…`SuccessScreen.tsx`, `AgentBuilderPanel.tsx`) until the new modal is wired in `MainLayout.tsx`, then delete them in the same change.
-- No changes to `useAgentBuilder.ts` API.
-- No changes to `supabase/`, `.env`, types, or edge functions.
-
-## Technical details
-
-- Framework: existing React + Vite + Tailwind + framer-motion + shadcn/ui — no new deps.
-- Color tokens: keep using semantic `bg-background`, `text-foreground`, plus `emerald-500` for accents, per the Verdant theme memory.
-- Identity color swatches map to a `SWATCHES` constant `{ key, ring, bg, dot }` so the character card can render without re-deriving Tailwind classes from raw hex.
-- Skills + tool config are stored only in local builder state (UI-only). They are NOT persisted to the DB in this pass to honor "do not touch backend." A short TODO comment will note where to plug them in once a `agent_skills` table is added.
-- All animations respect `prefers-reduced-motion` (framer-motion `useReducedMotion`).
-- Mobile (<768px): the modal collapses to a single column; the Character Card becomes a compact sticky header above the step content. Per memory: full-screen Dialog, zero horizontal scroll.
-
-## File map
+────────────────────────────────────────
+### Architecture
 
 ```text
-src/components/agents/
-  AgentBuilderModal.tsx                (new — replaces AgentBuilderPanel)
-  builder/v2/
-    CharacterCard.tsx
-    ReadinessRing.tsx
-    StepShell.tsx
-    StepDots.tsx
-    Step1Identity.tsx
-    Step2Department.tsx
-    Step3Role.tsx
-    Step4Model.tsx
-    Step5Capabilities.tsx
-    Step6Tools.tsx
-    Step7Skills.tsx
-    DeployScreen.tsx
-    constants.ts          (swatches, model meta, dept recommendations,
-                           capability examples, tool list, skill catalog)
-src/components/department/
-  AgentRoster.tsx         (new — used by DepartmentRoom)
-src/components/MainLayout.tsx           (swap import to AgentBuilderModal)
-src/pages/DepartmentRoom.tsx            (mount <AgentRoster department=...>)
+MainLayout
+ └─ <ChatWorkspaceProvider>           ← context: open/closed, mode (drawer|full),
+     │                                  height, activeView, activeConversationId
+     ├─ GlobalChatBar (existing, refactored)
+     │     • Click anywhere on bar → open drawer
+     │     • Composer remains the input (re-used inside drawer)
+     └─ <ChatWorkspace />              ← new: drawer + full-screen container
+           ├─ DragHandle  (resize / dblclick → fullscreen / Esc → collapse)
+           ├─ ConversationsSidebar     (220 / 260px)
+           │     • Filter chips: All | Active | Done
+           │     • Conversation list (task_plans)
+           │     • CHANNELS section (4 dept rooms)
+           │     • YOUR TEAM agent dock (5 avatars w/ pulse)
+           └─ ThreadPane                ← switches by activeView
+                 ├─ ConversationView    (single plan)
+                 ├─ ChannelView         (dept-filtered activity feed)
+                 ├─ DirectAgentView     (per-agent history)
+                 └─ EmptyState
+                 └─ Composer (sticky bottom inside drawer)
 ```
 
-Old files removed at the end of the change:
-`src/components/agents/AgentBuilderPanel.tsx` and the contents of `src/components/agents/builder/` (Step1…SuccessScreen, StepProgress).
+`ChatWorkspaceProvider` is mounted in `MainLayout` so the drawer state is global. `GlobalChatBar` becomes a thin wrapper that, when collapsed, shows just the composer + a clickable surface that opens the drawer; when expanded, the composer is rendered inside `ChatWorkspace` instead.
 
-## Out of scope
+────────────────────────────────────────
+### New files
 
-- Persisting skills, skill configs, tool API keys, or webhook URLs to Supabase.
-- Changing the Sidebar entry, dock entry, or `openAgentBuilder()` call sites — they continue to work unchanged.
-- Any orchestration / model-routing logic.
+```
+src/contexts/ChatWorkspaceContext.tsx     – open/mode/view/height + helpers
+src/components/chat/workspace/
+  ChatWorkspace.tsx                       – drawer + fullscreen shell, drag handle
+  ConversationsSidebar.tsx
+  ConversationListItem.tsx
+  ChannelList.tsx
+  TeamDock.tsx                            – 5 avatars, running pulse
+  ThreadPane.tsx                          – router for the 3 views
+  ConversationView.tsx                    – plan-scoped thread
+  ChannelView.tsx                         – dept-scoped activity feed
+  DirectAgentView.tsx                     – per-agent history
+  EmptyState.tsx
+  ChatComposerPro.tsx                     – upgraded composer: @ # / pickers, glow
+  MentionPill.tsx
+  bubbles/
+    UserBubble.tsx
+    AgentBubble.tsx                       – wraps the 4 states
+    ThinkingBubble.tsx
+    WorkingBubble.tsx                     – animated progress in agent color
+    HandoffRow.tsx                        – particle-trail handoff animation
+    DoneBubble.tsx                        – wraps OutputRenderer + footer (tokens/time/feedback)
+    ApprovalCard.tsx                      – amber card with Approve/Reject
+    SystemMessage.tsx
+  output/
+    OutputRenderer.tsx                    – auto-detects shape from JSON
+    CandidateListCard.tsx
+    EmailListCard.tsx
+    SignalListCard.tsx
+    IntelReportCard.tsx
+    ContentBlock.tsx                      – text + Copy
+  effects/
+    AmbientShimmer.tsx                    – running-agent gradient drift
+    ParticleTrail.tsx                     – handoff dots along arc
+src/hooks/
+  useChatWorkspace.ts                     – context hook
+  usePlanThread.ts                        – plan + tasks + activity + approvals → unified message stream
+  useChannelThread.ts                     – activity_feed filtered by department
+  useDirectAgentThread.ts                 – task_plans where target_agent_slug = agent
+  useRelativeTime.ts
+src/lib/
+  chatMessageStream.ts                    – pure fn: merges tasks/activity/approvals
+                                            into ordered ChatMessage[] (user/system/agent/handoff/approval)
+  outputShape.ts                          – detect candidate/email/signal/intel/content/json
+  agentDeptIndex.ts                       – maps agent_id → dept (built from useAgents)
+  chatSounds.ts                           – optional WebAudio chimes (default off)
+```
+
+### Edited files
+
+- `src/components/MainLayout.tsx` — wrap children in `<ChatWorkspaceProvider>`, mount `<ChatWorkspace />` once.
+- `src/components/chat/GlobalChatBar.tsx` — strip the inline expanded panel; clicking the bar / focusing composer calls `openWorkspace()`. The legacy `expanded` panel and `historyOpen` are removed; the composer behaves identically when the workspace is closed.
+- `src/components/chat/ChatComposer.tsx` — keep as the legacy composer; new `ChatComposerPro` lives next to it and is what the workspace uses (so we don't break other consumers like Department rooms).
+
+────────────────────────────────────────
+### Behaviour details
+
+#### Drawer / fullscreen shell
+- `framer-motion` `<motion.div>` with `animate={{ height }}` and a spring `{ stiffness: 260, damping: 30 }`.
+- States: `closed` (composer-only bar visible), `drawer` (default 70vh, resizable 30–95vh), `fullscreen` (covers viewport, sidebar widens to 260px).
+- Drag handle: `onPointerDown` captures pointer, `onPointerMove` updates a `height` state (clamped). Double-click → fullscreen. Escape (when focused inside workspace) → collapse to closed.
+- Background: `bg-background/85 backdrop-blur-2xl` with `border-t border-primary/30 shadow-[0_-1px_0_0_hsl(var(--primary)/0.4),0_-30px_80px_-20px_hsl(var(--primary)/0.15)]` — semantic tokens only (verdant theme).
+- Keyboard: `Cmd/Ctrl+K` toggles drawer; `Cmd+ArrowUp`/`Cmd+ArrowDown` toggle fullscreen.
+
+#### Conversations sidebar
+- Filter chips drive a memoized filter over `useAllPlans`:
+  - `All`: every plan
+  - `Active`: `status in ('planning','executing','awaiting_approval')`
+  - `Done`: `status in ('complete','failed')`
+- Conversation item: dot color = primary agent's department color (resolved via first task's `agent_id` → `useAgents`); first line of `user_instruction` (truncated 1 line); relative time from `created_at`; small pulsing green dot when status is active.
+- CHANNELS: hardcoded 4 (talent / growth / intelligence / content), clicking sets `activeView = { kind: 'channel', dept }`.
+- TEAM dock: 5 avatars from `AGENT_PROFILES`, overlay green pulse if a matching `agents` row has `status === 'running'`. Click → `activeView = { kind: 'agent', slug }`.
+
+#### Thread message stream (`chatMessageStream.ts`)
+Pure builder that takes `(plan, tasks, activity, approvals)` and yields ordered `ChatMessage`s:
+1. `user` — from `plan.user_instruction` at `plan.created_at`.
+2. `system` — `plan_created` event ("── Plan created: N steps ──").
+3. For each task in `step_index` order:
+   - if task.status `running` and no `done` event yet → `agent.thinking` or `agent.working` (working when latest activity for this task is `agent_started`).
+   - if a `handoff` event references `from_agent_id → to_agent_id` between two tasks → insert `handoff` row.
+   - if `awaiting_approval` event → `approval` card (resolved from `approvals` row by `task_id`).
+   - if task.status `complete` → `agent.done` with `task.output` rendered by `OutputRenderer`.
+4. `system` — `plan_complete` final marker.
+
+Result is consumed by `ConversationView` and rendered with virtualization-friendly map (no list virtualization needed at this scale; cap last 200 rows).
+
+#### Bubbles
+- All colors derive from `AGENT_PROFILES[agent].department` via `deptText/deptDot/deptRing` (existing). No hardcoded hex.
+- `WorkingBubble`: thin progress bar = `motion` width animating `0 → 90%` over 12s with `easeOut`, jumps to 100% on completion event. The model badge uses existing `ModelBadge` component if present, otherwise `modelBadge` map from `dockAgents.ts`.
+- `HandoffRow`: two avatars + animated SVG arc, with `<ParticleTrail/>` (4 dots over 0.8s, then unmounts).
+- `DoneBubble` footer: token count from `task.output.usage?.total_tokens` if present; elapsed = `finished_at - started_at`; thumbs up/down (local-only, no backend); "Use this" copies output JSON to clipboard or, for content output, copies the text.
+
+#### Output renderer detection (`outputShape.ts`)
+```ts
+detect(output): 'candidates' | 'emails' | 'signals' | 'intel' | 'content' | 'raw'
+```
+- `candidates`: array of objects with `name` & (`title`|`role`) & optional `score`.
+- `emails`: array with `subject` and (`body`|`html`).
+- `signals`: array with `severity` and (`title`|`message`).
+- `intel`: object with `summary` or `sections`.
+- `content`: string OR object with single `text`/`markdown` field.
+- Fallback: pretty-printed JSON in a collapsible block.
+
+Each card uses semantic tokens (`bg-card`, `border-border`, `text-foreground`, `text-muted-foreground`, agent dept ring for accents).
+
+#### Approval cards
+Render in-thread when `event_type = 'awaiting_approval'`. Approve/Reject call existing `decideApproval(approvalId, action)`. After resolution, the same card morphs to a resolved state ("Approved at 14:02 — Penn resumed") via `framer-motion` layout animation; the rest of the thread continues to grow as the orchestrator emits more events.
+
+#### Composer (`ChatComposerPro`)
+- Same auto-resize textarea, but with three popover triggers:
+  - `@` → agent picker (current 5, with status from `useAgents`, dept dot, one-line role).
+  - `#` → channel picker (4 depts). Selecting a channel sets the workspace's "default channel" so subsequent sends without `@` go to the orchestrator restricted to that dept (we pass through as part of the `user_instruction` prefix only — no backend change; the orchestrator already supports `target_agent_slug` for direct mentions).
+  - `/` → command menu: `/plan` (jumps to current active plan view), `/agents` (opens agent dock view), `/history` (filter sidebar to Done), `/brain` (navigates to existing Company Brain route via `useNavigate`), `/clear` (resets to empty state — does not delete data).
+- Suggested prompts: 3 chips when input is empty + focused, rotated by hour-of-day and presence of pending approvals (pure client logic).
+- Send routing:
+  - First `@AgentName` matches a known agent → `submitInstruction(workspace, text, { agentSlug: agent.id })`. The orchestrator already produces a single-agent plan when a target slug is provided.
+  - Otherwise → `submitInstruction(workspace, text)`.
+  - In a Channel view with no `@`, prepend a hint to `user_instruction` (e.g. `"[#talent] " + text`) so the orchestrator biases toward that dept's agents. (No edge function changes.)
+- Input border: focus state uses `focus-within:border-primary/70 focus-within:shadow-[0_0_0_4px_hsl(var(--primary)/0.12)]` (already present, enhanced).
+
+#### Channel view
+- Header: `# {dept}`, description, dept agent avatars, and a status line computed from `useAgents` (e.g. "2 agents idle · Scout is running").
+- Pinned `ACTIVE PLAN` card if any plan in `planning|executing|awaiting_approval` involves a dept agent — clickable, opens that conversation.
+- Body: `useChannelThread(dept)` returns `activity_feed` events where `agent_id ∈ deptAgentIds`, oldest 50 first, paginates on scroll-up via `before_created_at` cursor.
+- Each event renders as a compact agent message ("Scout · 14:02 — Sourced 18 leads in ICP"). Clicking opens the source plan in `ConversationView`.
+- Composer in channel: `restrictDepartment={dept}` so the @ picker only shows that dept's agents.
+
+#### Direct agent view
+- Header: large dept-colored avatar, name, dept, model badge, status dot, skills chips (placeholder list from agent profile / `agent_capabilities` if rows exist for that agent), "View profile" link to existing agent panel route.
+- Body: `useDirectAgentThread(agentId)` returns the union of `task_plans` whose first task has this `agent_id` (1 round-trip query per session, then realtime). Each plan rendered as a collapsible thread group.
+- Empty state: 3 example task chips per agent (static per-agent presets in `src/data/agentTaskPresets.ts`).
+- Composer: `@AgentName` is auto-prefixed and locked.
+
+#### Visual & UX details
+- `AmbientShimmer`: an absolutely-positioned `motion.div` inside any bubble whose source agent is currently running; uses `bg-gradient-to-r from-transparent via-{deptRgba}/15 to-transparent` with `animate={{ x: ['-100%', '100%'] }}` over 6s loop. Auto-unmounts on completion.
+- `ParticleTrail`: SVG with 4 `<motion.circle>` traveling along a pre-computed quadratic Bézier between two avatar refs, staggered 80ms.
+- Timestamps: `useRelativeTime(date)` re-renders every 30s; full timestamp in a Radix `Tooltip`.
+- Unread floater: `IntersectionObserver` on the bottom sentinel; when off-screen and new messages arrive, show a `motion.button` "N new messages ↓".
+- Empty state: SVG arc of 5 agent images, headline + subtext + 4 dept cards (Aria/Scout · Penn · Hawk · Scribe) each calling the composer with a preset string.
+- Loading: Tailwind `animate-pulse` skeletons in sidebar (8 rows) and thread (4 bubble skeletons), plus a 4s slow wave variant via `animation-delay`.
+
+#### Sounds (optional)
+- `chatSounds.ts` lazily loads three short oscillator-generated tones via WebAudio (no asset files). A small speaker toggle lives at the right of the composer; persisted in `localStorage('chat.sounds')`. Default `false`.
+
+────────────────────────────────────────
+### Backend wiring (read-only — no edge function or DB changes)
+
+| Action | Existing API used |
+|---|---|
+| Send (no @) | `submitInstruction(workspaceId, text)` |
+| Send (@Agent) | `submitInstruction(workspaceId, text, { agentSlug })` |
+| Approve / Reject | `decideApproval(id, action)` |
+| Conversations list | `useAllPlans(workspaceId)` |
+| Plan thread | `usePlanDetail(planId)` (existing) → fed into `chatMessageStream` |
+| Channel feed | new `useChannelThread`: `fetchActivityFeed` + `subscribeActivityFeed`, filtered by dept agent ids |
+| Direct agent | new `useDirectAgentThread`: query `task_plans` joined to first task's `agent_id` |
+| Live updates | existing realtime subscribers in `lib/orchestration.ts` |
+
+`run-agent` is **not** called from the client (it only accepts `task_id`); direct @mentions go through `orchestrate` with `target_agent_slug`, which already returns a single-agent plan.
+
+────────────────────────────────────────
+### Theme & a11y
+
+- Strict semantic tokens: `bg-background`, `bg-card`, `text-foreground`, `text-muted-foreground`, `border-border`, `text-primary`, `bg-primary`, plus the per-dept Tailwind classes already defined in `agentProfiles.ts` / `dockAgents.ts`.
+- All animations respect `prefers-reduced-motion` (skip shimmer + particle trail).
+- Drawer is a `role="dialog"` with `aria-modal="false"` (non-blocking), focus-trapped only in fullscreen mode.
+- Mobile (`useIsMobile`): drawer becomes a full-screen sheet, sidebar collapses into a top tab switcher (Conversations / Channels / Team), no drag handle, swipe-down to close.
+
+────────────────────────────────────────
+### Out of scope (explicitly)
+
+- No edge function code, no DB migrations, no RLS changes.
+- No persistence of thumbs-up/down (UI-only).
+- No new tables for "channels" — channels are a pure client view over `activity_feed`.
+- The existing Department room pages, dock, and agent builder modal are untouched.
