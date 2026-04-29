@@ -15,18 +15,21 @@ export default function UserBubble({ text, ts }: Props) {
 
   return (
     <div className="flex items-start gap-3 justify-end group">
-      <div className="max-w-[78%]">
+      <div className="max-w-[70%]">
         <Tooltip>
           <TooltipTrigger asChild>
-            <div className="rounded-2xl rounded-br-sm bg-card border border-border/70 px-4 py-2.5 text-sm text-foreground/95 leading-relaxed">
+            <div
+              className="bg-surface-elevated border border-white/[0.08] px-4 py-3 text-[14px] text-foreground leading-relaxed"
+              style={{ borderRadius: '12px 12px 2px 12px' }}
+            >
               <MentionPill text={text} />
             </div>
           </TooltipTrigger>
           <TooltipContent side="top" align="end">{new Date(ts).toLocaleString()}</TooltipContent>
         </Tooltip>
-        <div className="text-[10px] text-muted-foreground/70 text-right mt-1">{rel}</div>
+        <div className="text-[10px] text-text-tertiary text-right mt-1">{rel}</div>
       </div>
-      <div className="h-8 w-8 shrink-0 rounded-full bg-primary/15 border border-primary/40 flex items-center justify-center text-xs font-semibold text-primary">
+      <div className="h-7 w-7 shrink-0 rounded-full bg-primary/15 border border-primary/40 flex items-center justify-center text-[11px] font-medium text-primary">
         {initial}
       </div>
     </div>
