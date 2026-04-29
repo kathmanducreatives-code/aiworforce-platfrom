@@ -30,11 +30,11 @@ const DEPT_META: Record<AgentDept, { label: string; tagline: string }> = {
   operations:   { label: 'Operations',   tagline: 'Workflow automation & ops' },
 };
 
-const COLUMNS: { id: 'todo' | 'in_progress' | 'awaiting' | 'done'; label: string; statuses: DBPlan['status'][] }[] = [
-  { id: 'todo',       label: 'To Do',             statuses: ['planning'] },
-  { id: 'in_progress',label: 'In Progress',       statuses: ['executing'] },
-  { id: 'awaiting',   label: 'Awaiting Approval', statuses: ['awaiting_approval'] },
-  { id: 'done',       label: 'Done',              statuses: ['complete', 'failed'] },
+const COLUMN_BUCKETS: { id: 'todo' | 'in_progress' | 'awaiting' | 'done'; statuses: DBPlan['status'][] }[] = [
+  { id: 'todo',       statuses: ['planning'] },
+  { id: 'in_progress',statuses: ['executing'] },
+  { id: 'awaiting',   statuses: ['awaiting_approval'] },
+  { id: 'done',       statuses: ['complete', 'failed'] },
 ];
 
 interface PlanWithAgents extends DBPlan {
