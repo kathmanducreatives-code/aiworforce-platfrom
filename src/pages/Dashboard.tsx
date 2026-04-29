@@ -181,27 +181,28 @@ const Dashboard = () => {
         <OnboardingWizard totalCandidates={metrics.totalCandidates} />
 
         {/* Welcome Header */}
-        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-8">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-6">
           <div className="flex items-center gap-4">
             {profile?.logo_url && (
               <img src={profile.logo_url} alt="Logo" className="h-10 w-auto" />
             )}
             <div>
-              <h1 className="text-xl sm:text-2xl font-bold text-foreground tracking-tight">
+              <h1 className="text-[22px] font-semibold text-foreground tracking-tight leading-tight">
                 {getGreeting()}, {profile?.full_name?.split(' ')[0] || 'there'}
               </h1>
-              <p className="text-sm text-muted-foreground mt-0.5">
+              <p className="text-[13px] text-muted-foreground mt-1">
                 {new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}
-                {metrics.candidatesThisWeek > 0 && ` · ${metrics.candidatesThisWeek} new candidates this week`}
               </p>
             </div>
           </div>
-          <div className="flex items-center gap-3">
-            <div className="flex items-center gap-2 px-3 py-1.5 rounded-full border border-border bg-card/50 text-xs">
-              <Moon className="h-3.5 w-3.5 text-muted-foreground" />
-              <Switch checked={theme === 'light'} onCheckedChange={toggleTheme} className="data-[state=checked]:bg-primary scale-90" />
-              <Sun className="h-3.5 w-3.5 text-amber-400" />
-            </div>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={toggleTheme}
+              className="w-8 h-8 rounded-full border border-border-subtle hover:border-border bg-card flex items-center justify-center text-muted-foreground hover:text-foreground transition-colors"
+              aria-label="Toggle theme"
+            >
+              {theme === 'dark' ? <Sun className="h-3.5 w-3.5" /> : <Moon className="h-3.5 w-3.5" />}
+            </button>
             <NotificationCenter />
           </div>
         </div>
@@ -216,23 +217,24 @@ const Dashboard = () => {
             <MetricCard
               label="Total Candidates"
               value={metrics.totalCandidates}
-              icon={<Users className="h-4 w-4 text-emerald-500" />}
+              icon={<Users className="h-3.5 w-3.5 text-emerald-400" />}
               trend={{ value: weekTrend, label: 'vs last week' }}
             />
             <MetricCard
               label="Avg Fit Score"
               value={`${metrics.avgFitScore}%`}
-              icon={<TrendingUp className="h-4 w-4 text-teal-500" />}
+              icon={<TrendingUp className="h-3.5 w-3.5 text-teal-400" />}
             />
             <MetricCard
               label="Active Roles"
               value={metrics.activeRecruitments}
-              icon={<Folder className="h-4 w-4 text-primary" />}
+              icon={<Folder className="h-3.5 w-3.5 text-primary" />}
             />
             <MetricCard
               label="AI Screening"
               value="100%"
-              icon={<Brain className="h-4 w-4 text-purple-500" />}
+              valueColor="primary"
+              icon={<Brain className="h-3.5 w-3.5 text-purple-400" />}
               trend={{ value: 0, label: 'powered' }}
             />
           </div>
