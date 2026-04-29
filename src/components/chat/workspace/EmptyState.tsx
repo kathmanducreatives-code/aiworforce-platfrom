@@ -52,7 +52,12 @@ export default function EmptyState({ onPickPrompt }: Props) {
             return (
               <button
                 key={c.label}
-                onClick={() => onPickPrompt?.(`${c.label} ${c.text}`)}
+                onClick={() => {
+                  const txt = `${c.label} ${c.text}`;
+                  navigator.clipboard.writeText(txt);
+                  toast.success('Copied to clipboard', { description: 'Paste it into the composer below.' });
+                  onPickPrompt?.(txt);
+                }}
                 className="rounded-xl border border-border/60 bg-card hover:border-primary/40 hover:bg-primary/5 px-4 py-3 transition-all group"
               >
                 <div className="flex items-center gap-2 mb-1">
