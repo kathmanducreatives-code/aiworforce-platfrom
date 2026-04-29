@@ -22,9 +22,18 @@ interface DockItemProps {
 const BASE = 44;
 const MAX = 70;
 
+const DEPT_HEX: Record<string, string> = {
+  talent: '#8B5CF6',
+  growth: '#10B981',
+  intelligence: '#14B8A6',
+  content: '#A855F7',
+  operations: '#3B82F6',
+};
+
 function DockItem({ agent, mouseX, onHover, onClick }: DockItemProps) {
   const ref = useRef<HTMLButtonElement>(null);
   const dept = deptColor[agent.department];
+  const deptHex = DEPT_HEX[agent.department] ?? '#10B981';
 
   const distance = useTransform(mouseX, (val) => {
     const rect = ref.current?.getBoundingClientRect() ?? { x: 0, width: BASE } as DOMRect;
