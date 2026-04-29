@@ -294,7 +294,7 @@ export default function DepartmentRoom() {
         <div className="border-l border-border/50 flex flex-col bg-background/40">
           <div className="px-4 py-3 border-b border-border/50 flex items-center gap-2">
             <span className={cn('h-1.5 w-1.5 rounded-full', deptDot[department], 'animate-pulse')} />
-            <span className="text-xs font-semibold text-foreground">#{meta.label.toLowerCase()}-room</span>
+            <span className="text-xs font-semibold text-foreground">#{theme.label.toLowerCase()}-room</span>
             <span className="text-[10px] text-muted-foreground ml-auto">{deptEvents.length} messages</span>
           </div>
 
