@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useState } from 'react';
-import { useParams } from 'react-router-dom';
+import { useEffect, useMemo, useState, useRef } from 'react';
+import { useParams, Link } from 'react-router-dom';
 import { useWorkspace } from '@/contexts/WorkspaceContext';
 import { useAgents } from '@/hooks/useAgents';
 import { useAllPlans } from '@/hooks/usePlans';
@@ -17,9 +17,10 @@ import {
 } from '@/components/ui/dialog';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
-import { Plus } from 'lucide-react';
+import { Plus, ChevronLeft, ChevronRight, ArrowRight, Play } from 'lucide-react';
 import { openAgentBuilder } from '@/hooks/useAgentBuilder';
 import AgentRoster from '@/components/department/AgentRoster';
+import { getDeptTheme } from '@/lib/departmentTheme';
 
 const DEPT_META: Record<AgentDept, { label: string; tagline: string }> = {
   talent:       { label: 'Talent',       tagline: 'Sourcing, screening & shortlists' },
@@ -29,11 +30,11 @@ const DEPT_META: Record<AgentDept, { label: string; tagline: string }> = {
   operations:   { label: 'Operations',   tagline: 'Workflow automation & ops' },
 };
 
-const COLUMNS: { id: 'todo' | 'in_progress' | 'awaiting' | 'done'; label: string; statuses: DBPlan['status'][] }[] = [
-  { id: 'todo',       label: 'To Do',             statuses: ['planning'] },
-  { id: 'in_progress',label: 'In Progress',       statuses: ['executing'] },
-  { id: 'awaiting',   label: 'Awaiting Approval', statuses: ['awaiting_approval'] },
-  { id: 'done',       label: 'Done',              statuses: ['complete', 'failed'] },
+const COLUMN_BUCKETS: { id: 'todo' | 'in_progress' | 'awaiting' | 'done'; statuses: DBPlan['status'][] }[] = [
+  { id: 'todo',       statuses: ['planning'] },
+  { id: 'in_progress',statuses: ['executing'] },
+  { id: 'awaiting',   statuses: ['awaiting_approval'] },
+  { id: 'done',       statuses: ['complete', 'failed'] },
 ];
 
 interface PlanWithAgents extends DBPlan {
@@ -117,6 +118,15 @@ export default function DepartmentRoom() {
 
   const [planning, setPlanning] = useState<{ steps: PlanStep[]; planId: string } | null>(null);
   const [openPlanId, setOpenPlanId] = useState<string | null>(null);
+  const composerRef = useRef<HTMLDivElement>(null);
+  const theme = getDeptTheme(department);
+  const latestEvent = deptEvents[deptEvents.length - 1];
+
+  const focusComposer = () => {
+    composerRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    const input = composerRef.current?.querySelector('textarea, input') as HTMLElement | null;
+    setTimeout(() => input?.focus(), 300);
+  };
 
   const handleSubmit = async ({ text, mentioned }: ComposerSubmit) => {
     if (!workspaceId) { toast.error('Workspace not ready'); return; }
@@ -145,49 +155,94 @@ export default function DepartmentRoom() {
 
   return (
     <>
-      <div className="px-6 py-5 border-b border-border/50">
-        <div className="flex items-center gap-3">
-          <span className={cn('h-2.5 w-2.5 rounded-full', deptDot[department])} />
-          <h1 className="text-xl font-semibold text-foreground">{meta.label}</h1>
-          <span className="text-sm text-muted-foreground">· {meta.tagline}</span>
-          <div className="ml-auto flex items-center gap-3">
-            <div className="flex -space-x-2">
-              {deptAgents.map((a) => {
-                const profile = AGENT_BY_NAME[a.name.toLowerCase()];
-                if (!profile) return null;
-                return (
-                  <img
-                    key={a.id}
-                    src={profile.image}
-                    alt={a.name}
-                    title={`${a.name} · ${a.status}`}
-                    className={cn('h-7 w-7 rounded-full ring-2 ring-background object-cover', deptRing[department])}
-                  />
-                );
-              })}
-            </div>
+      {/* Breadcrumb */}
+      <div className="px-6 pt-5 pb-2 flex items-center gap-2 text-xs text-muted-foreground">
+        <Link to="/departments" className="hover:text-foreground inline-flex items-center gap-1 transition-colors">
+          <ChevronLeft className="h-3.5 w-3.5" />
+          Departments
+        </Link>
+        <ChevronRight className="h-3 w-3 opacity-40" />
+        <span className="text-foreground">{theme.label}</span>
+      </div>
+
+      {/* Room header */}
+      <div className="px-6 pb-4">
+        <div className="flex items-center gap-4 flex-wrap">
+          <div
+            className="h-11 w-11 rounded-xl flex items-center justify-center"
+            style={{ backgroundColor: `${theme.hex}1a`, color: theme.hex }}
+          >
+            <theme.icon className="h-5 w-5" />
+          </div>
+          <div className="min-w-0">
+            <h1 className="text-2xl font-semibold text-foreground leading-tight">{theme.label}</h1>
+            <p className="text-xs text-muted-foreground mt-0.5">{theme.tagline}</p>
+          </div>
+
+          <div className="flex -space-x-2 ml-4">
+            {deptAgents.map((a) => {
+              const profile = AGENT_BY_NAME[a.name.toLowerCase()];
+              if (!profile) return null;
+              const running = a.status === 'running';
+              return (
+                <img
+                  key={a.id}
+                  src={profile.image}
+                  alt={a.name}
+                  title={`${a.name} · ${a.status}`}
+                  className={cn(
+                    'h-8 w-8 rounded-full ring-2 ring-background object-cover transition',
+                    running ? '' : 'opacity-70 grayscale-[40%]',
+                  )}
+                  style={running ? { boxShadow: `0 0 0 2px ${theme.hex}` } : undefined}
+                />
+              );
+            })}
+          </div>
+
+          <div className="ml-auto flex items-center gap-2">
             <button
               onClick={() => openAgentBuilder({ department })}
-              className="inline-flex items-center gap-1.5 rounded-lg border border-emerald-500/40 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-300 px-2.5 py-1.5 text-xs font-semibold transition"
+              className="inline-flex items-center gap-1.5 rounded-lg border border-border/60 bg-card/40 hover:bg-card/80 text-muted-foreground hover:text-foreground px-2.5 py-1.5 text-xs font-semibold transition"
             >
               <Plus className="h-3.5 w-3.5" /> New Agent
             </button>
+            <button
+              onClick={focusComposer}
+              className="inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold text-background transition hover:opacity-90"
+              style={{ backgroundColor: theme.hex }}
+            >
+              <Play className="h-3.5 w-3.5" /> Start Task
+            </button>
           </div>
         </div>
+
+        {/* Live status line */}
+        <div className="mt-3 flex items-center gap-2 text-xs">
+          <span className={cn('h-1.5 w-1.5 rounded-full', deptDot[department], workingAgents.length > 0 && 'animate-pulse')} />
+          <span className="text-muted-foreground">
+            {workingAgents.length > 0
+              ? `${workingAgents.join(' & ')} ${workingAgents.length === 1 ? 'is' : 'are'} working`
+              : latestEvent?.title ?? 'Quiet for now — start a task to wake the team.'}
+          </span>
+        </div>
       </div>
+
+      <div className="border-b border-border/50" />
 
       <AgentRoster department={department} />
 
       <div className="grid grid-cols-1 xl:grid-cols-[1fr_minmax(0,420px)] gap-0 min-h-[calc(100vh-180px)]">
         <div className="p-5 overflow-x-auto">
           <div className="grid grid-cols-4 gap-4 min-w-[820px]">
-            {COLUMNS.map((col) => {
+            {COLUMN_BUCKETS.map((col, idx) => {
               const cards = deptPlans.filter((p) => col.statuses.includes(p.status));
+              const label = theme.workflow[idx];
               return (
                 <div key={col.id} className="flex flex-col">
                   <div className="flex items-center justify-between mb-2 px-1">
                     <span className="text-[11px] uppercase tracking-widest font-semibold text-muted-foreground">
-                      {col.label}
+                      {label}
                     </span>
                     <span className="text-[10px] text-muted-foreground/70 tabular-nums">{cards.length}</span>
                   </div>
@@ -239,7 +294,7 @@ export default function DepartmentRoom() {
         <div className="border-l border-border/50 flex flex-col bg-background/40">
           <div className="px-4 py-3 border-b border-border/50 flex items-center gap-2">
             <span className={cn('h-1.5 w-1.5 rounded-full', deptDot[department], 'animate-pulse')} />
-            <span className="text-xs font-semibold text-foreground">#{meta.label.toLowerCase()}-room</span>
+            <span className="text-xs font-semibold text-foreground">#{theme.label.toLowerCase()}-room</span>
             <span className="text-[10px] text-muted-foreground ml-auto">{deptEvents.length} messages</span>
           </div>
 
@@ -252,6 +307,29 @@ export default function DepartmentRoom() {
             {deptEvents.map((e) => {
               const name = e.agent_id ? agentNameById.get(e.agent_id) : undefined;
               const isHandoff = e.event_type === 'handoff';
+
+              if (isHandoff) {
+                const fromName = (e.metadata as any)?.from_agent_name ?? name;
+                const toName = (e.metadata as any)?.to_agent_name ?? (e.body?.match(/→\s*([A-Za-z]+)/)?.[1]);
+                return (
+                  <div
+                    key={e.id}
+                    className="flex items-center gap-2 py-1 px-2 rounded-lg"
+                    style={{ background: `linear-gradient(90deg, ${theme.hex}10, transparent)` }}
+                  >
+                    <span className="text-[10px] uppercase tracking-widest font-semibold" style={{ color: theme.hex }}>
+                      Handoff
+                    </span>
+                    <span className="text-xs text-foreground font-medium">{fromName ?? '—'}</span>
+                    <ArrowRight className="h-3 w-3 text-muted-foreground" />
+                    <span className="text-xs text-foreground font-medium">{toName ?? '—'}</span>
+                    <span className="text-[10px] text-muted-foreground ml-auto truncate max-w-[140px]">
+                      {e.title}
+                    </span>
+                  </div>
+                );
+              }
+
               return (
                 <ChatBubble
                   key={e.id}
@@ -259,7 +337,6 @@ export default function DepartmentRoom() {
                   agentName={name}
                   text={e.body || e.title}
                   timestamp={e.created_at}
-                  nested={isHandoff}
                 />
               );
             })}
@@ -282,12 +359,12 @@ export default function DepartmentRoom() {
             )}
           </div>
 
-          <div className="p-3 border-t border-border/50">
+          <div ref={composerRef} className="p-3 border-t border-border/50">
             <ChatComposer
               onSubmit={handleSubmit}
               restrictDepartment={department}
               compact
-              placeholder={`Message #${meta.label.toLowerCase()} — type @ to mention`}
+              placeholder={`Message #${theme.label.toLowerCase()} — type @ to mention`}
             />
           </div>
         </div>
