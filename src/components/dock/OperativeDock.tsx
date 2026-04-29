@@ -67,8 +67,8 @@ function DockItem({ agent, mouseX, onHover, onClick }: DockItemProps) {
       )}
       style={{
         boxShadow: agent.status === 'active'
-          ? `0 0 0 2px ${dept.hex ?? '#10B981'}, 0 0 12px ${dept.hex ?? '#10B981'}66`
-          : `0 0 0 2px ${dept.hex ?? '#10B981'}80`,
+          ? `0 0 0 2px ${deptHex}, 0 0 12px ${deptHex}66`
+          : `0 0 0 2px ${deptHex}80`,
       }}>
         <img
           src={agent.image}
