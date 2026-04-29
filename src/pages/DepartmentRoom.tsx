@@ -19,6 +19,7 @@ import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 import { Plus } from 'lucide-react';
 import { openAgentBuilder } from '@/hooks/useAgentBuilder';
+import AgentRoster from '@/components/department/AgentRoster';
 
 const DEPT_META: Record<AgentDept, { label: string; tagline: string }> = {
   talent:       { label: 'Talent',       tagline: 'Sourcing, screening & shortlists' },
@@ -174,6 +175,8 @@ export default function DepartmentRoom() {
           </div>
         </div>
       </div>
+
+      <AgentRoster department={department} />
 
       <div className="grid grid-cols-1 xl:grid-cols-[1fr_minmax(0,420px)] gap-0 min-h-[calc(100vh-180px)]">
         <div className="p-5 overflow-x-auto">
