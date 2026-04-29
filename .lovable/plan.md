@@ -1,137 +1,128 @@
 
-## ⚠️ Critical issues with the request as written
+# Agent Builder v2 — Cinematic Character Creator
 
-Before doing anything, three things have to be flagged — your spec as written would **leak both API keys publicly and break the entire app**.
+Rebuild the Agent Builder as a full-screen, two-column experience that feels like crafting a living AI employee. Backend, edge functions, and the existing `createAgent` contract are untouched — the new UI is purely a visual and UX rewrite that maps onto the same Supabase insert.
 
-### 1. The keys you pasted are now compromised
+## What stays the same (do not touch)
 
-You shared real `sk-ant-…` and `sk-proj-…` keys in chat. Treat them as **leaked**. Please rotate both immediately at console.anthropic.com and platform.openai.com **before** we wire anything up. I'll use whatever you generate next — never the ones above.
+- `supabase/functions/*` and any edge function code
+- `src/lib/orchestration.ts` `createAgent(...)` signature and DB schema
+- `useAgentBuilder` open/close pub-sub API (`openAgentBuilder`, `closeAgentBuilder`)
+- Realtime agent subscription on the `agents` table
+- Existing pages, routes, and dock behavior outside the builder itself
 
-### 2. Putting `ANTHROPIC_API_KEY` / `OPENAI_API_KEY` in `.env` and `import.meta.env` puts them in the browser bundle
+## What changes
 
-Vite only exposes vars prefixed with `VITE_`, **but** Step 2 reads them as `import.meta.env.ANTHROPIC_API_KEY` — which would be `undefined`. The only way to make that code "work" is to prefix them `VITE_…`, which **inlines the secret into the JS bundle every visitor downloads**. That is exactly what your own Rules section forbids. Anthropic and OpenAI's SDKs even refuse to run in browsers without an explicit `dangerouslyAllowBrowser: true` flag for this reason.
+### 1. Replace the slide-over with a full-screen takeover
 
-The correct pattern (and the one already used everywhere else in this project — Lovable AI, Resend, etc.) is: **secrets live in Supabase Edge Function env, not in `.env`. The frontend calls an edge function, which calls the model.**
+- New file: `src/components/agents/AgentBuilderModal.tsx` — replaces the current `SlideOverPanel`-based `AgentBuilderPanel.tsx`.
+- Mounted from `src/components/MainLayout.tsx` (swap the import; same `<AgentBuilderModal />` placement).
+- A fixed `inset-0 z-[80]` overlay with backdrop blur and pitch-black wash.
+- Centered cinematic frame (`max-w-[1280px]`, glassmorphic, rounded-2xl) split 40 / 60 with `framer-motion` mount animation (fade + slight scale).
+- Escape and outside-click after step 2 trigger an in-modal exit confirm: "Abandon this agent? Your progress will be lost." with Keep building / Discard.
 
-### 3. Enabling Cloud blew away the generated DB types — the build is currently broken
+### 2. Left column — Live Character Card (40%)
 
-When Cloud was just enabled, `src/integrations/supabase/types.ts` was reset to an empty schema (`Tables: { [_ in never]: never }`). That's why you see ~hundreds of `Argument of type '"resume_analyses"' is not assignable to parameter of type 'never'` errors. None of the existing tables (`resume_analyses`, `candidate_profiles`, `agents`, `tasks`, …) are typed anymore, so almost every page fails to compile.
+New file: `src/components/agents/builder/v2/CharacterCard.tsx`. Pure presentational, driven by current form state.
 
-This has to be fixed first — otherwise nothing else ships.
+- Large circular avatar (size ~160px) with chosen identity color and the first letter of the name in white. Pulses softly when empty.
+- Name in display font below; fades + scales in once Step 1 is valid.
+- Department pill (color-mapped using `deptDot`/`deptText` from `agentProfiles.ts`) slides in after Step 2.
+- "Brain" excerpt card (first ~140 chars of role prompt) reveals after Step 3.
+- Model badge with provider logo from `aiModelLogos.ts` reveals after Step 4.
+- Capability chips row reveals after Step 5 (each chip = capability name).
+- Tool badges row reveals after Step 6.
+- Skill icon grid reveals after Step 7.
+- Bottom: "Agent Readiness" circular SVG progress ring filling green as steps complete (`completedSteps / 7 * 100`).
+- All reveals use a small `Reveal` wrapper (framer-motion `initial={{opacity:0, y:8, scale:0.96}} animate={...}`).
 
----
+### 3. Right column — Step Engine (60%)
 
-## Proposed plan
+New file: `src/components/agents/builder/v2/StepShell.tsx` handles:
 
-### Step 0 — Unblock the build (mandatory, do first)
+- Top progress bar with 7 dots + labels (Identity, Department, Role, Model, Capabilities, Tools, Skills). Completed = green filled, current = pulsing emerald, future = dim. Clicking a completed dot jumps to that step.
+- Animated step container using framer-motion `AnimatePresence` with horizontal slide between steps.
+- Fixed Back / Next footer. Keyboard: Enter / ArrowRight = Next (when valid), ArrowLeft = Back, Escape = exit confirm.
 
-Run a no-op migration to force Supabase to regenerate `src/integrations/supabase/types.ts` from the live database schema. All your existing tables are still there in Postgres; only the TS types file got wiped. Once regenerated, all the `"resume_analyses" is not assignable to never` errors disappear in one shot.
+Each step is its own file under `src/components/agents/builder/v2/`:
 
-If regen doesn't pick everything up, fall back to manually re-running the most recent schema migration so the types tool sees current state.
+| Step | File | Notes |
+|---|---|---|
+| 1 Identity | `Step1Identity.tsx` | Large autofocused name input + 8-color swatch row (emerald, violet, blue, amber, coral, teal, pink, slate). Hover previews on character card via local hover state lifted into form. |
+| 2 Department | `Step2Department.tsx` | 5 large cards (Talent / Growth / Intelligence / Content / Operations). Each shows existing agents from `AGENT_PROFILES` filtered by department as small avatar stack; Operations shows "Be the first." Selected card: emerald border + glow. |
+| 3 Role | `Step3Role.tsx` | Large textarea, 3 starter template chips (Sourcing / Outreach / Research) that fill the textarea, char counter with 50-char minimum, tip card. |
+| 4 Model | `Step4Model.tsx` | 2x2 grid of large model cards (Claude Haiku, Claude Sonnet, GPT-4o, Gemini Pro). Each: provider logo, name, speed dots, cost $-signs, "Best for" line, conditional "Recommended for [department]" emerald badge. Selected card: glowing border in provider brand color. Maps to existing `AgentModelKey` strings stored in DB. |
+| 5 Capabilities | `Step5Capabilities.tsx` | 3-column table (capability, input, output) with up to 8 rows + delete button. Below: "Examples for [department]" section with 3 click-to-add chips per department (full lists per the spec). |
+| 6 Tools | `Step6Tools.tsx` | 6 tool cards in 2 columns (Firecrawl, Web Search, Email Sender, Slack, ElevenLabs Voice, Webhook). Each: icon, name, one-liner, toggle. "Requires API key" amber badge where relevant (Firecrawl, Email, Slack, ElevenLabs). Webhook reveals a URL input when toggled on. Skip-for-now link. Stored as string array (`tools`) and a `tool_config` JSON kept locally for the next step. |
+| 7 Skills | `Step7Skills.tsx` | Masonry-ish grid of skill cards (Firecrawl Scraping, Web Search, Email Writing, Candidate Scoring, Content Writing, Research & Analysis, Competitor Monitoring, Lead Enrichment). Equip button toggles to "Equipped" (emerald). Each card has an inline accordion "Configure" panel with 2-3 fields specific to the skill. Equipped count surfaces as a badge on the step dot. |
 
-### Step 1 — You rotate the leaked keys, then store them as Edge Function secrets
+### 4. Deploy screen + animation
 
-I'll trigger the secrets prompt for:
+New file: `src/components/agents/builder/v2/DeployScreen.tsx`.
 
-- `ANTHROPIC_API_KEY`
-- `OPENAI_API_KEY`
+- After step 7, show a centered enlarged Character Card + 4-section summary (Identity / Brain / Capabilities / Equipped Skills with config in small gray text under each chip).
+- Large full-width emerald "Deploy Agent" button with subtle pulse.
+- On click: call existing `createAgent(...)` from `src/lib/orchestration.ts` with the same payload shape used today (skills + tool_config are kept in local form state but only `tools: string[]` and `capabilities` are passed to the existing API to avoid backend changes).
+- Play deployment animation: framer-motion `motion.div` with `layoutId` flies the avatar from the deploy screen down to the dock position (target = bounding rect of the dock; computed once on click).
+- Then show success state: "{Name} has joined your workforce" + which department room, plus two buttons: "Go to {Department} room" (router push to `/department/{dept}`) and "Build another agent" (resets the wizard).
 
-You paste the **newly rotated** values into the secure Lovable secrets dialog. They never touch `.env`, never touch `import.meta.env`, never enter the browser bundle. Existing `LOVABLE_API_KEY` and `RESEND_API_KEY` already follow this same pattern.
+### 5. Department roster section
 
-### Step 2 — Create the central AI client **on the server, not the client**
+Edit `src/pages/DepartmentRoom.tsx`:
 
-Instead of `src/lib/ai-clients.ts`, create `supabase/functions/_shared/ai-clients.ts` with the same intent as your spec:
+- Add a new `AgentRoster` block at the top, just below the existing quick action bar.
+- Uses existing `useAgents()` hook (or `fetchAgents` + the existing realtime subscription on `agents`) filtered by current `department`.
+- Each roster card: colored avatar circle (first letter), name, model badge, status dot (idle/running) using `deptDot` mapping.
+- Click → opens an Agent profile side panel (reuse existing slide-over component used elsewhere; if none exists for agents, render a minimal `Sheet` that shows name, department, model, role prompt, capabilities; this is purely a UI surface, no new backend).
+- "New" green badge for 24h post-`created_at`.
+- New agent appears automatically because the agents subscription already invalidates the list.
 
-```ts
-// supabase/functions/_shared/ai-clients.ts
-import Anthropic from 'npm:@anthropic-ai/sdk';
-import OpenAI from 'npm:openai';
+### 6. Cleanup / housekeeping
 
-const anthropic = new Anthropic({ apiKey: Deno.env.get('ANTHROPIC_API_KEY')! });
-const openai    = new OpenAI({    apiKey: Deno.env.get('OPENAI_API_KEY')! });
+- Keep old wizard files (`Step1Identity.tsx`…`SuccessScreen.tsx`, `AgentBuilderPanel.tsx`) until the new modal is wired in `MainLayout.tsx`, then delete them in the same change.
+- No changes to `useAgentBuilder.ts` API.
+- No changes to `supabase/`, `.env`, types, or edge functions.
 
-export const MODEL_MAP: Record<string, 'anthropic' | 'openai'> = {
-  'claude-sonnet-4-20250514':  'anthropic',
-  'claude-haiku-4-5-20251001': 'anthropic',
-  'gpt-4o':                    'openai',
-};
+## Technical details
 
-export async function callAI(model: string, prompt: string, systemPrompt?: string) {
-  const provider = MODEL_MAP[model];
-  if (provider === 'anthropic') {
-    const r = await anthropic.messages.create({
-      model, max_tokens: 1024, system: systemPrompt,
-      messages: [{ role: 'user', content: prompt }],
-    });
-    return r.content[0].type === 'text' ? r.content[0].text : '';
-  }
-  if (provider === 'openai') {
-    const r = await openai.chat.completions.create({
-      model,
-      messages: [
-        ...(systemPrompt ? [{ role: 'system' as const, content: systemPrompt }] : []),
-        { role: 'user' as const, content: prompt },
-      ],
-    });
-    return r.choices[0].message.content ?? '';
-  }
-  throw new Error(`Unknown model: ${model}`);
-}
+- Framework: existing React + Vite + Tailwind + framer-motion + shadcn/ui — no new deps.
+- Color tokens: keep using semantic `bg-background`, `text-foreground`, plus `emerald-500` for accents, per the Verdant theme memory.
+- Identity color swatches map to a `SWATCHES` constant `{ key, ring, bg, dot }` so the character card can render without re-deriving Tailwind classes from raw hex.
+- Skills + tool config are stored only in local builder state (UI-only). They are NOT persisted to the DB in this pass to honor "do not touch backend." A short TODO comment will note where to plug them in once a `agent_skills` table is added.
+- All animations respect `prefers-reduced-motion` (framer-motion `useReducedMotion`).
+- Mobile (<768px): the modal collapses to a single column; the Character Card becomes a compact sticky header above the step content. Per memory: full-screen Dialog, zero horizontal scroll.
+
+## File map
+
+```text
+src/components/agents/
+  AgentBuilderModal.tsx                (new — replaces AgentBuilderPanel)
+  builder/v2/
+    CharacterCard.tsx
+    ReadinessRing.tsx
+    StepShell.tsx
+    StepDots.tsx
+    Step1Identity.tsx
+    Step2Department.tsx
+    Step3Role.tsx
+    Step4Model.tsx
+    Step5Capabilities.tsx
+    Step6Tools.tsx
+    Step7Skills.tsx
+    DeployScreen.tsx
+    constants.ts          (swatches, model meta, dept recommendations,
+                           capability examples, tool list, skill catalog)
+src/components/department/
+  AgentRoster.tsx         (new — used by DepartmentRoom)
+src/components/MainLayout.tsx           (swap import to AgentBuilderModal)
+src/pages/DepartmentRoom.tsx            (mount <AgentRoster department=...>)
 ```
 
-Same shape and `MODEL_MAP` semantics as your spec — just lives where secrets are safe.
+Old files removed at the end of the change:
+`src/components/agents/AgentBuilderPanel.tsx` and the contents of `src/components/agents/builder/` (Step1…SuccessScreen, StepProgress).
 
-### Step 3 — Wire `run-agent` (and `orchestrate`) to use `callAI`
+## Out of scope
 
-Currently `run-agent/index.ts` only simulates work with a 600 ms `setTimeout` (line 75) and writes `{ note: 'auto-completed' }` to the task output. I'll replace that with:
-
-```ts
-const result = await callAI(agent.model, task.description, agent.role_prompt);
-// store result in tasks.output
-await admin.from('tasks').update({
-  status: 'complete', finished_at: finishedAt,
-  output: { text: result, model: agent.model },
-}).eq('id', task.id);
-```
-
-Plus: switch `orchestrate/index.ts`'s planner from the Lovable AI Gateway call to `callAI('claude-sonnet-4-20250514', …)` so the orchestrator itself runs on Claude Sonnet, matching your Step 5 verification flow.
-
-### Step 4 — Frontend: no SDK install, no client-side keys
-
-Skip `npm install @anthropic-ai/sdk openai` on the frontend. The SDKs get installed automatically by Deno (`npm:@anthropic-ai/sdk`) inside the edge function only. The browser bundle stays clean.
-
-If you ever need `callAI` from the React side, it goes through `supabase.functions.invoke('run-agent', …)` — which is already how the dock and command center talk to agents.
-
-### Step 5 — Verification
-
-Same as your spec, just routed through the new path:
-1. Send a message without `@` in the Command Center → `orchestrate` → Claude Sonnet returns a plan.
-2. `@scout` task → `run-agent` reads `agent.model = 'gpt-4o'` → routes via OpenAI.
-3. `@aria` task → `run-agent` reads `agent.model = 'claude-haiku-4-5-20251001'` → routes via Anthropic.
-
-I'll also add a tiny `text` field render in the activity feed so you can see the model's actual response, not just `auto-completed`.
-
----
-
-## Files I will create / modify
-
-**Create**
-- `supabase/functions/_shared/ai-clients.ts` — the shared `callAI` + `MODEL_MAP`
-- `supabase/migrations/<ts>_regen_types_noop.sql` — no-op DDL to trigger types regeneration
-
-**Modify**
-- `supabase/functions/run-agent/index.ts` — replace `setTimeout(600)` simulation with real `callAI(agent.model, …)` and write the model output into `tasks.output`
-- `supabase/functions/orchestrate/index.ts` — swap the Lovable AI Gateway planner call for `callAI('claude-sonnet-4-20250514', …)`
-- `src/components/command-center/…` (the bubble that renders task output) — surface the new `output.text` so verification is visible
-
-**Will NOT create**
-- `src/lib/ai-clients.ts` — would leak keys to the browser. Replaced by the shared edge module above.
-- `.env` entries for `ANTHROPIC_API_KEY` / `OPENAI_API_KEY` — secrets go in Edge Function env only.
-
----
-
-## What I need from you before I start coding
-
-1. **Rotate both leaked keys** at Anthropic and OpenAI. Do not reuse the ones pasted in chat.
-2. Confirm you want the orchestrator on `claude-sonnet-4-20250514` (your Step 5 implies it). If you'd rather keep the planner on Lovable AI / Gemini and only route per-agent tasks through Anthropic/OpenAI, say so and I'll skip the orchestrate change.
-3. Approve and I'll: regen types → prompt for the two new (rotated) secrets → ship the shared client → wire `run-agent` and `orchestrate` → verify with @scout / @aria.
+- Persisting skills, skill configs, tool API keys, or webhook URLs to Supabase.
+- Changing the Sidebar entry, dock entry, or `openAgentBuilder()` call sites — they continue to work unchanged.
+- Any orchestration / model-routing logic.
