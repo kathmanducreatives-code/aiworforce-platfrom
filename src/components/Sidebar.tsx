@@ -79,58 +79,62 @@ const Sidebar = ({ collapsed, onToggle, onOpenCommandPalette }: SidebarProps) =>
   return (
     <aside
       className={cn(
-        'fixed left-0 top-0 h-screen z-40 flex flex-col border-r border-border bg-card/95 backdrop-blur-xl transition-all duration-300',
+        'fixed left-0 top-0 h-screen z-40 flex flex-col bg-background transition-all duration-300',
         collapsed ? 'w-[64px]' : 'w-[248px]'
       )}
     >
-      {/* User Profile */}
-      <div className={cn('flex items-center gap-3 px-4 py-5 border-b border-border', collapsed && 'justify-center px-0')}>
+      {/* Workspace header */}
+      <div className={cn('flex items-center gap-3 px-3 py-4', collapsed && 'justify-center px-0')}>
+        <div className="w-7 h-7 rounded-full flex items-center justify-center text-[12px] font-medium text-white shrink-0"
+             style={{ background: 'linear-gradient(135deg, #10B981 0%, #0EA5E9 100%)' }}>
+          {profile?.full_name?.[0]?.toUpperCase() || 'S'}
+        </div>
         {!collapsed && (
-          <div className="flex items-center gap-3 flex-1 min-w-0">
-            <div className="w-8 h-8 rounded-lg bg-primary/10 border border-primary/20 flex items-center justify-center text-sm font-bold text-primary flex-shrink-0">
-              {profile?.full_name?.[0] || 'S'}
-            </div>
+          <>
             <div className="flex-1 min-w-0">
-              <p className="text-sm font-semibold text-foreground truncate">{profile?.full_name || 'ScreeningPilot'}</p>
-              <p className="text-xs text-muted-foreground truncate">{profile?.full_name || 'Professional'}</p>
+              <p className="text-[13px] font-medium text-foreground truncate leading-tight">{profile?.full_name || 'ScreeningPilot'}</p>
             </div>
-            <span className="text-[10px] font-medium text-primary bg-primary/10 px-1.5 py-0.5 rounded flex-shrink-0">Pro</span>
-          </div>
-        )}
-        {collapsed && (
-          <div className="w-8 h-8 rounded-lg bg-primary/10 border border-primary/20 flex items-center justify-center text-sm font-bold text-primary">
-            {profile?.full_name?.[0] || 'S'}
-          </div>
+            <span className="text-[9px] tracking-wider text-primary border border-primary/40 rounded-full px-1.5 py-px">
+              PRO
+            </span>
+          </>
         )}
       </div>
 
-      {/* Command Palette Shortcut */}
+      {/* Search */}
       {!collapsed && onOpenCommandPalette && (
         <button
           onClick={onOpenCommandPalette}
-          className="mx-3 mt-3 flex items-center gap-2 px-3 py-2 rounded-lg border border-border/60 bg-card/70 text-sm text-muted-foreground hover:text-foreground hover:border-primary/30 hover:bg-card transition-all"
+          className="mx-3 mb-2 flex items-center gap-2 px-3 h-8 rounded-md bg-white/[0.03] hover:bg-white/[0.06] text-[12px] text-muted-foreground hover:text-foreground transition-colors"
         >
           <Search className="h-3.5 w-3.5" />
-          <span className="flex-1 text-left">Search...</span>
-          <kbd className="text-[10px] bg-muted/70 border border-border rounded px-1 py-0.5 font-mono">⌘K</kbd>
+          <span className="flex-1 text-left">Search</span>
+          <kbd className="text-[9px] text-text-tertiary font-mono">⌘K</kbd>
         </button>
       )}
       {collapsed && onOpenCommandPalette && (
-        <button onClick={onOpenCommandPalette} className="mx-auto mt-3 p-2 rounded-lg hover:bg-muted transition-colors">
+        <button onClick={onOpenCommandPalette} className="mx-auto mb-2 p-2 rounded-md hover:bg-white/[0.04] transition-colors">
           <Search className="h-4 w-4 text-muted-foreground" />
         </button>
       )}
 
       {/* Navigation */}
-      <nav className="flex-1 overflow-y-auto px-3 py-3 space-y-5">
+      <nav className="flex-1 overflow-y-auto px-2 py-1">
         {navGroups.map((group) => (
-          <div key={group.label}>
+          <div key={group.label} className="mt-5 first:mt-1">
             {!collapsed && (
-              <p className="text-[10px] font-semibold text-muted-foreground/60 uppercase tracking-widest px-3 mb-1.5">
-                {group.label}
-              </p>
+              <div className="flex items-center justify-between pl-3 pr-2 mb-1">
+                <p className="font-label">
+                  {group.label}
+                </p>
+                {group.label === 'Hire' && (
+                  <span className="text-[10px] font-semibold tracking-wide text-amber-200 bg-amber-900/60 px-1.5 py-px rounded-full">
+                    Awaiting You
+                  </span>
+                )}
+              </div>
             )}
-            <div className="space-y-0.5">
+            <div className="space-y-px">
               {group.items.map((item) => {
                 const isActive = location.pathname === item.path || location.pathname.startsWith(item.path + '/');
                 return (
@@ -138,25 +142,21 @@ const Sidebar = ({ collapsed, onToggle, onOpenCommandPalette }: SidebarProps) =>
                     key={item.path}
                     to={item.path}
                     className={cn(
-                      'flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-all duration-200 relative group',
+                      'group relative flex items-center gap-2.5 h-8 px-3 rounded-md text-[13px] transition-colors',
                       isActive
-                        ? 'bg-primary/10 text-primary'
-                        : 'text-muted-foreground hover:text-foreground hover:bg-muted/50',
-                      collapsed && 'justify-center px-2'
+                        ? 'bg-surface-hover text-foreground pl-[10px] border-l-2 border-primary rounded-l-none'
+                        : 'text-muted-foreground hover:text-foreground hover:bg-white/[0.04]',
+                      collapsed && 'justify-center px-2',
                     )}
                   >
-                    {/* Active indicator */}
-                    {isActive && (
-                      <div className="absolute left-0 top-1/2 -translate-y-1/2 w-[3px] h-5 bg-primary rounded-r-full" />
-                    )}
-                    <item.icon className={cn('h-4 w-4 flex-shrink-0', isActive ? 'text-primary' : 'text-muted-foreground group-hover:text-foreground')} />
+                    <item.icon className={cn('h-4 w-4 shrink-0', isActive ? 'text-foreground' : 'text-muted-foreground group-hover:text-foreground')} />
                     {!collapsed && <span className="truncate flex-1">{item.label}</span>}
                     {!collapsed && item.badge && (
                       <span className={cn(
-                        'text-[10px] font-bold px-1.5 py-0.5 rounded border tabular-nums',
+                        'text-[10px] font-semibold px-1.5 py-px rounded-full tabular-nums',
                         item.badgeColor === 'amber'
-                          ? 'bg-amber-500/10 text-amber-400 border-amber-500/20'
-                          : 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20',
+                          ? 'bg-amber-900/60 text-amber-200'
+                          : 'bg-emerald-500/15 text-primary',
                       )}>
                         {item.badge}
                       </span>
@@ -168,12 +168,12 @@ const Sidebar = ({ collapsed, onToggle, onOpenCommandPalette }: SidebarProps) =>
                 <button
                   onClick={() => openAgentBuilder()}
                   className={cn(
-                    'mt-1 flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium text-emerald-400 hover:bg-emerald-500/10 hover:text-emerald-300 transition-all w-full border border-dashed border-emerald-500/30',
+                    'flex items-center gap-2.5 h-8 px-3 rounded-md text-[13px] text-primary hover:bg-emerald-500/[0.08] transition-colors w-full',
                     collapsed && 'justify-center px-2',
                   )}
                   aria-label="New agent"
                 >
-                  <Plus className="h-4 w-4 flex-shrink-0" />
+                  <Plus className="h-3.5 w-3.5 shrink-0" />
                   {!collapsed && <span className="truncate flex-1 text-left">New Agent</span>}
                 </button>
               )}
@@ -182,40 +182,37 @@ const Sidebar = ({ collapsed, onToggle, onOpenCommandPalette }: SidebarProps) =>
         ))}
       </nav>
 
-      {/* Bottom section */}
-      <div className="border-t border-border px-3 py-3 space-y-0.5">
-        {/* Settings button hidden until Settings page is implemented */}
+      {/* Bottom utility */}
+      <div className="border-t border-white/[0.06] px-2 py-2 space-y-px">
         <button
           className={cn(
-            'flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-all w-full',
+            'flex items-center gap-2.5 h-8 px-3 rounded-md text-[12px] text-muted-foreground hover:text-foreground hover:bg-white/[0.04] transition-colors w-full',
             collapsed && 'justify-center px-2'
           )}
         >
-          <HelpCircle className="h-4 w-4" />
+          <HelpCircle className="h-3.5 w-3.5" />
           {!collapsed && <span>Help & Support</span>}
         </button>
         <button
           onClick={signOut}
           className={cn(
-            'flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium text-muted-foreground hover:text-red-500 hover:bg-red-500/5 transition-all w-full',
+            'flex items-center gap-2.5 h-8 px-3 rounded-md text-[12px] text-muted-foreground hover:text-rose-400 hover:bg-white/[0.04] transition-colors w-full',
             collapsed && 'justify-center px-2'
           )}
         >
-          <LogOut className="h-4 w-4" />
+          <LogOut className="h-3.5 w-3.5" />
           {!collapsed && <span>Sign Out</span>}
         </button>
-        <div className="pt-1.5 border-t border-border mt-1.5">
-          <button
-            onClick={onToggle}
-            className={cn(
-              'flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-all w-full',
-              collapsed && 'justify-center px-2'
-            )}
-          >
-            {collapsed ? <PanelLeft className="h-4 w-4" /> : <PanelLeftClose className="h-4 w-4" />}
-            {!collapsed && <span>Collapse</span>}
-          </button>
-        </div>
+        <button
+          onClick={onToggle}
+          className={cn(
+            'flex items-center gap-2.5 h-8 px-3 rounded-md text-[12px] text-muted-foreground hover:text-foreground hover:bg-white/[0.04] transition-colors w-full',
+            collapsed && 'justify-center px-2'
+          )}
+        >
+          {collapsed ? <PanelLeft className="h-3.5 w-3.5" /> : <PanelLeftClose className="h-3.5 w-3.5" />}
+          {!collapsed && <span>Collapse</span>}
+        </button>
       </div>
     </aside>
   );

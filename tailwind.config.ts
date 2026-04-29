@@ -19,43 +19,48 @@ export default {
 		},
 		extend: {
 			colors: {
-			border: 'rgba(16, 185, 129, 0.06)',
+				border: 'rgba(255, 255, 255, 0.10)',
+				'border-subtle': 'rgba(255, 255, 255, 0.06)',
+				'border-accent': 'rgba(16, 185, 129, 0.30)',
 				input: 'hsl(var(--input))',
 				ring: 'hsl(var(--ring))',
-				background: '#080808',
-				foreground: '#FFFFFF',
+				background: '#080B0F',
+				foreground: '#F0F6FC',
+				'text-tertiary': '#484F58',
+				'surface-elevated': '#131920',
+				'surface-hover': '#1A2332',
 				primary: {
 					'100': 'rgba(16, 185, 129, 0.1)',
 					'200': 'rgba(16, 185, 129, 0.2)',
-					DEFAULT: '#10B981', // Emerald Green
+					DEFAULT: '#10B981',
 					foreground: '#FFFFFF',
 					light: '#34D399',
 					dark: '#059669'
 				},
 				secondary: {
-					DEFAULT: '#14B8A5', // Teal Accent
+					DEFAULT: '#14B8A5',
 					foreground: '#FFFFFF'
 				},
 				accent: {
-					DEFAULT: '#D4A417', // Expert Gold
-					foreground: '#0F1420',
+					DEFAULT: '#1A2332',
+					foreground: '#F0F6FC',
 					secondary: 'rgba(212, 164, 23, 0.1)'
 				},
 				destructive: {
-					DEFAULT: '#F43F5E', // Rose
+					DEFAULT: '#F43F5E',
 					foreground: '#FFFFFF'
 				},
 				muted: {
-					DEFAULT: 'rgba(255, 255, 255, 0.05)',
-					foreground: 'rgba(255, 255, 255, 0.6)'
+					DEFAULT: '#131920',
+					foreground: '#7D8590'
 				},
 				popover: {
-					DEFAULT: '#0D0D0D',
-					foreground: '#FFFFFF'
+					DEFAULT: '#0D1117',
+					foreground: '#F0F6FC'
 				},
 				card: {
-					DEFAULT: '#0D0D0D',
-					foreground: '#FFFFFF'
+					DEFAULT: '#0D1117',
+					foreground: '#F0F6FC'
 				},
 				sidebar: {
 					DEFAULT: 'hsl(var(--sidebar-background))',
