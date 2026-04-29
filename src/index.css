@@ -7,6 +7,47 @@
 @tailwind components;
 @tailwind utilities;
 
+/* === Premium SaaS visual layer === */
+.font-label {
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #484F58;
+}
+
+.shadow-card-premium {
+  box-shadow: 0 1px 3px rgba(0,0,0,0.4), 0 0 0 1px rgba(255,255,255,0.06);
+}
+.shadow-elevated-premium {
+  box-shadow: 0 8px 32px rgba(0,0,0,0.4), 0 0 0 1px rgba(255,255,255,0.08);
+}
+.shadow-glow-emerald {
+  box-shadow: 0 0 20px rgba(16,185,129,0.15);
+}
+
+@keyframes thinking-dot {
+  0%, 80%, 100% { transform: scale(0.6); opacity: 0.4; }
+  40%           { transform: scale(1);   opacity: 1;   }
+}
+.animate-thinking-dot { animation: thinking-dot 1.2s ease-in-out infinite; }
+
+@keyframes handoff-travel {
+  0%   { left: 0%; opacity: 0; }
+  10%  { opacity: 1; }
+  90%  { opacity: 1; }
+  100% { left: 100%; opacity: 0; }
+}
+.animate-handoff-travel { animation: handoff-travel 1.6s ease-in-out infinite; }
+
+/* Premium drawer top edge glow */
+.drawer-edge-glow {
+  box-shadow:
+    inset 0 1px 0 rgba(16,185,129,0.18),
+    0 -30px 80px -20px rgba(0,0,0,0.65);
+}
+
+
 /* Premium dark mode font system */
 .font-display {
   font-family: 'Inter Tight', 'Inter', system-ui, sans-serif;
