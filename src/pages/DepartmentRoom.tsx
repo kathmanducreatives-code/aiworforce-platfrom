@@ -235,13 +235,14 @@ export default function DepartmentRoom() {
       <div className="grid grid-cols-1 xl:grid-cols-[1fr_minmax(0,420px)] gap-0 min-h-[calc(100vh-180px)]">
         <div className="p-5 overflow-x-auto">
           <div className="grid grid-cols-4 gap-4 min-w-[820px]">
-            {COLUMNS.map((col) => {
+            {COLUMN_BUCKETS.map((col, idx) => {
               const cards = deptPlans.filter((p) => col.statuses.includes(p.status));
+              const label = theme.workflow[idx];
               return (
                 <div key={col.id} className="flex flex-col">
                   <div className="flex items-center justify-between mb-2 px-1">
                     <span className="text-[11px] uppercase tracking-widest font-semibold text-muted-foreground">
-                      {col.label}
+                      {label}
                     </span>
                     <span className="text-[10px] text-muted-foreground/70 tabular-nums">{cards.length}</span>
                   </div>
