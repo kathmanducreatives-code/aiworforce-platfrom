@@ -1,13 +1,10 @@
-import { AGENT_PROFILES, deptRing, deptText } from '@/data/agentProfiles';
-import { Sparkles, Users, TrendingUp, Eye, FileText } from 'lucide-react';
-import { cn } from '@/lib/utils';
-import { toast } from 'sonner';
+import { motion } from 'framer-motion';
 
-const CARDS = [
-  { icon: Users, label: '@Scout', text: 'Find 10 React engineers in London', dept: 'talent' as const },
-  { icon: TrendingUp, label: '@Penn', text: "Draft outreach for today's leads", dept: 'growth' as const },
-  { icon: Eye, label: '@Hawk', text: "What changed at our top 3 competitors today?", dept: 'intelligence' as const },
-  { icon: FileText, label: '@Scribe', text: 'Write a LinkedIn post about our Q4 wins', dept: 'content' as const },
+const SUGGESTIONS = [
+  { text: 'Find 10 React engineers in London', agent: 'Scout' },
+  { text: "Draft outreach for today's leads", agent: 'Penn' },
+  { text: 'What changed at our top 3 competitors today?', agent: 'Hawk' },
+  { text: 'Write a LinkedIn post about our Q4 wins', agent: 'Scribe' },
 ];
 
 interface Props {
@@ -15,60 +12,51 @@ interface Props {
 }
 
 export default function EmptyState({ onPickPrompt }: Props) {
+  const pick = (text: string) => {
+    onPickPrompt?.(text);
+    window.dispatchEvent(new CustomEvent('chat:prefill', { detail: text }));
+  };
+
   return (
-    <div className="flex-1 flex items-center justify-center px-6 py-10">
-      <div className="max-w-2xl w-full text-center space-y-8">
-        {/* Avatar arc */}
-        <div className="relative h-32 w-full">
-          <div className="absolute inset-0 flex items-end justify-center gap-3">
-            {AGENT_PROFILES.map((a, i) => {
-              const offset = (i - (AGENT_PROFILES.length - 1) / 2) * 16;
-              return (
-                <div
-                  key={a.id}
-                  className={cn('h-14 w-14 rounded-full overflow-hidden ring-2 bg-card border border-border/60', deptRing[a.department])}
-                  style={{ transform: `translateY(${-Math.abs(offset)}px)` }}
-                >
-                  <img src={a.image} alt="" className="h-full w-full object-cover" />
-                </div>
-              );
-            })}
-          </div>
-        </div>
+    <div className="flex-1 overflow-y-auto px-6 pt-8 pb-6">
+      <div className="max-w-[640px]">
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ duration: 0.2 }}
+          className="flex items-center gap-2"
+        >
+          <span className="h-1.5 w-1.5 rounded-full bg-[#10B981]" />
+          <span className="text-[11px] uppercase tracking-wider text-[#7D8590]">Ready</span>
+        </motion.div>
 
-        <div>
-          <div className="inline-flex items-center gap-1.5 text-[10px] uppercase tracking-widest text-primary mb-3">
-            <Sparkles className="h-3 w-3" /> AI Workforce
-          </div>
-          <h2 className="text-2xl font-semibold text-foreground">Your AI workforce is standing by</h2>
-          <p className="text-sm text-muted-foreground mt-2 max-w-md mx-auto">
-            Type a command or @mention an agent to get started. They work fast.
-          </p>
-        </div>
+        <motion.h2
+          initial={{ opacity: 0, y: 8 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.3, delay: 0.1 }}
+          className="text-[28px] font-medium text-[#F0F6FC] leading-tight mt-3"
+        >
+          What needs to get done?
+        </motion.h2>
 
-        <div className="grid sm:grid-cols-2 gap-3 text-left">
-          {CARDS.map((c) => {
-            const Icon = c.icon;
-            return (
+        <ul className="mt-8">
+          {SUGGESTIONS.map((s, i) => (
+            <motion.li
+              key={s.text}
+              initial={{ opacity: 0, y: 4 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.2, delay: 0.25 + i * 0.06 }}
+            >
               <button
-                key={c.label}
-                onClick={() => {
-                  const txt = `${c.label} ${c.text}`;
-                  navigator.clipboard.writeText(txt);
-                  toast.success('Copied to clipboard', { description: 'Paste it into the composer below.' });
-                  onPickPrompt?.(txt);
-                }}
-                className="rounded-xl border border-border/60 bg-card hover:border-primary/40 hover:bg-primary/5 px-4 py-3 transition-all group"
+                onClick={() => pick(s.text)}
+                className="w-full flex items-center justify-between py-3 border-b border-white/[0.06] hover:bg-white/[0.04] transition-colors duration-150 px-2 -mx-2 rounded"
               >
-                <div className="flex items-center gap-2 mb-1">
-                  <Icon className={cn('h-4 w-4', deptText[c.dept])} />
-                  <span className={cn('text-xs font-semibold', deptText[c.dept])}>{c.label}</span>
-                </div>
-                <div className="text-sm text-foreground/90 group-hover:text-foreground">{c.text}</div>
+                <span className="text-[14px] text-[#F0F6FC] text-left">{s.text}</span>
+                <span className="text-[12px] text-[#7D8590] shrink-0 ml-4">{s.agent}</span>
               </button>
-            );
-          })}
-        </div>
+            </motion.li>
+          ))}
+        </ul>
       </div>
     </div>
   );

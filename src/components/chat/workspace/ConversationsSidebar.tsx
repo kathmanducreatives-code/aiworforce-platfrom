@@ -5,43 +5,65 @@ import { useAgents } from '@/hooks/useAgents';
 import { useAllPlans } from '@/hooks/usePlans';
 import { useChatWorkspace } from '@/contexts/ChatWorkspaceContext';
 import { useRelativeTime } from '@/hooks/useRelativeTime';
-import { profileById, DEPTS } from '@/lib/agentDeptIndex';
-import { AGENT_PROFILES, deptDot, deptRing, deptText } from '@/data/agentProfiles';
-import { Hash } from 'lucide-react';
+import { DEPTS } from '@/lib/agentDeptIndex';
+import { AGENT_PROFILES } from '@/data/agentProfiles';
 
 type Filter = 'all' | 'active' | 'done';
 
 const ACTIVE_STATUSES = new Set(['planning', 'executing', 'awaiting_approval']);
 const DONE_STATUSES = new Set(['complete', 'failed']);
 
+const AGENT_HEX: Record<string, string> = {
+  scout: '#3B82F6',
+  aria: '#8B5CF6',
+  penn: '#10B981',
+  hawk: '#14B8A6',
+  scribe: '#A855F7',
+};
+
+function InitialCircle({ slug, name, size = 24, active = false }: { slug: string; name: string; size?: number; active?: boolean }) {
+  const hex = AGENT_HEX[slug] ?? '#7D8590';
+  const alpha = active ? '40' : '26'; // 25% / 15%
+  return (
+    <div
+      className="rounded-full flex items-center justify-center"
+      style={{
+        width: size,
+        height: size,
+        backgroundColor: `${hex}${alpha}`,
+        color: hex,
+        fontSize: size <= 20 ? 10 : 11,
+        fontWeight: active ? 600 : 500,
+        lineHeight: 1,
+      }}
+      aria-label={name}
+    >
+      {name.charAt(0).toUpperCase()}
+    </div>
+  );
+}
+
 function PlanItem({ plan }: { plan: any }) {
-  const { workspaceId } = useWorkspace();
-  const { agents } = useAgents(workspaceId);
   const { view, setView } = useChatWorkspace();
   const rel = useRelativeTime(plan.created_at);
   const active = view.kind === 'conversation' && view.planId === plan.id;
   const isRunning = ACTIVE_STATUSES.has(plan.status);
 
-  // Best-effort dot color: first agent matching workspace
-  const firstAgent = agents[0];
-  const profile = profileById(agents, firstAgent?.id);
-
   return (
     <button
       onClick={() => setView({ kind: 'conversation', planId: plan.id })}
       className={cn(
-        'w-full text-left px-2.5 py-2 rounded-md transition-colors group',
-        active ? 'bg-primary/10 text-foreground' : 'hover:bg-foreground/5 text-foreground/90',
+        'w-full text-left py-1.5 transition-colors group',
+        active
+          ? 'border-l-2 border-white pl-2 text-[#F0F6FC]'
+          : 'pl-2.5 text-[#7D8590] hover:text-[#F0F6FC]',
       )}
     >
       <div className="flex items-start gap-2">
-        <span className={cn('mt-1.5 h-1.5 w-1.5 rounded-full shrink-0', profile ? deptDot[profile.department] : 'bg-muted-foreground')} />
+        <span className={cn('mt-1.5 h-1.5 w-1.5 rounded-full shrink-0', isRunning ? 'bg-[#10B981] animate-pulse' : 'bg-white/30')} />
         <div className="flex-1 min-w-0">
           <div className="text-xs line-clamp-1">{plan.user_instruction}</div>
-          <div className="flex items-center gap-1.5 mt-0.5">
-            <span className="text-[10px] text-muted-foreground/70">{rel}</span>
-            {isRunning && <span className="h-1 w-1 rounded-full bg-emerald-500 animate-pulse" />}
-          </div>
+          <div className="text-[10px] text-[#484F58] mt-0.5">{rel}</div>
         </div>
       </div>
     </button>
@@ -62,21 +84,23 @@ export default function ConversationsSidebar({ wide }: { wide?: boolean }) {
   }, [plans, filter]);
 
   return (
-    <aside className={cn(
-      'shrink-0 border-r border-border/60 flex flex-col overflow-hidden bg-background/40',
-      wide ? 'w-[260px]' : 'w-[220px]',
-    )}>
+    <aside
+      className={cn(
+        'shrink-0 border-r border-white/[0.06] flex flex-col overflow-hidden bg-background/40',
+        wide ? 'w-[260px]' : 'w-[220px]',
+      )}
+    >
       {/* Filters */}
       <div className="px-3 pt-3 pb-2">
-        <div className="text-[10px] uppercase tracking-widest text-muted-foreground mb-2">Conversations</div>
-        <div className="flex items-center gap-1 p-0.5 bg-foreground/5 rounded-md">
+        <div className="text-[10px] uppercase tracking-widest text-[#484F58] mb-2">Conversations</div>
+        <div className="flex items-center gap-3">
           {(['all', 'active', 'done'] as Filter[]).map((f) => (
             <button
               key={f}
               onClick={() => setFilter(f)}
               className={cn(
-                'flex-1 text-[11px] capitalize py-1 rounded transition-colors',
-                filter === f ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground',
+                'text-[12px] capitalize transition-colors duration-150',
+                filter === f ? 'text-[#F0F6FC]' : 'text-[#7D8590] hover:text-[#F0F6FC]',
               )}
             >
               {f}
@@ -88,17 +112,21 @@ export default function ConversationsSidebar({ wide }: { wide?: boolean }) {
       {/* Plans list */}
       <div className="flex-1 overflow-y-auto px-2">
         {filteredPlans.length === 0 ? (
-          <div className="text-xs text-muted-foreground/70 px-2 py-3">No conversations.</div>
+          <div className="text-xs text-[#484F58] px-2 py-3">No conversations.</div>
         ) : (
           <ul className="space-y-0.5">
-            {filteredPlans.map((p) => <li key={p.id}><PlanItem plan={p} /></li>)}
+            {filteredPlans.map((p) => (
+              <li key={p.id}>
+                <PlanItem plan={p} />
+              </li>
+            ))}
           </ul>
         )}
       </div>
 
       {/* Channels */}
-      <div className="px-3 pt-3 pb-2 border-t border-border/60">
-        <div className="text-[10px] uppercase tracking-widest text-muted-foreground mb-1">Channels</div>
+      <div className="px-3 pt-3 pb-2 border-t border-white/[0.06]">
+        <div className="text-[10px] uppercase tracking-widest text-[#484F58] mb-1">Channels</div>
         <ul className="space-y-0.5">
           {DEPTS.map((d) => {
             const active = view.kind === 'channel' && view.dept === d.id;
@@ -107,11 +135,13 @@ export default function ConversationsSidebar({ wide }: { wide?: boolean }) {
                 <button
                   onClick={() => setView({ kind: 'channel', dept: d.id })}
                   className={cn(
-                    'w-full flex items-center gap-1.5 px-2 py-1.5 rounded-md text-xs transition-colors',
-                    active ? 'bg-primary/10 text-foreground' : 'hover:bg-foreground/5 text-foreground/85',
+                    'w-full flex items-center gap-1.5 py-1.5 text-xs transition-colors duration-150',
+                    active
+                      ? 'border-l-2 border-white pl-2 text-[#F0F6FC]'
+                      : 'pl-2.5 text-[#7D8590] hover:text-[#F0F6FC]',
                   )}
                 >
-                  <Hash className={cn('h-3 w-3', deptText[d.id])} />
+                  <span>#</span>
                   <span>{d.label}</span>
                 </button>
               </li>
@@ -121,8 +151,8 @@ export default function ConversationsSidebar({ wide }: { wide?: boolean }) {
       </div>
 
       {/* Team */}
-      <div className="px-3 py-3 border-t border-border/60">
-        <div className="text-[10px] uppercase tracking-widest text-muted-foreground mb-2">Your team</div>
+      <div className="px-3 py-3 border-t border-white/[0.06]">
+        <div className="text-[10px] uppercase tracking-widest text-[#484F58] mb-2">Your team</div>
         <div className="flex items-center gap-1.5 flex-wrap">
           {AGENT_PROFILES.map((a) => {
             const dbA = agents.find((x) => x.slug === a.id);
@@ -132,17 +162,12 @@ export default function ConversationsSidebar({ wide }: { wide?: boolean }) {
               <button
                 key={a.id}
                 onClick={() => setView({ kind: 'agent', slug: a.id })}
-                className="relative group"
+                className="relative"
                 title={a.name}
               >
-                <div className={cn(
-                  'h-8 w-8 rounded-full overflow-hidden ring-2 transition-all',
-                  active ? 'ring-primary' : deptRing[a.department],
-                )}>
-                  <img src={a.image} alt={a.name} className="h-full w-full object-cover" />
-                </div>
+                <InitialCircle slug={a.id} name={a.name} size={24} active={active} />
                 {isRunning && (
-                  <span className="absolute -top-0.5 -right-0.5 h-2 w-2 rounded-full bg-emerald-500 animate-pulse ring-2 ring-background" />
+                  <span className="absolute -bottom-0.5 -right-0.5 h-1.5 w-1.5 rounded-full bg-[#10B981]" />
                 )}
               </button>
             );
