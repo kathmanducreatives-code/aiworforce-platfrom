@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react';
-import { ArrowUp, AtSign, Hash, Loader2, Slash, X } from 'lucide-react';
+import { ArrowUp, Hash, Loader2, Slash, X, AtSign } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
 import { cn } from '@/lib/utils';
-import { AGENT_PROFILES, deptDot, deptText, type AgentProfile, type AgentDept } from '@/data/agentProfiles';
+import { AGENT_PROFILES, type AgentProfile, type AgentDept } from '@/data/agentProfiles';
 import { useAgents } from '@/hooks/useAgents';
 import { useWorkspace } from '@/contexts/WorkspaceContext';
 import { useApprovals } from '@/hooks/useApprovals';
@@ -25,12 +26,39 @@ const COMMANDS = [
   { id: 'clear', label: '/clear', desc: 'Clear current view' },
 ];
 
+const AGENT_HEX: Record<string, string> = {
+  scout: '#3B82F6',
+  aria: '#8B5CF6',
+  penn: '#10B981',
+  hawk: '#14B8A6',
+  scribe: '#A855F7',
+};
+
+function InitialCircle({ slug, name, size = 20 }: { slug: string; name: string; size?: number }) {
+  const hex = AGENT_HEX[slug] ?? '#7D8590';
+  return (
+    <div
+      className="rounded-full flex items-center justify-center shrink-0"
+      style={{
+        width: size,
+        height: size,
+        backgroundColor: `${hex}26`,
+        color: hex,
+        fontSize: size <= 20 ? 10 : 11,
+        fontWeight: 600,
+        lineHeight: 1,
+      }}
+      aria-hidden
+    >
+      {name.charAt(0).toUpperCase()}
+    </div>
+  );
+}
+
 interface Props {
-  /** restrict @ picker / outbound routing to a single department */
   restrictDepartment?: AgentDept;
   placeholder?: string;
   autoFocus?: boolean;
-  /** open workspace on focus when collapsed */
   openOnFocus?: boolean;
 }
 
@@ -49,12 +77,13 @@ export default function ChatComposerPro({ restrictDepartment, placeholder, autoF
   const [showSuggestions, setShowSuggestions] = useState(false);
   const taRef = useRef<HTMLTextAreaElement>(null);
 
-  // Mention candidates
-  const mentionCandidates = useMemo(() => {
-    return AGENT_PROFILES
-      .filter((a) => !restrictDepartment || a.department === restrictDepartment)
-      .filter((a) => a.name.toLowerCase().startsWith(query.toLowerCase()));
-  }, [query, restrictDepartment]);
+  const mentionCandidates = useMemo(
+    () =>
+      AGENT_PROFILES
+        .filter((a) => !restrictDepartment || a.department === restrictDepartment)
+        .filter((a) => a.name.toLowerCase().startsWith(query.toLowerCase())),
+    [query, restrictDepartment],
+  );
 
   const channelCandidates = useMemo(() => DEPTS.filter((d) => d.id.startsWith(query.toLowerCase())), [query]);
   const commandCandidates = useMemo(() => COMMANDS.filter((c) => c.id.startsWith(query.toLowerCase())), [query]);
@@ -70,6 +99,22 @@ export default function ChatComposerPro({ restrictDepartment, placeholder, autoF
   useEffect(() => {
     if (autoFocus) taRef.current?.focus();
   }, [autoFocus]);
+
+  // External prefill (from EmptyState rows)
+  useEffect(() => {
+    const onPrefill = (e: Event) => {
+      const detail = (e as CustomEvent<string>).detail;
+      if (typeof detail !== 'string') return;
+      setValue(detail);
+      requestAnimationFrame(() => {
+        const el = taRef.current;
+        el?.focus();
+        el?.setSelectionRange(detail.length, detail.length);
+      });
+    };
+    window.addEventListener('chat:prefill', onPrefill);
+    return () => window.removeEventListener('chat:prefill', onPrefill);
+  }, []);
 
   const detectPopup = (text: string, caret: number) => {
     const upTo = text.slice(0, caret);
@@ -90,7 +135,7 @@ export default function ChatComposerPro({ restrictDepartment, placeholder, autoF
     detectPopup(v, e.target.selectionStart ?? v.length);
   };
 
-  const replaceTrigger = (trigger: '@' | '#' | '/', insert: string) => {
+  const replaceTrigger = (_trigger: '@' | '#' | '/', insert: string) => {
     const el = taRef.current;
     const caret = el?.selectionStart ?? value.length;
     const upTo = value.slice(0, caret);
@@ -113,19 +158,15 @@ export default function ChatComposerPro({ restrictDepartment, placeholder, autoF
     setPopup(null); setValue('');
     if (cmdId === 'brain') { navigate('/company-brain'); return; }
     if (cmdId === 'agents') { setView({ kind: 'channel', dept: 'talent' }); return; }
-    if (cmdId === 'history') { /* sidebar handles via search */ return; }
+    if (cmdId === 'history') return;
     if (cmdId === 'clear') { setView({ kind: 'empty' }); return; }
-    if (cmdId === 'plan') {
-      // Stays on current view; user can pick from sidebar
-      return;
-    }
+    if (cmdId === 'plan') return;
   };
 
   const submit = async () => {
     const text = value.trim();
     if (!text || submitting || !workspaceId) return;
 
-    // Mention?
     const mentionMatch = text.match(/@(\w+)/);
     let mentioned: AgentProfile | undefined;
     if (mentionMatch) {
@@ -133,7 +174,6 @@ export default function ChatComposerPro({ restrictDepartment, placeholder, autoF
       mentioned = AGENT_PROFILES.find((a) => a.name.toLowerCase() === name);
     }
 
-    // If channel context with no @, prefix instruction
     let outbound = text;
     if (!mentioned && view.kind === 'channel') {
       outbound = `[#${view.dept}] ${text}`;
@@ -183,115 +223,123 @@ export default function ChatComposerPro({ restrictDepartment, placeholder, autoF
     }
   };
 
-  // Suggested prompts
   const suggestions = useMemo(() => {
     const hour = new Date().getHours();
     if (pendingApprovalCount > 0) {
       return [
         "What's waiting for my approval?",
-        "Review @Penn's outreach drafts",
+        "Review Penn's outreach drafts",
         "Show me Aria's latest shortlist",
       ];
     }
     if (hour < 11) {
       return [
         "What did my agents do yesterday?",
-        "@Hawk what's happening in our market today?",
-        "@Scout find engineers for our open roles",
+        "What's happening in our market today?",
+        "Find engineers for our open roles",
       ];
     }
     return [
-      "@Aria screen the new applicants",
-      "@Penn follow up with cold leads",
-      "@Scribe write a post about our latest win",
+      "Screen the new applicants",
+      "Follow up with cold leads",
+      "Write a post about our latest win",
     ];
   }, [pendingApprovalCount]);
 
-  // Context indicator
   const contextLabel =
-    view.kind === 'channel' ? `#${view.dept}` :
-    view.kind === 'agent' ? `@${AGENT_PROFILES.find(p => p.id === view.slug)?.name ?? view.slug}` :
+    view.kind === 'channel' ? `# ${view.dept}` :
+    view.kind === 'agent' ? `@ ${AGENT_PROFILES.find(p => p.id === view.slug)?.name ?? view.slug}` :
     null;
+
+  const hasText = value.trim().length > 0;
 
   return (
     <div className="relative w-full">
-      {/* Suggestions */}
+      {/* Quick suggestions (plain text, middle dot) */}
       {showSuggestions && !value && (
-        <div className="absolute bottom-full left-0 right-0 mb-3 flex flex-wrap gap-1.5 justify-center pointer-events-auto">
-          {suggestions.map((s) => (
-            <button
-              key={s}
-              onMouseDown={(e) => { e.preventDefault(); setValue(s); setShowSuggestions(false); taRef.current?.focus(); }}
-              className="text-xs px-2.5 py-1 rounded-full border border-border/60 bg-card/80 backdrop-blur hover:border-primary/50 hover:bg-primary/5 text-muted-foreground hover:text-foreground transition-all"
-            >
-              {s}
-            </button>
-          ))}
+        <div className="absolute bottom-full left-0 right-0 mb-3 px-1 pointer-events-auto">
+          <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[12px] text-[#484F58]">
+            {suggestions.map((s, i) => (
+              <span key={s} className="flex items-center gap-2">
+                <button
+                  onMouseDown={(e) => { e.preventDefault(); setValue(s); setShowSuggestions(false); taRef.current?.focus(); }}
+                  className="hover:text-[#7D8590] transition-colors"
+                >
+                  {s}
+                </button>
+                {i < suggestions.length - 1 && <span aria-hidden>·</span>}
+              </span>
+            ))}
+          </div>
         </div>
       )}
 
       {/* Popups */}
       {popup === 'mention' && mentionCandidates.length > 0 && (
-        <Popup title={<><AtSign className="h-3 w-3" />Mention an agent</>}>
-          {mentionCandidates.map((a, i) => (
-            <PopupRow key={a.id} active={i === activeIdx}
-              onPick={() => replaceTrigger('@', `@${a.name}`)}
-              onHover={() => setActiveIdx(i)}>
-              <img src={a.image} alt="" className="h-7 w-7 rounded-full object-cover ring-2 ring-border" />
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2">
-                  <span className="text-sm font-semibold text-foreground">{a.name}</span>
-                  <span className={cn('h-1.5 w-1.5 rounded-full', deptDot[a.department])} />
-                  <span className={cn('text-[10px] uppercase tracking-wider', deptText[a.department])}>{a.department}</span>
+        <Popup>
+          {mentionCandidates.map((a, i) => {
+            const dbA = agents.find((db) => db.slug === a.id);
+            const running = dbA?.status === 'running';
+            return (
+              <PopupRow
+                key={a.id}
+                active={i === activeIdx}
+                onPick={() => replaceTrigger('@', `@${a.name}`)}
+                onHover={() => setActiveIdx(i)}
+              >
+                <InitialCircle slug={a.id} name={a.name} size={20} />
+                <div className="flex-1 min-w-0">
+                  <div className="text-[13px] text-[#F0F6FC]">{a.name}</div>
+                  <div className="text-[12px] text-[#7D8590] truncate">{a.role}</div>
                 </div>
-                <div className="text-xs text-muted-foreground truncate">
-                  {agents.find((db) => db.slug === a.id)?.status === 'running'
-                    ? `Running — ${agents.find((db) => db.slug === a.id)?.current_task ?? '...'}`
-                    : a.role}
-                </div>
-              </div>
-            </PopupRow>
-          ))}
+                {running && <span className="h-1.5 w-1.5 rounded-full bg-[#10B981]" />}
+              </PopupRow>
+            );
+          })}
         </Popup>
       )}
       {popup === 'channel' && channelCandidates.length > 0 && (
-        <Popup title={<><Hash className="h-3 w-3" />Switch channel</>}>
+        <Popup>
           {channelCandidates.map((d, i) => (
             <PopupRow key={d.id} active={i === activeIdx}
               onPick={() => { replaceTrigger('#', ''); setView({ kind: 'channel', dept: d.id }); open(); }}
               onHover={() => setActiveIdx(i)}>
-              <Hash className={cn('h-4 w-4', deptText[d.id])} />
-              <div className="flex-1">
-                <div className="text-sm font-semibold text-foreground">#{d.label}</div>
-                <div className="text-xs text-muted-foreground">{d.description}</div>
+              <Hash className="h-3.5 w-3.5 text-[#7D8590]" />
+              <div className="flex-1 min-w-0">
+                <div className="text-[13px] text-[#F0F6FC]">#{d.label}</div>
+                <div className="text-[12px] text-[#7D8590] truncate">{d.description}</div>
               </div>
             </PopupRow>
           ))}
         </Popup>
       )}
       {popup === 'command' && commandCandidates.length > 0 && (
-        <Popup title={<><Slash className="h-3 w-3" />Commands</>}>
+        <Popup>
           {commandCandidates.map((c, i) => (
             <PopupRow key={c.id} active={i === activeIdx}
               onPick={() => { replaceTrigger('/', ''); runCommand(c.id); }}
               onHover={() => setActiveIdx(i)}>
-              <span className="text-sm font-mono text-primary">{c.label}</span>
-              <span className="text-xs text-muted-foreground">{c.desc}</span>
+              <Slash className="h-3.5 w-3.5 text-[#7D8590]" />
+              <div className="flex-1 min-w-0">
+                <div className="text-[13px] text-[#F0F6FC] font-mono">{c.label}</div>
+                <div className="text-[12px] text-[#7D8590] truncate">{c.desc}</div>
+              </div>
             </PopupRow>
           ))}
         </Popup>
       )}
 
       <div className={cn(
-        'flex items-end gap-2 rounded-2xl border border-border/70 bg-card/95 backdrop-blur-xl p-2.5 transition-all',
-        'focus-within:border-primary/70 focus-within:shadow-[0_0_0_4px_hsl(var(--primary)/0.12),0_0_30px_hsl(var(--primary)/0.15)]',
+        'flex items-end gap-2 rounded-xl bg-[#131920] border border-white/[0.06]',
+        'px-3 py-2.5 transition-[border-color] duration-150',
+        'focus-within:border-white/[0.12]',
       )}>
         {contextLabel && (
-          <div className="shrink-0 inline-flex items-center gap-1 h-8 px-2 rounded-lg bg-primary/10 border border-primary/30 text-primary text-xs font-mono">
-            {contextLabel}
+          <div className="shrink-0 inline-flex items-center gap-1 h-6 px-2 rounded-md border border-white/[0.08] text-[12px] text-[#7D8590]">
+            <span>{contextLabel}</span>
             <button
               onClick={() => setView({ kind: 'empty' })}
-              className="ml-0.5 hover:text-foreground"
+              className="ml-0.5 text-[#7D8590] hover:text-[#F0F6FC]"
               aria-label="Clear context"
               type="button"
             ><X className="h-3 w-3" /></button>
@@ -310,36 +358,37 @@ export default function ChatComposerPro({ restrictDepartment, placeholder, autoF
           }}
           onBlur={() => setTimeout(() => setShowSuggestions(false), 100)}
           onSelect={(e) => detectPopup(value, (e.target as HTMLTextAreaElement).selectionStart ?? value.length)}
-          placeholder={placeholder ?? 'Message your AI workforce — type @ # or /'}
-          className="flex-1 resize-none bg-transparent outline-none text-sm leading-relaxed placeholder:text-muted-foreground/70 max-h-[240px] min-h-[24px] py-1.5 px-2"
+          placeholder={placeholder ?? 'Message your workforce...'}
+          className="flex-1 resize-none bg-transparent outline-none text-[14px] leading-relaxed text-[#F0F6FC] placeholder:text-[#484F58] max-h-[240px] min-h-[24px] py-1 px-1"
         />
 
-        <button
-          type="button"
-          onClick={submit}
-          disabled={!value.trim() || submitting}
-          className={cn(
-            'h-9 w-9 shrink-0 rounded-xl flex items-center justify-center transition-all',
-            value.trim() && !submitting
-              ? 'bg-primary text-primary-foreground hover:bg-primary/90 shadow-lg shadow-primary/20'
-              : 'bg-muted text-muted-foreground/50 cursor-not-allowed',
+        <AnimatePresence initial={false}>
+          {(hasText || submitting) && (
+            <motion.button
+              key="send"
+              type="button"
+              onClick={submit}
+              disabled={!hasText || submitting}
+              initial={{ x: 8, opacity: 0 }}
+              animate={{ x: 0, opacity: 1 }}
+              exit={{ x: 8, opacity: 0 }}
+              transition={{ duration: 0.2, ease: 'easeOut' }}
+              className="h-7 w-7 shrink-0 rounded-full bg-[#10B981] text-white flex items-center justify-center hover:bg-[#0EA372] transition-colors"
+              aria-label="Send"
+            >
+              {submitting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <ArrowUp className="h-3.5 w-3.5" />}
+            </motion.button>
           )}
-          aria-label="Send"
-        >
-          {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <ArrowUp className="h-4 w-4" />}
-        </button>
+        </AnimatePresence>
       </div>
     </div>
   );
 }
 
-function Popup({ title, children }: { title: React.ReactNode; children: React.ReactNode }) {
+function Popup({ children }: { children: React.ReactNode }) {
   return (
     <div className="absolute bottom-full left-0 right-0 mb-2 z-50">
-      <div className="rounded-xl border border-border/80 bg-popover/95 backdrop-blur-xl shadow-2xl overflow-hidden">
-        <div className="px-3 py-1.5 border-b border-border/60 flex items-center gap-1.5 text-[10px] uppercase tracking-widest text-muted-foreground">
-          {title}
-        </div>
+      <div className="rounded-lg bg-[#131920] border border-white/[0.08] shadow-[0_8px_24px_rgba(0,0,0,0.4)] overflow-hidden">
         <ul className="max-h-72 overflow-auto py-1">{children}</ul>
       </div>
     </div>
@@ -355,8 +404,10 @@ function PopupRow({ active, onPick, onHover, children }: {
         type="button"
         onMouseDown={(e) => { e.preventDefault(); onPick(); }}
         onMouseEnter={onHover}
-        className={cn('w-full flex items-center gap-3 px-3 py-2 text-left transition-colors',
-          active ? 'bg-primary/10' : 'hover:bg-muted/50')}
+        className={cn(
+          'w-full flex items-center gap-2.5 px-3 py-2 text-left transition-colors',
+          active ? 'bg-white/[0.04]' : 'hover:bg-white/[0.04]',
+        )}
       >
         {children}
       </button>

@@ -65,12 +65,12 @@ export default function ChatWorkspace() {
           initial={{ y: '100%', opacity: 0.6 }}
           animate={{ y: 0, opacity: 1, height: computedHeight }}
           exit={{ y: '100%', opacity: 0 }}
-          transition={{ type: 'spring', stiffness: 260, damping: 30 }}
+          transition={{ duration: 0.4, ease: [0.32, 0.72, 0, 1] }}
           className={cn(
             'fixed left-0 right-0 bottom-0 z-40',
-            'border-t border-emerald-500/20',
+            'border-t border-white/[0.06]',
             'bg-background',
-            'rounded-t-2xl drawer-edge-glow',
+            'rounded-t-2xl',
             'flex flex-col',
           )}
           role="dialog"
@@ -87,7 +87,7 @@ export default function ChatWorkspace() {
               className="flex items-center justify-center pt-2 pb-1 cursor-ns-resize group"
               title="Drag to resize · double-click for fullscreen"
             >
-              <div className="h-1 w-9 rounded-sm bg-white/15 group-hover:bg-white/30 transition-colors" />
+              <div className="h-[3px] w-8 rounded-full bg-white/15 group-hover:bg-white/30 transition-colors" />
             </div>
           )}
 

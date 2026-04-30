@@ -1,8 +1,7 @@
-import { cn } from '@/lib/utils';
 import type { AgentProfile } from '@/data/agentProfiles';
 import { AGENT_BY_NAME } from '@/data/agentProfiles';
 
-/** Renders a user message with @-mention pills highlighted. */
+/** Renders a user message with @-mention tokens lightly highlighted. */
 export default function MentionPill({ text }: { text: string }) {
   const parts = text.split(/(@\w+)/g);
   return (
@@ -15,9 +14,7 @@ export default function MentionPill({ text }: { text: string }) {
             return (
               <span
                 key={i}
-                className={cn(
-                  'inline-flex items-center px-1.5 py-0.5 rounded-md text-primary bg-primary/15 border border-primary/30 font-medium',
-                )}
+                className="inline-flex items-center px-1 rounded-sm text-[#F0F6FC] bg-white/[0.06]"
               >
                 {p}
               </span>
