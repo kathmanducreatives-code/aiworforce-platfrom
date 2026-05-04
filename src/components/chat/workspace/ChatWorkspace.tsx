@@ -9,11 +9,12 @@ import ConversationView from './ConversationView';
 import ChannelView from './ChannelView';
 import DirectAgentView from './DirectAgentView';
 import EmptyState from './EmptyState';
+import ChatView from './ChatView';
 import ChatComposerPro from './ChatComposerPro';
 import { TooltipProvider } from '@/components/ui/tooltip';
 
 export default function ChatWorkspace() {
-  const { mode, view, height, close, toggleFullscreen, setHeight, setView } = useChatWorkspace();
+  const { mode, view, height, close, toggleFullscreen, setHeight, setView, pending } = useChatWorkspace();
   const isMobile = useIsMobile();
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -135,6 +136,14 @@ export default function ChatWorkspace() {
                 {view.kind === 'conversation' && <ConversationView planId={view.planId} />}
                 {view.kind === 'channel' && <ChannelView dept={view.dept} />}
                 {view.kind === 'agent' && <DirectAgentView slug={view.slug} />}
+                {view.kind === 'chat' && (
+                  <ChatView
+                    conversationId={view.conversationId}
+                    agentSlug={view.agentSlug}
+                    pendingUserText={pending?.conversationId === view.conversationId ? pending.text : null}
+                    awaitingReply={pending?.conversationId === view.conversationId && pending.awaiting}
+                  />
+                )}
               </div>
 
               {/* Composer */}
