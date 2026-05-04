@@ -2,11 +2,11 @@ import { useMemo, useState } from 'react';
 import { cn } from '@/lib/utils';
 import { useWorkspace } from '@/contexts/WorkspaceContext';
 import { useAgents } from '@/hooks/useAgents';
-import { useAllPlans } from '@/hooks/usePlans';
 import { useChatWorkspace } from '@/contexts/ChatWorkspaceContext';
 import { useRelativeTime } from '@/hooks/useRelativeTime';
+import { useUserConversations, type ChatConversationRow } from '@/hooks/useUserConversations';
 import { DEPTS } from '@/lib/agentDeptIndex';
-import { AGENT_PROFILES } from '@/data/agentProfiles';
+import { AGENT_PROFILES, AGENT_BY_ID } from '@/data/agentProfiles';
 
 type Filter = 'all' | 'active' | 'done';
 
