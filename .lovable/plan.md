@@ -1,152 +1,186 @@
 
-# Chat Workspace — Enterprise Redesign
+# Real AI Chat Backend for Chat Workspace
 
-Visual-only overhaul of the chat drawer. No layout restructuring, no backend changes, no route changes. All edits scoped to `src/components/chat/workspace/*`.
-
-## Files to Edit
-
-1. `src/components/chat/workspace/EmptyState.tsx` — full rewrite
-2. `src/components/chat/workspace/ConversationsSidebar.tsx` — restyle filters, channels, team
-3. `src/components/chat/workspace/ChatComposerPro.tsx` — restyle input, mentions popup, suggestions, send button
-4. `src/components/chat/workspace/ChatWorkspace.tsx` — drag handle styling and spring easing
-5. `src/components/chat/workspace/MentionPill.tsx` — neutralize colored pill background
-
-No new files. No changes to `ChatWorkspaceContext`, `ConversationView`, `ChannelView`, `DirectAgentView`, bubbles, or orchestration.
+Goal: when the user sends a message in the Chat Workspace, a real AI model (routed by agent) answers, persists, and streams back via Supabase Realtime — with **no visual changes** to the existing minimal design.
 
 ---
 
-## 1. New Avatar Convention (Initial Circles)
+## 1. Database (migration)
 
-A single inline helper inside `ConversationsSidebar.tsx` and `ChatComposerPro.tsx` (no shared file added — kept local to scope) that maps agent slug → hex:
+**New table `conversations`**
+- `id uuid pk default gen_random_uuid()`
+- `user_id uuid not null` (no FK to auth.users per project rules)
+- `agent_id uuid not null references public.agents(id)`
+- `channel text` — `talent | growth | intelligence | content` (nullable)
+- `title text`
+- `status text default 'active'` — `active | done`
+- `created_at timestamptz default now()`
+- `updated_at timestamptz default now()`
+- Trigger: `update_updated_at_column` on update.
 
-```text
-scout  #3B82F6
-aria   #8B5CF6
-penn   #10B981
-hawk   #14B8A6
-scribe #A855F7
+RLS (enabled): `select / insert / update` where `user_id = auth.uid()`.
+
+**New table `messages`**
+- `id uuid pk default gen_random_uuid()`
+- `conversation_id uuid not null references public.conversations(id) on delete cascade`
+- `role text not null check (role in ('user','assistant'))`
+- `content text not null`
+- `agent_id uuid references public.agents(id)`
+- `model_used text`
+- `tokens_used integer`
+- `is_error boolean default false`
+- `created_at timestamptz default now()`
+
+RLS: all access gated by `EXISTS (select 1 from conversations c where c.id = messages.conversation_id and c.user_id = auth.uid())`.
+
+Index: `(conversation_id, created_at)`.
+
+Realtime: `ALTER PUBLICATION supabase_realtime ADD TABLE public.messages;` and `REPLICA IDENTITY FULL`.
+
+**Extend `agents` table**
+- Add `model_provider text` (`openai | anthropic | google`)
+- Add `model_id text`
+
+Seed/update by agent name (case-insensitive):
+| Agent  | provider  | model_id |
+|--------|-----------|----------|
+| Scout  | openai    | gpt-4o |
+| Aria   | anthropic | claude-haiku-4-5-20251001 |
+| Penn   | anthropic | claude-haiku-4-5-20251001 |
+| Hawk   | google    | gemini-pro |
+| Scribe | anthropic | claude-sonnet-4-6 |
+
+---
+
+## 2. Secrets
+
+Already present: `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`.
+Missing: **`GOOGLE_AI_API_KEY`** — request via `add_secret` before deploying (used by Hawk). Function falls back gracefully if missing (Hawk returns a friendly error message).
+
+Note: Spec hard-codes external model providers. We will follow it as written and not silently swap to Lovable AI.
+
+---
+
+## 3. Edge function `chat-respond`
+
+`supabase/functions/chat-respond/index.ts`, JWT-validated in code (`getClaims`), CORS enabled, no streaming (single JSON response — Realtime delivers it to the UI).
+
+Flow:
+1. Verify JWT → `userId`.
+2. Parse + Zod-validate `{ message, agent_id, conversation_id?, channel? }`.
+3. If no `conversation_id` → insert new conversation (`title` = first 50 chars of message). Else load and verify ownership.
+4. Insert user message row (`role: 'user'`, `agent_id: null`).
+5. Load agent (`name`, `model_provider`, `model_id`) + last 20 messages asc.
+6. Build system prompt from a hard-coded `SYSTEM_PROMPTS` map keyed by agent name (Scout/Aria/Penn/Hawk/Scribe text per spec). Fallback generic prompt if unknown.
+7. Call provider:
+   - **openai**: `POST https://api.openai.com/v1/chat/completions` with `Authorization: Bearer …`, `messages = [system, …history, user]`, `max_tokens: 1500`. Extract `choices[0].message.content`, `usage.total_tokens`.
+   - **anthropic**: `POST https://api.anthropic.com/v1/messages` with `x-api-key`, `anthropic-version: 2023-06-01`, `system`, `messages`, `max_tokens: 1500`. Extract `content[0].text`, `usage.input_tokens + output_tokens`.
+   - **google**: `POST …/v1beta/models/{model_id}:generateContent?key=…`, prepend system as first user turn, alternate `user`/`model` roles, parts `[{text}]`. Extract `candidates[0].content.parts[0].text`.
+8. Insert assistant message with `model_used`, `tokens_used`. On provider error, insert `is_error: true` assistant message ("I couldn't process that request. Please try again.") and still respond 200.
+9. Return `{ conversation_id, message }`.
+
+`supabase/config.toml`: add `[functions.chat-respond] verify_jwt = true` (we validate manually too, but keep gateway check on since this is user-scoped).
+
+---
+
+## 4. Frontend wiring (no visual changes)
+
+### 4a. Chat view model
+
+`src/contexts/ChatWorkspaceContext.tsx` — add a new `ChatViewKind` variant:
+```ts
+| { kind: 'chat'; conversationId: string }
+```
+Existing `conversation` (plan-based), `channel`, `agent`, `empty` variants stay so the plan/orchestration features still work. Channel default-agent map:
+```ts
+const CHANNEL_DEFAULT_AGENT = { talent:'scout', growth:'penn', intelligence:'hawk', content:'scribe' };
 ```
 
-Render: 24px (sidebar) / 20px (mention popup) circle, background `${hex}26` (15% alpha), letter in full hex, no ring, no border, no shadow. Used everywhere a portrait used to render. The imported `image` field on `AgentProfile` is simply not read — no data changes.
+### 4b. New hook `useChatConversation(conversationId)`
 
-## 2. EmptyState (full rewrite)
+`src/hooks/useChatConversation.ts`:
+- Fetch all messages for conversation ordered asc.
+- Subscribe to `postgres_changes` on `messages` filtered by `conversation_id=eq.{id}` (INSERT) → append.
+- Returns `{ messages, loading }`.
 
-Replaces the centered avatar arc + sparkle header + 4 colored cards.
+### 4c. New hook `useUserConversations()`
 
-Layout: left-aligned, padded `px-6 pt-8`, max-width `640px`.
+Lists `conversations` for `user_id = auth.uid()`, ordered by `updated_at desc`, with active/done filter. Replaces the plan list in the sidebar's All/Active/Done filter for the new chat surface.
 
-- Top: `<span class="h-1.5 w-1.5 rounded-full bg-[#10B981]" />` + `READY` in `text-[11px] uppercase tracking-wider text-[#7D8590]`.
-- Heading: `What needs to get done?` — `text-[28px] font-medium text-[#F0F6FC] leading-tight mt-3`.
-- Suggestions list (4 rows). Plain text only:
+### 4d. Sender service
 
-```text
-Find 10 React engineers in London                       Scout
-Draft outreach for today's leads                        Penn
-What changed at our top 3 competitors today?            Hawk
-Write a LinkedIn post about our Q4 wins                 Scribe
+`src/lib/chatRespond.ts`:
+```ts
+supabase.functions.invoke('chat-respond', { body: { message, agent_id, conversation_id, channel } })
 ```
+Returns `{ conversation_id }`. UI does NOT need to wait for the assistant text — Realtime will deliver it.
 
-Each row: full-width button, `flex justify-between items-center`, `py-3`, `border-b border-white/[0.06]`, `hover:bg-white/[0.04]`, transition 150ms. Left text 14px `#F0F6FC`. Right agent name 12px `#7D8590`. No icons, no `@`, no colored text.
+### 4e. Composer changes (`ChatComposerPro.tsx`)
 
-Click → calls a new optional `onPickPrompt` consumer. Since `EmptyState` is rendered without props from `ChatWorkspace.tsx`, click behavior: copy text into composer via a tiny shared event. Simplest path: dispatch a `CustomEvent('chat:prefill', { detail })` on `window`; `ChatComposerPro` listens once and sets value + focuses. (No context changes.)
+In `submit()`:
+1. Resolve target agent:
+   - If `@mention` → that agent.
+   - Else if `view.kind === 'chat'` → reuse the conversation's `agent_id` (passed via context).
+   - Else if `view.kind === 'channel'` → `CHANNEL_DEFAULT_AGENT[view.dept]`.
+   - Else → default to Scout.
+2. Look up agent uuid from `useAgents` (match by slug/name).
+3. Call `chatRespond({ message: text, agent_id, conversation_id: currentChatId, channel: viewKind==='channel' ? view.dept : null })`.
+4. On success with new id → `setView({ kind: 'chat', conversationId })`.
+5. Optimistically insert local user message into a small in-memory queue keyed by conversation id (React Query cache or context) so it appears instantly; Realtime dedupe by `id` after server insert.
+6. While `submitting`, `ChatView` shows the typing indicator (existing 22px initial circle + three pulsing 4px dots in `#484F58`, 200ms staggered) — purely typographic, no new visual primitives.
 
-Entrance animation (Framer Motion already in scope):
-- ready dot: opacity 0→1, 200ms
-- heading: opacity + translateY(8px → 0), 300ms, 100ms delay
-- rows: stagger 60ms each, opacity + translateY(4px → 0), 200ms
+Keep all existing styling tokens. No new colors, no portraits.
 
-## 3. ConversationsSidebar
+### 4f. New view `ChatView`
 
-Filters (All / Active / Done):
-- Remove the `bg-foreground/5` track and the `bg-card` active pill.
-- Render as inline plain-text buttons separated by a 12px gap.
-- Inactive: `text-[#7D8590] hover:text-[#F0F6FC]`. Active: `text-[#F0F6FC]`. No background, no border.
+`src/components/chat/workspace/ChatView.tsx`, used when `view.kind === 'chat'`:
+- Uses `useChatConversation(conversationId)`.
+- Renders user messages right-aligned plain text (`text-[#F0F6FC]`), agent messages with the existing `InitialCircle` + name + body text.
+- Detects "structured" content (has `\n\n` and ≥3 lines or starts with `- ` / `1. `) → wraps in inset block: `bg-white/[0.03]`, `border border-white/[0.06]`, `rounded-md`, `p-4`, copy button (Lucide `Copy`, 12px, `#484F58` → hover `#7D8590`).
+- Typing indicator row when `submitting && lastRole==='user'`.
 
-Channels:
-- Keep `#` prefix (plain text, no icon color).
-- Inactive row: `text-[#7D8590] hover:text-[#F0F6FC]`, no background.
-- Active row: `text-[#F0F6FC]` + 2px solid white left border (`border-l-2 border-white pl-2`). Width transitions in over 200ms via `transition-[border-width]`.
+Wire `ChatWorkspace.tsx` body to render `<ChatView/>` for the new variant.
 
-Your team:
-- Replace `<img>` portraits with the initial-letter circle (24px, color map above).
-- Drop ring, drop ring-active highlight. Active state: increase letter weight to 600 and switch background alpha from 15%→25%.
-- Running indicator: keep small green dot but as a 6px circle bottom-right, no ring around it.
+### 4g. Sidebar (`ConversationsSidebar.tsx`)
 
-PlanItem rows:
-- Keep dot indicator but switch dot color to neutral `bg-white/30` (drop dept color), running dot stays emerald.
-- Remove `bg-primary/10` active background; active row uses `text-[#F0F6FC]` + a `border-l-2 border-white pl-2`. Inactive `text-[#7D8590] hover:text-[#F0F6FC]`.
+Add a section above plans (or replace plan list entirely for the All/Active/Done filters) listing `useUserConversations()`:
+- 24px `InitialCircle` of agent
+- title (truncate 30 chars) + relative timestamp `#484F58`
+- Active row: `bg-white/[0.04]`, no border change.
+- Click → `setView({ kind: 'chat', conversationId })`.
 
-Section labels (`Conversations`, `Channels`, `Your team`): keep, but use `text-[#484F58]` and `text-[10px] tracking-widest`.
+Plan-based items remain accessible (keeps orchestration features).
 
-Sidebar background stays `bg-background/40`; remove the `border-r border-border/60` in favor of `border-r border-white/[0.06]`.
+### 4h. Channel context & placeholder
 
-## 4. ChatComposerPro
+`ChatComposerPro` already shows the `# talent` / `@ Scout` pill. Update placeholder when `view.kind === 'channel'` → `Message #${dept}…`. No other visual change.
 
-Input shell:
-- New classes: `flex items-end gap-2 rounded-xl bg-[#131920] border border-white/[0.06] px-3 py-2.5 transition-[border-color] duration-150 focus-within:border-white/[0.12]`.
-- Drop the green focus ring + glow (`shadow-[…primary…]`).
+---
 
-Context pill (left, when channel/agent selected):
-- Replace primary-colored pill with: `inline-flex items-center gap-1 h-6 px-2 rounded-md border border-white/[0.08] text-[12px] text-[#7D8590]`. Format: `# talent` or `@ Scout` (with single space after symbol). Keep the `X` clear button, neutral icon color.
+## 5. Files touched
 
-Textarea:
-- Placeholder: `Message your workforce...`
-- Placeholder color: `placeholder:text-[#484F58]`.
-- Body text: `text-[14px] text-[#F0F6FC]`.
+**Created**
+- `supabase/functions/chat-respond/index.ts`
+- `src/hooks/useChatConversation.ts`
+- `src/hooks/useUserConversations.ts`
+- `src/lib/chatRespond.ts`
+- `src/components/chat/workspace/ChatView.tsx`
 
-Send button:
-- Hidden by default. When `value.trim()` becomes truthy, render a 28px circle `bg-[#10B981]` with white `ArrowUp` icon.
-- Animate via Framer Motion: `initial={{ x: 8, opacity: 0 }} animate={{ x: 0, opacity: 1 }} exit={{ x: 8, opacity: 0 }}` over 200ms ease-out, wrapped in `<AnimatePresence>`. Use a real `<motion.button>` (Framer Motion already in this codebase).
-- Submitting state: keep spinner; same green background.
+**Edited**
+- `supabase/config.toml` (function block)
+- `src/contexts/ChatWorkspaceContext.tsx` (new view variant + channel→agent map export)
+- `src/components/chat/workspace/ChatWorkspace.tsx` (render `ChatView` branch)
+- `src/components/chat/workspace/ChatComposerPro.tsx` (route through `chat-respond`)
+- `src/components/chat/workspace/ConversationsSidebar.tsx` (chat conversations list + click handler + placeholder for channel)
 
-Quick suggestions:
-- Replace pill chips with a single inline row of plain text separated by a middle dot `·`, styled `text-[12px] text-[#484F58]`. Each clickable to set value. No borders, no background, no hover background — only `hover:text-[#7D8590]`.
-- Show only when input is empty and focused, same conditions as today.
+**Migrations**
+- Create `conversations`, `messages`, indexes, RLS, realtime publication.
+- Alter `agents` add `model_provider`, `model_id`; UPDATE rows for the 5 agents by name.
 
-@ Mention dropdown (`Popup` + `PopupRow`):
-- Container: `rounded-lg bg-[#131920] border border-white/[0.08] shadow-[0_8px_24px_rgba(0,0,0,0.4)]`. Drop `bg-popover/95 backdrop-blur-xl`.
-- Header strip removed (no "MENTION AN AGENT" label) — Raycast-style: list only.
-- Row: 20px initial circle (no portrait), agent name `text-[13px] text-[#F0F6FC]`, role `text-[12px] text-[#7D8590]` truncated, right-aligned green dot only when running.
-- Active row: `bg-white/[0.04]`. Hover: `bg-white/[0.04]`.
-- Channel popup and command popup follow the same chrome (no header strip, same container, same row hover).
+---
 
-Bottom-right portrait stack:
-- Already not rendered in this composer, but verify and remove any residual avatar render. The `OperativeDock` (bottom-right of the workspace shell) is NOT inside the chat workspace — leave untouched per spec ("inside the chat input area" only).
+## 6. Open items / pre-flight
 
-## 5. ChatWorkspace (drawer chrome)
-
-- Drag handle: change to `h-[3px] w-8 rounded-full bg-white/15`, container `pt-2 pb-1`. Double-click to fullscreen retained.
-- Drawer entrance transition: replace spring with `transition: { duration: 0.4, ease: [0.32, 0.72, 0, 1] }`. Default open height stays 70vh.
-- Drop the emerald top-edge glow (`drawer-edge-glow`) and `border-emerald-500/20`; replace border with `border-white/[0.06]`. (Per spec, green is reserved for ready dot, active states, and send button.)
-- Backdrop: keep `bg-black/60 backdrop-blur-sm`.
-
-## 6. MentionPill
-
-Neutralize. The user-bubble text rendering for `@Name` should become a plain-weight token, not a green pill:
-
-```tsx
-className="inline-flex items-center px-1 rounded-sm text-[#F0F6FC] bg-white/[0.06]"
-```
-
-No primary color, no border.
-
-## Wiring Notes
-
-- `EmptyState` → composer prefill: dispatch `window.dispatchEvent(new CustomEvent('chat:prefill', { detail: text }))`. In `ChatComposerPro`, add a `useEffect` listener that sets `value` and focuses the textarea. No context surface changes.
-- Tailwind: hex literals are used inline for the spec colors; existing semantic tokens (`bg-background`, `text-foreground`, `border-border`) stay untouched elsewhere. Per memory note, semantic tokens are preferred — the hex values requested map approximately to existing tokens (`#0D1117`≈`card`, `#131920`≈`surface-elevated`, `#7D8590`≈`text-secondary`, `#F0F6FC`≈`text-primary`, `#10B981`≈`primary`). Where a token already matches, the token will be used; only colors without an exact token (`#484F58`, `#A855F7`, etc.) are inlined.
-
-## Out of Scope
-
-- No edits to `OperativeDock`, `MainLayout`, `Sidebar`, or any page.
-- No edits to bubbles other than `MentionPill`.
-- No changes to `submitInstruction`, hooks, or Supabase wiring.
-- No new dependencies.
-
-## QA Checklist
-
-- Chat opens via `⌘K`, drawer rises with new easing curve.
-- Empty state is left-aligned, no portraits, no sparkle, four plain rows.
-- Sidebar shows initial-letter circles for all 5 agents; no images.
-- Send button hidden until typing; slides in from right.
-- `@` popup shows initial circles + role line + optional green status dot.
-- No green glows or rings anywhere except the ready dot, active sidebar/channel states, and the send button.
+- Need to add secret **`GOOGLE_AI_API_KEY`** before Hawk works. Will request it during implementation.
+- Existing `agents` table currently powers the orchestration system — adding two nullable columns is non-breaking. No existing code reads them, so safe.
+- Plan-based orchestration (`submitInstruction`, plans/tasks UI) is left intact; the new chat path is additive and used when the composer determines "this is a direct chat" (default for all agent/channel/empty views going forward). If you later want to retire the plan path entirely, that's a follow-up.
