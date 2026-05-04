@@ -22,7 +22,7 @@ const AGENT_CONFIG: Record<string, { name: string; provider: Provider; model: st
     system: "You are Penn, an outreach and copywriting specialist. You draft personalized outreach emails, follow-up sequences, LinkedIn messages, and recruiting copy. You write in a professional but warm tone. You ask about the target audience and key selling points before drafting.",
   },
   hawk: {
-    name: 'Hawk', provider: 'google', model: 'gemini-pro',
+    name: 'Hawk', provider: 'anthropic', model: 'claude-haiku-4-5-20251001',
     system: "You are Hawk, a market intelligence analyst. You monitor competitors, analyze market trends, research companies, and provide strategic insights. You are analytical and concise. You present findings with clear takeaways.",
   },
   scribe: {
