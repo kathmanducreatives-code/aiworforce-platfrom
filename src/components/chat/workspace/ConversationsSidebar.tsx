@@ -2,16 +2,13 @@ import { useMemo, useState } from 'react';
 import { cn } from '@/lib/utils';
 import { useWorkspace } from '@/contexts/WorkspaceContext';
 import { useAgents } from '@/hooks/useAgents';
-import { useAllPlans } from '@/hooks/usePlans';
 import { useChatWorkspace } from '@/contexts/ChatWorkspaceContext';
 import { useRelativeTime } from '@/hooks/useRelativeTime';
+import { useUserConversations, type ChatConversationRow } from '@/hooks/useUserConversations';
 import { DEPTS } from '@/lib/agentDeptIndex';
-import { AGENT_PROFILES } from '@/data/agentProfiles';
+import { AGENT_PROFILES, AGENT_BY_ID } from '@/data/agentProfiles';
 
 type Filter = 'all' | 'active' | 'done';
-
-const ACTIVE_STATUSES = new Set(['planning', 'executing', 'awaiting_approval']);
-const DONE_STATUSES = new Set(['complete', 'failed']);
 
 const AGENT_HEX: Record<string, string> = {
   scout: '#3B82F6',
@@ -23,48 +20,39 @@ const AGENT_HEX: Record<string, string> = {
 
 function InitialCircle({ slug, name, size = 24, active = false }: { slug: string; name: string; size?: number; active?: boolean }) {
   const hex = AGENT_HEX[slug] ?? '#7D8590';
-  const alpha = active ? '40' : '26'; // 25% / 15%
+  const alpha = active ? '40' : '26';
   return (
     <div
       className="rounded-full flex items-center justify-center"
       style={{
-        width: size,
-        height: size,
-        backgroundColor: `${hex}${alpha}`,
-        color: hex,
-        fontSize: size <= 20 ? 10 : 11,
-        fontWeight: active ? 600 : 500,
-        lineHeight: 1,
+        width: size, height: size,
+        backgroundColor: `${hex}${alpha}`, color: hex,
+        fontSize: size <= 20 ? 10 : 11, fontWeight: active ? 600 : 500, lineHeight: 1,
       }}
       aria-label={name}
-    >
-      {name.charAt(0).toUpperCase()}
-    </div>
+    >{name.charAt(0).toUpperCase()}</div>
   );
 }
 
-function PlanItem({ plan }: { plan: any }) {
+function ConversationItem({ conv }: { conv: ChatConversationRow }) {
   const { view, setView } = useChatWorkspace();
-  const rel = useRelativeTime(plan.created_at);
-  const active = view.kind === 'conversation' && view.planId === plan.id;
-  const isRunning = ACTIVE_STATUSES.has(plan.status);
+  const rel = useRelativeTime(conv.updated_at);
+  const active = view.kind === 'chat' && view.conversationId === conv.id;
+  const profile = AGENT_BY_ID[conv.agent_slug];
+  const title = (conv.title ?? '').slice(0, 30) || 'New chat';
 
   return (
     <button
-      onClick={() => setView({ kind: 'conversation', planId: plan.id })}
+      onClick={() => setView({ kind: 'chat', conversationId: conv.id, agentSlug: conv.agent_slug })}
       className={cn(
-        'w-full text-left py-1.5 transition-colors group',
-        active
-          ? 'border-l-2 border-white pl-2 text-[#F0F6FC]'
-          : 'pl-2.5 text-[#7D8590] hover:text-[#F0F6FC]',
+        'w-full text-left py-1.5 px-2 rounded-md transition-colors flex items-start gap-2',
+        active ? 'bg-white/[0.04] text-[#F0F6FC]' : 'text-[#7D8590] hover:text-[#F0F6FC] hover:bg-white/[0.02]',
       )}
     >
-      <div className="flex items-start gap-2">
-        <span className={cn('mt-1.5 h-1.5 w-1.5 rounded-full shrink-0', isRunning ? 'bg-[#10B981] animate-pulse' : 'bg-white/30')} />
-        <div className="flex-1 min-w-0">
-          <div className="text-xs line-clamp-1">{plan.user_instruction}</div>
-          <div className="text-[10px] text-[#484F58] mt-0.5">{rel}</div>
-        </div>
+      <InitialCircle slug={conv.agent_slug} name={profile?.name ?? conv.agent_slug} size={24} />
+      <div className="flex-1 min-w-0">
+        <div className="text-xs line-clamp-1">{title}</div>
+        <div className="text-[10px] text-[#484F58] mt-0.5">{rel}</div>
       </div>
     </button>
   );
@@ -72,16 +60,15 @@ function PlanItem({ plan }: { plan: any }) {
 
 export default function ConversationsSidebar({ wide }: { wide?: boolean }) {
   const { workspaceId } = useWorkspace();
-  const { plans } = useAllPlans(workspaceId, 30);
   const { agents } = useAgents(workspaceId);
   const { view, setView } = useChatWorkspace();
+  const { conversations } = useUserConversations();
   const [filter, setFilter] = useState<Filter>('all');
 
-  const filteredPlans = useMemo(() => {
-    if (filter === 'all') return plans;
-    if (filter === 'active') return plans.filter((p) => ACTIVE_STATUSES.has(p.status));
-    return plans.filter((p) => DONE_STATUSES.has(p.status));
-  }, [plans, filter]);
+  const filtered = useMemo(() => {
+    if (filter === 'all') return conversations;
+    return conversations.filter((c) => c.status === (filter === 'active' ? 'active' : 'done'));
+  }, [conversations, filter]);
 
   return (
     <aside
@@ -90,7 +77,6 @@ export default function ConversationsSidebar({ wide }: { wide?: boolean }) {
         wide ? 'w-[260px]' : 'w-[220px]',
       )}
     >
-      {/* Filters */}
       <div className="px-3 pt-3 pb-2">
         <div className="text-[10px] uppercase tracking-widest text-[#484F58] mb-2">Conversations</div>
         <div className="flex items-center gap-3">
@@ -102,23 +88,18 @@ export default function ConversationsSidebar({ wide }: { wide?: boolean }) {
                 'text-[12px] capitalize transition-colors duration-150',
                 filter === f ? 'text-[#F0F6FC]' : 'text-[#7D8590] hover:text-[#F0F6FC]',
               )}
-            >
-              {f}
-            </button>
+            >{f}</button>
           ))}
         </div>
       </div>
 
-      {/* Plans list */}
-      <div className="flex-1 overflow-y-auto px-2">
-        {filteredPlans.length === 0 ? (
+      <div className="flex-1 overflow-y-auto px-1.5">
+        {filtered.length === 0 ? (
           <div className="text-xs text-[#484F58] px-2 py-3">No conversations.</div>
         ) : (
           <ul className="space-y-0.5">
-            {filteredPlans.map((p) => (
-              <li key={p.id}>
-                <PlanItem plan={p} />
-              </li>
+            {filtered.map((c) => (
+              <li key={c.id}><ConversationItem conv={c} /></li>
             ))}
           </ul>
         )}

@@ -7,8 +7,8 @@ import { AGENT_PROFILES, type AgentProfile, type AgentDept } from '@/data/agentP
 import { useAgents } from '@/hooks/useAgents';
 import { useWorkspace } from '@/contexts/WorkspaceContext';
 import { useApprovals } from '@/hooks/useApprovals';
-import { useChatWorkspace } from '@/contexts/ChatWorkspaceContext';
-import { submitInstruction } from '@/lib/orchestration';
+import { useChatWorkspace, CHANNEL_DEFAULT_AGENT } from '@/contexts/ChatWorkspaceContext';
+import { chatRespond } from '@/lib/chatRespond';
 import { toast } from 'sonner';
 
 const DEPTS: { id: AgentDept; label: string; description: string }[] = [
@@ -67,7 +67,7 @@ export default function ChatComposerPro({ restrictDepartment, placeholder, autoF
   const { workspaceId } = useWorkspace();
   const { agents } = useAgents(workspaceId);
   const { count: pendingApprovalCount } = useApprovals(workspaceId);
-  const { open, mode, view, setView } = useChatWorkspace();
+  const { open, mode, view, setView, setPending } = useChatWorkspace();
 
   const [value, setValue] = useState('');
   const [popup, setPopup] = useState<null | 'mention' | 'channel' | 'command'>(null);
@@ -165,28 +165,41 @@ export default function ChatComposerPro({ restrictDepartment, placeholder, autoF
 
   const submit = async () => {
     const text = value.trim();
-    if (!text || submitting || !workspaceId) return;
+    if (!text || submitting) return;
 
+    // Resolve target agent slug
     const mentionMatch = text.match(/@(\w+)/);
     let mentioned: AgentProfile | undefined;
     if (mentionMatch) {
       const name = mentionMatch[1].toLowerCase();
       mentioned = AGENT_PROFILES.find((a) => a.name.toLowerCase() === name);
     }
+    let agentSlug: string;
+    if (mentioned) agentSlug = mentioned.id;
+    else if (view.kind === 'chat') agentSlug = view.agentSlug;
+    else if (view.kind === 'agent') agentSlug = view.slug;
+    else if (view.kind === 'channel') agentSlug = CHANNEL_DEFAULT_AGENT[view.dept];
+    else agentSlug = 'scout';
 
-    let outbound = text;
-    if (!mentioned && view.kind === 'channel') {
-      outbound = `[#${view.dept}] ${text}`;
-    }
+    const conversationId = view.kind === 'chat' ? view.conversationId : null;
+    const channel = view.kind === 'channel' ? view.dept : null;
 
     open();
     setSubmitting(true);
+    // Optimistic: stash pending text against (possibly future) conversation id
+    if (conversationId) {
+      setPending({ conversationId, text, awaiting: true });
+    }
+    setValue('');
     try {
-      const result = await submitInstruction(workspaceId, outbound, mentioned ? { agentSlug: mentioned.id } : undefined);
-      setValue('');
-      setView({ kind: 'conversation', planId: result.plan_id });
+      const result = await chatRespond({ message: text, agent_slug: agentSlug, conversation_id: conversationId, channel });
+      if (!conversationId) {
+        setView({ kind: 'chat', conversationId: result.conversation_id, agentSlug });
+      }
+      setPending(null);
     } catch (e) {
-      toast.error('Could not dispatch', { description: e instanceof Error ? e.message : String(e) });
+      setPending(null);
+      toast.error('Could not send message', { description: e instanceof Error ? e.message : String(e) });
     } finally {
       setSubmitting(false);
     }
@@ -358,7 +371,7 @@ export default function ChatComposerPro({ restrictDepartment, placeholder, autoF
           }}
           onBlur={() => setTimeout(() => setShowSuggestions(false), 100)}
           onSelect={(e) => detectPopup(value, (e.target as HTMLTextAreaElement).selectionStart ?? value.length)}
-          placeholder={placeholder ?? 'Message your workforce...'}
+          placeholder={placeholder ?? (view.kind === 'channel' ? `Message #${view.dept}…` : 'Message your workforce...')}
           className="flex-1 resize-none bg-transparent outline-none text-[14px] leading-relaxed text-[#F0F6FC] placeholder:text-[#484F58] max-h-[240px] min-h-[24px] py-1 px-1"
         />
 
