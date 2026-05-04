@@ -729,6 +729,39 @@ export type Database = {
           },
         ]
       }
+      conversations: {
+        Row: {
+          agent_slug: string
+          channel: string | null
+          created_at: string
+          id: string
+          status: string
+          title: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          agent_slug: string
+          channel?: string | null
+          created_at?: string
+          id?: string
+          status?: string
+          title?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          agent_slug?: string
+          channel?: string | null
+          created_at?: string
+          id?: string
+          status?: string
+          title?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       deep_search_analysis: {
         Row: {
           created_at: string
@@ -1545,6 +1578,50 @@ export type Database = {
           thumbnail_url?: string | null
         }
         Relationships: []
+      }
+      messages: {
+        Row: {
+          agent_slug: string | null
+          content: string
+          conversation_id: string
+          created_at: string
+          id: string
+          is_error: boolean
+          model_used: string | null
+          role: string
+          tokens_used: number | null
+        }
+        Insert: {
+          agent_slug?: string | null
+          content: string
+          conversation_id: string
+          created_at?: string
+          id?: string
+          is_error?: boolean
+          model_used?: string | null
+          role: string
+          tokens_used?: number | null
+        }
+        Update: {
+          agent_slug?: string | null
+          content?: string
+          conversation_id?: string
+          created_at?: string
+          id?: string
+          is_error?: boolean
+          model_used?: string | null
+          role?: string
+          tokens_used?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "messages_conversation_id_fkey"
+            columns: ["conversation_id"]
+            isOneToOne: false
+            referencedRelation: "conversations"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       outreach_activities: {
         Row: {
