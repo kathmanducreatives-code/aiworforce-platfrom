@@ -92,7 +92,7 @@ const ProductLookalike = () => {
             Your recruiting team.<br />Always hiring. While you sleep.
           </h2>
           <p className="look-subtitle text-white/60 text-base md:text-lg leading-[1.7] max-w-[700px] mx-auto opacity-0">
-            Scout finds candidates who match your ideal profile. Aria screens every applicant through an AI interview. Lens reads the behavioral signals that CVs never reveal. You receive a ranked shortlist.
+            Scout finds candidates who match your ideal profile. Aria screens every applicant through an AI interview and scores answers across 12 criteria. You receive a ranked shortlist.
           </p>
         </div>
 

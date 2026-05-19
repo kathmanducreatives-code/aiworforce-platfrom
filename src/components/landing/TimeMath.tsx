@@ -73,7 +73,7 @@ const TimeMath = () => {
         <div className="text-center mb-14">
           <p className="font-mono text-xs uppercase tracking-[0.15em] mb-4 text-emerald-400 font-semibold">◆ THE MATH DOESN'T LIE</p>
           <h2 className="font-display font-black text-[clamp(1.5rem,3.5vw,3rem)] leading-[1.1] tracking-[-0.03em] text-white">
-            Your AI workforce vs. a human team.
+            Five working AI agents vs. a human team.
           </h2>
         </div>
 

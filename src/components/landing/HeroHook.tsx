@@ -53,7 +53,7 @@ const HeroHook = () => {
 
         <div ref={subtextRef} className="opacity-0 mb-10">
           <p className="font-display text-lg md:text-xl text-foreground/60 max-w-2xl mx-auto leading-relaxed">
-            ScreeningPilot gives you a full AI workforce — five departments, fifteen agents, one company brain. They recruit, sell, create, research, and report. You make the decisions. They do everything else.
+            ScreeningPilot gives you a working AI workforce — five active agents across Talent, Growth, and Intelligence, all sharing one company brain. They screen candidates, source talent, draft outreach, monitor competitors, and write content. You make the decisions.
           </p>
         </div>
 

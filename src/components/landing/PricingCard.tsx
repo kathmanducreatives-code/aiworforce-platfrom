@@ -10,19 +10,19 @@ const plans = [
   {
     name: 'Founder', monthlyPrice: 79, annualPrice: 63,
     desc: 'For solo founders getting started',
-    features: ['Talent Department (Scout + Aria + Lens)','Intelligence Department (Hawk + Signal + Brief)','Company Brain — full context storage','500 Firecrawl credits/month','50 AI screening interviews/month','1 custom agent','Email support'],
+    features: ['Scout — candidate sourcing','Aria — AI screening interviews','Hawk — competitor monitoring','Company Brain — full context storage','500 Firecrawl credits/month','50 AI screening interviews/month','Email support'],
     cta: 'Start free trial', popular: false,
   },
   {
     name: 'Startup', monthlyPrice: 149, annualPrice: 119,
     desc: 'For founders running a full business',
-    features: ['All 5 pre-built departments','15 AI agents fully active','Company Brain unlimited','2,000 Firecrawl credits/month','Unlimited AI screening','Unlimited custom agents','Cross-department intelligence sharing','Weekly AI performance brief','Priority support'],
+    features: ['All 5 working agents (Scout, Aria, Penn, Hawk, Scribe)','Talent, Growth, and Intelligence functions','Company Brain unlimited','2,000 Firecrawl credits/month','Unlimited AI screening','Outreach drafting with Penn','Content writing with Scribe','Weekly AI performance brief','Priority support'],
     cta: 'Build your workforce', popular: true,
   },
   {
     name: 'Business', monthlyPrice: 349, annualPrice: 279,
     desc: 'For teams replacing or augmenting headcount',
-    features: ['Everything in Startup plus:','Multiple company workspaces','White label for client delivery','Full API access','Custom agent publishing','Dedicated onboarding session','Slack support channel','SLA guarantees'],
+    features: ['Everything in Startup plus:','Multiple company workspaces','White label for client delivery','Full API access','Early access to new agents','Dedicated onboarding session','Slack support channel','SLA guarantees'],
     cta: 'Talk to us', popular: false,
   },
 ];
