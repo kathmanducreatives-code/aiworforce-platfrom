@@ -7,10 +7,10 @@ import { X, Loader2, Link as LinkIcon } from 'lucide-react';
 gsap.registerPlugin(ScrollTrigger);
 
 const steps = [
-    { num: 1, title: 'Radar detects funding trigger', desc: 'Acme Corp raised €8M Series A — warm lead identified' },
+    { num: 1, title: 'Hawk surfaces a funding trigger', desc: 'Acme Corp raised €8M Series A — warm lead flagged' },
     { num: 2, title: 'Penn writes personalized outreach', desc: 'Email written in your voice, referencing the exact event' },
-    { num: 3, title: 'Relay sends at optimal time', desc: '9am delivery — highest open rate window' },
-    { num: 4, title: 'Reply received — meeting booked', desc: 'James Park replied. Calendar link sent automatically.' },
+    { num: 3, title: 'You approve and send from your inbox', desc: 'No automated sends — every email is yours to ship' },
+    { num: 4, title: 'Reply received — meeting booked', desc: 'James Park replied. You confirmed the call.' },
 ];
 
 const fullTitle = 'Acme Corp — Series A Lead';
@@ -167,7 +167,7 @@ const ProductScreening = () => {
                             Your sales team.<br />Finding leads before<br />your competitors do.
                         </h2>
                         <p className="scr-subtext text-white/60 text-base md:text-lg leading-[1.7] mb-8 max-w-[480px]">
-                            Radar monitors funding announcements, job postings, and LinkedIn posts for companies that need you right now. Penn writes a personalized email. Relay sends it at the optimal time.
+                            Hawk monitors funding announcements and competitor moves for companies that need you right now. Penn writes a personalized email in your voice. You approve and send from your own inbox.
                         </p>
 
                         {/* Steps */}
@@ -202,7 +202,7 @@ const ProductScreening = () => {
                                     <div className="w-3 h-3 rounded-full bg-yellow-400/60" />
                                     <div className="w-3 h-3 rounded-full bg-green-400/60" />
                                 </div>
-                                <div className="flex-1 text-center"><span className="text-xs text-white/30 bg-white/5 rounded-md px-3 py-1 select-none">Growth Department · Radar Agent</span></div>
+                                <div className="flex-1 text-center"><span className="text-xs text-white/30 bg-white/5 rounded-md px-3 py-1 select-none">Growth Department · Penn Agent</span></div>
                             </div>
 
                             <div className="p-6">

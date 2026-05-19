@@ -4,20 +4,17 @@ import { ArrowRight, Check, Clock, AlertTriangle } from 'lucide-react';
 import { Users, TrendingUp, Pen, Eye, BarChart2, User } from 'lucide-react';
 
 const timeline = [
-  { time: '7:00 AM', agent: 'Brief', dept: 'Intelligence', color: 'bg-amber-500/20 border-amber-500/40', action: 'Morning brief delivered', output: '3 signals need attention today. 1 urgent. 2 informational.', status: 'done' },
-  { time: '7:12 AM', agent: 'You', dept: 'Founder', color: 'bg-blue-500/20 border-blue-500/40', action: 'Reviewed brief. Approved Growth agent to pursue Acme Corp lead.', output: '', status: 'decision' },
-  { time: '7:13 AM', agent: 'Radar', dept: 'Growth', color: 'bg-emerald-500/20 border-emerald-500/40', action: 'Lead research initiated for Acme Corp', output: 'Found: James Park, Co-Founder. Trigger: €8M Series A. Pain signal: posted about screening chaos.', status: 'done' },
+  { time: '7:00 AM', agent: 'Hawk', dept: 'Intelligence', color: 'bg-amber-500/20 border-amber-500/40', action: 'Overnight monitoring summary delivered', output: '1 competitor pricing change, 2 funding rounds. 1 item needs your attention.', status: 'done' },
+  { time: '7:12 AM', agent: 'You', dept: 'Founder', color: 'bg-blue-500/20 border-blue-500/40', action: 'Reviewed brief. Asked Penn to pursue Acme Corp lead.', output: '', status: 'decision' },
   { time: '7:45 AM', agent: 'Penn', dept: 'Growth', color: 'bg-emerald-500/20 border-emerald-500/40', action: 'Personalized outreach drafted', output: 'Email written in your voice. References: the raise, 4 open roles, and James\'s exact post from last week.', status: 'review' },
-  { time: '8:02 AM', agent: 'You', dept: 'Founder', color: 'bg-blue-500/20 border-blue-500/40', action: 'Approved. Sent.', output: '', status: 'decision' },
-  { time: '8:03 AM', agent: 'Relay', dept: 'Growth', color: 'bg-emerald-500/20 border-emerald-500/40', action: 'Email delivered to james@acmecorp.com', output: 'Sent. Open tracking active. Follow-up scheduled: Thursday 9am if no reply.', status: 'done' },
+  { time: '8:02 AM', agent: 'You', dept: 'Founder', color: 'bg-blue-500/20 border-blue-500/40', action: 'Approved. Sent from my inbox.', output: '', status: 'decision' },
   { time: '9:30 AM', agent: 'Scout', dept: 'Talent', color: 'bg-purple-500/20 border-purple-500/40', action: 'Lookalike candidate scan complete', output: '127 candidates found matching your Senior Engineer ICP. Sending to Aria for screening.', status: 'done' },
   { time: '9:31 AM', agent: 'Aria', dept: 'Talent', color: 'bg-purple-500/20 border-purple-500/40', action: 'Screening 127 candidates asynchronously', output: 'AI interviews running in background. Results ready by morning.', status: 'progress' },
   { time: '11:00 AM', agent: 'Hawk', dept: 'Intelligence', color: 'bg-amber-500/20 border-amber-500/40', action: 'Competitor alert detected', output: 'Ashby dropped their starter plan price by 20% this morning. Flagged for your awareness.', status: 'review' },
-  { time: '11:05 AM', agent: 'Quill', dept: 'Content', color: 'bg-pink-500/20 border-pink-500/40', action: 'Response content drafted', output: 'LinkedIn post written: why our pricing model benefits you more. Ready for your review.', status: 'review' },
+  { time: '11:05 AM', agent: 'Scribe', dept: 'Content', color: 'bg-pink-500/20 border-pink-500/40', action: 'Response content drafted', output: 'LinkedIn post written: why our pricing model benefits you more. Ready for your review.', status: 'review' },
   { time: '2:30 PM', agent: 'You', dept: 'Founder', color: 'bg-blue-500/20 border-blue-500/40', action: 'Approved post. Minor edit to closing line.', output: '', status: 'decision' },
-  { time: '2:32 PM', agent: 'Pulse', dept: 'Content', color: 'bg-pink-500/20 border-pink-500/40', action: 'Scheduled for tomorrow 9am', output: 'Posted at peak engagement window. Performance data by Wednesday.', status: 'done' },
-  { time: '4:45 PM', agent: 'Relay', dept: 'Growth', color: 'bg-emerald-500/20 border-emerald-500/40', action: 'Reply received from James Park', output: 'He replied. Interested. Suggested a call Thursday 2pm. Calendar link sent automatically.', status: 'done' },
-  { time: '5:00 PM', agent: 'Atlas', dept: 'Command', color: 'bg-emerald-500/20 border-emerald-500/40', action: 'End of day summary ready', output: 'Today: 1 meeting booked. 127 candidates in screening. 1 post scheduled. 3 competitor signals. Your time: 47 minutes.', status: 'done' },
+  { time: '2:32 PM', agent: 'Scribe', dept: 'Content', color: 'bg-pink-500/20 border-pink-500/40', action: 'Final post handed back for scheduling', output: 'Cleaned-up draft ready in your queue for tomorrow 9am.', status: 'done' },
+  { time: '5:00 PM', agent: 'Hawk', dept: 'Intelligence', color: 'bg-amber-500/20 border-amber-500/40', action: 'End of day summary ready', output: 'Today: 1 outreach approved. 127 candidates in screening. 1 post drafted. 3 competitor signals. Your time: 47 minutes.', status: 'done' },
 ];
 
 const statusIcon = (s: string) => {
