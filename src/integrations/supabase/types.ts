@@ -2427,6 +2427,69 @@ export type Database = {
         }
         Relationships: []
       }
+      tasks: {
+        Row: {
+          agent_slug: string
+          completed_at: string | null
+          created_at: string
+          depends_on: string[]
+          error_message: string | null
+          id: string
+          parent_task_id: string | null
+          payload: Json
+          plan_id: string | null
+          result: Json
+          status: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          agent_slug: string
+          completed_at?: string | null
+          created_at?: string
+          depends_on?: string[]
+          error_message?: string | null
+          id?: string
+          parent_task_id?: string | null
+          payload?: Json
+          plan_id?: string | null
+          result?: Json
+          status?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          agent_slug?: string
+          completed_at?: string | null
+          created_at?: string
+          depends_on?: string[]
+          error_message?: string | null
+          id?: string
+          parent_task_id?: string | null
+          payload?: Json
+          plan_id?: string | null
+          result?: Json
+          status?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tasks_parent_task_id_fkey"
+            columns: ["parent_task_id"]
+            isOneToOne: false
+            referencedRelation: "tasks"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tasks_plan_id_fkey"
+            columns: ["plan_id"]
+            isOneToOne: false
+            referencedRelation: "task_plans"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never
