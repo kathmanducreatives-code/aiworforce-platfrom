@@ -1477,33 +1477,6 @@ export type Database = {
           },
         ]
       }
-      linkedin_posts: {
-        Row: {
-          content: string | null
-          created_at: string
-          id: string
-          scheduled_at: string | null
-          status: string | null
-          user_id: string | null
-        }
-        Insert: {
-          content?: string | null
-          created_at?: string
-          id?: string
-          scheduled_at?: string | null
-          status?: string | null
-          user_id?: string | null
-        }
-        Update: {
-          content?: string | null
-          created_at?: string
-          id?: string
-          scheduled_at?: string | null
-          status?: string | null
-          user_id?: string | null
-        }
-        Relationships: []
-      }
       marketing_tasks: {
         Row: {
           created_at: string | null
@@ -1540,42 +1513,6 @@ export type Database = {
           title?: string
           updated_at?: string | null
           user_id?: string | null
-        }
-        Relationships: []
-      }
-      marketing_videos: {
-        Row: {
-          background_video_url: string | null
-          created_at: string | null
-          duration: number | null
-          feature_name: string
-          final_video_url: string | null
-          has_motion_graphics: boolean | null
-          id: string
-          script: Json | null
-          thumbnail_url: string | null
-        }
-        Insert: {
-          background_video_url?: string | null
-          created_at?: string | null
-          duration?: number | null
-          feature_name: string
-          final_video_url?: string | null
-          has_motion_graphics?: boolean | null
-          id?: string
-          script?: Json | null
-          thumbnail_url?: string | null
-        }
-        Update: {
-          background_video_url?: string | null
-          created_at?: string | null
-          duration?: number | null
-          feature_name?: string
-          final_video_url?: string | null
-          has_motion_graphics?: boolean | null
-          id?: string
-          script?: Json | null
-          thumbnail_url?: string | null
         }
         Relationships: []
       }
