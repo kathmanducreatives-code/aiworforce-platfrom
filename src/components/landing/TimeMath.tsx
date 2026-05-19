@@ -5,11 +5,11 @@ import { ScrollTrigger } from 'gsap/ScrollTrigger';
 gsap.registerPlugin(ScrollTrigger);
 
 const rows = [
-  { task: 'Recruiting', manual: '€60,000/year + 6 weeks per hire', sp: 'Scout + Aria + Lens · Always active' },
-  { task: 'Outreach & Sales', manual: '€50,000/year SDR + low reply rates', sp: 'Radar + Penn + Relay · 34% reply rate' },
-  { task: 'Content & Marketing', manual: '€45,000/year + 2 posts per week', sp: 'Quill + Canvas + Pulse · Daily output' },
-  { task: 'Market Research', manual: '€40,000/year + weekly reports', sp: 'Hawk + Signal + Brief · Live, 24/7' },
-  { task: 'Total cost', manual: '€195,000/year + hiring time', sp: '€149/month · All five departments', highlight: true },
+  { task: 'Sourcing & Screening', manual: '€60,000/year + 6 weeks per hire', sp: 'Scout + Aria · Always active' },
+  { task: 'Outreach Drafting', manual: '€50,000/year SDR + low reply rates', sp: 'Penn · Personalized drafts on demand' },
+  { task: 'Content Writing', manual: '€45,000/year + 2 posts per week', sp: 'Scribe · Drafts in your brand voice' },
+  { task: 'Competitor Monitoring', manual: '€40,000/year + weekly reports', sp: 'Hawk · Tracks rivals 24/7' },
+  { task: 'Total cost', manual: '€195,000/year + hiring time', sp: '€149/month · Five working agents', highlight: true },
 ];
 
 const TimeMath = () => {
