@@ -7,7 +7,7 @@ gsap.registerPlugin(ScrollTrigger);
 
 const testimonials = [
     { quote: "I was doing 6 jobs. Now I review decisions. The talent department alone saved me €80,000 in agency fees in the first quarter.", name: "Co-Founder, Series A SaaS", metric: "€80K saved · Q1" },
-    { quote: "The agents brief each other. I did not believe that was real until I watched Hawk flag a competitor move and Quill write a response post without me asking. That was the moment I knew.", name: "Solo Founder, Developer Tools", metric: "Zero prompting required" },
+    { quote: "The agents brief each other. I did not believe that was real until I watched Hawk flag a competitor move and Scribe draft a response post without me asking. That was the moment I knew.", name: "Solo Founder, Developer Tools", metric: "Zero prompting required" },
     { quote: "48 hours from posting the job to having a shortlist of 6 qualified candidates. Our recruiting agency took 6 weeks to do the same thing. We cancelled the contract that afternoon.", name: "VP People, Seed Fintech", metric: "6 weeks → 48 hours" },
 ];
 

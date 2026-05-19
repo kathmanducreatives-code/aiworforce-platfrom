@@ -25,14 +25,10 @@ interface Agent {
 
 const AGENTS: Agent[] = [
   { id: "scout", name: "Scout", title: "Talent Scout Agent", department: "talent", icon: Search, job: "Finds candidates matching your ICP across LinkedIn while you sleep.", tools: ["apify","firecrawl"], talksTo: ["Aria"] },
-  { id: "aria", name: "Aria", title: "AI Screening Agent", department: "talent", icon: MessageSquare, job: "Runs async AI interviews with every applicant. Scores answers across 12 criteria.", tools: ["gemini","claude"], talksTo: ["Lens"] },
-  { id: "lens", name: "Lens", title: "People Analyst Agent", department: "talent", icon: Eye, job: "Reads behavioral signals CVs never show. Flags ownership, clarity, culture fit.", tools: ["gemini","claude"], talksTo: ["Founder"] },
-  { id: "radar", name: "Radar", title: "Lead Intelligence Agent", department: "growth", icon: Radio, job: "Monitors funding news, job postings, and LinkedIn for warm leads daily.", tools: ["firecrawl","apify","perplexity"], talksTo: ["Penn"] },
-  { id: "penn", name: "Penn", title: "Outreach Copywriter Agent", department: "growth", icon: PenLine, job: "Writes personalized cold emails referencing the exact trigger that made this lead hot.", tools: ["claude"], talksTo: ["Relay"] },
-  { id: "relay", name: "Relay", title: "Outreach Coordinator Agent", department: "growth", icon: Send, job: "Sends at optimal time, tracks replies, triggers follow-ups automatically.", tools: ["instantly","hunter"], talksTo: ["Signal"] },
-  { id: "hawk", name: "Hawk", title: "Competitor Monitor Agent", department: "intelligence", icon: Target, job: "Watches competitor pricing, hiring, product, and reviews around the clock.", tools: ["firecrawl","perplexity"], talksTo: ["Quill","Brief"] },
-  { id: "signal", name: "Signal", title: "Market Intelligence Agent", department: "intelligence", icon: TrendingUp, job: "Tracks talent markets, salary benchmarks, and industry funding movements.", tools: ["firecrawl","perplexity","gpt4"], talksTo: ["Radar","Brief"] },
-  { id: "brief", name: "Brief", title: "Morning Brief Agent", department: "intelligence", icon: FileText, job: "Synthesizes everything into a 3-minute daily report. Delivered at 7am. Every day.", tools: ["claude"], talksTo: ["Founder"] },
+  { id: "aria", name: "Aria", title: "AI Screening Agent", department: "talent", icon: MessageSquare, job: "Runs async AI interviews with every applicant. Scores answers across 12 criteria.", tools: ["gemini","claude"], talksTo: ["Founder"] },
+  { id: "penn", name: "Penn", title: "Outreach Copywriter Agent", department: "growth", icon: PenLine, job: "Writes personalized cold emails referencing the exact trigger that made this lead hot.", tools: ["claude"], talksTo: ["Founder"] },
+  { id: "hawk", name: "Hawk", title: "Competitor Monitor Agent", department: "intelligence", icon: Target, job: "Watches competitor pricing, hiring, product, and reviews around the clock.", tools: ["firecrawl","perplexity"], talksTo: ["Scribe","Founder"] },
+  { id: "scribe", name: "Scribe", title: "Content Writer Agent", department: "content", icon: FileText, job: "Drafts posts, newsletters, and responses in your brand voice. Ready for review.", tools: ["claude"], talksTo: ["Founder"] },
 ];
 
 interface FeedMessage {
@@ -41,41 +37,38 @@ interface FeedMessage {
 }
 
 const MESSAGES: FeedMessage[] = [
-  { agentId: "brief", agentName: "Brief", department: "intelligence", tools: ["claude"], time: "07:00 AM",
-    text: "Morning brief delivered. Today's priorities: 12 new leads from Signal, 24 candidates in screening, 1 competitor pricing change detected overnight. Your attention needed: 2 items. Estimated review time: 8 minutes.",
+  { agentId: "hawk", agentName: "Hawk", department: "intelligence", tools: ["firecrawl","perplexity"], time: "07:00 AM",
+    text: "Overnight monitoring complete. 1 competitor pricing change detected (Ashby, −22%). 2 funding rounds in your space. Flagging the pricing change for your review.",
     passedTo: "You", passedToDept: "founder" },
   { agentId: "founder", agentName: "You", department: "founder", tools: [], time: "07:12 AM", isFounder: true,
-    text: "Reviewed brief. Approved outreach to top 3 leads. Approved Quill's LinkedIn post draft. Moving on with my day." },
-  { agentId: "radar", agentName: "Radar", department: "growth", tools: ["firecrawl","apify"], time: "07:14 AM",
-    text: "Deep enrichment on approved leads. Top lead: Acme Corp — €8M Series A, James Park Co-Founder, posted about screening chaos 3 days ago. Trigger score: 28/30.",
-    passedTo: "Penn", passedToDept: "growth" },
-  { agentId: "penn", agentName: "Penn", department: "growth", tools: ["claude"], time: "07:18 AM",
-    text: "Outreach drafted for James Park using Acme's Series A trigger + his LinkedIn post as the hook. References his exact words: 'hiring is about to become my full time job'. Brand voice check: passed.",
+    text: "Reviewed. Asked Scribe to draft a response post on our pricing model. Moving on with my day." },
+  { agentId: "scribe", agentName: "Scribe", department: "content", tools: ["claude"], time: "07:18 AM",
+    text: "LinkedIn post drafted: why our pricing model benefits customers more. Written in your brand voice. Ready for your review.",
     passedTo: "You", passedToDept: "founder" },
-  { agentId: "founder", agentName: "You", department: "founder", tools: [], time: "07:22 AM", isFounder: true,
-    text: "Email looks perfect. Approved. Send it." },
-  { agentId: "relay", agentName: "Relay", department: "growth", tools: ["instantly"], time: "07:23 AM",
-    text: "Email to james@acmecorp.com delivered. Open tracking active. Subject: 'saw the Series A this morning' — 31% above average open rate for this format. Follow-up scheduled Thursday 9am if no reply." },
   { agentId: "scout", agentName: "Scout", department: "talent", tools: ["apify","firecrawl"], time: "07:30 AM",
     text: "ICP lookalike scan complete for Senior Engineer role. 127 candidates found across LinkedIn. Similarity scores: 6 above 90%, 18 above 80%. Sending top 24 to Aria for AI screening.",
     passedTo: "Aria", passedToDept: "talent" },
-  { agentId: "hawk", agentName: "Hawk", department: "intelligence", tools: ["firecrawl","perplexity"], time: "07:45 AM",
-    text: "Competitor alert: Ashby dropped Starter plan pricing by 22% — detected 40 minutes ago. Previous: €49/month. Current: €38/month. 3rd price change in 90 days. Flagging HIGH priority.",
-    passedTo: "Brief", passedToDept: "intelligence" },
-  { agentId: "brief", agentName: "Brief", department: "intelligence", tools: ["claude"], time: "18:00 PM",
-    text: "End of day summary. Today: 1 meeting booked with James Park (Acme Corp). 127 candidates screened — 6 scoring above 90%. Competitor pricing alert handled. Your time invested: 47 minutes." },
+  { agentId: "aria", agentName: "Aria", department: "talent", tools: ["gemini","claude"], time: "08:00 AM",
+    text: "AI screening running on 24 candidates. Each gets a 12-criteria interview. Results back to you with a ranked shortlist by end of day." },
+  { agentId: "penn", agentName: "Penn", department: "growth", tools: ["claude"], time: "09:14 AM",
+    text: "Outreach drafted for James Park at Acme Corp using their Series A trigger + his LinkedIn post as the hook. Brand voice check: passed. Ready to send.",
+    passedTo: "You", passedToDept: "founder" },
+  { agentId: "founder", agentName: "You", department: "founder", tools: [], time: "09:22 AM", isFounder: true,
+    text: "Email looks perfect. Approved. I'll send it from my inbox." },
+  { agentId: "hawk", agentName: "Hawk", department: "intelligence", tools: ["claude"], time: "18:00 PM",
+    text: "End of day summary. Today: 1 outreach approved (Acme Corp). 127 candidates screened — 6 scoring above 90%. 1 competitor pricing alert handled. Your time invested: 47 minutes." },
 ];
 
 const DEPARTMENTS_LIST = [
-  { key: "talent" as const, label: "Talent", count: 3 },
-  { key: "growth" as const, label: "Growth", count: 3 },
-  { key: "content" as const, label: "Content", count: 2 },
-  { key: "intelligence" as const, label: "Intelligence", count: 3 },
+  { key: "talent" as const, label: "Talent", count: 2 },
+  { key: "growth" as const, label: "Growth", count: 1 },
+  { key: "content" as const, label: "Content", count: 1 },
+  { key: "intelligence" as const, label: "Intelligence", count: 1 },
 ];
 
 const truths = [
   { icon: Brain, title: "One brain. Every agent knows everything.", body: "Tell ScreeningPilot about your company once. Your brand voice, your ICP, your competitors, your goals. From that moment every agent operates with full context — permanently. What you tell one, all of them remember." },
-  { icon: GitBranch, title: "They pass work to each other. You just decide.", body: "Scout finds candidates and passes them to Aria. Hawk spots a competitor move and tells Quill to draft a response. Radar finds a lead and Penn writes the email. The handoffs happen automatically — no configuration, no prompting, no tab switching." },
+  { icon: GitBranch, title: "They pass work to each other. You just decide.", body: "Scout finds candidates and passes them to Aria. Hawk spots a competitor move and tells Scribe to draft a response. Penn writes outreach for warm leads as soon as they're identified. The handoffs happen automatically — no configuration, no prompting, no tab switching." },
   { icon: Crown, title: "You are the only human in the room.", body: "Your agents brief each other, execute the work, and surface only what needs a human decision. Eight minutes of reviewing their outputs replaces eight hours of doing the work yourself. You are the founder making calls — not the intern running between desks." },
 ];
 
@@ -349,6 +342,14 @@ const MeetTheTeamSection = () => {
               </div>
             </motion.div>
           ))}
+          {/* v2 placeholder card */}
+          <motion.div initial={{ opacity: 0, y: 16 }}
+            whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true, amount: 0.1 }}
+            transition={{ duration: 0.4, delay: AGENTS.length * 0.08 }}
+            className="rounded-xl border border-dashed border-white/[0.08] bg-white/[0.01] p-5 flex flex-col items-center justify-center text-center min-h-[180px]">
+            <span className="text-[10px] font-mono uppercase tracking-[0.15em] text-white/30 mb-2">v2 · Soon</span>
+            <p className="text-sm text-white/50 font-medium">More agents joining the team in v2</p>
+          </motion.div>
         </div>
 
         {/* Truth Blocks */}

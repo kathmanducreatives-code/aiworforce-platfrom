@@ -1,186 +1,75 @@
+# Day 1 Cleanup — 4 Jobs
 
-# Real AI Chat Backend for Chat Workspace
+No git push. Backend logic untouched outside listed scope.
 
-Goal: when the user sends a message in the Chat Workspace, a real AI model (routed by agent) answers, persists, and streams back via Supabase Realtime — with **no visual changes** to the existing minimal design.
+## JOB 1 — `tasks` table migration
 
----
+New migration creating `public.tasks` exactly to your spec:
+- Columns: id (uuid pk), plan_id (FK task_plans ON DELETE CASCADE), agent_slug (text not null), parent_task_id (self-FK ON DELETE SET NULL), depends_on (uuid[] default '{}'), status (text default 'pending' + CHECK in pending/ready/running/awaiting_approval/complete/failed), payload (jsonb default '{}'), result (jsonb default '{}'), error_message (text null), user_id (FK auth.users ON DELETE CASCADE not null), created_at, updated_at, completed_at.
+- Indexes: plan_id, status, agent_slug, user_id.
+- RLS enabled. Policies: SELECT/INSERT/UPDATE/DELETE gated on `user_id = auth.uid()`. Plus `service_role` ALL bypass policy (`TO service_role USING (true) WITH CHECK (true)`).
+- Trigger `update_tasks_updated_at` using existing `public.update_updated_at_column()`.
 
-## 1. Database (migration)
+### run-agent column audit (pre-flight — already read the file)
 
-**New table `conversations`**
-- `id uuid pk default gen_random_uuid()`
-- `user_id uuid not null` (no FK to auth.users per project rules)
-- `agent_id uuid not null references public.agents(id)`
-- `channel text` — `talent | growth | intelligence | content` (nullable)
-- `title text`
-- `status text default 'active'` — `active | done`
-- `created_at timestamptz default now()`
-- `updated_at timestamptz default now()`
-- Trigger: `update_updated_at_column` on update.
+`supabase/functions/run-agent/index.ts` queries columns that DO NOT match your schema. I will NOT auto-fix; reporting only:
 
-RLS (enabled): `select / insert / update` where `user_id = auth.uid()`.
+| run-agent reference | Your schema |
+|---|---|
+| `agent_id` (uuid) | `agent_slug` (text) |
+| `step_index` | not present |
+| `description` | not present (closest: `payload`) |
+| `started_at`, `finished_at` | only `completed_at` |
+| `output` | `result` |
+| `plan.workspace_id` (read from task_plans) | task_plans has no `workspace_id` |
 
-**New table `messages`**
-- `id uuid pk default gen_random_uuid()`
-- `conversation_id uuid not null references public.conversations(id) on delete cascade`
-- `role text not null check (role in ('user','assistant'))`
-- `content text not null`
-- `agent_id uuid references public.agents(id)`
-- `model_used text`
-- `tokens_used integer`
-- `is_error boolean default false`
-- `created_at timestamptz default now()`
+Also: run-agent writes to tables that don't exist — `approvals`, `handoffs`, `activity_feed`, and reads from `agents` columns (`slug`, `department`, `status`, `progress`, `current_task`, `last_active_at`) that don't all exist on the current `agents` table.
 
-RLS: all access gated by `EXISTS (select 1 from conversations c where c.id = messages.conversation_id and c.user_id = auth.uid())`.
+**Result: even after this migration, `run-agent` will still fail.** Flagged, not fixed.
 
-Index: `(conversation_id, created_at)`.
+## JOB 2 — Honest landing
 
-Realtime: `ALTER PUBLICATION supabase_realtime ADD TABLE public.messages;` and `REPLICA IDENTITY FULL`.
+Files I'll edit (every fake-agent occurrence purged; department structure preserved):
 
-**Extend `agents` table**
-- Add `model_provider text` (`openai | anthropic | google`)
-- Add `model_id text`
+1. `HeroHook.tsx` — "five departments, fifteen agents" → 5-agent honest copy.
+2. `MeetTheTeamSection.tsx` — agent array reduced to Aria/Scout/Penn/Hawk/Scribe; daily-flow chat rewritten with real agents only; add "More agents joining the team in v2" pill at end.
+3. `MeetYourAITeamSection.tsx` — already 5 from AGENT_PROFILES; add the v2 pill, trim subtitle if it inflates count.
+4. `TimeMath.tsx` — replace Radar+Penn+Relay / Quill+Canvas+Pulse / Hawk+Signal+Brief rows with real-agent equivalents (Scout+Aria, Penn, Scribe, Hawk).
+5. `PricingCard.tsx` — remove Lens/Signal/Brief + "15 AI agents fully active"; replace with real capabilities.
+6. `ProductLookalike.tsx` — Lens behavioral-signals copy rewritten around Scout+Aria.
+7. `TeamsAtWorkSection.tsx`, `SocialProof.tsx`, `DayTimelineSection.tsx`, `ProductDashboard.tsx`, `ProductScreening.tsx`, `VerticalPipeline.tsx`, `ExpertJourney.tsx`, `FeatureSet.tsx`, `EcosystemSection.tsx` — sweep for fake-agent name mentions / inflated counts; rewrite only those lines. (Note: `EnergyPulses` / `pulses` state in EcosystemSection are CSS identifiers, not the "Pulse" agent — those stay.)
 
-Seed/update by agent name (case-insensitive):
-| Agent  | provider  | model_id |
-|--------|-----------|----------|
-| Scout  | openai    | gpt-4o |
-| Aria   | anthropic | claude-haiku-4-5-20251001 |
-| Penn   | anthropic | claude-haiku-4-5-20251001 |
-| Hawk   | google    | gemini-pro |
-| Scribe | anthropic | claude-sonnet-4-6 |
+Capability mapping for honest copy: Aria = AI screening, Scout = candidate sourcing, Penn = outreach drafting, Hawk = competitor monitoring, Scribe = content writing.
 
----
+Will deliver a one-line summary per changed file.
 
-## 2. Secrets
+## JOB 3 — GCal secret rename
 
-Already present: `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`.
-Missing: **`GOOGLE_AI_API_KEY`** — request via `add_secret` before deploying (used by Hawk). Function falls back gracefully if missing (Hawk returns a friendly error message).
+Edit `supabase/functions/google-calendar-auth/index.ts` and `supabase/functions/google-calendar-events/index.ts`:
+- `Deno.env.get('CLEINT_SECERT_CALENDER')` → `Deno.env.get('GOOGLE_CALENDAR_CLIENT_SECRET')`
+- `Deno.env.get('GOOGLE_CALENDER_ID')` → `Deno.env.get('GOOGLE_CALENDAR_ID')`
 
-Note: Spec hard-codes external model providers. We will follow it as written and not silently swap to Lovable AI.
+Secrets you'll set manually in Supabase dashboard: `GOOGLE_CALENDAR_CLIENT_SECRET`, `GOOGLE_CALENDAR_ID`. Old typo'd secrets can then be removed.
 
----
+## JOB 4 — linkedin_posts / marketing_videos
 
-## 3. Edge function `chat-respond`
+Code search done: **NEITHER table is referenced anywhere in `src/` or `supabase/functions/`** (only in autogenerated `src/integrations/supabase/types.ts`, which doesn't count).
 
-`supabase/functions/chat-respond/index.ts`, JWT-validated in code (`getClaims`), CORS enabled, no streaming (single JSON response — Realtime delivers it to the UI).
+Plan: draft a migration with `DROP TABLE IF EXISTS public.linkedin_posts; DROP TABLE IF EXISTS public.marketing_videos;` — will wait for your explicit approval before running.
 
-Flow:
-1. Verify JWT → `userId`.
-2. Parse + Zod-validate `{ message, agent_id, conversation_id?, channel? }`.
-3. If no `conversation_id` → insert new conversation (`title` = first 50 chars of message). Else load and verify ownership.
-4. Insert user message row (`role: 'user'`, `agent_id: null`).
-5. Load agent (`name`, `model_provider`, `model_id`) + last 20 messages asc.
-6. Build system prompt from a hard-coded `SYSTEM_PROMPTS` map keyed by agent name (Scout/Aria/Penn/Hawk/Scribe text per spec). Fallback generic prompt if unknown.
-7. Call provider:
-   - **openai**: `POST https://api.openai.com/v1/chat/completions` with `Authorization: Bearer …`, `messages = [system, …history, user]`, `max_tokens: 1500`. Extract `choices[0].message.content`, `usage.total_tokens`.
-   - **anthropic**: `POST https://api.anthropic.com/v1/messages` with `x-api-key`, `anthropic-version: 2023-06-01`, `system`, `messages`, `max_tokens: 1500`. Extract `content[0].text`, `usage.input_tokens + output_tokens`.
-   - **google**: `POST …/v1beta/models/{model_id}:generateContent?key=…`, prepend system as first user turn, alternate `user`/`model` roles, parts `[{text}]`. Extract `candidates[0].content.parts[0].text`.
-8. Insert assistant message with `model_used`, `tokens_used`. On provider error, insert `is_error: true` assistant message ("I couldn't process that request. Please try again.") and still respond 200.
-9. Return `{ conversation_id, message }`.
+Note: there's a separate `linkedin-content-planner/` Electron sub-project with its own `linkedin_posts` migration file. It is not wired into the main project's edge functions or `src/`. Dropping the tables in the main DB does not affect that sub-project's own DB if it uses a different one. Flagging for awareness.
 
-`supabase/config.toml`: add `[functions.chat-respond] verify_jwt = true` (we validate manually too, but keep gateway check on since this is user-scoped).
+## Verification
 
----
+Run `tsc --noEmit` after edits; report zero new errors.
 
-## 4. Frontend wiring (no visual changes)
+## Final summary block (delivered after execution)
 
-### 4a. Chat view model
+1. Migration SQL ready (Job 1 + Job 4 drop).
+2. Files changed Jobs 2 + 3 (count + names + 1-line summary each).
+3. New secrets to set: `GOOGLE_CALENDAR_CLIENT_SECRET`, `GOOGLE_CALENDAR_ID`.
+4. Unexpected/broken: full run-agent mismatch list above + missing tables (`approvals`, `handoffs`, `activity_feed`) + missing `agents` columns + orphaned `linkedin-content-planner` subproject.
 
-`src/contexts/ChatWorkspaceContext.tsx` — add a new `ChatViewKind` variant:
-```ts
-| { kind: 'chat'; conversationId: string }
-```
-Existing `conversation` (plan-based), `channel`, `agent`, `empty` variants stay so the plan/orchestration features still work. Channel default-agent map:
-```ts
-const CHANNEL_DEFAULT_AGENT = { talent:'scout', growth:'penn', intelligence:'hawk', content:'scribe' };
-```
+## One ambiguity I want to confirm before executing
 
-### 4b. New hook `useChatConversation(conversationId)`
-
-`src/hooks/useChatConversation.ts`:
-- Fetch all messages for conversation ordered asc.
-- Subscribe to `postgres_changes` on `messages` filtered by `conversation_id=eq.{id}` (INSERT) → append.
-- Returns `{ messages, loading }`.
-
-### 4c. New hook `useUserConversations()`
-
-Lists `conversations` for `user_id = auth.uid()`, ordered by `updated_at desc`, with active/done filter. Replaces the plan list in the sidebar's All/Active/Done filter for the new chat surface.
-
-### 4d. Sender service
-
-`src/lib/chatRespond.ts`:
-```ts
-supabase.functions.invoke('chat-respond', { body: { message, agent_id, conversation_id, channel } })
-```
-Returns `{ conversation_id }`. UI does NOT need to wait for the assistant text — Realtime will deliver it.
-
-### 4e. Composer changes (`ChatComposerPro.tsx`)
-
-In `submit()`:
-1. Resolve target agent:
-   - If `@mention` → that agent.
-   - Else if `view.kind === 'chat'` → reuse the conversation's `agent_id` (passed via context).
-   - Else if `view.kind === 'channel'` → `CHANNEL_DEFAULT_AGENT[view.dept]`.
-   - Else → default to Scout.
-2. Look up agent uuid from `useAgents` (match by slug/name).
-3. Call `chatRespond({ message: text, agent_id, conversation_id: currentChatId, channel: viewKind==='channel' ? view.dept : null })`.
-4. On success with new id → `setView({ kind: 'chat', conversationId })`.
-5. Optimistically insert local user message into a small in-memory queue keyed by conversation id (React Query cache or context) so it appears instantly; Realtime dedupe by `id` after server insert.
-6. While `submitting`, `ChatView` shows the typing indicator (existing 22px initial circle + three pulsing 4px dots in `#484F58`, 200ms staggered) — purely typographic, no new visual primitives.
-
-Keep all existing styling tokens. No new colors, no portraits.
-
-### 4f. New view `ChatView`
-
-`src/components/chat/workspace/ChatView.tsx`, used when `view.kind === 'chat'`:
-- Uses `useChatConversation(conversationId)`.
-- Renders user messages right-aligned plain text (`text-[#F0F6FC]`), agent messages with the existing `InitialCircle` + name + body text.
-- Detects "structured" content (has `\n\n` and ≥3 lines or starts with `- ` / `1. `) → wraps in inset block: `bg-white/[0.03]`, `border border-white/[0.06]`, `rounded-md`, `p-4`, copy button (Lucide `Copy`, 12px, `#484F58` → hover `#7D8590`).
-- Typing indicator row when `submitting && lastRole==='user'`.
-
-Wire `ChatWorkspace.tsx` body to render `<ChatView/>` for the new variant.
-
-### 4g. Sidebar (`ConversationsSidebar.tsx`)
-
-Add a section above plans (or replace plan list entirely for the All/Active/Done filters) listing `useUserConversations()`:
-- 24px `InitialCircle` of agent
-- title (truncate 30 chars) + relative timestamp `#484F58`
-- Active row: `bg-white/[0.04]`, no border change.
-- Click → `setView({ kind: 'chat', conversationId })`.
-
-Plan-based items remain accessible (keeps orchestration features).
-
-### 4h. Channel context & placeholder
-
-`ChatComposerPro` already shows the `# talent` / `@ Scout` pill. Update placeholder when `view.kind === 'channel'` → `Message #${dept}…`. No other visual change.
-
----
-
-## 5. Files touched
-
-**Created**
-- `supabase/functions/chat-respond/index.ts`
-- `src/hooks/useChatConversation.ts`
-- `src/hooks/useUserConversations.ts`
-- `src/lib/chatRespond.ts`
-- `src/components/chat/workspace/ChatView.tsx`
-
-**Edited**
-- `supabase/config.toml` (function block)
-- `src/contexts/ChatWorkspaceContext.tsx` (new view variant + channel→agent map export)
-- `src/components/chat/workspace/ChatWorkspace.tsx` (render `ChatView` branch)
-- `src/components/chat/workspace/ChatComposerPro.tsx` (route through `chat-respond`)
-- `src/components/chat/workspace/ConversationsSidebar.tsx` (chat conversations list + click handler + placeholder for channel)
-
-**Migrations**
-- Create `conversations`, `messages`, indexes, RLS, realtime publication.
-- Alter `agents` add `model_provider`, `model_id`; UPDATE rows for the 5 agents by name.
-
----
-
-## 6. Open items / pre-flight
-
-- Need to add secret **`GOOGLE_AI_API_KEY`** before Hawk works. Will request it during implementation.
-- Existing `agents` table currently powers the orchestration system — adding two nullable columns is non-breaking. No existing code reads them, so safe.
-- Plan-based orchestration (`submitInstruction`, plans/tasks UI) is left intact; the new chat path is additive and used when the composer determines "this is a direct chat" (default for all agent/channel/empty views going forward). If you later want to retire the plan path entirely, that's a follow-up.
+Job 1 says "verify the columns it queries match this schema… don't auto-fix." Confirming the **default action is: ship the migration exactly as you spec'd, leave run-agent broken, just report the mismatches.** If instead you want me to adapt the schema to match what run-agent already queries, say so and I'll redraft Job 1.

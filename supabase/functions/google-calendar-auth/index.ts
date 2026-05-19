@@ -5,8 +5,8 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-const GOOGLE_CLIENT_ID = Deno.env.get('GOOGLE_CALENDER_ID');
-const GOOGLE_CLIENT_SECRET = Deno.env.get('CLEINT_SECERT_CALENDER');
+const GOOGLE_CLIENT_ID = Deno.env.get('GOOGLE_CALENDAR_ID');
+const GOOGLE_CLIENT_SECRET = Deno.env.get('GOOGLE_CALENDAR_CLIENT_SECRET');
 
 serve(async (req) => {
   if (req.method === 'OPTIONS') {

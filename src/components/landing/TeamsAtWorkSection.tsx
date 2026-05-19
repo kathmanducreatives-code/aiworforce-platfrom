@@ -23,9 +23,9 @@ const DEPARTMENTS: DeptCard[] = [
     activities: [
       { done: true, text: "Scout found 34 candidates matching ICP" },
       { done: true, text: "Aria completed 28 AI screening interviews" },
-      { done: false, text: "Lens scoring behavioral signals for top 8" },
+      { done: false, text: "Aria scoring answers across 12 criteria for top 8" },
       { done: true, text: "Shortlist ready: 6 candidates ranked for review" },
-      { done: false, text: "Monitoring open-to-work signals on LinkedIn" },
+      { done: false, text: "Scout monitoring open-to-work signals on LinkedIn" },
       { done: true, text: "Market salary for this role: $145k–$190k" },
     ],
   },
@@ -36,12 +36,12 @@ const DEPARTMENTS: DeptCard[] = [
       { Logo: InstantlyLogo, name: "Instantly" }, { Logo: ApifyLogo, name: "Apify" },
     ],
     activities: [
-      { done: true, text: "Radar found Acme Corp — Series A trigger" },
+      { done: true, text: "Hawk flagged Acme Corp — Series A trigger" },
       { done: true, text: "Penn wrote personalized outreach for James Park" },
-      { done: false, text: "Relay tracking open rates on 12 sent emails" },
+      { done: false, text: "Penn drafting follow-ups for 12 leads in queue" },
       { done: true, text: "Reply detected from TechFlow Inc — flagging urgent" },
-      { done: false, text: "Scoring 47 leads from this week's funding news" },
-      { done: true, text: "Follow-up sequence triggered for 3 warm leads" },
+      { done: false, text: "Penn scoring 47 leads from this week's funding news" },
+      { done: true, text: "Outreach drafts ready for 3 warm leads" },
     ],
   },
   {
@@ -51,9 +51,9 @@ const DEPARTMENTS: DeptCard[] = [
       { Logo: ElevenLabsLogo, name: "ElevenLabs" },
     ],
     activities: [
-      { done: true, text: "Quill wrote LinkedIn post in your brand voice" },
-      { done: false, text: "Canvas generating graphic for tomorrow's post" },
-      { done: true, text: "Pulse scheduled 3 pieces of content this week" },
+      { done: true, text: "Scribe wrote LinkedIn post in your brand voice" },
+      { done: false, text: "Scribe drafting newsletter for tomorrow" },
+      { done: true, text: "Scribe queued 3 pieces of content this week" },
       { done: true, text: "Brand voice check passed: 98% consistency score" },
       { done: false, text: "Repurposing last week's top post into 3 formats" },
       { done: true, text: "Cold email sequence drafted: 5 emails, 3 subjects" },
@@ -67,9 +67,9 @@ const DEPARTMENTS: DeptCard[] = [
     ],
     activities: [
       { done: true, text: "Hawk detected competitor pricing change" },
-      { done: true, text: "Signal updated salary benchmarks for open roles" },
-      { done: true, text: "Brief delivered morning report — 3 signals found" },
-      { done: false, text: "Scanning 23 competitor job postings for signals" },
+      { done: true, text: "Hawk updated salary benchmarks for open roles" },
+      { done: true, text: "Hawk delivered morning brief — 3 signals found" },
+      { done: false, text: "Hawk scanning 23 competitor job postings" },
       { done: true, text: "3 companies in your space raised this week" },
       { done: true, text: "Weekly intelligence report saved to Notion" },
     ],
@@ -139,10 +139,10 @@ const TeamsAtWorkSection = () => {
         <div className="text-center mb-16">
           <span className="font-mono text-xs uppercase tracking-[0.15em] text-emerald-400 mb-4 block">YOUR DEPARTMENTS, LIVE</span>
           <h2 className="font-display font-black text-3xl md:text-5xl text-white leading-[1.1] mb-6">
-            Five teams running simultaneously.<br />All sharing intelligence.<br />All working in your voice.
+            Five working agents.<br />Three active departments.<br />All sharing one company brain.
           </h2>
           <p className="text-white/40 text-lg max-w-[600px] mx-auto leading-relaxed">
-            While you focus on what matters, your AI workforce handles recruiting, growth, content, research, and strategy — simultaneously, automatically.
+            Scout, Aria, Penn, Hawk, and Scribe handle sourcing, screening, outreach drafting, competitor monitoring, and content writing. More agents joining the team in v2.
           </p>
         </div>
 
