@@ -161,13 +161,13 @@ export const ExpertJourney = () => {
             </div>
           </div>
 
-          {/* Stage 2 — Signal */}
+          {/* Stage 2 — Hawk market lens */}
           <div className="sequence-stage stage-2">
             <div className="sequence-card">
               <div className="sequence-content">
-                <div className="seq-label">Intelligence · Signal Agent</div>
+                <div className="seq-label">Intelligence · Hawk (Market Lens)</div>
                 <h3 className="seq-title">Tracks market shifts in real time.</h3>
-                <p className="seq-copy">Signal tracks talent markets, salary benchmarks, and industry funding — so you always know what the market looks like.</p>
+                <p className="seq-copy">Hawk also tracks talent markets, salary benchmarks, and industry funding — so you always know what the market looks like.</p>
                 <div className="seq-bullets">
                   <div className="seq-bullet"><span className="seq-bullet-mark">•</span><span>Salary benchmark updates</span></div>
                   <div className="seq-bullet"><span className="seq-bullet-mark">•</span><span>Funding round tracking</span></div>
@@ -186,13 +186,13 @@ export const ExpertJourney = () => {
             </div>
           </div>
 
-          {/* Stage 3 — Brief */}
+          {/* Stage 3 — Scribe daily brief */}
           <div className="sequence-stage stage-3">
             <div className="sequence-card">
               <div className="sequence-content">
-                <div className="seq-label">Intelligence · Brief Agent</div>
+                <div className="seq-label">Content · Scribe (Daily Brief)</div>
                 <h3 className="seq-title">Your 3-minute morning report. Every day at 7am.</h3>
-                <p className="seq-copy">Brief synthesizes everything into your daily morning report. What happened overnight. What needs your attention.</p>
+                <p className="seq-copy">Scribe synthesizes Hawk's overnight findings into your daily morning report. What happened overnight. What needs your attention.</p>
                 <div className="seq-bullets">
                   <div className="seq-bullet"><span className="seq-bullet-mark">•</span><span>Competitor moves overnight</span></div>
                   <div className="seq-bullet"><span className="seq-bullet-mark">•</span><span>Action items prioritized</span></div>
@@ -203,7 +203,7 @@ export const ExpertJourney = () => {
                 <div className="ui-panel">
                   <div className="ui-row"><span className="text-xs text-white/80">1 urgent signal</span><span className="ui-badge">Action</span></div>
                   <div className="ui-row"><span className="text-xs text-white/80">2 informational updates</span><span className="ui-badge">FYI</span></div>
-                  <div className="ui-row"><span className="text-xs text-white/80">Growth: 47 leads found</span><span className="ui-badge">Summary</span></div>
+                  <div className="ui-row"><span className="text-xs text-white/80">Growth: 4 leads drafted</span><span className="ui-badge">Summary</span></div>
                   <div className="ui-widget">Morning brief · Delivered 7:00am · 3 min read</div>
                 </div>
               </div>
@@ -216,11 +216,11 @@ export const ExpertJourney = () => {
               <div className="sequence-content">
                 <div className="seq-label">Intelligence Department · Complete</div>
                 <h3 className="seq-title">Your research team never sleeps.</h3>
-                <p className="seq-copy">Three agents. Always watching. Always learning. Always briefing you on what matters.</p>
+                <p className="seq-copy">Hawk watches competitors and the market. Scribe turns it into a daily brief you can read in 3 minutes.</p>
                 <div className="seq-bullets">
                   <div className="seq-bullet"><span className="seq-bullet-mark">•</span><span>Hawk: 5 competitors monitored 24/7</span></div>
-                  <div className="seq-bullet"><span className="seq-bullet-mark">•</span><span>Signal: Market data in real time</span></div>
-                  <div className="seq-bullet"><span className="seq-bullet-mark">•</span><span>Brief: Morning report at 7am daily</span></div>
+                  <div className="seq-bullet"><span className="seq-bullet-mark">•</span><span>Hawk: Market and salary data refreshed daily</span></div>
+                  <div className="seq-bullet"><span className="seq-bullet-mark">•</span><span>Scribe: Morning report drafted at 7am</span></div>
                 </div>
                 <p className="seq-copy"><strong className="text-white">Intelligence costs: €0 in research staff.</strong></p>
               </div>
@@ -263,8 +263,8 @@ export const ExpertJourney = () => {
                   <div style={{ borderTop: '1px solid rgba(255,255,255,0.08)', paddingTop: 8 }}>
                     {[
                       { name: 'Hawk', status: 'Monitoring 5 competitors now' },
-                      { name: 'Signal', status: 'Market scan: 12 signals found' },
-                      { name: 'Brief', status: 'Next report: tomorrow 7:00 AM' },
+                      { name: 'Hawk', status: 'Market scan: 12 signals found' },
+                      { name: 'Scribe', status: 'Next brief: tomorrow 7:00 AM' },
                     ].map(a => (
                       <div key={a.name} className="agent-status-row">
                         <div className="agent-dot" />
