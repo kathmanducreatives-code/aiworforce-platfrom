@@ -65,6 +65,23 @@ export default function MeetYourAITeamSection() {
               </span>
             </motion.div>
           ))}
+
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            whileInView={{ opacity: 0.6, y: 0 }}
+            viewport={{ once: true, margin: '-30px' }}
+            transition={{ duration: 0.5, delay: AGENT_PROFILES.length * 0.08 }}
+            className="flex flex-col items-center text-center"
+          >
+            <div className="w-32 h-32 md:w-40 md:h-40 rounded-full border-2 border-dashed border-white/15 flex items-center justify-center">
+              <span className="font-mono text-[10px] uppercase tracking-[0.15em] text-white/40">v2</span>
+            </div>
+            <h3 className="mt-5 font-display font-bold text-xl text-white/60">More agents</h3>
+            <p className="text-sm text-white/40 mt-0.5">Joining the team in v2</p>
+            <span className="mt-2 text-[10px] uppercase tracking-[0.15em] font-mono font-semibold text-white/30">
+              Coming soon
+            </span>
+          </motion.div>
         </div>
 
         <motion.div
