@@ -1,75 +1,36 @@
-# Day 1 Cleanup — 4 Jobs
+# Day 1 Closeout Plan
 
-No git push. Backend logic untouched outside listed scope.
+Five sequential tasks, no scope creep.
 
-## JOB 1 — `tasks` table migration
+## 1. Append v2 pill to `src/components/landing/MeetYourAITeamSection.tsx`
+After the existing 5-agent grid (`AGENT_PROFILES.map(...)`), append one extra grid item styled as a "coming soon" placeholder:
+- Same outer wrapper dimensions as an agent card so the grid stays aligned
+- Dashed border (`border-2 border-dashed border-white/15`), reduced opacity (`opacity-60`)
+- Circular slot matching `w-32 h-32 md:w-40 md:h-40` but empty (no image, no pulse dot)
+- Copy: "More agents joining the team in v2"
+- Uses existing tokens only (no new colors)
 
-New migration creating `public.tasks` exactly to your spec:
-- Columns: id (uuid pk), plan_id (FK task_plans ON DELETE CASCADE), agent_slug (text not null), parent_task_id (self-FK ON DELETE SET NULL), depends_on (uuid[] default '{}'), status (text default 'pending' + CHECK in pending/ready/running/awaiting_approval/complete/failed), payload (jsonb default '{}'), result (jsonb default '{}'), error_message (text null), user_id (FK auth.users ON DELETE CASCADE not null), created_at, updated_at, completed_at.
-- Indexes: plan_id, status, agent_slug, user_id.
-- RLS enabled. Policies: SELECT/INSERT/UPDATE/DELETE gated on `user_id = auth.uid()`. Plus `service_role` ALL bypass policy (`TO service_role USING (true) WITH CHECK (true)`).
-- Trigger `update_tasks_updated_at` using existing `public.update_updated_at_column()`.
+## 2. Verify `src/components/landing/FeatureSet.tsx`
+Read full file. Grep for: Lens, Radar, Relay, Quill, Canvas, Pulse, Signal, Brief, Oracle. From the file already in context, none appear — slides are Clock3/Briefcase/Users/Target with agency-killer copy. Will re-confirm with ripgrep and report clean or strip any hits.
 
-### run-agent column audit (pre-flight — already read the file)
+## 3. Typecheck
+Run `npx tsc --noEmit` from project root. Paste full output. Fix only errors introduced today (landing edits, secret renames, tasks migration types). Flag pre-existing unrelated errors without fixing.
 
-`supabase/functions/run-agent/index.ts` queries columns that DO NOT match your schema. I will NOT auto-fix; reporting only:
+## 4. run-agent ↔ tasks column report
+Read `supabase/functions/run-agent/index.ts` end-to-end. From the file in context, the `tasks` columns referenced are:
+- select: `id, plan_id, agent_id, step_index, description, status`
+- update: `status, started_at, finished_at, output`
+- select on next: `id, agent_id, step_index, description`
+- filter: `plan_id, status`
 
-| run-agent reference | Your schema |
-|---|---|
-| `agent_id` (uuid) | `agent_slug` (text) |
-| `step_index` | not present |
-| `description` | not present (closest: `payload`) |
-| `started_at`, `finished_at` | only `completed_at` |
-| `output` | `result` |
-| `plan.workspace_id` (read from task_plans) | task_plans has no `workspace_id` |
+Compare each against migrated schema (id, plan_id, agent_slug, parent_task_id, depends_on, status, payload, result, error_message, user_id, created_at, updated_at, completed_at). Mark ✅ / ⚠️ / ❌. No fixes.
 
-Also: run-agent writes to tables that don't exist — `approvals`, `handoffs`, `activity_feed`, and reads from `agents` columns (`slug`, `department`, `status`, `progress`, `current_task`, `last_active_at`) that don't all exist on the current `agents` table.
+Also note (out of scope but flagged): references to nonexistent tables `approvals`, `handoffs`, `activity_feed`, `agents`, and missing `task_plans.workspace_id`.
 
-**Result: even after this migration, `run-agent` will still fail.** Flagged, not fixed.
+## 5. Final summary block
+Single message with the six exact sections requested: Migrations run today, Files modified, Secrets to set, run-agent↔tasks status, Anything unexpected, Ready to verify.
 
-## JOB 2 — Honest landing
+## Rules honored
+No git push, no new deps, no edits outside the five items.
 
-Files I'll edit (every fake-agent occurrence purged; department structure preserved):
-
-1. `HeroHook.tsx` — "five departments, fifteen agents" → 5-agent honest copy.
-2. `MeetTheTeamSection.tsx` — agent array reduced to Aria/Scout/Penn/Hawk/Scribe; daily-flow chat rewritten with real agents only; add "More agents joining the team in v2" pill at end.
-3. `MeetYourAITeamSection.tsx` — already 5 from AGENT_PROFILES; add the v2 pill, trim subtitle if it inflates count.
-4. `TimeMath.tsx` — replace Radar+Penn+Relay / Quill+Canvas+Pulse / Hawk+Signal+Brief rows with real-agent equivalents (Scout+Aria, Penn, Scribe, Hawk).
-5. `PricingCard.tsx` — remove Lens/Signal/Brief + "15 AI agents fully active"; replace with real capabilities.
-6. `ProductLookalike.tsx` — Lens behavioral-signals copy rewritten around Scout+Aria.
-7. `TeamsAtWorkSection.tsx`, `SocialProof.tsx`, `DayTimelineSection.tsx`, `ProductDashboard.tsx`, `ProductScreening.tsx`, `VerticalPipeline.tsx`, `ExpertJourney.tsx`, `FeatureSet.tsx`, `EcosystemSection.tsx` — sweep for fake-agent name mentions / inflated counts; rewrite only those lines. (Note: `EnergyPulses` / `pulses` state in EcosystemSection are CSS identifiers, not the "Pulse" agent — those stay.)
-
-Capability mapping for honest copy: Aria = AI screening, Scout = candidate sourcing, Penn = outreach drafting, Hawk = competitor monitoring, Scribe = content writing.
-
-Will deliver a one-line summary per changed file.
-
-## JOB 3 — GCal secret rename
-
-Edit `supabase/functions/google-calendar-auth/index.ts` and `supabase/functions/google-calendar-events/index.ts`:
-- `Deno.env.get('CLEINT_SECERT_CALENDER')` → `Deno.env.get('GOOGLE_CALENDAR_CLIENT_SECRET')`
-- `Deno.env.get('GOOGLE_CALENDER_ID')` → `Deno.env.get('GOOGLE_CALENDAR_ID')`
-
-Secrets you'll set manually in Supabase dashboard: `GOOGLE_CALENDAR_CLIENT_SECRET`, `GOOGLE_CALENDAR_ID`. Old typo'd secrets can then be removed.
-
-## JOB 4 — linkedin_posts / marketing_videos
-
-Code search done: **NEITHER table is referenced anywhere in `src/` or `supabase/functions/`** (only in autogenerated `src/integrations/supabase/types.ts`, which doesn't count).
-
-Plan: draft a migration with `DROP TABLE IF EXISTS public.linkedin_posts; DROP TABLE IF EXISTS public.marketing_videos;` — will wait for your explicit approval before running.
-
-Note: there's a separate `linkedin-content-planner/` Electron sub-project with its own `linkedin_posts` migration file. It is not wired into the main project's edge functions or `src/`. Dropping the tables in the main DB does not affect that sub-project's own DB if it uses a different one. Flagging for awareness.
-
-## Verification
-
-Run `tsc --noEmit` after edits; report zero new errors.
-
-## Final summary block (delivered after execution)
-
-1. Migration SQL ready (Job 1 + Job 4 drop).
-2. Files changed Jobs 2 + 3 (count + names + 1-line summary each).
-3. New secrets to set: `GOOGLE_CALENDAR_CLIENT_SECRET`, `GOOGLE_CALENDAR_ID`.
-4. Unexpected/broken: full run-agent mismatch list above + missing tables (`approvals`, `handoffs`, `activity_feed`) + missing `agents` columns + orphaned `linkedin-content-planner` subproject.
-
-## One ambiguity I want to confirm before executing
-
-Job 1 says "verify the columns it queries match this schema… don't auto-fix." Confirming the **default action is: ship the migration exactly as you spec'd, leave run-agent broken, just report the mismatches.** If instead you want me to adapt the schema to match what run-agent already queries, say so and I'll redraft Job 1.
+Approve to execute.
