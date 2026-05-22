@@ -1,5 +1,12 @@
 import { useEffect, useState } from "react";
 
+/**
+ * Deep Space AI OS — atmospheric background.
+ *
+ * Restrained: two faint emerald nebulae, one slow grid drift, two starfield
+ * layers, one slow twinkle. Total brightness budget is intentionally low —
+ * the UI should feel quietly infinite, not "crypto dashboard".
+ */
 const AuthenticatedBackground = () => {
   const [isLight, setIsLight] = useState(false);
 
@@ -14,94 +21,75 @@ const AuthenticatedBackground = () => {
     return () => observer.disconnect();
   }, []);
 
+  // Light theme: solid, no atmosphere. Atmosphere is a dark-mode language.
+  if (isLight) {
+    return (
+      <div
+        className="fixed inset-0 pointer-events-none z-0"
+        style={{ background: '#FAFAFA' }}
+      />
+    );
+  }
+
   return (
     <div
       className="fixed inset-0 pointer-events-none z-0 overflow-hidden"
-      style={{
-        background: isLight ? '#f8f8f8' : '#020202',
-        opacity: isLight ? 0.35 : 1,
-      }}
+      style={{ background: '#050505' }}
     >
-      {/* 1. Breathing Nebula Glows */}
+      {/* Two faint emerald nebulae — slow breathing, low opacity */}
       <div
-       className="absolute top-[-10%] left-1/2 -translate-x-1/2 w-[900px] h-[600px] rounded-full blur-[180px] opacity-25 pointer-events-none"
+        className="absolute top-[-10%] left-1/2 -translate-x-1/2 w-[900px] h-[600px] rounded-full pointer-events-none"
         style={{
-          background: 'radial-gradient(circle, rgba(16, 185, 129, 0.45) 0%, transparent 70%)',
-          animation: 'nebula-breathe 8s ease-in-out infinite',
+          background: 'radial-gradient(circle, rgba(16, 185, 129, 0.30) 0%, transparent 70%)',
+          filter: 'blur(220px)',
+          opacity: 0.12,
+          animation: 'nebula-breathe 12s ease-in-out infinite',
         }}
       />
       <div
-        className="absolute bottom-[-5%] right-[-5%] w-[800px] h-[800px] rounded-full blur-[180px] opacity-20 pointer-events-none"
+        className="absolute bottom-[-10%] right-[-5%] w-[900px] h-[900px] rounded-full pointer-events-none"
         style={{
-          background: 'radial-gradient(circle, rgba(16, 185, 129, 0.4) 0%, transparent 70%)',
-          animation: 'nebula-breathe 8s ease-in-out infinite 3s',
-        }}
-      />
-      <div
-        className="absolute top-[35%] left-[-5%] w-[600px] h-[600px] rounded-full blur-[160px] opacity-15 pointer-events-none"
-        style={{
-          background: 'radial-gradient(circle, rgba(16, 185, 129, 0.35) 0%, transparent 70%)',
-          animation: 'nebula-breathe 8s ease-in-out infinite 6s',
+          background: 'radial-gradient(circle, rgba(16, 185, 129, 0.25) 0%, transparent 70%)',
+          filter: 'blur(220px)',
+          opacity: 0.08,
+          animation: 'nebula-breathe 12s ease-in-out infinite 6s',
         }}
       />
 
-      {/* 2. Drifting Grid — large panels with glassy feel */}
+      {/* Single grid layer — very faint, slow drift */}
       <div
         className="absolute inset-[-50%] w-[200%] h-[200%]"
         style={{
           backgroundImage: `
-            linear-gradient(rgba(16, 185, 129, 0.12) 1px, transparent 1px),
-            linear-gradient(90deg, rgba(16, 185, 129, 0.12) 1px, transparent 1px)
+            linear-gradient(rgba(16, 185, 129, 0.04) 1px, transparent 1px),
+            linear-gradient(90deg, rgba(16, 185, 129, 0.04) 1px, transparent 1px)
           `,
-          backgroundSize: '140px 140px',
-          animation: 'grid-drift 60s linear infinite',
-        }}
-      />
-      {/* Grid cell inner glow — gives each panel a glassy sheen */}
-      <div
-        className="absolute inset-[-50%] w-[200%] h-[200%]"
-        style={{
-          backgroundImage: `
-            radial-gradient(ellipse 100px 100px at 70px 70px, rgba(16, 185, 129, 0.06) 0%, transparent 70%)
-          `,
-          backgroundSize: '140px 140px',
-          animation: 'grid-drift 60s linear infinite',
-        }}
-      />
-      {/* Intersection dots */}
-      <div
-        className="absolute inset-[-50%] w-[200%] h-[200%]"
-        style={{
-          backgroundImage: `radial-gradient(circle 2px at 0px 0px, rgba(16, 185, 129, 0.35) 0%, transparent 100%)`,
-          backgroundSize: '140px 140px',
-          animation: 'grid-drift 60s linear infinite',
-        }}
-      />
-
-      {/* 3. Starfield */}
-      <div
-        className="absolute inset-0"
-        style={{
-          backgroundImage: `radial-gradient(circle at 12px 12px, rgba(255, 255, 255, 0.35) 1px, transparent 1px)`,
           backgroundSize: '160px 160px',
-          backgroundPosition: '0 0',
+          animation: 'grid-drift 90s linear infinite',
         }}
       />
+
+      {/* Starfield — two static layers + one slow twinkle */}
       <div
         className="absolute inset-0"
         style={{
-          backgroundImage: `radial-gradient(circle at 80px 40px, rgba(16, 185, 129, 0.25) 1px, transparent 1px)`,
+          backgroundImage: `radial-gradient(circle at 12px 12px, rgba(255, 255, 255, 0.18) 1px, transparent 1px)`,
           backgroundSize: '200px 200px',
-          backgroundPosition: '32px 32px',
         }}
       />
       <div
         className="absolute inset-0"
         style={{
-          backgroundImage: `radial-gradient(circle at 50px 110px, rgba(255, 255, 255, 0.2) 0.5px, transparent 0.5px)`,
-          backgroundSize: '120px 130px',
-          backgroundPosition: '10px 20px',
-          animation: 'star-twinkle 3s ease-in-out infinite',
+          backgroundImage: `radial-gradient(circle at 80px 40px, rgba(16, 185, 129, 0.12) 1px, transparent 1px)`,
+          backgroundSize: '280px 280px',
+        }}
+      />
+      <div
+        className="absolute inset-0"
+        style={{
+          backgroundImage: `radial-gradient(circle at 50px 110px, rgba(255, 255, 255, 0.10) 0.5px, transparent 0.5px)`,
+          backgroundSize: '140px 150px',
+          animation: 'star-twinkle 6s ease-in-out infinite',
         }}
       />
     </div>
