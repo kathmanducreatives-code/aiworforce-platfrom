@@ -1,95 +1,161 @@
-# Pass 2 — Hero Command Surface
+# Pass 2.5 — Consolidate to a single persistent Command Dock
 
-Turn the chat input from a footer utility into the visual center of the dashboard, using only Pass 1 tokens (`.glass-surface`, `.text-mono-label`, `text-display-*`, depth-layer colors, `shadow-emerald-glow`).
+Goal: kill the Pass 2 hero on the dashboard, and merge the existing footer
+chat bar (`GlobalChatBar`) + agent dock (`OperativeDock`) into one floating
+**Command Dock** mounted globally in `MainLayout`. Backend, routing and chat
+logic are untouched — this is a UI consolidation.
 
-## Audit (Job 1)
+## Current state (verified)
 
-- `src/components/MainLayout.tsx` mounts `<GlobalChatBar />` (footer, every page) and `<OperativeDock />` (the 5 agent avatars, bottom-right, every page).
-- `GlobalChatBar` renders `ChatComposerPro` inside a pinned bottom container with a gradient fade.
-- `src/pages/Dashboard.tsx` does **not** render any chat composer itself today — the "Message your workforce…" bar the user sees is `GlobalChatBar`, and the 5 avatars are `OperativeDock`, both global.
-- `ChatComposerPro` is also used inside `ChatWorkspace` (the drawer). That instance must keep working unchanged.
+- `src/pages/Dashboard.tsx` line 212 renders `<HeroCommandSurface />` (Pass 2).
+- `src/components/dashboard/HeroCommandSurface.tsx` — the hero (kept on disk,
+  unmounted; behaviors migrate into the dock).
+- `src/components/MainLayout.tsx` mounts BOTH:
+  - `<GlobalChatBar />` — bottom-center "Message your workforce…" composer
+    (renders `ChatComposerPro openOnFocus`). This is the legacy footer input.
+  - `<OperativeDock />` — bottom-right floating row of 5 agent avatars +
+    "deploy" button. Desktop only.
+- `ChatComposerPro` is also used inside `ChatWorkspace` drawer — must keep
+  working there unchanged.
+- Backend path: `chatRespond` + `useChatWorkspace` context (unchanged).
 
-Conflict to flag (not fixing this pass): after this pass, the dashboard will show **two** composers — the new in-flow hero and the legacy bottom `GlobalChatBar`. Per the brief, legacy stays until a later pass.
+So today the user sees two surfaces at the bottom (composer + dock) AND a
+hero in the middle of the dashboard. Three things doing related jobs.
 
-## What gets built (Job 2 + 3)
+## Target
 
-New component: `src/components/dashboard/HeroCommandSurface.tsx`.
+One floating glass dock, centered at bottom of every authenticated page,
+with three states (resting / focused / expanded). Cinematic dim + emerald
+glow from Pass 2 live here now. Agent avatars live here now.
 
-Rendered from `Dashboard.tsx`, slotted between the welcome header and the KPI metrics row (≈ 1/3 down the page, in the natural flow — not fixed positioning).
+## JOB 1 — Remove hero from Dashboard
 
-### Composition
+- `src/pages/Dashboard.tsx`: drop the `HeroCommandSurface` import and the
+  `<HeroCommandSurface />` render at line 212. Leave the gap empty (Pass 3
+  fills it with Morning Brief).
+- Keep `HeroCommandSurface.tsx` on disk, unused. Don't delete.
+
+## JOB 2 — New `CommandDock` component
+
+New file: `src/components/dock/CommandDock.tsx`.
+
+Replaces both `GlobalChatBar` and `OperativeDock` visually. Reuses the
+exact same `chatRespond` + `useChatWorkspace` plumbing the hero used, so
+submission / persistence / @mentions / agent routing are unchanged.
+
+### Layout & positioning
+
+- `position: fixed; bottom: 24px; left: 0; right: 0;` flex-center.
+- Inner container: `w-full max-w-4xl mx-4` (≈896px max, viewport-32px on
+  narrow screens).
+- `z-40` — above page content, below modals (`CommandPalette` is `z-50`).
+- Hidden when `ChatWorkspace` drawer is open (mirrors `GlobalChatBar`
+  behavior — checks `mode !== 'closed'`).
+
+### Surface
+
+- `.glass-surface` (Pass 1 token), `rounded-2xl` (16px), padding `p-5`
+  (resting) → `p-5 pb-4` (expanded). No new ad-hoc styling.
+- Ambient emerald glow (the Pass 2 layered radial blur) sits behind the
+  card, opacity animates with state (10% resting → 25% focused/expanded).
+
+### Resting state (~120px)
 
 ```text
-┌──────────────────────────────────────────────────────────┐
-│  [chip] [chip] [chip] [chip]      (fade out on focus)    │
-│                                                          │
-│  ┌────────────────────────────────────────────────────┐  │
-│  │  rotating placeholder / user text                  │  │
-│  │                                                    │  │
-│  │                          [A][S][P][H][Sc] [+]  ↵   │  │
-│  └────────────────────────────────────────────────────┘  │
-│   glass-surface, radius 16, ambient emerald glow         │
-└──────────────────────────────────────────────────────────┘
+[ chip · chip · chip · chip ]                          (text-mono-label)
+[ rotating placeholder textarea …………  ◯◯◯◯◯  +  Enter↵  ⌃ ]
 ```
 
-- Outer wrapper: `max-w-3xl mx-auto`, vertical padding so it breathes.
-- Inner surface: `.glass-surface rounded-2xl p-5 sm:p-6`, min input zone 72px, total ~150px with chips.
-- Ambient glow: an absolutely-positioned sibling using `shadow-emerald-glow` at low opacity by default, animated up to ~28% on focus via framer-motion.
+- 4 suggestion chips (same 4 from Pass 2: "Brief me on today", "Show
+  pending approvals", "What's @Penn working on?", "Run morning standup").
+- Rotating placeholder (same 5 strings, 4s interval, 300ms cross-fade).
+- Right cluster: 5 agent avatars (24px) with emerald status ring +
+  breathe, `+` add-agent button, `Enter ↵` hint, chevron-up to expand.
 
-### Rotating placeholder
+### Focused state
 
-`useEffect` + `setInterval(4000ms)` cycling 5 strings, framer-motion `AnimatePresence` cross-fade (300ms). Pauses while value is non-empty or input is focused; resumes 2s after blur with empty value.
+- Textarea grows with content, max 4 lines then scrolls.
+- Chips fade out (200ms, framer `AnimatePresence`).
+- Ambient glow → 25% opacity.
+- Full-viewport dim overlay: `fixed inset-0 bg-black z-30
+  pointer-events-none`, animates 0 → 0.6 (desktop) / 0 → 0.4 (mobile)
+  over 250ms ease-out. Dock itself sits at `z-40` so it stays lit.
 
-Strings: as specified in the brief.
+### Expanded state
 
-### Suggestion chips
+- Trigger: click chevron-up, or `Cmd/Ctrl + \`.
+- Container animates from `~120px` → `60vh`, 350ms ease-out (framer
+  `layout` + height tween — matches Pass 2 easings).
+- Top section becomes a scrollable conversation pane fed by
+  `useChatWorkspace` view (mirrors what `ChatWorkspace` shows). Reuses
+  the existing message-list components from the workspace if a clean
+  import is available; otherwise a thin list bound to the same context.
+- Chevron-down + `Escape` collapse back to resting. Dim stays on while
+  expanded.
 
-4 hardcoded chips above the input. Pill buttons, `.glass-surface` lighter variant (just `.glass-surface` with reduced padding), `text-mono-label`, hover `scale-1.02` + soft glow (framer-motion `whileHover`). Click sets composer value and focuses input. Chips fade out (`AnimatePresence`, 200ms) when input is focused; horizontal scroll on mobile (`overflow-x-auto`, `flex-nowrap`).
+### Mobile (<768px)
 
-### Agent presence row (inside input, right-aligned)
+- Resting height ~64px, no chip row, no Enter hint.
+- Avatars: 3 visible + "+2" pill.
+- Tap composer → expand to **full-screen** sheet (covers viewport,
+  safe-area aware), same conversation pane behavior. Close via chevron
+  or Escape / back-swipe affordance.
 
-5 agents from `AGENT_PROFILES` (or `dockAgents`). 24px circular initial badges reusing the existing `InitialCircle` style from `ChatComposerPro`. Static "ready" ring: 1.5px emerald at 60% opacity, `animate-pulse`-style 3s breathe (custom keyframe in component or reuse existing). Wrapped in shadcn `Tooltip` → "{Name} — ready". Trailing 28px `+` button, lower contrast.
+### Persistence across navigation
 
-Mobile (<768px): first 3 avatars + `+2` chip.
+- Component lives in `MainLayout`, so it never unmounts during route
+  changes. Textarea value, focus state, and expansion state survive
+  navigation because the component itself doesn't remount.
+- Conversation context is already global (`ChatWorkspaceProvider` wraps
+  `MainLayout`), so expanded-state history persists naturally.
+- Suggestion chips are static for now (page-context awareness deferred).
 
-### Submit affordance
+## JOB 3 — Remove the legacy surfaces
 
-- No send button on desktop. Right edge of input shows `Enter ↵` in `text-mono-label`, fades in when `value.trim().length > 0`.
-- Enter submits, Shift+Enter newline (same as today).
-- Mobile (<768px): small emerald arrow icon (24px) replaces the Enter hint, tappable.
+In `src/components/MainLayout.tsx`:
 
-### Focus dim (the centerpiece)
+- Drop `<GlobalChatBar />` import + render.
+- Drop `<OperativeDock />` import + render.
+- Add `<CommandDock />` in their place.
 
-- A single `motion.div` rendered at the dashboard root, `fixed inset-0 bg-black pointer-events-none z-[15]`, animating opacity `0 → 0.6` (desktop) / `0 → 0.4` (mobile) over 250ms ease-out when the hero input is focused.
-- Hero surface sits at `z-20` so it stays above the dim.
-- The page grid background sits below the overlay, so it dims with everything else — no separate logic needed.
-- `GlobalChatBar` is `z-20` today and would compete; we'll lift the hero overlay to `z-30` and the hero surface to `z-40` so the legacy bar dims correctly without code changes to it.
-- Focus state is tracked in `HeroCommandSurface` local state; the overlay is rendered as a portal-less sibling at the top of the component tree (returned alongside the surface inside a fragment).
+Files NOT deleted (kept on disk, just unmounted):
+- `src/components/chat/GlobalChatBar.tsx`
+- `src/components/dock/OperativeDock.tsx`
+- `src/components/dashboard/HeroCommandSurface.tsx`
 
-### Wiring to backend
+`ChatComposerPro` stays as-is — still used by `ChatWorkspace`.
 
-Reuse `chatRespond` and `useChatWorkspace` exactly like `ChatComposerPro` does — copy the submit logic verbatim so chat persistence keeps working. No backend changes.
+## Technical details
 
-## Files modified
+- Framer Motion for: dim fade, chip fade, expand height tween, glow
+  opacity. Easings match Pass 2 (`easeOut`, 250ms dim, 350ms expand,
+  200ms chip, 300ms placeholder cross-fade).
+- Keyboard: `Enter` submit, `Shift+Enter` newline, `Cmd/Ctrl+\` toggle
+  expand, `Escape` collapse.
+- Reuses `chatRespond`, `useChatWorkspace`, `AGENT_PROFILES`,
+  `CHANNEL_DEFAULT_AGENT` — exact same plumbing as `HeroCommandSurface`.
+- Tokens only: `.glass-surface`, `.text-mono-label`, `border-soft`,
+  `border-active`, `layer-1/2`. No new colors, no new blur values.
+- `tsc --noEmit` clean at the end.
 
-- `src/components/dashboard/HeroCommandSurface.tsx` — new component (≈ 300 lines).
-- `src/pages/Dashboard.tsx` — import + render `<HeroCommandSurface />` between the welcome header and the KPI row.
+## Out of scope (deferred)
 
-## Files inspected, not changed
+- Morning Brief content for the freed dashboard space (Pass 3).
+- Page-contextual suggestion chips (later pass).
+- Real agent status wiring (Pass 4 — stays static "ready").
+- Removing dead files (`HeroCommandSurface`, `GlobalChatBar`,
+  `OperativeDock`) — leave on disk for now.
 
-- `src/components/MainLayout.tsx`, `src/components/chat/GlobalChatBar.tsx`, `src/components/chat/workspace/ChatComposerPro.tsx`, `src/components/dock/OperativeDock.tsx`.
+## Files touched
 
-## Out of scope (per brief)
+- `src/components/dock/CommandDock.tsx` — new.
+- `src/components/MainLayout.tsx` — swap mounted surfaces.
+- `src/pages/Dashboard.tsx` — remove hero import + render.
 
-- Removing `GlobalChatBar` or `OperativeDock` — Pass 5+.
-- Wiring real agent status, real suggestion generation, morning brief — Pass 3/4.
-- Any change to landing pages, ChatWorkspace drawer, or sidebar.
+## Open question for you before I build
 
-## Verification
-
-- `npx tsc --noEmit` — zero new errors.
-- Manual: focus dims rest of page, blur restores, placeholder rotates, chips populate input, Enter submits and persists to conversations table (existing path through `chatRespond`).
-
-## One open question
-
-The brief says "leave `GlobalChatBar` if mounted." Confirmed it is mounted globally on every page including `/dashboard`. That means the dashboard will visibly have **two** composers after this pass (new hero in-flow, legacy bar at the bottom). Acceptable per the brief, or do you want me to conditionally hide `GlobalChatBar` only on `/dashboard` for this pass? Default: leave it visible.
+Expand animation: I'm planning **350ms ease-out, height tween from
+~120px → 60vh, container stays centered horizontally**. On mobile it
+goes **full-screen sheet** (100vw × 100vh, slide-up 300ms). OK to
+proceed with those, or do you want different timing / a different
+mobile pattern (e.g. bottom-sheet that only covers 85vh)?
