@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { ArrowUp, Loader2, Plus } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { AGENT_PROFILES, type AgentProfile } from '@/data/agentProfiles';
-import { useWorkspace } from '@/contexts/WorkspaceContext';
+
 import { useChatWorkspace, CHANNEL_DEFAULT_AGENT } from '@/contexts/ChatWorkspaceContext';
 import { chatRespond } from '@/lib/chatRespond';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
