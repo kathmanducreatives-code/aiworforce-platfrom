@@ -4,8 +4,7 @@ import Sidebar from "./Sidebar";
 import MobileHeader from "./MobileHeader";
 import CommandPalette from "./shared/CommandPalette";
 import CommandBar from "./dock/CommandBar";
-import OperativeDock from "./dock/OperativeDock";
-import GlobalChatBar from "./chat/GlobalChatBar";
+import CommandDock from "./dock/CommandDock";
 import ChatWorkspace from "./chat/workspace/ChatWorkspace";
 import AgentBuilderModal from "./agents/AgentBuilderModal";
 import { ChatWorkspaceProvider } from "@/contexts/ChatWorkspaceContext";
@@ -66,14 +65,11 @@ const MainLayout = ({ children }: MainLayoutProps) => {
           </div>
         </main>
 
-        {/* Persistent bottom command bar (hidden when workspace is open) */}
-        <GlobalChatBar />
+        {/* Persistent command dock — unified composer + agent surface */}
+        <CommandDock />
 
         {/* Full Chat Workspace drawer / fullscreen */}
         <ChatWorkspace />
-
-        {/* Operative Dock (desktop only) — sits beside the chat bar */}
-        {!isMobile && <OperativeDock />}
 
         {/* Agent Builder full-screen takeover (mounted globally) */}
         <AgentBuilderModal />

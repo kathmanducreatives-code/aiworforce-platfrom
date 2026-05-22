@@ -17,7 +17,7 @@ import NotificationCenter from "@/components/shared/NotificationCenter";
 import { cn } from "@/lib/utils";
 import { fetchOutboundMetrics } from "@/services/interceptorService";
 import HandoffFeedItem, { HandoffEvent } from "@/components/dashboard/HandoffFeedItem";
-import HeroCommandSurface from "@/components/dashboard/HeroCommandSurface";
+
 import { useWorkspace } from "@/contexts/WorkspaceContext";
 import { useActivityFeed } from "@/hooks/useActivityFeed";
 
@@ -207,9 +207,9 @@ const Dashboard = () => {
             <NotificationCenter />
           </div>
         </div>
+        {/* Hero command surface removed in Pass 2.5 — consolidated into CommandDock.
+            Pass 3 will fill this space with Morning Brief content. */}
 
-        {/* Hero Command Surface — the operating system's command line */}
-        <HeroCommandSurface />
 
         {/* KPI Metrics Row */}
         {loading ? (
