@@ -139,11 +139,19 @@ export default {
 				lg: 'none',
 				xl: 'none',
 				'2xl': 'none',
-				primary: '0 0 15px rgba(16, 185, 129, 0.15)',
-				'primary-lg': '0 0 30px rgba(16, 185, 129, 0.25)',
-				glow: '0 0 20px rgba(255, 255, 255, 0.05)',
 				'2xs': 'none',
-				'emerald-glow': '0 0 20px rgba(16, 185, 129, 0.2)'
+				/* Deep Space elevation */
+				ambient: '0 1px 2px rgba(0, 0, 0, 0.4)',
+				elevated: '0 8px 24px -6px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(255, 255, 255, 0.06)',
+				floating: '0 24px 64px -16px rgba(0, 0, 0, 0.7), 0 0 0 1px rgba(255, 255, 255, 0.06)',
+				/* Emerald glow system — restrained */
+				'emerald-soft': '0 0 24px rgba(16, 185, 129, 0.08)',
+				'emerald-focus': '0 0 32px rgba(16, 185, 129, 0.25)',
+				/* Legacy aliases — keep existing classnames working */
+				primary: '0 0 24px rgba(16, 185, 129, 0.08)',
+				'primary-lg': '0 0 32px rgba(16, 185, 129, 0.25)',
+				glow: '0 0 20px rgba(255, 255, 255, 0.04)',
+				'emerald-glow': '0 0 24px rgba(16, 185, 129, 0.12)'
 			},
 			transitionTimingFunction: {
 				smooth: 'var(--transition-smooth)'
