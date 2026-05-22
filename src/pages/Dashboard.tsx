@@ -17,6 +17,7 @@ import NotificationCenter from "@/components/shared/NotificationCenter";
 import { cn } from "@/lib/utils";
 import { fetchOutboundMetrics } from "@/services/interceptorService";
 import HandoffFeedItem, { HandoffEvent } from "@/components/dashboard/HandoffFeedItem";
+import HeroCommandSurface from "@/components/dashboard/HeroCommandSurface";
 import { useWorkspace } from "@/contexts/WorkspaceContext";
 import { useActivityFeed } from "@/hooks/useActivityFeed";
 
