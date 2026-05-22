@@ -1,165 +1,95 @@
-# Pass 1 — Foundation: Design Tokens + Sidebar Restructure
+# Pass 2 — Hero Command Surface
 
-Two jobs. Additive only. No visual changes to components, dashboard, chat, or landing.
+Turn the chat input from a footer utility into the visual center of the dashboard, using only Pass 1 tokens (`.glass-surface`, `.text-mono-label`, `text-display-*`, depth-layer colors, `shadow-emerald-glow`).
 
----
+## Audit (Job 1)
 
-## Pre-flight findings (read before write)
+- `src/components/MainLayout.tsx` mounts `<GlobalChatBar />` (footer, every page) and `<OperativeDock />` (the 5 agent avatars, bottom-right, every page).
+- `GlobalChatBar` renders `ChatComposerPro` inside a pinned bottom container with a gradient fade.
+- `src/pages/Dashboard.tsx` does **not** render any chat composer itself today — the "Message your workforce…" bar the user sees is `GlobalChatBar`, and the 5 avatars are `OperativeDock`, both global.
+- `ChatComposerPro` is also used inside `ChatWorkspace` (the drawer). That instance must keep working unchanged.
 
-### `tailwind.config.ts` current state
-- **Backgrounds**: `background: #080B0F`, `card/popover: #0D1117`, `muted: #131920`, `surface-elevated: #131920`, `surface-hover: #1A2332`
-- **Borders**: `border: rgba(255,255,255,0.10)`, `border-subtle: rgba(255,255,255,0.06)`, `border-accent: rgba(16,185,129,0.30)` — note: the names the user asked for (`border-hairline`, `border-soft`, `border-active`) overlap semantically with these.
-- **Fonts**: `sans: DM Sans`, `serif: Instrument Serif`, `mono: JetBrains Mono`
-- **Shadows**: `xs/sm/md/lg/xl/2xl: none`, `primary/primary-lg/emerald-glow` for green glow, `glow` for white
-- **No backdrop-blur custom utilities** — uses Tailwind defaults
+Conflict to flag (not fixing this pass): after this pass, the dashboard will show **two** composers — the new in-flow hero and the legacy bottom `GlobalChatBar`. Per the brief, legacy stays until a later pass.
 
-### `src/index.css` current state
-- **Existing glass utilities** (already proliferating — this is the problem the user wants to prevent):
-  - `.glass` — rgba(255,255,255,0.04) + blur(24px) + border 0.06 + heavy shadow
-  - `.glass-strong` — rgba 0.06 + blur(32px) + border 0.08
-  - `.glass-panel` — landing-only, uses hsl tokens + blur(24px)
-  - `.glass-card-landing` — landing-only, blur(12px)
-- **Typography utilities**: `.font-display` (Inter Tight, -0.02em), `.font-jetbrains`, `.font-label` (11px uppercase mono-feel, but uses Inter not JetBrains)
-- **Body**: no explicit body class; Tailwind default + `--font-sans` which is **Work Sans** in `:root` and **Inter Tight** in `.dark`. Confirmed.
-- **Spacing**: `--spacing: 0.25rem` (4px base), standard Tailwind scale (no custom extensions in config)
-- **Inconsistency to flag**: memory says HSL-only, but `tailwind.config.ts` uses hex literals for `background`, `card`, `primary`, etc. Also `--background` in `[data-theme="dark"]` is `0 0% 1% / 0` (transparent alpha) which is unusual. Not fixing this pass.
+## What gets built (Job 2 + 3)
 
-### `src/components/Sidebar.tsx` current state
-- 5 groups (Hire, Departments, Find, Engage, Insights), 22 visible items + 3 bottom utilities
-- Row height: `h-8` (32px) — below user's 36-40px target
-- Section labels: use `.font-label` already
-- Group spacing: `mt-5` (20px) between groups — below user's 24px target
+New component: `src/components/dashboard/HeroCommandSurface.tsx`.
 
----
+Rendered from `Dashboard.tsx`, slotted between the welcome header and the KPI metrics row (≈ 1/3 down the page, in the natural flow — not fixed positioning).
 
-## JOB 1 — Design tokens (additive)
+### Composition
 
-### Edit `tailwind.config.ts` (extend, don't replace)
-
-Add under `theme.extend.colors`:
-```ts
-'layer-0': '#000000',
-'layer-1': '#0A0A0A',
-'layer-2': '#131313',
-'layer-3': 'rgba(255,255,255,0.04)',
-'border-hairline': 'rgba(255,255,255,0.06)',
-'border-soft': 'rgba(255,255,255,0.10)',
-'border-active': 'rgba(16,185,129,0.40)',
+```text
+┌──────────────────────────────────────────────────────────┐
+│  [chip] [chip] [chip] [chip]      (fade out on focus)    │
+│                                                          │
+│  ┌────────────────────────────────────────────────────┐  │
+│  │  rotating placeholder / user text                  │  │
+│  │                                                    │  │
+│  │                          [A][S][P][H][Sc] [+]  ↵   │  │
+│  └────────────────────────────────────────────────────┘  │
+│   glass-surface, radius 16, ambient emerald glow         │
+└──────────────────────────────────────────────────────────┘
 ```
 
-**Collision note**: existing `border-subtle` (0.06) ≈ new `border-hairline`; existing `border` (0.10) ≈ new `border-soft`; existing `border-accent` (0.30) ≈ new `border-active` (0.40). I'll add the new names **alongside** the old ones (not overwrite). Flag for user to consolidate in a later pass.
+- Outer wrapper: `max-w-3xl mx-auto`, vertical padding so it breathes.
+- Inner surface: `.glass-surface rounded-2xl p-5 sm:p-6`, min input zone 72px, total ~150px with chips.
+- Ambient glow: an absolutely-positioned sibling using `shadow-emerald-glow` at low opacity by default, animated up to ~28% on focus via framer-motion.
 
-### Edit `src/index.css` — append to the "Premium SaaS visual layer" section
+### Rotating placeholder
 
-```css
-/* === Pass 1: v2 design system tokens === */
+`useEffect` + `setInterval(4000ms)` cycling 5 strings, framer-motion `AnimatePresence` cross-fade (300ms). Pauses while value is non-empty or input is focused; resumes 2s after blur with empty value.
 
-/* Single-source glass utility — use this going forward */
-.glass-surface {
-  background: rgba(255, 255, 255, 0.04);
-  backdrop-filter: blur(24px);
-  -webkit-backdrop-filter: blur(24px);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  box-shadow: inset 0 1px 0 0 rgba(255, 255, 255, 0.04);
-}
+Strings: as specified in the brief.
 
-/* Display type scale */
-.text-display-lg {
-  font-family: 'Inter Tight', 'Inter', system-ui, sans-serif;
-  font-size: clamp(48px, 5vw, 56px);
-  font-weight: 600;
-  line-height: 1.05;
-  letter-spacing: -0.02em;
-}
-.text-display-md {
-  font-family: 'Inter Tight', 'Inter', system-ui, sans-serif;
-  font-size: clamp(32px, 3vw, 36px);
-  font-weight: 600;
-  line-height: 1.1;
-  letter-spacing: -0.015em;
-}
-.text-display-sm {
-  font-family: 'Inter Tight', 'Inter', system-ui, sans-serif;
-  font-size: clamp(22px, 2vw, 24px);
-  font-weight: 600;
-  line-height: 1.2;
-  letter-spacing: -0.01em;
-}
+### Suggestion chips
 
-/* Mono labels (timestamps, IDs, system data) */
-.text-mono-label {
-  font-family: 'JetBrains Mono', ui-monospace, monospace;
-  font-size: 11px;
-  font-weight: 500;
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-}
-```
+4 hardcoded chips above the input. Pill buttons, `.glass-surface` lighter variant (just `.glass-surface` with reduced padding), `text-mono-label`, hover `scale-1.02` + soft glow (framer-motion `whileHover`). Click sets composer value and focuses input. Chips fade out (`AnimatePresence`, 200ms) when input is focused; horizontal scroll on mobile (`overflow-x-auto`, `flex-nowrap`).
 
-**No collisions** — `.glass-surface`, `.text-display-*`, `.text-mono-label` are all new names. `.font-label` stays (similar but Inter-based; will deprecate later).
+### Agent presence row (inside input, right-aligned)
 
-### Existing glass treatments to flag (not migrate)
-- `.glass`, `.glass-strong`, `.glass-panel`, `.glass-card-landing` — all live in `index.css`
-- Many components use ad-hoc `backdrop-blur-* + bg-white/X + border-white/X` — will inventory in Pass 2
+5 agents from `AGENT_PROFILES` (or `dockAgents`). 24px circular initial badges reusing the existing `InitialCircle` style from `ChatComposerPro`. Static "ready" ring: 1.5px emerald at 60% opacity, `animate-pulse`-style 3s breathe (custom keyframe in component or reuse existing). Wrapped in shadcn `Tooltip` → "{Name} — ready". Trailing 28px `+` button, lower contrast.
 
----
+Mobile (<768px): first 3 avatars + `+2` chip.
 
-## JOB 2 — Sidebar restructure
+### Submit affordance
 
-### Edit `src/components/Sidebar.tsx`
+- No send button on desktop. Right edge of input shows `Enter ↵` in `text-mono-label`, fades in when `value.trim().length > 0`.
+- Enter submits, Shift+Enter newline (same as today).
+- Mobile (<768px): small emerald arrow icon (24px) replaces the Enter hint, tappable.
 
-Replace `navGroups` array with 4 groups in this order:
+### Focus dim (the centerpiece)
 
-**Workspace**
-- Dashboard `/dashboard` (LayoutDashboard)
-- Awaiting You `/awaiting-you` (Inbox, badge "4" amber)
-- Conversations `/dashboard` (Mail icon) — with `// TODO: route to /conversations in later pass`
+- A single `motion.div` rendered at the dashboard root, `fixed inset-0 bg-black pointer-events-none z-[15]`, animating opacity `0 → 0.6` (desktop) / `0 → 0.4` (mobile) over 250ms ease-out when the hero input is focused.
+- Hero surface sits at `z-20` so it stays above the dim.
+- The page grid background sits below the overlay, so it dims with everything else — no separate logic needed.
+- `GlobalChatBar` is `z-20` today and would compete; we'll lift the hero overlay to `z-30` and the hero surface to `z-40` so the legacy bar dims correctly without code changes to it.
+- Focus state is tracked in `HeroCommandSurface` local state; the overlay is rendered as a portal-less sibling at the top of the component tree (returned alongside the surface inside a fragment).
 
-**Workforce**
-- Talent `/rooms/talent` (Sparkles)
-- Growth `/rooms/growth` (Megaphone)
-- Intelligence `/rooms/intelligence` (Eye)
-- Content `/rooms/content` (BookOpen)
-- + New Agent button (existing modal trigger — preserve as-is)
+### Wiring to backend
 
-**Intelligence**
-- Lead Scraper `/lead-scraper` (Search)
-- ICP Intelligence `/icp-intelligence` (Target)
-- Deep Search `/deep-search` (Brain)
-- Growth Signals `/growth-signals` (TrendingUp)
-- Talent Intel `/talent-intel` (Users)
-- Competitor Intel `/competitor-intel` (Eye)
-- Analytics `/analytics` (BarChart3)
+Reuse `chatRespond` and `useChatWorkspace` exactly like `ChatComposerPro` does — copy the submit logic verbatim so chat persistence keeps working. No backend changes.
 
-**Settings**
-- Interviews `/interview-scheduler` (Calendar) — moved from Hire
-- Email Sequences `/email-sequences` (Mail) — moved from Engage
+## Files modified
 
-**Decision on bottom utility row**: keep Help & Support / Sign Out / Collapse in the existing bottom utility row (under the border-t). Reason: Sign Out and Collapse are app-shell controls, not "Settings" links. Cleaner mental model.
+- `src/components/dashboard/HeroCommandSurface.tsx` — new component (≈ 300 lines).
+- `src/pages/Dashboard.tsx` — import + render `<HeroCommandSurface />` between the welcome header and the KPI row.
 
-### Items hidden from primary nav (routes preserved in codebase)
-Job Screening, Candidates, Expert Interviews, Job Distribution, Post Interceptor, Lead CRM, Job Tracker.
+## Files inspected, not changed
 
-### Minimal visual changes (this pass only)
-- Section labels: swap `font-label` → `text-mono-label` (new utility)
-- Row height: `h-8` → `h-9` (36px) — hits the 36-40px target
-- Group spacing: `mt-5` (20px) → `mt-6` (24px)
-- No color, icon, badge, or active-state changes
+- `src/components/MainLayout.tsx`, `src/components/chat/GlobalChatBar.tsx`, `src/components/chat/workspace/ChatComposerPro.tsx`, `src/components/dock/OperativeDock.tsx`.
 
----
+## Out of scope (per brief)
+
+- Removing `GlobalChatBar` or `OperativeDock` — Pass 5+.
+- Wiring real agent status, real suggestion generation, morning brief — Pass 3/4.
+- Any change to landing pages, ChatWorkspace drawer, or sidebar.
 
 ## Verification
-- Run `npx tsc --noEmit`. Report results.
-- No new npm dependencies.
-- No git push.
 
----
+- `npx tsc --noEmit` — zero new errors.
+- Manual: focus dims rest of page, blur restores, placeholder rotates, chips populate input, Enter submits and persists to conversations table (existing path through `chatRespond`).
 
-## Final summary block (delivered after execution)
-Will contain: Tokens added, Tokens NOT added (collisions), Sidebar items hidden, Sidebar items moved, Files modified, Anything unexpected, Ready to verify line.
+## One open question
 
----
-
-## One question before I execute
-
-**Conversations link target**: you said "for now, link to /dashboard with a TODO comment". Confirm — or would you prefer it disabled (visible but `disabled` styling, no nav) so users don't get confused by clicking it and landing on Dashboard? I'll default to your stated `/dashboard + TODO` if no preference.
+The brief says "leave `GlobalChatBar` if mounted." Confirmed it is mounted globally on every page including `/dashboard`. That means the dashboard will visibly have **two** composers after this pass (new hero in-flow, legacy bar at the bottom). Acceptable per the brief, or do you want me to conditionally hide `GlobalChatBar` only on `/dashboard` for this pass? Default: leave it visible.
