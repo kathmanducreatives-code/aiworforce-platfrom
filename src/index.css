@@ -26,6 +26,51 @@
   box-shadow: 0 0 20px rgba(16,185,129,0.15);
 }
 
+/* === Pass 1: v2 design system tokens === */
+
+/* Single-source glass utility — use this going forward */
+.glass-surface {
+  background: rgba(255, 255, 255, 0.04);
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: inset 0 1px 0 0 rgba(255, 255, 255, 0.04);
+}
+
+/* Display type scale */
+.text-display-lg {
+  font-family: 'Inter Tight', 'Inter', system-ui, sans-serif;
+  font-size: clamp(48px, 5vw, 56px);
+  font-weight: 600;
+  line-height: 1.05;
+  letter-spacing: -0.02em;
+}
+.text-display-md {
+  font-family: 'Inter Tight', 'Inter', system-ui, sans-serif;
+  font-size: clamp(32px, 3vw, 36px);
+  font-weight: 600;
+  line-height: 1.1;
+  letter-spacing: -0.015em;
+}
+.text-display-sm {
+  font-family: 'Inter Tight', 'Inter', system-ui, sans-serif;
+  font-size: clamp(22px, 2vw, 24px);
+  font-weight: 600;
+  line-height: 1.2;
+  letter-spacing: -0.01em;
+}
+
+/* Mono labels (timestamps, IDs, system data) */
+.text-mono-label {
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  font-size: 11px;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+
+
 @keyframes thinking-dot {
   0%, 80%, 100% { transform: scale(0.6); opacity: 0.4; }
   40%           { transform: scale(1);   opacity: 1;   }
