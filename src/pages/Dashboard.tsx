@@ -207,9 +207,9 @@ const Dashboard = () => {
             <NotificationCenter />
           </div>
         </div>
+        {/* Hero command surface removed in Pass 2.5 — consolidated into CommandDock.
+            Pass 3 will fill this space with Morning Brief content. */}
 
-        {/* Hero Command Surface — the operating system's command line */}
-        <HeroCommandSurface />
 
         {/* KPI Metrics Row */}
         {loading ? (
