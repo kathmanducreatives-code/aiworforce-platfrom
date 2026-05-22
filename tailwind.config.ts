@@ -19,24 +19,51 @@ export default {
 		},
 		extend: {
 			colors: {
-				border: 'rgba(255, 255, 255, 0.10)',
+				/* — Deep Space layers — */
+				'space-0': '#000000',
+				'space-1': '#050505',
+				'space-2': '#0A0A0A',
+				'space-3': '#101010',
+				'space-4': '#161616',
+				'space-5': '#1F1F1F',
+				/* — Ink hierarchy — */
+				'ink-primary': '#EDEDED',
+				'ink-secondary': '#9CA3AF',
+				'ink-muted': '#6B7280',
+				'ink-faint': '#3F3F46',
+				/* — Hairlines — */
+				hairline: 'rgba(255, 255, 255, 0.06)',
+				'hairline-strong': 'rgba(255, 255, 255, 0.10)',
+				'edge-emerald': 'rgba(16, 185, 129, 0.30)',
+				/* — Emerald system — */
+				'emerald-deep': '#059669',
+				'emerald-core': '#10B981',
+				'emerald-glow-color': '#34D399',
+				'emerald-ambient': 'rgba(16, 185, 129, 0.08)',
+				'emerald-focus': 'rgba(16, 185, 129, 0.25)',
+
+				/* — Legacy aliases — kept so unmigrated components don't break — */
+				border: 'rgba(255, 255, 255, 0.06)',
 				'border-subtle': 'rgba(255, 255, 255, 0.06)',
 				'border-accent': 'rgba(16, 185, 129, 0.30)',
-				// Pass 1 v2 design system — depth layers + new border tokens (additive)
 				'layer-0': '#000000',
-				'layer-1': '#0A0A0A',
-				'layer-2': '#131313',
+				'layer-1': '#050505',
+				'layer-2': '#0A0A0A',
 				'layer-3': 'rgba(255, 255, 255, 0.04)',
 				'border-hairline': 'rgba(255, 255, 255, 0.06)',
 				'border-soft': 'rgba(255, 255, 255, 0.10)',
-				'border-active': 'rgba(16, 185, 129, 0.40)',
+				'border-active': 'rgba(16, 185, 129, 0.30)',
 				input: 'hsl(var(--input))',
 				ring: 'hsl(var(--ring))',
-				background: '#080B0F',
-				foreground: '#F0F6FC',
-				'text-tertiary': '#484F58',
-				'surface-elevated': '#131920',
-				'surface-hover': '#1A2332',
+				/* Map shadcn semantic names to Deep Space layers (kept as literals
+				   so light-theme HSL vars still drive the actual painted color via
+				   hsl(var(--background)) in body styles — these literals are the
+				   dark-mode fallback for components that opt out of vars). */
+				background: '#050505',
+				foreground: '#EDEDED',
+				'text-tertiary': '#6B7280',
+				'surface-elevated': '#101010',
+				'surface-hover': '#161616',
 				primary: {
 					'100': 'rgba(16, 185, 129, 0.1)',
 					'200': 'rgba(16, 185, 129, 0.2)',
@@ -46,29 +73,29 @@ export default {
 					dark: '#059669'
 				},
 				secondary: {
-					DEFAULT: '#14B8A5',
-					foreground: '#FFFFFF'
+					DEFAULT: '#0A0A0A',
+					foreground: '#EDEDED'
 				},
 				accent: {
-					DEFAULT: '#1A2332',
-					foreground: '#F0F6FC',
-					secondary: 'rgba(212, 164, 23, 0.1)'
+					DEFAULT: '#161616',
+					foreground: '#EDEDED',
+					secondary: 'rgba(16, 185, 129, 0.08)'
 				},
 				destructive: {
 					DEFAULT: '#F43F5E',
 					foreground: '#FFFFFF'
 				},
 				muted: {
-					DEFAULT: '#131920',
-					foreground: '#7D8590'
+					DEFAULT: '#161616',
+					foreground: '#9CA3AF'
 				},
 				popover: {
-					DEFAULT: '#0D1117',
-					foreground: '#F0F6FC'
+					DEFAULT: '#101010',
+					foreground: '#EDEDED'
 				},
 				card: {
-					DEFAULT: '#0D1117',
-					foreground: '#F0F6FC'
+					DEFAULT: '#101010',
+					foreground: '#EDEDED'
 				},
 				sidebar: {
 					DEFAULT: 'hsl(var(--sidebar-background))',
@@ -112,11 +139,19 @@ export default {
 				lg: 'none',
 				xl: 'none',
 				'2xl': 'none',
-				primary: '0 0 15px rgba(16, 185, 129, 0.15)',
-				'primary-lg': '0 0 30px rgba(16, 185, 129, 0.25)',
-				glow: '0 0 20px rgba(255, 255, 255, 0.05)',
 				'2xs': 'none',
-				'emerald-glow': '0 0 20px rgba(16, 185, 129, 0.2)'
+				/* Deep Space elevation */
+				ambient: '0 1px 2px rgba(0, 0, 0, 0.4)',
+				elevated: '0 8px 24px -6px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(255, 255, 255, 0.06)',
+				floating: '0 24px 64px -16px rgba(0, 0, 0, 0.7), 0 0 0 1px rgba(255, 255, 255, 0.06)',
+				/* Emerald glow system — restrained */
+				'emerald-soft': '0 0 24px rgba(16, 185, 129, 0.08)',
+				'emerald-focus': '0 0 32px rgba(16, 185, 129, 0.25)',
+				/* Legacy aliases — keep existing classnames working */
+				primary: '0 0 24px rgba(16, 185, 129, 0.08)',
+				'primary-lg': '0 0 32px rgba(16, 185, 129, 0.25)',
+				glow: '0 0 20px rgba(255, 255, 255, 0.04)',
+				'emerald-glow': '0 0 24px rgba(16, 185, 129, 0.12)'
 			},
 			transitionTimingFunction: {
 				smooth: 'var(--transition-smooth)'

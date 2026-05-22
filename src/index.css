@@ -28,13 +28,44 @@
 
 /* === Pass 1: v2 design system tokens === */
 
-/* Single-source glass utility — use this going forward */
+/* — Glass system: three intensities, used as a scalpel —
+   .glass-quiet    ambient panels (popovers, hover layers)
+   .glass-surface  floating intelligence surfaces (command dock, modals)
+   .glass-loud     focal AI surfaces (active modal, expanded dock)            */
+.glass-quiet {
+  background: rgba(255, 255, 255, 0.025);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid var(--hairline, rgba(255, 255, 255, 0.06));
+}
+
 .glass-surface {
   background: rgba(255, 255, 255, 0.04);
   backdrop-filter: blur(24px);
   -webkit-backdrop-filter: blur(24px);
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  border: 1px solid var(--hairline, rgba(255, 255, 255, 0.06));
   box-shadow: inset 0 1px 0 0 rgba(255, 255, 255, 0.04);
+}
+
+.glass-loud {
+  background: rgba(255, 255, 255, 0.06);
+  backdrop-filter: blur(32px);
+  -webkit-backdrop-filter: blur(32px);
+  border: 1px solid var(--hairline-strong, rgba(255, 255, 255, 0.10));
+  box-shadow:
+    inset 0 1px 0 0 rgba(255, 255, 255, 0.05),
+    0 24px 64px -16px rgba(0, 0, 0, 0.7);
+}
+
+/* Emerald focus rim — apply to glass surfaces that should bloom on focus */
+.glass-focus-ring {
+  transition: box-shadow 250ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+.glass-focus-ring:focus-within {
+  box-shadow:
+    inset 0 1px 0 0 rgba(255, 255, 255, 0.06),
+    0 0 0 1px var(--edge-emerald, rgba(16, 185, 129, 0.30)),
+    0 0 32px var(--emerald-focus, rgba(16, 185, 129, 0.25));
 }
 
 /* Display type scale */
@@ -60,6 +91,18 @@
   letter-spacing: -0.01em;
 }
 
+/* Body + meta — discourage ad-hoc text-sm text-white/70 in later passes */
+.text-body {
+  font-size: 15px;
+  line-height: 1.55;
+  color: var(--ink-secondary, #9CA3AF);
+}
+.text-meta {
+  font-size: 12px;
+  letter-spacing: 0.02em;
+  color: var(--ink-muted, #6B7280);
+}
+
 /* Mono labels (timestamps, IDs, system data) */
 .text-mono-label {
   font-family: 'JetBrains Mono', ui-monospace, monospace;
@@ -67,6 +110,27 @@
   font-weight: 500;
   text-transform: uppercase;
   letter-spacing: 0.08em;
+}
+
+/* — Motion primitives — */
+.transition-cinematic {
+  transition: all 250ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+@keyframes breathe-slow {
+  0%, 100% { opacity: 0.7; }
+  50%      { opacity: 1; }
+}
+.breathe-slow { animation: breathe-slow 4s ease-in-out infinite; }
+@keyframes breathe-emerald {
+  0%, 100% { box-shadow: 0 0 24px rgba(16, 185, 129, 0.08); }
+  50%      { box-shadow: 0 0 32px rgba(16, 185, 129, 0.20); }
+}
+.breathe-emerald { animation: breathe-emerald 6s ease-in-out infinite; }
+
+.focus-ring-emerald:focus-visible {
+  outline: 1px solid var(--emerald-core, #10B981);
+  outline-offset: 2px;
+  box-shadow: 0 0 32px var(--emerald-focus, rgba(16, 185, 129, 0.25));
 }
 
 
@@ -129,21 +193,24 @@ html {
   }
 }
 
-/* Glassmorphism base */
+/* Legacy glass aliases — redirect to the disciplined glass system above.
+   Existing components keep working; new code should use .glass-surface etc. */
 .glass {
   background: rgba(255, 255, 255, 0.04);
   backdrop-filter: blur(24px);
   -webkit-backdrop-filter: blur(24px);
-  border: 1px solid rgba(255, 255, 255, 0.06);
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--hairline, rgba(255, 255, 255, 0.06));
+  box-shadow: inset 0 1px 0 0 rgba(255, 255, 255, 0.04);
 }
 
 .glass-strong {
   background: rgba(255, 255, 255, 0.06);
   backdrop-filter: blur(32px);
   -webkit-backdrop-filter: blur(32px);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.06);
+  border: 1px solid var(--hairline-strong, rgba(255, 255, 255, 0.10));
+  box-shadow:
+    inset 0 1px 0 0 rgba(255, 255, 255, 0.05),
+    0 24px 64px -16px rgba(0, 0, 0, 0.7);
 }
 
 /* Conic gradient rotating border */
@@ -508,59 +575,89 @@ All colors MUST be HSL.
     --font-mono: 'JetBrains Mono', ui-monospace, monospace;
   }
 
-  /* ====== DARK PREMIUM — Deep Charcoal/Obsidian #080808 ====== */
+  /* ====== DARK — Deep Space AI OS ======
+     Pitch-black foundations, restrained emerald, matte vs glass contrast.
+     Surfaces step up in single-digit luminance increments. */
   [data-theme="dark"] {
+    /* — Deep Space layers (matte) — */
+    --space-0: #000000;
+    --space-1: #050505;
+    --space-2: #0A0A0A;
+    --space-3: #101010;
+    --space-4: #161616;
+    --space-5: #1F1F1F;
+
+    /* — Ink hierarchy (never pure white) — */
+    --ink-primary: #EDEDED;
+    --ink-secondary: #9CA3AF;
+    --ink-muted: #6B7280;
+    --ink-faint: #3F3F46;
+
+    /* — Hairlines — */
+    --hairline: rgba(255, 255, 255, 0.06);
+    --hairline-strong: rgba(255, 255, 255, 0.10);
+    --edge-emerald: rgba(16, 185, 129, 0.30);
+
+    /* — Emerald system — */
+    --emerald-deep: #059669;
+    --emerald-core: #10B981;
+    --emerald-glow: #34D399;
+    --emerald-ambient: rgba(16, 185, 129, 0.08);
+    --emerald-focus: rgba(16, 185, 129, 0.25);
+
+    /* — Glass (driven by surface utilities) — */
     --glass-bg: rgba(255, 255, 255, 0.04);
     --glass-border: rgba(255, 255, 255, 0.06);
     --glass-hover: rgba(255, 255, 255, 0.08);
-    --shadow-premium: 0 8px 32px rgba(0, 0, 0, 0.4);
-    --shadow-glow: 0 0 30px rgba(5, 150, 105, 0.15);
-    --skeleton-base: rgba(255, 255, 255, 0.04);
-    --skeleton-shine: rgba(255, 255, 255, 0.08);
+    --shadow-premium: 0 8px 32px rgba(0, 0, 0, 0.5);
+    --shadow-glow: 0 0 30px rgba(16, 150, 105, 0.12);
+    --skeleton-base: rgba(255, 255, 255, 0.03);
+    --skeleton-shine: rgba(255, 255, 255, 0.06);
 
-    --background: 0 0% 1% / 0;
-    --foreground: 0 0% 93%;
+    /* — Shadcn semantic tokens (HSL, mapped to Deep Space) — */
+    --background: 0 0% 2%;          /* #050505 */
+    --foreground: 0 0% 93%;          /* #EDEDED */
 
-    --card: 0 0% 5%;
+    --card: 0 0% 6%;                 /* #101010 */
     --card-foreground: 0 0% 93%;
 
     --popover: 0 0% 6%;
     --popover-foreground: 0 0% 93%;
 
-    --primary: 158 64% 42%;
+    --primary: 160 84% 39%;          /* #10B981 emerald-core */
     --primary-foreground: 0 0% 100%;
-    --primary-light: 158 64% 55%;
-    --primary-dark: 158 64% 32%;
+    --primary-light: 156 72% 67%;    /* #34D399 */
+    --primary-dark: 160 84% 30%;     /* #059669 */
 
     --secondary: 0 0% 9%;
     --secondary-foreground: 0 0% 93%;
-    --muted: 0 0% 10%;
-    --muted-foreground: 0 0% 50%;
+    --muted: 0 0% 9%;                /* #161616 */
+    --muted-foreground: 0 0% 56%;    /* #9CA3AF-ish */
 
     --border: 0 0% 14%;
-    --input: 0 0% 8%;
-    --ring: 158 64% 42%;
+    --input: 0 0% 9%;
+    --ring: 160 84% 39%;
 
-    --accent: 158 64% 42%;
+    --accent: 160 84% 39%;
     --accent-foreground: 0 0% 100%;
 
     --destructive: 0 62% 50%;
     --destructive-foreground: 0 0% 100%;
 
-    --chart-1: 158 64% 45%;
+    --chart-1: 160 84% 39%;
     --chart-2: 180 50% 50%;
     --chart-3: 200 60% 55%;
     --chart-4: 280 50% 55%;
     --chart-5: 40 60% 55%;
 
-    --sidebar: 0 0% 4%;
-    --sidebar-foreground: 0 0% 85%;
-    --sidebar-primary: 158 64% 42%;
+    --sidebar: 0 0% 4%;              /* #0A0A0A */
+    --sidebar-foreground: 0 0% 80%;
+    --sidebar-primary: 160 84% 39%;
     --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 0 0% 10%;
+    --sidebar-accent: 0 0% 9%;
     --sidebar-accent-foreground: 0 0% 90%;
-    --sidebar-border: 0 0% 12%;
-    --sidebar-ring: 158 64% 42%;
+    --sidebar-border: 0 0% 10%;
+    --sidebar-ring: 160 84% 39%;
   }
 
   /* ====== LIGHT PREMIUM — Snow & Ice #FFFFFF ====== */
