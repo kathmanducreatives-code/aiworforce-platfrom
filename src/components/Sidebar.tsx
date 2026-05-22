@@ -111,31 +111,12 @@ const Sidebar = ({ collapsed, onToggle, onOpenCommandPalette }: SidebarProps) =>
       {/* Navigation */}
       <nav className="flex-1 overflow-y-auto px-2 py-1">
         {navGroups.map((group) => (
-          <div key={group.label} className="mt-5 first:mt-1">
+          <div key={group.label} className="mt-6 first:mt-1">
             {!collapsed && (
               <div className="flex items-center justify-between pl-3 pr-2 mb-1">
-                {group.label === 'Departments' ? (
-                  <NavLink
-                    to="/departments"
-                    className={cn(
-                      'font-label transition-colors',
-                      location.pathname === '/departments'
-                        ? 'text-primary'
-                        : 'hover:text-foreground',
-                    )}
-                  >
-                    {group.label}
-                  </NavLink>
-                ) : (
-                  <p className="font-label">
-                    {group.label}
-                  </p>
-                )}
-                {group.label === 'Hire' && (
-                  <span className="text-[10px] font-semibold tracking-wide text-amber-200 bg-amber-900/60 px-1.5 py-px rounded-full">
-                    Awaiting You
-                  </span>
-                )}
+                <p className="text-mono-label text-text-tertiary">
+                  {group.label}
+                </p>
               </div>
             )}
             <div className="space-y-px">
@@ -143,10 +124,10 @@ const Sidebar = ({ collapsed, onToggle, onOpenCommandPalette }: SidebarProps) =>
                 const isActive = location.pathname === item.path || location.pathname.startsWith(item.path + '/');
                 return (
                   <NavLink
-                    key={item.path}
+                    key={`${group.label}-${item.path}-${item.label}`}
                     to={item.path}
                     className={cn(
-                      'group relative flex items-center gap-2.5 h-8 px-3 rounded-md text-[13px] transition-colors',
+                      'group relative flex items-center gap-2.5 h-9 px-3 rounded-md text-[13px] transition-colors',
                       isActive
                         ? 'bg-surface-hover text-foreground pl-[10px] border-l-2 border-primary rounded-l-none'
                         : 'text-muted-foreground hover:text-foreground hover:bg-white/[0.04]',
@@ -168,11 +149,11 @@ const Sidebar = ({ collapsed, onToggle, onOpenCommandPalette }: SidebarProps) =>
                   </NavLink>
                 );
               })}
-              {group.label === 'Departments' && (
+              {group.label === 'Workforce' && (
                 <button
                   onClick={() => openAgentBuilder()}
                   className={cn(
-                    'flex items-center gap-2.5 h-8 px-3 rounded-md text-[13px] text-primary hover:bg-emerald-500/[0.08] transition-colors w-full',
+                    'flex items-center gap-2.5 h-9 px-3 rounded-md text-[13px] text-primary hover:bg-emerald-500/[0.08] transition-colors w-full',
                     collapsed && 'justify-center px-2',
                   )}
                   aria-label="New agent"
