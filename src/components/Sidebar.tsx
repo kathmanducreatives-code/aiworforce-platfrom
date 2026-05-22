@@ -3,9 +3,9 @@ import { NavLink, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import {
   LayoutDashboard, Calendar, Search, Brain, Target, TrendingUp,
-  Mail, Share2, BarChart3, LogOut, HelpCircle,
-  PanelLeftClose, PanelLeft, Users, Briefcase, Crosshair, Zap, Radar, Eye, Inbox,
-  Sparkles, Megaphone, BookOpen, Plus,
+  Mail, BarChart3, LogOut, HelpCircle,
+  PanelLeftClose, PanelLeft, Users, Eye, Inbox,
+  Sparkles, Megaphone, BookOpen, Plus, MessageSquare,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { openAgentBuilder } from '@/hooks/useAgentBuilder';
@@ -17,18 +17,16 @@ interface NavGroup {
 
 const navGroups: NavGroup[] = [
   {
-    label: 'Hire',
+    label: 'Workspace',
     items: [
       { path: '/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
       { path: '/awaiting-you', icon: Inbox, label: 'Awaiting You', badge: '4', badgeColor: 'amber' },
-      { path: '/screening-jobs', icon: Briefcase, label: 'Job Screening' },
-      { path: '/candidates', icon: Users, label: 'Candidates' },
-      { path: '/expert-marketplace', icon: Users, label: 'Expert Interviews' },
-      { path: '/interview-scheduler', icon: Calendar, label: 'Interviews' },
+      // TODO: route to /conversations in later pass
+      { path: '/dashboard', icon: MessageSquare, label: 'Conversations' },
     ],
   },
   {
-    label: 'Departments',
+    label: 'Workforce',
     items: [
       { path: '/rooms/talent',       icon: Sparkles,  label: 'Talent' },
       { path: '/rooms/growth',       icon: Megaphone, label: 'Growth' },
@@ -37,7 +35,7 @@ const navGroups: NavGroup[] = [
     ],
   },
   {
-    label: 'Find',
+    label: 'Intelligence',
     items: [
       { path: '/lead-scraper', icon: Search, label: 'Lead Scraper' },
       { path: '/icp-intelligence', icon: Target, label: 'ICP Intelligence' },
@@ -45,22 +43,14 @@ const navGroups: NavGroup[] = [
       { path: '/growth-signals', icon: TrendingUp, label: 'Growth Signals' },
       { path: '/talent-intel', icon: Users, label: 'Talent Intel' },
       { path: '/competitor-intel', icon: Eye, label: 'Competitor Intel' },
-    ],
-  },
-  {
-    label: 'Engage',
-    items: [
-      { path: '/email-sequences', icon: Mail, label: 'Email Sequences' },
-      { path: '/distribution', icon: Share2, label: 'Job Distribution' },
-      { path: '/post-interceptor', icon: Crosshair, label: 'Post Interceptor' },
-      { path: '/lead-crm', icon: Zap, label: 'Lead CRM' },
-      { path: '/competitors', icon: Radar, label: 'Job Tracker' },
-    ],
-  },
-  {
-    label: 'Insights',
-    items: [
       { path: '/analytics', icon: BarChart3, label: 'Analytics' },
+    ],
+  },
+  {
+    label: 'Settings',
+    items: [
+      { path: '/interview-scheduler', icon: Calendar, label: 'Interviews' },
+      { path: '/email-sequences', icon: Mail, label: 'Email Sequences' },
     ],
   },
 ];
