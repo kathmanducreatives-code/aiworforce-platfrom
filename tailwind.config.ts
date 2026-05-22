@@ -19,17 +19,40 @@ export default {
 		},
 		extend: {
 			colors: {
-				border: 'rgba(255, 255, 255, 0.10)',
+				/* — Deep Space layers — */
+				'space-0': '#000000',
+				'space-1': '#050505',
+				'space-2': '#0A0A0A',
+				'space-3': '#101010',
+				'space-4': '#161616',
+				'space-5': '#1F1F1F',
+				/* — Ink hierarchy — */
+				'ink-primary': '#EDEDED',
+				'ink-secondary': '#9CA3AF',
+				'ink-muted': '#6B7280',
+				'ink-faint': '#3F3F46',
+				/* — Hairlines — */
+				hairline: 'rgba(255, 255, 255, 0.06)',
+				'hairline-strong': 'rgba(255, 255, 255, 0.10)',
+				'edge-emerald': 'rgba(16, 185, 129, 0.30)',
+				/* — Emerald system — */
+				'emerald-deep': '#059669',
+				'emerald-core': '#10B981',
+				'emerald-glow-color': '#34D399',
+				'emerald-ambient': 'rgba(16, 185, 129, 0.08)',
+				'emerald-focus': 'rgba(16, 185, 129, 0.25)',
+
+				/* — Legacy aliases — kept so unmigrated components don't break — */
+				border: 'rgba(255, 255, 255, 0.06)',
 				'border-subtle': 'rgba(255, 255, 255, 0.06)',
 				'border-accent': 'rgba(16, 185, 129, 0.30)',
-				// Pass 1 v2 design system — depth layers + new border tokens (additive)
 				'layer-0': '#000000',
-				'layer-1': '#0A0A0A',
-				'layer-2': '#131313',
+				'layer-1': '#050505',
+				'layer-2': '#0A0A0A',
 				'layer-3': 'rgba(255, 255, 255, 0.04)',
 				'border-hairline': 'rgba(255, 255, 255, 0.06)',
 				'border-soft': 'rgba(255, 255, 255, 0.10)',
-				'border-active': 'rgba(16, 185, 129, 0.40)',
+				'border-active': 'rgba(16, 185, 129, 0.30)',
 				input: 'hsl(var(--input))',
 				ring: 'hsl(var(--ring))',
 				background: '#080B0F',
