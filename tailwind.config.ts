@@ -55,11 +55,15 @@ export default {
 				'border-active': 'rgba(16, 185, 129, 0.30)',
 				input: 'hsl(var(--input))',
 				ring: 'hsl(var(--ring))',
-				background: '#080B0F',
-				foreground: '#F0F6FC',
-				'text-tertiary': '#484F58',
-				'surface-elevated': '#131920',
-				'surface-hover': '#1A2332',
+				/* Map shadcn semantic names to Deep Space layers (kept as literals
+				   so light-theme HSL vars still drive the actual painted color via
+				   hsl(var(--background)) in body styles — these literals are the
+				   dark-mode fallback for components that opt out of vars). */
+				background: '#050505',
+				foreground: '#EDEDED',
+				'text-tertiary': '#6B7280',
+				'surface-elevated': '#101010',
+				'surface-hover': '#161616',
 				primary: {
 					'100': 'rgba(16, 185, 129, 0.1)',
 					'200': 'rgba(16, 185, 129, 0.2)',
@@ -69,29 +73,29 @@ export default {
 					dark: '#059669'
 				},
 				secondary: {
-					DEFAULT: '#14B8A5',
-					foreground: '#FFFFFF'
+					DEFAULT: '#0A0A0A',
+					foreground: '#EDEDED'
 				},
 				accent: {
-					DEFAULT: '#1A2332',
-					foreground: '#F0F6FC',
-					secondary: 'rgba(212, 164, 23, 0.1)'
+					DEFAULT: '#161616',
+					foreground: '#EDEDED',
+					secondary: 'rgba(16, 185, 129, 0.08)'
 				},
 				destructive: {
 					DEFAULT: '#F43F5E',
 					foreground: '#FFFFFF'
 				},
 				muted: {
-					DEFAULT: '#131920',
-					foreground: '#7D8590'
+					DEFAULT: '#161616',
+					foreground: '#9CA3AF'
 				},
 				popover: {
-					DEFAULT: '#0D1117',
-					foreground: '#F0F6FC'
+					DEFAULT: '#101010',
+					foreground: '#EDEDED'
 				},
 				card: {
-					DEFAULT: '#0D1117',
-					foreground: '#F0F6FC'
+					DEFAULT: '#101010',
+					foreground: '#EDEDED'
 				},
 				sidebar: {
 					DEFAULT: 'hsl(var(--sidebar-background))',
