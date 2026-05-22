@@ -65,14 +65,11 @@ const MainLayout = ({ children }: MainLayoutProps) => {
           </div>
         </main>
 
-        {/* Persistent bottom command bar (hidden when workspace is open) */}
-        <GlobalChatBar />
+        {/* Persistent command dock — unified composer + agent surface */}
+        <CommandDock />
 
         {/* Full Chat Workspace drawer / fullscreen */}
         <ChatWorkspace />
-
-        {/* Operative Dock (desktop only) — sits beside the chat bar */}
-        {!isMobile && <OperativeDock />}
 
         {/* Agent Builder full-screen takeover (mounted globally) */}
         <AgentBuilderModal />
