@@ -54,7 +54,6 @@ function AgentBadge({ agent, size = 24 }: { agent: AgentProfile; size?: number }
 }
 
 export default function HeroCommandSurface() {
-  const { workspaceId } = useWorkspace();
   const { open, view, setView, setPending } = useChatWorkspace();
 
   const [value, setValue] = useState('');
