@@ -29,6 +29,73 @@ function buildUserMessage(instruction: string, input: string | null | undefined)
   return `Task: ${instruction}\n\nInput from previous step:\n${input}`;
 }
 
+type CompanyBrain = {
+  company_name: string | null;
+  what_we_do: string | null;
+  who_we_sell_to: string | null;
+  voice_and_tone: string | null;
+  do_not_say: unknown;
+  examples: unknown;
+} | null;
+
+function renderCompanyBrain(brain: CompanyBrain): string {
+  if (!brain || (!brain.company_name && !brain.what_we_do && !brain.who_we_sell_to)) {
+    return `<company_brain>
+(empty — workspace has not completed onboarding yet. Rely on the task description for context. Do not invent a company name; refer to it generically as "the company".)
+</company_brain>`;
+  }
+  const donts = Array.isArray(brain.do_not_say) ? (brain.do_not_say as string[]) : [];
+  const examples = Array.isArray(brain.examples) ? (brain.examples as Array<{ label?: string; sample?: string }>) : [];
+  const exampleBlock = examples.length
+    ? `\nExamples of on-brand output:\n${examples.slice(0, 3).map((e, i) => `  ${i + 1}. ${e.label ? `[${e.label}] ` : ''}${e.sample ?? ''}`).join('\n')}`
+    : '';
+  const dontBlock = donts.length ? `\nNever say: ${donts.map((d) => `"${d}"`).join(', ')}` : '';
+  return `<company_brain>
+Company: ${brain.company_name ?? '(unspecified)'}
+What we do: ${brain.what_we_do ?? '(unspecified)'}
+Who we sell to: ${brain.who_we_sell_to ?? '(unspecified)'}
+Voice and tone: ${brain.voice_and_tone ?? '(unspecified)'}${dontBlock}${exampleBlock}
+</company_brain>`;
+}
+
+async function callAnthropicWithRetry(
+  payload: unknown,
+  apiKey: string
+): Promise<{ ok: boolean; data: any; error?: string }> {
+  for (let attempt = 0; attempt < 2; attempt++) {
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), 30_000);
+    try {
+      const res = await fetch("https://api.anthropic.com/v1/messages", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-api-key": apiKey,
+          "anthropic-version": "2023-06-01",
+        },
+        body: JSON.stringify(payload),
+        signal: ctrl.signal,
+      });
+      clearTimeout(timer);
+      const data = await res.json();
+      if (res.ok) return { ok: true, data };
+      if (res.status >= 500 && attempt === 0) {
+        await new Promise((r) => setTimeout(r, 1000));
+        continue;
+      }
+      return { ok: false, data, error: `Anthropic ${res.status}: ${JSON.stringify(data?.error ?? data)}` };
+    } catch (e) {
+      clearTimeout(timer);
+      if (attempt === 0) {
+        await new Promise((r) => setTimeout(r, 1000));
+        continue;
+      }
+      return { ok: false, data: null, error: `fetch failed: ${String(e)}` };
+    }
+  }
+  return { ok: false, data: null, error: "retry exhausted" };
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: cors });
 
@@ -90,36 +157,36 @@ Deno.serve(async (req) => {
     metadata: { step_index, task_id: task.id },
   });
 
-  // 4-6. Call Anthropic
+  // 3b. Load company_brain for this workspace (silent on missing).
+  const { data: brain } = await supabase
+    .from("company_brain")
+    .select("company_name, what_we_do, who_we_sell_to, voice_and_tone, do_not_say, examples")
+    .eq("workspace_id", workspace_id)
+    .maybeSingle();
+
+  const systemPrompt = `${agent.role_prompt}\n\n${renderCompanyBrain(brain as CompanyBrain)}`;
+
+  // 4-6. Call Anthropic (30s timeout, 1 retry on 5xx / network error).
   const model = resolveModel(agent.model);
   let apiText = ""; let tokensIn = 0; let tokensOut = 0; let apiError: string | null = null;
 
-  try {
-    const res = await fetch("https://api.anthropic.com/v1/messages", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "x-api-key": Deno.env.get("ANTHROPIC_API_KEY")!,
-        "anthropic-version": "2023-06-01",
-      },
-      body: JSON.stringify({
-        model,
-        max_tokens: 2048,
-        system: agent.role_prompt,
-        messages: [{ role: "user", content: buildUserMessage(instruction, input) }],
-      }),
-    });
-    const data = await res.json();
-    if (!res.ok) {
-      apiError = `Anthropic ${res.status}: ${JSON.stringify(data?.error ?? data)}`;
-    } else {
-      apiText = data?.content?.[0]?.text ?? "";
-      tokensIn = data?.usage?.input_tokens ?? 0;
-      tokensOut = data?.usage?.output_tokens ?? 0;
-      if (!apiText) apiError = "empty content from Anthropic";
-    }
-  } catch (e) {
-    apiError = `fetch failed: ${String(e)}`;
+  const result = await callAnthropicWithRetry(
+    {
+      model,
+      max_tokens: 2048,
+      system: systemPrompt,
+      messages: [{ role: "user", content: buildUserMessage(instruction, input) }],
+    },
+    Deno.env.get("ANTHROPIC_API_KEY")!
+  );
+
+  if (result.ok) {
+    apiText = result.data?.content?.[0]?.text ?? "";
+    tokensIn = result.data?.usage?.input_tokens ?? 0;
+    tokensOut = result.data?.usage?.output_tokens ?? 0;
+    if (!apiText) apiError = "empty content from Anthropic";
+  } else {
+    apiError = result.error ?? "unknown anthropic error";
   }
 
   // 7b. Failure path
