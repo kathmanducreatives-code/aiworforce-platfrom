@@ -13,20 +13,20 @@ import { toast } from 'sonner';
 const PLACEHOLDERS = [
   'Ask your workforce anything...',
   '@Scout find backend engineers in Berlin',
-  'Summarize this week\u2019s pipeline',
+  'Summarize this week’s pipeline',
   'What changed across competitors today?',
-  '@Penn draft outreach for today\u2019s leads',
+  '@Penn draft outreach for today’s leads',
 ];
 
 const CHIPS = [
   'Brief me on today',
   'Show pending approvals',
-  'What\u2019s @Penn working on?',
+  'What’s @Penn working on?',
   'Run morning standup',
 ];
 
 const AGENT_HEX: Record<string, string> = {
-  scout: '#3B82F6',
+  scout: '#10B981',
   aria: '#8B5CF6',
   penn: '#10B981',
   hawk: '#14B8A6',
@@ -37,11 +37,10 @@ function AgentBadge({ agent, size = 24 }: { agent: AgentProfile; size?: number }
   const hex = AGENT_HEX[agent.id] ?? '#7D8590';
   return (
     <div
-      className="rounded-full flex items-center justify-center shrink-0 ring-[1.5px] ring-emerald-500/60 animate-[dockPulse_3s_ease-in-out_infinite]"
+      className="rounded-full flex items-center justify-center shrink-0 border border-white/[0.04] bg-white/[0.02] shadow-[0_1px_2px_rgba(0,0,0,0.3)] transition-all duration-300 hover:scale-105"
       style={{
         width: size,
         height: size,
-        backgroundColor: `${hex}26`,
         color: hex,
         fontSize: 10,
         fontWeight: 600,
@@ -174,23 +173,16 @@ export default function CommandDock() {
 
   return (
     <>
-      <style>{`
-        @keyframes dockPulse {
-          0%, 100% { box-shadow: 0 0 0 0 rgba(16,185,129,0); }
-          50% { box-shadow: 0 0 0 3px rgba(16,185,129,0.18); }
-        }
-      `}</style>
-
       {/* Focus dim — full viewport, between page and dock */}
       <AnimatePresence>
         {focused && (
           <motion.div
             key="dock-dim"
             initial={{ opacity: 0 }}
-            animate={{ opacity: isMobile ? 0.4 : 0.6 }}
+            animate={{ opacity: isMobile ? 0.3 : 0.5 }}
             exit={{ opacity: 0 }}
-            transition={{ duration: 0.25, ease: 'easeOut' }}
-            className="fixed inset-0 bg-black pointer-events-none z-30"
+            transition={{ duration: 0.2, ease: 'easeOut' }}
+            className="fixed inset-0 bg-[#000000]/60 backdrop-blur-[2px] pointer-events-none z-30"
           />
         )}
       </AnimatePresence>
@@ -202,20 +194,20 @@ export default function CommandDock() {
           bottom: 'calc(env(safe-area-inset-bottom, 0px) + 24px)',
         }}
       >
-        <div className={cn('w-full max-w-4xl pointer-events-auto relative')}>
+        <div className={cn('w-full max-w-3xl pointer-events-auto relative')}>
           {/* Ambient emerald glow */}
           <motion.div
             aria-hidden
             initial={false}
-            animate={{ opacity: focused ? 0.25 : 0.1 }}
+            animate={{ opacity: focused ? 0.15 : 0.05 }}
             transition={{ duration: 0.25, ease: 'easeOut' }}
-            className="absolute -inset-4 rounded-3xl shadow-emerald-glow pointer-events-none"
+            className="absolute -inset-2.5 rounded-2xl bg-emerald-500/10 blur-xl pointer-events-none"
           />
 
-          <div className={cn('glass-surface relative rounded-2xl', isMobile ? 'p-3' : 'p-5')}>
+          <div className={cn('glass-surface relative rounded-2xl border border-white/[0.08] bg-[#0A0A0A]/85 backdrop-blur-xl shadow-2xl', isMobile ? 'p-3' : 'p-4')}>
             {/* Suggestion chips — desktop only, hidden when focused/typing */}
             {!isMobile && (
-              <div className="relative mb-3 h-7">
+              <div className="relative mb-3 h-7 empty:hidden">
                 <AnimatePresence>
                   {!focused && !hasText && (
                     <motion.div
@@ -231,9 +223,9 @@ export default function CommandDock() {
                           key={c}
                           type="button"
                           onClick={() => handleChipClick(c)}
-                          whileHover={{ scale: 1.02 }}
+                          whileHover={{ scale: 1.015 }}
                           transition={{ duration: 0.15, ease: 'easeOut' }}
-                          className="glass-surface shrink-0 rounded-full px-3 py-1.5 text-mono-label text-foreground/70 hover:text-foreground"
+                          className="glass shrink-0 rounded-full px-3 py-1 text-mono-label text-neutral-400 hover:text-foreground border border-white/[0.04] bg-white/[0.01] hover:bg-white/[0.03] hover:border-white/[0.08] transition-all"
                         >
                           {c}
                         </motion.button>
@@ -257,15 +249,15 @@ export default function CommandDock() {
                   onBlur={handleBlur}
                   placeholder=""
                   className={cn(
-                    'w-full resize-none bg-transparent outline-none text-foreground placeholder:text-foreground/40 py-1',
-                    isMobile ? 'text-[14px] leading-[20px] min-h-[36px]' : 'text-[15px] leading-[22px] min-h-[28px]',
+                    'w-full resize-none bg-transparent outline-none text-foreground placeholder:text-neutral-600 py-1 font-sans',
+                    isMobile ? 'text-[14px] leading-[20px] min-h-[36px]' : 'text-[14px] leading-[22px] min-h-[28px]',
                   )}
                   style={{ maxHeight: 88 }}
                 />
                 {!value && (
                   <div className={cn(
-                    'pointer-events-none absolute inset-0 py-1 text-foreground/40',
-                    isMobile ? 'text-[14px] leading-[20px]' : 'text-[15px] leading-[22px]',
+                    'pointer-events-none absolute inset-0 py-1 text-neutral-500 font-sans',
+                    isMobile ? 'text-[14px] leading-[20px]' : 'text-[14px] leading-[22px]',
                   )}>
                     <AnimatePresence mode="wait">
                       <motion.span
@@ -286,7 +278,7 @@ export default function CommandDock() {
               <div className="flex items-center gap-2 shrink-0">
                 <TooltipProvider delayDuration={200}>
                   {!isMobile ? (
-                    <div className="flex items-center gap-1.5">
+                    <div className="flex items-center gap-1.5 mr-1">
                       {visibleAgents.map((a) => (
                         <Tooltip key={a.id}>
                           <TooltipTrigger asChild>
@@ -294,16 +286,16 @@ export default function CommandDock() {
                               <AgentBadge agent={a} />
                             </button>
                           </TooltipTrigger>
-                          <TooltipContent side="top" className="text-xs">{a.name} — ready</TooltipContent>
+                          <TooltipContent side="top" className="text-xs bg-[#0A0A0A] border-white/[0.04] text-neutral-300">{a.name} — active</TooltipContent>
                         </Tooltip>
                       ))}
                     </div>
                   ) : (
-                    <div className="flex items-center gap-1.5">
+                    <div className="flex items-center gap-1.5 mr-1">
                       {visibleAgents.slice(0, 3).map((a) => (
                         <AgentBadge key={a.id} agent={a} size={22} />
                       ))}
-                      <span className="text-mono-label text-foreground/50">+2</span>
+                      <span className="text-mono-label text-neutral-500">+2</span>
                     </div>
                   )}
                 </TooltipProvider>
@@ -313,9 +305,9 @@ export default function CommandDock() {
                     type="button"
                     aria-label="Add agent"
                     onClick={() => openAgentBuilder()}
-                    className="h-6 w-6 rounded-full border border-border-soft text-foreground/40 hover:text-foreground/70 hover:border-border-active flex items-center justify-center transition-colors"
+                    className="h-6 w-6 rounded-full border border-white/[0.06] text-neutral-500 hover:text-neutral-300 hover:bg-white/[0.02] flex items-center justify-center transition-colors"
                   >
-                    <Plus className="h-3 w-3" />
+                    <Plus className="h-3.5 w-3.5" />
                   </button>
                 )}
 
@@ -332,7 +324,7 @@ export default function CommandDock() {
                       animate={{ opacity: 1, scale: 1 }}
                       exit={{ opacity: 0, scale: 0.9 }}
                       transition={{ duration: 0.15, ease: 'easeOut' }}
-                      className="h-7 w-7 rounded-full bg-emerald-500 text-white flex items-center justify-center hover:bg-emerald-400 transition-colors"
+                      className="h-7 w-7 rounded-full bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/20 hover:border-emerald-500/40 hover:text-emerald-300 flex items-center justify-center transition-all duration-200 shadow-sm"
                     >
                       {submitting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <ArrowUp className="h-3.5 w-3.5" />}
                     </motion.button>
@@ -343,7 +335,7 @@ export default function CommandDock() {
                       animate={{ opacity: 1 }}
                       exit={{ opacity: 0 }}
                       transition={{ duration: 0.15 }}
-                      className="text-mono-label text-foreground/50 px-1"
+                      className="text-mono-label text-neutral-500 px-1 select-none"
                     >
                       Enter ↵
                     </motion.span>
@@ -355,7 +347,7 @@ export default function CommandDock() {
                   type="button"
                   aria-label="Expand conversation (Cmd+\\)"
                   onClick={() => open()}
-                  className="h-7 w-7 rounded-full border border-border-soft text-foreground/50 hover:text-foreground hover:border-border-active flex items-center justify-center transition-colors"
+                  className="h-7 w-7 rounded-full border border-white/[0.06] text-neutral-500 hover:text-neutral-300 hover:bg-white/[0.02] flex items-center justify-center transition-colors"
                 >
                   <ChevronUp className="h-3.5 w-3.5" />
                 </button>
