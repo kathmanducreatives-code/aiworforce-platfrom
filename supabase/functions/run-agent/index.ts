@@ -1,178 +1,226 @@
-// run-agent: executes a single task in a plan. Internal-only (called by orchestrate
-// and by approve-and-continue). Uses the service role for all writes.
-// Input: { task_id: string }
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.45.0';
-
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers':
-    'authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version',
+const cors = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-const json = (body: unknown, status = 200) =>
-  new Response(JSON.stringify(body), { status, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+const MODEL_MAP: Record<string, string> = {
+  "claude-haiku-4-5": "claude-haiku-4-5-20251001",
+  "claude-sonnet-4-5": "claude-sonnet-4-5-20250929",
+  "gpt-4o": "claude-haiku-4-5-20251001",
+  "gemini-1.5-pro": "claude-sonnet-4-5-20250929",
+};
+const DEFAULT_MODEL = "claude-haiku-4-5-20251001";
 
-const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
-const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+function resolveModel(raw: string): string {
+  if (MODEL_MAP[raw]) {
+    if (raw === "gpt-4o" || raw === "gemini-1.5-pro") {
+      console.error(`[run-agent] remapping non-Anthropic model "${raw}" -> ${MODEL_MAP[raw]}`);
+    }
+    return MODEL_MAP[raw];
+  }
+  console.error(`[run-agent] unknown model "${raw}" — defaulting to ${DEFAULT_MODEL}`);
+  return DEFAULT_MODEL;
+}
 
-// Heuristic: certain verbs in a step description require human approval
-function requiresApproval(description: string): boolean {
-  const d = description.toLowerCase();
-  return /\b(send|email|post|publish|message|dm|invite|schedule|book|launch|deploy|reach out|contact)\b/.test(d);
+function buildUserMessage(instruction: string, input: string | null | undefined): string {
+  if (!input || input.length === 0) return `Task: ${instruction}`;
+  return `Task: ${instruction}\n\nInput from previous step:\n${input}`;
 }
 
 Deno.serve(async (req) => {
-  if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
+  if (req.method === "OPTIONS") return new Response("ok", { headers: cors });
+
+  const supabase = createClient(
+    Deno.env.get("SUPABASE_URL")!,
+    Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
+  );
+
+  let body: any;
+  try {
+    body = await req.json();
+  } catch (e) {
+    console.error("[run-agent] bad json:", e);
+    return new Response(JSON.stringify({ error: "invalid json body" }), {
+      status: 400, headers: { ...cors, "Content-Type": "application/json" }
+    });
+  }
+
+  const { task_plan_id, step_index, agent_id, workspace_id, instruction, input, needs_approval } = body;
+
+  if (!task_plan_id || step_index === undefined || !agent_id || !workspace_id || !instruction) {
+    return new Response(JSON.stringify({ error: "missing required fields" }), {
+      status: 400, headers: { ...cors, "Content-Type": "application/json" }
+    });
+  }
+
+  // 1. Insert task row (status default 'running')
+  const { data: task, error: taskErr } = await supabase
+    .from("tasks")
+    .insert({ task_plan_id, agent_id, workspace_id, step_index, input: input ?? null, status: "running" })
+    .select()
+    .single();
+
+  if (taskErr || !task) {
+    console.error("[run-agent] failed to insert task:", taskErr);
+    return new Response(JSON.stringify({ error: "failed to insert task", detail: taskErr }), {
+      status: 500, headers: { ...cors, "Content-Type": "application/json" }
+    });
+  }
+
+  // 3. Load agent
+  const { data: agent, error: agentErr } = await supabase
+    .from("agents").select("id, name, model, role_prompt, department").eq("id", agent_id).single();
+
+  if (agentErr || !agent) {
+    console.error("[run-agent] failed to load agent:", agentErr);
+    await supabase.from("tasks").update({ status: "failed", output: "[ERROR] agent not found" }).eq("id", task.id);
+    return new Response(JSON.stringify({ error: "agent not found", detail: agentErr }), {
+      status: 404, headers: { ...cors, "Content-Type": "application/json" }
+    });
+  }
+
+  // 2. step_started event (after agent load so we have the name)
+  await supabase.from("activity_feed").insert({
+    workspace_id, task_plan_id, agent_id,
+    event_type: "step_started",
+    title: `${agent.name} started`,
+    body: instruction,
+    metadata: { step_index, task_id: task.id },
+  });
+
+  // 4-6. Call Anthropic
+  const model = resolveModel(agent.model);
+  let apiText = ""; let tokensIn = 0; let tokensOut = 0; let apiError: string | null = null;
 
   try {
-    const { task_id } = await req.json().catch(() => ({}));
-    if (typeof task_id !== 'string') return json({ error: 'task_id required' }, 400);
-
-    const admin = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
-
-    // Load task + plan + agent
-    const { data: task, error: taskErr } = await admin
-      .from('tasks')
-      .select('id, plan_id, agent_id, step_index, description, status')
-      .eq('id', task_id)
-      .single();
-    if (taskErr || !task) return json({ error: 'task not found' }, 404);
-    if (task.status !== 'pending') return json({ ok: true, skipped: true });
-
-    const { data: plan } = await admin
-      .from('task_plans')
-      .select('id, workspace_id')
-      .eq('id', task.plan_id)
-      .single();
-    if (!plan) return json({ error: 'plan not found' }, 404);
-
-    const { data: agent } = await admin
-      .from('agents')
-      .select('id, slug, name, department')
-      .eq('id', task.agent_id!)
-      .single();
-
-    // Mark task running + agent running
-    const startedAt = new Date().toISOString();
-    await admin.from('tasks').update({ status: 'running', started_at: startedAt }).eq('id', task.id);
-    if (agent) {
-      await admin
-        .from('agents')
-        .update({ status: 'running', current_task: task.description, last_active_at: startedAt, progress: 25 })
-        .eq('id', agent.id);
-      await admin.from('activity_feed').insert({
-        workspace_id: plan.workspace_id,
-        plan_id: plan.id,
-        agent_id: agent.id,
-        event_type: 'agent_started',
-        title: `${agent.name} started`,
-        body: task.description,
-      });
-    }
-
-    // Simulate work — small delay so the UI shows the running state
-    await new Promise((r) => setTimeout(r, 600));
-
-    // Decide: needs approval or completes
-    if (requiresApproval(task.description)) {
-      await admin
-        .from('approvals')
-        .insert({
-          workspace_id: plan.workspace_id,
-          plan_id: plan.id,
-          agent_id: agent?.id ?? null,
-          task_id: task.id,
-          title: `${agent?.name ?? 'Agent'} needs approval`,
-          description: task.description,
-          payload: { step_index: task.step_index },
-          status: 'pending',
-        });
-      if (agent) {
-        await admin.from('agents').update({ status: 'awaiting_approval', progress: 80 }).eq('id', agent.id);
-      }
-      await admin.from('task_plans').update({ status: 'awaiting_approval' }).eq('id', plan.id);
-      await admin.from('activity_feed').insert({
-        workspace_id: plan.workspace_id,
-        plan_id: plan.id,
-        agent_id: agent?.id ?? null,
-        event_type: 'awaiting_approval',
-        title: `Awaiting your approval`,
-        body: task.description,
-      });
-      return json({ ok: true, awaiting_approval: true });
-    }
-
-    // Complete task
-    const finishedAt = new Date().toISOString();
-    await admin
-      .from('tasks')
-      .update({ status: 'complete', finished_at: finishedAt, output: { note: 'auto-completed' } })
-      .eq('id', task.id);
-
-    // Find next task
-    const { data: nextTasks } = await admin
-      .from('tasks')
-      .select('id, agent_id, step_index, description')
-      .eq('plan_id', plan.id)
-      .eq('status', 'pending')
-      .order('step_index', { ascending: true })
-      .limit(1);
-    const next = nextTasks?.[0];
-
-    if (next) {
-      // Handoff
-      if (agent && next.agent_id) {
-        await admin.from('handoffs').insert({
-          plan_id: plan.id,
-          from_agent_id: agent.id,
-          to_agent_id: next.agent_id,
-          payload: { from_step: task.step_index, to_step: next.step_index },
-        });
-        const { data: nextAgent } = await admin
-          .from('agents')
-          .select('name')
-          .eq('id', next.agent_id)
-          .single();
-        await admin.from('activity_feed').insert({
-          workspace_id: plan.workspace_id,
-          plan_id: plan.id,
-          agent_id: next.agent_id,
-          event_type: 'handoff',
-          title: `${agent.name} → ${nextAgent?.name ?? 'next agent'}`,
-          body: next.description,
-          metadata: { from_agent: agent.name, to_agent: nextAgent?.name },
-        });
-      }
-      if (agent) {
-        await admin.from('agents').update({ status: 'idle', progress: 0, current_task: null }).eq('id', agent.id);
-      }
-      // Recurse
-      admin.functions
-        .invoke('run-agent', { body: { task_id: next.id } })
-        .catch((e) => console.error('next run-agent invoke failed', e));
-      return json({ ok: true, next_task_id: next.id });
-    }
-
-    // No more tasks — plan complete
-    if (agent) {
-      await admin.from('agents').update({ status: 'idle', progress: 0, current_task: null }).eq('id', agent.id);
-    }
-    await admin
-      .from('task_plans')
-      .update({ status: 'complete', completed_at: finishedAt })
-      .eq('id', plan.id);
-    await admin.from('activity_feed').insert({
-      workspace_id: plan.workspace_id,
-      plan_id: plan.id,
-      event_type: 'plan_complete',
-      title: 'Plan complete',
-      body: 'All steps finished.',
+    const res = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-api-key": Deno.env.get("ANTHROPIC_API_KEY")!,
+        "anthropic-version": "2023-06-01",
+      },
+      body: JSON.stringify({
+        model,
+        max_tokens: 2048,
+        system: agent.role_prompt,
+        messages: [{ role: "user", content: buildUserMessage(instruction, input) }],
+      }),
     });
-    return json({ ok: true, complete: true });
+    const data = await res.json();
+    if (!res.ok) {
+      apiError = `Anthropic ${res.status}: ${JSON.stringify(data?.error ?? data)}`;
+    } else {
+      apiText = data?.content?.[0]?.text ?? "";
+      tokensIn = data?.usage?.input_tokens ?? 0;
+      tokensOut = data?.usage?.output_tokens ?? 0;
+      if (!apiText) apiError = "empty content from Anthropic";
+    }
   } catch (e) {
-    const msg = e instanceof Error ? e.message : String(e);
-    console.error('run-agent error', msg);
-    return json({ error: msg }, 500);
+    apiError = `fetch failed: ${String(e)}`;
   }
+
+  // 7b. Failure path
+  if (apiError) {
+    console.error("[run-agent] api failure:", apiError);
+    await supabase.from("tasks").update({
+      status: "failed", output: `[ERROR] ${apiError}`,
+    }).eq("id", task.id);
+    await supabase.from("activity_feed").insert({
+      workspace_id, task_plan_id, agent_id,
+      event_type: "step_failed",
+      title: `${agent.name} failed`,
+      body: apiError,
+      metadata: { step_index, task_id: task.id },
+    });
+    await supabase.from("task_plans").update({ status: "failed" }).eq("id", task_plan_id);
+    return new Response(JSON.stringify({ error: "step failed", detail: apiError, task_id: task.id }), {
+      status: 500, headers: { ...cors, "Content-Type": "application/json" }
+    });
+  }
+
+  // 7a. Success — update task
+  const finalStatus = needs_approval ? "awaiting_approval" : "done";
+  await supabase.from("tasks").update({
+    output: apiText, tokens_in: tokensIn, tokens_out: tokensOut, status: finalStatus,
+  }).eq("id", task.id);
+
+  // 8. Load plan to find next step
+  const { data: plan } = await supabase.from("task_plans").select("plan, current_step").eq("id", task_plan_id).single();
+  const steps = plan?.plan?.steps ?? [];
+  const nextStep = steps[step_index + 1] ?? null;
+
+  // 9. needs_approval branch
+  if (needs_approval) {
+    await supabase.from("approvals").insert({
+      workspace_id, task_id: task.id, task_plan_id, agent_id,
+      title: `${agent.name} needs approval`,
+      summary: instruction,
+      payload: { output: apiText, next_step: nextStep },
+      status: "pending",
+    });
+    await supabase.from("activity_feed").insert({
+      workspace_id, task_plan_id, agent_id,
+      event_type: "awaiting_approval",
+      title: `${agent.name} awaiting approval`,
+      body: `${agent.name}'s output needs your review before continuing.`,
+      metadata: { step_index, task_id: task.id },
+    });
+    await supabase.from("task_plans").update({ status: "awaiting_approval" }).eq("id", task_plan_id);
+    return new Response(JSON.stringify({ success: true, task_id: task.id, status: "awaiting_approval" }),
+      { headers: { ...cors, "Content-Type": "application/json" } });
+  }
+
+  // 10. Chain to next step
+  if (nextStep) {
+    await supabase.from("handoffs").insert({
+      workspace_id, from_agent_id: agent_id, to_agent_id: nextStep.agent_id,
+      task_id: task.id, task_plan_id,
+    });
+    await supabase.from("activity_feed").insert({
+      workspace_id, task_plan_id, agent_id,
+      event_type: "step_completed",
+      title: `${agent.name} finished`,
+      body: `${agent.name} finished. Handing to ${nextStep.agent_name}.`,
+      metadata: { step_index, task_id: task.id, next_agent_id: nextStep.agent_id },
+    });
+    await supabase.from("task_plans").update({ current_step: step_index + 1 }).eq("id", task_plan_id);
+
+    // fire-and-forget
+    fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/run-agent`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`,
+      },
+      body: JSON.stringify({
+        task_plan_id,
+        step_index: step_index + 1,
+        agent_id: nextStep.agent_id,
+        workspace_id,
+        instruction: nextStep.instruction,
+        input: apiText,
+        needs_approval: nextStep.needs_approval,
+      }),
+    }).catch((e) => console.error("[run-agent] chain fetch failed:", e));
+
+    return new Response(JSON.stringify({
+      success: true, task_id: task.id, status: "done", next_agent: nextStep.agent_name,
+    }), { headers: { ...cors, "Content-Type": "application/json" } });
+  }
+
+  // 11. Final step — plan complete
+  await supabase.from("activity_feed").insert({
+    workspace_id, task_plan_id, agent_id,
+    event_type: "plan_completed",
+    title: "Plan completed",
+    body: `${plan?.plan?.plan_summary ?? "Plan"} — complete.`,
+    metadata: { step_index, task_id: task.id },
+  });
+  await supabase.from("task_plans").update({ status: "done" }).eq("id", task_plan_id);
+
+  return new Response(JSON.stringify({ success: true, task_id: task.id, status: "done", complete: true }),
+    { headers: { ...cors, "Content-Type": "application/json" } });
 });
