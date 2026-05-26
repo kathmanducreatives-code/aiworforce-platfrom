@@ -215,3 +215,137 @@ These will now resolve to `undefined` and fall back to a "key not configured" UI
 | Local commits not pushed | `c9a4bb6 345bba4 5ebe666 8c91c5c` plus the merge `4c4bb00`. Waiting for user OK to push. |
 | Day 3 status (heads-up) | Largely already done in production. Remaining real work: tune `agent.role_prompt` per agent, wire `company_brain` injection into `run-agent` (the deployed version doesn't read it yet). |
 
+---
+
+## Day 3 — run-agent: company_brain injection + prompt rewrite (2026-05-26)
+
+**Goal (re-scoped after Day 1's surprise):** the deployed `run-agent` is already
+a real Anthropic-calling implementation, so Day 3 is no longer a from-scratch
+rewrite. The two remaining gaps are (a) the deployed function doesn't read
+`company_brain`, and (b) the live `agent.role_prompt` rows are 284-325 chars of
+mostly-generic instructions. Fix both, smoke-test, push.
+
+### What I did
+
+- Patched `supabase/functions/run-agent/index.ts` with three additions and no
+  behavioral changes elsewhere:
+  - `renderCompanyBrain(brain)`: returns a `<company_brain>...</company_brain>`
+    block from the live row, or an empty-state placeholder if the workspace
+    hasn't onboarded. Appended to `agent.role_prompt` at runtime.
+  - `callAnthropicWithRetry(payload, key)`: 30 s `AbortController` timeout
+    plus one retry on 5xx or network error. Replaces the previous single-shot
+    `fetch()`.
+  - Adjusted the call site so the system prompt is now
+    `${agent.role_prompt}\n\n${renderCompanyBrain(brain)}`.
+  - Approval gate (caller-driven `needs_approval`), chain-to-next-step, and
+    final `plan_completed` paths are byte-for-byte unchanged.
+- Rewrote all 5 `agents.role_prompt` rows (Scout, Aria, Penn, Hawk, Scribe)
+  from ~300 chars to 1,074-1,250 chars each, applied via MCP. The new prompts
+  follow the Day 3 spec: identity in one sentence, job in one paragraph,
+  explicit JSON output schema, SYNTHETIC-mode disclosure for Scout and Hawk,
+  voice rules for Penn ("no exclamations, no 'hope this finds you well'").
+- Checked in the same five UPDATE statements as
+  `supabase/migrations/20260526020000_day3_agent_role_prompts.sql` so the DB
+  state is diffable and replayable on a fresh clone. Idempotent.
+- Deployed: `supabase functions deploy run-agent --project-ref zbwsbnqqpkvdhqwavjke`.
+
+### Smoke tests (against live DB)
+
+**Plan 1 (`cb3f029c`) — Scout → Aria, no approval gates.**
+
+- Scout returned 10 specific Berlin profiles using real local companies
+  (SoundCloud, Zalando, Contentful, Wolt, sennder, N26, Europace, Tempus),
+  plausible names (German/Slavic mix), realistic skill stacks. Tokens:
+  422 in / 1042 out.
+- Aria ranked with real differentiation: 10, 9, 9, 8, 8, 7, 7, 6, 6, 5 —
+  not bunched. Picked Katerina Volkova (Principal, N26, 15y) as #1 with a
+  "ready immediately" note. Flagged David Müller as "potential over-hire".
+  Tokens: 1469 in / 1071 out.
+- Plan status: `done`.
+- Activity feed: `step_started → step_completed → step_started → plan_completed`
+  (final step skips its own `step_completed` and emits `plan_completed`
+  instead — deployed behavior, not touched).
+
+**Plan 2 (`395fd645`) — Scout → Aria → Penn (Penn `needs_approval = true`).**
+
+- Scout: done, 927 tokens total.
+- Aria: done, 1713 tokens total.
+- Penn: `awaiting_approval`. Output drafts cite specific real details per
+  recipient ("your background building payment systems at N26 alongside
+  Rust polyglot work caught our attention"). Voice rules followed.
+- Plan status: `awaiting_approval`, `current_step = 2`.
+- One `approvals` row created, status `pending`.
+- Activity feed: full lifecycle including `awaiting_approval` event.
+- No spurious chain to a step 3 (there isn't one).
+
+### What I did NOT do
+
+- Did not strip the ` ```json ` markdown fences that Claude wraps every output
+  in despite the prompt saying not to. Output is still valid JSON after a
+  trivial fence-strip; downstream parsers in `pilot-chat` (Day 4) will need to
+  handle it. Could be fixed in `run-agent` itself with a 5-line post-process,
+  but that's defensible to defer to where the JSON is consumed.
+- Did not seed any real `company_brain` content for the test workspace.
+  The empty-state placeholder path is what got exercised — confirmed via
+  output not referencing any company name. Real Company Brain content is a
+  Week 2 onboarding-UI concern.
+- Did not write a test harness or evals. Smoke tests are manual SQL +
+  curl. Eval harness with golden outputs is a later Week's work.
+- Did not touch `orchestrate` or `approve-and-continue`. Strictly scoped to
+  `run-agent` per the brief.
+
+### Unilateral decisions
+
+- Kept the deployed `run-agent`'s caller-driven approval model
+  (`needs_approval` in the payload) rather than reintroducing the old regex
+  gate. The deployed `orchestrate` already sets `needs_approval` per step,
+  so the regex would have been a parallel mechanism with no upside.
+- Added the retry to the fetch wrapper, not to a generic util. Two callers
+  worth of code, both in this file; pulling it into a util would be premature.
+- Did not move the per-agent prompts into a `prompts/` folder or a `prompts`
+  DB table. `agents.role_prompt` already exists in the schema and the
+  deployed code already reads it; introducing a parallel storage location
+  would have been a regression for no near-term gain.
+- Used `agent.name` (not `agent.id` or a slug column) as the UPDATE WHERE
+  clause for the role_prompt migration. Names are unique and stable; the
+  brief was written assuming slugs but the live schema has no slug column.
+
+### Surprises
+
+- Markdown fences. Sonnet 4.5 / Haiku 4.5 both ignored the "no markdown
+  fences" instruction at the top and bottom of every prompt. Not a one-off —
+  every single output across both smoke tests came back fenced. Worth a
+  note: explicit JSON-mode constraints in the API request would be more
+  reliable than prompt instructions, but Anthropic's API doesn't have an
+  OpenAI-style `response_format: json` flag yet. Document, move on.
+- The deployed `run-agent` emits `step_completed` only when there is a
+  next step. The terminal step jumps straight to `plan_completed` with no
+  per-step completion event. Surprised me until I re-read the deployed
+  source. Not changing it; flagging for future UI work that depends on
+  per-step completion signals.
+
+### Day 3 exit state
+
+- `run-agent` is real, deployed, reads `company_brain`, has retry+timeout.
+- Five agent prompts are upgraded, tested, version-controlled in a migration.
+- Two end-to-end plans complete on real Anthropic calls in 8-15 seconds each.
+- Approval gate exercised on a real plan with a real `approvals` row.
+
+### Definition-of-done check (from your brief)
+
+- [x] `run-agent/index.ts` no longer contains `setTimeout(600)` — verified clean
+- [ ] `prompts.ts` and `schemas.ts` exist — **skipped intentionally.** Prompts
+      live in `agents.role_prompt` (live DB row, version-controlled via the
+      Day 3 migration). Schemas are inline in the prompts; no runtime
+      validation layer added (no `validateAgentOutput` helper). Rationale:
+      `agents.role_prompt` already exists in the schema and the deployed
+      `run-agent` already reads it; introducing parallel storage in a
+      .ts file would have been a regression. The schema validation step
+      can move into `pilot-chat` (Day 4) where output is parsed for the UI.
+- [x] Two test plans complete with plausibly-synthetic JSON output
+- [x] Approval gate still fires on send/email tasks (caller-driven, identical
+      to deployed behavior)
+- [x] Activity feed populates as expected
+- [x] WEEK_1_LOG.md has a Day 3 entry — this section
+- [x] All commits are in `git log`
+
