@@ -15,93 +15,87 @@ const AuthenticatedBackground = () => {
   }, []);
 
   return (
-    <div
-      className="fixed inset-0 pointer-events-none z-0 overflow-hidden"
-      style={{
-        background: isLight ? '#f8f8f8' : '#020202',
-        opacity: isLight ? 0.35 : 1,
-      }}
-    >
-      {/* 1. Breathing Nebula Glows */}
+    <div className="fixed inset-0 pointer-events-none z-0 overflow-hidden bg-[#030303] transition-colors duration-500">
+      {/* 1. Ambient Cinematic Deep Space Glows */}
       <div
-       className="absolute top-[-10%] left-1/2 -translate-x-1/2 w-[900px] h-[600px] rounded-full blur-[180px] opacity-25 pointer-events-none"
+        className="absolute top-[-15%] left-1/2 -translate-x-1/2 w-[1000px] h-[700px] rounded-full blur-[160px] opacity-[0.12] pointer-events-none"
         style={{
-          background: 'radial-gradient(circle, rgba(16, 185, 129, 0.45) 0%, transparent 70%)',
-          animation: 'nebula-breathe 8s ease-in-out infinite',
+          background: 'radial-gradient(circle, rgba(16, 185, 129, 0.35) 0%, transparent 80%)',
+          animation: 'nebula-breathe 12s ease-in-out infinite',
         }}
       />
       <div
-        className="absolute bottom-[-5%] right-[-5%] w-[800px] h-[800px] rounded-full blur-[180px] opacity-20 pointer-events-none"
+        className="absolute bottom-[-10%] right-[-10%] w-[900px] h-[900px] rounded-full blur-[180px] opacity-[0.10] pointer-events-none"
         style={{
-          background: 'radial-gradient(circle, rgba(16, 185, 129, 0.4) 0%, transparent 70%)',
-          animation: 'nebula-breathe 8s ease-in-out infinite 3s',
+          background: 'radial-gradient(circle, rgba(16, 185, 129, 0.3) 0%, transparent 80%)',
+          animation: 'nebula-breathe 12s ease-in-out infinite 4s',
         }}
       />
       <div
-        className="absolute top-[35%] left-[-5%] w-[600px] h-[600px] rounded-full blur-[160px] opacity-15 pointer-events-none"
+        className="absolute top-[30%] left-[-10%] w-[700px] h-[700px] rounded-full blur-[150px] opacity-[0.08] pointer-events-none"
         style={{
-          background: 'radial-gradient(circle, rgba(16, 185, 129, 0.35) 0%, transparent 70%)',
-          animation: 'nebula-breathe 8s ease-in-out infinite 6s',
+          background: 'radial-gradient(circle, rgba(16, 185, 129, 0.25) 0%, transparent 80%)',
+          animation: 'nebula-breathe 12s ease-in-out infinite 8s',
         }}
       />
 
-      {/* 2. Drifting Grid — large panels with glassy feel */}
+      {/* 2. Restrained Tech Blueprint Grid (Drifting, faint and elegant) */}
       <div
-        className="absolute inset-[-50%] w-[200%] h-[200%]"
+        className="absolute inset-[-50%] w-[200%] h-[200%] opacity-[0.18]"
         style={{
           backgroundImage: `
-            linear-gradient(rgba(16, 185, 129, 0.12) 1px, transparent 1px),
-            linear-gradient(90deg, rgba(16, 185, 129, 0.12) 1px, transparent 1px)
+            linear-gradient(rgba(255, 255, 255, 0.03) 1px, transparent 1px),
+            linear-gradient(90deg, rgba(255, 255, 255, 0.03) 1px, transparent 1px)
           `,
-          backgroundSize: '140px 140px',
-          animation: 'grid-drift 60s linear infinite',
+          backgroundSize: '120px 120px',
+          animation: 'grid-drift 80s linear infinite',
         }}
       />
-      {/* Grid cell inner glow — gives each panel a glassy sheen */}
+      {/* Grid intersection micro-glows */}
       <div
-        className="absolute inset-[-50%] w-[200%] h-[200%]"
+        className="absolute inset-[-50%] w-[200%] h-[200%] opacity-[0.08]"
         style={{
           backgroundImage: `
-            radial-gradient(ellipse 100px 100px at 70px 70px, rgba(16, 185, 129, 0.06) 0%, transparent 70%)
+            radial-gradient(ellipse 80px 80px at 60px 60px, rgba(16, 185, 129, 0.12) 0%, transparent 80%)
           `,
-          backgroundSize: '140px 140px',
-          animation: 'grid-drift 60s linear infinite',
+          backgroundSize: '120px 120px',
+          animation: 'grid-drift 80s linear infinite',
         }}
       />
-      {/* Intersection dots */}
+      {/* Intersection coordinates/dots */}
       <div
-        className="absolute inset-[-50%] w-[200%] h-[200%]"
+        className="absolute inset-[-50%] w-[200%] h-[200%] opacity-[0.25]"
         style={{
-          backgroundImage: `radial-gradient(circle 2px at 0px 0px, rgba(16, 185, 129, 0.35) 0%, transparent 100%)`,
-          backgroundSize: '140px 140px',
-          animation: 'grid-drift 60s linear infinite',
+          backgroundImage: `radial-gradient(circle 1px at 0px 0px, rgba(16, 185, 129, 0.2) 0%, transparent 100%)`,
+          backgroundSize: '120px 120px',
+          animation: 'grid-drift 80s linear infinite',
         }}
       />
 
-      {/* 3. Starfield */}
+      {/* 3. Deep Space Starfield (Subtle, varied depth) */}
       <div
-        className="absolute inset-0"
+        className="absolute inset-0 opacity-[0.4]"
         style={{
-          backgroundImage: `radial-gradient(circle at 12px 12px, rgba(255, 255, 255, 0.35) 1px, transparent 1px)`,
-          backgroundSize: '160px 160px',
+          backgroundImage: `radial-gradient(circle at 12px 12px, rgba(255, 255, 255, 0.2) 0.5px, transparent 0.5px)`,
+          backgroundSize: '180px 180px',
           backgroundPosition: '0 0',
         }}
       />
       <div
-        className="absolute inset-0"
+        className="absolute inset-0 opacity-[0.3]"
         style={{
-          backgroundImage: `radial-gradient(circle at 80px 40px, rgba(16, 185, 129, 0.25) 1px, transparent 1px)`,
-          backgroundSize: '200px 200px',
-          backgroundPosition: '32px 32px',
+          backgroundImage: `radial-gradient(circle at 90px 45px, rgba(16, 185, 129, 0.15) 0.5px, transparent 0.5px)`,
+          backgroundSize: '240px 240px',
+          backgroundPosition: '40px 40px',
         }}
       />
       <div
-        className="absolute inset-0"
+        className="absolute inset-0 opacity-[0.5]"
         style={{
-          backgroundImage: `radial-gradient(circle at 50px 110px, rgba(255, 255, 255, 0.2) 0.5px, transparent 0.5px)`,
-          backgroundSize: '120px 130px',
-          backgroundPosition: '10px 20px',
-          animation: 'star-twinkle 3s ease-in-out infinite',
+          backgroundImage: `radial-gradient(circle at 60px 130px, rgba(255, 255, 255, 0.18) 0.5px, transparent 0.5px)`,
+          backgroundSize: '140px 150px',
+          backgroundPosition: '15px 25px',
+          animation: 'star-twinkle 4s ease-in-out infinite',
         }}
       />
     </div>

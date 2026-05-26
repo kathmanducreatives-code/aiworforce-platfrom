@@ -69,14 +69,14 @@ const Sidebar = ({ collapsed, onToggle, onOpenCommandPalette }: SidebarProps) =>
   return (
     <aside
       className={cn(
-        'fixed left-0 top-0 h-screen z-40 flex flex-col bg-background transition-all duration-300',
+        'fixed left-0 top-0 h-screen z-40 flex flex-col bg-[#050505]/40 backdrop-blur-xl border-r border-white/[0.04] transition-all duration-300',
         collapsed ? 'w-[64px]' : 'w-[248px]'
       )}
     >
       {/* Workspace header */}
-      <div className={cn('flex items-center gap-3 px-3 py-4', collapsed && 'justify-center px-0')}>
-        <div className="w-7 h-7 rounded-full flex items-center justify-center text-[12px] font-medium text-white shrink-0"
-             style={{ background: 'linear-gradient(135deg, #10B981 0%, #0EA5E9 100%)' }}>
+      <div className={cn('flex items-center gap-3 px-4 py-5 border-b border-white/[0.03]', collapsed && 'justify-center px-0')}>
+        <div className="w-7 h-7 rounded-full flex items-center justify-center text-[12px] font-medium text-white shrink-0 shadow-inner"
+             style={{ background: 'linear-gradient(135deg, hsl(var(--primary-dark)) 0%, hsl(var(--primary)) 100%)' }}>
           {profile?.full_name?.[0]?.toUpperCase() || 'S'}
         </div>
         {!collapsed && (
@@ -84,37 +84,40 @@ const Sidebar = ({ collapsed, onToggle, onOpenCommandPalette }: SidebarProps) =>
             <div className="flex-1 min-w-0">
               <p className="text-[13px] font-medium text-foreground truncate leading-tight">{profile?.full_name || 'ScreeningPilot'}</p>
             </div>
-            <span className="text-[9px] tracking-wider text-primary border border-primary/40 rounded-full px-1.5 py-px">
+            <span className="text-[9px] font-mono tracking-wider text-emerald-400 border border-emerald-500/20 bg-emerald-500/5 rounded px-1.5 py-px">
               PRO
             </span>
           </>
         )}
       </div>
 
-      {/* Search */}
+      {/* Search Button */}
       {!collapsed && onOpenCommandPalette && (
         <button
           onClick={onOpenCommandPalette}
-          className="mx-3 mb-2 flex items-center gap-2 px-3 h-8 rounded-md bg-white/[0.03] hover:bg-white/[0.06] text-[12px] text-muted-foreground hover:text-foreground transition-colors"
+          className="mx-3 mt-4 mb-2 flex items-center gap-2 px-3 h-8 rounded-md bg-white/[0.02] border border-white/[0.04] hover:bg-white/[0.04] hover:border-white/[0.08] text-[12px] text-neutral-400 hover:text-foreground transition-all duration-200"
         >
-          <Search className="h-3.5 w-3.5" />
+          <Search className="h-3.5 w-3.5 text-neutral-500" />
           <span className="flex-1 text-left">Search</span>
-          <kbd className="text-[9px] text-text-tertiary font-mono">⌘K</kbd>
+          <kbd className="text-[9px] text-neutral-600 font-mono">⌘K</kbd>
         </button>
       )}
       {collapsed && onOpenCommandPalette && (
-        <button onClick={onOpenCommandPalette} className="mx-auto mb-2 p-2 rounded-md hover:bg-white/[0.04] transition-colors">
-          <Search className="h-4 w-4 text-muted-foreground" />
+        <button 
+          onClick={onOpenCommandPalette} 
+          className="mx-auto mt-4 mb-2 p-2 rounded-md hover:bg-white/[0.04] border border-transparent hover:border-white/[0.04] transition-all"
+        >
+          <Search className="h-4 w-4 text-neutral-400" />
         </button>
       )}
 
       {/* Navigation */}
-      <nav className="flex-1 overflow-y-auto px-2 py-1">
+      <nav className="flex-1 overflow-y-auto px-2 py-3 space-y-4">
         {navGroups.map((group) => (
-          <div key={group.label} className="mt-6 first:mt-1">
+          <div key={group.label} className="space-y-1">
             {!collapsed && (
-              <div className="flex items-center justify-between pl-3 pr-2 mb-1">
-                <p className="text-mono-label text-text-tertiary">
+              <div className="flex items-center justify-between pl-3 pr-2 mb-1.5">
+                <p className="text-[10px] font-mono font-medium tracking-wider text-neutral-600 uppercase">
                   {group.label}
                 </p>
               </div>
@@ -127,21 +130,21 @@ const Sidebar = ({ collapsed, onToggle, onOpenCommandPalette }: SidebarProps) =>
                     key={`${group.label}-${item.path}-${item.label}`}
                     to={item.path}
                     className={cn(
-                      'group relative flex items-center gap-2.5 h-9 px-3 rounded-md text-[13px] transition-colors',
+                      'group relative flex items-center gap-2.5 h-8.5 px-3 rounded-md text-[13px] transition-all duration-200 border',
                       isActive
-                        ? 'bg-surface-hover text-foreground pl-[10px] border-l-2 border-primary rounded-l-none'
-                        : 'text-muted-foreground hover:text-foreground hover:bg-white/[0.04]',
+                        ? 'bg-white/[0.03] text-foreground border-white/[0.06] shadow-[inset_0_1px_0_0_rgba(255,255,255,0.02)]'
+                        : 'text-neutral-400 hover:text-foreground hover:bg-white/[0.02] border-transparent',
                       collapsed && 'justify-center px-2',
                     )}
                   >
-                    <item.icon className={cn('h-4 w-4 shrink-0', isActive ? 'text-foreground' : 'text-muted-foreground group-hover:text-foreground')} />
+                    <item.icon className={cn('h-4 w-4 shrink-0 transition-colors', isActive ? 'text-emerald-400' : 'text-neutral-400 group-hover:text-foreground')} />
                     {!collapsed && <span className="truncate flex-1">{item.label}</span>}
                     {!collapsed && item.badge && (
                       <span className={cn(
-                        'text-[10px] font-semibold px-1.5 py-px rounded-full tabular-nums',
+                        'text-[10px] font-mono font-medium px-1.5 py-px rounded border tabular-nums',
                         item.badgeColor === 'amber'
-                          ? 'bg-amber-900/60 text-amber-200'
-                          : 'bg-emerald-500/15 text-primary',
+                          ? 'bg-amber-500/5 border-amber-500/20 text-amber-400'
+                          : 'bg-emerald-500/5 border-emerald-500/20 text-emerald-400',
                       )}>
                         {item.badge}
                       </span>
@@ -153,7 +156,7 @@ const Sidebar = ({ collapsed, onToggle, onOpenCommandPalette }: SidebarProps) =>
                 <button
                   onClick={() => openAgentBuilder()}
                   className={cn(
-                    'flex items-center gap-2.5 h-9 px-3 rounded-md text-[13px] text-primary hover:bg-emerald-500/[0.08] transition-colors w-full',
+                    'flex items-center gap-2.5 h-8.5 px-3 rounded-md text-[13px] text-emerald-400 bg-emerald-500/[0.03] border border-emerald-500/10 hover:bg-emerald-500/[0.06] hover:border-emerald-500/20 transition-all duration-200 w-full',
                     collapsed && 'justify-center px-2',
                   )}
                   aria-label="New agent"
@@ -168,34 +171,34 @@ const Sidebar = ({ collapsed, onToggle, onOpenCommandPalette }: SidebarProps) =>
       </nav>
 
       {/* Bottom utility */}
-      <div className="border-t border-white/[0.06] px-2 py-2 space-y-px">
+      <div className="border-t border-white/[0.04] px-2 py-2 space-y-px">
         <button
           className={cn(
-            'flex items-center gap-2.5 h-8 px-3 rounded-md text-[12px] text-muted-foreground hover:text-foreground hover:bg-white/[0.04] transition-colors w-full',
+            'flex items-center gap-2.5 h-8 px-3 rounded-md text-[12px] text-neutral-400 hover:text-foreground hover:bg-white/[0.02] border border-transparent transition-all w-full',
             collapsed && 'justify-center px-2'
           )}
         >
-          <HelpCircle className="h-3.5 w-3.5" />
+          <HelpCircle className="h-3.5 w-3.5 text-neutral-500" />
           {!collapsed && <span>Help & Support</span>}
         </button>
         <button
           onClick={signOut}
           className={cn(
-            'flex items-center gap-2.5 h-8 px-3 rounded-md text-[12px] text-muted-foreground hover:text-rose-400 hover:bg-white/[0.04] transition-colors w-full',
+            'flex items-center gap-2.5 h-8 px-3 rounded-md text-[12px] text-neutral-400 hover:text-rose-400 hover:bg-white/[0.02] border border-transparent transition-all w-full',
             collapsed && 'justify-center px-2'
           )}
         >
-          <LogOut className="h-3.5 w-3.5" />
+          <LogOut className="h-3.5 w-3.5 text-neutral-500 group-hover:text-rose-400" />
           {!collapsed && <span>Sign Out</span>}
         </button>
         <button
           onClick={onToggle}
           className={cn(
-            'flex items-center gap-2.5 h-8 px-3 rounded-md text-[12px] text-muted-foreground hover:text-foreground hover:bg-white/[0.04] transition-colors w-full',
+            'flex items-center gap-2.5 h-8 px-3 rounded-md text-[12px] text-neutral-400 hover:text-foreground hover:bg-white/[0.02] border border-transparent transition-all w-full',
             collapsed && 'justify-center px-2'
           )}
         >
-          {collapsed ? <PanelLeft className="h-3.5 w-3.5" /> : <PanelLeftClose className="h-3.5 w-3.5" />}
+          {collapsed ? <PanelLeft className="h-3.5 w-3.5 text-neutral-500" /> : <PanelLeftClose className="h-3.5 w-3.5 text-neutral-500" />}
           {!collapsed && <span>Collapse</span>}
         </button>
       </div>

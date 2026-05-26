@@ -55,7 +55,7 @@ const MainLayout = ({ children }: MainLayoutProps) => {
         >
           {/* Top Command Bar */}
           {!isMobile && (
-            <div className="sticky top-0 z-30 backdrop-blur-xl bg-card/60 border-b border-border px-6 py-2.5 flex items-center justify-end">
+            <div className="sticky top-0 z-30 backdrop-blur-md bg-[#030303]/40 border-b border-white/[0.03] px-6 py-2.5 flex items-center justify-end">
               <CommandBar onOpen={() => setCommandOpen(true)} />
             </div>
           )}

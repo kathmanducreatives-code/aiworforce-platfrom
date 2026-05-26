@@ -19,7 +19,16 @@ export const ThemeProvider = ({ children }: { children: ReactNode }) => {
   useEffect(() => {
     localStorage.setItem('app-theme', theme);
     const root = document.documentElement;
+    
+    // Set data-theme attribute
     root.setAttribute('data-theme', theme);
+    
+    // Unify with Tailwind class-based dark mode
+    if (theme === 'dark') {
+      root.classList.add('dark');
+    } else {
+      root.classList.remove('dark');
+    }
   }, [theme]);
 
   const setTheme = (t: ThemeName) => setThemeState(t);
