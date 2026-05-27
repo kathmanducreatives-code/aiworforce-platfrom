@@ -8,7 +8,7 @@ import { useAgents } from '@/hooks/useAgents';
 import { useWorkspace } from '@/contexts/WorkspaceContext';
 import { useApprovals } from '@/hooks/useApprovals';
 import { useChatWorkspace, CHANNEL_DEFAULT_AGENT } from '@/contexts/ChatWorkspaceContext';
-import { chatRespond } from '@/lib/chatRespond';
+import { pilotChat } from '@/lib/pilotChat';
 import { toast } from 'sonner';
 
 const DEPTS: { id: AgentDept; label: string; description: string }[] = [
@@ -182,7 +182,11 @@ export default function ChatComposerPro({ restrictDepartment, placeholder, autoF
     else agentSlug = 'scout';
 
     const conversationId = view.kind === 'chat' ? view.conversationId : null;
-    const channel = view.kind === 'channel' ? view.dept : null;
+
+    if (!workspaceId) {
+      toast.error('No workspace selected');
+      return;
+    }
 
     open();
     setSubmitting(true);
@@ -192,7 +196,7 @@ export default function ChatComposerPro({ restrictDepartment, placeholder, autoF
     }
     setValue('');
     try {
-      const result = await chatRespond({ message: text, agent_slug: agentSlug, conversation_id: conversationId, channel });
+      const result = await pilotChat({ message: text, workspace_id: workspaceId, conversation_id: conversationId });
       if (!conversationId) {
         setView({ kind: 'chat', conversationId: result.conversation_id, agentSlug });
       }

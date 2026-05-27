@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
-import type { ChatMessageRow } from '@/lib/chatRespond';
+import type { ChatMessageRow } from '@/lib/pilotChat';
 
 export function useChatConversation(conversationId: string | null) {
   const [messages, setMessages] = useState<ChatMessageRow[]>([]);

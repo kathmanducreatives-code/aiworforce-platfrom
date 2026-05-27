@@ -4,7 +4,8 @@ import { ArrowUp, ChevronUp, Loader2, Plus } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { AGENT_PROFILES, type AgentProfile } from '@/data/agentProfiles';
 import { useChatWorkspace, CHANNEL_DEFAULT_AGENT } from '@/contexts/ChatWorkspaceContext';
-import { chatRespond } from '@/lib/chatRespond';
+import { useWorkspace } from '@/contexts/WorkspaceContext';
+import { pilotChat } from '@/lib/pilotChat';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { openAgentBuilder } from '@/hooks/useAgentBuilder';
 import { useIsMobile } from '@/hooks/use-mobile';
@@ -55,6 +56,7 @@ function AgentBadge({ agent, size = 24 }: { agent: AgentProfile; size?: number }
 
 export default function CommandDock() {
   const { mode, open, view, setView, setPending } = useChatWorkspace();
+  const { workspaceId } = useWorkspace();
   const isMobile = useIsMobile();
 
   const [value, setValue] = useState('');
@@ -123,12 +125,17 @@ export default function CommandDock() {
     const conversationId = view.kind === 'chat' ? view.conversationId : null;
     const channel = view.kind === 'channel' ? view.dept : null;
 
+    if (!workspaceId) {
+      toast.error('No workspace selected');
+      return;
+    }
+
     open();
     setSubmitting(true);
     if (conversationId) setPending({ conversationId, text, awaiting: true });
     setValue('');
     try {
-      const result = await chatRespond({ message: text, agent_slug: agentSlug, conversation_id: conversationId, channel });
+      const result = await pilotChat({ message: text, workspace_id: workspaceId, conversation_id: conversationId });
       if (!conversationId) setView({ kind: 'chat', conversationId: result.conversation_id, agentSlug });
       setPending(null);
     } catch (e) {

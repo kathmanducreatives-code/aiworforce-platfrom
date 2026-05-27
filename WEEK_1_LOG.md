@@ -472,3 +472,100 @@ Both fixed in the same commit (`7f6a3bf`).
       construction, not exercised in smoke tests)
 - [x] Frontend UI untouched — Day 5's scope
 
+---
+
+## Day 5 — frontend off chat-respond, onto pilot-chat (2026-05-27)
+
+**Goal:** migrate the five frontend surfaces that talk to the chat-respond
+edge function over to the new pilot-chat entry point. Backend was wired
+end-to-end in Day 4; this is a UI-layer swap with no behavioral changes
+to the backend.
+
+### What I did
+
+- New file `src/lib/pilotChat.ts` (45 LOC). Exports `pilotChat(input)` and
+  the `ChatMessageRow` type. Calls the `pilot-chat` edge function via
+  `supabase.functions.invoke`. Returns a discriminated union
+  `{ type: 'reply' | 'plan', conversation_id, message, plan_id?, ... }`.
+- Updated three components to swap `chatRespond` for `pilotChat`, drop
+  `agent_slug` and `channel` from the call payload (Pilot owns routing
+  now), and add a workspace guard that toasts + bails when
+  `workspaceId` is null:
+    - `src/components/dashboard/HeroCommandSurface.tsx`  +useWorkspace hook
+    - `src/components/dock/CommandDock.tsx`               +useWorkspace hook
+    - `src/components/chat/workspace/ChatComposerPro.tsx` (already imported it)
+- Updated `src/hooks/useChatConversation.ts` to import the
+  `ChatMessageRow` type from `pilotChat.ts` rather than the legacy
+  `chatRespond.ts`.
+- Deleted `src/lib/chatRespond.ts`. No remaining callers in `src/` —
+  only one docstring comment in `pilotChat.ts` mentions it.
+- `npm install` (deps weren't in this clone). `npm run build` clean —
+  4,105 modules transformed, no TypeScript errors, 4.29 s. Pre-existing
+  warnings (tailwind class ambiguity, chunk size) unchanged.
+
+### What I did NOT do
+
+- Did not delete or modify the `chat-respond` edge function. It stays
+  deployed as rollback safety per the user's call. Day 6+ cleanup can
+  mark it deprecated.
+- Did not render `type: 'plan'` responses with a special plan card UI.
+  The synthetic "On it. Here's the plan: ..." message Pilot persists
+  arrives via the realtime `messages` subscription like any other
+  assistant turn, so the existing chat list renders it fine. Plan-card
+  UX is Day 6+ polish.
+- Did not exercise the chat surfaces in a real browser. That's the
+  user's smoke test after this push. Backend round-trip is already
+  verified end-to-end from Day 4.
+- Did not touch `src/types/` to share the `ChatMessageRow` type more
+  broadly — single re-export from `pilotChat.ts` is enough for the one
+  remaining consumer (the hook).
+
+### Unilateral decisions
+
+- Drop `channel` from the payload entirely rather than passing it
+  through. Pilot doesn't read it, and persisted conversations get
+  `channel = 'dashboard'` set by `pilot-chat` itself. Channel-as-UI-
+  state (which dept tab is active) remains a local concern.
+- Workspace guard is a `toast.error('No workspace selected')` + return,
+  exactly what the user requested. No default fallback to a placeholder
+  workspace UUID — explicit failure is safer.
+- Kept the `agentSlug` local variable in each component because it
+  still drives `setView({ kind: 'chat', conversationId, agentSlug })`
+  — that's UI routing state, separate from the backend payload.
+
+### Day 0 deferred verification — completed in this build pass
+
+The original Day 0 brief asked to confirm via `npm run build &&
+grep dist/ -r fc-...` that no Firecrawl key is bundled. Skipped at the
+time because `node_modules` wasn't in the clone and the result was
+provable by construction (no `VITE_*` variable holds the key after
+Day 0's rotation).
+
+Now actually verified empirically:
+  - `grep -rl "fc-d9dc14" dist/` (the live rotated key) — **clean**
+  - `grep -rl "fc-d5fea417" dist/` (the original burned key)  — **clean**
+  - `grep -rhoE "fc-[a-z0-9]{20,}" dist/` (any plausible key) — **no matches**
+
+Day 0 success criteria fully met.
+
+### Surprises
+
+- The `useChatConversation` hook only imported a *type* from
+  `chatRespond.ts`, never the function. The hook itself is wholly
+  realtime-subscription-based and didn't need migrating — only its
+  type import path. Smaller diff than expected.
+- Two of the three components (`HeroCommandSurface`, `CommandDock`)
+  weren't importing `useWorkspace` at all before today. They were
+  passing whatever `agent_slug` was active and relying on `chat-respond`
+  to figure out the rest. The pilot-chat migration forced
+  workspace-awareness into both, which is correct.
+
+### Day 5 exit state
+
+- Frontend chat surfaces hit `pilot-chat` directly.
+- `chat-respond` edge function still deployed (intentional rollback
+  hatch) but unreferenced from `src/`.
+- Build green, no leaks, no TS errors.
+- User to run a real browser pass against `/dashboard` chat surfaces
+  next; then Day 6 begins (pilot UX polish + execution visibility).
+
