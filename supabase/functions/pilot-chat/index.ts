@@ -168,23 +168,23 @@ Deno.serve(async (req) => {
 
   const admin = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
-  // 3. Membership check
+  // 3. Membership check via workspace_members
   const { data: member } = await admin
-    .from("users")
-    .select("id")
-    .eq("id", userId)
+    .from("workspace_members")
+    .select("workspace_id")
+    .eq("user_id", userId)
     .eq("workspace_id", workspaceId)
     .maybeSingle();
   if (!member) return json({ error: "Forbidden — not a member of this workspace" }, 403);
 
-  // 4. Get or create conversation
+  // 4. Get or create conversation (conversations table is user-scoped; no workspace_id column)
   if (conversationId) {
     const { data: existing } = await admin
       .from("conversations")
-      .select("id, user_id, workspace_id")
+      .select("id, user_id")
       .eq("id", conversationId)
       .maybeSingle();
-    if (!existing || existing.user_id !== userId || existing.workspace_id !== workspaceId) {
+    if (!existing || existing.user_id !== userId) {
       return json({ error: "Conversation not found or not yours" }, 404);
     }
   } else {
@@ -192,7 +192,6 @@ Deno.serve(async (req) => {
       .from("conversations")
       .insert({
         user_id: userId,
-        workspace_id: workspaceId,
         agent_slug: "pilot",
         channel: "dashboard",
         title: message.slice(0, 60),
@@ -202,7 +201,7 @@ Deno.serve(async (req) => {
       .single();
     if (convErr || !created) {
       console.error("[pilot-chat] create conversation failed:", convErr);
-      return json({ error: "failed to create conversation", detail: convErr }, 500);
+      return json({ error: "failed to create conversation", detail: convErr?.message ?? convErr }, 500);
     }
     conversationId = created.id;
   }
