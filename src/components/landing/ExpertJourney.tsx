@@ -265,8 +265,8 @@ export const ExpertJourney = () => {
                       { name: 'Hawk', status: 'Monitoring 5 competitors now' },
                       { name: 'Hawk', status: 'Market scan: 12 signals found' },
                       { name: 'Scribe', status: 'Next brief: tomorrow 7:00 AM' },
-                    ].map(a => (
-                      <div key={a.name} className="agent-status-row">
+                    ].map((a, i) => (
+                      <div key={`${a.name}-${i}`} className="agent-status-row">
                         <div className="agent-dot" />
                         <span style={{ fontWeight: 600, color: '#fbbf24' }}>{a.name}</span>
                         <span>— {a.status}</span>
