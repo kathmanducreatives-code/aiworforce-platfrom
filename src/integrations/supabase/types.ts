@@ -10,430 +10,139 @@ export type Database = {
   // Allows to automatically instantiate createClient with right options
   // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
   __InternalSupabase: {
-    PostgrestVersion: "13.0.4"
+    PostgrestVersion: "14.5"
   }
   public: {
     Tables: {
-      activity_feed: {
+      adaptive_screening_sessions: {
+        Row: {
+          candidate_id: string | null
+          company: string | null
+          completed_at: string | null
+          contact_name: string | null
+          created_at: string | null
+          id: string
+          job_id: string | null
+          profile_name: string | null
+          role_briefing: Json | null
+          scenario_config: Json | null
+          session_status: string | null
+          total_score: number | null
+        }
+        Insert: {
+          candidate_id?: string | null
+          company?: string | null
+          completed_at?: string | null
+          contact_name?: string | null
+          created_at?: string | null
+          id?: string
+          job_id?: string | null
+          profile_name?: string | null
+          role_briefing?: Json | null
+          scenario_config?: Json | null
+          session_status?: string | null
+          total_score?: number | null
+        }
+        Update: {
+          candidate_id?: string | null
+          company?: string | null
+          completed_at?: string | null
+          contact_name?: string | null
+          created_at?: string | null
+          id?: string
+          job_id?: string | null
+          profile_name?: string | null
+          role_briefing?: Json | null
+          scenario_config?: Json | null
+          session_status?: string | null
+          total_score?: number | null
+        }
+        Relationships: []
+      }
+      agent_runs: {
         Row: {
           agent_id: string | null
-          body: string | null
-          created_at: string | null
-          event_type: string
+          completed_at: string | null
           id: string
-          metadata: Json | null
+          input: Json | null
+          output: Json | null
+          started_at: string | null
+          status: string | null
           task_plan_id: string | null
-          title: string | null
-          workspace_id: string | null
         }
         Insert: {
           agent_id?: string | null
-          body?: string | null
-          created_at?: string | null
-          event_type: string
+          completed_at?: string | null
           id?: string
-          metadata?: Json | null
+          input?: Json | null
+          output?: Json | null
+          started_at?: string | null
+          status?: string | null
           task_plan_id?: string | null
-          title?: string | null
-          workspace_id?: string | null
         }
         Update: {
           agent_id?: string | null
-          body?: string | null
-          created_at?: string | null
-          event_type?: string
+          completed_at?: string | null
           id?: string
-          metadata?: Json | null
+          input?: Json | null
+          output?: Json | null
+          started_at?: string | null
+          status?: string | null
           task_plan_id?: string | null
-          title?: string | null
-          workspace_id?: string | null
         }
         Relationships: [
           {
-            foreignKeyName: "activity_feed_agent_id_fkey"
+            foreignKeyName: "agent_runs_agent_id_fkey"
             columns: ["agent_id"]
             isOneToOne: false
             referencedRelation: "agents"
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "activity_feed_task_plan_id_fkey"
+            foreignKeyName: "agent_runs_task_plan_id_fkey"
             columns: ["task_plan_id"]
             isOneToOne: false
             referencedRelation: "task_plans"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "activity_feed_workspace_id_fkey"
-            columns: ["workspace_id"]
-            isOneToOne: false
-            referencedRelation: "workspaces"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      activity_logs: {
-        Row: {
-          actor_type: string
-          actor_user_id: string | null
-          agent_id: string | null
-          created_at: string
-          department_id: string | null
-          event_type: string
-          id: string
-          job_id: string | null
-          job_step_id: string | null
-          message: string
-          metadata: Json
-          organization_id: string
-          severity: Database["public"]["Enums"]["activity_log_severity"]
-        }
-        Insert: {
-          actor_type?: string
-          actor_user_id?: string | null
-          agent_id?: string | null
-          created_at?: string
-          department_id?: string | null
-          event_type: string
-          id?: string
-          job_id?: string | null
-          job_step_id?: string | null
-          message: string
-          metadata?: Json
-          organization_id: string
-          severity?: Database["public"]["Enums"]["activity_log_severity"]
-        }
-        Update: {
-          actor_type?: string
-          actor_user_id?: string | null
-          agent_id?: string | null
-          created_at?: string
-          department_id?: string | null
-          event_type?: string
-          id?: string
-          job_id?: string | null
-          job_step_id?: string | null
-          message?: string
-          metadata?: Json
-          organization_id?: string
-          severity?: Database["public"]["Enums"]["activity_log_severity"]
-        }
-        Relationships: [
-          {
-            foreignKeyName: "activity_logs_department_same_org"
-            columns: ["department_id", "organization_id"]
-            isOneToOne: false
-            referencedRelation: "departments"
-            referencedColumns: ["id", "organization_id"]
-          },
-          {
-            foreignKeyName: "activity_logs_job_same_org"
-            columns: ["job_id", "organization_id"]
-            isOneToOne: false
-            referencedRelation: "jobs"
-            referencedColumns: ["id", "organization_id"]
-          },
-          {
-            foreignKeyName: "activity_logs_organization_id_fkey"
-            columns: ["organization_id"]
-            isOneToOne: false
-            referencedRelation: "organizations"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "activity_logs_step_same_org"
-            columns: ["job_step_id", "organization_id"]
-            isOneToOne: false
-            referencedRelation: "job_steps"
-            referencedColumns: ["id", "organization_id"]
-          },
-        ]
-      }
-      adaptive_screening_sessions: {
-        Row: {
-          access_token: string
-          candidate_consent_given: boolean | null
-          candidate_id: string | null
-          completed_at: string | null
-          consent_given_at: string | null
-          created_at: string | null
-          current_scenario_index: number | null
-          expires_at: string | null
-          id: string
-          invited_at: string | null
-          role_briefing: Json | null
-          scenario_config: Json | null
-          scenario_count: number | null
-          session_status: Database["public"]["Enums"]["screening_session_status"]
-          started_at: string | null
-          template_id: string | null
-          updated_at: string | null
-        }
-        Insert: {
-          access_token?: string
-          candidate_consent_given?: boolean | null
-          candidate_id?: string | null
-          completed_at?: string | null
-          consent_given_at?: string | null
-          created_at?: string | null
-          current_scenario_index?: number | null
-          expires_at?: string | null
-          id?: string
-          invited_at?: string | null
-          role_briefing?: Json | null
-          scenario_config?: Json | null
-          scenario_count?: number | null
-          session_status?: Database["public"]["Enums"]["screening_session_status"]
-          started_at?: string | null
-          template_id?: string | null
-          updated_at?: string | null
-        }
-        Update: {
-          access_token?: string
-          candidate_consent_given?: boolean | null
-          candidate_id?: string | null
-          completed_at?: string | null
-          consent_given_at?: string | null
-          created_at?: string | null
-          current_scenario_index?: number | null
-          expires_at?: string | null
-          id?: string
-          invited_at?: string | null
-          role_briefing?: Json | null
-          scenario_config?: Json | null
-          scenario_count?: number | null
-          session_status?: Database["public"]["Enums"]["screening_session_status"]
-          started_at?: string | null
-          template_id?: string | null
-          updated_at?: string | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "adaptive_screening_sessions_candidate_id_fkey"
-            columns: ["candidate_id"]
-            isOneToOne: false
-            referencedRelation: "resume_analyses"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "adaptive_screening_sessions_template_id_fkey"
-            columns: ["template_id"]
-            isOneToOne: false
-            referencedRelation: "screening_templates"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      agent_capabilities: {
-        Row: {
-          agent_id: string | null
-          capability: string
-          id: string
-          input_type: string
-          output_type: string
-          priority: number | null
-        }
-        Insert: {
-          agent_id?: string | null
-          capability: string
-          id?: string
-          input_type: string
-          output_type: string
-          priority?: number | null
-        }
-        Update: {
-          agent_id?: string | null
-          capability?: string
-          id?: string
-          input_type?: string
-          output_type?: string
-          priority?: number | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "agent_capabilities_agent_id_fkey"
-            columns: ["agent_id"]
-            isOneToOne: false
-            referencedRelation: "agents"
             referencedColumns: ["id"]
           },
         ]
       }
       agents: {
         Row: {
-          avatar_color: string | null
-          avatar_icon: string | null
+          capabilities: Json | null
+          config: Json | null
           created_at: string | null
-          department: string
           id: string
-          is_default: boolean | null
+          is_active: boolean | null
           model: string
           name: string
-          role_prompt: string
-          status: string | null
-          tools: Json | null
-          trigger_config: Json | null
-          trigger_type: string | null
-          workspace_id: string | null
+          role: string | null
+          system_prompt: string | null
+          updated_at: string | null
         }
         Insert: {
-          avatar_color?: string | null
-          avatar_icon?: string | null
+          capabilities?: Json | null
+          config?: Json | null
           created_at?: string | null
-          department: string
           id?: string
-          is_default?: boolean | null
+          is_active?: boolean | null
           model?: string
           name: string
-          role_prompt: string
-          status?: string | null
-          tools?: Json | null
-          trigger_config?: Json | null
-          trigger_type?: string | null
-          workspace_id?: string | null
+          role?: string | null
+          system_prompt?: string | null
+          updated_at?: string | null
         }
         Update: {
-          avatar_color?: string | null
-          avatar_icon?: string | null
+          capabilities?: Json | null
+          config?: Json | null
           created_at?: string | null
-          department?: string
           id?: string
-          is_default?: boolean | null
+          is_active?: boolean | null
           model?: string
           name?: string
-          role_prompt?: string
-          status?: string | null
-          tools?: Json | null
-          trigger_config?: Json | null
-          trigger_type?: string | null
-          workspace_id?: string | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "agents_workspace_id_fkey"
-            columns: ["workspace_id"]
-            isOneToOne: false
-            referencedRelation: "workspaces"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      approvals: {
-        Row: {
-          agent_id: string | null
-          created_at: string | null
-          id: string
-          payload: Json | null
-          resolved_at: string | null
-          status: string | null
-          summary: string | null
-          task_id: string | null
-          task_plan_id: string | null
-          title: string | null
-          workspace_id: string | null
-        }
-        Insert: {
-          agent_id?: string | null
-          created_at?: string | null
-          id?: string
-          payload?: Json | null
-          resolved_at?: string | null
-          status?: string | null
-          summary?: string | null
-          task_id?: string | null
-          task_plan_id?: string | null
-          title?: string | null
-          workspace_id?: string | null
-        }
-        Update: {
-          agent_id?: string | null
-          created_at?: string | null
-          id?: string
-          payload?: Json | null
-          resolved_at?: string | null
-          status?: string | null
-          summary?: string | null
-          task_id?: string | null
-          task_plan_id?: string | null
-          title?: string | null
-          workspace_id?: string | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "approvals_agent_id_fkey"
-            columns: ["agent_id"]
-            isOneToOne: false
-            referencedRelation: "agents"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "approvals_task_id_fkey"
-            columns: ["task_id"]
-            isOneToOne: false
-            referencedRelation: "tasks"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "approvals_task_plan_id_fkey"
-            columns: ["task_plan_id"]
-            isOneToOne: false
-            referencedRelation: "task_plans"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "approvals_workspace_id_fkey"
-            columns: ["workspace_id"]
-            isOneToOne: false
-            referencedRelation: "workspaces"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      audit_log: {
-        Row: {
-          action: string
-          candidate_id: string | null
-          created_at: string | null
-          error_message: string | null
-          execution_time_ms: number | null
-          id: string
-          ip_address: string | null
-          request_data: Json | null
-          response_data: Json | null
-          route: string | null
-          session_id: string | null
-          status: string | null
-          user_agent: string | null
-        }
-        Insert: {
-          action: string
-          candidate_id?: string | null
-          created_at?: string | null
-          error_message?: string | null
-          execution_time_ms?: number | null
-          id?: string
-          ip_address?: string | null
-          request_data?: Json | null
-          response_data?: Json | null
-          route?: string | null
-          session_id?: string | null
-          status?: string | null
-          user_agent?: string | null
-        }
-        Update: {
-          action?: string
-          candidate_id?: string | null
-          created_at?: string | null
-          error_message?: string | null
-          execution_time_ms?: number | null
-          id?: string
-          ip_address?: string | null
-          request_data?: Json | null
-          response_data?: Json | null
-          route?: string | null
-          session_id?: string | null
-          status?: string | null
-          user_agent?: string | null
+          role?: string | null
+          system_prompt?: string | null
+          updated_at?: string | null
         }
         Relationships: []
       }
@@ -477,104 +186,57 @@ export type Database = {
       }
       candidate_profiles: {
         Row: {
-          batch_number: number | null
           created_at: string | null
           current_company: string | null
           current_title: string | null
-          education: Json | null
-          email: string | null
-          email_confidence: string | null
-          email_found_at: string | null
+          enriched_data: Json | null
+          full_name: string | null
           headline: string | null
           id: string
           inserted_at: string | null
-          linkedin_url: string
+          linkedin_url: string | null
           location: string | null
-          match_quality: string | null
-          match_reasons: Json | null
-          name: string | null
-          photo_url: string | null
-          profile_completeness: number | null
-          profile_data: Json | null
-          score_breakdown: Json | null
+          profile_name: string | null
+          raw_data: Json | null
           scrape_run_id: string | null
-          seniority_level: string | null
           session_id: string | null
           similarity_score: number | null
-          tier_source: number | null
-          top_skills: Json | null
-          work_history: Json | null
-          years_experience: number | null
         }
         Insert: {
-          batch_number?: number | null
           created_at?: string | null
           current_company?: string | null
           current_title?: string | null
-          education?: Json | null
-          email?: string | null
-          email_confidence?: string | null
-          email_found_at?: string | null
+          enriched_data?: Json | null
+          full_name?: string | null
           headline?: string | null
           id?: string
           inserted_at?: string | null
-          linkedin_url: string
+          linkedin_url?: string | null
           location?: string | null
-          match_quality?: string | null
-          match_reasons?: Json | null
-          name?: string | null
-          photo_url?: string | null
-          profile_completeness?: number | null
-          profile_data?: Json | null
-          score_breakdown?: Json | null
+          profile_name?: string | null
+          raw_data?: Json | null
           scrape_run_id?: string | null
-          seniority_level?: string | null
           session_id?: string | null
           similarity_score?: number | null
-          tier_source?: number | null
-          top_skills?: Json | null
-          work_history?: Json | null
-          years_experience?: number | null
         }
         Update: {
-          batch_number?: number | null
           created_at?: string | null
           current_company?: string | null
           current_title?: string | null
-          education?: Json | null
-          email?: string | null
-          email_confidence?: string | null
-          email_found_at?: string | null
+          enriched_data?: Json | null
+          full_name?: string | null
           headline?: string | null
           id?: string
           inserted_at?: string | null
-          linkedin_url?: string
+          linkedin_url?: string | null
           location?: string | null
-          match_quality?: string | null
-          match_reasons?: Json | null
-          name?: string | null
-          photo_url?: string | null
-          profile_completeness?: number | null
-          profile_data?: Json | null
-          score_breakdown?: Json | null
+          profile_name?: string | null
+          raw_data?: Json | null
           scrape_run_id?: string | null
-          seniority_level?: string | null
           session_id?: string | null
           similarity_score?: number | null
-          tier_source?: number | null
-          top_skills?: Json | null
-          work_history?: Json | null
-          years_experience?: number | null
         }
-        Relationships: [
-          {
-            foreignKeyName: "candidate_profiles_session_id_fkey"
-            columns: ["session_id"]
-            isOneToOne: false
-            referencedRelation: "icp_lookalike_sessions"
-            referencedColumns: ["session_id"]
-          },
-        ]
+        Relationships: []
       }
       client_active_positions: {
         Row: {
@@ -713,137 +375,6 @@ export type Database = {
           primary_color?: string | null
           secondary_color?: string | null
           updated_at?: string | null
-        }
-        Relationships: []
-      }
-      closely_events: {
-        Row: {
-          created_at: string | null
-          event_type: string
-          id: string
-          linkedin_url: string | null
-          matched_lead_id: string | null
-          processed: boolean | null
-          raw_payload: Json
-        }
-        Insert: {
-          created_at?: string | null
-          event_type: string
-          id?: string
-          linkedin_url?: string | null
-          matched_lead_id?: string | null
-          processed?: boolean | null
-          raw_payload: Json
-        }
-        Update: {
-          created_at?: string | null
-          event_type?: string
-          id?: string
-          linkedin_url?: string | null
-          matched_lead_id?: string | null
-          processed?: boolean | null
-          raw_payload?: Json
-        }
-        Relationships: [
-          {
-            foreignKeyName: "closely_events_matched_lead_id_fkey"
-            columns: ["matched_lead_id"]
-            isOneToOne: false
-            referencedRelation: "outreach_leads"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      codex_leads: {
-        Row: {
-          applicant_count: number | null
-          channel: string
-          company: string
-          company_description: string | null
-          created_at: string
-          data: Json
-          first_name: string | null
-          funding_amount: string | null
-          funding_stage: string | null
-          id: string
-          job_description: string | null
-          job_title: string | null
-          last_name: string | null
-          lead_score: number | null
-          lead_tier: string | null
-          open_roles_count: number | null
-          pain_angle: string | null
-          personalized_message: string
-          role_type: string | null
-          round_date: string | null
-          salary_range: string | null
-          signal_used: string | null
-          source_type: string | null
-          source_url: string
-          subject_line: string | null
-          title: string | null
-          updated_at: string
-          word_count: number | null
-        }
-        Insert: {
-          applicant_count?: number | null
-          channel?: string
-          company: string
-          company_description?: string | null
-          created_at?: string
-          data?: Json
-          first_name?: string | null
-          funding_amount?: string | null
-          funding_stage?: string | null
-          id?: string
-          job_description?: string | null
-          job_title?: string | null
-          last_name?: string | null
-          lead_score?: number | null
-          lead_tier?: string | null
-          open_roles_count?: number | null
-          pain_angle?: string | null
-          personalized_message: string
-          role_type?: string | null
-          round_date?: string | null
-          salary_range?: string | null
-          signal_used?: string | null
-          source_type?: string | null
-          source_url: string
-          subject_line?: string | null
-          title?: string | null
-          updated_at?: string
-          word_count?: number | null
-        }
-        Update: {
-          applicant_count?: number | null
-          channel?: string
-          company?: string
-          company_description?: string | null
-          created_at?: string
-          data?: Json
-          first_name?: string | null
-          funding_amount?: string | null
-          funding_stage?: string | null
-          id?: string
-          job_description?: string | null
-          job_title?: string | null
-          last_name?: string | null
-          lead_score?: number | null
-          lead_tier?: string | null
-          open_roles_count?: number | null
-          pain_angle?: string | null
-          personalized_message?: string
-          role_type?: string | null
-          round_date?: string | null
-          salary_range?: string | null
-          signal_used?: string | null
-          source_type?: string | null
-          source_url?: string
-          subject_line?: string | null
-          title?: string | null
-          updated_at?: string
-          word_count?: number | null
         }
         Relationships: []
       }
@@ -1088,263 +619,110 @@ export type Database = {
         }
         Relationships: []
       }
-      company_brain: {
-        Row: {
-          company_name: string | null
-          do_not_say: Json
-          examples: Json
-          updated_at: string
-          updated_by: string | null
-          voice_and_tone: string | null
-          what_we_do: string | null
-          who_we_sell_to: string | null
-          workspace_id: string
-        }
-        Insert: {
-          company_name?: string | null
-          do_not_say?: Json
-          examples?: Json
-          updated_at?: string
-          updated_by?: string | null
-          voice_and_tone?: string | null
-          what_we_do?: string | null
-          who_we_sell_to?: string | null
-          workspace_id: string
-        }
-        Update: {
-          company_name?: string | null
-          do_not_say?: Json
-          examples?: Json
-          updated_at?: string
-          updated_by?: string | null
-          voice_and_tone?: string | null
-          what_we_do?: string | null
-          who_we_sell_to?: string | null
-          workspace_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "company_brain_workspace_id_fkey"
-            columns: ["workspace_id"]
-            isOneToOne: true
-            referencedRelation: "workspaces"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
       competitor_companies: {
         Row: {
-          careers_url: string | null
-          company_name: string
-          crawl_status: string | null
           created_at: string | null
           id: string
-          last_crawled_at: string | null
-          user_id: string
-          website_url: string | null
+          industry: string | null
+          metadata: Json | null
+          name: string
+          website: string | null
         }
         Insert: {
-          careers_url?: string | null
-          company_name: string
-          crawl_status?: string | null
           created_at?: string | null
           id?: string
-          last_crawled_at?: string | null
-          user_id: string
-          website_url?: string | null
+          industry?: string | null
+          metadata?: Json | null
+          name: string
+          website?: string | null
         }
         Update: {
-          careers_url?: string | null
-          company_name?: string
-          crawl_status?: string | null
           created_at?: string | null
           id?: string
-          last_crawled_at?: string | null
-          user_id?: string
-          website_url?: string | null
+          industry?: string | null
+          metadata?: Json | null
+          name?: string
+          website?: string | null
         }
         Relationships: []
       }
       competitor_intel_signals: {
         Row: {
-          competitor_id: string | null
-          competitor_name: string | null
+          company_id: string | null
           created_at: string | null
           id: string
-          importance: string | null
-          is_dismissed: boolean | null
-          is_read: boolean | null
-          signal_data: Json | null
-          signal_date: string | null
-          signal_source_url: string | null
-          signal_summary: string | null
-          signal_title: string
-          signal_type: string
-          user_id: string
+          payload: Json | null
+          signal_type: string | null
         }
         Insert: {
-          competitor_id?: string | null
-          competitor_name?: string | null
+          company_id?: string | null
           created_at?: string | null
           id?: string
-          importance?: string | null
-          is_dismissed?: boolean | null
-          is_read?: boolean | null
-          signal_data?: Json | null
-          signal_date?: string | null
-          signal_source_url?: string | null
-          signal_summary?: string | null
-          signal_title: string
-          signal_type: string
-          user_id: string
+          payload?: Json | null
+          signal_type?: string | null
         }
         Update: {
-          competitor_id?: string | null
-          competitor_name?: string | null
+          company_id?: string | null
           created_at?: string | null
           id?: string
-          importance?: string | null
-          is_dismissed?: boolean | null
-          is_read?: boolean | null
-          signal_data?: Json | null
-          signal_date?: string | null
-          signal_source_url?: string | null
-          signal_summary?: string | null
-          signal_title?: string
-          signal_type?: string
-          user_id?: string
+          payload?: Json | null
+          signal_type?: string | null
         }
-        Relationships: [
-          {
-            foreignKeyName: "competitor_intel_signals_competitor_id_fkey"
-            columns: ["competitor_id"]
-            isOneToOne: false
-            referencedRelation: "competitor_companies"
-            referencedColumns: ["id"]
-          },
-        ]
+        Relationships: []
       }
       competitor_job_postings: {
         Row: {
-          competitor_id: string | null
+          company_id: string | null
           created_at: string | null
-          department: string | null
           id: string
-          job_title: string
-          job_url: string | null
-          location: string | null
-          scraped_at: string | null
-          user_id: string
+          metadata: Json | null
+          posted_at: string | null
+          title: string | null
+          url: string | null
         }
         Insert: {
-          competitor_id?: string | null
+          company_id?: string | null
           created_at?: string | null
-          department?: string | null
           id?: string
-          job_title: string
-          job_url?: string | null
-          location?: string | null
-          scraped_at?: string | null
-          user_id: string
+          metadata?: Json | null
+          posted_at?: string | null
+          title?: string | null
+          url?: string | null
         }
         Update: {
-          competitor_id?: string | null
+          company_id?: string | null
           created_at?: string | null
-          department?: string | null
           id?: string
-          job_title?: string
-          job_url?: string | null
-          location?: string | null
-          scraped_at?: string | null
-          user_id?: string
+          metadata?: Json | null
+          posted_at?: string | null
+          title?: string | null
+          url?: string | null
         }
-        Relationships: [
-          {
-            foreignKeyName: "competitor_job_postings_competitor_id_fkey"
-            columns: ["competitor_id"]
-            isOneToOne: false
-            referencedRelation: "competitor_companies"
-            referencedColumns: ["id"]
-          },
-        ]
+        Relationships: []
       }
       competitor_profiles: {
         Row: {
-          competitor_id: string | null
-          engineering_headcount_estimate: number | null
-          g2_rating: number | null
-          g2_review_count: number | null
+          company_id: string | null
+          created_at: string | null
           id: string
-          key_differentiators: Json | null
-          key_features: Json | null
-          last_full_scan_at: string | null
-          last_pricing_change_at: string | null
-          pricing_change_summary: string | null
-          pricing_model: string | null
-          pricing_tiers: Json | null
-          recent_executive_changes: Json | null
-          recent_launches: Json | null
-          tagline: string | null
-          target_market: string | null
-          top_complaints: Json | null
-          top_praise: Json | null
-          total_employees_estimate: number | null
-          updated_at: string | null
-          user_id: string
-          value_proposition: string | null
+          profile_data: Json | null
         }
         Insert: {
-          competitor_id?: string | null
-          engineering_headcount_estimate?: number | null
-          g2_rating?: number | null
-          g2_review_count?: number | null
+          company_id?: string | null
+          created_at?: string | null
           id?: string
-          key_differentiators?: Json | null
-          key_features?: Json | null
-          last_full_scan_at?: string | null
-          last_pricing_change_at?: string | null
-          pricing_change_summary?: string | null
-          pricing_model?: string | null
-          pricing_tiers?: Json | null
-          recent_executive_changes?: Json | null
-          recent_launches?: Json | null
-          tagline?: string | null
-          target_market?: string | null
-          top_complaints?: Json | null
-          top_praise?: Json | null
-          total_employees_estimate?: number | null
-          updated_at?: string | null
-          user_id: string
-          value_proposition?: string | null
+          profile_data?: Json | null
         }
         Update: {
-          competitor_id?: string | null
-          engineering_headcount_estimate?: number | null
-          g2_rating?: number | null
-          g2_review_count?: number | null
+          company_id?: string | null
+          created_at?: string | null
           id?: string
-          key_differentiators?: Json | null
-          key_features?: Json | null
-          last_full_scan_at?: string | null
-          last_pricing_change_at?: string | null
-          pricing_change_summary?: string | null
-          pricing_model?: string | null
-          pricing_tiers?: Json | null
-          recent_executive_changes?: Json | null
-          recent_launches?: Json | null
-          tagline?: string | null
-          target_market?: string | null
-          top_complaints?: Json | null
-          top_praise?: Json | null
-          total_employees_estimate?: number | null
-          updated_at?: string | null
-          user_id?: string
-          value_proposition?: string | null
+          profile_data?: Json | null
         }
         Relationships: [
           {
-            foreignKeyName: "competitor_profiles_competitor_id_fkey"
-            columns: ["competitor_id"]
+            foreignKeyName: "competitor_profiles_company_id_fkey"
+            columns: ["company_id"]
             isOneToOne: false
             referencedRelation: "competitor_companies"
             referencedColumns: ["id"]
@@ -1353,7 +731,7 @@ export type Database = {
       }
       conversations: {
         Row: {
-          agent_slug: string | null
+          agent_slug: string
           channel: string | null
           created_at: string
           id: string
@@ -1361,10 +739,9 @@ export type Database = {
           title: string | null
           updated_at: string
           user_id: string
-          workspace_id: string | null
         }
         Insert: {
-          agent_slug?: string | null
+          agent_slug: string
           channel?: string | null
           created_at?: string
           id?: string
@@ -1372,10 +749,9 @@ export type Database = {
           title?: string | null
           updated_at?: string
           user_id: string
-          workspace_id?: string | null
         }
         Update: {
-          agent_slug?: string | null
+          agent_slug?: string
           channel?: string | null
           created_at?: string
           id?: string
@@ -1383,60 +759,30 @@ export type Database = {
           title?: string | null
           updated_at?: string
           user_id?: string
-          workspace_id?: string | null
         }
-        Relationships: [
-          {
-            foreignKeyName: "conversations_workspace_id_fkey"
-            columns: ["workspace_id"]
-            isOneToOne: false
-            referencedRelation: "workspaces"
-            referencedColumns: ["id"]
-          },
-        ]
+        Relationships: []
       }
       deep_search_analysis: {
         Row: {
-          candidate_name: string | null
-          certifications: Json | null
-          created_at: string | null
-          current_role_and_company: string | null
-          education: Json | null
-          experience_summary: string | null
+          created_at: string
           id: string
-          key_skills: Json | null
-          languages: Json | null
-          overall_fit_rating: number | null
-          recruiter_insight: string | null
-          soft_skills_and_traits: string | null
+          query: string | null
+          result: Json | null
+          user_id: string | null
         }
         Insert: {
-          candidate_name?: string | null
-          certifications?: Json | null
-          created_at?: string | null
-          current_role_and_company?: string | null
-          education?: Json | null
-          experience_summary?: string | null
+          created_at?: string
           id?: string
-          key_skills?: Json | null
-          languages?: Json | null
-          overall_fit_rating?: number | null
-          recruiter_insight?: string | null
-          soft_skills_and_traits?: string | null
+          query?: string | null
+          result?: Json | null
+          user_id?: string | null
         }
         Update: {
-          candidate_name?: string | null
-          certifications?: Json | null
-          created_at?: string | null
-          current_role_and_company?: string | null
-          education?: Json | null
-          experience_summary?: string | null
+          created_at?: string
           id?: string
-          key_skills?: Json | null
-          languages?: Json | null
-          overall_fit_rating?: number | null
-          recruiter_insight?: string | null
-          soft_skills_and_traits?: string | null
+          query?: string | null
+          result?: Json | null
+          user_id?: string | null
         }
         Relationships: []
       }
@@ -1446,18 +792,13 @@ export type Database = {
           ai_summary: string | null
           candidate_id: string | null
           candidate_name: string
-          certifications: Json | null
           company: string | null
           company_match_notes: string | null
           created_at: string | null
-          education: Json | null
-          email: string | null
           fit_score: number | null
           id: string
           ideal_roles: string[] | null
-          languages: Json | null
           linkedin_url: string | null
-          profile_picture_url: string | null
           raw_analysis: Json | null
           status: string | null
           strengths: string[] | null
@@ -1469,18 +810,13 @@ export type Database = {
           ai_summary?: string | null
           candidate_id?: string | null
           candidate_name: string
-          certifications?: Json | null
           company?: string | null
           company_match_notes?: string | null
           created_at?: string | null
-          education?: Json | null
-          email?: string | null
           fit_score?: number | null
           id?: string
           ideal_roles?: string[] | null
-          languages?: Json | null
           linkedin_url?: string | null
-          profile_picture_url?: string | null
           raw_analysis?: Json | null
           status?: string | null
           strengths?: string[] | null
@@ -1492,18 +828,13 @@ export type Database = {
           ai_summary?: string | null
           candidate_id?: string | null
           candidate_name?: string
-          certifications?: Json | null
           company?: string | null
           company_match_notes?: string | null
           created_at?: string | null
-          education?: Json | null
-          email?: string | null
           fit_score?: number | null
           id?: string
           ideal_roles?: string[] | null
-          languages?: Json | null
           linkedin_url?: string | null
-          profile_picture_url?: string | null
           raw_analysis?: Json | null
           status?: string | null
           strengths?: string[] | null
@@ -1519,143 +850,6 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
-      }
-      departments: {
-        Row: {
-          created_at: string
-          description: string | null
-          id: string
-          metadata: Json
-          name: string
-          organization_id: string
-          slug: string
-          status: string
-          updated_at: string
-        }
-        Insert: {
-          created_at?: string
-          description?: string | null
-          id?: string
-          metadata?: Json
-          name: string
-          organization_id: string
-          slug: string
-          status?: string
-          updated_at?: string
-        }
-        Update: {
-          created_at?: string
-          description?: string | null
-          id?: string
-          metadata?: Json
-          name?: string
-          organization_id?: string
-          slug?: string
-          status?: string
-          updated_at?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "departments_organization_id_fkey"
-            columns: ["organization_id"]
-            isOneToOne: false
-            referencedRelation: "organizations"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      dialer_leads: {
-        Row: {
-          attempts: number
-          call_result: string | null
-          called_at: string | null
-          company: string | null
-          created_at: string
-          full_name: string
-          funding_stage: string | null
-          id: string
-          lead_id: string
-          notes: string | null
-          open_roles: number | null
-          phone: string | null
-          score: number | null
-          score_tier: string | null
-          session_tag: string | null
-          signals: string[] | null
-          status: string
-          timezone: string | null
-          updated_at: string
-          website: string | null
-        }
-        Insert: {
-          attempts?: number
-          call_result?: string | null
-          called_at?: string | null
-          company?: string | null
-          created_at?: string
-          full_name: string
-          funding_stage?: string | null
-          id?: string
-          lead_id: string
-          notes?: string | null
-          open_roles?: number | null
-          phone?: string | null
-          score?: number | null
-          score_tier?: string | null
-          session_tag?: string | null
-          signals?: string[] | null
-          status?: string
-          timezone?: string | null
-          updated_at?: string
-          website?: string | null
-        }
-        Update: {
-          attempts?: number
-          call_result?: string | null
-          called_at?: string | null
-          company?: string | null
-          created_at?: string
-          full_name?: string
-          funding_stage?: string | null
-          id?: string
-          lead_id?: string
-          notes?: string | null
-          open_roles?: number | null
-          phone?: string | null
-          score?: number | null
-          score_tier?: string | null
-          session_tag?: string | null
-          signals?: string[] | null
-          status?: string
-          timezone?: string | null
-          updated_at?: string
-          website?: string | null
-        }
-        Relationships: []
-      }
-      dialer_status: {
-        Row: {
-          current_call: Json | null
-          id: string
-          status: string
-          updated_at: string
-          workspace_id: string
-        }
-        Insert: {
-          current_call?: Json | null
-          id?: string
-          status?: string
-          updated_at?: string
-          workspace_id?: string
-        }
-        Update: {
-          current_call?: Json | null
-          id?: string
-          status?: string
-          updated_at?: string
-          workspace_id?: string
-        }
-        Relationships: []
       }
       email_tracking: {
         Row: {
@@ -1695,39 +889,27 @@ export type Database = {
           },
         ]
       }
-      error_log: {
+      firecrawl_scrape_logs: {
         Row: {
           created_at: string | null
-          error_message: string | null
-          error_type: string | null
           id: string
-          node_name: string | null
-          request_payload: Json | null
-          route: string | null
-          session_id: string | null
-          stack_trace: string | null
+          payload: Json | null
+          status: string | null
+          url: string | null
         }
         Insert: {
           created_at?: string | null
-          error_message?: string | null
-          error_type?: string | null
           id?: string
-          node_name?: string | null
-          request_payload?: Json | null
-          route?: string | null
-          session_id?: string | null
-          stack_trace?: string | null
+          payload?: Json | null
+          status?: string | null
+          url?: string | null
         }
         Update: {
           created_at?: string | null
-          error_message?: string | null
-          error_type?: string | null
           id?: string
-          node_name?: string | null
-          request_payload?: Json | null
-          route?: string | null
-          session_id?: string | null
-          stack_trace?: string | null
+          payload?: Json | null
+          status?: string | null
+          url?: string | null
         }
         Relationships: []
       }
@@ -1767,389 +949,95 @@ export type Database = {
       growth_signal_companies: {
         Row: {
           company_name: string
-          created_at: string
-          engineering_roles_count: number
-          funding_amount: number | null
-          funding_date: string | null
-          funding_round: string | null
-          growth_score: number
+          created_at: string | null
+          growth_score: number | null
           id: string
           industry: string | null
-          investors: Json | null
-          is_hot_lead: boolean
-          last_updated: string
-          open_roles_count: number
-          sample_job_titles: Json | null
-          source_url: string | null
-          user_id: string
+          metadata: Json | null
+          signals: Json | null
+          updated_at: string | null
+          website: string | null
         }
         Insert: {
           company_name: string
-          created_at?: string
-          engineering_roles_count?: number
-          funding_amount?: number | null
-          funding_date?: string | null
-          funding_round?: string | null
-          growth_score?: number
+          created_at?: string | null
+          growth_score?: number | null
           id?: string
           industry?: string | null
-          investors?: Json | null
-          is_hot_lead?: boolean
-          last_updated?: string
-          open_roles_count?: number
-          sample_job_titles?: Json | null
-          source_url?: string | null
-          user_id: string
+          metadata?: Json | null
+          signals?: Json | null
+          updated_at?: string | null
+          website?: string | null
         }
         Update: {
           company_name?: string
-          created_at?: string
-          engineering_roles_count?: number
-          funding_amount?: number | null
-          funding_date?: string | null
-          funding_round?: string | null
-          growth_score?: number
+          created_at?: string | null
+          growth_score?: number | null
           id?: string
           industry?: string | null
-          investors?: Json | null
-          is_hot_lead?: boolean
-          last_updated?: string
-          open_roles_count?: number
-          sample_job_titles?: Json | null
-          source_url?: string | null
-          user_id?: string
+          metadata?: Json | null
+          signals?: Json | null
+          updated_at?: string | null
+          website?: string | null
         }
         Relationships: []
-      }
-      handoffs: {
-        Row: {
-          created_at: string | null
-          from_agent_id: string | null
-          id: string
-          task_id: string | null
-          task_plan_id: string | null
-          to_agent_id: string | null
-          workspace_id: string | null
-        }
-        Insert: {
-          created_at?: string | null
-          from_agent_id?: string | null
-          id?: string
-          task_id?: string | null
-          task_plan_id?: string | null
-          to_agent_id?: string | null
-          workspace_id?: string | null
-        }
-        Update: {
-          created_at?: string | null
-          from_agent_id?: string | null
-          id?: string
-          task_id?: string | null
-          task_plan_id?: string | null
-          to_agent_id?: string | null
-          workspace_id?: string | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "handoffs_from_agent_id_fkey"
-            columns: ["from_agent_id"]
-            isOneToOne: false
-            referencedRelation: "agents"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "handoffs_task_id_fkey"
-            columns: ["task_id"]
-            isOneToOne: false
-            referencedRelation: "tasks"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "handoffs_task_plan_id_fkey"
-            columns: ["task_plan_id"]
-            isOneToOne: false
-            referencedRelation: "task_plans"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "handoffs_to_agent_id_fkey"
-            columns: ["to_agent_id"]
-            isOneToOne: false
-            referencedRelation: "agents"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "handoffs_workspace_id_fkey"
-            columns: ["workspace_id"]
-            isOneToOne: false
-            referencedRelation: "workspaces"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      icp_drafts: {
-        Row: {
-          created_at: string | null
-          current_step: number | null
-          draft_name: string | null
-          form_data: Json | null
-          id: string
-          is_completed: boolean | null
-          updated_at: string | null
-          user_id: string
-          workspace_id: string
-        }
-        Insert: {
-          created_at?: string | null
-          current_step?: number | null
-          draft_name?: string | null
-          form_data?: Json | null
-          id?: string
-          is_completed?: boolean | null
-          updated_at?: string | null
-          user_id: string
-          workspace_id: string
-        }
-        Update: {
-          created_at?: string | null
-          current_step?: number | null
-          draft_name?: string | null
-          form_data?: Json | null
-          id?: string
-          is_completed?: boolean | null
-          updated_at?: string | null
-          user_id?: string
-          workspace_id?: string
-        }
-        Relationships: []
-      }
-      icp_lookalike_results: {
-        Row: {
-          created_at: string | null
-          id: string
-          match_reasons: Json | null
-          match_score: number | null
-          profile_data: Json | null
-          profile_url: string | null
-          session_id: string | null
-        }
-        Insert: {
-          created_at?: string | null
-          id?: string
-          match_reasons?: Json | null
-          match_score?: number | null
-          profile_data?: Json | null
-          profile_url?: string | null
-          session_id?: string | null
-        }
-        Update: {
-          created_at?: string | null
-          id?: string
-          match_reasons?: Json | null
-          match_score?: number | null
-          profile_data?: Json | null
-          profile_url?: string | null
-          session_id?: string | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "icp_lookalike_results_session_id_fkey"
-            columns: ["session_id"]
-            isOneToOne: false
-            referencedRelation: "icp_lookalike_sessions"
-            referencedColumns: ["session_id"]
-          },
-        ]
       }
       icp_lookalike_sessions: {
         Row: {
-          ai_strategy: string | null
-          apify_run_id: string | null
           company_location: Json | null
-          company_size: Json | null
+          company_size: string | null
+          config: Json | null
           created_at: string | null
-          current_phase: string | null
-          current_step: number | null
-          excluded_signals: Json | null
-          feature_weights: Json | null
-          firmographic_constraints: Json | null
           hiring_intensity: string | null
           id: string
           industry_names: Json | null
-          is_draft: boolean | null
-          lookalike_profile_data: Json | null
-          lookalike_results: string | null
-          lookalike_url: string | null
-          mandatory_signals: Json | null
-          persona_description: string | null
           profile_name: string | null
           results_count: number | null
-          role_family: string | null
           scrape_status: string | null
-          search_logic_dna: string | null
-          search_results_count: number | null
           session_id: string
           status: string | null
           strong_matches_count: number | null
-          target_industry: string | null
-          target_industry_name: string | null
-          target_results_count: number | null
-          technical_execution: Json | null
+          target_industry: Json | null
           updated_at: string | null
           user_id: string | null
         }
         Insert: {
-          ai_strategy?: string | null
-          apify_run_id?: string | null
           company_location?: Json | null
-          company_size?: Json | null
+          company_size?: string | null
+          config?: Json | null
           created_at?: string | null
-          current_phase?: string | null
-          current_step?: number | null
-          excluded_signals?: Json | null
-          feature_weights?: Json | null
-          firmographic_constraints?: Json | null
           hiring_intensity?: string | null
           id?: string
           industry_names?: Json | null
-          is_draft?: boolean | null
-          lookalike_profile_data?: Json | null
-          lookalike_results?: string | null
-          lookalike_url?: string | null
-          mandatory_signals?: Json | null
-          persona_description?: string | null
           profile_name?: string | null
           results_count?: number | null
-          role_family?: string | null
           scrape_status?: string | null
-          search_logic_dna?: string | null
-          search_results_count?: number | null
           session_id: string
           status?: string | null
           strong_matches_count?: number | null
-          target_industry?: string | null
-          target_industry_name?: string | null
-          target_results_count?: number | null
-          technical_execution?: Json | null
+          target_industry?: Json | null
           updated_at?: string | null
           user_id?: string | null
         }
         Update: {
-          ai_strategy?: string | null
-          apify_run_id?: string | null
           company_location?: Json | null
-          company_size?: Json | null
+          company_size?: string | null
+          config?: Json | null
           created_at?: string | null
-          current_phase?: string | null
-          current_step?: number | null
-          excluded_signals?: Json | null
-          feature_weights?: Json | null
-          firmographic_constraints?: Json | null
           hiring_intensity?: string | null
           id?: string
           industry_names?: Json | null
-          is_draft?: boolean | null
-          lookalike_profile_data?: Json | null
-          lookalike_results?: string | null
-          lookalike_url?: string | null
-          mandatory_signals?: Json | null
-          persona_description?: string | null
           profile_name?: string | null
           results_count?: number | null
-          role_family?: string | null
           scrape_status?: string | null
-          search_logic_dna?: string | null
-          search_results_count?: number | null
           session_id?: string
           status?: string | null
           strong_matches_count?: number | null
-          target_industry?: string | null
-          target_industry_name?: string | null
-          target_results_count?: number | null
-          technical_execution?: Json | null
+          target_industry?: Json | null
           updated_at?: string | null
           user_id?: string | null
         }
         Relationships: []
-      }
-      icp_saved_searches: {
-        Row: {
-          backend_session_id: string | null
-          created_at: string | null
-          draft_id: string | null
-          id: string
-          search_name: string | null
-          status: string | null
-          updated_at: string | null
-          user_id: string
-          workspace_id: string
-        }
-        Insert: {
-          backend_session_id?: string | null
-          created_at?: string | null
-          draft_id?: string | null
-          id?: string
-          search_name?: string | null
-          status?: string | null
-          updated_at?: string | null
-          user_id: string
-          workspace_id: string
-        }
-        Update: {
-          backend_session_id?: string | null
-          created_at?: string | null
-          draft_id?: string | null
-          id?: string
-          search_name?: string | null
-          status?: string | null
-          updated_at?: string | null
-          user_id?: string
-          workspace_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "icp_saved_searches_draft_id_fkey"
-            columns: ["draft_id"]
-            isOneToOne: false
-            referencedRelation: "icp_drafts"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      icp_search_results: {
-        Row: {
-          created_at: string | null
-          id: string
-          profile_data: Json | null
-          profile_url: string | null
-          search_id: string | null
-          similarity_score: number | null
-        }
-        Insert: {
-          created_at?: string | null
-          id?: string
-          profile_data?: Json | null
-          profile_url?: string | null
-          search_id?: string | null
-          similarity_score?: number | null
-        }
-        Update: {
-          created_at?: string | null
-          id?: string
-          profile_data?: Json | null
-          profile_url?: string | null
-          search_id?: string | null
-          similarity_score?: number | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "icp_search_results_search_id_fkey"
-            columns: ["search_id"]
-            isOneToOne: false
-            referencedRelation: "icp_saved_searches"
-            referencedColumns: ["id"]
-          },
-        ]
       }
       interview_availability: {
         Row: {
@@ -2404,388 +1292,131 @@ export type Database = {
           },
         ]
       }
-      job_distribution_status: {
+      job_distribution_postings: {
         Row: {
-          created_at: string
-          error_message: string | null
-          external_job_id: string | null
-          feed_url: string | null
+          created_at: string | null
           id: string
-          job_id: string
-          last_synced_at: string | null
-          platform: string
+          job_id: string | null
+          metadata: Json | null
+          platform: string | null
           posted_at: string | null
-          status: string
-          user_id: string
+          url: string | null
         }
         Insert: {
-          created_at?: string
-          error_message?: string | null
-          external_job_id?: string | null
-          feed_url?: string | null
+          created_at?: string | null
           id?: string
-          job_id: string
-          last_synced_at?: string | null
-          platform: string
+          job_id?: string | null
+          metadata?: Json | null
+          platform?: string | null
           posted_at?: string | null
-          status?: string
-          user_id: string
+          url?: string | null
         }
         Update: {
-          created_at?: string
-          error_message?: string | null
-          external_job_id?: string | null
-          feed_url?: string | null
+          created_at?: string | null
           id?: string
-          job_id?: string
-          last_synced_at?: string | null
-          platform?: string
+          job_id?: string | null
+          metadata?: Json | null
+          platform?: string | null
           posted_at?: string | null
-          status?: string
-          user_id?: string
+          url?: string | null
         }
-        Relationships: [
-          {
-            foreignKeyName: "job_distribution_status_job_id_fkey"
-            columns: ["job_id"]
-            isOneToOne: false
-            referencedRelation: "screening_jobs"
-            referencedColumns: ["id"]
-          },
-        ]
+        Relationships: []
+      }
+      job_distribution_status: {
+        Row: {
+          created_at: string | null
+          external_url: string | null
+          id: string
+          job_id: string | null
+          metadata: Json | null
+          platform: string
+          status: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          external_url?: string | null
+          id?: string
+          job_id?: string | null
+          metadata?: Json | null
+          platform: string
+          status?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          external_url?: string | null
+          id?: string
+          job_id?: string | null
+          metadata?: Json | null
+          platform?: string
+          status?: string | null
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
+      job_market_intelligence: {
+        Row: {
+          created_at: string | null
+          data: Json | null
+          id: string
+        }
+        Insert: {
+          created_at?: string | null
+          data?: Json | null
+          id?: string
+        }
+        Update: {
+          created_at?: string | null
+          data?: Json | null
+          id?: string
+        }
+        Relationships: []
       }
       job_postings: {
         Row: {
-          benefits: string[] | null
-          company_name: string
           created_at: string | null
-          description: string
+          description: string | null
           experience_level: string | null
           id: string
-          job_type: string
-          location: string
-          posted_boards: Json | null
-          remote_option: string | null
-          requirements: string[] | null
-          salary_currency: string | null
+          location: string | null
+          required_skills: string[] | null
           salary_max: number | null
           salary_min: number | null
           status: string | null
           title: string
           updated_at: string | null
-          user_id: string
+          user_id: string | null
         }
         Insert: {
-          benefits?: string[] | null
-          company_name: string
           created_at?: string | null
-          description: string
+          description?: string | null
           experience_level?: string | null
           id?: string
-          job_type?: string
-          location: string
-          posted_boards?: Json | null
-          remote_option?: string | null
-          requirements?: string[] | null
-          salary_currency?: string | null
+          location?: string | null
+          required_skills?: string[] | null
           salary_max?: number | null
           salary_min?: number | null
           status?: string | null
           title: string
           updated_at?: string | null
-          user_id: string
+          user_id?: string | null
         }
         Update: {
-          benefits?: string[] | null
-          company_name?: string
           created_at?: string | null
-          description?: string
+          description?: string | null
           experience_level?: string | null
           id?: string
-          job_type?: string
-          location?: string
-          posted_boards?: Json | null
-          remote_option?: string | null
-          requirements?: string[] | null
-          salary_currency?: string | null
+          location?: string | null
+          required_skills?: string[] | null
           salary_max?: number | null
           salary_min?: number | null
           status?: string | null
           title?: string
           updated_at?: string | null
-          user_id?: string
+          user_id?: string | null
         }
         Relationships: []
-      }
-      job_steps: {
-        Row: {
-          action: string
-          agent_id: string
-          attempt_count: number
-          capability_type: string
-          completed_at: string | null
-          created_at: string
-          department_id: string
-          error: Json | null
-          id: string
-          input: Json
-          job_id: string
-          max_attempts: number
-          organization_id: string
-          output: Json | null
-          started_at: string | null
-          status: Database["public"]["Enums"]["job_step_status"]
-          step_key: string
-          step_order: number
-          tool_id: string | null
-          updated_at: string
-        }
-        Insert: {
-          action: string
-          agent_id: string
-          attempt_count?: number
-          capability_type: string
-          completed_at?: string | null
-          created_at?: string
-          department_id: string
-          error?: Json | null
-          id?: string
-          input?: Json
-          job_id: string
-          max_attempts?: number
-          organization_id: string
-          output?: Json | null
-          started_at?: string | null
-          status?: Database["public"]["Enums"]["job_step_status"]
-          step_key: string
-          step_order?: number
-          tool_id?: string | null
-          updated_at?: string
-        }
-        Update: {
-          action?: string
-          agent_id?: string
-          attempt_count?: number
-          capability_type?: string
-          completed_at?: string | null
-          created_at?: string
-          department_id?: string
-          error?: Json | null
-          id?: string
-          input?: Json
-          job_id?: string
-          max_attempts?: number
-          organization_id?: string
-          output?: Json | null
-          started_at?: string | null
-          status?: Database["public"]["Enums"]["job_step_status"]
-          step_key?: string
-          step_order?: number
-          tool_id?: string | null
-          updated_at?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "job_steps_department_same_org"
-            columns: ["department_id", "organization_id"]
-            isOneToOne: false
-            referencedRelation: "departments"
-            referencedColumns: ["id", "organization_id"]
-          },
-          {
-            foreignKeyName: "job_steps_job_same_org"
-            columns: ["job_id", "organization_id"]
-            isOneToOne: false
-            referencedRelation: "jobs"
-            referencedColumns: ["id", "organization_id"]
-          },
-          {
-            foreignKeyName: "job_steps_organization_id_fkey"
-            columns: ["organization_id"]
-            isOneToOne: false
-            referencedRelation: "organizations"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "job_steps_tool_id_fkey"
-            columns: ["tool_id"]
-            isOneToOne: false
-            referencedRelation: "tools"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      job_transition_rules: {
-        Row: {
-          condition: Json
-          created_at: string
-          created_by: string | null
-          enabled: boolean
-          from_agent_id: string | null
-          from_job_type: string
-          from_status: Database["public"]["Enums"]["job_status"]
-          id: string
-          input_mapping: Json
-          organization_id: string
-          priority: number
-          to_agent_id: string
-          to_department_id: string
-          to_workflow_type: string
-          updated_at: string
-        }
-        Insert: {
-          condition?: Json
-          created_at?: string
-          created_by?: string | null
-          enabled?: boolean
-          from_agent_id?: string | null
-          from_job_type: string
-          from_status?: Database["public"]["Enums"]["job_status"]
-          id?: string
-          input_mapping?: Json
-          organization_id: string
-          priority?: number
-          to_agent_id: string
-          to_department_id: string
-          to_workflow_type: string
-          updated_at?: string
-        }
-        Update: {
-          condition?: Json
-          created_at?: string
-          created_by?: string | null
-          enabled?: boolean
-          from_agent_id?: string | null
-          from_job_type?: string
-          from_status?: Database["public"]["Enums"]["job_status"]
-          id?: string
-          input_mapping?: Json
-          organization_id?: string
-          priority?: number
-          to_agent_id?: string
-          to_department_id?: string
-          to_workflow_type?: string
-          updated_at?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "job_transition_rules_organization_id_fkey"
-            columns: ["organization_id"]
-            isOneToOne: false
-            referencedRelation: "organizations"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "job_transition_rules_to_department_same_org"
-            columns: ["to_department_id", "organization_id"]
-            isOneToOne: false
-            referencedRelation: "departments"
-            referencedColumns: ["id", "organization_id"]
-          },
-        ]
-      }
-      jobs: {
-        Row: {
-          agent_id: string
-          cancelled_at: string | null
-          completed_at: string | null
-          created_at: string
-          created_by: string | null
-          department_id: string
-          error: Json | null
-          failed_at: string | null
-          id: string
-          idempotency_key: string | null
-          input: Json
-          max_retries: number
-          organization_id: string
-          output: Json | null
-          parent_job_id: string | null
-          priority: number
-          queued_at: string
-          retry_count: number
-          started_at: string | null
-          status: Database["public"]["Enums"]["job_status"]
-          updated_at: string
-          waiting_at: string | null
-          workflow_type: string
-          workflow_version: string | null
-        }
-        Insert: {
-          agent_id: string
-          cancelled_at?: string | null
-          completed_at?: string | null
-          created_at?: string
-          created_by?: string | null
-          department_id: string
-          error?: Json | null
-          failed_at?: string | null
-          id?: string
-          idempotency_key?: string | null
-          input?: Json
-          max_retries?: number
-          organization_id: string
-          output?: Json | null
-          parent_job_id?: string | null
-          priority?: number
-          queued_at?: string
-          retry_count?: number
-          started_at?: string | null
-          status?: Database["public"]["Enums"]["job_status"]
-          updated_at?: string
-          waiting_at?: string | null
-          workflow_type: string
-          workflow_version?: string | null
-        }
-        Update: {
-          agent_id?: string
-          cancelled_at?: string | null
-          completed_at?: string | null
-          created_at?: string
-          created_by?: string | null
-          department_id?: string
-          error?: Json | null
-          failed_at?: string | null
-          id?: string
-          idempotency_key?: string | null
-          input?: Json
-          max_retries?: number
-          organization_id?: string
-          output?: Json | null
-          parent_job_id?: string | null
-          priority?: number
-          queued_at?: string
-          retry_count?: number
-          started_at?: string | null
-          status?: Database["public"]["Enums"]["job_status"]
-          updated_at?: string
-          waiting_at?: string | null
-          workflow_type?: string
-          workflow_version?: string | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "jobs_department_same_org"
-            columns: ["department_id", "organization_id"]
-            isOneToOne: false
-            referencedRelation: "departments"
-            referencedColumns: ["id", "organization_id"]
-          },
-          {
-            foreignKeyName: "jobs_organization_id_fkey"
-            columns: ["organization_id"]
-            isOneToOne: false
-            referencedRelation: "organizations"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "jobs_parent_job_id_fkey"
-            columns: ["parent_job_id"]
-            isOneToOne: false
-            referencedRelation: "jobs"
-            referencedColumns: ["id"]
-          },
-        ]
       }
       linkedin_leads: {
         Row: {
@@ -2799,10 +1430,8 @@ export type Database = {
           keywords: string[] | null
           linkedin_url: string | null
           location: string | null
-          profile_picture: string | null
           scraped_at: string
           search_criteria: Json | null
-          search_id: string | null
           session_id: string | null
           updated_at: string
         }
@@ -2817,10 +1446,8 @@ export type Database = {
           keywords?: string[] | null
           linkedin_url?: string | null
           location?: string | null
-          profile_picture?: string | null
           scraped_at?: string
           search_criteria?: Json | null
-          search_id?: string | null
           session_id?: string | null
           updated_at?: string
         }
@@ -2835,10 +1462,8 @@ export type Database = {
           keywords?: string[] | null
           linkedin_url?: string | null
           location?: string | null
-          profile_picture?: string | null
           scraped_at?: string
           search_criteria?: Json | null
-          search_id?: string | null
           session_id?: string | null
           updated_at?: string
         }
@@ -2852,129 +1477,42 @@ export type Database = {
           },
         ]
       }
-      linkedin_posts: {
+      marketing_tasks: {
         Row: {
-          content_format: string | null
           created_at: string | null
-          day: string
+          description: string | null
+          due_date: string | null
           id: string
-          image_prompt: string | null
-          post_caption: string | null
+          metadata: Json | null
+          priority: string | null
           status: string | null
-          video_idea: string | null
-        }
-        Insert: {
-          content_format?: string | null
-          created_at?: string | null
-          day: string
-          id?: string
-          image_prompt?: string | null
-          post_caption?: string | null
-          status?: string | null
-          video_idea?: string | null
-        }
-        Update: {
-          content_format?: string | null
-          created_at?: string | null
-          day?: string
-          id?: string
-          image_prompt?: string | null
-          post_caption?: string | null
-          status?: string | null
-          video_idea?: string | null
-        }
-        Relationships: []
-      }
-      marketing_videos: {
-        Row: {
-          ai_motion_graphics: Json | null
-          ai_motion_raw_response: string | null
-          ai_script: Json | null
-          ai_script_raw_response: string | null
-          avatar_id: string | null
-          completed_at: string | null
-          created_at: string | null
-          cta_message: string | null
-          demo_steps: Json | null
-          error_message: string | null
-          feature_description: string | null
-          feature_name: string
-          generation_status: string | null
-          heygen_status: string | null
-          heygen_video_id: string | null
-          id: string
-          key_benefits: Json | null
-          problem_solved: string | null
-          script_estimated_duration: number | null
-          script_word_count: number | null
-          target_audience: string | null
-          thumbnail_url: string | null
+          title: string
           updated_at: string | null
-          video_intent: string | null
-          video_length: number | null
-          video_style: string | null
-          video_url: string | null
-          voice_id: string | null
+          user_id: string | null
         }
         Insert: {
-          ai_motion_graphics?: Json | null
-          ai_motion_raw_response?: string | null
-          ai_script?: Json | null
-          ai_script_raw_response?: string | null
-          avatar_id?: string | null
-          completed_at?: string | null
           created_at?: string | null
-          cta_message?: string | null
-          demo_steps?: Json | null
-          error_message?: string | null
-          feature_description?: string | null
-          feature_name: string
-          generation_status?: string | null
-          heygen_status?: string | null
-          heygen_video_id?: string | null
+          description?: string | null
+          due_date?: string | null
           id?: string
-          key_benefits?: Json | null
-          problem_solved?: string | null
-          script_estimated_duration?: number | null
-          script_word_count?: number | null
-          target_audience?: string | null
-          thumbnail_url?: string | null
+          metadata?: Json | null
+          priority?: string | null
+          status?: string | null
+          title: string
           updated_at?: string | null
-          video_intent?: string | null
-          video_length?: number | null
-          video_style?: string | null
-          video_url?: string | null
-          voice_id?: string | null
+          user_id?: string | null
         }
         Update: {
-          ai_motion_graphics?: Json | null
-          ai_motion_raw_response?: string | null
-          ai_script?: Json | null
-          ai_script_raw_response?: string | null
-          avatar_id?: string | null
-          completed_at?: string | null
           created_at?: string | null
-          cta_message?: string | null
-          demo_steps?: Json | null
-          error_message?: string | null
-          feature_description?: string | null
-          feature_name?: string
-          generation_status?: string | null
-          heygen_status?: string | null
-          heygen_video_id?: string | null
+          description?: string | null
+          due_date?: string | null
           id?: string
-          key_benefits?: Json | null
-          problem_solved?: string | null
-          script_estimated_duration?: number | null
-          script_word_count?: number | null
-          target_audience?: string | null
-          thumbnail_url?: string | null
+          metadata?: Json | null
+          priority?: string | null
+          status?: string | null
+          title?: string
           updated_at?: string | null
-          video_intent?: string | null
-          video_length?: number | null
-          video_style?: string | null
-          video_url?: string | null
-          voice_id?: string | null
+          user_id?: string | null
         }
         Relationships: []
       }
@@ -3022,80 +1560,6 @@ export type Database = {
           },
         ]
       }
-      organization_members: {
-        Row: {
-          created_at: string
-          id: string
-          invited_by: string | null
-          joined_at: string | null
-          organization_id: string
-          role: Database["public"]["Enums"]["organization_member_role"]
-          status: Database["public"]["Enums"]["organization_member_status"]
-          updated_at: string
-          user_id: string
-        }
-        Insert: {
-          created_at?: string
-          id?: string
-          invited_by?: string | null
-          joined_at?: string | null
-          organization_id: string
-          role?: Database["public"]["Enums"]["organization_member_role"]
-          status?: Database["public"]["Enums"]["organization_member_status"]
-          updated_at?: string
-          user_id: string
-        }
-        Update: {
-          created_at?: string
-          id?: string
-          invited_by?: string | null
-          joined_at?: string | null
-          organization_id?: string
-          role?: Database["public"]["Enums"]["organization_member_role"]
-          status?: Database["public"]["Enums"]["organization_member_status"]
-          updated_at?: string
-          user_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "organization_members_organization_id_fkey"
-            columns: ["organization_id"]
-            isOneToOne: false
-            referencedRelation: "organizations"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      organizations: {
-        Row: {
-          created_at: string
-          created_by: string | null
-          id: string
-          metadata: Json
-          name: string
-          slug: string
-          updated_at: string
-        }
-        Insert: {
-          created_at?: string
-          created_by?: string | null
-          id?: string
-          metadata?: Json
-          name: string
-          slug: string
-          updated_at?: string
-        }
-        Update: {
-          created_at?: string
-          created_by?: string | null
-          id?: string
-          metadata?: Json
-          name?: string
-          slug?: string
-          updated_at?: string
-        }
-        Relationships: []
-      }
       outreach_activities: {
         Row: {
           action_type: string
@@ -3105,13 +1569,10 @@ export type Database = {
           executed_date: string | null
           id: string
           lead_id: string
-          message_id: string | null
           response_received: boolean | null
           response_text: string | null
-          response_type: string | null
           scheduled_date: string | null
           sequence_id: string | null
-          source: string | null
           status: Database["public"]["Enums"]["activity_status"] | null
           step_number: number | null
           subject: string | null
@@ -3124,13 +1585,10 @@ export type Database = {
           executed_date?: string | null
           id?: string
           lead_id: string
-          message_id?: string | null
           response_received?: boolean | null
           response_text?: string | null
-          response_type?: string | null
           scheduled_date?: string | null
           sequence_id?: string | null
-          source?: string | null
           status?: Database["public"]["Enums"]["activity_status"] | null
           step_number?: number | null
           subject?: string | null
@@ -3143,13 +1601,10 @@ export type Database = {
           executed_date?: string | null
           id?: string
           lead_id?: string
-          message_id?: string | null
           response_received?: boolean | null
           response_text?: string | null
-          response_type?: string | null
           scheduled_date?: string | null
           sequence_id?: string | null
-          source?: string | null
           status?: Database["public"]["Enums"]["activity_status"] | null
           step_number?: number | null
           subject?: string | null
@@ -3171,255 +1626,66 @@ export type Database = {
           },
         ]
       }
-      outreach_daily_queue: {
-        Row: {
-          action_type: string
-          activity_id: string | null
-          channel: string
-          created_at: string | null
-          id: string
-          lead_id: string | null
-          priority: number | null
-          queue_date: string
-          snooze_until: string | null
-          status: string | null
-        }
-        Insert: {
-          action_type: string
-          activity_id?: string | null
-          channel: string
-          created_at?: string | null
-          id?: string
-          lead_id?: string | null
-          priority?: number | null
-          queue_date?: string
-          snooze_until?: string | null
-          status?: string | null
-        }
-        Update: {
-          action_type?: string
-          activity_id?: string | null
-          channel?: string
-          created_at?: string | null
-          id?: string
-          lead_id?: string | null
-          priority?: number | null
-          queue_date?: string
-          snooze_until?: string | null
-          status?: string | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "outreach_daily_queue_activity_id_fkey"
-            columns: ["activity_id"]
-            isOneToOne: false
-            referencedRelation: "outreach_activities"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "outreach_daily_queue_lead_id_fkey"
-            columns: ["lead_id"]
-            isOneToOne: false
-            referencedRelation: "outreach_leads"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      outreach_error_log: {
-        Row: {
-          activity_id: string | null
-          created_at: string | null
-          error_message: string | null
-          error_type: string | null
-          id: string
-          lead_id: string | null
-          payload: Json | null
-          workflow: string
-        }
-        Insert: {
-          activity_id?: string | null
-          created_at?: string | null
-          error_message?: string | null
-          error_type?: string | null
-          id?: string
-          lead_id?: string | null
-          payload?: Json | null
-          workflow: string
-        }
-        Update: {
-          activity_id?: string | null
-          created_at?: string | null
-          error_message?: string | null
-          error_type?: string | null
-          id?: string
-          lead_id?: string | null
-          payload?: Json | null
-          workflow?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "outreach_error_log_activity_id_fkey"
-            columns: ["activity_id"]
-            isOneToOne: false
-            referencedRelation: "outreach_activities"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "outreach_error_log_lead_id_fkey"
-            columns: ["lead_id"]
-            isOneToOne: false
-            referencedRelation: "outreach_leads"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
       outreach_leads: {
         Row: {
-          agency_name: string | null
-          closely_connection_status: string | null
-          closely_last_event: string | null
-          closely_last_event_at: string | null
-          closely_synced: boolean | null
-          commenter_score: number | null
           company: string
           company_size: string | null
           contact_name: string
           created_at: string
           current_sequence_step: number | null
-          discovery_source: string | null
           email: string | null
-          founder_about: string | null
-          generated_connection_note: string | null
-          generated_dm_step2: string | null
-          generated_dm_step3: string | null
-          generated_dm_step4: string | null
-          hiring_detected: boolean | null
-          hiring_source: string | null
           id: string
           industry: string | null
           last_touch_date: string | null
-          linkedin_slug: string | null
           linkedin_url: string | null
           next_action_date: string | null
           notes: string | null
-          open_roles: string | null
-          original_comment: string | null
-          pain_point_detected: string | null
-          recent_news: string | null
-          role_count: number | null
-          salary_range: string | null
-          scrape_status: string | null
-          scrape_url: string | null
-          scraped_at: string | null
-          scraped_careers: string | null
-          scraped_homepage: string | null
           sequence_id: string | null
           signals: Json | null
-          source_post_author: string | null
-          source_post_url: string | null
           status: Database["public"]["Enums"]["lead_status"] | null
           tier: Database["public"]["Enums"]["lead_tier"] | null
           title: string | null
           updated_at: string
-          uses_agency: boolean | null
         }
         Insert: {
-          agency_name?: string | null
-          closely_connection_status?: string | null
-          closely_last_event?: string | null
-          closely_last_event_at?: string | null
-          closely_synced?: boolean | null
-          commenter_score?: number | null
           company: string
           company_size?: string | null
           contact_name: string
           created_at?: string
           current_sequence_step?: number | null
-          discovery_source?: string | null
           email?: string | null
-          founder_about?: string | null
-          generated_connection_note?: string | null
-          generated_dm_step2?: string | null
-          generated_dm_step3?: string | null
-          generated_dm_step4?: string | null
-          hiring_detected?: boolean | null
-          hiring_source?: string | null
           id?: string
           industry?: string | null
           last_touch_date?: string | null
-          linkedin_slug?: string | null
           linkedin_url?: string | null
           next_action_date?: string | null
           notes?: string | null
-          open_roles?: string | null
-          original_comment?: string | null
-          pain_point_detected?: string | null
-          recent_news?: string | null
-          role_count?: number | null
-          salary_range?: string | null
-          scrape_status?: string | null
-          scrape_url?: string | null
-          scraped_at?: string | null
-          scraped_careers?: string | null
-          scraped_homepage?: string | null
           sequence_id?: string | null
           signals?: Json | null
-          source_post_author?: string | null
-          source_post_url?: string | null
           status?: Database["public"]["Enums"]["lead_status"] | null
           tier?: Database["public"]["Enums"]["lead_tier"] | null
           title?: string | null
           updated_at?: string
-          uses_agency?: boolean | null
         }
         Update: {
-          agency_name?: string | null
-          closely_connection_status?: string | null
-          closely_last_event?: string | null
-          closely_last_event_at?: string | null
-          closely_synced?: boolean | null
-          commenter_score?: number | null
           company?: string
           company_size?: string | null
           contact_name?: string
           created_at?: string
           current_sequence_step?: number | null
-          discovery_source?: string | null
           email?: string | null
-          founder_about?: string | null
-          generated_connection_note?: string | null
-          generated_dm_step2?: string | null
-          generated_dm_step3?: string | null
-          generated_dm_step4?: string | null
-          hiring_detected?: boolean | null
-          hiring_source?: string | null
           id?: string
           industry?: string | null
           last_touch_date?: string | null
-          linkedin_slug?: string | null
           linkedin_url?: string | null
           next_action_date?: string | null
           notes?: string | null
-          open_roles?: string | null
-          original_comment?: string | null
-          pain_point_detected?: string | null
-          recent_news?: string | null
-          role_count?: number | null
-          salary_range?: string | null
-          scrape_status?: string | null
-          scrape_url?: string | null
-          scraped_at?: string | null
-          scraped_careers?: string | null
-          scraped_homepage?: string | null
           sequence_id?: string | null
           signals?: Json | null
-          source_post_author?: string | null
-          source_post_url?: string | null
           status?: Database["public"]["Enums"]["lead_status"] | null
           tier?: Database["public"]["Enums"]["lead_tier"] | null
           title?: string | null
           updated_at?: string
-          uses_agency?: boolean | null
         }
         Relationships: [
           {
@@ -3505,44 +1771,24 @@ export type Database = {
       }
       pricing_history: {
         Row: {
-          change_detected: boolean | null
-          change_summary: string | null
-          competitor_id: string | null
+          company_id: string | null
           id: string
-          previous_entry_id: string | null
-          pricing_data: Json | null
-          scraped_at: string | null
-          user_id: string
+          observed_at: string | null
+          price_data: Json | null
         }
         Insert: {
-          change_detected?: boolean | null
-          change_summary?: string | null
-          competitor_id?: string | null
+          company_id?: string | null
           id?: string
-          previous_entry_id?: string | null
-          pricing_data?: Json | null
-          scraped_at?: string | null
-          user_id: string
+          observed_at?: string | null
+          price_data?: Json | null
         }
         Update: {
-          change_detected?: boolean | null
-          change_summary?: string | null
-          competitor_id?: string | null
+          company_id?: string | null
           id?: string
-          previous_entry_id?: string | null
-          pricing_data?: Json | null
-          scraped_at?: string | null
-          user_id?: string
+          observed_at?: string | null
+          price_data?: Json | null
         }
-        Relationships: [
-          {
-            foreignKeyName: "pricing_history_competitor_id_fkey"
-            columns: ["competitor_id"]
-            isOneToOne: false
-            referencedRelation: "competitor_companies"
-            referencedColumns: ["id"]
-          },
-        ]
+        Relationships: []
       }
       profiles: {
         Row: {
@@ -3593,17 +1839,16 @@ export type Database = {
           email: string | null
           email_clicked: boolean | null
           email_opened: boolean | null
-          fit_score: Json | null
+          fit_score: number | null
           id: string
           justification: string | null
           nurturing_stage: string | null
-          overall_factor: Json | null
+          overall_factor: number | null
           processing_time_minutes: number | null
           recruitment_name: string | null
           resume: string | null
-          reward_factor: Json | null
-          risk_factor: Json | null
-          screening_status: string | null
+          reward_factor: number | null
+          risk_factor: number | null
           screening_type: string | null
           status: string | null
           status_updated_at: string | null
@@ -3618,17 +1863,16 @@ export type Database = {
           email?: string | null
           email_clicked?: boolean | null
           email_opened?: boolean | null
-          fit_score?: Json | null
+          fit_score?: number | null
           id?: string
           justification?: string | null
           nurturing_stage?: string | null
-          overall_factor?: Json | null
+          overall_factor?: number | null
           processing_time_minutes?: number | null
           recruitment_name?: string | null
           resume?: string | null
-          reward_factor?: Json | null
-          risk_factor?: Json | null
-          screening_status?: string | null
+          reward_factor?: number | null
+          risk_factor?: number | null
           screening_type?: string | null
           status?: string | null
           status_updated_at?: string | null
@@ -3643,17 +1887,16 @@ export type Database = {
           email?: string | null
           email_clicked?: boolean | null
           email_opened?: boolean | null
-          fit_score?: Json | null
+          fit_score?: number | null
           id?: string
           justification?: string | null
           nurturing_stage?: string | null
-          overall_factor?: Json | null
+          overall_factor?: number | null
           processing_time_minutes?: number | null
           recruitment_name?: string | null
           resume?: string | null
-          reward_factor?: Json | null
-          risk_factor?: Json | null
-          screening_status?: string | null
+          reward_factor?: number | null
+          risk_factor?: number | null
           screening_type?: string | null
           status?: string | null
           status_updated_at?: string | null
@@ -3665,88 +1908,61 @@ export type Database = {
       }
       scheduled_emails: {
         Row: {
-          candidate_email: string
+          body: string | null
+          candidate_email: string | null
           candidate_id: string | null
-          candidate_name: string
-          company_name: string | null
-          content: string | null
-          created_at: string | null
-          delay_days: number | null
-          fit_score: number | null
+          candidate_name: string | null
+          created_at: string
           folder_name: string | null
           id: string
-          recruitment_name: string | null
+          recipient_email: string | null
           scheduled_send_time: string | null
-          send_time: string | null
-          send_time_end: string | null
-          send_time_utc: string
-          sender_name: string | null
+          send_time_utc: string | null
           sequence_created_at: string | null
+          sequence_id: string | null
           sequence_name: string | null
           status: string | null
-          step_number: number
+          step_number: number | null
           subject: string | null
-          timezone: string | null
           user_id: string | null
-          user_timezone: string | null
-          window_end: string | null
-          window_start: string | null
         }
         Insert: {
-          candidate_email: string
+          body?: string | null
+          candidate_email?: string | null
           candidate_id?: string | null
-          candidate_name: string
-          company_name?: string | null
-          content?: string | null
-          created_at?: string | null
-          delay_days?: number | null
-          fit_score?: number | null
+          candidate_name?: string | null
+          created_at?: string
           folder_name?: string | null
           id?: string
-          recruitment_name?: string | null
+          recipient_email?: string | null
           scheduled_send_time?: string | null
-          send_time?: string | null
-          send_time_end?: string | null
-          send_time_utc: string
-          sender_name?: string | null
+          send_time_utc?: string | null
           sequence_created_at?: string | null
+          sequence_id?: string | null
           sequence_name?: string | null
           status?: string | null
-          step_number: number
+          step_number?: number | null
           subject?: string | null
-          timezone?: string | null
           user_id?: string | null
-          user_timezone?: string | null
-          window_end?: string | null
-          window_start?: string | null
         }
         Update: {
-          candidate_email?: string
+          body?: string | null
+          candidate_email?: string | null
           candidate_id?: string | null
-          candidate_name?: string
-          company_name?: string | null
-          content?: string | null
-          created_at?: string | null
-          delay_days?: number | null
-          fit_score?: number | null
+          candidate_name?: string | null
+          created_at?: string
           folder_name?: string | null
           id?: string
-          recruitment_name?: string | null
+          recipient_email?: string | null
           scheduled_send_time?: string | null
-          send_time?: string | null
-          send_time_end?: string | null
-          send_time_utc?: string
-          sender_name?: string | null
+          send_time_utc?: string | null
           sequence_created_at?: string | null
+          sequence_id?: string | null
           sequence_name?: string | null
           status?: string | null
-          step_number?: number
+          step_number?: number | null
           subject?: string | null
-          timezone?: string | null
           user_id?: string | null
-          user_timezone?: string | null
-          window_end?: string | null
-          window_start?: string | null
         }
         Relationships: []
       }
@@ -3756,6 +1972,7 @@ export type Database = {
           created_at: string | null
           id: string
           name: string | null
+          scrape_run_id: string | null
           search_criteria: Json
           status: string | null
           total_leads: number | null
@@ -3766,6 +1983,7 @@ export type Database = {
           created_at?: string | null
           id?: string
           name?: string | null
+          scrape_run_id?: string | null
           search_criteria: Json
           status?: string | null
           total_leads?: number | null
@@ -3776,6 +1994,7 @@ export type Database = {
           created_at?: string | null
           id?: string
           name?: string | null
+          scrape_run_id?: string | null
           search_criteria?: Json
           status?: string | null
           total_leads?: number | null
@@ -3862,86 +2081,37 @@ export type Database = {
       }
       screening_behavioral_analysis: {
         Row: {
-          ai_confidence_score: number | null
-          analysis_completed_at: string | null
-          candidate_id: string
-          clarity_evidence: Json | null
-          clarity_score: number | null
-          consistency_evidence: Json | null
-          consistency_score: number | null
           created_at: string | null
-          emotional_evidence: Json | null
-          emotional_regulation_score: number | null
-          green_flags: Json | null
           id: string
-          overall_risk_level:
-            | Database["public"]["Enums"]["behavioral_risk_level"]
-            | null
-          ownership_evidence: Json | null
-          ownership_score: number | null
           red_flags: Json | null
-          risk_summary: string | null
-          session_id: string
-          updated_at: string | null
+          session_id: string | null
+          strengths: Json | null
+          summary: string | null
+          trait_scores: Json | null
         }
         Insert: {
-          ai_confidence_score?: number | null
-          analysis_completed_at?: string | null
-          candidate_id: string
-          clarity_evidence?: Json | null
-          clarity_score?: number | null
-          consistency_evidence?: Json | null
-          consistency_score?: number | null
           created_at?: string | null
-          emotional_evidence?: Json | null
-          emotional_regulation_score?: number | null
-          green_flags?: Json | null
           id?: string
-          overall_risk_level?:
-            | Database["public"]["Enums"]["behavioral_risk_level"]
-            | null
-          ownership_evidence?: Json | null
-          ownership_score?: number | null
           red_flags?: Json | null
-          risk_summary?: string | null
-          session_id: string
-          updated_at?: string | null
+          session_id?: string | null
+          strengths?: Json | null
+          summary?: string | null
+          trait_scores?: Json | null
         }
         Update: {
-          ai_confidence_score?: number | null
-          analysis_completed_at?: string | null
-          candidate_id?: string
-          clarity_evidence?: Json | null
-          clarity_score?: number | null
-          consistency_evidence?: Json | null
-          consistency_score?: number | null
           created_at?: string | null
-          emotional_evidence?: Json | null
-          emotional_regulation_score?: number | null
-          green_flags?: Json | null
           id?: string
-          overall_risk_level?:
-            | Database["public"]["Enums"]["behavioral_risk_level"]
-            | null
-          ownership_evidence?: Json | null
-          ownership_score?: number | null
           red_flags?: Json | null
-          risk_summary?: string | null
-          session_id?: string
-          updated_at?: string | null
+          session_id?: string | null
+          strengths?: Json | null
+          summary?: string | null
+          trait_scores?: Json | null
         }
         Relationships: [
           {
-            foreignKeyName: "screening_behavioral_analysis_candidate_id_fkey"
-            columns: ["candidate_id"]
-            isOneToOne: false
-            referencedRelation: "resume_analyses"
-            referencedColumns: ["id"]
-          },
-          {
             foreignKeyName: "screening_behavioral_analysis_session_id_fkey"
             columns: ["session_id"]
-            isOneToOne: true
+            isOneToOne: false
             referencedRelation: "adaptive_screening_sessions"
             referencedColumns: ["id"]
           },
@@ -3949,46 +2119,30 @@ export type Database = {
       }
       screening_conversation_logs: {
         Row: {
-          behavioral_signals_detected: Json | null
-          content: string
+          content: string | null
           created_at: string | null
           id: string
-          message_index: number
-          response_time_seconds: number | null
-          role: string
-          scenario_id: string | null
-          session_id: string
+          metadata: Json | null
+          role: string | null
+          session_id: string | null
         }
         Insert: {
-          behavioral_signals_detected?: Json | null
-          content: string
+          content?: string | null
           created_at?: string | null
           id?: string
-          message_index: number
-          response_time_seconds?: number | null
-          role: string
-          scenario_id?: string | null
-          session_id: string
+          metadata?: Json | null
+          role?: string | null
+          session_id?: string | null
         }
         Update: {
-          behavioral_signals_detected?: Json | null
-          content?: string
+          content?: string | null
           created_at?: string | null
           id?: string
-          message_index?: number
-          response_time_seconds?: number | null
-          role?: string
-          scenario_id?: string | null
-          session_id?: string
+          metadata?: Json | null
+          role?: string | null
+          session_id?: string | null
         }
         Relationships: [
-          {
-            foreignKeyName: "screening_conversation_logs_scenario_id_fkey"
-            columns: ["scenario_id"]
-            isOneToOne: false
-            referencedRelation: "screening_scenarios"
-            referencedColumns: ["id"]
-          },
           {
             foreignKeyName: "screening_conversation_logs_session_id_fkey"
             columns: ["session_id"]
@@ -4054,88 +2208,72 @@ export type Database = {
       }
       screening_scenarios: {
         Row: {
-          category: Database["public"]["Enums"]["scenario_category"]
+          category: string
           created_at: string | null
-          difficulty_level: number | null
+          difficulty_level: string | null
           follow_up_prompts: Json | null
           id: string
           is_active: boolean | null
-          name: string
           scenario_prompt: string
-          target_signals: Json | null
-          updated_at: string | null
         }
         Insert: {
-          category: Database["public"]["Enums"]["scenario_category"]
+          category: string
           created_at?: string | null
-          difficulty_level?: number | null
+          difficulty_level?: string | null
           follow_up_prompts?: Json | null
           id?: string
           is_active?: boolean | null
-          name: string
           scenario_prompt: string
-          target_signals?: Json | null
-          updated_at?: string | null
         }
         Update: {
-          category?: Database["public"]["Enums"]["scenario_category"]
+          category?: string
           created_at?: string | null
-          difficulty_level?: number | null
+          difficulty_level?: string | null
           follow_up_prompts?: Json | null
           id?: string
           is_active?: boolean | null
-          name?: string
           scenario_prompt?: string
-          target_signals?: Json | null
-          updated_at?: string | null
         }
         Relationships: []
       }
       screening_template_questions: {
         Row: {
-          category: string
+          category: string | null
           created_at: string | null
-          difficulty_level: number | null
+          difficulty_level: string | null
+          display_order: number | null
           follow_up_prompts: Json | null
           id: string
-          is_custom: boolean | null
-          question_text: string
+          is_required: boolean | null
           scenario_id: string | null
-          sort_order: number | null
+          scenario_prompt: string | null
           template_id: string | null
         }
         Insert: {
-          category: string
+          category?: string | null
           created_at?: string | null
-          difficulty_level?: number | null
+          difficulty_level?: string | null
+          display_order?: number | null
           follow_up_prompts?: Json | null
           id?: string
-          is_custom?: boolean | null
-          question_text: string
+          is_required?: boolean | null
           scenario_id?: string | null
-          sort_order?: number | null
+          scenario_prompt?: string | null
           template_id?: string | null
         }
         Update: {
-          category?: string
+          category?: string | null
           created_at?: string | null
-          difficulty_level?: number | null
+          difficulty_level?: string | null
+          display_order?: number | null
           follow_up_prompts?: Json | null
           id?: string
-          is_custom?: boolean | null
-          question_text?: string
+          is_required?: boolean | null
           scenario_id?: string | null
-          sort_order?: number | null
+          scenario_prompt?: string | null
           template_id?: string | null
         }
         Relationships: [
-          {
-            foreignKeyName: "screening_template_questions_scenario_id_fkey"
-            columns: ["scenario_id"]
-            isOneToOne: false
-            referencedRelation: "screening_scenarios"
-            referencedColumns: ["id"]
-          },
           {
             foreignKeyName: "screening_template_questions_template_id_fkey"
             columns: ["template_id"]
@@ -4153,8 +2291,6 @@ export type Database = {
           id: string
           is_default: boolean | null
           name: string
-          role_focus: string | null
-          updated_at: string | null
         }
         Insert: {
           created_at?: string | null
@@ -4163,8 +2299,6 @@ export type Database = {
           id?: string
           is_default?: boolean | null
           name: string
-          role_focus?: string | null
-          updated_at?: string | null
         }
         Update: {
           created_at?: string | null
@@ -4173,573 +2307,129 @@ export type Database = {
           id?: string
           is_default?: boolean | null
           name?: string
-          role_focus?: string | null
-          updated_at?: string | null
-        }
-        Relationships: []
-      }
-      secret_connections: {
-        Row: {
-          created_at: string
-          created_by: string | null
-          id: string
-          metadata: Json
-          name: string
-          organization_id: string
-          provider_slug: string
-          secret_ref: string
-          secret_scope: string
-          status: Database["public"]["Enums"]["secret_connection_status"]
-          tool_id: string | null
-          updated_at: string
-        }
-        Insert: {
-          created_at?: string
-          created_by?: string | null
-          id?: string
-          metadata?: Json
-          name: string
-          organization_id: string
-          provider_slug: string
-          secret_ref: string
-          secret_scope?: string
-          status?: Database["public"]["Enums"]["secret_connection_status"]
-          tool_id?: string | null
-          updated_at?: string
-        }
-        Update: {
-          created_at?: string
-          created_by?: string | null
-          id?: string
-          metadata?: Json
-          name?: string
-          organization_id?: string
-          provider_slug?: string
-          secret_ref?: string
-          secret_scope?: string
-          status?: Database["public"]["Enums"]["secret_connection_status"]
-          tool_id?: string | null
-          updated_at?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "secret_connections_organization_id_fkey"
-            columns: ["organization_id"]
-            isOneToOne: false
-            referencedRelation: "organizations"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "secret_connections_tool_id_fkey"
-            columns: ["tool_id"]
-            isOneToOne: false
-            referencedRelation: "tools"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      sp_outreach_leads_scored: {
-        Row: {
-          company: string | null
-          company_description: string | null
-          company_email: string | null
-          company_phone: string | null
-          company_size: string | null
-          company_website: string | null
-          created_at: string
-          dm_text: string | null
-          enriched_at: string | null
-          funding_stage: string | null
-          headline: string | null
-          id: string
-          linkedin_url: string
-          name: string
-          open_roles: string | null
-          score: number
-          scraped_at: string
-          signals: string | null
-          source: string
-          status: string
-          tech_stack: string | null
-          tier: string
-        }
-        Insert: {
-          company?: string | null
-          company_description?: string | null
-          company_email?: string | null
-          company_phone?: string | null
-          company_size?: string | null
-          company_website?: string | null
-          created_at?: string
-          dm_text?: string | null
-          enriched_at?: string | null
-          funding_stage?: string | null
-          headline?: string | null
-          id?: string
-          linkedin_url: string
-          name: string
-          open_roles?: string | null
-          score: number
-          scraped_at?: string
-          signals?: string | null
-          source?: string
-          status?: string
-          tech_stack?: string | null
-          tier: string
-        }
-        Update: {
-          company?: string | null
-          company_description?: string | null
-          company_email?: string | null
-          company_phone?: string | null
-          company_size?: string | null
-          company_website?: string | null
-          created_at?: string
-          dm_text?: string | null
-          enriched_at?: string | null
-          funding_stage?: string | null
-          headline?: string | null
-          id?: string
-          linkedin_url?: string
-          name?: string
-          open_roles?: string | null
-          score?: number
-          scraped_at?: string
-          signals?: string | null
-          source?: string
-          status?: string
-          tech_stack?: string | null
-          tier?: string
-        }
-        Relationships: []
-      }
-      sp_wellfound_leads: {
-        Row: {
-          applicant_count: number | null
-          company_description: string | null
-          company_name: string | null
-          company_url: string | null
-          company_website: string | null
-          created_at: string | null
-          date_posted: string | null
-          decision_maker_linkedin: string | null
-          decision_maker_name: string | null
-          decision_maker_title: string | null
-          dm_sent: boolean | null
-          dm_sent_at: string | null
-          enrichment_source: string | null
-          funding_amount: string | null
-          funding_stage: string | null
-          id: string
-          job_title: string | null
-          location: string | null
-          open_roles_count: number | null
-          personalized_dm: string | null
-          remote: boolean | null
-          reply_received: boolean | null
-          reply_text: string | null
-          salary_range: string | null
-          score: number | null
-          score_breakdown: Json | null
-          scrape_date: string | null
-          source: string | null
-          team_size: string | null
-          tech_stack: string[] | null
-          tier: string | null
-        }
-        Insert: {
-          applicant_count?: number | null
-          company_description?: string | null
-          company_name?: string | null
-          company_url?: string | null
-          company_website?: string | null
-          created_at?: string | null
-          date_posted?: string | null
-          decision_maker_linkedin?: string | null
-          decision_maker_name?: string | null
-          decision_maker_title?: string | null
-          dm_sent?: boolean | null
-          dm_sent_at?: string | null
-          enrichment_source?: string | null
-          funding_amount?: string | null
-          funding_stage?: string | null
-          id?: string
-          job_title?: string | null
-          location?: string | null
-          open_roles_count?: number | null
-          personalized_dm?: string | null
-          remote?: boolean | null
-          reply_received?: boolean | null
-          reply_text?: string | null
-          salary_range?: string | null
-          score?: number | null
-          score_breakdown?: Json | null
-          scrape_date?: string | null
-          source?: string | null
-          team_size?: string | null
-          tech_stack?: string[] | null
-          tier?: string | null
-        }
-        Update: {
-          applicant_count?: number | null
-          company_description?: string | null
-          company_name?: string | null
-          company_url?: string | null
-          company_website?: string | null
-          created_at?: string | null
-          date_posted?: string | null
-          decision_maker_linkedin?: string | null
-          decision_maker_name?: string | null
-          decision_maker_title?: string | null
-          dm_sent?: boolean | null
-          dm_sent_at?: string | null
-          enrichment_source?: string | null
-          funding_amount?: string | null
-          funding_stage?: string | null
-          id?: string
-          job_title?: string | null
-          location?: string | null
-          open_roles_count?: number | null
-          personalized_dm?: string | null
-          remote?: boolean | null
-          reply_received?: boolean | null
-          reply_text?: string | null
-          salary_range?: string | null
-          score?: number | null
-          score_breakdown?: Json | null
-          scrape_date?: string | null
-          source?: string | null
-          team_size?: string | null
-          tech_stack?: string[] | null
-          tier?: string | null
         }
         Relationships: []
       }
       talent_signals: {
         Row: {
-          action_type: string | null
-          actioned_at: string | null
-          candidate_company: string | null
-          candidate_email: string | null
-          candidate_linkedin_url: string | null
-          candidate_location: string | null
-          candidate_name: string | null
-          candidate_photo_url: string | null
-          candidate_title: string | null
+          company_id: string | null
           created_at: string | null
           id: string
-          is_actioned: boolean | null
-          is_dismissed: boolean | null
-          matched_job_id: string | null
-          role_match_score: number | null
-          signal_detected_at: string | null
-          signal_score: number | null
-          signal_source_url: string | null
-          signal_summary: string | null
-          signal_title: string
-          signal_type: string
-          tier: string | null
-          user_id: string
+          payload: Json | null
+          signal_type: string | null
         }
         Insert: {
-          action_type?: string | null
-          actioned_at?: string | null
-          candidate_company?: string | null
-          candidate_email?: string | null
-          candidate_linkedin_url?: string | null
-          candidate_location?: string | null
-          candidate_name?: string | null
-          candidate_photo_url?: string | null
-          candidate_title?: string | null
+          company_id?: string | null
           created_at?: string | null
           id?: string
-          is_actioned?: boolean | null
-          is_dismissed?: boolean | null
-          matched_job_id?: string | null
-          role_match_score?: number | null
-          signal_detected_at?: string | null
-          signal_score?: number | null
-          signal_source_url?: string | null
-          signal_summary?: string | null
-          signal_title: string
-          signal_type: string
-          tier?: string | null
-          user_id: string
+          payload?: Json | null
+          signal_type?: string | null
         }
         Update: {
-          action_type?: string | null
-          actioned_at?: string | null
-          candidate_company?: string | null
-          candidate_email?: string | null
-          candidate_linkedin_url?: string | null
-          candidate_location?: string | null
-          candidate_name?: string | null
-          candidate_photo_url?: string | null
-          candidate_title?: string | null
+          company_id?: string | null
           created_at?: string | null
           id?: string
-          is_actioned?: boolean | null
-          is_dismissed?: boolean | null
-          matched_job_id?: string | null
-          role_match_score?: number | null
-          signal_detected_at?: string | null
-          signal_score?: number | null
-          signal_source_url?: string | null
-          signal_summary?: string | null
-          signal_title?: string
-          signal_type?: string
-          tier?: string | null
-          user_id?: string
+          payload?: Json | null
+          signal_type?: string | null
         }
-        Relationships: [
-          {
-            foreignKeyName: "talent_signals_matched_job_id_fkey"
-            columns: ["matched_job_id"]
-            isOneToOne: false
-            referencedRelation: "screening_jobs"
-            referencedColumns: ["id"]
-          },
-        ]
+        Relationships: []
       }
       task_plans: {
         Row: {
           created_at: string | null
-          current_step: number | null
+          goal: string
           id: string
-          plan: Json
           status: string | null
-          user_instruction: string
-          workspace_id: string | null
+          steps: Json | null
+          updated_at: string | null
+          user_id: string | null
         }
         Insert: {
           created_at?: string | null
-          current_step?: number | null
+          goal: string
           id?: string
-          plan?: Json
           status?: string | null
-          user_instruction: string
-          workspace_id?: string | null
+          steps?: Json | null
+          updated_at?: string | null
+          user_id?: string | null
         }
         Update: {
           created_at?: string | null
-          current_step?: number | null
+          goal?: string
           id?: string
-          plan?: Json
           status?: string | null
-          user_instruction?: string
-          workspace_id?: string | null
+          steps?: Json | null
+          updated_at?: string | null
+          user_id?: string | null
         }
-        Relationships: [
-          {
-            foreignKeyName: "task_plans_workspace_id_fkey"
-            columns: ["workspace_id"]
-            isOneToOne: false
-            referencedRelation: "workspaces"
-            referencedColumns: ["id"]
-          },
-        ]
+        Relationships: []
       }
       tasks: {
         Row: {
-          agent_id: string | null
-          created_at: string | null
+          agent_slug: string
+          completed_at: string | null
+          created_at: string
+          depends_on: string[]
+          error_message: string | null
           id: string
-          input: string | null
-          output: string | null
-          status: string | null
-          step_index: number | null
-          task_plan_id: string | null
-          tokens_in: number | null
-          tokens_out: number | null
-          workspace_id: string | null
+          parent_task_id: string | null
+          payload: Json
+          plan_id: string | null
+          result: Json
+          status: string
+          updated_at: string
+          user_id: string
         }
         Insert: {
-          agent_id?: string | null
-          created_at?: string | null
+          agent_slug: string
+          completed_at?: string | null
+          created_at?: string
+          depends_on?: string[]
+          error_message?: string | null
           id?: string
-          input?: string | null
-          output?: string | null
-          status?: string | null
-          step_index?: number | null
-          task_plan_id?: string | null
-          tokens_in?: number | null
-          tokens_out?: number | null
-          workspace_id?: string | null
+          parent_task_id?: string | null
+          payload?: Json
+          plan_id?: string | null
+          result?: Json
+          status?: string
+          updated_at?: string
+          user_id: string
         }
         Update: {
-          agent_id?: string | null
-          created_at?: string | null
+          agent_slug?: string
+          completed_at?: string | null
+          created_at?: string
+          depends_on?: string[]
+          error_message?: string | null
           id?: string
-          input?: string | null
-          output?: string | null
-          status?: string | null
-          step_index?: number | null
-          task_plan_id?: string | null
-          tokens_in?: number | null
-          tokens_out?: number | null
-          workspace_id?: string | null
+          parent_task_id?: string | null
+          payload?: Json
+          plan_id?: string | null
+          result?: Json
+          status?: string
+          updated_at?: string
+          user_id?: string
         }
         Relationships: [
           {
-            foreignKeyName: "tasks_agent_id_fkey"
-            columns: ["agent_id"]
+            foreignKeyName: "tasks_parent_task_id_fkey"
+            columns: ["parent_task_id"]
             isOneToOne: false
-            referencedRelation: "agents"
+            referencedRelation: "tasks"
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "tasks_task_plan_id_fkey"
-            columns: ["task_plan_id"]
+            foreignKeyName: "tasks_plan_id_fkey"
+            columns: ["plan_id"]
             isOneToOne: false
             referencedRelation: "task_plans"
             referencedColumns: ["id"]
           },
-          {
-            foreignKeyName: "tasks_workspace_id_fkey"
-            columns: ["workspace_id"]
-            isOneToOne: false
-            referencedRelation: "workspaces"
-            referencedColumns: ["id"]
-          },
         ]
-      }
-      tools: {
-        Row: {
-          capability_types: string[]
-          config_schema: Json
-          created_at: string
-          enabled: boolean
-          id: string
-          metadata: Json
-          name: string
-          provider: string
-          slug: string
-          supported_actions: Json
-          updated_at: string
-        }
-        Insert: {
-          capability_types?: string[]
-          config_schema?: Json
-          created_at?: string
-          enabled?: boolean
-          id?: string
-          metadata?: Json
-          name: string
-          provider: string
-          slug: string
-          supported_actions?: Json
-          updated_at?: string
-        }
-        Update: {
-          capability_types?: string[]
-          config_schema?: Json
-          created_at?: string
-          enabled?: boolean
-          id?: string
-          metadata?: Json
-          name?: string
-          provider?: string
-          slug?: string
-          supported_actions?: Json
-          updated_at?: string
-        }
-        Relationships: []
-      }
-      users: {
-        Row: {
-          created_at: string | null
-          email: string | null
-          full_name: string | null
-          id: string
-          role: string | null
-          workspace_id: string | null
-        }
-        Insert: {
-          created_at?: string | null
-          email?: string | null
-          full_name?: string | null
-          id: string
-          role?: string | null
-          workspace_id?: string | null
-        }
-        Update: {
-          created_at?: string | null
-          email?: string | null
-          full_name?: string | null
-          id?: string
-          role?: string | null
-          workspace_id?: string | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "users_workspace_id_fkey"
-            columns: ["workspace_id"]
-            isOneToOne: false
-            referencedRelation: "workspaces"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      workspaces: {
-        Row: {
-          company_brain: string | null
-          created_at: string | null
-          daily_run_limit: number | null
-          id: string
-          name: string
-          plan: string | null
-          tokens_used_today: number | null
-        }
-        Insert: {
-          company_brain?: string | null
-          created_at?: string | null
-          daily_run_limit?: number | null
-          id?: string
-          name: string
-          plan?: string | null
-          tokens_used_today?: number | null
-        }
-        Update: {
-          company_brain?: string | null
-          created_at?: string | null
-          daily_run_limit?: number | null
-          id?: string
-          name?: string
-          plan?: string | null
-          tokens_used_today?: number | null
-        }
-        Relationships: []
       }
     }
     Views: {
-      outreach_channel_performance: {
-        Row: {
-          channel: string | null
-          negative_replies: number | null
-          positive_replies: number | null
-          reply_rate_pct: number | null
-          total_replies: number | null
-          total_sent: number | null
-        }
-        Relationships: []
-      }
-      outreach_dashboard: {
-        Row: {
-          closed: number | null
-          dead: number | null
-          in_sequence: number | null
-          linkedin_connected: number | null
-          linkedin_pending: number | null
-          meetings_booked: number | null
-          meetings_this_week: number | null
-          new_leads_this_week: number | null
-          not_started: number | null
-          replied: number | null
-          replies_this_week: number | null
-          total_leads: number | null
-        }
-        Relationships: []
-      }
+      [_ in never]: never
     }
     Functions: {
       get_client_branding: {
@@ -4763,29 +2453,14 @@ export type Database = {
         }[]
       }
       get_user_client_id: { Args: { user_uuid: string }; Returns: string }
-      has_org_role: {
-        Args: { org_uuid: string; role_names: string[] }
-        Returns: boolean
-      }
-      increment_tokens: {
-        Args: { amount: number; workspace_id_input: string }
-        Returns: undefined
-      }
-      is_org_member: { Args: { org_uuid: string }; Returns: boolean }
       is_room_member: {
         Args: { _room_id: string; _user_id: string }
         Returns: boolean
       }
     }
     Enums: {
-      activity_log_severity: "debug" | "info" | "warning" | "error"
       activity_status: "pending" | "sent" | "skipped" | "failed"
-      behavioral_risk_level: "low" | "medium" | "high"
-      candidate_source:
-        | "resume_screening"
-        | "deep_search"
-        | "linkedin_scraper"
-        | "screening_flow"
+      candidate_source: "resume_screening" | "deep_search" | "linkedin_scraper"
       interview_location_type: "video" | "phone" | "in_person"
       interview_status:
         | "scheduled"
@@ -4793,20 +2468,6 @@ export type Database = {
         | "cancelled"
         | "no_show"
         | "rescheduled"
-      job_status:
-        | "queued"
-        | "running"
-        | "waiting"
-        | "completed"
-        | "failed"
-        | "cancelled"
-      job_step_status:
-        | "queued"
-        | "running"
-        | "completed"
-        | "failed"
-        | "skipped"
-        | "retrying"
       lead_status:
         | "not_started"
         | "in_sequence"
@@ -4815,22 +2476,7 @@ export type Database = {
         | "closed"
         | "dead"
       lead_tier: "unassigned" | "tier_1" | "tier_2" | "tier_3"
-      organization_member_role: "owner" | "admin" | "operator" | "viewer"
-      organization_member_status: "active" | "invited" | "disabled"
       reminder_type: "24h" | "1h" | "15min"
-      scenario_category:
-        | "ambiguity"
-        | "accountability"
-        | "competing_priorities"
-        | "time_pressure"
-        | "conflict_resolution"
-      screening_session_status:
-        | "invited"
-        | "in_progress"
-        | "completed"
-        | "expired"
-        | "abandoned"
-      secret_connection_status: "active" | "disabled" | "rotating" | "error"
       sequence_status: "draft" | "active" | "paused"
       slot_status: "available" | "booked" | "blocked"
     }
@@ -4960,15 +2606,8 @@ export type CompositeTypes<
 export const Constants = {
   public: {
     Enums: {
-      activity_log_severity: ["debug", "info", "warning", "error"],
       activity_status: ["pending", "sent", "skipped", "failed"],
-      behavioral_risk_level: ["low", "medium", "high"],
-      candidate_source: [
-        "resume_screening",
-        "deep_search",
-        "linkedin_scraper",
-        "screening_flow",
-      ],
+      candidate_source: ["resume_screening", "deep_search", "linkedin_scraper"],
       interview_location_type: ["video", "phone", "in_person"],
       interview_status: [
         "scheduled",
@@ -4976,22 +2615,6 @@ export const Constants = {
         "cancelled",
         "no_show",
         "rescheduled",
-      ],
-      job_status: [
-        "queued",
-        "running",
-        "waiting",
-        "completed",
-        "failed",
-        "cancelled",
-      ],
-      job_step_status: [
-        "queued",
-        "running",
-        "completed",
-        "failed",
-        "skipped",
-        "retrying",
       ],
       lead_status: [
         "not_started",
@@ -5002,24 +2625,7 @@ export const Constants = {
         "dead",
       ],
       lead_tier: ["unassigned", "tier_1", "tier_2", "tier_3"],
-      organization_member_role: ["owner", "admin", "operator", "viewer"],
-      organization_member_status: ["active", "invited", "disabled"],
       reminder_type: ["24h", "1h", "15min"],
-      scenario_category: [
-        "ambiguity",
-        "accountability",
-        "competing_priorities",
-        "time_pressure",
-        "conflict_resolution",
-      ],
-      screening_session_status: [
-        "invited",
-        "in_progress",
-        "completed",
-        "expired",
-        "abandoned",
-      ],
-      secret_connection_status: ["active", "disabled", "rotating", "error"],
       sequence_status: ["draft", "active", "paused"],
       slot_status: ["available", "booked", "blocked"],
     },
