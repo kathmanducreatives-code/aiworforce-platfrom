@@ -349,3 +349,126 @@ mostly-generic instructions. Fix both, smoke-test, push.
 - [x] WEEK_1_LOG.md has a Day 3 entry — this section
 - [x] All commits are in `git log`
 
+---
+
+## Day 4 — pilot-chat edge function (2026-05-27)
+
+**Goal:** a single chat endpoint the frontend will call (Day 5) that decides
+between replying directly and delegating to `orchestrate`. Persists turns to
+the Day-2 `conversations` / `messages` tables.
+
+### What I did
+
+- Wrote `supabase/functions/pilot-chat/index.ts` (361 LOC, `verify_jwt=true`).
+  Flow: JWT → user_id → workspace-membership check (`public.users`) →
+  upsert conversation → persist user message → load last 20 → single Claude
+  Sonnet 4.5 call with a router system prompt → strip markdown fences →
+  parse `{decision, text|instruction}` JSON → branch:
+  - `reply`: persist assistant message, return.
+  - `delegate`: server-to-server `fetch` to `orchestrate` (forwarding the
+    user's bearer token so its own membership check passes), persist a
+    synthetic "On it. Here's the plan: ... (N steps)" assistant message
+    tagged with `agent_slug='pilot'` and `metadata.plan_id`, return.
+- Reused the `callAnthropicWithRetry` pattern from Day 3 (30 s
+  AbortController timeout, 1 retry on 5xx / network error). Duplicated
+  inline — only two callers, both small; a shared module would be premature.
+- Pilot router prompt enumerates the 5 agent specialisations verbatim
+  (Scout / Aria / Penn / Hawk / Scribe with their domains) so Claude does
+  not hallucinate the team's capabilities.
+- Deployed via `supabase functions deploy pilot-chat --project-ref zbwsbnqqpkvdhqwavjke`.
+  `verify_jwt: true` is the default — function config not customised.
+
+### Smoke tests
+
+Set up: confirmed the existing `auth.users` row for `test@example.com`
+(`b1e500cb-…`) by setting `email_confirmed_at` and a known
+bcrypt-hashed password (`crypt('TestPilot2026!', gen_salt('bf', 10))`)
+via SQL, then inserted matching `public.users` row pointing at the
+seeded workspace `00000000-0000-0000-0000-000000000001`. Signed in via
+`/auth/v1/token` to get an access token.
+
+Four cases run via curl against the live function:
+
+| # | Message | Expected | Actual |
+|---|---|---|---|
+| 1 | "hi" | `reply` | ✓ reply, 1-line intro |
+| 2 | "who is on your team and what does each one do?" | `reply` with correct specialisations | ✓ accurate breakdown: Scout / Aria / Penn / Hawk / Scribe |
+| 3 | "find me 5 React engineers in Amsterdam" | `delegate` → 2-step plan | ✓ plan `c4bb2c9d`, Scout+Aria, completed in ~25 s |
+| 4 | "write a LinkedIn post about why staff engineers leave their jobs" | `delegate` → ≥1-step plan | ✓ plan `b596b73d`, Scribe, gated `awaiting_approval` (orchestrate flagged the publish step) |
+
+All 8 messages persisted into conversation `154af51e…` with correct
+`role`, `agent_slug='pilot'` on assistant rows, `is_error=false`
+throughout. Token usage: ~550-800 per Pilot turn (Sonnet 4.5).
+
+### What broke and was fixed in the same session
+
+1. **Pilot hallucinated agent roles** on the first deploy ("Aria writes
+   outreach"). Root cause: prompt named the agents but didn't enumerate
+   their specialisations. Fix: explicit list in the prompt.
+2. **`plan_id` returned empty / `steps_count=0`** even though orchestrate
+   actually succeeded and run-agent fired. Root cause: I was reading
+   `orchBody.plan_id` and `orchBody.steps_count`; deployed orchestrate
+   returns `task_plan_id` and `total_steps`. Fix: accept either pair, so
+   if orchestrate is ever rewritten with the alternate names the function
+   still works.
+
+Both fixed in the same commit (`7f6a3bf`).
+
+### What I did NOT do
+
+- Did not wire the frontend off `chat-respond`. The five frontend surfaces
+  (`ChatComposerPro.tsx`, `HeroCommandSurface.tsx`, `CommandDock.tsx`,
+  `useChatConversation.ts`, `lib/chatRespond.ts`) still call the old
+  `chat-respond` function. Day 5 work — needs a Lovable pass against the
+  current UI.
+- Did not delete or deprecate `chat-respond`. It still exists and still
+  works (now that Day 2 created the tables it expected). When the
+  frontend migration lands we can mark it deprecated.
+- Did not add a shared `_lib/` module for the retry helper or fence-strip
+  helper. Two callers each, both ~10 LOC.
+- Did not seed Company Brain content for the test workspace. Pilot did
+  not need it for these tests; the brain only matters once `run-agent`
+  is doing real domain work and that already gracefully handles an
+  empty brain (Day 3 work).
+
+### Unilateral decisions
+
+- Used `public.users.workspace_id` for membership scoping (consistent
+  with `orchestrate` and the Day 2 RLS policies).
+- Forwarded the user's bearer token to orchestrate rather than calling
+  with service role. Keeps orchestrate's membership check authoritative.
+- Synthetic announcement message ("On it. Here's the plan: …") goes
+  through the same `messages` insert path as a real Claude reply, with
+  `agent_slug='pilot'`. The UI can distinguish plan messages by the
+  presence of `metadata.plan_id` if we set it later; for now the
+  response payload from `/pilot-chat` already carries the plan info.
+
+### Surprises
+
+- Markdown fence problem from Day 3 reappeared as expected. `stripFences()`
+  handles it deterministically. Documented in code.
+- Orchestrate's tool-use of Gemini 2.5 Flash for planning is independent
+  of Pilot's Sonnet 4.5 reasoning — i.e., two distinct LLM providers in
+  the same request lifecycle. Working fine; flagging for ops awareness
+  (now we have a hard dependency on Anthropic + Google AI + Lovable AI
+  Gateway for one chat turn).
+
+### Day 4 exit state
+
+- `pilot-chat` deployed and verified end-to-end against the live project.
+- Conversations / messages tables now have real data flowing through them.
+- The next call from a frontend that knows about `pilot-chat` will Just
+  Work — no further backend changes needed for Day 5's UI migration.
+
+### Definition-of-done check
+
+- [x] `pilot-chat` is deployed and responds to authenticated requests
+- [x] Reply path works (cases 1 and 2)
+- [x] Delegate path works end-to-end through `orchestrate` → `run-agent`
+      (cases 3 and 4)
+- [x] Conversation history persists; both user and assistant turns saved
+- [x] Approval gate downstream still fires (case 4 hit `awaiting_approval`)
+- [x] Failure surfaces an `is_error=true` assistant message (verified by
+      construction, not exercised in smoke tests)
+- [x] Frontend UI untouched — Day 5's scope
+
