@@ -11,6 +11,7 @@ import DirectAgentView from './DirectAgentView';
 import EmptyState from './EmptyState';
 import ChatView from './ChatView';
 import ChatComposerPro from './ChatComposerPro';
+import ChatErrorBoundary from './ChatErrorBoundary';
 import { TooltipProvider } from '@/components/ui/tooltip';
 
 export default function ChatWorkspace() {
@@ -132,26 +133,30 @@ export default function ChatWorkspace() {
 
               {/* Active view */}
               <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
-                {view.kind === 'empty' && <EmptyState />}
-                {view.kind === 'conversation' && <ConversationView planId={view.planId} />}
-                {view.kind === 'channel' && <ChannelView dept={view.dept} />}
-                {view.kind === 'agent' && <DirectAgentView slug={view.slug} />}
-                {view.kind === 'chat' && (
-                  <ChatView
-                    conversationId={view.conversationId}
-                    agentSlug={view.agentSlug}
-                    pendingUserText={pending?.conversationId === view.conversationId ? pending.text : null}
-                    awaitingReply={pending?.conversationId === view.conversationId && pending.awaiting}
-                  />
-                )}
+                <ChatErrorBoundary>
+                  {view.kind === 'empty' && <EmptyState />}
+                  {view.kind === 'conversation' && <ConversationView planId={view.planId} />}
+                  {view.kind === 'channel' && <ChannelView dept={view.dept} />}
+                  {view.kind === 'agent' && <DirectAgentView slug={view.slug} />}
+                  {view.kind === 'chat' && view.conversationId && (
+                    <ChatView
+                      conversationId={view.conversationId}
+                      agentSlug={view.agentSlug}
+                      pendingUserText={pending?.conversationId === view.conversationId ? pending.text : null}
+                      awaitingReply={pending?.conversationId === view.conversationId && pending.awaiting}
+                    />
+                  )}
+                </ChatErrorBoundary>
               </div>
 
               {/* Composer */}
               <div className="border-t border-border/60 px-4 py-3 bg-background/60">
-                <ChatComposerPro
-                  restrictDepartment={view.kind === 'channel' ? view.dept : undefined}
-                  autoFocus
-                />
+                <ChatErrorBoundary>
+                  <ChatComposerPro
+                    restrictDepartment={view.kind === 'channel' ? view.dept : undefined}
+                    autoFocus
+                  />
+                </ChatErrorBoundary>
               </div>
             </div>
           </div>

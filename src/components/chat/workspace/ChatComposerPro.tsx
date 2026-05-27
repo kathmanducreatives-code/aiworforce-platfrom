@@ -197,8 +197,9 @@ export default function ChatComposerPro({ restrictDepartment, placeholder, autoF
     setValue('');
     try {
       const result = await pilotChat({ message: text, workspace_id: workspaceId, conversation_id: conversationId });
-      if (!conversationId) {
-        setView({ kind: 'chat', conversationId: result.conversation_id, agentSlug });
+      const newConvId = result?.conversation_id;
+      if (!conversationId && typeof newConvId === 'string' && newConvId) {
+        setView({ kind: 'chat', conversationId: newConvId, agentSlug });
       }
       setPending(null);
     } catch (e) {
