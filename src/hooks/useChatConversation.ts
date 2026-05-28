@@ -7,7 +7,10 @@ export function useChatConversation(conversationId: string | null) {
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    if (!conversationId) { setMessages([]); return; }
+    if (!conversationId || typeof conversationId !== 'string') {
+      setMessages([]);
+      return;
+    }
     let cancelled = false;
     setLoading(true);
 
@@ -23,23 +26,30 @@ export function useChatConversation(conversationId: string | null) {
       }
     })();
 
-    const channel = supabase
-      .channel(`messages:${conversationId}`)
-      .on(
-        'postgres_changes',
-        { event: 'INSERT', schema: 'public', table: 'messages', filter: `conversation_id=eq.${conversationId}` },
-        (payload) => {
-          const row = payload.new as ChatMessageRow;
-          setMessages((prev) => (prev.some((m) => m.id === row.id) ? prev : [...prev, row]));
-        },
-      )
-      .subscribe();
+    // Unique topic per hook instance to avoid "subscribe can only be called
+    // a single time per channel instance" collisions under StrictMode / multi-mount.
+    const topic = `messages:${conversationId}:${
+      typeof crypto !== 'undefined' && 'randomUUID' in crypto
+        ? crypto.randomUUID()
+        : Math.random().toString(36).slice(2)
+    }`;
+    const channel = supabase.channel(topic);
+    channel.on(
+      'postgres_changes',
+      { event: 'INSERT', schema: 'public', table: 'messages', filter: `conversation_id=eq.${conversationId}` },
+      (payload) => {
+        const row = payload.new as ChatMessageRow;
+        setMessages((prev) => (prev.some((m) => m.id === row.id) ? prev : [...prev, row]));
+      },
+    );
+    channel.subscribe();
 
     return () => {
       cancelled = true;
       supabase.removeChannel(channel);
     };
   }, [conversationId]);
+
 
   return { messages, loading, setMessages };
 }
