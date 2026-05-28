@@ -569,3 +569,71 @@ Day 0 success criteria fully met.
 - User to run a real browser pass against `/dashboard` chat surfaces
   next; then Day 6 begins (pilot UX polish + execution visibility).
 
+---
+
+## Hotfix — "No workspace selected" blocking chat (2026-05-28)
+
+Browser smoke test against `localhost:8081` after Day 5 push hit "No
+workspace selected" toast on every send.
+
+### Diagnosis
+
+- `workspaces` had 1 row (`00000000-…-0001` "My Company") — OK.
+- `workspace_members` **did not exist** in the live DB despite Lovable's
+  repo migration `20260527113004_…sql` defining it. That migration was
+  never applied; if it had been, it would have crashed on RLS policies
+  referencing `workspaces.owner_user_id`, a column the live workspaces
+  table doesn't have.
+- Frontend reads workspace from `src/lib/orchestration.ts:57` →
+  `workspace_members.workspace_id where user_id = auth.uid()`. With the
+  table missing, this returns null and `WorkspaceContext` reports "No
+  workspace available for this account."
+
+### Fix applied
+
+Migration `20260528160000_workspace_members_hotfix.sql`:
+- Created `workspace_members` (the minimal schema Lovable's migration
+  spec'd: id PK, workspace_id FK→workspaces, user_id, role default
+  'owner', created_at, UNIQUE(workspace_id, user_id)).
+- RLS on with two policies: members can SELECT/INSERT their own rows.
+- Seeded three rows linking the existing workspace to:
+  - `kathmanducreatives@gmail.com` (founder, primary)
+  - `prasidhpro@gmail.com` (founder, secondary)
+  - `test@example.com` (Day-4 smoke-test user)
+
+Applied via MCP `apply_migration`, then committed the file. Skipped the
+rest of Lovable's planned workspace rewrite (workspaces CREATE TABLE,
+approvals/activity_feed rewrites, has_workspace_access function,
+provision_workspace_for_user RPC, auto-provision trigger) because none
+of it is on the chat critical path and the policies would crash on a
+missing column.
+
+### Verification
+
+- `select wm.role, u.email from workspace_members join auth.users` → 3 rows ✓
+- `pilot-chat` membership lookup (`workspace_id = '…0001' AND user_id =
+  '3fc29d49-…'`) returns 1 match ✓
+- Test insert into `public.conversations` for the founder succeeded
+  (then cleaned up) ✓
+
+### Browser action
+
+Reload `localhost:8081`. No localStorage clear needed — `WorkspaceContext`
+re-queries on auth change and on retry. If the toast still appears, the
+account you're signed in as isn't one of the three linked above; tell me
+which and I'll add a row.
+
+### Known follow-up (Week 2 polish)
+
+**New users receive no workspace on signup.** The app has no
+workspace-creation/onboarding step, so `workspace_members` starts empty
+for fresh accounts. Hotfixed on 2026-05-28 by manually linking the
+founder accounts. Real fix: auto-provision a workspace on signup via
+either (a) an `auth.users` insert trigger that creates a workspace,
+inserts the user as owner, and seeds their `company_brain` row (Lovable's
+`provision_workspace_for_user` + `handle_new_user_workspace` from the
+unapplied migration is a reasonable starting point — needs reconciling
+with the actual live `workspaces` schema), or (b) a first-run onboarding
+screen that does the same on form submit. Not blocking; scope into Week
+1 polish or Week 2.
+
