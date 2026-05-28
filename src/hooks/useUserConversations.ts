@@ -31,12 +31,17 @@ export function useUserConversations() {
     };
     load();
 
-    const ch = supabase
-      .channel('user-conversations')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'conversations' }, () => load())
-      .subscribe();
+    const topic = `user-conversations:${
+      typeof crypto !== 'undefined' && 'randomUUID' in crypto
+        ? crypto.randomUUID()
+        : Math.random().toString(36).slice(2)
+    }`;
+    const ch = supabase.channel(topic);
+    ch.on('postgres_changes', { event: '*', schema: 'public', table: 'conversations' }, () => load());
+    ch.subscribe();
 
     return () => { cancelled = true; supabase.removeChannel(ch); };
+
   }, []);
 
   return { conversations, loading };
