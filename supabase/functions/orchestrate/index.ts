@@ -1,3 +1,11 @@
+// orchestrate: plan a multi-agent workflow and kick off the first step.
+// Schema-aligned with the wqnigjhcwjxtmordrwno backend.
+//
+// Input:  { workspace_id | workspaceId, user_instruction | userInstruction,
+//           conversation_id? | conversationId? }
+// Auth:   Bearer JWT (forwarded by pilot-chat). Membership validated via
+//         workspace_members using the service-role client.
+
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const cors = {
@@ -5,82 +13,125 @@ const cors = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
+const json = (body: unknown, status = 200) =>
+  new Response(JSON.stringify(body), {
+    status,
+    headers: { ...cors, "Content-Type": "application/json" },
+  });
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: cors });
 
   try {
-    const supabase = createClient(
-      Deno.env.get("SUPABASE_URL")!,
-      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
-    );
+    const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
+    const SUPABASE_ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY")!;
+    const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+    const ANTHROPIC_API_KEY = Deno.env.get("ANTHROPIC_API_KEY");
 
-    const body = await req.json().catch(() => ({}));
+    const body = await req.json().catch(() => ({} as Record<string, unknown>));
 
-    // Health-check ping used by VerificationPanel.tsx / pingOrchestrate.
-    // Must precede the required-fields check.
-    if (body?.ping === true) {
-      return new Response(JSON.stringify({ ok: true }), {
-        status: 200,
-        headers: { ...cors, "Content-Type": "application/json" },
-      });
+    // Health-check ping (used by VerificationPanel).
+    if ((body as { ping?: unknown })?.ping === true) {
+      return json({ ok: true });
     }
 
-    const { user_instruction, workspace_id } = body ?? {};
+    // Accept snake_case + camelCase.
+    const b = body as Record<string, unknown>;
+    const workspace_id = (b.workspace_id ?? b.workspaceId) as string | undefined;
+    const user_instruction = (b.user_instruction ?? b.userInstruction) as string | undefined;
+    const conversation_id = (b.conversation_id ?? b.conversationId ?? null) as string | null;
 
     if (!user_instruction || !workspace_id) {
-      return new Response(
-        JSON.stringify({ error: "user_instruction and workspace_id required" }),
-        { status: 400, headers: { ...cors, "Content-Type": "application/json" } }
+      return json(
+        { error: "missing_parameter", details: "workspace_id and user_instruction are required" },
+        400,
       );
     }
 
-    // Fetch workspace
-    const { data: workspace } = await supabase
+    if (!ANTHROPIC_API_KEY) return json({ error: "ANTHROPIC_API_KEY not configured" }, 500);
+
+    // Validate JWT and derive user_id.
+    const authHeader = req.headers.get("Authorization");
+    if (!authHeader?.startsWith("Bearer ")) {
+      return json({ error: "Unauthorized" }, 401);
+    }
+    const userClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+      global: { headers: { Authorization: authHeader } },
+    });
+    const token = authHeader.replace("Bearer ", "");
+    const { data: userData, error: userErr } = await userClient.auth.getUser(token);
+    if (userErr || !userData?.user?.id) return json({ error: "Unauthorized" }, 401);
+    const userId = userData.user.id;
+
+    const admin = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+
+    // Membership check (bypass RLS via service role, then verify explicitly).
+    const { data: member } = await admin
+      .from("workspace_members")
+      .select("workspace_id, role")
+      .eq("user_id", userId)
+      .eq("workspace_id", workspace_id)
+      .maybeSingle();
+
+    if (!member) {
+      return json(
+        {
+          error: "workspace_not_found",
+          details: "User is not a member of the specified workspace",
+          workspace_id,
+        },
+        404,
+      );
+    }
+
+    // Workspace lookup (real columns only).
+    const { data: workspace } = await admin
       .from("workspaces")
-      .select("company_brain, daily_run_limit, tokens_used_today")
+      .select("id, name")
       .eq("id", workspace_id)
-      .single();
+      .maybeSingle();
 
     if (!workspace) {
-      return new Response(
-        JSON.stringify({ error: "Workspace not found" }),
-        { status: 404, headers: { ...cors, "Content-Type": "application/json" } }
+      return json(
+        {
+          error: "workspace_not_found",
+          details: "Workspace row not found in database",
+          workspace_id,
+        },
+        404,
       );
     }
 
-    if (workspace.tokens_used_today >= workspace.daily_run_limit) {
-      return new Response(
-        JSON.stringify({ error: "Daily run limit reached" }),
-        { status: 429, headers: { ...cors, "Content-Type": "application/json" } }
-      );
-    }
+    // Load company_brain profile (separate table; optional).
+    const { data: brainRow } = await admin
+      .from("company_brain")
+      .select("profile")
+      .eq("workspace_id", workspace_id)
+      .maybeSingle();
+    const companyBrain = (brainRow?.profile ?? {}) as Record<string, unknown>;
 
-    // Fetch all agent capabilities
-    const { data: capabilities } = await supabase
+    // Load agents + capabilities (using real columns: capability, config).
+    const { data: capabilities } = await admin
       .from("agent_capabilities")
-      .select(`
-        capability, input_type, output_type, priority,
-        agents ( id, name, model, department, status )
-      `);
+      .select("capability, config, agents ( id, slug, name, model, department )");
 
-    const capabilityMap = (capabilities ?? []).map((c: any) => ({
-      agent_id: c.agents?.id,
-      agent_name: c.agents?.name,
-      model: c.agents?.model,
-      department: c.agents?.department,
-      capability: c.capability,
-      input_type: c.input_type,
-      output_type: c.output_type,
-      priority: c.priority,
-    }));
+    const capabilityMap = (capabilities ?? [])
+      .map((c: any) => ({
+        agent_slug: c.agents?.slug,
+        agent_name: c.agents?.name,
+        department: c.agents?.department,
+        model: c.agents?.model,
+        capability: c.capability,
+        config: c.config ?? {},
+      }))
+      .filter((c) => c.agent_slug);
 
-    // Ask Claude to build the dynamic plan
-    const orchestratorPrompt = `
-You are the orchestrator for ScreeningPilot, an AI workforce platform.
-Read the user instruction and decide which agents to involve, in what order, to complete the task.
+    // Plan with Claude.
+    const orchestratorPrompt = `You are the orchestrator for ScreeningPilot, an AI workforce platform.
+Read the user instruction and decide which agents to involve, in what order.
 
 COMPANY CONTEXT:
-${workspace.company_brain}
+${JSON.stringify(companyBrain)}
 
 AVAILABLE AGENTS AND CAPABILITIES:
 ${JSON.stringify(capabilityMap, null, 2)}
@@ -89,11 +140,10 @@ USER INSTRUCTION:
 "${user_instruction}"
 
 RULES:
-- Only use agents whose input_type matches the previous step's output_type
-- First agent must accept raw text input
-- Only include agents actually needed — no unnecessary steps
-- If a step produces output needing human review before proceeding (emails to send, content to publish), set needs_approval to true
-- If the task needs only one agent, return one step
+- Use agent_slug values from the list above. Never invent slugs.
+- Only include agents actually needed.
+- If a step produces output that needs human review before continuing (sending emails, publishing content), set needs_approval to true.
+- If only one agent is needed, return one step.
 
 Return ONLY valid JSON, no explanation, no markdown:
 {
@@ -101,13 +151,11 @@ Return ONLY valid JSON, no explanation, no markdown:
   "steps": [
     {
       "step_index": 0,
-      "agent_id": "uuid",
-      "agent_name": "name",
-      "capability": "capability being used",
-      "input_type": "what this step receives",
-      "output_type": "what this step produces",
+      "agent_slug": "scout",
+      "agent_name": "Scout",
+      "capability": "search_linkedin",
       "needs_approval": false,
-      "instruction": "specific instruction for this agent based on the user request"
+      "instruction": "specific instruction for this agent"
     }
   ]
 }`;
@@ -116,7 +164,7 @@ Return ONLY valid JSON, no explanation, no markdown:
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        "x-api-key": Deno.env.get("ANTHROPIC_API_KEY")!,
+        "x-api-key": ANTHROPIC_API_KEY,
         "anthropic-version": "2023-06-01",
       },
       body: JSON.stringify({
@@ -127,82 +175,81 @@ Return ONLY valid JSON, no explanation, no markdown:
     });
 
     const anthropicData = await anthropicRes.json();
-    const rawPlan = anthropicData.content?.[0]?.text ?? "";
+    const rawPlan: string = anthropicData?.content?.[0]?.text ?? "";
 
-    let parsedPlan: any;
+    let parsedPlan: { plan_summary: string; steps: any[] };
     try {
       parsedPlan = JSON.parse(rawPlan.replace(/```json|```/g, "").trim());
     } catch {
-      return new Response(
-        JSON.stringify({ error: "Failed to parse orchestrator plan", raw: rawPlan }),
-        { status: 500, headers: { ...cors, "Content-Type": "application/json" } }
-      );
+      return json({ error: "plan_parse_failed", raw: rawPlan }, 500);
     }
 
-    // Save task plan
-    const { data: taskPlan, error: planError } = await supabase
+    if (!Array.isArray(parsedPlan?.steps) || parsedPlan.steps.length === 0) {
+      return json({ error: "empty_plan", raw: rawPlan }, 500);
+    }
+
+    // Persist task_plan with real columns.
+    const { data: taskPlan, error: planError } = await admin
       .from("task_plans")
       .insert({
         workspace_id,
+        user_id: userId,
+        created_by: userId,
+        goal: user_instruction,
         user_instruction,
-        plan: parsedPlan,
-        status: "running",
-        current_step: 0,
+        plan_summary: parsedPlan.plan_summary,
+        steps: parsedPlan.steps,
+        status: "executing",
       })
-      .select()
+      .select("id")
       .single();
 
     if (planError || !taskPlan) {
-      return new Response(
-        JSON.stringify({ error: "Failed to save plan", detail: planError }),
-        { status: 500, headers: { ...cors, "Content-Type": "application/json" } }
-      );
+      console.error("[orchestrate] failed to save task_plan:", planError);
+      return json({ error: "plan_save_failed", details: planError?.message }, 500);
     }
 
-    // Log plan creation to activity feed
-    await supabase.from("activity_feed").insert({
+    // Activity feed: plan_created.
+    await admin.from("activity_feed").insert({
       workspace_id,
-      task_plan_id: taskPlan.id,
+      plan_id: taskPlan.id,
       event_type: "plan_created",
       title: "Plan created",
       body: parsedPlan.plan_summary,
-      metadata: { total_steps: parsedPlan.steps.length },
+      metadata: { total_steps: parsedPlan.steps.length, conversation_id },
     });
 
-    // Fire first step immediately
+    // Fire first step (best-effort; failures don't block the response).
     const firstStep = parsedPlan.steps[0];
-    await fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/run-agent`, {
+    fetch(`${SUPABASE_URL}/functions/v1/run-agent`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        Authorization: `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`,
+        Authorization: `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
       },
       body: JSON.stringify({
-        task_plan_id: taskPlan.id,
+        plan_id: taskPlan.id,
         step_index: 0,
-        agent_id: firstStep.agent_id,
+        agent_slug: firstStep.agent_slug,
         workspace_id,
+        user_id: userId,
         instruction: firstStep.instruction,
         input: user_instruction,
-        needs_approval: firstStep.needs_approval,
+        needs_approval: firstStep.needs_approval === true,
       }),
+    }).catch((e) => console.error("[orchestrate] run-agent kickoff failed:", e));
+
+    return json({
+      success: true,
+      plan_id: taskPlan.id,
+      task_plan_id: taskPlan.id, // backward-compat alias
+      plan_summary: parsedPlan.plan_summary,
+      total_steps: parsedPlan.steps.length,
+      steps_count: parsedPlan.steps.length,
+      plan: parsedPlan,
     });
-
-    return new Response(
-      JSON.stringify({
-        success: true,
-        task_plan_id: taskPlan.id,
-        plan_summary: parsedPlan.plan_summary,
-        total_steps: parsedPlan.steps.length,
-        plan: parsedPlan,
-      }),
-      { headers: { ...cors, "Content-Type": "application/json" } }
-    );
-
   } catch (err) {
-    return new Response(
-      JSON.stringify({ error: "Unexpected error", detail: String(err) }),
-      { status: 500, headers: { ...cors, "Content-Type": "application/json" } }
-    );
+    console.error("[orchestrate] unexpected:", err);
+    return json({ error: "internal_error", details: String(err) }, 500);
   }
 });
