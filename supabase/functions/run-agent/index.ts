@@ -5,6 +5,7 @@
 //           workspace_id, user_id, instruction, input?, needs_approval? }
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { runTool } from "../_shared/toolRegistry.ts";
 
 const cors = {
   "Access-Control-Allow-Origin": "*",
