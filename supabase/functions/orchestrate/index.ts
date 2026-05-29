@@ -1,21 +1,11 @@
 // orchestrate: plan a multi-agent workflow and kick off the first step.
-// Schema-aligned with the wqnigjhcwjxtmordrwno backend.
-//
-// Input:  { workspace_id | workspaceId, user_instruction | userInstruction,
-//           conversation_id? | conversationId? }
-// Auth:   Bearer JWT (forwarded by pilot-chat). Membership validated via
-//         workspace_members using the service-role client.
-//
-// Resilience:
-//   - Tolerates fenced / preamble-wrapped JSON from Claude.
-//   - Repairs unbalanced braces/brackets.
-//   - Falls back to a deterministic intent-based planner if the model fails
-//     or returns an empty plan, so common workforce requests never bubble
-//     up "empty_plan" to the user.
+// Workflow-aware: produces deep plans (sourcing, research, intel, outreach,
+// content, screening, brief) with tool + approval metadata, then deterministic
+// expansion to guarantee depth. Tool availability is annotated, never faked.
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { generateJson, logProviderCall } from "../_shared/aiProvider.ts";
-
+import { isToolConfigured } from "../_shared/toolRegistry.ts";
 
 const cors = {
   "Access-Control-Allow-Origin": "*",
@@ -28,49 +18,44 @@ const json = (body: unknown, status = 200) =>
     headers: { ...cors, "Content-Type": "application/json" },
   });
 
-// ---------- JSON parsing helpers ----------
+// ---------- Types ----------
 
-function stripFences(s: string): string {
-  return s.replace(/```json/gi, "").replace(/```/g, "").trim();
-}
-
-function extractJson(raw: string): unknown {
-  const cleaned = stripFences(raw);
-  const start = cleaned.search(/[\{\[]/);
-  if (start === -1) throw new Error("no JSON found");
-  const opener = cleaned[start];
-  const closer = opener === "[" ? "]" : "}";
-  const end = cleaned.lastIndexOf(closer);
-  const slice = end > start ? cleaned.slice(start, end + 1) : cleaned.slice(start);
-
-  try {
-    return JSON.parse(slice);
-  } catch {
-    // Repair: pad missing closers + strip control chars.
-    let braces = 0, brackets = 0;
-    for (const ch of slice) {
-      if (ch === "{") braces++;
-      else if (ch === "}") braces--;
-      else if (ch === "[") brackets++;
-      else if (ch === "]") brackets--;
-    }
-    let repaired = slice.replace(/[\x00-\x1F\x7F]/g, "");
-    while (brackets-- > 0) repaired += "]";
-    while (braces-- > 0) repaired += "}";
-    return JSON.parse(repaired);
-  }
-}
-
-// ---------- Intent fallback planner ----------
+type ToolName =
+  | "research_web"
+  | "scrape_url"
+  | "summarize_text"
+  | "extract_structured"
+  | "draft_outreach"
+  | "send_email"
+  | null;
 
 type Step = {
   step_index: number;
-  agent_slug: string;
+  agent_slug: "scout" | "aria" | "penn" | "hawk" | "scribe";
   agent_name: string;
+  task_title: string;
+  task_description: string;
+  instruction: string; // back-compat for run-agent
   capability?: string;
-  needs_approval: boolean;
-  instruction: string;
+  tool_needed: ToolName;
+  expected_output: string;
+  success_criteria: string;
+  requires_approval: boolean;
+  needs_approval: boolean; // alias
+  planner_source: "ai" | "fallback" | "expansion";
+  tool_status?: "ready" | "connector_required";
+  connector_required?: string;
 };
+
+type Intent =
+  | "sourcing"
+  | "extraction"
+  | "intelligence"
+  | "outreach"
+  | "content"
+  | "screening"
+  | "brief"
+  | "general";
 
 const KNOWN_AGENTS: Record<string, string> = {
   scout: "Scout",
@@ -80,66 +65,397 @@ const KNOWN_AGENTS: Record<string, string> = {
   scribe: "Scribe",
 };
 
-function normalizeSlug(s: string | undefined | null): string | null {
+const TOOL_FRIENDLY: Record<string, string> = {
+  PERPLEXITY_API_KEY: "Perplexity",
+  FIRECRAWL_API_KEY: "Firecrawl",
+  RESEND_API_KEY: "Resend",
+};
+
+function normalizeSlug(s: string | undefined | null): Step["agent_slug"] | null {
   if (!s) return null;
   const slug = String(s).trim().toLowerCase();
-  return KNOWN_AGENTS[slug] ? slug : null;
+  return (KNOWN_AGENTS[slug] ? slug : null) as Step["agent_slug"] | null;
 }
 
-function fallbackPlan(instruction: string): { plan_summary: string; steps: Step[] } {
-  const t = instruction.toLowerCase();
-  const mk = (slug: keyof typeof KNOWN_AGENTS, step_index: number, body: string, approval = false): Step => ({
+function detectIntent(t: string): Intent {
+  const s = t.toLowerCase();
+  if (/brief me|daily brief|today's brief|brief on today/.test(s)) return "brief";
+  if (/https?:\/\//.test(s) || /from this (url|website|page|link)/.test(s)) return "extraction";
+  if (/(competitor|market|signals?|today|latest|monitor|changed|funding|hiring trend|pricing|launches?)/.test(s))
+    return "intelligence";
+  if (/(find|source|sourc(?:e|ing)|discover|identify|candidates?|engineers?|developers?|leads?|prospects?|founders?|companies)/.test(s))
+    return "sourcing";
+  if (/(rank|screen|score|shortlist|evaluate|compare|fit)/.test(s)) return "screening";
+  if (/(outreach|email|message|dm|reach out|follow.?up|sequence|\bsend\b)/.test(s)) return "outreach";
+  if (/(write|post|linkedin|blog|article|jd|job description|brief|memo|report|summary)/.test(s)) return "content";
+  return "general";
+}
+
+// ---------- Step factory ----------
+
+function mkStep(
+  step_index: number,
+  slug: Step["agent_slug"],
+  title: string,
+  description: string,
+  opts: {
+    tool_needed?: ToolName;
+    expected_output: string;
+    success_criteria: string;
+    requires_approval?: boolean;
+    planner_source?: Step["planner_source"];
+  },
+): Step {
+  const requires_approval = opts.requires_approval === true;
+  return {
     step_index,
     agent_slug: slug,
     agent_name: KNOWN_AGENTS[slug],
-    needs_approval: approval,
-    instruction: body,
-  });
-
-  // Sourcing / find candidates
-  if (/(find|source|sourc(?:e|ing)|candidates?|engineers?|developers?|hires?|recruit)/.test(t)) {
-    return {
-      plan_summary: `Source, rank, and prepare outreach for: ${instruction}`,
-      steps: [
-        mk("scout", 0, `Source candidates for: ${instruction}`),
-        mk("aria", 1, `Rank and score the sourced candidates against the requirements in: ${instruction}`),
-        mk("penn", 2, `Draft personalized outreach for the strongest candidates from: ${instruction}`, true),
-      ],
-    };
-  }
-  // Outreach / email
-  if (/(outreach|email|message|dm|reach out|follow.?up)/.test(t)) {
-    return {
-      plan_summary: `Draft outreach: ${instruction}`,
-      steps: [mk("penn", 0, instruction, true)],
-    };
-  }
-  // Competitive / market intelligence
-  if (/(competitor|competitive|market|intel|intelligence|changed|news)/.test(t)) {
-    return {
-      plan_summary: `Gather competitive intelligence: ${instruction}`,
-      steps: [mk("hawk", 0, instruction)],
-    };
-  }
-  // Content / LinkedIn / blog
-  if (/(linkedin|post|blog|content|write|article|jd|job description)/.test(t)) {
-    return {
-      plan_summary: `Draft content: ${instruction}`,
-      steps: [mk("scribe", 0, instruction)],
-    };
-  }
-  // Screening / ranking only
-  if (/(rank|screen|score|shortlist|evaluate)/.test(t)) {
-    return {
-      plan_summary: `Screen candidates: ${instruction}`,
-      steps: [mk("aria", 0, instruction)],
-    };
-  }
-  // Default: Scout as research entrypoint.
-  return {
-    plan_summary: `Investigate request: ${instruction}`,
-    steps: [mk("scout", 0, instruction)],
+    task_title: title,
+    task_description: description,
+    instruction: description,
+    tool_needed: opts.tool_needed ?? null,
+    expected_output: opts.expected_output,
+    success_criteria: opts.success_criteria,
+    requires_approval,
+    needs_approval: requires_approval,
+    planner_source: opts.planner_source ?? "fallback",
   };
+}
+
+// ---------- Deterministic fallback plans per intent ----------
+
+function fallbackPlan(instruction: string, intent: Intent): { plan_summary: string; steps: Step[] } {
+  switch (intent) {
+    case "sourcing":
+      return {
+        plan_summary: `Source, rank, and prepare outreach for: ${instruction}`,
+        steps: [
+          mkStep(0, "scout", "Source candidates", `Find candidates that match: ${instruction}`, {
+            tool_needed: "research_web",
+            expected_output: "List of candidate profiles with name, role, company, and source link.",
+            success_criteria: "At least 5 candidates returned with verifiable sources.",
+          }),
+          mkStep(1, "aria", "Rank candidates", `Rank and score the sourced candidates against: ${instruction}`, {
+            tool_needed: "extract_structured",
+            expected_output: "Ranked list with fit score (0-100) and rationale per candidate.",
+            success_criteria: "Every candidate has a score and 1-2 sentence rationale.",
+          }),
+          mkStep(2, "penn", "Draft outreach", `Draft personalized outreach for the strongest candidates from: ${instruction}`, {
+            tool_needed: "draft_outreach",
+            requires_approval: true,
+            expected_output: "Personalized message per top candidate, ready for review.",
+            success_criteria: "Each message references the candidate's background; no auto-send.",
+          }),
+        ],
+      };
+    case "extraction":
+      return {
+        plan_summary: `Extract structured data: ${instruction}`,
+        steps: [
+          mkStep(0, "hawk", "Scrape source", `Scrape and extract from: ${instruction}`, {
+            tool_needed: "scrape_url",
+            expected_output: "Raw extracted content (markdown) from the target URL.",
+            success_criteria: "Page successfully fetched; content non-empty.",
+          }),
+          mkStep(1, "scribe", "Summarize findings", `Summarize the extracted content into a brief for: ${instruction}`, {
+            tool_needed: "summarize_text",
+            expected_output: "Concise brief with key signals, bullets, and source citation.",
+            success_criteria: "Brief is grounded in scraped content, no fabrication.",
+          }),
+        ],
+      };
+    case "intelligence":
+      return {
+        plan_summary: `Gather competitive/market intelligence: ${instruction}`,
+        steps: [
+          mkStep(0, "hawk", "Research signals", `Research current signals for: ${instruction}`, {
+            tool_needed: "research_web",
+            expected_output: "Cited list of recent signals (funding, hiring, launches, pricing).",
+            success_criteria: "At least 3 cited signals from reputable sources.",
+          }),
+          mkStep(1, "scribe", "Brief summary", `Turn research into a short intel brief for: ${instruction}`, {
+            tool_needed: "summarize_text",
+            expected_output: "1-page intel brief with bullets and recommended next action.",
+            success_criteria: "Brief references only the research above.",
+          }),
+        ],
+      };
+    case "outreach": {
+      const wantsSend = /\bsend\b|send.*email/.test(instruction.toLowerCase());
+      const steps: Step[] = [
+        mkStep(0, "penn", "Draft outreach", `Draft personalized outreach: ${instruction}`, {
+          tool_needed: "draft_outreach",
+          requires_approval: true,
+          expected_output: "Personalized draft(s) ready for human review.",
+          success_criteria: "Draft references recipient context; no auto-send.",
+        }),
+      ];
+      if (wantsSend) {
+        steps.push(
+          mkStep(1, "penn", "Send after approval", `Send the approved outreach for: ${instruction}`, {
+            tool_needed: "send_email",
+            requires_approval: true,
+            expected_output: "Delivery confirmation from the email provider.",
+            success_criteria: "Email sent only after explicit approval.",
+          }),
+        );
+      }
+      return { plan_summary: `Outreach workflow: ${instruction}`, steps };
+    }
+    case "content":
+      return {
+        plan_summary: `Draft content: ${instruction}`,
+        steps: [
+          mkStep(0, "scribe", "Draft content", instruction, {
+            tool_needed: "summarize_text",
+            expected_output: "Ready-to-publish draft in the requested format.",
+            success_criteria: "Matches the requested length and tone.",
+          }),
+        ],
+      };
+    case "screening":
+      return {
+        plan_summary: `Screen and rank: ${instruction}`,
+        steps: [
+          mkStep(0, "aria", "Evaluate and rank", instruction, {
+            tool_needed: "extract_structured",
+            expected_output: "Structured ranking with scores and per-criterion rationale.",
+            success_criteria: "Every candidate scored against explicit criteria.",
+          }),
+        ],
+      };
+    case "brief":
+      return {
+        plan_summary: `Daily brief: ${instruction}`,
+        steps: [
+          mkStep(0, "scribe", "Internal workspace brief", "Summarize today's activity: pending approvals, active plans, recent task results.", {
+            tool_needed: "summarize_text",
+            expected_output: "Concise daily brief grouped by approvals, active plans, recent results.",
+            success_criteria: "Pulled from workspace data only.",
+          }),
+          mkStep(1, "hawk", "Live market pulse", "Add a short external intel pulse if live research is configured.", {
+            tool_needed: "research_web",
+            expected_output: "Optional 3-5 bullet external pulse with citations.",
+            success_criteria: "Skipped gracefully if Perplexity is not configured.",
+          }),
+        ],
+      };
+    default:
+      return {
+        plan_summary: `Investigate request: ${instruction}`,
+        steps: [
+          mkStep(0, "scout", "Investigate", instruction, {
+            tool_needed: "research_web",
+            expected_output: "Findings relevant to the user's request.",
+            success_criteria: "Findings cite sources or workspace data.",
+          }),
+        ],
+      };
+  }
+}
+
+// ---------- Deterministic expansion ----------
+
+function expandPlan(instruction: string, intent: Intent, steps: Step[]): Step[] {
+  const t = instruction.toLowerCase();
+  const has = (slug: Step["agent_slug"]) => steps.some((s) => s.agent_slug === slug);
+  const find = (slug: Step["agent_slug"]) => steps.find((s) => s.agent_slug === slug);
+
+  if (intent === "sourcing") {
+    if (!has("scout")) {
+      steps.unshift(
+        mkStep(0, "scout", "Source candidates", `Find candidates for: ${instruction}`, {
+          tool_needed: "research_web",
+          expected_output: "Candidate list with name, role, company, source link.",
+          success_criteria: "At least 5 candidates returned.",
+          planner_source: "expansion",
+        }),
+      );
+    }
+    if (!has("aria")) {
+      steps.push(
+        mkStep(0, "aria", "Rank candidates", `Rank candidates against: ${instruction}`, {
+          tool_needed: "extract_structured",
+          expected_output: "Ranked list with fit score and rationale.",
+          success_criteria: "Every candidate scored.",
+          planner_source: "expansion",
+        }),
+      );
+    }
+    if (!has("penn")) {
+      steps.push(
+        mkStep(0, "penn", "Draft outreach", `Draft outreach to top candidates for: ${instruction}`, {
+          tool_needed: "draft_outreach",
+          requires_approval: true,
+          expected_output: "Personalized drafts for top candidates.",
+          success_criteria: "Drafts ready for approval; no auto-send.",
+          planner_source: "expansion",
+        }),
+      );
+    }
+  }
+
+  if (intent === "extraction") {
+    const first = steps[0];
+    if (!first || (first.agent_slug !== "hawk" && first.agent_slug !== "scout") || first.tool_needed !== "scrape_url") {
+      steps.unshift(
+        mkStep(0, "hawk", "Scrape source", `Scrape and extract from: ${instruction}`, {
+          tool_needed: "scrape_url",
+          expected_output: "Markdown of the target page.",
+          success_criteria: "Non-empty extraction.",
+          planner_source: "expansion",
+        }),
+      );
+    }
+  }
+
+  if (intent === "intelligence") {
+    const hawk = find("hawk");
+    if (!hawk) {
+      steps.unshift(
+        mkStep(0, "hawk", "Research signals", `Research signals for: ${instruction}`, {
+          tool_needed: "research_web",
+          expected_output: "Cited signals from current sources.",
+          success_criteria: "At least 3 cited signals.",
+          planner_source: "expansion",
+        }),
+      );
+    } else if (!hawk.tool_needed) {
+      hawk.tool_needed = "research_web";
+    }
+    if (/(brief|report|summary|memo)/.test(t) && !has("scribe")) {
+      steps.push(
+        mkStep(0, "scribe", "Brief summary", `Summarize intel for: ${instruction}`, {
+          tool_needed: "summarize_text",
+          expected_output: "Short intel brief with recommended action.",
+          success_criteria: "Grounded in research above.",
+          planner_source: "expansion",
+        }),
+      );
+    }
+  }
+
+  if (intent === "outreach") {
+    if (!has("penn")) {
+      steps.unshift(
+        mkStep(0, "penn", "Draft outreach", instruction, {
+          tool_needed: "draft_outreach",
+          requires_approval: true,
+          expected_output: "Personalized drafts ready for approval.",
+          success_criteria: "No auto-send.",
+          planner_source: "expansion",
+        }),
+      );
+    }
+    const wantsSend = /\bsend\b/.test(t);
+    const hasSend = steps.some((s) => s.tool_needed === "send_email");
+    if (wantsSend && !hasSend) {
+      steps.push(
+        mkStep(0, "penn", "Send after approval", `Send approved outreach for: ${instruction}`, {
+          tool_needed: "send_email",
+          requires_approval: true,
+          expected_output: "Provider delivery confirmation.",
+          success_criteria: "Send only after approval.",
+          planner_source: "expansion",
+        }),
+      );
+    }
+  }
+
+  if (intent === "content") {
+    if (!has("scribe")) {
+      steps.unshift(
+        mkStep(0, "scribe", "Draft content", instruction, {
+          tool_needed: "summarize_text",
+          expected_output: "Draft in requested format.",
+          success_criteria: "Matches requested length and tone.",
+          planner_source: "expansion",
+        }),
+      );
+    }
+    if (/(current|today|latest|now)/.test(t) && !has("hawk") && !has("scout")) {
+      steps.unshift(
+        mkStep(0, "hawk", "Research facts", `Gather supporting facts for: ${instruction}`, {
+          tool_needed: "research_web",
+          expected_output: "Cited supporting facts.",
+          success_criteria: "Facts have sources.",
+          planner_source: "expansion",
+        }),
+      );
+    }
+  }
+
+  if (intent === "screening" && !has("aria")) {
+    steps.unshift(
+      mkStep(0, "aria", "Evaluate and rank", instruction, {
+        tool_needed: "extract_structured",
+        expected_output: "Structured ranking with scores.",
+        success_criteria: "Per-criterion rationale included.",
+        planner_source: "expansion",
+      }),
+    );
+  }
+
+  if (intent === "brief") {
+    if (!has("scribe")) {
+      steps.unshift(
+        mkStep(0, "scribe", "Internal workspace brief",
+          "Summarize today's workspace activity: pending approvals, active plans, recent task results.", {
+          tool_needed: "summarize_text",
+          expected_output: "Daily brief from workspace data.",
+          success_criteria: "Only workspace data used.",
+          planner_source: "expansion",
+        }),
+      );
+    }
+    if (!has("hawk") && isToolConfigured("research_web").ready) {
+      steps.push(
+        mkStep(0, "hawk", "Live market pulse", "Add 3-5 bullets of external intel pulse.", {
+          tool_needed: "research_web",
+          expected_output: "External pulse with citations.",
+          success_criteria: "Skipped if Perplexity unavailable.",
+          planner_source: "expansion",
+        }),
+      );
+    }
+  }
+
+  // Force send_email steps to be approval-gated.
+  for (const s of steps) {
+    if (s.tool_needed === "send_email") {
+      s.requires_approval = true;
+      s.needs_approval = true;
+    }
+  }
+
+  // Renumber.
+  steps.forEach((s, i) => (s.step_index = i));
+  return steps;
+}
+
+// ---------- Tool annotation ----------
+
+function annotateTools(steps: Step[]): string[] {
+  const missing: string[] = [];
+  for (const s of steps) {
+    if (!s.tool_needed) continue;
+    const status = isToolConfigured(s.tool_needed);
+    if (status.ready) {
+      s.tool_status = "ready";
+    } else {
+      s.tool_status = "connector_required";
+      s.connector_required = status.env;
+      if (status.env && !missing.includes(status.env)) missing.push(status.env);
+    }
+  }
+  return missing;
+}
+
+// ---------- JSON parsing helpers (kept for AI output) ----------
+
+function stripFences(s: string): string {
+  return s.replace(/```json/gi, "").replace(/```/g, "").trim();
 }
 
 // ---------- Main handler ----------
@@ -152,12 +468,10 @@ Deno.serve(async (req) => {
     const SUPABASE_ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY")!;
     const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
     if (!SUPABASE_SERVICE_ROLE_KEY) {
-      return json({ error: "missing_service_role_key", message: "SUPABASE_SERVICE_ROLE_KEY is not configured for this Edge Function" }, 500);
+      return json({ error: "missing_service_role_key", message: "SUPABASE_SERVICE_ROLE_KEY is not configured" }, 500);
     }
 
-
     const body = await req.json().catch(() => ({} as Record<string, unknown>));
-
     if ((body as { ping?: unknown })?.ping === true) return json({ ok: true });
 
     const b = body as Record<string, unknown>;
@@ -192,86 +506,70 @@ Deno.serve(async (req) => {
     if (!member) {
       return json({ error: "workspace_not_found", details: "User is not a member", workspace_id }, 404);
     }
-    const { data: workspace } = await admin
-      .from("workspaces").select("id, name").eq("id", workspace_id).maybeSingle();
-    if (!workspace) {
-      return json({ error: "workspace_not_found", details: "Workspace row missing", workspace_id }, 404);
-    }
 
-    // Agent lookup (slug → id).
-    const { data: agentsRows, error: agentsErr } = await admin
-      .from("agents")
-      .select("id, slug, name, model, department");
-    if (agentsErr || !agentsRows || agentsRows.length === 0) {
-      console.error("[orchestrate] agent_lookup_failed:", agentsErr);
-      return json({ error: "agent_lookup_failed", details: agentsErr?.message }, 500);
-    }
-    const slugToAgent = new Map<string, { id: string; name: string; model: string | null }>();
-    for (const a of agentsRows) {
-      const slug = (a.slug ?? a.name ?? "").toString().toLowerCase();
-      if (slug) slugToAgent.set(slug, { id: a.id, name: a.name, model: a.model });
-    }
-
-    console.log("[orchestrate] request", {
-      workspace_id, user_id: userId,
-      instruction_len: user_instruction.length,
-      agent_slugs: [...slugToAgent.keys()],
-    });
-
-    // Load company_brain + capabilities (best-effort).
+    // Best-effort company brain.
     const { data: brainRow } = await admin
       .from("company_brain").select("profile").eq("workspace_id", workspace_id).maybeSingle();
     const companyBrain = (brainRow?.profile ?? {}) as Record<string, unknown>;
 
-    const { data: capRows } = await admin
-      .from("agent_capabilities")
-      .select("capability, config, agents ( slug, name )");
-    const capabilityMap = (capRows ?? [])
-      .map((c: any) => ({
-        agent_slug: (c.agents?.slug ?? c.agents?.name ?? "").toString().toLowerCase(),
-        capability: c.capability,
-        config: c.config ?? {},
-      }))
-      .filter((c) => c.agent_slug);
+    const intent = detectIntent(user_instruction);
 
-    // Try AI planner via shared adapter; fall back deterministically on any failure.
-    let parsedPlan: { plan_summary: string; steps: Step[] } | null = null;
-    let plannerSource: "ai" | "fallback" = "fallback";
-    let aiProvider = "none";
-    let aiModel = "";
+    // ---------- AI planner ----------
 
-    const orchestratorPrompt = `You are the orchestrator for ScreeningPilot, an AI workforce platform.
-Read the user instruction and decide which agents to involve, in what order.
+    const orchestratorPrompt = `You are the planner for ScreeningPilot, an AI workforce orchestrator.
+Convert the user instruction into a multi-step plan with the right agents, tools, and approval gates.
 
-COMPANY CONTEXT:
+AGENTS:
+- scout  = sourcing, lead/candidate discovery, research collection
+- aria   = screening, ranking, scoring, evaluation, fit analysis
+- penn   = outreach, follow-up, personalized messages, email drafts (approval-gated sending)
+- hawk   = market/competitive intelligence, signals, monitoring, scraping
+- scribe = content, summaries, briefs, posts, reports
+
+TOOLS:
+- research_web      (perplexity)  allowed: hawk, scout
+- scrape_url        (firecrawl)   allowed: hawk, scout
+- summarize_text    (gemini)      allowed: aria, scribe, hawk, scout
+- extract_structured(gemini)      allowed: aria, scribe, hawk, scout
+- draft_outreach    (gemini)      allowed: penn
+- send_email        (resend)      allowed: penn — ALWAYS requires_approval=true
+
+WORKFLOW ARCHETYPES (use as defaults, deepen when useful):
+A. Sourcing  -> scout(research_web|scrape_url) -> aria(extract_structured) -> penn(draft_outreach, approval)
+B. Extraction from URL -> hawk(scrape_url) -> scribe(summarize_text)
+C. Intelligence -> hawk(research_web) -> scribe(summarize_text) when a brief/report is asked for
+D. Outreach -> penn(draft_outreach, approval); add penn(send_email, approval) only if user said send
+E. Content -> scribe(summarize_text); prepend hawk(research_web) only if user wants current facts
+F. Screening -> aria(extract_structured)
+
+COMPANY CONTEXT (may be empty):
 ${JSON.stringify(companyBrain)}
-
-AVAILABLE AGENTS:
-${JSON.stringify([...slugToAgent.keys()])}
-
-CAPABILITIES:
-${JSON.stringify(capabilityMap, null, 2)}
 
 USER INSTRUCTION:
 "${user_instruction}"
 
-RULES:
-- Use agent_slug values from AVAILABLE AGENTS only. Never invent slugs.
-- Only include agents actually needed.
-- needs_approval=true for irreversible external actions (sending emails, publishing posts).
-- If only one agent is needed, return one step.
+DETECTED INTENT: ${intent}
 
-Return ONLY valid JSON, no explanation, no markdown:
+RULES:
+- agent_slug must be one of: scout, aria, penn, hawk, scribe.
+- Never claim live data was retrieved — only describe what the agent will do.
+- Default to deeper plans (multi-step) for sourcing, extraction, intelligence, and outreach.
+- send_email and any irreversible external action MUST set requires_approval=true.
+
+Return ONLY valid JSON, no prose, no markdown:
 {
-  "plan_summary": "one sentence describing what will happen",
+  "plan_summary": "one sentence",
+  "intent": "${intent}",
   "steps": [
     {
       "step_index": 0,
       "agent_slug": "scout",
-      "agent_name": "Scout",
-      "capability": "search_linkedin",
-      "needs_approval": false,
-      "instruction": "specific instruction for this agent"
+      "task_title": "Source candidates",
+      "task_description": "specific instruction",
+      "tool_needed": "research_web",
+      "expected_output": "what this step produces",
+      "success_criteria": "how we know it worked",
+      "requires_approval": false
     }
   ]
 }`;
@@ -285,8 +583,7 @@ Return ONLY valid JSON, no explanation, no markdown:
       functionName: "orchestrate",
       workspaceId: workspace_id,
     });
-    aiProvider = ai.provider;
-    aiModel = ai.model;
+
     await logProviderCall(admin, {
       workspace_id,
       function_name: "orchestrate",
@@ -298,46 +595,64 @@ Return ONLY valid JSON, no explanation, no markdown:
       error_code: ai.errorCode,
     });
 
+    let plannerSource: "ai" | "fallback" = "fallback";
+    let parsed: { plan_summary: string; steps: Step[] } | null = null;
+
     if (ai.ok && ai.json) {
-      const parsed = ai.json as { plan_summary?: string; steps?: any[] };
-      if (parsed && Array.isArray(parsed.steps) && parsed.steps.length > 0) {
-        const normalizedSteps: Step[] = parsed.steps
-          .map((s: any, i: number) => {
+      const p = ai.json as { plan_summary?: string; steps?: any[] };
+      if (p && Array.isArray(p.steps) && p.steps.length > 0) {
+        const normalized: Step[] = p.steps
+          .map((s: any, i: number): Step | null => {
             const slug = normalizeSlug(s?.agent_slug);
             if (!slug) return null;
+            const desc =
+              (typeof s.task_description === "string" && s.task_description.trim()) ||
+              (typeof s.instruction === "string" && s.instruction.trim()) ||
+              user_instruction;
+            const title = (typeof s.task_title === "string" && s.task_title.trim()) || `${KNOWN_AGENTS[slug]} step`;
+            const tool = (typeof s.tool_needed === "string" ? s.tool_needed : null) as ToolName;
+            const approval = s.requires_approval === true || s.needs_approval === true || tool === "send_email";
             return {
               step_index: typeof s.step_index === "number" ? s.step_index : i,
               agent_slug: slug,
               agent_name: KNOWN_AGENTS[slug],
+              task_title: title,
+              task_description: desc,
+              instruction: desc,
               capability: typeof s.capability === "string" ? s.capability : undefined,
-              needs_approval: s.needs_approval === true,
-              instruction: typeof s.instruction === "string" && s.instruction.trim().length > 0
-                ? s.instruction
-                : user_instruction,
-            } as Step;
+              tool_needed: tool,
+              expected_output: typeof s.expected_output === "string" ? s.expected_output : "",
+              success_criteria: typeof s.success_criteria === "string" ? s.success_criteria : "",
+              requires_approval: approval,
+              needs_approval: approval,
+              planner_source: "ai",
+            };
           })
           .filter((s): s is Step => s !== null);
-        if (normalizedSteps.length > 0) {
-          parsedPlan = {
-            plan_summary: parsed.plan_summary || `Plan for: ${user_instruction}`,
-            steps: normalizedSteps,
-          };
+        if (normalized.length > 0) {
+          parsed = { plan_summary: p.plan_summary || `Plan for: ${user_instruction}`, steps: normalized };
           plannerSource = "ai";
         }
       }
     } else {
-      console.warn("[orchestrate] AI planner unavailable, using fallback:", ai.error);
+      console.warn("[orchestrate] AI planner unavailable, falling back:", ai.error);
     }
 
+    if (!parsed) parsed = fallbackPlan(user_instruction, intent);
 
+    // Deterministic expansion.
+    parsed.steps = expandPlan(user_instruction, intent, parsed.steps);
 
-    if (!parsedPlan) {
-      parsedPlan = fallbackPlan(user_instruction);
-    }
+    // Tool availability annotation.
+    const connectorsMissing = annotateTools(parsed.steps);
+
     console.log("[orchestrate] plan ready", {
       source: plannerSource,
-      steps: parsedPlan.steps.length,
-      agents: parsedPlan.steps.map((s) => s.agent_slug),
+      intent,
+      steps: parsed.steps.length,
+      agents: parsed.steps.map((s) => s.agent_slug),
+      tools: parsed.steps.map((s) => s.tool_needed),
+      connectors_missing: connectorsMissing,
     });
 
     // Persist task_plan.
@@ -349,8 +664,8 @@ Return ONLY valid JSON, no explanation, no markdown:
         created_by: userId,
         goal: user_instruction,
         user_instruction,
-        plan_summary: parsedPlan.plan_summary,
-        steps: parsedPlan.steps,
+        plan_summary: parsed.plan_summary,
+        steps: parsed.steps,
         status: "executing",
       })
       .select("id")
@@ -361,26 +676,27 @@ Return ONLY valid JSON, no explanation, no markdown:
       return json({ error: "task_plan_insert_failed", details: planError?.message }, 500);
     }
 
-    // Activity feed entry.
     await admin.from("activity_feed").insert({
       workspace_id,
       plan_id: taskPlan.id,
       event_type: "plan_created",
       title: "Plan created",
-      body: parsedPlan.plan_summary,
+      body: parsed.plan_summary,
       metadata: {
-        total_steps: parsedPlan.steps.length,
+        total_steps: parsed.steps.length,
         conversation_id,
         planner: plannerSource,
-        provider: aiProvider,
-        model: aiModel,
-        agents: parsedPlan.steps.map((s) => s.agent_slug),
+        provider: ai.provider,
+        model: ai.model,
+        intent,
+        agents: parsed.steps.map((s) => s.agent_slug),
+        tools_required: parsed.steps.map((s) => s.tool_needed).filter(Boolean),
+        connectors_missing: connectorsMissing,
       },
-
     });
 
     // Kick off first step (non-blocking).
-    const firstStep = parsedPlan.steps[0];
+    const firstStep = parsed.steps[0];
     fetch(`${SUPABASE_URL}/functions/v1/run-agent`, {
       method: "POST",
       headers: {
@@ -395,7 +711,8 @@ Return ONLY valid JSON, no explanation, no markdown:
         user_id: userId,
         instruction: firstStep.instruction,
         input: user_instruction,
-        needs_approval: firstStep.needs_approval === true,
+        needs_approval: firstStep.requires_approval === true,
+        tool_needed: firstStep.tool_needed,
       }),
     }).catch((e) => console.error("[orchestrate] run-agent kickoff failed:", e));
 
@@ -403,11 +720,14 @@ Return ONLY valid JSON, no explanation, no markdown:
       success: true,
       plan_id: taskPlan.id,
       task_plan_id: taskPlan.id,
-      plan_summary: parsedPlan.plan_summary,
-      total_steps: parsedPlan.steps.length,
-      steps_count: parsedPlan.steps.length,
+      plan_summary: parsed.plan_summary,
+      total_steps: parsed.steps.length,
+      steps_count: parsed.steps.length,
       planner: plannerSource,
-      plan: parsedPlan,
+      intent,
+      agents: parsed.steps.map((s) => s.agent_slug),
+      connectors_missing: connectorsMissing.map((env) => TOOL_FRIENDLY[env] ?? env),
+      plan: parsed,
     });
   } catch (err) {
     console.error("[orchestrate] unexpected:", err);
