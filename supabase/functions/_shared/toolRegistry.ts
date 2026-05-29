@@ -186,6 +186,18 @@ const REGISTRY: Record<string, ToolDef> = {
   },
 };
 
+const TOOL_ENV: Record<string, string> = {
+  research_web: "PERPLEXITY_API_KEY",
+  scrape_url: "FIRECRAWL_API_KEY",
+  send_email: "RESEND_API_KEY",
+};
+
+export function isToolConfigured(name: string): { ready: boolean; env?: string } {
+  const env = TOOL_ENV[name];
+  if (!env) return { ready: true };
+  return { ready: !!Deno.env.get(env), env };
+}
+
 export function listTools() {
   return Object.values(REGISTRY).map((t) => ({
     name: t.name,
