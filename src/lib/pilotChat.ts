@@ -44,6 +44,19 @@ export type PilotChatResult =
 
 export async function pilotChat(input: PilotChatInput): Promise<PilotChatResult> {
   const { data, error } = await supabase.functions.invoke('pilot-chat', { body: input });
-  if (error) throw error;
+  if (error) {
+    const context = typeof error.context === 'object' && error.context !== null ? error.context as { json?: () => Promise<unknown>; text?: () => Promise<string> } : null;
+    try {
+      const body = context?.json ? await context.json() as { error?: string; message?: string; details?: string } : null;
+      const message = body?.error || body?.message || body?.details;
+      if (message) throw new Error(message);
+    } catch (parseError) {
+      if (parseError instanceof Error && parseError.message !== error.message) throw parseError;
+    }
+    throw new Error(error.message || 'Pilot chat failed to respond.');
+  }
+  if (!data || typeof (data as { conversation_id?: unknown }).conversation_id !== 'string') {
+    throw new Error('Pilot chat returned an invalid response.');
+  }
   return data as PilotChatResult;
 }
