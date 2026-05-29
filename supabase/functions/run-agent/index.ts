@@ -33,7 +33,7 @@ function renderCompanyBrain(brain: CompanyBrain): string {
   return `<company_brain>\n${JSON.stringify(brain, null, 2)}\n</company_brain>`;
 }
 
-}
+
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: cors });
