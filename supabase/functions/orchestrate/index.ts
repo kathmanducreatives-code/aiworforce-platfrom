@@ -150,9 +150,10 @@ Deno.serve(async (req) => {
   try {
     const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
     const SUPABASE_ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY")!;
-
-
-
+    const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+    if (!SUPABASE_SERVICE_ROLE_KEY) {
+      return json({ error: "missing_service_role_key", message: "SUPABASE_SERVICE_ROLE_KEY is not configured for this Edge Function" }, 500);
+    }
 
 
     const body = await req.json().catch(() => ({} as Record<string, unknown>));
