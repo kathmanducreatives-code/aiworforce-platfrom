@@ -6,6 +6,8 @@
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { runTool } from "../_shared/toolRegistry.ts";
+import { generateText, logProviderCall } from "../_shared/aiProvider.ts";
+
 
 const cors = {
   "Access-Control-Allow-Origin": "*",
