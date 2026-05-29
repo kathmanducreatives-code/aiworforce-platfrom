@@ -33,3 +33,4 @@ linkedin-content-planner/release/
 # Supabase CLI local state
 supabase/.temp/
 supabase/.branches/
+RECON_REPORT.md
