@@ -5,6 +5,13 @@
 //           conversation_id? | conversationId? }
 // Auth:   Bearer JWT (forwarded by pilot-chat). Membership validated via
 //         workspace_members using the service-role client.
+//
+// Resilience:
+//   - Tolerates fenced / preamble-wrapped JSON from Claude.
+//   - Repairs unbalanced braces/brackets.
+//   - Falls back to a deterministic intent-based planner if the model fails
+//     or returns an empty plan, so common workforce requests never bubble
+//     up "empty_plan" to the user.
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
@@ -19,6 +26,122 @@ const json = (body: unknown, status = 200) =>
     headers: { ...cors, "Content-Type": "application/json" },
   });
 
+// ---------- JSON parsing helpers ----------
+
+function stripFences(s: string): string {
+  return s.replace(/```json/gi, "").replace(/```/g, "").trim();
+}
+
+function extractJson(raw: string): unknown {
+  const cleaned = stripFences(raw);
+  const start = cleaned.search(/[\{\[]/);
+  if (start === -1) throw new Error("no JSON found");
+  const opener = cleaned[start];
+  const closer = opener === "[" ? "]" : "}";
+  const end = cleaned.lastIndexOf(closer);
+  const slice = end > start ? cleaned.slice(start, end + 1) : cleaned.slice(start);
+
+  try {
+    return JSON.parse(slice);
+  } catch {
+    // Repair: pad missing closers + strip control chars.
+    let braces = 0, brackets = 0;
+    for (const ch of slice) {
+      if (ch === "{") braces++;
+      else if (ch === "}") braces--;
+      else if (ch === "[") brackets++;
+      else if (ch === "]") brackets--;
+    }
+    let repaired = slice.replace(/[\x00-\x1F\x7F]/g, "");
+    while (brackets-- > 0) repaired += "]";
+    while (braces-- > 0) repaired += "}";
+    return JSON.parse(repaired);
+  }
+}
+
+// ---------- Intent fallback planner ----------
+
+type Step = {
+  step_index: number;
+  agent_slug: string;
+  agent_name: string;
+  capability?: string;
+  needs_approval: boolean;
+  instruction: string;
+};
+
+const KNOWN_AGENTS: Record<string, string> = {
+  scout: "Scout",
+  aria: "Aria",
+  penn: "Penn",
+  hawk: "Hawk",
+  scribe: "Scribe",
+};
+
+function normalizeSlug(s: string | undefined | null): string | null {
+  if (!s) return null;
+  const slug = String(s).trim().toLowerCase();
+  return KNOWN_AGENTS[slug] ? slug : null;
+}
+
+function fallbackPlan(instruction: string): { plan_summary: string; steps: Step[] } {
+  const t = instruction.toLowerCase();
+  const mk = (slug: keyof typeof KNOWN_AGENTS, step_index: number, body: string, approval = false): Step => ({
+    step_index,
+    agent_slug: slug,
+    agent_name: KNOWN_AGENTS[slug],
+    needs_approval: approval,
+    instruction: body,
+  });
+
+  // Sourcing / find candidates
+  if (/(find|source|sourc(?:e|ing)|candidates?|engineers?|developers?|hires?|recruit)/.test(t)) {
+    return {
+      plan_summary: `Source, rank, and prepare outreach for: ${instruction}`,
+      steps: [
+        mk("scout", 0, `Source candidates for: ${instruction}`),
+        mk("aria", 1, `Rank and score the sourced candidates against the requirements in: ${instruction}`),
+        mk("penn", 2, `Draft personalized outreach for the strongest candidates from: ${instruction}`, true),
+      ],
+    };
+  }
+  // Outreach / email
+  if (/(outreach|email|message|dm|reach out|follow.?up)/.test(t)) {
+    return {
+      plan_summary: `Draft outreach: ${instruction}`,
+      steps: [mk("penn", 0, instruction, true)],
+    };
+  }
+  // Competitive / market intelligence
+  if (/(competitor|competitive|market|intel|intelligence|changed|news)/.test(t)) {
+    return {
+      plan_summary: `Gather competitive intelligence: ${instruction}`,
+      steps: [mk("hawk", 0, instruction)],
+    };
+  }
+  // Content / LinkedIn / blog
+  if (/(linkedin|post|blog|content|write|article|jd|job description)/.test(t)) {
+    return {
+      plan_summary: `Draft content: ${instruction}`,
+      steps: [mk("scribe", 0, instruction)],
+    };
+  }
+  // Screening / ranking only
+  if (/(rank|screen|score|shortlist|evaluate)/.test(t)) {
+    return {
+      plan_summary: `Screen candidates: ${instruction}`,
+      steps: [mk("aria", 0, instruction)],
+    };
+  }
+  // Default: Scout as research entrypoint.
+  return {
+    plan_summary: `Investigate request: ${instruction}`,
+    steps: [mk("scout", 0, instruction)],
+  };
+}
+
+// ---------- Main handler ----------
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: cors });
 
@@ -30,31 +153,20 @@ Deno.serve(async (req) => {
 
     const body = await req.json().catch(() => ({} as Record<string, unknown>));
 
-    // Health-check ping (used by VerificationPanel).
-    if ((body as { ping?: unknown })?.ping === true) {
-      return json({ ok: true });
-    }
+    if ((body as { ping?: unknown })?.ping === true) return json({ ok: true });
 
-    // Accept snake_case + camelCase.
     const b = body as Record<string, unknown>;
     const workspace_id = (b.workspace_id ?? b.workspaceId) as string | undefined;
     const user_instruction = (b.user_instruction ?? b.userInstruction) as string | undefined;
     const conversation_id = (b.conversation_id ?? b.conversationId ?? null) as string | null;
 
     if (!user_instruction || !workspace_id) {
-      return json(
-        { error: "missing_parameter", details: "workspace_id and user_instruction are required" },
-        400,
-      );
+      return json({ error: "missing_parameter", details: "workspace_id and user_instruction are required" }, 400);
     }
 
-    if (!ANTHROPIC_API_KEY) return json({ error: "ANTHROPIC_API_KEY not configured" }, 500);
-
-    // Validate JWT and derive user_id.
+    // Auth.
     const authHeader = req.headers.get("Authorization");
-    if (!authHeader?.startsWith("Bearer ")) {
-      return json({ error: "Unauthorized" }, 401);
-    }
+    if (!authHeader?.startsWith("Bearer ")) return json({ error: "Unauthorized" }, 401);
     const userClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
       global: { headers: { Authorization: authHeader } },
     });
@@ -65,84 +177,82 @@ Deno.serve(async (req) => {
 
     const admin = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
-    // Membership check (bypass RLS via service role, then verify explicitly).
+    // Membership.
     const { data: member } = await admin
       .from("workspace_members")
-      .select("workspace_id, role")
+      .select("workspace_id")
       .eq("user_id", userId)
       .eq("workspace_id", workspace_id)
       .maybeSingle();
-
     if (!member) {
-      return json(
-        {
-          error: "workspace_not_found",
-          details: "User is not a member of the specified workspace",
-          workspace_id,
-        },
-        404,
-      );
+      return json({ error: "workspace_not_found", details: "User is not a member", workspace_id }, 404);
     }
-
-    // Workspace lookup (real columns only).
     const { data: workspace } = await admin
-      .from("workspaces")
-      .select("id, name")
-      .eq("id", workspace_id)
-      .maybeSingle();
-
+      .from("workspaces").select("id, name").eq("id", workspace_id).maybeSingle();
     if (!workspace) {
-      return json(
-        {
-          error: "workspace_not_found",
-          details: "Workspace row not found in database",
-          workspace_id,
-        },
-        404,
-      );
+      return json({ error: "workspace_not_found", details: "Workspace row missing", workspace_id }, 404);
     }
 
-    // Load company_brain profile (separate table; optional).
+    // Agent lookup (slug → id).
+    const { data: agentsRows, error: agentsErr } = await admin
+      .from("agents")
+      .select("id, slug, name, model, department");
+    if (agentsErr || !agentsRows || agentsRows.length === 0) {
+      console.error("[orchestrate] agent_lookup_failed:", agentsErr);
+      return json({ error: "agent_lookup_failed", details: agentsErr?.message }, 500);
+    }
+    const slugToAgent = new Map<string, { id: string; name: string; model: string | null }>();
+    for (const a of agentsRows) {
+      const slug = (a.slug ?? a.name ?? "").toString().toLowerCase();
+      if (slug) slugToAgent.set(slug, { id: a.id, name: a.name, model: a.model });
+    }
+
+    console.log("[orchestrate] request", {
+      workspace_id, user_id: userId,
+      instruction_len: user_instruction.length,
+      agent_slugs: [...slugToAgent.keys()],
+    });
+
+    // Load company_brain + capabilities (best-effort).
     const { data: brainRow } = await admin
-      .from("company_brain")
-      .select("profile")
-      .eq("workspace_id", workspace_id)
-      .maybeSingle();
+      .from("company_brain").select("profile").eq("workspace_id", workspace_id).maybeSingle();
     const companyBrain = (brainRow?.profile ?? {}) as Record<string, unknown>;
 
-    // Load agents + capabilities (using real columns: capability, config).
-    const { data: capabilities } = await admin
+    const { data: capRows } = await admin
       .from("agent_capabilities")
-      .select("capability, config, agents ( id, slug, name, model, department )");
-
-    const capabilityMap = (capabilities ?? [])
+      .select("capability, config, agents ( slug, name )");
+    const capabilityMap = (capRows ?? [])
       .map((c: any) => ({
-        agent_slug: c.agents?.slug,
-        agent_name: c.agents?.name,
-        department: c.agents?.department,
-        model: c.agents?.model,
+        agent_slug: (c.agents?.slug ?? c.agents?.name ?? "").toString().toLowerCase(),
         capability: c.capability,
         config: c.config ?? {},
       }))
       .filter((c) => c.agent_slug);
 
-    // Plan with Claude.
-    const orchestratorPrompt = `You are the orchestrator for ScreeningPilot, an AI workforce platform.
+    // Try AI planner; fall back deterministically on any failure.
+    let parsedPlan: { plan_summary: string; steps: Step[] } | null = null;
+    let plannerSource: "ai" | "fallback" = "fallback";
+
+    if (ANTHROPIC_API_KEY) {
+      const orchestratorPrompt = `You are the orchestrator for ScreeningPilot, an AI workforce platform.
 Read the user instruction and decide which agents to involve, in what order.
 
 COMPANY CONTEXT:
 ${JSON.stringify(companyBrain)}
 
-AVAILABLE AGENTS AND CAPABILITIES:
+AVAILABLE AGENTS:
+${JSON.stringify([...slugToAgent.keys()])}
+
+CAPABILITIES:
 ${JSON.stringify(capabilityMap, null, 2)}
 
 USER INSTRUCTION:
 "${user_instruction}"
 
 RULES:
-- Use agent_slug values from the list above. Never invent slugs.
+- Use agent_slug values from AVAILABLE AGENTS only. Never invent slugs.
 - Only include agents actually needed.
-- If a step produces output that needs human review before continuing (sending emails, publishing content), set needs_approval to true.
+- needs_approval=true for irreversible external actions (sending emails, publishing posts).
 - If only one agent is needed, return one step.
 
 Return ONLY valid JSON, no explanation, no markdown:
@@ -160,35 +270,74 @@ Return ONLY valid JSON, no explanation, no markdown:
   ]
 }`;
 
-    const anthropicRes = await fetch("https://api.anthropic.com/v1/messages", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "x-api-key": ANTHROPIC_API_KEY,
-        "anthropic-version": "2023-06-01",
-      },
-      body: JSON.stringify({
-        model: "claude-haiku-4-5-20251001",
-        max_tokens: 1024,
-        messages: [{ role: "user", content: orchestratorPrompt }],
-      }),
+      try {
+        const ctrl = new AbortController();
+        const timer = setTimeout(() => ctrl.abort(), 25_000);
+        const anthropicRes = await fetch("https://api.anthropic.com/v1/messages", {
+          method: "POST",
+          signal: ctrl.signal,
+          headers: {
+            "Content-Type": "application/json",
+            "x-api-key": ANTHROPIC_API_KEY,
+            "anthropic-version": "2023-06-01",
+          },
+          body: JSON.stringify({
+            model: "claude-haiku-4-5-20251001",
+            max_tokens: 2048,
+            messages: [{ role: "user", content: orchestratorPrompt }],
+          }),
+        });
+        clearTimeout(timer);
+        const anthropicData = await anthropicRes.json().catch(() => ({}));
+        const rawPlan: string = anthropicData?.content?.[0]?.text ?? "";
+        console.log("[orchestrate] model output length:", rawPlan.length);
+
+        if (rawPlan) {
+          const parsed = extractJson(rawPlan) as { plan_summary?: string; steps?: any[] };
+          if (parsed && Array.isArray(parsed.steps) && parsed.steps.length > 0) {
+            const normalizedSteps: Step[] = parsed.steps
+              .map((s: any, i: number) => {
+                const slug = normalizeSlug(s?.agent_slug);
+                if (!slug) return null;
+                return {
+                  step_index: typeof s.step_index === "number" ? s.step_index : i,
+                  agent_slug: slug,
+                  agent_name: KNOWN_AGENTS[slug],
+                  capability: typeof s.capability === "string" ? s.capability : undefined,
+                  needs_approval: s.needs_approval === true,
+                  instruction: typeof s.instruction === "string" && s.instruction.trim().length > 0
+                    ? s.instruction
+                    : user_instruction,
+                } as Step;
+              })
+              .filter((s): s is Step => s !== null);
+
+            if (normalizedSteps.length > 0) {
+              parsedPlan = {
+                plan_summary: parsed.plan_summary || `Plan for: ${user_instruction}`,
+                steps: normalizedSteps,
+              };
+              plannerSource = "ai";
+            }
+          }
+        }
+      } catch (e) {
+        console.warn("[orchestrate] AI planner failed, using fallback:", String(e));
+      }
+    } else {
+      console.warn("[orchestrate] ANTHROPIC_API_KEY missing, using fallback planner");
+    }
+
+    if (!parsedPlan) {
+      parsedPlan = fallbackPlan(user_instruction);
+    }
+    console.log("[orchestrate] plan ready", {
+      source: plannerSource,
+      steps: parsedPlan.steps.length,
+      agents: parsedPlan.steps.map((s) => s.agent_slug),
     });
 
-    const anthropicData = await anthropicRes.json();
-    const rawPlan: string = anthropicData?.content?.[0]?.text ?? "";
-
-    let parsedPlan: { plan_summary: string; steps: any[] };
-    try {
-      parsedPlan = JSON.parse(rawPlan.replace(/```json|```/g, "").trim());
-    } catch {
-      return json({ error: "plan_parse_failed", raw: rawPlan }, 500);
-    }
-
-    if (!Array.isArray(parsedPlan?.steps) || parsedPlan.steps.length === 0) {
-      return json({ error: "empty_plan", raw: rawPlan }, 500);
-    }
-
-    // Persist task_plan with real columns.
+    // Persist task_plan.
     const { data: taskPlan, error: planError } = await admin
       .from("task_plans")
       .insert({
@@ -205,21 +354,26 @@ Return ONLY valid JSON, no explanation, no markdown:
       .single();
 
     if (planError || !taskPlan) {
-      console.error("[orchestrate] failed to save task_plan:", planError);
-      return json({ error: "plan_save_failed", details: planError?.message }, 500);
+      console.error("[orchestrate] task_plan_insert_failed:", planError);
+      return json({ error: "task_plan_insert_failed", details: planError?.message }, 500);
     }
 
-    // Activity feed: plan_created.
+    // Activity feed entry.
     await admin.from("activity_feed").insert({
       workspace_id,
       plan_id: taskPlan.id,
       event_type: "plan_created",
       title: "Plan created",
       body: parsedPlan.plan_summary,
-      metadata: { total_steps: parsedPlan.steps.length, conversation_id },
+      metadata: {
+        total_steps: parsedPlan.steps.length,
+        conversation_id,
+        planner: plannerSource,
+        agents: parsedPlan.steps.map((s) => s.agent_slug),
+      },
     });
 
-    // Fire first step (best-effort; failures don't block the response).
+    // Kick off first step (non-blocking).
     const firstStep = parsedPlan.steps[0];
     fetch(`${SUPABASE_URL}/functions/v1/run-agent`, {
       method: "POST",
@@ -242,10 +396,11 @@ Return ONLY valid JSON, no explanation, no markdown:
     return json({
       success: true,
       plan_id: taskPlan.id,
-      task_plan_id: taskPlan.id, // backward-compat alias
+      task_plan_id: taskPlan.id,
       plan_summary: parsedPlan.plan_summary,
       total_steps: parsedPlan.steps.length,
       steps_count: parsedPlan.steps.length,
+      planner: plannerSource,
       plan: parsedPlan,
     });
   } catch (err) {
