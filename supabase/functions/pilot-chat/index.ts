@@ -4,7 +4,8 @@
 // Auth:  verify_jwt = true (user identity needed for conversations.user_id)
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { generateJson, generateText, logProviderCall } from "../_shared/aiProvider.ts";
+import { generateJson, logProviderCall } from "../_shared/aiProvider.ts";
+
 
 const cors = {
   "Access-Control-Allow-Origin": "*",
