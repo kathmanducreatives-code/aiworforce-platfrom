@@ -305,8 +305,8 @@ Deno.serve(async (req) => {
       role: "assistant",
       content: announce,
       agent_slug: "pilot",
-      model_used: PILOT_MODEL,
-      tokens_used: tokensUsed,
+      model_used: modelUsed,
+
     })
     .select("*")
     .single();
