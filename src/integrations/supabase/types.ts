@@ -2696,6 +2696,60 @@ export type Database = {
           },
         ]
       }
+      tool_calls: {
+        Row: {
+          agent_id: string | null
+          completed_at: string | null
+          created_at: string
+          created_by: string | null
+          error: string | null
+          id: string
+          input_json: Json | null
+          output_json: Json | null
+          plan_id: string | null
+          provider: string
+          started_at: string | null
+          status: string
+          task_id: string | null
+          tool_name: string
+          workspace_id: string
+        }
+        Insert: {
+          agent_id?: string | null
+          completed_at?: string | null
+          created_at?: string
+          created_by?: string | null
+          error?: string | null
+          id?: string
+          input_json?: Json | null
+          output_json?: Json | null
+          plan_id?: string | null
+          provider: string
+          started_at?: string | null
+          status?: string
+          task_id?: string | null
+          tool_name: string
+          workspace_id: string
+        }
+        Update: {
+          agent_id?: string | null
+          completed_at?: string | null
+          created_at?: string
+          created_by?: string | null
+          error?: string | null
+          id?: string
+          input_json?: Json | null
+          output_json?: Json | null
+          plan_id?: string | null
+          provider?: string
+          started_at?: string | null
+          status?: string
+          task_id?: string | null
+          tool_name?: string
+          workspace_id?: string
+        }
+        Relationships: []
+      }
       workspace_members: {
         Row: {
           created_at: string

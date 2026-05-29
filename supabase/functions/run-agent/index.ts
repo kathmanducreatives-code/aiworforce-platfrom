@@ -5,6 +5,7 @@
 //           workspace_id, user_id, instruction, input?, needs_approval? }
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { runTool } from "../_shared/toolRegistry.ts";
 
 const cors = {
   "Access-Control-Allow-Origin": "*",
@@ -160,12 +161,45 @@ Deno.serve(async (req) => {
   const systemPrompt = `${agent.role_prompt ?? `You are ${agent.name}.`}\n\n${renderCompanyBrain(brain)}`;
   const model = resolveModel(agent.model);
 
+  // --- Tool layer: hawk + scout get live web research via Perplexity. ---
+  let toolContext: string | null = null;
+  let toolNotice: string | null = null;
+  if (agent_slug === "hawk" || agent_slug === "scout") {
+    const toolRes = await runTool("research_web", { query: instruction }, {
+      admin: supabase,
+      workspace_id,
+      agent_slug,
+      agent_id: agent.id,
+      agent_name: agent.name,
+      plan_id,
+      task_id: task.id,
+      user_id: user_id ?? null,
+    });
+    if (toolRes.ok && toolRes.data) {
+      const d = toolRes.data as { content?: string; citations?: string[] };
+      const citations = (d.citations ?? []).slice(0, 8).map((c, i) => `[${i + 1}] ${c}`).join("\n");
+      toolContext = `LIVE RESEARCH (Perplexity):\n${d.content ?? ""}\n\nCITATIONS:\n${citations}`;
+    } else if (toolRes.unavailable) {
+      toolNotice = agent_slug === "scout"
+        ? "Live candidate discovery requires the Perplexity / Firecrawl / Apollo connector. I can still produce the sourcing plan."
+        : "Live research requires the Perplexity connector to be configured.";
+    } else if (!toolRes.ok) {
+      toolNotice = `Research tool failed: ${toolRes.error ?? "unknown"}.`;
+    }
+  }
+
+  const userMessage = toolContext
+    ? `${buildUserMessage(instruction, input)}\n\n${toolContext}`
+    : toolNotice
+      ? `${buildUserMessage(instruction, input)}\n\nNOTE TO AGENT: ${toolNotice} Do NOT fabricate live data. Acknowledge the limitation, then produce the best plan/analysis you can from available context.`
+      : buildUserMessage(instruction, input);
+
   const result = await callAnthropicWithRetry(
     {
       model,
       max_tokens: 2048,
       system: systemPrompt,
-      messages: [{ role: "user", content: buildUserMessage(instruction, input) }],
+      messages: [{ role: "user", content: userMessage }],
     },
     Deno.env.get("ANTHROPIC_API_KEY")!,
   );
