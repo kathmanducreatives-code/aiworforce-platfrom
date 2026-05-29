@@ -1,133 +1,97 @@
-# AI Workforce Tool System — Phase 1 to 4 (+ stubs for 5–7)
+# Switch Pilot brain to Lovable AI Gateway (Anthropic optional)
 
-Scope: durable tool infrastructure for the existing pipeline `pilot-chat → orchestrate → run-agent`. No UI redesign, no frontend tool calls, no RLS off, backend stays `wqnigjhcwjxtmordrwno`.
+## Audit (current state)
 
-Currently configured secrets include `ANTHROPIC_API_KEY`, `GOOGLE_AI_API_KEY`, `OPENAI_API_KEY`, `RESEND_API_KEY`, `LOVABLE_API_KEY`. `PERPLEXITY_API_KEY` and `FIRECRAWL_API_KEY` are not configured yet — the registry will degrade gracefully when missing and surface a clear "connector not configured" message.
+Direct Anthropic `fetch("https://api.anthropic.com/v1/messages")` calls live in three places:
 
-## 1. Database migration — `tool_calls`
+- `supabase/functions/pilot-chat/index.ts` — hard-fails 500 if `ANTHROPIC_API_KEY` is missing.
+- `supabase/functions/orchestrate/index.ts` — uses Claude for planning; falls back to deterministic planner only if key missing or call fails.
+- `supabase/functions/run-agent/index.ts` — every agent step calls Claude directly.
 
-New table `public.tool_calls`:
+`supabase/functions/_shared/` only contains `toolRegistry.ts`. No provider adapter exists yet. `LOVABLE_API_KEY` is already in project secrets.
 
-- `id uuid pk default gen_random_uuid()`
-- `workspace_id uuid not null`
-- `plan_id uuid null`, `task_id uuid null`, `agent_id uuid null`
-- `tool_name text not null`, `provider text not null`
-- `input_json jsonb`, `output_json jsonb`
-- `status text not null default 'queued'` (queued | running | succeeded | failed | unavailable)
-- `error text null`
-- `started_at timestamptz`, `completed_at timestamptz`
-- `created_by uuid null`, `created_at timestamptz default now()`
+Unrelated functions (`adaptive-screening-chat`, `screen-candidate`, etc.) are out of scope.
 
-Indexes: `workspace_id`, `task_id`, `agent_id`, `status`, `created_at desc`.
+## Goal
 
-GRANTs + RLS:
-- `GRANT SELECT, INSERT, UPDATE, DELETE … TO authenticated; GRANT ALL … TO service_role;`
-- RLS on. Policies:
-  - SELECT for `authenticated` where `has_workspace_access(auth.uid(), workspace_id)`.
-  - INSERT/UPDATE for `authenticated` where `has_workspace_access(auth.uid(), workspace_id)`. Edge functions use the service-role client and bypass RLS.
-  - No DELETE policy (immutable log).
+Make Lovable AI Gateway the default brain for Pilot, orchestrate, and run-agent. Keep Anthropic as an opt-in advanced/fallback provider. App must function fully without `ANTHROPIC_API_KEY`.
 
-## 2. Backend tool registry
+## Architecture (unchanged)
 
-New shared module `supabase/functions/_shared/toolRegistry.ts` (Deno-resolvable via relative import from each function). Exports:
-
-```ts
-type ToolContext = { admin, workspace_id, agent_slug, agent_id, plan_id, task_id, user_id };
-type ToolResult = { ok: boolean; data?: unknown; error?: string; unavailable?: boolean };
-type Tool = {
-  name: string;
-  provider: string;
-  description: string;
-  allowed_agents: string[];
-  requires_approval: boolean;
-  inputSchema: ZodLike;            // lightweight runtime check, no external dep
-  execute(input: unknown, ctx: ToolContext): Promise<ToolResult>;
-};
-
-export async function runTool(toolName, input, ctx): Promise<ToolResult>
+```
+ChatWorkspace → pilot-chat → aiProvider → (Lovable AI Gateway | Anthropic)
+                          ↘ orchestrate → aiProvider → task_plans/tasks
+                                       → run-agent → aiProvider + toolRegistry
+                                                  → activity_feed / approvals / messages
 ```
 
-`runTool` is the single entry point. It:
-1. Looks up the tool. Unknown → `tool_not_found` (logged).
-2. Checks `allowed_agents.includes(ctx.agent_slug)`. Wrong agent → `tool_forbidden`.
-3. Inserts a `tool_calls` row with status `queued` → flips to `running` → final state.
-4. Validates input against schema; bad input → `failed`.
-5. Calls `tool.execute`. Catches throws, fills `error`, status `failed`.
-6. Missing secret → status `unavailable`, error `"<PROVIDER>_API_KEY not configured"`.
-7. Writes an `activity_feed` entry (`tool_used` event) on success and a `tool_failed` entry on failure/unavailable.
+## Changes
 
-Initial registry entries (only #1 actually executes; the rest are declared stubs so `allowed_agents` validation works and Phase 5–7 can plug in):
+### 1. New `supabase/functions/_shared/aiProvider.ts`
 
-1. `research_web` — provider `perplexity`, agents `hawk, scout`, approval `false` — **implemented**.
-2. `scrape_url` — provider `firecrawl`, agents `hawk, scout`, approval `false` — declared, returns `unavailable` until FIRECRAWL_API_KEY exists.
-3. `summarize_text` — provider `gemini` (via existing `GOOGLE_AI_API_KEY`), agents `scribe, aria, hawk, scout`, approval `false` — declared, implemented in Phase 6 only if needed (skipped for now to keep scope tight).
-4. `draft_outreach` — provider `anthropic`, agents `penn`, approval `false` — declared stub.
-5. `send_email` — provider `resend`, agents `penn`, approval `true` — declared stub (approval gate plumbed in Phase 7).
+Single model-calling layer. Exposes:
 
-## 3. Implement `research_web` (Perplexity)
+- `generateText(opts)` → `{ ok, content, provider, model, usage?, error?, latencyMs }`
+- `generateJson(opts)` → same shape plus `json?: unknown` (uses robust extraction: strip ``` fences, slice first/last braces, repair).
 
-Inside the registry module:
+Options: `{ role, agentSlug?, taskType, messages, systemPrompt?, temperature?, maxTokens?, preferredProvider?, responseFormat? }`.
 
-- Read `PERPLEXITY_API_KEY` at call time. Missing → return `{ ok: false, unavailable: true, error: "PERPLEXITY_API_KEY not configured" }`.
-- Direct fetch to `https://api.perplexity.ai/chat/completions`, model `sonar`, 25 s timeout, single retry on 5xx.
-- Returns `{ ok: true, data: { content, citations[] } }`.
-- All input/output captured into `tool_calls.input_json` / `output_json`.
+Provider implementations:
 
-## 4. Wire `run-agent` to call the registry
+- **Lovable AI Gateway** (default): POST to `https://ai.gateway.lovable.dev/v1/chat/completions` with header `Authorization: Bearer ${LOVABLE_API_KEY}`. OpenAI-compatible body. Handle 429 (rate limit) and 402 (credits exhausted) as typed errors that propagate to UI.
+- **Anthropic** (optional): existing `api.anthropic.com/v1/messages` flow, used only if `ANTHROPIC_API_KEY` set AND (`preferredProvider === "anthropic"` OR Lovable fallback triggers).
 
-Edit `supabase/functions/run-agent/index.ts`:
+Default models per task type:
+- `pilot_chat` → `google/gemini-3-flash-preview`
+- `orchestration_plan` → `google/gemini-3-flash-preview`
+- `agent_execution` → `google/gemini-3-flash-preview`
+- `helper` → `google/gemini-2.5-flash-lite`
 
-- Per agent slug, pick a default tool when the step's `instruction` implies research:
-  - `hawk` → always `research_web`.
-  - `scout` → `research_web` for sourcing-strategy steps; **no candidate fabrication**. If Perplexity returns `unavailable`, Scout's output explicitly says: *"Live candidate discovery requires Perplexity / Firecrawl / Apollo connector."*
-  - `aria`, `penn`, `scribe` → unchanged Claude reasoning path (no tool call yet).
-- Tool result is concatenated into the model context so the agent can summarize it back to the user.
-- Activity feed records `agent_used_tool` with tool name + provider.
+Fallback order: preferred → Lovable default → Lovable alt (`openai/gpt-5-mini`) → Anthropic (if key) → return `{ ok: false, error }`.
 
-## 5. Pilot / orchestrate (no contract change)
+Each call returns metadata; helper `logProviderCall(supabase, { workspace_id, function_name, agent_slug, task_type, provider, model, success, latency_ms, error_code })` writes a row to `activity_feed` with `event_type: 'ai_provider_call'` and the metadata in `metadata` JSON. No keys, no full prompts logged.
 
-Already routes Hawk for competitor/market/"brief me" intents and Scout/Aria/Penn for sourcing (verified in last turn's fallback planner). No edits needed unless Phase 9 testing reveals routing gaps.
+### 2. `supabase/functions/pilot-chat/index.ts`
 
-## 6. Approval gate (Phase 7 stub only)
+- Remove the `ANTHROPIC_API_KEY` precondition and the inline `callAnthropicWithRetry`.
+- Replace the Claude call with `generateJson({ taskType: 'pilot_chat', systemPrompt: PILOT_SYSTEM_PROMPT, messages, ... })` to parse the decision JSON.
+- On `{ ok: false }` from adapter (all providers failed), insert assistant message: *"Pilot is online, but the AI provider is temporarily unavailable. I saved your message — you can retry."* (`is_error: true`), return 200 (not 500) so chat UI stays functional.
+- Delegation branch unchanged — still posts to `orchestrate`.
 
-For `send_email`: when `runTool` sees `requires_approval: true`, it does not call `execute`. Instead it:
-- inserts `approvals` row with `plan_id, task_id, agent_id, title="Send email", description=<subject>`,
-- writes `tool_calls` row status `queued` linked to the approval,
-- writes `activity_feed` entry "Penn email send awaiting approval",
-- returns `{ ok: false, error: "awaiting_approval" }` so the agent loop pauses.
+### 3. `supabase/functions/orchestrate/index.ts`
 
-The existing `approve-and-continue` function will later flip the `tool_calls` row to `running` and call `execute`. Not building send logic in this round.
+- Replace the direct Anthropic block with `generateJson({ taskType: 'orchestration_plan', ... })`.
+- Keep all existing post-processing: robust JSON extraction (already in adapter), slug normalization, deterministic fallback planner, specific error codes (`agent_lookup_failed`, `task_plan_insert_failed`). Never return `empty_plan`.
+- If adapter returns `ok:false`, go straight to deterministic planner — log fallback reason in activity_feed.
 
-## 7. Frontend
+### 4. `supabase/functions/run-agent/index.ts`
 
-No component changes. Tool output already surfaces via the assistant message Pilot persists and via `activity_feed` (which the dashboard already reads). A dedicated "Tool Calls" panel is deferred.
+- Replace the inline Claude `fetch` with `generateText({ taskType: 'agent_execution', agentSlug, systemPrompt, messages, ... })`.
+- Drop the gemini→claude model-name mapping (adapter owns model selection).
+- toolRegistry flow (Hawk/Scout `research_web`, context appending, approval gates) unchanged.
 
-## 8. Verification checklist (after implementation)
+### 5. Frontend
 
-1. `"hello"` → normal Pilot reply, no tool_calls row.
-2. `"Brief me on today"` → Hawk task, `tool_calls(research_web)` row, `succeeded` if `PERPLEXITY_API_KEY` set else `unavailable`; assistant message reflects either the brief or the connector-needed notice.
-3. `"What changed at our top 3 competitors today?"` → same as above; no hallucinated data when unavailable.
-4. `"Find 10 React engineers in London"` → 3-step plan (Scout → Aria → Penn); Scout tool_call recorded; no fake candidates.
-5. `"Draft outreach to the top candidates"` → Penn drafts text; no email is sent; no `send_email` execution.
+No changes. `ChatWorkspace` → `pilotChat()` → `pilot-chat` edge function path is preserved.
 
-## Files to add / edit
+## Out of scope
 
-```text
-supabase/migrations/<ts>_tool_calls.sql          NEW
-supabase/functions/_shared/toolRegistry.ts       NEW
-supabase/functions/run-agent/index.ts            EDIT (call runTool for hawk/scout)
-```
+- No new tables (`ai_calls` table not created; metadata goes in `activity_feed.metadata`).
+- No UI changes. No backend project switch. No removal of toolRegistry / orchestrate / run-agent / approvals.
+- Other edge functions that call AI for non-Pilot purposes (`screen-candidate`, `adaptive-screening-chat`, `parse-resume`, etc.) are not migrated in this pass.
 
-No edits to `pilot-chat`, `orchestrate`, `WorkspaceContext`, RLS helpers, or any UI file.
+## Verification
 
-## Out of scope (explicit)
+After deploy, in Lovable Preview:
+1. `hello` → Pilot replies; activity_feed row shows `provider: lovable-ai`, `model: google/gemini-3-flash-preview`.
+2. `Find 10 React engineers in London` → plan created with Scout → Aria → Penn; no `empty_plan`; orchestrate row shows lovable-ai provider.
+3. `Brief me on today` → Hawk task runs; since no `PERPLEXITY_API_KEY`, response says live research connector required; no hallucinated data; no crash.
+4. `Write a LinkedIn post about our Q4 wins` → Scribe task plan + response via lovable-ai.
+5. Simulate missing Anthropic (it's optional already): all four flows still succeed via Lovable AI Gateway.
 
-- Firecrawl, Apollo, LinkedIn-style live candidate connectors.
-- `summarize_text`, `draft_outreach`, `send_email` execution bodies.
-- Tool Calls UI panel.
-- Streaming tool output.
-- Any change to `chat-respond` (still removed) or `pilot-chat` contract.
+## Files touched
 
-## Open question
-
-Should I request `PERPLEXITY_API_KEY` from you now via the secure secrets prompt so `research_web` runs live on first try, or leave it unconfigured for now and let Hawk return the "connector not configured" message until you're ready?
+- **New:** `supabase/functions/_shared/aiProvider.ts`
+- **Edit:** `supabase/functions/pilot-chat/index.ts`
+- **Edit:** `supabase/functions/orchestrate/index.ts`
+- **Edit:** `supabase/functions/run-agent/index.ts`

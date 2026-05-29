@@ -4,6 +4,8 @@
 // Auth:  verify_jwt = true (user identity needed for conversations.user_id)
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { generateJson, logProviderCall } from "../_shared/aiProvider.ts";
+
 
 const cors = {
   "Access-Control-Allow-Origin": "*",
@@ -16,7 +18,6 @@ const json = (body: unknown, status = 200, extra: HeadersInit = {}) =>
     headers: { ...cors, "Content-Type": "application/json", ...extra },
   });
 
-const PILOT_MODEL = "claude-sonnet-4-5-20250929";
 
 const PILOT_SYSTEM_PROMPT = `You are Pilot, the orchestrator of a five-agent AI workforce. Your job is
 to decide what to do with each user message.
@@ -58,74 +59,22 @@ For a delegation:
 
 type Msg = { role: "user" | "assistant"; content: string };
 
-async function callAnthropicWithRetry(
-  payload: unknown,
-  apiKey: string
-): Promise<{ ok: boolean; data: any; error?: string }> {
-  for (let attempt = 0; attempt < 2; attempt++) {
-    const ctrl = new AbortController();
-    const timer = setTimeout(() => ctrl.abort(), 30_000);
-    try {
-      const res = await fetch("https://api.anthropic.com/v1/messages", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "x-api-key": apiKey,
-          "anthropic-version": "2023-06-01",
-        },
-        body: JSON.stringify(payload),
-        signal: ctrl.signal,
-      });
-      clearTimeout(timer);
-      const data = await res.json();
-      if (res.ok) return { ok: true, data };
-      if (res.status >= 500 && attempt === 0) {
-        await new Promise((r) => setTimeout(r, 1000));
-        continue;
-      }
-      return { ok: false, data, error: `Anthropic ${res.status}: ${JSON.stringify(data?.error ?? data)}` };
-    } catch (e) {
-      clearTimeout(timer);
-      if (attempt === 0) {
-        await new Promise((r) => setTimeout(r, 1000));
-        continue;
-      }
-      return { ok: false, data: null, error: `fetch failed: ${String(e)}` };
-    }
-  }
-  return { ok: false, data: null, error: "retry exhausted" };
-}
-
-// Claude often wraps JSON in ```json ... ``` fences despite instructions.
-// Strip leading/trailing fences before parsing.
-function stripFences(text: string): string {
-  let t = text.trim();
-  if (t.startsWith("```")) {
-    const firstNl = t.indexOf("\n");
-    if (firstNl > -1) t = t.slice(firstNl + 1);
-  }
-  if (t.endsWith("```")) t = t.slice(0, t.lastIndexOf("```")).trim();
-  return t.trim();
-}
-
 type Decision =
   | { decision: "reply"; text: string }
   | { decision: "delegate"; instruction: string };
 
-function parseDecision(raw: string): Decision | null {
-  try {
-    const obj = JSON.parse(stripFences(raw));
-    if (obj?.decision === "reply" && typeof obj.text === "string" && obj.text.length > 0) {
-      return { decision: "reply", text: obj.text };
-    }
-    if (obj?.decision === "delegate" && typeof obj.instruction === "string" && obj.instruction.length > 0) {
-      return { decision: "delegate", instruction: obj.instruction };
-    }
-  } catch {
-    /* fall through */
+function coerceDecision(obj: unknown): Decision | null {
+  const o = obj as { decision?: string; text?: string; instruction?: string } | null;
+  if (!o) return null;
+  if (o.decision === "reply" && typeof o.text === "string" && o.text.length > 0) {
+    return { decision: "reply", text: o.text };
+  }
+  if (o.decision === "delegate" && typeof o.instruction === "string" && o.instruction.length > 0) {
+    return { decision: "delegate", instruction: o.instruction };
   }
   return null;
 }
+
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: cors });
@@ -133,11 +82,7 @@ Deno.serve(async (req) => {
   const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
   const SUPABASE_ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY")!;
   const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-  const ANTHROPIC_API_KEY = Deno.env.get("ANTHROPIC_API_KEY");
 
-  if (!ANTHROPIC_API_KEY) {
-    return json({ error: "ANTHROPIC_API_KEY not configured" }, 500);
-  }
 
   // 1. JWT → user_id
   const authHeader = req.headers.get("Authorization");
@@ -225,46 +170,54 @@ Deno.serve(async (req) => {
     .filter((m: any) => m.role === "user" || m.role === "assistant")
     .map((m: any) => ({ role: m.role, content: m.content }));
 
-  // 7. Call Claude as Pilot
-  const apiResult = await callAnthropicWithRetry(
-    {
-      model: PILOT_MODEL,
-      max_tokens: 1024,
-      system: PILOT_SYSTEM_PROMPT,
-      messages: msgs,
-    },
-    ANTHROPIC_API_KEY
-  );
+  // 7. Ask Pilot brain via the AI provider adapter (Lovable AI Gateway default).
+  const ai = await generateJson({
+    taskType: "pilot_chat",
+    systemPrompt: PILOT_SYSTEM_PROMPT,
+    messages: msgs,
+    temperature: 0.4,
+    maxTokens: 1024,
+    functionName: "pilot-chat",
+    workspaceId,
+  });
 
-  // 7b. Failure path
-  if (!apiResult.ok) {
-    const errText = apiResult.error ?? "unknown anthropic error";
-    console.error("[pilot-chat] anthropic error:", errText);
+  await logProviderCall(admin, {
+    workspace_id: workspaceId,
+    function_name: "pilot-chat",
+    task_type: "pilot_chat",
+    provider: ai.provider,
+    model: ai.model,
+    success: ai.ok,
+    latency_ms: ai.latencyMs,
+    error_code: ai.errorCode,
+  });
+
+  const providerUsed = ai.provider !== "none" ? ai.provider : "lovable-ai";
+  const modelUsed = ai.model || "google/gemini-3-flash-preview";
+
+  // 7b. Total provider failure — return a safe message but 200 so chat keeps working.
+  if (!ai.ok || (!ai.content && !ai.json)) {
+    console.error("[pilot-chat] provider failed:", ai.error);
     const { data: saved } = await admin
       .from("messages")
       .insert({
         conversation_id: conversationId,
         role: "assistant",
-        content: "I couldn't process that request. Please try again.",
+        content: "Pilot is online, but the AI provider is temporarily unavailable. I saved your message — you can retry.",
         agent_slug: "pilot",
-        model_used: PILOT_MODEL,
+        model_used: modelUsed,
         is_error: true,
       })
       .select("*")
       .single();
-    return json({ type: "reply", conversation_id: conversationId, message: saved, error: errText }, 500);
+    return json({ type: "reply", conversation_id: conversationId, message: saved, provider: providerUsed, error: ai.error });
   }
 
-  const rawText: string = apiResult.data?.content?.[0]?.text ?? "";
-  const tokensUsed =
-    (apiResult.data?.usage?.input_tokens ?? 0) + (apiResult.data?.usage?.output_tokens ?? 0);
+  const decision = coerceDecision(ai.json);
 
-  const decision = parseDecision(rawText);
-
-  // 8a. Unparseable — degrade gracefully: treat as a plain reply.
+  // 8a. Unparseable — degrade gracefully: treat the raw text as a plain reply.
   if (!decision) {
-    console.error("[pilot-chat] failed to parse decision; falling back to raw reply:", rawText.slice(0, 200));
-    const fallback = stripFences(rawText) || "I'm not sure how to respond to that. Could you rephrase?";
+    const fallback = (ai.content || "").trim() || "I'm not sure how to respond to that. Could you rephrase?";
     const { data: saved } = await admin
       .from("messages")
       .insert({
@@ -272,12 +225,11 @@ Deno.serve(async (req) => {
         role: "assistant",
         content: fallback,
         agent_slug: "pilot",
-        model_used: PILOT_MODEL,
-        tokens_used: tokensUsed,
+        model_used: modelUsed,
       })
       .select("*")
       .single();
-    return json({ type: "reply", conversation_id: conversationId, message: saved, parse_fallback: true });
+    return json({ type: "reply", conversation_id: conversationId, message: saved, parse_fallback: true, provider: providerUsed });
   }
 
   // 8b. Reply branch
@@ -289,13 +241,13 @@ Deno.serve(async (req) => {
         role: "assistant",
         content: decision.text,
         agent_slug: "pilot",
-        model_used: PILOT_MODEL,
-        tokens_used: tokensUsed,
+        model_used: modelUsed,
       })
       .select("*")
       .single();
-    return json({ type: "reply", conversation_id: conversationId, message: saved });
+    return json({ type: "reply", conversation_id: conversationId, message: saved, provider: providerUsed });
   }
+
 
   // 8c. Delegate branch — call orchestrate server-to-server, forwarding the user JWT.
   const orchResponse = await fetch(`${SUPABASE_URL}/functions/v1/orchestrate`, {
@@ -322,8 +274,8 @@ Deno.serve(async (req) => {
         role: "assistant",
         content: errMsg,
         agent_slug: "pilot",
-        model_used: PILOT_MODEL,
-        tokens_used: tokensUsed,
+        model_used: modelUsed,
+
         is_error: true,
       })
       .select("*")
@@ -354,8 +306,8 @@ Deno.serve(async (req) => {
       role: "assistant",
       content: announce,
       agent_slug: "pilot",
-      model_used: PILOT_MODEL,
-      tokens_used: tokensUsed,
+      model_used: modelUsed,
+
     })
     .select("*")
     .single();

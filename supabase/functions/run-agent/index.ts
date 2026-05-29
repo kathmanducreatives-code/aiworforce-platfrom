@@ -6,6 +6,8 @@
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { runTool } from "../_shared/toolRegistry.ts";
+import { generateText, logProviderCall } from "../_shared/aiProvider.ts";
+
 
 const cors = {
   "Access-Control-Allow-Origin": "*",
@@ -17,21 +19,6 @@ const json = (body: unknown, status = 200) =>
     status,
     headers: { ...cors, "Content-Type": "application/json" },
   });
-
-const MODEL_MAP: Record<string, string> = {
-  "claude-haiku-4-5": "claude-haiku-4-5-20251001",
-  "claude-sonnet-4-5": "claude-sonnet-4-5-20250929",
-  "gpt-4o": "claude-haiku-4-5-20251001",
-  "gemini-2.5-flash": "claude-haiku-4-5-20251001",
-  "gemini-1.5-pro": "claude-sonnet-4-5-20250929",
-};
-const DEFAULT_MODEL = "claude-haiku-4-5-20251001";
-
-function resolveModel(raw: string | null | undefined): string {
-  if (!raw) return DEFAULT_MODEL;
-  return MODEL_MAP[raw] ?? DEFAULT_MODEL;
-}
-
 function buildUserMessage(instruction: string, input: string | null | undefined): string {
   if (!input) return `Task: ${instruction}`;
   return `Task: ${instruction}\n\nInput from previous step:\n${input}`;
@@ -46,40 +33,7 @@ function renderCompanyBrain(brain: CompanyBrain): string {
   return `<company_brain>\n${JSON.stringify(brain, null, 2)}\n</company_brain>`;
 }
 
-async function callAnthropicWithRetry(payload: unknown, apiKey: string) {
-  for (let attempt = 0; attempt < 2; attempt++) {
-    const ctrl = new AbortController();
-    const timer = setTimeout(() => ctrl.abort(), 30_000);
-    try {
-      const res = await fetch("https://api.anthropic.com/v1/messages", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "x-api-key": apiKey,
-          "anthropic-version": "2023-06-01",
-        },
-        body: JSON.stringify(payload),
-        signal: ctrl.signal,
-      });
-      clearTimeout(timer);
-      const data = await res.json();
-      if (res.ok) return { ok: true as const, data };
-      if (res.status >= 500 && attempt === 0) {
-        await new Promise((r) => setTimeout(r, 1000));
-        continue;
-      }
-      return { ok: false as const, data, error: `Anthropic ${res.status}` };
-    } catch (e) {
-      clearTimeout(timer);
-      if (attempt === 0) {
-        await new Promise((r) => setTimeout(r, 1000));
-        continue;
-      }
-      return { ok: false as const, data: null, error: `fetch failed: ${String(e)}` };
-    }
-  }
-  return { ok: false as const, data: null, error: "retry exhausted" };
-}
+
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: cors });
@@ -159,7 +113,6 @@ Deno.serve(async (req) => {
   const brain = (brainRow?.profile ?? null) as CompanyBrain;
 
   const systemPrompt = `${agent.role_prompt ?? `You are ${agent.name}.`}\n\n${renderCompanyBrain(brain)}`;
-  const model = resolveModel(agent.model);
 
   // --- Tool layer: hawk + scout get live web research via Perplexity. ---
   let toolContext: string | null = null;
@@ -194,29 +147,39 @@ Deno.serve(async (req) => {
       ? `${buildUserMessage(instruction, input)}\n\nNOTE TO AGENT: ${toolNotice} Do NOT fabricate live data. Acknowledge the limitation, then produce the best plan/analysis you can from available context.`
       : buildUserMessage(instruction, input);
 
-  const result = await callAnthropicWithRetry(
-    {
-      model,
-      max_tokens: 2048,
-      system: systemPrompt,
-      messages: [{ role: "user", content: userMessage }],
-    },
-    Deno.env.get("ANTHROPIC_API_KEY")!,
-  );
+  const ai = await generateText({
+    taskType: "agent_execution",
+    systemPrompt,
+    messages: [{ role: "user", content: userMessage }],
+    temperature: 0.6,
+    maxTokens: 2048,
+    functionName: "run-agent",
+    agentSlug: agent_slug ?? undefined,
+    workspaceId: workspace_id,
+  });
 
-  let apiText = "";
-  let tokensIn = 0;
-  let tokensOut = 0;
+  await logProviderCall(supabase, {
+    workspace_id,
+    plan_id,
+    agent_id: agent.id,
+    function_name: "run-agent",
+    agent_slug: agent_slug ?? null,
+    task_type: "agent_execution",
+    provider: ai.provider,
+    model: ai.model,
+    success: ai.ok,
+    latency_ms: ai.latencyMs,
+    error_code: ai.errorCode,
+  });
+
+  let apiText = ai.ok ? ai.content : "";
+  const usage = (ai.usage ?? {}) as { prompt_tokens?: number; completion_tokens?: number; input_tokens?: number; output_tokens?: number };
+  const tokensIn = usage.prompt_tokens ?? usage.input_tokens ?? 0;
+  const tokensOut = usage.completion_tokens ?? usage.output_tokens ?? 0;
   let apiError: string | null = null;
+  if (!ai.ok) apiError = ai.error ?? "ai provider failed";
+  else if (!apiText) apiError = "empty content from AI provider";
 
-  if (result.ok) {
-    apiText = result.data?.content?.[0]?.text ?? "";
-    tokensIn = result.data?.usage?.input_tokens ?? 0;
-    tokensOut = result.data?.usage?.output_tokens ?? 0;
-    if (!apiText) apiError = "empty content from Anthropic";
-  } else {
-    apiError = result.error ?? "unknown anthropic error";
-  }
 
   if (apiError) {
     console.error("[run-agent] api failure:", apiError);
