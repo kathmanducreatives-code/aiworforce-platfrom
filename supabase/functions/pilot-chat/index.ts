@@ -295,13 +295,31 @@ Deno.serve(async (req) => {
   }
 
   const planSummary: string = orchBody?.plan_summary ?? "(no summary)";
-  // Deployed orchestrate returns `task_plan_id` and `total_steps` (not
-  // plan_id / steps_count). Accept both for forward compatibility.
   const planId: string = orchBody?.task_plan_id ?? orchBody?.plan_id ?? "";
   const stepsCount: number = orchBody?.total_steps ?? orchBody?.steps_count ?? 0;
+  const agents: string[] = Array.isArray(orchBody?.agents) ? orchBody.agents : [];
+  const connectorsMissing: string[] = Array.isArray(orchBody?.connectors_missing) ? orchBody.connectors_missing : [];
+  const planSteps: any[] = Array.isArray(orchBody?.plan?.steps) ? orchBody.plan.steps : [];
 
-  // Synthetic assistant message announcing the plan
-  const announce = `On it. Here's the plan: ${planSummary} (${stepsCount} step${stepsCount === 1 ? "" : "s"})`;
+  const agentNames: Record<string, string> = { scout: "Scout", aria: "Aria", penn: "Penn", hawk: "Hawk", scribe: "Scribe" };
+  const chain = planSteps
+    .map((s) => {
+      const name = agentNames[s.agent_slug] ?? s.agent_slug;
+      const verb = (s.task_title || "").toString().toLowerCase() || "work the step";
+      return `${name} will ${verb}`;
+    })
+    .join(", ");
+
+  const needsApproval = planSteps.some((s) => s.requires_approval && s.tool_needed === "send_email");
+  const approvalNote = needsApproval ? " Penn will pause for your approval before sending." : "";
+  const connectorNote = connectorsMissing.length
+    ? ` Live data via ${connectorsMissing.join(", ")} requires a connector — add the API key in Settings to enable it.`
+    : "";
+
+  const announce = stepsCount > 0
+    ? `I created a ${stepsCount}-step plan: ${chain}.${approvalNote}${connectorNote}`
+    : `On it. ${planSummary}`;
+
   const { data: announced } = await admin
     .from("messages")
     .insert({
