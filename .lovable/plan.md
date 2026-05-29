@@ -1,141 +1,113 @@
+# Fix orchestrator "Workspace not found"
 
-## Step 1 — Audit report (no mutations performed)
+## Root cause
 
-**Active backend ref:** `wqnigjhcwjxtmordrwno` (confirmed via `supabase--project_info` context — `.env`/client are auto-generated and untouched).
+`supabase/functions/orchestrate/index.ts` does:
 
-### Tables
+```ts
+.from("workspaces")
+  .select("company_brain, daily_run_limit, tokens_used_today")
+  .eq("id", workspace_id)
+  .single();
+```
 
-| Expected | Present | Notes |
+The `workspaces` table in `wqnigjhcwjxtmordrwno` only has:
+`id, name, owner_user_id, created_at, updated_at`.
+
+Selecting non-existent columns makes `.single()` return `data = null` with an error → the function falls into the `if (!workspace)` branch and returns `404 "Workspace not found"`. The workspace and the user's membership actually exist:
+
+- 1 workspace: `e510c1a6-2bb8-4aa4-95f7-0beb786ed995` (owner = the signed-in user)
+- 1 row in `workspace_members` for that user
+- 5 agents seeded with 2 capabilities each
+
+pilot-chat is correct (it forwards `workspace_id` snake_case, with a valid uuid, after checking membership itself).
+
+Additional drift discovered while tracing the path (will be fixed in the same edit so the pipeline doesn't just fail at the next step):
+
+| Table | Code uses | Real columns |
 |---|---|---|
-| workspaces | ✅ | 1 row (`prasidha's Workspace`, owner `63365602…c43b`) |
-| workspace_members | ✅ | 1 row (matches the workspace owner) |
-| company_brain | ✅ | 1 row |
-| agents | ✅ | **0 rows — empty** |
-| agent_capabilities | ❌ **MISSING** | Referenced by `orchestrate/index.ts:60`, `src/lib/orchestration.ts:332`, and `VerificationPanel`. `orchestration.ts` casts `as any`, so TS compiles, but the query returns a permission/relation error at runtime. |
-| conversations | ✅ | 3 rows |
-| messages | ✅ | 6 rows; columns: id, conversation_id, role, content, agent_slug, model_used, tokens_used, is_error, created_at |
-| task_plans | ✅ | 0 rows |
-| tasks | ✅ | columns: id, plan_id, agent_slug, parent_task_id, depends_on, status, payload, result, error_message, user_id, timestamps |
-| activity_feed | ✅ | 0 rows |
-| approvals | ✅ | 0 rows |
-| handoffs | ❌ **MISSING** | `run-agent/index.ts:245` inserts into `handoffs` — that call fails silently / 500s |
+| workspaces | company_brain, daily_run_limit, tokens_used_today | (none of these) |
+| agent_capabilities | input_type, output_type, priority | only `capability`, `config` |
+| task_plans | plan, current_step, status='running' | goal, user_instruction, plan_summary, steps, status, workspace_id, created_by |
+| tasks | task_plan_id, agent_id, workspace_id, step_index, input, output, tokens_in, tokens_out | plan_id, agent_slug, payload, result, user_id, status |
+| activity_feed | task_plan_id | plan_id |
+| handoffs | from_agent_id, to_agent_id, task_plan_id | from_agent_slug, to_agent_slug, plan_id |
+| approvals | summary, payload, task_plan_id | description, plan_id, task_id |
 
-### RLS policies (workforce-critical tables)
+## Changes (frontend untouched)
 
-- `workspaces` — owner insert; member select; owner update ✅
-- `workspace_members` — self insert/select/delete ✅
-- `messages` — users select/insert own (via conversation join) ✅
-- `tasks` — user_id-scoped CRUD + service_role full access ✅
-- `agents`, `task_plans`, `activity_feed`, `approvals`, `company_brain` — workspace-member scoped via `has_workspace_access()` (per memory + prior migrations) ✅
-- `handoffs` / `agent_capabilities` — N/A (tables don't exist)
+### 1. `supabase/functions/orchestrate/index.ts` — rewrite
 
-### Edge functions deployed
+- Validate JWT, derive `userId`, accept body with snake_case + camelCase aliases:
+  ```ts
+  const workspace_id = body.workspace_id ?? body.workspaceId;
+  const user_instruction = body.user_instruction ?? body.userInstruction;
+  const conversation_id = body.conversation_id ?? body.conversationId ?? null;
+  ```
+- Keep `ping` health-check first.
+- Use service-role client, but **also** validate membership via `workspace_members` (user_id + workspace_id). On miss return structured 404:
+  ```json
+  { "error": "workspace_not_found", "details": "User is not a member of this workspace", "workspace_id": "..." }
+  ```
+- Look up workspace with `select("id, name")` only. Load `company_brain.profile` from the `company_brain` table separately (best-effort, empty-object fallback). Drop the `daily_run_limit / tokens_used_today` rate-limit check (those columns don't exist; non-blocking).
+- Fetch capabilities with the columns that exist: `capability, config, agents ( id, slug, name, model, department )`.
+- Update the Anthropic planner prompt to ask for `agent_slug` (not agent_id) and to drop input_type/output_type — just `capability` strings. Keep `needs_approval`, `instruction`, `step_index`.
+- Persist plan into `task_plans` using real columns:
+  ```ts
+  insert({
+    workspace_id,
+    user_id: userId,
+    created_by: userId,
+    goal: user_instruction,
+    user_instruction,
+    plan_summary: parsedPlan.plan_summary,
+    steps: parsedPlan.steps,
+    status: "executing",
+  })
+  ```
+- Log to `activity_feed` with `plan_id` (not `task_plan_id`), event_type `plan_created`.
+- Fire first step into `run-agent` with the new payload contract:
+  ```json
+  { "plan_id": "...", "step_index": 0, "agent_slug": "scout",
+    "workspace_id": "...", "user_id": "...", "instruction": "...",
+    "input": "<user_instruction>", "needs_approval": false }
+  ```
+- On success return `{ success, plan_id, plan_summary, total_steps, plan }` (keep `task_plan_id` alias for backward compat with pilot-chat which already accepts both).
 
-| Function | Present |
-|---|---|
-| pilot-chat | ✅ |
-| run-agent | ✅ (but calls missing `handoffs` table) |
-| orchestrate | ✅ (but queries missing `agent_capabilities` table) |
-| approve-and-continue | ✅ |
+### 2. `supabase/functions/run-agent/index.ts` — minimum schema alignment
 
-### Secrets
+Only what's needed so the chained call from orchestrate doesn't crash with the same kind of error and report it back up:
 
-Present per `fetch_secrets`: `LOVABLE_API_KEY`, `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, `GOOGLE_AI_API_KEY`, `RESEND_API_KEY`, plus Supabase platform secrets. **Missing:** `PERPLEXITY_API_KEY`, `FIRECRAWL_API_KEY` (only needed if research/sourcing connectors are exercised — pilot-chat itself does not require them).
+- Accept `plan_id` (with `task_plan_id` alias) and `agent_slug` (with `agent_id` alias resolved to slug via a lookup).
+- Insert task with real columns: `plan_id, agent_slug, payload: { instruction, input }, status: 'running', user_id`.
+- `activity_feed` insert uses `plan_id` (not `task_plan_id`).
+- Approvals insert uses `description` (not `summary`), `plan_id` (not `task_plan_id`), drop `payload`.
+- Handoffs insert uses `from_agent_slug, to_agent_slug, plan_id` (not the _id variants / task_plan_id).
+- Read plan back with `select("steps, plan_summary").eq("id", plan_id)`; `steps[step_index+1]` drives the next call.
+- `task_plans` updates use status only (no `current_step` column).
+- Tasks update writes `result: { output, tokens_in, tokens_out }` instead of separate columns.
 
-### Seed / system data
+### 3. Redeploy
 
-| Item | Status |
-|---|---|
-| ≥1 workspace | ✅ |
-| Signed-in preview user has workspace_members row | ✅ (`63365602…c43b`) |
-| 5 core agents (Scout, Aria, Penn, Hawk, Scribe) | ❌ `agents` table empty |
-| agent_capabilities rows | ❌ table missing |
+Redeploy `orchestrate` and `run-agent`. No DB migration, no UI, no env, no schema change.
 
-### Root cause summary
+## Verification
 
-The schema migrations created `workspaces`/`workspace_members`/`conversations`/`messages`/`tasks`/etc. and the workspace auto-provision trigger works (you have a workspace). The crash-/silent-failure surface that remains is:
+- `select id from workspaces` → returns the same uuid pilot-chat is sending. ✅ already confirmed.
+- Send "hello" → Pilot reply, same as today.
+- Send "Find React engineers in London":
+  - `orchestrate` returns 200 with `plan_summary` + `total_steps ≥ 1`.
+  - One row inserted in `task_plans` (workspace_id matches the resolved id).
+  - One row in `tasks` (plan_id matches).
+  - One row in `activity_feed` with `event_type = 'plan_created'`, `plan_id` set.
+  - No "Workspace not found".
+  - No realtime/postgres_changes errors in console (the earlier fix is preserved).
+- If anything fails, the response is the structured `workspace_not_found` JSON, not a crash.
 
-1. **No agents seeded** → orchestrator can't pick an executor; agent listing in UI is empty.
-2. **`agent_capabilities` table never created** → orchestrate edge function 500s; VerificationPanel red.
-3. **`handoffs` table never created** → run-agent silently fails the handoff insert.
+## Out of scope (explicit)
 
-Everything else needed for the chat send path (workspace resolve → conversation create → message insert → `pilot-chat` invoke) is in place.
-
----
-
-## Step 2 — Repair plan (narrow, scoped to `wqnigjhcwjxtmordrwno`)
-
-### Migration 1 — create the two missing tables (with GRANTs + RLS)
-
-```text
-CREATE TABLE public.agent_capabilities (
-  id uuid pk default gen_random_uuid(),
-  agent_id uuid not null,
-  capability text not null,
-  config jsonb default '{}',
-  created_at timestamptz default now(),
-  unique(agent_id, capability)
-)
-GRANT SELECT,INSERT,UPDATE,DELETE ... TO authenticated
-GRANT ALL ... TO service_role
-ENABLE RLS
-POLICY: authenticated can SELECT all; service_role manages
-
-CREATE TABLE public.handoffs (
-  id uuid pk default gen_random_uuid(),
-  workspace_id uuid not null,
-  plan_id uuid,
-  from_agent_slug text,
-  to_agent_slug text,
-  payload jsonb default '{}',
-  created_at timestamptz default now()
-)
-GRANT ... TO authenticated, service_role
-ENABLE RLS
-POLICY: has_workspace_access(auth.uid(), workspace_id) for SELECT/INSERT
-```
-
-### Seed 2 — five core agents + their capabilities (idempotent)
-
-Insert via `supabase--insert` (one workspace_id = NULL so they're global defaults visible to all members; `is_default = true`):
-
-```text
-agents:
-  Scout   slug=scout    dept=Sourcing       role="Lead sourcing"
-  Aria    slug=aria     dept=Outreach       role="Personalized outreach"
-  Penn    slug=penn     dept=Screening      role="Candidate screening"
-  Hawk    slug=hawk     dept=Intelligence   role="Market & competitor intel"
-  Scribe  slug=scribe   dept=Operations     role="Notes, summaries, comms"
-all with model='gemini-2.5-flash' (per memory standard), is_active=true, is_default=true
-
-agent_capabilities (one row per capability):
-  scout: search_linkedin, enrich_profile
-  aria:  draft_email, send_sequence
-  penn:  generate_questions, score_response
-  hawk:  scrape_company, summarize_market
-  scribe: summarize_conversation, write_note
-```
-
-### Code touch (only if Step 1/2 above does not also resolve runtime guards) — none required. `run-agent` and `orchestrate` will start succeeding as soon as the tables exist; the chat send path already works.
-
-### Out of scope (explicit non-changes)
-
-- No edit to `src/integrations/supabase/{client,types}.ts` or `.env`.
-- No new Supabase project, no swap to `zbwsbnqqpkvdhqwavjke`.
-- No UI redesign, no revert to `chat-respond`, no RLS disable, no data reset.
-- `PERPLEXITY_API_KEY` / `FIRECRAWL_API_KEY` not added unless you ask — orchestration core doesn't require them.
-
----
-
-## Step 3 — Apply (only after you approve)
-
-On approval I will, in order:
-1. Run one `supabase--migration` for `agent_capabilities` + `handoffs` (tables, GRANTs, RLS, policies).
-2. Run one `supabase--insert` seeding the 5 agents and their capabilities.
-3. Redeploy `pilot-chat`, `run-agent`, `orchestrate`, `approve-and-continue` to pick up the now-resolvable relations.
-
-## Step 4 — Verify
-
-After apply I'll confirm: dashboard renders, `select count(*) from agents = 5`, VerificationPanel shows all green, a test message round-trips through `pilot-chat`, `run-agent` insert into `handoffs` succeeds in logs, `orchestrate` returns 200, no postgres_changes/realtime errors in console.
-
-**Remaining blockers after this plan:** none expected for the chat + orchestration loop. If you later enable the Research or Sourcing connectors end-to-end, you'll need to add `PERPLEXITY_API_KEY` and/or `FIRECRAWL_API_KEY` then.
+- No backend project switch. Active backend stays `wqnigjhcwjxtmordrwno`.
+- No `.env` / generated client / generated types edits.
+- No new tables, no RLS changes, no reseeding agents (5 are already present).
+- No UI redesign, no changes to `WorkspaceContext`, `pilotChat.ts`, `useChatConversation`, or `ChatErrorBoundary`.
+- `chat-respond` not reintroduced.
