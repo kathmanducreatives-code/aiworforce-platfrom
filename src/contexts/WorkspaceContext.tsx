@@ -26,7 +26,10 @@ export const WorkspaceProvider = ({ children }: { children: ReactNode }) => {
   const retry = useCallback(() => setTick((t) => t + 1), []);
 
   useEffect(() => {
-    if (authLoading) return;
+    if (authLoading) {
+      setLoading(true);
+      return;
+    }
     if (!user) {
       setWorkspaceId(null);
       setError(null);
@@ -45,6 +48,7 @@ export const WorkspaceProvider = ({ children }: { children: ReactNode }) => {
       .catch((e) => {
         if (cancelled) return;
         console.error('workspace resolve failed', e);
+        setWorkspaceId(null);
         setError(e instanceof Error ? e : new Error(String(e)));
       })
       .finally(() => {
