@@ -637,3 +637,75 @@ with the actual live `workspaces` schema), or (b) a first-run onboarding
 screen that does the same on form submit. Not blocking; scope into Week
 1 polish or Week 2.
 
+---
+
+## Hotfix — BACKEND VERIFY 0-rows + orchestrate ping + realtime channel collision (2026-05-28)
+
+Browser surfaced three issues after the workspace_members hotfix:
+
+  A) BACKEND VERIFY panel showed all 8 tables at 0 rows. False alarm —
+     the DB has 5 agents, 1 workspace, 8 task_plans, 14 tasks, 34
+     activity_feed rows, 7 handoffs, 3 approvals. Cause: the panel
+     queried each table via `select count(*)` as the authenticated
+     user, and post-Lovable RLS policies silently hide rows from the
+     ordinary user context (count returns 0 with no error).
+
+  B) `orchestrate fn` row failed in the panel. Cause: Lovable's
+     rewrite of `supabase/functions/orchestrate/index.ts` removed the
+     `{ ping: true }` health-check branch. The frontend
+     `pingOrchestrate()` still sends it; orchestrate now 400s.
+
+  C) Chat threw `cannot add 'postgres_changes' callbacks for
+     realtime:realtime:agents:00000000-…-0001 after subscribe()`.
+     Cause: `subscribeTable` and `subscribePlan` in
+     `src/lib/orchestration.ts` used deterministic channel names. When
+     two callers subscribed to the same workspace+table (or React
+     StrictMode double-mounted), `supabase.channel(name)` returned the
+     same instance — the first call had already subscribed it, the
+     second `.on()` lands on an already-subscribed channel.
+     `00000000-…-0001` is NOT a placeholder; it's the real seeded
+     workspace UUID.
+
+### Fix applied
+
+1. `supabase/functions/orchestrate/index.ts` — restored the `{ping:true}`
+   branch immediately after the OPTIONS check, returning `{ok:true}`.
+   Redeployed. `curl …/orchestrate -d '{"ping":true}'` → `{"ok":true}`.
+
+2. `supabase/migrations/20260528170000_dev_table_counts_rpc.sql` — new
+   SECURITY DEFINER function `public.dev_table_counts()` returning the
+   8 counts as `jsonb`. Granted to `authenticated, service_role`.
+   Applied via MCP. `select public.dev_table_counts()` returns the
+   real counts (5 agents etc.).
+
+3. `src/components/dev/VerificationPanel.tsx` — replaced the 8 per-
+   table queries with a single `supabase.rpc('dev_table_counts')`
+   call. Now displays true counts via SECURITY DEFINER instead of
+   RLS-blocked client-side reads.
+
+4. `src/lib/orchestration.ts` — added `uniqueTopic(prefix)` that
+   appends a `crypto.randomUUID()` suffix. Both `subscribeTable`
+   (used by `subscribeAgents`, `subscribeActivityFeed`,
+   `subscribeApprovals`, `subscribePlans`) and `subscribePlan` now
+   create unique channel names per call. Pattern matches what
+   Lovable already adopted in `useChatConversation.ts`.
+
+### Verification
+
+- `npm run build` clean.
+- `curl orchestrate {ping:true}` → `{"ok":true}` against the live
+  redeployed function.
+- `select public.dev_table_counts()` returns full counts to the SECURITY
+  DEFINER function.
+- Dev server restarted on localhost:8081.
+
+### Still not done (logged, not fixed today)
+
+- Investigate the RLS policies that hide rows from `kathmanducreatives@gmail.com`
+  on the orchestration tables (root cause of A). The dev-RPC sidesteps it
+  for the verify panel, but ordinary frontend queries against `agents`,
+  `task_plans`, etc. will still return empty. Day 6 / RLS audit.
+- The `00000000-…-0001` workspace UUID is real (seeded), but if Day 6
+  starts treating each user's workspace as distinct, we'll need a
+  per-user workspace provisioning path (already in the known follow-up).
+

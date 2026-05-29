@@ -49,23 +49,31 @@ export default function VerificationPanel() {
     (async () => {
       setRunning(true);
       const results: CheckRow[] = [];
-      for (const t of TABLES) {
-        try {
-          const { count, error } = await supabase
-            .from(t as any)
-            .select('*', { count: 'exact', head: true });
-          if (error) {
-            results.push({ name: t, state: 'fail', detail: error.message });
+
+      // Single RPC returns counts via SECURITY DEFINER so RLS can't
+      // silently hide rows the dev panel cares about (data may exist
+      // but be invisible to the authed user via per-table policies).
+      try {
+        const { data, error } = await supabase.rpc('dev_table_counts' as any);
+        if (error) throw error;
+        const counts = (data ?? {}) as Record<string, number>;
+        for (const t of TABLES) {
+          const n = counts[t];
+          if (typeof n === 'number') {
+            results.push({ name: t, state: 'ok', detail: `${n} rows` });
           } else {
-            results.push({ name: t, state: 'ok', detail: `${count ?? 0} rows` });
+            results.push({ name: t, state: 'fail', detail: 'missing from RPC' });
           }
-        } catch (e) {
-          const msg = e instanceof Error ? e.message : String(e);
+        }
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : String(e);
+        for (const t of TABLES) {
           results.push({ name: t, state: 'fail', detail: msg });
         }
-        if (cancelled) return;
-        setChecks([...results, { name: 'orchestrate fn', state: 'idle', detail: '…' }]);
       }
+      if (cancelled) return;
+      setChecks([...results, { name: 'orchestrate fn', state: 'idle', detail: '…' }]);
+
       try {
         const r = await pingOrchestrate();
         results.push({ name: 'orchestrate fn', state: r?.ok ? 'ok' : 'fail', detail: r?.ok ? 'reachable' : 'no ok' });

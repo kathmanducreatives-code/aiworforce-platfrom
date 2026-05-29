@@ -14,7 +14,18 @@ Deno.serve(async (req) => {
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
     );
 
-    const { user_instruction, workspace_id } = await req.json();
+    const body = await req.json().catch(() => ({}));
+
+    // Health-check ping used by VerificationPanel.tsx / pingOrchestrate.
+    // Must precede the required-fields check.
+    if (body?.ping === true) {
+      return new Response(JSON.stringify({ ok: true }), {
+        status: 200,
+        headers: { ...cors, "Content-Type": "application/json" },
+      });
+    }
+
+    const { user_instruction, workspace_id } = body ?? {};
 
     if (!user_instruction || !workspace_id) {
       return new Response(

@@ -109,9 +109,23 @@ export async function fetchPendingApprovals(workspaceId: string): Promise<DBAppr
 // ---------------- Subscriptions ----------------
 type Unsub = () => void;
 
+// Per-call random suffix so duplicate mounts (StrictMode, parallel
+// components subscribing to the same workspace+table) don't collide
+// on a single shared channel instance. supabase.channel(name) returns
+// the same instance for the same name; subsequent .on() calls on an
+// already-subscribed channel throw
+//   "cannot add 'postgres_changes' callbacks ... after subscribe()".
+function uniqueTopic(prefix: string): string {
+  const rand =
+    typeof crypto !== 'undefined' && 'randomUUID' in crypto
+      ? crypto.randomUUID()
+      : Math.random().toString(36).slice(2);
+  return `${prefix}:${rand}`;
+}
+
 function subscribeTable(table: string, workspaceId: string, onChange: () => void): Unsub {
   const ch: RealtimeChannel = supabase
-    .channel(`realtime:${table}:${workspaceId}`)
+    .channel(uniqueTopic(`realtime:${table}:${workspaceId}`))
     .on(
       'postgres_changes' as any,
       { event: '*', schema: 'public', table, filter: `workspace_id=eq.${workspaceId}` },
@@ -194,7 +208,7 @@ export async function fetchApprovalsForPlan(planId: string): Promise<DBApproval[
 }
 
 export const subscribePlan = (planId: string, cb: () => void) => {
-  const ch = supabase.channel(`realtime:plan:${planId}`)
+  const ch = supabase.channel(uniqueTopic(`realtime:plan:${planId}`))
     .on('postgres_changes' as any, { event: '*', schema: 'public', table: 'task_plans', filter: `id=eq.${planId}` }, cb)
     .on('postgres_changes' as any, { event: '*', schema: 'public', table: 'tasks', filter: `plan_id=eq.${planId}` }, cb)
     .on('postgres_changes' as any, { event: '*', schema: 'public', table: 'activity_feed', filter: `plan_id=eq.${planId}` }, cb)
