@@ -232,12 +232,13 @@ Deno.serve(async (req) => {
       }))
       .filter((c) => c.agent_slug);
 
-    // Try AI planner; fall back deterministically on any failure.
+    // Try AI planner via shared adapter; fall back deterministically on any failure.
     let parsedPlan: { plan_summary: string; steps: Step[] } | null = null;
     let plannerSource: "ai" | "fallback" = "fallback";
+    let aiProvider = "none";
+    let aiModel = "";
 
-    if (ANTHROPIC_API_KEY) {
-      const orchestratorPrompt = `You are the orchestrator for ScreeningPilot, an AI workforce platform.
+    const orchestratorPrompt = `You are the orchestrator for ScreeningPilot, an AI workforce platform.
 Read the user instruction and decide which agents to involve, in what order.
 
 COMPANY CONTEXT:
@@ -273,63 +274,60 @@ Return ONLY valid JSON, no explanation, no markdown:
   ]
 }`;
 
-      try {
-        const ctrl = new AbortController();
-        const timer = setTimeout(() => ctrl.abort(), 25_000);
-        const anthropicRes = await fetch("https://api.anthropic.com/v1/messages", {
-          method: "POST",
-          signal: ctrl.signal,
-          headers: {
-            "Content-Type": "application/json",
-            "x-api-key": ANTHROPIC_API_KEY,
-            "anthropic-version": "2023-06-01",
-          },
-          body: JSON.stringify({
-            model: "claude-haiku-4-5-20251001",
-            max_tokens: 2048,
-            messages: [{ role: "user", content: orchestratorPrompt }],
-          }),
-        });
-        clearTimeout(timer);
-        const anthropicData = await anthropicRes.json().catch(() => ({}));
-        const rawPlan: string = anthropicData?.content?.[0]?.text ?? "";
-        console.log("[orchestrate] model output length:", rawPlan.length);
+    const ai = await generateJson({
+      taskType: "orchestration_plan",
+      systemPrompt: "You are a planning assistant. Respond with valid JSON only.",
+      messages: [{ role: "user", content: orchestratorPrompt }],
+      temperature: 0.3,
+      maxTokens: 2048,
+      functionName: "orchestrate",
+      workspaceId: workspace_id,
+    });
+    aiProvider = ai.provider;
+    aiModel = ai.model;
+    await logProviderCall(admin, {
+      workspace_id,
+      function_name: "orchestrate",
+      task_type: "orchestration_plan",
+      provider: ai.provider,
+      model: ai.model,
+      success: ai.ok,
+      latency_ms: ai.latencyMs,
+      error_code: ai.errorCode,
+    });
 
-        if (rawPlan) {
-          const parsed = extractJson(rawPlan) as { plan_summary?: string; steps?: any[] };
-          if (parsed && Array.isArray(parsed.steps) && parsed.steps.length > 0) {
-            const normalizedSteps: Step[] = parsed.steps
-              .map((s: any, i: number) => {
-                const slug = normalizeSlug(s?.agent_slug);
-                if (!slug) return null;
-                return {
-                  step_index: typeof s.step_index === "number" ? s.step_index : i,
-                  agent_slug: slug,
-                  agent_name: KNOWN_AGENTS[slug],
-                  capability: typeof s.capability === "string" ? s.capability : undefined,
-                  needs_approval: s.needs_approval === true,
-                  instruction: typeof s.instruction === "string" && s.instruction.trim().length > 0
-                    ? s.instruction
-                    : user_instruction,
-                } as Step;
-              })
-              .filter((s): s is Step => s !== null);
-
-            if (normalizedSteps.length > 0) {
-              parsedPlan = {
-                plan_summary: parsed.plan_summary || `Plan for: ${user_instruction}`,
-                steps: normalizedSteps,
-              };
-              plannerSource = "ai";
-            }
-          }
+    if (ai.ok && ai.json) {
+      const parsed = ai.json as { plan_summary?: string; steps?: any[] };
+      if (parsed && Array.isArray(parsed.steps) && parsed.steps.length > 0) {
+        const normalizedSteps: Step[] = parsed.steps
+          .map((s: any, i: number) => {
+            const slug = normalizeSlug(s?.agent_slug);
+            if (!slug) return null;
+            return {
+              step_index: typeof s.step_index === "number" ? s.step_index : i,
+              agent_slug: slug,
+              agent_name: KNOWN_AGENTS[slug],
+              capability: typeof s.capability === "string" ? s.capability : undefined,
+              needs_approval: s.needs_approval === true,
+              instruction: typeof s.instruction === "string" && s.instruction.trim().length > 0
+                ? s.instruction
+                : user_instruction,
+            } as Step;
+          })
+          .filter((s): s is Step => s !== null);
+        if (normalizedSteps.length > 0) {
+          parsedPlan = {
+            plan_summary: parsed.plan_summary || `Plan for: ${user_instruction}`,
+            steps: normalizedSteps,
+          };
+          plannerSource = "ai";
         }
-      } catch (e) {
-        console.warn("[orchestrate] AI planner failed, using fallback:", String(e));
       }
     } else {
-      console.warn("[orchestrate] ANTHROPIC_API_KEY missing, using fallback planner");
+      console.warn("[orchestrate] AI planner unavailable, using fallback:", ai.error);
     }
+
+
 
     if (!parsedPlan) {
       parsedPlan = fallbackPlan(user_instruction);
