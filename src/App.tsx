@@ -75,17 +75,21 @@ const App = () => (
   <QueryClientProvider client={queryClient}>
     <ThemeProvider>
       <TooltipProvider>
-        <AuthProvider>
-          <WorkspaceProvider>
-            <ClientProvider>
-              <ClientThemeProvider>
-                <Toaster />
-                <Sonner />
-                {import.meta.env.DEV && <VerificationPanel />}
+        <AppErrorBoundary>
+          <AuthProvider>
+            <WorkspaceProvider>
+              <ClientProvider>
+                <ClientThemeProvider>
+                  <Toaster />
+                  <Sonner />
+                  {import.meta.env.DEV && import.meta.env.VITE_ENABLE_VERIFICATION_PANEL === 'true' && (
+                    <AppErrorBoundary>
+                      <VerificationPanel />
+                    </AppErrorBoundary>
+                  )}
                 <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
                   <div className="relative min-h-screen w-full">
                     <AuthenticatedBackground />
-                  <AppErrorBoundary>
                   <Routes>
 
                     {/* Public Routes */}
@@ -370,7 +374,6 @@ const App = () => (
                     {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
                     <Route path="*" element={<NotFound />} />
                   </Routes>
-                  </AppErrorBoundary>
                 </div>
 
               </BrowserRouter>
@@ -378,6 +381,7 @@ const App = () => (
           </ClientProvider>
           </WorkspaceProvider>
         </AuthProvider>
+        </AppErrorBoundary>
       </TooltipProvider>
     </ThemeProvider>
   </QueryClientProvider>
