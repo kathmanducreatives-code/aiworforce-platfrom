@@ -113,7 +113,6 @@ Deno.serve(async (req) => {
   const brain = (brainRow?.profile ?? null) as CompanyBrain;
 
   const systemPrompt = `${agent.role_prompt ?? `You are ${agent.name}.`}\n\n${renderCompanyBrain(brain)}`;
-  const model = resolveModel(agent.model);
 
   // --- Tool layer: hawk + scout get live web research via Perplexity. ---
   let toolContext: string | null = null;
@@ -148,29 +147,39 @@ Deno.serve(async (req) => {
       ? `${buildUserMessage(instruction, input)}\n\nNOTE TO AGENT: ${toolNotice} Do NOT fabricate live data. Acknowledge the limitation, then produce the best plan/analysis you can from available context.`
       : buildUserMessage(instruction, input);
 
-  const result = await callAnthropicWithRetry(
-    {
-      model,
-      max_tokens: 2048,
-      system: systemPrompt,
-      messages: [{ role: "user", content: userMessage }],
-    },
-    Deno.env.get("ANTHROPIC_API_KEY")!,
-  );
+  const ai = await generateText({
+    taskType: "agent_execution",
+    systemPrompt,
+    messages: [{ role: "user", content: userMessage }],
+    temperature: 0.6,
+    maxTokens: 2048,
+    functionName: "run-agent",
+    agentSlug: agent_slug ?? undefined,
+    workspaceId: workspace_id,
+  });
 
-  let apiText = "";
-  let tokensIn = 0;
-  let tokensOut = 0;
+  await logProviderCall(supabase, {
+    workspace_id,
+    plan_id,
+    agent_id: agent.id,
+    function_name: "run-agent",
+    agent_slug: agent_slug ?? null,
+    task_type: "agent_execution",
+    provider: ai.provider,
+    model: ai.model,
+    success: ai.ok,
+    latency_ms: ai.latencyMs,
+    error_code: ai.errorCode,
+  });
+
+  let apiText = ai.ok ? ai.content : "";
+  const usage = (ai.usage ?? {}) as { prompt_tokens?: number; completion_tokens?: number; input_tokens?: number; output_tokens?: number };
+  const tokensIn = usage.prompt_tokens ?? usage.input_tokens ?? 0;
+  const tokensOut = usage.completion_tokens ?? usage.output_tokens ?? 0;
   let apiError: string | null = null;
+  if (!ai.ok) apiError = ai.error ?? "ai provider failed";
+  else if (!apiText) apiError = "empty content from AI provider";
 
-  if (result.ok) {
-    apiText = result.data?.content?.[0]?.text ?? "";
-    tokensIn = result.data?.usage?.input_tokens ?? 0;
-    tokensOut = result.data?.usage?.output_tokens ?? 0;
-    if (!apiText) apiError = "empty content from Anthropic";
-  } else {
-    apiError = result.error ?? "unknown anthropic error";
-  }
 
   if (apiError) {
     console.error("[run-agent] api failure:", apiError);
