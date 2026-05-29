@@ -103,6 +103,30 @@ export type Database = {
         }
         Relationships: []
       }
+      agent_capabilities: {
+        Row: {
+          agent_id: string
+          capability: string
+          config: Json
+          created_at: string
+          id: string
+        }
+        Insert: {
+          agent_id: string
+          capability: string
+          config?: Json
+          created_at?: string
+          id?: string
+        }
+        Update: {
+          agent_id?: string
+          capability?: string
+          config?: Json
+          created_at?: string
+          id?: string
+        }
+        Relationships: []
+      }
       agent_runs: {
         Row: {
           agent_id: string | null
@@ -1137,6 +1161,39 @@ export type Database = {
           signals?: Json | null
           updated_at?: string | null
           website?: string | null
+        }
+        Relationships: []
+      }
+      handoffs: {
+        Row: {
+          created_at: string
+          from_agent_slug: string | null
+          id: string
+          payload: Json
+          plan_id: string | null
+          task_id: string | null
+          to_agent_slug: string | null
+          workspace_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          from_agent_slug?: string | null
+          id?: string
+          payload?: Json
+          plan_id?: string | null
+          task_id?: string | null
+          to_agent_slug?: string | null
+          workspace_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          from_agent_slug?: string | null
+          id?: string
+          payload?: Json
+          plan_id?: string | null
+          task_id?: string | null
+          to_agent_slug?: string | null
+          workspace_id?: string | null
         }
         Relationships: []
       }
