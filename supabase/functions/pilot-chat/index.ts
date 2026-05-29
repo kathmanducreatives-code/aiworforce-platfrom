@@ -81,11 +81,7 @@ Deno.serve(async (req) => {
   const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
   const SUPABASE_ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY")!;
   const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-  const ANTHROPIC_API_KEY = Deno.env.get("ANTHROPIC_API_KEY");
 
-  if (!ANTHROPIC_API_KEY) {
-    return json({ error: "ANTHROPIC_API_KEY not configured" }, 500);
-  }
 
   // 1. JWT → user_id
   const authHeader = req.headers.get("Authorization");
