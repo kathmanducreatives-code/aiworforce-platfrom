@@ -19,21 +19,6 @@ const json = (body: unknown, status = 200) =>
     status,
     headers: { ...cors, "Content-Type": "application/json" },
   });
-
-const MODEL_MAP: Record<string, string> = {
-  "claude-haiku-4-5": "claude-haiku-4-5-20251001",
-  "claude-sonnet-4-5": "claude-sonnet-4-5-20250929",
-  "gpt-4o": "claude-haiku-4-5-20251001",
-  "gemini-2.5-flash": "claude-haiku-4-5-20251001",
-  "gemini-1.5-pro": "claude-sonnet-4-5-20250929",
-};
-const DEFAULT_MODEL = "claude-haiku-4-5-20251001";
-
-function resolveModel(raw: string | null | undefined): string {
-  if (!raw) return DEFAULT_MODEL;
-  return MODEL_MAP[raw] ?? DEFAULT_MODEL;
-}
-
 function buildUserMessage(instruction: string, input: string | null | undefined): string {
   if (!input) return `Task: ${instruction}`;
   return `Task: ${instruction}\n\nInput from previous step:\n${input}`;
@@ -48,39 +33,6 @@ function renderCompanyBrain(brain: CompanyBrain): string {
   return `<company_brain>\n${JSON.stringify(brain, null, 2)}\n</company_brain>`;
 }
 
-async function callAnthropicWithRetry(payload: unknown, apiKey: string) {
-  for (let attempt = 0; attempt < 2; attempt++) {
-    const ctrl = new AbortController();
-    const timer = setTimeout(() => ctrl.abort(), 30_000);
-    try {
-      const res = await fetch("https://api.anthropic.com/v1/messages", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "x-api-key": apiKey,
-          "anthropic-version": "2023-06-01",
-        },
-        body: JSON.stringify(payload),
-        signal: ctrl.signal,
-      });
-      clearTimeout(timer);
-      const data = await res.json();
-      if (res.ok) return { ok: true as const, data };
-      if (res.status >= 500 && attempt === 0) {
-        await new Promise((r) => setTimeout(r, 1000));
-        continue;
-      }
-      return { ok: false as const, data, error: `Anthropic ${res.status}` };
-    } catch (e) {
-      clearTimeout(timer);
-      if (attempt === 0) {
-        await new Promise((r) => setTimeout(r, 1000));
-        continue;
-      }
-      return { ok: false as const, data: null, error: `fetch failed: ${String(e)}` };
-    }
-  }
-  return { ok: false as const, data: null, error: "retry exhausted" };
 }
 
 Deno.serve(async (req) => {
