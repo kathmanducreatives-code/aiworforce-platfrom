@@ -14,6 +14,8 @@
 //     up "empty_plan" to the user.
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { generateJson, logProviderCall } from "../_shared/aiProvider.ts";
+
 
 const cors = {
   "Access-Control-Allow-Origin": "*",
