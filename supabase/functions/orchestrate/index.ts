@@ -150,7 +150,8 @@ Deno.serve(async (req) => {
   try {
     const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
     const SUPABASE_ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY")!;
-    const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+
+
     const ANTHROPIC_API_KEY = Deno.env.get("ANTHROPIC_API_KEY");
 
     const body = await req.json().catch(() => ({} as Record<string, unknown>));
