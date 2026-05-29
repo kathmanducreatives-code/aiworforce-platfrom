@@ -371,8 +371,11 @@ Return ONLY valid JSON, no explanation, no markdown:
         total_steps: parsedPlan.steps.length,
         conversation_id,
         planner: plannerSource,
+        provider: aiProvider,
+        model: aiModel,
         agents: parsedPlan.steps.map((s) => s.agent_slug),
       },
+
     });
 
     // Kick off first step (non-blocking).
