@@ -4,6 +4,7 @@
 // Auth:  verify_jwt = true (user identity needed for conversations.user_id)
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { generateJson, generateText, logProviderCall } from "../_shared/aiProvider.ts";
 
 const cors = {
   "Access-Control-Allow-Origin": "*",
@@ -16,7 +17,6 @@ const json = (body: unknown, status = 200, extra: HeadersInit = {}) =>
     headers: { ...cors, "Content-Type": "application/json", ...extra },
   });
 
-const PILOT_MODEL = "claude-sonnet-4-5-20250929";
 
 const PILOT_SYSTEM_PROMPT = `You are Pilot, the orchestrator of a five-agent AI workforce. Your job is
 to decide what to do with each user message.
