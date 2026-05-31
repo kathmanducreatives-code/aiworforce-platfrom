@@ -161,6 +161,38 @@ Deno.serve(async (req) => {
     content: message,
   });
 
+  // 5b. Daily-brief intent: deterministic route to daily-brief function.
+  const DAILY_BRIEF_RE =
+    /^\s*(brief me( on today)?|daily brief|today'?s (command )?brief|give me today'?s (command )?brief|what should i know today\??|what happened today\??|plan my day|what needs my attention\??)\s*[.!?]?\s*$/i;
+  if (DAILY_BRIEF_RE.test(message)) {
+    try {
+      const briefResp = await fetch(`${SUPABASE_URL}/functions/v1/daily-brief`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: authHeader,
+          apikey: SUPABASE_ANON_KEY,
+        },
+        body: JSON.stringify({ workspace_id: workspaceId, conversation_id: conversationId }),
+      });
+      if (briefResp.ok) {
+        const briefBody = await briefResp.json();
+        return json({
+          type: "reply",
+          intent: "daily_brief",
+          conversation_id: conversationId,
+          message: briefBody?.message ?? null,
+          connectors_missing: briefBody?.connectors_missing ?? [],
+        });
+      }
+      console.warn("[pilot-chat] daily-brief non-2xx, falling through:", briefResp.status);
+    } catch (e) {
+      console.warn("[pilot-chat] daily-brief threw, falling through:", e);
+    }
+  }
+
+
+
   // 6. Load last 20 messages for context
   const { data: history } = await admin
     .from("messages")
