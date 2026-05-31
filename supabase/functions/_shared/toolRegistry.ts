@@ -101,31 +101,190 @@ async function execResearchWeb(input: unknown): Promise<ToolResult> {
   return { ok: false, error: "Perplexity retry exhausted" };
 }
 
-// ---------- Tool: scrape_url (Firecrawl) — declared stub ----------
+// ---------- Tool: scrape_url (Firecrawl v2) ----------
+
+const FIRECRAWL_V2 = "https://api.firecrawl.dev/v2";
+
+function isValidHttpUrl(s: string): boolean {
+  try {
+    const u = new URL(s);
+    return u.protocol === "http:" || u.protocol === "https:";
+  } catch {
+    return false;
+  }
+}
+
+function truncate(s: unknown, max = 6000): string {
+  const str = typeof s === "string" ? s : "";
+  return str.length > max ? str.slice(0, max) + "\n…[truncated]" : str;
+}
+
+async function firecrawlFetch(
+  apiKey: string,
+  path: string,
+  body: unknown,
+  timeoutMs = 25_000,
+): Promise<{ ok: boolean; status: number; data: any }> {
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), timeoutMs);
+  try {
+    const res = await fetch(`${FIRECRAWL_V2}${path}`, {
+      method: "POST",
+      signal: ctrl.signal,
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(body),
+    });
+    const data = await res.json().catch(() => ({}));
+    return { ok: res.ok, status: res.status, data };
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+async function firecrawlGet(
+  apiKey: string,
+  path: string,
+  timeoutMs = 10_000,
+): Promise<{ ok: boolean; status: number; data: any }> {
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), timeoutMs);
+  try {
+    const res = await fetch(`${FIRECRAWL_V2}${path}`, {
+      signal: ctrl.signal,
+      headers: { Authorization: `Bearer ${apiKey}` },
+    });
+    const data = await res.json().catch(() => ({}));
+    return { ok: res.ok, status: res.status, data };
+  } finally {
+    clearTimeout(timer);
+  }
+}
 
 async function execScrapeUrl(input: unknown): Promise<ToolResult> {
   const FIRECRAWL_API_KEY = Deno.env.get("FIRECRAWL_API_KEY");
   if (!FIRECRAWL_API_KEY) {
     return { ok: false, unavailable: true, error: "FIRECRAWL_API_KEY not configured" };
   }
-  const i = (input ?? {}) as { url?: string };
-  if (!i.url) return { ok: false, error: "missing 'url'" };
-  // Minimal call; full Firecrawl wiring deferred.
-  try {
-    const res = await fetch("https://api.firecrawl.dev/v1/scrape", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${FIRECRAWL_API_KEY}`,
-        "Content-Type": "application/json",
+
+  const i = (input ?? {}) as { url?: string; extraction_goal?: string; max_pages?: number };
+  const url = (i.url ?? "").toString().trim();
+  const extraction_goal = (i.extraction_goal ?? "").toString();
+  const max_pages = Math.min(5, Math.max(1, Number(i.max_pages) || 1));
+
+  if (!url) return { ok: false, error: "missing 'url'" };
+  if (!isValidHttpUrl(url)) return { ok: false, error: "invalid_url" };
+
+  // Single-page scrape
+  if (max_pages === 1) {
+    let last: { ok: boolean; status: number; data: any } | null = null;
+    for (let attempt = 0; attempt < 2; attempt++) {
+      try {
+        last = await firecrawlFetch(FIRECRAWL_API_KEY, "/scrape", {
+          url,
+          formats: ["markdown", "summary"],
+          onlyMainContent: true,
+        });
+        if (last.ok) break;
+        if (last.status >= 500 && attempt === 0) {
+          await new Promise((r) => setTimeout(r, 800));
+          continue;
+        }
+        break;
+      } catch (e) {
+        if (attempt === 0) {
+          await new Promise((r) => setTimeout(r, 800));
+          continue;
+        }
+        return { ok: false, error: `Firecrawl fetch failed: ${String(e)}` };
+      }
+    }
+    if (!last) return { ok: false, error: "Firecrawl no response" };
+    if (last.status === 402) {
+      return { ok: false, unavailable: true, error: "firecrawl_insufficient_credits" };
+    }
+    if (last.status === 401 || last.status === 403) {
+      return { ok: false, unavailable: true, error: "firecrawl_unauthorized" };
+    }
+    if (!last.ok) {
+      return { ok: false, error: `Firecrawl ${last.status}: ${JSON.stringify(last.data?.error ?? last.data).slice(0, 300)}` };
+    }
+    // v2 returns { success, data: { markdown, summary, metadata } }
+    const doc = last.data?.data ?? last.data ?? {};
+    const metadata = doc.metadata ?? {};
+    return {
+      ok: true,
+      data: {
+        url,
+        source_url: metadata.sourceURL ?? url,
+        title: metadata.title ?? null,
+        markdown: truncate(doc.markdown, 12_000),
+        summary: doc.summary ?? null,
+        metadata,
+        extraction_goal,
       },
-      body: JSON.stringify({ url: i.url, formats: ["markdown"] }),
-    });
-    const data = await res.json().catch(() => ({}));
-    if (!res.ok) return { ok: false, error: `Firecrawl ${res.status}` };
-    return { ok: true, data };
-  } catch (e) {
-    return { ok: false, error: `Firecrawl fetch failed: ${String(e)}` };
+    };
   }
+
+  // Multi-page crawl
+  const startRes = await firecrawlFetch(FIRECRAWL_API_KEY, "/crawl", {
+    url,
+    limit: max_pages,
+    scrapeOptions: { formats: ["markdown"], onlyMainContent: true },
+  }).catch((e) => ({ ok: false, status: 0, data: { error: String(e) } }));
+
+  if (startRes.status === 402) return { ok: false, unavailable: true, error: "firecrawl_insufficient_credits" };
+  if (startRes.status === 401 || startRes.status === 403) return { ok: false, unavailable: true, error: "firecrawl_unauthorized" };
+  if (!startRes.ok) return { ok: false, error: `Firecrawl crawl ${startRes.status}` };
+
+  const jobId = startRes.data?.id ?? startRes.data?.data?.id;
+  if (!jobId) {
+    // Some responses return data inline.
+    const docs = startRes.data?.data ?? [];
+    return {
+      ok: true,
+      data: {
+        url,
+        source_url: url,
+        extraction_goal,
+        pages: (Array.isArray(docs) ? docs : []).map((d: any) => ({
+          url: d?.metadata?.sourceURL ?? null,
+          markdown: truncate(d?.markdown, 6000),
+          metadata: d?.metadata ?? {},
+        })),
+      },
+    };
+  }
+
+  // Poll up to ~25s
+  const deadline = Date.now() + 25_000;
+  let status: any = null;
+  while (Date.now() < deadline) {
+    await new Promise((r) => setTimeout(r, 2000));
+    const s = await firecrawlGet(FIRECRAWL_API_KEY, `/crawl/${jobId}`).catch(() => null);
+    if (!s) continue;
+    status = s.data;
+    if (status?.status === "completed" || status?.status === "failed") break;
+  }
+
+  const docs = Array.isArray(status?.data) ? status.data : [];
+  return {
+    ok: true,
+    data: {
+      url,
+      source_url: url,
+      extraction_goal,
+      partial: status?.status !== "completed",
+      pages: docs.slice(0, max_pages).map((d: any) => ({
+        url: d?.metadata?.sourceURL ?? null,
+        markdown: truncate(d?.markdown, 6000),
+        metadata: d?.metadata ?? {},
+      })),
+      truncated: docs.length > max_pages,
+    },
+  };
 }
 
 // ---------- Tool: send_email (Resend) — approval-gated stub ----------
