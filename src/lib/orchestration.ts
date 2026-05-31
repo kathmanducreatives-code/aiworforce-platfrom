@@ -225,12 +225,21 @@ export async function fetchApprovalsForPlan(planId: string): Promise<DBApproval[
   return (data ?? []) as unknown as DBApproval[];
 }
 
+export async function fetchToolCallsForPlan(planId: string): Promise<DBToolCall[]> {
+  const { data, error } = await supabase
+    .from('tool_calls' as any).select('*').eq('plan_id', planId)
+    .order('created_at', { ascending: true });
+  if (error) { console.error('fetchToolCallsForPlan', error); return []; }
+  return (data ?? []) as unknown as DBToolCall[];
+}
+
 export const subscribePlan = (planId: string, cb: () => void) => {
   const ch = supabase.channel(uniqueTopic(`realtime:plan:${planId}`))
     .on('postgres_changes' as any, { event: '*', schema: 'public', table: 'task_plans', filter: `id=eq.${planId}` }, cb)
     .on('postgres_changes' as any, { event: '*', schema: 'public', table: 'tasks', filter: `plan_id=eq.${planId}` }, cb)
     .on('postgres_changes' as any, { event: '*', schema: 'public', table: 'activity_feed', filter: `plan_id=eq.${planId}` }, cb)
     .on('postgres_changes' as any, { event: '*', schema: 'public', table: 'approvals', filter: `plan_id=eq.${planId}` }, cb)
+    .on('postgres_changes' as any, { event: '*', schema: 'public', table: 'tool_calls', filter: `plan_id=eq.${planId}` }, cb)
     .subscribe();
   return () => { supabase.removeChannel(ch); };
 };
