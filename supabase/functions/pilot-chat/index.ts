@@ -363,6 +363,18 @@ Deno.serve(async (req) => {
     ? `I created a ${stepsCount}-step plan: ${chain}.${approvalNote}${connectorNote}`
     : `On it. ${planSummary}`;
 
+  const planTitle: string = (orchBody?.plan_title || planSummary || "Execution plan").toString().slice(0, 140);
+  const announceMetadata = planId
+    ? {
+        type: "execution_plan",
+        plan_id: planId,
+        plan_title: planTitle,
+        task_count: stepsCount,
+        agents,
+        connector_limitations: connectorsMissing,
+      }
+    : {};
+
   const { data: announced } = await admin
     .from("messages")
     .insert({
@@ -371,7 +383,7 @@ Deno.serve(async (req) => {
       content: announce,
       agent_slug: "pilot",
       model_used: modelUsed,
-
+      metadata: announceMetadata,
     })
     .select("*")
     .single();
@@ -380,8 +392,11 @@ Deno.serve(async (req) => {
     type: "plan",
     conversation_id: conversationId,
     plan_id: planId,
+    plan_title: planTitle,
     plan_summary: planSummary,
     steps_count: stepsCount,
+    agents,
+    connector_limitations: connectorsMissing,
     message: announced,
   });
 });
