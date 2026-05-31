@@ -38,6 +38,7 @@ import MainLayout from "./components/MainLayout";
 import AuthenticatedBackground from "./components/AuthenticatedBackground";
 
 import CandidateApply from "./pages/CandidateApply";
+import OnboardingCompanyBrain from "./pages/OnboardingCompanyBrain";
 
 import ICPManager from "./pages/ICPManager";
 import ICPResultsPage from "./pages/ICPResultsPage";
@@ -105,6 +106,12 @@ const App = () => (
                         <MainLayout>
                           <Dashboard />
                         </MainLayout>
+                      </ProtectedRoute>
+                    } />
+
+                    <Route path="/onboarding/company-brain" element={
+                      <ProtectedRoute>
+                        <OnboardingCompanyBrain />
                       </ProtectedRoute>
                     } />
 
