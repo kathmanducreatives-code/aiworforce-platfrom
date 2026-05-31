@@ -777,16 +777,25 @@ export type Database = {
       }
       company_brain: {
         Row: {
+          created_at: string
+          onboarding_completed: boolean
+          onboarding_completed_at: string | null
           profile: Json
           updated_at: string
           workspace_id: string
         }
         Insert: {
+          created_at?: string
+          onboarding_completed?: boolean
+          onboarding_completed_at?: string | null
           profile?: Json
           updated_at?: string
           workspace_id: string
         }
         Update: {
+          created_at?: string
+          onboarding_completed?: boolean
+          onboarding_completed_at?: string | null
           profile?: Json
           updated_at?: string
           workspace_id?: string
@@ -2781,6 +2790,48 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      workspace_sources: {
+        Row: {
+          created_at: string
+          extracted_summary: string | null
+          id: string
+          label: string | null
+          last_checked_at: string | null
+          metadata: Json
+          source_type: string
+          status: string
+          updated_at: string
+          url: string
+          workspace_id: string
+        }
+        Insert: {
+          created_at?: string
+          extracted_summary?: string | null
+          id?: string
+          label?: string | null
+          last_checked_at?: string | null
+          metadata?: Json
+          source_type: string
+          status?: string
+          updated_at?: string
+          url: string
+          workspace_id: string
+        }
+        Update: {
+          created_at?: string
+          extracted_summary?: string | null
+          id?: string
+          label?: string | null
+          last_checked_at?: string | null
+          metadata?: Json
+          source_type?: string
+          status?: string
+          updated_at?: string
+          url?: string
+          workspace_id?: string
+        }
+        Relationships: []
       }
       workspaces: {
         Row: {
