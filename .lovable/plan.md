@@ -1,139 +1,118 @@
-## Goal
+# Company Brain Onboarding Flow
 
-Make Pilot a real workforce orchestrator: convert user intent into multi-step plans with the right agents, tools, approval gates, and expected outputs. No UI changes. Keep architecture: pilot-chat → orchestrate → task_plans/tasks → run-agent → toolRegistry.
+A guided 5-step setup that runs after signup so every workspace has structured context that Pilot and all agents consume. Nothing existing is removed: Pilot, ChatWorkspace, WorkspaceContext, aiProvider, orchestrate, run-agent, toolRegistry, task_plans, tasks, activity_feed, approvals, and agents stay as-is.
 
-## Files changed
+## Database (migration)
 
-1. `supabase/functions/pilot-chat/index.ts` — stronger orchestrator system prompt + richer delegate announcement.
-2. `supabase/functions/orchestrate/index.ts` — richer planner prompt, expanded `Step` schema, deterministic expansion, tool-availability annotation, improved persistence + activity log.
-3. `supabase/functions/_shared/toolRegistry.ts` — small helper `isToolConfigured(name)` so orchestrate can flag missing connectors without trying to execute.
+Existing `company_brain` is `(workspace_id, profile jsonb, updated_at)`. Extend it without breaking:
 
-No new tables, no migrations, no RLS changes. All extra fields are stored inside the existing `task_plans.steps` JSON column (already JSONB).
-
-## 1. Pilot system prompt (pilot-chat)
-
-Rewrite `PILOT_SYSTEM_PROMPT` so Pilot knows:
-- It is the orchestrator/router/planner — not a chatbot.
-- DELEGATE is the default whenever the user asks for sourcing, research/extraction, competitive intel, outreach, content, or screening. REPLY only for greetings, capability questions, or pure clarifications.
-- Trigger word groups (A–F from spec) are listed verbatim so the decision is stable.
-- When delegating, the `instruction` it forwards must be a complete restated work order, including any URL, count, role, geography, criteria, or recipient mentioned by the user.
-
-Output contract unchanged: `{ "decision": "reply" | "delegate", ... }`.
-
-## 2. Orchestrate planner
-
-### Expanded step schema
-
-```ts
-type Step = {
-  step_index: number;
-  agent_slug: 'scout'|'aria'|'penn'|'hawk'|'scribe';
-  agent_name: string;
-  task_title: string;          // short
-  task_description: string;    // full instruction for run-agent
-  instruction: string;         // = task_description, kept for back-compat
-  tool_needed: 'research_web'|'scrape_url'|'summarize_text'|'extract_structured'|'draft_outreach'|'send_email'|null;
-  expected_output: string;
-  success_criteria: string;
-  requires_approval: boolean;
-  needs_approval: boolean;     // alias, kept for run-agent back-compat
-  planner_source: 'ai'|'fallback'|'expansion';
-  tool_status?: 'ready'|'connector_required';
-  connector_required?: string; // e.g. 'PERPLEXITY_API_KEY'
-};
+```sql
+ALTER TABLE public.company_brain
+  ADD COLUMN IF NOT EXISTS onboarding_completed boolean NOT NULL DEFAULT false,
+  ADD COLUMN IF NOT EXISTS onboarding_completed_at timestamptz,
+  ADD COLUMN IF NOT EXISTS created_at timestamptz NOT NULL DEFAULT now();
 ```
 
-### New planner prompt
+All structured fields (company_name, company_summary, website_url, linkedin_company_url, founder_linkedin_url, target_customer_profile, target_candidate_profile, offer_summary, brand_voice, outreach_style, do_not_say, avoid_targets, competitors, approved_sources, active_goals, agent_instructions, pilot_followup_qa) live inside the existing `profile` JSONB so we don't fight the current shape.
 
-Reworked to:
-- Enumerate the six workflow archetypes (A–F) with their default agent chains.
-- List the tool catalog (`research_web`, `scrape_url`, `summarize_text`, `extract_structured`, `draft_outreach`, `send_email`) and which agents may use each.
-- Require Pilot's plan to include `task_title`, `task_description`, `tool_needed`, `expected_output`, `success_criteria`, `requires_approval`.
-- Force `send_email` and any external write step to `requires_approval: true`.
-- Forbid claiming live data was retrieved.
+New table `workspace_sources`:
 
-### Deterministic expansion (runs after model output, before persistence)
+```sql
+CREATE TABLE public.workspace_sources (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  workspace_id uuid NOT NULL,
+  source_type text NOT NULL,   -- website|linkedin_company|founder_linkedin|careers_page|competitor|case_study|booking|document|other
+  url text NOT NULL,
+  label text,
+  status text NOT NULL DEFAULT 'pending',
+  extracted_summary text,
+  last_checked_at timestamptz,
+  metadata jsonb DEFAULT '{}'::jsonb,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  updated_at timestamptz NOT NULL DEFAULT now()
+);
 
-`expandPlan(instruction, steps)` rules:
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.workspace_sources TO authenticated;
+GRANT ALL ON public.workspace_sources TO service_role;
 
-- **Sourcing** (`find|source|candidates|engineers|developers|leads|prospects|founders|companies`): if plan lacks Scout, prepend Scout(research_web/scrape_url); if lacks Aria, append Aria(extract_structured); if lacks Penn, append Penn(draft_outreach, requires_approval).
-- **Extraction from URL** (contains `http(s)://` or `from this (url|website|page)`): ensure first step is Hawk or Scout with `tool_needed=scrape_url`.
-- **Competitor / latest / today** (`competitor|market|today|latest|monitor|changed|funding|hiring|pricing|launches`): ensure a Hawk step with `tool_needed=research_web`; append Scribe summary if any "brief/report/summary" word present.
-- **Outreach/send** (`send|email|outreach|follow.?up|message|sequence`): ensure Penn step; if user asked to send, append a `send_email` step with `requires_approval=true`; never auto-send.
-- **Content** (`write|post|linkedin|blog|brief|memo|report|summary`): ensure Scribe; prepend Hawk/Scout research only if user asked for "current/today/latest" facts.
-- **Ranking** (`rank|screen|score|shortlist|evaluate|compare|fit`): ensure Aria; do not add Penn unless user asked for outreach.
-- **"Brief me on today"** default plan: Scribe (internal activity + pending approvals + active plans) → Hawk(research_web) only if Perplexity is configured.
+ALTER TABLE public.workspace_sources ENABLE ROW LEVEL SECURITY;
 
-After expansion, `step_index` is renumbered 0..n-1 and `planner_source` set to `'expansion'` for any step the expander added.
-
-### Tool-availability annotation
-
-Use a new `isToolConfigured(name)` from toolRegistry:
-- `research_web` → `PERPLEXITY_API_KEY`
-- `scrape_url` → `FIRECRAWL_API_KEY`
-- `send_email` → `RESEND_API_KEY`
-- `summarize_text`, `extract_structured`, `draft_outreach` → always ready (Lovable AI Gateway).
-
-For each step with a `tool_needed`, set `tool_status = 'ready' | 'connector_required'` and `connector_required = '<ENV_VAR>'` when missing. The plan is still created; run-agent already returns a graceful unavailable result when the tool is missing.
-
-### Persistence
-
-- Insert into `task_plans` as today, with the richer `steps` JSON.
-- Also write the `intent` (sourcing/research/intel/outreach/content/screening/brief/general) into the `steps[0]` parent or as a top-level field on the plan summary string — no new column.
-- Keep kicking off step 0 via `run-agent` (unchanged).
-- Activity feed `plan_created` event metadata gets `intent`, `tools_required`, `connectors_missing`.
-
-### Response back to pilot-chat
-
-`orchestrate` already returns `plan_summary`, `total_steps`, `task_plan_id`. Add `agents: string[]`, `intent: string`, `connectors_missing: string[]`.
-
-## 3. pilot-chat announcement upgrade
-
-After receiving the orchestrate response, build the announcement from the new fields:
-
-> "I created a {N}-step plan: {Agent1} will {verb1}, {Agent2} will {verb2}, …. {ApprovalNote}{ConnectorNote}"
-
-- `verbN` derived from `task_title`.
-- `ApprovalNote`: "Penn will pause for your approval before sending." when any step has `requires_approval` + `tool_needed=send_email`.
-- `ConnectorNote`: "Live {capability} requires a {connector} connector." when `connectors_missing` is non-empty (mapped to friendly names: Perplexity, Firecrawl, Resend).
-
-## 4. toolRegistry helper
-
-Add and export:
-
-```ts
-const TOOL_ENV: Record<string, string> = {
-  research_web: 'PERPLEXITY_API_KEY',
-  scrape_url:   'FIRECRAWL_API_KEY',
-  send_email:   'RESEND_API_KEY',
-};
-export function isToolConfigured(name: string): { ready: boolean; env?: string } {
-  const env = TOOL_ENV[name];
-  if (!env) return { ready: true };
-  return { ready: !!Deno.env.get(env), env };
-}
+CREATE POLICY "Members manage workspace sources"
+  ON public.workspace_sources FOR ALL TO authenticated
+  USING (has_workspace_access(auth.uid(), workspace_id))
+  WITH CHECK (has_workspace_access(auth.uid(), workspace_id));
 ```
 
-No behavior change to existing `runTool`.
+## Backend — new edge function `setup-company-brain`
 
-## Safety rules preserved
+`supabase/functions/setup-company-brain/index.ts`. Auth via JWT, verifies workspace membership via `has_workspace_access`. Actions (selected by `action` field):
 
-- RLS untouched; workspace membership still checked in orchestrate.
-- `send_email` and any external write stay approval-gated via toolRegistry; orchestrate only marks intent, it never bypasses approvals.
-- No mock data: if a tool is `connector_required`, the plan is created but tasks declare `tool_status='connector_required'` and Pilot's reply tells the user which connector to add.
-- API keys remain server-side only.
+- `save_basics` — persist Step 1 fields into `company_brain.profile`.
+- `save_sources` — upsert URLs into `workspace_sources`.
+- `analyze` — Step 3: call `aiProvider` (Lovable AI Gateway) with the provided basics + sources to draft `company_summary`, `target_customer_profile`, `offer_summary`, `brand_voice`, `competitors`, `agent_instructions`. If `isToolConfigured('scrape_url')` or `research_web` is ready, optionally enrich via `runTool` from `toolRegistry`; otherwise return `{enriched:false, reason:"connectors_missing"}` and proceed with manual data only. No hallucinated facts — prompt instructs the model to leave fields empty when unknown.
+- `generate_followups` — return 3–5 Pilot follow-up questions generated from current profile.
+- `save_followups` — store answers under `profile.pilot_followup_qa`.
+- `finalize` — merge everything into `company_brain.profile`, set `onboarding_completed=true`, `onboarding_completed_at=now()`, write an `activity_feed` "onboarding_completed" entry (non-blocking).
 
-## Verification (after build)
+All AI/tool calls server-side only; never exposes keys. Wraps every external call in try/catch so failures don't block onboarding.
 
-Manually trigger each prompt from the chat and confirm via `task_plans` + `activity_feed`:
+## Frontend — onboarding flow
 
-1. "Find 10 React engineers in London" → 3 steps Scout→Aria→Penn, Penn requires_approval=true.
-2. "Extract hiring signals from this competitor careers page: https://example.com/careers" → Hawk(scrape_url) + Scribe.
-3. "What changed at our top 3 competitors today?" → Hawk(research_web); if no Perplexity, connector_required note in announcement.
-4. "Draft outreach to the top candidates" → Penn draft; no send_email step unless user said "send".
-5. "Write a LinkedIn post about our Q4 wins" → Scribe only.
-6. "Rank these 5 candidates for a senior React role" → Aria only.
-7. "Brief me on today" → Scribe internal brief (+ Hawk if Perplexity present).
-8. "hello" → REPLY, no plan.
+New route `/onboarding/company-brain` (added in `src/App.tsx`, protected). Page `src/pages/OnboardingCompanyBrain.tsx` containing a stepper with 5 steps:
 
-Final report after implementation will list: files changed, exact prompt diffs, deterministic rules added, new step metadata fields, test outcomes per prompt, and any connectors still missing in this workspace.
+1. **Company Basics** — form for company_name, website_url, linkedin_company_url, founder_linkedin_url (optional), short_description, current_primary_goal (radio: leads/hiring/competitors/outreach/content/other).
+2. **Sources & References** — dynamic list of URL inputs grouped by source_type; all optional.
+3. **AI Company Understanding** — calls `setup-company-brain { action:"analyze" }`, shows draft profile fields user can edit. If connectors missing, shows yellow notice: "Live enrichment requires Perplexity or Firecrawl. You can still complete setup manually." Retry button.
+4. **Pilot Follow-up Questions** — fetches via `generate_followups`, renders 3–5 textareas, saves via `save_followups`.
+5. **Success** — copy "Your AI workforce is ready" with per-agent lines (Scout/Aria/Penn/Hawk/Scribe) and quick action buttons (Brief me on today / Find leads like my ICP / Analyze competitors / Draft outreach / Create a hiring plan). Each navigates to `/dashboard` and prefills the ChatWorkspace composer via a new lightweight event/context hook (`window.dispatchEvent(new CustomEvent('pilot:prefill', { detail: prompt }))` already-compatible pattern; ChatWorkspace will subscribe).
+
+### Onboarding gating
+
+New hook `useCompanyBrain()` reads `company_brain` for current workspace. Update `MainLayout` (or `Dashboard`) to:
+- If `!loading && workspaceId && !brain.onboarding_completed` and route is not `/onboarding/*`, render a non-blocking dashboard banner "Complete Company Brain Setup" linking to `/onboarding/company-brain`.
+- After fresh signup (`Auth.tsx` success handler), `navigate('/onboarding/company-brain')` instead of `/dashboard`.
+- User can click "Skip for now" to land on dashboard; banner persists until completed.
+
+## Agent context injection
+
+Add `supabase/functions/_shared/companyBrain.ts` exporting `loadCompanyBrainContext(admin, workspace_id)` that returns a compact text block (company summary, ICP, brand voice, outreach style, do_not_say, competitors, agent_instructions, active goals). Wire it into:
+
+- `pilot-chat/index.ts` — prepend to system prompt.
+- `orchestrate/index.ts` — include in planner prompt so intent expansion respects ICP & goals.
+- `run-agent/index.ts` — inject into each agent's per-run system prompt; agent-specific slices already exist conceptually (Scout→ICP, Aria→ranking, Penn→tone/outreach_style/do_not_say, Hawk→competitors, Scribe→brand_voice). One helper, agent-aware via `agent_slug`.
+
+No prompt rewrites beyond this prefix; the existing orchestrator logic stays.
+
+## Safety
+
+- All RLS preserved; new policies workspace-scoped.
+- AI/tool failures caught and surfaced as warnings, never block save.
+- No API keys in frontend; `setup-company-brain` is the only path.
+- No changes to backend project, no disabling of RLS.
+
+## Files
+
+New:
+- `supabase/migrations/<ts>_company_brain_onboarding.sql`
+- `supabase/functions/setup-company-brain/index.ts`
+- `supabase/functions/_shared/companyBrain.ts`
+- `src/pages/OnboardingCompanyBrain.tsx`
+- `src/components/onboarding/StepBasics.tsx`, `StepSources.tsx`, `StepAnalyze.tsx`, `StepFollowups.tsx`, `StepSuccess.tsx`
+- `src/hooks/useCompanyBrain.ts`
+
+Edited:
+- `src/App.tsx` — add `/onboarding/company-brain` route
+- `src/pages/Auth.tsx` — post-signup redirect
+- `src/pages/Dashboard.tsx` — onboarding reminder banner
+- `src/components/ChatWorkspace*.tsx` — listen for `pilot:prefill` event
+- `supabase/functions/pilot-chat/index.ts`, `orchestrate/index.ts`, `run-agent/index.ts` — inject Company Brain
+
+## Verification
+
+1. New signup → redirected to `/onboarding/company-brain`.
+2. Fill basics + sources → rows in `company_brain.profile` and `workspace_sources`.
+3. Step 3 analyze → returns draft fields; with no Perplexity/Firecrawl shows warning, still proceeds.
+4. Step 4 → 3–5 questions generated, answers saved under `profile.pilot_followup_qa`.
+5. Step 5 finalize → `onboarding_completed=true`, dashboard loads without banner.
+6. Pilot "Find leads for my company" → orchestrator plan reflects saved ICP.
+7. Pilot "Draft outreach" → Penn step uses saved brand voice / outreach style / do_not_say.
