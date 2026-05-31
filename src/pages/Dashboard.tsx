@@ -180,6 +180,8 @@ const Dashboard = () => {
     <div className="min-h-screen bg-transparent">
       <div className="max-w-[1280px] mx-auto px-6 lg:px-8 py-6">
 
+        <CompanyBrainBanner />
+
         {/* Onboarding Wizard — only shows for new users */}
         <OnboardingWizard totalCandidates={metrics.totalCandidates} />
 
