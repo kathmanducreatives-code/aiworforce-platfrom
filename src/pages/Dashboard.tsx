@@ -440,4 +440,24 @@ const Dashboard = () => {
   );
 };
 
+function CompanyBrainBanner() {
+  const navigate = useNavigate();
+  const { data, loading } = useCompanyBrain();
+  if (loading || !data || data.onboarding_completed) return null;
+  return (
+    <div className="mb-6 flex flex-col sm:flex-row sm:items-center justify-between gap-3 rounded-2xl border border-primary/30 bg-primary/5 p-4">
+      <div className="flex items-center gap-3">
+        <Sparkles className="h-4 w-4 text-primary" />
+        <div>
+          <div className="text-sm font-semibold">Complete Company Brain Setup</div>
+          <div className="text-xs text-muted-foreground">Teach Pilot, Scout, Aria, Penn, Hawk, and Scribe about your company.</div>
+        </div>
+      </div>
+      <button onClick={() => navigate('/onboarding/company-brain')} className="text-sm font-semibold text-primary hover:underline">
+        Set up now →
+      </button>
+    </div>
+  );
+}
+
 export default Dashboard;
