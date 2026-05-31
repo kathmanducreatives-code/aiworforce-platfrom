@@ -173,10 +173,21 @@ Deno.serve(async (req) => {
     .filter((m: any) => m.role === "user" || m.role === "assistant")
     .map((m: any) => ({ role: m.role, content: m.content }));
 
+  // 6b. Load company brain for context
+  const { data: brainRow } = await admin
+    .from("company_brain")
+    .select("profile, onboarding_completed")
+    .eq("workspace_id", workspaceId)
+    .maybeSingle();
+  const brain = (brainRow?.profile ?? {}) as Record<string, unknown>;
+  const brainBlock = Object.keys(brain).length
+    ? `\n\nCOMPANY BRAIN (workspace context — use to ground every decision):\n${JSON.stringify(brain, null, 2)}`
+    : `\n\nCOMPANY BRAIN: (empty — workspace has not completed onboarding yet. If the user asks for work that requires company context, suggest completing onboarding at /onboarding/company-brain.)`;
+
   // 7. Ask Pilot brain via the AI provider adapter (Lovable AI Gateway default).
   const ai = await generateJson({
     taskType: "pilot_chat",
-    systemPrompt: PILOT_SYSTEM_PROMPT,
+    systemPrompt: PILOT_SYSTEM_PROMPT + brainBlock,
     messages: msgs,
     temperature: 0.4,
     maxTokens: 1024,
