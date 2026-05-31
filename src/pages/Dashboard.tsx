@@ -20,6 +20,8 @@ import HandoffFeedItem, { HandoffEvent } from "@/components/dashboard/HandoffFee
 
 import { useWorkspace } from "@/contexts/WorkspaceContext";
 import { useActivityFeed } from "@/hooks/useActivityFeed";
+import { useCompanyBrain } from "@/hooks/useCompanyBrain";
+import { Sparkles } from "lucide-react";
 
 const FALLBACK_HANDOFFS: HandoffEvent[] = [
   {
