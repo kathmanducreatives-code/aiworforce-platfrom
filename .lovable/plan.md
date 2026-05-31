@@ -1,118 +1,114 @@
-# Company Brain Onboarding Flow
+# Daily Brief That Works
 
-A guided 5-step setup that runs after signup so every workspace has structured context that Pilot and all agents consume. Nothing existing is removed: Pilot, ChatWorkspace, WorkspaceContext, aiProvider, orchestrate, run-agent, toolRegistry, task_plans, tasks, activity_feed, approvals, and agents stay as-is.
+Make "Brief me on today" deterministic: detect the intent in `pilot-chat`, build a structured brief from real workspace data via a new `daily-brief` edge function, summarize with the AI provider (formatting only, no fabrication), and return it as a normal assistant message. No frontend redesign, no removal of existing modules.
 
-## Database (migration)
+## Files changed
 
-Existing `company_brain` is `(workspace_id, profile jsonb, updated_at)`. Extend it without breaking:
+1. **NEW** `supabase/functions/daily-brief/index.ts` — builder + responder
+2. **EDIT** `supabase/functions/pilot-chat/index.ts` — daily-brief intent detection, runs before AI decision call
+3. **EDIT** `supabase/config.toml` — register `daily-brief` with `verify_jwt = false` only if needed (we'll validate JWT in code, mirroring `pilot-chat`)
 
-```sql
-ALTER TABLE public.company_brain
-  ADD COLUMN IF NOT EXISTS onboarding_completed boolean NOT NULL DEFAULT false,
-  ADD COLUMN IF NOT EXISTS onboarding_completed_at timestamptz,
-  ADD COLUMN IF NOT EXISTS created_at timestamptz NOT NULL DEFAULT now();
+No DB migrations. No frontend changes. `ChatWorkspace` already renders markdown assistant messages.
+
+## Routing (pilot-chat)
+
+Before calling `generateJson`, run a regex/intent match on the trimmed message:
+
+```
+/^\s*(brief me( on today)?|daily brief|today'?s brief|what should i know today|what happened today|give me today'?s (command )?brief|plan my day|what needs my attention)\b/i
 ```
 
-All structured fields (company_name, company_summary, website_url, linkedin_company_url, founder_linkedin_url, target_customer_profile, target_candidate_profile, offer_summary, brand_voice, outreach_style, do_not_say, avoid_targets, competitors, approved_sources, active_goals, agent_instructions, pilot_followup_qa) live inside the existing `profile` JSONB so we don't fight the current shape.
+If matched:
+- Persist the user message (already done above the AI call — keep that order).
+- Call `daily-brief` server-to-server, forwarding the user JWT and `{ workspace_id, conversation_id }`.
+- `daily-brief` returns `{ message }` (the saved assistant row).
+- Return `{ type: "reply", conversation_id, message, intent: "daily_brief" }`.
+- Skip orchestrate and the normal `generateJson` path entirely.
 
-New table `workspace_sources`:
+Fallback: if `daily-brief` returns non-2xx, fall through to the existing AI decision path (so chat never breaks).
 
-```sql
-CREATE TABLE public.workspace_sources (
-  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  workspace_id uuid NOT NULL,
-  source_type text NOT NULL,   -- website|linkedin_company|founder_linkedin|careers_page|competitor|case_study|booking|document|other
-  url text NOT NULL,
-  label text,
-  status text NOT NULL DEFAULT 'pending',
-  extracted_summary text,
-  last_checked_at timestamptz,
-  metadata jsonb DEFAULT '{}'::jsonb,
-  created_at timestamptz NOT NULL DEFAULT now(),
-  updated_at timestamptz NOT NULL DEFAULT now()
-);
+Routing priority becomes: **daily_brief → AI decision (reply/delegate) → orchestrate**.
 
-GRANT SELECT, INSERT, UPDATE, DELETE ON public.workspace_sources TO authenticated;
-GRANT ALL ON public.workspace_sources TO service_role;
+## daily-brief function
 
-ALTER TABLE public.workspace_sources ENABLE ROW LEVEL SECURITY;
+Auth, membership, and conversation handling mirror `pilot-chat`:
+- Verify Bearer JWT via `auth.getUser`.
+- Check `workspace_members`.
+- Validate `conversation_id` belongs to user, or create one.
 
-CREATE POLICY "Members manage workspace sources"
-  ON public.workspace_sources FOR ALL TO authenticated
-  USING (has_workspace_access(auth.uid(), workspace_id))
-  WITH CHECK (has_workspace_access(auth.uid(), workspace_id));
-```
+### Data collection (parallel queries, admin client, scoped to `workspace_id`)
 
-## Backend — new edge function `setup-company-brain`
+| Section | Source | Query |
+|---|---|---|
+| Active Plans | `task_plans` | `status in ('active','running','pending')` order by `created_at desc` limit 10; for each, count `tasks` and fetch next pending task title |
+| Tasks Needing Attention | `tasks` | `workspace_id = ? and status in ('pending','waiting','failed','requires_approval','blocked')` limit 20 — include `agent_slug`, `status`, `title`, last error if column exists |
+| Pending Approvals | `approvals` | `workspace_id = ? and status = 'pending'` limit 20 |
+| Recent Agent Activity | `activity_feed` | `workspace_id = ? and created_at >= now() - interval '24 hours'` order desc limit 10 |
+| Outreach Status | `tasks` + `approvals` | filter `agent_slug = 'penn'` |
+| Company Brain | `company_brain` | `profile, onboarding_completed` |
 
-`supabase/functions/setup-company-brain/index.ts`. Auth via JWT, verifies workspace membership via `has_workspace_access`. Actions (selected by `action` field):
+All queries wrapped in `try/catch`; missing tables/columns degrade to "section empty" — never crash the brief.
 
-- `save_basics` — persist Step 1 fields into `company_brain.profile`.
-- `save_sources` — upsert URLs into `workspace_sources`.
-- `analyze` — Step 3: call `aiProvider` (Lovable AI Gateway) with the provided basics + sources to draft `company_summary`, `target_customer_profile`, `offer_summary`, `brand_voice`, `competitors`, `agent_instructions`. If `isToolConfigured('scrape_url')` or `research_web` is ready, optionally enrich via `runTool` from `toolRegistry`; otherwise return `{enriched:false, reason:"connectors_missing"}` and proceed with manual data only. No hallucinated facts — prompt instructs the model to leave fields empty when unknown.
-- `generate_followups` — return 3–5 Pilot follow-up questions generated from current profile.
-- `save_followups` — store answers under `profile.pilot_followup_qa`.
-- `finalize` — merge everything into `company_brain.profile`, set `onboarding_completed=true`, `onboarding_completed_at=now()`, write an `activity_feed` "onboarding_completed" entry (non-blocking).
+### Connector detection
 
-All AI/tool calls server-side only; never exposes keys. Wraps every external call in try/catch so failures don't block onboarding.
+Use existing `isToolConfigured` from `_shared/toolRegistry.ts`:
+- `research_web` → PERPLEXITY
+- `scrape_url` → FIRECRAWL
+- `send_email` → RESEND
+- Lovable AI gateway: `!!Deno.env.get("LOVABLE_API_KEY")`
 
-## Frontend — onboarding flow
+Build a `connectors` object: `{ research_web: ready, scrape_url: ready, send_email: ready, lovable_ai: ready }`.
 
-New route `/onboarding/company-brain` (added in `src/App.tsx`, protected). Page `src/pages/OnboardingCompanyBrain.tsx` containing a stepper with 5 steps:
+### Optional Hawk live intelligence
 
-1. **Company Basics** — form for company_name, website_url, linkedin_company_url, founder_linkedin_url (optional), short_description, current_primary_goal (radio: leads/hiring/competitors/outreach/content/other).
-2. **Sources & References** — dynamic list of URL inputs grouped by source_type; all optional.
-3. **AI Company Understanding** — calls `setup-company-brain { action:"analyze" }`, shows draft profile fields user can edit. If connectors missing, shows yellow notice: "Live enrichment requires Perplexity or Firecrawl. You can still complete setup manually." Retry button.
-4. **Pilot Follow-up Questions** — fetches via `generate_followups`, renders 3–5 textareas, saves via `save_followups`.
-5. **Success** — copy "Your AI workforce is ready" with per-agent lines (Scout/Aria/Penn/Hawk/Scribe) and quick action buttons (Brief me on today / Find leads like my ICP / Analyze competitors / Draft outreach / Create a hiring plan). Each navigates to `/dashboard` and prefills the ChatWorkspace composer via a new lightweight event/context hook (`window.dispatchEvent(new CustomEvent('pilot:prefill', { detail: prompt }))` already-compatible pattern; ChatWorkspace will subscribe).
+For v1: **do not auto-spawn a Hawk run**. Just include the connector-status line. Auto-spawning would slow the brief and add side effects. The "Recommended Next Actions" can suggest "Run Hawk to gather today's market signals" when `research_web.ready === true`. (Flag this in the report so the user can ask us to auto-run later.)
 
-### Onboarding gating
+### Assembly
 
-New hook `useCompanyBrain()` reads `company_brain` for current workspace. Update `MainLayout` (or `Dashboard`) to:
-- If `!loading && workspaceId && !brain.onboarding_completed` and route is not `/onboarding/*`, render a non-blocking dashboard banner "Complete Company Brain Setup" linking to `/onboarding/company-brain`.
-- After fresh signup (`Auth.tsx` success handler), `navigate('/onboarding/company-brain')` instead of `/dashboard`.
-- User can click "Skip for now" to land on dashboard; banner persists until completed.
+Build a deterministic markdown skeleton in code using the data above. Then call `generateJson` (or a plain `generateText`-equivalent through `aiProvider`) with:
+- system: "You format a founder daily brief. Use ONLY the JSON facts provided. Do not invent plans, tasks, approvals, activity, or market data. Keep tone tight and actionable. Output markdown matching the section headings exactly."
+- user: `{ facts: <collected structured data>, connectors, company_brain_summary }` as JSON
 
-## Agent context injection
+If the provider fails, return the deterministic markdown skeleton directly (no AI polish) — brief still works.
 
-Add `supabase/functions/_shared/companyBrain.ts` exporting `loadCompanyBrainContext(admin, workspace_id)` that returns a compact text block (company summary, ICP, brand voice, outreach style, do_not_say, competitors, agent_instructions, active goals). Wire it into:
+### Recommended Next Actions logic (deterministic, max 5)
 
-- `pilot-chat/index.ts` — prepend to system prompt.
-- `orchestrate/index.ts` — include in planner prompt so intent expansion respects ICP & goals.
-- `run-agent/index.ts` — inject into each agent's per-run system prompt; agent-specific slices already exist conceptually (Scout→ICP, Aria→ranking, Penn→tone/outreach_style/do_not_say, Hawk→competitors, Scribe→brand_voice). One helper, agent-aware via `agent_slug`.
+Pushed in this priority order:
+1. If `company_brain.onboarding_completed !== true` → "Complete Company Brain setup at /onboarding/company-brain"
+2. If `!connectors.research_web` → "Connect Perplexity for live market intelligence"
+3. If `!connectors.scrape_url` → "Connect Firecrawl to enable site extraction"
+4. If any pending approval → "Review N pending approval(s)"
+5. If any failed task → "Fix N failed task(s)"
+6. If no active plans → "Start a new plan — try 'Find 20 React engineers in Berlin'"
+7. If active plan has next pending task → "Resume <plan title>"
 
-No prompt rewrites beyond this prefix; the existing orchestrator logic stays.
+### Hallucination guards
 
-## Safety
+- The AI prompt only sees the JSON facts; no web access.
+- Intelligence Status section text is hard-coded based on `connectors.research_web`:
+  - configured: "Live research available via Perplexity. Ask 'Have Hawk gather today's market signals' to run it."
+  - not configured: "Live market and competitor intelligence requires Perplexity or Firecrawl. I can still summarize internal workspace activity."
+- No "today's market changed" phrasing allowed in prompt instructions.
 
-- All RLS preserved; new policies workspace-scoped.
-- AI/tool failures caught and surfaced as warnings, never block save.
-- No API keys in frontend; `setup-company-brain` is the only path.
-- No changes to backend project, no disabling of RLS.
+### Save & return
 
-## Files
+Insert assistant row into `messages` with `agent_slug = 'pilot'`, `model_used`, content = final markdown. Return `{ message, conversation_id, intent: "daily_brief", connectors_missing }`.
 
-New:
-- `supabase/migrations/<ts>_company_brain_onboarding.sql`
-- `supabase/functions/setup-company-brain/index.ts`
-- `supabase/functions/_shared/companyBrain.ts`
-- `src/pages/OnboardingCompanyBrain.tsx`
-- `src/components/onboarding/StepBasics.tsx`, `StepSources.tsx`, `StepAnalyze.tsx`, `StepFollowups.tsx`, `StepSuccess.tsx`
-- `src/hooks/useCompanyBrain.ts`
+## Verification (manual in Preview)
 
-Edited:
-- `src/App.tsx` — add `/onboarding/company-brain` route
-- `src/pages/Auth.tsx` — post-signup redirect
-- `src/pages/Dashboard.tsx` — onboarding reminder banner
-- `src/components/ChatWorkspace*.tsx` — listen for `pilot:prefill` event
-- `supabase/functions/pilot-chat/index.ts`, `orchestrate/index.ts`, `run-agent/index.ts` — inject Company Brain
+1. "Brief me on today" → structured brief, no clarification.
+2. "What should I know today?" → same.
+3. Empty workspace → all sections say empty; recommended actions include onboarding + connectors.
+4. Workspace with `task_plans` → Active Plans populated.
+5. Pending approval row → appears under Pending Approvals.
+6. PERPLEXITY missing → Intelligence Status says connector required; no fake facts.
+7. PERPLEXITY set → Intelligence Status invites Hawk run.
 
-## Verification
+## Final report (to be written after build)
 
-1. New signup → redirected to `/onboarding/company-brain`.
-2. Fill basics + sources → rows in `company_brain.profile` and `workspace_sources`.
-3. Step 3 analyze → returns draft fields; with no Perplexity/Firecrawl shows warning, still proceeds.
-4. Step 4 → 3–5 questions generated, answers saved under `profile.pilot_followup_qa`.
-5. Step 5 finalize → `onboarding_completed=true`, dashboard loads without banner.
-6. Pilot "Find leads for my company" → orchestrator plan reflects saved ICP.
-7. Pilot "Draft outreach" → Penn step uses saved brand voice / outreach style / do_not_say.
+- Files changed list
+- Confirm `daily-brief` function added and deployed
+- How each section is queried (table + filter)
+- How connector status uses `isToolConfigured`
+- Hallucination prevention (facts-only prompt, hard-coded intelligence text, deterministic fallback markdown)
+- Test results from the 7 scenarios above
