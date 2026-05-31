@@ -1,114 +1,65 @@
-# Daily Brief That Works
+# Execution Plan Cards
 
-Make "Brief me on today" deterministic: detect the intent in `pilot-chat`, build a structured brief from real workspace data via a new `daily-brief` edge function, summarize with the AI provider (formatting only, no fabrication), and return it as a normal assistant message. No frontend redesign, no removal of existing modules.
+Render a compact Execution Plan card inline under the assistant announce message in `ChatView` whenever pilot-chat returned a delegation. Reuse existing plan loading (`usePlanDetail`) and realtime (`subscribePlan`) — extend only for `tool_calls`. Tie messages to plans via a new `messages.metadata` JSONB column populated by `pilot-chat`. No app redesign, no removal of existing modules.
 
 ## Files changed
 
-1. **NEW** `supabase/functions/daily-brief/index.ts` — builder + responder
-2. **EDIT** `supabase/functions/pilot-chat/index.ts` — daily-brief intent detection, runs before AI decision call
-3. **EDIT** `supabase/config.toml` — register `daily-brief` with `verify_jwt = false` only if needed (we'll validate JWT in code, mirroring `pilot-chat`)
+### Backend
+1. **Migration** — add `messages.metadata jsonb not null default '{}'::jsonb`. No RLS change (existing policies cover it).
+2. **EDIT** `supabase/functions/pilot-chat/index.ts` — on the delegation branch, persist `metadata: { type: "execution_plan", plan_id, plan_title, task_count, agents, connector_limitations }` with the assistant announce message. Return it in the response too.
 
-No DB migrations. No frontend changes. `ChatWorkspace` already renders markdown assistant messages.
+### Frontend
+3. **EDIT** `src/lib/orchestration.ts` — add `DBToolCall` type, `fetchToolCallsForPlan(planId)`, and extend `subscribePlan` to also watch `tool_calls` rows where `plan_id = eq.<planId>` (callback registered before `.subscribe()`, existing cleanup preserved).
+4. **EDIT** `src/hooks/usePlanDetail.ts` — also fetch + expose `toolCalls`. (Single hook reused by both the existing ConversationView and the new card; realtime already debounces via re-fetch on every change.)
+5. **EDIT** `src/lib/pilotChat.ts` — extend `ChatMessageRow` with optional `metadata: Record<string, unknown> | null`; extend `PilotChatResult` plan variant with `plan_title?`, `agents?`, `connector_limitations?`.
+6. **EDIT** `src/hooks/useChatConversation.ts` — include `metadata` in the message select and the realtime payload mapping (read-only; existing subscription pattern preserved).
+7. **NEW** `src/components/chat/workspace/plan/ExecutionPlanCard.tsx` — top-level card. Reads `usePlanDetail(planId)`. Shows header, task list, activity mini-feed, connector limitations. Mobile-stacked.
+8. **NEW** `src/components/chat/workspace/plan/ExecutionTaskRow.tsx` — one row per task: step #, agent badge, title, status, description, expected_output (from `task.payload.expected_output`), success_criteria (from `task.payload.success_criteria`), tool_needed badge, approval badge, latest tool_call status, output preview, error.
+9. **NEW** `src/components/chat/workspace/plan/AgentBadge.tsx` — slug → name, color, initial circle. Reuses `AGENT_BY_ID` + `AGENT_HEX` already in `ChatView`.
+10. **NEW** `src/components/chat/workspace/plan/ToolStatusBadge.tsx` — given `tool_needed` + latest `tool_call`, render: configured/missing for `research_web|scrape_url|send_email|summarize_text|extract_structured`; live status (queued/running/succeeded/failed/unavailable/awaiting approval); provider; short error; citations count from `output_json.citations`.
+11. **NEW** `src/components/chat/workspace/plan/ApprovalBadge.tsx` — read-only pending/approved/rejected pill. v1: no Approve/Reject actions wired; clicking "Review" calls `setView({kind:'conversation', planId})` to open the existing `ConversationView` where `ApprovalCard` already handles approve/reject.
+12. **NEW** `src/components/chat/workspace/plan/ActivityMiniFeed.tsx` — latest 3–5 plan activity events (`plan_created`, `task_started`, `task_completed`, `tool_used`, `tool_failed`, `approval_created`, `ai_provider_call`).
+13. **EDIT** `src/components/chat/workspace/ChatView.tsx` — after the existing assistant bubble, if `m.metadata?.type === "execution_plan"` and `metadata.plan_id`, render `<ExecutionPlanCard planId={...} compact />`.
 
-## Routing (pilot-chat)
+## Tool-needed source of truth
 
-Before calling `generateJson`, run a regex/intent match on the trimmed message:
+`tasks.payload` is a JSONB written by orchestrate with fields like `tool_needed`, `expected_output`, `success_criteria`, `requires_approval`. The card reads them defensively (`task.payload?.tool_needed`, etc.) — no schema change. Connector configuration availability is exposed via `connector_limitations` returned by `pilot-chat` (already populated from orchestrate). The frontend treats this as the source of truth (no client-side env check).
 
-```
-/^\s*(brief me( on today)?|daily brief|today'?s brief|what should i know today|what happened today|give me today'?s (command )?brief|plan my day|what needs my attention)\b/i
-```
+## Tool calls join
 
-If matched:
-- Persist the user message (already done above the AI call — keep that order).
-- Call `daily-brief` server-to-server, forwarding the user JWT and `{ workspace_id, conversation_id }`.
-- `daily-brief` returns `{ message }` (the saved assistant row).
-- Return `{ type: "reply", conversation_id, message, intent: "daily_brief" }`.
-- Skip orchestrate and the normal `generateJson` path entirely.
+`fetchToolCallsForPlan(planId)` selects `tool_calls where plan_id = ? order by created_at asc`. The card groups them by `task_id`. Each task row picks the latest by `created_at` to render `ToolStatusBadge`.
 
-Fallback: if `daily-brief` returns non-2xx, fall through to the existing AI decision path (so chat never breaks).
+## Realtime safety
 
-Routing priority becomes: **daily_brief → AI decision (reply/delegate) → orchestrate**.
+`subscribePlan` already follows the rules: single channel, all `.on('postgres_changes', ...)` calls before `.subscribe()`, cleanup via `supabase.removeChannel`. The edit adds one more `.on(...)` for `tool_calls` in the same chained call (still before `subscribe`). No new channels are opened by `ExecutionPlanCard`; it just consumes `usePlanDetail`. StrictMode double-mount safety is already handled by the existing `uniqueTopic()` helper.
 
-## daily-brief function
+If a card is missing `planId`, it renders nothing (no channel, no fetch).
 
-Auth, membership, and conversation handling mirror `pilot-chat`:
-- Verify Bearer JWT via `auth.getUser`.
-- Check `workspace_members`.
-- Validate `conversation_id` belongs to user, or create one.
+## Approval actions
 
-### Data collection (parallel queries, admin client, scoped to `workspace_id`)
+Read-only in v1: badges show pending/approved/rejected; an inline "Review" button opens the existing plan ConversationView (which already wires `ApprovalCard`). Documented as TODO for inline approve in v2 — keeps `approve-and-continue` flow untouched.
 
-| Section | Source | Query |
-|---|---|---|
-| Active Plans | `task_plans` | `status in ('active','running','pending')` order by `created_at desc` limit 10; for each, count `tasks` and fetch next pending task title |
-| Tasks Needing Attention | `tasks` | `workspace_id = ? and status in ('pending','waiting','failed','requires_approval','blocked')` limit 20 — include `agent_slug`, `status`, `title`, last error if column exists |
-| Pending Approvals | `approvals` | `workspace_id = ? and status = 'pending'` limit 20 |
-| Recent Agent Activity | `activity_feed` | `workspace_id = ? and created_at >= now() - interval '24 hours'` order desc limit 10 |
-| Outreach Status | `tasks` + `approvals` | filter `agent_slug = 'penn'` |
-| Company Brain | `company_brain` | `profile, onboarding_completed` |
+## Visual
 
-All queries wrapped in `try/catch`; missing tables/columns degrade to "section empty" — never crash the brief.
+- Dark Deep Space card: `rounded-xl border border-white/[0.06] bg-white/[0.03]` to match existing structured bubble.
+- Agent dot/name with existing `AGENT_HEX` palette (Scout blue, Aria purple, Penn emerald, Hawk teal, Scribe violet).
+- Mobile: task rows stack vertically, badges wrap.
+- Failed/unavailable: amber/red icon + short text, not modal/scary.
 
-### Connector detection
+## Verification (manual in preview)
 
-Use existing `isToolConfigured` from `_shared/toolRegistry.ts`:
-- `research_web` → PERPLEXITY
-- `scrape_url` → FIRECRAWL
-- `send_email` → RESEND
-- Lovable AI gateway: `!!Deno.env.get("LOVABLE_API_KEY")`
+1. "Find 10 React engineers in London" → assistant bubble + Execution Plan card with Scout/Aria/Scribe/Penn rows, `research_web` flagged "Perplexity required" (no Perplexity key in env).
+2. "Draft outreach…" → Penn row shows "Approval required" badge.
+3. Send `approve-and-continue` from existing flow → realtime updates card statuses live.
+4. Empty plan_id (pure reply) → no card rendered.
+5. Mobile viewport → card stacks, no horizontal scroll.
 
-Build a `connectors` object: `{ research_web: ready, scrape_url: ready, send_email: ready, lovable_ai: ready }`.
-
-### Optional Hawk live intelligence
-
-For v1: **do not auto-spawn a Hawk run**. Just include the connector-status line. Auto-spawning would slow the brief and add side effects. The "Recommended Next Actions" can suggest "Run Hawk to gather today's market signals" when `research_web.ready === true`. (Flag this in the report so the user can ask us to auto-run later.)
-
-### Assembly
-
-Build a deterministic markdown skeleton in code using the data above. Then call `generateJson` (or a plain `generateText`-equivalent through `aiProvider`) with:
-- system: "You format a founder daily brief. Use ONLY the JSON facts provided. Do not invent plans, tasks, approvals, activity, or market data. Keep tone tight and actionable. Output markdown matching the section headings exactly."
-- user: `{ facts: <collected structured data>, connectors, company_brain_summary }` as JSON
-
-If the provider fails, return the deterministic markdown skeleton directly (no AI polish) — brief still works.
-
-### Recommended Next Actions logic (deterministic, max 5)
-
-Pushed in this priority order:
-1. If `company_brain.onboarding_completed !== true` → "Complete Company Brain setup at /onboarding/company-brain"
-2. If `!connectors.research_web` → "Connect Perplexity for live market intelligence"
-3. If `!connectors.scrape_url` → "Connect Firecrawl to enable site extraction"
-4. If any pending approval → "Review N pending approval(s)"
-5. If any failed task → "Fix N failed task(s)"
-6. If no active plans → "Start a new plan — try 'Find 20 React engineers in Berlin'"
-7. If active plan has next pending task → "Resume <plan title>"
-
-### Hallucination guards
-
-- The AI prompt only sees the JSON facts; no web access.
-- Intelligence Status section text is hard-coded based on `connectors.research_web`:
-  - configured: "Live research available via Perplexity. Ask 'Have Hawk gather today's market signals' to run it."
-  - not configured: "Live market and competitor intelligence requires Perplexity or Firecrawl. I can still summarize internal workspace activity."
-- No "today's market changed" phrasing allowed in prompt instructions.
-
-### Save & return
-
-Insert assistant row into `messages` with `agent_slug = 'pilot'`, `model_used`, content = final markdown. Return `{ message, conversation_id, intent: "daily_brief", connectors_missing }`.
-
-## Verification (manual in Preview)
-
-1. "Brief me on today" → structured brief, no clarification.
-2. "What should I know today?" → same.
-3. Empty workspace → all sections say empty; recommended actions include onboarding + connectors.
-4. Workspace with `task_plans` → Active Plans populated.
-5. Pending approval row → appears under Pending Approvals.
-6. PERPLEXITY missing → Intelligence Status says connector required; no fake facts.
-7. PERPLEXITY set → Intelligence Status invites Hawk run.
-
-## Final report (to be written after build)
+## Final report (after build)
 
 - Files changed list
-- Confirm `daily-brief` function added and deployed
-- How each section is queried (table + filter)
-- How connector status uses `isToolConfigured`
-- Hallucination prevention (facts-only prompt, hard-coded intelligence text, deterministic fallback markdown)
-- Test results from the 7 scenarios above
+- Migration applied (`messages.metadata`)
+- pilot-chat metadata payload sample
+- Realtime channel topology (one channel per visible plan, already-existing pattern)
+- Components added
+- Approval action status (read-only v1, opens ConversationView for action)
+- Test results from the 5 scenarios
