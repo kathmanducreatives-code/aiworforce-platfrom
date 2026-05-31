@@ -101,6 +101,10 @@ export default function ChatView({ conversationId, agentSlug, pendingUserText, a
         const slug = m.agent_slug ?? agentSlug;
         const name = AGENT_BY_ID[slug]?.name ?? slug;
         const structured = isStructured(m.content);
+        const meta = (m.metadata ?? null) as Record<string, any> | null;
+        const planMeta = meta && meta.type === 'execution_plan' && typeof meta.plan_id === 'string'
+          ? meta as { plan_id: string; plan_title?: string; task_count?: number; agents?: string[]; connector_limitations?: string[] }
+          : null;
         return (
           <div key={m.id} className="flex items-start gap-3">
             <InitialCircle slug={slug} />
@@ -115,6 +119,17 @@ export default function ChatView({ conversationId, agentSlug, pendingUserText, a
                 <div className={cn('text-[14px] leading-relaxed whitespace-pre-wrap', m.is_error ? 'text-[#7D8590]' : 'text-[#F0F6FC]')}>
                   {m.content}
                 </div>
+              )}
+              {planMeta && (
+                <ExecutionPlanCard
+                  planId={planMeta.plan_id}
+                  meta={{
+                    plan_title: planMeta.plan_title,
+                    task_count: planMeta.task_count,
+                    agents: planMeta.agents,
+                    connector_limitations: planMeta.connector_limitations,
+                  }}
+                />
               )}
             </div>
           </div>
