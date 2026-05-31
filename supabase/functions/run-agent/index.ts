@@ -114,11 +114,13 @@ Deno.serve(async (req) => {
 
   const systemPrompt = `${agent.role_prompt ?? `You are ${agent.name}.`}\n\n${renderCompanyBrain(brain)}`;
 
-  // --- Tool layer: hawk + scout get live web research via Perplexity. ---
+  // --- Tool layer: hawk + scout get live tools (Firecrawl scrape, Perplexity research). ---
   let toolContext: string | null = null;
-  let toolNotice: string | null = null;
+  let scrapedContext: string | null = null;
+  const toolNotices: string[] = [];
+
   if (agent_slug === "hawk" || agent_slug === "scout") {
-    const toolRes = await runTool("research_web", { query: instruction }, {
+    const baseCtx = {
       admin: supabase,
       workspace_id,
       agent_slug,
@@ -127,22 +129,58 @@ Deno.serve(async (req) => {
       plan_id,
       task_id: task.id,
       user_id: user_id ?? null,
-    });
+    };
+
+    // 1) Firecrawl scrape — if instruction/input contains URLs.
+    const urlRe = /https?:\/\/[^\s)\]"'<>]+/g;
+    const haystack = `${instruction ?? ""}\n${input ?? ""}`;
+    const urls = Array.from(new Set((haystack.match(urlRe) ?? []).map((u) => u.replace(/[.,;:]+$/, "")))).slice(0, 3);
+
+    if (urls.length > 0) {
+      const blocks: string[] = [];
+      for (const u of urls) {
+        const r = await runTool("scrape_url", { url: u, extraction_goal: instruction, max_pages: 1 }, baseCtx);
+        if (r.ok && r.data) {
+          const d = r.data as { source_url?: string; title?: string; markdown?: string; summary?: string };
+          blocks.push(`SOURCE: ${d.source_url ?? u}${d.title ? ` — ${d.title}` : ""}${d.summary ? `\nSUMMARY: ${d.summary}` : ""}\n\n${d.markdown ?? ""}`);
+        } else if (r.unavailable) {
+          toolNotices.push(`Firecrawl unavailable for ${u} (${r.error ?? "not configured"}).`);
+        } else if (!r.ok) {
+          toolNotices.push(`Scrape failed for ${u}: ${r.error ?? "unknown"}.`);
+        }
+      }
+      if (blocks.length > 0) {
+        scrapedContext = `SCRAPED CONTENT (Firecrawl):\n\n${blocks.join("\n\n---\n\n")}`;
+      }
+    }
+
+    // 2) Perplexity research — keep behavior, but never block on unavailable.
+    const toolRes = await runTool("research_web", { query: instruction }, baseCtx);
     if (toolRes.ok && toolRes.data) {
       const d = toolRes.data as { content?: string; citations?: string[] };
       const citations = (d.citations ?? []).slice(0, 8).map((c, i) => `[${i + 1}] ${c}`).join("\n");
       toolContext = `LIVE RESEARCH (Perplexity):\n${d.content ?? ""}\n\nCITATIONS:\n${citations}`;
     } else if (toolRes.unavailable) {
-      toolNotice = agent_slug === "scout"
-        ? "Live candidate discovery requires the Perplexity / Firecrawl / Apollo connector. I can still produce the sourcing plan."
-        : "Live research requires the Perplexity connector to be configured.";
+      // Only note Perplexity if Firecrawl didn't already provide grounding.
+      if (!scrapedContext) {
+        toolNotices.push(
+          agent_slug === "scout"
+            ? "Live candidate discovery requires the Perplexity / Firecrawl / Apollo connector. Continuing with available context."
+            : "Live web research (Perplexity) is not configured. Continuing with available context.",
+        );
+      }
     } else if (!toolRes.ok) {
-      toolNotice = `Research tool failed: ${toolRes.error ?? "unknown"}.`;
+      toolNotices.push(`Research tool failed: ${toolRes.error ?? "unknown"}.`);
     }
   }
 
-  const userMessage = toolContext
-    ? `${buildUserMessage(instruction, input)}\n\n${toolContext}`
+  const contextParts: string[] = [];
+  if (scrapedContext) contextParts.push(scrapedContext);
+  if (toolContext) contextParts.push(toolContext);
+  const toolNotice = toolNotices.length > 0 ? toolNotices.join(" ") : null;
+
+  const userMessage = contextParts.length > 0
+    ? `${buildUserMessage(instruction, input)}\n\n${contextParts.join("\n\n")}${toolNotice ? `\n\nNOTE TO AGENT: ${toolNotice} Do NOT fabricate data beyond what is provided.` : ""}`
     : toolNotice
       ? `${buildUserMessage(instruction, input)}\n\nNOTE TO AGENT: ${toolNotice} Do NOT fabricate live data. Acknowledge the limitation, then produce the best plan/analysis you can from available context.`
       : buildUserMessage(instruction, input);
