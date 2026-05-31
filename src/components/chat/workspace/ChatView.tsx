@@ -3,6 +3,7 @@ import { Copy, Check } from 'lucide-react';
 import { useChatConversation } from '@/hooks/useChatConversation';
 import { AGENT_BY_ID } from '@/data/agentProfiles';
 import { cn } from '@/lib/utils';
+import ExecutionPlanCard from './plan/ExecutionPlanCard';
 
 const AGENT_HEX: Record<string, string> = {
   scout: '#3B82F6', aria: '#8B5CF6', penn: '#10B981', hawk: '#14B8A6', scribe: '#A855F7',
