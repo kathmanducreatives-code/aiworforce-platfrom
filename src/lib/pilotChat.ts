@@ -25,6 +25,7 @@ export interface ChatMessageRow {
   tokens_used: number | null;
   is_error: boolean;
   created_at: string;
+  metadata?: Record<string, unknown> | null;
 }
 
 export type PilotChatResult =
@@ -38,8 +39,11 @@ export type PilotChatResult =
       conversation_id: string;
       message: ChatMessageRow;
       plan_id: string;
+      plan_title?: string;
       plan_summary: string;
       steps_count: number;
+      agents?: string[];
+      connector_limitations?: string[];
     };
 
 export async function pilotChat(input: PilotChatInput): Promise<PilotChatResult> {
