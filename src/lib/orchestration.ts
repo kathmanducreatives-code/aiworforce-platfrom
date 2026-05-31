@@ -161,8 +161,26 @@ export interface DBTask {
   status: 'pending' | 'running' | 'complete' | 'failed' | 'skipped';
   input: any;
   output: any;
+  payload?: any;
   started_at: string | null;
   finished_at: string | null;
+  created_at: string;
+}
+
+export interface DBToolCall {
+  id: string;
+  workspace_id: string;
+  plan_id: string | null;
+  task_id: string | null;
+  agent_id: string | null;
+  tool_name: string;
+  provider: string;
+  input_json: any;
+  output_json: any;
+  status: 'queued' | 'running' | 'succeeded' | 'failed' | 'unavailable' | 'awaiting_approval' | string;
+  error: string | null;
+  started_at: string | null;
+  completed_at: string | null;
   created_at: string;
 }
 
