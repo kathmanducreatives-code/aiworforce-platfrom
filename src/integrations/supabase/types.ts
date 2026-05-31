@@ -1748,6 +1748,7 @@ export type Database = {
           created_at: string
           id: string
           is_error: boolean
+          metadata: Json
           model_used: string | null
           role: string
           tokens_used: number | null
@@ -1759,6 +1760,7 @@ export type Database = {
           created_at?: string
           id?: string
           is_error?: boolean
+          metadata?: Json
           model_used?: string | null
           role: string
           tokens_used?: number | null
@@ -1770,6 +1772,7 @@ export type Database = {
           created_at?: string
           id?: string
           is_error?: boolean
+          metadata?: Json
           model_used?: string | null
           role?: string
           tokens_used?: number | null

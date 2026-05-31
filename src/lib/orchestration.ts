@@ -161,8 +161,26 @@ export interface DBTask {
   status: 'pending' | 'running' | 'complete' | 'failed' | 'skipped';
   input: any;
   output: any;
+  payload?: any;
   started_at: string | null;
   finished_at: string | null;
+  created_at: string;
+}
+
+export interface DBToolCall {
+  id: string;
+  workspace_id: string;
+  plan_id: string | null;
+  task_id: string | null;
+  agent_id: string | null;
+  tool_name: string;
+  provider: string;
+  input_json: any;
+  output_json: any;
+  status: 'queued' | 'running' | 'succeeded' | 'failed' | 'unavailable' | 'awaiting_approval' | string;
+  error: string | null;
+  started_at: string | null;
+  completed_at: string | null;
   created_at: string;
 }
 
@@ -207,12 +225,21 @@ export async function fetchApprovalsForPlan(planId: string): Promise<DBApproval[
   return (data ?? []) as unknown as DBApproval[];
 }
 
+export async function fetchToolCallsForPlan(planId: string): Promise<DBToolCall[]> {
+  const { data, error } = await supabase
+    .from('tool_calls' as any).select('*').eq('plan_id', planId)
+    .order('created_at', { ascending: true });
+  if (error) { console.error('fetchToolCallsForPlan', error); return []; }
+  return (data ?? []) as unknown as DBToolCall[];
+}
+
 export const subscribePlan = (planId: string, cb: () => void) => {
   const ch = supabase.channel(uniqueTopic(`realtime:plan:${planId}`))
     .on('postgres_changes' as any, { event: '*', schema: 'public', table: 'task_plans', filter: `id=eq.${planId}` }, cb)
     .on('postgres_changes' as any, { event: '*', schema: 'public', table: 'tasks', filter: `plan_id=eq.${planId}` }, cb)
     .on('postgres_changes' as any, { event: '*', schema: 'public', table: 'activity_feed', filter: `plan_id=eq.${planId}` }, cb)
     .on('postgres_changes' as any, { event: '*', schema: 'public', table: 'approvals', filter: `plan_id=eq.${planId}` }, cb)
+    .on('postgres_changes' as any, { event: '*', schema: 'public', table: 'tool_calls', filter: `plan_id=eq.${planId}` }, cb)
     .subscribe();
   return () => { supabase.removeChannel(ch); };
 };
