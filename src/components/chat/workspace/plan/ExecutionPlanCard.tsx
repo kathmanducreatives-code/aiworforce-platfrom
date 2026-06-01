@@ -73,6 +73,7 @@ export default function ExecutionPlanCard({ planId, meta }: Props) {
       const s = lim.toLowerCase();
       if (s.includes('perplexity')) keys.add('perplexity');
       if (s.includes('firecrawl')) keys.add('firecrawl');
+      if (s.includes('apify')) keys.add('apify');
       if (s.includes('resend')) keys.add('resend');
     }
     return keys;
