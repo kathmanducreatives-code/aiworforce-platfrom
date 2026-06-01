@@ -293,8 +293,53 @@ const APIFY_BASE = "https://api.apify.com/v2";
 
 // Actor catalog. Fill `actor_id` once the user provides the Apify actor for that source_type.
 // `null` => unavailable for that source_type until configured.
-const APIFY_ACTORS: Record<string, { actor_id: string | null; description: string }> = {
-  jobs:           { actor_id: null, description: "Find companies hiring for specific roles" },
+type ApifyActorCfg = {
+  actor_id: string | null;
+  description: string;
+  // Optional adapter: map our generic source_with_apify input to this actor's input schema.
+  input_adapter?: (i: {
+    query?: string | null;
+    location?: string | null;
+    role_keywords?: string[] | null;
+    max_results: number;
+    user_input?: Record<string, unknown>;
+  }) => Record<string, unknown>;
+};
+
+function buildLinkedInJobsSearchUrl(keywords: string | null | undefined, location: string | null | undefined): string {
+  const params = new URLSearchParams();
+  if (keywords && keywords.trim()) params.set("keywords", keywords.trim());
+  if (location && location.trim()) params.set("location", location.trim());
+  params.set("position", "1");
+  params.set("pageNum", "0");
+  return `https://www.linkedin.com/jobs/search/?${params.toString()}`;
+}
+
+const APIFY_ACTORS: Record<string, ApifyActorCfg> = {
+  jobs: {
+    actor_id: "curious_coder/linkedin-jobs-scraper",
+    description: "Scrape public LinkedIn jobs search results with company details",
+    input_adapter: ({ query, location, role_keywords, max_results, user_input }) => {
+      // Prefer explicit role_keywords joined into a query; fall back to query.
+      const kwFromRoles = Array.isArray(role_keywords) && role_keywords.length > 0
+        ? role_keywords.join(" ")
+        : null;
+      const keywords = (user_input?.keywords as string | undefined)
+        ?? kwFromRoles
+        ?? query
+        ?? null;
+      const urls = Array.isArray(user_input?.urls) && (user_input!.urls as unknown[]).length > 0
+        ? (user_input!.urls as string[])
+        : [buildLinkedInJobsSearchUrl(keywords, location)];
+      // Actor minimum is 10.
+      const count = Math.max(10, Math.min(100, max_results));
+      return {
+        urls,
+        count,
+        scrapeCompany: user_input?.scrapeCompany ?? true,
+      };
+    },
+  },
   companies:      { actor_id: null, description: "Find companies matching a query" },
   linkedin_posts: { actor_id: null, description: "Find people posting about hiring/problems" },
   comments:       { actor_id: null, description: "Find comments on relevant posts" },
