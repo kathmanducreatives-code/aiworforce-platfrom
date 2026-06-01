@@ -7,6 +7,9 @@ import CommandBar from "./dock/CommandBar";
 import CommandDock from "./dock/CommandDock";
 import ChatWorkspace from "./chat/workspace/ChatWorkspace";
 import AgentBuilderModal from "./agents/AgentBuilderModal";
+import RouteErrorBoundary from "./RouteErrorBoundary";
+import WorkspaceGate from "./WorkspaceGate";
+import ChatErrorBoundary from "./chat/workspace/ChatErrorBoundary";
 import { ChatWorkspaceProvider } from "@/contexts/ChatWorkspaceContext";
 import { useIsMobile } from "@/hooks/use-mobile";
 
