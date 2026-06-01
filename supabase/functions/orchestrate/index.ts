@@ -69,6 +69,7 @@ const KNOWN_AGENTS: Record<string, string> = {
 const TOOL_FRIENDLY: Record<string, string> = {
   PERPLEXITY_API_KEY: "Perplexity",
   FIRECRAWL_API_KEY: "Firecrawl",
+  APIFY_API_TOKEN: "Apify",
   RESEND_API_KEY: "Resend",
 };
 
