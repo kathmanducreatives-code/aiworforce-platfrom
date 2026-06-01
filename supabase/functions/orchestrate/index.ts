@@ -267,10 +267,10 @@ function expandPlan(instruction: string, intent: Intent, steps: Step[]): Step[] 
   if (intent === "sourcing") {
     if (!has("scout")) {
       steps.unshift(
-        mkStep(0, "scout", "Source candidates", `Find candidates for: ${instruction}`, {
-          tool_needed: "research_web",
-          expected_output: "Candidate list with name, role, company, source link.",
-          success_criteria: "At least 5 candidates returned.",
+        mkStep(0, "scout", "Source companies/leads via Apify", `Find candidates for: ${instruction}`, {
+          tool_needed: "source_with_apify",
+          expected_output: "Sourced leads with name, company, title, url, location.",
+          success_criteria: "Apify returns results or a clear actor-not-configured message.",
           planner_source: "expansion",
         }),
       );
