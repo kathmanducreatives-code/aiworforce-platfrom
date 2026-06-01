@@ -23,6 +23,7 @@ const json = (body: unknown, status = 200) =>
 type ToolName =
   | "research_web"
   | "scrape_url"
+  | "source_with_apify"
   | "summarize_text"
   | "extract_structured"
   | "draft_outreach"
