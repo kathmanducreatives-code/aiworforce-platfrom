@@ -529,17 +529,18 @@ AGENTS:
 - scribe = content, summaries, briefs, posts, reports
 
 TOOLS:
-- research_web      (perplexity)  allowed: hawk, scout
-- scrape_url        (firecrawl)   allowed: hawk, scout
-- summarize_text    (gemini)      allowed: aria, scribe, hawk, scout
-- extract_structured(gemini)      allowed: aria, scribe, hawk, scout
-- draft_outreach    (gemini)      allowed: penn
-- send_email        (resend)      allowed: penn — ALWAYS requires_approval=true
+- research_web        (perplexity) allowed: hawk, scout
+- scrape_url          (firecrawl)  allowed: hawk, scout
+- source_with_apify   (apify)      allowed: scout, hawk — PREFERRED for finding companies/leads/hiring signals/jobs/posts
+- summarize_text      (gemini)     allowed: aria, scribe, hawk, scout
+- extract_structured  (gemini)     allowed: aria, scribe, hawk, scout
+- draft_outreach      (gemini)     allowed: penn
+- send_email          (resend)     allowed: penn — ALWAYS requires_approval=true
 
 WORKFLOW ARCHETYPES (use as defaults, deepen when useful):
-A. Sourcing  -> scout(research_web|scrape_url) -> aria(extract_structured) -> penn(draft_outreach, approval)
+A. Sourcing  -> scout(source_with_apify) -> aria(extract_structured) -> penn(draft_outreach, approval)
 B. Extraction from URL -> hawk(scrape_url) -> scribe(summarize_text)
-C. Intelligence -> hawk(research_web) -> scribe(summarize_text) when a brief/report is asked for
+C. Intelligence -> hawk(research_web or source_with_apify when looking up job/company signals) -> scribe(summarize_text) when a brief/report is asked for
 D. Outreach -> penn(draft_outreach, approval); add penn(send_email, approval) only if user said send
 E. Content -> scribe(summarize_text); prepend hawk(research_web) only if user wants current facts
 F. Screening -> aria(extract_structured)
