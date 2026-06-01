@@ -133,10 +133,10 @@ function fallbackPlan(instruction: string, intent: Intent): { plan_summary: stri
       return {
         plan_summary: `Source, rank, and prepare outreach for: ${instruction}`,
         steps: [
-          mkStep(0, "scout", "Source candidates", `Find candidates that match: ${instruction}`, {
-            tool_needed: "research_web",
-            expected_output: "List of candidate profiles with name, role, company, and source link.",
-            success_criteria: "At least 5 candidates returned with verifiable sources.",
+          mkStep(0, "scout", "Source companies/leads via Apify", `Find companies/leads matching: ${instruction}`, {
+            tool_needed: "source_with_apify",
+            expected_output: "List of sourced leads (name, company, title, url, location) with Apify run/dataset reference.",
+            success_criteria: "Apify actor returns at least a few candidate results, or surfaces a clear actor-not-configured message.",
           }),
           mkStep(1, "aria", "Rank candidates", `Rank and score the sourced candidates against: ${instruction}`, {
             tool_needed: "extract_structured",
