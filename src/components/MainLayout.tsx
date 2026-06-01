@@ -7,6 +7,9 @@ import CommandBar from "./dock/CommandBar";
 import CommandDock from "./dock/CommandDock";
 import ChatWorkspace from "./chat/workspace/ChatWorkspace";
 import AgentBuilderModal from "./agents/AgentBuilderModal";
+import RouteErrorBoundary from "./RouteErrorBoundary";
+import WorkspaceGate from "./WorkspaceGate";
+import ChatErrorBoundary from "./chat/workspace/ChatErrorBoundary";
 import { ChatWorkspaceProvider } from "@/contexts/ChatWorkspaceContext";
 import { useIsMobile } from "@/hooks/use-mobile";
 
@@ -61,15 +64,23 @@ const MainLayout = ({ children }: MainLayoutProps) => {
           )}
 
           <div className={isMobile ? 'px-4 py-6 pb-32' : 'pb-32'}>
-            {children}
+            <RouteErrorBoundary>
+              <WorkspaceGate>
+                {children}
+              </WorkspaceGate>
+            </RouteErrorBoundary>
           </div>
         </main>
 
         {/* Persistent command dock — unified composer + agent surface */}
-        <CommandDock />
+        <ChatErrorBoundary>
+          <CommandDock />
+        </ChatErrorBoundary>
 
         {/* Full Chat Workspace drawer / fullscreen */}
-        <ChatWorkspace />
+        <ChatErrorBoundary>
+          <ChatWorkspace />
+        </ChatErrorBoundary>
 
         {/* Agent Builder full-screen takeover (mounted globally) */}
         <AgentBuilderModal />

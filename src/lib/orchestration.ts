@@ -54,20 +54,33 @@ export interface DBActivity {
 }
 
 // ---------------- Workspace ----------------
+// Uses getSession() (in-memory, no network, lightweight on the navigator
+// auth lock) so concurrent callers on app mount don't contend with
+// useAuth / ClientContext for the same Supabase auth lock. Falls back to
+// getUser() only if no cached session is available.
 export async function getCurrentWorkspaceId(): Promise<string | null> {
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return null;
+  let userId: string | null = null;
+  try {
+    const { data: { session } } = await supabase.auth.getSession();
+    userId = session?.user?.id ?? null;
+  } catch (e) {
+    if (import.meta.env.DEV) console.warn('[orchestration] getSession failed', e);
+  }
+  if (!userId) {
+    const { data: { user } } = await supabase.auth.getUser();
+    userId = user?.id ?? null;
+  }
+  if (!userId) return null;
 
   const { data, error } = await supabase
     .from('workspace_members' as any)
     .select('workspace_id')
-    .eq('user_id', user.id)
+    .eq('user_id', userId)
     .limit(1)
     .maybeSingle();
 
   if (error || !data) {
-    // Self-provision via RPC fallback (in case the trigger didn't run for this user)
-    const { data: rpc } = await supabase.rpc('provision_workspace_for_user' as any, { _user_id: user.id });
+    const { data: rpc } = await supabase.rpc('provision_workspace_for_user' as any, { _user_id: userId });
     return (rpc as unknown as string) ?? null;
   }
   return (data as any).workspace_id as string;
