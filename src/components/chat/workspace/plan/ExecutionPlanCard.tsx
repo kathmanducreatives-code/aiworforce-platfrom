@@ -31,6 +31,7 @@ const STATUS_TONE: Record<string, string> = {
 const TOOL_PROVIDER_KEY: Record<string, string> = {
   research_web: 'perplexity',
   scrape_url: 'firecrawl',
+  source_with_apify: 'apify',
   send_email: 'resend',
 };
 
@@ -72,6 +73,7 @@ export default function ExecutionPlanCard({ planId, meta }: Props) {
       const s = lim.toLowerCase();
       if (s.includes('perplexity')) keys.add('perplexity');
       if (s.includes('firecrawl')) keys.add('firecrawl');
+      if (s.includes('apify')) keys.add('apify');
       if (s.includes('resend')) keys.add('resend');
     }
     return keys;

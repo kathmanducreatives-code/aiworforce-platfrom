@@ -114,9 +114,10 @@ Deno.serve(async (req) => {
 
   const systemPrompt = `${agent.role_prompt ?? `You are ${agent.name}.`}\n\n${renderCompanyBrain(brain)}`;
 
-  // --- Tool layer: hawk + scout get live tools (Firecrawl scrape, Perplexity research). ---
+  // --- Tool layer: hawk + scout get live tools (Firecrawl scrape, Apify sourcing, Perplexity research). ---
   let toolContext: string | null = null;
   let scrapedContext: string | null = null;
+  let apifyContext: string | null = null;
   const toolNotices: string[] = [];
 
   if (agent_slug === "hawk" || agent_slug === "scout") {
@@ -154,18 +155,63 @@ Deno.serve(async (req) => {
       }
     }
 
-    // 2) Perplexity research — keep behavior, but never block on unavailable.
+    // 2) Apify sourcing — sourcing-intent instructions on scout (and jobs/companies on hawk).
+    const sourcingRe = /\b(find|source|sourcing|discover|prospects?|leads?|founders?|companies|hiring|job openings|roles|recruit(?:ers?|ing)|candidates?|engineers?|marketers?|linkedin posts?|comments?)\b/i;
+    if (sourcingRe.test(`${instruction ?? ""} ${input ?? ""}`)) {
+      const text = `${instruction ?? ""} ${input ?? ""}`.toLowerCase();
+      let source_type: "jobs" | "companies" | "linkedin_posts" | "comments" | "generic" = "generic";
+      if (/\b(hiring|job openings?|roles?|engineers?|marketers?|developers?|candidates?)\b/.test(text)) source_type = "jobs";
+      else if (/\b(companies|founders?|prospects?|startups?|orgs?)\b/.test(text)) source_type = "companies";
+      else if (/\blinkedin\b|\bposts?\b/.test(text)) source_type = "linkedin_posts";
+      else if (/\bcomments?\b/.test(text)) source_type = "comments";
+
+      const allowedForHawk = source_type === "jobs" || source_type === "companies";
+      const shouldRun = agent_slug === "scout" || (agent_slug === "hawk" && allowedForHawk);
+
+      if (shouldRun) {
+        const locMatch = (instruction ?? "").match(/\bin\s+([A-Z][A-Za-z\s\-]+?)(?:[.,]|$)/);
+        const location = locMatch?.[1]?.trim() ?? null;
+        const roleKeywords = Array.from(
+          new Set(((instruction ?? "").toLowerCase().match(/\b(marketing|marketer|sales|engineer|developer|designer|founder|product|react|frontend|backend|growth|recruiter)\b/g) ?? [])),
+        );
+
+        const planPayload = (task as unknown as { payload?: Record<string, unknown> })?.payload ?? {};
+        const apifyInput = {
+          source_type,
+          search_goal: instruction,
+          query: instruction,
+          location: location ?? (planPayload.location as string | undefined) ?? undefined,
+          role_keywords: roleKeywords.length > 0 ? roleKeywords : (planPayload.role_keywords as string[] | undefined),
+          max_results: 25,
+        };
+
+        const r = await runTool("source_with_apify", apifyInput, baseCtx);
+        if (r.ok && r.data) {
+          const d = r.data as { items?: any[]; total?: number; summary?: string; run_id?: string };
+          const sample = (d.items ?? []).slice(0, 25);
+          apifyContext = `APIFY SOURCING (run ${d.run_id ?? "?"} — ${d.total ?? sample.length} results):\n${d.summary ?? ""}\n\nITEMS:\n${JSON.stringify(sample, null, 2).slice(0, 8000)}`;
+        } else if (r.unavailable) {
+          const reason = r.error === "apify_actor_not_configured"
+            ? `Apify is connected, but no actor is configured for source_type=${source_type}.`
+            : `Apify unavailable (${r.error ?? "not configured"}).`;
+          toolNotices.push(reason);
+        } else if (!r.ok) {
+          toolNotices.push(`Apify failed: ${r.error ?? "unknown"}.`);
+        }
+      }
+    }
+
+    // 3) Perplexity research — keep behavior, but never block on unavailable.
     const toolRes = await runTool("research_web", { query: instruction }, baseCtx);
     if (toolRes.ok && toolRes.data) {
       const d = toolRes.data as { content?: string; citations?: string[] };
       const citations = (d.citations ?? []).slice(0, 8).map((c, i) => `[${i + 1}] ${c}`).join("\n");
       toolContext = `LIVE RESEARCH (Perplexity):\n${d.content ?? ""}\n\nCITATIONS:\n${citations}`;
     } else if (toolRes.unavailable) {
-      // Only note Perplexity if Firecrawl didn't already provide grounding.
-      if (!scrapedContext) {
+      if (!scrapedContext && !apifyContext) {
         toolNotices.push(
           agent_slug === "scout"
-            ? "Live candidate discovery requires the Perplexity / Firecrawl / Apollo connector. Continuing with available context."
+            ? "Live candidate discovery requires the Perplexity / Firecrawl / Apollo / Apify connector. Continuing with available context."
             : "Live web research (Perplexity) is not configured. Continuing with available context.",
         );
       }
@@ -176,6 +222,7 @@ Deno.serve(async (req) => {
 
   const contextParts: string[] = [];
   if (scrapedContext) contextParts.push(scrapedContext);
+  if (apifyContext) contextParts.push(apifyContext);
   if (toolContext) contextParts.push(toolContext);
   const toolNotice = toolNotices.length > 0 ? toolNotices.join(" ") : null;
 

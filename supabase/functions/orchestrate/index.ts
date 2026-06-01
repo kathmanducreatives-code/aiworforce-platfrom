@@ -23,6 +23,7 @@ const json = (body: unknown, status = 200) =>
 type ToolName =
   | "research_web"
   | "scrape_url"
+  | "source_with_apify"
   | "summarize_text"
   | "extract_structured"
   | "draft_outreach"
@@ -68,6 +69,7 @@ const KNOWN_AGENTS: Record<string, string> = {
 const TOOL_FRIENDLY: Record<string, string> = {
   PERPLEXITY_API_KEY: "Perplexity",
   FIRECRAWL_API_KEY: "Firecrawl",
+  APIFY_API_TOKEN: "Apify",
   RESEND_API_KEY: "Resend",
 };
 
@@ -131,10 +133,10 @@ function fallbackPlan(instruction: string, intent: Intent): { plan_summary: stri
       return {
         plan_summary: `Source, rank, and prepare outreach for: ${instruction}`,
         steps: [
-          mkStep(0, "scout", "Source candidates", `Find candidates that match: ${instruction}`, {
-            tool_needed: "research_web",
-            expected_output: "List of candidate profiles with name, role, company, and source link.",
-            success_criteria: "At least 5 candidates returned with verifiable sources.",
+          mkStep(0, "scout", "Source companies/leads via Apify", `Find companies/leads matching: ${instruction}`, {
+            tool_needed: "source_with_apify",
+            expected_output: "List of sourced leads (name, company, title, url, location) with Apify run/dataset reference.",
+            success_criteria: "Apify actor returns at least a few candidate results, or surfaces a clear actor-not-configured message.",
           }),
           mkStep(1, "aria", "Rank candidates", `Rank and score the sourced candidates against: ${instruction}`, {
             tool_needed: "extract_structured",
@@ -265,10 +267,10 @@ function expandPlan(instruction: string, intent: Intent, steps: Step[]): Step[] 
   if (intent === "sourcing") {
     if (!has("scout")) {
       steps.unshift(
-        mkStep(0, "scout", "Source candidates", `Find candidates for: ${instruction}`, {
-          tool_needed: "research_web",
-          expected_output: "Candidate list with name, role, company, source link.",
-          success_criteria: "At least 5 candidates returned.",
+        mkStep(0, "scout", "Source companies/leads via Apify", `Find candidates for: ${instruction}`, {
+          tool_needed: "source_with_apify",
+          expected_output: "Sourced leads with name, company, title, url, location.",
+          success_criteria: "Apify returns results or a clear actor-not-configured message.",
           planner_source: "expansion",
         }),
       );
@@ -527,17 +529,18 @@ AGENTS:
 - scribe = content, summaries, briefs, posts, reports
 
 TOOLS:
-- research_web      (perplexity)  allowed: hawk, scout
-- scrape_url        (firecrawl)   allowed: hawk, scout
-- summarize_text    (gemini)      allowed: aria, scribe, hawk, scout
-- extract_structured(gemini)      allowed: aria, scribe, hawk, scout
-- draft_outreach    (gemini)      allowed: penn
-- send_email        (resend)      allowed: penn — ALWAYS requires_approval=true
+- research_web        (perplexity) allowed: hawk, scout
+- scrape_url          (firecrawl)  allowed: hawk, scout
+- source_with_apify   (apify)      allowed: scout, hawk — PREFERRED for finding companies/leads/hiring signals/jobs/posts
+- summarize_text      (gemini)     allowed: aria, scribe, hawk, scout
+- extract_structured  (gemini)     allowed: aria, scribe, hawk, scout
+- draft_outreach      (gemini)     allowed: penn
+- send_email          (resend)     allowed: penn — ALWAYS requires_approval=true
 
 WORKFLOW ARCHETYPES (use as defaults, deepen when useful):
-A. Sourcing  -> scout(research_web|scrape_url) -> aria(extract_structured) -> penn(draft_outreach, approval)
+A. Sourcing  -> scout(source_with_apify) -> aria(extract_structured) -> penn(draft_outreach, approval)
 B. Extraction from URL -> hawk(scrape_url) -> scribe(summarize_text)
-C. Intelligence -> hawk(research_web) -> scribe(summarize_text) when a brief/report is asked for
+C. Intelligence -> hawk(research_web or source_with_apify when looking up job/company signals) -> scribe(summarize_text) when a brief/report is asked for
 D. Outreach -> penn(draft_outreach, approval); add penn(send_email, approval) only if user said send
 E. Content -> scribe(summarize_text); prepend hawk(research_web) only if user wants current facts
 F. Screening -> aria(extract_structured)

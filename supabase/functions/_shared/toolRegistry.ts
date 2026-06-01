@@ -287,6 +287,223 @@ async function execScrapeUrl(input: unknown): Promise<ToolResult> {
   };
 }
 
+// ---------- Tool: source_with_apify (Apify) ----------
+
+const APIFY_BASE = "https://api.apify.com/v2";
+
+// Actor catalog. Fill `actor_id` once the user provides the Apify actor for that source_type.
+// `null` => unavailable for that source_type until configured.
+const APIFY_ACTORS: Record<string, { actor_id: string | null; description: string }> = {
+  jobs:           { actor_id: null, description: "Find companies hiring for specific roles" },
+  companies:      { actor_id: null, description: "Find companies matching a query" },
+  linkedin_posts: { actor_id: null, description: "Find people posting about hiring/problems" },
+  comments:       { actor_id: null, description: "Find comments on relevant posts" },
+  websites:       { actor_id: null, description: "Scrape arbitrary websites via actor" },
+  generic:        { actor_id: null, description: "Fallback generic actor" },
+};
+
+const APIFY_ACTOR_ID_RE = /^[a-zA-Z0-9_~][a-zA-Z0-9_\-~]{0,127}(?:\/[a-zA-Z0-9_\-~]+)?$/;
+
+function signalFromSourceType(source_type: string): string {
+  switch (source_type) {
+    case "jobs":           return "hiring";
+    case "linkedin_posts": return "post";
+    case "companies":      return "company";
+    case "comments":       return "comment";
+    case "websites":       return "website";
+    default:               return "generic";
+  }
+}
+
+function pickStr(obj: any, keys: string[]): string | null {
+  for (const k of keys) {
+    const v = obj?.[k];
+    if (typeof v === "string" && v.trim()) return v.trim();
+  }
+  return null;
+}
+
+function truncObj(v: unknown, max = 4000): unknown {
+  try {
+    const s = JSON.stringify(v);
+    if (s.length <= max) return v;
+    return { _truncated: true, preview: s.slice(0, max) };
+  } catch {
+    return { _unserializable: true };
+  }
+}
+
+function normalizeApifyItem(raw: any, source_type: string) {
+  const r = raw && typeof raw === "object" ? raw : {};
+  return {
+    name:        pickStr(r, ["name", "fullName", "authorName", "personName"]),
+    company:     pickStr(r, ["companyName", "company", "employer", "organization", "org"]),
+    title:       pickStr(r, ["title", "jobTitle", "position", "headline", "postTitle"]),
+    url:         pickStr(r, ["url", "link", "jobUrl", "postUrl", "profileUrl", "sourceUrl"]),
+    location:    pickStr(r, ["location", "city", "jobLocation", "geo", "place"]),
+    description: pickStr(r, ["description", "snippet", "text", "summary", "body"]),
+    source:      "apify",
+    signal_type: signalFromSourceType(source_type),
+    confidence:  null,
+    raw:         truncObj(r, 4000),
+  };
+}
+
+async function apifyFetch(
+  path: string,
+  init: RequestInit & { timeoutMs?: number } = {},
+): Promise<{ ok: boolean; status: number; data: any }> {
+  const { timeoutMs = 20_000, ...rest } = init;
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), timeoutMs);
+  try {
+    const res = await fetch(`${APIFY_BASE}${path}`, { ...rest, signal: ctrl.signal });
+    const data = await res.json().catch(() => ({}));
+    return { ok: res.ok, status: res.status, data };
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+async function execSourceWithApify(input: unknown): Promise<ToolResult> {
+  const APIFY_API_TOKEN = Deno.env.get("APIFY_API_TOKEN");
+  if (!APIFY_API_TOKEN) {
+    return { ok: false, unavailable: true, error: "apify_not_configured" };
+  }
+
+  const i = (input ?? {}) as {
+    actor_id?: string;
+    source_type?: string;
+    search_goal?: string;
+    query?: string;
+    location?: string;
+    role_keywords?: string[];
+    max_results?: number;
+    input?: Record<string, unknown>;
+  };
+
+  const source_type = (i.source_type ?? "generic").toString().toLowerCase();
+  const max_results = Math.min(100, Math.max(1, Number(i.max_results) || 25));
+  const search_goal = (i.search_goal ?? "").toString();
+
+  let actor_id = (i.actor_id ?? "").toString().trim();
+  if (actor_id) {
+    if (!APIFY_ACTOR_ID_RE.test(actor_id)) return { ok: false, error: "invalid_actor_id" };
+  } else {
+    const cfg = APIFY_ACTORS[source_type] ?? APIFY_ACTORS.generic;
+    if (!cfg?.actor_id) {
+      return {
+        ok: false,
+        unavailable: true,
+        error: "apify_actor_not_configured",
+        data: {
+          source_type,
+          message: "Apify is connected, but no actor is configured for this source type yet.",
+        },
+      };
+    }
+    actor_id = cfg.actor_id;
+  }
+
+  // Apify accepts `username~actor-name` or actorId in the URL path.
+  const actorPath = encodeURIComponent(actor_id.replace("/", "~"));
+
+  const actorInput: Record<string, unknown> = {
+    query: i.query ?? search_goal ?? null,
+    location: i.location ?? null,
+    role_keywords: Array.isArray(i.role_keywords) ? i.role_keywords : null,
+    max_results,
+    ...(i.input && typeof i.input === "object" ? i.input : {}),
+  };
+
+  const startRes = await apifyFetch(`/acts/${actorPath}/runs?token=${APIFY_API_TOKEN}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(actorInput),
+    timeoutMs: 20_000,
+  }).catch((e) => ({ ok: false, status: 0, data: { error: String(e) } }));
+
+  if (startRes.status === 401 || startRes.status === 403) {
+    return { ok: false, unavailable: true, error: "apify_unauthorized" };
+  }
+  if (startRes.status === 402) {
+    return { ok: false, unavailable: true, error: "apify_insufficient_credits" };
+  }
+  if (!startRes.ok) {
+    return { ok: false, error: `apify_start_failed:${startRes.status}` };
+  }
+
+  const run = startRes.data?.data ?? startRes.data ?? {};
+  const run_id: string | undefined = run.id;
+  const dataset_id: string | undefined = run.defaultDatasetId;
+  if (!run_id) return { ok: false, error: "apify_missing_run_id" };
+
+  const deadline = Date.now() + 90_000;
+  let status: string = run.status ?? "READY";
+  let finalRun: any = run;
+  while (Date.now() < deadline) {
+    if (status === "SUCCEEDED" || status === "FAILED" || status === "TIMED-OUT" || status === "ABORTED") break;
+    await new Promise((r) => setTimeout(r, 3000));
+    const poll = await apifyFetch(`/actor-runs/${run_id}?token=${APIFY_API_TOKEN}`, {
+      method: "GET",
+      timeoutMs: 10_000,
+    }).catch(() => null);
+    if (!poll) continue;
+    if (poll.status === 401 || poll.status === 403) {
+      return { ok: false, unavailable: true, error: "apify_unauthorized", data: { run_id } };
+    }
+    finalRun = poll.data?.data ?? poll.data ?? finalRun;
+    status = finalRun?.status ?? status;
+  }
+
+  const resolvedDatasetId: string | undefined = finalRun?.defaultDatasetId ?? dataset_id;
+
+  if (status !== "SUCCEEDED") {
+    return {
+      ok: false,
+      error: `apify_run_${(status || "timeout").toLowerCase()}`,
+      data: { run_id, dataset_id: resolvedDatasetId, status },
+    };
+  }
+
+  if (!resolvedDatasetId) {
+    return {
+      ok: true,
+      data: { actor_id, run_id, dataset_id: null, items: [], total: 0, summary: "no_dataset", citations: [] },
+    };
+  }
+
+  const itemsRes = await apifyFetch(
+    `/datasets/${resolvedDatasetId}/items?clean=true&limit=${max_results}&token=${APIFY_API_TOKEN}`,
+    { method: "GET", timeoutMs: 20_000 },
+  ).catch((e) => ({ ok: false, status: 0, data: { error: String(e) } }));
+
+  if (!itemsRes.ok) {
+    return {
+      ok: false,
+      error: `apify_items_failed:${itemsRes.status}`,
+      data: { run_id, dataset_id: resolvedDatasetId },
+    };
+  }
+
+  const rawItems: any[] = Array.isArray(itemsRes.data) ? itemsRes.data : [];
+  const items = rawItems.slice(0, max_results).map((r) => normalizeApifyItem(r, source_type));
+  const citations = items.map((it) => it.url).filter((u): u is string => !!u).slice(0, 10);
+
+  return {
+    ok: true,
+    data: {
+      actor_id,
+      run_id,
+      dataset_id: resolvedDatasetId,
+      items,
+      total: items.length,
+      summary: `Apify actor returned ${items.length} ${source_type} result(s) for: ${search_goal || i.query || "(no goal)"}`,
+      citations,
+    },
+  };
+}
+
 // ---------- Tool: send_email (Resend) — approval-gated stub ----------
 
 async function execSendEmail(input: unknown): Promise<ToolResult> {
@@ -335,6 +552,14 @@ const REGISTRY: Record<string, ToolDef> = {
     requires_approval: false,
     execute: execScrapeUrl,
   },
+  source_with_apify: {
+    name: "source_with_apify",
+    provider: "apify",
+    description: "Run an Apify actor to source jobs, companies, posts, or comments.",
+    allowed_agents: ["scout", "hawk"],
+    requires_approval: false,
+    execute: execSourceWithApify,
+  },
   send_email: {
     name: "send_email",
     provider: "resend",
@@ -348,6 +573,7 @@ const REGISTRY: Record<string, ToolDef> = {
 const TOOL_ENV: Record<string, string> = {
   research_web: "PERPLEXITY_API_KEY",
   scrape_url: "FIRECRAWL_API_KEY",
+  source_with_apify: "APIFY_API_TOKEN",
   send_email: "RESEND_API_KEY",
 };
 
