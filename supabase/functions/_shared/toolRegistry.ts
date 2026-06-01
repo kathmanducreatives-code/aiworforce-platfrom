@@ -432,6 +432,7 @@ async function execSourceWithApify(input: unknown): Promise<ToolResult> {
   const search_goal = (i.search_goal ?? "").toString();
 
   let actor_id = (i.actor_id ?? "").toString().trim();
+  let actorCfg: ApifyActorCfg | undefined;
   if (actor_id) {
     if (!APIFY_ACTOR_ID_RE.test(actor_id)) return { ok: false, error: "invalid_actor_id" };
   } else {
@@ -448,18 +449,28 @@ async function execSourceWithApify(input: unknown): Promise<ToolResult> {
       };
     }
     actor_id = cfg.actor_id;
+    actorCfg = cfg;
   }
 
   // Apify accepts `username~actor-name` or actorId in the URL path.
   const actorPath = encodeURIComponent(actor_id.replace("/", "~"));
 
-  const actorInput: Record<string, unknown> = {
-    query: i.query ?? search_goal ?? null,
-    location: i.location ?? null,
-    role_keywords: Array.isArray(i.role_keywords) ? i.role_keywords : null,
-    max_results,
-    ...(i.input && typeof i.input === "object" ? i.input : {}),
-  };
+  const userInput = (i.input && typeof i.input === "object") ? (i.input as Record<string, unknown>) : {};
+  const actorInput: Record<string, unknown> = actorCfg?.input_adapter
+    ? actorCfg.input_adapter({
+        query: i.query ?? search_goal ?? null,
+        location: i.location ?? null,
+        role_keywords: Array.isArray(i.role_keywords) ? i.role_keywords : null,
+        max_results,
+        user_input: userInput,
+      })
+    : {
+        query: i.query ?? search_goal ?? null,
+        location: i.location ?? null,
+        role_keywords: Array.isArray(i.role_keywords) ? i.role_keywords : null,
+        max_results,
+        ...userInput,
+      };
 
   const startRes = await apifyFetch(`/acts/${actorPath}/runs?token=${APIFY_API_TOKEN}`, {
     method: "POST",
