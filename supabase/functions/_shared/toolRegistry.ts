@@ -552,6 +552,14 @@ const REGISTRY: Record<string, ToolDef> = {
     requires_approval: false,
     execute: execScrapeUrl,
   },
+  source_with_apify: {
+    name: "source_with_apify",
+    provider: "apify",
+    description: "Run an Apify actor to source jobs, companies, posts, or comments.",
+    allowed_agents: ["scout", "hawk"],
+    requires_approval: false,
+    execute: execSourceWithApify,
+  },
   send_email: {
     name: "send_email",
     provider: "resend",
@@ -565,6 +573,7 @@ const REGISTRY: Record<string, ToolDef> = {
 const TOOL_ENV: Record<string, string> = {
   research_web: "PERPLEXITY_API_KEY",
   scrape_url: "FIRECRAWL_API_KEY",
+  source_with_apify: "APIFY_API_TOKEN",
   send_email: "RESEND_API_KEY",
 };
 
