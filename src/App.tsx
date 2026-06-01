@@ -9,6 +9,7 @@ import { ClientThemeProvider } from "./components/ClientThemeProvider";
 import { ThemeProvider } from "./contexts/ThemeContext";
 import { WorkspaceProvider } from "./contexts/WorkspaceContext";
 import VerificationPanel from "./components/dev/VerificationPanel";
+import PreviewDiagnostics from "./components/dev/PreviewDiagnostics";
 import AppErrorBoundary from "./components/AppErrorBoundary";
 import Landing from "./pages/Landing";
 
@@ -91,6 +92,7 @@ const App = () => (
                 <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
                   <div className="relative min-h-screen w-full">
                     <AuthenticatedBackground />
+                    {import.meta.env.DEV && <PreviewDiagnostics />}
                   <Routes>
 
                     {/* Public Routes */}

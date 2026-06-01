@@ -64,15 +64,23 @@ const MainLayout = ({ children }: MainLayoutProps) => {
           )}
 
           <div className={isMobile ? 'px-4 py-6 pb-32' : 'pb-32'}>
-            {children}
+            <RouteErrorBoundary>
+              <WorkspaceGate>
+                {children}
+              </WorkspaceGate>
+            </RouteErrorBoundary>
           </div>
         </main>
 
         {/* Persistent command dock — unified composer + agent surface */}
-        <CommandDock />
+        <ChatErrorBoundary>
+          <CommandDock />
+        </ChatErrorBoundary>
 
         {/* Full Chat Workspace drawer / fullscreen */}
-        <ChatWorkspace />
+        <ChatErrorBoundary>
+          <ChatWorkspace />
+        </ChatErrorBoundary>
 
         {/* Agent Builder full-screen takeover (mounted globally) */}
         <AgentBuilderModal />
