@@ -31,6 +31,7 @@ const STATUS_TONE: Record<string, string> = {
 const TOOL_PROVIDER_KEY: Record<string, string> = {
   research_web: 'perplexity',
   scrape_url: 'firecrawl',
+  source_with_apify: 'apify',
   send_email: 'resend',
 };
 
