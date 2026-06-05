@@ -59,6 +59,8 @@ Deno.serve(async (req) => {
   const instruction: string | undefined = body.instruction;
   const input: string | null | undefined = body.input ?? null;
   const needs_approval: boolean = body.needs_approval === true;
+  const tool_input_body: any = body.tool_input ?? null;
+  const execution_mode_body: string | undefined = body.execution_mode;
 
   if (!plan_id || step_index === undefined || (!agent_slug && !agent_id_in) || !workspace_id || !instruction) {
     return json({ error: "missing_required_fields" }, 400);
