@@ -378,10 +378,58 @@ const APIFY_ACTORS: Record<string, ApifyActorCfg> = {
   },
 };
 
+// Alias map: planner / agent vocabularies often differ from the actor registry keys.
+// Anything that means "find companies hiring people" routes to the jobs actor today,
+// since no people/profile actor is configured yet.
+const SOURCE_TYPE_ALIASES: Record<string, string> = {
+  jobs: "jobs",
+  job: "jobs",
+  hiring: "jobs",
+  hiring_signals: "jobs",
+  job_search: "jobs",
+  linkedin_jobs: "jobs",
+  companies_hiring: "jobs",
+  source_companies: "jobs",
+  source_candidates: "jobs",
+  candidates: "jobs",
+  candidate: "jobs",
+  people: "jobs",
+  person: "jobs",
+  profiles: "jobs",
+  profile: "jobs",
+  engineers: "jobs",
+  engineer: "jobs",
+  developers: "jobs",
+  developer: "jobs",
+  marketers: "jobs",
+  marketer: "jobs",
+  roles: "jobs",
+  role: "jobs",
+  companies: "jobs",
+  company: "jobs",
+  founders: "jobs",
+  founder: "jobs",
+  generic: "jobs",
+  indeed_jobs: "indeed_jobs",
+  website_content: "website_content",
+  custom_web: "custom_web",
+  search: "search_fallback",
+  search_fallback: "search_fallback",
+};
+
+export function normalizeApifySourceType(raw?: string | null): string {
+  const k = (raw ?? "").toString().trim().toLowerCase();
+  if (!k) return "jobs";
+  if (SOURCE_TYPE_ALIASES[k]) return SOURCE_TYPE_ALIASES[k];
+  if (APIFY_ACTORS[k]) return k;
+  return "jobs";
+}
+
 // Actors that must NEVER run without explicit opt-in, regardless of how
 // the orchestrator/planner resolved them. Guards against silently using
 // Apify as the default broad-search lane.
 const OPT_IN_ONLY_ACTOR_IDS = new Set<string>(["apify/google-search-scraper"]);
+
 
 const APIFY_ACTOR_ID_RE = /^[a-zA-Z0-9_~][a-zA-Z0-9_\-~]{0,127}(?:\/[a-zA-Z0-9_\-~]+)?$/;
 
@@ -464,7 +512,8 @@ async function execSourceWithApify(input: unknown): Promise<ToolResult> {
     allow_disabled?: boolean;
   };
 
-  const source_type = (i.source_type ?? "jobs").toString().toLowerCase();
+  const requested_source_type = (i.source_type ?? null) as string | null;
+  const source_type = normalizeApifySourceType(requested_source_type ?? "jobs");
   const max_results = Math.min(100, Math.max(1, Number(i.max_results) || 25));
   const search_goal = (i.search_goal ?? "").toString();
   const allow_disabled = i.allow_disabled === true;
@@ -473,7 +522,6 @@ async function execSourceWithApify(input: unknown): Promise<ToolResult> {
   let actorCfg: ApifyActorCfg | undefined;
   if (actor_id) {
     if (!APIFY_ACTOR_ID_RE.test(actor_id)) return { ok: false, error: "invalid_actor_id" };
-    // Resolve cfg by actor_id so we can apply enabled_by_default gating even on explicit calls.
     actorCfg = Object.values(APIFY_ACTORS).find((c) => c.actor_id === actor_id);
   } else {
     const cfg = APIFY_ACTORS[source_type];
@@ -483,8 +531,11 @@ async function execSourceWithApify(input: unknown): Promise<ToolResult> {
         unavailable: true,
         error: "apify_actor_not_configured",
         data: {
-          source_type,
-          message: "Apify is connected, but no actor is configured for this source type yet.",
+          requested_source_type,
+          normalized_source_type: source_type,
+          expected_actor_key: source_type,
+          actor_configured: false,
+          message: `No Apify actor configured for source_type=${source_type} (requested=${requested_source_type ?? "null"}).`,
         },
       };
     }
@@ -622,6 +673,10 @@ async function execSourceWithApify(input: unknown): Promise<ToolResult> {
     ok: true,
     data: {
       actor_id,
+      requested_source_type,
+      normalized_source_type: source_type,
+      expected_actor_key: source_type,
+      actor_configured: true,
       run_id,
       dataset_id: resolvedDatasetId,
       items,

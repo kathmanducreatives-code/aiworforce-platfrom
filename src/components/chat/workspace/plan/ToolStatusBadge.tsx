@@ -92,8 +92,19 @@ export default function ToolStatusBadge({ toolNeeded, latestCall, connectorMissi
     running: 'bg-sky-500/10 text-sky-300 border-sky-500/20',
   }[tone];
 
+  let tooltip: string | undefined;
+  if (status === 'unavailable' && latestCall?.error === 'apify_actor_not_configured') {
+    const req = output?.requested_source_type ?? '(none)';
+    const norm = output?.normalized_source_type ?? '(none)';
+    const expected = output?.expected_actor_key ?? '(none)';
+    const configured = output?.actor_configured === true ? 'true' : 'false';
+    tooltip = `Apify actor missing\nrequested source_type: ${req}\nnormalized: ${norm}\nexpected actor key: ${expected}\nactor configured: ${configured}`;
+  } else if (status === 'succeeded' && name === 'source_with_apify' && output?.normalized_source_type) {
+    tooltip = `requested: ${output?.requested_source_type ?? '(none)'}\nnormalized: ${output?.normalized_source_type}\nactor: ${output?.actor_id ?? '(none)'}`;
+  }
+
   return (
-    <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md border text-[11px] ${toneClass}`}>
+    <span title={tooltip} className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md border text-[11px] ${toneClass}`}>
       {icon}{text}
     </span>
   );

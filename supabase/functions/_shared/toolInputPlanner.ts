@@ -72,14 +72,14 @@ export function fallbackParse(prompt: string, intent: Intent | string): ToolInpu
   const needs_enrichment = ENRICH_WORDS.test(t);
 
   // source_type heuristic
+  // NOTE: No people/profile or companies actor is configured today. Everything that
+  // looks like sourcing routes to source_type="jobs" (the LinkedIn jobs actor),
+  // which surfaces companies hiring for the requested role.
   let source_type: SourceType = null;
   let tool_name: ToolName = null;
-  if (intent === "source_signals" || /\b(find|source|hiring|companies|leads|prospects|candidates)\b/i.test(prompt)) {
+  if (intent === "source_signals" || /\b(find|source|hiring|companies|leads|prospects|candidates|engineers?|developers?|marketers?|people)\b/i.test(prompt)) {
     tool_name = "source_with_apify";
-    source_type = "jobs"; // jobs is the only configured actor today
-    if (/\bcompanies\b/i.test(prompt) && !/\bhiring\b/i.test(prompt)) source_type = "companies";
-    if (/\b(post|linkedin posts?)\b/i.test(prompt)) source_type = "posts";
-    if (/\bpeople\b/i.test(prompt)) source_type = "people";
+    source_type = "jobs";
   } else if (intent === "analyze_url" || /https?:\/\//.test(prompt)) {
     tool_name = "scrape_url";
   } else if (intent === "daily_brief" || intent === "content") {
@@ -156,7 +156,9 @@ Rules:
 - execution_mode: outreach > deep > fast (outreach implies deep).
 - If user just says "Find leads" with no role/location, set confidence < 0.65 and put role_keywords/location in missing_fields.
 - If a URL is present, tool_name = "scrape_url".
-- For sourcing prompts, prefer tool_name = "source_with_apify" and source_type = "jobs".`;
+- For ANY sourcing prompt, set tool_name = "source_with_apify" and source_type = "jobs". No people/profile or companies actor is configured.
+- Prompts like "find engineers in London" / "find marketers" / "find candidates" mean "find companies hiring those roles" — set source_type = "jobs", role_keywords from the role words, and location from any place name.
+- NEVER return source_type "people", "companies", or "posts" — only "jobs" or null.`;
 
 export async function planToolInput(
   prompt: string,
@@ -215,6 +217,11 @@ export async function planToolInput(
   // Cost caps.
   merged.max_results = Math.max(1, Math.min(200, merged.max_results || 25));
 
+  // No people/companies/posts actors configured — coerce to jobs whenever Apify is used.
+  if (merged.tool_name === "source_with_apify") {
+    if (merged.source_type !== "jobs") merged.source_type = "jobs";
+  }
+
   // Clarification gate.
   if (
     merged.intent === "source_signals" &&
@@ -228,6 +235,15 @@ export async function planToolInput(
       ? "Which role or industry should I focus on?"
       : "Which location should I focus on?";
     merged.clarification = need;
+  }
+
+  // Explicit individual-people request — no people actor configured.
+  const explicitPeople = /\b(individual|specific)\s+(people|candidates|profiles|persons?)\b/i.test(prompt)
+    || /\b(individual\s+\w+\s+(profiles?|candidates?))\b/i.test(prompt)
+    || (/\bprofiles?\b/i.test(prompt) && !/\bhiring\b/i.test(prompt) && !/\bcompanies?\b/i.test(prompt));
+  if (merged.intent === "source_signals" && explicitPeople) {
+    merged.ask_clarification = true;
+    merged.clarification = "I can currently find companies hiring for that role using Apify Jobs. Individual candidate/profile sourcing requires a people/profile actor to be configured. Want me to find companies hiring instead?";
   }
 
   return merged;

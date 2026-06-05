@@ -1,91 +1,115 @@
-## Goal
+## Root cause
 
-Clean up tool routing so Apify is only used for structured actors (jobs / hiring / company data / niche scrapers). The broad web search lane stays on `search_web` (Gemini/Lovable grounded search), and `apify/google-search-scraper` becomes an opt-in fallback that is disabled by default.
+Live test of "Find 10 engineers in London" failed with "Apify actor missing" for three layered reasons:
 
-No UI, backend project, secret, or feature removal changes.
+1. **Planner returned `source_type: "people"`** (see pilot-chat log) for "engineers", because the AI planner treats "engineers" as people.
+2. **run-agent then downgraded `people` to `generic`** (`run-agent/index.ts` L171: `st === "people" ? "generic" : st`). The Apify call log confirms this: `source_type: "generic"`.
+3. **`APIFY_ACTORS` only has keys `jobs / indeed_jobs / website_content / custom_web / search_fallback`** — neither `people` nor `generic` resolves to an actor, so `execSourceWithApify` returns `apify_actor_not_configured` → UI shows "Apify actor missing".
 
-## Scope
+The `jobs` actor itself is correctly configured (`curious_coder/linkedin-jobs-scraper`, `enabled_by_default: true`) — it just never gets selected for prompts like "engineers in London".
 
-One file: `supabase/functions/_shared/toolRegistry.ts`
+## Fix scope
 
-Orchestrator/run-agent routing is already correct (hiring → `source_with_apify`, broad/current → `search_web`, URL → `scrape_url`), so no changes needed there.
+Three edge-function files only. No UI redesign, no DB, no schema, no backend project change, no removal of Apify / Firecrawl / toolRegistry / run-agent / orchestrate / Execution Plan Card / Company Brain / approvals. One small ToolStatusBadge tooltip enrichment to surface debug fields when an actor is missing.
 
-## Changes
+### File 1 — `supabase/functions/_shared/toolRegistry.ts`
 
-### 1. Replace `APIFY_ACTORS` map (toolRegistry.ts ~L318-348)
-
-New shape adds `source_type`, `enabled_by_default`, and `use_for` per the spec, and removes the unused `companies`/`linkedin_posts`/`comments`/`websites`/`generic` placeholders that currently advertise `null` actors:
+Add a single normalization helper used both internally and exported for callers:
 
 ```ts
-const APIFY_ACTORS: Record<string, ApifyActorCfg> = {
-  jobs: {
-    actor_id: "curious_coder/linkedin-jobs-scraper",
-    source_type: "jobs",
-    enabled_by_default: true,
-    use_for: ["hiring signals", "companies hiring roles", "job openings"],
-    description: "LinkedIn jobs search with company details",
-    input_adapter: /* unchanged */,
-  },
-  indeed_jobs: {
-    actor_id: "curious_coder/indeed-scraper",
-    source_type: "indeed_jobs",
-    enabled_by_default: false,
-    use_for: ["Indeed jobs", "non-LinkedIn hiring signals", "backup jobs source"],
-    description: "Indeed jobs scraper (backup hiring source)",
-  },
-  website_content: {
-    actor_id: "apify/website-content-crawler",
-    source_type: "website_content",
-    enabled_by_default: false,
-    use_for: ["website content fallback if Firecrawl fails"],
-    description: "Website content crawler — fallback if Firecrawl fails",
-  },
-  custom_web: {
-    actor_id: "apify/web-scraper",
-    source_type: "custom_web",
-    enabled_by_default: false,
-    use_for: ["custom websites", "directories", "niche job boards"],
-    description: "Generic web scraper for niche/custom sites",
-  },
-  search_fallback: {
-    actor_id: "apify/google-search-scraper",
-    source_type: "search",
-    enabled_by_default: false,
-    use_for: ["optional fallback only if grounded search is unavailable and user explicitly enables it"],
-    description: "Google SERP via Apify — opt-in fallback only",
-  },
+const SOURCE_TYPE_ALIASES: Record<string, string> = {
+  jobs: "jobs", job: "jobs", hiring: "jobs", hiring_signals: "jobs",
+  job_search: "jobs", linkedin_jobs: "jobs", companies_hiring: "jobs",
+  source_companies: "jobs", source_candidates: "jobs",
+  candidates: "jobs", people: "jobs", profiles: "jobs",
+  engineers: "jobs", developers: "jobs", roles: "jobs",
+  indeed_jobs: "indeed_jobs", website_content: "website_content",
+  custom_web: "custom_web", search: "search_fallback",
 };
+export function normalizeApifySourceType(raw?: string | null): string {
+  const k = (raw ?? "").toString().trim().toLowerCase();
+  return SOURCE_TYPE_ALIASES[k] ?? (APIFY_ACTORS[k] ? k : "jobs");
+}
 ```
 
-`ApifyActorCfg` type extended with `source_type: string`, `enabled_by_default: boolean`, `use_for: string[]`.
-
-### 2. Gate disabled actors in `execSourceWithApify` (~L434-453)
-
-When the planner/orchestrator picks an actor via `source_type` or explicit `actor_id`:
-- Look up the registry entry by `source_type` (falling back to scanning by `actor_id`).
-- If the resolved actor has `enabled_by_default === false` AND the caller did not pass `allow_disabled: true` in input, return:
+In `execSourceWithApify`:
+- Run input `source_type` through `normalizeApifySourceType` BEFORE looking up the actor.
+- When actor lookup fails, return debug payload:
   ```ts
-  { ok: false, unavailable: true, error: "apify_actor_disabled_by_default",
-    data: { actor_id, source_type, use_for, message: "Actor is opt-in; enable explicitly via allow_disabled." } }
+  data: {
+    requested_source_type: i.source_type ?? null,
+    normalized_source_type: source_type,
+    expected_actor_key: source_type,
+    actor_configured: false,
+    message: "..."
+  }
   ```
-- Specifically guard `apify/google-search-scraper`: even with explicit `actor_id`, require `allow_disabled: true` so it never becomes the default broad-search path.
+- On success, include `requested_source_type` and `normalized_source_type` in the returned data so the Execution Plan Card can show what was actually used.
 
-This keeps the orchestrator's existing "search_web unavailable" honesty intact — it will no longer silently fall through to Apify SERP scraping.
+Confirm `APIFY_ACTORS.jobs` keeps `actor_id: "curious_coder/linkedin-jobs-scraper"`, `enabled_by_default: true` (already correct — no change).
 
-### 3. Keep `search_web` as-is
+### File 2 — `supabase/functions/run-agent/index.ts`
 
-`search_web` already returns `{ ok: false, unavailable: true, error: "broad_web_search_not_configured" }` until a grounded backend is wired. No change. The orchestrator already prefers `source_with_apify` for hiring shape and `search_web` for broad/current work — routing is already correct.
+Replace the `people → generic` map (L167-181) with:
 
-### 4. No changes to
+```ts
+import { normalizeApifySourceType } from "../_shared/toolRegistry.ts";
+const raw_source_type = tool_input_body?.source_type ?? null;
+let source_type = normalizeApifySourceType(raw_source_type);
+// If no tool_input.source_type, do the existing regex sniff, then normalize.
+if (!raw_source_type) {
+  const text = `${instruction} ${tool_input_body?.query ?? ""}`.toLowerCase();
+  if (/\b(engineers?|developers?|candidates?|people|hiring|roles?|jobs?)\b/.test(text)) source_type = "jobs";
+  else if (/\b(companies|founders?|startups?)\b/.test(text)) source_type = "jobs"; // companies-hiring shape until a companies actor exists
+}
+```
 
-- `toolInputPlanner.ts` (already routes hiring → `source_with_apify`, URL → `scrape_url`, broad → `search_web`)
-- `orchestrate/index.ts`, `run-agent/index.ts` (already use the same routing)
-- Firecrawl `scrape_url` path
-- Approvals / Execution Plan Card / Daily Brief / Company Brain / activity_feed
+Drop the `allowedForHawk` companies path (now also routes to `jobs`). Pass `source_type` (normalized) into the Apify call. Persist debug fields on the tool_calls row:
+
+```ts
+metadata: {
+  requested_source_type: raw_source_type,
+  normalized_source_type: source_type,
+  expected_actor_key: source_type,
+}
+```
+
+### File 3 — `supabase/functions/_shared/toolInputPlanner.ts`
+
+Update the system prompt + fallback parser so that "find N engineers / developers / candidates / people in <place>" maps to:
+
+```json
+{ "tool_name": "source_with_apify", "source_type": "jobs",
+  "query": "engineer", "role_keywords": ["engineer"],
+  "location": "London", "max_results": 10, "execution_mode": "fast" }
+```
+
+In `fallbackParse`, when intent is `source_signals` always set `source_type: "jobs"` (drop the companies/posts/people branches — those actors do not exist). In the AI prompt, add a rule: "No people/profile actor is configured. For prompts that mention engineers / developers / candidates / individual people, interpret as 'companies hiring those roles' and set source_type = jobs."
+
+Add a `people_actor_unavailable` clarification path: if the user explicitly asks for "individual people / candidates / profiles" (regex on `\b(individual|specific) (people|candidates|profiles)\b` or `\bprofiles?\b` without "hiring"), set:
+
+```ts
+ask_clarification = true;
+clarification = "I can currently find companies hiring engineers using Apify Jobs. Individual candidate/profile sourcing requires a people/profile actor to be configured.";
+```
+
+So pilot-chat surfaces it instead of silently running jobs.
+
+### File 4 — `src/components/chat/workspace/plan/ToolStatusBadge.tsx` (tooltip-only, no redesign)
+
+When `latestCall.error === 'apify_actor_not_configured'`, set the existing `title` attribute on the badge span to include `requested_source_type`, `normalized_source_type`, `expected_actor_key`, `actor_configured` from `latestCall.output_json`. Same badge text, same colors — debug-only hover affordance. No new components, no layout change.
+
+## Deployment
+
+Deploy `pilot-chat`, `run-agent`, `orchestrate` after changes.
 
 ## Verification
 
-- `source_type: "jobs"` request → runs `curious_coder/linkedin-jobs-scraper` (unchanged).
-- `source_type: "indeed_jobs" | "website_content" | "custom_web" | "search"` without `allow_disabled` → returns `apify_actor_disabled_by_default` (surfaces as a ToolStatusBadge warning, not a silent run).
-- Broad research prompt with no grounded backend → `search_web` returns `broad_web_search_not_configured` (existing behavior); orchestrator reports honestly instead of falling through to SERP Apify.
-- No frontend, no secrets, no schema changes.
+1. **"Find 10 engineers in London"** → planner emits `source_type: jobs`, run-agent logs `requested=people normalized=jobs`, Apify runs `curious_coder/linkedin-jobs-scraper`, badge shows result count + run_id tail. Aria's output explains these are companies/jobs hiring engineers.
+2. **"Find companies hiring marketing roles in London"** → `source_type: jobs`, jobs actor runs.
+3. **"Find 10 individual React developer profiles in London"** → planner sets `ask_clarification` with the people-actor message; no Apify run.
+4. Force a bad source_type via raw API call to confirm the badge tooltip shows requested vs normalized vs expected actor key.
+
+## Out of scope
+
+UI redesign, removing tools, DB changes, schema changes, RLS changes, secrets changes, search_web behavior (still returns `broad_web_search_not_configured`).
