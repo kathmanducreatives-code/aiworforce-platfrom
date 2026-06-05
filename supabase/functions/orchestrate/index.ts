@@ -777,7 +777,7 @@ Return ONLY valid JSON, no prose, no markdown:
       planner: plannerSource,
       intent,
       agents: parsed.steps.map((s) => s.agent_slug),
-      connectors_missing: connectorsMissing.map((env) => TOOL_FRIENDLY[env] ?? env),
+      connectors_missing: connectorsMissing,
       plan: parsed,
     });
   } catch (err) {
