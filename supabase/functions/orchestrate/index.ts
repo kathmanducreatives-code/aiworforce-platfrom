@@ -477,20 +477,27 @@ function expandPlan(instruction: string, intent: Intent, steps: Step[]): Step[] 
 // ---------- Tool annotation ----------
 
 function annotateTools(steps: Step[]): string[] {
-  const missing: string[] = [];
+  const messages: string[] = [];
+  const seen = new Set<string>();
   for (const s of steps) {
     if (!s.tool_needed) continue;
     const status = isToolConfigured(s.tool_needed);
     if (status.ready) {
       s.tool_status = "ready";
-    } else {
-      s.tool_status = "connector_required";
-      s.connector_required = status.env;
-      if (status.env && !missing.includes(status.env)) missing.push(status.env);
+      continue;
+    }
+    s.tool_status = "connector_required";
+    s.connector_required = status.env;
+    const msg = TOOL_LIMITATION_MESSAGE[s.tool_needed]
+      ?? `${s.tool_needed} unavailable (${status.env ?? "not configured"}).`;
+    if (!seen.has(msg)) {
+      seen.add(msg);
+      messages.push(msg);
     }
   }
-  return missing;
+  return messages;
 }
+
 
 // ---------- JSON parsing helpers (kept for AI output) ----------
 
