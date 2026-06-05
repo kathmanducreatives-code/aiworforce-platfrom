@@ -66,12 +66,17 @@ const KNOWN_AGENTS: Record<string, string> = {
   scribe: "Scribe",
 };
 
-const TOOL_FRIENDLY: Record<string, string> = {
-  PERPLEXITY_API_KEY: "Perplexity",
-  FIRECRAWL_API_KEY: "Firecrawl",
-  APIFY_API_TOKEN: "Apify",
-  RESEND_API_KEY: "Resend",
+// Human-readable, tool-aware limitation messages keyed by tool name.
+// We emit these directly into connectors_missing so the UI never shows raw
+// env names or surfaces Perplexity for plans that don't actually need it.
+const TOOL_LIMITATION_MESSAGE: Record<string, string> = {
+  source_with_apify: "Apify token missing — hiring-signal sourcing unavailable.",
+  scrape_url: "Firecrawl missing — page extraction unavailable.",
+  search_web: "Broad web search is not configured. Use Apify for hiring signals or Firecrawl for specific URLs.",
+  research_web: "Perplexity not configured (optional fallback).",
+  send_email: "Resend missing — outreach can be drafted but not sent.",
 };
+
 
 function normalizeSlug(s: string | undefined | null): Step["agent_slug"] | null {
   if (!s) return null;
