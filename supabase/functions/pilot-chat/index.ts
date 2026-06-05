@@ -218,7 +218,82 @@ Deno.serve(async (req) => {
     ? `\n\nCOMPANY BRAIN (workspace context — use to ground every decision):\n${JSON.stringify(brain, null, 2)}`
     : `\n\nCOMPANY BRAIN: (empty — workspace has not completed onboarding yet. If the user asks for work that requires company context, suggest completing onboarding at /onboarding/company-brain.)`;
 
-  // 7. Ask Pilot brain via the AI provider adapter (Lovable AI Gateway default).
+  // 6c. Intent routing — short-circuit when we don't need full Pilot reasoning.
+  const intentResult = await classifyIntent(message);
+  console.log("[pilot-chat] intent:", intentResult);
+
+  // 6c.i Unclear → ask one clarification, no orchestration.
+  if (intentResult.intent === "unclear") {
+    const clarification = "I'm not sure what you'd like me to do. Could you add a bit more detail — for example, the role/company type and a location, or a specific URL?";
+    const { data: saved } = await admin
+      .from("messages")
+      .insert({
+        conversation_id: conversationId,
+        role: "assistant",
+        content: clarification,
+        agent_slug: "pilot",
+        model_used: "google/gemini-3-flash-preview",
+        metadata: { intent: "unclear", clarification: true },
+      })
+      .select("*")
+      .single();
+    return json({ type: "reply", conversation_id: conversationId, intent: "unclear", message: saved });
+  }
+
+  // 6c.ii Source-style intent → run tool input planner; may ask clarification.
+  let toolInput: ToolInput | null = null;
+  if (
+    intentResult.intent === "source_signals" ||
+    intentResult.intent === "analyze_url" ||
+    intentResult.intent === "enrich_existing_leads" ||
+    intentResult.intent === "draft_outreach" ||
+    intentResult.intent === "send_requires_approval" ||
+    intentResult.intent === "rank_existing_leads"
+  ) {
+    toolInput = await planToolInput(message, intentResult.intent, brain);
+    console.log("[pilot-chat] tool_input:", toolInput);
+
+    if (toolInput.ask_clarification) {
+      const q = toolInput.clarification ?? "Could you share a bit more — role/company type and location would help.";
+      const { data: saved } = await admin
+        .from("messages")
+        .insert({
+          conversation_id: conversationId,
+          role: "assistant",
+          content: q,
+          agent_slug: "pilot",
+          model_used: "google/gemini-3-flash-preview",
+          metadata: { intent: intentResult.intent, clarification: true, missing_fields: toolInput.missing_fields },
+        })
+        .select("*")
+        .single();
+      return json({
+        type: "reply",
+        conversation_id: conversationId,
+        intent: intentResult.intent,
+        clarification: true,
+        message: saved,
+      });
+    }
+  }
+
+  // 6c.iii When we have a confident tool_input, skip the Pilot AI decision and delegate directly.
+  if (toolInput && toolInput.tool_name) {
+    return await delegateToOrchestrate({
+      admin,
+      SUPABASE_URL,
+      SUPABASE_ANON_KEY,
+      authHeader,
+      conversationId,
+      workspaceId,
+      instruction: message,
+      toolInput,
+      modelUsed: "google/gemini-3-flash-preview",
+      providerUsed: "lovable-ai",
+    });
+  }
+
+  // 7. Otherwise let Pilot decide (simple_chat / daily_brief fallthrough / content).
   const ai = await generateJson({
     taskType: "pilot_chat",
     systemPrompt: PILOT_SYSTEM_PROMPT + brainBlock,
