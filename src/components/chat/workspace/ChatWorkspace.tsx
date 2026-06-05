@@ -16,7 +16,7 @@ import WorkbenchPanel from './workbench/WorkbenchPanel';
 import { TooltipProvider } from '@/components/ui/tooltip';
 
 export default function ChatWorkspace() {
-  const { mode, view, height, close, toggleFullscreen, setHeight, setView, pending } = useChatWorkspace();
+  const { mode, view, height, close, toggleFullscreen, setHeight, setView, pending, workbenchOpen, workbenchWidth, closeWorkbench } = useChatWorkspace();
   const isMobile = useIsMobile();
   const containerRef = useRef<HTMLDivElement>(null);
 
