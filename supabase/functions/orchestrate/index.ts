@@ -714,7 +714,7 @@ Return ONLY valid JSON, no prose, no markdown:
   ]
 }`;
 
-    const ai = await generateJson({
+    ai = await generateJson({
       taskType: "orchestration_plan",
       systemPrompt: "You are a planning assistant. Respond with valid JSON only.",
       messages: [{ role: "user", content: orchestratorPrompt }],
@@ -734,9 +734,6 @@ Return ONLY valid JSON, no prose, no markdown:
       latency_ms: ai.latencyMs,
       error_code: ai.errorCode,
     });
-
-    let plannerSource: "ai" | "fallback" = "fallback";
-    let parsed: { plan_summary: string; steps: Step[] } | null = null;
 
     if (ai.ok && ai.json) {
       const p = ai.json as { plan_summary?: string; steps?: any[] };
@@ -780,11 +777,13 @@ Return ONLY valid JSON, no prose, no markdown:
 
     if (!parsed) parsed = fallbackPlan(user_instruction, intent);
 
-    // Deterministic expansion.
+    // Deterministic expansion (only when not using staged plan).
     parsed.steps = expandPlan(user_instruction, intent, parsed.steps);
 
+    } // end AI planner branch
+
     // Tool availability annotation.
-    const connectorsMissing = annotateTools(parsed.steps);
+    const connectorsMissing = annotateTools(parsed!.steps);
 
     console.log("[orchestrate] plan ready", {
       source: plannerSource,
