@@ -5,6 +5,8 @@
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { generateJson, logProviderCall } from "../_shared/aiProvider.ts";
+import { classifyIntent } from "../_shared/intentRouter.ts";
+import { planToolInput, type ToolInput } from "../_shared/toolInputPlanner.ts";
 
 
 const cors = {
