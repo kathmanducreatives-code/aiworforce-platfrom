@@ -220,6 +220,11 @@ export async function planToolInput(
   // Cost caps.
   merged.max_results = Math.max(1, Math.min(200, merged.max_results || 25));
 
+  // No people/companies/posts actors configured — coerce to jobs whenever Apify is used.
+  if (merged.tool_name === "source_with_apify") {
+    if (merged.source_type !== "jobs") merged.source_type = "jobs";
+  }
+
   // Clarification gate.
   if (
     merged.intent === "source_signals" &&
@@ -233,6 +238,15 @@ export async function planToolInput(
       ? "Which role or industry should I focus on?"
       : "Which location should I focus on?";
     merged.clarification = need;
+  }
+
+  // Explicit individual-people request — no people actor configured.
+  const explicitPeople = /\b(individual|specific)\s+(people|candidates|profiles|persons?)\b/i.test(prompt)
+    || /\b(individual\s+\w+\s+(profiles?|candidates?))\b/i.test(prompt)
+    || (/\bprofiles?\b/i.test(prompt) && !/\bhiring\b/i.test(prompt) && !/\bcompanies?\b/i.test(prompt));
+  if (merged.intent === "source_signals" && explicitPeople) {
+    merged.ask_clarification = true;
+    merged.clarification = "I can currently find companies hiring for that role using Apify Jobs. Individual candidate/profile sourcing requires a people/profile actor to be configured. Want me to find companies hiring instead?";
   }
 
   return merged;
