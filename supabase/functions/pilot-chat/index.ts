@@ -487,109 +487,17 @@ Deno.serve(async (req) => {
   }
 
 
-  // 8c. Delegate branch — call orchestrate server-to-server, forwarding the user JWT.
-  const orchResponse = await fetch(`${SUPABASE_URL}/functions/v1/orchestrate`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: authHeader, // forward user JWT so orchestrate's membership check passes
-      apikey: SUPABASE_ANON_KEY,
-    },
-    body: JSON.stringify({
-      user_instruction: decision.instruction,
-      workspace_id: workspaceId,
-    }),
-  });
-  const orchBody = await orchResponse.json().catch(() => ({}));
-
-  if (!orchResponse.ok) {
-    console.error("[pilot-chat] orchestrate failed:", orchResponse.status, orchBody);
-    const errMsg = `I started building a plan but the orchestrator failed: ${orchBody?.error ?? "unknown"}`;
-    const { data: saved } = await admin
-      .from("messages")
-      .insert({
-        conversation_id: conversationId,
-        role: "assistant",
-        content: errMsg,
-        agent_slug: "pilot",
-        model_used: modelUsed,
-
-        is_error: true,
-      })
-      .select("*")
-      .single();
-    return json(
-      {
-        type: "reply",
-        conversation_id: conversationId,
-        message: saved,
-        error: `orchestrate ${orchResponse.status}: ${JSON.stringify(orchBody)}`,
-      },
-      502
-    );
-  }
-
-  const planSummary: string = orchBody?.plan_summary ?? "(no summary)";
-  const planId: string = orchBody?.task_plan_id ?? orchBody?.plan_id ?? "";
-  const stepsCount: number = orchBody?.total_steps ?? orchBody?.steps_count ?? 0;
-  const agents: string[] = Array.isArray(orchBody?.agents) ? orchBody.agents : [];
-  const connectorsMissing: string[] = Array.isArray(orchBody?.connectors_missing) ? orchBody.connectors_missing : [];
-  const planSteps: any[] = Array.isArray(orchBody?.plan?.steps) ? orchBody.plan.steps : [];
-
-  const agentNames: Record<string, string> = { scout: "Scout", aria: "Aria", penn: "Penn", hawk: "Hawk", scribe: "Scribe" };
-  const chain = planSteps
-    .map((s) => {
-      const name = agentNames[s.agent_slug] ?? s.agent_slug;
-      const verb = (s.task_title || "").toString().toLowerCase() || "work the step";
-      return `${name} will ${verb}`;
-    })
-    .join(", ");
-
-  const needsApproval = planSteps.some((s) => s.requires_approval && s.tool_needed === "send_email");
-  const approvalNote = needsApproval ? " Penn will pause for your approval before sending." : "";
-  const connectorNote = connectorsMissing.length
-    ? ` Heads up: ${connectorsMissing.join(" ")} I'll continue with available tools.`
-    : "";
-
-
-  const announce = stepsCount > 0
-    ? `I created a ${stepsCount}-step plan: ${chain}.${approvalNote}${connectorNote}`
-    : `On it. ${planSummary}`;
-
-  const planTitle: string = (orchBody?.plan_title || planSummary || "Execution plan").toString().slice(0, 140);
-  const announceMetadata = planId
-    ? {
-        type: "execution_plan",
-        plan_id: planId,
-        plan_title: planTitle,
-        task_count: stepsCount,
-        agents,
-        connector_limitations: connectorsMissing,
-      }
-    : {};
-
-  const { data: announced } = await admin
-    .from("messages")
-    .insert({
-      conversation_id: conversationId,
-      role: "assistant",
-      content: announce,
-      agent_slug: "pilot",
-      model_used: modelUsed,
-      metadata: announceMetadata,
-    })
-    .select("*")
-    .single();
-
-  return json({
-    type: "plan",
-    conversation_id: conversationId,
-    plan_id: planId,
-    plan_title: planTitle,
-    plan_summary: planSummary,
-    steps_count: stepsCount,
-    agents,
-    connector_limitations: connectorsMissing,
-    message: announced,
+  // 8c. Delegate branch — call the shared orchestrate helper.
+  return await delegateToOrchestrate({
+    admin,
+    SUPABASE_URL,
+    SUPABASE_ANON_KEY,
+    authHeader,
+    conversationId,
+    workspaceId,
+    instruction: decision.instruction,
+    toolInput: null,
+    modelUsed,
+    providerUsed,
   });
 });
