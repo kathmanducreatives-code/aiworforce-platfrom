@@ -336,30 +336,37 @@ function expandPlan(instruction: string, intent: Intent, steps: Step[]): Step[] 
   }
 
   if (intent === "intelligence") {
+    const hiringShape = /(hiring|jobs?|roles?|companies?|recruit|engineers?|marketers?|developers?|leads?|founders?)/.test(t);
+    const defaultTool = hiringShape ? "source_with_apify" : "search_web";
     const hawk = find("hawk");
     if (!hawk) {
       steps.unshift(
-        mkStep(0, "hawk", "Research signals", `Research signals for: ${instruction}`, {
-          tool_needed: "research_web",
-          expected_output: "Cited signals from current sources.",
-          success_criteria: "At least 3 cited signals.",
+        mkStep(0, "hawk", hiringShape ? "Source hiring/company signals" : "Research signals", `Investigate: ${instruction}`, {
+          tool_needed: defaultTool,
+          expected_output: hiringShape
+            ? "Companies/roles with source URLs from Apify."
+            : "Cited signals from current sources (if broad search is configured).",
+          success_criteria: hiringShape
+            ? "Apify returns results or reports unavailable."
+            : "At least 3 cited signals, or a clear unavailable note.",
           planner_source: "expansion",
         }),
       );
-    } else if (!hawk.tool_needed) {
-      hawk.tool_needed = "research_web";
+    } else if (!hawk.tool_needed || hawk.tool_needed === "research_web") {
+      hawk.tool_needed = defaultTool;
     }
     if (/(brief|report|summary|memo)/.test(t) && !has("scribe")) {
       steps.push(
         mkStep(0, "scribe", "Brief summary", `Summarize intel for: ${instruction}`, {
           tool_needed: "summarize_text",
           expected_output: "Short intel brief with recommended action.",
-          success_criteria: "Grounded in research above.",
+          success_criteria: "Grounded in findings above.",
           planner_source: "expansion",
         }),
       );
     }
   }
+
 
   if (intent === "outreach") {
     if (!has("penn")) {
@@ -400,16 +407,18 @@ function expandPlan(instruction: string, intent: Intent, steps: Step[]): Step[] 
       );
     }
     if (/(current|today|latest|now)/.test(t) && !has("hawk") && !has("scout")) {
+      const broadTool = isToolConfigured("search_web").ready ? "search_web" : "search_web";
       steps.unshift(
         mkStep(0, "hawk", "Research facts", `Gather supporting facts for: ${instruction}`, {
-          tool_needed: "research_web",
-          expected_output: "Cited supporting facts.",
-          success_criteria: "Facts have sources.",
+          tool_needed: broadTool,
+          expected_output: "Cited supporting facts (if broad search is configured).",
+          success_criteria: "Facts have sources, or step reports unavailable.",
           planner_source: "expansion",
         }),
       );
     }
   }
+
 
   if (intent === "screening" && !has("aria")) {
     steps.unshift(
@@ -434,17 +443,23 @@ function expandPlan(instruction: string, intent: Intent, steps: Step[]): Step[] 
         }),
       );
     }
-    if (!has("hawk") && isToolConfigured("research_web").ready) {
+    const pulseTool = isToolConfigured("search_web").ready
+      ? "search_web"
+      : isToolConfigured("research_web").ready
+      ? "research_web"
+      : null;
+    if (!has("hawk") && pulseTool) {
       steps.push(
         mkStep(0, "hawk", "Live market pulse", "Add 3-5 bullets of external intel pulse.", {
-          tool_needed: "research_web",
+          tool_needed: pulseTool,
           expected_output: "External pulse with citations.",
-          success_criteria: "Skipped if Perplexity unavailable.",
+          success_criteria: "Skipped gracefully if the tool reports unavailable.",
           planner_source: "expansion",
         }),
       );
     }
   }
+
 
   // Force send_email steps to be approval-gated.
   for (const s of steps) {
