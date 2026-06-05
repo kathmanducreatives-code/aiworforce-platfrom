@@ -2,8 +2,12 @@
 import { createClient } from '@supabase/supabase-js';
 import type { Database } from './types';
 
-const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
-const SUPABASE_PUBLISHABLE_KEY = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
+const SUPABASE_URL = "https://wqnigjhcwjxtmordrwno.supabase.co";
+const SUPABASE_PUBLISHABLE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Indxbmlnamhjd2p4dG1vcmRyd25vIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzcxNzQ0NjUsImV4cCI6MjA5Mjc1MDQ2NX0.GelbMIlFnirbVFu50ywoFekbHSBcg_v2hc3dIVHMPog";
+
+if (!SUPABASE_URL || !SUPABASE_PUBLISHABLE_KEY) {
+  throw new Error("Supabase client misconfigured: missing URL or publishable key in the production bundle.");
+}
 
 // Import the supabase client like this:
 // import { supabase } from "@/integrations/supabase/client";

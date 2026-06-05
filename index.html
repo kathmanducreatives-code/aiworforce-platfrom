@@ -34,8 +34,39 @@
     rel="stylesheet">
 </head>
 
-<body>
-  <div id="root"></div>
+<body style="margin:0;background:#020202;color:#e6e6e6;font-family:DM Sans,system-ui,sans-serif;">
+  <div id="root">
+    <div id="boot-fallback" style="position:fixed;inset:0;display:flex;align-items:center;justify-content:center;background:#020202;color:#e6e6e6;">
+      <div style="text-align:center;max-width:420px;padding:24px;">
+        <div style="width:32px;height:32px;border:2px solid #10B981;border-top-color:transparent;border-radius:50%;margin:0 auto 16px;animation:agentory-spin 1s linear infinite;"></div>
+        <div id="boot-fallback-msg" style="font-size:14px;opacity:0.85;">Loading Agentory…</div>
+        <div id="boot-fallback-actions" style="display:none;margin-top:20px;gap:8px;justify-content:center;">
+          <button onclick="location.reload()" style="padding:8px 14px;border-radius:8px;border:1px solid #10B981;background:#10B981;color:#020202;font-size:13px;cursor:pointer;">Reload</button>
+          <button onclick="try{Object.keys(localStorage).filter(k=>k.startsWith('sb-')).forEach(k=>localStorage.removeItem(k));}catch(e){}location.assign('/auth')" style="padding:8px 14px;border-radius:8px;border:1px solid #333;background:transparent;color:#e6e6e6;font-size:13px;margin-left:8px;cursor:pointer;">Sign out</button>
+        </div>
+      </div>
+    </div>
+  </div>
+  <style>@keyframes agentory-spin{to{transform:rotate(360deg)}}</style>
+  <script>
+    // Watchdog: if React hasn't replaced the fallback in 10s, surface recovery actions.
+    setTimeout(function(){
+      var el = document.getElementById('boot-fallback');
+      if (!el) return;
+      var msg = document.getElementById('boot-fallback-msg');
+      var actions = document.getElementById('boot-fallback-actions');
+      if (msg) msg.textContent = "Agentory is taking longer than expected to load.";
+      if (actions) actions.style.display = 'flex';
+    }, 10000);
+    window.addEventListener('error', function(e){
+      var el = document.getElementById('boot-fallback');
+      if (!el) return;
+      var msg = document.getElementById('boot-fallback-msg');
+      var actions = document.getElementById('boot-fallback-actions');
+      if (msg) msg.textContent = "Agentory hit an error while loading. Please reload or sign out.";
+      if (actions) actions.style.display = 'flex';
+    });
+  </script>
   <script type="module" src="/src/main.tsx"></script>
 </body>
 
