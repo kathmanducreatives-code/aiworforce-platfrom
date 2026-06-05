@@ -94,6 +94,7 @@ const App = () => (
                   <div className="relative min-h-screen w-full">
                     <AuthenticatedBackground />
                     {import.meta.env.DEV && <PreviewDiagnostics />}
+                  <RouteErrorBoundary>
                   <Routes>
 
                     {/* Public Routes */}
