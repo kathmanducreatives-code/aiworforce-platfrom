@@ -1,115 +1,103 @@
-## Root cause
+## Goal
 
-Live test of "Find 10 engineers in London" failed with "Apify actor missing" for three layered reasons:
+Add a premium right-side "Workbench" panel to the existing `ChatWorkspace` that lets users drill into the actual outputs of each agent task and tool call (Scout, Aria, Hawk, Penn, Scribe, Apify, Firecrawl, etc.) without redesigning the rest of the app.
 
-1. **Planner returned `source_type: "people"`** (see pilot-chat log) for "engineers", because the AI planner treats "engineers" as people.
-2. **run-agent then downgraded `people` to `generic`** (`run-agent/index.ts` L171: `st === "people" ? "generic" : st`). The Apify call log confirms this: `source_type: "generic"`.
-3. **`APIFY_ACTORS` only has keys `jobs / indeed_jobs / website_content / custom_web / search_fallback`** — neither `people` nor `generic` resolves to an actor, so `execSourceWithApify` returns `apify_actor_not_configured` → UI shows "Apify actor missing".
+No backend/RLS/edge-function changes. Pure frontend, reads existing tables.
 
-The `jobs` actor itself is correctly configured (`curious_coder/linkedin-jobs-scraper`, `enabled_by_default: true`) — it just never gets selected for prompts like "engineers in London".
+## UX
 
-## Fix scope
+- New panel docked to the right inside `ChatWorkspace`, opened by:
+  - clicking a task row in `ExecutionPlanCard`
+  - clicking a `ToolStatusBadge` (e.g. "Apify · 10 results")
+  - explicit "Open output" / "View results" buttons we add to rows
+- Desktop: resizable split (chat left, Workbench right, default ~42% width, min 360px, collapsible via close button).
+- Mobile: opens as a full-screen drawer over the chat.
+- State lives in `ChatWorkspaceContext` as `selectedOutput { planId, taskId?, agentSlug?, toolCallId? }`.
 
-Three edge-function files only. No UI redesign, no DB, no schema, no backend project change, no removal of Apify / Firecrawl / toolRegistry / run-agent / orchestrate / Execution Plan Card / Company Brain / approvals. One small ToolStatusBadge tooltip enrichment to surface debug fields when an actor is missing.
+`ExecutionPlanCard` stays compact — detailed result rendering moves into Workbench.
 
-### File 1 — `supabase/functions/_shared/toolRegistry.ts`
+## Files to add
 
-Add a single normalization helper used both internally and exported for callers:
-
-```ts
-const SOURCE_TYPE_ALIASES: Record<string, string> = {
-  jobs: "jobs", job: "jobs", hiring: "jobs", hiring_signals: "jobs",
-  job_search: "jobs", linkedin_jobs: "jobs", companies_hiring: "jobs",
-  source_companies: "jobs", source_candidates: "jobs",
-  candidates: "jobs", people: "jobs", profiles: "jobs",
-  engineers: "jobs", developers: "jobs", roles: "jobs",
-  indeed_jobs: "indeed_jobs", website_content: "website_content",
-  custom_web: "custom_web", search: "search_fallback",
-};
-export function normalizeApifySourceType(raw?: string | null): string {
-  const k = (raw ?? "").toString().trim().toLowerCase();
-  return SOURCE_TYPE_ALIASES[k] ?? (APIFY_ACTORS[k] ? k : "jobs");
-}
+```
+src/components/chat/workspace/workbench/
+  WorkbenchPanel.tsx          // dock container, resize, close
+  WorkbenchHeader.tsx         // plan title, agent, task, status, tool, source, timestamp
+  WorkbenchTabs.tsx           // Summary / Results / Raw / Reasoning / Next Actions (hide empty)
+  AgentOutputViewer.tsx       // routes to per-agent view based on agent_slug
+  ScoutResultsView.tsx        // Apify/Firecrawl jobs+companies cards
+  AriaRankingView.tsx         // ranked leads, score, Hot/Warm/Maybe/Ignore
+  HawkResearchView.tsx        // Firecrawl markdown, signals, sources
+  PennDraftView.tsx           // outreach drafts + approval status
+  ScribeReportView.tsx        // final report with copy
+  RawJsonView.tsx             // collapsed JSON tree
+  OutputActionBar.tsx         // chat-prefill actions ("Send to Aria", "Enrich top 3"…)
+  useWorkbenchData.ts         // hook merging task + tool_calls + approvals + activity for selection
+  normalize.ts                // safe shape detection (extends src/lib/outputShape.ts)
 ```
 
-In `execSourceWithApify`:
-- Run input `source_type` through `normalizeApifySourceType` BEFORE looking up the actor.
-- When actor lookup fails, return debug payload:
-  ```ts
-  data: {
-    requested_source_type: i.source_type ?? null,
-    normalized_source_type: source_type,
-    expected_actor_key: source_type,
-    actor_configured: false,
-    message: "..."
-  }
-  ```
-- On success, include `requested_source_type` and `normalized_source_type` in the returned data so the Execution Plan Card can show what was actually used.
+## Files to edit
 
-Confirm `APIFY_ACTORS.jobs` keeps `actor_id: "curious_coder/linkedin-jobs-scraper"`, `enabled_by_default: true` (already correct — no change).
+- `src/contexts/ChatWorkspaceContext.tsx` — add `selectedOutput`, `setSelectedOutput`, `workbenchOpen`, `openWorkbench`, `closeWorkbench`, `workbenchWidth`, `setWorkbenchWidth`.
+- `src/components/chat/workspace/ChatWorkspace.tsx` — render `WorkbenchPanel` next to the chat column when `workbenchOpen`; mobile uses full-screen overlay.
+- `src/components/chat/workspace/plan/ExecutionPlanCard.tsx` — task row + tool badge clicks call `openWorkbench({...})` instead of (or in addition to) the existing `setView({kind:'conversation'})` jump.
+- `src/components/chat/workspace/plan/ExecutionTaskRow.tsx` — add "View output" affordance, make row clickable.
+- `src/components/chat/workspace/plan/ToolStatusBadge.tsx` — make clickable, calls `openWorkbench({ toolCallId, ... })`.
 
-### File 2 — `supabase/functions/run-agent/index.ts`
+No edits to backend code, edge functions, RLS, or `toolRegistry`.
 
-Replace the `people → generic` map (L167-181) with:
+## Data sources (read-only)
 
-```ts
-import { normalizeApifySourceType } from "../_shared/toolRegistry.ts";
-const raw_source_type = tool_input_body?.source_type ?? null;
-let source_type = normalizeApifySourceType(raw_source_type);
-// If no tool_input.source_type, do the existing regex sniff, then normalize.
-if (!raw_source_type) {
-  const text = `${instruction} ${tool_input_body?.query ?? ""}`.toLowerCase();
-  if (/\b(engineers?|developers?|candidates?|people|hiring|roles?|jobs?)\b/.test(text)) source_type = "jobs";
-  else if (/\b(companies|founders?|startups?)\b/.test(text)) source_type = "jobs"; // companies-hiring shape until a companies actor exists
-}
-```
+Reuse existing hooks/queries from `src/lib/orchestration.ts`:
+- `tasks` → `output`, `payload`, `status`, `agent_id`, `description`
+- `tool_calls` → `tool_name`, `provider`, `input_json`, `output_json`, `status`, `error`, `metadata` (where present)
+- `approvals` → status / title / description for Penn drafts
+- `activity_feed` → timeline entries for the selected task
+- `agents` → slug/name for header
 
-Drop the `allowedForHawk` companies path (now also routes to `jobs`). Pass `source_type` (normalized) into the Apify call. Persist debug fields on the tool_calls row:
+`useWorkbenchData(planId, selection)` selects the matching task + latest tool_call + approval + scoped activity from already-loaded `usePlanDetail`.
 
-```ts
-metadata: {
-  requested_source_type: raw_source_type,
-  normalized_source_type: source_type,
-  expected_actor_key: source_type,
-}
-```
+## Per-agent rendering
 
-### File 3 — `supabase/functions/_shared/toolInputPlanner.ts`
+Selection routed by `agent_slug` (fallback to tool provider when no agent):
+- **scout** → `ScoutResultsView`. Parses `tool_calls.output_json` for Apify jobs (`items[]` with company/title/location/url) and renders cards + table; raw items collapsed.
+- **aria** → `AriaRankingView`. Reads structured `tasks.output.rankings` if present, otherwise renders parsed markdown with Hot/Warm/Maybe/Ignore badges.
+- **hawk** → `HawkResearchView`. Renders Firecrawl markdown + extracted signals + source URLs.
+- **penn** → `PennDraftView`. Subject + body + LinkedIn note + approval pill. Approve/Reject buttons only when a pending `approval` row exists; calls existing `decideApproval()`.
+- **scribe** → `ScribeReportView`. Markdown + copy.
+- fallback → `RawJsonView`.
 
-Update the system prompt + fallback parser so that "find N engineers / developers / candidates / people in <place>" maps to:
+Tool-call selection (no agent context) → render by `provider`: `apify` → ScoutResultsView; `firecrawl` → HawkResearchView; others → RawJsonView.
 
-```json
-{ "tool_name": "source_with_apify", "source_type": "jobs",
-  "query": "engineer", "role_keywords": ["engineer"],
-  "location": "London", "max_results": 10, "execution_mode": "fast" }
-```
+## OutputActionBar
 
-In `fallbackParse`, when intent is `source_signals` always set `source_type: "jobs"` (drop the companies/posts/people branches — those actors do not exist). In the AI prompt, add a rule: "No people/profile actor is configured. For prompts that mention engineers / developers / candidates / individual people, interpret as 'companies hiring those roles' and set source_type = jobs."
+Buttons prefill the chat composer via existing `ChatComposerPro` (text dispatch) — no new backend calls:
+- "Send to Aria for ranking"
+- "Enrich top 3"
+- "Draft outreach with Penn"
+- "Save to leads" (disabled placeholder if signal table absent)
 
-Add a `people_actor_unavailable` clarification path: if the user explicitly asks for "individual people / candidates / profiles" (regex on `\b(individual|specific) (people|candidates|profiles)\b` or `\bprofiles?\b` without "hiring"), set:
+## Empty / error states
 
-```ts
-ask_clarification = true;
-clarification = "I can currently find companies hiring engineers using Apify Jobs. Individual candidate/profile sourcing requires a people/profile actor to be configured.";
-```
+- No task selected → empty hero "Pick a step or tool to view its output."
+- Task running, no output yet → "Output not available yet. The agent may still be working."
+- Tool call failed → red card with `error` text + Retry button hidden for v1 (safe: just show message).
+- Old/missing metadata → fallback to RawJsonView or empty message; never crash (wrapped in `ChatErrorBoundary`).
 
-So pilot-chat surfaces it instead of silently running jobs.
+## Realtime
 
-### File 4 — `src/components/chat/workspace/plan/ToolStatusBadge.tsx` (tooltip-only, no redesign)
+No new channels — `usePlanDetail` already subscribes to plans/tasks/tool_calls/approvals/activity. The Workbench re-renders from the same store. Add a manual "Refresh" button in the header as backup.
 
-When `latestCall.error === 'apify_actor_not_configured'`, set the existing `title` attribute on the badge span to include `requested_source_type`, `normalized_source_type`, `expected_actor_key`, `actor_configured` from `latestCall.output_json`. Same badge text, same colors — debug-only hover affordance. No new components, no layout change.
+## Visual style
 
-## Deployment
-
-Deploy `pilot-chat`, `run-agent`, `orchestrate` after changes.
+Reuse existing Verdant tokens (`bg-background`, `border-white/[0.06]`, emerald accents). Glassmorphic header, badge row, tabs styled like existing plan card. No hardcoded hex.
 
 ## Verification
 
-1. **"Find 10 engineers in London"** → planner emits `source_type: jobs`, run-agent logs `requested=people normalized=jobs`, Apify runs `curious_coder/linkedin-jobs-scraper`, badge shows result count + run_id tail. Aria's output explains these are companies/jobs hiring engineers.
-2. **"Find companies hiring marketing roles in London"** → `source_type: jobs`, jobs actor runs.
-3. **"Find 10 individual React developer profiles in London"** → planner sets `ask_clarification` with the people-actor message; no Apify run.
-4. Force a bad source_type via raw API call to confirm the badge tooltip shows requested vs normalized vs expected actor key.
+1. "Find 10 engineers in London" → click Apify badge → Workbench shows 10 normalized job/company cards + raw JSON tab.
+2. "Find companies hiring marketing roles in London and draft outreach" → Scout, Aria, Penn tabs/views all reachable; Penn shows pending approval pill; no auto-send.
+3. "Hawk, scrape https://stripe.com/jobs…" → Firecrawl badge opens Hawk view with markdown + sources.
+4. Old conversation with missing `output` → Workbench shows "Output not available yet." with no crash.
 
 ## Out of scope
 
-UI redesign, removing tools, DB changes, schema changes, RLS changes, secrets changes, search_web behavior (still returns `broad_web_search_not_configured`).
+No changes to: ChatWorkspace chat logic, ExecutionPlanCard status semantics, orchestrate/run-agent/pilot-chat edge functions, toolRegistry, approvals backend, Daily Brief, Apify/Firecrawl actor config, RLS policies, secrets.

@@ -40,7 +40,13 @@ export default function ExecutionPlanCard({ planId, meta }: Props) {
   const { workspaceId } = useWorkspace();
   const { agents } = useAgents(workspaceId);
   const { plan, tasks, activity, approvals, toolCalls, loading } = usePlanDetail(planId);
-  const { setView } = useChatWorkspace();
+  const { setView, openWorkbench } = useChatWorkspace();
+
+  const handleOpenOutput = (taskId: string, toolCallId?: string | null) => {
+    const task = tasks.find((t) => t.id === taskId);
+    const slug = task?.agent_id ? agentById[task.agent_id] ?? null : null;
+    openWorkbench({ planId, taskId, agentSlug: slug, toolCallId: toolCallId ?? null });
+  };
 
   const agentById = useMemo(() => {
     const m: Record<string, string> = {};
@@ -156,6 +162,7 @@ export default function ExecutionPlanCard({ planId, meta }: Props) {
             approval={approvalByTask[t.id] ?? null}
             connectorMissingFor={connectorMissingFor}
             onReviewApproval={() => setView({ kind: 'conversation', planId })}
+            onOpenOutput={handleOpenOutput}
           />
         ))}
         {tasks.length === 0 && (

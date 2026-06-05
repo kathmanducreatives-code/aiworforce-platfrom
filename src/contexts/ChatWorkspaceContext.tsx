@@ -24,17 +24,30 @@ interface PendingState {
   awaiting: boolean;
 }
 
+export interface WorkbenchSelection {
+  planId: string;
+  taskId?: string | null;
+  agentSlug?: string | null;
+  toolCallId?: string | null;
+}
+
 interface Ctx {
   mode: ChatMode;
   view: ChatViewKind;
   height: number;
   pending: PendingState | null;
+  workbenchOpen: boolean;
+  workbenchWidth: number;
+  selectedOutput: WorkbenchSelection | null;
   open: () => void;
   close: () => void;
   toggleFullscreen: () => void;
   setHeight: (h: number) => void;
   setView: (v: ChatViewKind) => void;
   setPending: (p: PendingState | null) => void;
+  openWorkbench: (sel: WorkbenchSelection) => void;
+  closeWorkbench: () => void;
+  setWorkbenchWidth: (w: number) => void;
 }
 
 const ChatWorkspaceContext = createContext<Ctx | null>(null);
@@ -44,6 +57,15 @@ export const ChatWorkspaceProvider = ({ children }: { children: ReactNode }) => 
   const [view, setView] = useState<ChatViewKind>({ kind: 'empty' });
   const [height, setHeight] = useState<number>(70);
   const [pending, setPending] = useState<PendingState | null>(null);
+  const [workbenchOpen, setWorkbenchOpen] = useState(false);
+  const [workbenchWidth, setWorkbenchWidth] = useState(520);
+  const [selectedOutput, setSelectedOutput] = useState<WorkbenchSelection | null>(null);
+
+  const openWorkbench = useCallback((sel: WorkbenchSelection) => {
+    setSelectedOutput(sel);
+    setWorkbenchOpen(true);
+  }, []);
+  const closeWorkbench = useCallback(() => setWorkbenchOpen(false), []);
 
   const open = useCallback(() => setMode((m) => (m === 'closed' ? 'drawer' : m)), []);
   const close = useCallback(() => setMode('closed'), []);
@@ -71,7 +93,7 @@ export const ChatWorkspaceProvider = ({ children }: { children: ReactNode }) => 
 
   return (
     <ChatWorkspaceContext.Provider
-      value={{ mode, view, height, pending, open, close, toggleFullscreen, setHeight, setView, setPending }}
+      value={{ mode, view, height, pending, workbenchOpen, workbenchWidth, selectedOutput, open, close, toggleFullscreen, setHeight, setView, setPending, openWorkbench, closeWorkbench, setWorkbenchWidth }}
     >
       {children}
     </ChatWorkspaceContext.Provider>

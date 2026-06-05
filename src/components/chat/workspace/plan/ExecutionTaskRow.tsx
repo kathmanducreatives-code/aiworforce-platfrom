@@ -12,6 +12,7 @@ interface Props {
   approval?: DBApproval | null;
   connectorMissingFor: (tool: string | null | undefined) => boolean;
   onReviewApproval?: () => void;
+  onOpenOutput?: (taskId: string, toolCallId?: string | null) => void;
 }
 
 function StatusIcon({ status }: { status: DBTask['status'] }) {
@@ -32,7 +33,7 @@ function outputPreview(output: unknown): string | null {
 }
 
 export default function ExecutionTaskRow({
-  index, task, agentSlug, latestToolCall, approval, connectorMissingFor, onReviewApproval,
+  index, task, agentSlug, latestToolCall, approval, connectorMissingFor, onReviewApproval, onOpenOutput,
 }: Props) {
   const payload = (task.payload ?? {}) as Record<string, any>;
   const toolNeeded: string | null = payload.tool_needed ?? null;
@@ -41,8 +42,15 @@ export default function ExecutionTaskRow({
   const requiresApproval: boolean = !!payload.requires_approval;
   const title: string = payload.task_title ?? task.description ?? `Step ${index + 1}`;
 
+  const canOpenOutput =
+    !!onOpenOutput && (task.status === 'complete' || task.status === 'failed' || !!latestToolCall);
+
   return (
-    <li className="rounded-lg border border-white/[0.06] bg-white/[0.02] p-3">
+    <li
+      className={`rounded-lg border border-white/[0.06] bg-white/[0.02] p-3 ${canOpenOutput ? 'hover:bg-white/[0.04] hover:border-white/[0.10] cursor-pointer transition-colors' : ''}`}
+      onClick={canOpenOutput ? () => onOpenOutput!(task.id, latestToolCall?.id ?? null) : undefined}
+    >
+
       <div className="flex items-start gap-3 flex-wrap">
         <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-white/[0.05] text-[#7D8590] shrink-0">
           {String(index + 1).padStart(2, '0')}
@@ -66,14 +74,32 @@ export default function ExecutionTaskRow({
 
       <div className="mt-2 flex flex-wrap items-center gap-1.5">
         {(toolNeeded || latestToolCall) && (
-          <ToolStatusBadge
-            toolNeeded={toolNeeded}
-            latestCall={latestToolCall ?? null}
-            connectorMissing={connectorMissingFor(toolNeeded)}
-          />
+          <span
+            onClick={(e) => {
+              if (!onOpenOutput) return;
+              e.stopPropagation();
+              onOpenOutput(task.id, latestToolCall?.id ?? null);
+            }}
+            className={onOpenOutput ? 'cursor-pointer' : ''}
+          >
+            <ToolStatusBadge
+              toolNeeded={toolNeeded}
+              latestCall={latestToolCall ?? null}
+              connectorMissing={connectorMissingFor(toolNeeded)}
+            />
+          </span>
         )}
         {(requiresApproval || approval) && (
           <ApprovalBadge approval={approval ?? null} onReview={onReviewApproval} />
+        )}
+        {canOpenOutput && (
+          <button
+            type="button"
+            onClick={(e) => { e.stopPropagation(); onOpenOutput!(task.id, latestToolCall?.id ?? null); }}
+            className="ml-auto text-[11px] text-emerald-300 hover:text-emerald-200"
+          >
+            View output →
+          </button>
         )}
       </div>
 
