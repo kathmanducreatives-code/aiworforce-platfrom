@@ -224,9 +224,10 @@ Deno.serve(async (req) => {
       }
     }
 
-    // 3) Optional broad research — only attempt if Perplexity is actually configured.
-    //    Apify (sourcing) and Firecrawl (extraction) are the primaries; this is a fallback.
-    if (!apifyContext && !scrapedContext) {
+    // 3) Optional broad research — only attempt if Perplexity is actually configured AND
+    //    we're not in fast mode (fast mode skips this entirely to keep cost low).
+    const skipBroadResearch = execution_mode_body === "fast" || tool_input_body?.tool_name === "source_with_apify";
+    if (!apifyContext && !scrapedContext && !skipBroadResearch) {
       const toolRes = await runTool("research_web", { query: instruction }, baseCtx);
       if (toolRes.ok && toolRes.data) {
         const d = toolRes.data as { content?: string; citations?: string[] };
