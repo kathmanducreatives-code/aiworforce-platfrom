@@ -162,6 +162,7 @@ export default function ExecutionPlanCard({ planId, meta }: Props) {
             approval={approvalByTask[t.id] ?? null}
             connectorMissingFor={connectorMissingFor}
             onReviewApproval={() => setView({ kind: 'conversation', planId })}
+            onOpenOutput={handleOpenOutput}
           />
         ))}
         {tasks.length === 0 && (
