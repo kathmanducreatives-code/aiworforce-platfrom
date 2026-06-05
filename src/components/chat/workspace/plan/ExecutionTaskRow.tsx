@@ -12,6 +12,7 @@ interface Props {
   approval?: DBApproval | null;
   connectorMissingFor: (tool: string | null | undefined) => boolean;
   onReviewApproval?: () => void;
+  onOpenOutput?: (taskId: string, toolCallId?: string | null) => void;
 }
 
 function StatusIcon({ status }: { status: DBTask['status'] }) {
