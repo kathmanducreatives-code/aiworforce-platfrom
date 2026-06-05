@@ -673,6 +673,10 @@ async function execSourceWithApify(input: unknown): Promise<ToolResult> {
     ok: true,
     data: {
       actor_id,
+      requested_source_type,
+      normalized_source_type: source_type,
+      expected_actor_key: source_type,
+      actor_configured: true,
       run_id,
       dataset_id: resolvedDatasetId,
       items,
