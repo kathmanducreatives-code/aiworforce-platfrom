@@ -93,7 +93,7 @@ export const ChatWorkspaceProvider = ({ children }: { children: ReactNode }) => 
 
   return (
     <ChatWorkspaceContext.Provider
-      value={{ mode, view, height, pending, open, close, toggleFullscreen, setHeight, setView, setPending }}
+      value={{ mode, view, height, pending, workbenchOpen, workbenchWidth, selectedOutput, open, close, toggleFullscreen, setHeight, setView, setPending, openWorkbench, closeWorkbench, setWorkbenchWidth }}
     >
       {children}
     </ChatWorkspaceContext.Provider>
