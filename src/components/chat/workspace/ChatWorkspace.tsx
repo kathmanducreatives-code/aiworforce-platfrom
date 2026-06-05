@@ -12,6 +12,7 @@ import EmptyState from './EmptyState';
 import ChatView from './ChatView';
 import ChatComposerPro from './ChatComposerPro';
 import ChatErrorBoundary from './ChatErrorBoundary';
+import WorkbenchPanel from './workbench/WorkbenchPanel';
 import { TooltipProvider } from '@/components/ui/tooltip';
 
 export default function ChatWorkspace() {
