@@ -196,7 +196,7 @@ async function delegateToOrchestrate(a: DelegateArgs): Promise<Response> {
   });
 }
 
-
+Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: cors });
 
   const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
