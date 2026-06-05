@@ -118,7 +118,7 @@ Deno.serve(async (req) => {
           } catch (_) { /* non-blocking */ }
         }
       } else if (sources.length) {
-        warnings.push("Live enrichment requires Perplexity or Firecrawl. Continuing with manually entered data.");
+        warnings.push("Live enrichment requires Firecrawl. Continuing with manually entered data.");
       }
 
       const ai = await generateJson({

@@ -3,6 +3,7 @@ import { AlertCircle, CheckCircle2, Clock, Loader2, PlugZap, ShieldAlert, XCircl
 
 const TOOL_LABEL: Record<string, string> = {
   research_web: 'Web research',
+  search_web: 'Web search',
   scrape_url: 'Scrape URL',
   source_with_apify: 'Apify sourcing',
   send_email: 'Send email',
@@ -11,13 +12,15 @@ const TOOL_LABEL: Record<string, string> = {
 };
 
 const TOOL_PROVIDER_HINT: Record<string, string> = {
-  research_web: 'Perplexity',
+  research_web: 'Perplexity (optional)',
+  search_web: 'Gemini Search',
   scrape_url: 'Firecrawl',
   source_with_apify: 'Apify',
   send_email: 'Resend',
   summarize_text: 'Gemini',
   extract_structured: 'Gemini',
 };
+
 
 const APIFY_UNAVAILABLE_LABEL: Record<string, string> = {
   apify_not_configured: 'Apify not configured',

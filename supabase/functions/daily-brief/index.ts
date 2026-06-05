@@ -135,8 +135,10 @@ Deno.serve(async (req) => {
 
   // Connectors
   const connectors = {
-    research_web: isToolConfigured("research_web").ready,
+    source_with_apify: isToolConfigured("source_with_apify").ready,
     scrape_url: isToolConfigured("scrape_url").ready,
+    search_web: isToolConfigured("search_web").ready,
+    research_web: isToolConfigured("research_web").ready,
     send_email: isToolConfigured("send_email").ready,
     lovable_ai: !!Deno.env.get("LOVABLE_API_KEY"),
   };
@@ -144,7 +146,7 @@ Deno.serve(async (req) => {
   // ---- Recommended Next Actions (deterministic) ----
   const actions: string[] = [];
   if (!onboardingCompleted) actions.push("Complete Company Brain setup at /onboarding/company-brain so agents can personalize work.");
-  if (!connectors.research_web) actions.push("Connect Perplexity (PERPLEXITY_API_KEY) to enable live market and competitor intelligence.");
+  if (!connectors.source_with_apify) actions.push("Connect Apify (APIFY_API_TOKEN) to enable hiring-signal sourcing.");
   if (!connectors.scrape_url) actions.push("Connect Firecrawl (FIRECRAWL_API_KEY) to enable site/page extraction.");
   const failed = tasks.filter((t) => t.status === "failed");
   if (failed.length) actions.push(`Fix ${failed.length} failed task${failed.length > 1 ? "s" : ""}.`);
@@ -186,9 +188,18 @@ Deno.serve(async (req) => {
       ].filter(Boolean).join(" ")
     : "No outreach activity yet.";
 
-  const sectionIntel = connectors.research_web
-    ? "Live research available via Perplexity. Ask 'Have Hawk gather today's market signals' to run it."
-    : "Live market and competitor intelligence requires Perplexity or Firecrawl. I can still summarize internal workspace activity.";
+  const connectorStatusLines = [
+    `Lovable AI Gateway: ${connectors.lovable_ai ? "active" : "missing"}`,
+    `Apify hiring signals: ${connectors.source_with_apify ? "configured" : "token missing"}`,
+    `Firecrawl page extraction: ${connectors.scrape_url ? "configured" : "missing"}`,
+    `Broad web search: ${connectors.search_web ? "configured" : "unavailable (no grounded search connector)"}`,
+    `Perplexity (optional fallback): ${connectors.research_web ? "configured" : "not configured"}`,
+  ].join(" · ");
+
+  const sectionIntel = (connectors.search_web || connectors.research_web)
+    ? "Live broad research is available. Ask 'Have Hawk gather today's market signals' to run it."
+    : "Broad web search is not configured. I can still pull hiring signals via Apify and extract specific URLs via Firecrawl.";
+
 
   const sectionActions = actions.length
     ? actions.map((a, i) => `${i + 1}. ${a}`).join("\n")

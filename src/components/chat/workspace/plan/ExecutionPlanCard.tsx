@@ -30,6 +30,7 @@ const STATUS_TONE: Record<string, string> = {
 
 const TOOL_PROVIDER_KEY: Record<string, string> = {
   research_web: 'perplexity',
+  search_web: 'broad web search',
   scrape_url: 'firecrawl',
   source_with_apify: 'apify',
   send_email: 'resend',
@@ -67,13 +68,18 @@ export default function ExecutionPlanCard({ planId, meta }: Props) {
     return m;
   }, [approvals]);
 
+  // Limitations now arrive as human-readable, tool-aware sentences.
+  // We still derive a per-provider key set so individual task rows can mark
+  // their own tool badge as "connector missing" — but only when the
+  // plan actually uses that provider.
   const connectorMissingKeys = useMemo(() => {
     const keys = new Set<string>();
     for (const lim of meta?.connector_limitations ?? []) {
       const s = lim.toLowerCase();
-      if (s.includes('perplexity')) keys.add('perplexity');
-      if (s.includes('firecrawl')) keys.add('firecrawl');
       if (s.includes('apify')) keys.add('apify');
+      if (s.includes('firecrawl')) keys.add('firecrawl');
+      if (s.includes('broad web search')) keys.add('broad web search');
+      if (s.includes('perplexity')) keys.add('perplexity');
       if (s.includes('resend')) keys.add('resend');
     }
     return keys;
@@ -84,6 +90,7 @@ export default function ExecutionPlanCard({ planId, meta }: Props) {
     const key = TOOL_PROVIDER_KEY[tool];
     return key ? connectorMissingKeys.has(key) : false;
   };
+
 
   const title = plan?.user_instruction ?? meta?.plan_title ?? 'Execution plan';
   const status = plan?.status ?? 'planning';
