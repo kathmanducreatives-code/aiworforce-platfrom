@@ -296,7 +296,9 @@ const APIFY_BASE = "https://api.apify.com/v2";
 type ApifyActorCfg = {
   actor_id: string | null;
   description: string;
-  // Optional adapter: map our generic source_with_apify input to this actor's input schema.
+  source_type?: string;
+  enabled_by_default?: boolean;
+  use_for?: string[];
   input_adapter?: (i: {
     query?: string | null;
     location?: string | null;
@@ -315,12 +317,18 @@ function buildLinkedInJobsSearchUrl(keywords: string | null | undefined, locatio
   return `https://www.linkedin.com/jobs/search/?${params.toString()}`;
 }
 
+// Apify actor registry. Apify is reserved for structured sourcing actors
+// (jobs/hiring/company data). Broad web search stays on `search_web`
+// (Gemini/Lovable grounded search) — `apify/google-search-scraper` is an
+// opt-in fallback only and is disabled by default.
 const APIFY_ACTORS: Record<string, ApifyActorCfg> = {
   jobs: {
     actor_id: "curious_coder/linkedin-jobs-scraper",
-    description: "Scrape public LinkedIn jobs search results with company details",
+    source_type: "jobs",
+    enabled_by_default: true,
+    use_for: ["hiring signals", "companies hiring roles", "job openings"],
+    description: "LinkedIn jobs search with company details",
     input_adapter: ({ query, location, role_keywords, max_results, user_input }) => {
-      // Prefer explicit role_keywords joined into a query; fall back to query.
       const kwFromRoles = Array.isArray(role_keywords) && role_keywords.length > 0
         ? role_keywords.join(" ")
         : null;
@@ -340,12 +348,40 @@ const APIFY_ACTORS: Record<string, ApifyActorCfg> = {
       };
     },
   },
-  companies:      { actor_id: null, description: "Find companies matching a query" },
-  linkedin_posts: { actor_id: null, description: "Find people posting about hiring/problems" },
-  comments:       { actor_id: null, description: "Find comments on relevant posts" },
-  websites:       { actor_id: null, description: "Scrape arbitrary websites via actor" },
-  generic:        { actor_id: null, description: "Fallback generic actor" },
+  indeed_jobs: {
+    actor_id: "curious_coder/indeed-scraper",
+    source_type: "indeed_jobs",
+    enabled_by_default: false,
+    use_for: ["Indeed jobs", "non-LinkedIn hiring signals", "backup jobs source"],
+    description: "Indeed jobs scraper (backup hiring source)",
+  },
+  website_content: {
+    actor_id: "apify/website-content-crawler",
+    source_type: "website_content",
+    enabled_by_default: false,
+    use_for: ["website content fallback if Firecrawl fails"],
+    description: "Website content crawler — fallback if Firecrawl fails",
+  },
+  custom_web: {
+    actor_id: "apify/web-scraper",
+    source_type: "custom_web",
+    enabled_by_default: false,
+    use_for: ["custom websites", "directories", "niche job boards"],
+    description: "Generic web scraper for niche/custom sites",
+  },
+  search_fallback: {
+    actor_id: "apify/google-search-scraper",
+    source_type: "search",
+    enabled_by_default: false,
+    use_for: ["optional fallback only if grounded search is unavailable and user explicitly enables it"],
+    description: "Google SERP via Apify — opt-in fallback only",
+  },
 };
+
+// Actors that must NEVER run without explicit opt-in, regardless of how
+// the orchestrator/planner resolved them. Guards against silently using
+// Apify as the default broad-search lane.
+const OPT_IN_ONLY_ACTOR_IDS = new Set<string>(["apify/google-search-scraper"]);
 
 const APIFY_ACTOR_ID_RE = /^[a-zA-Z0-9_~][a-zA-Z0-9_\-~]{0,127}(?:\/[a-zA-Z0-9_\-~]+)?$/;
 
@@ -425,18 +461,22 @@ async function execSourceWithApify(input: unknown): Promise<ToolResult> {
     role_keywords?: string[];
     max_results?: number;
     input?: Record<string, unknown>;
+    allow_disabled?: boolean;
   };
 
-  const source_type = (i.source_type ?? "generic").toString().toLowerCase();
+  const source_type = (i.source_type ?? "jobs").toString().toLowerCase();
   const max_results = Math.min(100, Math.max(1, Number(i.max_results) || 25));
   const search_goal = (i.search_goal ?? "").toString();
+  const allow_disabled = i.allow_disabled === true;
 
   let actor_id = (i.actor_id ?? "").toString().trim();
   let actorCfg: ApifyActorCfg | undefined;
   if (actor_id) {
     if (!APIFY_ACTOR_ID_RE.test(actor_id)) return { ok: false, error: "invalid_actor_id" };
+    // Resolve cfg by actor_id so we can apply enabled_by_default gating even on explicit calls.
+    actorCfg = Object.values(APIFY_ACTORS).find((c) => c.actor_id === actor_id);
   } else {
-    const cfg = APIFY_ACTORS[source_type] ?? APIFY_ACTORS.generic;
+    const cfg = APIFY_ACTORS[source_type];
     if (!cfg?.actor_id) {
       return {
         ok: false,
@@ -451,6 +491,38 @@ async function execSourceWithApify(input: unknown): Promise<ToolResult> {
     actor_id = cfg.actor_id;
     actorCfg = cfg;
   }
+
+  // Hard gate: opt-in-only actors (e.g. google-search-scraper) never run without explicit allow_disabled.
+  if (OPT_IN_ONLY_ACTOR_IDS.has(actor_id) && !allow_disabled) {
+    return {
+      ok: false,
+      unavailable: true,
+      error: "apify_actor_disabled_by_default",
+      data: {
+        actor_id,
+        source_type: actorCfg?.source_type ?? source_type,
+        use_for: actorCfg?.use_for ?? [],
+        message:
+          "apify/google-search-scraper is opt-in only. Use grounded search_web for broad research, or pass allow_disabled: true to force this actor.",
+      },
+    };
+  }
+
+  // Soft gate: any registry actor marked enabled_by_default: false requires opt-in.
+  if (actorCfg && actorCfg.enabled_by_default === false && !allow_disabled) {
+    return {
+      ok: false,
+      unavailable: true,
+      error: "apify_actor_disabled_by_default",
+      data: {
+        actor_id,
+        source_type: actorCfg.source_type ?? source_type,
+        use_for: actorCfg.use_for ?? [],
+        message: `Apify actor ${actor_id} is opt-in only. Pass allow_disabled: true to enable.`,
+      },
+    };
+  }
+
 
   // Apify accepts `username~actor-name` or actorId in the URL path.
   const actorPath = encodeURIComponent(actor_id.replace("/", "~"));
