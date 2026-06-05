@@ -159,7 +159,9 @@ Rules:
 - execution_mode: outreach > deep > fast (outreach implies deep).
 - If user just says "Find leads" with no role/location, set confidence < 0.65 and put role_keywords/location in missing_fields.
 - If a URL is present, tool_name = "scrape_url".
-- For sourcing prompts, prefer tool_name = "source_with_apify" and source_type = "jobs".`;
+- For ANY sourcing prompt, set tool_name = "source_with_apify" and source_type = "jobs". No people/profile or companies actor is configured.
+- Prompts like "find engineers in London" / "find marketers" / "find candidates" mean "find companies hiring those roles" — set source_type = "jobs", role_keywords from the role words, and location from any place name.
+- NEVER return source_type "people", "companies", or "posts" — only "jobs" or null.`;
 
 export async function planToolInput(
   prompt: string,
