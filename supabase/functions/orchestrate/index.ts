@@ -573,22 +573,25 @@ AGENTS:
 - hawk   = market/competitive intelligence, signals, monitoring, scraping
 - scribe = content, summaries, briefs, posts, reports
 
-TOOLS:
-- research_web        (perplexity) allowed: hawk, scout
-- scrape_url          (firecrawl)  allowed: hawk, scout
-- source_with_apify   (apify)      allowed: scout, hawk — PREFERRED for finding companies/leads/hiring signals/jobs/posts
-- summarize_text      (gemini)     allowed: aria, scribe, hawk, scout
-- extract_structured  (gemini)     allowed: aria, scribe, hawk, scout
-- draft_outreach      (gemini)     allowed: penn
-- send_email          (resend)     allowed: penn — ALWAYS requires_approval=true
+TOOLS (priority order matters):
+- source_with_apify   (apify)        allowed: scout, hawk — PRIMARY for finding companies/leads/hiring signals/jobs/posts
+- scrape_url          (firecrawl)    allowed: hawk, scout — PRIMARY for any specific URL/page extraction
+- search_web          (gemini_search) allowed: hawk, scout — broad/current web research (may be unavailable; that's fine)
+- research_web        (perplexity)   allowed: hawk, scout — OPTIONAL fallback only when explicitly preferred
+- summarize_text      (gemini)       allowed: aria, scribe, hawk, scout
+- extract_structured  (gemini)       allowed: aria, scribe, hawk, scout
+- draft_outreach      (gemini)       allowed: penn
+- send_email          (resend)       allowed: penn — ALWAYS requires_approval=true
 
 WORKFLOW ARCHETYPES (use as defaults, deepen when useful):
-A. Sourcing  -> scout(source_with_apify) -> aria(extract_structured) -> penn(draft_outreach, approval)
+A. Sourcing (hiring/companies/leads) -> scout(source_with_apify) -> aria(extract_structured) -> penn(draft_outreach, approval) ONLY if outreach was requested
 B. Extraction from URL -> hawk(scrape_url) -> scribe(summarize_text)
-C. Intelligence -> hawk(research_web or source_with_apify when looking up job/company signals) -> scribe(summarize_text) when a brief/report is asked for
+C. Intelligence (hiring shape: companies/jobs/roles) -> hawk(source_with_apify) -> scribe(summarize_text)
+C2. Intelligence (broad market/current events) -> hawk(search_web) -> scribe(summarize_text)
 D. Outreach -> penn(draft_outreach, approval); add penn(send_email, approval) only if user said send
-E. Content -> scribe(summarize_text); prepend hawk(research_web) only if user wants current facts
+E. Content -> scribe(summarize_text); prepend hawk(search_web) only if user wants current facts
 F. Screening -> aria(extract_structured)
+
 
 COMPANY CONTEXT (may be empty):
 ${JSON.stringify(companyBrain)}
