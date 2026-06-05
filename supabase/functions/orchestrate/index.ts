@@ -172,22 +172,30 @@ function fallbackPlan(instruction: string, intent: Intent): { plan_summary: stri
           }),
         ],
       };
-    case "intelligence":
+    case "intelligence": {
+      const sLower = instruction.toLowerCase();
+      const hiringShape = /(hiring|jobs?|roles?|companies?|recruit|engineers?|marketers?|developers?|leads?|founders?)/.test(sLower);
+      const hawkTool = hiringShape ? "source_with_apify" : "search_web";
       return {
-        plan_summary: `Gather competitive/market intelligence: ${instruction}`,
+        plan_summary: `Gather intelligence: ${instruction}`,
         steps: [
-          mkStep(0, "hawk", "Research signals", `Research current signals for: ${instruction}`, {
-            tool_needed: "research_web",
-            expected_output: "Cited list of recent signals (funding, hiring, launches, pricing).",
-            success_criteria: "At least 3 cited signals from reputable sources.",
+          mkStep(0, "hawk", hiringShape ? "Source hiring/company signals" : "Research signals", `Investigate: ${instruction}`, {
+            tool_needed: hawkTool,
+            expected_output: hiringShape
+              ? "List of companies/roles with source URLs and metadata from Apify."
+              : "Cited list of recent signals (funding, hiring, launches, pricing).",
+            success_criteria: hiringShape
+              ? "Apify returns results or clearly reports unavailable."
+              : "At least 3 cited signals, or a clear unavailable note.",
           }),
-          mkStep(1, "scribe", "Brief summary", `Turn research into a short intel brief for: ${instruction}`, {
+          mkStep(1, "scribe", "Brief summary", `Turn findings into a short intel brief for: ${instruction}`, {
             tool_needed: "summarize_text",
             expected_output: "1-page intel brief with bullets and recommended next action.",
-            success_criteria: "Brief references only the research above.",
+            success_criteria: "Brief references only findings above.",
           }),
         ],
       };
+    }
     case "outreach": {
       const wantsSend = /\bsend\b|send.*email/.test(instruction.toLowerCase());
       const steps: Step[] = [
@@ -232,35 +240,45 @@ function fallbackPlan(instruction: string, intent: Intent): { plan_summary: stri
           }),
         ],
       };
-    case "brief":
-      return {
-        plan_summary: `Daily brief: ${instruction}`,
-        steps: [
-          mkStep(0, "scribe", "Internal workspace brief", "Summarize today's activity: pending approvals, active plans, recent task results.", {
-            tool_needed: "summarize_text",
-            expected_output: "Concise daily brief grouped by approvals, active plans, recent results.",
-            success_criteria: "Pulled from workspace data only.",
+    case "brief": {
+      const briefSteps: Step[] = [
+        mkStep(0, "scribe", "Internal workspace brief", "Summarize today's activity: pending approvals, active plans, recent task results.", {
+          tool_needed: "summarize_text",
+          expected_output: "Concise daily brief grouped by approvals, active plans, recent results.",
+          success_criteria: "Pulled from workspace data only.",
+        }),
+      ];
+      // Only add a live-pulse step if a live-research tool is actually configured.
+      const pulseTool = isToolConfigured("search_web").ready
+        ? "search_web"
+        : isToolConfigured("research_web").ready
+        ? "research_web"
+        : null;
+      if (pulseTool) {
+        briefSteps.push(
+          mkStep(1, "hawk", "Live market pulse", "Add a short external intel pulse.", {
+            tool_needed: pulseTool,
+            expected_output: "3-5 bullet external pulse with citations.",
+            success_criteria: "Skipped gracefully if the tool reports unavailable.",
           }),
-          mkStep(1, "hawk", "Live market pulse", "Add a short external intel pulse if live research is configured.", {
-            tool_needed: "research_web",
-            expected_output: "Optional 3-5 bullet external pulse with citations.",
-            success_criteria: "Skipped gracefully if Perplexity is not configured.",
-          }),
-        ],
-      };
+        );
+      }
+      return { plan_summary: `Daily brief: ${instruction}`, steps: briefSteps };
+    }
     default:
       return {
         plan_summary: `Investigate request: ${instruction}`,
         steps: [
-          mkStep(0, "scout", "Investigate", instruction, {
-            tool_needed: "research_web",
-            expected_output: "Findings relevant to the user's request.",
-            success_criteria: "Findings cite sources or workspace data.",
+          mkStep(0, "scribe", "Respond from workspace context", instruction, {
+            tool_needed: "summarize_text",
+            expected_output: "Findings relevant to the user's request from available workspace data.",
+            success_criteria: "No fabrication; cite workspace data or clearly note when broader research is unavailable.",
           }),
         ],
       };
   }
 }
+
 
 // ---------- Deterministic expansion ----------
 
