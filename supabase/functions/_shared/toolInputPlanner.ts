@@ -85,9 +85,6 @@ export function fallbackParse(prompt: string, intent: Intent | string): ToolInpu
   } else if (intent === "daily_brief" || intent === "content") {
     tool_name = "search_web";
   }
-  } else if (intent === "daily_brief" || intent === "content") {
-    tool_name = "search_web";
-  }
 
   // execution mode
   let execution_mode: ExecutionMode = "fast";
