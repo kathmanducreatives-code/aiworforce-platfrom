@@ -525,6 +525,19 @@ Deno.serve(async (req) => {
     const workspace_id = (b.workspace_id ?? b.workspaceId) as string | undefined;
     const user_instruction = (b.user_instruction ?? b.userInstruction) as string | undefined;
     const conversation_id = (b.conversation_id ?? b.conversationId ?? null) as string | null;
+    const tool_input = (b.tool_input ?? null) as null | {
+      intent?: string;
+      tool_name?: string | null;
+      source_type?: string | null;
+      query?: string;
+      role_keywords?: string[];
+      location?: string | null;
+      max_results?: number;
+      needs_enrichment?: boolean;
+      needs_outreach?: boolean;
+      execution_mode?: "fast" | "deep" | "outreach";
+      confidence?: number;
+    };
 
     if (!user_instruction || !workspace_id) {
       return json({ error: "missing_parameter", details: "workspace_id and user_instruction are required" }, 400);
@@ -560,6 +573,7 @@ Deno.serve(async (req) => {
     const companyBrain = (brainRow?.profile ?? {}) as Record<string, unknown>;
 
     const intent = detectIntent(user_instruction);
+    const executionMode = tool_input?.execution_mode ?? "fast";
 
     // ---------- AI planner ----------
 
