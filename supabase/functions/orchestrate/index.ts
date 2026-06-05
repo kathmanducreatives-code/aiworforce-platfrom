@@ -575,7 +575,82 @@ Deno.serve(async (req) => {
     const intent = detectIntent(user_instruction);
     const executionMode = tool_input?.execution_mode ?? "fast";
 
-    // ---------- AI planner ----------
+    // ---------- Staged plan from tool_input (short-circuits AI planner) ----------
+
+    let parsed: { plan_summary: string; steps: Step[] } | null = null;
+    let plannerSource: "ai" | "fallback" | "staged" = "fallback";
+
+    if (tool_input && tool_input.tool_name === "source_with_apify") {
+      const cap = Math.max(1, Math.min(200, tool_input.max_results ?? 25));
+      const sourcingStep = mkStep(
+        0,
+        "scout",
+        "Source signals via Apify",
+        `Find ${cap} ${tool_input.source_type ?? "jobs"} matching: ${tool_input.query || user_instruction}${tool_input.location ? ` in ${tool_input.location}` : ""}${tool_input.role_keywords?.length ? ` (roles: ${tool_input.role_keywords.join(", ")})` : ""}`,
+        {
+          tool_needed: "source_with_apify",
+          expected_output: "Normalized list of signals with company, role, url, location.",
+          success_criteria: "Apify returns at least a few results, or reports unavailable cleanly.",
+          planner_source: "fallback",
+        },
+      );
+      (sourcingStep as Step & { metadata?: Record<string, unknown> }).metadata = { tool_input };
+
+      const steps: Step[] = [sourcingStep];
+      const rankStep = mkStep(1, "aria", "Rank signals", `Score and rank the sourced signals against: ${user_instruction}`, {
+        tool_needed: "extract_structured",
+        expected_output: "Ranked list with fit score and rationale.",
+        success_criteria: "Every signal scored.",
+        planner_source: "fallback",
+      });
+      steps.push(rankStep);
+
+      if (executionMode === "deep" || executionMode === "outreach") {
+        steps.push(mkStep(2, "hawk", "Enrich top companies", `Firecrawl the top companies for: ${user_instruction}`, {
+          tool_needed: "scrape_url",
+          expected_output: "Enrichment notes for top 3-5 companies.",
+          success_criteria: "Only top-ranked companies enriched; cost-capped.",
+          planner_source: "fallback",
+        }));
+      }
+      if (executionMode === "outreach") {
+        steps.push(mkStep(3, "penn", "Draft outreach (top 5)", `Draft personalized outreach for top candidates from: ${user_instruction}`, {
+          tool_needed: "draft_outreach",
+          requires_approval: true,
+          expected_output: "Up to 5 personalized drafts ready for review.",
+          success_criteria: "No auto-send; capped at 5 unless user confirms more.",
+          planner_source: "fallback",
+        }));
+      }
+
+      const modeLabel = executionMode === "outreach" ? "Source → rank → enrich → draft" : executionMode === "deep" ? "Source → rank → enrich" : "Source → rank";
+      parsed = {
+        plan_summary: `${modeLabel}: ${tool_input.query || user_instruction}`,
+        steps,
+      };
+      plannerSource = "staged";
+    } else if (tool_input && tool_input.tool_name === "scrape_url") {
+      const scrapeStep = mkStep(0, "hawk", "Scrape source", `Scrape and extract from: ${user_instruction}`, {
+        tool_needed: "scrape_url",
+        expected_output: "Markdown + summary of the target page.",
+        success_criteria: "Non-empty extraction.",
+        planner_source: "fallback",
+      });
+      (scrapeStep as Step & { metadata?: Record<string, unknown> }).metadata = { tool_input };
+      const briefStep = mkStep(1, "scribe", "Summarize findings", `Summarize the extracted content for: ${user_instruction}`, {
+        tool_needed: "summarize_text",
+        expected_output: "Short brief grounded in scraped content.",
+        success_criteria: "No fabrication.",
+        planner_source: "fallback",
+      });
+      parsed = { plan_summary: `Extract and summarize: ${user_instruction}`, steps: [scrapeStep, briefStep] };
+      plannerSource = "staged";
+    }
+
+    // ---------- AI planner (only if no staged plan) ----------
+
+    let ai: any = null;
+    if (!parsed) {
 
     const orchestratorPrompt = `You are the planner for ScreeningPilot, an AI workforce orchestrator.
 Convert the user instruction into a multi-step plan with the right agents, tools, and approval gates.
