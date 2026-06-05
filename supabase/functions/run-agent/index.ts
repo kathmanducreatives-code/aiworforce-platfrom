@@ -59,6 +59,8 @@ Deno.serve(async (req) => {
   const instruction: string | undefined = body.instruction;
   const input: string | null | undefined = body.input ?? null;
   const needs_approval: boolean = body.needs_approval === true;
+  const tool_input_body: any = body.tool_input ?? null;
+  const execution_mode_body: string | undefined = body.execution_mode;
 
   if (!plan_id || step_index === undefined || (!agent_slug && !agent_id_in) || !workspace_id || !instruction) {
     return json({ error: "missing_required_fields" }, 400);
@@ -157,38 +159,59 @@ Deno.serve(async (req) => {
 
     // 2) Apify sourcing — sourcing-intent instructions on scout (and jobs/companies on hawk).
     const sourcingRe = /\b(find|source|sourcing|discover|prospects?|leads?|founders?|companies|hiring|job openings|roles|recruit(?:ers?|ing)|candidates?|engineers?|marketers?|linkedin posts?|comments?)\b/i;
-    if (sourcingRe.test(`${instruction ?? ""} ${input ?? ""}`)) {
-      const text = `${instruction ?? ""} ${input ?? ""}`.toLowerCase();
+    const shouldUseApify = tool_input_body?.tool_name === "source_with_apify" ||
+      sourcingRe.test(`${instruction ?? ""} ${input ?? ""}`);
+
+    if (shouldUseApify) {
+      // Prefer tool_input (planned upstream); fall back to lightweight regex parse.
       let source_type: "jobs" | "companies" | "linkedin_posts" | "comments" | "generic" = "generic";
-      if (/\b(hiring|job openings?|roles?|engineers?|marketers?|developers?|candidates?)\b/.test(text)) source_type = "jobs";
-      else if (/\b(companies|founders?|prospects?|startups?|orgs?)\b/.test(text)) source_type = "companies";
-      else if (/\blinkedin\b|\bposts?\b/.test(text)) source_type = "linkedin_posts";
-      else if (/\bcomments?\b/.test(text)) source_type = "comments";
+      if (tool_input_body?.source_type) {
+        const st = String(tool_input_body.source_type).toLowerCase();
+        if (st === "jobs" || st === "companies" || st === "people" || st === "posts") {
+          source_type = st === "posts" ? "linkedin_posts" : st === "people" ? "generic" : st as any;
+        }
+      } else {
+        const text = `${instruction ?? ""} ${input ?? ""}`.toLowerCase();
+        if (/\b(hiring|job openings?|roles?|engineers?|marketers?|developers?|candidates?)\b/.test(text)) source_type = "jobs";
+        else if (/\b(companies|founders?|prospects?|startups?|orgs?)\b/.test(text)) source_type = "companies";
+        else if (/\blinkedin\b|\bposts?\b/.test(text)) source_type = "linkedin_posts";
+        else if (/\bcomments?\b/.test(text)) source_type = "comments";
+      }
 
       const allowedForHawk = source_type === "jobs" || source_type === "companies";
       const shouldRun = agent_slug === "scout" || (agent_slug === "hawk" && allowedForHawk);
 
       if (shouldRun) {
-        const locMatch = (instruction ?? "").match(/\bin\s+([A-Z][A-Za-z\s\-]+?)(?:[.,]|$)/);
-        const location = locMatch?.[1]?.trim() ?? null;
-        const roleKeywords = Array.from(
-          new Set(((instruction ?? "").toLowerCase().match(/\b(marketing|marketer|sales|engineer|developer|designer|founder|product|react|frontend|backend|growth|recruiter)\b/g) ?? [])),
-        );
+        let location: string | null = tool_input_body?.location ?? null;
+        let roleKeywords: string[] = Array.isArray(tool_input_body?.role_keywords) ? tool_input_body.role_keywords : [];
+        let max_results: number = typeof tool_input_body?.max_results === "number"
+          ? Math.max(1, Math.min(200, tool_input_body.max_results))
+          : 25;
 
-        const planPayload = (task as unknown as { payload?: Record<string, unknown> })?.payload ?? {};
+        if (!location) {
+          const locMatch = (instruction ?? "").match(/\bin\s+([A-Z][A-Za-z\s\-]+?)(?:[.,]|$)/);
+          location = locMatch?.[1]?.trim() ?? null;
+        }
+        if (roleKeywords.length === 0) {
+          roleKeywords = Array.from(
+            new Set(((instruction ?? "").toLowerCase().match(/\b(marketing|marketer|sales|engineer|developer|designer|founder|product|react|frontend|backend|growth|recruiter)\b/g) ?? [])),
+          );
+        }
+
         const apifyInput = {
           source_type,
-          search_goal: instruction,
-          query: instruction,
-          location: location ?? (planPayload.location as string | undefined) ?? undefined,
-          role_keywords: roleKeywords.length > 0 ? roleKeywords : (planPayload.role_keywords as string[] | undefined),
-          max_results: 25,
+          search_goal: tool_input_body?.query ?? instruction,
+          query: tool_input_body?.query ?? instruction,
+          location: location ?? undefined,
+          role_keywords: roleKeywords.length > 0 ? roleKeywords : undefined,
+          max_results,
         };
 
+        console.log("[run-agent] apify input", apifyInput);
         const r = await runTool("source_with_apify", apifyInput, baseCtx);
         if (r.ok && r.data) {
           const d = r.data as { items?: any[]; total?: number; summary?: string; run_id?: string };
-          const sample = (d.items ?? []).slice(0, 25);
+          const sample = (d.items ?? []).slice(0, Math.min(max_results, 25));
           apifyContext = `APIFY SOURCING (run ${d.run_id ?? "?"} — ${d.total ?? sample.length} results):\n${d.summary ?? ""}\n\nITEMS:\n${JSON.stringify(sample, null, 2).slice(0, 8000)}`;
         } else if (r.unavailable) {
           const reason = r.error === "apify_actor_not_configured"
@@ -201,9 +224,10 @@ Deno.serve(async (req) => {
       }
     }
 
-    // 3) Optional broad research — only attempt if Perplexity is actually configured.
-    //    Apify (sourcing) and Firecrawl (extraction) are the primaries; this is a fallback.
-    if (!apifyContext && !scrapedContext) {
+    // 3) Optional broad research — only attempt if Perplexity is actually configured AND
+    //    we're not in fast mode (fast mode skips this entirely to keep cost low).
+    const skipBroadResearch = execution_mode_body === "fast" || tool_input_body?.tool_name === "source_with_apify";
+    if (!apifyContext && !scrapedContext && !skipBroadResearch) {
       const toolRes = await runTool("research_web", { query: instruction }, baseCtx);
       if (toolRes.ok && toolRes.data) {
         const d = toolRes.data as { content?: string; citations?: string[] };
@@ -358,6 +382,8 @@ Deno.serve(async (req) => {
         instruction: nextStep.instruction,
         input: apiText,
         needs_approval: nextStep.needs_approval === true,
+        tool_input: tool_input_body ?? nextStep.metadata?.tool_input ?? null,
+        execution_mode: execution_mode_body,
       }),
     }).catch((e) => console.error("[run-agent] chain fetch failed:", e));
 

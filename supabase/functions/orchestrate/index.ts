@@ -525,6 +525,19 @@ Deno.serve(async (req) => {
     const workspace_id = (b.workspace_id ?? b.workspaceId) as string | undefined;
     const user_instruction = (b.user_instruction ?? b.userInstruction) as string | undefined;
     const conversation_id = (b.conversation_id ?? b.conversationId ?? null) as string | null;
+    const tool_input = (b.tool_input ?? null) as null | {
+      intent?: string;
+      tool_name?: string | null;
+      source_type?: string | null;
+      query?: string;
+      role_keywords?: string[];
+      location?: string | null;
+      max_results?: number;
+      needs_enrichment?: boolean;
+      needs_outreach?: boolean;
+      execution_mode?: "fast" | "deep" | "outreach";
+      confidence?: number;
+    };
 
     if (!user_instruction || !workspace_id) {
       return json({ error: "missing_parameter", details: "workspace_id and user_instruction are required" }, 400);
@@ -560,8 +573,84 @@ Deno.serve(async (req) => {
     const companyBrain = (brainRow?.profile ?? {}) as Record<string, unknown>;
 
     const intent = detectIntent(user_instruction);
+    const executionMode = tool_input?.execution_mode ?? "fast";
 
-    // ---------- AI planner ----------
+    // ---------- Staged plan from tool_input (short-circuits AI planner) ----------
+
+    let parsed: { plan_summary: string; steps: Step[] } | null = null;
+    let plannerSource: "ai" | "fallback" | "staged" = "fallback";
+
+    if (tool_input && tool_input.tool_name === "source_with_apify") {
+      const cap = Math.max(1, Math.min(200, tool_input.max_results ?? 25));
+      const sourcingStep = mkStep(
+        0,
+        "scout",
+        "Source signals via Apify",
+        `Find ${cap} ${tool_input.source_type ?? "jobs"} matching: ${tool_input.query || user_instruction}${tool_input.location ? ` in ${tool_input.location}` : ""}${tool_input.role_keywords?.length ? ` (roles: ${tool_input.role_keywords.join(", ")})` : ""}`,
+        {
+          tool_needed: "source_with_apify",
+          expected_output: "Normalized list of signals with company, role, url, location.",
+          success_criteria: "Apify returns at least a few results, or reports unavailable cleanly.",
+          planner_source: "fallback",
+        },
+      );
+      (sourcingStep as Step & { metadata?: Record<string, unknown> }).metadata = { tool_input };
+
+      const steps: Step[] = [sourcingStep];
+      const rankStep = mkStep(1, "aria", "Rank signals", `Score and rank the sourced signals against: ${user_instruction}`, {
+        tool_needed: "extract_structured",
+        expected_output: "Ranked list with fit score and rationale.",
+        success_criteria: "Every signal scored.",
+        planner_source: "fallback",
+      });
+      steps.push(rankStep);
+
+      if (executionMode === "deep" || executionMode === "outreach") {
+        steps.push(mkStep(2, "hawk", "Enrich top companies", `Firecrawl the top companies for: ${user_instruction}`, {
+          tool_needed: "scrape_url",
+          expected_output: "Enrichment notes for top 3-5 companies.",
+          success_criteria: "Only top-ranked companies enriched; cost-capped.",
+          planner_source: "fallback",
+        }));
+      }
+      if (executionMode === "outreach") {
+        steps.push(mkStep(3, "penn", "Draft outreach (top 5)", `Draft personalized outreach for top candidates from: ${user_instruction}`, {
+          tool_needed: "draft_outreach",
+          requires_approval: true,
+          expected_output: "Up to 5 personalized drafts ready for review.",
+          success_criteria: "No auto-send; capped at 5 unless user confirms more.",
+          planner_source: "fallback",
+        }));
+      }
+
+      const modeLabel = executionMode === "outreach" ? "Source → rank → enrich → draft" : executionMode === "deep" ? "Source → rank → enrich" : "Source → rank";
+      parsed = {
+        plan_summary: `${modeLabel}: ${tool_input.query || user_instruction}`,
+        steps,
+      };
+      plannerSource = "staged";
+    } else if (tool_input && tool_input.tool_name === "scrape_url") {
+      const scrapeStep = mkStep(0, "hawk", "Scrape source", `Scrape and extract from: ${user_instruction}`, {
+        tool_needed: "scrape_url",
+        expected_output: "Markdown + summary of the target page.",
+        success_criteria: "Non-empty extraction.",
+        planner_source: "fallback",
+      });
+      (scrapeStep as Step & { metadata?: Record<string, unknown> }).metadata = { tool_input };
+      const briefStep = mkStep(1, "scribe", "Summarize findings", `Summarize the extracted content for: ${user_instruction}`, {
+        tool_needed: "summarize_text",
+        expected_output: "Short brief grounded in scraped content.",
+        success_criteria: "No fabrication.",
+        planner_source: "fallback",
+      });
+      parsed = { plan_summary: `Extract and summarize: ${user_instruction}`, steps: [scrapeStep, briefStep] };
+      plannerSource = "staged";
+    }
+
+    // ---------- AI planner (only if no staged plan) ----------
+
+    let ai: any = null;
+    if (!parsed) {
 
     const orchestratorPrompt = `You are the planner for ScreeningPilot, an AI workforce orchestrator.
 Convert the user instruction into a multi-step plan with the right agents, tools, and approval gates.
@@ -625,7 +714,7 @@ Return ONLY valid JSON, no prose, no markdown:
   ]
 }`;
 
-    const ai = await generateJson({
+    ai = await generateJson({
       taskType: "orchestration_plan",
       systemPrompt: "You are a planning assistant. Respond with valid JSON only.",
       messages: [{ role: "user", content: orchestratorPrompt }],
@@ -645,9 +734,6 @@ Return ONLY valid JSON, no prose, no markdown:
       latency_ms: ai.latencyMs,
       error_code: ai.errorCode,
     });
-
-    let plannerSource: "ai" | "fallback" = "fallback";
-    let parsed: { plan_summary: string; steps: Step[] } | null = null;
 
     if (ai.ok && ai.json) {
       const p = ai.json as { plan_summary?: string; steps?: any[] };
@@ -691,18 +777,21 @@ Return ONLY valid JSON, no prose, no markdown:
 
     if (!parsed) parsed = fallbackPlan(user_instruction, intent);
 
-    // Deterministic expansion.
+    // Deterministic expansion (only when not using staged plan).
     parsed.steps = expandPlan(user_instruction, intent, parsed.steps);
 
+    } // end AI planner branch
+
     // Tool availability annotation.
-    const connectorsMissing = annotateTools(parsed.steps);
+    const connectorsMissing = annotateTools(parsed!.steps);
 
     console.log("[orchestrate] plan ready", {
       source: plannerSource,
       intent,
-      steps: parsed.steps.length,
-      agents: parsed.steps.map((s) => s.agent_slug),
-      tools: parsed.steps.map((s) => s.tool_needed),
+      execution_mode: executionMode,
+      steps: parsed!.steps.length,
+      agents: parsed!.steps.map((s) => s.agent_slug),
+      tools: parsed!.steps.map((s) => s.tool_needed),
       connectors_missing: connectorsMissing,
     });
 
@@ -715,8 +804,8 @@ Return ONLY valid JSON, no prose, no markdown:
         created_by: userId,
         goal: user_instruction,
         user_instruction,
-        plan_summary: parsed.plan_summary,
-        steps: parsed.steps,
+        plan_summary: parsed!.plan_summary,
+        steps: parsed!.steps,
         status: "executing",
       })
       .select("id")
@@ -732,22 +821,24 @@ Return ONLY valid JSON, no prose, no markdown:
       plan_id: taskPlan.id,
       event_type: "plan_created",
       title: "Plan created",
-      body: parsed.plan_summary,
+      body: parsed!.plan_summary,
       metadata: {
-        total_steps: parsed.steps.length,
+        total_steps: parsed!.steps.length,
         conversation_id,
         planner: plannerSource,
-        provider: ai.provider,
-        model: ai.model,
+        provider: ai?.provider ?? "staged",
+        model: ai?.model ?? "n/a",
         intent,
-        agents: parsed.steps.map((s) => s.agent_slug),
-        tools_required: parsed.steps.map((s) => s.tool_needed).filter(Boolean),
+        execution_mode: executionMode,
+        agents: parsed!.steps.map((s) => s.agent_slug),
+        tools_required: parsed!.steps.map((s) => s.tool_needed).filter(Boolean),
         connectors_missing: connectorsMissing,
+        tool_input: tool_input ?? null,
       },
     });
 
     // Kick off first step (non-blocking).
-    const firstStep = parsed.steps[0];
+    const firstStep = parsed!.steps[0];
     fetch(`${SUPABASE_URL}/functions/v1/run-agent`, {
       method: "POST",
       headers: {
@@ -764,6 +855,8 @@ Return ONLY valid JSON, no prose, no markdown:
         input: user_instruction,
         needs_approval: firstStep.requires_approval === true,
         tool_needed: firstStep.tool_needed,
+        tool_input: tool_input ?? null,
+        execution_mode: executionMode,
       }),
     }).catch((e) => console.error("[orchestrate] run-agent kickoff failed:", e));
 
@@ -771,12 +864,13 @@ Return ONLY valid JSON, no prose, no markdown:
       success: true,
       plan_id: taskPlan.id,
       task_plan_id: taskPlan.id,
-      plan_summary: parsed.plan_summary,
-      total_steps: parsed.steps.length,
-      steps_count: parsed.steps.length,
+      plan_summary: parsed!.plan_summary,
+      total_steps: parsed!.steps.length,
+      steps_count: parsed!.steps.length,
       planner: plannerSource,
       intent,
-      agents: parsed.steps.map((s) => s.agent_slug),
+      execution_mode: executionMode,
+      agents: parsed!.steps.map((s) => s.agent_slug),
       connectors_missing: connectorsMissing,
       plan: parsed,
     });

@@ -9,6 +9,7 @@ export type TaskType =
   | "pilot_chat"
   | "orchestration_plan"
   | "agent_execution"
+  | "tool_input_planning"
   | "helper";
 
 export interface ChatMessage {
@@ -49,6 +50,7 @@ const DEFAULT_MODELS: Record<TaskType, string> = {
   pilot_chat: "google/gemini-3-flash-preview",
   orchestration_plan: "google/gemini-3-flash-preview",
   agent_execution: "google/gemini-3-flash-preview",
+  tool_input_planning: "google/gemini-3-flash-preview",
   helper: "google/gemini-2.5-flash-lite",
 };
 

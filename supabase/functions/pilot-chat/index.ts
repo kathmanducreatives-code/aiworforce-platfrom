@@ -5,6 +5,8 @@
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { generateJson, logProviderCall } from "../_shared/aiProvider.ts";
+import { classifyIntent } from "../_shared/intentRouter.ts";
+import { planToolInput, type ToolInput } from "../_shared/toolInputPlanner.ts";
 
 
 const cors = {
@@ -78,6 +80,121 @@ function coerceDecision(obj: unknown): Decision | null {
   return null;
 }
 
+// ---------- Delegation helper ----------
+
+interface DelegateArgs {
+  admin: ReturnType<typeof createClient>;
+  SUPABASE_URL: string;
+  SUPABASE_ANON_KEY: string;
+  authHeader: string;
+  conversationId: string;
+  workspaceId: string;
+  instruction: string;
+  toolInput?: ToolInput | null;
+  modelUsed: string;
+  providerUsed: string;
+}
+
+async function delegateToOrchestrate(a: DelegateArgs): Promise<Response> {
+  const orchResponse = await fetch(`${a.SUPABASE_URL}/functions/v1/orchestrate`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: a.authHeader,
+      apikey: a.SUPABASE_ANON_KEY,
+    },
+    body: JSON.stringify({
+      user_instruction: a.instruction,
+      workspace_id: a.workspaceId,
+      tool_input: a.toolInput ?? null,
+    }),
+  });
+  const orchBody = await orchResponse.json().catch(() => ({} as any));
+
+  if (!orchResponse.ok) {
+    console.error("[pilot-chat] orchestrate failed:", orchResponse.status, orchBody);
+    const errMsg = `I started building a plan but the orchestrator failed: ${orchBody?.error ?? "unknown"}`;
+    const { data: saved } = await a.admin
+      .from("messages")
+      .insert({
+        conversation_id: a.conversationId,
+        role: "assistant",
+        content: errMsg,
+        agent_slug: "pilot",
+        model_used: a.modelUsed,
+        is_error: true,
+      })
+      .select("*")
+      .single();
+    return json({ type: "reply", conversation_id: a.conversationId, message: saved, error: `orchestrate ${orchResponse.status}` }, 502);
+  }
+
+  const planSummary: string = orchBody?.plan_summary ?? "(no summary)";
+  const planId: string = orchBody?.task_plan_id ?? orchBody?.plan_id ?? "";
+  const stepsCount: number = orchBody?.total_steps ?? orchBody?.steps_count ?? 0;
+  const agents: string[] = Array.isArray(orchBody?.agents) ? orchBody.agents : [];
+  const connectorsMissing: string[] = Array.isArray(orchBody?.connectors_missing) ? orchBody.connectors_missing : [];
+  const planSteps: any[] = Array.isArray(orchBody?.plan?.steps) ? orchBody.plan.steps : [];
+  const executionMode: string = orchBody?.execution_mode ?? a.toolInput?.execution_mode ?? "fast";
+
+  const agentNames: Record<string, string> = { scout: "Scout", aria: "Aria", penn: "Penn", hawk: "Hawk", scribe: "Scribe" };
+  const chain = planSteps.map((s) => `${agentNames[s.agent_slug] ?? s.agent_slug} will ${(s.task_title || "").toString().toLowerCase() || "work the step"}`).join(", ");
+
+  const needsApproval = planSteps.some((s) => s.requires_approval && s.tool_needed === "send_email");
+  const approvalNote = needsApproval ? " Penn will pause for your approval before sending." : "";
+  const connectorNote = connectorsMissing.length ? ` Heads up: ${connectorsMissing.join(" ")} I'll continue with available tools.` : "";
+
+  let modeNote = "";
+  if (a.toolInput) {
+    if (executionMode === "fast") modeNote = " (fast mode — I'll source signals and rank them; ask me to enrich or draft outreach next.)";
+    else if (executionMode === "deep") modeNote = ` (deep mode — I'll enrich the top ${Math.min(5, a.toolInput.max_results)} after sourcing.)`;
+    else if (executionMode === "outreach") modeNote = ` (outreach mode — I'll draft messages for the top ${Math.min(5, a.toolInput.max_results)}; nothing will be sent without your approval.)`;
+  }
+
+  const announce = stepsCount > 0
+    ? `I created a ${stepsCount}-step plan: ${chain}.${approvalNote}${connectorNote}${modeNote}`
+    : `On it. ${planSummary}`;
+
+  const planTitle: string = (orchBody?.plan_title || planSummary || "Execution plan").toString().slice(0, 140);
+  const announceMetadata = planId
+    ? {
+        type: "execution_plan",
+        plan_id: planId,
+        plan_title: planTitle,
+        task_count: stepsCount,
+        agents,
+        connector_limitations: connectorsMissing,
+        execution_mode: executionMode,
+        tool_input: a.toolInput ?? null,
+      }
+    : {};
+
+  const { data: announced } = await a.admin
+    .from("messages")
+    .insert({
+      conversation_id: a.conversationId,
+      role: "assistant",
+      content: announce,
+      agent_slug: "pilot",
+      model_used: a.modelUsed,
+      metadata: announceMetadata,
+    })
+    .select("*")
+    .single();
+
+  return json({
+    type: "plan",
+    conversation_id: a.conversationId,
+    plan_id: planId,
+    plan_title: planTitle,
+    plan_summary: planSummary,
+    steps_count: stepsCount,
+    agents,
+    connector_limitations: connectorsMissing,
+    execution_mode: executionMode,
+    message: announced,
+  });
+}
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: cors });
@@ -216,7 +333,82 @@ Deno.serve(async (req) => {
     ? `\n\nCOMPANY BRAIN (workspace context — use to ground every decision):\n${JSON.stringify(brain, null, 2)}`
     : `\n\nCOMPANY BRAIN: (empty — workspace has not completed onboarding yet. If the user asks for work that requires company context, suggest completing onboarding at /onboarding/company-brain.)`;
 
-  // 7. Ask Pilot brain via the AI provider adapter (Lovable AI Gateway default).
+  // 6c. Intent routing — short-circuit when we don't need full Pilot reasoning.
+  const intentResult = await classifyIntent(message);
+  console.log("[pilot-chat] intent:", intentResult);
+
+  // 6c.i Unclear → ask one clarification, no orchestration.
+  if (intentResult.intent === "unclear") {
+    const clarification = "I'm not sure what you'd like me to do. Could you add a bit more detail — for example, the role/company type and a location, or a specific URL?";
+    const { data: saved } = await admin
+      .from("messages")
+      .insert({
+        conversation_id: conversationId,
+        role: "assistant",
+        content: clarification,
+        agent_slug: "pilot",
+        model_used: "google/gemini-3-flash-preview",
+        metadata: { intent: "unclear", clarification: true },
+      })
+      .select("*")
+      .single();
+    return json({ type: "reply", conversation_id: conversationId, intent: "unclear", message: saved });
+  }
+
+  // 6c.ii Source-style intent → run tool input planner; may ask clarification.
+  let toolInput: ToolInput | null = null;
+  if (
+    intentResult.intent === "source_signals" ||
+    intentResult.intent === "analyze_url" ||
+    intentResult.intent === "enrich_existing_leads" ||
+    intentResult.intent === "draft_outreach" ||
+    intentResult.intent === "send_requires_approval" ||
+    intentResult.intent === "rank_existing_leads"
+  ) {
+    toolInput = await planToolInput(message, intentResult.intent, brain);
+    console.log("[pilot-chat] tool_input:", toolInput);
+
+    if (toolInput.ask_clarification) {
+      const q = toolInput.clarification ?? "Could you share a bit more — role/company type and location would help.";
+      const { data: saved } = await admin
+        .from("messages")
+        .insert({
+          conversation_id: conversationId,
+          role: "assistant",
+          content: q,
+          agent_slug: "pilot",
+          model_used: "google/gemini-3-flash-preview",
+          metadata: { intent: intentResult.intent, clarification: true, missing_fields: toolInput.missing_fields },
+        })
+        .select("*")
+        .single();
+      return json({
+        type: "reply",
+        conversation_id: conversationId,
+        intent: intentResult.intent,
+        clarification: true,
+        message: saved,
+      });
+    }
+  }
+
+  // 6c.iii When we have a confident tool_input, skip the Pilot AI decision and delegate directly.
+  if (toolInput && toolInput.tool_name) {
+    return await delegateToOrchestrate({
+      admin,
+      SUPABASE_URL,
+      SUPABASE_ANON_KEY,
+      authHeader,
+      conversationId,
+      workspaceId,
+      instruction: message,
+      toolInput,
+      modelUsed: "google/gemini-3-flash-preview",
+      providerUsed: "lovable-ai",
+    });
+  }
+
+  // 7. Otherwise let Pilot decide (simple_chat / daily_brief fallthrough / content).
   const ai = await generateJson({
     taskType: "pilot_chat",
     systemPrompt: PILOT_SYSTEM_PROMPT + brainBlock,
@@ -295,109 +487,17 @@ Deno.serve(async (req) => {
   }
 
 
-  // 8c. Delegate branch — call orchestrate server-to-server, forwarding the user JWT.
-  const orchResponse = await fetch(`${SUPABASE_URL}/functions/v1/orchestrate`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: authHeader, // forward user JWT so orchestrate's membership check passes
-      apikey: SUPABASE_ANON_KEY,
-    },
-    body: JSON.stringify({
-      user_instruction: decision.instruction,
-      workspace_id: workspaceId,
-    }),
-  });
-  const orchBody = await orchResponse.json().catch(() => ({}));
-
-  if (!orchResponse.ok) {
-    console.error("[pilot-chat] orchestrate failed:", orchResponse.status, orchBody);
-    const errMsg = `I started building a plan but the orchestrator failed: ${orchBody?.error ?? "unknown"}`;
-    const { data: saved } = await admin
-      .from("messages")
-      .insert({
-        conversation_id: conversationId,
-        role: "assistant",
-        content: errMsg,
-        agent_slug: "pilot",
-        model_used: modelUsed,
-
-        is_error: true,
-      })
-      .select("*")
-      .single();
-    return json(
-      {
-        type: "reply",
-        conversation_id: conversationId,
-        message: saved,
-        error: `orchestrate ${orchResponse.status}: ${JSON.stringify(orchBody)}`,
-      },
-      502
-    );
-  }
-
-  const planSummary: string = orchBody?.plan_summary ?? "(no summary)";
-  const planId: string = orchBody?.task_plan_id ?? orchBody?.plan_id ?? "";
-  const stepsCount: number = orchBody?.total_steps ?? orchBody?.steps_count ?? 0;
-  const agents: string[] = Array.isArray(orchBody?.agents) ? orchBody.agents : [];
-  const connectorsMissing: string[] = Array.isArray(orchBody?.connectors_missing) ? orchBody.connectors_missing : [];
-  const planSteps: any[] = Array.isArray(orchBody?.plan?.steps) ? orchBody.plan.steps : [];
-
-  const agentNames: Record<string, string> = { scout: "Scout", aria: "Aria", penn: "Penn", hawk: "Hawk", scribe: "Scribe" };
-  const chain = planSteps
-    .map((s) => {
-      const name = agentNames[s.agent_slug] ?? s.agent_slug;
-      const verb = (s.task_title || "").toString().toLowerCase() || "work the step";
-      return `${name} will ${verb}`;
-    })
-    .join(", ");
-
-  const needsApproval = planSteps.some((s) => s.requires_approval && s.tool_needed === "send_email");
-  const approvalNote = needsApproval ? " Penn will pause for your approval before sending." : "";
-  const connectorNote = connectorsMissing.length
-    ? ` Heads up: ${connectorsMissing.join(" ")} I'll continue with available tools.`
-    : "";
-
-
-  const announce = stepsCount > 0
-    ? `I created a ${stepsCount}-step plan: ${chain}.${approvalNote}${connectorNote}`
-    : `On it. ${planSummary}`;
-
-  const planTitle: string = (orchBody?.plan_title || planSummary || "Execution plan").toString().slice(0, 140);
-  const announceMetadata = planId
-    ? {
-        type: "execution_plan",
-        plan_id: planId,
-        plan_title: planTitle,
-        task_count: stepsCount,
-        agents,
-        connector_limitations: connectorsMissing,
-      }
-    : {};
-
-  const { data: announced } = await admin
-    .from("messages")
-    .insert({
-      conversation_id: conversationId,
-      role: "assistant",
-      content: announce,
-      agent_slug: "pilot",
-      model_used: modelUsed,
-      metadata: announceMetadata,
-    })
-    .select("*")
-    .single();
-
-  return json({
-    type: "plan",
-    conversation_id: conversationId,
-    plan_id: planId,
-    plan_title: planTitle,
-    plan_summary: planSummary,
-    steps_count: stepsCount,
-    agents,
-    connector_limitations: connectorsMissing,
-    message: announced,
+  // 8c. Delegate branch — call the shared orchestrate helper.
+  return await delegateToOrchestrate({
+    admin,
+    SUPABASE_URL,
+    SUPABASE_ANON_KEY,
+    authHeader,
+    conversationId,
+    workspaceId,
+    instruction: decision.instruction,
+    toolInput: null,
+    modelUsed,
+    providerUsed,
   });
 });
