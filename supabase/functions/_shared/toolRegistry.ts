@@ -296,7 +296,9 @@ const APIFY_BASE = "https://api.apify.com/v2";
 type ApifyActorCfg = {
   actor_id: string | null;
   description: string;
-  // Optional adapter: map our generic source_with_apify input to this actor's input schema.
+  source_type?: string;
+  enabled_by_default?: boolean;
+  use_for?: string[];
   input_adapter?: (i: {
     query?: string | null;
     location?: string | null;
@@ -315,12 +317,18 @@ function buildLinkedInJobsSearchUrl(keywords: string | null | undefined, locatio
   return `https://www.linkedin.com/jobs/search/?${params.toString()}`;
 }
 
+// Apify actor registry. Apify is reserved for structured sourcing actors
+// (jobs/hiring/company data). Broad web search stays on `search_web`
+// (Gemini/Lovable grounded search) — `apify/google-search-scraper` is an
+// opt-in fallback only and is disabled by default.
 const APIFY_ACTORS: Record<string, ApifyActorCfg> = {
   jobs: {
     actor_id: "curious_coder/linkedin-jobs-scraper",
-    description: "Scrape public LinkedIn jobs search results with company details",
+    source_type: "jobs",
+    enabled_by_default: true,
+    use_for: ["hiring signals", "companies hiring roles", "job openings"],
+    description: "LinkedIn jobs search with company details",
     input_adapter: ({ query, location, role_keywords, max_results, user_input }) => {
-      // Prefer explicit role_keywords joined into a query; fall back to query.
       const kwFromRoles = Array.isArray(role_keywords) && role_keywords.length > 0
         ? role_keywords.join(" ")
         : null;
@@ -340,12 +348,40 @@ const APIFY_ACTORS: Record<string, ApifyActorCfg> = {
       };
     },
   },
-  companies:      { actor_id: null, description: "Find companies matching a query" },
-  linkedin_posts: { actor_id: null, description: "Find people posting about hiring/problems" },
-  comments:       { actor_id: null, description: "Find comments on relevant posts" },
-  websites:       { actor_id: null, description: "Scrape arbitrary websites via actor" },
-  generic:        { actor_id: null, description: "Fallback generic actor" },
+  indeed_jobs: {
+    actor_id: "curious_coder/indeed-scraper",
+    source_type: "indeed_jobs",
+    enabled_by_default: false,
+    use_for: ["Indeed jobs", "non-LinkedIn hiring signals", "backup jobs source"],
+    description: "Indeed jobs scraper (backup hiring source)",
+  },
+  website_content: {
+    actor_id: "apify/website-content-crawler",
+    source_type: "website_content",
+    enabled_by_default: false,
+    use_for: ["website content fallback if Firecrawl fails"],
+    description: "Website content crawler — fallback if Firecrawl fails",
+  },
+  custom_web: {
+    actor_id: "apify/web-scraper",
+    source_type: "custom_web",
+    enabled_by_default: false,
+    use_for: ["custom websites", "directories", "niche job boards"],
+    description: "Generic web scraper for niche/custom sites",
+  },
+  search_fallback: {
+    actor_id: "apify/google-search-scraper",
+    source_type: "search",
+    enabled_by_default: false,
+    use_for: ["optional fallback only if grounded search is unavailable and user explicitly enables it"],
+    description: "Google SERP via Apify — opt-in fallback only",
+  },
 };
+
+// Actors that must NEVER run without explicit opt-in, regardless of how
+// the orchestrator/planner resolved them. Guards against silently using
+// Apify as the default broad-search lane.
+const OPT_IN_ONLY_ACTOR_IDS = new Set<string>(["apify/google-search-scraper"]);
 
 const APIFY_ACTOR_ID_RE = /^[a-zA-Z0-9_~][a-zA-Z0-9_\-~]{0,127}(?:\/[a-zA-Z0-9_\-~]+)?$/;
 
