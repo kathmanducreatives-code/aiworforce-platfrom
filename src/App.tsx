@@ -11,6 +11,7 @@ import { WorkspaceProvider } from "./contexts/WorkspaceContext";
 import VerificationPanel from "./components/dev/VerificationPanel";
 import PreviewDiagnostics from "./components/dev/PreviewDiagnostics";
 import AppErrorBoundary from "./components/AppErrorBoundary";
+import RouteErrorBoundary from "./components/RouteErrorBoundary";
 import Landing from "./pages/Landing";
 
 import Dashboard from "./pages/Dashboard";
