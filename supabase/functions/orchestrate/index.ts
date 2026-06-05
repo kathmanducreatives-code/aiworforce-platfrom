@@ -788,9 +788,10 @@ Return ONLY valid JSON, no prose, no markdown:
     console.log("[orchestrate] plan ready", {
       source: plannerSource,
       intent,
-      steps: parsed.steps.length,
-      agents: parsed.steps.map((s) => s.agent_slug),
-      tools: parsed.steps.map((s) => s.tool_needed),
+      execution_mode: executionMode,
+      steps: parsed!.steps.length,
+      agents: parsed!.steps.map((s) => s.agent_slug),
+      tools: parsed!.steps.map((s) => s.tool_needed),
       connectors_missing: connectorsMissing,
     });
 
@@ -803,9 +804,10 @@ Return ONLY valid JSON, no prose, no markdown:
         created_by: userId,
         goal: user_instruction,
         user_instruction,
-        plan_summary: parsed.plan_summary,
-        steps: parsed.steps,
+        plan_summary: parsed!.plan_summary,
+        steps: parsed!.steps,
         status: "executing",
+        metadata: { execution_mode: executionMode, tool_input: tool_input ?? null, intent },
       })
       .select("id")
       .single();
@@ -820,22 +822,24 @@ Return ONLY valid JSON, no prose, no markdown:
       plan_id: taskPlan.id,
       event_type: "plan_created",
       title: "Plan created",
-      body: parsed.plan_summary,
+      body: parsed!.plan_summary,
       metadata: {
-        total_steps: parsed.steps.length,
+        total_steps: parsed!.steps.length,
         conversation_id,
         planner: plannerSource,
-        provider: ai.provider,
-        model: ai.model,
+        provider: ai?.provider ?? "staged",
+        model: ai?.model ?? "n/a",
         intent,
-        agents: parsed.steps.map((s) => s.agent_slug),
-        tools_required: parsed.steps.map((s) => s.tool_needed).filter(Boolean),
+        execution_mode: executionMode,
+        agents: parsed!.steps.map((s) => s.agent_slug),
+        tools_required: parsed!.steps.map((s) => s.tool_needed).filter(Boolean),
         connectors_missing: connectorsMissing,
+        tool_input: tool_input ?? null,
       },
     });
 
     // Kick off first step (non-blocking).
-    const firstStep = parsed.steps[0];
+    const firstStep = parsed!.steps[0];
     fetch(`${SUPABASE_URL}/functions/v1/run-agent`, {
       method: "POST",
       headers: {
@@ -852,6 +856,8 @@ Return ONLY valid JSON, no prose, no markdown:
         input: user_instruction,
         needs_approval: firstStep.requires_approval === true,
         tool_needed: firstStep.tool_needed,
+        tool_input: tool_input ?? null,
+        execution_mode: executionMode,
       }),
     }).catch((e) => console.error("[orchestrate] run-agent kickoff failed:", e));
 
@@ -859,12 +865,13 @@ Return ONLY valid JSON, no prose, no markdown:
       success: true,
       plan_id: taskPlan.id,
       task_plan_id: taskPlan.id,
-      plan_summary: parsed.plan_summary,
-      total_steps: parsed.steps.length,
-      steps_count: parsed.steps.length,
+      plan_summary: parsed!.plan_summary,
+      total_steps: parsed!.steps.length,
+      steps_count: parsed!.steps.length,
       planner: plannerSource,
       intent,
-      agents: parsed.steps.map((s) => s.agent_slug),
+      execution_mode: executionMode,
+      agents: parsed!.steps.map((s) => s.agent_slug),
       connectors_missing: connectorsMissing,
       plan: parsed,
     });
