@@ -512,7 +512,8 @@ async function execSourceWithApify(input: unknown): Promise<ToolResult> {
     allow_disabled?: boolean;
   };
 
-  const source_type = (i.source_type ?? "jobs").toString().toLowerCase();
+  const requested_source_type = (i.source_type ?? null) as string | null;
+  const source_type = normalizeApifySourceType(requested_source_type ?? "jobs");
   const max_results = Math.min(100, Math.max(1, Number(i.max_results) || 25));
   const search_goal = (i.search_goal ?? "").toString();
   const allow_disabled = i.allow_disabled === true;
@@ -521,7 +522,6 @@ async function execSourceWithApify(input: unknown): Promise<ToolResult> {
   let actorCfg: ApifyActorCfg | undefined;
   if (actor_id) {
     if (!APIFY_ACTOR_ID_RE.test(actor_id)) return { ok: false, error: "invalid_actor_id" };
-    // Resolve cfg by actor_id so we can apply enabled_by_default gating even on explicit calls.
     actorCfg = Object.values(APIFY_ACTORS).find((c) => c.actor_id === actor_id);
   } else {
     const cfg = APIFY_ACTORS[source_type];
@@ -531,8 +531,11 @@ async function execSourceWithApify(input: unknown): Promise<ToolResult> {
         unavailable: true,
         error: "apify_actor_not_configured",
         data: {
-          source_type,
-          message: "Apify is connected, but no actor is configured for this source type yet.",
+          requested_source_type,
+          normalized_source_type: source_type,
+          expected_actor_key: source_type,
+          actor_configured: false,
+          message: `No Apify actor configured for source_type=${source_type} (requested=${requested_source_type ?? "null"}).`,
         },
       };
     }
