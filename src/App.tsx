@@ -11,6 +11,7 @@ import { WorkspaceProvider } from "./contexts/WorkspaceContext";
 import VerificationPanel from "./components/dev/VerificationPanel";
 import PreviewDiagnostics from "./components/dev/PreviewDiagnostics";
 import AppErrorBoundary from "./components/AppErrorBoundary";
+import RouteErrorBoundary from "./components/RouteErrorBoundary";
 import Landing from "./pages/Landing";
 
 import Dashboard from "./pages/Dashboard";
@@ -93,6 +94,7 @@ const App = () => (
                   <div className="relative min-h-screen w-full">
                     <AuthenticatedBackground />
                     {import.meta.env.DEV && <PreviewDiagnostics />}
+                  <RouteErrorBoundary>
                   <Routes>
 
                     {/* Public Routes */}
@@ -383,6 +385,7 @@ const App = () => (
                     {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
                     <Route path="*" element={<NotFound />} />
                   </Routes>
+                  </RouteErrorBoundary>
                 </div>
 
               </BrowserRouter>
