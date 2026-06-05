@@ -164,22 +164,21 @@ Deno.serve(async (req) => {
 
     if (shouldUseApify) {
       // Prefer tool_input (planned upstream); fall back to lightweight regex parse.
-      let source_type: "jobs" | "companies" | "linkedin_posts" | "comments" | "generic" = "generic";
-      if (tool_input_body?.source_type) {
-        const st = String(tool_input_body.source_type).toLowerCase();
-        if (st === "jobs" || st === "companies" || st === "people" || st === "posts") {
-          source_type = st === "posts" ? "linkedin_posts" : st === "people" ? "generic" : st as any;
-        }
-      } else {
+      const raw_source_type: string | null = tool_input_body?.source_type ?? null;
+      let source_type = normalizeApifySourceType(raw_source_type);
+      if (!raw_source_type) {
         const text = `${instruction ?? ""} ${input ?? ""}`.toLowerCase();
-        if (/\b(hiring|job openings?|roles?|engineers?|marketers?|developers?|candidates?)\b/.test(text)) source_type = "jobs";
-        else if (/\b(companies|founders?|prospects?|startups?|orgs?)\b/.test(text)) source_type = "companies";
-        else if (/\blinkedin\b|\bposts?\b/.test(text)) source_type = "linkedin_posts";
-        else if (/\bcomments?\b/.test(text)) source_type = "comments";
+        // No people/profile actor configured yet — everything sourcing-shaped maps to jobs.
+        if (/\b(hiring|job openings?|jobs?|roles?|engineers?|marketers?|developers?|candidates?|people|companies|founders?|prospects?|startups?|orgs?)\b/.test(text)) {
+          source_type = "jobs";
+        } else if (/\blinkedin\b|\bposts?\b|\bcomments?\b/.test(text)) {
+          // No posts/comments actor yet — degrade to jobs hiring lens.
+          source_type = "jobs";
+        }
       }
 
-      const allowedForHawk = source_type === "jobs" || source_type === "companies";
-      const shouldRun = agent_slug === "scout" || (agent_slug === "hawk" && allowedForHawk);
+      // Both scout and hawk may run the jobs actor.
+      const shouldRun = agent_slug === "scout" || agent_slug === "hawk";
 
       if (shouldRun) {
         let location: string | null = tool_input_body?.location ?? null;
@@ -207,15 +206,23 @@ Deno.serve(async (req) => {
           max_results,
         };
 
-        console.log("[run-agent] apify input", apifyInput);
+        console.log("[run-agent] apify input", {
+          requested_source_type: raw_source_type,
+          normalized_source_type: source_type,
+          ...apifyInput,
+        });
         const r = await runTool("source_with_apify", apifyInput, baseCtx);
         if (r.ok && r.data) {
           const d = r.data as { items?: any[]; total?: number; summary?: string; run_id?: string };
           const sample = (d.items ?? []).slice(0, Math.min(max_results, 25));
-          apifyContext = `APIFY SOURCING (run ${d.run_id ?? "?"} — ${d.total ?? sample.length} results):\n${d.summary ?? ""}\n\nITEMS:\n${JSON.stringify(sample, null, 2).slice(0, 8000)}`;
+          const lens = source_type === "jobs"
+            ? "\n\nNOTE: These are companies/jobs hiring for the requested role, not individual people profiles."
+            : "";
+          apifyContext = `APIFY SOURCING (run ${d.run_id ?? "?"} — ${d.total ?? sample.length} results):\n${d.summary ?? ""}${lens}\n\nITEMS:\n${JSON.stringify(sample, null, 2).slice(0, 8000)}`;
         } else if (r.unavailable) {
+          const dbg = (r.data ?? {}) as Record<string, unknown>;
           const reason = r.error === "apify_actor_not_configured"
-            ? `Apify is connected, but no actor is configured for source_type=${source_type}.`
+            ? `Apify is connected, but no actor is configured for source_type=${source_type} (requested=${raw_source_type ?? "null"}, expected_actor_key=${dbg.expected_actor_key ?? source_type}).`
             : `Apify unavailable (${r.error ?? "not configured"}).`;
           toolNotices.push(reason);
         } else if (!r.ok) {
@@ -223,6 +230,7 @@ Deno.serve(async (req) => {
         }
       }
     }
+
 
     // 3) Optional broad research — only attempt if Perplexity is actually configured AND
     //    we're not in fast mode (fast mode skips this entirely to keep cost low).
