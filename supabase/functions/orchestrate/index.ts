@@ -807,7 +807,6 @@ Return ONLY valid JSON, no prose, no markdown:
         plan_summary: parsed!.plan_summary,
         steps: parsed!.steps,
         status: "executing",
-        metadata: { execution_mode: executionMode, tool_input: tool_input ?? null, intent },
       })
       .select("id")
       .single();
