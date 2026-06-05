@@ -382,6 +382,8 @@ Deno.serve(async (req) => {
         instruction: nextStep.instruction,
         input: apiText,
         needs_approval: nextStep.needs_approval === true,
+        tool_input: tool_input_body ?? nextStep.metadata?.tool_input ?? null,
+        execution_mode: execution_mode_body,
       }),
     }).catch((e) => console.error("[run-agent] chain fetch failed:", e));
 
