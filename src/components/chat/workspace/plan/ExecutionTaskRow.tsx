@@ -74,14 +74,32 @@ export default function ExecutionTaskRow({
 
       <div className="mt-2 flex flex-wrap items-center gap-1.5">
         {(toolNeeded || latestToolCall) && (
-          <ToolStatusBadge
-            toolNeeded={toolNeeded}
-            latestCall={latestToolCall ?? null}
-            connectorMissing={connectorMissingFor(toolNeeded)}
-          />
+          <span
+            onClick={(e) => {
+              if (!onOpenOutput) return;
+              e.stopPropagation();
+              onOpenOutput(task.id, latestToolCall?.id ?? null);
+            }}
+            className={onOpenOutput ? 'cursor-pointer' : ''}
+          >
+            <ToolStatusBadge
+              toolNeeded={toolNeeded}
+              latestCall={latestToolCall ?? null}
+              connectorMissing={connectorMissingFor(toolNeeded)}
+            />
+          </span>
         )}
         {(requiresApproval || approval) && (
           <ApprovalBadge approval={approval ?? null} onReview={onReviewApproval} />
+        )}
+        {canOpenOutput && (
+          <button
+            type="button"
+            onClick={(e) => { e.stopPropagation(); onOpenOutput!(task.id, latestToolCall?.id ?? null); }}
+            className="ml-auto text-[11px] text-emerald-300 hover:text-emerald-200"
+          >
+            View output →
+          </button>
         )}
       </div>
 
