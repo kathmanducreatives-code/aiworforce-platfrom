@@ -72,16 +72,19 @@ export function fallbackParse(prompt: string, intent: Intent | string): ToolInpu
   const needs_enrichment = ENRICH_WORDS.test(t);
 
   // source_type heuristic
+  // NOTE: No people/profile or companies actor is configured today. Everything that
+  // looks like sourcing routes to source_type="jobs" (the LinkedIn jobs actor),
+  // which surfaces companies hiring for the requested role.
   let source_type: SourceType = null;
   let tool_name: ToolName = null;
-  if (intent === "source_signals" || /\b(find|source|hiring|companies|leads|prospects|candidates)\b/i.test(prompt)) {
+  if (intent === "source_signals" || /\b(find|source|hiring|companies|leads|prospects|candidates|engineers?|developers?|marketers?|people)\b/i.test(prompt)) {
     tool_name = "source_with_apify";
-    source_type = "jobs"; // jobs is the only configured actor today
-    if (/\bcompanies\b/i.test(prompt) && !/\bhiring\b/i.test(prompt)) source_type = "companies";
-    if (/\b(post|linkedin posts?)\b/i.test(prompt)) source_type = "posts";
-    if (/\bpeople\b/i.test(prompt)) source_type = "people";
+    source_type = "jobs";
   } else if (intent === "analyze_url" || /https?:\/\//.test(prompt)) {
     tool_name = "scrape_url";
+  } else if (intent === "daily_brief" || intent === "content") {
+    tool_name = "search_web";
+  }
   } else if (intent === "daily_brief" || intent === "content") {
     tool_name = "search_web";
   }
