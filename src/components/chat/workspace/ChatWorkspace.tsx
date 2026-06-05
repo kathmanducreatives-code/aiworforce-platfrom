@@ -160,7 +160,28 @@ export default function ChatWorkspace() {
                 </ChatErrorBoundary>
               </div>
             </div>
+
+            {/* Workbench (desktop side panel) */}
+            {workbenchOpen && !isMobile && (
+              <div
+                className="border-l border-white/[0.06] bg-[#0a0d12] shrink-0 overflow-hidden"
+                style={{ width: workbenchWidth }}
+              >
+                <ChatErrorBoundary>
+                  <WorkbenchPanel />
+                </ChatErrorBoundary>
+              </div>
+            )}
           </div>
+
+          {/* Workbench (mobile fullscreen overlay) */}
+          {workbenchOpen && isMobile && (
+            <div className="absolute inset-0 z-50 bg-[#0a0d12]">
+              <ChatErrorBoundary>
+                <WorkbenchPanel />
+              </ChatErrorBoundary>
+            </div>
+          )}
         </motion.div>
       </AnimatePresence>
     </TooltipProvider>
