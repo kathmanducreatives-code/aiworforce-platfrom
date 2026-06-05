@@ -239,8 +239,12 @@ ${sectionOutreach}
 ## Intelligence Status
 ${sectionIntel}
 
+## Connectors
+${connectorStatusLines}
+
 ## Recommended Next Actions
 ${sectionActions}`;
+
 
   // ---- Optional AI polish (formatting only, no fabrication) ----
   let finalMd = deterministicMd;
