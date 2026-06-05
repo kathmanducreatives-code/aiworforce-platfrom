@@ -9,6 +9,7 @@ export type TaskType =
   | "pilot_chat"
   | "orchestration_plan"
   | "agent_execution"
+  | "tool_input_planning"
   | "helper";
 
 export interface ChatMessage {
