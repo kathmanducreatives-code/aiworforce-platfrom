@@ -61,6 +61,7 @@ const Header = () => {
           ) : (
             <>
               <button onClick={() => navigate('/auth')} className="text-sm text-neutral-400 hover:text-white font-medium transition-colors">Sign In</button>
+              <button onClick={() => navigate('/dashboard')} className="text-sm text-neutral-300 hover:text-white font-medium transition-colors">Launch App</button>
               <button onClick={() => navigate('/auth')} className="liquid-fill-btn h-[36px] px-5 bg-emerald-500/[0.04] border border-emerald-500/25 text-emerald-300 text-sm font-medium rounded-full transition-all duration-300 hover:bg-emerald-500/[0.08] hover:border-emerald-500/40 hover:shadow-[0_0_20px_rgba(16,185,129,0.15)] flex items-center justify-center">
                 Meet your workforce →
               </button>
