@@ -66,12 +66,17 @@ const KNOWN_AGENTS: Record<string, string> = {
   scribe: "Scribe",
 };
 
-const TOOL_FRIENDLY: Record<string, string> = {
-  PERPLEXITY_API_KEY: "Perplexity",
-  FIRECRAWL_API_KEY: "Firecrawl",
-  APIFY_API_TOKEN: "Apify",
-  RESEND_API_KEY: "Resend",
+// Human-readable, tool-aware limitation messages keyed by tool name.
+// We emit these directly into connectors_missing so the UI never shows raw
+// env names or surfaces Perplexity for plans that don't actually need it.
+const TOOL_LIMITATION_MESSAGE: Record<string, string> = {
+  source_with_apify: "Apify token missing — hiring-signal sourcing unavailable.",
+  scrape_url: "Firecrawl missing — page extraction unavailable.",
+  search_web: "Broad web search is not configured. Use Apify for hiring signals or Firecrawl for specific URLs.",
+  research_web: "Perplexity not configured (optional fallback).",
+  send_email: "Resend missing — outreach can be drafted but not sent.",
 };
+
 
 function normalizeSlug(s: string | undefined | null): Step["agent_slug"] | null {
   if (!s) return null;
@@ -167,22 +172,30 @@ function fallbackPlan(instruction: string, intent: Intent): { plan_summary: stri
           }),
         ],
       };
-    case "intelligence":
+    case "intelligence": {
+      const sLower = instruction.toLowerCase();
+      const hiringShape = /(hiring|jobs?|roles?|companies?|recruit|engineers?|marketers?|developers?|leads?|founders?)/.test(sLower);
+      const hawkTool = hiringShape ? "source_with_apify" : "search_web";
       return {
-        plan_summary: `Gather competitive/market intelligence: ${instruction}`,
+        plan_summary: `Gather intelligence: ${instruction}`,
         steps: [
-          mkStep(0, "hawk", "Research signals", `Research current signals for: ${instruction}`, {
-            tool_needed: "research_web",
-            expected_output: "Cited list of recent signals (funding, hiring, launches, pricing).",
-            success_criteria: "At least 3 cited signals from reputable sources.",
+          mkStep(0, "hawk", hiringShape ? "Source hiring/company signals" : "Research signals", `Investigate: ${instruction}`, {
+            tool_needed: hawkTool,
+            expected_output: hiringShape
+              ? "List of companies/roles with source URLs and metadata from Apify."
+              : "Cited list of recent signals (funding, hiring, launches, pricing).",
+            success_criteria: hiringShape
+              ? "Apify returns results or clearly reports unavailable."
+              : "At least 3 cited signals, or a clear unavailable note.",
           }),
-          mkStep(1, "scribe", "Brief summary", `Turn research into a short intel brief for: ${instruction}`, {
+          mkStep(1, "scribe", "Brief summary", `Turn findings into a short intel brief for: ${instruction}`, {
             tool_needed: "summarize_text",
             expected_output: "1-page intel brief with bullets and recommended next action.",
-            success_criteria: "Brief references only the research above.",
+            success_criteria: "Brief references only findings above.",
           }),
         ],
       };
+    }
     case "outreach": {
       const wantsSend = /\bsend\b|send.*email/.test(instruction.toLowerCase());
       const steps: Step[] = [
@@ -227,35 +240,45 @@ function fallbackPlan(instruction: string, intent: Intent): { plan_summary: stri
           }),
         ],
       };
-    case "brief":
-      return {
-        plan_summary: `Daily brief: ${instruction}`,
-        steps: [
-          mkStep(0, "scribe", "Internal workspace brief", "Summarize today's activity: pending approvals, active plans, recent task results.", {
-            tool_needed: "summarize_text",
-            expected_output: "Concise daily brief grouped by approvals, active plans, recent results.",
-            success_criteria: "Pulled from workspace data only.",
+    case "brief": {
+      const briefSteps: Step[] = [
+        mkStep(0, "scribe", "Internal workspace brief", "Summarize today's activity: pending approvals, active plans, recent task results.", {
+          tool_needed: "summarize_text",
+          expected_output: "Concise daily brief grouped by approvals, active plans, recent results.",
+          success_criteria: "Pulled from workspace data only.",
+        }),
+      ];
+      // Only add a live-pulse step if a live-research tool is actually configured.
+      const pulseTool = isToolConfigured("search_web").ready
+        ? "search_web"
+        : isToolConfigured("research_web").ready
+        ? "research_web"
+        : null;
+      if (pulseTool) {
+        briefSteps.push(
+          mkStep(1, "hawk", "Live market pulse", "Add a short external intel pulse.", {
+            tool_needed: pulseTool,
+            expected_output: "3-5 bullet external pulse with citations.",
+            success_criteria: "Skipped gracefully if the tool reports unavailable.",
           }),
-          mkStep(1, "hawk", "Live market pulse", "Add a short external intel pulse if live research is configured.", {
-            tool_needed: "research_web",
-            expected_output: "Optional 3-5 bullet external pulse with citations.",
-            success_criteria: "Skipped gracefully if Perplexity is not configured.",
-          }),
-        ],
-      };
+        );
+      }
+      return { plan_summary: `Daily brief: ${instruction}`, steps: briefSteps };
+    }
     default:
       return {
         plan_summary: `Investigate request: ${instruction}`,
         steps: [
-          mkStep(0, "scout", "Investigate", instruction, {
-            tool_needed: "research_web",
-            expected_output: "Findings relevant to the user's request.",
-            success_criteria: "Findings cite sources or workspace data.",
+          mkStep(0, "scribe", "Respond from workspace context", instruction, {
+            tool_needed: "summarize_text",
+            expected_output: "Findings relevant to the user's request from available workspace data.",
+            success_criteria: "No fabrication; cite workspace data or clearly note when broader research is unavailable.",
           }),
         ],
       };
   }
 }
+
 
 // ---------- Deterministic expansion ----------
 
@@ -313,30 +336,37 @@ function expandPlan(instruction: string, intent: Intent, steps: Step[]): Step[] 
   }
 
   if (intent === "intelligence") {
+    const hiringShape = /(hiring|jobs?|roles?|companies?|recruit|engineers?|marketers?|developers?|leads?|founders?)/.test(t);
+    const defaultTool = hiringShape ? "source_with_apify" : "search_web";
     const hawk = find("hawk");
     if (!hawk) {
       steps.unshift(
-        mkStep(0, "hawk", "Research signals", `Research signals for: ${instruction}`, {
-          tool_needed: "research_web",
-          expected_output: "Cited signals from current sources.",
-          success_criteria: "At least 3 cited signals.",
+        mkStep(0, "hawk", hiringShape ? "Source hiring/company signals" : "Research signals", `Investigate: ${instruction}`, {
+          tool_needed: defaultTool,
+          expected_output: hiringShape
+            ? "Companies/roles with source URLs from Apify."
+            : "Cited signals from current sources (if broad search is configured).",
+          success_criteria: hiringShape
+            ? "Apify returns results or reports unavailable."
+            : "At least 3 cited signals, or a clear unavailable note.",
           planner_source: "expansion",
         }),
       );
-    } else if (!hawk.tool_needed) {
-      hawk.tool_needed = "research_web";
+    } else if (!hawk.tool_needed || hawk.tool_needed === "research_web") {
+      hawk.tool_needed = defaultTool;
     }
     if (/(brief|report|summary|memo)/.test(t) && !has("scribe")) {
       steps.push(
         mkStep(0, "scribe", "Brief summary", `Summarize intel for: ${instruction}`, {
           tool_needed: "summarize_text",
           expected_output: "Short intel brief with recommended action.",
-          success_criteria: "Grounded in research above.",
+          success_criteria: "Grounded in findings above.",
           planner_source: "expansion",
         }),
       );
     }
   }
+
 
   if (intent === "outreach") {
     if (!has("penn")) {
@@ -377,16 +407,18 @@ function expandPlan(instruction: string, intent: Intent, steps: Step[]): Step[] 
       );
     }
     if (/(current|today|latest|now)/.test(t) && !has("hawk") && !has("scout")) {
+      const broadTool = isToolConfigured("search_web").ready ? "search_web" : "search_web";
       steps.unshift(
         mkStep(0, "hawk", "Research facts", `Gather supporting facts for: ${instruction}`, {
-          tool_needed: "research_web",
-          expected_output: "Cited supporting facts.",
-          success_criteria: "Facts have sources.",
+          tool_needed: broadTool,
+          expected_output: "Cited supporting facts (if broad search is configured).",
+          success_criteria: "Facts have sources, or step reports unavailable.",
           planner_source: "expansion",
         }),
       );
     }
   }
+
 
   if (intent === "screening" && !has("aria")) {
     steps.unshift(
@@ -411,17 +443,23 @@ function expandPlan(instruction: string, intent: Intent, steps: Step[]): Step[] 
         }),
       );
     }
-    if (!has("hawk") && isToolConfigured("research_web").ready) {
+    const pulseTool = isToolConfigured("search_web").ready
+      ? "search_web"
+      : isToolConfigured("research_web").ready
+      ? "research_web"
+      : null;
+    if (!has("hawk") && pulseTool) {
       steps.push(
         mkStep(0, "hawk", "Live market pulse", "Add 3-5 bullets of external intel pulse.", {
-          tool_needed: "research_web",
+          tool_needed: pulseTool,
           expected_output: "External pulse with citations.",
-          success_criteria: "Skipped if Perplexity unavailable.",
+          success_criteria: "Skipped gracefully if the tool reports unavailable.",
           planner_source: "expansion",
         }),
       );
     }
   }
+
 
   // Force send_email steps to be approval-gated.
   for (const s of steps) {
@@ -439,20 +477,27 @@ function expandPlan(instruction: string, intent: Intent, steps: Step[]): Step[] 
 // ---------- Tool annotation ----------
 
 function annotateTools(steps: Step[]): string[] {
-  const missing: string[] = [];
+  const messages: string[] = [];
+  const seen = new Set<string>();
   for (const s of steps) {
     if (!s.tool_needed) continue;
     const status = isToolConfigured(s.tool_needed);
     if (status.ready) {
       s.tool_status = "ready";
-    } else {
-      s.tool_status = "connector_required";
-      s.connector_required = status.env;
-      if (status.env && !missing.includes(status.env)) missing.push(status.env);
+      continue;
+    }
+    s.tool_status = "connector_required";
+    s.connector_required = status.env;
+    const msg = TOOL_LIMITATION_MESSAGE[s.tool_needed]
+      ?? `${s.tool_needed} unavailable (${status.env ?? "not configured"}).`;
+    if (!seen.has(msg)) {
+      seen.add(msg);
+      messages.push(msg);
     }
   }
-  return missing;
+  return messages;
 }
+
 
 // ---------- JSON parsing helpers (kept for AI output) ----------
 
@@ -528,22 +573,25 @@ AGENTS:
 - hawk   = market/competitive intelligence, signals, monitoring, scraping
 - scribe = content, summaries, briefs, posts, reports
 
-TOOLS:
-- research_web        (perplexity) allowed: hawk, scout
-- scrape_url          (firecrawl)  allowed: hawk, scout
-- source_with_apify   (apify)      allowed: scout, hawk — PREFERRED for finding companies/leads/hiring signals/jobs/posts
-- summarize_text      (gemini)     allowed: aria, scribe, hawk, scout
-- extract_structured  (gemini)     allowed: aria, scribe, hawk, scout
-- draft_outreach      (gemini)     allowed: penn
-- send_email          (resend)     allowed: penn — ALWAYS requires_approval=true
+TOOLS (priority order matters):
+- source_with_apify   (apify)        allowed: scout, hawk — PRIMARY for finding companies/leads/hiring signals/jobs/posts
+- scrape_url          (firecrawl)    allowed: hawk, scout — PRIMARY for any specific URL/page extraction
+- search_web          (gemini_search) allowed: hawk, scout — broad/current web research (may be unavailable; that's fine)
+- research_web        (perplexity)   allowed: hawk, scout — OPTIONAL fallback only when explicitly preferred
+- summarize_text      (gemini)       allowed: aria, scribe, hawk, scout
+- extract_structured  (gemini)       allowed: aria, scribe, hawk, scout
+- draft_outreach      (gemini)       allowed: penn
+- send_email          (resend)       allowed: penn — ALWAYS requires_approval=true
 
 WORKFLOW ARCHETYPES (use as defaults, deepen when useful):
-A. Sourcing  -> scout(source_with_apify) -> aria(extract_structured) -> penn(draft_outreach, approval)
+A. Sourcing (hiring/companies/leads) -> scout(source_with_apify) -> aria(extract_structured) -> penn(draft_outreach, approval) ONLY if outreach was requested
 B. Extraction from URL -> hawk(scrape_url) -> scribe(summarize_text)
-C. Intelligence -> hawk(research_web or source_with_apify when looking up job/company signals) -> scribe(summarize_text) when a brief/report is asked for
+C. Intelligence (hiring shape: companies/jobs/roles) -> hawk(source_with_apify) -> scribe(summarize_text)
+C2. Intelligence (broad market/current events) -> hawk(search_web) -> scribe(summarize_text)
 D. Outreach -> penn(draft_outreach, approval); add penn(send_email, approval) only if user said send
-E. Content -> scribe(summarize_text); prepend hawk(research_web) only if user wants current facts
+E. Content -> scribe(summarize_text); prepend hawk(search_web) only if user wants current facts
 F. Screening -> aria(extract_structured)
+
 
 COMPANY CONTEXT (may be empty):
 ${JSON.stringify(companyBrain)}
@@ -729,7 +777,7 @@ Return ONLY valid JSON, no prose, no markdown:
       planner: plannerSource,
       intent,
       agents: parsed.steps.map((s) => s.agent_slug),
-      connectors_missing: connectorsMissing.map((env) => TOOL_FRIENDLY[env] ?? env),
+      connectors_missing: connectorsMissing,
       plan: parsed,
     });
   } catch (err) {

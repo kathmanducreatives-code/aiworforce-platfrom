@@ -114,7 +114,7 @@ Deno.serve(async (req) => {
 
   const systemPrompt = `${agent.role_prompt ?? `You are ${agent.name}.`}\n\n${renderCompanyBrain(brain)}`;
 
-  // --- Tool layer: hawk + scout get live tools (Firecrawl scrape, Apify sourcing, Perplexity research). ---
+  // --- Tool layer: hawk + scout get live tools (Firecrawl scrape, Apify sourcing). Broad web search is optional. ---
   let toolContext: string | null = null;
   let scrapedContext: string | null = null;
   let apifyContext: string | null = null;
@@ -201,24 +201,24 @@ Deno.serve(async (req) => {
       }
     }
 
-    // 3) Perplexity research — keep behavior, but never block on unavailable.
-    const toolRes = await runTool("research_web", { query: instruction }, baseCtx);
-    if (toolRes.ok && toolRes.data) {
-      const d = toolRes.data as { content?: string; citations?: string[] };
-      const citations = (d.citations ?? []).slice(0, 8).map((c, i) => `[${i + 1}] ${c}`).join("\n");
-      toolContext = `LIVE RESEARCH (Perplexity):\n${d.content ?? ""}\n\nCITATIONS:\n${citations}`;
-    } else if (toolRes.unavailable) {
-      if (!scrapedContext && !apifyContext) {
+    // 3) Optional broad research — only attempt if Perplexity is actually configured.
+    //    Apify (sourcing) and Firecrawl (extraction) are the primaries; this is a fallback.
+    if (!apifyContext && !scrapedContext) {
+      const toolRes = await runTool("research_web", { query: instruction }, baseCtx);
+      if (toolRes.ok && toolRes.data) {
+        const d = toolRes.data as { content?: string; citations?: string[] };
+        const citations = (d.citations ?? []).slice(0, 8).map((c, i) => `[${i + 1}] ${c}`).join("\n");
+        toolContext = `BROAD RESEARCH:\n${d.content ?? ""}\n\nCITATIONS:\n${citations}`;
+      } else if (toolRes.unavailable) {
         toolNotices.push(
-          agent_slug === "scout"
-            ? "Live candidate discovery requires the Perplexity / Firecrawl / Apollo / Apify connector. Continuing with available context."
-            : "Live web research (Perplexity) is not configured. Continuing with available context.",
+          "Broad web research is not configured for this workspace. Use Apify for hiring signals or Firecrawl for specific URLs.",
         );
+      } else if (!toolRes.ok) {
+        toolNotices.push(`Research tool failed: ${toolRes.error ?? "unknown"}.`);
       }
-    } else if (!toolRes.ok) {
-      toolNotices.push(`Research tool failed: ${toolRes.error ?? "unknown"}.`);
     }
   }
+
 
   const contextParts: string[] = [];
   if (scrapedContext) contextParts.push(scrapedContext);

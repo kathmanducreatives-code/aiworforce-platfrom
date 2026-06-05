@@ -589,21 +589,42 @@ async function execSendEmail(input: unknown): Promise<ToolResult> {
   }
 }
 
+// ---------- Tool: search_web (broad grounded web search) ----------
+// Placeholder: returns `unavailable` unless a real grounded-search backend
+// (e.g. Gemini Enterprise webGroundingSpec) is wired up. This lets the
+// orchestrator honestly report "broad web search unavailable" without
+// pretending Perplexity is the only option.
+async function execSearchWeb(_input: unknown): Promise<ToolResult> {
+  return {
+    ok: false,
+    unavailable: true,
+    error: "broad_web_search_not_configured",
+  };
+}
+
 // ---------- Registry ----------
 
 const REGISTRY: Record<string, ToolDef> = {
   research_web: {
     name: "research_web",
     provider: "perplexity",
-    description: "Live web research with citations via Perplexity Sonar.",
+    description: "Optional fallback: live web research with citations via Perplexity Sonar. Prefer source_with_apify for hiring/company signals and scrape_url for specific URLs.",
     allowed_agents: ["hawk", "scout"],
     requires_approval: false,
     execute: execResearchWeb,
   },
+  search_web: {
+    name: "search_web",
+    provider: "gemini_search",
+    description: "Broad grounded web search (Gemini/Lovable). Reports unavailable until a grounded-search backend is configured.",
+    allowed_agents: ["hawk", "scout"],
+    requires_approval: false,
+    execute: execSearchWeb,
+  },
   scrape_url: {
     name: "scrape_url",
     provider: "firecrawl",
-    description: "Scrape a single URL to markdown via Firecrawl.",
+    description: "Primary tool for URL/page extraction — scrape a single URL to markdown via Firecrawl.",
     allowed_agents: ["hawk", "scout"],
     requires_approval: false,
     execute: execScrapeUrl,
@@ -611,7 +632,7 @@ const REGISTRY: Record<string, ToolDef> = {
   source_with_apify: {
     name: "source_with_apify",
     provider: "apify",
-    description: "Run an Apify actor to source jobs, companies, posts, or comments.",
+    description: "Primary tool for hiring/company/job/lead signal sourcing — runs an Apify actor.",
     allowed_agents: ["scout", "hawk"],
     requires_approval: false,
     execute: execSourceWithApify,
@@ -628,6 +649,7 @@ const REGISTRY: Record<string, ToolDef> = {
 
 const TOOL_ENV: Record<string, string> = {
   research_web: "PERPLEXITY_API_KEY",
+  search_web: "GEMINI_SEARCH",
   scrape_url: "FIRECRAWL_API_KEY",
   source_with_apify: "APIFY_API_TOKEN",
   send_email: "RESEND_API_KEY",
@@ -647,6 +669,7 @@ export function listTools() {
     requires_approval: t.requires_approval,
   }));
 }
+
 
 // ---------- Main entry point ----------
 

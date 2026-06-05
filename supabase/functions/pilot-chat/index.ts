@@ -356,8 +356,9 @@ Deno.serve(async (req) => {
   const needsApproval = planSteps.some((s) => s.requires_approval && s.tool_needed === "send_email");
   const approvalNote = needsApproval ? " Penn will pause for your approval before sending." : "";
   const connectorNote = connectorsMissing.length
-    ? ` Live data via ${connectorsMissing.join(", ")} requires a connector — add the API key in Settings to enable it.`
+    ? ` Heads up: ${connectorsMissing.join(" ")} I'll continue with available tools.`
     : "";
+
 
   const announce = stepsCount > 0
     ? `I created a ${stepsCount}-step plan: ${chain}.${approvalNote}${connectorNote}`
