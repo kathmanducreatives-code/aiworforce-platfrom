@@ -168,6 +168,7 @@ async function delegateToOrchestrate(a: DelegateArgs): Promise<Response> {
         connector_limitations: connectorsMissing,
         execution_mode: executionMode,
         tool_input: a.toolInput ?? null,
+        prompt_version: AGENTORY_SYSTEM_PROMPT_VERSION,
       }
     : {};
 
