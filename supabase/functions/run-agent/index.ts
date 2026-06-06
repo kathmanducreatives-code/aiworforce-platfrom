@@ -116,7 +116,12 @@ Deno.serve(async (req) => {
     .maybeSingle();
   const brain = (brainRow?.profile ?? null) as CompanyBrain;
 
-  const systemPrompt = `${agent.role_prompt ?? `You are ${agent.name}.`}\n\n${renderCompanyBrain(brain)}`;
+  const systemPrompt = `${agent.role_prompt ?? `You are ${agent.name}.`}\n\n${getAgentorySystemPrompt({
+    taskType: "agent_execution",
+    currentAgent: agent_slug ?? agent.slug ?? undefined,
+    companyBrain: brain as Record<string, unknown> | null,
+    actorRegistrySummary: summarizeRegistryForPrompt(),
+  })}`;
 
   // --- Tool layer: hawk + scout get live tools (Firecrawl scrape, Apify sourcing). Broad web search is optional. ---
   let toolContext: string | null = null;
