@@ -785,8 +785,13 @@ async function execSourceWithApify(input: unknown): Promise<ToolResult> {
   }
 
   const rawItems: any[] = Array.isArray(itemsRes.data) ? itemsRes.data : [];
-  const items = rawItems.slice(0, max_results).map((r) => normalizeApifyItem(r, source_type));
-  const citations = items.map((it) => it.url).filter((u): u is string => !!u).slice(0, 10);
+  const items = source_type === "people_profiles"
+    ? rawItems.slice(0, max_results).map((r) => normalizeApifyPeopleItem(r))
+    : rawItems.slice(0, max_results).map((r) => normalizeApifyItem(r, source_type));
+  const citations = items
+    .map((it: any) => (it as any).url ?? (it as any).profile_url)
+    .filter((u: any): u is string => typeof u === "string" && !!u)
+    .slice(0, 10);
 
   const registryEntry = registry_actor_key ? getActorByKey(registry_actor_key) : null;
   return {
