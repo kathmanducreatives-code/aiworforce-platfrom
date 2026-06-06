@@ -4,8 +4,9 @@ import RawJsonView from './RawJsonView';
 
 export default function ScoutResultsView({ output }: { output: any }) {
   const items = normalizeApifyItems(output);
+  const actorDisabledTop = output?.error === 'actor_missing' || output?.error === 'actor_key_unknown' || output?.error === 'apify_actor_disabled_by_default';
 
-  if (items.length === 0) {
+  if (items.length === 0 && !actorDisabledTop) {
     return (
       <div className="space-y-3">
         <div className="text-[12px] text-[#7D8590]">No normalized items detected.</div>
