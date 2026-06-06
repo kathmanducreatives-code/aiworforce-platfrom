@@ -6,6 +6,7 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { generateText } from "../_shared/aiProvider.ts";
 import { isToolConfigured } from "../_shared/toolRegistry.ts";
+import { getAgentorySystemPrompt } from "../_shared/agentorySystemPrompt.ts";
 
 const cors = {
   "Access-Control-Allow-Origin": "*",
