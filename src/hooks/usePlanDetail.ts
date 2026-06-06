@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import {
   fetchPlan, fetchTasksForPlan, fetchActivityForPlan, fetchApprovalsForPlan, fetchToolCallsForPlan,
   subscribePlan, type DBPlan, type DBTask, type DBActivity, type DBApproval, type DBToolCall,
@@ -11,6 +11,9 @@ export function usePlanDetail(planId: string | null) {
   const [approvals, setApprovals] = useState<DBApproval[]>([]);
   const [toolCalls, setToolCalls] = useState<DBToolCall[]>([]);
   const [loading, setLoading] = useState(true);
+  const [refreshTick, setRefreshTick] = useState(0);
+
+  const refresh = useCallback(() => setRefreshTick(t => t + 1), []);
 
   useEffect(() => {
     if (!planId) {
@@ -20,6 +23,7 @@ export function usePlanDetail(planId: string | null) {
     let cancelled = false;
 
     const load = async () => {
+      setLoading(true);
       const [p, t, a, ap, tc] = await Promise.all([
         fetchPlan(planId),
         fetchTasksForPlan(planId),
@@ -33,7 +37,7 @@ export function usePlanDetail(planId: string | null) {
     load();
     const unsub = subscribePlan(planId, load);
     return () => { cancelled = true; unsub(); };
-  }, [planId]);
+  }, [planId, refreshTick]);
 
-  return { plan, tasks, activity, approvals, toolCalls, loading };
+  return { plan, tasks, activity, approvals, toolCalls, loading, refresh };
 }

@@ -16,12 +16,13 @@ export interface WorkbenchData {
   allToolCalls: DBToolCall[];
   approval: DBApproval | null;
   activity: DBActivity[];
+  refresh: () => void;
 }
 
 export function useWorkbenchData(selection: WorkbenchSelection | null): WorkbenchData {
   const { workspaceId } = useWorkspace();
   const { agents } = useAgents(workspaceId);
-  const { plan, tasks, activity, approvals, toolCalls, loading } = usePlanDetail(selection?.planId ?? null);
+  const { plan, tasks, activity, approvals, toolCalls, loading, refresh } = usePlanDetail(selection?.planId ?? null);
 
   return useMemo<WorkbenchData>(() => {
     const task =
@@ -65,6 +66,7 @@ export function useWorkbenchData(selection: WorkbenchSelection | null): Workbenc
       allToolCalls: taskToolCalls,
       approval,
       activity: scopedActivity,
+      refresh,
     };
-  }, [selection, plan, tasks, toolCalls, approvals, activity, agents, loading]);
+  }, [selection, plan, tasks, toolCalls, approvals, activity, agents, loading, refresh]);
 }

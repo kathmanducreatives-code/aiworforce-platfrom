@@ -1,4 +1,5 @@
-import { X } from 'lucide-react';
+import { X, RefreshCw } from 'lucide-react';
+import { cn } from '@/lib/utils';
 import AgentBadge from '../plan/AgentBadge';
 import type { WorkbenchData } from './useWorkbenchData';
 
@@ -26,8 +27,8 @@ const PROVIDER_LABEL: Record<string, string> = {
 };
 
 export default function WorkbenchHeader({
-  data, onClose,
-}: { data: WorkbenchData; onClose: () => void }) {
+  data, onClose, onRefresh,
+}: { data: WorkbenchData; onClose: () => void; onRefresh: () => void }) {
   const { planTitle, task, agentSlug, agentName, toolCall } = data;
   const taskPayload = (task?.payload ?? {}) as Record<string, any>;
   const taskTitle: string = taskPayload.task_title ?? task?.description ?? null;
@@ -51,13 +52,27 @@ export default function WorkbenchHeader({
             <div className="mt-1 text-[12px] text-[#C9D1D9] truncate">{taskTitle}</div>
           )}
         </div>
-        <button
-          onClick={onClose}
-          aria-label="Close workbench"
-          className="h-7 w-7 inline-flex items-center justify-center rounded hover:bg-white/[0.06] text-[#7D8590] hover:text-[#F0F6FC] shrink-0"
-        >
-          <X className="h-3.5 w-3.5" />
-        </button>
+        <div className="flex items-center gap-1 shrink-0">
+          <button
+            onClick={onRefresh}
+            disabled={data.loading}
+            title="Refresh output"
+            aria-label="Refresh output"
+            className={cn(
+              'h-7 w-7 inline-flex items-center justify-center rounded hover:bg-white/[0.06] text-[#7D8590] hover:text-[#F0F6FC] transition-colors',
+              data.loading && 'opacity-60 cursor-not-allowed'
+            )}
+          >
+            <RefreshCw className={cn('h-3.5 w-3.5', data.loading && 'animate-spin')} />
+          </button>
+          <button
+            onClick={onClose}
+            aria-label="Close workbench"
+            className="h-7 w-7 inline-flex items-center justify-center rounded hover:bg-white/[0.06] text-[#7D8590] hover:text-[#F0F6FC]"
+          >
+            <X className="h-3.5 w-3.5" />
+          </button>
+        </div>
       </div>
 
       <div className="mt-2 flex items-center gap-2 flex-wrap text-[11px] text-[#7D8590]">
