@@ -417,7 +417,7 @@ Deno.serve(async (req) => {
   // 7. Otherwise let Pilot decide (simple_chat / daily_brief fallthrough / content).
   const ai = await generateJson({
     taskType: "pilot_chat",
-    systemPrompt: PILOT_SYSTEM_PROMPT + brainBlock,
+    systemPrompt: pilotSystem,
     messages: msgs,
     temperature: 0.4,
     maxTokens: 1024,
@@ -434,6 +434,7 @@ Deno.serve(async (req) => {
     success: ai.ok,
     latency_ms: ai.latencyMs,
     error_code: ai.errorCode,
+    prompt_version: AGENTORY_SYSTEM_PROMPT_VERSION,
   });
 
   const providerUsed = ai.provider !== "none" ? ai.provider : "lovable-ai";
