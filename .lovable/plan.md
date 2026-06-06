@@ -1,76 +1,91 @@
+## Multi-Scenario Apify Actor Registry
 
-## Actor Intelligence Layer
+Extend the existing Actor Intelligence Layer to cover 8 actors (4 new) with env-based overrides, richer Gemini routing, and Workbench/Plan Card surface for disabled actors. No UI redesign, no backend project changes, no removed systems.
 
-Goal: make Gemini / `toolInputPlanner` choose the **correct Apify actor or tool chain** for each request, including ambiguous "find engineers in London" prompts. No UI redesign, no backend project changes, no removed systems.
+### 1. Rewrite `supabase/functions/_shared/actorRegistry.ts`
 
-### 1. New file — `supabase/functions/_shared/actorRegistry.ts`
+Replace the current `ACTOR_REGISTRY` with the full 9-entry spec from the user message:
 
-Single source of truth describing each available actor/tool in natural language. Exports:
+- `apify_jobs` — enabled, `curious_coder/linkedin-jobs-scraper`
+- `apify_advanced_linkedin_jobs` — disabled, `curious_coder/linkedin-jobs-search-scraper` (NEW)
+- `apify_indeed_jobs` — disabled, `curious_coder/indeed-scraper`
+- `apify_website_content` — disabled, `apify/website-content-crawler`
+- `apify_custom_web` — disabled, `apify/web-scraper`
+- `apify_people_search` — disabled, `harvestapi/linkedin-profile-search` (renamed from `people_profile_actor`, requires_explicit_opt_in)
+- `apify_profile_enrichment` — disabled, `atomus/linkedin-profile-scraper` (NEW)
+- `firecrawl_scrape_url` — enabled
+- `search_web` — disabled
 
-- `ACTOR_REGISTRY` — the spec from the user message (`apify_jobs`, `apify_indeed_jobs`, `apify_website_content`, `apify_custom_web`, `firecrawl_scrape_url`, `search_web`, `people_profile_actor`).
-- `getEnabledActors()` — filters by `enabled` and by env keys present (`APIFY_API_TOKEN`, `FIRECRAWL_API_KEY`).
-- `getActorByKey(key)` and `resolveActorForSourceType(source_type)`.
-- `summarizeRegistryForPrompt()` — compact string fed into the Gemini planner prompt (label, best_for, not_for, example_user_requests, enabled flag).
-- `PEOPLE_INTENT_RE` / `JOBS_INTENT_RE` regexes for the disambiguation rules in step 3.
+Add env overrides (read once at module load via `Deno.env.get`):
 
-Actor metadata kept exactly as proposed; `enabled: true` only for `apify_jobs` and `firecrawl_scrape_url`. `people_profile_actor` carries `missing_message`.
+| Env var | Effect |
+|---|---|
+| `APIFY_ACTOR_JOBS` | overrides `apify_jobs.actor_id` |
+| `APIFY_ACTOR_ADVANCED_LINKEDIN_JOBS` | overrides `apify_advanced_linkedin_jobs.actor_id` |
+| `APIFY_ACTOR_INDEED_JOBS` | overrides `apify_indeed_jobs.actor_id` |
+| `APIFY_ACTOR_WEBSITE_CONTENT` | overrides `apify_website_content.actor_id` |
+| `APIFY_ACTOR_CUSTOM_WEB` | overrides `apify_custom_web.actor_id` |
+| `APIFY_ACTOR_PEOPLE_SEARCH` | overrides `apify_people_search.actor_id` |
+| `APIFY_ACTOR_PROFILE_ENRICHMENT` | overrides `apify_profile_enrichment.actor_id` |
+| `APIFY_ENABLE_ADVANCED_LINKEDIN_JOBS` / `APIFY_ENABLE_INDEED_JOBS` / `APIFY_ENABLE_WEBSITE_CONTENT` / `APIFY_ENABLE_CUSTOM_WEB` / `APIFY_ENABLE_PEOPLE_SEARCH` / `APIFY_ENABLE_PROFILE_ENRICHMENT` | flips `enabled` to true (value `"1"`/`"true"`/`"yes"`) |
+
+Defaults: `apify_jobs` and `firecrawl_scrape_url` enabled; everything else disabled.
+
+Helpers unchanged in shape: `getActorByKey`, `getEnabledActors`, `isActorRuntimeEnabled` (still gated by `required_env`, e.g. `APIFY_API_TOKEN` / `FIRECRAWL_API_KEY`), `summarizeRegistryForPrompt`. Add `resolveActorForIntent({source_type, has_url, mentions_indeed, mentions_advanced, people_intent, enrichment_intent})` used by the planner fallback. Keep `PEOPLE_INTENT_RE`, `COMPANY_INTENT_RE`, `AMBIGUOUS_ROLE_RE`; add `INDEED_INTENT_RE`, `ADVANCED_JOBS_INTENT_RE`, `ENRICHMENT_INTENT_RE`, `MULTIPAGE_CRAWL_INTENT_RE`, `LINKEDIN_URL_RE`.
 
 ### 2. Update `supabase/functions/_shared/toolInputPlanner.ts`
 
-- Extend `ToolInput` with `selected_actor_key: string | null`, `reason: string | null`, and keep existing fields.
-- Inject `summarizeRegistryForPrompt()` into `PLANNER_PROMPT` and require Gemini to return the new JSON shape (`intent`, `selected_tool`, `selected_actor_key`, `source_type`, `reason`, …).
-- After AI merge, validate `selected_actor_key` against `ACTOR_REGISTRY`. If unknown or disabled → fall back deterministically:
-  - URL in prompt → `firecrawl_scrape_url`.
-  - Hiring/companies language → `apify_jobs`.
-  - People-only language with no people actor configured → `selected_actor_key = null`, `tool_name = null`, `ask_clarification = true`, `clarification` from `people_profile_actor.missing_message` + "Want me to find companies hiring instead?".
-  - Ambiguous role+location ("find 10 engineers in London") → `ask_clarification = true` with the people-vs-companies question from spec step 3, while pre-selecting `apify_jobs` as the proceed-if-confirmed default.
-- Replace the current "everything sourcing → jobs" coercion with the registry-driven decision; keep cost caps and outreach/deep escalation.
+- Reinject the larger `summarizeRegistryForPrompt()` (now 9 actors with `enabled` state) into the Gemini prompt and add explicit routing rules in the system instruction matching the 7 scenarios from the spec (hiring → `apify_jobs`; advanced LinkedIn → `apify_advanced_linkedin_jobs` if enabled else fall back to `apify_jobs`; Indeed/avoid-LinkedIn → `apify_indeed_jobs`; people search → `apify_people_search`; profile enrichment with LinkedIn URLs → `apify_profile_enrichment`; specific URL → `firecrawl_scrape_url`; multi-page crawl → `apify_website_content`; niche directories → `apify_custom_web`).
+- After AI merge, re-validate `selected_actor_key`. If the chosen actor is disabled, do not silently swap to `apify_jobs`:
+  - `apify_advanced_linkedin_jobs` disabled → fall back to `apify_jobs`, set `reason` accordingly.
+  - `apify_indeed_jobs` disabled → set `ask_clarification = true` with message "Indeed Jobs actor is not configured. I can use LinkedIn Jobs instead." (pre-select `apify_jobs` as proceed-default).
+  - `apify_people_search` disabled → no tool, `ask_clarification = true` using `apify_people_search.missing_message` + companies-hiring offer.
+  - `apify_profile_enrichment` disabled → no tool, `ask_clarification = true` with "Profile enrichment actor is not configured."
+  - `apify_website_content` / `apify_custom_web` disabled → `ask_clarification` explaining disabled state, suggest Firecrawl if a URL is present.
+- Result caps: fast mode default 25 (jobs), people search 10, enrichment 3–5, outreach drafts 3–5 — enforce via clamps on `max_results` per actor's `default_max_results` / `max_safe_results`.
 
 ### 3. Update `supabase/functions/orchestrate/index.ts`
 
-- When `tool_input.selected_actor_key` is present, propagate it into `step.metadata.selected_actor_key` and `step.metadata.actor_reason` (no overwrite of generic `source_type`).
-- Multi-tool expansion:
-  - "enrich top N" / "analyze website" language after a sourcing step → append a Hawk step with `tool_needed: scrape_url` and `metadata.selected_actor_key = firecrawl_scrape_url`.
-  - "draft outreach" / "send" → keep existing Penn step.
-  - URL-only prompt → Hawk Firecrawl first, optional Scout only if hiring/discovery language is also present.
-- Connector-missing messages: extend `TOOL_LIMITATION_MESSAGE` and `annotateTools` to read from the registry so `people_profile_actor` surfaces the configured `missing_message` instead of running silently.
+- Multi-tool plans (already partially in place). Confirm the planner's `selected_actor_key` propagates into `step.metadata.selected_actor_key` for every expanded step. Add specific expansions:
+  - "enrich the top N" after sourcing → Hawk `scrape_url` with `firecrawl_scrape_url` (cap N at 3–5).
+  - "draft outreach" / "send" → Penn step, approval-gated, cap drafts at 3–5.
+  - LinkedIn profile URLs in prompt → `apify_profile_enrichment` step (only when enabled, else clarification).
+- `annotateTools` / `TOOL_LIMITATION_MESSAGE`: read disabled-actor `missing_message` from the registry so each new disabled actor surfaces its own message.
+- Suppress auto-execution whenever `requires_clarification = true` (already exists; just verify path for new actor keys).
 
-### 4. Update `supabase/functions/run-agent/index.ts` and `toolRegistry.ts`
+### 4. Update `supabase/functions/run-agent/index.ts` and `_shared/toolRegistry.ts`
 
-- `run-agent`: prefer `tool_input_body.selected_actor_key` (or `task.payload.metadata.selected_actor_key`) when resolving Apify; pass it into `runTool("source_with_apify", { selected_actor_key, source_type, … })`.
-- `toolRegistry.execSourceWithApify`: accept `selected_actor_key`, look it up in the registry, then in `APIFY_ACTORS`. If still missing or disabled, return `{ ok: false, unavailable: true, error: "actor_missing", data: { actor_key, source_type, reason, configured_actor_keys } }` (clear payload for Workbench).
-- Keep `OPT_IN_ONLY_ACTOR_IDS` and existing alias map; the registry overrides aliases only when an explicit `selected_actor_key` is passed.
+- `run-agent`: keep using `tool_input_body.selected_actor_key`; pass through unchanged. No behavioural change beyond accepting the new keys.
+- `toolRegistry.execSourceWithApify`: when resolving a `selected_actor_key`, look it up in the registry, check `isActorRuntimeEnabled`, then resolve `actor_id`. On disabled/missing, return `{ ok: false, unavailable: true, error: "actor_missing", data: { actor_key, source_type, reason, configured_actor_keys, missing_message } }` so the Workbench can show the configuration-needed copy.
+- Keep `OPT_IN_ONLY_ACTOR_IDS`; ensure `apify_people_search` and `apify_profile_enrichment` actor IDs are in that set (people/profile compliance).
 
-### 5. UI transparency — minimal surface changes
+### 5. Minimal UI surface changes
 
-No redesign. Two small additions:
+No redesign. Show the new actor metadata using existing components:
 
-- `ExecutionPlanCard.tsx` / `ExecutionTaskRow.tsx`: when `task.payload.metadata.selected_actor_key` exists, render the actor label + one-line `actor_reason` under the existing tool badge ("Apify Jobs — selected because this asks for hiring signals by role/location").
-- `workbench/WorkbenchHeader.tsx` and `ScoutResultsView.tsx`: show actor label, actor_id, `output_type`, and reason as a small `Actor` section above the result list. Read from `toolCall.input_json.selected_actor_key` → registry, falling back to `toolCall.metadata`.
-- When the planner returned `ask_clarification`, the Pilot chat already surfaces the question; nothing new here besides making sure orchestrate does not auto-execute when `requires_clarification = true`.
+- `src/components/chat/workspace/plan/ExecutionTaskRow.tsx`: already shows `actorKey` + `actorReason`. Add a small "disabled — configuration needed" pill when `task.payload.metadata.actor_disabled === true` (set by orchestrate from registry lookup) and surface `missing_message` underneath.
+- `src/components/chat/workspace/workbench/WorkbenchHeader.tsx` and `ScoutResultsView.tsx`: add `Actor enabled: yes/no` and `Configuration: <missing_message>` lines next to the existing actor label/id/output_type/reason block, read from `toolCall.input_json.selected_actor_key` → registry summary already returned by the edge function (no new fetch).
 
 ### 6. Verification
 
-After deploy, run all 6 verification prompts from the spec against `agentory.space` and capture:
-- selected_actor_key returned by planner
-- step.metadata stored on the plan
-- actor + reason rendered in Execution Plan Card and Workbench
-- whether clarification was asked (tests 2, 3) and whether jobs actor was suppressed (test 3)
-- whether multi-actor plan was produced (tests 4, 6) and whether Firecrawl ran first (test 5).
+After deploy, run the 6 prompts from the spec against agentory.space and capture for each:
+- `selected_actor_key` returned by planner
+- `step.metadata.selected_actor_key`, `actor_disabled`, `actor_reason`
+- Whether clarification was asked vs auto-run
+- Workbench display (label, id, output_type, enabled, missing_message)
+- Multi-tool expansion order (Scout → Hawk → Aria → Penn) for prompt 6
 
-### Files changed
+### Technical detail
 
-- **Add:** `supabase/functions/_shared/actorRegistry.ts`
+Files changed:
+- **Edit:** `supabase/functions/_shared/actorRegistry.ts`
 - **Edit:** `supabase/functions/_shared/toolInputPlanner.ts`
 - **Edit:** `supabase/functions/_shared/toolRegistry.ts`
 - **Edit:** `supabase/functions/orchestrate/index.ts`
 - **Edit:** `supabase/functions/run-agent/index.ts`
-- **Edit:** `src/components/chat/workspace/plan/ExecutionPlanCard.tsx`
 - **Edit:** `src/components/chat/workspace/plan/ExecutionTaskRow.tsx`
 - **Edit:** `src/components/chat/workspace/workbench/WorkbenchHeader.tsx`
 - **Edit:** `src/components/chat/workspace/workbench/ScoutResultsView.tsx`
-- **Deploy:** `toolInputPlanner`, `toolRegistry`, `orchestrate`, `run-agent` (via deploy of `orchestrate`, `run-agent`, `pilot-chat` which import the shared files).
+- **Deploy:** `orchestrate`, `run-agent`, `pilot-chat` (pulls shared files)
 
-### Out of scope
-
-No new tables, no RLS changes, no secret changes, no removal of existing tools/agents/UI surfaces, no new people-profile actor (kept disabled with `missing_message`).
+Out of scope: new tables, RLS, secret creation, enabling people/profile actors by default, removing existing tools or UI surfaces, redesign of Workbench/Plan cards. New people/profile actors stay disabled with `missing_message`; users enable them via the env flags above.

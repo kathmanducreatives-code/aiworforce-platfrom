@@ -1,7 +1,6 @@
-// Actor Intelligence Layer.
-// Single source of truth for which Apify actor / external tool to use per intent.
-// Used by toolInputPlanner (Gemini) to choose the right actor, and by
-// toolRegistry / run-agent to resolve `selected_actor_key` -> actor_id.
+// Actor Intelligence Layer — single source of truth.
+// Used by toolInputPlanner (Gemini) to pick the right actor/tool,
+// and by toolRegistry/run-agent to resolve selected_actor_key -> actor_id.
 
 export type ActorEntry = {
   key: string;
@@ -11,36 +10,64 @@ export type ActorEntry = {
   source_type: string | null;
   label: string;
   enabled: boolean;
+  requires_explicit_opt_in?: boolean;
   best_for: string[];
   not_for: string[];
   example_user_requests?: string[];
   output_type: string;
   default_max_results?: number;
   max_safe_results?: number;
+  default_max_pages?: number;
+  max_safe_pages?: number;
   compliance_level: string;
   missing_message?: string;
   required_env?: string;
 };
 
+// ---- Env helpers ---------------------------------------------------------
+
+function envStr(name: string): string | null {
+  try {
+    // @ts-ignore Deno at runtime
+    if (typeof Deno !== "undefined") {
+      const v = Deno.env.get(name);
+      return v && v.trim() ? v.trim() : null;
+    }
+  } catch { /* ignore */ }
+  return null;
+}
+
+function envFlag(name: string): boolean {
+  const v = envStr(name);
+  if (!v) return false;
+  return ["1", "true", "yes", "on", "enabled"].includes(v.toLowerCase());
+}
+
+function actorId(envName: string, fallback: string | null): string | null {
+  return envStr(envName) ?? fallback;
+}
+
+// ---- Registry ------------------------------------------------------------
+
 export const ACTOR_REGISTRY: Record<string, ActorEntry> = {
   apify_jobs: {
     key: "apify_jobs",
     tool_name: "source_with_apify",
-    actor_id: "curious_coder/linkedin-jobs-scraper",
+    actor_id: actorId("APIFY_ACTOR_JOBS", "curious_coder/linkedin-jobs-scraper"),
     source_type: "jobs",
     label: "LinkedIn Jobs Scraper",
     enabled: true,
     best_for: [
-      "finding companies hiring for specific roles",
-      "job openings by keyword and location",
+      "finding companies hiring specific roles",
+      "public job openings by role and location",
       "hiring intent signals",
-      "companies hiring engineers/marketers/GTM/sales roles",
+      "companies hiring engineers, marketers, GTM, sales, SDR, BDR, content, SEO roles",
     ],
     not_for: [
-      "finding individual people profiles",
-      "finding founder phone numbers",
-      "finding candidate contact details",
-      "scraping LinkedIn profiles",
+      "individual people profiles",
+      "candidate profile search",
+      "phone numbers",
+      "personal contact details",
     ],
     example_user_requests: [
       "Find companies hiring marketing roles in London",
@@ -53,55 +80,146 @@ export const ACTOR_REGISTRY: Record<string, ActorEntry> = {
     compliance_level: "public_jobs",
     required_env: "APIFY_API_TOKEN",
   },
+
+  apify_advanced_linkedin_jobs: {
+    key: "apify_advanced_linkedin_jobs",
+    tool_name: "source_with_apify",
+    actor_id: actorId("APIFY_ACTOR_ADVANCED_LINKEDIN_JOBS", "curious_coder/linkedin-jobs-search-scraper"),
+    source_type: "advanced_jobs",
+    label: "Advanced LinkedIn Jobs Scraper",
+    enabled: envFlag("APIFY_ENABLE_ADVANCED_LINKEDIN_JOBS"),
+    best_for: [
+      "advanced LinkedIn jobs search",
+      "boolean job search",
+      "richer LinkedIn job filters",
+    ],
+    not_for: ["individual people profiles", "private contact data"],
+    output_type: "advanced_job_posts_and_company_data",
+    default_max_results: 25,
+    max_safe_results: 100,
+    compliance_level: "public_or_authorized_jobs",
+    required_env: "APIFY_API_TOKEN",
+    missing_message:
+      "Advanced LinkedIn Jobs actor is not configured. I can use the standard LinkedIn Jobs actor instead.",
+  },
+
   apify_indeed_jobs: {
     key: "apify_indeed_jobs",
     tool_name: "source_with_apify",
-    actor_id: "curious_coder/indeed-scraper",
+    actor_id: actorId("APIFY_ACTOR_INDEED_JOBS", "curious_coder/indeed-scraper"),
     source_type: "indeed_jobs",
     label: "Indeed Jobs Scraper",
-    enabled: false,
-    best_for: ["Indeed job listings", "non-LinkedIn hiring signals", "backup job source"],
+    enabled: envFlag("APIFY_ENABLE_INDEED_JOBS"),
+    best_for: [
+      "Indeed job listings",
+      "non-LinkedIn hiring signals",
+      "backup job source",
+      "company hiring data from Indeed",
+    ],
     not_for: ["individual people profiles", "private contact data"],
     output_type: "job_posts_and_hiring_companies",
     default_max_results: 25,
+    max_safe_results: 100,
     compliance_level: "public_jobs",
     required_env: "APIFY_API_TOKEN",
+    missing_message:
+      "Indeed Jobs actor is not configured. I can use LinkedIn Jobs instead.",
   },
+
   apify_website_content: {
     key: "apify_website_content",
     tool_name: "source_with_apify",
-    actor_id: "apify/website-content-crawler",
+    actor_id: actorId("APIFY_ACTOR_WEBSITE_CONTENT", "apify/website-content-crawler"),
     source_type: "website_content",
     label: "Website Content Crawler",
-    enabled: false,
+    enabled: envFlag("APIFY_ENABLE_WEBSITE_CONTENT"),
     best_for: [
-      "crawling multiple pages from a website",
-      "extracting clean Markdown/text for LLM use",
-      "website content fallback if Firecrawl fails",
-      "knowledge-base style website extraction",
+      "multi-page website crawling",
+      "clean text or Markdown extraction",
+      "RAG-ready content",
+      "fallback if Firecrawl fails",
+      "docs, blogs, help centers, resource pages",
     ],
     not_for: ["job search", "people search"],
     output_type: "website_markdown_content",
+    default_max_pages: 5,
+    max_safe_pages: 20,
     compliance_level: "public_web",
     required_env: "APIFY_API_TOKEN",
+    missing_message:
+      "Apify Website Content Crawler is not enabled. Try Firecrawl for single-page extraction, or enable APIFY_ENABLE_WEBSITE_CONTENT for multi-page crawls.",
   },
+
   apify_custom_web: {
     key: "apify_custom_web",
     tool_name: "source_with_apify",
-    actor_id: "apify/web-scraper",
+    actor_id: actorId("APIFY_ACTOR_CUSTOM_WEB", "apify/web-scraper"),
     source_type: "custom_web",
     label: "Generic Web Scraper",
-    enabled: false,
+    enabled: envFlag("APIFY_ENABLE_CUSTOM_WEB"),
     best_for: [
       "custom directories",
       "niche job boards",
-      "special websites where no dedicated actor exists",
+      "public websites with special structure",
+      "custom extraction workflows",
     ],
-    not_for: ["broad search by default", "people/private data without consent"],
+    not_for: ["broad search by default", "private data", "people scraping without consent"],
     output_type: "custom_structured_results",
+    default_max_pages: 10,
+    max_safe_pages: 20,
     compliance_level: "public_web_custom",
     required_env: "APIFY_API_TOKEN",
+    missing_message:
+      "Apify generic web scraper is not enabled. Enable APIFY_ENABLE_CUSTOM_WEB to use it for niche sites.",
   },
+
+  apify_people_search: {
+    key: "apify_people_search",
+    tool_name: "source_with_apify",
+    actor_id: actorId("APIFY_ACTOR_PEOPLE_SEARCH", "harvestapi/linkedin-profile-search"),
+    source_type: "people_profiles",
+    label: "LinkedIn Profile Search",
+    enabled: envFlag("APIFY_ENABLE_PEOPLE_SEARCH"),
+    requires_explicit_opt_in: true,
+    best_for: [
+      "finding individual candidate profiles",
+      "finding engineers by title/location",
+      "finding founder profiles",
+      "people search",
+    ],
+    not_for: ["companies hiring", "job opening discovery"],
+    output_type: "people_profiles",
+    default_max_results: 10,
+    max_safe_results: 25,
+    compliance_level: "restricted_people_data",
+    required_env: "APIFY_API_TOKEN",
+    missing_message:
+      "Individual people/profile sourcing is not configured yet. I can find companies hiring those roles using the jobs actor.",
+  },
+
+  apify_profile_enrichment: {
+    key: "apify_profile_enrichment",
+    tool_name: "source_with_apify",
+    actor_id: actorId("APIFY_ACTOR_PROFILE_ENRICHMENT", "atomus/linkedin-profile-scraper"),
+    source_type: "profile_enrichment",
+    label: "LinkedIn Profile Enrichment",
+    enabled: envFlag("APIFY_ENABLE_PROFILE_ENRICHMENT"),
+    requires_explicit_opt_in: true,
+    best_for: [
+      "enriching known LinkedIn profile URLs",
+      "extracting structured data from provided profile URLs",
+      "candidate/founder profile enrichment after URLs are already known",
+    ],
+    not_for: ["searching for people from scratch", "phone number scraping", "private data"],
+    output_type: "profile_enrichment_records",
+    default_max_results: 10,
+    max_safe_results: 50,
+    compliance_level: "restricted_profile_enrichment",
+    required_env: "APIFY_API_TOKEN",
+    missing_message:
+      "LinkedIn profile enrichment actor is not configured. Enable APIFY_ENABLE_PROFILE_ENRICHMENT to use it on known profile URLs.",
+  },
+
   firecrawl_scrape_url: {
     key: "firecrawl_scrape_url",
     tool_name: "scrape_url",
@@ -113,15 +231,16 @@ export const ACTOR_REGISTRY: Record<string, ActorEntry> = {
     best_for: [
       "specific URL extraction",
       "company website analysis",
-      "careers page analysis",
-      "pricing/about/customer page extraction",
+      "careers page extraction",
+      "pricing/about/customer page analysis",
       "single-page or small-site enrichment",
     ],
-    not_for: ["broad search", "finding people across the web"],
+    not_for: ["broad search", "people search"],
     output_type: "page_markdown_and_summary",
     compliance_level: "public_web",
     required_env: "FIRECRAWL_API_KEY",
   },
+
   search_web: {
     key: "search_web",
     tool_name: "search_web",
@@ -136,30 +255,13 @@ export const ACTOR_REGISTRY: Record<string, ActorEntry> = {
       "competitor news",
       "discovery when no structured actor fits",
     ],
-    not_for: ["claiming current facts if grounded search is unavailable"],
+    not_for: ["claiming current facts without grounded search"],
     output_type: "search_results_with_citations",
     compliance_level: "public_search",
   },
-  people_profile_actor: {
-    key: "people_profile_actor",
-    tool_name: "source_with_apify",
-    actor_id: null,
-    source_type: "people_profiles",
-    label: "People/Profile Actor",
-    enabled: false,
-    best_for: [
-      "finding individual candidates",
-      "finding engineer profiles",
-      "finding founder profiles",
-      "people search",
-    ],
-    not_for: [],
-    output_type: "people_profiles",
-    compliance_level: "requires_explicit_opt_in",
-    missing_message:
-      "Individual people/profile sourcing is not configured yet. I can find companies hiring those roles using the jobs actor.",
-  },
 };
+
+// ---- Helpers -------------------------------------------------------------
 
 export function getActorByKey(key: string | null | undefined): ActorEntry | null {
   if (!key) return null;
@@ -168,17 +270,20 @@ export function getActorByKey(key: string | null | undefined): ActorEntry | null
 
 export function isActorRuntimeEnabled(entry: ActorEntry): boolean {
   if (!entry.enabled) return false;
-  if (entry.required_env) {
-    try {
-      // @ts-ignore Deno global at runtime in edge functions
-      if (typeof Deno !== "undefined" && !Deno.env.get(entry.required_env)) return false;
-    } catch { /* ignore */ }
-  }
+  if (entry.required_env && !envStr(entry.required_env)) return false;
   return true;
 }
 
 export function getEnabledActors(): ActorEntry[] {
   return Object.values(ACTOR_REGISTRY).filter(isActorRuntimeEnabled);
+}
+
+export function resolveActorForSourceType(source_type: string | null | undefined): ActorEntry | null {
+  if (!source_type) return null;
+  for (const a of Object.values(ACTOR_REGISTRY)) {
+    if (a.source_type === source_type) return a;
+  }
+  return null;
 }
 
 export function summarizeRegistryForPrompt(): string {
@@ -191,15 +296,35 @@ export function summarizeRegistryForPrompt(): string {
     ];
     if (a.not_for.length > 0) lines.push(`  not_for: ${a.not_for.join("; ")}`);
     if (a.example_user_requests?.length) lines.push(`  examples: ${a.example_user_requests.join(" | ")}`);
-    if (!a.enabled && a.missing_message) lines.push(`  missing: ${a.missing_message}`);
+    if (!isActorRuntimeEnabled(a) && a.missing_message) lines.push(`  missing: ${a.missing_message}`);
+    if (a.requires_explicit_opt_in) lines.push(`  requires_explicit_opt_in: true`);
     return lines.join("\n");
   }).join("\n\n");
 }
 
-// Disambiguation regexes used by the planner fallback.
+// ---- Intent detection regexes -------------------------------------------
+
 export const PEOPLE_INTENT_RE =
-  /\b(individual|specific)\s+(people|candidates?|profiles?|persons?)\b|\b(individual\s+\w+\s+(profiles?|candidates?))\b|\b(profile|profiles|phone numbers?|emails?|linkedin profiles?)\b/i;
+  /\b(individual|specific)\s+(people|candidates?|profiles?|persons?|engineers?|developers?|marketers?|founders?|designers?)\b|\b(profile|profiles|phone numbers?|emails?|linkedin profiles?|candidate profiles?)\b/i;
+
 export const COMPANY_INTENT_RE =
   /\b(compan(?:y|ies)|hiring|hir(?:e|es|ed)|jobs?|roles?|openings?|careers?|recruit)/i;
+
 export const AMBIGUOUS_ROLE_RE =
   /\b(find|source|get|show)\b.*\b(engineers?|developers?|marketers?|designers?|founders?|recruiters?|sales|sdrs?|bdrs?|people)\b/i;
+
+export const INDEED_INTENT_RE = /\b(indeed|avoid linkedin|not linkedin|non[- ]?linkedin)\b/i;
+
+export const ADVANCED_JOBS_INTENT_RE =
+  /\b(advanced (?:linkedin )?(?:job )?search|boolean (?:job )?search|advanced filters?)\b/i;
+
+export const ENRICHMENT_INTENT_RE =
+  /\b(enrich(?:ment)?|extract (?:data|profile) from|scrape (?:this )?(?:profile|linkedin profile))\b/i;
+
+export const MULTIPAGE_CRAWL_INTENT_RE =
+  /\b(crawl (?:this |the )?(?:whole |entire )?(?:site|website)|multi[- ]?page (?:crawl|scrape)|crawl multiple pages|with apify)\b/i;
+
+export const LINKEDIN_PROFILE_URL_RE =
+  /https?:\/\/(?:[a-z]{2,3}\.)?linkedin\.com\/in\/[A-Za-z0-9_\-%]+/i;
+
+export const URL_RE = /\bhttps?:\/\/[^\s)]+/i;

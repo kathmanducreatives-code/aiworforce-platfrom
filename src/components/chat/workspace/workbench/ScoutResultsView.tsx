@@ -4,8 +4,9 @@ import RawJsonView from './RawJsonView';
 
 export default function ScoutResultsView({ output }: { output: any }) {
   const items = normalizeApifyItems(output);
+  const actorDisabledTop = output?.error === 'actor_missing' || output?.error === 'actor_key_unknown' || output?.error === 'apify_actor_disabled_by_default';
 
-  if (items.length === 0) {
+  if (items.length === 0 && !actorDisabledTop) {
     return (
       <div className="space-y-3">
         <div className="text-[12px] text-[#7D8590]">No normalized items detected.</div>
@@ -18,8 +19,10 @@ export default function ScoutResultsView({ output }: { output: any }) {
   const runId = typeof output?.run_id === 'string' ? output.run_id : null;
   const actorId = output?.actor_id ?? null;
   const actorLabel: string | null = output?.actor_label ?? null;
-  const actorKey: string | null = output?.selected_actor_key ?? null;
+  const actorKey: string | null = output?.selected_actor_key ?? output?.actor_key ?? null;
   const outputType: string | null = output?.actor_output_type ?? null;
+  const actorDisabled = output?.error === 'actor_missing' || output?.error === 'actor_key_unknown' || output?.error === 'apify_actor_disabled_by_default';
+  const missingMessage: string | null = output?.reason ?? output?.message ?? null;
 
   return (
     <div className="space-y-3">
@@ -29,8 +32,14 @@ export default function ScoutResultsView({ output }: { output: any }) {
             <span className="text-emerald-300 font-medium">Actor:</span>
             <span>{actorLabel ?? actorKey ?? actorId}</span>
             {actorId && <span className="font-mono text-[#7D8590]">({actorId})</span>}
+            <span className={`ml-auto text-[10px] px-1.5 py-0.5 rounded border ${actorDisabled ? 'border-amber-500/30 bg-amber-500/10 text-amber-300' : 'border-emerald-500/30 bg-emerald-500/10 text-emerald-300'}`}>
+              {actorDisabled ? 'disabled' : 'enabled'}
+            </span>
           </div>
           {outputType && <div className="text-[#7D8590] mt-0.5">Output: {outputType}</div>}
+          {actorDisabled && missingMessage && (
+            <div className="mt-1 text-amber-300/90">Configuration: {missingMessage}</div>
+          )}
         </div>
       )}
       <div className="flex items-center gap-2 text-[11px] text-[#7D8590] flex-wrap">

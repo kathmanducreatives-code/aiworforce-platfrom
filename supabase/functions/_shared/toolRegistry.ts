@@ -349,6 +349,13 @@ const APIFY_ACTORS: Record<string, ApifyActorCfg> = {
       };
     },
   },
+  advanced_jobs: {
+    actor_id: "curious_coder/linkedin-jobs-search-scraper",
+    source_type: "advanced_jobs",
+    enabled_by_default: false,
+    use_for: ["advanced LinkedIn job search", "boolean job search"],
+    description: "Advanced LinkedIn jobs scraper with richer filters",
+  },
   indeed_jobs: {
     actor_id: "curious_coder/indeed-scraper",
     source_type: "indeed_jobs",
@@ -369,6 +376,20 @@ const APIFY_ACTORS: Record<string, ApifyActorCfg> = {
     enabled_by_default: false,
     use_for: ["custom websites", "directories", "niche job boards"],
     description: "Generic web scraper for niche/custom sites",
+  },
+  people_profiles: {
+    actor_id: "harvestapi/linkedin-profile-search",
+    source_type: "people_profiles",
+    enabled_by_default: false,
+    use_for: ["individual people/candidate profile search (opt-in only)"],
+    description: "LinkedIn profile search — restricted, opt-in only",
+  },
+  profile_enrichment: {
+    actor_id: "atomus/linkedin-profile-scraper",
+    source_type: "profile_enrichment",
+    enabled_by_default: false,
+    use_for: ["enrich known LinkedIn profile URLs (opt-in only)"],
+    description: "LinkedIn profile enrichment — restricted, opt-in only",
   },
   search_fallback: {
     actor_id: "apify/google-search-scraper",
@@ -427,9 +448,12 @@ export function normalizeApifySourceType(raw?: string | null): string {
 }
 
 // Actors that must NEVER run without explicit opt-in, regardless of how
-// the orchestrator/planner resolved them. Guards against silently using
-// Apify as the default broad-search lane.
-const OPT_IN_ONLY_ACTOR_IDS = new Set<string>(["apify/google-search-scraper"]);
+// the orchestrator/planner resolved them.
+const OPT_IN_ONLY_ACTOR_IDS = new Set<string>([
+  "apify/google-search-scraper",
+  "harvestapi/linkedin-profile-search",
+  "atomus/linkedin-profile-scraper",
+]);
 
 
 const APIFY_ACTOR_ID_RE = /^[a-zA-Z0-9_~][a-zA-Z0-9_\-~]{0,127}(?:\/[a-zA-Z0-9_\-~]+)?$/;
@@ -598,8 +622,12 @@ async function execSourceWithApify(input: unknown): Promise<ToolResult> {
 
   const source_type = actorCfg?.source_type ?? normalizeApifySourceType(requested_source_type ?? "jobs");
 
-  // Hard gate: opt-in-only actors (e.g. google-search-scraper) never run without explicit allow_disabled.
-  if (OPT_IN_ONLY_ACTOR_IDS.has(actor_id) && !allow_disabled) {
+  // If the registry explicitly approved this actor (it passed isActorRuntimeEnabled
+  // via env flags + required_env), treat it as opted in.
+  const registryApproved = !!registry_actor_key;
+
+  // Hard gate: opt-in-only actors never run without explicit opt-in.
+  if (OPT_IN_ONLY_ACTOR_IDS.has(actor_id) && !allow_disabled && !registryApproved) {
     return {
       ok: false,
       unavailable: true,
@@ -609,13 +637,13 @@ async function execSourceWithApify(input: unknown): Promise<ToolResult> {
         source_type: actorCfg?.source_type ?? source_type,
         use_for: actorCfg?.use_for ?? [],
         message:
-          "apify/google-search-scraper is opt-in only. Use grounded search_web for broad research, or pass allow_disabled: true to force this actor.",
+          `${actor_id} is opt-in only. Enable it via the matching APIFY_ENABLE_* env flag, or pass allow_disabled: true.`,
       },
     };
   }
 
-  // Soft gate: any registry actor marked enabled_by_default: false requires opt-in.
-  if (actorCfg && actorCfg.enabled_by_default === false && !allow_disabled) {
+  // Soft gate: any local-catalog actor marked enabled_by_default: false requires opt-in.
+  if (actorCfg && actorCfg.enabled_by_default === false && !allow_disabled && !registryApproved) {
     return {
       ok: false,
       unavailable: true,
@@ -628,6 +656,8 @@ async function execSourceWithApify(input: unknown): Promise<ToolResult> {
       },
     };
   }
+
+
 
 
   // Apify accepts `username~actor-name` or actorId in the URL path.
