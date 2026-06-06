@@ -349,6 +349,13 @@ const APIFY_ACTORS: Record<string, ApifyActorCfg> = {
       };
     },
   },
+  advanced_jobs: {
+    actor_id: "curious_coder/linkedin-jobs-search-scraper",
+    source_type: "advanced_jobs",
+    enabled_by_default: false,
+    use_for: ["advanced LinkedIn job search", "boolean job search"],
+    description: "Advanced LinkedIn jobs scraper with richer filters",
+  },
   indeed_jobs: {
     actor_id: "curious_coder/indeed-scraper",
     source_type: "indeed_jobs",
@@ -369,6 +376,20 @@ const APIFY_ACTORS: Record<string, ApifyActorCfg> = {
     enabled_by_default: false,
     use_for: ["custom websites", "directories", "niche job boards"],
     description: "Generic web scraper for niche/custom sites",
+  },
+  people_profiles: {
+    actor_id: "harvestapi/linkedin-profile-search",
+    source_type: "people_profiles",
+    enabled_by_default: false,
+    use_for: ["individual people/candidate profile search (opt-in only)"],
+    description: "LinkedIn profile search — restricted, opt-in only",
+  },
+  profile_enrichment: {
+    actor_id: "atomus/linkedin-profile-scraper",
+    source_type: "profile_enrichment",
+    enabled_by_default: false,
+    use_for: ["enrich known LinkedIn profile URLs (opt-in only)"],
+    description: "LinkedIn profile enrichment — restricted, opt-in only",
   },
   search_fallback: {
     actor_id: "apify/google-search-scraper",
