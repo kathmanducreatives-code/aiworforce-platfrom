@@ -186,6 +186,7 @@ export const ACTOR_REGISTRY: Record<string, ActorEntry> = {
       "finding engineers by title/location",
       "finding founder profiles",
       "people search",
+      "finding individual LinkedIn profiles",
     ],
     not_for: ["companies hiring", "job opening discovery"],
     output_type: "people_profiles",
