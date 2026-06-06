@@ -1,12 +1,14 @@
-import { ExternalLink, Building2, MapPin } from 'lucide-react';
-import { normalizeApifyItems } from './normalize';
+import { ExternalLink, Building2, MapPin, User } from 'lucide-react';
+import { normalizeApifyItems, normalizeApifyPeople, isPeopleOutput } from './normalize';
 import RawJsonView from './RawJsonView';
 
 export default function ScoutResultsView({ output }: { output: any }) {
-  const items = normalizeApifyItems(output);
+  const peopleMode = isPeopleOutput(output);
+  const items = peopleMode ? [] : normalizeApifyItems(output);
+  const people = peopleMode ? normalizeApifyPeople(output) : [];
   const actorDisabledTop = output?.error === 'actor_missing' || output?.error === 'actor_key_unknown' || output?.error === 'apify_actor_disabled_by_default';
 
-  if (items.length === 0 && !actorDisabledTop) {
+  if (items.length === 0 && people.length === 0 && !actorDisabledTop) {
     return (
       <div className="space-y-3">
         <div className="text-[12px] text-[#7D8590]">No normalized items detected.</div>
