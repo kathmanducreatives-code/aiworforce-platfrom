@@ -77,6 +77,16 @@ export default function ExecutionTaskRow({
         </div>
       )}
 
+      {(actorKey || actorReason) && (
+        <div className="mt-2 pl-1 text-[11px] text-emerald-300/90">
+          {actorKey && <span className="font-mono">{actorKey}</span>}
+          {actorKey && actorReason && <span className="text-[#7D8590]"> — </span>}
+          {actorReason && <span className="text-[#C9D1D9]">{actorReason}</span>}
+        </div>
+      )}
+
+
+
       <div className="mt-2 flex flex-wrap items-center gap-1.5">
         {(toolNeeded || latestToolCall) && (
           <span
