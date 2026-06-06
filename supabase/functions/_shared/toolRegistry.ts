@@ -622,8 +622,12 @@ async function execSourceWithApify(input: unknown): Promise<ToolResult> {
 
   const source_type = actorCfg?.source_type ?? normalizeApifySourceType(requested_source_type ?? "jobs");
 
-  // Hard gate: opt-in-only actors (e.g. google-search-scraper) never run without explicit allow_disabled.
-  if (OPT_IN_ONLY_ACTOR_IDS.has(actor_id) && !allow_disabled) {
+  // If the registry explicitly approved this actor (it passed isActorRuntimeEnabled
+  // via env flags + required_env), treat it as opted in.
+  const registryApproved = !!registry_actor_key;
+
+  // Hard gate: opt-in-only actors never run without explicit opt-in.
+  if (OPT_IN_ONLY_ACTOR_IDS.has(actor_id) && !allow_disabled && !registryApproved) {
     return {
       ok: false,
       unavailable: true,
@@ -633,13 +637,13 @@ async function execSourceWithApify(input: unknown): Promise<ToolResult> {
         source_type: actorCfg?.source_type ?? source_type,
         use_for: actorCfg?.use_for ?? [],
         message:
-          "apify/google-search-scraper is opt-in only. Use grounded search_web for broad research, or pass allow_disabled: true to force this actor.",
+          `${actor_id} is opt-in only. Enable it via the matching APIFY_ENABLE_* env flag, or pass allow_disabled: true.`,
       },
     };
   }
 
-  // Soft gate: any registry actor marked enabled_by_default: false requires opt-in.
-  if (actorCfg && actorCfg.enabled_by_default === false && !allow_disabled) {
+  // Soft gate: any local-catalog actor marked enabled_by_default: false requires opt-in.
+  if (actorCfg && actorCfg.enabled_by_default === false && !allow_disabled && !registryApproved) {
     return {
       ok: false,
       unavailable: true,
@@ -652,6 +656,8 @@ async function execSourceWithApify(input: unknown): Promise<ToolResult> {
       },
     };
   }
+
+
 
 
   // Apify accepts `username~actor-name` or actorId in the URL path.
