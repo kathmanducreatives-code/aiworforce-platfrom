@@ -448,9 +448,12 @@ export function normalizeApifySourceType(raw?: string | null): string {
 }
 
 // Actors that must NEVER run without explicit opt-in, regardless of how
-// the orchestrator/planner resolved them. Guards against silently using
-// Apify as the default broad-search lane.
-const OPT_IN_ONLY_ACTOR_IDS = new Set<string>(["apify/google-search-scraper"]);
+// the orchestrator/planner resolved them.
+const OPT_IN_ONLY_ACTOR_IDS = new Set<string>([
+  "apify/google-search-scraper",
+  "harvestapi/linkedin-profile-search",
+  "atomus/linkedin-profile-scraper",
+]);
 
 
 const APIFY_ACTOR_ID_RE = /^[a-zA-Z0-9_~][a-zA-Z0-9_\-~]{0,127}(?:\/[a-zA-Z0-9_\-~]+)?$/;
