@@ -298,6 +298,7 @@ Deno.serve(async (req) => {
     success: ai.ok,
     latency_ms: ai.latencyMs,
     error_code: ai.errorCode,
+    prompt_version: AGENTORY_SYSTEM_PROMPT_VERSION,
   });
 
   let apiText = ai.ok ? ai.content : "";
