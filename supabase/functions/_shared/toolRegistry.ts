@@ -503,6 +503,7 @@ async function execSourceWithApify(input: unknown): Promise<ToolResult> {
 
   const i = (input ?? {}) as {
     actor_id?: string;
+    selected_actor_key?: string;
     source_type?: string;
     search_goal?: string;
     query?: string;
@@ -514,18 +515,69 @@ async function execSourceWithApify(input: unknown): Promise<ToolResult> {
   };
 
   const requested_source_type = (i.source_type ?? null) as string | null;
-  const source_type = normalizeApifySourceType(requested_source_type ?? "jobs");
+  const selected_actor_key = (i.selected_actor_key ?? null) as string | null;
   const max_results = Math.min(100, Math.max(1, Number(i.max_results) || 25));
   const search_goal = (i.search_goal ?? "").toString();
   const allow_disabled = i.allow_disabled === true;
 
+  // Resolve actor: prefer explicit actor_id, then selected_actor_key (registry), then source_type alias.
   let actor_id = (i.actor_id ?? "").toString().trim();
   let actorCfg: ApifyActorCfg | undefined;
+  let registry_actor_key: string | null = null;
+
   if (actor_id) {
     if (!APIFY_ACTOR_ID_RE.test(actor_id)) return { ok: false, error: "invalid_actor_id" };
     actorCfg = Object.values(APIFY_ACTORS).find((c) => c.actor_id === actor_id);
+  } else if (selected_actor_key) {
+    const reg = getActorByKey(selected_actor_key);
+    if (!reg) {
+      return {
+        ok: false,
+        unavailable: true,
+        error: "actor_key_unknown",
+        data: {
+          actor_key: selected_actor_key,
+          source_type: requested_source_type,
+          reason: `selected_actor_key "${selected_actor_key}" is not in ACTOR_REGISTRY.`,
+          configured_actor_keys: Object.keys(ACTOR_REGISTRY),
+        },
+      };
+    }
+    if (!isActorRuntimeEnabled(reg) && !allow_disabled) {
+      return {
+        ok: false,
+        unavailable: true,
+        error: "actor_missing",
+        data: {
+          actor_key: reg.key,
+          actor_id: reg.actor_id,
+          source_type: reg.source_type,
+          reason: reg.missing_message
+            ?? `Actor "${reg.key}" is disabled or its required environment is not configured.`,
+          configured_actor_keys: Object.values(ACTOR_REGISTRY).filter(isActorRuntimeEnabled).map((a) => a.key),
+        },
+      };
+    }
+    if (!reg.actor_id) {
+      return {
+        ok: false,
+        unavailable: true,
+        error: "actor_missing",
+        data: {
+          actor_key: reg.key,
+          source_type: reg.source_type,
+          reason: reg.missing_message ?? `Actor "${reg.key}" has no actor_id configured.`,
+          configured_actor_keys: Object.values(ACTOR_REGISTRY).filter(isActorRuntimeEnabled).map((a) => a.key),
+        },
+      };
+    }
+    actor_id = reg.actor_id;
+    registry_actor_key = reg.key;
+    actorCfg = Object.values(APIFY_ACTORS).find((c) => c.actor_id === actor_id)
+      ?? APIFY_ACTORS[reg.source_type ?? "jobs"];
   } else {
-    const cfg = APIFY_ACTORS[source_type];
+    const source_type_alias = normalizeApifySourceType(requested_source_type ?? "jobs");
+    const cfg = APIFY_ACTORS[source_type_alias];
     if (!cfg?.actor_id) {
       return {
         ok: false,
@@ -533,16 +585,18 @@ async function execSourceWithApify(input: unknown): Promise<ToolResult> {
         error: "apify_actor_not_configured",
         data: {
           requested_source_type,
-          normalized_source_type: source_type,
-          expected_actor_key: source_type,
+          normalized_source_type: source_type_alias,
+          expected_actor_key: source_type_alias,
           actor_configured: false,
-          message: `No Apify actor configured for source_type=${source_type} (requested=${requested_source_type ?? "null"}).`,
+          message: `No Apify actor configured for source_type=${source_type_alias} (requested=${requested_source_type ?? "null"}).`,
         },
       };
     }
     actor_id = cfg.actor_id;
     actorCfg = cfg;
   }
+
+  const source_type = actorCfg?.source_type ?? normalizeApifySourceType(requested_source_type ?? "jobs");
 
   // Hard gate: opt-in-only actors (e.g. google-search-scraper) never run without explicit allow_disabled.
   if (OPT_IN_ONLY_ACTOR_IDS.has(actor_id) && !allow_disabled) {
