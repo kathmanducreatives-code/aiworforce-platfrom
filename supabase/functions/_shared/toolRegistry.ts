@@ -521,6 +521,22 @@ function normalizeApifyItem(raw: any, source_type: string) {
   };
 }
 
+function normalizeApifyPeopleItem(raw: any) {
+  const r = raw && typeof raw === "object" ? raw : {};
+  return {
+    full_name:   pickStr(r, ["full_name", "fullName", "name", "personName", "displayName"]),
+    headline:    pickStr(r, ["headline", "title_headline", "subtitle"]),
+    title:       pickStr(r, ["currentJobTitle", "jobTitle", "title", "position"]),
+    location:    pickStr(r, ["location", "geoLocation", "city", "place", "country"]),
+    company:     pickStr(r, ["currentCompany", "companyName", "company", "employer", "organization"]),
+    profile_url: pickStr(r, ["profileUrl", "profile_url", "linkedinUrl", "linkedin_url", "url", "publicProfileUrl"]),
+    summary:     pickStr(r, ["summary", "about", "description"]),
+    source:      "apify",
+    signal_type: "people_profile",
+    raw:         truncObj(r, 4000),
+  };
+}
+
 async function apifyFetch(
   path: string,
   init: RequestInit & { timeoutMs?: number } = {},
