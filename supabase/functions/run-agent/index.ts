@@ -7,6 +7,8 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { runTool, normalizeApifySourceType } from "../_shared/toolRegistry.ts";
 import { generateText, logProviderCall } from "../_shared/aiProvider.ts";
+import { getAgentorySystemPrompt, AGENTORY_SYSTEM_PROMPT_VERSION } from "../_shared/agentorySystemPrompt.ts";
+import { summarizeRegistryForPrompt } from "../_shared/actorRegistry.ts";
 
 
 const cors = {
@@ -114,7 +116,12 @@ Deno.serve(async (req) => {
     .maybeSingle();
   const brain = (brainRow?.profile ?? null) as CompanyBrain;
 
-  const systemPrompt = `${agent.role_prompt ?? `You are ${agent.name}.`}\n\n${renderCompanyBrain(brain)}`;
+  const systemPrompt = `${agent.role_prompt ?? `You are ${agent.name}.`}\n\n${getAgentorySystemPrompt({
+    taskType: "agent_execution",
+    currentAgent: agent_slug ?? agent.slug ?? undefined,
+    companyBrain: brain as Record<string, unknown> | null,
+    actorRegistrySummary: summarizeRegistryForPrompt(),
+  })}`;
 
   // --- Tool layer: hawk + scout get live tools (Firecrawl scrape, Apify sourcing). Broad web search is optional. ---
   let toolContext: string | null = null;
@@ -291,6 +298,7 @@ Deno.serve(async (req) => {
     success: ai.ok,
     latency_ms: ai.latencyMs,
     error_code: ai.errorCode,
+    prompt_version: AGENTORY_SYSTEM_PROMPT_VERSION,
   });
 
   let apiText = ai.ok ? ai.content : "";

@@ -6,6 +6,8 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { generateJson, logProviderCall } from "../_shared/aiProvider.ts";
 import { isToolConfigured } from "../_shared/toolRegistry.ts";
+import { getAgentorySystemPrompt, AGENTORY_SYSTEM_PROMPT_VERSION } from "../_shared/agentorySystemPrompt.ts";
+import { summarizeRegistryForPrompt } from "../_shared/actorRegistry.ts";
 
 const cors = {
   "Access-Control-Allow-Origin": "*",
@@ -716,7 +718,12 @@ Return ONLY valid JSON, no prose, no markdown:
 
     ai = await generateJson({
       taskType: "orchestration_plan",
-      systemPrompt: "You are a planning assistant. Respond with valid JSON only.",
+      systemPrompt: getAgentorySystemPrompt({
+        taskType: "planning",
+        currentAgent: "pilot",
+        companyBrain: companyBrain as Record<string, unknown> | null,
+        actorRegistrySummary: summarizeRegistryForPrompt(),
+      }),
       messages: [{ role: "user", content: orchestratorPrompt }],
       temperature: 0.3,
       maxTokens: 2048,
@@ -733,6 +740,7 @@ Return ONLY valid JSON, no prose, no markdown:
       success: ai.ok,
       latency_ms: ai.latencyMs,
       error_code: ai.errorCode,
+      prompt_version: AGENTORY_SYSTEM_PROMPT_VERSION,
     });
 
     if (ai.ok && ai.json) {

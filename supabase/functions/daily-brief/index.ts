@@ -6,6 +6,7 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { generateText } from "../_shared/aiProvider.ts";
 import { isToolConfigured } from "../_shared/toolRegistry.ts";
+import { getAgentorySystemPrompt } from "../_shared/agentorySystemPrompt.ts";
 
 const cors = {
   "Access-Control-Allow-Origin": "*",
@@ -261,7 +262,12 @@ ${sectionActions}`;
     const ai = await generateText({
       taskType: "helper",
       systemPrompt:
-        "You format a founder daily command brief. Use ONLY the JSON facts provided. " +
+        getAgentorySystemPrompt({
+          taskType: "reporting",
+          currentAgent: "scribe",
+          companyBrain: brainProfile as Record<string, unknown> | null,
+        }) +
+        "\n\nYou format a founder daily command brief. Use ONLY the JSON facts provided. " +
         "Do NOT invent plans, tasks, approvals, activity, market data, or current events. " +
         "Output GitHub-flavored markdown with EXACTLY these H2 sections in order: " +
         "Summary, Active Plans, Tasks Needing Attention, Pending Approvals, Recent Agent Activity, " +

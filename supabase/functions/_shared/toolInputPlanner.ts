@@ -17,6 +17,7 @@ import {
   LINKEDIN_PROFILE_URL_RE,
   URL_RE,
 } from "./actorRegistry.ts";
+import { getAgentorySystemPrompt, AGENTORY_SYSTEM_PROMPT_VERSION } from "./agentorySystemPrompt.ts";
 
 export type ExecutionMode = "fast" | "deep" | "outreach";
 export type ToolName = "source_with_apify" | "scrape_url" | "search_web" | null;
@@ -191,11 +192,9 @@ export function fallbackParse(prompt: string, intent: Intent | string): ToolInpu
 
 const ACTOR_KEYS = Object.keys(ACTOR_REGISTRY).join("|");
 
-const PLANNER_PROMPT = `You are the tool/actor selection planner for ScreeningPilot/Agentory.
-Convert the user prompt into a JSON plan describing which actor/tool to run.
-
-ACTOR REGISTRY (authoritative — never invent actors not listed here):
-${summarizeRegistryForPrompt()}
+const PLANNER_JSON_TAIL = `You are the tool/actor selection planner. Convert the user prompt into a JSON
+plan describing which actor/tool to run. Use the actor_registry above as the
+authoritative list — never invent actors not listed.
 
 Return ONLY this JSON (no prose, no markdown):
 {
@@ -218,18 +217,26 @@ Return ONLY this JSON (no prose, no markdown):
 }
 
 Routing rules (apply in order):
-1. LinkedIn profile URL + enrichment language -> selected_actor_key="apify_profile_enrichment".
-2. Any URL + multi-page crawl / "with apify" language -> selected_actor_key="apify_website_content".
-3. Any URL otherwise -> selected_actor_key="firecrawl_scrape_url".
-4. "Indeed" or "avoid LinkedIn" -> selected_actor_key="apify_indeed_jobs".
-5. "advanced LinkedIn search" / "boolean search" + hiring/company words -> selected_actor_key="apify_advanced_linkedin_jobs".
-6. Niche directory / custom job board / "use custom scraper" -> selected_actor_key="apify_custom_web".
-7. Explicit individual people / candidate profiles / "find React developer profiles" / "find founder profiles" -> selected_actor_key="apify_people_search". Because that actor is DISABLED, set requires_clarification=true and ask whether to find companies hiring instead.
-8. Hiring / companies / jobs / roles / openings / GTM/SDR/BDR -> selected_actor_key="apify_jobs".
+1. LinkedIn profile URL + enrichment language -> "apify_profile_enrichment".
+2. Any URL + multi-page crawl / "with apify" -> "apify_website_content".
+3. Any URL otherwise -> "firecrawl_scrape_url".
+4. "Indeed" / "avoid LinkedIn" -> "apify_indeed_jobs".
+5. "advanced LinkedIn search" / "boolean search" + hiring/company words -> "apify_advanced_linkedin_jobs".
+6. Niche directory / custom job board -> "apify_custom_web".
+7. Explicit individual people / candidate profiles / "find <role> profiles" -> "apify_people_search". If that actor is DISABLED, set requires_clarification=true and offer companies-hiring fallback.
+8. Hiring / companies / jobs / roles / openings / GTM/SDR/BDR -> "apify_jobs".
 9. Ambiguous "Find N <role>s in <location>" without "companies hiring" or "individual profiles" -> requires_clarification=true. Pre-select "apify_jobs".
-10. Broad market/news questions with no actor fit -> selected_actor_key="search_web".
+10. Broad market/news with no actor fit -> "search_web".
 
-Never pick a DISABLED actor as the final answer without setting requires_clarification=true. needs_outreach implies execution_mode="outreach"; needs_enrichment implies "deep". Default max_results=25 unless user specifies a number; clamp to the actor's max_safe_results.`;
+Never pick a DISABLED actor as the final answer without setting requires_clarification=true. needs_outreach implies execution_mode="outreach"; needs_enrichment implies "deep". Default max_results=25; clamp to the actor's max_safe_results.`;
+
+function buildPlannerSystemPrompt(): string {
+  return getAgentorySystemPrompt({
+    taskType: "tool_parameter_extraction",
+    currentAgent: "pilot",
+    actorRegistrySummary: summarizeRegistryForPrompt(),
+  }) + "\n\n" + PLANNER_JSON_TAIL;
+}
 
 export async function planToolInput(
   prompt: string,
@@ -240,7 +247,7 @@ export async function planToolInput(
 
   const ai = await generateJson({
     taskType: "tool_input_planning",
-    systemPrompt: PLANNER_PROMPT,
+    systemPrompt: buildPlannerSystemPrompt(),
     messages: [
       {
         role: "user",

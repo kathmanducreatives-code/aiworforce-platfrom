@@ -7,6 +7,8 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { generateJson, logProviderCall } from "../_shared/aiProvider.ts";
 import { classifyIntent } from "../_shared/intentRouter.ts";
 import { planToolInput, type ToolInput } from "../_shared/toolInputPlanner.ts";
+import { getAgentorySystemPrompt, AGENTORY_SYSTEM_PROMPT_VERSION } from "../_shared/agentorySystemPrompt.ts";
+import { summarizeRegistryForPrompt } from "../_shared/actorRegistry.ts";
 
 
 const cors = {
@@ -166,6 +168,7 @@ async function delegateToOrchestrate(a: DelegateArgs): Promise<Response> {
         connector_limitations: connectorsMissing,
         execution_mode: executionMode,
         tool_input: a.toolInput ?? null,
+        prompt_version: AGENTORY_SYSTEM_PROMPT_VERSION,
       }
     : {};
 
@@ -329,9 +332,13 @@ Deno.serve(async (req) => {
     .eq("workspace_id", workspaceId)
     .maybeSingle();
   const brain = (brainRow?.profile ?? {}) as Record<string, unknown>;
-  const brainBlock = Object.keys(brain).length
-    ? `\n\nCOMPANY BRAIN (workspace context — use to ground every decision):\n${JSON.stringify(brain, null, 2)}`
-    : `\n\nCOMPANY BRAIN: (empty — workspace has not completed onboarding yet. If the user asks for work that requires company context, suggest completing onboarding at /onboarding/company-brain.)`;
+  const pilotSystem = getAgentorySystemPrompt({
+    taskType: "pilot_router",
+    currentAgent: "pilot",
+    companyBrain: brain,
+    actorRegistrySummary: summarizeRegistryForPrompt(),
+    availableTools: ["apify", "firecrawl", "resend"],
+  }) + "\n\n" + PILOT_SYSTEM_PROMPT;
 
   // 6c. Intent routing — short-circuit when we don't need full Pilot reasoning.
   const intentResult = await classifyIntent(message);
@@ -411,7 +418,7 @@ Deno.serve(async (req) => {
   // 7. Otherwise let Pilot decide (simple_chat / daily_brief fallthrough / content).
   const ai = await generateJson({
     taskType: "pilot_chat",
-    systemPrompt: PILOT_SYSTEM_PROMPT + brainBlock,
+    systemPrompt: pilotSystem,
     messages: msgs,
     temperature: 0.4,
     maxTokens: 1024,
@@ -428,6 +435,7 @@ Deno.serve(async (req) => {
     success: ai.ok,
     latency_ms: ai.latencyMs,
     error_code: ai.errorCode,
+    prompt_version: AGENTORY_SYSTEM_PROMPT_VERSION,
   });
 
   const providerUsed = ai.provider !== "none" ? ai.provider : "lovable-ai";

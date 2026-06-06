@@ -269,6 +269,7 @@ export async function logProviderCall(
     success: boolean;
     latency_ms: number;
     error_code?: string;
+    prompt_version?: string;
   },
 ): Promise<void> {
   if (!meta.workspace_id) return;
@@ -289,6 +290,7 @@ export async function logProviderCall(
         success: meta.success,
         latency_ms: meta.latency_ms,
         error_code: meta.error_code ?? null,
+        prompt_version: meta.prompt_version ?? null,
       },
     });
   } catch (e) {
