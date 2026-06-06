@@ -6,14 +6,23 @@
 
 import { generateJson } from "./aiProvider.ts";
 import type { Intent } from "./intentRouter.ts";
+import {
+  ACTOR_REGISTRY,
+  getActorByKey,
+  isActorRuntimeEnabled,
+  summarizeRegistryForPrompt,
+  PEOPLE_INTENT_RE,
+  COMPANY_INTENT_RE,
+} from "./actorRegistry.ts";
 
 export type ExecutionMode = "fast" | "deep" | "outreach";
 export type ToolName = "source_with_apify" | "scrape_url" | "search_web" | null;
-export type SourceType = "jobs" | "companies" | "people" | "posts" | null;
+export type SourceType = "jobs" | "indeed_jobs" | "website_content" | "custom_web" | "people_profiles" | "search" | null;
 
 export interface ToolInput {
   intent: Intent | string;
   tool_name: ToolName;
+  selected_actor_key: string | null;
   source_type: SourceType;
   query: string;
   role_keywords: string[];
@@ -24,6 +33,7 @@ export interface ToolInput {
   execution_mode: ExecutionMode;
   confidence: number;
   missing_fields: string[];
+  reason: string | null;
   ask_clarification?: boolean;
   clarification?: string;
 }
@@ -48,11 +58,9 @@ const SEND_WORDS = /\b(send|deliver|fire off)\b/i;
 export function fallbackParse(prompt: string, intent: Intent | string): ToolInput {
   const t = prompt.toLowerCase();
 
-  // numbers
   const numMatch = t.match(/\b(\d{1,4})\b/);
   let max_results = numMatch ? Math.max(1, Math.min(200, parseInt(numMatch[1], 10))) : 25;
 
-  // locations
   let location: string | null = null;
   for (const loc of LOCATIONS) {
     const re = new RegExp(`\\b${loc.replace(/[-/\\^$*+?.()|[\]{}]/g, "\\$&")}\\b`, "i");
@@ -62,7 +70,6 @@ export function fallbackParse(prompt: string, intent: Intent | string): ToolInpu
     }
   }
 
-  // roles
   const role_keywords: string[] = [];
   for (const r of ROLES) {
     if (new RegExp(`\\b${r}\\b`, "i").test(t)) role_keywords.push(r);
@@ -71,27 +78,36 @@ export function fallbackParse(prompt: string, intent: Intent | string): ToolInpu
   const needs_outreach = OUTREACH_WORDS.test(t) || SEND_WORDS.test(t);
   const needs_enrichment = ENRICH_WORDS.test(t);
 
-  // source_type heuristic
-  // NOTE: No people/profile or companies actor is configured today. Everything that
-  // looks like sourcing routes to source_type="jobs" (the LinkedIn jobs actor),
-  // which surfaces companies hiring for the requested role.
-  let source_type: SourceType = null;
+  // Decide tool/actor from text shape.
   let tool_name: ToolName = null;
-  if (intent === "source_signals" || /\b(find|source|hiring|companies|leads|prospects|candidates|engineers?|developers?|marketers?|people)\b/i.test(prompt)) {
-    tool_name = "source_with_apify";
-    source_type = "jobs";
-  } else if (intent === "analyze_url" || /https?:\/\//.test(prompt)) {
+  let selected_actor_key: string | null = null;
+  let source_type: SourceType = null;
+  let reason: string | null = null;
+
+  if (intent === "analyze_url" || /https?:\/\//.test(prompt)) {
     tool_name = "scrape_url";
+    selected_actor_key = "firecrawl_scrape_url";
+    reason = "Prompt contains a URL — Firecrawl is the right tool for page extraction.";
+  } else if (
+    intent === "source_signals" ||
+    COMPANY_INTENT_RE.test(prompt) ||
+    /\b(find|source|leads|prospects|candidates|engineers?|developers?|marketers?|people)\b/i.test(prompt)
+  ) {
+    tool_name = "source_with_apify";
+    selected_actor_key = "apify_jobs";
+    source_type = "jobs";
+    reason = "Hiring/role/location prompt — LinkedIn Jobs actor returns companies hiring for the role.";
   } else if (intent === "daily_brief" || intent === "content") {
     tool_name = "search_web";
+    selected_actor_key = "search_web";
+    source_type = "search";
+    reason = "Broad/current information request — falls to search_web (may be unavailable).";
   }
 
-  // execution mode
   let execution_mode: ExecutionMode = "fast";
   if (needs_outreach) execution_mode = "outreach";
   else if (needs_enrichment) execution_mode = "deep";
 
-  // missing fields
   const missing_fields: string[] = [];
   if (intent === "source_signals") {
     if (role_keywords.length === 0 && !/\b(hiring|company|companies|jobs?|founders?|leads?)\b/i.test(prompt)) {
@@ -102,7 +118,6 @@ export function fallbackParse(prompt: string, intent: Intent | string): ToolInpu
     }
   }
 
-  // confidence: high if we have role/location or explicit intent; low if "find leads" type
   const tokens = prompt.trim().split(/\s+/).length;
   let confidence = 0.5;
   if (tool_name) confidence += 0.2;
@@ -115,6 +130,7 @@ export function fallbackParse(prompt: string, intent: Intent | string): ToolInpu
   return {
     intent,
     tool_name,
+    selected_actor_key,
     source_type,
     query: prompt,
     role_keywords,
@@ -125,19 +141,24 @@ export function fallbackParse(prompt: string, intent: Intent | string): ToolInpu
     execution_mode,
     confidence,
     missing_fields,
+    reason,
   };
 }
 
 // ---------- AI planner ----------
 
-const PLANNER_PROMPT = `You are the tool input planner for ScreeningPilot.
-Convert the user prompt into a JSON plan describing which tool to run and with what arguments.
+const PLANNER_PROMPT = `You are the tool/actor selection planner for ScreeningPilot.
+Convert the user prompt into a JSON plan describing which actor/tool to run.
+
+ACTOR REGISTRY (authoritative — never invent actors not listed here):
+${summarizeRegistryForPrompt()}
 
 Return ONLY this JSON shape (no prose, no markdown):
 {
-  "intent": "source_signals|analyze_url|rank_existing_leads|enrich_existing_leads|draft_outreach|send_requires_approval|content|daily_brief|simple_chat|unclear",
-  "tool_name": "source_with_apify|scrape_url|search_web|null",
-  "source_type": "jobs|companies|people|posts|null",
+  "intent": "source_companies|source_jobs|source_people|analyze_url|broad_search|draft_outreach|send_requires_approval|content|daily_brief|simple_chat|unclear",
+  "selected_tool": "source_with_apify|scrape_url|search_web|none",
+  "selected_actor_key": "apify_jobs|apify_indeed_jobs|apify_website_content|apify_custom_web|firecrawl_scrape_url|search_web|people_profile_actor|null",
+  "source_type": "jobs|indeed_jobs|website_content|custom_web|people_profiles|search|null",
   "query": "the user's literal search intent",
   "role_keywords": ["lowercase role words"],
   "location": "primary location string or null",
@@ -146,19 +167,22 @@ Return ONLY this JSON shape (no prose, no markdown):
   "needs_outreach": boolean,
   "execution_mode": "fast|deep|outreach",
   "confidence": 0.0-1.0,
-  "missing_fields": ["names of fields you couldn't infer"]
+  "missing_fields": ["names of fields you couldn't infer"],
+  "requires_clarification": boolean,
+  "clarification_question": "string or null",
+  "reason": "one-sentence rationale for the selected actor/tool"
 }
 
-Rules:
-- Default max_results = 25 unless user states a quantity.
-- needs_outreach true if user asks to draft/email/message.
-- needs_enrichment true if user asks to enrich/analyze/research a company.
-- execution_mode: outreach > deep > fast (outreach implies deep).
-- If user just says "Find leads" with no role/location, set confidence < 0.65 and put role_keywords/location in missing_fields.
-- If a URL is present, tool_name = "scrape_url".
-- For ANY sourcing prompt, set tool_name = "source_with_apify" and source_type = "jobs". No people/profile or companies actor is configured.
-- Prompts like "find engineers in London" / "find marketers" / "find candidates" mean "find companies hiring those roles" — set source_type = "jobs", role_keywords from the role words, and location from any place name.
-- NEVER return source_type "people", "companies", or "posts" — only "jobs" or null.`;
+Selection rules:
+- Match the prompt to the actor whose best_for fits and not_for does NOT fit.
+- A URL anywhere in the prompt -> selected_actor_key="firecrawl_scrape_url", selected_tool="scrape_url".
+- Hiring / companies / roles / jobs / openings language -> selected_actor_key="apify_jobs".
+- People / individual profiles / candidates / founders / phone numbers / emails / LinkedIn profiles -> intent="source_people", selected_actor_key="people_profile_actor". Because that actor is DISABLED, set requires_clarification=true and use clarification_question to ask whether to instead find companies hiring for that role (via apify_jobs).
+- Ambiguous "Find N <role>s in <location>" without "companies hiring" or "individual profiles" -> set requires_clarification=true and ask: "Do you want individual <role> profiles, or companies hiring <role>s in <location>? I can currently source companies/jobs via Apify Jobs." Still suggest selected_actor_key="apify_jobs" as the proceed-if-confirmed default.
+- needs_outreach implies execution_mode="outreach"; needs_enrichment implies "deep".
+- send_email / "send the outreach" -> intent="send_requires_approval".
+- Default max_results = 25 unless user specifies a number.
+- Never pick a DISABLED actor as the final answer without setting requires_clarification=true.`;
 
 export async function planToolInput(
   prompt: string,
@@ -179,7 +203,7 @@ export async function planToolInput(
       },
     ],
     temperature: 0.1,
-    maxTokens: 600,
+    maxTokens: 700,
     jsonMode: true,
     functionName: "toolInputPlanner",
   });
@@ -187,10 +211,15 @@ export async function planToolInput(
   let merged: ToolInput = fb;
 
   if (ai.ok && ai.json && typeof ai.json === "object") {
-    const o = ai.json as Partial<ToolInput>;
+    const o = ai.json as Record<string, any>;
+    const aiActorKey = typeof o.selected_actor_key === "string" ? o.selected_actor_key : null;
+    const aiTool = typeof o.selected_tool === "string" ? o.selected_tool : (typeof o.tool_name === "string" ? o.tool_name : null);
     merged = {
       intent: typeof o.intent === "string" ? o.intent : fb.intent,
-      tool_name: (o.tool_name as ToolName) ?? fb.tool_name,
+      tool_name: (aiTool === "source_with_apify" || aiTool === "scrape_url" || aiTool === "search_web")
+        ? aiTool
+        : fb.tool_name,
+      selected_actor_key: aiActorKey && getActorByKey(aiActorKey) ? aiActorKey : fb.selected_actor_key,
       source_type: (o.source_type as SourceType) ?? fb.source_type,
       query: typeof o.query === "string" && o.query.trim() ? o.query : fb.query,
       role_keywords: Array.isArray(o.role_keywords) && o.role_keywords.length > 0
@@ -207,26 +236,92 @@ export async function planToolInput(
         : fb.execution_mode,
       confidence: typeof o.confidence === "number" ? Math.max(0, Math.min(1, o.confidence)) : fb.confidence,
       missing_fields: Array.isArray(o.missing_fields) ? (o.missing_fields as string[]) : fb.missing_fields,
+      reason: typeof o.reason === "string" && o.reason.trim() ? o.reason : fb.reason,
+      ask_clarification: o.requires_clarification === true ? true : undefined,
+      clarification: typeof o.clarification_question === "string" && o.clarification_question.trim()
+        ? o.clarification_question
+        : undefined,
     };
   }
 
-  // Hard rule: outreach implies deep enrichment pipeline.
+  // Hard rule: outreach implies deep pipeline.
   if (merged.needs_outreach) merged.execution_mode = "outreach";
   else if (merged.needs_enrichment && merged.execution_mode === "fast") merged.execution_mode = "deep";
 
-  // Cost caps.
   merged.max_results = Math.max(1, Math.min(200, merged.max_results || 25));
 
-  // No people/companies/posts actors configured — coerce to jobs whenever Apify is used.
-  if (merged.tool_name === "source_with_apify") {
-    if (merged.source_type !== "jobs") merged.source_type = "jobs";
+  // Validate selected_actor_key. If disabled or unknown, fall back.
+  const actor = getActorByKey(merged.selected_actor_key);
+  if (actor) {
+    if (!isActorRuntimeEnabled(actor)) {
+      // Disabled actor selected → either ask clarification (people) or fall back to jobs.
+      if (actor.key === "people_profile_actor") {
+        merged.ask_clarification = true;
+        merged.clarification = merged.clarification
+          ?? `${actor.missing_message ?? "That actor is not configured."} Want me to find companies hiring instead?`;
+        merged.selected_actor_key = null;
+        merged.tool_name = null;
+        merged.source_type = null;
+        merged.reason = actor.missing_message ?? merged.reason;
+      } else {
+        // Other disabled actor — fall back to jobs if hiring shape, else firecrawl if URL.
+        if (/https?:\/\//.test(prompt)) {
+          merged.selected_actor_key = "firecrawl_scrape_url";
+          merged.tool_name = "scrape_url";
+          merged.source_type = null;
+        } else {
+          merged.selected_actor_key = "apify_jobs";
+          merged.tool_name = "source_with_apify";
+          merged.source_type = "jobs";
+        }
+        merged.reason = `Requested actor "${actor.key}" is disabled — falling back to ${merged.selected_actor_key}.`;
+      }
+    } else {
+      // Mirror tool/source_type from the actor to keep run-agent consistent.
+      merged.tool_name = actor.tool_name;
+      if (actor.source_type) merged.source_type = actor.source_type as SourceType;
+    }
   }
 
-  // Clarification gate.
+  // People-intent guard (regardless of AI). Catches "individual profiles", explicit "people".
+  const explicitPeople = PEOPLE_INTENT_RE.test(prompt)
+    && !/\bhiring\b|\bcompan(?:y|ies)\b|\bjobs?\b/i.test(prompt);
+  if (explicitPeople && !ACTOR_REGISTRY.people_profile_actor.enabled) {
+    merged.ask_clarification = true;
+    merged.clarification = merged.clarification
+      ?? `${ACTOR_REGISTRY.people_profile_actor.missing_message} Want me to find companies hiring for that role instead?`;
+    // Suppress silent jobs run.
+    merged.selected_actor_key = null;
+    merged.tool_name = null;
+    merged.source_type = null;
+    merged.reason = ACTOR_REGISTRY.people_profile_actor.missing_message;
+  }
+
+  // Ambiguous "find N <role>s in <location>" — ask, but pre-select apify_jobs.
+  const ambiguousRoleLoc =
+    !explicitPeople
+    && /\b(engineers?|developers?|marketers?|designers?|founders?|recruiters?|people)\b/i.test(prompt)
+    && /\bin\s+[A-Z]/.test(prompt)
+    && !COMPANY_INTENT_RE.test(prompt)
+    && !/\bindividual\b/i.test(prompt);
+  if (ambiguousRoleLoc && !merged.ask_clarification) {
+    const role = (merged.role_keywords[0] ?? "people");
+    const loc = merged.location ?? "that location";
+    merged.ask_clarification = true;
+    merged.clarification =
+      `Do you want individual ${role} profiles, or companies hiring ${role}s in ${loc}? I can currently source companies/jobs via Apify Jobs.`;
+    merged.selected_actor_key = merged.selected_actor_key ?? "apify_jobs";
+    merged.tool_name = "source_with_apify";
+    merged.source_type = "jobs";
+    merged.reason = merged.reason ?? "Ambiguous role+location prompt — defaulting to companies hiring if confirmed.";
+  }
+
+  // Low-confidence sourcing — generic clarification gate kept for compatibility.
   if (
-    merged.intent === "source_signals" &&
-    merged.confidence < 0.65 &&
-    merged.missing_fields.length > 0
+    !merged.ask_clarification
+    && merged.intent === "source_signals"
+    && merged.confidence < 0.65
+    && merged.missing_fields.length > 0
   ) {
     merged.ask_clarification = true;
     const need = merged.missing_fields.includes("role_keywords") && merged.missing_fields.includes("location")
@@ -235,15 +330,6 @@ export async function planToolInput(
       ? "Which role or industry should I focus on?"
       : "Which location should I focus on?";
     merged.clarification = need;
-  }
-
-  // Explicit individual-people request — no people actor configured.
-  const explicitPeople = /\b(individual|specific)\s+(people|candidates|profiles|persons?)\b/i.test(prompt)
-    || /\b(individual\s+\w+\s+(profiles?|candidates?))\b/i.test(prompt)
-    || (/\bprofiles?\b/i.test(prompt) && !/\bhiring\b/i.test(prompt) && !/\bcompanies?\b/i.test(prompt));
-  if (merged.intent === "source_signals" && explicitPeople) {
-    merged.ask_clarification = true;
-    merged.clarification = "I can currently find companies hiring for that role using Apify Jobs. Individual candidate/profile sourcing requires a people/profile actor to be configured. Want me to find companies hiring instead?";
   }
 
   return merged;

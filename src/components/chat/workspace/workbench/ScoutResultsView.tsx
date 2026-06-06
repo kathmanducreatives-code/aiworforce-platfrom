@@ -16,17 +16,31 @@ export default function ScoutResultsView({ output }: { output: any }) {
 
   const total = typeof output?.total === 'number' ? output.total : items.length;
   const runId = typeof output?.run_id === 'string' ? output.run_id : null;
-  const actor = output?.actor_id ?? output?.normalized_source_type ?? null;
+  const actorId = output?.actor_id ?? null;
+  const actorLabel: string | null = output?.actor_label ?? null;
+  const actorKey: string | null = output?.selected_actor_key ?? null;
+  const outputType: string | null = output?.actor_output_type ?? null;
 
   return (
     <div className="space-y-3">
+      {(actorLabel || actorKey || actorId) && (
+        <div className="rounded-lg border border-emerald-500/20 bg-emerald-500/5 px-3 py-2 text-[11px] text-[#C9D1D9]">
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="text-emerald-300 font-medium">Actor:</span>
+            <span>{actorLabel ?? actorKey ?? actorId}</span>
+            {actorId && <span className="font-mono text-[#7D8590]">({actorId})</span>}
+          </div>
+          {outputType && <div className="text-[#7D8590] mt-0.5">Output: {outputType}</div>}
+        </div>
+      )}
       <div className="flex items-center gap-2 text-[11px] text-[#7D8590] flex-wrap">
         <span className="px-2 py-0.5 rounded-md border border-emerald-500/20 bg-emerald-500/10 text-emerald-300">
           {total} result{total === 1 ? '' : 's'}
         </span>
-        {actor && <span>actor: <span className="text-[#C9D1D9] font-mono">{actor}</span></span>}
+        {actorKey && <span>key: <span className="text-[#C9D1D9] font-mono">{actorKey}</span></span>}
         {runId && <span>run: <span className="text-[#C9D1D9] font-mono">{runId.slice(-8)}</span></span>}
       </div>
+
 
       <ul className="space-y-2">
         {items.map((it, i) => (

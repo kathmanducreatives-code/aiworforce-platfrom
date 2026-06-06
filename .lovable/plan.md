@@ -1,103 +1,76 @@
-## Goal
 
-Add a premium right-side "Workbench" panel to the existing `ChatWorkspace` that lets users drill into the actual outputs of each agent task and tool call (Scout, Aria, Hawk, Penn, Scribe, Apify, Firecrawl, etc.) without redesigning the rest of the app.
+## Actor Intelligence Layer
 
-No backend/RLS/edge-function changes. Pure frontend, reads existing tables.
+Goal: make Gemini / `toolInputPlanner` choose the **correct Apify actor or tool chain** for each request, including ambiguous "find engineers in London" prompts. No UI redesign, no backend project changes, no removed systems.
 
-## UX
+### 1. New file — `supabase/functions/_shared/actorRegistry.ts`
 
-- New panel docked to the right inside `ChatWorkspace`, opened by:
-  - clicking a task row in `ExecutionPlanCard`
-  - clicking a `ToolStatusBadge` (e.g. "Apify · 10 results")
-  - explicit "Open output" / "View results" buttons we add to rows
-- Desktop: resizable split (chat left, Workbench right, default ~42% width, min 360px, collapsible via close button).
-- Mobile: opens as a full-screen drawer over the chat.
-- State lives in `ChatWorkspaceContext` as `selectedOutput { planId, taskId?, agentSlug?, toolCallId? }`.
+Single source of truth describing each available actor/tool in natural language. Exports:
 
-`ExecutionPlanCard` stays compact — detailed result rendering moves into Workbench.
+- `ACTOR_REGISTRY` — the spec from the user message (`apify_jobs`, `apify_indeed_jobs`, `apify_website_content`, `apify_custom_web`, `firecrawl_scrape_url`, `search_web`, `people_profile_actor`).
+- `getEnabledActors()` — filters by `enabled` and by env keys present (`APIFY_API_TOKEN`, `FIRECRAWL_API_KEY`).
+- `getActorByKey(key)` and `resolveActorForSourceType(source_type)`.
+- `summarizeRegistryForPrompt()` — compact string fed into the Gemini planner prompt (label, best_for, not_for, example_user_requests, enabled flag).
+- `PEOPLE_INTENT_RE` / `JOBS_INTENT_RE` regexes for the disambiguation rules in step 3.
 
-## Files to add
+Actor metadata kept exactly as proposed; `enabled: true` only for `apify_jobs` and `firecrawl_scrape_url`. `people_profile_actor` carries `missing_message`.
 
-```
-src/components/chat/workspace/workbench/
-  WorkbenchPanel.tsx          // dock container, resize, close
-  WorkbenchHeader.tsx         // plan title, agent, task, status, tool, source, timestamp
-  WorkbenchTabs.tsx           // Summary / Results / Raw / Reasoning / Next Actions (hide empty)
-  AgentOutputViewer.tsx       // routes to per-agent view based on agent_slug
-  ScoutResultsView.tsx        // Apify/Firecrawl jobs+companies cards
-  AriaRankingView.tsx         // ranked leads, score, Hot/Warm/Maybe/Ignore
-  HawkResearchView.tsx        // Firecrawl markdown, signals, sources
-  PennDraftView.tsx           // outreach drafts + approval status
-  ScribeReportView.tsx        // final report with copy
-  RawJsonView.tsx             // collapsed JSON tree
-  OutputActionBar.tsx         // chat-prefill actions ("Send to Aria", "Enrich top 3"…)
-  useWorkbenchData.ts         // hook merging task + tool_calls + approvals + activity for selection
-  normalize.ts                // safe shape detection (extends src/lib/outputShape.ts)
-```
+### 2. Update `supabase/functions/_shared/toolInputPlanner.ts`
 
-## Files to edit
+- Extend `ToolInput` with `selected_actor_key: string | null`, `reason: string | null`, and keep existing fields.
+- Inject `summarizeRegistryForPrompt()` into `PLANNER_PROMPT` and require Gemini to return the new JSON shape (`intent`, `selected_tool`, `selected_actor_key`, `source_type`, `reason`, …).
+- After AI merge, validate `selected_actor_key` against `ACTOR_REGISTRY`. If unknown or disabled → fall back deterministically:
+  - URL in prompt → `firecrawl_scrape_url`.
+  - Hiring/companies language → `apify_jobs`.
+  - People-only language with no people actor configured → `selected_actor_key = null`, `tool_name = null`, `ask_clarification = true`, `clarification` from `people_profile_actor.missing_message` + "Want me to find companies hiring instead?".
+  - Ambiguous role+location ("find 10 engineers in London") → `ask_clarification = true` with the people-vs-companies question from spec step 3, while pre-selecting `apify_jobs` as the proceed-if-confirmed default.
+- Replace the current "everything sourcing → jobs" coercion with the registry-driven decision; keep cost caps and outreach/deep escalation.
 
-- `src/contexts/ChatWorkspaceContext.tsx` — add `selectedOutput`, `setSelectedOutput`, `workbenchOpen`, `openWorkbench`, `closeWorkbench`, `workbenchWidth`, `setWorkbenchWidth`.
-- `src/components/chat/workspace/ChatWorkspace.tsx` — render `WorkbenchPanel` next to the chat column when `workbenchOpen`; mobile uses full-screen overlay.
-- `src/components/chat/workspace/plan/ExecutionPlanCard.tsx` — task row + tool badge clicks call `openWorkbench({...})` instead of (or in addition to) the existing `setView({kind:'conversation'})` jump.
-- `src/components/chat/workspace/plan/ExecutionTaskRow.tsx` — add "View output" affordance, make row clickable.
-- `src/components/chat/workspace/plan/ToolStatusBadge.tsx` — make clickable, calls `openWorkbench({ toolCallId, ... })`.
+### 3. Update `supabase/functions/orchestrate/index.ts`
 
-No edits to backend code, edge functions, RLS, or `toolRegistry`.
+- When `tool_input.selected_actor_key` is present, propagate it into `step.metadata.selected_actor_key` and `step.metadata.actor_reason` (no overwrite of generic `source_type`).
+- Multi-tool expansion:
+  - "enrich top N" / "analyze website" language after a sourcing step → append a Hawk step with `tool_needed: scrape_url` and `metadata.selected_actor_key = firecrawl_scrape_url`.
+  - "draft outreach" / "send" → keep existing Penn step.
+  - URL-only prompt → Hawk Firecrawl first, optional Scout only if hiring/discovery language is also present.
+- Connector-missing messages: extend `TOOL_LIMITATION_MESSAGE` and `annotateTools` to read from the registry so `people_profile_actor` surfaces the configured `missing_message` instead of running silently.
 
-## Data sources (read-only)
+### 4. Update `supabase/functions/run-agent/index.ts` and `toolRegistry.ts`
 
-Reuse existing hooks/queries from `src/lib/orchestration.ts`:
-- `tasks` → `output`, `payload`, `status`, `agent_id`, `description`
-- `tool_calls` → `tool_name`, `provider`, `input_json`, `output_json`, `status`, `error`, `metadata` (where present)
-- `approvals` → status / title / description for Penn drafts
-- `activity_feed` → timeline entries for the selected task
-- `agents` → slug/name for header
+- `run-agent`: prefer `tool_input_body.selected_actor_key` (or `task.payload.metadata.selected_actor_key`) when resolving Apify; pass it into `runTool("source_with_apify", { selected_actor_key, source_type, … })`.
+- `toolRegistry.execSourceWithApify`: accept `selected_actor_key`, look it up in the registry, then in `APIFY_ACTORS`. If still missing or disabled, return `{ ok: false, unavailable: true, error: "actor_missing", data: { actor_key, source_type, reason, configured_actor_keys } }` (clear payload for Workbench).
+- Keep `OPT_IN_ONLY_ACTOR_IDS` and existing alias map; the registry overrides aliases only when an explicit `selected_actor_key` is passed.
 
-`useWorkbenchData(planId, selection)` selects the matching task + latest tool_call + approval + scoped activity from already-loaded `usePlanDetail`.
+### 5. UI transparency — minimal surface changes
 
-## Per-agent rendering
+No redesign. Two small additions:
 
-Selection routed by `agent_slug` (fallback to tool provider when no agent):
-- **scout** → `ScoutResultsView`. Parses `tool_calls.output_json` for Apify jobs (`items[]` with company/title/location/url) and renders cards + table; raw items collapsed.
-- **aria** → `AriaRankingView`. Reads structured `tasks.output.rankings` if present, otherwise renders parsed markdown with Hot/Warm/Maybe/Ignore badges.
-- **hawk** → `HawkResearchView`. Renders Firecrawl markdown + extracted signals + source URLs.
-- **penn** → `PennDraftView`. Subject + body + LinkedIn note + approval pill. Approve/Reject buttons only when a pending `approval` row exists; calls existing `decideApproval()`.
-- **scribe** → `ScribeReportView`. Markdown + copy.
-- fallback → `RawJsonView`.
+- `ExecutionPlanCard.tsx` / `ExecutionTaskRow.tsx`: when `task.payload.metadata.selected_actor_key` exists, render the actor label + one-line `actor_reason` under the existing tool badge ("Apify Jobs — selected because this asks for hiring signals by role/location").
+- `workbench/WorkbenchHeader.tsx` and `ScoutResultsView.tsx`: show actor label, actor_id, `output_type`, and reason as a small `Actor` section above the result list. Read from `toolCall.input_json.selected_actor_key` → registry, falling back to `toolCall.metadata`.
+- When the planner returned `ask_clarification`, the Pilot chat already surfaces the question; nothing new here besides making sure orchestrate does not auto-execute when `requires_clarification = true`.
 
-Tool-call selection (no agent context) → render by `provider`: `apify` → ScoutResultsView; `firecrawl` → HawkResearchView; others → RawJsonView.
+### 6. Verification
 
-## OutputActionBar
+After deploy, run all 6 verification prompts from the spec against `agentory.space` and capture:
+- selected_actor_key returned by planner
+- step.metadata stored on the plan
+- actor + reason rendered in Execution Plan Card and Workbench
+- whether clarification was asked (tests 2, 3) and whether jobs actor was suppressed (test 3)
+- whether multi-actor plan was produced (tests 4, 6) and whether Firecrawl ran first (test 5).
 
-Buttons prefill the chat composer via existing `ChatComposerPro` (text dispatch) — no new backend calls:
-- "Send to Aria for ranking"
-- "Enrich top 3"
-- "Draft outreach with Penn"
-- "Save to leads" (disabled placeholder if signal table absent)
+### Files changed
 
-## Empty / error states
+- **Add:** `supabase/functions/_shared/actorRegistry.ts`
+- **Edit:** `supabase/functions/_shared/toolInputPlanner.ts`
+- **Edit:** `supabase/functions/_shared/toolRegistry.ts`
+- **Edit:** `supabase/functions/orchestrate/index.ts`
+- **Edit:** `supabase/functions/run-agent/index.ts`
+- **Edit:** `src/components/chat/workspace/plan/ExecutionPlanCard.tsx`
+- **Edit:** `src/components/chat/workspace/plan/ExecutionTaskRow.tsx`
+- **Edit:** `src/components/chat/workspace/workbench/WorkbenchHeader.tsx`
+- **Edit:** `src/components/chat/workspace/workbench/ScoutResultsView.tsx`
+- **Deploy:** `toolInputPlanner`, `toolRegistry`, `orchestrate`, `run-agent` (via deploy of `orchestrate`, `run-agent`, `pilot-chat` which import the shared files).
 
-- No task selected → empty hero "Pick a step or tool to view its output."
-- Task running, no output yet → "Output not available yet. The agent may still be working."
-- Tool call failed → red card with `error` text + Retry button hidden for v1 (safe: just show message).
-- Old/missing metadata → fallback to RawJsonView or empty message; never crash (wrapped in `ChatErrorBoundary`).
+### Out of scope
 
-## Realtime
-
-No new channels — `usePlanDetail` already subscribes to plans/tasks/tool_calls/approvals/activity. The Workbench re-renders from the same store. Add a manual "Refresh" button in the header as backup.
-
-## Visual style
-
-Reuse existing Verdant tokens (`bg-background`, `border-white/[0.06]`, emerald accents). Glassmorphic header, badge row, tabs styled like existing plan card. No hardcoded hex.
-
-## Verification
-
-1. "Find 10 engineers in London" → click Apify badge → Workbench shows 10 normalized job/company cards + raw JSON tab.
-2. "Find companies hiring marketing roles in London and draft outreach" → Scout, Aria, Penn tabs/views all reachable; Penn shows pending approval pill; no auto-send.
-3. "Hawk, scrape https://stripe.com/jobs…" → Firecrawl badge opens Hawk view with markdown + sources.
-4. Old conversation with missing `output` → Workbench shows "Output not available yet." with no crash.
-
-## Out of scope
-
-No changes to: ChatWorkspace chat logic, ExecutionPlanCard status semantics, orchestrate/run-agent/pilot-chat edge functions, toolRegistry, approvals backend, Daily Brief, Apify/Firecrawl actor config, RLS policies, secrets.
+No new tables, no RLS changes, no secret changes, no removal of existing tools/agents/UI surfaces, no new people-profile actor (kept disabled with `missing_message`).

@@ -41,6 +41,11 @@ export default function ExecutionTaskRow({
   const success: string | null = payload.success_criteria ?? null;
   const requiresApproval: boolean = !!payload.requires_approval;
   const title: string = payload.task_title ?? task.description ?? `Step ${index + 1}`;
+  const metaToolInput = (payload.metadata?.tool_input ?? payload.tool_input ?? null) as
+    | { selected_actor_key?: string | null; reason?: string | null }
+    | null;
+  const actorKey = metaToolInput?.selected_actor_key ?? null;
+  const actorReason = metaToolInput?.reason ?? null;
 
   const canOpenOutput =
     !!onOpenOutput && (task.status === 'complete' || task.status === 'failed' || !!latestToolCall);
@@ -71,6 +76,16 @@ export default function ExecutionTaskRow({
           {success && <div><span className="text-[#7D8590]">Done when:</span> {success}</div>}
         </div>
       )}
+
+      {(actorKey || actorReason) && (
+        <div className="mt-2 pl-1 text-[11px] text-emerald-300/90">
+          {actorKey && <span className="font-mono">{actorKey}</span>}
+          {actorKey && actorReason && <span className="text-[#7D8590]"> — </span>}
+          {actorReason && <span className="text-[#C9D1D9]">{actorReason}</span>}
+        </div>
+      )}
+
+
 
       <div className="mt-2 flex flex-wrap items-center gap-1.5">
         {(toolNeeded || latestToolCall) && (
