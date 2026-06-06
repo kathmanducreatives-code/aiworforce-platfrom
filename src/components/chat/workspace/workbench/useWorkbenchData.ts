@@ -16,6 +16,7 @@ export interface WorkbenchData {
   allToolCalls: DBToolCall[];
   approval: DBApproval | null;
   activity: DBActivity[];
+  refresh: () => void;
 }
 
 export function useWorkbenchData(selection: WorkbenchSelection | null): WorkbenchData {
