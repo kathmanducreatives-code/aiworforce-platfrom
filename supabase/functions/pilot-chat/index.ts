@@ -206,6 +206,12 @@ Deno.serve(async (req) => {
   const SUPABASE_ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY")!;
   const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 
+  console.log("[pilot-chat] people_actor_runtime", {
+    apify_token: !!Deno.env.get("APIFY_API_TOKEN"),
+    enable_people: Deno.env.get("APIFY_ENABLE_PEOPLE_SEARCH") ?? null,
+    actor_override: Deno.env.get("APIFY_ACTOR_PEOPLE_SEARCH") ?? null,
+  });
+
 
   // 1. JWT → user_id
   const authHeader = req.headers.get("Authorization");
