@@ -206,6 +206,12 @@ Deno.serve(async (req) => {
   const SUPABASE_ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY")!;
   const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 
+  console.log("[pilot-chat] people_actor_runtime", {
+    apify_token: !!Deno.env.get("APIFY_API_TOKEN"),
+    enable_people: Deno.env.get("APIFY_ENABLE_PEOPLE_SEARCH") ?? null,
+    actor_override: Deno.env.get("APIFY_ACTOR_PEOPLE_SEARCH") ?? null,
+  });
+
 
   // 1. JWT → user_id
   const authHeader = req.headers.get("Authorization");
@@ -280,6 +286,105 @@ Deno.serve(async (req) => {
     role: "user",
     content: message,
   });
+
+  // 5a. Resolve pending clarification (people-vs-companies) BEFORE classifying intent.
+  // Look at the most recent assistant message in this conversation.
+  {
+    const { data: lastAssistant } = await admin
+      .from("messages")
+      .select("id, metadata")
+      .eq("conversation_id", conversationId)
+      .eq("role", "assistant")
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    const meta: any = lastAssistant?.metadata ?? null;
+    if (meta && meta.pending_clarification === true) {
+      const reply = message.toLowerCase();
+      const peopleRe = /\b(individual|individuals|profiles?|people|candidates?|persons?|linkedin profiles?)\b/i;
+      const companiesRe = /\b(compan(?:y|ies)|hiring|jobs?|roles?|openings?|careers?|recruit)\b/i;
+      const wantsPeople = peopleRe.test(reply);
+      const wantsCompanies = companiesRe.test(reply);
+
+      let resolved: { kind: "people" | "companies"; action: ToolInput } | null = null;
+      if (wantsPeople && !wantsCompanies && meta.people_action) {
+        resolved = { kind: "people", action: meta.people_action as ToolInput };
+      } else if (wantsCompanies && !wantsPeople && meta.companies_action) {
+        resolved = { kind: "companies", action: meta.companies_action as ToolInput };
+      } else if (wantsPeople && !wantsCompanies && !meta.people_action && meta.companies_action) {
+        // People requested but unavailable — surface fallback offer, do not run silently.
+        const fallbackMsg =
+          "Individual people/profile sourcing isn't configured yet. I can find companies hiring for that role instead — reply \"companies\" to proceed.";
+        const { data: saved } = await admin
+          .from("messages")
+          .insert({
+            conversation_id: conversationId,
+            role: "assistant",
+            content: fallbackMsg,
+            agent_slug: "pilot",
+            model_used: "google/gemini-3-flash-preview",
+            metadata: {
+              ...meta,
+              pending_clarification: true,
+              clarification_type: "people_unavailable",
+              prompt_version: AGENTORY_SYSTEM_PROMPT_VERSION,
+            },
+          })
+          .select("*")
+          .single();
+        return json({ type: "reply", conversation_id: conversationId, clarification: true, message: saved });
+      }
+
+      if (resolved) {
+        // Mark prior message resolved.
+        if (lastAssistant?.id) {
+          const nextMeta = { ...meta };
+          delete nextMeta.pending_clarification;
+          nextMeta.resolved_with = resolved.kind;
+          await admin.from("messages").update({ metadata: nextMeta }).eq("id", lastAssistant.id);
+        }
+        const originalInstruction: string = typeof meta.original_request === "string" && meta.original_request.trim()
+          ? meta.original_request
+          : message;
+        return await delegateToOrchestrate({
+          admin,
+          SUPABASE_URL,
+          SUPABASE_ANON_KEY,
+          authHeader,
+          conversationId,
+          workspaceId,
+          instruction: originalInstruction,
+          toolInput: resolved.action,
+          modelUsed: "google/gemini-3-flash-preview",
+          providerUsed: "lovable-ai",
+        });
+      }
+
+      if (!wantsPeople && !wantsCompanies) {
+        // Couldn't classify — ask once more, preserve context.
+        const reAsk = "Please choose one: individual profiles or companies hiring.";
+        const { data: saved } = await admin
+          .from("messages")
+          .insert({
+            conversation_id: conversationId,
+            role: "assistant",
+            content: reAsk,
+            agent_slug: "pilot",
+            model_used: "google/gemini-3-flash-preview",
+            metadata: {
+              ...meta,
+              pending_clarification: true,
+              prompt_version: AGENTORY_SYSTEM_PROMPT_VERSION,
+            },
+          })
+          .select("*")
+          .single();
+        return json({ type: "reply", conversation_id: conversationId, clarification: true, message: saved });
+      }
+      // If both matched, fall through to normal planner.
+    }
+  }
 
   // 5b. Daily-brief intent: deterministic route to daily-brief function.
   const DAILY_BRIEF_RE =
@@ -385,7 +490,17 @@ Deno.serve(async (req) => {
           content: q,
           agent_slug: "pilot",
           model_used: "google/gemini-3-flash-preview",
-          metadata: { intent: intentResult.intent, clarification: true, missing_fields: toolInput.missing_fields },
+          metadata: {
+            intent: intentResult.intent,
+            clarification: true,
+            missing_fields: toolInput.missing_fields,
+            pending_clarification: !!(toolInput.people_action || toolInput.companies_action),
+            clarification_type: toolInput.clarification_type ?? "generic",
+            original_request: message,
+            people_action: toolInput.people_action ?? null,
+            companies_action: toolInput.companies_action ?? null,
+            prompt_version: AGENTORY_SYSTEM_PROMPT_VERSION,
+          },
         })
         .select("*")
         .single();
