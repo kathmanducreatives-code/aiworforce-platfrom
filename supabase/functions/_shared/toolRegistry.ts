@@ -383,6 +383,24 @@ const APIFY_ACTORS: Record<string, ApifyActorCfg> = {
     enabled_by_default: false,
     use_for: ["individual people/candidate profile search (opt-in only)"],
     description: "LinkedIn profile search — restricted, opt-in only",
+    input_adapter: ({ query, location, role_keywords, max_results, user_input }) => {
+      const kwFromRoles = Array.isArray(role_keywords) && role_keywords.length > 0
+        ? role_keywords.join(" ")
+        : null;
+      const searchQuery = (user_input?.searchQuery as string | undefined)
+        ?? (user_input?.query as string | undefined)
+        ?? kwFromRoles
+        ?? query
+        ?? "";
+      const maxItems = Math.max(1, Math.min(25, max_results || 10));
+      return {
+        searchQuery,
+        location: location ?? undefined,
+        maxItems,
+        profileScraperMode: (user_input?.profileScraperMode as string | undefined) ?? "Short",
+        ...user_input,
+      };
+    },
   },
   profile_enrichment: {
     actor_id: "atomus/linkedin-profile-scraper",
