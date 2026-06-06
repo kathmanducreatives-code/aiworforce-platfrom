@@ -78,10 +78,18 @@ export default function ExecutionTaskRow({
       )}
 
       {(actorKey || actorReason) && (
-        <div className="mt-2 pl-1 text-[11px] text-emerald-300/90">
+        <div className="mt-2 pl-1 text-[11px] text-emerald-300/90 flex items-center gap-2 flex-wrap">
           {actorKey && <span className="font-mono">{actorKey}</span>}
-          {actorKey && actorReason && <span className="text-[#7D8590]"> — </span>}
-          {actorReason && <span className="text-[#C9D1D9]">{actorReason}</span>}
+          {(() => {
+            const err = (latestToolCall?.error ?? '') as string;
+            const disabled = err === 'actor_missing' || err === 'actor_key_unknown' || err === 'apify_actor_disabled_by_default';
+            return disabled ? (
+              <span className="text-[10px] px-1.5 py-0.5 rounded border border-amber-500/30 bg-amber-500/10 text-amber-300">
+                disabled
+              </span>
+            ) : null;
+          })()}
+          {actorReason && <span className="text-[#C9D1D9]">— {actorReason}</span>}
         </div>
       )}
 
