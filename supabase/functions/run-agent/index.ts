@@ -220,9 +220,14 @@ Deno.serve(async (req) => {
           apifyContext = `APIFY SOURCING (run ${d.run_id ?? "?"} — ${d.total ?? sample.length} results):\n${d.summary ?? ""}${lens}\n\nITEMS:\n${JSON.stringify(sample, null, 2).slice(0, 8000)}`;
         } else if (r.unavailable) {
           const dbg = (r.data ?? {}) as Record<string, unknown>;
-          const reason = r.error === "apify_actor_not_configured"
-            ? `Apify is connected, but no actor is configured for source_type=${source_type} (requested=${raw_source_type ?? "null"}, expected_actor_key=${dbg.expected_actor_key ?? source_type}).`
-            : `Apify unavailable (${r.error ?? "not configured"}).`;
+          let reason: string;
+          if (r.error === "actor_missing" || r.error === "actor_key_unknown") {
+            reason = `Actor missing: ${dbg.actor_key ?? planned_actor_key ?? "(none)"} — ${dbg.reason ?? r.error}. Configured: ${Array.isArray(dbg.configured_actor_keys) ? (dbg.configured_actor_keys as string[]).join(", ") : "n/a"}.`;
+          } else if (r.error === "apify_actor_not_configured") {
+            reason = `Apify is connected, but no actor is configured for source_type=${source_type} (requested=${raw_source_type ?? "null"}, expected_actor_key=${dbg.expected_actor_key ?? source_type}).`;
+          } else {
+            reason = `Apify unavailable (${r.error ?? "not configured"}).`;
+          }
           toolNotices.push(reason);
         } else if (!r.ok) {
           toolNotices.push(`Apify failed: ${r.error ?? "unknown"}.`);
