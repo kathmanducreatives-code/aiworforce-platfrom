@@ -17,6 +17,7 @@ import {
   LINKEDIN_PROFILE_URL_RE,
   URL_RE,
 } from "./actorRegistry.ts";
+import { getAgentorySystemPrompt, AGENTORY_SYSTEM_PROMPT_VERSION } from "./agentorySystemPrompt.ts";
 
 export type ExecutionMode = "fast" | "deep" | "outreach";
 export type ToolName = "source_with_apify" | "scrape_url" | "search_web" | null;
