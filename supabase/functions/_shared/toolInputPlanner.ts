@@ -133,6 +133,14 @@ export function fallbackParse(prompt: string, intent: Intent | string): ToolInpu
     source_type = "advanced_jobs";
     reason = "Advanced/boolean LinkedIn job search requested.";
   } else if (
+    PEOPLE_INTENT_RE.test(prompt)
+    && !COMPANY_INTENT_RE.test(prompt)
+  ) {
+    tool_name = "source_with_apify";
+    selected_actor_key = "apify_people_search";
+    source_type = "people_profiles";
+    reason = "Explicit individual/people/profile language — LinkedIn Profile Search actor.";
+  } else if (
     intent === "source_signals" ||
     COMPANY_INTENT_RE.test(prompt) ||
     /\b(find|source|leads|prospects|candidates|engineers?|developers?|marketers?|people)\b/i.test(prompt)
