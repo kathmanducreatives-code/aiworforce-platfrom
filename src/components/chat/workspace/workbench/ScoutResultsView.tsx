@@ -17,7 +17,7 @@ export default function ScoutResultsView({ output }: { output: any }) {
     );
   }
 
-  const total = typeof output?.total === 'number' ? output.total : items.length;
+  const total = typeof output?.total === 'number' ? output.total : (peopleMode ? people.length : items.length);
   const runId = typeof output?.run_id === 'string' ? output.run_id : null;
   const actorId = output?.actor_id ?? null;
   const actorLabel: string | null = output?.actor_label ?? null;
