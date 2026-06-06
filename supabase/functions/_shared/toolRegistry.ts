@@ -724,10 +724,14 @@ async function execSourceWithApify(input: unknown): Promise<ToolResult> {
   const items = rawItems.slice(0, max_results).map((r) => normalizeApifyItem(r, source_type));
   const citations = items.map((it) => it.url).filter((u): u is string => !!u).slice(0, 10);
 
+  const registryEntry = registry_actor_key ? getActorByKey(registry_actor_key) : null;
   return {
     ok: true,
     data: {
       actor_id,
+      selected_actor_key: registry_actor_key,
+      actor_label: registryEntry?.label ?? null,
+      actor_output_type: registryEntry?.output_type ?? null,
       requested_source_type,
       normalized_source_type: source_type,
       expected_actor_key: source_type,
