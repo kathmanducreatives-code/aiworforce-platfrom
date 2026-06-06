@@ -9,6 +9,7 @@
 //   import { runTool } from "../_shared/toolRegistry.ts";
 
 import type { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { ACTOR_REGISTRY, getActorByKey, isActorRuntimeEnabled } from "./actorRegistry.ts";
 
 export interface ToolContext {
   admin: SupabaseClient;
