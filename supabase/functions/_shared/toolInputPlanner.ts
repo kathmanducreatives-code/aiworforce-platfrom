@@ -396,34 +396,89 @@ export async function planToolInput(
   // ---- People-intent guard (independent of AI) ----
   const explicitPeople = PEOPLE_INTENT_RE.test(prompt)
     && !/\bhiring\b|\bcompan(?:y|ies)\b|\bjobs?\b/i.test(prompt);
-  if (explicitPeople && !isActorRuntimeEnabled(ACTOR_REGISTRY.apify_people_search)) {
+  const peopleActorEnabled = isActorRuntimeEnabled(ACTOR_REGISTRY.apify_people_search);
+  if (explicitPeople && !peopleActorEnabled) {
     const msg = ACTOR_REGISTRY.apify_people_search.missing_message!;
     merged.ask_clarification = true;
     merged.clarification = merged.clarification
       ?? `${msg} Want me to find companies hiring for that role instead?`;
+    merged.clarification_type = "people_unavailable";
     merged.selected_actor_key = null;
     merged.tool_name = null;
     merged.source_type = null;
     merged.reason = msg;
   }
 
-  // ---- Ambiguous role+location ----
+  // ---- Ambiguous role+location (case-insensitive, location-aware) ----
+  const hasRoleWord = /\b(engineers?|developers?|marketers?|designers?|founders?|recruiters?|sales|sdrs?|bdrs?|people)\b/i.test(prompt);
+  const hasLocationHint = !!merged.location || /\bin\s+[\w-]+/i.test(prompt);
   const ambiguousRoleLoc =
     !explicitPeople
-    && /\b(engineers?|developers?|marketers?|designers?|founders?|recruiters?|people)\b/i.test(prompt)
-    && /\bin\s+[A-Z]/.test(prompt)
+    && hasRoleWord
+    && hasLocationHint
     && !COMPANY_INTENT_RE.test(prompt)
     && !/\bindividual\b/i.test(prompt);
   if (ambiguousRoleLoc && !merged.ask_clarification) {
     const role = (merged.role_keywords[0] ?? "people");
     const loc = merged.location ?? "that location";
+    const peopleOption = peopleActorEnabled
+      ? `individual ${role} profiles`
+      : `individual ${role} profiles (not configured yet)`;
     merged.ask_clarification = true;
-    merged.clarification =
-      `Do you want individual ${role} profiles, or companies hiring ${role}s in ${loc}? I can currently source companies/jobs via Apify Jobs.`;
-    merged.selected_actor_key = merged.selected_actor_key ?? "apify_jobs";
-    merged.tool_name = "source_with_apify";
-    merged.source_type = "jobs";
-    merged.reason = merged.reason ?? "Ambiguous role+location prompt — defaulting to companies hiring if confirmed.";
+    merged.clarification = `Do you want ${peopleOption}, or companies hiring ${role}s in ${loc}?`;
+    merged.clarification_type = "people_vs_companies";
+    // Do NOT pre-commit a tool while waiting on the user.
+    merged.selected_actor_key = null;
+    merged.tool_name = null;
+    merged.source_type = null;
+    merged.reason = merged.reason ?? "Ambiguous role+location prompt — awaiting people-vs-companies clarification.";
+  }
+
+  // ---- Build people_action / companies_action when a clarification is pending ----
+  if (merged.ask_clarification && (merged.clarification_type === "people_vs_companies" || merged.clarification_type === "people_unavailable")) {
+    const baseRoleKw = merged.role_keywords;
+    const baseLoc = merged.location;
+    const baseQuery = (baseRoleKw.length > 0 ? baseRoleKw.join(" ") : prompt).slice(0, 200);
+    const baseMax = merged.max_results || 10;
+
+    const companies_action: ToolInput = {
+      intent: "source_companies_hiring",
+      tool_name: "source_with_apify",
+      selected_actor_key: "apify_jobs",
+      source_type: "jobs",
+      query: baseQuery,
+      role_keywords: baseRoleKw,
+      location: baseLoc,
+      max_results: clampForActor("apify_jobs", baseMax),
+      needs_enrichment: merged.needs_enrichment,
+      needs_outreach: merged.needs_outreach,
+      execution_mode: merged.execution_mode,
+      confidence: 0.8,
+      missing_fields: [],
+      reason: "Resolved from clarification: companies hiring.",
+    };
+    merged.companies_action = companies_action;
+
+    if (peopleActorEnabled) {
+      merged.people_action = {
+        intent: "source_people_profiles",
+        tool_name: "source_with_apify",
+        selected_actor_key: "apify_people_search",
+        source_type: "people_profiles",
+        query: baseQuery,
+        role_keywords: baseRoleKw,
+        location: baseLoc,
+        max_results: clampForActor("apify_people_search", baseMax),
+        needs_enrichment: merged.needs_enrichment,
+        needs_outreach: merged.needs_outreach,
+        execution_mode: merged.execution_mode,
+        confidence: 0.8,
+        missing_fields: [],
+        reason: "Resolved from clarification: individual profiles.",
+      };
+    } else {
+      merged.people_action = null;
+    }
   }
 
   // Low-confidence sourcing clarification gate.
