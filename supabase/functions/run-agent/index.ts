@@ -159,25 +159,23 @@ Deno.serve(async (req) => {
 
     // 2) Apify sourcing — sourcing-intent instructions on scout (and jobs/companies on hawk).
     const sourcingRe = /\b(find|source|sourcing|discover|prospects?|leads?|founders?|companies|hiring|job openings|roles|recruit(?:ers?|ing)|candidates?|engineers?|marketers?|linkedin posts?|comments?)\b/i;
+    const planned_actor_key: string | null = tool_input_body?.selected_actor_key ?? null;
     const shouldUseApify = tool_input_body?.tool_name === "source_with_apify" ||
+      !!planned_actor_key ||
       sourcingRe.test(`${instruction ?? ""} ${input ?? ""}`);
 
     if (shouldUseApify) {
-      // Prefer tool_input (planned upstream); fall back to lightweight regex parse.
       const raw_source_type: string | null = tool_input_body?.source_type ?? null;
       let source_type = normalizeApifySourceType(raw_source_type);
-      if (!raw_source_type) {
+      if (!raw_source_type && !planned_actor_key) {
         const text = `${instruction ?? ""} ${input ?? ""}`.toLowerCase();
-        // No people/profile actor configured yet — everything sourcing-shaped maps to jobs.
         if (/\b(hiring|job openings?|jobs?|roles?|engineers?|marketers?|developers?|candidates?|people|companies|founders?|prospects?|startups?|orgs?)\b/.test(text)) {
           source_type = "jobs";
         } else if (/\blinkedin\b|\bposts?\b|\bcomments?\b/.test(text)) {
-          // No posts/comments actor yet — degrade to jobs hiring lens.
           source_type = "jobs";
         }
       }
 
-      // Both scout and hawk may run the jobs actor.
       const shouldRun = agent_slug === "scout" || agent_slug === "hawk";
 
       if (shouldRun) {
@@ -198,6 +196,7 @@ Deno.serve(async (req) => {
         }
 
         const apifyInput = {
+          selected_actor_key: planned_actor_key ?? undefined,
           source_type,
           search_goal: tool_input_body?.query ?? instruction,
           query: tool_input_body?.query ?? instruction,
