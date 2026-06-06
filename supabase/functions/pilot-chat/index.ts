@@ -484,7 +484,17 @@ Deno.serve(async (req) => {
           content: q,
           agent_slug: "pilot",
           model_used: "google/gemini-3-flash-preview",
-          metadata: { intent: intentResult.intent, clarification: true, missing_fields: toolInput.missing_fields },
+          metadata: {
+            intent: intentResult.intent,
+            clarification: true,
+            missing_fields: toolInput.missing_fields,
+            pending_clarification: !!(toolInput.people_action || toolInput.companies_action),
+            clarification_type: toolInput.clarification_type ?? "generic",
+            original_request: message,
+            people_action: toolInput.people_action ?? null,
+            companies_action: toolInput.companies_action ?? null,
+            prompt_version: AGENTORY_SYSTEM_PROMPT_VERSION,
+          },
         })
         .select("*")
         .single();
