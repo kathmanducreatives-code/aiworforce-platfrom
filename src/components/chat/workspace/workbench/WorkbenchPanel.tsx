@@ -77,7 +77,7 @@ export default function WorkbenchPanel() {
         />
       )}
       <div className="flex-1 flex flex-col min-w-0 bg-[#0a0d12]">
-        <WorkbenchHeader data={data} onClose={closeWorkbench} />
+        <WorkbenchHeader data={data} onClose={closeWorkbench} onRefresh={data.refresh} />
 
         {tabs.length > 1 && (
           <div className="flex items-center gap-1 px-3 border-b border-white/[0.06]">
