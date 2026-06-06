@@ -281,6 +281,105 @@ Deno.serve(async (req) => {
     content: message,
   });
 
+  // 5a. Resolve pending clarification (people-vs-companies) BEFORE classifying intent.
+  // Look at the most recent assistant message in this conversation.
+  {
+    const { data: lastAssistant } = await admin
+      .from("messages")
+      .select("id, metadata")
+      .eq("conversation_id", conversationId)
+      .eq("role", "assistant")
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    const meta: any = lastAssistant?.metadata ?? null;
+    if (meta && meta.pending_clarification === true) {
+      const reply = message.toLowerCase();
+      const peopleRe = /\b(individual|individuals|profiles?|people|candidates?|persons?|linkedin profiles?)\b/i;
+      const companiesRe = /\b(compan(?:y|ies)|hiring|jobs?|roles?|openings?|careers?|recruit)\b/i;
+      const wantsPeople = peopleRe.test(reply);
+      const wantsCompanies = companiesRe.test(reply);
+
+      let resolved: { kind: "people" | "companies"; action: ToolInput } | null = null;
+      if (wantsPeople && !wantsCompanies && meta.people_action) {
+        resolved = { kind: "people", action: meta.people_action as ToolInput };
+      } else if (wantsCompanies && !wantsPeople && meta.companies_action) {
+        resolved = { kind: "companies", action: meta.companies_action as ToolInput };
+      } else if (wantsPeople && !wantsCompanies && !meta.people_action && meta.companies_action) {
+        // People requested but unavailable — surface fallback offer, do not run silently.
+        const fallbackMsg =
+          "Individual people/profile sourcing isn't configured yet. I can find companies hiring for that role instead — reply \"companies\" to proceed.";
+        const { data: saved } = await admin
+          .from("messages")
+          .insert({
+            conversation_id: conversationId,
+            role: "assistant",
+            content: fallbackMsg,
+            agent_slug: "pilot",
+            model_used: "google/gemini-3-flash-preview",
+            metadata: {
+              ...meta,
+              pending_clarification: true,
+              clarification_type: "people_unavailable",
+              prompt_version: AGENTORY_SYSTEM_PROMPT_VERSION,
+            },
+          })
+          .select("*")
+          .single();
+        return json({ type: "reply", conversation_id: conversationId, clarification: true, message: saved });
+      }
+
+      if (resolved) {
+        // Mark prior message resolved.
+        if (lastAssistant?.id) {
+          const nextMeta = { ...meta };
+          delete nextMeta.pending_clarification;
+          nextMeta.resolved_with = resolved.kind;
+          await admin.from("messages").update({ metadata: nextMeta }).eq("id", lastAssistant.id);
+        }
+        const originalInstruction: string = typeof meta.original_request === "string" && meta.original_request.trim()
+          ? meta.original_request
+          : message;
+        return await delegateToOrchestrate({
+          admin,
+          SUPABASE_URL,
+          SUPABASE_ANON_KEY,
+          authHeader,
+          conversationId,
+          workspaceId,
+          instruction: originalInstruction,
+          toolInput: resolved.action,
+          modelUsed: "google/gemini-3-flash-preview",
+          providerUsed: "lovable-ai",
+        });
+      }
+
+      if (!wantsPeople && !wantsCompanies) {
+        // Couldn't classify — ask once more, preserve context.
+        const reAsk = "Please choose one: individual profiles or companies hiring.";
+        const { data: saved } = await admin
+          .from("messages")
+          .insert({
+            conversation_id: conversationId,
+            role: "assistant",
+            content: reAsk,
+            agent_slug: "pilot",
+            model_used: "google/gemini-3-flash-preview",
+            metadata: {
+              ...meta,
+              pending_clarification: true,
+              prompt_version: AGENTORY_SYSTEM_PROMPT_VERSION,
+            },
+          })
+          .select("*")
+          .single();
+        return json({ type: "reply", conversation_id: conversationId, clarification: true, message: saved });
+      }
+      // If both matched, fall through to normal planner.
+    }
+  }
+
   // 5b. Daily-brief intent: deterministic route to daily-brief function.
   const DAILY_BRIEF_RE =
     /^\s*(brief me( on today)?|daily brief|today'?s (command )?brief|give me today'?s (command )?brief|what should i know today\??|what happened today\??|plan my day|what needs my attention\??)\s*[.!?]?\s*$/i;
