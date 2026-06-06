@@ -37,6 +37,43 @@ export function normalizeApifyItems(output: any): ApifyJobItem[] {
   }));
 }
 
+export interface ApifyPeopleItem {
+  full_name?: string;
+  headline?: string;
+  title?: string;
+  location?: string;
+  company?: string;
+  profile_url?: string;
+  summary?: string;
+  source?: string;
+  raw: any;
+}
+
+export function isPeopleOutput(output: any): boolean {
+  if (!output) return false;
+  if (output.normalized_source_type === 'people_profiles') return true;
+  if (output.actor_output_type === 'people_profiles') return true;
+  const list = Array.isArray(output.items) ? output.items : [];
+  if (list.length === 0) return false;
+  const first = list[0];
+  return !!(first && (first.signal_type === 'people_profile' || first.profile_url || first.full_name));
+}
+
+export function normalizeApifyPeople(output: any): ApifyPeopleItem[] {
+  if (!output) return [];
+  const list = Array.isArray(output.items) ? output.items : [];
+  return list.map((it: any) => ({
+    full_name:   it.full_name ?? it.fullName ?? it.name ?? undefined,
+    headline:    it.headline ?? undefined,
+    title:       it.title ?? it.currentJobTitle ?? it.jobTitle ?? undefined,
+    location:    it.location ?? it.geoLocation ?? undefined,
+    company:     it.company ?? it.currentCompany ?? it.companyName ?? undefined,
+    profile_url: it.profile_url ?? it.profileUrl ?? it.linkedinUrl ?? it.url ?? undefined,
+    summary:     it.summary ?? it.about ?? undefined,
+    source:      it.source ?? 'apify',
+    raw:         it,
+  }));
+
 export interface FirecrawlResult {
   url?: string;
   title?: string;
