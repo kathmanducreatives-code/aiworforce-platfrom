@@ -73,6 +73,9 @@ export function normalizeApifyPeople(output: any): ApifyPeopleItem[] {
     source:      it.source ?? 'apify',
     raw:         it,
   }));
+}
+
+
 
 export interface FirecrawlResult {
   url?: string;
