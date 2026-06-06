@@ -7,6 +7,8 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { runTool, normalizeApifySourceType } from "../_shared/toolRegistry.ts";
 import { generateText, logProviderCall } from "../_shared/aiProvider.ts";
+import { getAgentorySystemPrompt, AGENTORY_SYSTEM_PROMPT_VERSION } from "../_shared/agentorySystemPrompt.ts";
+import { summarizeRegistryForPrompt } from "../_shared/actorRegistry.ts";
 
 
 const cors = {
