@@ -247,7 +247,7 @@ export async function planToolInput(
 
   const ai = await generateJson({
     taskType: "tool_input_planning",
-    systemPrompt: PLANNER_PROMPT,
+    systemPrompt: buildPlannerSystemPrompt(),
     messages: [
       {
         role: "user",
