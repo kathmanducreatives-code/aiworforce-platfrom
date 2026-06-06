@@ -41,6 +41,11 @@ export default function ExecutionTaskRow({
   const success: string | null = payload.success_criteria ?? null;
   const requiresApproval: boolean = !!payload.requires_approval;
   const title: string = payload.task_title ?? task.description ?? `Step ${index + 1}`;
+  const metaToolInput = (payload.metadata?.tool_input ?? payload.tool_input ?? null) as
+    | { selected_actor_key?: string | null; reason?: string | null }
+    | null;
+  const actorKey = metaToolInput?.selected_actor_key ?? null;
+  const actorReason = metaToolInput?.reason ?? null;
 
   const canOpenOutput =
     !!onOpenOutput && (task.status === 'complete' || task.status === 'failed' || !!latestToolCall);
