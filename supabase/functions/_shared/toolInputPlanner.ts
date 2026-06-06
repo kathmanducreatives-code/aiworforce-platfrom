@@ -42,6 +42,9 @@ export interface ToolInput {
   reason: string | null;
   ask_clarification?: boolean;
   clarification?: string;
+  clarification_type?: "people_vs_companies" | "people_unavailable" | "generic";
+  people_action?: ToolInput | null;
+  companies_action?: ToolInput | null;
 }
 
 // ---------- Deterministic fallback parser ----------
