@@ -1,138 +1,105 @@
-
-# Smarter Intent + Clarification Memory for Actor Selection
-
 ## Goal
-Make the planner choose `apify_people_search` for unambiguous "individual profile" prompts, ask clarification only for genuinely ambiguous role+location prompts, persist both candidate actions on the clarifying assistant message, and resolve the user's next reply against that stored context — instead of re-running the planner cold.
+Upgrade the orchestrator task screen (center conversation + right Workbench) into a premium, Slack-style command center. UI/UX only — no backend, edge functions, registries, or schema changes.
 
-No UI redesign. No RLS, schema, or registry removals. Deterministic backend safety stays.
+## Scope
+- `src/components/chat/workspace/ConversationView.tsx`
+- `src/components/chat/workspace/bubbles/` (`UserBubble`, `SystemMessage`, `AgentBubble`, `HandoffRow`)
+- `src/lib/chatMessageStream.ts` (add semantic section markers — no data fetch changes)
+- `src/components/chat/workspace/workbench/` (`WorkbenchPanel`, `WorkbenchHeader`, `AgentOutputViewer`, `OutputActionBar`, new `FailureRecoveryCard`, new `SummaryView`)
 
-## Step 1 — Verify people actor at runtime
+No edits to: `useWorkbenchData`, `usePlanDetail`, `toolRegistry`, `actorRegistry`, supabase functions, normalize logic.
 
-`supabase/functions/_shared/actorRegistry.ts` already defines `apify_people_search` with `actor_id: "harvestapi/linkedin-profile-search"` and env overrides `APIFY_ACTOR_PEOPLE_SEARCH` + `APIFY_ENABLE_PEOPLE_SEARCH`. `enabled` is driven by `APIFY_ENABLE_PEOPLE_SEARCH`.
+---
 
-Action: add `best_for: "finding individual LinkedIn profiles"` to its `best_for` list (tiny clarity tweak — no behavior change). Read `APIFY_ENABLE_PEOPLE_SEARCH` and `APIFY_API_TOKEN` at boot of one diagnostic log line in `pilot-chat` to report runtime-enabled status in the final verification.
+## 1. Conversation Thread — structured workflow timeline
 
-## Step 2 — Sharper intent classification in `toolInputPlanner.ts`
+Add section grouping to `buildPlanMessages` so messages carry a `section` tag: `request | interpretation | clarification | workflow | execution | status | next_step`. `ConversationView` groups consecutive messages of the same section under a small left-rail label + thin vertical accent line (emerald for active, muted otherwise).
 
-Edits to `supabase/functions/_shared/toolInputPlanner.ts`:
+New visual primitives:
+- `SectionDivider` — uppercase label ("Workflow created", "Execution", "Recommended next step") with a hairline rule and timestamp.
+- `WorkflowSummaryCard` (system variant) — when plan is created, render a compact card showing step count, agents involved (badges), and ETA tone, replacing the plain "Plan created · N steps" line.
+- `StatusPulseRow` — shows current step name + animated emerald dot while running.
+- `NextStepHint` — at thread tail, shows Pilot's recommended next action with one inline button that prefills the composer.
 
-1. **Strengthen people-intent detection.** Update `fallbackParse` so when the prompt explicitly contains "individual / profile(s) / candidate profiles / LinkedIn profiles / people search" AND a role keyword, it selects `apify_people_search` (not `apify_jobs`). When that actor is runtime-disabled, the existing people-intent guard already converts it into a clear "not configured" clarification with companies-hiring fallback offer.
-2. **Tighten the ambiguous-prompt rule.** The current `ambiguousRoleLoc` check requires `\bin\s+[A-Z]` which misses "Find 10 engineers in London" when the AI lowercases. Replace with case-insensitive role+location detection: role keyword present, location resolved (`merged.location` truthy) OR `\bin\s+\w+`, no `COMPANY_INTENT_RE`, no `PEOPLE_INTENT_RE`. Result: clarification triggers reliably.
-3. **Stop pre-committing to jobs on ambiguity.** When `ambiguousRoleLoc` fires, set `selected_actor_key=null`, `tool_name=null`, `source_type=null` so the orchestrator doesn't silently run jobs while waiting. Add two new fields to `ToolInput`:
-   - `people_action?: ToolInput`
-   - `companies_action?: ToolInput`
-   Build both from the parsed `role_keywords`, `location`, `max_results` (clamped via `clampForActor` for each actor). `companies_action` always populated; `people_action` populated only when `apify_people_search` is runtime-enabled. The clarification question references whichever options are actually available.
-4. **PLANNER_JSON_TAIL rule updates.** Add rules 7a/7b: explicit "individual"/"profile"/"candidate" + role → `apify_people_search`; if disabled, set `requires_clarification=true` with people-not-configured + companies-fallback offer. Rule 9 stays for ambiguous prompts but now must populate both `people_action` and `companies_action` in the returned JSON (extend schema). Keep deterministic post-validation as the final authority.
+Spacing: tighten vertical rhythm (space-y-3 → grouped sections with internal space-y-2, between-section space-y-5), add max-w-3xl content column centered to kill empty black space, soft inner gradient on the scroll container.
 
-## Step 3 — Persist clarification context
+## 2. Workbench Header upgrade
 
-In `supabase/functions/pilot-chat/index.ts`, when `toolInput.ask_clarification` is true, expand the assistant-message `metadata` payload (already saved at line ~388) to:
+Rework `WorkbenchHeader` to show a richer meta row:
+`Task title` (h2) → badges row: `AgentBadge · ToolBadge · WorkflowTypeBadge · StatusBadge · updatedAt`.
+- Workflow type derived from `toolCall.tool_name` / `output.actor_output_type` (people_search, jobs_search, scrape, draft, rank) — pure presentational mapping.
+- Status badge color-coded (existing tone map extended for `failed` to use the recovery palette).
+- Show secondary line: "Last updated 4:26 PM · Run abc12345".
 
-```json
-{
-  "intent": "...",
-  "clarification": true,
-  "pending_clarification": true,
-  "clarification_type": "people_vs_companies" | "people_unavailable" | "generic",
-  "original_request": "<user message>",
-  "people_action": { ToolInput | null },
-  "companies_action": { ToolInput | null },
-  "prompt_version": AGENTORY_SYSTEM_PROMPT_VERSION
-}
-```
+## 3. Workbench Tabs
 
-`clarification_type` is derived: "people_vs_companies" when both actions exist; "people_unavailable" when only companies_action exists and the prompt was explicitly people-intent; otherwise "generic". No schema change needed — `messages.metadata` is `jsonb`.
+Replace current 1–3 tab logic with a fixed 4-tab set: `Summary | Results | Activity | Raw`.
+- `Summary` (new `SummaryView`) — plain-English narration built from task/toolCall fields (what was requested, what ran, outcome, counts, next suggested action). No backend calls; pure derivation.
+- `Results` — existing `AgentOutputViewer` (success path only; failure routed to recovery card — see §4).
+- `Activity` — existing list, restyled with timeline dots.
+- `Raw` — existing `RawJsonView` forced open, plus raw error code chip when failed.
 
-## Step 4 — Resolve clarification replies in `pilot-chat`
+Default tab: `Summary` on success, `Summary` on failure (with prominent recovery card embedded), `Results` if user explicitly opened from a results step.
 
-Before calling `classifyIntent(message)` on a new turn, query the **last assistant message** in this `conversation_id`:
+## 4. Failure state — designed recovery card
 
-```sql
-select id, metadata from messages
-where conversation_id = $1 and role = 'assistant'
-order by created_at desc limit 1
-```
+New `FailureRecoveryCard` shown in Summary tab when `toolCall.status === 'failed'` or `'unavailable'`:
+- Friendly title mapped from error code (e.g. `apify_unauthorized` → "Apify connection needs attention").
+- Body explanation.
+- Metadata grid: Tool, Step, Error type.
+- Recovery actions (buttons emit `chat:prefill` events, matching existing `OutputActionBar` pattern — no new wiring):
+  - Retry run → `@Pilot retry the last step`
+  - Reconnect Apify → opens `/settings/integrations` route if present, else prefill
+  - Switch sourcing method → `@Pilot use an alternative sourcing method`
+  - Ask Pilot for alternative → `@Pilot suggest an alternative approach`
+- Raw code (`apify_unauthorized`) shown as small mono chip; full payload remains in Raw tab.
 
-If `metadata.pending_clarification === true`, run a small `resolveClarificationReply(text, metadata)` helper (new, local to `pilot-chat/index.ts`):
+Error-code → friendly-copy map kept in a small local `errorCopy.ts` lookup (presentation only).
 
-- People keywords regex: `\b(individual|individuals|profiles?|people|candidates?|persons?|linkedin profiles?)\b` OR a bare "engineers|developers|founders|marketers|designers" reply when the original request already named that role.
-- Companies keywords regex: `\b(companies?|hiring|jobs?|roles?|openings?|careers?|recruit)\b`.
-- If people match AND `metadata.people_action` exists → use that ToolInput.
-- If companies match AND `metadata.companies_action` exists → use that ToolInput.
-- If people match but `people_action` is null → reply with the people-unavailable message + companies fallback offer; if user confirms next turn, run companies_action.
-- If unclear → ask once: "Please choose one: individual profiles or companies hiring." Re-save the same `pending_clarification` metadata (do not lose `original_request`/actions). Do not re-run the planner.
+## 5. State-aware `OutputActionBar`
 
-On a successful resolution, mark the prior assistant message: `update messages set metadata = metadata - 'pending_clarification' || jsonb_build_object('resolved_with', 'people'|'companies') where id = $prior_id`, then call `delegateToOrchestrate({ ... toolInput: stored_action, instruction: metadata.original_request, ... })`. This bypasses `classifyIntent` and the planner entirely on the resolution turn.
+Extend existing component to branch on `toolCall.status`:
+- Failed/unavailable: Retry · Reconnect tool · Ask Pilot alternative.
+- Succeeded: existing actions + new "Export results" (prefill `@Scribe export these results as CSV`).
+- Pending/running: hide bar (replace with subtle "Working…" shimmer line).
 
-## Step 5 — `toolRegistry` support for the people actor
+All actions continue to use the `chat:prefill` event — no orchestration code touched.
 
-`APIFY_ACTORS.people_profiles` already maps to `harvestapi/linkedin-profile-search`. Two changes in `supabase/functions/_shared/toolRegistry.ts`:
+## 6. Visual hierarchy polish
 
-1. **Add `input_adapter`** for `people_profiles` that maps the generic `{query, role_keywords, location, max_results}` into the actor's expected input. Default shape (mirrors harvestapi schema):
+- Center column: `max-w-3xl mx-auto`, subtle radial emerald glow at top, faint grid background continues edge-to-edge behind the column.
+- Workbench: card-in-card layout with `rounded-xl` inner panels, hairline emerald top-border on the active tab, sticky header with backdrop blur on scroll.
+- Consistent type scale: 11/12/13/14 already in use — keep; add `text-[10px] uppercase tracking-widest` rail for section labels.
+- Keep tokens semantic (`text-foreground`, `bg-background`, emerald accents per Verdant theme memory) — no hardcoded greys beyond the existing GitHub-dark palette already used in this surface.
 
-   ```ts
-   {
-     searchQuery: keywords ?? query,        // e.g. "React engineer"
-     location: location ?? undefined,
-     maxItems: Math.min(max_safe_results, max_results),
-     profileScraperMode: "Short"            // structured profile data, no contact scraping
-   }
-   ```
+---
 
-   Always allow `user_input` overrides to win.
+## Technical notes
 
-2. **Output normalization.** Add a dedicated `normalizeApifyPeopleItem(raw)` that returns the requested shape:
+New files:
+- `src/components/chat/workspace/bubbles/SectionDivider.tsx`
+- `src/components/chat/workspace/bubbles/WorkflowSummaryCard.tsx`
+- `src/components/chat/workspace/bubbles/NextStepHint.tsx`
+- `src/components/chat/workspace/workbench/SummaryView.tsx`
+- `src/components/chat/workspace/workbench/FailureRecoveryCard.tsx`
+- `src/components/chat/workspace/workbench/errorCopy.ts`
 
-   ```ts
-   {
-     full_name, headline, title, location, profile_url,
-     company, summary, source: "apify", signal_type: "people_profile",
-     raw: truncObj(raw, 4000)
-   }
-   ```
+Edited files:
+- `ConversationView.tsx` — grouping + max-width column + section dividers
+- `chatMessageStream.ts` — attach `section` field to ChatMessage union (additive, optional)
+- `AgentBubble.tsx`, `SystemMessage.tsx` — lighter chrome, denser spacing
+- `WorkbenchHeader.tsx` — richer meta row, workflow-type badge
+- `WorkbenchPanel.tsx` — 4-tab fixed layout, default-tab logic
+- `AgentOutputViewer.tsx` — delegate failure to `FailureRecoveryCard` in Summary path
+- `OutputActionBar.tsx` — state-aware action set
 
-   Pick from common harvestapi keys: `name|fullName`, `headline`, `currentJobTitle|title`, `location|geoLocation`, `profileUrl|linkedinUrl|url`, `currentCompany|company`, `summary|about`. Never invent email/phone — leave absent.
+No edits to data hooks, orchestration lib, registries, edge functions, or DB.
 
-   Branch in the items mapping: when `source_type === "people_profiles"`, use `normalizeApifyPeopleItem`; otherwise existing `normalizeApifyItem`.
+## Limitations
+- Recovery buttons trigger via composer prefill (existing pattern); no new retry RPC.
+- "Reconnect Apify" deep-link only navigates if a settings route exists; otherwise falls back to prefill.
+- Workflow-type badge is derived heuristically from tool name / output shape.
+- Summary copy is template-based (not AI-generated) to keep this UI-only.
 
-3. **Alias map.** Leave the existing `SOURCE_TYPE_ALIASES` aliases (`people→jobs`, `profiles→jobs`, etc.) as a default for unspecified prompts, but when `selected_actor_key === "apify_people_search"` reaches `execSourceWithApify`, the registry path already wins (line ~556). No alias change required.
-
-The existing `OPT_IN_ONLY_ACTOR_IDS` gate is satisfied because `registryApproved` is set when `apify_people_search` was resolved through `selected_actor_key` and passed `isActorRuntimeEnabled`.
-
-## Step 6 — Workbench display
-
-`src/components/chat/workspace/workbench/AgentOutputViewer.tsx` already routes Scout's Apify output to `ScoutResultsView` via `normalizeApifyItems` (job-shaped). Add a thin branch:
-
-1. In `normalize.ts`, add `normalizeApifyPeople(output)` returning `{ full_name, headline, title, location, company, profile_url, summary, source, raw }[]`. Detect by `output.source_type === "people_profiles"` or by item shape (`full_name` / `profile_url` / `signal_type === "people_profile"`).
-2. In `ScoutResultsView`, when the normalized array is people-shaped, render a People variant (name, title/headline, company, location, "View profile" link, source badge, raw JSON collapsed). Job-shape rendering is unchanged.
-
-No new viewer file, no route changes, no design overhaul.
-
-## Step 7 — Untouched (safety)
-
-- `actorRegistry` enable flags and `isActorRuntimeEnabled` semantics.
-- Deterministic disabled-actor handlers in `toolInputPlanner` (only refined, not removed).
-- `OPT_IN_ONLY_ACTOR_IDS` gate, `send_email` approval requirement, `search_web` unavailable behavior.
-- RLS, schemas, secrets, edge function `verify_jwt` settings.
-
-## Deploy
-Edited functions only: `pilot-chat`, plus `_shared/toolInputPlanner.ts`, `_shared/toolRegistry.ts`, `_shared/actorRegistry.ts` (recompiled via the consumers). Redeploy: `pilot-chat`, `orchestrate`, `run-agent` (they import shared modules).
-
-## Verification on agentory.space
-
-Run 6 prompts; for each capture `selected_actor_key`, `ask_clarification`, `metadata.pending_clarification`, `metadata.people_action`/`companies_action` presence, plan step agents, any unsupported-capability claim, behavior delta.
-
-1. "Find companies hiring React engineers in London" → `apify_jobs`, no clarification.
-2. "Find 10 individual React developer profiles in London" → `apify_people_search` (if `APIFY_ENABLE_PEOPLE_SEARCH=true`), Workbench renders people cards. If disabled → "people sourcing not configured" + companies fallback offer, **no jobs silently**.
-3. "Find 10 engineers in London" → one clarification; assistant message metadata contains both `people_action` and `companies_action`; no tool run yet.
-4. Reply "individual engineer profiles" → executes stored `people_action` (`apify_people_search`); prior message marked `resolved_with: people`.
-5. New thread → "Find 10 engineers in London" then reply "companies hiring engineers" → executes stored `companies_action` (`apify_jobs`).
-6. People actor disabled → "Find 10 individual React developer profiles in London" → clear unavailable message, no jobs run.
-
-## Final report (what I will deliver after build)
-- Runtime status of `apify_people_search` (`enabled`, `actor_id`, env flags read).
-- Files changed.
-- How clarification context is stored (message metadata schema).
-- How replies are resolved (regex + stored-action execution, planner bypass).
-- People actor input mapping + output normalization shape.
-- Test results for all 6 scenarios.
+## Deliverables on completion
+Files changed list, components changed list, conversation UI diff summary, workbench UI diff summary, error-state UX summary, and noted limitations.
