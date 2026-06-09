@@ -1,45 +1,30 @@
-# Sync confirmation + schema drift audit
+# Pilot-chat smoke test run
 
-## 1. GitHub sync — confirmed present
+No code or schema changes. Execute 6 prompts against `pilot-chat` via `curl_edge_functions`, then read DB rows for each invocation.
 
-All three files from Claude Code's commit exist in Lovable, untouched:
+## Approach
 
-- `supabase/functions/_shared/harvestApiPeople.ts` (6,872 bytes)
-- `supabase/functions/_shared/harvestApiPeople.test.ts` (6,144 bytes)
-- `supabase/functions/_shared/toolRegistry.ts`
-  - Line 13: `import { buildHarvestApiPeopleInput } from "./harvestApiPeople.ts";`
-  - Line 390: invoked inside the Apify run path
-  - Line 381–383: `people_profiles` registry entry → `harvestapi/linkedin-profile-search`
-  - Line 811: `source_type === "people_profiles"` uses `normalizeApifyPeopleItem`
+For each prompt I'll:
 
-Related files already aligned: `actorRegistry.ts` (line 180/192), `toolInputPlanner.ts` (lines 26/141/464/467) — all reference `people_profiles` consistently.
+1. POST to `pilot-chat` with `{ message, conversation_id? }`. Tests 4→continuation reuse the conversation_id returned by test 4 so the people_action is shared.
+2. Capture the JSON response (assistant message, plan_id if any, intent).
+3. If a plan was created, query the DB:
+   - `task_plans` → status, steps, plan_summary
+   - `tasks` → status, error_message
+   - `tool_calls` → tool_name, input_json.selected_actor_key, input_json.actor_id, status, error, output_json (existence + total/no_results)
+4. Wait briefly between query and read so async chain (`run-agent` → `runTool`) has time to write.
 
-No Lovable-side overwrite will happen.
+## Reporting
 
-## 2. Schema drift audit
+Per test: assistant response, plan_id, selected_actor_key, tool_call status + error, result count, output_json present (yes/no), plan status.
 
-Tables referenced by the people-search code path:
+Final table summarizing all 6, plus a "ready / blocked" verdict per test.
 
-| Code path | Table | Status |
-|---|---|---|
-| `runApifySource` writes | `tool_calls`, `activity_feed`, `approvals` | exist, columns match |
-| `pilot-chat` / `orchestrate` | `conversations`, `messages`, `task_plans`, `workspace_members`, `company_brain`, `activity_feed` | exist |
-| `run-agent` | `tasks`, `handoffs` | exist |
+## Auth
 
-The new `people_profiles` data shape is stored **inside the existing `tool_calls.output_json` JSONB column** (fields: `actor_output_type`, `selected_actor_key`, `items`, `no_results`, etc.). No new top-level columns, no new tables, no enum additions, no policy gaps.
+Use the preview-session token injected by `curl_edge_functions` so RLS-scoped reads work. DB introspection uses `supabase--read_query` with service role.
 
-**Result: zero schema drift. No additive migration required.**
+## Limits
 
-## 3. Recommendation
-
-Skip the migration step. Proceed directly to:
-
-1. Confirm runtime secrets are set (already verified earlier):
-   - `APIFY_API_TOKEN` ✓
-   - `APIFY_ENABLE_PEOPLE_SEARCH=true` ✓
-   - `APIFY_ACTOR_PEOPLE_SEARCH=harvestapi/linkedin-profile-search` ✓
-2. Redeploy `pilot-chat`, `orchestrate`, `run-agent` so they pick up the synced shared code.
-3. Verify the `[pilot-chat] people_actor_runtime` log line shows all three values truthy.
-4. Run the three test prompts ("Find 10 engineers in London", etc.).
-
-If you want, I can switch to build mode and execute steps 2–4. No DB migration will be created.
+- HarvestAPI / Apify Jobs / Firecrawl may take 30–120s to finish. If a tool_call is still `running` when I query, I'll note it and re-query once.
+- I will not retry failures or mutate state to "fix" anything during this run — only report.
