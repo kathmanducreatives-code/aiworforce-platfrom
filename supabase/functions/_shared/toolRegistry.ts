@@ -10,6 +10,7 @@
 
 import type { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { ACTOR_REGISTRY, getActorByKey, isActorRuntimeEnabled } from "./actorRegistry.ts";
+import { buildHarvestApiPeopleInput } from "./harvestApiPeople.ts";
 
 export interface ToolContext {
   admin: SupabaseClient;
@@ -383,24 +384,10 @@ const APIFY_ACTORS: Record<string, ApifyActorCfg> = {
     enabled_by_default: false,
     use_for: ["individual people/candidate profile search (opt-in only)"],
     description: "LinkedIn profile search — restricted, opt-in only",
-    input_adapter: ({ query, location, role_keywords, max_results, user_input }) => {
-      const kwFromRoles = Array.isArray(role_keywords) && role_keywords.length > 0
-        ? role_keywords.join(" ")
-        : null;
-      const searchQuery = (user_input?.searchQuery as string | undefined)
-        ?? (user_input?.query as string | undefined)
-        ?? kwFromRoles
-        ?? query
-        ?? "";
-      const maxItems = Math.max(1, Math.min(25, max_results || 10));
-      return {
-        searchQuery,
-        location: location ?? undefined,
-        maxItems,
-        profileScraperMode: (user_input?.profileScraperMode as string | undefined) ?? "Short",
-        ...user_input,
-      };
-    },
+    // Dedicated HarvestAPI adapter — maps generic Agentory input to the
+    // actor's official schema. Never forwards raw Agentory fields.
+    input_adapter: ({ query, location, role_keywords, max_results, user_input }) =>
+      buildHarvestApiPeopleInput({ query, location, role_keywords, max_results, user_input }),
   },
   profile_enrichment: {
     actor_id: "atomus/linkedin-profile-scraper",
@@ -722,10 +709,46 @@ async function execSourceWithApify(input: unknown): Promise<ToolResult> {
   }).catch((e) => ({ ok: false, status: 0, data: { error: String(e) } }));
 
   if (startRes.status === 401 || startRes.status === 403) {
-    return { ok: false, unavailable: true, error: "apify_unauthorized" };
+    // Token reached Apify but was rejected — almost always actor access/rental,
+    // not a malformed token. Surface a clear, actionable hint (rule 9).
+    console.error("[toolRegistry] apify_unauthorized", { actor_id, source_type, status: startRes.status });
+    return {
+      ok: false,
+      unavailable: true,
+      error: "apify_unauthorized",
+      data: {
+        actor_id,
+        source_type,
+        status: startRes.status,
+        hint: "Apify rejected the request (401/403). Check that this token's account has access to / has rented the actor, and that APIFY_API_TOKEN is valid.",
+      },
+    };
   }
   if (startRes.status === 402) {
     return { ok: false, unavailable: true, error: "apify_insufficient_credits" };
+  }
+  if (startRes.status === 400) {
+    // Malformed actor input. Log the SHAPE only (keys), never values or the
+    // token (token lives in the URL query, not in actorInput) — rule 8.
+    const apifyMessage =
+      (startRes.data?.error?.message ?? startRes.data?.error ?? startRes.data?.message ?? null) as string | null;
+    console.error("[toolRegistry] apify_input_schema_error", {
+      actor_id,
+      source_type,
+      payload_keys: Object.keys(actorInput),
+      apify_message: apifyMessage,
+    });
+    return {
+      ok: false,
+      error: "apify_input_schema_error",
+      data: {
+        actor_id,
+        source_type,
+        payload_keys: Object.keys(actorInput),
+        apify_message: apifyMessage,
+        hint: "Apify rejected the actor input (400). The input payload shape does not match the actor's schema.",
+      },
+    };
   }
   if (!startRes.ok) {
     return { ok: false, error: `apify_start_failed:${startRes.status}` };
@@ -767,7 +790,7 @@ async function execSourceWithApify(input: unknown): Promise<ToolResult> {
   if (!resolvedDatasetId) {
     return {
       ok: true,
-      data: { actor_id, run_id, dataset_id: null, items: [], total: 0, summary: "no_dataset", citations: [] },
+      data: { actor_id, run_id, dataset_id: null, items: [], total: 0, no_results: true, summary: "no_dataset", citations: [] },
     };
   }
 
@@ -809,7 +832,11 @@ async function execSourceWithApify(input: unknown): Promise<ToolResult> {
       dataset_id: resolvedDatasetId,
       items,
       total: items.length,
-      summary: `Apify actor returned ${items.length} ${source_type} result(s) for: ${search_goal || i.query || "(no goal)"}`,
+      // Success with zero items is `no_results`, not a failure (rule 10).
+      no_results: items.length === 0,
+      summary: items.length === 0
+        ? `Apify actor ran successfully but returned 0 ${source_type} results for: ${search_goal || i.query || "(no goal)"}`
+        : `Apify actor returned ${items.length} ${source_type} result(s) for: ${search_goal || i.query || "(no goal)"}`,
       citations,
     },
   };
