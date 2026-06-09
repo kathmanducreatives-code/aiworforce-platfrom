@@ -2,6 +2,7 @@ import { X, RefreshCw } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import AgentBadge from '../plan/AgentBadge';
 import type { WorkbenchData } from './useWorkbenchData';
+import { workflowTypeFromToolCall, WORKFLOW_LABELS } from './workflowType';
 
 const STATUS_TONE: Record<string, string> = {
   pending: 'bg-white/[0.04] text-[#7D8590] border-white/[0.08]',
@@ -9,8 +10,8 @@ const STATUS_TONE: Record<string, string> = {
   queued: 'bg-white/[0.04] text-[#7D8590] border-white/[0.08]',
   complete: 'bg-emerald-500/10 text-emerald-300 border-emerald-500/20',
   succeeded: 'bg-emerald-500/10 text-emerald-300 border-emerald-500/20',
-  failed: 'bg-rose-500/10 text-rose-300 border-rose-500/20',
-  unavailable: 'bg-amber-500/10 text-amber-300 border-amber-500/20',
+  failed: 'bg-amber-500/10 text-amber-300 border-amber-500/25',
+  unavailable: 'bg-amber-500/10 text-amber-300 border-amber-500/25',
   awaiting_approval: 'bg-amber-500/10 text-amber-300 border-amber-500/20',
   skipped: 'bg-white/[0.04] text-[#7D8590] border-white/[0.08]',
 };
@@ -37,19 +38,23 @@ export default function WorkbenchHeader({
   const provider = toolCall?.provider ? (PROVIDER_LABEL[toolCall.provider.toLowerCase()] ?? toolCall.provider) : null;
   const ts = task?.finished_at ?? task?.started_at ?? toolCall?.completed_at ?? toolCall?.created_at ?? null;
   const apifyTotal = typeof toolCall?.output_json?.total === 'number' ? toolCall.output_json.total : null;
+  const workflowLabel = WORKFLOW_LABELS[workflowTypeFromToolCall(toolCall)];
+  const runShort = typeof toolCall?.output_json?.run_id === 'string'
+    ? String(toolCall.output_json.run_id).slice(-8)
+    : null;
 
   return (
-    <div className="px-4 pt-3 pb-3 border-b border-white/[0.06] bg-gradient-to-b from-white/[0.02] to-transparent">
+    <div className="px-4 pt-4 pb-3 border-b border-white/[0.06] bg-gradient-to-b from-emerald-500/[0.04] via-white/[0.015] to-transparent backdrop-blur-sm sticky top-0 z-10">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0 flex-1">
-          <div className="text-[10px] uppercase tracking-widest text-[#7D8590] font-semibold">
-            Workbench {agentName ? `· ${agentName} output` : ''}
+          <div className="text-[10px] uppercase tracking-widest text-emerald-300/80 font-semibold">
+            Workbench
           </div>
-          <div className="mt-0.5 text-[14px] text-[#F0F6FC] font-medium truncate">
-            {planTitle}
-          </div>
-          {taskTitle && (
-            <div className="mt-1 text-[12px] text-[#C9D1D9] truncate">{taskTitle}</div>
+          <h2 className="mt-1 text-[15px] text-[#F0F6FC] font-semibold leading-snug truncate">
+            {taskTitle || planTitle}
+          </h2>
+          {taskTitle && planTitle && taskTitle !== planTitle && (
+            <div className="mt-0.5 text-[11px] text-[#7D8590] truncate">From: {planTitle}</div>
           )}
         </div>
         <div className="flex items-center gap-1 shrink-0">
@@ -75,19 +80,36 @@ export default function WorkbenchHeader({
         </div>
       </div>
 
-      <div className="mt-2 flex items-center gap-2 flex-wrap text-[11px] text-[#7D8590]">
+      <div className="mt-2.5 flex items-center gap-1.5 flex-wrap text-[11px]">
         {agentSlug && <AgentBadge slug={agentSlug} />}
-        <span className={`text-[10px] px-2 py-0.5 rounded-md border ${STATUS_TONE[status] ?? STATUS_TONE.pending}`}>
+        {provider && (
+          <span className="text-[10px] px-2 py-0.5 rounded-md border border-white/[0.08] bg-white/[0.03] text-[#C9D1D9]">
+            {provider}
+          </span>
+        )}
+        <span className="text-[10px] px-2 py-0.5 rounded-md border border-emerald-500/20 bg-emerald-500/[0.07] text-emerald-300">
+          {workflowLabel}
+        </span>
+        <span className={`text-[10px] px-2 py-0.5 rounded-md border capitalize ${STATUS_TONE[status] ?? STATUS_TONE.pending}`}>
           {status.replace('_', ' ')}
         </span>
         {toolLabel && (
-          <span className="font-mono text-[10px] px-2 py-0.5 rounded-md border border-white/[0.06] bg-white/[0.03]">
+          <span className="font-mono text-[10px] px-2 py-0.5 rounded-md border border-white/[0.06] bg-white/[0.02] text-[#7D8590]">
             {toolLabel}
           </span>
         )}
-        {provider && <span>· {provider}</span>}
-        {apifyTotal !== null && <span>· {apifyTotal} result{apifyTotal === 1 ? '' : 's'}</span>}
-        {ts && <span>· {new Date(ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>}
+      </div>
+
+      <div className="mt-2 text-[10px] text-[#7D8590] flex items-center gap-2 flex-wrap">
+        {apifyTotal !== null && <span>{apifyTotal} result{apifyTotal === 1 ? '' : 's'}</span>}
+        {apifyTotal !== null && (ts || runShort) && <span className="opacity-40">·</span>}
+        {ts && <span>Updated {new Date(ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>}
+        {runShort && (
+          <>
+            <span className="opacity-40">·</span>
+            <span>Run <span className="font-mono text-[#C9D1D9]">{runShort}</span></span>
+          </>
+        )}
       </div>
     </div>
   );

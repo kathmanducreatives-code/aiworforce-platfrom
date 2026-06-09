@@ -1,28 +1,44 @@
-import { useState } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { useChatWorkspace } from '@/contexts/ChatWorkspaceContext';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { useWorkbenchData } from './useWorkbenchData';
 import WorkbenchHeader from './WorkbenchHeader';
 import AgentOutputViewer from './AgentOutputViewer';
 import OutputActionBar from './OutputActionBar';
+import SummaryView from './SummaryView';
+import RawJsonView from './RawJsonView';
+import FailureRecoveryCard from './FailureRecoveryCard';
 import ChatErrorBoundary from '../ChatErrorBoundary';
-import { Loader2, FlaskConical } from 'lucide-react';
+import { Loader2, FlaskConical, FileText, ListChecks, Activity, Code2 } from 'lucide-react';
 
-type Tab = 'results' | 'reasoning' | 'activity';
+type Tab = 'summary' | 'results' | 'activity' | 'raw';
 
 export default function WorkbenchPanel() {
   const { selectedOutput, closeWorkbench, workbenchWidth, setWorkbenchWidth } = useChatWorkspace();
   const isMobile = useIsMobile();
   const data = useWorkbenchData(selectedOutput);
-  const [tab, setTab] = useState<Tab>('results');
+
+  const status = data.task?.status ?? data.toolCall?.status ?? 'pending';
+  const failed = status === 'failed' || status === 'unavailable';
+
+  // Default tab: summary, unless user explicitly opened a tool call from results UI
+  const defaultTab: Tab = useMemo(() => 'summary', []);
+  const [tab, setTab] = useState<Tab>(defaultTab);
+
+  // Reset tab when selection changes
+  useEffect(() => {
+    setTab('summary');
+  }, [selectedOutput?.taskId, selectedOutput?.toolCallId]);
 
   if (!selectedOutput) {
     return (
       <div className="h-full flex flex-col items-center justify-center text-center px-6 text-[#7D8590]">
-        <FlaskConical className="h-6 w-6 mb-2 text-[#484F58]" />
-        <div className="text-[13px] text-[#C9D1D9]">Workbench</div>
+        <div className="h-12 w-12 rounded-xl border border-emerald-500/20 bg-emerald-500/5 flex items-center justify-center mb-3">
+          <FlaskConical className="h-5 w-5 text-emerald-300/80" />
+        </div>
+        <div className="text-[13px] text-[#C9D1D9] font-medium">Workbench</div>
         <div className="text-[12px] mt-1 max-w-xs">
-          Pick a step or tool from any plan to view its output here.
+          Pick a step or tool from any plan to inspect its output, recover from failures, and trigger the next action.
         </div>
       </div>
     );
@@ -36,17 +52,12 @@ export default function WorkbenchPanel() {
     );
   }
 
-  const reasoning =
-    (data.task?.output as any)?.reasoning ??
-    (data.task?.output as any)?.notes ??
-    (data.task?.output as any)?.thoughts ??
-    null;
-
-  const tabs: { id: Tab; label: string }[] = [
-    { id: 'results', label: 'Results' },
+  const tabs: { id: Tab; label: string; icon: any }[] = [
+    { id: 'summary', label: 'Summary', icon: FileText },
+    { id: 'results', label: 'Results', icon: ListChecks },
+    { id: 'activity', label: 'Activity', icon: Activity },
+    { id: 'raw', label: 'Raw', icon: Code2 },
   ];
-  if (reasoning) tabs.push({ id: 'reasoning', label: 'Reasoning' });
-  if (data.activity.length > 0) tabs.push({ id: 'activity', label: 'Activity' });
 
   // Drag-resize (desktop only)
   const onResizePointerDown = (e: React.PointerEvent) => {
@@ -67,6 +78,8 @@ export default function WorkbenchPanel() {
     window.addEventListener('pointerup', up);
   };
 
+  const rawData = data.toolCall?.output_json ?? data.task?.output ?? null;
+
   return (
     <div className="h-full flex flex-row">
       {!isMobile && (
@@ -76,57 +89,92 @@ export default function WorkbenchPanel() {
           aria-hidden
         />
       )}
-      <div className="flex-1 flex flex-col min-w-0 bg-[#0a0d12]">
+      <div className="flex-1 flex flex-col min-w-0 bg-[#0a0d12] relative">
+        <div className="pointer-events-none absolute inset-x-0 top-0 h-32 bg-gradient-to-b from-emerald-500/[0.03] to-transparent" />
         <WorkbenchHeader data={data} onClose={closeWorkbench} onRefresh={data.refresh} />
 
-        {tabs.length > 1 && (
-          <div className="flex items-center gap-1 px-3 border-b border-white/[0.06]">
-            {tabs.map((t) => (
+        <div className="flex items-center gap-0.5 px-3 border-b border-white/[0.06] bg-white/[0.01]">
+          {tabs.map((t) => {
+            const Icon = t.icon;
+            const active = tab === t.id;
+            return (
               <button
                 key={t.id}
                 onClick={() => setTab(t.id)}
-                className={`text-[12px] px-3 py-2 -mb-px border-b-2 transition-colors ${
-                  tab === t.id
+                className={`group inline-flex items-center gap-1.5 text-[12px] px-3 py-2 -mb-px border-b-2 transition-colors ${
+                  active
                     ? 'border-emerald-400 text-[#F0F6FC]'
                     : 'border-transparent text-[#7D8590] hover:text-[#C9D1D9]'
                 }`}
               >
+                <Icon className={`h-3.5 w-3.5 ${active ? 'text-emerald-300' : ''}`} />
                 {t.label}
+                {t.id === 'summary' && failed && (
+                  <span className="ml-0.5 h-1.5 w-1.5 rounded-full bg-amber-400 animate-pulse" />
+                )}
               </button>
-            ))}
-          </div>
-        )}
+            );
+          })}
+        </div>
 
-        <div className="flex-1 overflow-auto p-4 space-y-3">
+        <div className="flex-1 overflow-auto p-4 space-y-3 relative z-[1]">
           <ChatErrorBoundary>
-            {tab === 'results' && (
+            {tab === 'summary' && (
               <>
-                <AgentOutputViewer
+                <SummaryView
                   task={data.task}
                   toolCall={data.toolCall}
-                  agentSlug={data.agentSlug}
-                  approval={data.approval}
+                  agentName={data.agentName}
+                  planTitle={data.planTitle}
                 />
-                <OutputActionBar agentSlug={data.agentSlug} />
+                <OutputActionBar agentSlug={data.agentSlug} status={status} />
               </>
             )}
-            {tab === 'reasoning' && reasoning && (
-              <div className="text-[13px] text-[#C9D1D9] whitespace-pre-wrap leading-relaxed">
-                {typeof reasoning === 'string' ? reasoning : JSON.stringify(reasoning, null, 2)}
-              </div>
+            {tab === 'results' && (
+              <>
+                {failed ? (
+                  <FailureRecoveryCard toolCall={data.toolCall} task={data.task} />
+                ) : (
+                  <AgentOutputViewer
+                    task={data.task}
+                    toolCall={data.toolCall}
+                    agentSlug={data.agentSlug}
+                    approval={data.approval}
+                  />
+                )}
+                <OutputActionBar agentSlug={data.agentSlug} status={status} />
+              </>
             )}
             {tab === 'activity' && (
               <ul className="space-y-2">
+                {data.activity.length === 0 && (
+                  <li className="text-[12px] text-[#7D8590]">No activity yet.</li>
+                )}
                 {data.activity.map((a) => (
-                  <li key={a.id} className="rounded-lg border border-white/[0.06] bg-white/[0.02] p-2.5">
-                    <div className="text-[11px] text-[#7D8590]">
-                      {new Date(a.created_at).toLocaleTimeString()} · {a.event_type}
+                  <li key={a.id} className="relative rounded-lg border border-white/[0.06] bg-white/[0.02] p-2.5 pl-6">
+                    <span className="absolute left-2 top-3 h-1.5 w-1.5 rounded-full bg-emerald-400/70" />
+                    <div className="text-[10px] uppercase tracking-wider text-[#7D8590]">
+                      {new Date(a.created_at).toLocaleTimeString()} · {a.event_type.replace('_', ' ')}
                     </div>
                     <div className="text-[12px] text-[#C9D1D9] mt-0.5">{a.title}</div>
                     {a.body && <div className="text-[11px] text-[#7D8590] mt-0.5">{a.body}</div>}
                   </li>
                 ))}
               </ul>
+            )}
+            {tab === 'raw' && (
+              <div className="space-y-3">
+                {failed && data.toolCall?.error && (
+                  <div className="inline-flex items-center gap-1.5 text-[11px] font-mono px-2 py-1 rounded border border-amber-500/25 bg-amber-500/[0.06] text-amber-200">
+                    <span className="opacity-70">error code:</span> {data.toolCall.error}
+                  </div>
+                )}
+                {rawData != null ? (
+                  <RawJsonView data={rawData} defaultOpen />
+                ) : (
+                  <div className="text-[12px] text-[#7D8590]">No raw payload available.</div>
+                )}
+              </div>
             )}
           </ChatErrorBoundary>
         </div>

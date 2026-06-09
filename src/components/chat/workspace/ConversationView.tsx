@@ -4,12 +4,32 @@ import { motion } from 'framer-motion';
 import { usePlanDetail } from '@/hooks/usePlanDetail';
 import { useAgents } from '@/hooks/useAgents';
 import { useWorkspace } from '@/contexts/WorkspaceContext';
-import { buildPlanMessages } from '@/lib/chatMessageStream';
+import { buildPlanMessages, type ChatMessage } from '@/lib/chatMessageStream';
 import UserBubble from './bubbles/UserBubble';
 import SystemMessage from './bubbles/SystemMessage';
 import AgentBubble from './bubbles/AgentBubble';
 import HandoffRow from './bubbles/HandoffRow';
 import ApprovalCard from './bubbles/ApprovalCard';
+import SectionDivider from './bubbles/SectionDivider';
+
+type SectionKey = 'request' | 'workflow' | 'execution' | 'status';
+const SECTION_LABELS: Record<SectionKey, string> = {
+  request: 'Request',
+  workflow: 'Workflow',
+  execution: 'Execution',
+  status: 'Status',
+};
+
+function sectionOf(m: ChatMessage, index: number): SectionKey {
+  if (m.kind === 'user') return 'request';
+  if (m.kind === 'system') {
+    if (m.id.endsWith('-created')) return 'workflow';
+    return 'status';
+  }
+  if (m.kind === 'approval') return 'execution';
+  if (m.kind === 'handoff') return 'execution';
+  return 'execution';
+}
 
 export default function ConversationView({ planId }: { planId: string }) {
   const { workspaceId } = useWorkspace();
@@ -23,6 +43,21 @@ export default function ConversationView({ planId }: { planId: string }) {
     if (!plan) return [];
     return buildPlanMessages(plan, tasks, activity, approvals, agents);
   }, [plan, tasks, activity, approvals, agents]);
+
+  // Group consecutive messages by section
+  const groups = useMemo(() => {
+    const out: { section: SectionKey; items: ChatMessage[]; ts: string }[] = [];
+    messages.forEach((m, i) => {
+      const s = sectionOf(m, i);
+      const last = out[out.length - 1];
+      if (last && last.section === s) {
+        last.items.push(m);
+      } else {
+        out.push({ section: s, items: [m], ts: m.ts });
+      }
+    });
+    return out;
+  }, [messages]);
 
   // Auto-scroll on new messages
   const lastCount = useRef(messages.length);
@@ -63,14 +98,57 @@ export default function ConversationView({ planId }: { planId: string }) {
 
   return (
     <div className="flex-1 relative overflow-hidden">
-      <div ref={scrollRef} onScroll={handleScroll} className="absolute inset-0 overflow-y-auto px-6 py-6 space-y-4">
-        {messages.map((m) => {
-          if (m.kind === 'user')     return <UserBubble key={m.id} text={m.text} ts={m.ts} />;
-          if (m.kind === 'system')   return <SystemMessage key={m.id} text={m.text} />;
-          if (m.kind === 'handoff')  return <HandoffRow key={m.id} fromAgentId={m.fromAgentId} toAgentId={m.toAgentId} />;
-          if (m.kind === 'approval') return <ApprovalCard key={m.id} approval={m.approval} agentId={m.agentId} />;
-          return <AgentBubble key={m.id} msg={m} />;
-        })}
+      {/* Ambient emerald glow + faint grid kill the empty-black feel */}
+      <div className="pointer-events-none absolute inset-0">
+        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[640px] h-[320px] bg-emerald-500/[0.04] blur-3xl rounded-full" />
+        <div
+          className="absolute inset-0 opacity-[0.035]"
+          style={{
+            backgroundImage:
+              'linear-gradient(to right, rgba(255,255,255,0.4) 1px, transparent 1px), linear-gradient(to bottom, rgba(255,255,255,0.4) 1px, transparent 1px)',
+            backgroundSize: '48px 48px',
+            maskImage: 'radial-gradient(ellipse 60% 50% at 50% 30%, black 40%, transparent 100%)',
+          }}
+        />
+      </div>
+
+      <div ref={scrollRef} onScroll={handleScroll} className="absolute inset-0 overflow-y-auto px-4 sm:px-6 py-6">
+        <div className="mx-auto max-w-3xl space-y-5">
+          {groups.map((g, gi) => (
+            <section key={gi} className="relative pl-3">
+              <span
+                className={`absolute left-0 top-1 bottom-1 w-px ${
+                  g.section === 'execution' ? 'bg-emerald-500/30' : 'bg-white/[0.06]'
+                }`}
+              />
+              <SectionDivider label={SECTION_LABELS[g.section]} ts={g.ts} />
+              <div className="mt-3 space-y-3">
+                {g.items.map((m) => {
+                  if (m.kind === 'user') return <UserBubble key={m.id} text={m.text} ts={m.ts} />;
+                  if (m.kind === 'system') return <SystemMessage key={m.id} text={m.text} />;
+                  if (m.kind === 'handoff')
+                    return <HandoffRow key={m.id} fromAgentId={m.fromAgentId} toAgentId={m.toAgentId} />;
+                  if (m.kind === 'approval')
+                    return <ApprovalCard key={m.id} approval={m.approval} agentId={m.agentId} />;
+                  return <AgentBubble key={m.id} msg={m} />;
+                })}
+              </div>
+            </section>
+          ))}
+
+          {/* Recommended next step rail */}
+          {plan.status !== 'complete' && plan.status !== 'failed' && tasks.some((t) => t.status === 'running') && (
+            <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/[0.04] px-4 py-3 text-[12px] text-[#C9D1D9] flex items-center gap-3">
+              <span className="relative flex h-2 w-2">
+                <span className="absolute inline-flex h-full w-full rounded-full bg-emerald-400/60 animate-ping" />
+                <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-400" />
+              </span>
+              <span>
+                Agents are working. Open the Workbench on the right to inspect outputs as they arrive.
+              </span>
+            </div>
+          )}
+        </div>
       </div>
 
       {!atBottom && unread > 0 && (
