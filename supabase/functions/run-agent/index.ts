@@ -284,12 +284,19 @@ Deno.serve(async (req) => {
       ? `${buildUserMessage(instruction, input)}\n\nNOTE TO AGENT: ${toolNotice} Do NOT fabricate live data. Acknowledge the limitation, then produce the best plan/analysis you can from available context.`
       : buildUserMessage(instruction, input);
 
+  // Scribe (content/copywriting) prefers Claude/Anthropic for higher-quality
+  // writing when ANTHROPIC_API_KEY is configured. aiProvider falls back to
+  // Gemini/Lovable automatically when the key is absent — no behavior change
+  // for other agents, which stay on the default Gemini provider.
+  const preferredProvider = agent_slug === "scribe" ? "anthropic" : undefined;
+
   const ai = await generateText({
     taskType: "agent_execution",
     systemPrompt,
     messages: [{ role: "user", content: userMessage }],
     temperature: 0.6,
     maxTokens: 2048,
+    preferredProvider,
     functionName: "run-agent",
     agentSlug: agent_slug ?? undefined,
     workspaceId: workspace_id,
