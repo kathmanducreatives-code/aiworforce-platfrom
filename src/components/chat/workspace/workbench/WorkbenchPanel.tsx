@@ -8,10 +8,15 @@ import OutputActionBar from './OutputActionBar';
 import SummaryView from './SummaryView';
 import RawJsonView from './RawJsonView';
 import FailureRecoveryCard from './FailureRecoveryCard';
+import NoResultsCard from './NoResultsCard';
+import AriaRankingView from './AriaRankingView';
+import PennDraftView from './PennDraftView';
+import HawkResearchView from './HawkResearchView';
 import ChatErrorBoundary from '../ChatErrorBoundary';
-import { Loader2, FlaskConical, FileText, ListChecks, Activity, Code2 } from 'lucide-react';
+import { normalizeApifyItems, normalizeApifyPeople, isPeopleOutput, normalizeAriaRankings, normalizePennDrafts, normalizeFirecrawl } from './normalize';
+import { Loader2, FlaskConical, FileText, ListChecks, Activity, Code2, Trophy, Mail, Link2 } from 'lucide-react';
 
-type Tab = 'summary' | 'results' | 'activity' | 'raw';
+type Tab = 'summary' | 'results' | 'rankings' | 'drafts' | 'sources' | 'activity' | 'raw';
 
 export default function WorkbenchPanel() {
   const { selectedOutput, closeWorkbench, workbenchWidth, setWorkbenchWidth } = useChatWorkspace();
