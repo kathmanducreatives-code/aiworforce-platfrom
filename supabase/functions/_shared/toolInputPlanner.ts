@@ -42,9 +42,14 @@ export interface ToolInput {
   reason: string | null;
   ask_clarification?: boolean;
   clarification?: string;
-  clarification_type?: "people_vs_companies" | "people_unavailable" | "generic";
+  clarification_type?: "people_vs_companies" | "people_unavailable" | "people_vs_agency" | "generic";
   people_action?: ToolInput | null;
   companies_action?: ToolInput | null;
+  agency_action?: ToolInput | null;
+  // Advisory fields from Gemini intent normalization (non-breaking, optional).
+  business_goal?: string;
+  remote_ok?: boolean;
+  seniority?: string | null;
 }
 
 // ---------- Deterministic fallback parser ----------
