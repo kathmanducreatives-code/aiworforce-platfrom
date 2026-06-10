@@ -164,12 +164,21 @@ Deno.serve(async (req) => {
       }
     }
 
-    // 2) Apify sourcing — sourcing-intent instructions on scout (and jobs/companies on hawk).
+    // 2) Apify sourcing — only when the planner explicitly selected an Apify tool/actor,
+    //    or (legacy path) when no tool_input was supplied and the instruction looks like sourcing.
     const sourcingRe = /\b(find|source|sourcing|discover|prospects?|leads?|founders?|companies|hiring|job openings|roles|recruit(?:ers?|ing)|candidates?|engineers?|marketers?|linkedin posts?|comments?)\b/i;
     const planned_actor_key: string | null = tool_input_body?.selected_actor_key ?? null;
-    const shouldUseApify = tool_input_body?.tool_name === "source_with_apify" ||
-      !!planned_actor_key ||
-      sourcingRe.test(`${instruction ?? ""} ${input ?? ""}`);
+    const planned_tool_name: string | null = tool_input_body?.tool_name ?? null;
+    const isFirecrawlSelected =
+      planned_tool_name === "scrape_url"
+      || planned_actor_key === "firecrawl_scrape_url";
+    const isApifySelected =
+      planned_tool_name === "source_with_apify"
+      || (typeof planned_actor_key === "string" && planned_actor_key.startsWith("apify_"));
+    const shouldUseApify = !isFirecrawlSelected && (
+      isApifySelected
+      || (!tool_input_body && sourcingRe.test(`${instruction ?? ""} ${input ?? ""}`))
+    );
 
     if (shouldUseApify) {
       const raw_source_type: string | null = tool_input_body?.source_type ?? null;
