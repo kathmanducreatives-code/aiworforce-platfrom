@@ -582,7 +582,25 @@ Deno.serve(async (req) => {
     let parsed: { plan_summary: string; steps: Step[] } | null = null;
     let plannerSource: "ai" | "fallback" | "staged" = "fallback";
 
-    if (tool_input && tool_input.tool_name === "source_with_apify") {
+    // Content-creation template: Scribe only. No Apify/Firecrawl, no Penn.
+    // Driven by the workflow classifier (tool_input.intent === 'content_creation').
+    if (tool_input && tool_input.intent === "content_creation") {
+      const scribeStep = mkStep(
+        0,
+        "scribe",
+        "Write content",
+        user_instruction,
+        {
+          tool_needed: null,
+          expected_output: "On-brand content draft (post/report/summary as requested).",
+          success_criteria: "Draft produced; no fabricated facts — ask for source context if missing.",
+          planner_source: "fallback",
+        },
+      );
+      (scribeStep as Step & { metadata?: Record<string, unknown> }).metadata = { tool_input };
+      parsed = { plan_summary: `Content: ${user_instruction.slice(0, 90)}`, steps: [scribeStep] };
+      plannerSource = "staged";
+    } else if (tool_input && tool_input.tool_name === "source_with_apify") {
       const cap = Math.max(1, Math.min(200, tool_input.max_results ?? 25));
       const sourcingStep = mkStep(
         0,

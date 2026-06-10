@@ -9,6 +9,7 @@ import { classifyIntent } from "../_shared/intentRouter.ts";
 import { planToolInput, type ToolInput } from "../_shared/toolInputPlanner.ts";
 import { getAgentorySystemPrompt, AGENTORY_SYSTEM_PROMPT_VERSION } from "../_shared/agentorySystemPrompt.ts";
 import { summarizeRegistryForPrompt } from "../_shared/actorRegistry.ts";
+import { classifyWorkflow, coerceAiWorkflow, WORKFLOW_AI_PROMPT } from "../_shared/workflowClassifier.ts";
 
 
 const cors = {
@@ -450,6 +451,99 @@ Deno.serve(async (req) => {
   }
 
 
+
+  // 5c. Deterministic workflow classification — source of truth for routing.
+  //     Gemini stays the natural-language brain (low-confidence fallback only);
+  //     the category decision and routing are deterministic.
+  let wf = classifyWorkflow(message);
+  if (wf.confidence < 0.6) {
+    const aiCls = await generateJson({
+      taskType: "helper",
+      systemPrompt: WORKFLOW_AI_PROMPT,
+      messages: [{ role: "user", content: message }],
+      temperature: 0,
+      maxTokens: 120,
+      jsonMode: true,
+      functionName: "workflow-classifier",
+      workspaceId,
+    });
+    const coerced = aiCls.ok ? coerceAiWorkflow(aiCls.json) : null;
+    if (coerced) wf = { workflow: coerced, confidence: 0.75, reason: "ai fallback", source: "ai" };
+  }
+  console.log("[pilot-chat] workflow:", wf);
+
+  const replyWorkflow = async (content: string, metadata: Record<string, unknown>) => {
+    const { data: saved } = await admin.from("messages").insert({
+      conversation_id: conversationId,
+      role: "assistant",
+      content,
+      agent_slug: "pilot",
+      model_used: "google/gemini-3-flash-preview",
+      metadata: { ...metadata, workflow: wf.workflow, prompt_version: AGENTORY_SYSTEM_PROMPT_VERSION },
+    }).select("*").single();
+    return json({ type: "reply", conversation_id: conversationId, workflow: wf.workflow, message: saved });
+  };
+
+  // 5c.i UNSAFE — refuse the unsafe part; offer compliant alternatives. No tools run.
+  if (wf.workflow === "unsafe") {
+    return await replyWorkflow(
+      "I can't auto-dial people or scrape personal/private phone numbers — Agentory doesn't do that. " +
+      "What I can do safely: source individual or company profiles, draft approval-gated outreach " +
+      "(email/LinkedIn), write call scripts, and research public business info. Want to start with one of those?",
+      { refused: true, unsafe_reason: wf.unsafe_reason ?? "unsafe" },
+    );
+  }
+
+  // 5c.ii MARKET RESEARCH — honest: broad real-time web search isn't configured.
+  if (wf.workflow === "market_research") {
+    return await replyWorkflow(
+      "Broad real-time web search isn't configured, so I won't invent current market/competitor news. " +
+      "I can instead: (1) analyze specific competitor URLs you paste (Firecrawl), " +
+      "(2) pull structured hiring/company signals (Apify), or (3) track competitors you name. " +
+      "Which would you like — and do you have specific URLs or companies in mind?",
+      { honest_unavailable: "broad_web_search" },
+    );
+  }
+
+  // 5c.iii VAGUE LEAD SOURCING — clarify before sourcing; never random-scrape.
+  if (wf.workflow === "vague_lead_sourcing") {
+    return await replyWorkflow(
+      "Happy to source that — to target it well, do you want (a) individual people/profiles, " +
+      "(b) companies hiring for a role, or (c) agencies/partners? And which role/industry + location " +
+      "(or \"remote\")? For example: \"companies hiring GTM roles in the US\" or " +
+      "\"individual growth marketer profiles, remote\".",
+      { clarification: true, clarification_type: "workflow_vague", original_request: message },
+    );
+  }
+
+  // 5c.iv CONTENT CREATION — Scribe-only plan; never trigger sourcing/outreach.
+  if (wf.workflow === "content_creation") {
+    return await delegateToOrchestrate({
+      admin, SUPABASE_URL, SUPABASE_ANON_KEY, authHeader,
+      conversationId, workspaceId, instruction: message,
+      toolInput: {
+        intent: "content_creation",
+        tool_name: null,
+        selected_actor_key: null,
+        source_type: null,
+        query: message,
+        role_keywords: [],
+        location: null,
+        max_results: 1,
+        needs_enrichment: false,
+        needs_outreach: false,
+        execution_mode: "content",
+        confidence: wf.confidence,
+        missing_fields: [],
+        reason: "workflow=content_creation",
+      } as unknown as ToolInput,
+      modelUsed: "google/gemini-3-flash-preview",
+      providerUsed: "lovable-ai",
+    });
+  }
+
+  // Other workflows (url_analysis, people_sourcing, company_hiring_sourcing,
+  // outreach, capabilities, simple_chat) fall through to the existing pipeline.
 
   // 6. Load last 20 messages for context
   const { data: history } = await admin
