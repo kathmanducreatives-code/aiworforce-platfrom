@@ -208,43 +208,74 @@ export function fallbackParse(prompt: string, intent: Intent | string): ToolInpu
 
 const ACTOR_KEYS = Object.keys(ACTOR_REGISTRY).join("|");
 
-const PLANNER_JSON_TAIL = `You are the tool/actor selection planner. Convert the user prompt into a JSON
-plan describing which actor/tool to run. Use the actor_registry above as the
-authoritative list — never invent actors not listed.
+const PLANNER_JSON_TAIL = `You are Agentory's INTENT NORMALIZER for the planner step.
+Read messy business language and convert it into a single strict JSON object.
+Never reply conversationally. Never run tools. Never invent actors that are not
+in the actor_registry above.
 
 Return ONLY this JSON (no prose, no markdown):
 {
-  "intent": "source_companies|source_jobs|source_people|profile_enrichment|analyze_url|crawl_website|broad_search|draft_outreach|send_requires_approval|content|daily_brief|simple_chat|unclear",
-  "selected_tool": "source_with_apify|scrape_url|search_web|none",
+  "business_goal": "short plain-English business goal",
+  "intent": "simple_chat|capabilities|daily_brief|source_people_profiles|source_companies_hiring|source_agencies|analyze_url|broad_research|draft_outreach|create_content|unclear",
+  "confidence": 0.0-1.0,
+  "tool_name": "source_with_apify|scrape_url|search_web|null",
   "selected_actor_key": "${ACTOR_KEYS}|null",
   "source_type": "jobs|advanced_jobs|indeed_jobs|website_content|custom_web|people_profiles|profile_enrichment|search|null",
-  "query": "literal search intent",
-  "role_keywords": ["lowercase role words"],
+  "query": "literal search query or null",
+  "role_keywords": ["Title Case role words"],
   "location": "primary location or null",
+  "remote_ok": boolean,
+  "seniority": "junior|mid|senior|experienced|lead|principal|null",
   "max_results": 1-200,
   "needs_enrichment": boolean,
   "needs_outreach": boolean,
-  "execution_mode": "fast|deep|outreach",
-  "confidence": 0.0-1.0,
+  "execution_mode": "fast|deep|outreach|content",
   "missing_fields": ["field names"],
-  "requires_clarification": boolean,
-  "clarification_question": "string or null",
+  "needs_clarification": boolean,
+  "ask_clarification": boolean,
+  "clarification_type": "people_vs_companies|people_vs_agency|people_unavailable|generic|null",
+  "clarification": "string or null",
+  "people_action": null | { intent, tool_name, selected_actor_key, source_type, query, role_keywords, location, remote_ok, seniority, max_results, execution_mode },
+  "companies_action": null | { ...same shape... },
+  "agency_action": null | { ...same shape... },
   "reason": "one-sentence rationale"
 }
 
-Routing rules (apply in order):
+ROUTING RULES (apply in order):
 1. LinkedIn profile URL + enrichment language -> "apify_profile_enrichment".
 2. Any URL + multi-page crawl / "with apify" -> "apify_website_content".
 3. Any URL otherwise -> "firecrawl_scrape_url".
 4. "Indeed" / "avoid LinkedIn" -> "apify_indeed_jobs".
 5. "advanced LinkedIn search" / "boolean search" + hiring/company words -> "apify_advanced_linkedin_jobs".
-6. Niche directory / custom job board -> "apify_custom_web".
-7. Explicit individual people / candidate profiles / "find <role> profiles" -> "apify_people_search". If that actor is DISABLED, set requires_clarification=true and offer companies-hiring fallback.
-8. Hiring / companies / jobs / roles / openings / GTM/SDR/BDR -> "apify_jobs".
-9. Ambiguous "Find N <role>s in <location>" without "companies hiring" or "individual profiles" -> requires_clarification=true. Pre-select "apify_jobs".
+6. Explicit individual people / candidate profiles / "find <role> profiles" -> "apify_people_search". If DISABLED, set ask_clarification=true and offer companies fallback.
+7. Hiring / companies / jobs / roles / openings / GTM/SDR/BDR -> "apify_jobs".
+8. Ambiguous "Find N <role>s in <location>" without "companies hiring" or "individual profiles" -> ask_clarification=true, clarification_type="people_vs_companies", populate BOTH people_action and companies_action, leave top-level tool/actor null.
+9. Vague business pain that could mean hire-a-person OR hire-an-agency (e.g. "we have dev problems, maybe we need engineers", "need help with marketing") -> ask_clarification=true, clarification_type="people_vs_agency", populate people_action and agency_action.
 10. Broad market/news with no actor fit -> "search_web".
 
-Never pick a DISABLED actor as the final answer without setting requires_clarification=true. needs_outreach implies execution_mode="outreach"; needs_enrichment implies "deep". Default max_results=25; clamp to the actor's max_safe_results.`;
+When ask_clarification=true, ALWAYS pre-fill the alternative action objects so the
+backend can execute the user's choice without re-running you. Never pre-commit
+top-level tool_name/selected_actor_key while waiting on the user.
+
+Default max_results=25 (10 for people_profiles). needs_outreach implies
+execution_mode="outreach"; needs_enrichment implies "deep".
+
+EXAMPLES:
+
+USER: "Currently having issues with development. I think we may need to hire new engineers. Remote is okay but they need to be experienced."
+JSON: {"business_goal":"hire experienced engineering help","intent":"source_people_profiles","confidence":0.72,"tool_name":null,"selected_actor_key":null,"source_type":null,"query":"experienced software engineer remote","role_keywords":["Software Engineer","Full Stack Engineer","Backend Engineer","Frontend Engineer"],"location":null,"remote_ok":true,"seniority":"experienced","max_results":10,"execution_mode":"fast","needs_clarification":true,"ask_clarification":true,"clarification_type":"people_vs_agency","clarification":"Do you want individual engineer profiles to hire, or an agency/team that can take on the development work?","people_action":{"intent":"source_people_profiles","tool_name":"source_with_apify","selected_actor_key":"apify_people_search","source_type":"people_profiles","query":"experienced software engineer remote","role_keywords":["Software Engineer","Full Stack Engineer","Backend Engineer","Frontend Engineer"],"location":null,"remote_ok":true,"seniority":"experienced","max_results":10,"execution_mode":"fast"},"companies_action":null,"agency_action":{"intent":"source_agencies","tool_name":null,"selected_actor_key":null,"source_type":null,"query":"experienced software development agency remote","role_keywords":["software development agency","engineering team"],"location":null,"remote_ok":true,"seniority":"experienced","max_results":10,"execution_mode":"fast"},"reason":"User described a development capacity problem; unclear if they want individuals or an agency."}
+
+USER: "Find companies hiring React engineers in London"
+JSON: {"business_goal":"find companies hiring React engineers","intent":"source_companies_hiring","confidence":0.95,"tool_name":"source_with_apify","selected_actor_key":"apify_jobs","source_type":"jobs","query":"React engineer","role_keywords":["React Engineer","React Developer","Frontend Engineer"],"location":"London","remote_ok":false,"seniority":null,"max_results":25,"execution_mode":"fast","needs_clarification":false,"ask_clarification":false,"clarification_type":null,"clarification":null,"people_action":null,"companies_action":null,"agency_action":null,"reason":"Explicit companies-hiring request -> Apify Jobs."}
+
+USER: "Find 10 individual React developer profiles in London"
+JSON: {"business_goal":"find individual React developer profiles","intent":"source_people_profiles","confidence":0.97,"tool_name":"source_with_apify","selected_actor_key":"apify_people_search","source_type":"people_profiles","query":"React developer","role_keywords":["React Developer","React Engineer","Frontend Engineer"],"location":"London","remote_ok":false,"seniority":null,"max_results":10,"execution_mode":"fast","needs_clarification":false,"ask_clarification":false,"clarification_type":null,"clarification":null,"people_action":null,"companies_action":null,"agency_action":null,"reason":"Explicit individual-profile request."}
+
+USER: "Find 10 engineers in London"
+JSON: {"business_goal":"find engineering talent or hiring signals","intent":"unclear","confidence":0.65,"tool_name":null,"selected_actor_key":null,"source_type":null,"query":"engineer","role_keywords":["Engineer","Software Engineer"],"location":"London","remote_ok":false,"seniority":null,"max_results":10,"execution_mode":"fast","needs_clarification":true,"ask_clarification":true,"clarification_type":"people_vs_companies","clarification":"Do you want individual engineer profiles, or companies hiring engineers in London?","people_action":{"intent":"source_people_profiles","tool_name":"source_with_apify","selected_actor_key":"apify_people_search","source_type":"people_profiles","query":"engineer","role_keywords":["Engineer","Software Engineer"],"location":"London","max_results":10,"execution_mode":"fast"},"companies_action":{"intent":"source_companies_hiring","tool_name":"source_with_apify","selected_actor_key":"apify_jobs","source_type":"jobs","query":"engineer","role_keywords":["Engineer","Software Engineer"],"location":"London","max_results":10,"execution_mode":"fast"},"agency_action":null,"reason":"Could mean people profiles or companies hiring."}
+
+USER: "We need more customers. Can you find companies hiring salespeople and draft outreach?"
+JSON: {"business_goal":"find hiring-intent sales leads and draft outreach","intent":"source_companies_hiring","confidence":0.9,"tool_name":"source_with_apify","selected_actor_key":"apify_jobs","source_type":"jobs","query":"sales","role_keywords":["Sales","Sales Development Representative","Account Executive"],"location":null,"remote_ok":false,"seniority":null,"max_results":25,"execution_mode":"outreach","needs_outreach":true,"needs_enrichment":false,"needs_clarification":false,"ask_clarification":false,"clarification_type":null,"clarification":null,"people_action":null,"companies_action":null,"agency_action":null,"reason":"Hiring-intent companies + outreach drafting."}`;
 
 function buildPlannerSystemPrompt(): string {
   return getAgentorySystemPrompt({
