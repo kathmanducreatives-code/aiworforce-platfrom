@@ -18,6 +18,7 @@ interface Props {
     task_count?: number;
     agents?: string[];
     connector_limitations?: string[];
+    execution_mode?: string;
   };
 }
 
