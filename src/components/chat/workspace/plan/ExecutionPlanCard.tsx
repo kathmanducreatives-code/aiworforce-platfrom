@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import { Loader2 } from 'lucide-react';
+import { Loader2, Gauge, ShieldCheck } from 'lucide-react';
 import { usePlanDetail } from '@/hooks/usePlanDetail';
 import { useAgents } from '@/hooks/useAgents';
 import { useWorkspace } from '@/contexts/WorkspaceContext';
@@ -7,6 +7,7 @@ import { useChatWorkspace } from '@/contexts/ChatWorkspaceContext';
 import AgentBadge from './AgentBadge';
 import ExecutionTaskRow from './ExecutionTaskRow';
 import ActivityMiniFeed from './ActivityMiniFeed';
+import PlanStatusPill from './PlanStatusPill';
 import type { DBToolCall, DBApproval } from '@/lib/orchestration';
 
 interface Props {
