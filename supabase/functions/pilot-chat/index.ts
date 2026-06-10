@@ -527,11 +527,12 @@ Deno.serve(async (req) => {
             intent: intentResult.intent,
             clarification: true,
             missing_fields: toolInput.missing_fields,
-            pending_clarification: !!(toolInput.people_action || toolInput.companies_action),
+            pending_clarification: !!(toolInput.people_action || toolInput.companies_action || toolInput.agency_action),
             clarification_type: toolInput.clarification_type ?? "generic",
             original_request: message,
             people_action: toolInput.people_action ?? null,
             companies_action: toolInput.companies_action ?? null,
+            agency_action: toolInput.agency_action ?? null,
             prompt_version: AGENTORY_SYSTEM_PROMPT_VERSION,
           },
         })
