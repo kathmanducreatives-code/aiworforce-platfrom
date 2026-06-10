@@ -42,9 +42,14 @@ export interface ToolInput {
   reason: string | null;
   ask_clarification?: boolean;
   clarification?: string;
-  clarification_type?: "people_vs_companies" | "people_unavailable" | "generic";
+  clarification_type?: "people_vs_companies" | "people_unavailable" | "people_vs_agency" | "generic";
   people_action?: ToolInput | null;
   companies_action?: ToolInput | null;
+  agency_action?: ToolInput | null;
+  // Advisory fields from Gemini intent normalization (non-breaking, optional).
+  business_goal?: string;
+  remote_ok?: boolean;
+  seniority?: string | null;
 }
 
 // ---------- Deterministic fallback parser ----------
@@ -203,43 +208,74 @@ export function fallbackParse(prompt: string, intent: Intent | string): ToolInpu
 
 const ACTOR_KEYS = Object.keys(ACTOR_REGISTRY).join("|");
 
-const PLANNER_JSON_TAIL = `You are the tool/actor selection planner. Convert the user prompt into a JSON
-plan describing which actor/tool to run. Use the actor_registry above as the
-authoritative list — never invent actors not listed.
+const PLANNER_JSON_TAIL = `You are Agentory's INTENT NORMALIZER for the planner step.
+Read messy business language and convert it into a single strict JSON object.
+Never reply conversationally. Never run tools. Never invent actors that are not
+in the actor_registry above.
 
 Return ONLY this JSON (no prose, no markdown):
 {
-  "intent": "source_companies|source_jobs|source_people|profile_enrichment|analyze_url|crawl_website|broad_search|draft_outreach|send_requires_approval|content|daily_brief|simple_chat|unclear",
-  "selected_tool": "source_with_apify|scrape_url|search_web|none",
+  "business_goal": "short plain-English business goal",
+  "intent": "simple_chat|capabilities|daily_brief|source_people_profiles|source_companies_hiring|source_agencies|analyze_url|broad_research|draft_outreach|create_content|unclear",
+  "confidence": 0.0-1.0,
+  "tool_name": "source_with_apify|scrape_url|search_web|null",
   "selected_actor_key": "${ACTOR_KEYS}|null",
   "source_type": "jobs|advanced_jobs|indeed_jobs|website_content|custom_web|people_profiles|profile_enrichment|search|null",
-  "query": "literal search intent",
-  "role_keywords": ["lowercase role words"],
+  "query": "literal search query or null",
+  "role_keywords": ["Title Case role words"],
   "location": "primary location or null",
+  "remote_ok": boolean,
+  "seniority": "junior|mid|senior|experienced|lead|principal|null",
   "max_results": 1-200,
   "needs_enrichment": boolean,
   "needs_outreach": boolean,
-  "execution_mode": "fast|deep|outreach",
-  "confidence": 0.0-1.0,
+  "execution_mode": "fast|deep|outreach|content",
   "missing_fields": ["field names"],
-  "requires_clarification": boolean,
-  "clarification_question": "string or null",
+  "needs_clarification": boolean,
+  "ask_clarification": boolean,
+  "clarification_type": "people_vs_companies|people_vs_agency|people_unavailable|generic|null",
+  "clarification": "string or null",
+  "people_action": null | { intent, tool_name, selected_actor_key, source_type, query, role_keywords, location, remote_ok, seniority, max_results, execution_mode },
+  "companies_action": null | { ...same shape... },
+  "agency_action": null | { ...same shape... },
   "reason": "one-sentence rationale"
 }
 
-Routing rules (apply in order):
+ROUTING RULES (apply in order):
 1. LinkedIn profile URL + enrichment language -> "apify_profile_enrichment".
 2. Any URL + multi-page crawl / "with apify" -> "apify_website_content".
 3. Any URL otherwise -> "firecrawl_scrape_url".
 4. "Indeed" / "avoid LinkedIn" -> "apify_indeed_jobs".
 5. "advanced LinkedIn search" / "boolean search" + hiring/company words -> "apify_advanced_linkedin_jobs".
-6. Niche directory / custom job board -> "apify_custom_web".
-7. Explicit individual people / candidate profiles / "find <role> profiles" -> "apify_people_search". If that actor is DISABLED, set requires_clarification=true and offer companies-hiring fallback.
-8. Hiring / companies / jobs / roles / openings / GTM/SDR/BDR -> "apify_jobs".
-9. Ambiguous "Find N <role>s in <location>" without "companies hiring" or "individual profiles" -> requires_clarification=true. Pre-select "apify_jobs".
+6. Explicit individual people / candidate profiles / "find <role> profiles" -> "apify_people_search". If DISABLED, set ask_clarification=true and offer companies fallback.
+7. Hiring / companies / jobs / roles / openings / GTM/SDR/BDR -> "apify_jobs".
+8. Ambiguous "Find N <role>s in <location>" without "companies hiring" or "individual profiles" -> ask_clarification=true, clarification_type="people_vs_companies", populate BOTH people_action and companies_action, leave top-level tool/actor null.
+9. Vague business pain that could mean hire-a-person OR hire-an-agency (e.g. "we have dev problems, maybe we need engineers", "need help with marketing") -> ask_clarification=true, clarification_type="people_vs_agency", populate people_action and agency_action.
 10. Broad market/news with no actor fit -> "search_web".
 
-Never pick a DISABLED actor as the final answer without setting requires_clarification=true. needs_outreach implies execution_mode="outreach"; needs_enrichment implies "deep". Default max_results=25; clamp to the actor's max_safe_results.`;
+When ask_clarification=true, ALWAYS pre-fill the alternative action objects so the
+backend can execute the user's choice without re-running you. Never pre-commit
+top-level tool_name/selected_actor_key while waiting on the user.
+
+Default max_results=25 (10 for people_profiles). needs_outreach implies
+execution_mode="outreach"; needs_enrichment implies "deep".
+
+EXAMPLES:
+
+USER: "Currently having issues with development. I think we may need to hire new engineers. Remote is okay but they need to be experienced."
+JSON: {"business_goal":"hire experienced engineering help","intent":"source_people_profiles","confidence":0.72,"tool_name":null,"selected_actor_key":null,"source_type":null,"query":"experienced software engineer remote","role_keywords":["Software Engineer","Full Stack Engineer","Backend Engineer","Frontend Engineer"],"location":null,"remote_ok":true,"seniority":"experienced","max_results":10,"execution_mode":"fast","needs_clarification":true,"ask_clarification":true,"clarification_type":"people_vs_agency","clarification":"Do you want individual engineer profiles to hire, or an agency/team that can take on the development work?","people_action":{"intent":"source_people_profiles","tool_name":"source_with_apify","selected_actor_key":"apify_people_search","source_type":"people_profiles","query":"experienced software engineer remote","role_keywords":["Software Engineer","Full Stack Engineer","Backend Engineer","Frontend Engineer"],"location":null,"remote_ok":true,"seniority":"experienced","max_results":10,"execution_mode":"fast"},"companies_action":null,"agency_action":{"intent":"source_agencies","tool_name":null,"selected_actor_key":null,"source_type":null,"query":"experienced software development agency remote","role_keywords":["software development agency","engineering team"],"location":null,"remote_ok":true,"seniority":"experienced","max_results":10,"execution_mode":"fast"},"reason":"User described a development capacity problem; unclear if they want individuals or an agency."}
+
+USER: "Find companies hiring React engineers in London"
+JSON: {"business_goal":"find companies hiring React engineers","intent":"source_companies_hiring","confidence":0.95,"tool_name":"source_with_apify","selected_actor_key":"apify_jobs","source_type":"jobs","query":"React engineer","role_keywords":["React Engineer","React Developer","Frontend Engineer"],"location":"London","remote_ok":false,"seniority":null,"max_results":25,"execution_mode":"fast","needs_clarification":false,"ask_clarification":false,"clarification_type":null,"clarification":null,"people_action":null,"companies_action":null,"agency_action":null,"reason":"Explicit companies-hiring request -> Apify Jobs."}
+
+USER: "Find 10 individual React developer profiles in London"
+JSON: {"business_goal":"find individual React developer profiles","intent":"source_people_profiles","confidence":0.97,"tool_name":"source_with_apify","selected_actor_key":"apify_people_search","source_type":"people_profiles","query":"React developer","role_keywords":["React Developer","React Engineer","Frontend Engineer"],"location":"London","remote_ok":false,"seniority":null,"max_results":10,"execution_mode":"fast","needs_clarification":false,"ask_clarification":false,"clarification_type":null,"clarification":null,"people_action":null,"companies_action":null,"agency_action":null,"reason":"Explicit individual-profile request."}
+
+USER: "Find 10 engineers in London"
+JSON: {"business_goal":"find engineering talent or hiring signals","intent":"unclear","confidence":0.65,"tool_name":null,"selected_actor_key":null,"source_type":null,"query":"engineer","role_keywords":["Engineer","Software Engineer"],"location":"London","remote_ok":false,"seniority":null,"max_results":10,"execution_mode":"fast","needs_clarification":true,"ask_clarification":true,"clarification_type":"people_vs_companies","clarification":"Do you want individual engineer profiles, or companies hiring engineers in London?","people_action":{"intent":"source_people_profiles","tool_name":"source_with_apify","selected_actor_key":"apify_people_search","source_type":"people_profiles","query":"engineer","role_keywords":["Engineer","Software Engineer"],"location":"London","max_results":10,"execution_mode":"fast"},"companies_action":{"intent":"source_companies_hiring","tool_name":"source_with_apify","selected_actor_key":"apify_jobs","source_type":"jobs","query":"engineer","role_keywords":["Engineer","Software Engineer"],"location":"London","max_results":10,"execution_mode":"fast"},"agency_action":null,"reason":"Could mean people profiles or companies hiring."}
+
+USER: "We need more customers. Can you find companies hiring salespeople and draft outreach?"
+JSON: {"business_goal":"find hiring-intent sales leads and draft outreach","intent":"source_companies_hiring","confidence":0.9,"tool_name":"source_with_apify","selected_actor_key":"apify_jobs","source_type":"jobs","query":"sales","role_keywords":["Sales","Sales Development Representative","Account Executive"],"location":null,"remote_ok":false,"seniority":null,"max_results":25,"execution_mode":"outreach","needs_outreach":true,"needs_enrichment":false,"needs_clarification":false,"ask_clarification":false,"clarification_type":null,"clarification":null,"people_action":null,"companies_action":null,"agency_action":null,"reason":"Hiring-intent companies + outreach drafting."}`;
 
 function buildPlannerSystemPrompt(): string {
   return getAgentorySystemPrompt({
@@ -248,6 +284,51 @@ function buildPlannerSystemPrompt(): string {
     actorRegistrySummary: summarizeRegistryForPrompt(),
   }) + "\n\n" + PLANNER_JSON_TAIL;
 }
+
+// Re-validate an AI-suggested action object through the same actor/tool/clamp
+// pipeline so Gemini can never smuggle an unknown or disabled actor in.
+function validateActionFromAi(raw: unknown): ToolInput | null | undefined {
+  if (raw === null) return null;
+  if (!raw || typeof raw !== "object") return undefined;
+  const r = raw as Record<string, any>;
+  const actorKey = typeof r.selected_actor_key === "string" ? r.selected_actor_key : null;
+  let resolvedKey: string | null = null;
+  let resolvedTool: ToolName = null;
+  let resolvedSource: SourceType = null;
+  if (actorKey) {
+    const actor = getActorByKey(actorKey);
+    if (actor && isActorRuntimeEnabled(actor)) {
+      resolvedKey = actor.key;
+      resolvedTool = actor.tool_name;
+      resolvedSource = (actor.source_type as SourceType) ?? null;
+    }
+  }
+  const roleKw = Array.isArray(r.role_keywords)
+    ? (r.role_keywords as unknown[]).map((s) => String(s)).filter(Boolean)
+    : [];
+  const maxReq = typeof r.max_results === "number" ? Math.floor(r.max_results) : 10;
+  return {
+    intent: typeof r.intent === "string" ? r.intent : "unclear",
+    tool_name: resolvedTool,
+    selected_actor_key: resolvedKey,
+    source_type: resolvedSource,
+    query: typeof r.query === "string" ? r.query : "",
+    role_keywords: roleKw,
+    location: typeof r.location === "string" && r.location.trim() ? r.location : null,
+    max_results: clampForActor(resolvedKey, maxReq),
+    needs_enrichment: r.needs_enrichment === true,
+    needs_outreach: r.needs_outreach === true,
+    execution_mode: (r.execution_mode === "deep" || r.execution_mode === "outreach")
+      ? r.execution_mode
+      : "fast",
+    confidence: typeof r.confidence === "number" ? r.confidence : 0.7,
+    missing_fields: [],
+    reason: typeof r.reason === "string" ? r.reason : "Pre-built clarification action.",
+    remote_ok: typeof r.remote_ok === "boolean" ? r.remote_ok : undefined,
+    seniority: typeof r.seniority === "string" ? r.seniority : undefined,
+  };
+}
+
 
 export async function planToolInput(
   prompt: string,
@@ -302,10 +383,24 @@ export async function planToolInput(
       confidence: typeof o.confidence === "number" ? Math.max(0, Math.min(1, o.confidence)) : fb.confidence,
       missing_fields: Array.isArray(o.missing_fields) ? (o.missing_fields as string[]) : fb.missing_fields,
       reason: typeof o.reason === "string" && o.reason.trim() ? o.reason : fb.reason,
-      ask_clarification: o.requires_clarification === true ? true : undefined,
-      clarification: typeof o.clarification_question === "string" && o.clarification_question.trim()
-        ? o.clarification_question
+      ask_clarification: (o.ask_clarification === true || o.needs_clarification === true || o.requires_clarification === true) ? true : undefined,
+      clarification: typeof o.clarification === "string" && o.clarification.trim()
+        ? o.clarification
+        : (typeof o.clarification_question === "string" && o.clarification_question.trim()
+          ? o.clarification_question
+          : undefined),
+      clarification_type: (o.clarification_type === "people_vs_companies"
+        || o.clarification_type === "people_vs_agency"
+        || o.clarification_type === "people_unavailable"
+        || o.clarification_type === "generic")
+        ? o.clarification_type
         : undefined,
+      business_goal: typeof o.business_goal === "string" ? o.business_goal : undefined,
+      remote_ok: typeof o.remote_ok === "boolean" ? o.remote_ok : undefined,
+      seniority: typeof o.seniority === "string" ? o.seniority : undefined,
+      people_action: validateActionFromAi(o.people_action),
+      companies_action: validateActionFromAi(o.companies_action),
+      agency_action: validateActionFromAi(o.agency_action),
     };
   }
 
@@ -438,13 +533,13 @@ export async function planToolInput(
     merged.reason = merged.reason ?? "Ambiguous role+location prompt — awaiting people-vs-companies clarification.";
   }
 
-  // ---- Build people_action / companies_action when a clarification is pending ----
-  // Trigger when the clarification is explicitly typed, OR when we're asking a
-  // clarification on a prompt that has both a role word and a location hint
-  // (covers AI-planner clarifications that didn't set clarification_type).
+  // ---- Build people_action / companies_action / agency_action when a
+  // clarification is pending. AI-supplied actions (already re-validated in
+  // validateActionFromAi) are preserved; missing ones are synthesized.
   const shouldBuildClarificationActions =
     merged.ask_clarification && (
       merged.clarification_type === "people_vs_companies"
+      || merged.clarification_type === "people_vs_agency"
       || merged.clarification_type === "people_unavailable"
       || (hasRoleWord && hasLocationHint)
     );
@@ -457,43 +552,71 @@ export async function planToolInput(
     const baseQuery = (baseRoleKw.length > 0 ? baseRoleKw.join(" ") : prompt).slice(0, 200);
     const baseMax = merged.max_results || 10;
 
-    const companies_action: ToolInput = {
-      intent: "source_companies_hiring",
-      tool_name: "source_with_apify",
-      selected_actor_key: "apify_jobs",
-      source_type: "jobs",
-      query: baseQuery,
-      role_keywords: baseRoleKw,
-      location: baseLoc,
-      max_results: clampForActor("apify_jobs", baseMax),
-      needs_enrichment: merged.needs_enrichment,
-      needs_outreach: merged.needs_outreach,
-      execution_mode: merged.execution_mode,
-      confidence: 0.8,
-      missing_fields: [],
-      reason: "Resolved from clarification: companies hiring.",
-    };
-    merged.companies_action = companies_action;
-
-    if (peopleActorEnabled) {
-      merged.people_action = {
-        intent: "source_people_profiles",
+    if (!merged.companies_action && merged.clarification_type !== "people_vs_agency") {
+      merged.companies_action = {
+        intent: "source_companies_hiring",
         tool_name: "source_with_apify",
-        selected_actor_key: "apify_people_search",
-        source_type: "people_profiles",
+        selected_actor_key: "apify_jobs",
+        source_type: "jobs",
         query: baseQuery,
         role_keywords: baseRoleKw,
         location: baseLoc,
-        max_results: clampForActor("apify_people_search", baseMax),
+        max_results: clampForActor("apify_jobs", baseMax),
         needs_enrichment: merged.needs_enrichment,
         needs_outreach: merged.needs_outreach,
         execution_mode: merged.execution_mode,
         confidence: 0.8,
         missing_fields: [],
-        reason: "Resolved from clarification: individual profiles.",
+        reason: "Resolved from clarification: companies hiring.",
       };
-    } else {
-      merged.people_action = null;
+    }
+
+    if (!merged.people_action) {
+      if (peopleActorEnabled) {
+        merged.people_action = {
+          intent: "source_people_profiles",
+          tool_name: "source_with_apify",
+          selected_actor_key: "apify_people_search",
+          source_type: "people_profiles",
+          query: baseQuery,
+          role_keywords: baseRoleKw,
+          location: baseLoc,
+          max_results: clampForActor("apify_people_search", baseMax),
+          needs_enrichment: merged.needs_enrichment,
+          needs_outreach: merged.needs_outreach,
+          execution_mode: merged.execution_mode,
+          confidence: 0.8,
+          missing_fields: [],
+          reason: "Resolved from clarification: individual profiles.",
+          remote_ok: merged.remote_ok,
+          seniority: merged.seniority,
+        };
+      } else {
+        merged.people_action = null;
+      }
+    }
+
+    // agency_action has no dedicated actor; we preserve whatever the AI built
+    // (re-validated to a null actor) so the backend can present it as a "we
+    // can't execute this directly yet" branch and resolve to a Hawk/Scribe
+    // research draft. Synthesize a minimal one if the AI didn't.
+    if (merged.clarification_type === "people_vs_agency" && !merged.agency_action) {
+      merged.agency_action = {
+        intent: "source_agencies",
+        tool_name: null,
+        selected_actor_key: null,
+        source_type: null,
+        query: `${baseQuery} agency`.slice(0, 200),
+        role_keywords: baseRoleKw,
+        location: baseLoc,
+        max_results: baseMax,
+        needs_enrichment: false,
+        needs_outreach: false,
+        execution_mode: "fast",
+        confidence: 0.6,
+        missing_fields: [],
+        reason: "Agency option from people_vs_agency clarification (no dedicated actor yet).",
+      };
     }
   }
 

@@ -135,7 +135,14 @@ function taskFraming(task: AgentorySystemPromptTask | undefined): string {
     case "planning":
       return "TASK FRAMING: You are Pilot planning a multi-step workflow. Assign one agent per step, pick the right tool, mark approvals.";
     case "tool_parameter_extraction":
-      return "TASK FRAMING: You are extracting tool input parameters. Choose a single selected_actor_key from the registry — never invent one.";
+      return [
+        "TASK FRAMING: You are Agentory's intent normalizer.",
+        "Read messy business language and produce a strict ToolInput JSON object.",
+        "Do not answer conversationally. Do not run tools. Do not invent unavailable capabilities.",
+        "Extract: business_goal, intent, actor/tool choice, missing fields, clarification question, and pre-built alternative actions when ambiguous.",
+        "Supported intents: simple_chat | capabilities | daily_brief | source_people_profiles | source_companies_hiring | source_agencies | analyze_url | broad_research | draft_outreach | create_content | unclear.",
+        "Pick selected_actor_key only from the registry; if unsure, leave it null and set needs_clarification=true with pre-built people_action / companies_action / agency_action options the backend can execute after the user picks.",
+      ].join(" ");
     case "agent_execution":
       return "TASK FRAMING: You are an individual specialist agent executing one assigned step. Use only provided context; do not invent data.";
     case "reporting":
