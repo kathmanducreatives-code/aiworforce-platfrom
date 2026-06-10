@@ -338,10 +338,24 @@ export async function planToolInput(
       confidence: typeof o.confidence === "number" ? Math.max(0, Math.min(1, o.confidence)) : fb.confidence,
       missing_fields: Array.isArray(o.missing_fields) ? (o.missing_fields as string[]) : fb.missing_fields,
       reason: typeof o.reason === "string" && o.reason.trim() ? o.reason : fb.reason,
-      ask_clarification: o.requires_clarification === true ? true : undefined,
-      clarification: typeof o.clarification_question === "string" && o.clarification_question.trim()
-        ? o.clarification_question
+      ask_clarification: (o.ask_clarification === true || o.needs_clarification === true || o.requires_clarification === true) ? true : undefined,
+      clarification: typeof o.clarification === "string" && o.clarification.trim()
+        ? o.clarification
+        : (typeof o.clarification_question === "string" && o.clarification_question.trim()
+          ? o.clarification_question
+          : undefined),
+      clarification_type: (o.clarification_type === "people_vs_companies"
+        || o.clarification_type === "people_vs_agency"
+        || o.clarification_type === "people_unavailable"
+        || o.clarification_type === "generic")
+        ? o.clarification_type
         : undefined,
+      business_goal: typeof o.business_goal === "string" ? o.business_goal : undefined,
+      remote_ok: typeof o.remote_ok === "boolean" ? o.remote_ok : undefined,
+      seniority: typeof o.seniority === "string" ? o.seniority : undefined,
+      people_action: validateActionFromAi(o.people_action),
+      companies_action: validateActionFromAi(o.companies_action),
+      agency_action: validateActionFromAi(o.agency_action),
     };
   }
 
