@@ -302,17 +302,21 @@ Deno.serve(async (req) => {
     const meta: any = lastAssistant?.metadata ?? null;
     if (meta && meta.pending_clarification === true) {
       const reply = message.toLowerCase();
-      const peopleRe = /\b(individual|individuals|profiles?|people|candidates?|persons?|linkedin profiles?)\b/i;
+      const peopleRe = /\b(individual|individuals|profiles?|people|candidates?|persons?|linkedin profiles?|engineers? to hire|hire (someone|engineers?|developers?))\b/i;
       const companiesRe = /\b(compan(?:y|ies)|hiring|jobs?|roles?|openings?|careers?|recruit)\b/i;
+      const agencyRe = /\b(agenc(?:y|ies)|firms?|consultanc(?:y|ies)|studio|outsourc|dev shop)\b/i;
       const wantsPeople = peopleRe.test(reply);
       const wantsCompanies = companiesRe.test(reply);
+      const wantsAgency = agencyRe.test(reply);
 
-      let resolved: { kind: "people" | "companies"; action: ToolInput } | null = null;
-      if (wantsPeople && !wantsCompanies && meta.people_action) {
+      let resolved: { kind: "people" | "companies" | "agency"; action: ToolInput } | null = null;
+      if (wantsAgency && !wantsPeople && !wantsCompanies && meta.agency_action) {
+        resolved = { kind: "agency", action: meta.agency_action as ToolInput };
+      } else if (wantsPeople && !wantsCompanies && !wantsAgency && meta.people_action) {
         resolved = { kind: "people", action: meta.people_action as ToolInput };
-      } else if (wantsCompanies && !wantsPeople && meta.companies_action) {
+      } else if (wantsCompanies && !wantsPeople && !wantsAgency && meta.companies_action) {
         resolved = { kind: "companies", action: meta.companies_action as ToolInput };
-      } else if (wantsPeople && !wantsCompanies && !meta.people_action && meta.companies_action) {
+      } else if (wantsPeople && !wantsCompanies && !wantsAgency && !meta.people_action && meta.companies_action) {
         // People requested but unavailable — surface fallback offer, do not run silently.
         const fallbackMsg =
           "Individual people/profile sourcing isn't configured yet. I can find companies hiring for that role instead — reply \"companies\" to proceed.";
