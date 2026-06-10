@@ -418,14 +418,18 @@ export async function planToolInput(
     && hasLocationHint
     && !COMPANY_INTENT_RE.test(prompt)
     && !/\bindividual\b/i.test(prompt);
-  if (ambiguousRoleLoc && !merged.ask_clarification) {
+  if (ambiguousRoleLoc) {
     const role = (merged.role_keywords[0] ?? "people");
     const loc = merged.location ?? "that location";
     const peopleOption = peopleActorEnabled
       ? `individual ${role} profiles`
       : `individual ${role} profiles (not configured yet)`;
-    merged.ask_clarification = true;
-    merged.clarification = `Do you want ${peopleOption}, or companies hiring ${role}s in ${loc}?`;
+    if (!merged.ask_clarification) {
+      merged.ask_clarification = true;
+      merged.clarification = `Do you want ${peopleOption}, or companies hiring ${role}s in ${loc}?`;
+    }
+    // Always tag people_vs_companies for ambiguous role+location, even if the
+    // AI planner also set ask_clarification without a clarification_type.
     merged.clarification_type = "people_vs_companies";
     // Do NOT pre-commit a tool while waiting on the user.
     merged.selected_actor_key = null;
@@ -435,7 +439,19 @@ export async function planToolInput(
   }
 
   // ---- Build people_action / companies_action when a clarification is pending ----
-  if (merged.ask_clarification && (merged.clarification_type === "people_vs_companies" || merged.clarification_type === "people_unavailable")) {
+  // Trigger when the clarification is explicitly typed, OR when we're asking a
+  // clarification on a prompt that has both a role word and a location hint
+  // (covers AI-planner clarifications that didn't set clarification_type).
+  const shouldBuildClarificationActions =
+    merged.ask_clarification && (
+      merged.clarification_type === "people_vs_companies"
+      || merged.clarification_type === "people_unavailable"
+      || (hasRoleWord && hasLocationHint)
+    );
+  if (shouldBuildClarificationActions && !merged.clarification_type) {
+    merged.clarification_type = "people_vs_companies";
+  }
+  if (shouldBuildClarificationActions) {
     const baseRoleKw = merged.role_keywords;
     const baseLoc = merged.location;
     const baseQuery = (baseRoleKw.length > 0 ? baseRoleKw.join(" ") : prompt).slice(0, 200);
