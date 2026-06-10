@@ -351,6 +351,32 @@ Deno.serve(async (req) => {
         const originalInstruction: string = typeof meta.original_request === "string" && meta.original_request.trim()
           ? meta.original_request
           : message;
+
+        // Agency branch has no dedicated actor yet — surface a clear capability
+        // message instead of crashing the orchestrator with a null tool.
+        if (resolved.kind === "agency" && !resolved.action?.tool_name) {
+          const agencyMsg =
+            "Dedicated agency sourcing isn't configured yet. I can either (a) find companies hiring for the roles you need (reply \"companies\"), or (b) run a Hawk web research pass on dev agencies — say which you'd prefer.";
+          const { data: saved } = await admin
+            .from("messages")
+            .insert({
+              conversation_id: conversationId,
+              role: "assistant",
+              content: agencyMsg,
+              agent_slug: "pilot",
+              model_used: "google/gemini-3-flash-preview",
+              metadata: {
+                ...meta,
+                pending_clarification: true,
+                clarification_type: "agency_unavailable",
+                prompt_version: AGENTORY_SYSTEM_PROMPT_VERSION,
+              },
+            })
+            .select("*")
+            .single();
+          return json({ type: "reply", conversation_id: conversationId, clarification: true, message: saved });
+        }
+
         return await delegateToOrchestrate({
           admin,
           SUPABASE_URL,
@@ -365,9 +391,12 @@ Deno.serve(async (req) => {
         });
       }
 
-      if (!wantsPeople && !wantsCompanies) {
+      if (!wantsPeople && !wantsCompanies && !wantsAgency) {
         // Couldn't classify — ask once more, preserve context.
-        const reAsk = "Please choose one: individual profiles or companies hiring.";
+        const hasAgency = !!meta.agency_action;
+        const reAsk = hasAgency
+          ? "Please choose one: individual profiles, companies hiring, or an agency."
+          : "Please choose one: individual profiles or companies hiring.";
         const { data: saved } = await admin
           .from("messages")
           .insert({
@@ -386,7 +415,7 @@ Deno.serve(async (req) => {
           .single();
         return json({ type: "reply", conversation_id: conversationId, clarification: true, message: saved });
       }
-      // If both matched, fall through to normal planner.
+      // If multiple matched, fall through to normal planner.
     }
   }
 
