@@ -399,7 +399,7 @@ export default function ChatComposerPro({ restrictDepartment, placeholder, autoF
             <motion.button
               key="send"
               type="button"
-              onClick={submit}
+              onClick={() => { void submit(); }}
               disabled={!hasText || submitting}
               initial={{ x: 8, opacity: 0 }}
               animate={{ x: 0, opacity: 1 }}
