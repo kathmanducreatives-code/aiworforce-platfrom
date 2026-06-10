@@ -127,6 +127,13 @@ export default function ScoutResultsView({ output }: { output: any }) {
                   </a>
                 )}
               </div>
+              <ActionRow
+                items={[
+                  { label: 'Save Profile', icon: Bookmark, onClick: () => sendToPilot(`Save ${p.full_name ?? 'this profile'}${p.company ? ` at ${p.company}` : ''} as a lead`) },
+                  { label: 'Rank', icon: Sparkles, onClick: () => sendToPilot(`Have Aria rank ${p.full_name ?? 'this profile'}${p.company ? ` at ${p.company}` : ''}`) },
+                  { label: 'Draft Outreach', icon: Send, onClick: () => sendToPilot(`Draft outreach for ${p.full_name ?? 'this profile'}${p.company ? ` at ${p.company}` : ''}`) },
+                ]}
+              />
             </li>
           ))}
         </ul>
