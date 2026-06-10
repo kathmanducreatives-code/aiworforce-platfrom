@@ -190,8 +190,16 @@ export default function ScoutResultsView({ output }: { output: any }) {
                       Company <ExternalLink className="h-3 w-3" />
                     </a>
                   )}
+                  )}
                 </div>
               </div>
+              <ActionRow
+                items={[
+                  { label: 'Save Lead', icon: Bookmark, onClick: () => sendToPilot(`Save ${it.company ?? it.title ?? 'this'} as a lead`) },
+                  { label: 'Enrich', icon: Sparkles, onClick: () => sendToPilot(`Enrich ${it.company ?? it.title ?? 'this company'}${it.companyUrl ? ` (${it.companyUrl})` : ''}`) },
+                  { label: 'Draft Outreach', icon: Send, onClick: () => sendToPilot(`Draft outreach for ${it.company ?? it.title}${it.title && it.company ? ` about the ${it.title} role` : ''}`) },
+                ]}
+              />
             </li>
           ))}
         </ul>
