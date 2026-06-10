@@ -115,11 +115,8 @@ export default function ChatComposerPro({ restrictDepartment, placeholder, autoF
     const onSend = (e: Event) => {
       const detail = (e as CustomEvent<string>).detail;
       if (typeof detail !== 'string' || !detail.trim()) return;
-      setValue(detail);
-      requestAnimationFrame(() => {
-        // submit reads from state on next tick
-        setTimeout(() => { void submit(); }, 0);
-      });
+      setValue('');
+      void submit(detail);
     };
     window.addEventListener('chat:prefill', onPrefill);
     window.addEventListener('chat:send', onSend);
