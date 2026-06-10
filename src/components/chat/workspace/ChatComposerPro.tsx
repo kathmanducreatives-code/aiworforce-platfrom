@@ -112,8 +112,22 @@ export default function ChatComposerPro({ restrictDepartment, placeholder, autoF
         el?.setSelectionRange(detail.length, detail.length);
       });
     };
+    const onSend = (e: Event) => {
+      const detail = (e as CustomEvent<string>).detail;
+      if (typeof detail !== 'string' || !detail.trim()) return;
+      setValue(detail);
+      requestAnimationFrame(() => {
+        // submit reads from state on next tick
+        setTimeout(() => { void submit(); }, 0);
+      });
+    };
     window.addEventListener('chat:prefill', onPrefill);
-    return () => window.removeEventListener('chat:prefill', onPrefill);
+    window.addEventListener('chat:send', onSend);
+    return () => {
+      window.removeEventListener('chat:prefill', onPrefill);
+      window.removeEventListener('chat:send', onSend);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const detectPopup = (text: string, caret: number) => {
