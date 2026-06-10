@@ -112,8 +112,19 @@ export default function ChatComposerPro({ restrictDepartment, placeholder, autoF
         el?.setSelectionRange(detail.length, detail.length);
       });
     };
+    const onSend = (e: Event) => {
+      const detail = (e as CustomEvent<string>).detail;
+      if (typeof detail !== 'string' || !detail.trim()) return;
+      setValue('');
+      void submit(detail);
+    };
     window.addEventListener('chat:prefill', onPrefill);
-    return () => window.removeEventListener('chat:prefill', onPrefill);
+    window.addEventListener('chat:send', onSend);
+    return () => {
+      window.removeEventListener('chat:prefill', onPrefill);
+      window.removeEventListener('chat:send', onSend);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const detectPopup = (text: string, caret: number) => {
@@ -163,8 +174,8 @@ export default function ChatComposerPro({ restrictDepartment, placeholder, autoF
     if (cmdId === 'plan') return;
   };
 
-  const submit = async () => {
-    const text = value.trim();
+  const submit = async (override?: string) => {
+    const text = (override ?? value).trim();
     if (!text || submitting) return;
 
     // Resolve target agent slug
@@ -385,7 +396,7 @@ export default function ChatComposerPro({ restrictDepartment, placeholder, autoF
             <motion.button
               key="send"
               type="button"
-              onClick={submit}
+              onClick={() => { void submit(); }}
               disabled={!hasText || submitting}
               initial={{ x: 8, opacity: 0 }}
               animate={{ x: 0, opacity: 1 }}

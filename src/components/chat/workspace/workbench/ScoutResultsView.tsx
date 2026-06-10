@@ -1,6 +1,32 @@
-import { ExternalLink, Building2, MapPin, User } from 'lucide-react';
+import { ExternalLink, Building2, MapPin, User, Bookmark, Sparkles, Send } from 'lucide-react';
+import { toast } from 'sonner';
 import { normalizeApifyItems, normalizeApifyPeople, isPeopleOutput } from './normalize';
 import RawJsonView from './RawJsonView';
+
+function sendToPilot(text: string) {
+  window.dispatchEvent(new CustomEvent('chat:send', { detail: text }));
+  toast.success('Sent to Pilot');
+}
+
+function ActionRow({ items }: { items: { label: string; icon: any; onClick: () => void }[] }) {
+  if (items.length === 0) return null;
+  return (
+    <div className="mt-2 flex items-center gap-1.5 flex-wrap">
+      {items.map((a) => {
+        const Icon = a.icon;
+        return (
+          <button
+            key={a.label}
+            onClick={a.onClick}
+            className="inline-flex items-center gap-1 text-[11px] px-2 py-1 rounded-md border border-white/[0.08] bg-white/[0.02] text-[#C9D1D9] hover:bg-emerald-500/[0.06] hover:border-emerald-500/30 hover:text-[#F0F6FC] transition-colors"
+          >
+            <Icon className="h-3 w-3" /> {a.label}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
 
 export default function ScoutResultsView({ output }: { output: any }) {
   const peopleMode = isPeopleOutput(output);
@@ -101,6 +127,13 @@ export default function ScoutResultsView({ output }: { output: any }) {
                   </a>
                 )}
               </div>
+              <ActionRow
+                items={[
+                  { label: 'Save Profile', icon: Bookmark, onClick: () => sendToPilot(`Save ${p.full_name ?? 'this profile'}${p.company ? ` at ${p.company}` : ''} as a lead`) },
+                  { label: 'Rank', icon: Sparkles, onClick: () => sendToPilot(`Have Aria rank ${p.full_name ?? 'this profile'}${p.company ? ` at ${p.company}` : ''}`) },
+                  { label: 'Draft Outreach', icon: Send, onClick: () => sendToPilot(`Draft outreach for ${p.full_name ?? 'this profile'}${p.company ? ` at ${p.company}` : ''}`) },
+                ]}
+              />
             </li>
           ))}
         </ul>
@@ -159,6 +192,13 @@ export default function ScoutResultsView({ output }: { output: any }) {
                   )}
                 </div>
               </div>
+              <ActionRow
+                items={[
+                  { label: 'Save Lead', icon: Bookmark, onClick: () => sendToPilot(`Save ${it.company ?? it.title ?? 'this'} as a lead`) },
+                  { label: 'Enrich', icon: Sparkles, onClick: () => sendToPilot(`Enrich ${it.company ?? it.title ?? 'this company'}${it.companyUrl ? ` (${it.companyUrl})` : ''}`) },
+                  { label: 'Draft Outreach', icon: Send, onClick: () => sendToPilot(`Draft outreach for ${it.company ?? it.title}${it.title && it.company ? ` about the ${it.title} role` : ''}`) },
+                ]}
+              />
             </li>
           ))}
         </ul>

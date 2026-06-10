@@ -8,10 +8,15 @@ import OutputActionBar from './OutputActionBar';
 import SummaryView from './SummaryView';
 import RawJsonView from './RawJsonView';
 import FailureRecoveryCard from './FailureRecoveryCard';
+import NoResultsCard from './NoResultsCard';
+import AriaRankingView from './AriaRankingView';
+import PennDraftView from './PennDraftView';
+import HawkResearchView from './HawkResearchView';
 import ChatErrorBoundary from '../ChatErrorBoundary';
-import { Loader2, FlaskConical, FileText, ListChecks, Activity, Code2 } from 'lucide-react';
+import { normalizeApifyItems, normalizeApifyPeople, isPeopleOutput, normalizeAriaRankings, normalizePennDrafts, normalizeFirecrawl } from './normalize';
+import { Loader2, FlaskConical, FileText, ListChecks, Activity, Code2, Trophy, Mail, Link2 } from 'lucide-react';
 
-type Tab = 'summary' | 'results' | 'activity' | 'raw';
+type Tab = 'summary' | 'results' | 'rankings' | 'drafts' | 'sources' | 'activity' | 'raw';
 
 export default function WorkbenchPanel() {
   const { selectedOutput, closeWorkbench, workbenchWidth, setWorkbenchWidth } = useChatWorkspace();
@@ -52,12 +57,50 @@ export default function WorkbenchPanel() {
     );
   }
 
-  const tabs: { id: Tab; label: string; icon: any }[] = [
-    { id: 'summary', label: 'Summary', icon: FileText },
-    { id: 'results', label: 'Results', icon: ListChecks },
-    { id: 'activity', label: 'Activity', icon: Activity },
-    { id: 'raw', label: 'Raw', icon: Code2 },
-  ];
+  // Derived tabs — only show ones that have data
+  const output = data.toolCall?.output_json ?? (data.task as any)?.output ?? null;
+  const peopleMode = isPeopleOutput(output);
+  const apifyItems = useMemo(() => peopleMode ? [] : normalizeApifyItems(output), [output, peopleMode]);
+  const apifyPeople = useMemo(() => peopleMode ? normalizeApifyPeople(output) : [], [output, peopleMode]);
+  const rankings = useMemo(() => normalizeAriaRankings(output), [output]);
+  const drafts = useMemo(() => normalizePennDrafts(output), [output]);
+  const firecrawl = useMemo(() => normalizeFirecrawl(output), [output]);
+  const hasResults = (apifyItems.length + apifyPeople.length) > 0;
+  const hasRankings = rankings.length > 0;
+  const hasDrafts = drafts.length > 0 && drafts.some((d) => d.subject || d.body || d.linkedin);
+  const hasSources = !!(firecrawl.url || firecrawl.markdown || (firecrawl.citations?.length ?? 0) > 0);
+  const provider = (data.toolCall?.provider ?? '').toLowerCase();
+  const isApify = provider === 'apify' || hasResults;
+  const isFirecrawl = provider === 'firecrawl' || hasSources;
+  const isPenn = data.agentSlug === 'penn' || hasDrafts;
+  const isAria = data.agentSlug === 'aria' || hasRankings;
+
+  const tabs: { id: Tab; label: string; icon: any }[] = useMemo(() => {
+    const list: { id: Tab; label: string; icon: any }[] = [
+      { id: 'summary', label: 'Summary', icon: FileText },
+    ];
+    if (hasResults || failed || isApify) list.push({ id: 'results', label: 'Results', icon: ListChecks });
+    if (hasRankings || isAria) list.push({ id: 'rankings', label: 'Rankings', icon: Trophy });
+    if (hasDrafts || isPenn) list.push({ id: 'drafts', label: 'Drafts', icon: Mail });
+    if (hasSources || isFirecrawl) list.push({ id: 'sources', label: 'Sources', icon: Link2 });
+    list.push({ id: 'activity', label: 'Activity', icon: Activity });
+    list.push({ id: 'raw', label: 'Raw', icon: Code2 });
+    return list;
+  }, [hasResults, hasRankings, hasDrafts, hasSources, isApify, isFirecrawl, isPenn, isAria, failed]);
+
+  // Snap to a valid tab if the current one isn't available
+  useEffect(() => {
+    if (!tabs.some((t) => t.id === tab)) setTab('summary');
+  }, [tabs, tab]);
+
+  // Mode for NoResultsCard
+  const noResultsMode: 'people' | 'jobs' | 'companies' | 'generic' =
+    peopleMode ? 'people'
+    : (data.toolCall?.output_json?.actor_output_type === 'jobs' || (data.toolCall?.tool_name ?? '').includes('job')) ? 'jobs'
+    : 'generic';
+  const taskPayload = (data.task?.payload ?? {}) as any;
+  const noResultsLocation = taskPayload.location ?? data.toolCall?.output_json?.location ?? null;
+  const noResultsRole = Array.isArray(taskPayload.role_keywords) ? taskPayload.role_keywords[0] : null;
 
   // Drag-resize (desktop only)
   const onResizePointerDown = (e: React.PointerEvent) => {
@@ -134,6 +177,8 @@ export default function WorkbenchPanel() {
               <>
                 {failed ? (
                   <FailureRecoveryCard toolCall={data.toolCall} task={data.task} />
+                ) : !hasResults && isApify ? (
+                  <NoResultsCard mode={noResultsMode} location={noResultsLocation} role={noResultsRole} />
                 ) : (
                   <AgentOutputViewer
                     task={data.task}
@@ -144,6 +189,15 @@ export default function WorkbenchPanel() {
                 )}
                 <OutputActionBar agentSlug={data.agentSlug} status={status} />
               </>
+            )}
+            {tab === 'rankings' && (
+              <AriaRankingView output={output} />
+            )}
+            {tab === 'drafts' && (
+              <PennDraftView output={output} approval={data.approval} />
+            )}
+            {tab === 'sources' && (
+              <HawkResearchView output={output} />
             )}
             {tab === 'activity' && (
               <ul className="space-y-2">

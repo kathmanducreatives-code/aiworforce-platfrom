@@ -1,9 +1,11 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Copy, Check } from 'lucide-react';
 import { useChatConversation } from '@/hooks/useChatConversation';
 import { AGENT_BY_ID } from '@/data/agentProfiles';
 import { cn } from '@/lib/utils';
 import ExecutionPlanCard from './plan/ExecutionPlanCard';
+import ClarificationCard from './bubbles/ClarificationCard';
+import InterpretationPill from './bubbles/InterpretationPill';
 
 const AGENT_HEX: Record<string, string> = {
   scout: '#3B82F6', aria: '#8B5CF6', penn: '#10B981', hawk: '#14B8A6', scribe: '#A855F7',
@@ -105,6 +107,15 @@ export default function ChatView({ conversationId, agentSlug, pendingUserText, a
         const planMeta = meta && meta.type === 'execution_plan' && typeof meta.plan_id === 'string'
           ? meta as { plan_id: string; plan_title?: string; task_count?: number; agents?: string[]; connector_limitations?: string[] }
           : null;
+        const toolInput = (meta?.tool_input ?? null) as Record<string, any> | null;
+        const isClarification =
+          !!meta &&
+          (meta.clarification === true || meta.needs_clarification === true || !!meta.pending_clarification) &&
+          (toolInput?.people_action || toolInput?.companies_action || toolInput?.agency_action ||
+            meta.people_action || meta.companies_action || meta.agency_action);
+        const peopleAction = toolInput?.people_action ?? meta?.people_action ?? null;
+        const companiesAction = toolInput?.companies_action ?? meta?.companies_action ?? null;
+        const agencyAction = toolInput?.agency_action ?? meta?.agency_action ?? null;
         return (
           <div key={m.id} className="flex items-start gap-3">
             <InitialCircle slug={slug} />
@@ -118,6 +129,24 @@ export default function ChatView({ conversationId, agentSlug, pendingUserText, a
               ) : (
                 <div className={cn('text-[14px] leading-relaxed whitespace-pre-wrap', m.is_error ? 'text-[#7D8590]' : 'text-[#F0F6FC]')}>
                   {m.content}
+                </div>
+              )}
+              {toolInput && (toolInput.business_goal || toolInput.intent || toolInput.selected_actor_key || toolInput.execution_mode) && !isClarification && !planMeta && (
+                <InterpretationPill
+                  businessGoal={toolInput.business_goal ?? null}
+                  intent={toolInput.intent ?? null}
+                  selectedActorKey={toolInput.selected_actor_key ?? null}
+                  executionMode={toolInput.execution_mode ?? null}
+                />
+              )}
+              {isClarification && (
+                <div className="mt-2">
+                  <ClarificationCard
+                    question={m.content}
+                    peopleAction={peopleAction}
+                    companiesAction={companiesAction}
+                    agencyAction={agencyAction}
+                  />
                 </div>
               )}
               {planMeta && (
