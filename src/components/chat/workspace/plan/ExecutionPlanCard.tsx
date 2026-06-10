@@ -116,7 +116,7 @@ export default function ExecutionPlanCard({ planId, meta }: Props) {
   // Derive normalized status
   const pendingApprovals = approvals.some((a) => a.status === 'pending');
   const anyFailed = tasks.some((t) => t.status === 'failed');
-  const anyRunning = tasks.some((t) => t.status === 'running' || t.status === 'queued');
+  const anyRunning = tasks.some((t) => t.status === 'running' || t.status === 'pending');
   const allComplete = tasks.length > 0 && tasks.every((t) => t.status === 'complete' || t.status === 'skipped');
   const normalizedStatus: string =
     rawStatus === 'failed' ? 'failed' :
