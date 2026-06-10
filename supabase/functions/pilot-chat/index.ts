@@ -302,17 +302,21 @@ Deno.serve(async (req) => {
     const meta: any = lastAssistant?.metadata ?? null;
     if (meta && meta.pending_clarification === true) {
       const reply = message.toLowerCase();
-      const peopleRe = /\b(individual|individuals|profiles?|people|candidates?|persons?|linkedin profiles?)\b/i;
+      const peopleRe = /\b(individual|individuals|profiles?|people|candidates?|persons?|linkedin profiles?|engineers? to hire|hire (someone|engineers?|developers?))\b/i;
       const companiesRe = /\b(compan(?:y|ies)|hiring|jobs?|roles?|openings?|careers?|recruit)\b/i;
+      const agencyRe = /\b(agenc(?:y|ies)|firms?|consultanc(?:y|ies)|studio|outsourc|dev shop)\b/i;
       const wantsPeople = peopleRe.test(reply);
       const wantsCompanies = companiesRe.test(reply);
+      const wantsAgency = agencyRe.test(reply);
 
-      let resolved: { kind: "people" | "companies"; action: ToolInput } | null = null;
-      if (wantsPeople && !wantsCompanies && meta.people_action) {
+      let resolved: { kind: "people" | "companies" | "agency"; action: ToolInput } | null = null;
+      if (wantsAgency && !wantsPeople && !wantsCompanies && meta.agency_action) {
+        resolved = { kind: "agency", action: meta.agency_action as ToolInput };
+      } else if (wantsPeople && !wantsCompanies && !wantsAgency && meta.people_action) {
         resolved = { kind: "people", action: meta.people_action as ToolInput };
-      } else if (wantsCompanies && !wantsPeople && meta.companies_action) {
+      } else if (wantsCompanies && !wantsPeople && !wantsAgency && meta.companies_action) {
         resolved = { kind: "companies", action: meta.companies_action as ToolInput };
-      } else if (wantsPeople && !wantsCompanies && !meta.people_action && meta.companies_action) {
+      } else if (wantsPeople && !wantsCompanies && !wantsAgency && !meta.people_action && meta.companies_action) {
         // People requested but unavailable — surface fallback offer, do not run silently.
         const fallbackMsg =
           "Individual people/profile sourcing isn't configured yet. I can find companies hiring for that role instead — reply \"companies\" to proceed.";
@@ -347,6 +351,32 @@ Deno.serve(async (req) => {
         const originalInstruction: string = typeof meta.original_request === "string" && meta.original_request.trim()
           ? meta.original_request
           : message;
+
+        // Agency branch has no dedicated actor yet — surface a clear capability
+        // message instead of crashing the orchestrator with a null tool.
+        if (resolved.kind === "agency" && !resolved.action?.tool_name) {
+          const agencyMsg =
+            "Dedicated agency sourcing isn't configured yet. I can either (a) find companies hiring for the roles you need (reply \"companies\"), or (b) run a Hawk web research pass on dev agencies — say which you'd prefer.";
+          const { data: saved } = await admin
+            .from("messages")
+            .insert({
+              conversation_id: conversationId,
+              role: "assistant",
+              content: agencyMsg,
+              agent_slug: "pilot",
+              model_used: "google/gemini-3-flash-preview",
+              metadata: {
+                ...meta,
+                pending_clarification: true,
+                clarification_type: "agency_unavailable",
+                prompt_version: AGENTORY_SYSTEM_PROMPT_VERSION,
+              },
+            })
+            .select("*")
+            .single();
+          return json({ type: "reply", conversation_id: conversationId, clarification: true, message: saved });
+        }
+
         return await delegateToOrchestrate({
           admin,
           SUPABASE_URL,
@@ -361,9 +391,12 @@ Deno.serve(async (req) => {
         });
       }
 
-      if (!wantsPeople && !wantsCompanies) {
+      if (!wantsPeople && !wantsCompanies && !wantsAgency) {
         // Couldn't classify — ask once more, preserve context.
-        const reAsk = "Please choose one: individual profiles or companies hiring.";
+        const hasAgency = !!meta.agency_action;
+        const reAsk = hasAgency
+          ? "Please choose one: individual profiles, companies hiring, or an agency."
+          : "Please choose one: individual profiles or companies hiring.";
         const { data: saved } = await admin
           .from("messages")
           .insert({
@@ -382,7 +415,7 @@ Deno.serve(async (req) => {
           .single();
         return json({ type: "reply", conversation_id: conversationId, clarification: true, message: saved });
       }
-      // If both matched, fall through to normal planner.
+      // If multiple matched, fall through to normal planner.
     }
   }
 
@@ -494,11 +527,12 @@ Deno.serve(async (req) => {
             intent: intentResult.intent,
             clarification: true,
             missing_fields: toolInput.missing_fields,
-            pending_clarification: !!(toolInput.people_action || toolInput.companies_action),
+            pending_clarification: !!(toolInput.people_action || toolInput.companies_action || toolInput.agency_action),
             clarification_type: toolInput.clarification_type ?? "generic",
             original_request: message,
             people_action: toolInput.people_action ?? null,
             companies_action: toolInput.companies_action ?? null,
+            agency_action: toolInput.agency_action ?? null,
             prompt_version: AGENTORY_SYSTEM_PROMPT_VERSION,
           },
         })
