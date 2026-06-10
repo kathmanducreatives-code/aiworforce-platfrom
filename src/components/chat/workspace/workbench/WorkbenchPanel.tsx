@@ -177,6 +177,8 @@ export default function WorkbenchPanel() {
               <>
                 {failed ? (
                   <FailureRecoveryCard toolCall={data.toolCall} task={data.task} />
+                ) : !hasResults && isApify ? (
+                  <NoResultsCard mode={noResultsMode} location={noResultsLocation} role={noResultsRole} />
                 ) : (
                   <AgentOutputViewer
                     task={data.task}
@@ -187,6 +189,15 @@ export default function WorkbenchPanel() {
                 )}
                 <OutputActionBar agentSlug={data.agentSlug} status={status} />
               </>
+            )}
+            {tab === 'rankings' && (
+              <AriaRankingView output={output} />
+            )}
+            {tab === 'drafts' && (
+              <PennDraftView output={output} approval={data.approval} />
+            )}
+            {tab === 'sources' && (
+              <HawkResearchView output={output} />
             )}
             {tab === 'activity' && (
               <ul className="space-y-2">
