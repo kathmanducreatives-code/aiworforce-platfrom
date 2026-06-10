@@ -93,6 +93,25 @@ export default function WorkbenchHeader({
         <span className={`text-[10px] px-2 py-0.5 rounded-md border capitalize ${STATUS_TONE[status] ?? STATUS_TONE.pending}`}>
           {status.replace('_', ' ')}
         </span>
+        {(() => {
+          const out = toolCall?.output_json;
+          const actorLabel = out?.actor_label ?? out?.selected_actor_key ?? out?.actor_key ?? null;
+          return actorLabel ? (
+            <span className="font-mono text-[10px] px-2 py-0.5 rounded-md border border-emerald-500/20 bg-emerald-500/[0.05] text-emerald-200">
+              actor: {actorLabel}
+            </span>
+          ) : null;
+        })()}
+        {toolCall?.output_json?.actor_output_type && (
+          <span className="text-[10px] px-2 py-0.5 rounded-md border border-white/[0.08] bg-white/[0.02] text-[#C9D1D9]">
+            {String(toolCall.output_json.actor_output_type).replace(/_/g, ' ')}
+          </span>
+        )}
+        {agentSlug === 'penn' && (
+          <span className="text-[10px] px-2 py-0.5 rounded-md border border-amber-500/30 bg-amber-500/10 text-amber-300 uppercase tracking-wider">
+            approval required
+          </span>
+        )}
         {toolLabel && (
           <span className="font-mono text-[10px] px-2 py-0.5 rounded-md border border-white/[0.06] bg-white/[0.02] text-[#7D8590]">
             {toolLabel}
