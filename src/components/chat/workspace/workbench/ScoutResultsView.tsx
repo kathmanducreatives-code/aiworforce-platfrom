@@ -190,7 +190,6 @@ export default function ScoutResultsView({ output }: { output: any }) {
                       Company <ExternalLink className="h-3 w-3" />
                     </a>
                   )}
-                  )}
                 </div>
               </div>
               <ActionRow
