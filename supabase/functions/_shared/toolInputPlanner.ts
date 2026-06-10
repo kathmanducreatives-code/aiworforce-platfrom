@@ -285,6 +285,51 @@ function buildPlannerSystemPrompt(): string {
   }) + "\n\n" + PLANNER_JSON_TAIL;
 }
 
+// Re-validate an AI-suggested action object through the same actor/tool/clamp
+// pipeline so Gemini can never smuggle an unknown or disabled actor in.
+function validateActionFromAi(raw: unknown): ToolInput | null | undefined {
+  if (raw === null) return null;
+  if (!raw || typeof raw !== "object") return undefined;
+  const r = raw as Record<string, any>;
+  const actorKey = typeof r.selected_actor_key === "string" ? r.selected_actor_key : null;
+  let resolvedKey: string | null = null;
+  let resolvedTool: ToolName = null;
+  let resolvedSource: SourceType = null;
+  if (actorKey) {
+    const actor = getActorByKey(actorKey);
+    if (actor && isActorRuntimeEnabled(actor)) {
+      resolvedKey = actor.key;
+      resolvedTool = actor.tool_name;
+      resolvedSource = (actor.source_type as SourceType) ?? null;
+    }
+  }
+  const roleKw = Array.isArray(r.role_keywords)
+    ? (r.role_keywords as unknown[]).map((s) => String(s)).filter(Boolean)
+    : [];
+  const maxReq = typeof r.max_results === "number" ? Math.floor(r.max_results) : 10;
+  return {
+    intent: typeof r.intent === "string" ? r.intent : "unclear",
+    tool_name: resolvedTool,
+    selected_actor_key: resolvedKey,
+    source_type: resolvedSource,
+    query: typeof r.query === "string" ? r.query : "",
+    role_keywords: roleKw,
+    location: typeof r.location === "string" && r.location.trim() ? r.location : null,
+    max_results: clampForActor(resolvedKey, maxReq),
+    needs_enrichment: r.needs_enrichment === true,
+    needs_outreach: r.needs_outreach === true,
+    execution_mode: (r.execution_mode === "deep" || r.execution_mode === "outreach")
+      ? r.execution_mode
+      : "fast",
+    confidence: typeof r.confidence === "number" ? r.confidence : 0.7,
+    missing_fields: [],
+    reason: typeof r.reason === "string" ? r.reason : "Pre-built clarification action.",
+    remote_ok: typeof r.remote_ok === "boolean" ? r.remote_ok : undefined,
+    seniority: typeof r.seniority === "string" ? r.seniority : undefined,
+  };
+}
+
+
 export async function planToolInput(
   prompt: string,
   intent: Intent | string,
