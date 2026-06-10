@@ -177,8 +177,8 @@ export default function ChatComposerPro({ restrictDepartment, placeholder, autoF
     if (cmdId === 'plan') return;
   };
 
-  const submit = async () => {
-    const text = value.trim();
+  const submit = async (override?: string) => {
+    const text = (override ?? value).trim();
     if (!text || submitting) return;
 
     // Resolve target agent slug
