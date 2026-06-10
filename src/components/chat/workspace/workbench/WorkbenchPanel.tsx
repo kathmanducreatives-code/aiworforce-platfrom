@@ -57,12 +57,50 @@ export default function WorkbenchPanel() {
     );
   }
 
-  const tabs: { id: Tab; label: string; icon: any }[] = [
-    { id: 'summary', label: 'Summary', icon: FileText },
-    { id: 'results', label: 'Results', icon: ListChecks },
-    { id: 'activity', label: 'Activity', icon: Activity },
-    { id: 'raw', label: 'Raw', icon: Code2 },
-  ];
+  // Derived tabs — only show ones that have data
+  const output = data.toolCall?.output_json ?? (data.task as any)?.output ?? null;
+  const peopleMode = isPeopleOutput(output);
+  const apifyItems = useMemo(() => peopleMode ? [] : normalizeApifyItems(output), [output, peopleMode]);
+  const apifyPeople = useMemo(() => peopleMode ? normalizeApifyPeople(output) : [], [output, peopleMode]);
+  const rankings = useMemo(() => normalizeAriaRankings(output), [output]);
+  const drafts = useMemo(() => normalizePennDrafts(output), [output]);
+  const firecrawl = useMemo(() => normalizeFirecrawl(output), [output]);
+  const hasResults = (apifyItems.length + apifyPeople.length) > 0;
+  const hasRankings = rankings.length > 0;
+  const hasDrafts = drafts.length > 0 && drafts.some((d) => d.subject || d.body || d.linkedin);
+  const hasSources = !!(firecrawl.url || firecrawl.markdown || (firecrawl.citations?.length ?? 0) > 0);
+  const provider = (data.toolCall?.provider ?? '').toLowerCase();
+  const isApify = provider === 'apify' || hasResults;
+  const isFirecrawl = provider === 'firecrawl' || hasSources;
+  const isPenn = data.agentSlug === 'penn' || hasDrafts;
+  const isAria = data.agentSlug === 'aria' || hasRankings;
+
+  const tabs: { id: Tab; label: string; icon: any }[] = useMemo(() => {
+    const list: { id: Tab; label: string; icon: any }[] = [
+      { id: 'summary', label: 'Summary', icon: FileText },
+    ];
+    if (hasResults || failed || isApify) list.push({ id: 'results', label: 'Results', icon: ListChecks });
+    if (hasRankings || isAria) list.push({ id: 'rankings', label: 'Rankings', icon: Trophy });
+    if (hasDrafts || isPenn) list.push({ id: 'drafts', label: 'Drafts', icon: Mail });
+    if (hasSources || isFirecrawl) list.push({ id: 'sources', label: 'Sources', icon: Link2 });
+    list.push({ id: 'activity', label: 'Activity', icon: Activity });
+    list.push({ id: 'raw', label: 'Raw', icon: Code2 });
+    return list;
+  }, [hasResults, hasRankings, hasDrafts, hasSources, isApify, isFirecrawl, isPenn, isAria, failed]);
+
+  // Snap to a valid tab if the current one isn't available
+  useEffect(() => {
+    if (!tabs.some((t) => t.id === tab)) setTab('summary');
+  }, [tabs, tab]);
+
+  // Mode for NoResultsCard
+  const noResultsMode: 'people' | 'jobs' | 'companies' | 'generic' =
+    peopleMode ? 'people'
+    : (data.toolCall?.output_json?.actor_output_type === 'jobs' || (data.toolCall?.tool_name ?? '').includes('job')) ? 'jobs'
+    : 'generic';
+  const taskPayload = (data.task?.payload ?? {}) as any;
+  const noResultsLocation = taskPayload.location ?? data.toolCall?.output_json?.location ?? null;
+  const noResultsRole = Array.isArray(taskPayload.role_keywords) ? taskPayload.role_keywords[0] : null;
 
   // Drag-resize (desktop only)
   const onResizePointerDown = (e: React.PointerEvent) => {
