@@ -533,13 +533,13 @@ export async function planToolInput(
     merged.reason = merged.reason ?? "Ambiguous role+location prompt — awaiting people-vs-companies clarification.";
   }
 
-  // ---- Build people_action / companies_action when a clarification is pending ----
-  // Trigger when the clarification is explicitly typed, OR when we're asking a
-  // clarification on a prompt that has both a role word and a location hint
-  // (covers AI-planner clarifications that didn't set clarification_type).
+  // ---- Build people_action / companies_action / agency_action when a
+  // clarification is pending. AI-supplied actions (already re-validated in
+  // validateActionFromAi) are preserved; missing ones are synthesized.
   const shouldBuildClarificationActions =
     merged.ask_clarification && (
       merged.clarification_type === "people_vs_companies"
+      || merged.clarification_type === "people_vs_agency"
       || merged.clarification_type === "people_unavailable"
       || (hasRoleWord && hasLocationHint)
     );
@@ -552,43 +552,71 @@ export async function planToolInput(
     const baseQuery = (baseRoleKw.length > 0 ? baseRoleKw.join(" ") : prompt).slice(0, 200);
     const baseMax = merged.max_results || 10;
 
-    const companies_action: ToolInput = {
-      intent: "source_companies_hiring",
-      tool_name: "source_with_apify",
-      selected_actor_key: "apify_jobs",
-      source_type: "jobs",
-      query: baseQuery,
-      role_keywords: baseRoleKw,
-      location: baseLoc,
-      max_results: clampForActor("apify_jobs", baseMax),
-      needs_enrichment: merged.needs_enrichment,
-      needs_outreach: merged.needs_outreach,
-      execution_mode: merged.execution_mode,
-      confidence: 0.8,
-      missing_fields: [],
-      reason: "Resolved from clarification: companies hiring.",
-    };
-    merged.companies_action = companies_action;
-
-    if (peopleActorEnabled) {
-      merged.people_action = {
-        intent: "source_people_profiles",
+    if (!merged.companies_action && merged.clarification_type !== "people_vs_agency") {
+      merged.companies_action = {
+        intent: "source_companies_hiring",
         tool_name: "source_with_apify",
-        selected_actor_key: "apify_people_search",
-        source_type: "people_profiles",
+        selected_actor_key: "apify_jobs",
+        source_type: "jobs",
         query: baseQuery,
         role_keywords: baseRoleKw,
         location: baseLoc,
-        max_results: clampForActor("apify_people_search", baseMax),
+        max_results: clampForActor("apify_jobs", baseMax),
         needs_enrichment: merged.needs_enrichment,
         needs_outreach: merged.needs_outreach,
         execution_mode: merged.execution_mode,
         confidence: 0.8,
         missing_fields: [],
-        reason: "Resolved from clarification: individual profiles.",
+        reason: "Resolved from clarification: companies hiring.",
       };
-    } else {
-      merged.people_action = null;
+    }
+
+    if (!merged.people_action) {
+      if (peopleActorEnabled) {
+        merged.people_action = {
+          intent: "source_people_profiles",
+          tool_name: "source_with_apify",
+          selected_actor_key: "apify_people_search",
+          source_type: "people_profiles",
+          query: baseQuery,
+          role_keywords: baseRoleKw,
+          location: baseLoc,
+          max_results: clampForActor("apify_people_search", baseMax),
+          needs_enrichment: merged.needs_enrichment,
+          needs_outreach: merged.needs_outreach,
+          execution_mode: merged.execution_mode,
+          confidence: 0.8,
+          missing_fields: [],
+          reason: "Resolved from clarification: individual profiles.",
+          remote_ok: merged.remote_ok,
+          seniority: merged.seniority,
+        };
+      } else {
+        merged.people_action = null;
+      }
+    }
+
+    // agency_action has no dedicated actor; we preserve whatever the AI built
+    // (re-validated to a null actor) so the backend can present it as a "we
+    // can't execute this directly yet" branch and resolve to a Hawk/Scribe
+    // research draft. Synthesize a minimal one if the AI didn't.
+    if (merged.clarification_type === "people_vs_agency" && !merged.agency_action) {
+      merged.agency_action = {
+        intent: "source_agencies",
+        tool_name: null,
+        selected_actor_key: null,
+        source_type: null,
+        query: `${baseQuery} agency`.slice(0, 200),
+        role_keywords: baseRoleKw,
+        location: baseLoc,
+        max_results: baseMax,
+        needs_enrichment: false,
+        needs_outreach: false,
+        execution_mode: "fast",
+        confidence: 0.6,
+        missing_fields: [],
+        reason: "Agency option from people_vs_agency clarification (no dedicated actor yet).",
+      };
     }
   }
 
