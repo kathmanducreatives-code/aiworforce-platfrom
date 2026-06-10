@@ -137,17 +137,26 @@ export default function ConversationView({ planId }: { planId: string }) {
           ))}
 
           {/* Recommended next step rail */}
-          {plan.status !== 'complete' && plan.status !== 'failed' && tasks.some((t) => t.status === 'running') && (
-            <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/[0.04] px-4 py-3 text-[12px] text-[#C9D1D9] flex items-center gap-3">
-              <span className="relative flex h-2 w-2">
-                <span className="absolute inline-flex h-full w-full rounded-full bg-emerald-400/60 animate-ping" />
-                <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-400" />
-              </span>
-              <span>
-                Agents are working. Open the Workbench on the right to inspect outputs as they arrive.
-              </span>
-            </div>
-          )}
+          {(() => {
+            const running = tasks.some((t) => t.status === 'running' || t.status === 'pending');
+            const awaiting = approvals.some((a) => a.status === 'pending');
+            const allDone = tasks.length > 0 && tasks.every((t) => t.status === 'complete' || t.status === 'skipped');
+            if (plan?.status === 'failed' || (!running && !awaiting && !allDone)) return null;
+            const label = awaiting
+              ? "Penn is waiting for your approval — review and approve to send."
+              : running
+              ? 'Agents are working. Open the Workbench on the right to inspect outputs as they arrive.'
+              : 'All steps complete. Open the Workbench to inspect outputs or ask Pilot for the next move.';
+            return (
+              <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/[0.04] px-4 py-3 text-[12px] text-[#C9D1D9] flex items-center gap-3">
+                <span className="relative flex h-2 w-2">
+                  <span className="absolute inline-flex h-full w-full rounded-full bg-emerald-400/60 animate-ping" />
+                  <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-400" />
+                </span>
+                <span>{label}</span>
+              </div>
+            );
+          })()}
         </div>
       </div>
 
