@@ -101,7 +101,7 @@ export default function ExecutionPlanCard({ planId, meta }: Props) {
 
 
   const title = plan?.user_instruction ?? meta?.plan_title ?? 'Execution plan';
-  const status = plan?.status ?? 'planning';
+  const rawStatus = plan?.status ?? 'planning';
   const taskCount = tasks.length || meta?.task_count || 0;
   const agentSlugs = useMemo(() => {
     const set = new Set<string>();
@@ -112,6 +112,34 @@ export default function ExecutionPlanCard({ planId, meta }: Props) {
     for (const a of meta?.agents ?? []) set.add(a.toLowerCase());
     return Array.from(set);
   }, [tasks, agentById, meta?.agents]);
+
+  // Derive normalized status
+  const pendingApprovals = approvals.some((a) => a.status === 'pending');
+  const anyFailed = tasks.some((t) => t.status === 'failed');
+  const anyRunning = tasks.some((t) => t.status === 'running' || t.status === 'queued');
+  const allComplete = tasks.length > 0 && tasks.every((t) => t.status === 'complete' || t.status === 'skipped');
+  const normalizedStatus: string =
+    rawStatus === 'failed' ? 'failed' :
+    pendingApprovals ? 'awaiting_approval' :
+    anyRunning ? 'running' :
+    allComplete && anyFailed ? 'partial' :
+    allComplete ? 'complete' :
+    rawStatus;
+
+  const totalResults = useMemo(() => {
+    let sum = 0;
+    for (const tc of toolCalls) {
+      const total = tc.output_json?.total;
+      if (typeof total === 'number') sum += total;
+    }
+    return sum;
+  }, [toolCalls]);
+
+  const executionMode = meta?.execution_mode ?? (plan?.payload as any)?.execution_mode ?? null;
+  const pennInvolved = agentSlugs.includes('penn') || tasks.some((t) => {
+    const slug = t.agent_id ? agentById[t.agent_id] : null;
+    return slug === 'penn';
+  });
 
   if (loading && !plan) {
     return (
@@ -130,13 +158,27 @@ export default function ExecutionPlanCard({ planId, meta }: Props) {
           <div className="text-[10px] uppercase tracking-widest text-[#7D8590] font-semibold mb-0.5">Execution plan</div>
           <div className="text-[14px] text-[#F0F6FC] font-medium leading-snug truncate">{title}</div>
         </div>
-        <span className={`text-[10px] px-2 py-0.5 rounded border ${STATUS_TONE[status] ?? STATUS_TONE.planning}`}>
-          {status.replace('_', ' ')}
-        </span>
+        <PlanStatusPill status={normalizedStatus} />
       </div>
 
-      <div className="mt-2 flex items-center gap-3 flex-wrap text-[11px] text-[#7D8590]">
+      <div className="mt-2 flex items-center gap-2 flex-wrap text-[11px] text-[#7D8590]">
         <span>{taskCount} step{taskCount === 1 ? '' : 's'}</span>
+        {totalResults > 0 && (
+          <>
+            <span className="text-[#484F58]">·</span>
+            <span className="text-emerald-300">{totalResults} result{totalResults === 1 ? '' : 's'}</span>
+          </>
+        )}
+        {executionMode && (
+          <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded border border-white/[0.08] bg-white/[0.02] text-[10px] uppercase tracking-wider text-[#C9D1D9]">
+            <Gauge className="h-2.5 w-2.5" /> {executionMode}
+          </span>
+        )}
+        {pennInvolved && (
+          <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded border border-amber-500/30 bg-amber-500/10 text-[10px] uppercase tracking-wider text-amber-300">
+            <ShieldCheck className="h-2.5 w-2.5" /> approval required
+          </span>
+        )}
         {agentSlugs.length > 0 && (
           <>
             <span className="text-[#484F58]">·</span>
@@ -152,6 +194,7 @@ export default function ExecutionPlanCard({ planId, meta }: Props) {
           {meta!.connector_limitations!.join(' · ')}
         </div>
       )}
+
 
       <ul className="mt-3 space-y-2">
         {tasks.map((t, i) => (
