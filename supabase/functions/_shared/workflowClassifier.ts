@@ -233,8 +233,8 @@ function regexClassify(message: string): WorkflowDecision | null {
       confidence: 0.85,
       agents: ["hawk", "scribe"],
       execution_mode: "research",
-      selected_tool: "search_web",
-      selected_actor_key: "search_web",
+      // Don't pin selected_actor_key here — validator decides based on
+      // search_web availability and degrades to honest reply if missing.
     });
   }
 
