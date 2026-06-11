@@ -1,67 +1,112 @@
+# Phase 1 — Workflow Classifier Reliability
+
 ## Goal
 
-Tighten the existing chat + Workbench into a command-center experience: clearer message structure, an interactive clarification card, a richer Execution Plan card, and a domain-aware Workbench with action affordances and friendlier empty/failure states. UI/UX only — no backend, schema, edge function, registry, or secret changes.
+Replace the two competing routers (`intentRouter` + `toolInputPlanner` decision logic) with one deterministic workflow-intelligence layer:
 
-## Files to change
+```text
+user message
+  → classifyWorkflow()        (regex-first, Gemini fallback)
+  → normalizeIntent()         (coerce/clean Gemini output)
+  → validateAgainstCapabilities()  (actor/tool/env/approval gates)
+  → askClarification() OR createPlanTemplate()
+  → existing tool execution path (unchanged)
+```
 
-Chat thread:
-- `src/components/chat/workspace/ChatView.tsx` — render structured "Pilot Interpretation" pill row from `metadata.tool_input.business_goal`, render the new `ClarificationCard` when `metadata.clarification === true && pending_clarification`, render the new `WorkflowStatusRail` block under in-flight plans.
-- `src/components/chat/workspace/bubbles/UserBubble.tsx` — small "Request" label + emerald rail to match the new sectioning.
-- `src/components/chat/workspace/bubbles/ClarificationCard.tsx` (new) — "Pilot needs one decision" card with up to 3 option chips: Individual profiles / Companies hiring / Agencies. Each chip dispatches a normal chat message via `sendUserMessage` from `pilotChat.ts` ("individual profiles" / "companies hiring" / "agencies"), so the existing backend resolver picks the matching stored action. Only render chips that have a corresponding `people_action` / `companies_action` / `agency_action` in metadata.
-- `src/components/chat/workspace/bubbles/InterpretationPill.tsx` (new) — small "Pilot interpreted as" badge row showing `intent`, `selected_actor_key`, `execution_mode`, and `business_goal` when present in `metadata.tool_input`. Pure presentational, reads existing metadata.
-- `src/components/chat/workspace/bubbles/NextActionRow.tsx` (new) — single-line "Recommended next" hint under completed/awaiting plans, derived from plan/task status (e.g. "Open Workbench to review results", "Approve Penn's drafts to send"). UI-only.
+Old files stay in place as thin wrappers so working flows (Apify Jobs, HarvestAPI people, Firecrawl URL, Scribe, Penn approval, Daily Brief) cannot regress.
 
-Execution Plan Card:
-- `src/components/chat/workspace/plan/ExecutionPlanCard.tsx` — surface execution mode and approval badge in the header; add a normalized live-status pill (`planning` | `running` | `awaiting approval` | `complete` | `partial` | `failed`) derived from `plan.status` + per-task statuses; show selected actor label, tool name, and aggregated result count (sum of `output_json.total` across tool calls); keep existing task rows and connector limitations.
-- `src/components/chat/workspace/plan/PlanStatusPill.tsx` (new) — small pill component used by both the card and the rail.
+## Architecture & Files
 
-Workbench:
-- `src/components/chat/workspace/workbench/WorkbenchHeader.tsx` — already shows task title, agent, provider, status, run id, updated; add Actor label (from `output_json.actor_label` / `selected_actor_key`) and an Output Type pill (people_profiles / jobs / website_content / drafts), plus an "Approval required" badge for Penn tasks.
-- `src/components/chat/workspace/workbench/WorkbenchPanel.tsx` — replace fixed 4-tab set with a derived tab list. Candidate tabs: Summary, Results, Rankings, Drafts, Sources, Raw. Each tab only renders if the underlying data is present (e.g. Rankings only if `output_json.rankings`/`output_json.ranked` exists; Drafts only for Penn outputs; Sources only if Firecrawl `output_json.sources`/URLs exist; Results only if Apify items/people exist).
-- `src/components/chat/workspace/workbench/ScoutResultsView.tsx` — add a per-row action row: "Save Lead", "Enrich", "Draft Outreach". Each button uses the existing chat send path (`useChatWorkspace` + `pilotChat.sendUserMessage`) to fire a templated follow-up message ("Draft outreach for {full_name} at {company}", "Enrich {company} ({url})", "Save {company} as a lead"). No backend changes — relies on existing Pilot orchestration. Hide actions when no useful context is available.
-- `src/components/chat/workspace/workbench/HawkResearchView.tsx` — render page summary, extracted facts as bullet list, list of source URLs, and stash raw markdown under a collapsed Raw tab body block.
-- `src/components/chat/workspace/workbench/PennDraftView.tsx` — show subject / body / personalization notes more prominently, approval-status chip; keep existing Approve / Edit / Reject controls if `approval` is present.
-- `src/components/chat/workspace/workbench/FailureRecoveryCard.tsx` — make this the primary failure surface: "What failed / Why it likely failed / What you can do" with Retry, Check integration, Ask Pilot for alternative buttons. Raw error code stays in Raw tab only.
-- `src/components/chat/workspace/workbench/NoResultsCard.tsx` (new) — shown in Results tab when normalized list is empty and no failure. Suggests: Broaden role, Broaden location, Try related titles, Switch to companies hiring (or to people if currently companies). Each suggestion sends a templated chat message to Pilot.
+### New
+- `supabase/functions/_shared/workflowClassifier.ts` — single source of truth. Exports `classifyWorkflow(message, ctx)` returning the structured `WorkflowDecision` object specified in the brief (all 14 categories + agents/execution_mode/selected_actor_key/etc.). Regex layer for high-confidence cases (greetings, capability Qs, URL, daily brief, explicit unsafe phrases, explicit people/jobs phrasing with city/role). Gemini fallback through `generateJson` constrained to the 14-category JSON schema, then `normalizeIntent()` cleans/clamps.
+- `supabase/functions/_shared/capabilityValidator.ts` — exports `validateAgainstCapabilities(decision)` returning `{ ok, decision, clarification?, reason? }`. Checks: actor key exists in `ACTOR_REGISTRY`, `isActorRuntimeEnabled`, `max_results ≤ max_safe_results`, people-search opt-in/env gate, Firecrawl key for url_analysis, search_web availability for market_research, outreach forces `requires_approval=true`, unsafe categories block tool selection.
+- `supabase/functions/_shared/workflowClassifier.test.ts` — Deno tests for all 14 categories with the messy prompts listed in the brief.
+- `supabase/functions/_shared/capabilityValidator.test.ts` — Deno tests for: disabled people actor → clarification, market_research without search_web → honest-reply mode, url_analysis without FIRECRAWL_API_KEY → unavailable, outreach always sets `requires_approval`, unsafe blocks tool execution.
 
-No new pages. No routes added. Existing context (`ChatWorkspaceContext`, `useChatConversation`, `usePlanDetail`, `useWorkbenchData`) is reused unchanged.
+### Edited
+- `supabase/functions/pilot-chat/index.ts` — replace the `classifyIntent` + `planToolInput` branching (lines ~482–565) with a single `classifyWorkflow` → `validateAgainstCapabilities` → branch on `workflow_category`. Behaviour per category matches the brief (simple_chat/capabilities → reply; daily_brief → existing daily-brief flow; content_creation → delegate to Scribe-only plan; url_analysis → Firecrawl plan; people/company sourcing → existing `delegateToOrchestrate` with a `ToolInput` built from the decision; outreach → require approval; market_research → honest reply unless search_web enabled; signal_sourcing vague → clarification; unsafe → safe canned reply; agent_management/approval_review → direct reply, read-only). Preserve existing pending-clarification resolver at lines ~290 (people-vs-companies stored actions) — it keeps working because the new classifier emits the same `clarification_type` metadata shape.
+- `supabase/functions/_shared/intentRouter.ts` — keep file; reimplement `classifyIntent` as a thin adapter that calls `classifyWorkflow` and maps the 14 categories down to the old 10-value `Intent` union, so any other caller keeps working. Mark deprecated in a header comment.
+- `supabase/functions/_shared/toolInputPlanner.ts` — keep file and its Gemini planner for building Apify/Firecrawl `ToolInput` payloads, but stop using it as a router. The new `workflowClassifier` becomes the decision-maker and only calls `planToolInput` to **fill in** structured tool args (role_keywords, location, max_results) when the regex layer already chose the actor. Existing People/Companies/Agency pending-clarification fields preserved.
+- `supabase/functions/_shared/agentorySystemPrompt.ts` — add the 14-category vocabulary + content/market-research/unsafe rules into the `pilot_router` prompt block so Gemini's free-form replies stay consistent with the classifier. No prompt rewrites elsewhere.
 
-## Behavior details
+### Not touched
+schema, migrations, UI, secrets, `actorRegistry.ts`, `toolRegistry.ts`, `harvestApiPeople.ts`, all `src/**`.
 
-Clarification card:
-- Triggered when an assistant message has `metadata.clarification === true` and one of `people_action`, `companies_action`, `agency_action` is present.
-- Header: "Pilot needs one decision" with subtitle = the assistant `content` (the clarification question itself).
-- Chips: each chip shows label + a one-line preview ("apify_people_search · London · 10 results"). Disabled chips for `agency_action` when `tool_name` is null, with a tooltip "Dedicated agency sourcing isn't configured — Pilot will offer a workaround".
-- Click sends the matching natural-language reply through the existing composer pipeline; the existing backend reply resolver runs the stored action.
+## Category → plan template mapping
 
-Workflow status rail:
-- Replaces the small "Agents are working" footer in `ConversationView` with a richer rail: current task title, current agent avatar, ticking timer, "Open Workbench" CTA. Reuses `usePlanDetail`. UI-only.
+| Category | Agents | execution_mode | actor / tool | Approval |
+|---|---|---|---|---|
+| simple_chat | — | none | — | — |
+| capabilities | — | none | — | — |
+| daily_brief | pilot | none | existing daily-brief | — |
+| content_creation | scribe | content | claude (if configured) else gemini | — |
+| market_research | hawk, scribe | research | search_web if enabled, else honest reply | — |
+| url_analysis | hawk, scribe | research | firecrawl_scrape_url / scrape_url | — |
+| signal_sourcing (vague) | — | none | — clarification first | — |
+| people_sourcing | scout, aria (+penn if outreach) | fast / outreach | apify_people_search | yes if outreach |
+| company_hiring_sourcing | scout, aria (+hawk, penn if outreach) | fast / outreach | apify_jobs | yes if outreach |
+| outreach | penn | outreach | — | **always yes** |
+| agent_management | pilot | none | — | — |
+| approval_review | pilot | none | read-only listing | — |
+| unsafe_or_unsupported | — | none | — | — |
+| unclear | — | none | — | — |
 
-Action buttons in Workbench results:
-- All "Save Lead / Enrich / Draft Outreach" buttons emit a chat message via existing `pilotChat.sendUserMessage` — they don't call new endpoints. A short inline confirmation ("Sent to Pilot") appears for 2s after click.
+## normalizeIntent
 
-## Visual style
+Pure function that takes raw Gemini JSON and:
+- clamps `confidence` to [0,1], defaults 0.5
+- forces `workflow_category` into the 14-value enum (unknown → `unclear`)
+- lowercases `execution_mode`, restricts to enum
+- caps `max_results` at the chosen actor's `max_safe_results` (or 25 default)
+- coerces booleans (`needs_enrichment`, `needs_outreach`, `requires_approval`)
+- empties `selected_actor_key`/`source_type`/`query` if not strings
+- if category is `outreach` → forces `requires_approval=true`
+- if category is `unsafe_or_unsupported` → wipes `selected_tool`, `selected_actor_key`, agents
 
-- Keep pitch-black + emerald accent + glassmorphic rounded-xl cards.
-- Reuse existing semantic tokens, no new color hex.
-- Status pills reuse the tone map already in `ExecutionPlanCard`.
-- Tabs reuse the existing underline-active pattern in `WorkbenchPanel`.
+## validateAgainstCapabilities
 
-## Out of scope
+Run after normalize. Returns either `{ ok: true, decision }` or `{ ok: false, decision, clarification, reason }`.
 
-- Backend, schema, edge functions, registry, secrets.
-- New pages or new routes.
-- New persistence (Save Lead / Enrich / Draft Outreach are chat-driven, not DB writes).
-- Redesign of dashboard, sidebar, or other surfaces.
+Checks in order:
+1. If `selected_actor_key` set, must exist in `ACTOR_REGISTRY` and `isActorRuntimeEnabled` → otherwise rewrite to clarification with the actor's `missing_message` (or honest "not configured").
+2. `people_sourcing` + actor disabled or no opt-in → switch to honest fallback "I can find companies hiring those roles instead."
+3. `url_analysis` requires `FIRECRAWL_API_KEY` (env check via `actorRegistry` helpers) — else honest unavailable.
+4. `market_research` requires `search_web` enabled — else degrade to direct honest reply mode (decision.execution_mode → "none", agents → []).
+5. `outreach` → always set `requires_approval=true`, refuse autosend.
+6. `max_results` > actor cap → clamp + add note.
+7. `unsafe_or_unsupported` → strip any tool/actor/agents.
 
-## Verification (build mode)
+## Compatibility strategy
 
-- Send "We're having issues with development. Maybe we need to hire senior remote engineers." → ChatView shows the new ClarificationCard with two chips (Individual profiles, Agencies). Clicking "Individual profiles" sends "individual profiles" and the next assistant message renders the upgraded ExecutionPlanCard with execution_mode + actor label.
-- Open Workbench on a Scout people result → Header shows Actor + Output Type + Approval n/a; Results tab shows per-person action row; tabs Drafts/Sources/Rankings are hidden because no data.
-- Force a failure (call a disabled actor) → Results tab shows FailureRecoveryCard with Retry / Check integration / Ask Pilot; Raw tab still shows the error code.
-- Apify Jobs with empty results → NoResultsCard with 4 templated chat suggestions; clicking one routes through the composer to Pilot.
+- `intentRouter.classifyIntent` keeps its old signature/return; internally calls `classifyWorkflow` and maps:
+  - simple_chat/capabilities/agent_management/approval_review → `simple_chat`
+  - daily_brief → `daily_brief`
+  - content_creation → `content`
+  - market_research → `simple_chat` (no Apify) — degraded honest reply branch
+  - url_analysis → `analyze_url`
+  - people_sourcing / company_hiring_sourcing / signal_sourcing → `source_signals`
+  - outreach → `draft_outreach` or `send_requires_approval` based on verbs
+  - unsafe_or_unsupported / unclear → `unclear`
+- `toolInputPlanner.planToolInput` keeps existing behaviour; pilot-chat calls it only after classifier picks a sourcing category so the existing pending-clarification persistence (people/companies/agency stored actions) keeps working end-to-end.
+- One final normalized decision per request: pilot-chat will only branch on `workflow_category`. The old `intentResult.intent` value is still computed for legacy log fields but does not gate execution.
 
-## Limitations
+## Tests
 
-- "Save Lead" / "Enrich" / "Draft Outreach" route through the chat (Pilot decides). No DB-side "leads" table writes are added in this pass.
-- Agency option remains visual-only because backend has no dedicated agency actor yet — the backend's existing fallback message handles the click.
+`workflowClassifier.test.ts` covers each of the 14 categories with the exact prompts from the brief, asserting `workflow_category`, `selected_actor_key`/`tool_name` where applicable, `needs_clarification`, and `requires_approval`.
+
+`capabilityValidator.test.ts` covers: disabled people actor fallback, missing Firecrawl key, search_web off → honest reply, outreach approval enforcement, unsafe stripping, max_results clamp.
+
+Run via `supabase--test_edge_functions` (Deno). No live calls in unit tests.
+
+After unit tests pass, run the 10 live prompts from the brief against the **preview** project only (`wqnigjhcwjxtmordrwno` is shared — we'll use existing preview workspace, no production conversations). Report card per prompt: category, response, clarification?, plan?, actor, tool_calls, approval, pass/partial/fail.
+
+## Out of scope / will not change
+
+- DB schema, migrations, UI components, secrets, new Apify actors.
+- Persistent Signal Memory, LinkedIn Engagement Engine, Competitor Tracker, Signal Feed UI, ICP Autopilot, Founder Content Loop (later phases).
+- No deletion of `intentRouter.ts` / `toolInputPlanner.ts` in this pass.
+- No deployment until unit + live tests pass and you approve.
+
+## Deliverable on completion
+
+Final report containing: files changed, 14 categories implemented, category→plan table, normalize/validate descriptions, compatibility notes, unit test results, live test results table, remaining gaps, deploy recommendation (await your go-ahead).
