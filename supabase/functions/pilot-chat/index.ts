@@ -9,6 +9,8 @@ import { classifyIntent } from "../_shared/intentRouter.ts";
 import { planToolInput, type ToolInput } from "../_shared/toolInputPlanner.ts";
 import { getAgentorySystemPrompt, AGENTORY_SYSTEM_PROMPT_VERSION } from "../_shared/agentorySystemPrompt.ts";
 import { summarizeRegistryForPrompt } from "../_shared/actorRegistry.ts";
+import { classifyWorkflow } from "../_shared/workflowClassifier.ts";
+import { validateAgainstCapabilities } from "../_shared/capabilityValidator.ts";
 
 
 const cors = {
@@ -448,6 +450,165 @@ Deno.serve(async (req) => {
       console.warn("[pilot-chat] daily-brief threw, falling through:", e);
     }
   }
+
+  // 5c. NEW: Workflow Classifier (Phase 1) — single source of truth.
+  // Regex-first with Gemini fallback. Short-circuits direct-reply categories
+  // and degraded paths; falls through to the legacy planner for sourcing,
+  // url_analysis, and outreach categories so the existing pending-clarification
+  // persistence keeps working unchanged.
+  const wf = await classifyWorkflow(message);
+  const validated = validateAgainstCapabilities(wf);
+  const decision = validated.decision;
+  console.log("[pilot-chat] workflow_classifier:", {
+    category: decision.workflow_category,
+    confidence: decision.confidence,
+    needs_clarification: decision.needs_clarification,
+    selected_actor_key: decision.selected_actor_key,
+    execution_mode: decision.execution_mode,
+    validator_ok: validated.ok,
+    validator_reason: validated.reason,
+  });
+
+  const baseMeta = {
+    workflow_category: decision.workflow_category,
+    business_goal: decision.business_goal,
+    intent: decision.intent,
+    confidence: decision.confidence,
+    execution_mode: decision.execution_mode,
+    selected_actor_key: decision.selected_actor_key,
+    selected_tool: decision.selected_tool,
+    requires_approval: decision.requires_approval,
+    classifier_source: decision.source,
+    prompt_version: AGENTORY_SYSTEM_PROMPT_VERSION,
+  };
+
+  async function replyAndReturn(content: string, extraMeta: Record<string, unknown> = {}): Promise<Response> {
+    const { data: saved } = await admin
+      .from("messages")
+      .insert({
+        conversation_id: conversationId,
+        role: "assistant",
+        content,
+        agent_slug: "pilot",
+        model_used: "google/gemini-3-flash-preview",
+        metadata: { ...baseMeta, ...extraMeta },
+      })
+      .select("*")
+      .single();
+    return json({
+      type: "reply",
+      conversation_id: conversationId,
+      workflow_category: decision.workflow_category,
+      message: saved,
+    });
+  }
+
+  // 5c.i Validator rejected (e.g. people actor disabled, Firecrawl missing,
+  // unknown actor) → surface its clarification and stop.
+  if (!validated.ok && validated.clarification) {
+    return await replyAndReturn(validated.clarification, {
+      clarification: true,
+      validator_reason: validated.reason ?? null,
+    });
+  }
+
+  // 5c.ii Unsafe / unsupported → safe canned reply with alternatives.
+  if (decision.workflow_category === "unsafe_or_unsupported") {
+    const msg =
+      "I can't run that as described — it would involve unsafe or unsupported actions (e.g. scraping private personal data or sending without your approval). I can help with: public business contact research, approval-gated email outreach, LinkedIn outreach drafts, or call scripts. Which of those would you like?";
+    return await replyAndReturn(msg, { unsafe: true });
+  }
+
+  // 5c.iii Capabilities / agent_management / approval_review / simple_chat
+  // → direct conversational reply.
+  if (decision.workflow_category === "simple_chat") {
+    return await replyAndReturn("Hi — I'm Pilot. What would you like to work on?");
+  }
+
+  if (decision.workflow_category === "capabilities") {
+    const msg =
+      "Agentory is an AI workforce OS for founders and small teams. I coordinate a five-agent team: Scout (sourcing/signals), Aria (ranking/scoring), Hawk (research/URL analysis), Penn (outreach drafts — approval-gated), Scribe (content/reports). Tools include Apify for structured sourcing, Firecrawl for URL/website analysis, Gemini/Claude for reasoning and writing, and approval-gated email. Tell me what you'd like to do — find leads, analyze a careers page, write a post, draft outreach, or get a daily brief.";
+    return await replyAndReturn(msg);
+  }
+
+  if (decision.workflow_category === "agent_management") {
+    const msg =
+      "Your AI workforce: Scout (sources companies hiring + candidate profiles), Aria (ranks and scores leads), Hawk (researches URLs and competitors with Firecrawl), Penn (drafts outreach — never sends without your approval), Scribe (writes posts, briefs, reports). Pilot (me) routes the work. Ask me to do something concrete and I'll assign the right agent.";
+    return await replyAndReturn(msg);
+  }
+
+  if (decision.workflow_category === "approval_review") {
+    const { data: pending } = await admin
+      .from("tasks")
+      .select("id, agent_slug, description, created_at")
+      .eq("workspace_id", workspaceId)
+      .eq("status", "awaiting_approval")
+      .order("created_at", { ascending: false })
+      .limit(10);
+    if (!pending || pending.length === 0) {
+      return await replyAndReturn("No drafts are waiting for approval right now. When Penn drafts outreach, it will appear here for you to review.");
+    }
+    const lines = pending.map((t: any) => `• ${t.agent_slug ?? "agent"}: ${t.description ?? t.id}`).join("\n");
+    return await replyAndReturn(`You have ${pending.length} pending approval${pending.length === 1 ? "" : "s"}:\n${lines}\n\nOpen the Workbench to approve or edit each draft.`);
+  }
+
+  // 5c.iv content_creation → Scribe-only delegation. No Apify/Firecrawl.
+  if (decision.workflow_category === "content_creation") {
+    return await delegateToOrchestrate({
+      admin,
+      SUPABASE_URL,
+      SUPABASE_ANON_KEY,
+      authHeader,
+      conversationId,
+      workspaceId,
+      instruction: message,
+      // ToolInput drives the legacy orchestrator's mode; content mode tells it
+      // to skip sourcing tools and go straight to Scribe.
+      toolInput: {
+        intent: "create_content",
+        tool_name: null,
+        selected_actor_key: null,
+        source_type: null,
+        query: message,
+        role_keywords: [],
+        location: null,
+        max_results: 1,
+        needs_enrichment: false,
+        needs_outreach: false,
+        // execution_mode "content" is supported by the legacy ToolInput type
+        // ("fast"|"deep"|"outreach"), so we coerce to "fast" and pass content
+        // intent — orchestrate keys off intent=create_content for Scribe-only.
+        execution_mode: "fast",
+        confidence: decision.confidence,
+        missing_fields: [],
+        reason: decision.reason,
+      } as ToolInput,
+      modelUsed: "google/gemini-3-flash-preview",
+      providerUsed: "lovable-ai",
+    });
+  }
+
+  // 5c.v market_research → if validator degraded (no search_web), honest reply.
+  if (decision.workflow_category === "market_research" && !decision.selected_actor_key) {
+    const msg =
+      "Broad live web search isn't configured in this workspace, so I can't pull current market or competitor news on demand. What I can do: analyze a specific URL with Hawk + Firecrawl (paste the link), or collect structured signals with Scout + Apify (e.g. \"find companies hiring AI engineers in the US\"). Which would help most?";
+    return await replyAndReturn(msg, { degraded: "search_web_unavailable" });
+  }
+
+  // 5c.vi signal_sourcing (vague) → ask one clarification.
+  if (decision.workflow_category === "signal_sourcing" && decision.needs_clarification) {
+    return await replyAndReturn(
+      decision.clarification_question ??
+        "Which buying signal should I target first: companies hiring GTM roles, companies hiring engineering roles, founder profiles, or a specific niche?",
+      { clarification: true, possible_actions: decision.possible_actions },
+    );
+  }
+
+  // 5c.vii unclear → existing fallback path will handle (set intent to unclear).
+  // For url_analysis / people_sourcing / company_hiring_sourcing / outreach
+  // we fall through to the legacy classifyIntent + planToolInput pipeline,
+  // which already handles people-vs-companies clarification persistence and
+  // Apify/Firecrawl ToolInput building.
 
 
 
