@@ -11,6 +11,7 @@
 import type { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { ACTOR_REGISTRY, getActorByKey, isActorRuntimeEnabled } from "./actorRegistry.ts";
 import { buildHarvestApiPeopleInput } from "./harvestApiPeople.ts";
+import { writeMemoryFromToolCall } from "./memoryWriter.ts";
 
 export interface ToolContext {
   admin: SupabaseClient;
@@ -1038,6 +1039,21 @@ export async function runTool(
       error: result.error ?? null,
       completed_at: completedAt,
     }).eq("id", row.id);
+  }
+
+  // Phase 2: persist outputs into structured GTM memory. Fire-and-forget.
+  if (result.ok && (tool.name === "source_with_apify" || tool.name === "scrape_url")) {
+    const actorKey = (input as any)?.selected_actor_key ?? null;
+    await writeMemoryFromToolCall({
+      admin: ctx.admin,
+      workspace_id: ctx.workspace_id,
+      plan_id: ctx.plan_id ?? null,
+      task_id: ctx.task_id ?? null,
+      tool_call_id: row?.id ?? null,
+      tool_name: tool.name,
+      selected_actor_key: actorKey,
+      output: result.data ?? null,
+    });
   }
 
   await ctx.admin.from("activity_feed").insert({
