@@ -1,0 +1,2 @@
+ALTER TABLE public.accounts ADD CONSTRAINT accounts_workspace_name_key UNIQUE USING INDEX accounts_workspace_name_uniq;
+ALTER TABLE public.contacts ADD CONSTRAINT contacts_workspace_linkedin_key UNIQUE USING INDEX contacts_workspace_linkedin_uniq;
