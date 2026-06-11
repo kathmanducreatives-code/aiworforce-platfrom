@@ -370,7 +370,7 @@ export function normalizeIntent(input: Partial<WorkflowDecision> | Record<string
     confidence,
     needs_clarification: !!raw.needs_clarification,
     clarification_question: typeof raw.clarification_question === "string" ? raw.clarification_question : null,
-    agents: Array.isArray(raw.agents) ? raw.agents.filter((a) => typeof a === "string") as string[] : [],
+    agents: Array.isArray(raw.agents) ? (raw.agents as unknown[]).filter((a: unknown) => typeof a === "string") as string[] : [],
     execution_mode: mode,
     selected_tool: typeof raw.selected_tool === "string" ? raw.selected_tool : null,
     selected_actor_key: typeof raw.selected_actor_key === "string" ? raw.selected_actor_key : null,
