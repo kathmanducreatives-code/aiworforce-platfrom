@@ -250,7 +250,7 @@ async function writeApifyJobs(ctx: ToolCallCtx, output: any): Promise<void> {
       source: it.source ?? "apify_jobs",
       raw: it.raw ?? {},
     };
-    const onConflict = domain ? "workspace_id,domain" : "workspace_id,name";
+    const onConflict = "workspace_id,name";
     let accountId: string | null = null;
     const { data: acc, error: accErr } = await ctx.admin
       .from("accounts")
@@ -296,23 +296,20 @@ async function writeApifyJobs(ctx: ToolCallCtx, output: any): Promise<void> {
       .select("id")
       .maybeSingle();
 
-    // Insert lead_candidate (ignore on dedupe conflict)
+    // Insert lead_candidate
     await ctx.admin
       .from("lead_candidates")
-      .upsert(
-        {
-          workspace_id: ctx.workspace_id,
-          conversation_id: ctx.conversation_id ?? null,
-          plan_id: ctx.plan_id ?? null,
-          account_id: accountId,
-          signal_id: sig?.id ?? null,
-          lead_type: "company",
-          status: "new",
-          reason: `${it.title ?? "Role"} @ ${it.company ?? domain ?? ""}`.trim(),
-          raw: { hiring: it.raw ?? {} },
-        },
-        { onConflict: "workspace_id,plan_id,account_id,contact_id,signal_id", ignoreDuplicates: true },
-      );
+      .insert({
+        workspace_id: ctx.workspace_id,
+        conversation_id: ctx.conversation_id ?? null,
+        plan_id: ctx.plan_id ?? null,
+        account_id: accountId,
+        signal_id: sig?.id ?? null,
+        lead_type: "company",
+        status: "new",
+        reason: `${it.title ?? "Role"} @ ${it.company ?? domain ?? ""}`.trim(),
+        raw: { hiring: it.raw ?? {} },
+      });
   }
 }
 
@@ -380,20 +377,17 @@ async function writeApifyPeople(ctx: ToolCallCtx, output: any): Promise<void> {
 
     await ctx.admin
       .from("lead_candidates")
-      .upsert(
-        {
-          workspace_id: ctx.workspace_id,
-          conversation_id: ctx.conversation_id ?? null,
-          plan_id: ctx.plan_id ?? null,
-          contact_id: contactId,
-          signal_id: sig?.id ?? null,
-          lead_type: "person",
-          status: "new",
-          reason: [p.title, p.company].filter(Boolean).join(" @ ") || null,
-          raw: { profile: p.raw ?? {} },
-        },
-        { onConflict: "workspace_id,plan_id,account_id,contact_id,signal_id", ignoreDuplicates: true },
-      );
+      .insert({
+        workspace_id: ctx.workspace_id,
+        conversation_id: ctx.conversation_id ?? null,
+        plan_id: ctx.plan_id ?? null,
+        contact_id: contactId,
+        signal_id: sig?.id ?? null,
+        lead_type: "person",
+        status: "new",
+        reason: [p.title, p.company].filter(Boolean).join(" @ ") || null,
+        raw: { profile: p.raw ?? {} },
+      });
   }
 }
 
