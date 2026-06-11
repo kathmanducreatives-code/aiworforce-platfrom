@@ -789,7 +789,7 @@ Deno.serve(async (req) => {
   }
 
   // 8b. Reply branch
-  if (pilotDecision.pilotDecision === "reply") {
+  if (pilotDecision.decision === "reply") {
     const { data: saved } = await admin
       .from("messages")
       .insert({
