@@ -117,14 +117,14 @@ const MARKET_RESEARCH_RE =
   /\b(what changed in|what(?:'?s| is) (?:happening|new) in|current (?:state|status|news|trends?)|latest (?:news|updates?|trends?)|market (?:update|news|trends?|research)|competitor (?:updates?|news|moves?)|what'?s? trending|industry (?:news|trends?))\b/i;
 
 const AGENT_MANAGEMENT_RE =
-  /\b(what (is|are) (scout|aria|hawk|penn|scribe|pilot) (working on|doing)|what can (scout|aria|hawk|penn|scribe) do|which agents?|show me my agents?|list (my )?agents?|my workforce)\b/i;
+  /\b(what (is|are) (scout|aria|hawk|penn|scribe|pilot) (working on|doing)|what can (scout|aria|hawk|penn|scribe) do|which agents?|show me my agents?|list (my )?agents?|what agents do i have|my workforce)\b/i;
 
 const APPROVAL_REVIEW_RE =
   /\b((what|which|any) approvals? (are )?(pending|waiting|to review)|pending approvals?|drafts? (?:waiting|pending|to (?:review|approve))|approve (penn'?s? )?drafts?|show me (?:my )?(?:pending )?approvals?)\b/i;
 
 // Outreach (drafting). Note: separate from outreach AS PART OF sourcing.
 const OUTREACH_RE =
-  /\b(draft (?:an? )?(?:outreach|email|dm|message|sequence|cold (?:email|outreach))|write (?:emails?|dms?|messages?|cold (?:emails?|outreach))|create (?:linkedin )?dms?|outreach to (?:the )?(?:top )?(?:leads?|prospects?|companies))\b/i;
+  /\b(draft (?:an? )?(?:outreach|email|dm|message|sequence|cold (?:email|outreach))|write (?:(?:linkedin |cold )?(?:emails?|dms?|messages?|outreach))|create (?:linkedin )?dms?|outreach to (?:the )?(?:top )?(?:leads?|prospects?|companies))\b/i;
 
 const SEND_RE = /\b(send|deliver|fire off|blast)\s+(?:emails?|messages?|outreach)\b/i;
 
