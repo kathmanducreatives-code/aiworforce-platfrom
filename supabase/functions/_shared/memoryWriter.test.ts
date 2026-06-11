@@ -172,3 +172,33 @@ Deno.test("writeMemoryFromAgentResult: Scribe writes content_draft", async () =>
   assertEquals(tables.saved_outputs[0].type, "content_draft");
   assertEquals(tables.saved_outputs[0].title, "Hello world");
 });
+
+Deno.test("writeMemoryFromAgentResult: Penn links drafts to explicit remembered lead ids", async () => {
+  const { tables, admin } = makeFake();
+  // Remembered leads from a PRIOR plan (the Penn-only draft plan has none of its own).
+  tables.lead_candidates.push(
+    { id: "lead-1", workspace_id: "ws-1", account_id: "acc-1", contact_id: "con-1", plan_id: "prior-plan" },
+    { id: "lead-2", workspace_id: "ws-1", account_id: "acc-2", contact_id: null, plan_id: "prior-plan" },
+  );
+  await writeMemoryFromAgentResult({
+    admin,
+    workspace_id: "ws-1",
+    plan_id: "draft-plan", // new Penn-only plan, no leads of its own
+    task_id: "task-1",
+    agent_slug: "penn",
+    output_text: JSON.stringify([
+      { subject: "Hi 1", body: "Personalized body one." },
+      { subject: "Hi 2", body: "Personalized body two." },
+    ]),
+    lead_candidate_ids: ["lead-1", "lead-2"],
+  });
+  assertEquals(tables.outreach_drafts.length, 2, "one draft per remembered lead, no duplicates");
+  const d1 = tables.outreach_drafts[0];
+  assertEquals(d1.lead_candidate_id, "lead-1");
+  assertEquals(d1.account_id, "acc-1");
+  assertEquals(d1.contact_id, "con-1");
+  assertEquals(d1.status, "draft");
+  const d2 = tables.outreach_drafts[1];
+  assertEquals(d2.lead_candidate_id, "lead-2");
+  assertEquals(d2.account_id, "acc-2");
+});

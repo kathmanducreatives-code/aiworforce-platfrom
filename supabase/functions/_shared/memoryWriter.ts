@@ -129,6 +129,12 @@ interface AgentResultCtx extends BaseCtx {
   agent_slug: string;
   output_text: string;
   structured?: unknown;
+  /**
+   * Memory-driven draft_outreach: explicit target lead_candidate ids (top N
+   * from a prior plan). When present, Penn drafts link to these rather than to
+   * lead_candidates created in the current (Penn-only) plan.
+   */
+  lead_candidate_ids?: string[];
 }
 
 function domainFromUrl(u?: string | null): string | null {
@@ -552,9 +558,24 @@ async function writePennDrafts(ctx: AgentResultCtx): Promise<void> {
     approvalId = appr?.id ?? null;
   }
 
-  // Attach drafts in order to most recent top-priority lead_candidates in this plan.
-  let leadIds: Array<{ id: string; account_id: string | null; contact_id: string | null }> = [];
-  if (ctx.plan_id) {
+  // Attach each draft to a lead. Resolution priority:
+  //   1) explicit lead_candidate_ids (memory-driven draft_outreach follow-up) —
+  //      those leads live in a PRIOR plan, so plan_id lookup wouldn't find them;
+  //   2) lead_candidates created in this plan (sourcing → outreach in one plan);
+  //   3) most recent leads in this conversation (memory follow-up, no ids given).
+  type LeadRef = { id: string; account_id: string | null; contact_id: string | null };
+  let leadIds: LeadRef[] = [];
+  if (Array.isArray(ctx.lead_candidate_ids) && ctx.lead_candidate_ids.length > 0) {
+    const wanted = ctx.lead_candidate_ids.slice(0, drafts.length);
+    const { data: ls } = await ctx.admin
+      .from("lead_candidates")
+      .select("id, account_id, contact_id")
+      .eq("workspace_id", ctx.workspace_id)
+      .in("id", wanted);
+    const byId = new Map((ls ?? []).map((l: any) => [l.id, l as LeadRef]));
+    leadIds = wanted.map((id) => byId.get(id)).filter(Boolean) as LeadRef[];
+  }
+  if (leadIds.length === 0 && ctx.plan_id) {
     const { data: ls } = await ctx.admin
       .from("lead_candidates")
       .select("id, account_id, contact_id")
@@ -562,7 +583,17 @@ async function writePennDrafts(ctx: AgentResultCtx): Promise<void> {
       .eq("plan_id", ctx.plan_id)
       .order("fit_score", { ascending: false, nullsFirst: false })
       .limit(drafts.length);
-    leadIds = (ls ?? []) as any;
+    leadIds = (ls ?? []) as LeadRef[];
+  }
+  if (leadIds.length === 0 && ctx.conversation_id) {
+    const { data: ls } = await ctx.admin
+      .from("lead_candidates")
+      .select("id, account_id, contact_id")
+      .eq("workspace_id", ctx.workspace_id)
+      .eq("conversation_id", ctx.conversation_id)
+      .order("fit_score", { ascending: false, nullsFirst: false })
+      .limit(drafts.length);
+    leadIds = (ls ?? []) as LeadRef[];
   }
 
   for (let i = 0; i < drafts.length; i++) {

@@ -363,6 +363,11 @@ Deno.serve(async (req) => {
         task_id: task.id,
         agent_slug,
         output_text: apiText,
+        // Memory-driven draft_outreach carries the target lead ids so Penn
+        // drafts link to the remembered leads (which live in a prior plan).
+        lead_candidate_ids: Array.isArray(tool_input_body?.lead_candidate_ids)
+          ? tool_input_body.lead_candidate_ids
+          : undefined,
       });
     } catch (e) {
       console.warn("[run-agent] memoryWriter failed:", e);

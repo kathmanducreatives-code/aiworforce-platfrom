@@ -77,6 +77,25 @@ Deno.test("outreach: draft outreach", async () => {
   assertEquals(await cat("Write LinkedIn DMs for the top 5."), "outreach");
 });
 
+// Phase 2 memory-driven follow-up: "Draft outreach to the top 5." must classify
+// as `outreach` (NOT a sourcing category) so pilot-chat routes it to the
+// memory/no-memory path instead of starting a new Apify sourcing run.
+Deno.test("outreach: 'Draft outreach to the top 5.' is outreach, not sourcing", async () => {
+  const d = await classifyWorkflow("Draft outreach to the top 5.");
+  assertEquals(d.workflow_category, "outreach");
+  assertEquals(d.requires_approval, true);
+});
+
+// Explicit sourcing + outreach in one message must still run sourcing (it is a
+// sourcing category with needs_outreach=true), so the no-memory guard never
+// short-circuits it.
+Deno.test("company_hiring_sourcing: explicit 'find … and draft outreach' still sources", async () => {
+  const d = await classifyWorkflow("Find companies hiring GTM roles in the US and draft outreach.");
+  assertEquals(d.workflow_category, "company_hiring_sourcing");
+  assertEquals(d.needs_outreach, true);
+  assertEquals(d.requires_approval, true);
+});
+
 Deno.test("agent_management", async () => {
   assertEquals(await cat("What is Penn working on?"), "agent_management");
   assertEquals(await cat("What can Scout do?"), "agent_management");

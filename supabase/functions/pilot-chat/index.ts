@@ -582,13 +582,16 @@ Deno.serve(async (req) => {
           role_keywords: [],
           location: null,
           max_results: top.length,
+          // Carry the remembered lead ids so orchestrate's Penn-only staged
+          // template and memoryWriter can link each draft to its lead/account/contact.
+          lead_candidate_ids: top.map((l) => l.id),
           needs_enrichment: false,
           needs_outreach: true,
           execution_mode: "outreach",
           confidence: 0.9,
           missing_fields: [],
           reason: "follow-up: draft outreach to top N from memory",
-        } as ToolInput,
+        } as unknown as ToolInput,
         modelUsed: "google/gemini-3-flash-preview",
         providerUsed: "lovable-ai",
       });
