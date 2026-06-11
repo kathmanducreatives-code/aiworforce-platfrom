@@ -349,7 +349,9 @@ function regexClassify(message: string): WorkflowDecision | null {
  * - Enforces outreach → requires_approval=true.
  * - Strips tool/actor on unsafe.
  */
-export function normalizeIntent(raw: Partial<WorkflowDecision> | Record<string, unknown>): WorkflowDecision {
+export function normalizeIntent(input: Partial<WorkflowDecision> | Record<string, unknown>): WorkflowDecision {
+  // deno-lint-ignore no-explicit-any
+  const raw = input as any;
   const cat = ALL_CATEGORIES.includes(raw.workflow_category as WorkflowCategory)
     ? (raw.workflow_category as WorkflowCategory)
     : "unclear";
