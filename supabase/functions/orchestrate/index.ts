@@ -633,8 +633,23 @@ Deno.serve(async (req) => {
           planner_source: "fallback",
         }));
       }
+
+      // full_gtm_report: when the user asks for a report/summary/brief, add a
+      // Scribe report step BEFORE Penn so it can be reviewed before approving
+      // any send. Detected from the instruction (deterministic).
+      const wantsReport = /\b(report|summary|brief|write[-\s]?up|recap|overview|digest)\b/i.test(user_instruction);
+      const isFullGtm = wantsReport && (executionMode === "deep" || executionMode === "outreach");
+      if (isFullGtm) {
+        steps.push(mkStep(99, "scribe", "Write review report", `Write a short, reviewable report of the sourced and ranked results (and enrichment) for: ${user_instruction}. Ground it only in the prior steps' outputs; do not fabricate.`, {
+          tool_needed: "summarize_text",
+          expected_output: "Concise report the user can review before approving outreach.",
+          success_criteria: "Grounded in prior step outputs; no fabricated companies/people.",
+          planner_source: "fallback",
+        }));
+      }
+
       if (executionMode === "outreach") {
-        steps.push(mkStep(3, "penn", "Draft outreach (top 5)", `Draft personalized outreach for top candidates from: ${user_instruction}`, {
+        steps.push(mkStep(99, "penn", "Draft outreach (top 5)", `Draft personalized outreach for top candidates from: ${user_instruction}`, {
           tool_needed: "draft_outreach",
           requires_approval: true,
           expected_output: "Up to 5 personalized drafts ready for review.",
@@ -643,7 +658,13 @@ Deno.serve(async (req) => {
         }));
       }
 
-      const modeLabel = executionMode === "outreach" ? "Source → rank → enrich → draft" : executionMode === "deep" ? "Source → rank → enrich" : "Source → rank";
+      // Re-index step_index to match array position (run-agent chains by array
+      // position, so inserted steps must keep these aligned).
+      steps.forEach((s, i) => { s.step_index = i; });
+
+      const modeLabel = isFullGtm
+        ? (executionMode === "outreach" ? "Source → rank → enrich → report → draft" : "Source → rank → enrich → report")
+        : executionMode === "outreach" ? "Source → rank → enrich → draft" : executionMode === "deep" ? "Source → rank → enrich" : "Source → rank";
       parsed = {
         plan_summary: `${modeLabel}: ${tool_input.query || user_instruction}`,
         steps,
