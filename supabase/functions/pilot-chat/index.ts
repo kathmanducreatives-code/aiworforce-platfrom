@@ -769,10 +769,10 @@ Deno.serve(async (req) => {
     return json({ type: "reply", conversation_id: conversationId, message: saved, provider: providerUsed, error: ai.error });
   }
 
-  const decision = coerceDecision(ai.json);
+  const pilotDecision = coerceDecision(ai.json);
 
   // 8a. Unparseable — degrade gracefully: treat the raw text as a plain reply.
-  if (!decision) {
+  if (!pilotDecision) {
     const fallback = (ai.content || "").trim() || "I'm not sure how to respond to that. Could you rephrase?";
     const { data: saved } = await admin
       .from("messages")
@@ -789,13 +789,13 @@ Deno.serve(async (req) => {
   }
 
   // 8b. Reply branch
-  if (decision.decision === "reply") {
+  if (pilotDecision.decision === "reply") {
     const { data: saved } = await admin
       .from("messages")
       .insert({
         conversation_id: conversationId,
         role: "assistant",
-        content: decision.text,
+        content: pilotDecision.text,
         agent_slug: "pilot",
         model_used: modelUsed,
       })
@@ -813,7 +813,7 @@ Deno.serve(async (req) => {
     authHeader,
     conversationId,
     workspaceId,
-    instruction: decision.instruction,
+    instruction: pilotDecision.instruction,
     toolInput: null,
     modelUsed,
     providerUsed,
