@@ -1,237 +1,498 @@
-// workflowClassifier: deterministic-first workflow classification.
+// workflowClassifier: single source of truth for Agentory workflow routing.
 //
-// Architecture:
-//   Gemini = understands user meaning (fallback for low-confidence only)
-//   classifyWorkflow() = deterministic category decision (source of truth)
-//   pilot-chat = routes each category deterministically
+// Pipeline:
+//   user message
+//     → classifyWorkflow()        (regex-first, Gemini fallback)
+//     → normalizeIntent()         (clamp/coerce raw output)
+//     → validateAgainstCapabilities() (in ./capabilityValidator.ts)
 //
-// Pure / import-free so it is unit-testable in Node + Deno. The AI fallback
-// is exposed as a prompt + coercer; pilot-chat performs the Gemini call and
-// feeds the result back through coerceAiWorkflow().
+// Categories (14):
+//   simple_chat | capabilities | daily_brief | content_creation |
+//   market_research | url_analysis | signal_sourcing | people_sourcing |
+//   company_hiring_sourcing | outreach | agent_management |
+//   approval_review | unsafe_or_unsupported | unclear
+//
+// Compat: intentRouter.ts and toolInputPlanner.ts still exist. This module
+// is the *decision* layer. toolInputPlanner is still used to fill structured
+// tool args for sourcing categories so the existing people-vs-companies
+// pending-clarification flow keeps working unchanged.
 
-export type Workflow =
-  | "unsafe"
+import { generateJson } from "./aiProvider.ts";
+import {
+  URL_RE,
+  PEOPLE_INTENT_RE,
+  COMPANY_INTENT_RE,
+  LINKEDIN_PROFILE_URL_RE,
+  ENRICHMENT_INTENT_RE,
+} from "./actorRegistry.ts";
+
+export type WorkflowCategory =
   | "simple_chat"
   | "capabilities"
   | "daily_brief"
-  | "market_research"
   | "content_creation"
+  | "market_research"
   | "url_analysis"
+  | "signal_sourcing"
   | "people_sourcing"
   | "company_hiring_sourcing"
   | "outreach"
-  | "vague_lead_sourcing";
+  | "agent_management"
+  | "approval_review"
+  | "unsafe_or_unsupported"
+  | "unclear";
 
-export interface WorkflowClassification {
-  workflow: Workflow;
-  confidence: number; // 0..1
+export type WorkflowExecutionMode =
+  | "fast"
+  | "deep"
+  | "outreach"
+  | "content"
+  | "research"
+  | "none";
+
+export interface WorkflowDecision {
+  workflow_category: WorkflowCategory;
+  business_goal: string;
+  intent: string;
+  confidence: number;
+  needs_clarification: boolean;
+  clarification_question: string | null;
+  agents: string[];
+  execution_mode: WorkflowExecutionMode;
+  selected_tool: string | null;
+  selected_actor_key: string | null;
+  source_type: string | null;
+  query: string | null;
+  role_keywords: string[];
+  location: string | null;
+  remote_ok: boolean;
+  seniority: string | null;
+  max_results: number;
+  needs_enrichment: boolean;
+  needs_outreach: boolean;
+  requires_approval: boolean;
+  possible_actions: string[];
   reason: string;
-  source: "rule" | "ai" | "default";
-  unsafe_reason?: string;
+  source: "regex" | "ai" | "default";
 }
 
-// ---------------------------------------------------------------------------
-// Regexes (ordered by precedence in classifyWorkflow)
-// ---------------------------------------------------------------------------
+const ALL_CATEGORIES: WorkflowCategory[] = [
+  "simple_chat",
+  "capabilities",
+  "daily_brief",
+  "content_creation",
+  "market_research",
+  "url_analysis",
+  "signal_sourcing",
+  "people_sourcing",
+  "company_hiring_sourcing",
+  "outreach",
+  "agent_management",
+  "approval_review",
+  "unsafe_or_unsupported",
+  "unclear",
+];
 
-// 1. UNSAFE — automated calling, or scraping personal/private phone numbers.
-const AUTO_CALL_RE =
-  /\b(auto(?:matically)?|start|begin|bulk|mass)\s+(call|calls|calling|dial|dialing|ring)\b|\bcall(?:ing)?\s+them\s+(?:automatic|all)|\bauto[-\s]?dial|\bcold[-\s]?call\s+\d+/i;
-const PRIVATE_CONTACT_RE =
-  /\b(personal|private|cell|mobile|home)\s+(phone|cell|mobile|number|numbers|contact)|\bphone numbers?\b/i;
+const ALL_EXECUTION_MODES: WorkflowExecutionMode[] = [
+  "fast", "deep", "outreach", "content", "research", "none",
+];
 
-// 2. DAILY BRIEF
-const DAILY_BRIEF_RE =
-  /^\s*(brief me( on today)?|daily brief|today'?s (command )?brief|give me today'?s (command )?brief|what should i know today\??|what happened today\??|plan my day|what needs my attention\??)\s*[.!?]*\s*$/i;
+// ---------- Regex layer ----------
 
-// 3. CAPABILITIES
-const CAPABILITIES_RE =
-  /\b(what can you do|what can agentory do|who(?:'?s| is) on (the|your) team|who are you|what are you|your (features|capabilities)|how (can|do) (you|agentory)( help| work)?|what is (this|pilot|agentory))\b/i;
-
-// 4. SIMPLE CHAT (pure greeting / acknowledgement only)
 const GREETING_RE =
-  /^\s*(hi|hello|hey|yo|sup|gm|good (morning|afternoon|evening)|thanks|thank you|ty|cool|nice|ok(ay)?|got it|cheers|great|perfect)[\s.!?]*$/i;
+  /^\s*(hi|hello|hey|yo|sup|gm|good (morning|afternoon|evening)|thanks|thank you|ty|cool|nice|ok|okay|got it|cheers)[\s.!?]*$/i;
 
-// 5. URL present
-const URL_RE = /\bhttps?:\/\/[^\s)]+/i;
+const CAPABILITY_RE =
+  /\b(what can you do|what are your (features|capabilities)|what can agentory do|what do you do|how do you work|how can you help|what is (this|agentory|pilot)|who are you|help me understand)\b/i;
 
-// 6. MARKET RESEARCH — current/market/competitor news (no specific URL).
+const DAILY_BRIEF_RE =
+  /\b(daily brief|brief me( on today)?|today'?s (command )?brief|what (happened|should i know) today|plan my day|what needs my attention)\b/i;
+
+// Content authoring (post, write, draft, summarize into report/brief).
+// Must NOT match outreach (email/dm/message) — outreach handled separately.
+const CONTENT_CREATION_RE =
+  /\b(write|draft|create|compose|post|publish|turn (this|that|it) into|summari[sz]e (this|that|into))\b.*\b(linkedin post|tweet|thread|blog|article|launch post|founder update|newsletter|memo|report|brief|content for|social post|caption)\b|\b(linkedin post|launch post|founder update|founder post|content for linkedin)\b/i;
+
 const MARKET_RESEARCH_RE =
-  /\b(market|industry|competitor|competitors|landscape|sector|space)\b/i;
-const CURRENT_NEWS_RE =
-  /\b(what(?:'?s| is| has)?\s+(changed|new|happening|going on)|latest|today|this week|recent(?:ly)?|current|trend|trends|news|updates?)\b/i;
+  /\b(what changed in|what(?:'?s| is) (?:happening|new) in|current (?:state|status|news|trends?)|latest (?:news|updates?|trends?)|market (?:update|news|trends?|research)|competitor (?:updates?|news|moves?)|what'?s? trending|industry (?:news|trends?))\b/i;
 
-// 7. CONTENT CREATION — write/produce a content artifact.
-const CONTENT_VERB_RE = /\b(write|draft|compose|create|generate|produce|summari[sz]e|rewrite)\b|\b(turn|make|rework)\b[^.?!]*\binto\b/i;
-const CONTENT_ARTIFACT_RE =
-  /\b(linkedin post|li post|post|blog|article|tweet|thread|newsletter|update|memo|report|summary|caption|content|copy|announcement|launch post|case study|press release|job description|jd)\b/i;
+const AGENT_MANAGEMENT_RE =
+  /\b(what (is|are) (scout|aria|hawk|penn|scribe|pilot) (working on|doing)|what can (scout|aria|hawk|penn|scribe) do|which agents?|show me my agents?|list (my )?agents?|what agents do i have|my workforce)\b/i;
 
-// 8. OUTREACH — drafting/sending messages to people/leads.
+const APPROVAL_REVIEW_RE =
+  /\b((what|which|any) approvals? (are )?(pending|waiting|to review)|pending approvals?|drafts? (?:waiting|pending|to (?:review|approve))|approve (penn'?s? )?drafts?|show me (?:my )?(?:pending )?approvals?)\b/i;
+
+// Outreach (drafting). Note: separate from outreach AS PART OF sourcing.
 const OUTREACH_RE =
-  /\b(draft|write|create|generate|send|fire off|prepare)\b[^.?!]*\b(outreach|cold (email|dm|message)|follow[-\s]?ups?|sequences?|messages? to|emails? to|dms? to|reach[-\s]?outs?)\b|\bdraft outreach\b|\boutreach (email|message|sequence|to)\b/i;
-const SEND_RE = /\b(send|deliver|fire off|blast)\b[^.?!]*\b(email|message|dm|outreach)\b/i;
+  /\b(draft (?:an? )?(?:outreach|email|dm|message|sequence|cold (?:email|outreach))|write (?:(?:linkedin |cold )?(?:emails?|dms?|messages?|outreach))|create (?:linkedin )?dms?|outreach to (?:the )?(?:top )?(?:leads?|prospects?|companies))\b/i;
 
-// 9. PEOPLE markers (individual humans, not companies)
-// Note: bare "people who …" is intentionally NOT a people-marker — it's vague
-// ICP language ("people who probably need this"), not a concrete profile search.
-const PEOPLE_MARKER_RE =
-  /\b(individual|specific)\s+(people|profiles?|candidates?|persons?|engineers?|developers?|founders?|marketers?|designers?|leaders?)\b|\b(profiles?|candidates?|persons?|linkedin profiles?)\b|\b(recently changed jobs?|recently posted|open to work|just (joined|left|started))\b/i;
+const SEND_RE = /\b(send|deliver|fire off|blast)\s+(?:emails?|messages?|outreach)\b/i;
 
-// 10. COMPANY-HIRING markers
-const COMPANY_HIRING_RE =
-  /\b(compan(?:y|ies)|startups?|orgs?|organi[sz]ations?)\b[^.?!]*\bhir(?:e|es|ing|ed)\b|\bwho(?:'?s| is) hiring\b|\bhir(?:e|es|ing)\b[^.?!]*\b(roles?|engineers?|sdrs?|aes?|gtm|marketers?|sales|developers?|reps?)\b|\bhiring signals?\b|\bcompanies hiring\b/i;
+// Unsafe / unsupported.
+const UNSAFE_RE =
+  /\b(personal phone numbers?|home address|scrape private|private personal data|harvest emails for spam|send (?:emails?|messages?) automatically|automatic(?:ally)? send|without approval|start calling them automatically|cold call(?:ing)? (?:automated|automatic))\b/i;
 
-// 11. SOURCING intent (broad)
-const SOURCING_VERB_RE =
-  /\b(find|source|sourcing|discover|identify|get me|pull|build a list|prospect)\b/i;
-const LEAD_TARGET_RE =
-  /\b(leads?|prospects?|pipeline|customers?|clients?|companies|people|founders?|candidates?|engineers?|developers?|marketers?|designers?|recruiters?|sdrs?|aes?)\b/i;
+// Sourcing.
+const COMPANIES_HIRING_RE =
+  /\b(compan(?:y|ies) (?:that are )?hiring|hiring (?:for )?(?:gtm|sdr|bdr|engineers?|sales|marketing|developers?|react|backend|frontend|product|content))\b|\bfind compan(?:y|ies)\b.*\bhiring\b|\bhiring intent\b/i;
 
-// Role words (used to detect "ambiguous talent" → vague).
-const ROLE_RE =
-  /\b(engineers?|developers?|marketers?|designers?|founders?|recruiters?|sales|sdrs?|aes?|gtm|product managers?|pms?|data scientists?|analysts?)\b/i;
+const PEOPLE_PROFILES_RE =
+  /\b(individual (?:profiles?|people|engineers?|developers?|founders?|candidates?)|find (\d+ )?(?:individual )?(?:engineers?|developers?|react developers?|backend engineers?|frontend engineers?|founders?|candidates?|profiles?) (?:in|from|based in)|founder profiles?|senior (?:engineers?|developers?|backend|frontend|fullstack))\b/i;
 
-// ---------------------------------------------------------------------------
+const VAGUE_SOURCING_RE =
+  /\b(find (?:me )?(?:more )?(?:leads?|customers?|prospects?)|i need (?:more )?customers|find compan(?:y|ies) (?:that )?(?:probably|might) need this|find people (?:likely|who might) (?:to )?buy)\b/i;
 
-function clamp(n: number): number {
-  return Math.max(0, Math.min(1, n));
+// Generic words.
+const URL_PRESENT_RE = URL_RE;
+
+// Trivial fallback for unclear.
+const VERY_VAGUE_RE = /^(can you help.*|do the thing.*|help.*|um.*|idk.*)$/i;
+
+// Phase 1 patch: short, contentless "please help" prompts that name no task.
+// These must deterministically resolve to `unclear` with a targeted menu,
+// rather than falling through to the AI fallback or a generic Pilot reply.
+// e.g. "Can you help with this?", "Help me with this.", "Can you do this?",
+// "I need help."
+const SHORT_VAGUE_RE =
+  /^\s*((can|could)\s+you\s+(help|do\s+(this|that|it))(\s+me)?(\s+with\s+(this|that|it))?|help(\s+me)?(\s+with\s+(this|that|it))?|i\s+(need|want)(\s+some)?\s+help|do\s+the\s+thing)[\s.!?]*$/i;
+
+export const SHORT_VAGUE_CLARIFICATION =
+  "Sure — what would you like me to help with: sourcing leads, researching a company, writing content, drafting outreach, or reviewing approvals?";
+
+// ---------- Helpers ----------
+
+function defaultDecision(category: WorkflowCategory, partial: Partial<WorkflowDecision>): WorkflowDecision {
+  return {
+    workflow_category: category,
+    business_goal: partial.business_goal ?? "",
+    intent: partial.intent ?? category,
+    confidence: partial.confidence ?? 0.85,
+    needs_clarification: partial.needs_clarification ?? false,
+    clarification_question: partial.clarification_question ?? null,
+    agents: partial.agents ?? [],
+    execution_mode: partial.execution_mode ?? "none",
+    selected_tool: partial.selected_tool ?? null,
+    selected_actor_key: partial.selected_actor_key ?? null,
+    source_type: partial.source_type ?? null,
+    query: partial.query ?? null,
+    role_keywords: partial.role_keywords ?? [],
+    location: partial.location ?? null,
+    remote_ok: partial.remote_ok ?? false,
+    seniority: partial.seniority ?? null,
+    max_results: partial.max_results ?? 10,
+    needs_enrichment: partial.needs_enrichment ?? false,
+    needs_outreach: partial.needs_outreach ?? false,
+    requires_approval: partial.requires_approval ?? false,
+    possible_actions: partial.possible_actions ?? [],
+    reason: partial.reason ?? "",
+    source: partial.source ?? "regex",
+  };
 }
+
+function looksLikeURL(m: string) { return URL_PRESENT_RE.test(m); }
+
+function regexClassify(message: string): WorkflowDecision | null {
+  const m = message.trim();
+  if (!m) return defaultDecision("unclear", { reason: "empty prompt", confidence: 1, source: "default" });
+
+  // Order matters: most specific first.
+  if (UNSAFE_RE.test(m) || (SEND_RE.test(m) && /\bautomatic|without approval\b/i.test(m))) {
+    return defaultDecision("unsafe_or_unsupported", {
+      reason: "matches unsafe/unsupported pattern",
+      possible_actions: ["public_business_research", "linkedin_outreach_draft", "approval_gated_email"],
+    });
+  }
+
+  if (GREETING_RE.test(m)) {
+    return defaultDecision("simple_chat", { reason: "greeting", confidence: 0.95 });
+  }
+
+  if (CAPABILITY_RE.test(m)) {
+    return defaultDecision("capabilities", { reason: "capability question", confidence: 0.95 });
+  }
+
+  if (DAILY_BRIEF_RE.test(m)) {
+    return defaultDecision("daily_brief", { reason: "daily brief phrasing", confidence: 0.95, agents: ["pilot"] });
+  }
+
+  if (APPROVAL_REVIEW_RE.test(m)) {
+    return defaultDecision("approval_review", { reason: "approval review request", confidence: 0.9, agents: ["pilot"] });
+  }
+
+  if (AGENT_MANAGEMENT_RE.test(m)) {
+    return defaultDecision("agent_management", { reason: "agent management question", confidence: 0.9, agents: ["pilot"] });
+  }
+
+  // Phase 1 patch: short "please help" prompts with no task → unclear (targeted menu).
+  if (SHORT_VAGUE_RE.test(m)) {
+    return defaultDecision("unclear", {
+      reason: "short vague help request — no task specified",
+      confidence: 0.9,
+      needs_clarification: true,
+      clarification_question: SHORT_VAGUE_CLARIFICATION,
+    });
+  }
+
+  // URL → url_analysis (unless it's a LinkedIn profile + enrichment intent, which the
+  // existing toolInputPlanner handles as profile_enrichment — we still route through
+  // the sourcing branch for that one).
+  if (looksLikeURL(m) && !(LINKEDIN_PROFILE_URL_RE.test(m) && ENRICHMENT_INTENT_RE.test(m))) {
+    return defaultDecision("url_analysis", {
+      reason: "URL present — Firecrawl",
+      confidence: 0.9,
+      agents: ["hawk", "scribe"],
+      execution_mode: "research",
+      selected_tool: "scrape_url",
+      selected_actor_key: "firecrawl_scrape_url",
+      query: m,
+    });
+  }
+
+  if (MARKET_RESEARCH_RE.test(m)) {
+    return defaultDecision("market_research", {
+      reason: "market/competitor/news/current trends",
+      confidence: 0.85,
+      agents: ["hawk", "scribe"],
+      execution_mode: "research",
+      // Don't pin selected_actor_key here — validator decides based on
+      // search_web availability and degrades to honest reply if missing.
+    });
+  }
+
+  // Content authoring: must come BEFORE outreach so "write LinkedIn post" doesn't
+  // get caught as outreach via "write".
+  if (CONTENT_CREATION_RE.test(m) && !OUTREACH_RE.test(m)) {
+    return defaultDecision("content_creation", {
+      reason: "content authoring request",
+      confidence: 0.9,
+      agents: ["scribe"],
+      execution_mode: "content",
+    });
+  }
+
+  // Outreach without sourcing: draft emails/dms/sequences/outreach explicitly.
+  // If the same message also says "find X", let sourcing branches handle it
+  // (toolInputPlanner will set needs_outreach=true).
+  const wantsSourcing = COMPANIES_HIRING_RE.test(m) || PEOPLE_PROFILES_RE.test(m) || VAGUE_SOURCING_RE.test(m);
+  if (OUTREACH_RE.test(m) && !wantsSourcing) {
+    return defaultDecision("outreach", {
+      reason: "outreach drafting without sourcing",
+      confidence: 0.85,
+      agents: ["penn"],
+      execution_mode: "outreach",
+      needs_outreach: true,
+      requires_approval: true,
+    });
+  }
+
+  if (COMPANIES_HIRING_RE.test(m)) {
+    return defaultDecision("company_hiring_sourcing", {
+      reason: "companies hiring signal",
+      confidence: 0.9,
+      agents: ["scout", "aria"],
+      execution_mode: "fast",
+      selected_tool: "source_with_apify",
+      selected_actor_key: "apify_jobs",
+      source_type: "jobs",
+      query: m,
+      needs_outreach: OUTREACH_RE.test(m),
+      requires_approval: OUTREACH_RE.test(m),
+    });
+  }
+
+  // people-vs-company resolution: explicit people language and NOT company language.
+  if (PEOPLE_PROFILES_RE.test(m) || (PEOPLE_INTENT_RE.test(m) && !COMPANY_INTENT_RE.test(m))) {
+    return defaultDecision("people_sourcing", {
+      reason: "individual people / profile language",
+      confidence: 0.9,
+      agents: ["scout", "aria"],
+      execution_mode: "fast",
+      selected_tool: "source_with_apify",
+      selected_actor_key: "apify_people_search",
+      source_type: "people_profiles",
+      query: m,
+      max_results: 10,
+      needs_outreach: OUTREACH_RE.test(m),
+      requires_approval: OUTREACH_RE.test(m),
+    });
+  }
+
+  if (VAGUE_SOURCING_RE.test(m)) {
+    return defaultDecision("signal_sourcing", {
+      reason: "vague sourcing request — needs clarification",
+      confidence: 0.7,
+      needs_clarification: true,
+      clarification_question:
+        "Which buying signal should I target first: companies hiring GTM roles, companies hiring engineering roles, founder profiles, LinkedIn engagement, competitor engagement, or a specific niche?",
+      possible_actions: [
+        "companies_hiring_gtm",
+        "companies_hiring_engineering",
+        "founder_profiles",
+        "linkedin_engagement",
+        "competitor_engagement",
+        "specific_niche",
+      ],
+    });
+  }
+
+  // Generic sourcing-ish words that don't match any specific bucket above.
+  if (COMPANY_INTENT_RE.test(m) || /\b(find|source|leads?|prospects?|candidates?)\b/i.test(m)) {
+    return defaultDecision("company_hiring_sourcing", {
+      reason: "generic sourcing — defaulting to companies-hiring (apify_jobs)",
+      confidence: 0.6,
+      agents: ["scout", "aria"],
+      execution_mode: "fast",
+      selected_tool: "source_with_apify",
+      selected_actor_key: "apify_jobs",
+      source_type: "jobs",
+      query: m,
+    });
+  }
+
+  if (VERY_VAGUE_RE.test(m) || m.split(/\s+/).length < 3) {
+    return defaultDecision("unclear", {
+      reason: "too short / generic",
+      confidence: 0.4,
+      needs_clarification: true,
+      clarification_question: "Could you add a bit more detail — what would you like me to help with?",
+    });
+  }
+
+  return null; // fall through to AI
+}
+
+// ---------- normalizeIntent ----------
 
 /**
- * Deterministic workflow classification. First match wins, in precedence order.
- * Safety (unsafe) is always checked first.
+ * Coerce raw classifier output (regex or AI) into a clean WorkflowDecision.
+ * - Forces workflow_category into the enum.
+ * - Clamps confidence and max_results.
+ * - Enforces outreach → requires_approval=true.
+ * - Strips tool/actor on unsafe.
  */
-export function classifyWorkflow(messageRaw: string): WorkflowClassification {
-  const message = (messageRaw ?? "").trim();
-  if (!message) {
-    return { workflow: "simple_chat", confidence: 0.4, reason: "empty message", source: "default" };
+export function normalizeIntent(input: Partial<WorkflowDecision> | Record<string, unknown>): WorkflowDecision {
+  // deno-lint-ignore no-explicit-any
+  const raw = input as any;
+  const cat = ALL_CATEGORIES.includes(raw.workflow_category as WorkflowCategory)
+    ? (raw.workflow_category as WorkflowCategory)
+    : "unclear";
+
+  const mode = ALL_EXECUTION_MODES.includes(raw.execution_mode as WorkflowExecutionMode)
+    ? (raw.execution_mode as WorkflowExecutionMode)
+    : "none";
+
+  const confidence = typeof raw.confidence === "number" ? Math.max(0, Math.min(1, raw.confidence)) : 0.5;
+  let max_results = typeof raw.max_results === "number" ? Math.max(1, Math.min(200, Math.floor(raw.max_results))) : 10;
+
+  const decision: WorkflowDecision = {
+    workflow_category: cat,
+    business_goal: typeof raw.business_goal === "string" ? raw.business_goal : "",
+    intent: typeof raw.intent === "string" ? raw.intent : cat,
+    confidence,
+    needs_clarification: !!raw.needs_clarification,
+    clarification_question: typeof raw.clarification_question === "string" ? raw.clarification_question : null,
+    agents: Array.isArray(raw.agents) ? (raw.agents as unknown[]).filter((a: unknown) => typeof a === "string") as string[] : [],
+    execution_mode: mode,
+    selected_tool: typeof raw.selected_tool === "string" ? raw.selected_tool : null,
+    selected_actor_key: typeof raw.selected_actor_key === "string" ? raw.selected_actor_key : null,
+    source_type: typeof raw.source_type === "string" ? raw.source_type : null,
+    query: typeof raw.query === "string" ? raw.query : null,
+    role_keywords: Array.isArray(raw.role_keywords)
+      ? (raw.role_keywords as unknown[]).filter((k) => typeof k === "string") as string[]
+      : [],
+    location: typeof raw.location === "string" ? raw.location : null,
+    remote_ok: !!raw.remote_ok,
+    seniority: typeof raw.seniority === "string" ? raw.seniority : null,
+    max_results,
+    needs_enrichment: !!raw.needs_enrichment,
+    needs_outreach: !!raw.needs_outreach,
+    requires_approval: !!raw.requires_approval,
+    possible_actions: Array.isArray(raw.possible_actions)
+      ? (raw.possible_actions as unknown[]).filter((a) => typeof a === "string") as string[]
+      : [],
+    reason: typeof raw.reason === "string" ? raw.reason : "",
+    source: (raw.source === "regex" || raw.source === "ai" || raw.source === "default") ? raw.source : "default",
+  };
+
+  // outreach (or sourcing+outreach) always requires approval before sending.
+  if (decision.workflow_category === "outreach" || decision.needs_outreach) {
+    decision.requires_approval = true;
   }
 
-  // 1) UNSAFE — highest precedence (safety). Auto-calling, or private-phone scraping.
-  if (AUTO_CALL_RE.test(message)) {
-    return {
-      workflow: "unsafe",
-      confidence: 0.97,
-      reason: "automated calling/dialing requested",
-      source: "rule",
-      unsafe_reason: "auto_calling",
-    };
-  }
-  if (PRIVATE_CONTACT_RE.test(message)) {
-    return {
-      workflow: "unsafe",
-      confidence: 0.9,
-      reason: "personal/private phone-number scraping requested",
-      source: "rule",
-      unsafe_reason: "private_contact_scraping",
-    };
+  // unsafe: strip any executable choices.
+  if (decision.workflow_category === "unsafe_or_unsupported") {
+    decision.selected_tool = null;
+    decision.selected_actor_key = null;
+    decision.source_type = null;
+    decision.agents = [];
+    decision.execution_mode = "none";
   }
 
-  // 2) DAILY BRIEF
-  if (DAILY_BRIEF_RE.test(message)) {
-    return { workflow: "daily_brief", confidence: 0.95, reason: "daily brief phrasing", source: "rule" };
-  }
-
-  // 3) CAPABILITIES
-  if (CAPABILITIES_RE.test(message)) {
-    return { workflow: "capabilities", confidence: 0.95, reason: "capability question", source: "rule" };
-  }
-
-  // 4) SIMPLE CHAT (pure greeting)
-  if (GREETING_RE.test(message)) {
-    return { workflow: "simple_chat", confidence: 0.95, reason: "greeting/acknowledgement", source: "rule" };
-  }
-
-  const hasUrl = URL_RE.test(message);
-  const hasOutreach = OUTREACH_RE.test(message) || SEND_RE.test(message);
-  const hasContent = CONTENT_VERB_RE.test(message) && CONTENT_ARTIFACT_RE.test(message);
-  const hasSourcingVerb = SOURCING_VERB_RE.test(message);
-  const hasPeople = PEOPLE_MARKER_RE.test(message);
-  const hasCompanyHiring = COMPANY_HIRING_RE.test(message);
-  const hasRole = ROLE_RE.test(message);
-  const hasLeadTarget = LEAD_TARGET_RE.test(message);
-
-  // 5) URL ANALYSIS — a concrete URL to analyze. Beats sourcing/content so we
-  //    never double-fire Apify on a URL request. (Outreach *angle* mentions
-  //    don't change this; actual outreach drafting is a separate later step.)
-  if (hasUrl) {
-    return { workflow: "url_analysis", confidence: 0.9, reason: "message contains a URL to analyze", source: "rule" };
-  }
-
-  // 6) OUTREACH — explicit drafting/sending of messages. Wins over plain
-  //    sourcing because "find X and draft outreach" is the full outreach chain.
-  if (hasOutreach) {
-    return { workflow: "outreach", confidence: 0.88, reason: "explicit outreach drafting/sending", source: "rule" };
-  }
-
-  // 7) CONTENT CREATION — produce a content artifact, with NO outreach/lead target.
-  if (hasContent && !hasOutreach && !(hasSourcingVerb && hasLeadTarget)) {
-    return { workflow: "content_creation", confidence: 0.9, reason: "content artifact request (no sourcing/outreach)", source: "rule" };
-  }
-
-  // 8) MARKET RESEARCH — current/market/competitor info, no URL, no sourcing.
-  if (MARKET_RESEARCH_RE.test(message) && CURRENT_NEWS_RE.test(message) && !hasSourcingVerb) {
-    return { workflow: "market_research", confidence: 0.85, reason: "current market/competitor research", source: "rule" };
-  }
-
-  // 9) PEOPLE SOURCING — explicit individual-people markers.
-  if (hasPeople && !hasCompanyHiring) {
-    return { workflow: "people_sourcing", confidence: 0.85, reason: "explicit individual-people markers", source: "rule" };
-  }
-
-  // 10) COMPANY HIRING SOURCING — explicit companies-hiring language.
-  if (hasCompanyHiring) {
-    return { workflow: "company_hiring_sourcing", confidence: 0.85, reason: "companies-hiring language", source: "rule" };
-  }
-
-  // 11) VAGUE LEAD SOURCING — sourcing intent but underspecified target, OR
-  //     ambiguous talent (role present, but neither people nor companies made
-  //     explicit). Route to clarification rather than guessing.
-  const vagueLeads = (hasSourcingVerb && hasLeadTarget) || /\b(who should we (reach out to|target|contact)|need (pipeline|leads|customers))\b/i.test(message);
-  const ambiguousTalent = hasRole && hasSourcingVerb && !hasPeople && !hasCompanyHiring;
-  if (vagueLeads || ambiguousTalent) {
-    return {
-      workflow: "vague_lead_sourcing",
-      confidence: 0.7,
-      reason: ambiguousTalent ? "ambiguous talent request (people vs companies vs agency)" : "underspecified lead-sourcing target",
-      source: "rule",
-    };
-  }
-
-  // Default — low confidence; pilot-chat may escalate to the Gemini fallback.
-  return { workflow: "vague_lead_sourcing", confidence: 0.3, reason: "no confident rule match", source: "default" };
+  return decision;
 }
 
-// ---------------------------------------------------------------------------
-// Gemini fallback (used by pilot-chat when deterministic confidence is low)
-// ---------------------------------------------------------------------------
+// ---------- AI fallback ----------
 
-export const WORKFLOW_AI_PROMPT = `You are Agentory's workflow classifier. Read the user message and choose EXACTLY
-ONE workflow category. Do not answer the user. Do not run tools.
+const AI_SYSTEM_PROMPT = `You classify a single user message for an AI workforce platform.
+Return ONLY a JSON object. Pick exactly one workflow_category from this list:
+${ALL_CATEGORIES.join(" | ")}
 
-Categories:
-- unsafe: requests for automated calling, mass dialing, or scraping personal/private phone numbers.
+Guidance:
 - simple_chat: greetings, thanks, small talk.
-- capabilities: questions about what Agentory/Pilot can do or who is on the team.
-- daily_brief: "brief me on today", "what needs my attention".
-- market_research: current/market/competitor news or trends (NOT a specific URL).
-- content_creation: write/produce a content artifact (LinkedIn post, blog, report, summary) with no lead sourcing or outreach.
-- url_analysis: a specific URL to analyze/scrape.
-- people_sourcing: find individual people/candidate profiles.
-- company_hiring_sourcing: find companies that are hiring specific roles.
-- outreach: draft or send outreach messages/emails (often after sourcing).
-- vague_lead_sourcing: a sourcing/lead request whose target is unclear, OR an ambiguous talent request (could be individuals, companies, or agencies). Use this when clarification is needed.
+- capabilities: "what can you do", "what are your features".
+- daily_brief: "brief me on today", "plan my day".
+- content_creation: write/draft a post, founder update, blog, report, summary.
+- market_research: current news, market/competitor trends, what changed today.
+- url_analysis: message contains an http(s) URL to analyze.
+- signal_sourcing: vague "find leads/customers", needs clarification.
+- people_sourcing: explicit "individual profiles" or "find <role> profiles".
+- company_hiring_sourcing: "find companies hiring <role>".
+- outreach: "draft outreach/email/dm/sequence" (no sourcing in same message).
+- agent_management: questions about agents (Scout, Aria, Penn, Hawk, Scribe, Pilot).
+- approval_review: "pending approvals", "drafts waiting to approve".
+- unsafe_or_unsupported: personal phone numbers, auto-send without approval, private data.
+- unclear: genuinely vague.
 
-Respond with ONLY this JSON: {"workflow":"<category>","reason":"<short>"}`;
+JSON shape:
+{
+  "workflow_category": "...",
+  "business_goal": "short phrase",
+  "intent": "short phrase",
+  "confidence": 0..1,
+  "needs_clarification": boolean,
+  "clarification_question": "string or null",
+  "agents": ["scout"|"aria"|"hawk"|"penn"|"scribe"|"pilot"],
+  "execution_mode": "fast|deep|outreach|content|research|none",
+  "reason": "one sentence"
+}`;
 
-const VALID_WORKFLOWS = new Set<Workflow>([
-  "unsafe", "simple_chat", "capabilities", "daily_brief", "market_research",
-  "content_creation", "url_analysis", "people_sourcing", "company_hiring_sourcing",
-  "outreach", "vague_lead_sourcing",
-]);
+export async function classifyWorkflow(message: string): Promise<WorkflowDecision> {
+  const quick = regexClassify(message);
+  if (quick) return normalizeIntent(quick);
 
-export function coerceAiWorkflow(raw: unknown): Workflow | null {
-  const w = (raw as { workflow?: unknown } | null)?.workflow;
-  if (typeof w === "string" && VALID_WORKFLOWS.has(w as Workflow)) return w as Workflow;
-  return null;
+  // AI fallback only when regex is uncertain.
+  const ai = await generateJson({
+    taskType: "helper",
+    systemPrompt: AI_SYSTEM_PROMPT,
+    messages: [{ role: "user", content: message }],
+    temperature: 0.1,
+    maxTokens: 400,
+    jsonMode: true,
+    functionName: "workflowClassifier",
+  });
+
+  if (ai.ok && ai.json && typeof ai.json === "object") {
+    const decision = normalizeIntent({ ...(ai.json as Record<string, unknown>), source: "ai" });
+    if (decision.confidence >= 0.5) return decision;
+  }
+
+  return normalizeIntent({
+    workflow_category: "unclear",
+    reason: "no regex match and AI low-confidence/unavailable",
+    needs_clarification: true,
+    clarification_question:
+      "Could you add a bit more detail — for example a role + location, a URL, or what kind of content you want?",
+    confidence: 0.3,
+    source: "default",
+  });
 }

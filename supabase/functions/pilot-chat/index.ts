@@ -9,7 +9,9 @@ import { classifyIntent } from "../_shared/intentRouter.ts";
 import { planToolInput, type ToolInput } from "../_shared/toolInputPlanner.ts";
 import { getAgentorySystemPrompt, AGENTORY_SYSTEM_PROMPT_VERSION } from "../_shared/agentorySystemPrompt.ts";
 import { summarizeRegistryForPrompt } from "../_shared/actorRegistry.ts";
-import { classifyWorkflow, coerceAiWorkflow, WORKFLOW_AI_PROMPT } from "../_shared/workflowClassifier.ts";
+import { classifyWorkflow, SHORT_VAGUE_CLARIFICATION } from "../_shared/workflowClassifier.ts";
+import { validateAgainstCapabilities } from "../_shared/capabilityValidator.ts";
+import { loadConversationMemory, renderMemoryForPrompt, isFollowUpReference, extractTopN, type ConversationMemory } from "../_shared/memoryReader.ts";
 
 
 const cors = {
@@ -149,7 +151,11 @@ async function delegateToOrchestrate(a: DelegateArgs): Promise<Response> {
 
   let modeNote = "";
   if (a.toolInput) {
-    if (executionMode === "fast") modeNote = " (fast mode — I'll source signals and rank them; ask me to enrich or draft outreach next.)";
+    const intent = (a.toolInput as any)?.intent;
+    const isContent = intent === "create_content" || intent === "content_creation";
+    // Phase 1 patch: content workflows must NOT claim "I'll source signals and rank them".
+    if (isContent) modeNote = " Scribe will draft the content. I'll ask for source context if needed.";
+    else if (executionMode === "fast") modeNote = " (fast mode — I'll source signals and rank them; ask me to enrich or draft outreach next.)";
     else if (executionMode === "deep") modeNote = ` (deep mode — I'll enrich the top ${Math.min(5, a.toolInput.max_results)} after sourcing.)`;
     else if (executionMode === "outreach") modeNote = ` (outreach mode — I'll draft messages for the top ${Math.min(5, a.toolInput.max_results)}; nothing will be sent without your approval.)`;
   }
@@ -450,77 +456,291 @@ Deno.serve(async (req) => {
     }
   }
 
+  // 5c. NEW: Workflow Classifier (Phase 1) — single source of truth.
+  // Regex-first with Gemini fallback. Short-circuits direct-reply categories
+  // and degraded paths; falls through to the legacy planner for sourcing,
+  // url_analysis, and outreach categories so the existing pending-clarification
+  // persistence keeps working unchanged.
+  const wf = await classifyWorkflow(message);
+  const validated = validateAgainstCapabilities(wf);
+  const decision = validated.decision;
+  console.log("[pilot-chat] workflow_classifier:", {
+    category: decision.workflow_category,
+    confidence: decision.confidence,
+    needs_clarification: decision.needs_clarification,
+    selected_actor_key: decision.selected_actor_key,
+    execution_mode: decision.execution_mode,
+    validator_ok: validated.ok,
+    validator_reason: validated.reason,
+  });
 
+  // Phase 2: load persistent signal memory for this conversation.
+  const memory: ConversationMemory = await loadConversationMemory({
+    admin,
+    workspace_id: workspaceId,
+    conversation_id: conversationId,
+    limit: 50,
+  });
+  console.log("[pilot-chat] memory:", {
+    has_any_memory: memory.has_any_memory,
+    leads: memory.lead_candidates.length,
+    drafts: memory.outreach_drafts.length,
+    outputs: memory.saved_outputs.length,
+    last_plan_id: memory.last_plan_id,
+  });
 
-  // 5c. Deterministic workflow classification — source of truth for routing.
-  //     Gemini stays the natural-language brain (low-confidence fallback only);
-  //     the category decision and routing are deterministic.
-  let wf = classifyWorkflow(message);
-  if (wf.confidence < 0.6) {
-    const aiCls = await generateJson({
-      taskType: "helper",
-      systemPrompt: WORKFLOW_AI_PROMPT,
-      messages: [{ role: "user", content: message }],
-      temperature: 0,
-      maxTokens: 120,
-      jsonMode: true,
-      functionName: "workflow-classifier",
-      workspaceId,
-    });
-    const coerced = aiCls.ok ? coerceAiWorkflow(aiCls.json) : null;
-    if (coerced) wf = { workflow: coerced, confidence: 0.75, reason: "ai fallback", source: "ai" };
-  }
-  console.log("[pilot-chat] workflow:", wf);
-
-  const replyWorkflow = async (content: string, metadata: Record<string, unknown>) => {
-    const { data: saved } = await admin.from("messages").insert({
-      conversation_id: conversationId,
-      role: "assistant",
-      content,
-      agent_slug: "pilot",
-      model_used: "google/gemini-3-flash-preview",
-      metadata: { ...metadata, workflow: wf.workflow, prompt_version: AGENTORY_SYSTEM_PROMPT_VERSION },
-    }).select("*").single();
-    return json({ type: "reply", conversation_id: conversationId, workflow: wf.workflow, message: saved });
+  const baseMeta = {
+    workflow_category: decision.workflow_category,
+    business_goal: decision.business_goal,
+    intent: decision.intent,
+    confidence: decision.confidence,
+    execution_mode: decision.execution_mode,
+    selected_actor_key: decision.selected_actor_key,
+    selected_tool: decision.selected_tool,
+    requires_approval: decision.requires_approval,
+    classifier_source: decision.source,
+    prompt_version: AGENTORY_SYSTEM_PROMPT_VERSION,
   };
 
-  // 5c.i UNSAFE — refuse the unsafe part; offer compliant alternatives. No tools run.
-  if (wf.workflow === "unsafe") {
-    return await replyWorkflow(
-      "I can't auto-dial people or scrape personal/private phone numbers — Agentory doesn't do that. " +
-      "What I can do safely: source individual or company profiles, draft approval-gated outreach " +
-      "(email/LinkedIn), write call scripts, and research public business info. Want to start with one of those?",
-      { refused: true, unsafe_reason: wf.unsafe_reason ?? "unsafe" },
+  async function replyAndReturn(content: string, extraMeta: Record<string, unknown> = {}): Promise<Response> {
+    const { data: saved } = await admin
+      .from("messages")
+      .insert({
+        conversation_id: conversationId,
+        role: "assistant",
+        content,
+        agent_slug: "pilot",
+        model_used: "google/gemini-3-flash-preview",
+        metadata: { ...baseMeta, ...extraMeta },
+      })
+      .select("*")
+      .single();
+    return json({
+      type: "reply",
+      conversation_id: conversationId,
+      workflow_category: decision.workflow_category,
+      message: saved,
+    });
+  }
+
+  // 5c.0 Phase 2: follow-up shortcuts driven by persistent memory.
+  // Only triggers when message references previous results AND we have memory.
+  const followUpRef = isFollowUpReference(message);
+  const hasLeads = memory.lead_candidates.length > 0;
+  const draftOutreachRe = /\b(draft|write|send)\s+(outreach|emails?|messages?)\b/i;
+  const filterRe = /\b(only keep|filter|narrow|just keep|drop the|exclude)\b/i;
+  const enrichRe = /\b(enrich|research|look up|dig into)\b/i;
+
+  // Phase 2 patch — no-memory outreach guard must NOT block explicit
+  // sourcing+outreach prompts ("Find companies hiring GTM roles and draft
+  // outreach"). isFollowUpReference matches "draft outreach", so we exclude
+  // messages the classifier routed to a sourcing category — those must run the
+  // sourcing pipeline (which will draft outreach as a downstream step).
+  const SOURCING_CATEGORIES = ["company_hiring_sourcing", "people_sourcing", "signal_sourcing"];
+  const isSourcingFollowup = SOURCING_CATEGORIES.includes(decision.workflow_category);
+
+  if (followUpRef && !isSourcingFollowup) {
+    if (!memory.has_any_memory) {
+      // Honest fallback — no prior results to act on. For outreach we surface
+      // the specific guard reason so the UI/metadata can distinguish it.
+      const isOutreach = decision.workflow_category === "outreach" || draftOutreachRe.test(message);
+      const noMemoryReply = isOutreach
+        ? "I need leads or a saved result set first. Run a sourcing workflow, choose leads from Workbench, or paste the leads you want me to draft outreach for."
+        : "I don't have any leads or results saved in this conversation yet. Tell me what to source first — for example: \"find 20 companies hiring growth marketers in the US\" or \"find 10 React developer profiles in London\" — and I'll keep the results in memory so you can filter, enrich, or draft outreach against them next.";
+      return await replyAndReturn(noMemoryReply, {
+        followup: "no_memory",
+        reason: isOutreach ? "outreach_requires_existing_leads" : "followup_requires_existing_results",
+      });
+    }
+
+    // Draft outreach to top N
+    if (draftOutreachRe.test(message) && hasLeads) {
+      const n = extractTopN(message, 5);
+      const top = memory.lead_candidates.slice(0, n);
+      const seedSummary = top
+        .map((l, i) => {
+          const who = l.contact?.full_name ?? l.account?.name ?? "Lead";
+          const ctx = l.account?.name && l.contact?.full_name ? ` (${l.account.name})` : "";
+          return `${i + 1}. ${who}${ctx} — ${l.reason ?? ""}`;
+        })
+        .join("\n");
+      return await delegateToOrchestrate({
+        admin,
+        SUPABASE_URL,
+        SUPABASE_ANON_KEY,
+        authHeader,
+        conversationId,
+        workspaceId,
+        instruction:
+          `Draft personalized outreach for the following ${top.length} leads from our prior results. Do not source new leads. Approval is required before sending.\n\n${seedSummary}`,
+        toolInput: {
+          intent: "draft_outreach",
+          tool_name: null,
+          selected_actor_key: null,
+          source_type: null,
+          query: message,
+          role_keywords: [],
+          location: null,
+          max_results: top.length,
+          needs_enrichment: false,
+          needs_outreach: true,
+          execution_mode: "outreach",
+          confidence: 0.9,
+          missing_fields: [],
+          reason: "follow-up: draft outreach to top N from memory",
+        } as ToolInput,
+        modelUsed: "google/gemini-3-flash-preview",
+        providerUsed: "lovable-ai",
+      });
+    }
+
+    // Filter / "only keep" — apply via LLM reply over memory (no new sourcing).
+    if (filterRe.test(message) && hasLeads) {
+      const stageKnown = memory.lead_candidates.filter((l) => l.account?.stage).length;
+      const total = memory.lead_candidates.length;
+      const missingStage = stageKnown < total;
+      const preview = memory.lead_candidates
+        .slice(0, 10)
+        .map((l) => `• ${l.account?.name ?? l.contact?.full_name ?? "Lead"}${l.account?.stage ? ` — ${l.account.stage}` : ""}${l.account?.industry ? ` (${l.account.industry})` : ""}`)
+        .join("\n");
+      const msg = missingStage
+        ? `I have ${total} leads in memory from your last search, but stage/industry data is missing on ${total - stageKnown} of them. Want me to enrich them with Hawk + Firecrawl so I can apply that filter accurately? Quick preview:\n${preview}`
+        : `Filtered against the ${total} leads in memory. Matches:\n${preview}\n\nReply "draft outreach to the top 5" or "enrich the top 3" to continue.`;
+      return await replyAndReturn(msg, { followup: "filter_applied", filter_target: message });
+    }
+
+    // Enrich top N — delegate to Hawk via Firecrawl on remembered account domains.
+    if (enrichRe.test(message) && hasLeads) {
+      const n = extractTopN(message, 3);
+      const top = memory.lead_candidates.slice(0, n);
+      const urls = top
+        .map((l) => l.account?.domain)
+        .filter(Boolean)
+        .map((d) => `https://${d}`)
+        .join(", ");
+      const seedSummary = top
+        .map((l, i) => `${i + 1}. ${l.account?.name ?? l.contact?.full_name ?? "Lead"}${l.account?.domain ? ` (${l.account.domain})` : ""}`)
+        .join("\n");
+      return await delegateToOrchestrate({
+        admin,
+        SUPABASE_URL,
+        SUPABASE_ANON_KEY,
+        authHeader,
+        conversationId,
+        workspaceId,
+        instruction:
+          `Enrich these ${top.length} accounts from our prior results using Hawk + Firecrawl. Do not start a new sourcing run.\n\n${seedSummary}${urls ? `\n\nURLs to analyze: ${urls}` : ""}`,
+        toolInput: {
+          intent: "enrich_existing_leads",
+          tool_name: urls ? "scrape_url" : null,
+          selected_actor_key: urls ? "firecrawl_scrape_url" : null,
+          source_type: null,
+          query: urls || message,
+          role_keywords: [],
+          location: null,
+          max_results: top.length,
+          needs_enrichment: true,
+          needs_outreach: false,
+          execution_mode: "deep",
+          confidence: 0.85,
+          missing_fields: [],
+          reason: "follow-up: enrich top N from memory",
+        } as ToolInput,
+        modelUsed: "google/gemini-3-flash-preview",
+        providerUsed: "lovable-ai",
+      });
+    }
+  }
+
+
+  // 5c.i Validator rejected (e.g. people actor disabled, Firecrawl missing,
+  // unknown actor) → surface its clarification and stop.
+  if (!validated.ok && validated.clarification) {
+    return await replyAndReturn(validated.clarification, {
+      clarification: true,
+      validator_reason: validated.reason ?? null,
+    });
+  }
+
+  // 5c.ii Unsafe / unsupported → safe canned reply with alternatives.
+  if (decision.workflow_category === "unsafe_or_unsupported") {
+    const msg =
+      "I can't run that as described — it would involve unsafe or unsupported actions (e.g. scraping private personal data or sending without your approval). I can help with: public business contact research, approval-gated email outreach, LinkedIn outreach drafts, or call scripts. Which of those would you like?";
+    return await replyAndReturn(msg, { unsafe: true });
+  }
+
+  // 5c.iii Capabilities / agent_management / approval_review / simple_chat
+  // → direct conversational reply.
+  if (decision.workflow_category === "simple_chat") {
+    return await replyAndReturn("Hi — I'm Pilot. What would you like to work on?");
+  }
+
+  if (decision.workflow_category === "capabilities") {
+    const msg =
+      "Agentory is an AI workforce OS for founders and small teams. I coordinate a five-agent team: Scout (sourcing/signals), Aria (ranking/scoring), Hawk (research/URL analysis), Penn (outreach drafts — approval-gated), Scribe (content/reports). Tools include Apify for structured sourcing, Firecrawl for URL/website analysis, Gemini/Claude for reasoning and writing, and approval-gated email. Tell me what you'd like to do — find leads, analyze a careers page, write a post, draft outreach, or get a daily brief.";
+    return await replyAndReturn(msg);
+  }
+
+  if (decision.workflow_category === "agent_management") {
+    const msg =
+      "Your AI workforce: Scout (sources companies hiring + candidate profiles), Aria (ranks and scores leads), Hawk (researches URLs and competitors with Firecrawl), Penn (drafts outreach — never sends without your approval), Scribe (writes posts, briefs, reports). Pilot (me) routes the work. Ask me to do something concrete and I'll assign the right agent.";
+    return await replyAndReturn(msg);
+  }
+
+  if (decision.workflow_category === "approval_review") {
+    // Phase 1 patch: pending approvals live in the `approvals` table (Penn writes
+    // them there). Prefer it; fall back to tasks.status='awaiting_approval' for
+    // older flows that only created tasks.
+    let pending: any[] = [];
+    let approvalSource: "approvals" | "tasks" = "approvals";
+    const { data: approvalRows, error: approvalsErr } = await admin
+      .from("approvals")
+      .select("id, agent_slug, title, summary, description, created_at")
+      .eq("workspace_id", workspaceId)
+      .eq("status", "pending")
+      .order("created_at", { ascending: false })
+      .limit(10);
+    if (!approvalsErr && approvalRows && approvalRows.length > 0) {
+      pending = approvalRows;
+    } else {
+      approvalSource = "tasks";
+      const { data: taskRows } = await admin
+        .from("tasks")
+        .select("id, agent_slug, description, created_at")
+        .eq("workspace_id", workspaceId)
+        .eq("status", "awaiting_approval")
+        .order("created_at", { ascending: false })
+        .limit(10);
+      pending = taskRows ?? [];
+    }
+    if (pending.length === 0) {
+      return await replyAndReturn(
+        "No drafts are waiting for approval right now. When Penn drafts outreach, it will appear here for you to review.",
+        { approval_source: approvalSource },
+      );
+    }
+    const lines = pending
+      .map((t: any) => `• ${t.agent_slug ?? "agent"}: ${t.title ?? t.description ?? t.summary ?? t.id}`)
+      .join("\n");
+    return await replyAndReturn(
+      `You have ${pending.length} pending approval${pending.length === 1 ? "" : "s"}:\n${lines}\n\nOpen the Workbench to approve or edit each draft.`,
+      { approval_source: approvalSource, pending_count: pending.length },
     );
   }
 
-  // 5c.ii MARKET RESEARCH — honest: broad real-time web search isn't configured.
-  if (wf.workflow === "market_research") {
-    return await replyWorkflow(
-      "Broad real-time web search isn't configured, so I won't invent current market/competitor news. " +
-      "I can instead: (1) analyze specific competitor URLs you paste (Firecrawl), " +
-      "(2) pull structured hiring/company signals (Apify), or (3) track competitors you name. " +
-      "Which would you like — and do you have specific URLs or companies in mind?",
-      { honest_unavailable: "broad_web_search" },
-    );
-  }
-
-  // 5c.iii VAGUE LEAD SOURCING — clarify before sourcing; never random-scrape.
-  if (wf.workflow === "vague_lead_sourcing") {
-    return await replyWorkflow(
-      "Happy to source that — to target it well, do you want (a) individual people/profiles, " +
-      "(b) companies hiring for a role, or (c) agencies/partners? And which role/industry + location " +
-      "(or \"remote\")? For example: \"companies hiring GTM roles in the US\" or " +
-      "\"individual growth marketer profiles, remote\".",
-      { clarification: true, clarification_type: "workflow_vague", original_request: message },
-    );
-  }
-
-  // 5c.iv CONTENT CREATION — Scribe-only plan; never trigger sourcing/outreach.
-  if (wf.workflow === "content_creation") {
+  // 5c.iv content_creation → Scribe-only delegation. No Apify/Firecrawl.
+  if (decision.workflow_category === "content_creation") {
     return await delegateToOrchestrate({
-      admin, SUPABASE_URL, SUPABASE_ANON_KEY, authHeader,
-      conversationId, workspaceId, instruction: message,
+      admin,
+      SUPABASE_URL,
+      SUPABASE_ANON_KEY,
+      authHeader,
+      conversationId,
+      workspaceId,
+      instruction: message,
+      // ToolInput drives the legacy orchestrator's mode; content mode tells it
+      // to skip sourcing tools and go straight to Scribe. NOTE: orchestrate's
+      // Scribe-only staged template keys off intent === "content_creation".
       toolInput: {
         intent: "content_creation",
         tool_name: null,
@@ -532,18 +752,49 @@ Deno.serve(async (req) => {
         max_results: 1,
         needs_enrichment: false,
         needs_outreach: false,
-        execution_mode: "content",
-        confidence: wf.confidence,
+        // execution_mode "content" is supported by the legacy ToolInput type
+        // ("fast"|"deep"|"outreach"), so we coerce to "fast" and pass content
+        // intent — orchestrate keys off intent=create_content for Scribe-only.
+        execution_mode: "fast",
+        confidence: decision.confidence,
         missing_fields: [],
-        reason: "workflow=content_creation",
-      } as unknown as ToolInput,
+        reason: decision.reason,
+      } as ToolInput,
       modelUsed: "google/gemini-3-flash-preview",
       providerUsed: "lovable-ai",
     });
   }
 
-  // Other workflows (url_analysis, people_sourcing, company_hiring_sourcing,
-  // outreach, capabilities, simple_chat) fall through to the existing pipeline.
+  // 5c.v market_research → if validator degraded (no search_web), honest reply.
+  if (decision.workflow_category === "market_research" && !decision.selected_actor_key) {
+    const msg =
+      "Broad live web search isn't configured in this workspace, so I can't pull current market or competitor news on demand. What I can do: analyze a specific URL with Hawk + Firecrawl (paste the link), or collect structured signals with Scout + Apify (e.g. \"find companies hiring AI engineers in the US\"). Which would help most?";
+    return await replyAndReturn(msg, { degraded: "search_web_unavailable" });
+  }
+
+  // 5c.vi signal_sourcing (vague) → ask one clarification.
+  if (decision.workflow_category === "signal_sourcing" && decision.needs_clarification) {
+    return await replyAndReturn(
+      decision.clarification_question ??
+        "Which buying signal should I target first: companies hiring GTM roles, companies hiring engineering roles, founder profiles, or a specific niche?",
+      { clarification: true, possible_actions: decision.possible_actions },
+    );
+  }
+
+  // 5c.vii unclear → targeted clarification menu. No plan, no tool.
+  if (decision.workflow_category === "unclear") {
+    return await replyAndReturn(
+      decision.clarification_question ?? SHORT_VAGUE_CLARIFICATION,
+      { clarification: true, clarification_type: "unclear" },
+    );
+  }
+
+  // For url_analysis / people_sourcing / company_hiring_sourcing / outreach
+  // we fall through to the legacy classifyIntent + planToolInput pipeline,
+  // which already handles people-vs-companies clarification persistence and
+  // Apify/Firecrawl ToolInput building.
+
+
 
   // 6. Load last 20 messages for context
   const { data: history } = await admin
@@ -570,7 +821,7 @@ Deno.serve(async (req) => {
     companyBrain: brain,
     actorRegistrySummary: summarizeRegistryForPrompt(),
     availableTools: ["apify", "firecrawl", "resend"],
-  }) + "\n\n" + PILOT_SYSTEM_PROMPT;
+  }) + "\n\n" + PILOT_SYSTEM_PROMPT + "\n\n" + renderMemoryForPrompt(memory);
 
   // 6c. Intent routing — short-circuit when we don't need full Pilot reasoning.
   const intentResult = await classifyIntent(message);
@@ -702,10 +953,10 @@ Deno.serve(async (req) => {
     return json({ type: "reply", conversation_id: conversationId, message: saved, provider: providerUsed, error: ai.error });
   }
 
-  const decision = coerceDecision(ai.json);
+  const pilotDecision = coerceDecision(ai.json);
 
   // 8a. Unparseable — degrade gracefully: treat the raw text as a plain reply.
-  if (!decision) {
+  if (!pilotDecision) {
     const fallback = (ai.content || "").trim() || "I'm not sure how to respond to that. Could you rephrase?";
     const { data: saved } = await admin
       .from("messages")
@@ -722,13 +973,13 @@ Deno.serve(async (req) => {
   }
 
   // 8b. Reply branch
-  if (decision.decision === "reply") {
+  if (pilotDecision.decision === "reply") {
     const { data: saved } = await admin
       .from("messages")
       .insert({
         conversation_id: conversationId,
         role: "assistant",
-        content: decision.text,
+        content: pilotDecision.text,
         agent_slug: "pilot",
         model_used: modelUsed,
       })
@@ -746,7 +997,7 @@ Deno.serve(async (req) => {
     authHeader,
     conversationId,
     workspaceId,
-    instruction: decision.instruction,
+    instruction: pilotDecision.instruction,
     toolInput: null,
     modelUsed,
     providerUsed,
