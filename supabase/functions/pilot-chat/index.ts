@@ -11,6 +11,7 @@ import { getAgentorySystemPrompt, AGENTORY_SYSTEM_PROMPT_VERSION } from "../_sha
 import { summarizeRegistryForPrompt } from "../_shared/actorRegistry.ts";
 import { classifyWorkflow } from "../_shared/workflowClassifier.ts";
 import { validateAgainstCapabilities } from "../_shared/capabilityValidator.ts";
+import { loadConversationMemory, renderMemoryForPrompt, isFollowUpReference, extractTopN, type ConversationMemory } from "../_shared/memoryReader.ts";
 
 
 const cors = {
@@ -469,6 +470,21 @@ Deno.serve(async (req) => {
     validator_reason: validated.reason,
   });
 
+  // Phase 2: load persistent signal memory for this conversation.
+  const memory: ConversationMemory = await loadConversationMemory({
+    admin,
+    workspace_id: workspaceId,
+    conversation_id: conversationId,
+    limit: 50,
+  });
+  console.log("[pilot-chat] memory:", {
+    has_any_memory: memory.has_any_memory,
+    leads: memory.lead_candidates.length,
+    drafts: memory.outreach_drafts.length,
+    outputs: memory.saved_outputs.length,
+    last_plan_id: memory.last_plan_id,
+  });
+
   const baseMeta = {
     workflow_category: decision.workflow_category,
     business_goal: decision.business_goal,
@@ -502,6 +518,123 @@ Deno.serve(async (req) => {
       message: saved,
     });
   }
+
+  // 5c.0 Phase 2: follow-up shortcuts driven by persistent memory.
+  // Only triggers when message references previous results AND we have memory.
+  const followUpRef = isFollowUpReference(message);
+  const hasLeads = memory.lead_candidates.length > 0;
+  const draftOutreachRe = /\b(draft|write|send)\s+(outreach|emails?|messages?)\b/i;
+  const filterRe = /\b(only keep|filter|narrow|just keep|drop the|exclude)\b/i;
+  const enrichRe = /\b(enrich|research|look up|dig into)\b/i;
+
+  if (followUpRef) {
+    if (!memory.has_any_memory) {
+      // Honest fallback — no prior results to act on.
+      return await replyAndReturn(
+        "I don't have any leads or results saved in this conversation yet. Tell me what to source first — for example: \"find 20 companies hiring growth marketers in the US\" or \"find 10 React developer profiles in London\" — and I'll keep the results in memory so you can filter, enrich, or draft outreach against them next.",
+        { followup: "no_memory" },
+      );
+    }
+
+    // Draft outreach to top N
+    if (draftOutreachRe.test(message) && hasLeads) {
+      const n = extractTopN(message, 5);
+      const top = memory.lead_candidates.slice(0, n);
+      const seedSummary = top
+        .map((l, i) => {
+          const who = l.contact?.full_name ?? l.account?.name ?? "Lead";
+          const ctx = l.account?.name && l.contact?.full_name ? ` (${l.account.name})` : "";
+          return `${i + 1}. ${who}${ctx} — ${l.reason ?? ""}`;
+        })
+        .join("\n");
+      return await delegateToOrchestrate({
+        admin,
+        SUPABASE_URL,
+        SUPABASE_ANON_KEY,
+        authHeader,
+        conversationId,
+        workspaceId,
+        instruction:
+          `Draft personalized outreach for the following ${top.length} leads from our prior results. Do not source new leads. Approval is required before sending.\n\n${seedSummary}`,
+        toolInput: {
+          intent: "draft_outreach",
+          tool_name: null,
+          selected_actor_key: null,
+          source_type: null,
+          query: message,
+          role_keywords: [],
+          location: null,
+          max_results: top.length,
+          needs_enrichment: false,
+          needs_outreach: true,
+          execution_mode: "outreach",
+          confidence: 0.9,
+          missing_fields: [],
+          reason: "follow-up: draft outreach to top N from memory",
+        } as ToolInput,
+        modelUsed: "google/gemini-3-flash-preview",
+        providerUsed: "lovable-ai",
+      });
+    }
+
+    // Filter / "only keep" — apply via LLM reply over memory (no new sourcing).
+    if (filterRe.test(message) && hasLeads) {
+      const stageKnown = memory.lead_candidates.filter((l) => l.account?.stage).length;
+      const total = memory.lead_candidates.length;
+      const missingStage = stageKnown < total;
+      const preview = memory.lead_candidates
+        .slice(0, 10)
+        .map((l) => `• ${l.account?.name ?? l.contact?.full_name ?? "Lead"}${l.account?.stage ? ` — ${l.account.stage}` : ""}${l.account?.industry ? ` (${l.account.industry})` : ""}`)
+        .join("\n");
+      const msg = missingStage
+        ? `I have ${total} leads in memory from your last search, but stage/industry data is missing on ${total - stageKnown} of them. Want me to enrich them with Hawk + Firecrawl so I can apply that filter accurately? Quick preview:\n${preview}`
+        : `Filtered against the ${total} leads in memory. Matches:\n${preview}\n\nReply "draft outreach to the top 5" or "enrich the top 3" to continue.`;
+      return await replyAndReturn(msg, { followup: "filter_applied", filter_target: message });
+    }
+
+    // Enrich top N — delegate to Hawk via Firecrawl on remembered account domains.
+    if (enrichRe.test(message) && hasLeads) {
+      const n = extractTopN(message, 3);
+      const top = memory.lead_candidates.slice(0, n);
+      const urls = top
+        .map((l) => l.account?.domain)
+        .filter(Boolean)
+        .map((d) => `https://${d}`)
+        .join(", ");
+      const seedSummary = top
+        .map((l, i) => `${i + 1}. ${l.account?.name ?? l.contact?.full_name ?? "Lead"}${l.account?.domain ? ` (${l.account.domain})` : ""}`)
+        .join("\n");
+      return await delegateToOrchestrate({
+        admin,
+        SUPABASE_URL,
+        SUPABASE_ANON_KEY,
+        authHeader,
+        conversationId,
+        workspaceId,
+        instruction:
+          `Enrich these ${top.length} accounts from our prior results using Hawk + Firecrawl. Do not start a new sourcing run.\n\n${seedSummary}${urls ? `\n\nURLs to analyze: ${urls}` : ""}`,
+        toolInput: {
+          intent: "enrich_existing_leads",
+          tool_name: urls ? "scrape_url" : null,
+          selected_actor_key: urls ? "firecrawl_scrape_url" : null,
+          source_type: null,
+          query: urls || message,
+          role_keywords: [],
+          location: null,
+          max_results: top.length,
+          needs_enrichment: true,
+          needs_outreach: false,
+          execution_mode: "deep",
+          confidence: 0.85,
+          missing_fields: [],
+          reason: "follow-up: enrich top N from memory",
+        } as ToolInput,
+        modelUsed: "google/gemini-3-flash-preview",
+        providerUsed: "lovable-ai",
+      });
+    }
+  }
+
 
   // 5c.i Validator rejected (e.g. people actor disabled, Firecrawl missing,
   // unknown actor) → surface its clarification and stop.
@@ -637,7 +770,7 @@ Deno.serve(async (req) => {
     companyBrain: brain,
     actorRegistrySummary: summarizeRegistryForPrompt(),
     availableTools: ["apify", "firecrawl", "resend"],
-  }) + "\n\n" + PILOT_SYSTEM_PROMPT;
+  }) + "\n\n" + PILOT_SYSTEM_PROMPT + "\n\n" + renderMemoryForPrompt(memory);
 
   // 6c. Intent routing — short-circuit when we don't need full Pilot reasoning.
   const intentResult = await classifyIntent(message);
