@@ -9,6 +9,8 @@ import { classifyIntent } from "../_shared/intentRouter.ts";
 import { planToolInput, type ToolInput } from "../_shared/toolInputPlanner.ts";
 import { getAgentorySystemPrompt, AGENTORY_SYSTEM_PROMPT_VERSION } from "../_shared/agentorySystemPrompt.ts";
 import { summarizeRegistryForPrompt } from "../_shared/actorRegistry.ts";
+import { classifyWorkflow } from "../_shared/workflowClassifier.ts";
+import { validateAgainstCapabilities } from "../_shared/capabilityValidator.ts";
 
 
 const cors = {
