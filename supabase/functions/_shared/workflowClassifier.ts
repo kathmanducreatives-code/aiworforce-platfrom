@@ -171,6 +171,18 @@ export const SHORT_VAGUE_CLARIFICATION =
 
 // ---------- Helpers ----------
 
+// Extract an explicit requested count, e.g. "find 5 posts", "10 LinkedIn posts",
+// "top 5" → number. Falls back to the given default. Clamped to [1,50].
+function extractRequestedCount(m: string, fallback: number): number {
+  const mm = m.match(/\b(?:find|get|show|top|first)\s+(\d{1,3})\b/i)
+    ?? m.match(/\b(\d{1,3})\s+(?:linkedin\s+)?(?:posts?|people|profiles?|results?)\b/i);
+  if (mm) {
+    const n = parseInt(mm[1], 10);
+    if (Number.isFinite(n) && n > 0) return Math.max(1, Math.min(50, n));
+  }
+  return fallback;
+}
+
 function defaultDecision(category: WorkflowCategory, partial: Partial<WorkflowDecision>): WorkflowDecision {
   return {
     workflow_category: category,
@@ -263,7 +275,7 @@ function regexClassify(message: string): WorkflowDecision | null {
       keywords: liEntityUrls,
       agents: ["scout", "aria"],
       execution_mode: "fast",
-      max_results: 10,
+      max_results: extractRequestedCount(m, 10),
     });
   }
 
@@ -314,7 +326,7 @@ function regexClassify(message: string): WorkflowDecision | null {
       needs_outreach: needsDms,
       requires_approval: needsDms,
       competitor_related: competitorHits.length > 0,
-      max_results: 10,
+      max_results: extractRequestedCount(m, 10),
     });
   }
 
