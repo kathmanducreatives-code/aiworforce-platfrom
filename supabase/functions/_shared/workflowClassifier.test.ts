@@ -149,6 +149,11 @@ Deno.test("approval_review", async () => {
   assertEquals(await cat("Show me drafts waiting for approval."), "approval_review");
 });
 
+Deno.test("unsafe_or_unsupported: auto-comment/post/dm refused", async () => {
+  assertEquals(await cat("Find posts I should comment on about AI SDRs and automatically comment on them."), "unsafe_or_unsupported");
+  assertEquals(await cat("Auto-DM everyone who engages with my post."), "unsafe_or_unsupported");
+});
+
 Deno.test("unsafe_or_unsupported", async () => {
   const d = await classifyWorkflow("Find personal phone numbers for 50 founders and start calling them automatically.");
   assertEquals(d.workflow_category, "unsafe_or_unsupported");

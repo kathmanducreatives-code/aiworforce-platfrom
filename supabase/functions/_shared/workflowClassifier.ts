@@ -140,7 +140,7 @@ const SEND_RE = /\b(send|deliver|fire off|blast)\s+(?:emails?|messages?|outreach
 
 // Unsafe / unsupported.
 const UNSAFE_RE =
-  /\b(personal phone numbers?|home address|scrape private|private personal data|harvest emails for spam|send (?:emails?|messages?) automatically|automatic(?:ally)? send|without approval|start calling them automatically|cold call(?:ing)? (?:automated|automatic))\b/i;
+  /\b(personal phone numbers?|home address|scrape private|private personal data|harvest emails for spam|send (?:emails?|messages?) automatically|automatic(?:ally)? send|without approval|start calling them automatically|cold call(?:ing)? (?:automated|automatic)|automatic(?:ally)?\s+(?:comment|post|dm|message|reply|engage|connect|like)|auto[- ]?(?:comment|post|dm|reply|like|engage))\b/i;
 
 // Sourcing.
 const COMPANIES_HIRING_RE =
@@ -170,6 +170,18 @@ export const SHORT_VAGUE_CLARIFICATION =
   "Sure — what would you like me to help with: sourcing leads, researching a company, writing content, drafting outreach, or reviewing approvals?";
 
 // ---------- Helpers ----------
+
+// Extract an explicit requested count, e.g. "find 5 posts", "10 LinkedIn posts",
+// "top 5" → number. Falls back to the given default. Clamped to [1,50].
+function extractRequestedCount(m: string, fallback: number): number {
+  const mm = m.match(/\b(?:find|get|show|top|first)\s+(\d{1,3})\b/i)
+    ?? m.match(/\b(\d{1,3})\s+(?:linkedin\s+)?(?:posts?|people|profiles?|results?)\b/i);
+  if (mm) {
+    const n = parseInt(mm[1], 10);
+    if (Number.isFinite(n) && n > 0) return Math.max(1, Math.min(50, n));
+  }
+  return fallback;
+}
 
 function defaultDecision(category: WorkflowCategory, partial: Partial<WorkflowDecision>): WorkflowDecision {
   return {
@@ -263,7 +275,7 @@ function regexClassify(message: string): WorkflowDecision | null {
       keywords: liEntityUrls,
       agents: ["scout", "aria"],
       execution_mode: "fast",
-      max_results: 10,
+      max_results: extractRequestedCount(m, 10),
     });
   }
 
@@ -314,7 +326,7 @@ function regexClassify(message: string): WorkflowDecision | null {
       needs_outreach: needsDms,
       requires_approval: needsDms,
       competitor_related: competitorHits.length > 0,
-      max_results: 10,
+      max_results: extractRequestedCount(m, 10),
     });
   }
 
