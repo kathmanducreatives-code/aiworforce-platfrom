@@ -659,6 +659,9 @@ Deno.serve(async (req) => {
       // The Hawk step (website mode) must only Firecrawl → give it a scrape-only tool_input.
       const scoutToolInput = { ...tool_input, tool_name: "source_with_apify", selected_actor_key: "apify_linkedin_posts", source_type: "linkedin_engagement" };
       const hawkScrapeToolInput = { tool_name: "scrape_url", selected_actor_key: null, source_type: null, query: ti.business_website ?? null, max_results: 1 };
+      // Inference-only Hawk (description mode): explicit no-tool input so it does
+      // NOT inherit the plan's apify tool_input and re-run the LinkedIn actor.
+      const hawkInferToolInput = { tool_name: null, selected_actor_key: null, source_type: null };
       const steps: Step[] = dplan.steps.map((s, idx) => {
         const st = mkStep(idx, s.agent_slug, s.task_title, s.task_description, {
           tool_needed: s.tool_needed,
@@ -668,7 +671,7 @@ Deno.serve(async (req) => {
           planner_source: "fallback",
         });
         if (s.agent_slug === "scout") (st as Step & { metadata?: Record<string, unknown> }).metadata = { tool_input: scoutToolInput };
-        else if (s.agent_slug === "hawk" && s.tool_needed === "scrape_url") (st as Step & { metadata?: Record<string, unknown> }).metadata = { tool_input: hawkScrapeToolInput };
+        else if (s.agent_slug === "hawk") (st as Step & { metadata?: Record<string, unknown> }).metadata = { tool_input: s.tool_needed === "scrape_url" ? hawkScrapeToolInput : hawkInferToolInput };
         return st;
       });
       parsed = { plan_summary: dplan.plan_summary, steps };
