@@ -140,7 +140,7 @@ const SEND_RE = /\b(send|deliver|fire off|blast)\s+(?:emails?|messages?|outreach
 
 // Unsafe / unsupported.
 const UNSAFE_RE =
-  /\b(personal phone numbers?|home address|scrape private|private personal data|harvest emails for spam|send (?:emails?|messages?) automatically|automatic(?:ally)? send|without approval|start calling them automatically|cold call(?:ing)? (?:automated|automatic))\b/i;
+  /\b(personal phone numbers?|home address|scrape private|private personal data|harvest emails for spam|send (?:emails?|messages?) automatically|automatic(?:ally)? send|without approval|start calling them automatically|cold call(?:ing)? (?:automated|automatic)|automatic(?:ally)?\s+(?:comment|post|dm|message|reply|engage|connect|like)|auto[- ]?(?:comment|post|dm|reply|like|engage))\b/i;
 
 // Sourcing.
 const COMPANIES_HIRING_RE =
