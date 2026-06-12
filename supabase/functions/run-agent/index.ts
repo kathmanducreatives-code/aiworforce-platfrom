@@ -352,6 +352,28 @@ Deno.serve(async (req) => {
     result: { output: apiText, tokens_in: tokensIn, tokens_out: tokensOut },
   }).eq("id", task.id);
 
+  // Phase 2: persist agent outputs into structured GTM memory. Fire-and-forget.
+  if (agent_slug === "aria" || agent_slug === "penn" || agent_slug === "scribe") {
+    try {
+      const { writeMemoryFromAgentResult } = await import("../_shared/memoryWriter.ts");
+      await writeMemoryFromAgentResult({
+        admin: supabase,
+        workspace_id,
+        plan_id,
+        task_id: task.id,
+        agent_slug,
+        output_text: apiText,
+        // Memory-driven draft_outreach carries the target lead ids so Penn
+        // drafts link to the remembered leads (which live in a prior plan).
+        lead_candidate_ids: Array.isArray(tool_input_body?.lead_candidate_ids)
+          ? tool_input_body.lead_candidate_ids
+          : undefined,
+      });
+    } catch (e) {
+      console.warn("[run-agent] memoryWriter failed:", e);
+    }
+  }
+
   // Load plan steps to find next.
   const { data: plan } = await supabase
     .from("task_plans")

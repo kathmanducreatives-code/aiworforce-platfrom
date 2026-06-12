@@ -8,6 +8,7 @@ import { generateJson, logProviderCall } from "../_shared/aiProvider.ts";
 import { isToolConfigured } from "../_shared/toolRegistry.ts";
 import { getAgentorySystemPrompt, AGENTORY_SYSTEM_PROMPT_VERSION } from "../_shared/agentorySystemPrompt.ts";
 import { summarizeRegistryForPrompt } from "../_shared/actorRegistry.ts";
+import { buildDraftOutreachPlan } from "../_shared/draftOutreachPlan.ts";
 
 const cors = {
   "Access-Control-Allow-Origin": "*",
@@ -599,6 +600,26 @@ Deno.serve(async (req) => {
       );
       (scribeStep as Step & { metadata?: Record<string, unknown> }).metadata = { tool_input };
       parsed = { plan_summary: `Content: ${user_instruction.slice(0, 90)}`, steps: [scribeStep] };
+      plannerSource = "staged";
+    } else if (tool_input && tool_input.intent === "draft_outreach") {
+      // Memory-driven outreach follow-up: Pilot already resolved the target
+      // leads from conversation memory. Deterministic Penn-only plan — no
+      // Scout/Aria/Apify/research_web/Firecrawl, no duplicate Penn steps.
+      const built = buildDraftOutreachPlan({
+        user_instruction,
+        max_results: (tool_input as { max_results?: number | null }).max_results ?? null,
+        lead_candidate_ids: (tool_input as { lead_candidate_ids?: string[] | null }).lead_candidate_ids ?? null,
+      });
+      const s0 = built.steps[0];
+      const pennStep = mkStep(0, "penn", s0.task_title, s0.task_description, {
+        tool_needed: "draft_outreach",
+        requires_approval: true,
+        expected_output: s0.expected_output,
+        success_criteria: s0.success_criteria,
+        planner_source: "fallback",
+      });
+      (pennStep as Step & { metadata?: Record<string, unknown> }).metadata = { tool_input };
+      parsed = { plan_summary: built.plan_summary, steps: [pennStep] };
       plannerSource = "staged";
     } else if (tool_input && tool_input.tool_name === "source_with_apify") {
       const cap = Math.max(1, Math.min(200, tool_input.max_results ?? 25));

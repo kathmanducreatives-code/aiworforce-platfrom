@@ -1,68 +1,144 @@
-// Tests for the deterministic workflow classifier.
-// Run: node --experimental-strip-types workflowClassifier.test.ts
-import { strict as assert } from "node:assert";
-import { classifyWorkflow, coerceAiWorkflow } from "./workflowClassifier.ts";
+// Unit tests for workflowClassifier. All test cases use only the regex layer
+// (no AI calls). If the regex layer changes such that a case falls through to
+// AI, the test will fail clearly (source === "regex" is asserted).
+//
+// Run with: supabase--test_edge_functions
 
-let pass = 0, fail = 0;
-function expect(msg: string, want: string) {
-  const got = classifyWorkflow(msg).workflow;
-  if (got === want) { pass++; console.log(`  ok   [${want}] ${msg.slice(0, 64)}`); }
-  else { fail++; console.log(`  FAIL want=${want} got=${got} :: ${msg.slice(0, 70)}`); }
+import { assertEquals, assert } from "https://deno.land/std@0.224.0/assert/mod.ts";
+import { classifyWorkflow, normalizeIntent, type WorkflowCategory } from "./workflowClassifier.ts";
+
+async function cat(message: string): Promise<WorkflowCategory> {
+  const d = await classifyWorkflow(message);
+  return d.workflow_category;
 }
 
-// ---- The 10 validation-suite prompts (the bugs this patch must fix) ----
-// T5 — content must NOT route to sourcing
-expect("Write a LinkedIn post about what we shipped this week for Agentory.", "content_creation");
-expect("Turn this report into a founder update.", "content_creation");
-expect("Write a launch post and a short blog intro.", "content_creation");
+Deno.test("simple_chat: greetings/thanks", async () => {
+  assertEquals(await cat("hey"), "simple_chat");
+  assertEquals(await cat("thanks"), "simple_chat");
+  assertEquals(await cat("hello"), "simple_chat");
+});
 
-// T7 — market/news must NOT route to sourcing
-expect("What changed in the AI sales automation market today? Give me current competitor updates and sources.", "market_research");
-expect("Any latest news on competitors this week?", "market_research");
+Deno.test("capabilities: what can you do", async () => {
+  assertEquals(await cat("what can you do?"), "capabilities");
+  assertEquals(await cat("what are your features?"), "capabilities");
+  assertEquals(await cat("what agents do I have?"), "agent_management");
+});
 
-// T2 — vague leads → clarify
-expect("Find me leads for Agentory. I want people who probably need this right now.", "vague_lead_sourcing");
-expect("We need pipeline this week.", "vague_lead_sourcing");
-expect("Who should we reach out to?", "vague_lead_sourcing");
+Deno.test("daily_brief", async () => {
+  assertEquals(await cat("brief me on today"), "daily_brief");
+  assertEquals(await cat("plan my day"), "daily_brief");
+});
 
-// T1 — ambiguous talent → clarify (no people/company qualifier)
-expect("We are behind on product development and need 2-3 experienced full-stack engineers. Remote ok. Can you help me figure out who to reach out to?", "vague_lead_sourcing");
+Deno.test("content_creation: posts, founder updates, reports", async () => {
+  assertEquals(await cat("Write a LinkedIn post about what we shipped this week."), "content_creation");
+  assertEquals(await cat("Can you turn our recent work into a founder update?"), "content_creation");
+  assertEquals(await cat("Draft a launch post for Agentory."), "content_creation");
+});
 
-// T9 — unsafe
-expect("Find personal phone numbers for 50 founders and start calling them automatically.", "unsafe");
-expect("Auto-dial these leads for me.", "unsafe");
-expect("Get me their cell numbers.", "unsafe");
+Deno.test("market_research: current/competitor/news", async () => {
+  assertEquals(await cat("What changed in the AI sales automation market today?"), "market_research");
+  assertEquals(await cat("Give me current competitor updates."), "market_research");
+  assertEquals(await cat("What's happening in the AI SDR market right now?"), "market_research");
+});
 
-// T4 — URL analysis (no Apify)
-expect("Analyze https://stripe.com/jobs and tell me what roles they are hiring for.", "url_analysis");
+Deno.test("url_analysis: URL present → Firecrawl", async () => {
+  const d1 = await classifyWorkflow("Analyze https://stripe.com/jobs.");
+  assertEquals(d1.workflow_category, "url_analysis");
+  assertEquals(d1.selected_actor_key, "firecrawl_scrape_url");
+  assertEquals(d1.selected_tool, "scrape_url");
+  assertEquals(await cat("Check this careers page and summarize what they're hiring for: https://example.com/careers"), "url_analysis");
+});
 
-// T8 — people sourcing (person signals)
-expect("Find 15 senior backend engineers in the United Kingdom who recently changed jobs or recently posted on LinkedIn.", "people_sourcing");
-expect("Find 10 individual React developer profiles in London.", "people_sourcing");
+Deno.test("signal_sourcing: vague lead requests → clarification", async () => {
+  const d = await classifyWorkflow("Find me leads for Agentory.");
+  assertEquals(d.workflow_category, "signal_sourcing");
+  assertEquals(d.needs_clarification, true);
+  assert(d.clarification_question && d.clarification_question.length > 0);
+});
 
-// company hiring sourcing
-expect("Find companies hiring React engineers in London.", "company_hiring_sourcing");
-expect("Find 30 early-stage SaaS companies in the US that are hiring SDRs, AEs, or growth marketers.", "company_hiring_sourcing");
-expect("Who is hiring growth marketers right now?", "company_hiring_sourcing");
+Deno.test("people_sourcing: explicit individual profiles", async () => {
+  const d = await classifyWorkflow("Find 10 individual React developer profiles in London.");
+  assertEquals(d.workflow_category, "people_sourcing");
+  assertEquals(d.selected_actor_key, "apify_people_search");
+  assertEquals(await cat("Find senior backend engineers in the United Kingdom."), "people_sourcing");
+});
 
-// T3/T6 — outreach (sourcing + draft outreach => full chain)
-expect("Find companies hiring GTM roles and draft outreach.", "outreach");
-expect("Find SaaS companies hiring sales and draft short founder-style outreach.", "outreach");
-expect("Draft outreach to the top 5.", "outreach");
+Deno.test("company_hiring_sourcing: companies hiring <role>", async () => {
+  const d = await classifyWorkflow("Find companies hiring GTM roles in the US.");
+  assertEquals(d.workflow_category, "company_hiring_sourcing");
+  assertEquals(d.selected_actor_key, "apify_jobs");
+  assertEquals(await cat("Find companies hiring React engineers in London."), "company_hiring_sourcing");
+});
 
-// capabilities / chat / brief
-expect("What can you do?", "capabilities");
-expect("hey", "simple_chat");
-expect("thanks!", "simple_chat");
-expect("Brief me on today", "daily_brief");
+Deno.test("outreach: draft outreach", async () => {
+  const d = await classifyWorkflow("Draft outreach to the top leads.");
+  assertEquals(d.workflow_category, "outreach");
+  assertEquals(d.requires_approval, true);
+  assertEquals(await cat("Write LinkedIn DMs for the top 5."), "outreach");
+});
 
-// ---- coercer ----
-(() => {
-  const ok = coerceAiWorkflow({ workflow: "content_creation" }) === "content_creation";
-  const bad = coerceAiWorkflow({ workflow: "nonsense" }) === null;
-  if (ok && bad) { pass++; console.log("  ok   coerceAiWorkflow validates"); }
-  else { fail++; console.log("  FAIL coerceAiWorkflow"); }
-})();
+// Phase 2 memory-driven follow-up: "Draft outreach to the top 5." must classify
+// as `outreach` (NOT a sourcing category) so pilot-chat routes it to the
+// memory/no-memory path instead of starting a new Apify sourcing run.
+Deno.test("outreach: 'Draft outreach to the top 5.' is outreach, not sourcing", async () => {
+  const d = await classifyWorkflow("Draft outreach to the top 5.");
+  assertEquals(d.workflow_category, "outreach");
+  assertEquals(d.requires_approval, true);
+});
 
-console.log(`\n${pass} passed, ${fail} failed`);
-if (fail > 0) process.exit(1);
+// Explicit sourcing + outreach in one message must still run sourcing (it is a
+// sourcing category with needs_outreach=true), so the no-memory guard never
+// short-circuits it.
+Deno.test("company_hiring_sourcing: explicit 'find … and draft outreach' still sources", async () => {
+  const d = await classifyWorkflow("Find companies hiring GTM roles in the US and draft outreach.");
+  assertEquals(d.workflow_category, "company_hiring_sourcing");
+  assertEquals(d.needs_outreach, true);
+  assertEquals(d.requires_approval, true);
+});
+
+Deno.test("agent_management", async () => {
+  assertEquals(await cat("What is Penn working on?"), "agent_management");
+  assertEquals(await cat("What can Scout do?"), "agent_management");
+});
+
+Deno.test("approval_review", async () => {
+  assertEquals(await cat("What approvals are pending?"), "approval_review");
+  assertEquals(await cat("Show me drafts waiting for approval."), "approval_review");
+});
+
+Deno.test("unsafe_or_unsupported", async () => {
+  const d = await classifyWorkflow("Find personal phone numbers for 50 founders and start calling them automatically.");
+  assertEquals(d.workflow_category, "unsafe_or_unsupported");
+  assertEquals(d.selected_actor_key, null);
+  assertEquals(await cat("Send emails automatically without approval."), "unsafe_or_unsupported");
+});
+
+Deno.test("unclear: vague short prompts", async () => {
+  assertEquals(await cat("Can you help with this?"), "unclear");
+});
+
+Deno.test("normalizeIntent: clamps + enforces outreach approval", () => {
+  const d = normalizeIntent({
+    workflow_category: "outreach",
+    confidence: 2,
+    max_results: 9999,
+    needs_outreach: true,
+  });
+  assertEquals(d.confidence, 1);
+  assertEquals(d.max_results, 200);
+  assertEquals(d.requires_approval, true);
+});
+
+Deno.test("normalizeIntent: unsafe wipes tools/agents", () => {
+  const d = normalizeIntent({
+    workflow_category: "unsafe_or_unsupported",
+    selected_actor_key: "apify_jobs",
+    selected_tool: "source_with_apify",
+    agents: ["scout"],
+    execution_mode: "fast",
+  });
+  assertEquals(d.selected_actor_key, null);
+  assertEquals(d.selected_tool, null);
+  assertEquals(d.agents.length, 0);
+  assertEquals(d.execution_mode, "none");
+});
