@@ -9,6 +9,7 @@ import { isToolConfigured } from "../_shared/toolRegistry.ts";
 import { getAgentorySystemPrompt, AGENTORY_SYSTEM_PROMPT_VERSION } from "../_shared/agentorySystemPrompt.ts";
 import { summarizeRegistryForPrompt } from "../_shared/actorRegistry.ts";
 import { buildDraftOutreachPlan } from "../_shared/draftOutreachPlan.ts";
+import { buildCompetitorDiscoveryPlan } from "../_shared/competitorDiscovery.ts";
 
 const cors = {
   "Access-Control-Allow-Origin": "*",
@@ -621,6 +622,40 @@ Deno.serve(async (req) => {
       (pennStep as Step & { metadata?: Record<string, unknown> }).metadata = { tool_input };
       parsed = { plan_summary: built.plan_summary, steps: [pennStep] };
       plannerSource = "staged";
+    } else if (tool_input && (tool_input as { competitor_discovery?: boolean }).competitor_discovery &&
+        ((tool_input as { discovery_mode?: string }).discovery_mode === "website" || (tool_input as { discovery_mode?: string }).discovery_mode === "description")) {
+      // Phase 4 (dynamic) — competitor discovery: website → Hawk(Firecrawl) first,
+      // description → Hawk(infer) first, then Scout(LinkedIn actor) → Aria → [..].
+      const ti = tool_input as typeof tool_input & {
+        discovery_mode?: "website" | "description"; business_website?: string; business_description?: string;
+        needs_comment_drafts?: boolean; needs_dm_drafts?: boolean; signal_type?: string; competitors?: string[];
+      };
+      const dplan = buildCompetitorDiscoveryPlan(ti.discovery_mode!, {
+        website_url: ti.business_website ?? null,
+        description: ti.business_description ?? null,
+        topic: tool_input.query || user_instruction,
+        needs_comment_drafts: ti.needs_comment_drafts,
+        needs_dm_drafts: ti.needs_dm_drafts,
+        max: tool_input.max_results,
+      });
+      // The Scout step must run the LinkedIn actor → give it the apify tool_input.
+      // The Hawk step (website mode) must only Firecrawl → give it a scrape-only tool_input.
+      const scoutToolInput = { ...tool_input, tool_name: "source_with_apify", selected_actor_key: "apify_linkedin_posts", source_type: "linkedin_engagement" };
+      const hawkScrapeToolInput = { tool_name: "scrape_url", selected_actor_key: null, source_type: null, query: ti.business_website ?? null, max_results: 1 };
+      const steps: Step[] = dplan.steps.map((s, idx) => {
+        const st = mkStep(idx, s.agent_slug, s.task_title, s.task_description, {
+          tool_needed: s.tool_needed,
+          requires_approval: s.requires_approval ?? false,
+          expected_output: "Grounded output for the discovery pipeline; no fabricated competitors/people.",
+          success_criteria: "Grounded only in prior steps / actor results. No auto-post/DM/send.",
+          planner_source: "fallback",
+        });
+        if (s.agent_slug === "scout") (st as Step & { metadata?: Record<string, unknown> }).metadata = { tool_input: scoutToolInput };
+        else if (s.agent_slug === "hawk" && s.tool_needed === "scrape_url") (st as Step & { metadata?: Record<string, unknown> }).metadata = { tool_input: hawkScrapeToolInput };
+        return st;
+      });
+      parsed = { plan_summary: dplan.plan_summary, steps };
+      plannerSource = "staged";
     } else if (tool_input && tool_input.source_type === "linkedin_engagement") {
       // Phase 3 — LinkedIn engagement signal engine. Deterministic staged plan:
       // Scout (apify_linkedin_posts) → Aria (rank) → [Scribe comments] → [Penn DMs].
@@ -983,7 +1018,9 @@ Return ONLY valid JSON, no prose, no markdown:
         input: user_instruction,
         needs_approval: firstStep.requires_approval === true,
         tool_needed: firstStep.tool_needed,
-        tool_input: tool_input ?? null,
+        // Per-step tool_input wins (lets step 0 use a different tool than the
+        // plan default, e.g. discovery's Hawk-scrape step 0 before Scout-apify).
+        tool_input: (firstStep as Step & { metadata?: { tool_input?: unknown } }).metadata?.tool_input ?? tool_input ?? null,
         execution_mode: executionMode,
       }),
     }).catch((e) => console.error("[orchestrate] run-agent kickoff failed:", e));

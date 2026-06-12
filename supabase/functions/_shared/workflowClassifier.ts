@@ -30,10 +30,17 @@ import {
   DM_DRAFT_INTENT_RE,
 } from "./actorRegistry.ts";
 import { matchCompetitors, buildCompetitorSearchQueries } from "./competitorRegistry.ts";
+import { extractInlineBusinessContext, resolveDiscoveryMode } from "./competitorDiscovery.ts";
 
 // Phase 4 — competitor-tracking intent phrases (alternatives/comparison/switch/complaints).
 const COMPETITOR_INTENT_RE =
   /\b(competitors?|competing tools?|alternatives?|comparison|compare|comparing|switching from|switch from|moving (?:off|away from)|complaints? about|complaining about|vs\.?|versus)\b/i;
+
+// Phase 4 (dynamic) — competitor DISCOVERY intent (find/map my competitors,
+// competitor conversations, competitors for <site>). Distinct from tracking a
+// named competitor (handled by the known-competitor block).
+const COMPETITOR_DISCOVERY_RE =
+  /\b(find (?:my |our )?competitors|who are (?:my|our) competitors|competitor conversations|competitive landscape|discover (?:my |our )?competitors|find competitors for|map (?:my|our|the) competitors)\b/i;
 
 export type WorkflowCategory =
   | "simple_chat"
@@ -91,6 +98,11 @@ export interface WorkflowDecision {
   competitor_related?: boolean;
   // Phase 4 — competitor engagement (matched competitor keys).
   competitors?: string[];
+  // Phase 4 (dynamic) — competitor discovery.
+  competitor_discovery?: boolean;
+  discovery_mode?: "website" | "description" | "known" | "needs_context";
+  business_website?: string | null;
+  business_description?: string | null;
 }
 
 const ALL_CATEGORIES: WorkflowCategory[] = [
@@ -221,6 +233,10 @@ function defaultDecision(category: WorkflowCategory, partial: Partial<WorkflowDe
     needs_dm_drafts: partial.needs_dm_drafts ?? false,
     competitor_related: partial.competitor_related ?? false,
     competitors: partial.competitors ?? [],
+    competitor_discovery: partial.competitor_discovery ?? false,
+    discovery_mode: partial.discovery_mode,
+    business_website: partial.business_website ?? null,
+    business_description: partial.business_description ?? null,
   };
 }
 
@@ -266,6 +282,57 @@ function regexClassify(message: string): WorkflowDecision | null {
       needs_clarification: true,
       clarification_question: SHORT_VAGUE_CLARIFICATION,
     });
+  }
+
+  // Phase 4 (dynamic) — Competitor DISCOVERY. "Find my competitors", "find
+  // competitors for <site>", "competitor conversations". Resolves business
+  // context (inline here; company_brain/memory resolved in pilot-chat). Must
+  // precede known-competitor + URL branches.
+  if (COMPETITOR_DISCOVERY_RE.test(m)) {
+    const ctx = extractInlineBusinessContext(m);
+    const mode = resolveDiscoveryMode(ctx);
+    // A category/topic ("around/about/on <X>") OR a named competitor means this is
+    // keyword tracking, not discovery — let the known-competitor block handle it.
+    const hasTopicOrCompetitor = /\b(?:around|about|on)\s+[A-Za-z0-9]/i.test(m) || matchCompetitors(m).length > 0;
+    if (mode === "needs_context" && !hasTopicOrCompetitor) {
+      return defaultDecision("signal_sourcing", {
+        reason: "competitor discovery needs business context",
+        confidence: 0.8,
+        signal_type: "competitor_engagement",
+        competitor_discovery: true,
+        discovery_mode: "needs_context",
+        needs_clarification: true,
+        clarification_question:
+          "To find your competitors, share your website, LinkedIn company page, or a one-line description of what you sell — or I can use your saved company profile if you have one.",
+      });
+    }
+    if (mode === "needs_context") {
+      // topic present but no business context → fall through to keyword tracking.
+    } else {
+    const needsComments = COMMENT_DRAFT_INTENT_RE.test(m);
+    const needsDms = DM_DRAFT_INTENT_RE.test(m);
+    return defaultDecision("signal_sourcing", {
+      reason: `competitor discovery (${mode})`,
+      confidence: 0.85,
+      signal_type: "competitor_engagement",
+      competitor_discovery: true,
+      discovery_mode: mode,
+      business_website: ctx.website_url,
+      business_description: ctx.description,
+      selected_tool: "source_with_apify",
+      selected_actor_key: "apify_linkedin_posts",
+      source_type: "linkedin_engagement",
+      query: m,
+      agents: ["hawk", "scout", "aria"],
+      execution_mode: (needsComments || needsDms) ? "outreach" : "fast",
+      needs_comment_drafts: needsComments,
+      needs_dm_drafts: needsDms,
+      needs_outreach: needsDms,
+      requires_approval: needsDms,
+      competitor_related: true,
+      max_results: extractRequestedCount(m, 10),
+    });
+    }
   }
 
   // Phase 4 — Competitor Engagement Tracker. Fires when a known competitor is
@@ -551,6 +618,11 @@ export function normalizeIntent(input: Partial<WorkflowDecision> | Record<string
     competitors: Array.isArray(raw.competitors)
       ? (raw.competitors as unknown[]).filter((k) => typeof k === "string") as string[]
       : [],
+    competitor_discovery: !!raw.competitor_discovery,
+    discovery_mode: (["website", "description", "known", "needs_context"].includes(raw.discovery_mode))
+      ? raw.discovery_mode : undefined,
+    business_website: typeof raw.business_website === "string" ? raw.business_website : null,
+    business_description: typeof raw.business_description === "string" ? raw.business_description : null,
   };
 
   // outreach (or sourcing+outreach) always requires approval before sending.

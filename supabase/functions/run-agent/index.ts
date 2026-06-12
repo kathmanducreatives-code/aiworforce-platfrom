@@ -445,7 +445,10 @@ Deno.serve(async (req) => {
         instruction: nextStep.instruction,
         input: apiText,
         needs_approval: nextStep.needs_approval === true,
-        tool_input: tool_input_body ?? nextStep.metadata?.tool_input ?? null,
+        // Per-step tool_input (set on the step's metadata) wins, so a plan can
+        // mix tools across steps (e.g. Hawk scrape → Scout apify). Steps without
+        // their own metadata inherit the current step's tool_input as before.
+        tool_input: nextStep.metadata?.tool_input ?? tool_input_body ?? null,
         execution_mode: execution_mode_body,
       }),
     }).catch((e) => console.error("[run-agent] chain fetch failed:", e));

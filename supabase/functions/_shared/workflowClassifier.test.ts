@@ -118,6 +118,39 @@ Deno.test("competitor_engagement safety: auto-DM is unsafe", async () => {
   assertEquals(await cat("Find people engaging with GojiBerry and automatically DM them."), "unsafe_or_unsupported");
 });
 
+// Phase 4 (dynamic) — competitor discovery.
+Deno.test("competitor_discovery: no context → clarification", async () => {
+  const d = await classifyWorkflow("Find my competitors.");
+  assertEquals(d.workflow_category, "signal_sourcing");
+  assertEquals(d.signal_type, "competitor_engagement");
+  assertEquals(d.competitor_discovery, true);
+  assertEquals(d.discovery_mode, "needs_context");
+  assertEquals(d.needs_clarification, true);
+  assert(d.clarification_question && d.clarification_question.length > 0);
+});
+
+Deno.test("competitor_discovery: website mode", async () => {
+  const d = await classifyWorkflow("Find competitors for https://example.com and track LinkedIn conversations");
+  assertEquals(d.competitor_discovery, true);
+  assertEquals(d.discovery_mode, "website");
+  assertEquals(d.business_website, "https://example.com");
+  assertEquals(d.signal_type, "competitor_engagement");
+});
+
+Deno.test("competitor_discovery: description mode", async () => {
+  const d = await classifyWorkflow("We sell AI employees for GTM teams. Find competitor conversations");
+  assertEquals(d.competitor_discovery, true);
+  assertEquals(d.discovery_mode, "description");
+  assert(d.business_description && /ai employees/i.test(d.business_description));
+});
+
+Deno.test("competitor_discovery does NOT hijack known-competitor tracking", async () => {
+  const d = await classifyWorkflow("Find people talking about Clay and GojiBerry");
+  assertEquals(d.signal_type, "competitor_engagement");
+  assertEquals(d.competitor_discovery, false);
+  assertEquals(d.selected_actor_key, "apify_linkedin_posts");
+});
+
 // Phase 4 — competitor engagement.
 Deno.test("competitor_engagement: keyword mode → apify_linkedin_posts", async () => {
   for (const p of [
