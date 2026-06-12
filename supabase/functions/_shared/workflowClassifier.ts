@@ -25,6 +25,7 @@ import {
   LINKEDIN_PROFILE_URL_RE,
   ENRICHMENT_INTENT_RE,
   LINKEDIN_ENGAGEMENT_RE,
+  LINKEDIN_ENTITY_URL_RE,
   COMMENT_DRAFT_INTENT_RE,
   DM_DRAFT_INTENT_RE,
 } from "./actorRegistry.ts";
@@ -244,6 +245,25 @@ function regexClassify(message: string): WorkflowDecision | null {
       confidence: 0.9,
       needs_clarification: true,
       clarification_question: SHORT_VAGUE_CLARIFICATION,
+    });
+  }
+
+  // Phase 3 — LinkedIn profile/company URL + posts/monitor intent → profile-posts
+  // actor (NOT Firecrawl url_analysis). Must precede the generic URL branch.
+  const liEntityUrls = m.match(LINKEDIN_ENTITY_URL_RE);
+  if (liEntityUrls && liEntityUrls.length > 0 && /\b(posts?|recent|monitor|monitoring|activity|engagement|latest|what.*(?:posting|sharing))\b/i.test(m)) {
+    return defaultDecision("signal_sourcing", {
+      reason: "LinkedIn profile/company post monitoring",
+      confidence: 0.85,
+      signal_type: "linkedin_engagement",
+      selected_tool: "source_with_apify",
+      selected_actor_key: "apify_linkedin_profile_posts",
+      source_type: "linkedin_engagement",
+      query: m,
+      keywords: liEntityUrls,
+      agents: ["scout", "aria"],
+      execution_mode: "fast",
+      max_results: 10,
     });
   }
 

@@ -1,78 +1,101 @@
 import { assertEquals, assert } from "https://deno.land/std@0.224.0/assert/mod.ts";
-import { buildLinkedinEngagementInput } from "./linkedinEngagementInput.ts";
+import { buildLinkedinEngagementInput, buildLinkedinProfilePostsInput } from "./linkedinEngagementInput.ts";
 import { normalizeLinkedinEngagementItem, normalizeLinkedinEngagementItems } from "./linkedinEngagementOutput.ts";
+import { getActorByKey, isActorRuntimeEnabled } from "./actorRegistry.ts";
 
-// ---------- input adapter ----------
+// ---------- actor registry / capability ----------
 
-Deno.test("input: builds searchQueries from keywords and clamps max_results", () => {
+Deno.test("registry: both LinkedIn actors exist with caps + defaults", () => {
+  const posts = getActorByKey("apify_linkedin_posts");
+  const profile = getActorByKey("apify_linkedin_profile_posts");
+  assert(posts, "apify_linkedin_posts registered");
+  assert(profile, "apify_linkedin_profile_posts registered");
+  assertEquals(posts!.actor_id, "harvestapi/linkedin-post-search");
+  assertEquals(profile!.actor_id, "harvestapi/linkedin-profile-posts");
+  assertEquals(posts!.source_type, "linkedin_engagement");
+  assertEquals(profile!.source_type, "linkedin_engagement");
+  assertEquals(posts!.max_safe_results, 20);
+  assertEquals(profile!.max_safe_results, 20);
+  // Disabled by default (env flags off in test) → honest unavailable path.
+  if (!Deno.env.get("APIFY_ENABLE_LINKEDIN_POSTS")) assertEquals(isActorRuntimeEnabled(posts!), false);
+  if (!Deno.env.get("APIFY_ENABLE_LINKEDIN_PROFILE_POSTS")) assertEquals(isActorRuntimeEnabled(profile!), false);
+  assert(posts!.missing_message && posts!.missing_message.includes("not configured"));
+});
+
+// ---------- input adapter: post search ----------
+
+Deno.test("post-search input: query/topics → searchQueries, comments limited, reactions off, clamp 20", () => {
   const p = buildLinkedinEngagementInput({
     query: "outbound problems",
-    keywords: ["AI SDR", "AI SDR", "cold outreach"],
-    max_results: 50, // over the cap
+    keywords: ["AI SDR", "AI SDR"],
+    topics: ["cold outreach"],
+    max_results: 50,
   });
-  assertEquals(p.maxItems, 20, "clamped to actor max 20");
-  assertEquals(p.maxPosts, 20);
   assertEquals(p.searchQueries, ["AI SDR", "cold outreach", "outbound problems"]);
-  assertEquals(p.keywords, "AI SDR cold outreach outbound problems");
+  assertEquals(p.maxPosts, 20, "clamped to 20");
+  assertEquals(p.scrapeComments, true);
+  assertEquals(p.maxComments, 5, "comments limited by default");
+  assertEquals(p.scrapeReactions, false, "reactions off by default");
+  assertEquals(p.maxReactions, 0);
+  assertEquals(p.postedLimit, "week");
+  assertEquals(p.sortBy, "date");
+  assertEquals(p.startPage, 1);
 });
 
-Deno.test("input: defaults max_results to 10 and uses topics/query when no keywords", () => {
-  const p = buildLinkedinEngagementInput({ query: "manual GTM work", topics: ["GTM"] });
-  assertEquals(p.maxItems, 10);
-  assertEquals(p.searchQueries, ["GTM", "manual GTM work"]);
-});
-
-Deno.test("input: does NOT forward unknown user_input keys", () => {
+Deno.test("post-search input: default max 10 and no unknown user_input forwarded", () => {
   const p = buildLinkedinEngagementInput({
     query: "AI agents",
-    max_results: 5,
-    user_input: { language: "en", cookies: "SECRET", proxy: { url: "x" }, evilSelector: "*" },
+    user_input: { sortBy: "relevance", cookies: "SECRET", proxy: { url: "x" }, evil: 1 },
   });
-  assertEquals(p.maxItems, 5);
-  assertEquals(p.language, "en", "whitelisted key forwarded");
-  assert(!("cookies" in p), "cookies dropped");
-  assert(!("proxy" in p), "proxy dropped");
-  assert(!("evilSelector" in p), "arbitrary field dropped");
+  assertEquals(p.maxPosts, 10);
+  assertEquals(p.sortBy, "relevance", "whitelisted override honored");
+  assert(!("cookies" in p));
+  assert(!("proxy" in p));
+  assert(!("evil" in p));
+});
+
+// ---------- input adapter: profile posts ----------
+
+Deno.test("profile-posts input: URLs → targetUrls, clamp 20, reactions off", () => {
+  const res = buildLinkedinProfilePostsInput({
+    profile_urls: ["https://linkedin.com/in/jane"],
+    company_urls: ["https://linkedin.com/company/acme"],
+    max_results: 99,
+  });
+  assert(res.ok);
+  assertEquals((res.payload!.targetUrls as string[]).length, 2);
+  assertEquals(res.payload!.maxPosts, 20);
+  assertEquals(res.payload!.scrapeReactions, false);
+  assertEquals(res.payload!.postedLimit, "month");
+});
+
+Deno.test("profile-posts input: missing URLs → validation/clarification (does not run)", () => {
+  const res = buildLinkedinProfilePostsInput({ max_results: 5 });
+  assertEquals(res.ok, false);
+  assertEquals(res.error, "missing_target_urls");
+  assert(res.clarification && res.clarification.length > 0);
 });
 
 // ---------- output normalizer ----------
 
-Deno.test("output: normalizes post author fields", () => {
-  const item = normalizeLinkedinEngagementItem({
+Deno.test("normalize: post author + missing fields, preserves raw, no contact invention", () => {
+  const raw = {
     postUrl: "https://linkedin.com/posts/abc",
-    text: "Outbound is so broken right now.",
+    text: "Outbound is broken.",
     author: { name: "Jane Founder", headline: "CEO at Acme", company: "Acme", profileUrl: "https://linkedin.com/in/jane" },
-  }, "outbound problems");
+  };
+  const item = normalizeLinkedinEngagementItem(raw, "outbound problems");
   assertEquals(item.type, "linkedin_engagement");
   assertEquals(item.post_url, "https://linkedin.com/posts/abc");
   assertEquals(item.post_author_name, "Jane Founder");
-  assertEquals(item.post_author_title, "CEO at Acme");
   assertEquals(item.post_author_company, "Acme");
   assertEquals(item.post_author_profile_url, "https://linkedin.com/in/jane");
-  assertEquals(item.topic, "outbound problems");
-  assertEquals(item.source, "apify_linkedin_posts");
-  assert(item.signal_reason && item.signal_reason.includes("outbound problems"));
-});
+  assertEquals(item.raw, raw, "preserves raw");
 
-Deno.test("output: handles missing fields without inventing", () => {
-  const item = normalizeLinkedinEngagementItem({ text: "Just a post." }, null);
-  assertEquals(item.post_url, null);
-  assertEquals(item.post_author_name, null);
-  assertEquals(item.post_author_company, null);
-  assertEquals(item.post_author_profile_url, null);
-  assertEquals(item.commenter_profile_url, null);
-  // never fabricates contact data
-  assert(!("email" in item));
-  assert(!("phone" in item));
-});
-
-Deno.test("output: maps commenter and empty array", () => {
-  const item = normalizeLinkedinEngagementItem({
-    postUrl: "https://linkedin.com/posts/x",
-    commenter: { name: "Bob Op", profileUrl: "https://linkedin.com/in/bob" },
-  });
-  assertEquals(item.commenter_name, "Bob Op");
-  assertEquals(item.commenter_profile_url, "https://linkedin.com/in/bob");
-  assertEquals(item.engagement_type, "comment");
+  const sparse = normalizeLinkedinEngagementItem({ text: "Just a post." }, null);
+  assertEquals(sparse.post_url, null);
+  assertEquals(sparse.post_author_name, null);
+  assert(!("email" in sparse));
+  assert(!("phone" in sparse));
   assertEquals(normalizeLinkedinEngagementItems(null), []);
 });

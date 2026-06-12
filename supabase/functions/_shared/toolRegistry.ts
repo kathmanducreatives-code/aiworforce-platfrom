@@ -12,7 +12,7 @@ import type { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { ACTOR_REGISTRY, getActorByKey, isActorRuntimeEnabled } from "./actorRegistry.ts";
 import { buildHarvestApiPeopleInput } from "./harvestApiPeople.ts";
 import { writeMemoryFromToolCall } from "./memoryWriter.ts";
-import { buildLinkedinEngagementInput } from "./linkedinEngagementInput.ts";
+import { buildLinkedinEngagementInput, buildLinkedinProfilePostsInput } from "./linkedinEngagementInput.ts";
 import { normalizeLinkedinEngagementItem } from "./linkedinEngagementOutput.ts";
 
 export interface ToolContext {
@@ -411,7 +411,7 @@ const APIFY_ACTORS: Record<string, ApifyActorCfg> = {
   // picks up the dedicated input adapter. enabled_by_default: false → gated by
   // the registry's APIFY_ENABLE_LINKEDIN_POSTS flag (registryApproved).
   linkedin_engagement: {
-    actor_id: null,
+    actor_id: "harvestapi/linkedin-post-search",
     source_type: "linkedin_engagement",
     enabled_by_default: false,
     use_for: ["LinkedIn posts/engagement by topic", "people discussing GTM pain", "warm comment/DM opportunities"],
@@ -427,6 +427,28 @@ const APIFY_ACTORS: Record<string, ApifyActorCfg> = {
         max_results,
         user_input,
       }),
+  },
+  // Phase 3 — profile/company post monitoring. Matched by actor_id when the
+  // registry resolves apify_linkedin_profile_posts.
+  linkedin_profile_posts: {
+    actor_id: "harvestapi/linkedin-profile-posts",
+    source_type: "linkedin_engagement",
+    enabled_by_default: false,
+    use_for: ["recent posts from specific LinkedIn profile/company URLs", "monitoring known founders/competitors"],
+    description: "LinkedIn profile/company posts — opt-in only",
+    input_adapter: ({ max_results, user_input }) => {
+      const res = buildLinkedinProfilePostsInput({
+        targetUrls: Array.isArray(user_input?.targetUrls) ? (user_input!.targetUrls as string[]) : null,
+        profile_urls: Array.isArray(user_input?.profile_urls) ? (user_input!.profile_urls as string[]) : null,
+        company_urls: Array.isArray(user_input?.company_urls) ? (user_input!.company_urls as string[]) : null,
+        max_results,
+        user_input,
+      });
+      // Caller (classifier/pilot) is responsible for the no-URL clarification
+      // before invoking; if it slips through, send empty targetUrls so the
+      // actor rejects cleanly rather than scraping something unintended.
+      return res.ok && res.payload ? res.payload : { targetUrls: [] };
+    },
   },
 };
 

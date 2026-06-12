@@ -114,6 +114,17 @@ Deno.test("linkedin_engagement: posts/people/conversations route to apify_linked
   }
 });
 
+Deno.test("linkedin_engagement: profile/company URL → profile-posts actor", async () => {
+  const d = await classifyWorkflow("Check recent posts from this LinkedIn profile: https://linkedin.com/in/janedoe");
+  assertEquals(d.workflow_category, "signal_sourcing");
+  assertEquals(d.signal_type, "linkedin_engagement");
+  assertEquals(d.selected_actor_key, "apify_linkedin_profile_posts");
+  assertEquals(d.source_type, "linkedin_engagement");
+
+  const c = await classifyWorkflow("Monitor recent posts from this company page: https://linkedin.com/company/acme");
+  assertEquals(c.selected_actor_key, "apify_linkedin_profile_posts");
+});
+
 Deno.test("linkedin_engagement: comment vs DM sub-intent + competitor keywords", async () => {
   const c = await classifyWorkflow("Find posts I should comment on about AI SDRs and draft comments.");
   assertEquals(c.needs_comment_drafts, true);

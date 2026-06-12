@@ -402,10 +402,10 @@ async function writeApifyPeople(ctx: ToolCallCtx, output: any): Promise<void> {
 // ---------- Phase 3: LinkedIn engagement ----------
 
 function isLinkedinEngagementOutput(output: any, selectedActorKey?: string | null): boolean {
-  if (selectedActorKey === "apify_linkedin_posts") return true;
+  if (selectedActorKey === "apify_linkedin_posts" || selectedActorKey === "apify_linkedin_profile_posts") return true;
   if (!output) return false;
   if (output.normalized_source_type === "linkedin_engagement") return true;
-  if (output.actor_output_type === "linkedin_posts") return true;
+  if (output.actor_output_type === "linkedin_posts" || output.actor_output_type === "linkedin_profile_posts") return true;
   const list = Array.isArray(output.items) ? output.items : [];
   return list.length > 0 && list[0]?.type === "linkedin_engagement";
 }
@@ -450,7 +450,7 @@ async function writeLinkedinEngagement(ctx: ToolCallCtx, output: any): Promise<v
         plan_id: ctx.plan_id ?? null,
         task_id: ctx.task_id ?? null,
         tool_call_id: ctx.tool_call_id ?? null,
-        source: "apify_linkedin_posts",
+        source: ctx.selected_actor_key ?? "apify_linkedin_posts",
         signal_type: "linkedin_engagement",
         signal_label: topic,
         title: [fullName, topic].filter(Boolean).join(" — ") || (postUrl ?? "LinkedIn engagement"),

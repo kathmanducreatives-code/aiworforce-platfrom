@@ -778,14 +778,26 @@ Deno.serve(async (req) => {
   // 5c.v-b Phase 3 — LinkedIn engagement signal sourcing. The actor is enabled
   // (validator passed above; if it were disabled we'd have returned the honest
   // fallback already). Delegate to orchestrate's staged LinkedIn plan.
-  if (decision.workflow_category === "signal_sourcing" && decision.selected_actor_key === "apify_linkedin_posts") {
+  if (decision.workflow_category === "signal_sourcing" &&
+      (decision.selected_actor_key === "apify_linkedin_posts" || decision.selected_actor_key === "apify_linkedin_profile_posts")) {
+    const isProfilePosts = decision.selected_actor_key === "apify_linkedin_profile_posts";
+    // Profile-posts needs target URLs; extract LinkedIn URLs from the message.
+    const targetUrls = isProfilePosts
+      ? (message.match(/https?:\/\/(?:[a-z]{2,3}\.)?linkedin\.com\/(?:in|company|school|showcase)\/[A-Za-z0-9_\-%.]+/ig) ?? [])
+      : [];
+    if (isProfilePosts && targetUrls.length === 0) {
+      return await replyAndReturn(
+        "Which LinkedIn profile or company page should I pull recent posts from? Paste one or more LinkedIn URLs.",
+        { clarification: true, clarification_type: "linkedin_profile_posts_needs_urls" },
+      );
+    }
     return await delegateToOrchestrate({
       admin, SUPABASE_URL, SUPABASE_ANON_KEY, authHeader,
       conversationId, workspaceId, instruction: message,
       toolInput: {
         intent: "signal_sourcing",
         tool_name: "source_with_apify",
-        selected_actor_key: "apify_linkedin_posts",
+        selected_actor_key: decision.selected_actor_key,
         source_type: "linkedin_engagement",
         query: decision.query ?? message,
         role_keywords: [],
@@ -800,6 +812,7 @@ Deno.serve(async (req) => {
         keywords: decision.keywords ?? [],
         needs_comment_drafts: !!decision.needs_comment_drafts,
         needs_dm_drafts: !!decision.needs_dm_drafts,
+        user_input: isProfilePosts ? { targetUrls } : {},
       } as unknown as ToolInput,
       modelUsed: "google/gemini-3-flash-preview",
       providerUsed: "lovable-ai",

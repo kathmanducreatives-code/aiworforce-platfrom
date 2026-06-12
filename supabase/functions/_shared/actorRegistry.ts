@@ -224,9 +224,9 @@ export const ACTOR_REGISTRY: Record<string, ActorEntry> = {
   apify_linkedin_posts: {
     key: "apify_linkedin_posts",
     tool_name: "source_with_apify",
-    // No default actor_id — Phase 3 requires the operator to point this at a
-    // configured LinkedIn posts/engagement actor via APIFY_ACTOR_LINKEDIN_POSTS.
-    actor_id: actorId("APIFY_ACTOR_LINKEDIN_POSTS", null),
+    provider: "apify",
+    // Default to the HarvestAPI LinkedIn post search actor; override via env.
+    actor_id: actorId("APIFY_ACTOR_LINKEDIN_POSTS", "harvestapi/linkedin-post-search"),
     source_type: "linkedin_engagement",
     label: "LinkedIn Posts / Engagement Search",
     enabled: envFlag("APIFY_ENABLE_LINKEDIN_POSTS"),
@@ -256,6 +256,41 @@ export const ACTOR_REGISTRY: Record<string, ActorEntry> = {
     required_env: "APIFY_API_TOKEN",
     missing_message:
       "LinkedIn engagement sourcing is not configured yet. I can still source hiring signals with Apify Jobs or analyze specific URLs with Firecrawl.",
+  },
+
+  apify_linkedin_profile_posts: {
+    key: "apify_linkedin_profile_posts",
+    tool_name: "source_with_apify",
+    provider: "apify",
+    // Fetch recent posts from specific LinkedIn profile/company page URLs.
+    actor_id: actorId("APIFY_ACTOR_LINKEDIN_PROFILE_POSTS", "harvestapi/linkedin-profile-posts"),
+    source_type: "linkedin_engagement",
+    label: "LinkedIn Profile / Company Posts",
+    enabled: envFlag("APIFY_ENABLE_LINKEDIN_PROFILE_POSTS"),
+    requires_explicit_opt_in: true,
+    best_for: [
+      "monitoring specific LinkedIn profiles",
+      "monitoring specific company pages",
+      "finding posts from known founders/competitors",
+      "collecting recent posts from supplied LinkedIn URLs",
+    ],
+    not_for: [
+      "broad keyword/topic post search (use apify_linkedin_posts)",
+      "companies hiring (use the jobs actor)",
+      "phone numbers or private personal contact data",
+    ],
+    example_user_requests: [
+      "Check recent posts from this LinkedIn profile: https://linkedin.com/in/...",
+      "Monitor posts from this company page",
+      "Get recent posts from these founders",
+    ],
+    output_type: "linkedin_profile_posts",
+    default_max_results: 10,
+    max_safe_results: 20,
+    compliance_level: "public_social_engagement",
+    required_env: "APIFY_API_TOKEN",
+    missing_message:
+      "LinkedIn profile/company post monitoring is not configured yet. Enable APIFY_ENABLE_LINKEDIN_PROFILE_POSTS, or I can analyze a specific URL with Firecrawl.",
   },
 
   firecrawl_scrape_url: {
@@ -364,6 +399,10 @@ export const MULTIPAGE_CRAWL_INTENT_RE =
 
 export const LINKEDIN_PROFILE_URL_RE =
   /https?:\/\/(?:[a-z]{2,3}\.)?linkedin\.com\/in\/[A-Za-z0-9_\-%]+/i;
+
+// Phase 3 — LinkedIn profile OR company page URL (for profile-posts monitoring).
+export const LINKEDIN_ENTITY_URL_RE =
+  /https?:\/\/(?:[a-z]{2,3}\.)?linkedin\.com\/(?:in|company|school|showcase)\/[A-Za-z0-9_\-%.]+/ig;
 
 // Phase 3 — LinkedIn engagement signal intent. Detects requests about LinkedIn
 // posts/comments/conversations, people discussing a topic or pain, and
