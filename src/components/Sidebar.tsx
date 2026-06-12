@@ -5,7 +5,7 @@ import {
   LayoutDashboard, Calendar, Search, Brain, Target, TrendingUp,
   Mail, BarChart3, LogOut, HelpCircle,
   PanelLeftClose, PanelLeft, Users, Eye, Inbox,
-  Sparkles, Megaphone, BookOpen, Plus, MessageSquare,
+  Sparkles, Megaphone, BookOpen, Plus, MessageSquare, Radar,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { openAgentBuilder } from '@/hooks/useAgentBuilder';
@@ -37,6 +37,7 @@ const navGroups: NavGroup[] = [
   {
     label: 'Intelligence',
     items: [
+      { path: '/signals', icon: Radar, label: 'Signals' },
       { path: '/lead-scraper', icon: Search, label: 'Lead Scraper' },
       { path: '/icp-intelligence', icon: Target, label: 'ICP Intelligence' },
       { path: '/deep-search', icon: Brain, label: 'Deep Search' },

@@ -15,6 +15,7 @@ import RouteErrorBoundary from "./components/RouteErrorBoundary";
 import Landing from "./pages/Landing";
 
 import Dashboard from "./pages/Dashboard";
+import Signals from "./pages/Signals";
 import AwaitingYou from "./pages/AwaitingYou";
 
 import Candidates from "./pages/Candidates";
@@ -123,6 +124,14 @@ const App = () => (
                       <ProtectedRoute>
                         <MainLayout>
                           <AwaitingYou />
+                        </MainLayout>
+                      </ProtectedRoute>
+                    } />
+
+                    <Route path="/signals" element={
+                      <ProtectedRoute>
+                        <MainLayout>
+                          <Signals />
                         </MainLayout>
                       </ProtectedRoute>
                     } />
