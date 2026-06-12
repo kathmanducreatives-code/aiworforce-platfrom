@@ -173,7 +173,9 @@ export async function writeMemoryFromToolCall(ctx: ToolCallCtx): Promise<void> {
     });
     if (tool === "source_with_apify") {
       const out = ctx.output as any;
-      if (isPeopleOutput(out)) {
+      if (isLinkedinEngagementOutput(out, ctx.selected_actor_key)) {
+        await writeLinkedinEngagement(ctx, out);
+      } else if (isPeopleOutput(out)) {
         await writeApifyPeople(ctx, out);
       } else {
         await writeApifyJobs(ctx, out);
@@ -394,6 +396,113 @@ async function writeApifyPeople(ctx: ToolCallCtx, output: any): Promise<void> {
         reason: [p.title, p.company].filter(Boolean).join(" @ ") || null,
         raw: { profile: p.raw ?? {} },
       });
+  }
+}
+
+// ---------- Phase 3: LinkedIn engagement ----------
+
+function isLinkedinEngagementOutput(output: any, selectedActorKey?: string | null): boolean {
+  if (selectedActorKey === "apify_linkedin_posts" || selectedActorKey === "apify_linkedin_profile_posts") return true;
+  if (!output) return false;
+  if (output.normalized_source_type === "linkedin_engagement") return true;
+  if (output.actor_output_type === "linkedin_posts" || output.actor_output_type === "linkedin_profile_posts") return true;
+  const list = Array.isArray(output.items) ? output.items : [];
+  return list.length > 0 && list[0]?.type === "linkedin_engagement";
+}
+
+async function writeLinkedinEngagement(ctx: ToolCallCtx, output: any): Promise<void> {
+  const items: any[] = Array.isArray(output?.items) ? output.items : [];
+  if (items.length === 0) return;
+
+  for (const it of items) {
+    const postUrl = it.post_url ?? null;
+    const profileUrl = it.post_author_profile_url ?? it.commenter_profile_url ?? null;
+    const fullName = it.post_author_name ?? it.commenter_name ?? null;
+    const topic = it.topic ?? null;
+    const reason = it.signal_reason ?? null;
+    // Skip empty items (nothing to anchor on).
+    if (!postUrl && !profileUrl && !it.post_text) continue;
+
+    // Optional account from author company (best-effort, deduped by name).
+    let accountId: string | null = null;
+    const company = (it.post_author_company ?? "").trim();
+    if (company) {
+      const accountRow: Record<string, unknown> = {
+        workspace_id: ctx.workspace_id,
+        name: company,
+        source: "linkedin_engagement",
+        raw: { from: "linkedin_engagement" },
+      };
+      const { data: acc } = await ctx.admin
+        .from("accounts")
+        .upsert(accountRow, { onConflict: "workspace_id,name" })
+        .select("id")
+        .maybeSingle();
+      accountId = acc?.id ?? null;
+    }
+
+    // Signal — always written for an engagement item.
+    const { data: sig } = await ctx.admin
+      .from("signals")
+      .insert({
+        workspace_id: ctx.workspace_id,
+        conversation_id: ctx.conversation_id ?? null,
+        plan_id: ctx.plan_id ?? null,
+        task_id: ctx.task_id ?? null,
+        tool_call_id: ctx.tool_call_id ?? null,
+        source: ctx.selected_actor_key ?? "apify_linkedin_posts",
+        signal_type: "linkedin_engagement",
+        signal_label: topic,
+        title: [fullName, topic].filter(Boolean).join(" — ") || (postUrl ?? "LinkedIn engagement"),
+        description: reason ?? (it.post_text ? String(it.post_text).slice(0, 500) : null),
+        source_url: postUrl,
+        raw: it.raw ?? it,
+      })
+      .select("id")
+      .maybeSingle();
+
+    // Contact — only if we have a profile URL (never invent email/phone).
+    let contactId: string | null = null;
+    if (profileUrl || fullName) {
+      const contactRow = {
+        workspace_id: ctx.workspace_id,
+        account_id: accountId,
+        full_name: fullName,
+        title: it.post_author_title ?? null,
+        headline: it.post_author_title ?? null,
+        company: company || null,
+        linkedin_url: profileUrl,
+        email: null,
+        phone: null,
+        source: "linkedin_engagement",
+        raw: it.raw ?? it,
+      };
+      if (profileUrl) {
+        const { data: c } = await ctx.admin
+          .from("contacts")
+          .upsert(contactRow, { onConflict: "workspace_id,linkedin_url" })
+          .select("id")
+          .maybeSingle();
+        contactId = c?.id ?? null;
+      } else {
+        const { data: c } = await ctx.admin.from("contacts").insert(contactRow).select("id").maybeSingle();
+        contactId = c?.id ?? null;
+      }
+    }
+
+    // Lead candidate (person engaging on a relevant post).
+    await ctx.admin.from("lead_candidates").insert({
+      workspace_id: ctx.workspace_id,
+      conversation_id: ctx.conversation_id ?? null,
+      plan_id: ctx.plan_id ?? null,
+      account_id: accountId,
+      contact_id: contactId,
+      signal_id: sig?.id ?? null,
+      lead_type: "person",
+      status: "new",
+      reason: reason ?? (topic ? `Engaging with content about ${topic}` : null),
+      raw: { linkedin_engagement: it.raw ?? it },
+    });
   }
 }
 

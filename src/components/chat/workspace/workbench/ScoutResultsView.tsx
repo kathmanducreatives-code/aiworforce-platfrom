@@ -1,6 +1,6 @@
 import { ExternalLink, Building2, MapPin, User, Bookmark, Sparkles, Send } from 'lucide-react';
 import { toast } from 'sonner';
-import { normalizeApifyItems, normalizeApifyPeople, isPeopleOutput } from './normalize';
+import { normalizeApifyItems, normalizeApifyPeople, isPeopleOutput, isLinkedinEngagementOutput, normalizeLinkedinEngagement } from './normalize';
 import RawJsonView from './RawJsonView';
 
 function sendToPilot(text: string) {
@@ -28,7 +28,72 @@ function ActionRow({ items }: { items: { label: string; icon: any; onClick: () =
   );
 }
 
+function LinkedinEngagementView({ output }: { output: any }) {
+  const items = normalizeLinkedinEngagement(output);
+  const total = typeof output?.total === 'number' ? output.total : items.length;
+  if (items.length === 0) {
+    return (
+      <div className="space-y-3">
+        <div className="text-[12px] text-[#7D8590]">No LinkedIn engagement items detected.</div>
+        <RawJsonView data={output} defaultOpen />
+      </div>
+    );
+  }
+  return (
+    <div className="space-y-3">
+      <div className="flex items-center gap-2 text-[11px] text-[#7D8590] flex-wrap">
+        <span className="px-2 py-0.5 rounded-md border border-sky-500/20 bg-sky-500/10 text-sky-300">
+          {total} LinkedIn signal{total === 1 ? '' : 's'}
+        </span>
+      </div>
+      <ul className="space-y-2">
+        {items.map((it, i) => {
+          const who = it.post_author_name ?? it.commenter_name ?? 'LinkedIn user';
+          const profile = it.post_author_profile_url ?? it.commenter_profile_url;
+          const meta = [it.post_author_title, it.post_author_company].filter(Boolean).join(' · ');
+          return (
+            <li key={i} className="rounded-lg border border-white/[0.06] bg-white/[0.02] p-3">
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-1.5 text-[13px] text-[#F0F6FC] font-medium">
+                    <User className="h-3.5 w-3.5 text-sky-300" /> {who}
+                    {it.engagement_type && (
+                      <span className="text-[10px] px-1.5 py-0.5 rounded border border-sky-500/30 bg-sky-500/10 text-sky-300">{it.engagement_type}</span>
+                    )}
+                  </div>
+                  {meta && <div className="text-[11px] text-[#7D8590] mt-0.5">{meta}</div>}
+                  {it.post_text && <div className="text-[12px] text-[#C9D1D9] mt-1.5 line-clamp-3">{it.post_text}</div>}
+                  {it.signal_reason && (
+                    <div className="text-[11px] text-emerald-300/90 mt-1 flex items-center gap-1">
+                      <Sparkles className="h-3 w-3" /> {it.signal_reason}
+                    </div>
+                  )}
+                  <div className="mt-2 flex items-center gap-3 text-[11px]">
+                    {it.post_url && (
+                      <a href={it.post_url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-sky-300 hover:underline">
+                        <ExternalLink className="h-3 w-3" /> Post
+                      </a>
+                    )}
+                    {profile && (
+                      <a href={profile} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-sky-300 hover:underline">
+                        <User className="h-3 w-3" /> Profile
+                      </a>
+                    )}
+                    {it.topic && <span className="text-[#7D8590]">topic: {it.topic}</span>}
+                  </div>
+                </div>
+              </div>
+            </li>
+          );
+        })}
+      </ul>
+      <RawJsonView data={output} />
+    </div>
+  );
+}
+
 export default function ScoutResultsView({ output }: { output: any }) {
+  if (isLinkedinEngagementOutput(output)) return <LinkedinEngagementView output={output} />;
   const peopleMode = isPeopleOutput(output);
   const items = peopleMode ? [] : normalizeApifyItems(output);
   const people = peopleMode ? normalizeApifyPeople(output) : [];

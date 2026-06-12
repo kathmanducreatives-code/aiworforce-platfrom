@@ -1,0 +1,84 @@
+// Phase 3 — output normalizer for the LinkedIn Posts / Engagement actor.
+// Maps raw actor items into Agentory's linkedin_engagement shape. Never invents
+// missing fields (null instead) and never fabricates email/phone. Pure /
+// import-free so it is unit-testable in Node + Deno.
+
+export interface LinkedinEngagementItem {
+  type: "linkedin_engagement";
+  post_url: string | null;
+  post_text: string | null;
+  post_author_name: string | null;
+  post_author_title: string | null;
+  post_author_company: string | null;
+  post_author_profile_url: string | null;
+  commenter_name: string | null;
+  commenter_profile_url: string | null;
+  engagement_type: string | null;
+  topic: string | null;
+  signal_reason: string | null;
+  source: "apify_linkedin_posts";
+  raw: unknown;
+}
+
+function pick(obj: any, keys: string[]): string | null {
+  if (!obj || typeof obj !== "object") return null;
+  for (const k of keys) {
+    const v = obj[k];
+    if (typeof v === "string" && v.trim()) return v.trim();
+    // support nested author/commenter objects, e.g. author.name
+    if (v && typeof v === "object") {
+      for (const nk of ["name", "fullName", "full_name", "title", "headline", "url", "profileUrl", "profile_url"]) {
+        const nv = (v as any)[nk];
+        if (typeof nv === "string" && nv.trim()) return nv.trim();
+      }
+    }
+  }
+  return null;
+}
+
+function truncRaw(v: unknown, max = 4000): unknown {
+  try {
+    const s = JSON.stringify(v);
+    if (s.length <= max) return v;
+    return { _truncated: true, preview: s.slice(0, max) };
+  } catch {
+    return { _unserializable: true };
+  }
+}
+
+export function normalizeLinkedinEngagementItem(raw: any, topic?: string | null): LinkedinEngagementItem {
+  const r = raw && typeof raw === "object" ? raw : {};
+  const author = (r.author && typeof r.author === "object") ? r.author : r;
+  const commenter = (r.commenter && typeof r.commenter === "object") ? r.commenter : null;
+
+  const post_text = pick(r, ["postText", "text", "content", "post_text", "description", "snippet"]);
+  const post_author_name = pick(author, ["authorName", "name", "fullName", "full_name", "author_name"]);
+  const post_author_title = pick(author, ["authorTitle", "headline", "title", "occupation", "subtitle"]);
+  const post_author_company = pick(author, ["authorCompany", "company", "companyName", "organization", "employer"]);
+
+  const engagement_type = pick(r, ["engagementType", "engagement_type", "reactionType", "type", "interaction"])
+    ?? (commenter ? "comment" : "post");
+
+  return {
+    type: "linkedin_engagement",
+    post_url: pick(r, ["postUrl", "url", "link", "post_url", "permalink", "sourceUrl"]),
+    post_text,
+    post_author_name,
+    post_author_title,
+    post_author_company,
+    post_author_profile_url: pick(author, ["authorProfileUrl", "profileUrl", "profile_url", "authorUrl", "linkedinUrl", "url"]),
+    commenter_name: commenter ? pick(commenter, ["name", "fullName", "full_name"]) : pick(r, ["commenterName", "commenter_name"]),
+    commenter_profile_url: commenter ? pick(commenter, ["profileUrl", "profile_url", "url", "linkedinUrl"]) : pick(r, ["commenterProfileUrl", "commenter_profile_url"]),
+    engagement_type,
+    topic: (typeof topic === "string" && topic.trim()) ? topic.trim() : pick(r, ["topic", "keyword", "matchedTopic"]),
+    signal_reason: pick(r, ["signalReason", "signal_reason", "reason"])
+      ?? (post_text ? `Engaged on a post about ${topic?.trim() || "a relevant GTM topic"}` : null),
+    source: "apify_linkedin_posts",
+    raw: truncRaw(r),
+  };
+}
+
+export function normalizeLinkedinEngagementItems(items: unknown, topic?: string | null): LinkedinEngagementItem[] {
+  if (!Array.isArray(items)) return [];
+  return items.map((it) => normalizeLinkedinEngagementItem(it, topic));
+}

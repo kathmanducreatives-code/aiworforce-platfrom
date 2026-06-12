@@ -63,6 +63,21 @@ Deno.test("max_results clamped to actor cap", () => {
   assertEquals(r.decision.max_results, cap);
 });
 
+Deno.test("linkedin_engagement: disabled actor → honest unavailable, never falls back to apify_jobs", async () => {
+  const d = await classifyWorkflow("Find posts I should comment on about AI SDRs.");
+  assertEquals(d.selected_actor_key, "apify_linkedin_posts");
+  const r = validateAgainstCapabilities(d);
+  if (isActorRuntimeEnabled(getActorByKey("apify_linkedin_posts")!)) {
+    assertEquals(r.ok, true);
+    assertEquals(r.decision.selected_actor_key, "apify_linkedin_posts");
+  } else {
+    assertEquals(r.ok, false);
+    assertEquals(r.reason, "actor_disabled");
+    assert(r.decision.selected_actor_key !== "apify_jobs", "must not substitute jobs actor");
+    assert(r.clarification && r.clarification.includes("not configured"));
+  }
+});
+
 Deno.test("disabled actor → clarification", () => {
   // Force a clearly disabled actor (advanced LinkedIn jobs is gated by env flag).
   const advanced = getActorByKey("apify_advanced_linkedin_jobs");

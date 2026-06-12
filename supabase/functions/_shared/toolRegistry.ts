@@ -12,6 +12,8 @@ import type { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { ACTOR_REGISTRY, getActorByKey, isActorRuntimeEnabled } from "./actorRegistry.ts";
 import { buildHarvestApiPeopleInput } from "./harvestApiPeople.ts";
 import { writeMemoryFromToolCall } from "./memoryWriter.ts";
+import { buildLinkedinEngagementInput, buildLinkedinProfilePostsInput } from "./linkedinEngagementInput.ts";
+import { normalizeLinkedinEngagementItem } from "./linkedinEngagementOutput.ts";
 
 export interface ToolContext {
   admin: SupabaseClient;
@@ -404,6 +406,50 @@ const APIFY_ACTORS: Record<string, ApifyActorCfg> = {
     use_for: ["optional fallback only if grounded search is unavailable and user explicitly enables it"],
     description: "Google SERP via Apify — opt-in fallback only",
   },
+  // Phase 3 — LinkedIn engagement. actor_id is supplied by the registry from
+  // APIFY_ACTOR_LINKEDIN_POSTS; this catalog entry exists so the registry path
+  // picks up the dedicated input adapter. enabled_by_default: false → gated by
+  // the registry's APIFY_ENABLE_LINKEDIN_POSTS flag (registryApproved).
+  linkedin_engagement: {
+    actor_id: "harvestapi/linkedin-post-search",
+    source_type: "linkedin_engagement",
+    enabled_by_default: false,
+    use_for: ["LinkedIn posts/engagement by topic", "people discussing GTM pain", "warm comment/DM opportunities"],
+    description: "LinkedIn posts / engagement search — opt-in only",
+    input_adapter: ({ query, location, role_keywords, max_results, user_input }) =>
+      buildLinkedinEngagementInput({
+        query,
+        keywords: Array.isArray(user_input?.keywords) ? (user_input!.keywords as string[]) : null,
+        topics: Array.isArray(user_input?.topics) ? (user_input!.topics as string[]) : null,
+        roles: Array.isArray(role_keywords) ? role_keywords : null,
+        companies: Array.isArray(user_input?.companies) ? (user_input!.companies as string[]) : null,
+        location,
+        max_results,
+        user_input,
+      }),
+  },
+  // Phase 3 — profile/company post monitoring. Matched by actor_id when the
+  // registry resolves apify_linkedin_profile_posts.
+  linkedin_profile_posts: {
+    actor_id: "harvestapi/linkedin-profile-posts",
+    source_type: "linkedin_engagement",
+    enabled_by_default: false,
+    use_for: ["recent posts from specific LinkedIn profile/company URLs", "monitoring known founders/competitors"],
+    description: "LinkedIn profile/company posts — opt-in only",
+    input_adapter: ({ max_results, user_input }) => {
+      const res = buildLinkedinProfilePostsInput({
+        targetUrls: Array.isArray(user_input?.targetUrls) ? (user_input!.targetUrls as string[]) : null,
+        profile_urls: Array.isArray(user_input?.profile_urls) ? (user_input!.profile_urls as string[]) : null,
+        company_urls: Array.isArray(user_input?.company_urls) ? (user_input!.company_urls as string[]) : null,
+        max_results,
+        user_input,
+      });
+      // Caller (classifier/pilot) is responsible for the no-URL clarification
+      // before invoking; if it slips through, send empty targetUrls so the
+      // actor rejects cleanly rather than scraping something unintended.
+      return res.ok && res.payload ? res.payload : { targetUrls: [] };
+    },
+  },
 };
 
 // Alias map: planner / agent vocabularies often differ from the actor registry keys.
@@ -443,6 +489,10 @@ const SOURCE_TYPE_ALIASES: Record<string, string> = {
   custom_web: "custom_web",
   search: "search_fallback",
   search_fallback: "search_fallback",
+  // Phase 3 — LinkedIn engagement (explicit; never falls back to jobs).
+  linkedin_engagement: "linkedin_engagement",
+  linkedin_posts: "linkedin_engagement",
+  linkedin_post: "linkedin_engagement",
 };
 
 export function normalizeApifySourceType(raw?: string | null): string {
@@ -466,12 +516,13 @@ const APIFY_ACTOR_ID_RE = /^[a-zA-Z0-9_~][a-zA-Z0-9_\-~]{0,127}(?:\/[a-zA-Z0-9_\
 
 function signalFromSourceType(source_type: string): string {
   switch (source_type) {
-    case "jobs":           return "hiring";
-    case "linkedin_posts": return "post";
-    case "companies":      return "company";
-    case "comments":       return "comment";
-    case "websites":       return "website";
-    default:               return "generic";
+    case "jobs":                return "hiring";
+    case "linkedin_engagement": return "linkedin_engagement";
+    case "linkedin_posts":      return "post";
+    case "companies":           return "company";
+    case "comments":            return "comment";
+    case "websites":            return "website";
+    default:                    return "generic";
   }
 }
 
@@ -809,11 +860,14 @@ async function execSourceWithApify(input: unknown): Promise<ToolResult> {
   }
 
   const rawItems: any[] = Array.isArray(itemsRes.data) ? itemsRes.data : [];
+  const topicForNorm = (i.query ?? search_goal ?? null) as string | null;
   const items = source_type === "people_profiles"
     ? rawItems.slice(0, max_results).map((r) => normalizeApifyPeopleItem(r))
-    : rawItems.slice(0, max_results).map((r) => normalizeApifyItem(r, source_type));
+    : source_type === "linkedin_engagement"
+      ? rawItems.slice(0, max_results).map((r) => normalizeLinkedinEngagementItem(r, topicForNorm))
+      : rawItems.slice(0, max_results).map((r) => normalizeApifyItem(r, source_type));
   const citations = items
-    .map((it: any) => (it as any).url ?? (it as any).profile_url)
+    .map((it: any) => (it as any).url ?? (it as any).profile_url ?? (it as any).post_url ?? (it as any).post_author_profile_url)
     .filter((u: any): u is string => typeof u === "string" && !!u)
     .slice(0, 10);
 

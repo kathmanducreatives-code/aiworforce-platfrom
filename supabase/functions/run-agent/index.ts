@@ -219,6 +219,11 @@ Deno.serve(async (req) => {
           location: location ?? undefined,
           role_keywords: roleKeywords.length > 0 ? roleKeywords : undefined,
           max_results,
+          // Phase 3 — pass whitelisted structured input (e.g. LinkedIn targetUrls,
+          // keywords, topics) through to the actor-specific input adapter.
+          input: (tool_input_body?.user_input && typeof tool_input_body.user_input === "object")
+            ? tool_input_body.user_input
+            : undefined,
         };
 
         console.log("[run-agent] apify input", {

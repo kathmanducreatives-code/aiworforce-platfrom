@@ -24,6 +24,10 @@ import {
   COMPANY_INTENT_RE,
   LINKEDIN_PROFILE_URL_RE,
   ENRICHMENT_INTENT_RE,
+  LINKEDIN_ENGAGEMENT_RE,
+  LINKEDIN_ENTITY_URL_RE,
+  COMMENT_DRAFT_INTENT_RE,
+  DM_DRAFT_INTENT_RE,
 } from "./actorRegistry.ts";
 
 export type WorkflowCategory =
@@ -74,6 +78,12 @@ export interface WorkflowDecision {
   possible_actions: string[];
   reason: string;
   source: "regex" | "ai" | "default";
+  // Phase 3 — LinkedIn engagement signal sourcing (optional fields).
+  signal_type?: string | null;
+  keywords?: string[];
+  needs_comment_drafts?: boolean;
+  needs_dm_drafts?: boolean;
+  competitor_related?: boolean;
 }
 
 const ALL_CATEGORIES: WorkflowCategory[] = [
@@ -186,6 +196,11 @@ function defaultDecision(category: WorkflowCategory, partial: Partial<WorkflowDe
     possible_actions: partial.possible_actions ?? [],
     reason: partial.reason ?? "",
     source: partial.source ?? "regex",
+    signal_type: partial.signal_type ?? null,
+    keywords: partial.keywords ?? [],
+    needs_comment_drafts: partial.needs_comment_drafts ?? false,
+    needs_dm_drafts: partial.needs_dm_drafts ?? false,
+    competitor_related: partial.competitor_related ?? false,
   };
 }
 
@@ -233,6 +248,25 @@ function regexClassify(message: string): WorkflowDecision | null {
     });
   }
 
+  // Phase 3 — LinkedIn profile/company URL + posts/monitor intent → profile-posts
+  // actor (NOT Firecrawl url_analysis). Must precede the generic URL branch.
+  const liEntityUrls = m.match(LINKEDIN_ENTITY_URL_RE);
+  if (liEntityUrls && liEntityUrls.length > 0 && /\b(posts?|recent|monitor|monitoring|activity|engagement|latest|what.*(?:posting|sharing))\b/i.test(m)) {
+    return defaultDecision("signal_sourcing", {
+      reason: "LinkedIn profile/company post monitoring",
+      confidence: 0.85,
+      signal_type: "linkedin_engagement",
+      selected_tool: "source_with_apify",
+      selected_actor_key: "apify_linkedin_profile_posts",
+      source_type: "linkedin_engagement",
+      query: m,
+      keywords: liEntityUrls,
+      agents: ["scout", "aria"],
+      execution_mode: "fast",
+      max_results: 10,
+    });
+  }
+
   // URL → url_analysis (unless it's a LinkedIn profile + enrichment intent, which the
   // existing toolInputPlanner handles as profile_enrichment — we still route through
   // the sourcing branch for that one).
@@ -245,6 +279,42 @@ function regexClassify(message: string): WorkflowDecision | null {
       selected_tool: "scrape_url",
       selected_actor_key: "firecrawl_scrape_url",
       query: m,
+    });
+  }
+
+  // Phase 3 — LinkedIn engagement signal sourcing. Detect BEFORE market/content/
+  // outreach/jobs/people so "founders posting about X", "posts I should comment
+  // on", "people discussing Clay" route to the LinkedIn posts actor (never jobs).
+  // Guard: "write/draft a LinkedIn post" is CONTENT authoring, not engagement
+  // sourcing — defer to content_creation in that case.
+  if (LINKEDIN_ENGAGEMENT_RE.test(m) && !CONTENT_CREATION_RE.test(m)) {
+    const needsComments = COMMENT_DRAFT_INTENT_RE.test(m);
+    const needsDms = DM_DRAFT_INTENT_RE.test(m);
+    const lower = m.toLowerCase();
+    const GTM_TOOLS = ["clay", "gojiberry", "artisan", "apollo", "salesloft", "lemlist", "instantly", "smartlead", "outreach.io", "clearbit", "6sense"];
+    const competitorHits = GTM_TOOLS.filter((k) => lower.includes(k));
+    const topicMatch = m.match(/\b(?:about|around|discussing|on|re:)\s+([A-Za-z0-9 ,&/+\-]{3,60})/i);
+    const topic = topicMatch
+      ? topicMatch[1].replace(/\b(?:and|then)?\s*(?:draft|write|generate|suggest|create)\b.*$/i, "").trim()
+      : null;
+    const keywords = Array.from(new Set([...competitorHits, ...(topic ? [topic] : [])])).filter(Boolean);
+    return defaultDecision("signal_sourcing", {
+      reason: "LinkedIn engagement signal sourcing",
+      confidence: 0.85,
+      signal_type: "linkedin_engagement",
+      selected_tool: "source_with_apify",
+      selected_actor_key: "apify_linkedin_posts",
+      source_type: "linkedin_engagement",
+      query: keywords.length > 0 ? keywords.join(", ") : m,
+      keywords,
+      agents: ["scout", "aria"],
+      execution_mode: (needsComments || needsDms) ? "outreach" : "fast",
+      needs_comment_drafts: needsComments,
+      needs_dm_drafts: needsDms,
+      needs_outreach: needsDms,
+      requires_approval: needsDms,
+      competitor_related: competitorHits.length > 0,
+      max_results: 10,
     });
   }
 
@@ -412,10 +482,23 @@ export function normalizeIntent(input: Partial<WorkflowDecision> | Record<string
       : [],
     reason: typeof raw.reason === "string" ? raw.reason : "",
     source: (raw.source === "regex" || raw.source === "ai" || raw.source === "default") ? raw.source : "default",
+    signal_type: typeof raw.signal_type === "string" ? raw.signal_type : null,
+    keywords: Array.isArray(raw.keywords)
+      ? (raw.keywords as unknown[]).filter((k) => typeof k === "string") as string[]
+      : [],
+    needs_comment_drafts: !!raw.needs_comment_drafts,
+    needs_dm_drafts: !!raw.needs_dm_drafts,
+    competitor_related: !!raw.competitor_related,
   };
 
   // outreach (or sourcing+outreach) always requires approval before sending.
   if (decision.workflow_category === "outreach" || decision.needs_outreach) {
+    decision.requires_approval = true;
+  }
+
+  // LinkedIn DM drafts are outreach → always approval-gated.
+  if (decision.needs_dm_drafts) {
+    decision.needs_outreach = true;
     decision.requires_approval = true;
   }
 
@@ -444,7 +527,7 @@ Guidance:
 - content_creation: write/draft a post, founder update, blog, report, summary.
 - market_research: current news, market/competitor trends, what changed today.
 - url_analysis: message contains an http(s) URL to analyze.
-- signal_sourcing: vague "find leads/customers", needs clarification.
+- signal_sourcing: vague "find leads/customers" (needs clarification), OR LinkedIn engagement sourcing — "find LinkedIn posts/people discussing <topic>", "posts I should comment on", "people talking about <pain>" (set signal_type="linkedin_engagement", selected_actor_key="apify_linkedin_posts", source_type="linkedin_engagement", needs_clarification=false; needs_comment_drafts/needs_dm_drafts when comments/DMs are requested).
 - people_sourcing: explicit "individual profiles" or "find <role> profiles".
 - company_hiring_sourcing: "find companies hiring <role>".
 - outreach: "draft outreach/email/dm/sequence" (no sourcing in same message).
