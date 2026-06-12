@@ -28,6 +28,7 @@ import {
   LINKEDIN_ENTITY_URL_RE,
   COMMENT_DRAFT_INTENT_RE,
   DM_DRAFT_INTENT_RE,
+  COMMENTER_EXTRACT_RE,
 } from "./actorRegistry.ts";
 import { matchCompetitors, buildCompetitorSearchQueries } from "./competitorRegistry.ts";
 import { extractInlineBusinessContext, resolveDiscoveryMode } from "./competitorDiscovery.ts";
@@ -103,6 +104,9 @@ export interface WorkflowDecision {
   discovery_mode?: "website" | "description" | "known" | "needs_context";
   business_website?: string | null;
   business_description?: string | null;
+  // Phase 4.2 — deep commenter extraction for a specific post.
+  extract_commenters?: boolean;
+  post_urls?: string[];
 }
 
 const ALL_CATEGORIES: WorkflowCategory[] = [
@@ -159,7 +163,7 @@ const SEND_RE = /\b(send|deliver|fire off|blast)\s+(?:emails?|messages?|outreach
 
 // Unsafe / unsupported.
 const UNSAFE_RE =
-  /\b(personal phone numbers?|home address|scrape private|private personal data|harvest emails for spam|send (?:emails?|messages?) automatically|automatic(?:ally)? send|without approval|start calling them automatically|cold call(?:ing)? (?:automated|automatic)|automatic(?:ally)?\s+(?:comment|post|dm|message|reply|engage|connect|like)|auto[- ]?(?:comment|post|dm|reply|like|engage))\b/i;
+  /\b(personal phone numbers?|home address|scrape private|private personal data|harvest emails for spam|send (?:emails?|messages?) automatically|automatic(?:ally)? send|without approval|start calling them automatically|cold call(?:ing)? (?:automated|automatic)|automatic(?:ally)?\s+(?:comment|post|dm|message|reply|engage|connect|like)|auto[- ]?(?:comment|post|dm|reply|like|engage)|send\s+(?:messages?|dms?|emails?|outreach)\s+to\s+(?:all|every|everyone|each))\b/i;
 
 // Sourcing.
 const COMPANIES_HIRING_RE =
@@ -237,6 +241,8 @@ function defaultDecision(category: WorkflowCategory, partial: Partial<WorkflowDe
     discovery_mode: partial.discovery_mode,
     business_website: partial.business_website ?? null,
     business_description: partial.business_description ?? null,
+    extract_commenters: partial.extract_commenters ?? false,
+    post_urls: partial.post_urls ?? [],
   };
 }
 
@@ -281,6 +287,30 @@ function regexClassify(message: string): WorkflowDecision | null {
       confidence: 0.9,
       needs_clarification: true,
       clarification_question: SHORT_VAGUE_CLARIFICATION,
+    });
+  }
+
+  // Phase 4.2 — deep commenter extraction for a specific post. Needs a post URL;
+  // pilot-chat asks for one if absent. Uses the (opt-in) post-comments actor.
+  if (COMMENTER_EXTRACT_RE.test(m)) {
+    const postUrls = (m.match(new RegExp(URL_RE, "ig")) ?? []).filter((u) => /linkedin\.com/i.test(u));
+    return defaultDecision("signal_sourcing", {
+      reason: "extract commenters from a specific post",
+      confidence: 0.85,
+      signal_type: "competitor_engagement",
+      extract_commenters: true,
+      post_urls: postUrls,
+      selected_tool: "source_with_apify",
+      selected_actor_key: "apify_linkedin_post_comments",
+      source_type: "linkedin_comments",
+      query: m,
+      agents: ["scout", "aria"],
+      execution_mode: "fast",
+      needs_clarification: postUrls.length === 0,
+      clarification_question: postUrls.length === 0
+        ? "Which LinkedIn post should I pull commenters from? Paste the post URL."
+        : null,
+      max_results: extractRequestedCount(m, 20),
     });
   }
 
@@ -623,6 +653,10 @@ export function normalizeIntent(input: Partial<WorkflowDecision> | Record<string
       ? raw.discovery_mode : undefined,
     business_website: typeof raw.business_website === "string" ? raw.business_website : null,
     business_description: typeof raw.business_description === "string" ? raw.business_description : null,
+    extract_commenters: !!raw.extract_commenters,
+    post_urls: Array.isArray(raw.post_urls)
+      ? (raw.post_urls as unknown[]).filter((u) => typeof u === "string") as string[]
+      : [],
   };
 
   // outreach (or sourcing+outreach) always requires approval before sending.

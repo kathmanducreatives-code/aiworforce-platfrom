@@ -293,6 +293,77 @@ export const ACTOR_REGISTRY: Record<string, ActorEntry> = {
       "LinkedIn profile/company post monitoring is not configured yet. Enable APIFY_ENABLE_LINKEDIN_PROFILE_POSTS, or I can analyze a specific URL with Firecrawl.",
   },
 
+  // Phase 4.2 — optional company-page-only monitor.
+  apify_linkedin_company_posts: {
+    key: "apify_linkedin_company_posts",
+    tool_name: "source_with_apify",
+    provider: "apify",
+    actor_id: actorId("APIFY_ACTOR_LINKEDIN_COMPANY_POSTS", "harvestapi/linkedin-company-posts"),
+    source_type: "linkedin_engagement",
+    label: "LinkedIn Company Posts",
+    enabled: envFlag("APIFY_ENABLE_LINKEDIN_COMPANY_POSTS"),
+    requires_explicit_opt_in: true,
+    best_for: ["company-page-only post monitoring", "competitor company pages"],
+    not_for: ["individual profiles (use profile posts)", "broad keyword search (use posts search)"],
+    output_type: "linkedin_company_posts",
+    default_max_results: 10,
+    max_safe_results: 20,
+    compliance_level: "public_social_engagement",
+    required_env: "APIFY_API_TOKEN",
+    missing_message:
+      "LinkedIn company-page monitoring isn't configured. Enable APIFY_ENABLE_LINKEDIN_COMPANY_POSTS, or I can use the profile-posts actor for company pages.",
+  },
+
+  // Phase 4.2 — deep commenter/engagement extraction for HOT posts only (opt-in,
+  // explicit). Never used by default for every search result.
+  apify_linkedin_post_comments: {
+    key: "apify_linkedin_post_comments",
+    tool_name: "source_with_apify",
+    provider: "apify",
+    actor_id: actorId("APIFY_ACTOR_LINKEDIN_POST_COMMENTS", "api-empire/post-comments-engagements-scraper-linkedin"),
+    source_type: "linkedin_comments",
+    label: "LinkedIn Post Comments / Engagements",
+    enabled: envFlag("APIFY_ENABLE_LINKEDIN_POST_COMMENTS"),
+    requires_explicit_opt_in: true,
+    best_for: [
+      "extracting commenters/repliers on a specific post",
+      "people commenting on a competitor post",
+      "deep engagement extraction for hot posts (explicit, capped)",
+    ],
+    not_for: ["default per-result extraction", "reactions by default", "private data"],
+    output_type: "linkedin_post_commenters",
+    default_max_results: 20,
+    max_safe_results: 50,
+    compliance_level: "public_social_engagement",
+    required_env: "APIFY_API_TOKEN",
+    missing_message:
+      "Comment/engagement extraction isn't configured. Enable APIFY_ENABLE_LINKEDIN_POST_COMMENTS to pull commenters from a specific post.",
+  },
+
+  // Phase 4.2 — optional Google SERP competitor discovery/validation (disabled by default).
+  apify_google_search: {
+    key: "apify_google_search",
+    tool_name: "source_with_apify",
+    provider: "apify",
+    actor_id: actorId("APIFY_ACTOR_GOOGLE_SEARCH", "scrapemesh/google-search-results-scraper"),
+    source_type: "serp",
+    label: "Google Search (SERP)",
+    enabled: envFlag("APIFY_ENABLE_GOOGLE_SEARCH"),
+    requires_explicit_opt_in: true,
+    best_for: [
+      "competitor discovery/validation (\"alternatives to X\", \"competitors of X\", \"best AI SDR tools\")",
+      "validating competitor hypotheses from a website/description",
+    ],
+    not_for: ["LinkedIn engagement (use the LinkedIn actors)", "broad grounded chat search (use search_web)"],
+    output_type: "serp_results",
+    default_max_results: 10,
+    max_safe_results: 20,
+    compliance_level: "public_web",
+    required_env: "APIFY_API_TOKEN",
+    missing_message:
+      "Google SERP discovery isn't configured. Enable APIFY_ENABLE_GOOGLE_SEARCH to validate competitor hypotheses via search.",
+  },
+
   firecrawl_scrape_url: {
     key: "firecrawl_scrape_url",
     tool_name: "scrape_url",
@@ -411,6 +482,10 @@ export const LINKEDIN_ENTITY_URL_RE =
 // post / comment / engagement cue so generic "find founders" stays on jobs.
 export const LINKEDIN_ENGAGEMENT_RE =
   /\b(linkedin\s+(?:posts?|comments?|conversations?|threads?|engagement)|posts?\s+(?:about|on|discussing|where|i\s+should\s+comment|to\s+comment)|comment\s+on\b|engag(?:e|ing)\s+with\b|(?:people|founders?|operators?|prospects?|users?)\s+(?:talking|posting|discussing|engaging|commenting)|conversations?\s+(?:about|around|on)|discussions?\s+(?:about|around|on))\b/i;
+
+// Phase 4.2 — extract commenters/engagers from a specific post.
+export const COMMENTER_EXTRACT_RE =
+  /\b(extract|find|get|pull|list|scrape)\b[^.]*\b(commenters?|people commenting|repliers?|who commented|engagers?|reactors?)\b|\bcomment(?:er)?s?\s+(?:on|from)\s+(?:this|the)\s+(?:post|linkedin)/i;
 
 // "draft a comment" vs "draft a DM" sub-intent for LinkedIn engagement.
 export const COMMENT_DRAFT_INTENT_RE =

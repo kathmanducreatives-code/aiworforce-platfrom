@@ -248,6 +248,42 @@ Deno.test("writeMemoryFromToolCall: competitor mention → competitor_engagement
   assert(tables.lead_candidates.every((l) => l.lead_type === "person"));
 });
 
+Deno.test("competitor signal stores source/category/conversation_type metadata", async () => {
+  const { tables, admin } = makeFake();
+  await writeMemoryFromToolCall({
+    admin, workspace_id: "ws-1", plan_id: "p", task_id: null, tool_call_id: "t",
+    tool_name: "source_with_apify", selected_actor_key: "apify_linkedin_posts",
+    output: { normalized_source_type: "linkedin_engagement", items: [
+      { type: "linkedin_engagement", post_url: "https://linkedin.com/posts/x", post_text: "Apollo data quality is broken, looking for alternatives", post_author_name: "A", post_author_profile_url: "https://linkedin.com/in/a", topic: "Apollo" },
+    ] },
+  });
+  const s = tables.signals[0];
+  assertEquals(s.signal_type, "competitor_engagement");
+  assertEquals(s.raw.competitor_key, "apollo");
+  assertEquals(s.raw.competitor_source, "post_content");
+  assert(typeof s.raw.competitor_category === "string");
+  assert(["complaint", "alternative_seeking"].includes(s.raw.conversation_type));
+  assertEquals(s.raw.original_signal_type, "linkedin_engagement");
+});
+
+Deno.test("post commenters → contacts + leads, no invented email/phone", async () => {
+  const { tables, admin } = makeFake();
+  await writeMemoryFromToolCall({
+    admin, workspace_id: "ws-1", plan_id: "p", task_id: null, tool_call_id: "t",
+    tool_name: "source_with_apify", selected_actor_key: "apify_linkedin_post_comments",
+    output: { normalized_source_type: "linkedin_comments", items: [
+      { type: "linkedin_commenter", commenter_name: "Jane", commenter_profile_url: "https://linkedin.com/in/jane", comment_text: "we switched off Clay", post_url: "https://linkedin.com/posts/y" },
+      { type: "linkedin_commenter", commenter_name: "Jane", commenter_profile_url: "https://linkedin.com/in/jane", post_url: "https://linkedin.com/posts/y" },
+    ] },
+  });
+  assertEquals(tables.signals.length, 2);
+  assert(tables.signals.every((s) => s.signal_type === "competitor_engagement"));
+  assertEquals(tables.contacts.length, 1, "deduped by linkedin_url");
+  assert(tables.contacts.every((c) => c.email === null && c.phone === null));
+  assertEquals(tables.lead_candidates.length, 2);
+  assert(tables.lead_candidates.every((l) => l.reason === "Commented on competitor/category post"));
+});
+
 Deno.test("writeMemoryFromAgentResult: Scribe writes content_draft", async () => {
   const { tables, admin } = makeFake();
   await writeMemoryFromAgentResult({

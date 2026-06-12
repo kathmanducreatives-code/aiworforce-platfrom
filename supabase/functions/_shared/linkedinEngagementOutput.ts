@@ -4,6 +4,7 @@
 // import-free so it is unit-testable in Node + Deno.
 
 import { matchCompetitors } from "./competitorRegistry.ts";
+import { classifyConversationType } from "./competitorDiscovery.ts";
 
 export interface LinkedinEngagementItem {
   type: "linkedin_engagement";
@@ -22,7 +23,9 @@ export interface LinkedinEngagementItem {
   // Phase 4 — competitor tag (for Workbench + memory hint). null when none.
   competitor_key: string | null;
   competitor_name: string | null;
+  competitor_category: string | null;
   matched_terms: string[];
+  conversation_type: string | null;
   raw: unknown;
 }
 
@@ -73,7 +76,9 @@ export function normalizeLinkedinEngagementItem(raw: any, topic?: string | null)
     type: "linkedin_engagement",
     competitor_key: comp?.key ?? null,
     competitor_name: comp?.name ?? null,
+    competitor_category: comp?.category ?? null,
     matched_terms: comp?.matched_terms ?? [],
+    conversation_type: post_text ? classifyConversationType(post_text) : null,
     post_url: pick(r, ["postUrl", "url", "link", "post_url", "permalink", "sourceUrl"]),
     post_text,
     post_author_name,

@@ -622,6 +622,23 @@ Deno.serve(async (req) => {
       (pennStep as Step & { metadata?: Record<string, unknown> }).metadata = { tool_input };
       parsed = { plan_summary: built.plan_summary, steps: [pennStep] };
       plannerSource = "staged";
+    } else if (tool_input && tool_input.source_type === "linkedin_comments") {
+      // Phase 4.2 — extract commenters from a specific post → rank.
+      const cap = Math.max(1, Math.min(50, tool_input.max_results ?? 20));
+      const scoutStep = mkStep(0, "scout", "Extract post commenters",
+        `Extract up to ${cap} commenters/engagers from the provided LinkedIn post URL(s). Use the post-comments actor only. Do not invent people or contact info; no reactions by default.`,
+        {
+          tool_needed: "source_with_apify",
+          expected_output: "Normalized commenters (name, profile URL, comment text).",
+          success_criteria: "Actor returns commenters or reports unavailable cleanly. No fabricated people.",
+          planner_source: "fallback",
+        });
+      (scoutStep as Step & { metadata?: Record<string, unknown> }).metadata = { tool_input };
+      const ariaStep = mkStep(1, "aria", "Rank commenters",
+        "Rank the commenters by ICP fit, role (founder/GTM/operator), and how warm/relevant their comment is. Label hot | warm | maybe | ignore.",
+        { tool_needed: "extract_structured", expected_output: "Ranked commenters with rationale.", success_criteria: "Grounded only in the extracted commenters.", planner_source: "fallback" });
+      parsed = { plan_summary: `Extract & rank post commenters`, steps: [scoutStep, ariaStep] };
+      plannerSource = "staged";
     } else if (tool_input && (tool_input as { competitor_discovery?: boolean }).competitor_discovery &&
         ((tool_input as { discovery_mode?: string }).discovery_mode === "website" || (tool_input as { discovery_mode?: string }).discovery_mode === "description")) {
       // Phase 4 (dynamic) — competitor discovery: website → Hawk(Firecrawl) first,

@@ -775,6 +775,42 @@ Deno.serve(async (req) => {
     return await replyAndReturn(msg, { degraded: "search_web_unavailable" });
   }
 
+  // 5c.v-0 Phase 4.2 — extract commenters from a specific post (opt-in actor;
+  // validator already returned the honest fallback above if it's disabled).
+  if (decision.extract_commenters) {
+    const urls = (decision.post_urls ?? []).filter((u) => /linkedin\.com/i.test(u));
+    if (urls.length === 0) {
+      return await replyAndReturn(
+        "Which LinkedIn post should I pull commenters from? Paste the post URL.",
+        { clarification: true, clarification_type: "commenters_need_post_url" },
+      );
+    }
+    return await delegateToOrchestrate({
+      admin, SUPABASE_URL, SUPABASE_ANON_KEY, authHeader,
+      conversationId, workspaceId, instruction: message,
+      toolInput: {
+        intent: "extract_commenters",
+        tool_name: "source_with_apify",
+        selected_actor_key: "apify_linkedin_post_comments",
+        source_type: "linkedin_comments",
+        query: message,
+        role_keywords: [],
+        location: null,
+        max_results: Math.max(1, Math.min(50, decision.max_results ?? 20)),
+        needs_enrichment: false,
+        needs_outreach: false,
+        execution_mode: "fast",
+        confidence: decision.confidence,
+        missing_fields: [],
+        reason: "extract_commenters",
+        extract_commenters: true,
+        user_input: { postUrls: urls },
+      } as unknown as ToolInput,
+      modelUsed: "google/gemini-3-flash-preview",
+      providerUsed: "lovable-ai",
+    });
+  }
+
   // 5c.v-a Phase 4 (dynamic) — Competitor DISCOVERY. Resolve business context
   // from inline (decision) + company_brain; if none, ask for it. Otherwise
   // delegate to orchestrate's discovery plan (website → Firecrawl-first).

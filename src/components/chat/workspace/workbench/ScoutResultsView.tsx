@@ -62,8 +62,11 @@ function LinkedinEngagementView({ output }: { output: any }) {
                     )}
                     {it.competitor_name && (
                       <span className="text-[10px] px-1.5 py-0.5 rounded border border-amber-500/30 bg-amber-500/10 text-amber-300" title={(it.matched_terms ?? []).join(', ')}>
-                        competitor: {it.competitor_name}
+                        competitor: {it.competitor_name}{it.competitor_category ? ` · ${it.competitor_category}` : ''}
                       </span>
+                    )}
+                    {it.conversation_type && (
+                      <span className="text-[10px] px-1.5 py-0.5 rounded border border-white/[0.12] bg-white/[0.04] text-[#9aa4af]">{it.conversation_type.replace(/_/g, ' ')}</span>
                     )}
                   </div>
                   {meta && <div className="text-[11px] text-[#7D8590] mt-0.5">{meta}</div>}

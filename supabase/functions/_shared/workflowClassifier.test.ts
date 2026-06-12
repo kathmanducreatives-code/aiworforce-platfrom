@@ -118,6 +118,24 @@ Deno.test("competitor_engagement safety: auto-DM is unsafe", async () => {
   assertEquals(await cat("Find people engaging with GojiBerry and automatically DM them."), "unsafe_or_unsupported");
 });
 
+// Phase 4.2 — commenter extraction.
+Deno.test("extract_commenters: needs a post URL", async () => {
+  const d = await classifyWorkflow("Extract commenters from this LinkedIn post and rank them.");
+  assertEquals(d.workflow_category, "signal_sourcing");
+  assertEquals(d.extract_commenters, true);
+  assertEquals(d.selected_actor_key, "apify_linkedin_post_comments");
+  assertEquals(d.needs_clarification, true);
+
+  const d2 = await classifyWorkflow("Find people commenting on this post: https://linkedin.com/posts/abc123 and rank them.");
+  assertEquals(d2.extract_commenters, true);
+  assertEquals(d2.needs_clarification, false);
+  assert((d2.post_urls ?? []).length === 1);
+});
+
+Deno.test("safety: mass-send is unsafe", async () => {
+  assertEquals(await cat("Send messages to all commenters on this post."), "unsafe_or_unsupported");
+});
+
 // Phase 4 (dynamic) — competitor discovery.
 Deno.test("competitor_discovery: no context → clarification", async () => {
   const d = await classifyWorkflow("Find my competitors.");

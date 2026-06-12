@@ -82,12 +82,12 @@ export function buildCompetitorHypotheses(ctx: BusinessContext, extraText = ""):
     const counts: Record<string, number> = {};
     for (const k of known) counts[k.category] = (counts[k.category] ?? 0) + 1;
     const category = (Object.entries(counts).sort((a, b) => b[1] - a[1])[0]?.[0] ?? null) as CompetitorCategory | null;
-    return { hypotheses: normalizeCompetitorHypotheses(known.map((k) => k.name)), category, source: "known" };
+    return { hypotheses: dedupeNames(known.map((k) => k.name)), category, source: "known" };
   }
   return { hypotheses: [], category: null, source: "none" };
 }
 
-export function normalizeCompetitorHypotheses(list: string[]): string[] {
+function dedupeNames(list: string[]): string[] {
   const seen = new Set<string>();
   const out: string[] = [];
   for (const raw of list) {
@@ -107,6 +107,7 @@ export interface SearchQueryGroups {
   complaints: string[];
   alternative_seeking: string[];
   category_discussions: string[];
+  audience_engagement: string[];
 }
 
 const CATEGORY_TERMS: Record<CompetitorCategory, string> = {
@@ -123,20 +124,23 @@ export function buildLinkedInSearchQueryGroups(
   hypotheses: string[],
   opts: { category?: CompetitorCategory | null; topic?: string | null } = {},
 ): SearchQueryGroups {
-  const names = normalizeCompetitorHypotheses(hypotheses);
+  const names = dedupeNames(hypotheses);
   const groups: SearchQueryGroups = {
     direct_mentions: [],
     comparisons: [],
     complaints: [],
     alternative_seeking: [],
     category_discussions: [],
+    audience_engagement: [],
   };
   for (const n of names) {
     groups.direct_mentions.push(n);
     groups.comparisons.push(`${n} vs`);
     groups.complaints.push(`${n} problems`);
     groups.alternative_seeking.push(`alternative to ${n}`);
+    groups.audience_engagement.push(`people commenting on ${n} posts`);
   }
+  if (opts.category) groups.audience_engagement.push(`founders talking about ${CATEGORY_TERMS[opts.category]}`);
   const catTerm = opts.category ? CATEGORY_TERMS[opts.category] : null;
   if (catTerm) {
     groups.category_discussions.push(catTerm);
@@ -161,6 +165,7 @@ export function flattenQueryGroups(groups: SearchQueryGroups, max = 8): string[]
     ...groups.complaints,
     ...groups.comparisons,
     ...groups.category_discussions,
+    ...groups.audience_engagement,
   ];
   return Array.from(new Set(ordered)).slice(0, Math.max(1, max));
 }
@@ -246,6 +251,164 @@ export function buildCompetitorDiscoveryPlan(mode: DiscoveryMode, opts: {
     : mode === "description" ? "Infer competitors → search → rank"
     : "Search → rank";
   return { plan_summary: `Competitor discovery (${label}): ${topic}`.slice(0, 140), steps };
+}
+
+// ===========================================================================
+// Phase 4.2 — richer dynamic competitor query planner.
+// ===========================================================================
+
+export type ConversationType =
+  | "direct_mention" | "comparison" | "complaint"
+  | "alternative_seeking" | "category_discussion" | "audience_engagement";
+
+export interface DynamicCompetitorInput {
+  companyName?: string;
+  websiteUrl?: string;
+  linkedinUrl?: string;
+  businessDescription?: string;
+  productCategory?: string;
+  icp?: string;
+  knownCompetitors?: string[];
+}
+
+export interface CompetitorHypothesis {
+  name?: string;
+  category: string;
+  reason: string;
+  confidence: number;            // 0..1
+  source: "seed" | "website" | "linkedin" | "description" | "memory" | "ai_inferred" | "serp";
+  keywords: string[];
+}
+
+export interface CompetitorQueryPlan {
+  competitors: CompetitorHypothesis[];
+  query_groups: {
+    direct_mentions: string[];
+    comparisons: string[];
+    complaints: string[];
+    alternative_seeking: string[];
+    category_discussion: string[];
+    audience_engagement: string[];
+  };
+  search_budget: {
+    max_queries: number;
+    max_results_per_query: number;
+    scrape_comments: boolean;
+    scrape_reactions: boolean;
+  };
+}
+
+const clamp01 = (n: number) => Math.max(0, Math.min(1, n));
+
+/** Classify a post/query's conversation angle (text-only heuristic). */
+export function classifyConversationType(text: string): ConversationType {
+  const t = (text || "").toLowerCase();
+  if (/\b(looking for|recommend|suggestions? for|need (?:a|an)\b|best .*\b(?:tool|tools|platform|software))\b/.test(t)) return "alternative_seeking";
+  if (/\b(vs\.?|versus|compare|comparison|comparing|alternatives?\b|alternative to)\b/.test(t)) return "comparison";
+  if (/\b(problem|issue|broken|frustrat|hate|annoying|hard to|too expensive|overpriced|churn|disappoint|bug|sucks?)\b/.test(t)) return "complaint";
+  if (/\b(comment|commenting|repl(?:y|ies|ying)|engag(?:e|ing|ement)|reacted|liked|discussion thread)\b/.test(t)) return "audience_engagement";
+  return "category_discussion";
+}
+
+export function extractBusinessContext(input: DynamicCompetitorInput): BusinessContext {
+  return {
+    website_url: input.websiteUrl ?? null,
+    linkedin_url: input.linkedinUrl ?? null,
+    description: input.businessDescription ?? input.productCategory ?? null,
+    brain_summary: null,
+  };
+}
+
+export function hasEnoughCompetitorContext(input: DynamicCompetitorInput): boolean {
+  if (Array.isArray(input.knownCompetitors) && input.knownCompetitors.length > 0) return true;
+  return hasEnoughContext(extractBusinessContext(input));
+}
+
+/** Normalize raw hypotheses: dedupe, clamp confidence, cap to 10, drop noisy one-word non-brand terms. */
+export function normalizeCompetitorHypotheses(raw: CompetitorHypothesis[] | string[]): CompetitorHypothesis[] {
+  const list: CompetitorHypothesis[] = (raw as unknown[]).map((r) =>
+    typeof r === "string"
+      ? { name: r, category: "other", reason: "supplied", confidence: 0.5, source: "seed" as const, keywords: [] }
+      : (r as CompetitorHypothesis)
+  );
+  const seen = new Set<string>();
+  const out: CompetitorHypothesis[] = [];
+  for (const h of list) {
+    const name = (h.name ?? "").trim();
+    if (!name) continue;
+    // Drop noisy one-word lowercase terms unless they're a known seed.
+    const isKnown = getCompetitors().some((c) => [c.name, ...c.aliases].some((a) => a.toLowerCase() === name.toLowerCase()));
+    const oneWordLower = /^[a-z][a-z0-9]+$/.test(name) && !name.includes(" ");
+    if (oneWordLower && !isKnown) continue;
+    const key = name.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push({
+      ...h,
+      name,
+      confidence: clamp01(typeof h.confidence === "number" ? h.confidence : 0.5),
+      keywords: Array.from(new Set((h.keywords ?? []).filter((k) => typeof k === "string" && k.trim()))),
+    });
+  }
+  return out.slice(0, 10);
+}
+
+/** Build a full competitor query plan from structured input. */
+export function buildCompetitorQueryPlan(input: DynamicCompetitorInput): CompetitorQueryPlan {
+  const ctx = extractBusinessContext(input);
+  const blob = [input.businessDescription, input.productCategory, input.icp, (input.knownCompetitors ?? []).join(" ")].filter(Boolean).join("  ");
+  const seedMatches = matchCompetitors(blob);
+
+  const hypotheses: CompetitorHypothesis[] = [];
+  // Explicit known competitors (highest confidence).
+  for (const kc of input.knownCompetitors ?? []) {
+    const seed = getCompetitors().find((c) => [c.name, ...c.aliases].some((a) => a.toLowerCase() === kc.toLowerCase()));
+    hypotheses.push({
+      name: seed?.name ?? kc, category: seed?.category ?? "other",
+      reason: "user-supplied competitor", confidence: 0.95, source: "seed",
+      keywords: seed?.keywords ?? [],
+    });
+  }
+  // Seeds detected in the description/category.
+  for (const m of seedMatches) {
+    hypotheses.push({
+      name: m.name, category: m.category,
+      reason: `mentioned in business context (${m.matched_terms.join(", ")})`,
+      confidence: 0.7, source: "description", keywords: [],
+    });
+  }
+  const competitors = normalizeCompetitorHypotheses(hypotheses);
+  const category = (competitors[0]?.category ?? null) as CompetitorCategory | null;
+  const groups = buildLinkedInSearchQueryGroups(competitors.map((c) => c.name!).filter(Boolean), {
+    category,
+    topic: input.productCategory ?? input.businessDescription ?? null,
+  });
+
+  return {
+    competitors,
+    query_groups: {
+      direct_mentions: groups.direct_mentions,
+      comparisons: groups.comparisons,
+      complaints: groups.complaints,
+      alternative_seeking: groups.alternative_seeking,
+      category_discussion: groups.category_discussions,
+      audience_engagement: groups.audience_engagement,
+    },
+    search_budget: {
+      max_queries: 5,
+      max_results_per_query: 5,
+      scrape_comments: true,
+      scrape_reactions: false,
+    },
+  };
+}
+
+export function buildCompetitorSearchQueries(hypotheses: CompetitorHypothesis[], originalGoal?: string | null): string[] {
+  const groups = buildLinkedInSearchQueryGroups(hypotheses.map((h) => h.name!).filter(Boolean), {
+    category: (hypotheses[0]?.category ?? null) as CompetitorCategory | null,
+    topic: originalGoal ?? null,
+  });
+  return flattenQueryGroups(groups, 8);
 }
 
 // re-export for convenience
