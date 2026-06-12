@@ -77,6 +77,50 @@ export function normalizeApifyPeople(output: any): ApifyPeopleItem[] {
 
 
 
+// Phase 3 — LinkedIn engagement results.
+export interface LinkedinEngagementItem {
+  post_url?: string;
+  post_text?: string;
+  post_author_name?: string;
+  post_author_title?: string;
+  post_author_company?: string;
+  post_author_profile_url?: string;
+  commenter_name?: string;
+  commenter_profile_url?: string;
+  engagement_type?: string;
+  topic?: string;
+  signal_reason?: string;
+  raw: any;
+}
+
+export function isLinkedinEngagementOutput(output: any): boolean {
+  if (!output) return false;
+  if (output.normalized_source_type === 'linkedin_engagement') return true;
+  if (output.actor_output_type === 'linkedin_posts') return true;
+  if (output.selected_actor_key === 'apify_linkedin_posts' || output.actor_key === 'apify_linkedin_posts') return true;
+  const list = Array.isArray(output.items) ? output.items : [];
+  return list.length > 0 && list[0]?.type === 'linkedin_engagement';
+}
+
+export function normalizeLinkedinEngagement(output: any): LinkedinEngagementItem[] {
+  if (!output) return [];
+  const list = Array.isArray(output.items) ? output.items : [];
+  return list.map((it: any) => ({
+    post_url: it.post_url ?? it.postUrl ?? it.url ?? undefined,
+    post_text: it.post_text ?? it.text ?? it.content ?? undefined,
+    post_author_name: it.post_author_name ?? it.authorName ?? undefined,
+    post_author_title: it.post_author_title ?? it.authorTitle ?? it.headline ?? undefined,
+    post_author_company: it.post_author_company ?? it.company ?? undefined,
+    post_author_profile_url: it.post_author_profile_url ?? it.profileUrl ?? undefined,
+    commenter_name: it.commenter_name ?? undefined,
+    commenter_profile_url: it.commenter_profile_url ?? undefined,
+    engagement_type: it.engagement_type ?? undefined,
+    topic: it.topic ?? undefined,
+    signal_reason: it.signal_reason ?? undefined,
+    raw: it,
+  }));
+}
+
 export interface FirecrawlResult {
   url?: string;
   title?: string;

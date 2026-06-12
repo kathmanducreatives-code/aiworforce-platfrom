@@ -96,6 +96,38 @@ Deno.test("company_hiring_sourcing: explicit 'find … and draft outreach' still
   assertEquals(d.requires_approval, true);
 });
 
+// Phase 3 — LinkedIn engagement signal sourcing.
+Deno.test("linkedin_engagement: posts/people/conversations route to apify_linkedin_posts", async () => {
+  const prompts = [
+    "Find LinkedIn posts where founders talk about outbound problems.",
+    "Find posts I should comment on about AI SDRs.",
+    "Find people discussing GojiBerry and Clay.",
+    "Find founders posting about hiring SDRs.",
+  ];
+  for (const p of prompts) {
+    const d = await classifyWorkflow(p);
+    assertEquals(d.workflow_category, "signal_sourcing", p);
+    assertEquals(d.signal_type, "linkedin_engagement", p);
+    assertEquals(d.selected_actor_key, "apify_linkedin_posts", p);
+    assertEquals(d.source_type, "linkedin_engagement", p);
+    assertEquals(d.needs_clarification, false, p);
+  }
+});
+
+Deno.test("linkedin_engagement: comment vs DM sub-intent + competitor keywords", async () => {
+  const c = await classifyWorkflow("Find posts I should comment on about AI SDRs and draft comments.");
+  assertEquals(c.needs_comment_drafts, true);
+  assertEquals(c.execution_mode, "outreach");
+
+  const dm = await classifyWorkflow("Find founders talking about outbound problems and draft soft DMs.");
+  assertEquals(dm.needs_dm_drafts, true);
+  assertEquals(dm.requires_approval, true);
+
+  const comp = await classifyWorkflow("Find people discussing GojiBerry and Clay.");
+  assertEquals(comp.competitor_related, true);
+  assert(comp.keywords!.some((k) => k.toLowerCase().includes("clay")));
+});
+
 Deno.test("agent_management", async () => {
   assertEquals(await cat("What is Penn working on?"), "agent_management");
   assertEquals(await cat("What can Scout do?"), "agent_management");

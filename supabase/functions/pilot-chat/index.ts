@@ -775,6 +775,37 @@ Deno.serve(async (req) => {
     return await replyAndReturn(msg, { degraded: "search_web_unavailable" });
   }
 
+  // 5c.v-b Phase 3 — LinkedIn engagement signal sourcing. The actor is enabled
+  // (validator passed above; if it were disabled we'd have returned the honest
+  // fallback already). Delegate to orchestrate's staged LinkedIn plan.
+  if (decision.workflow_category === "signal_sourcing" && decision.selected_actor_key === "apify_linkedin_posts") {
+    return await delegateToOrchestrate({
+      admin, SUPABASE_URL, SUPABASE_ANON_KEY, authHeader,
+      conversationId, workspaceId, instruction: message,
+      toolInput: {
+        intent: "signal_sourcing",
+        tool_name: "source_with_apify",
+        selected_actor_key: "apify_linkedin_posts",
+        source_type: "linkedin_engagement",
+        query: decision.query ?? message,
+        role_keywords: [],
+        location: decision.location ?? null,
+        max_results: Math.max(1, Math.min(20, decision.max_results ?? 10)),
+        needs_enrichment: false,
+        needs_outreach: !!decision.needs_dm_drafts,
+        execution_mode: decision.execution_mode,
+        confidence: decision.confidence,
+        missing_fields: [],
+        reason: "linkedin_engagement signal sourcing",
+        keywords: decision.keywords ?? [],
+        needs_comment_drafts: !!decision.needs_comment_drafts,
+        needs_dm_drafts: !!decision.needs_dm_drafts,
+      } as unknown as ToolInput,
+      modelUsed: "google/gemini-3-flash-preview",
+      providerUsed: "lovable-ai",
+    });
+  }
+
   // 5c.vi signal_sourcing (vague) → ask one clarification.
   if (decision.workflow_category === "signal_sourcing" && decision.needs_clarification) {
     return await replyAndReturn(

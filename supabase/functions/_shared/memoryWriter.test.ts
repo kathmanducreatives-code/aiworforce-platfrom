@@ -159,6 +159,49 @@ Deno.test("writeMemoryFromToolCall: Firecrawl writes enrichment + saved_output",
   assertEquals(tables.saved_outputs[0].type, "workflow_summary");
 });
 
+Deno.test("writeMemoryFromToolCall: LinkedIn engagement writes signals + contacts + lead_candidates; no invented contact data", async () => {
+  const { tables, admin } = makeFake();
+  await writeMemoryFromToolCall({
+    admin,
+    workspace_id: "ws-1",
+    plan_id: "plan-li",
+    task_id: null,
+    tool_call_id: "tc-li",
+    tool_name: "source_with_apify",
+    selected_actor_key: "apify_linkedin_posts",
+    output: {
+      normalized_source_type: "linkedin_engagement",
+      items: [
+        {
+          type: "linkedin_engagement",
+          post_url: "https://linkedin.com/posts/a",
+          post_text: "Outbound is broken.",
+          post_author_name: "Jane Founder",
+          post_author_title: "CEO",
+          post_author_company: "Acme",
+          post_author_profile_url: "https://linkedin.com/in/jane",
+          topic: "outbound problems",
+          signal_reason: "Active pain about outbound",
+        },
+        {
+          type: "linkedin_engagement",
+          post_url: "https://linkedin.com/posts/a", // same post
+          post_author_name: "Jane Founder",
+          post_author_profile_url: "https://linkedin.com/in/jane", // dedupe contact
+          topic: "outbound problems",
+        },
+      ],
+    },
+  });
+  assertEquals(tables.signals.length, 2, "one signal per engagement item");
+  assert(tables.signals.every((s) => s.signal_type === "linkedin_engagement"));
+  assertEquals(tables.contacts.length, 1, "contact deduped by linkedin_url");
+  assert(tables.contacts.every((c) => c.email === null && c.phone === null), "never invents email/phone");
+  assertEquals(tables.lead_candidates.length, 2);
+  assert(tables.lead_candidates.every((l) => l.lead_type === "person"));
+  assertEquals(tables.accounts.length, 1, "author company → one account");
+});
+
 Deno.test("writeMemoryFromAgentResult: Scribe writes content_draft", async () => {
   const { tables, admin } = makeFake();
   await writeMemoryFromAgentResult({

@@ -221,6 +221,43 @@ export const ACTOR_REGISTRY: Record<string, ActorEntry> = {
       "LinkedIn profile enrichment actor is not configured. Enable APIFY_ENABLE_PROFILE_ENRICHMENT to use it on known profile URLs.",
   },
 
+  apify_linkedin_posts: {
+    key: "apify_linkedin_posts",
+    tool_name: "source_with_apify",
+    // No default actor_id — Phase 3 requires the operator to point this at a
+    // configured LinkedIn posts/engagement actor via APIFY_ACTOR_LINKEDIN_POSTS.
+    actor_id: actorId("APIFY_ACTOR_LINKEDIN_POSTS", null),
+    source_type: "linkedin_engagement",
+    label: "LinkedIn Posts / Engagement Search",
+    enabled: envFlag("APIFY_ENABLE_LINKEDIN_POSTS"),
+    requires_explicit_opt_in: true,
+    best_for: [
+      "finding LinkedIn posts by keyword/topic",
+      "finding authors/commenters engaging with GTM-related topics",
+      "finding people discussing pain points (outbound, manual GTM, AI SDRs)",
+      "discovering warm engagement opportunities to comment on or DM",
+      "ICP conversations and topic discussions on LinkedIn",
+    ],
+    not_for: [
+      "companies hiring (use the jobs actor)",
+      "individual profile enrichment (use profile enrichment)",
+      "phone numbers or private personal contact data",
+    ],
+    example_user_requests: [
+      "Find LinkedIn posts where founders are talking about outbound problems",
+      "Find people discussing AI SDRs or AI agents on LinkedIn",
+      "Find posts I should comment on about AI SDRs",
+      "Find LinkedIn conversations around Clay or AI sales automation",
+    ],
+    output_type: "linkedin_posts",
+    default_max_results: 10,
+    max_safe_results: 20,
+    compliance_level: "public_social_engagement",
+    required_env: "APIFY_API_TOKEN",
+    missing_message:
+      "LinkedIn engagement sourcing is not configured yet. I can still source hiring signals with Apify Jobs or analyze specific URLs with Firecrawl.",
+  },
+
   firecrawl_scrape_url: {
     key: "firecrawl_scrape_url",
     tool_name: "scrape_url",
@@ -327,5 +364,19 @@ export const MULTIPAGE_CRAWL_INTENT_RE =
 
 export const LINKEDIN_PROFILE_URL_RE =
   /https?:\/\/(?:[a-z]{2,3}\.)?linkedin\.com\/in\/[A-Za-z0-9_\-%]+/i;
+
+// Phase 3 — LinkedIn engagement signal intent. Detects requests about LinkedIn
+// posts/comments/conversations, people discussing a topic or pain, and
+// "posts I should comment on / engage with". This is engagement sourcing, NOT
+// hiring (jobs) or profile search (people). Deliberately requires a LinkedIn /
+// post / comment / engagement cue so generic "find founders" stays on jobs.
+export const LINKEDIN_ENGAGEMENT_RE =
+  /\b(linkedin\s+(?:posts?|comments?|conversations?|threads?|engagement)|posts?\s+(?:about|on|discussing|where|i\s+should\s+comment|to\s+comment)|comment\s+on\b|engag(?:e|ing)\s+with\b|(?:people|founders?|operators?|prospects?|users?)\s+(?:talking|posting|discussing|engaging|commenting)|conversations?\s+(?:about|around|on)|discussions?\s+(?:about|around|on))\b/i;
+
+// "draft a comment" vs "draft a DM" sub-intent for LinkedIn engagement.
+export const COMMENT_DRAFT_INTENT_RE =
+  /\b(draft|write|suggest|generate)\b.*\bcomments?\b|\bcomments?\s+(?:to|i\s+should)\b|\bposts?\s+i\s+should\s+comment\b/i;
+export const DM_DRAFT_INTENT_RE =
+  /\b(draft|write|send|soft)\b.*\b(dms?|direct messages?|messages?|follow[- ]?ups?)\b|\bdm\s+(?:them|these|the)\b/i;
 
 export const URL_RE = /\bhttps?:\/\/[^\s)]+/i;
