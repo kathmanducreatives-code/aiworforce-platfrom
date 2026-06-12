@@ -40,7 +40,7 @@ const COMPETITOR_INTENT_RE =
 // competitor conversations, competitors for <site>). Distinct from tracking a
 // named competitor (handled by the known-competitor block).
 const COMPETITOR_DISCOVERY_RE =
-  /\b(find (?:my |our )?competitors|who are (?:my|our) competitors|competitor conversations|competitive landscape|discover (?:my |our )?competitors|find competitors for|map (?:my|our|the) competitors)\b/i;
+  /\b(find (?:\d+ )?(?:my |our )?competitors(?:\s+(?:for|of))?|who are (?:my|our) competitors|competitor conversations|competitive landscape|discover (?:\d+ )?(?:my |our )?competitors|map (?:my|our|the) competitors)\b/i;
 
 export type WorkflowCategory =
   | "simple_chat"

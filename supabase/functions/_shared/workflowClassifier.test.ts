@@ -129,12 +129,17 @@ Deno.test("competitor_discovery: no context → clarification", async () => {
   assert(d.clarification_question && d.clarification_question.length > 0);
 });
 
-Deno.test("competitor_discovery: website mode", async () => {
-  const d = await classifyWorkflow("Find competitors for https://example.com and track LinkedIn conversations");
-  assertEquals(d.competitor_discovery, true);
-  assertEquals(d.discovery_mode, "website");
-  assertEquals(d.business_website, "https://example.com");
-  assertEquals(d.signal_type, "competitor_engagement");
+Deno.test("competitor_discovery: website mode (with and without a count)", async () => {
+  for (const p of [
+    "Find competitors for https://example.com and track LinkedIn conversations",
+    "Find 5 competitors for https://example.com and track LinkedIn conversations",
+  ]) {
+    const d = await classifyWorkflow(p);
+    assertEquals(d.competitor_discovery, true, p);
+    assertEquals(d.discovery_mode, "website", p);
+    assertEquals(d.business_website, "https://example.com", p);
+    assertEquals(d.signal_type, "competitor_engagement", p);
+  }
 });
 
 Deno.test("competitor_discovery: description mode", async () => {
