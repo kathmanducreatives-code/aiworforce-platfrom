@@ -6,6 +6,7 @@
 // a memory write error.
 
 import type { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { matchCompetitors } from "./competitorRegistry.ts";
 
 // ---------- Inlined normalizers (mirrors src/components/chat/workspace/workbench/normalize.ts) ----------
 
@@ -419,9 +420,20 @@ async function writeLinkedinEngagement(ctx: ToolCallCtx, output: any): Promise<v
     const profileUrl = it.post_author_profile_url ?? it.commenter_profile_url ?? null;
     const fullName = it.post_author_name ?? it.commenter_name ?? null;
     const topic = it.topic ?? null;
-    const reason = it.signal_reason ?? null;
     // Skip empty items (nothing to anchor on).
     if (!postUrl && !profileUrl && !it.post_text) continue;
+
+    // Phase 4 — detect competitor mention in this item's content. If found, this
+    // is a competitor_engagement signal; otherwise stays linkedin_engagement.
+    const matchText = `${it.post_text ?? ""} ${topic ?? ""} ${fullName ?? ""} ${it.post_author_company ?? ""}`;
+    const comps = matchCompetitors(matchText);
+    const comp = comps[0] ?? null;
+    const isCompetitor = !!comp;
+    const signalType = isCompetitor ? "competitor_engagement" : "linkedin_engagement";
+    const reason = it.signal_reason
+      ?? (isCompetitor
+        ? `Engaging with content related to competitor ${comp!.name} (${comp!.matched_terms.join(", ")})`
+        : null);
 
     // Optional account from author company (best-effort, deduped by name).
     let accountId: string | null = null;
@@ -451,12 +463,14 @@ async function writeLinkedinEngagement(ctx: ToolCallCtx, output: any): Promise<v
         task_id: ctx.task_id ?? null,
         tool_call_id: ctx.tool_call_id ?? null,
         source: ctx.selected_actor_key ?? "apify_linkedin_posts",
-        signal_type: "linkedin_engagement",
-        signal_label: topic,
-        title: [fullName, topic].filter(Boolean).join(" — ") || (postUrl ?? "LinkedIn engagement"),
+        signal_type: signalType,
+        signal_label: isCompetitor ? comp!.name : topic,
+        title: [fullName, isCompetitor ? comp!.name : topic].filter(Boolean).join(" — ") || (postUrl ?? "LinkedIn engagement"),
         description: reason ?? (it.post_text ? String(it.post_text).slice(0, 500) : null),
         source_url: postUrl,
-        raw: it.raw ?? it,
+        raw: isCompetitor
+          ? { ...(typeof (it.raw ?? it) === "object" ? (it.raw ?? it) : { value: it.raw ?? it }), competitor_key: comp!.key, competitor_name: comp!.name, matched_terms: comp!.matched_terms, original_signal_type: "linkedin_engagement" }
+          : (it.raw ?? it),
       })
       .select("id")
       .maybeSingle();
@@ -500,8 +514,11 @@ async function writeLinkedinEngagement(ctx: ToolCallCtx, output: any): Promise<v
       signal_id: sig?.id ?? null,
       lead_type: "person",
       status: "new",
-      reason: reason ?? (topic ? `Engaging with content about ${topic}` : null),
-      raw: { linkedin_engagement: it.raw ?? it },
+      reason: reason
+        ?? (isCompetitor ? `Competitor signal: engaging with ${comp!.name}` : (topic ? `Engaging with content about ${topic}` : null)),
+      raw: isCompetitor
+        ? { competitor_engagement: it.raw ?? it, competitor_key: comp!.key, competitor_name: comp!.name }
+        : { linkedin_engagement: it.raw ?? it },
     });
   }
 }

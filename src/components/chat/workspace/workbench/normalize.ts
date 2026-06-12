@@ -90,6 +90,8 @@ export interface LinkedinEngagementItem {
   engagement_type?: string;
   topic?: string;
   signal_reason?: string;
+  competitor_name?: string;
+  matched_terms?: string[];
   raw: any;
 }
 
@@ -117,6 +119,8 @@ export function normalizeLinkedinEngagement(output: any): LinkedinEngagementItem
     engagement_type: it.engagement_type ?? undefined,
     topic: it.topic ?? undefined,
     signal_reason: it.signal_reason ?? undefined,
+    competitor_name: it.competitor_name ?? undefined,
+    matched_terms: Array.isArray(it.matched_terms) ? it.matched_terms : undefined,
     raw: it,
   }));
 }

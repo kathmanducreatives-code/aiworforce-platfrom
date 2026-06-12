@@ -626,12 +626,17 @@ Deno.serve(async (req) => {
       // Scout (apify_linkedin_posts) → Aria (rank) → [Scribe comments] → [Penn DMs].
       const ti = tool_input as typeof tool_input & {
         needs_comment_drafts?: boolean; needs_dm_drafts?: boolean; keywords?: string[];
+        signal_type?: string; competitors?: string[];
       };
+      const isCompetitor = ti.signal_type === "competitor_engagement";
       const cap = Math.max(1, Math.min(20, tool_input.max_results ?? 10));
       const topic = (ti.keywords && ti.keywords.length > 0) ? ti.keywords.join(", ") : (tool_input.query || user_instruction);
+      const compNote = isCompetitor && ti.competitors && ti.competitors.length > 0
+        ? ` (competitors: ${ti.competitors.join(", ")})` : "";
       const steps: Step[] = [];
-      const scoutStep = mkStep(0, "scout", "Find LinkedIn engagement signals",
-        `Find up to ${cap} LinkedIn posts / people engaging on: ${topic}. Use the LinkedIn posts actor only. Do not invent profiles or contact info.`,
+      const scoutStep = mkStep(0, "scout",
+        isCompetitor ? "Find competitor engagement signals" : "Find LinkedIn engagement signals",
+        `Find up to ${cap} LinkedIn posts / people ${isCompetitor ? "engaging around competitors/adjacent tools" : "engaging"} on: ${topic}${compNote}. Use the LinkedIn posts actor only. Do not invent profiles or contact info.`,
         {
           tool_needed: "source_with_apify",
           expected_output: "Normalized LinkedIn engagement items (post, author, topic, signal reason).",
@@ -640,8 +645,10 @@ Deno.serve(async (req) => {
         });
       (scoutStep as Step & { metadata?: Record<string, unknown> }).metadata = { tool_input };
       steps.push(scoutStep);
-      steps.push(mkStep(1, "aria", "Rank engagement signals",
-        `Rank the LinkedIn engagement signals for: ${topic}. Score by ICP fit, role fit (founder/GTM/operator), relevance to Agentory, pain/urgency, and whether engagement is warm enough to comment or DM. Label each hot | warm | maybe | ignore.`,
+      steps.push(mkStep(1, "aria", isCompetitor ? "Rank competitor signals" : "Rank engagement signals",
+        isCompetitor
+          ? `Rank these competitor-engagement signals for: ${topic}${compNote}. Score by ICP fit, founder/GTM/operator role, pain or complaint about the competitor, comparison/switching intent, competitor relevance, recency, and engagement quality. Label hot (explicit complaint/switching/looking for alternatives + high ICP fit) | warm (discussing the competitor/problem, decent ICP fit) | maybe (generic mention) | ignore (irrelevant/non-ICP). Note where a soft comment/DM is appropriate.`
+          : `Rank the LinkedIn engagement signals for: ${topic}. Score by ICP fit, role fit (founder/GTM/operator), relevance to Agentory, pain/urgency, and whether engagement is warm enough to comment or DM. Label each hot | warm | maybe | ignore.`,
         {
           tool_needed: "extract_structured",
           expected_output: "Ranked engagement signals with priority label and rationale.",
@@ -672,7 +679,7 @@ Deno.serve(async (req) => {
       steps.forEach((s, idx) => { s.step_index = idx; });
       const modeLabel = ti.needs_dm_drafts ? "Source → rank → draft DMs"
         : ti.needs_comment_drafts ? "Source → rank → draft comments" : "Source → rank";
-      parsed = { plan_summary: `LinkedIn engagement (${modeLabel}): ${topic}`, steps };
+      parsed = { plan_summary: `${isCompetitor ? "Competitor engagement" : "LinkedIn engagement"} (${modeLabel}): ${topic}`, steps };
       plannerSource = "staged";
     } else if (tool_input && tool_input.tool_name === "source_with_apify") {
       const cap = Math.max(1, Math.min(200, tool_input.max_results ?? 25));

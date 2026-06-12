@@ -29,6 +29,11 @@ import {
   COMMENT_DRAFT_INTENT_RE,
   DM_DRAFT_INTENT_RE,
 } from "./actorRegistry.ts";
+import { matchCompetitors, buildCompetitorSearchQueries } from "./competitorRegistry.ts";
+
+// Phase 4 — competitor-tracking intent phrases (alternatives/comparison/switch/complaints).
+const COMPETITOR_INTENT_RE =
+  /\b(competitors?|competing tools?|alternatives?|comparison|compare|comparing|switching from|switch from|moving (?:off|away from)|complaints? about|complaining about|vs\.?|versus)\b/i;
 
 export type WorkflowCategory =
   | "simple_chat"
@@ -84,6 +89,8 @@ export interface WorkflowDecision {
   needs_comment_drafts?: boolean;
   needs_dm_drafts?: boolean;
   competitor_related?: boolean;
+  // Phase 4 — competitor engagement (matched competitor keys).
+  competitors?: string[];
 }
 
 const ALL_CATEGORIES: WorkflowCategory[] = [
@@ -213,6 +220,7 @@ function defaultDecision(category: WorkflowCategory, partial: Partial<WorkflowDe
     needs_comment_drafts: partial.needs_comment_drafts ?? false,
     needs_dm_drafts: partial.needs_dm_drafts ?? false,
     competitor_related: partial.competitor_related ?? false,
+    competitors: partial.competitors ?? [],
   };
 }
 
@@ -258,6 +266,45 @@ function regexClassify(message: string): WorkflowDecision | null {
       needs_clarification: true,
       clarification_question: SHORT_VAGUE_CLARIFICATION,
     });
+  }
+
+  // Phase 4 — Competitor Engagement Tracker. Fires when a known competitor is
+  // mentioned, or on explicit competitor intent (alternatives/comparison/switch/
+  // complaints) in a social/sourcing context. Reuses the Phase 3 LinkedIn actors
+  // but tags the workflow as competitor_engagement. Must precede the generic
+  // profile-URL and linkedin_engagement branches.
+  {
+    const compMatches = matchCompetitors(m);
+    const socialCtx = /\b(linkedin|posts?|people|conversations?|engag|talking|comment|track|monitor|complain|switch|leads?|tools?)\b/i.test(m);
+    if (compMatches.length > 0 || (COMPETITOR_INTENT_RE.test(m) && socialCtx)) {
+      const isUrl = /linkedin\.com\/(?:in|company|school|showcase)\//i.test(m);
+      const needsComments = COMMENT_DRAFT_INTENT_RE.test(m);
+      const needsDms = DM_DRAFT_INTENT_RE.test(m);
+      const topicMatch = m.match(/\b(?:about|around|discussing|comparing)\s+([A-Za-z0-9 ,&/+\-]{3,60})/i);
+      const topic = topicMatch
+        ? topicMatch[1].replace(/\b(?:and|then)?\s*(?:draft|write|generate|suggest|create)\b.*$/i, "").trim()
+        : null;
+      const queries = buildCompetitorSearchQueries({ competitors: compMatches, topic, query: m });
+      return defaultDecision("signal_sourcing", {
+        reason: "competitor engagement tracking",
+        confidence: 0.85,
+        signal_type: "competitor_engagement",
+        selected_tool: "source_with_apify",
+        selected_actor_key: isUrl ? "apify_linkedin_profile_posts" : "apify_linkedin_posts",
+        source_type: "linkedin_engagement",
+        query: isUrl ? m : (queries.join(", ") || m),
+        keywords: queries,
+        competitors: compMatches.map((c) => c.key),
+        competitor_related: true,
+        agents: ["scout", "aria"],
+        execution_mode: (needsComments || needsDms) ? "outreach" : "fast",
+        needs_comment_drafts: needsComments,
+        needs_dm_drafts: needsDms,
+        needs_outreach: needsDms,
+        requires_approval: needsDms,
+        max_results: extractRequestedCount(m, 10),
+      });
+    }
   }
 
   // Phase 3 — LinkedIn profile/company URL + posts/monitor intent → profile-posts
@@ -501,6 +548,9 @@ export function normalizeIntent(input: Partial<WorkflowDecision> | Record<string
     needs_comment_drafts: !!raw.needs_comment_drafts,
     needs_dm_drafts: !!raw.needs_dm_drafts,
     competitor_related: !!raw.competitor_related,
+    competitors: Array.isArray(raw.competitors)
+      ? (raw.competitors as unknown[]).filter((k) => typeof k === "string") as string[]
+      : [],
   };
 
   // outreach (or sourcing+outreach) always requires approval before sending.

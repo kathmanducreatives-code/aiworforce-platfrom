@@ -202,6 +202,52 @@ Deno.test("writeMemoryFromToolCall: LinkedIn engagement writes signals + contact
   assertEquals(tables.accounts.length, 1, "author company → one account");
 });
 
+Deno.test("writeMemoryFromToolCall: competitor mention → competitor_engagement; generic stays linkedin_engagement", async () => {
+  const { tables, admin } = makeFake();
+  await writeMemoryFromToolCall({
+    admin,
+    workspace_id: "ws-1",
+    plan_id: "plan-comp",
+    task_id: null,
+    tool_call_id: "tc-comp",
+    tool_name: "source_with_apify",
+    selected_actor_key: "apify_linkedin_posts",
+    output: {
+      normalized_source_type: "linkedin_engagement",
+      items: [
+        {
+          type: "linkedin_engagement",
+          post_url: "https://linkedin.com/posts/1",
+          post_text: "Comparing GojiBerry vs other AI SDR tools for outbound.",
+          post_author_name: "Jane Founder",
+          post_author_profile_url: "https://linkedin.com/in/jane",
+          topic: "AI SDR",
+        },
+        {
+          type: "linkedin_engagement",
+          post_url: "https://linkedin.com/posts/2",
+          post_text: "Hiring a growth marketer, any tips?",
+          post_author_name: "Bob Builder",
+          post_author_profile_url: "https://linkedin.com/in/bob",
+          topic: "hiring",
+        },
+      ],
+    },
+  });
+  const comp = tables.signals.find((s) => s.source_url === "https://linkedin.com/posts/1");
+  const generic = tables.signals.find((s) => s.source_url === "https://linkedin.com/posts/2");
+  assertEquals(comp.signal_type, "competitor_engagement");
+  assertEquals(comp.raw.competitor_key, "gojiberry");
+  assert(Array.isArray(comp.raw.matched_terms) && comp.raw.matched_terms.length > 0);
+  assertEquals(comp.raw.original_signal_type, "linkedin_engagement");
+  assertEquals(generic.signal_type, "linkedin_engagement");
+  // contacts + leads written; no invented contact data
+  assertEquals(tables.contacts.length, 2);
+  assert(tables.contacts.every((c) => c.email === null && c.phone === null));
+  assertEquals(tables.lead_candidates.length, 2);
+  assert(tables.lead_candidates.every((l) => l.lead_type === "person"));
+});
+
 Deno.test("writeMemoryFromAgentResult: Scribe writes content_draft", async () => {
   const { tables, admin } = makeFake();
   await writeMemoryFromAgentResult({
