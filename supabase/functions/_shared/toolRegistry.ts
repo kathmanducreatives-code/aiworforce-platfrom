@@ -930,13 +930,38 @@ async function execSourceWithApify(input: unknown): Promise<ToolResult> {
 
   const rawItems: any[] = Array.isArray(itemsRes.data) ? itemsRes.data : [];
   const topicForNorm = (i.query ?? search_goal ?? null) as string | null;
-  const items = source_type === "people_profiles"
+  const items: any[] = source_type === "people_profiles"
     ? rawItems.slice(0, max_results).map((r) => normalizeApifyPeopleItem(r))
     : source_type === "linkedin_engagement"
       ? rawItems.slice(0, max_results).map((r) => normalizeLinkedinEngagementItem(r, topicForNorm))
       : source_type === "linkedin_comments"
         ? rawItems.slice(0, max_results).map((r) => normalizeLinkedinCommenterItem(r))
         : rawItems.slice(0, max_results).map((r) => normalizeApifyItem(r, source_type));
+
+  // Phase 4.2 — competitor discovery context (Hawk's inferred competitors,
+  // threaded via user_input). Tag items that have no per-item seed match with
+  // the inferred competitor so the Workbench + memory reflect competitor_engagement.
+  const ui = (i.input && typeof i.input === "object") ? (i.input as Record<string, unknown>) : {};
+  const discovery = ui.competitor_discovery
+    ? {
+        inferred_competitors: Array.isArray(ui.inferred_competitors) ? ui.inferred_competitors : [],
+        competitor_category: typeof ui.competitor_category === "string" ? ui.competitor_category : null,
+        matched_query: typeof ui.matched_query === "string" ? ui.matched_query : null,
+        original_business_description: typeof ui.original_business_description === "string" ? ui.original_business_description : null,
+        original_website_url: typeof ui.original_website_url === "string" ? ui.original_website_url : null,
+        hypothesis_reason: typeof ui.hypothesis_reason === "string" ? ui.hypothesis_reason : null,
+      }
+    : null;
+  if (discovery && source_type === "linkedin_engagement") {
+    const inferredName = (discovery.inferred_competitors[0] as string) ?? null;
+    for (const it of items) {
+      if (!it.competitor_key && !it.competitor_name) {
+        it.competitor_name = inferredName;
+        it.competitor_category = discovery.competitor_category;
+        it.competitor_source = "ai_inferred";
+      }
+    }
+  }
   const citations = items
     .map((it: any) => (it as any).url ?? (it as any).profile_url ?? (it as any).post_url ?? (it as any).post_author_profile_url)
     .filter((u: any): u is string => typeof u === "string" && !!u)
@@ -954,6 +979,7 @@ async function execSourceWithApify(input: unknown): Promise<ToolResult> {
       normalized_source_type: source_type,
       expected_actor_key: source_type,
       actor_configured: true,
+      discovery,
       run_id,
       dataset_id: resolvedDatasetId,
       items,

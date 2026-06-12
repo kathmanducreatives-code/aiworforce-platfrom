@@ -417,6 +417,8 @@ function isLinkedinEngagementOutput(output: any, selectedActorKey?: string | nul
 async function writeLinkedinEngagement(ctx: ToolCallCtx, output: any): Promise<void> {
   const items: any[] = Array.isArray(output?.items) ? output.items : [];
   if (items.length === 0) return;
+  // Phase 4.2 — competitor-discovery context (Hawk's inferred competitors).
+  const discovery = output?.discovery ?? null;
 
   for (const it of items) {
     const postUrl = it.post_url ?? null;
@@ -426,16 +428,38 @@ async function writeLinkedinEngagement(ctx: ToolCallCtx, output: any): Promise<v
     // Skip empty items (nothing to anchor on).
     if (!postUrl && !profileUrl && !it.post_text) continue;
 
-    // Phase 4 — detect competitor mention in this item's content. If found, this
-    // is a competitor_engagement signal; otherwise stays linkedin_engagement.
+    // Phase 4 + 4.2 — this is a competitor signal if EITHER the post content
+    // mentions a seed competitor, OR it came from a competitor-discovery search
+    // (Hawk's inferred competitors threaded via output.discovery). Otherwise it
+    // stays a generic linkedin_engagement signal.
     const matchText = `${it.post_text ?? ""} ${topic ?? ""} ${fullName ?? ""} ${it.post_author_company ?? ""}`;
     const comps = matchCompetitors(matchText);
-    const comp = comps[0] ?? null;
-    const isCompetitor = !!comp;
+    const seed = comps[0] ?? null;
+    const inferredName = Array.isArray(discovery?.inferred_competitors) ? (discovery.inferred_competitors[0] as string | undefined) : undefined;
+    const isCompetitor = !!seed || !!discovery;
     const signalType = isCompetitor ? "competitor_engagement" : "linkedin_engagement";
+    const competitorName = seed?.name ?? inferredName ?? null;
+    const competitorRaw = isCompetitor
+      ? {
+          competitor_key: seed?.key ?? null,
+          competitor_name: competitorName,
+          competitor_category: seed?.category ?? discovery?.competitor_category ?? null,
+          competitor_confidence: seed ? 0.7 : 0.5,
+          competitor_source: seed ? "post_content" : "ai_inferred",
+          matched_terms: seed?.matched_terms ?? [],
+          conversation_type: classifyConversationType(matchText),
+          matched_query: discovery?.matched_query ?? it.topic ?? null,
+          original_business_description: discovery?.original_business_description ?? null,
+          original_website_url: discovery?.original_website_url ?? null,
+          hypothesis_reason: discovery?.hypothesis_reason ?? (seed ? `seed competitor (${seed.matched_terms.join(", ")})` : null),
+          original_signal_type: "linkedin_engagement",
+        }
+      : null;
     const reason = it.signal_reason
       ?? (isCompetitor
-        ? `Engaging with content related to competitor ${comp!.name} (${comp!.matched_terms.join(", ")})`
+        ? (seed
+            ? `Engaging with content related to competitor ${seed.name} (${seed.matched_terms.join(", ")})`
+            : `Engaging with content related to inferred competitor${competitorName ? ` ${competitorName}` : "/category"}`)
         : null);
 
     // Optional account from author company (best-effort, deduped by name).
@@ -467,23 +491,14 @@ async function writeLinkedinEngagement(ctx: ToolCallCtx, output: any): Promise<v
         tool_call_id: ctx.tool_call_id ?? null,
         source: ctx.selected_actor_key ?? "apify_linkedin_posts",
         signal_type: signalType,
-        signal_label: isCompetitor ? comp!.name : topic,
-        title: [fullName, isCompetitor ? comp!.name : topic].filter(Boolean).join(" — ") || (postUrl ?? "LinkedIn engagement"),
+        signal_label: (isCompetitor ? (competitorName ?? (competitorRaw?.competitor_category ?? null)) : topic),
+        title: [fullName, isCompetitor ? (competitorName ?? "competitor") : topic].filter(Boolean).join(" — ") || (postUrl ?? "LinkedIn engagement"),
         description: reason ?? (it.post_text ? String(it.post_text).slice(0, 500) : null),
         source_url: postUrl,
         raw: isCompetitor
           ? {
               ...(typeof (it.raw ?? it) === "object" ? (it.raw ?? it) : { value: it.raw ?? it }),
-              competitor_key: comp!.key,
-              competitor_name: comp!.name,
-              competitor_category: comp!.category,
-              competitor_confidence: 0.7,
-              competitor_source: "post_content",
-              matched_terms: comp!.matched_terms,
-              conversation_type: classifyConversationType(matchText),
-              matched_query: it.topic ?? null,
-              original_signal_type: "linkedin_engagement",
-              business_context_source: (it as { business_context_source?: string }).business_context_source ?? null,
+              ...competitorRaw,
             }
           : (it.raw ?? it),
       })
@@ -530,9 +545,9 @@ async function writeLinkedinEngagement(ctx: ToolCallCtx, output: any): Promise<v
       lead_type: "person",
       status: "new",
       reason: reason
-        ?? (isCompetitor ? `Competitor signal: engaging with ${comp!.name}` : (topic ? `Engaging with content about ${topic}` : null)),
+        ?? (isCompetitor ? `Competitor signal: ${competitorName ?? "category"}` : (topic ? `Engaging with content about ${topic}` : null)),
       raw: isCompetitor
-        ? { competitor_engagement: it.raw ?? it, competitor_key: comp!.key, competitor_name: comp!.name }
+        ? { competitor_engagement: it.raw ?? it, competitor_key: seed?.key ?? null, competitor_name: competitorName, competitor_source: competitorRaw?.competitor_source }
         : { linkedin_engagement: it.raw ?? it },
     });
   }

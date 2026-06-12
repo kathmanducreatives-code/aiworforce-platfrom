@@ -201,19 +201,21 @@ export function buildCompetitorDiscoveryPlan(mode: DiscoveryMode, opts: {
   const topic = (opts.topic ?? opts.description ?? opts.website_url ?? "your competitors").toString();
   const steps: DiscoveryPlanStep[] = [];
 
+  const jsonInstruction =
+    ' Return ONLY a JSON block in this exact shape: ```json {"competitors":[{"name":"...","category":"ai_sdr|gtm_data|sales_engagement|community_intel|outbound_infra|other","reason":"...","confidence":0.0}],"category":"...","keywords":["..."]}```. List 5-8 real, plausible competitors as HYPOTHESES; if unsure, give fewer rather than inventing.';
   if (mode === "website") {
     steps.push({
       agent_slug: "hawk",
       tool_needed: "scrape_url",
       task_title: "Analyze site → identify competitors",
-      task_description: `Analyze ${opts.website_url ?? "the user's website"} to understand what they sell, then list 5-8 likely competitors and the product category. Ground it in the page; do not invent vague names.`,
+      task_description: `Analyze ${opts.website_url ?? "the user's website"} to understand what they sell and their category.${jsonInstruction}`,
     });
   } else if (mode === "description") {
     steps.push({
       agent_slug: "hawk",
       tool_needed: "extract_structured",
       task_title: "Infer competitors from description",
-      task_description: `From this business description, infer 5-8 likely competitors and the product category: "${opts.description ?? topic}". Only name real, plausible competitors; if unsure, say so rather than inventing.`,
+      task_description: `From this business description, infer likely competitors and the product category: "${opts.description ?? topic}".${jsonInstruction}`,
     });
   }
 
@@ -409,6 +411,66 @@ export function buildCompetitorSearchQueries(hypotheses: CompetitorHypothesis[],
     topic: originalGoal ?? null,
   });
   return flattenQueryGroups(groups, 8);
+}
+
+// ===========================================================================
+// Phase 4.2 — parse Hawk/Gemini-inferred competitors from agent output text.
+// Inferred competitors are HYPOTHESES (source "ai_inferred"), never facts.
+// ===========================================================================
+
+export interface InferredCompetitors {
+  competitors: CompetitorHypothesis[];
+  category: CompetitorCategory | null;
+  keywords: string[];
+}
+
+function tryParseJsonBlock(text: string): any | null {
+  if (!text) return null;
+  // ```json ... ``` fenced block first, then the first balanced {...}.
+  const fenced = text.match(/```(?:json)?\s*([\s\S]*?)```/i);
+  const candidates: string[] = [];
+  if (fenced) candidates.push(fenced[1]);
+  const brace = text.match(/\{[\s\S]*\}/);
+  if (brace) candidates.push(brace[0]);
+  for (const c of candidates) {
+    try { return JSON.parse(c); } catch { /* keep trying */ }
+  }
+  return null;
+}
+
+/**
+ * Extract inferred competitor hypotheses from Hawk's output. Prefers a JSON
+ * block ({competitors:[{name,category,reason,confidence}],category,keywords});
+ * falls back to seed matches in the text. Never invents beyond what's present.
+ */
+export function parseInferredCompetitors(text: string): InferredCompetitors {
+  const json = tryParseJsonBlock(text);
+  let hyps: CompetitorHypothesis[] = [];
+  let category: CompetitorCategory | null = null;
+  let keywords: string[] = [];
+
+  if (json && Array.isArray(json.competitors)) {
+    hyps = json.competitors.map((c: any) => ({
+      name: typeof c?.name === "string" ? c.name : (typeof c === "string" ? c : undefined),
+      category: typeof c?.category === "string" ? c.category : "other",
+      reason: typeof c?.reason === "string" ? c.reason : "inferred from business context",
+      confidence: typeof c?.confidence === "number" ? c.confidence : 0.5,
+      source: "ai_inferred" as const,
+      keywords: Array.isArray(c?.keywords) ? c.keywords.filter((k: unknown) => typeof k === "string") : [],
+    }));
+    if (typeof json.category === "string") category = json.category as CompetitorCategory;
+    if (Array.isArray(json.keywords)) keywords = json.keywords.filter((k: unknown) => typeof k === "string") as string[];
+  }
+
+  // Fallback / augment with seed competitors mentioned in the text.
+  const seeds = matchCompetitors(text);
+  for (const s of seeds) {
+    hyps.push({ name: s.name, category: s.category, reason: `seed competitor mentioned (${s.matched_terms.join(", ")})`, confidence: 0.6, source: "seed", keywords: [] });
+  }
+
+  const competitors = normalizeCompetitorHypotheses(hyps);
+  if (!category && competitors[0]) category = competitors[0].category as CompetitorCategory;
+  return { competitors, category, keywords: Array.from(new Set(keywords)) };
 }
 
 // re-export for convenience

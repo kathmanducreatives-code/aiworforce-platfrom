@@ -12,6 +12,7 @@ import {
   normalizeCompetitorHypotheses,
   hasEnoughCompetitorContext,
   buildCompetitorSearchQueries,
+  parseInferredCompetitors,
 } from "./competitorDiscovery.ts";
 
 Deno.test("extracts website + description from message", () => {
@@ -137,4 +138,20 @@ Deno.test("registry: phase 4.2 optional actors exist with caps + honest fallback
     // disabled by default in test env (no enable flag) → honest unavailable path
     if (!isActorRuntimeEnabled(a!)) assertEquals(isActorRuntimeEnabled(a!), false);
   }
+});
+
+Deno.test("parseInferredCompetitors: JSON block + seed fallback, never invents", () => {
+  const fromJson = `Here are competitors:
+\`\`\`json
+{"competitors":[{"name":"Regie.ai","category":"ai_sdr","reason":"AI sales content","confidence":0.7}],"category":"ai_sdr","keywords":["AI SDR"]}
+\`\`\``;
+  const r = parseInferredCompetitors(fromJson);
+  assert(r.competitors.some((c) => c.name === "Regie.ai" && c.source === "ai_inferred"));
+  assertEquals(r.category, "ai_sdr");
+
+  const fromText = parseInferredCompetitors("They likely compete with Clay and Apollo on outbound.");
+  assert(fromText.competitors.some((c) => c.name === "Clay"));
+
+  const nothing = parseInferredCompetitors("I'm not sure who the competitors are.");
+  assertEquals(nothing.competitors.length, 0); // no invention
 });

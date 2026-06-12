@@ -266,6 +266,31 @@ Deno.test("competitor signal stores source/category/conversation_type metadata",
   assertEquals(s.raw.original_signal_type, "linkedin_engagement");
 });
 
+Deno.test("inferred competitor discovery: tags competitor_engagement even without seed mention", async () => {
+  const { tables, admin } = makeFake();
+  await writeMemoryFromToolCall({
+    admin, workspace_id: "ws-1", plan_id: "p", task_id: null, tool_call_id: "t",
+    tool_name: "source_with_apify", selected_actor_key: "apify_linkedin_posts",
+    output: {
+      normalized_source_type: "linkedin_engagement",
+      discovery: { inferred_competitors: ["Regie.ai"], competitor_category: "ai_sdr", matched_query: "Regie.ai AI SDR", original_business_description: "AI employees for GTM teams", original_website_url: null, hypothesis_reason: "inferred from description" },
+      items: [
+        // No seed competitor in the text, but it came from a discovery search.
+        { type: "linkedin_engagement", post_url: "https://linkedin.com/posts/z", post_text: "Outbound is changing fast in 2025.", post_author_name: "Sam", post_author_profile_url: "https://linkedin.com/in/sam", topic: "AI SDR" },
+      ],
+    },
+  });
+  const s = tables.signals[0];
+  assertEquals(s.signal_type, "competitor_engagement");
+  assertEquals(s.raw.competitor_source, "ai_inferred");
+  assertEquals(s.raw.competitor_name, "Regie.ai");
+  assertEquals(s.raw.competitor_category, "ai_sdr");
+  assertEquals(s.raw.matched_query, "Regie.ai AI SDR");
+  assertEquals(s.raw.original_business_description, "AI employees for GTM teams");
+  assert(s.raw.hypothesis_reason);
+  assertEquals(tables.lead_candidates.length, 1);
+});
+
 Deno.test("post commenters → contacts + leads, no invented email/phone", async () => {
   const { tables, admin } = makeFake();
   await writeMemoryFromToolCall({
