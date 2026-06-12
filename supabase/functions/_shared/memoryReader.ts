@@ -130,9 +130,14 @@ export async function loadConversationMemory(args: {
         body_preview: (o.body ?? "").toString().slice(0, 280),
       })),
       last_plan_id,
+      // has_any_memory drives the no-memory outreach guard, so it must reflect
+      // ONLY conversation-scoped memory. lead_candidates and saved_outputs are
+      // filtered by conversation_id (when provided); outreach_drafts has no
+      // conversation_id column and is loaded workspace-wide, so it must NOT
+      // decide fresh-vs-not — otherwise any prior draft anywhere in the
+      // workspace makes every fresh conversation look like it has memory.
       has_any_memory:
         lead_candidates.length > 0 ||
-        (drafts?.length ?? 0) > 0 ||
         (outs?.length ?? 0) > 0,
     };
 
