@@ -202,6 +202,113 @@ Deno.test("writeMemoryFromToolCall: LinkedIn engagement writes signals + contact
   assertEquals(tables.accounts.length, 1, "author company → one account");
 });
 
+Deno.test("writeMemoryFromToolCall: competitor mention → competitor_engagement; generic stays linkedin_engagement", async () => {
+  const { tables, admin } = makeFake();
+  await writeMemoryFromToolCall({
+    admin,
+    workspace_id: "ws-1",
+    plan_id: "plan-comp",
+    task_id: null,
+    tool_call_id: "tc-comp",
+    tool_name: "source_with_apify",
+    selected_actor_key: "apify_linkedin_posts",
+    output: {
+      normalized_source_type: "linkedin_engagement",
+      items: [
+        {
+          type: "linkedin_engagement",
+          post_url: "https://linkedin.com/posts/1",
+          post_text: "Comparing GojiBerry vs other AI SDR tools for outbound.",
+          post_author_name: "Jane Founder",
+          post_author_profile_url: "https://linkedin.com/in/jane",
+          topic: "AI SDR",
+        },
+        {
+          type: "linkedin_engagement",
+          post_url: "https://linkedin.com/posts/2",
+          post_text: "Hiring a growth marketer, any tips?",
+          post_author_name: "Bob Builder",
+          post_author_profile_url: "https://linkedin.com/in/bob",
+          topic: "hiring",
+        },
+      ],
+    },
+  });
+  const comp = tables.signals.find((s) => s.source_url === "https://linkedin.com/posts/1");
+  const generic = tables.signals.find((s) => s.source_url === "https://linkedin.com/posts/2");
+  assertEquals(comp.signal_type, "competitor_engagement");
+  assertEquals(comp.raw.competitor_key, "gojiberry");
+  assert(Array.isArray(comp.raw.matched_terms) && comp.raw.matched_terms.length > 0);
+  assertEquals(comp.raw.original_signal_type, "linkedin_engagement");
+  assertEquals(generic.signal_type, "linkedin_engagement");
+  // contacts + leads written; no invented contact data
+  assertEquals(tables.contacts.length, 2);
+  assert(tables.contacts.every((c) => c.email === null && c.phone === null));
+  assertEquals(tables.lead_candidates.length, 2);
+  assert(tables.lead_candidates.every((l) => l.lead_type === "person"));
+});
+
+Deno.test("competitor signal stores source/category/conversation_type metadata", async () => {
+  const { tables, admin } = makeFake();
+  await writeMemoryFromToolCall({
+    admin, workspace_id: "ws-1", plan_id: "p", task_id: null, tool_call_id: "t",
+    tool_name: "source_with_apify", selected_actor_key: "apify_linkedin_posts",
+    output: { normalized_source_type: "linkedin_engagement", items: [
+      { type: "linkedin_engagement", post_url: "https://linkedin.com/posts/x", post_text: "Apollo data quality is broken, looking for alternatives", post_author_name: "A", post_author_profile_url: "https://linkedin.com/in/a", topic: "Apollo" },
+    ] },
+  });
+  const s = tables.signals[0];
+  assertEquals(s.signal_type, "competitor_engagement");
+  assertEquals(s.raw.competitor_key, "apollo");
+  assertEquals(s.raw.competitor_source, "post_content");
+  assert(typeof s.raw.competitor_category === "string");
+  assert(["complaint", "alternative_seeking"].includes(s.raw.conversation_type));
+  assertEquals(s.raw.original_signal_type, "linkedin_engagement");
+});
+
+Deno.test("inferred competitor discovery: tags competitor_engagement even without seed mention", async () => {
+  const { tables, admin } = makeFake();
+  await writeMemoryFromToolCall({
+    admin, workspace_id: "ws-1", plan_id: "p", task_id: null, tool_call_id: "t",
+    tool_name: "source_with_apify", selected_actor_key: "apify_linkedin_posts",
+    output: {
+      normalized_source_type: "linkedin_engagement",
+      discovery: { inferred_competitors: ["Regie.ai"], competitor_category: "ai_sdr", matched_query: "Regie.ai AI SDR", original_business_description: "AI employees for GTM teams", original_website_url: null, hypothesis_reason: "inferred from description" },
+      items: [
+        // No seed competitor in the text, but it came from a discovery search.
+        { type: "linkedin_engagement", post_url: "https://linkedin.com/posts/z", post_text: "Outbound is changing fast in 2025.", post_author_name: "Sam", post_author_profile_url: "https://linkedin.com/in/sam", topic: "AI SDR" },
+      ],
+    },
+  });
+  const s = tables.signals[0];
+  assertEquals(s.signal_type, "competitor_engagement");
+  assertEquals(s.raw.competitor_source, "ai_inferred");
+  assertEquals(s.raw.competitor_name, "Regie.ai");
+  assertEquals(s.raw.competitor_category, "ai_sdr");
+  assertEquals(s.raw.matched_query, "Regie.ai AI SDR");
+  assertEquals(s.raw.original_business_description, "AI employees for GTM teams");
+  assert(s.raw.hypothesis_reason);
+  assertEquals(tables.lead_candidates.length, 1);
+});
+
+Deno.test("post commenters → contacts + leads, no invented email/phone", async () => {
+  const { tables, admin } = makeFake();
+  await writeMemoryFromToolCall({
+    admin, workspace_id: "ws-1", plan_id: "p", task_id: null, tool_call_id: "t",
+    tool_name: "source_with_apify", selected_actor_key: "apify_linkedin_post_comments",
+    output: { normalized_source_type: "linkedin_comments", items: [
+      { type: "linkedin_commenter", commenter_name: "Jane", commenter_profile_url: "https://linkedin.com/in/jane", comment_text: "we switched off Clay", post_url: "https://linkedin.com/posts/y" },
+      { type: "linkedin_commenter", commenter_name: "Jane", commenter_profile_url: "https://linkedin.com/in/jane", post_url: "https://linkedin.com/posts/y" },
+    ] },
+  });
+  assertEquals(tables.signals.length, 2);
+  assert(tables.signals.every((s) => s.signal_type === "competitor_engagement"));
+  assertEquals(tables.contacts.length, 1, "deduped by linkedin_url");
+  assert(tables.contacts.every((c) => c.email === null && c.phone === null));
+  assertEquals(tables.lead_candidates.length, 2);
+  assert(tables.lead_candidates.every((l) => l.reason === "Commented on competitor/category post"));
+});
+
 Deno.test("writeMemoryFromAgentResult: Scribe writes content_draft", async () => {
   const { tables, admin } = makeFake();
   await writeMemoryFromAgentResult({

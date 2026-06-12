@@ -450,6 +450,51 @@ const APIFY_ACTORS: Record<string, ApifyActorCfg> = {
       return res.ok && res.payload ? res.payload : { targetUrls: [] };
     },
   },
+  // Phase 4.2 — company-page-only monitor (resolved via apify_linkedin_company_posts).
+  linkedin_company_posts: {
+    actor_id: "harvestapi/linkedin-company-posts",
+    source_type: "linkedin_engagement",
+    enabled_by_default: false,
+    use_for: ["company-page-only monitoring", "competitor company pages"],
+    description: "LinkedIn company posts — opt-in only",
+    input_adapter: ({ max_results, user_input }) => {
+      const res = buildLinkedinProfilePostsInput({
+        targetUrls: Array.isArray(user_input?.targetUrls) ? (user_input!.targetUrls as string[]) : null,
+        company_urls: Array.isArray(user_input?.company_urls) ? (user_input!.company_urls as string[]) : null,
+        max_results, user_input,
+      });
+      return res.ok && res.payload ? res.payload : { targetUrls: [] };
+    },
+  },
+  // Phase 4.2 — deep commenter/engagement extraction for a specific post (opt-in).
+  linkedin_comments: {
+    actor_id: "api-empire/post-comments-engagements-scraper-linkedin",
+    source_type: "linkedin_comments",
+    enabled_by_default: false,
+    use_for: ["extract commenters/engagers from a specific post URL"],
+    description: "LinkedIn post comments/engagements — opt-in only",
+    input_adapter: ({ max_results, user_input }) => {
+      const postUrls = Array.isArray(user_input?.postUrls) ? (user_input!.postUrls as string[])
+        : Array.isArray(user_input?.targetUrls) ? (user_input!.targetUrls as string[]) : [];
+      return {
+        postUrls,
+        maxComments: Math.max(1, Math.min(50, max_results)),
+        includeReactions: false, // reactions off by default
+      };
+    },
+  },
+  // Phase 4.2 — optional Google SERP competitor discovery/validation (opt-in).
+  serp: {
+    actor_id: "scrapemesh/google-search-results-scraper",
+    source_type: "serp",
+    enabled_by_default: false,
+    use_for: ["competitor discovery/validation via search (\"alternatives to X\")"],
+    description: "Google SERP scraper — opt-in only",
+    input_adapter: ({ query, max_results, user_input }) => {
+      const queries = Array.isArray(user_input?.queries) ? (user_input!.queries as string[]) : (query ? [query] : []);
+      return { queries, maxResults: Math.max(1, Math.min(20, max_results)) };
+    },
+  },
 };
 
 // Alias map: planner / agent vocabularies often differ from the actor registry keys.
@@ -493,6 +538,11 @@ const SOURCE_TYPE_ALIASES: Record<string, string> = {
   linkedin_engagement: "linkedin_engagement",
   linkedin_posts: "linkedin_engagement",
   linkedin_post: "linkedin_engagement",
+  // Phase 4.2 — explicit; never falls back to jobs.
+  linkedin_comments: "linkedin_comments",
+  linkedin_commenters: "linkedin_comments",
+  serp: "serp",
+  google_search: "serp",
 };
 
 export function normalizeApifySourceType(raw?: string | null): string {
@@ -518,6 +568,8 @@ function signalFromSourceType(source_type: string): string {
   switch (source_type) {
     case "jobs":                return "hiring";
     case "linkedin_engagement": return "linkedin_engagement";
+    case "linkedin_comments":   return "linkedin_engagement";
+    case "serp":                return "search";
     case "linkedin_posts":      return "post";
     case "companies":           return "company";
     case "comments":            return "comment";
@@ -557,6 +609,23 @@ function normalizeApifyItem(raw: any, source_type: string) {
     signal_type: signalFromSourceType(source_type),
     confidence:  null,
     raw:         truncObj(r, 4000),
+  };
+}
+
+// Phase 4.2 — normalize a LinkedIn post commenter/engager item. Never invents
+// email/phone.
+function normalizeLinkedinCommenterItem(raw: any) {
+  const r = raw && typeof raw === "object" ? raw : {};
+  const author = (r.author && typeof r.author === "object") ? r.author : r;
+  return {
+    type: "linkedin_commenter",
+    commenter_name: pickStr(author, ["name", "fullName", "full_name", "authorName", "commenterName"]),
+    commenter_profile_url: pickStr(author, ["profileUrl", "profile_url", "linkedinUrl", "url", "authorUrl"]),
+    commenter_headline: pickStr(author, ["headline", "occupation", "subtitle", "title"]),
+    comment_text: pickStr(r, ["commentText", "text", "comment", "body", "content"]),
+    post_url: pickStr(r, ["postUrl", "post_url", "sourceUrl", "permalink", "url"]),
+    source: "apify_linkedin_post_comments",
+    raw: truncObj(r, 4000),
   };
 }
 
@@ -861,11 +930,38 @@ async function execSourceWithApify(input: unknown): Promise<ToolResult> {
 
   const rawItems: any[] = Array.isArray(itemsRes.data) ? itemsRes.data : [];
   const topicForNorm = (i.query ?? search_goal ?? null) as string | null;
-  const items = source_type === "people_profiles"
+  const items: any[] = source_type === "people_profiles"
     ? rawItems.slice(0, max_results).map((r) => normalizeApifyPeopleItem(r))
     : source_type === "linkedin_engagement"
       ? rawItems.slice(0, max_results).map((r) => normalizeLinkedinEngagementItem(r, topicForNorm))
-      : rawItems.slice(0, max_results).map((r) => normalizeApifyItem(r, source_type));
+      : source_type === "linkedin_comments"
+        ? rawItems.slice(0, max_results).map((r) => normalizeLinkedinCommenterItem(r))
+        : rawItems.slice(0, max_results).map((r) => normalizeApifyItem(r, source_type));
+
+  // Phase 4.2 — competitor discovery context (Hawk's inferred competitors,
+  // threaded via user_input). Tag items that have no per-item seed match with
+  // the inferred competitor so the Workbench + memory reflect competitor_engagement.
+  const ui = (i.input && typeof i.input === "object") ? (i.input as Record<string, unknown>) : {};
+  const discovery = ui.competitor_discovery
+    ? {
+        inferred_competitors: Array.isArray(ui.inferred_competitors) ? ui.inferred_competitors : [],
+        competitor_category: typeof ui.competitor_category === "string" ? ui.competitor_category : null,
+        matched_query: typeof ui.matched_query === "string" ? ui.matched_query : null,
+        original_business_description: typeof ui.original_business_description === "string" ? ui.original_business_description : null,
+        original_website_url: typeof ui.original_website_url === "string" ? ui.original_website_url : null,
+        hypothesis_reason: typeof ui.hypothesis_reason === "string" ? ui.hypothesis_reason : null,
+      }
+    : null;
+  if (discovery && source_type === "linkedin_engagement") {
+    const inferredName = (discovery.inferred_competitors[0] as string) ?? null;
+    for (const it of items) {
+      if (!it.competitor_key && !it.competitor_name) {
+        it.competitor_name = inferredName;
+        it.competitor_category = discovery.competitor_category;
+        it.competitor_source = "ai_inferred";
+      }
+    }
+  }
   const citations = items
     .map((it: any) => (it as any).url ?? (it as any).profile_url ?? (it as any).post_url ?? (it as any).post_author_profile_url)
     .filter((u: any): u is string => typeof u === "string" && !!u)
@@ -883,6 +979,7 @@ async function execSourceWithApify(input: unknown): Promise<ToolResult> {
       normalized_source_type: source_type,
       expected_actor_key: source_type,
       actor_configured: true,
+      discovery,
       run_id,
       dataset_id: resolvedDatasetId,
       items,

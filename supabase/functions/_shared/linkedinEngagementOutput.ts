@@ -3,6 +3,9 @@
 // missing fields (null instead) and never fabricates email/phone. Pure /
 // import-free so it is unit-testable in Node + Deno.
 
+import { matchCompetitors } from "./competitorRegistry.ts";
+import { classifyConversationType } from "./competitorDiscovery.ts";
+
 export interface LinkedinEngagementItem {
   type: "linkedin_engagement";
   post_url: string | null;
@@ -17,6 +20,12 @@ export interface LinkedinEngagementItem {
   topic: string | null;
   signal_reason: string | null;
   source: "apify_linkedin_posts";
+  // Phase 4 — competitor tag (for Workbench + memory hint). null when none.
+  competitor_key: string | null;
+  competitor_name: string | null;
+  competitor_category: string | null;
+  matched_terms: string[];
+  conversation_type: string | null;
   raw: unknown;
 }
 
@@ -59,8 +68,17 @@ export function normalizeLinkedinEngagementItem(raw: any, topic?: string | null)
   const engagement_type = pick(r, ["engagementType", "engagement_type", "reactionType", "type", "interaction"])
     ?? (commenter ? "comment" : "post");
 
+  // Phase 4 — competitor tag from the post content.
+  const comps = matchCompetitors(`${post_text ?? ""} ${topic ?? ""} ${post_author_name ?? ""} ${post_author_company ?? ""}`);
+  const comp = comps[0] ?? null;
+
   return {
     type: "linkedin_engagement",
+    competitor_key: comp?.key ?? null,
+    competitor_name: comp?.name ?? null,
+    competitor_category: comp?.category ?? null,
+    matched_terms: comp?.matched_terms ?? [],
+    conversation_type: post_text ? classifyConversationType(post_text) : null,
     post_url: pick(r, ["postUrl", "url", "link", "post_url", "permalink", "sourceUrl"]),
     post_text,
     post_author_name,

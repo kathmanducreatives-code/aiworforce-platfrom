@@ -411,6 +411,43 @@ Deno.serve(async (req) => {
     return json({ success: true, task_id: task.id, status: "awaiting_approval" });
   }
 
+  // Phase 4.2 — inference→search threading. When Hawk (competitor discovery)
+  // hands off to Scout's LinkedIn search, parse Hawk's inferred competitors from
+  // its output and inject them into Scout's tool_input (queries + discovery
+  // context for memory tagging). Inferred competitors are hypotheses, not facts.
+  let nextToolInput: any = nextStep?.metadata?.tool_input ?? tool_input_body ?? null;
+  if (
+    nextStep && agent_slug === "hawk" && nextStep.agent_slug === "scout" &&
+    (nextToolInput?.source_type === "linkedin_engagement") &&
+    (nextToolInput?.competitor_discovery || tool_input_body?.competitor_discovery || tool_input_body?.discovery_mode)
+  ) {
+    try {
+      const { parseInferredCompetitors, buildCompetitorSearchQueries } = await import("../_shared/competitorDiscovery.ts");
+      const inferred = parseInferredCompetitors(apiText ?? "");
+      const queries = buildCompetitorSearchQueries(inferred.competitors, nextToolInput?.query ?? instruction);
+      if (queries.length > 0) {
+        nextToolInput = {
+          ...nextToolInput,
+          query: queries.join(", "),
+          competitor_discovery: true,
+          user_input: {
+            ...(nextToolInput?.user_input ?? {}),
+            keywords: queries,
+            competitor_discovery: true,
+            inferred_competitors: inferred.competitors.map((c: any) => c.name).filter(Boolean),
+            competitor_category: inferred.category,
+            matched_query: queries.join(", "),
+            original_business_description: tool_input_body?.business_description ?? nextToolInput?.business_description ?? null,
+            original_website_url: tool_input_body?.business_website ?? nextToolInput?.business_website ?? null,
+            hypothesis_reason: inferred.competitors[0]?.reason ?? "inferred from business context",
+          },
+        };
+      }
+    } catch (e) {
+      console.warn("[run-agent] inferred-competitor threading failed:", e);
+    }
+  }
+
   if (nextStep) {
     await supabase.from("handoffs").insert({
       workspace_id,
@@ -445,7 +482,11 @@ Deno.serve(async (req) => {
         instruction: nextStep.instruction,
         input: apiText,
         needs_approval: nextStep.needs_approval === true,
-        tool_input: tool_input_body ?? nextStep.metadata?.tool_input ?? null,
+        // Per-step tool_input (set on the step's metadata) wins, so a plan can
+        // mix tools across steps (e.g. Hawk scrape → Scout apify). Steps without
+        // their own metadata inherit the current step's tool_input as before.
+        // For competitor discovery, nextToolInput carries Hawk's inferred queries.
+        tool_input: nextToolInput,
         execution_mode: execution_mode_body,
       }),
     }).catch((e) => console.error("[run-agent] chain fetch failed:", e));

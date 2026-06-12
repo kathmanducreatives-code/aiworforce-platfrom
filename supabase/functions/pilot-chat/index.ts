@@ -775,6 +775,95 @@ Deno.serve(async (req) => {
     return await replyAndReturn(msg, { degraded: "search_web_unavailable" });
   }
 
+  // 5c.v-0 Phase 4.2 — extract commenters from a specific post (opt-in actor;
+  // validator already returned the honest fallback above if it's disabled).
+  if (decision.extract_commenters) {
+    const urls = (decision.post_urls ?? []).filter((u) => /linkedin\.com/i.test(u));
+    if (urls.length === 0) {
+      return await replyAndReturn(
+        "Which LinkedIn post should I pull commenters from? Paste the post URL.",
+        { clarification: true, clarification_type: "commenters_need_post_url" },
+      );
+    }
+    return await delegateToOrchestrate({
+      admin, SUPABASE_URL, SUPABASE_ANON_KEY, authHeader,
+      conversationId, workspaceId, instruction: message,
+      toolInput: {
+        intent: "extract_commenters",
+        tool_name: "source_with_apify",
+        selected_actor_key: "apify_linkedin_post_comments",
+        source_type: "linkedin_comments",
+        query: message,
+        role_keywords: [],
+        location: null,
+        max_results: Math.max(1, Math.min(50, decision.max_results ?? 20)),
+        needs_enrichment: false,
+        needs_outreach: false,
+        execution_mode: "fast",
+        confidence: decision.confidence,
+        missing_fields: [],
+        reason: "extract_commenters",
+        extract_commenters: true,
+        user_input: { postUrls: urls },
+      } as unknown as ToolInput,
+      modelUsed: "google/gemini-3-flash-preview",
+      providerUsed: "lovable-ai",
+    });
+  }
+
+  // 5c.v-a Phase 4 (dynamic) — Competitor DISCOVERY. Resolve business context
+  // from inline (decision) + company_brain; if none, ask for it. Otherwise
+  // delegate to orchestrate's discovery plan (website → Firecrawl-first).
+  if (decision.competitor_discovery) {
+    let website = decision.business_website ?? null;
+    let description = decision.business_description ?? null;
+    if (!website && !description) {
+      // Fall back to the saved company profile (company_brain).
+      const { data: brainRow } = await admin
+        .from("company_brain").select("profile").eq("workspace_id", workspaceId).maybeSingle();
+      const profile = (brainRow?.profile ?? {}) as Record<string, unknown>;
+      const what = [profile.what_we_do, profile.who_we_sell_to].filter((x) => typeof x === "string" && x).join(". ");
+      if (typeof profile.website === "string" && profile.website) website = profile.website as string;
+      else if (what) description = what;
+    }
+    const mode = website ? "website" : (description ? "description" : "needs_context");
+    if (mode === "needs_context") {
+      return await replyAndReturn(
+        "To find your competitors, share your website, LinkedIn company page, or a one-line description of what you sell — or set up your company profile and I'll use that.",
+        { clarification: true, clarification_type: "competitor_discovery_needs_context" },
+      );
+    }
+    return await delegateToOrchestrate({
+      admin, SUPABASE_URL, SUPABASE_ANON_KEY, authHeader,
+      conversationId, workspaceId, instruction: message,
+      toolInput: {
+        intent: "competitor_discovery",
+        tool_name: "source_with_apify",
+        selected_actor_key: "apify_linkedin_posts",
+        source_type: "linkedin_engagement",
+        query: description ?? website ?? message,
+        role_keywords: [],
+        location: null,
+        max_results: Math.max(1, Math.min(20, decision.max_results ?? 10)),
+        needs_enrichment: false,
+        needs_outreach: !!decision.needs_dm_drafts,
+        execution_mode: decision.execution_mode,
+        confidence: decision.confidence,
+        missing_fields: [],
+        reason: `competitor_discovery (${mode})`,
+        signal_type: "competitor_engagement",
+        competitor_discovery: true,
+        discovery_mode: mode,
+        business_website: website,
+        business_description: description,
+        needs_comment_drafts: !!decision.needs_comment_drafts,
+        needs_dm_drafts: !!decision.needs_dm_drafts,
+      } as unknown as ToolInput,
+      modelUsed: "google/gemini-3-flash-preview",
+      providerUsed: "lovable-ai",
+    });
+  }
+
   // 5c.v-b Phase 3 — LinkedIn engagement signal sourcing. The actor is enabled
   // (validator passed above; if it were disabled we'd have returned the honest
   // fallback already). Delegate to orchestrate's staged LinkedIn plan.
@@ -808,11 +897,17 @@ Deno.serve(async (req) => {
         execution_mode: decision.execution_mode,
         confidence: decision.confidence,
         missing_fields: [],
-        reason: "linkedin_engagement signal sourcing",
+        reason: (decision.signal_type === "competitor_engagement" ? "competitor_engagement" : "linkedin_engagement") + " signal sourcing",
+        signal_type: decision.signal_type ?? "linkedin_engagement",
+        competitors: decision.competitors ?? [],
         keywords: decision.keywords ?? [],
         needs_comment_drafts: !!decision.needs_comment_drafts,
         needs_dm_drafts: !!decision.needs_dm_drafts,
-        user_input: isProfilePosts ? { targetUrls } : {},
+        // Pass expanded search queries + (profile mode) target URLs to the actor adapter.
+        user_input: {
+          ...(decision.keywords && decision.keywords.length > 0 ? { keywords: decision.keywords } : {}),
+          ...(isProfilePosts ? { targetUrls } : {}),
+        },
       } as unknown as ToolInput,
       modelUsed: "google/gemini-3-flash-preview",
       providerUsed: "lovable-ai",

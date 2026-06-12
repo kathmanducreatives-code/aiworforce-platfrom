@@ -9,6 +9,7 @@ import { isToolConfigured } from "../_shared/toolRegistry.ts";
 import { getAgentorySystemPrompt, AGENTORY_SYSTEM_PROMPT_VERSION } from "../_shared/agentorySystemPrompt.ts";
 import { summarizeRegistryForPrompt } from "../_shared/actorRegistry.ts";
 import { buildDraftOutreachPlan } from "../_shared/draftOutreachPlan.ts";
+import { buildCompetitorDiscoveryPlan } from "../_shared/competitorDiscovery.ts";
 
 const cors = {
   "Access-Control-Allow-Origin": "*",
@@ -621,17 +622,76 @@ Deno.serve(async (req) => {
       (pennStep as Step & { metadata?: Record<string, unknown> }).metadata = { tool_input };
       parsed = { plan_summary: built.plan_summary, steps: [pennStep] };
       plannerSource = "staged";
+    } else if (tool_input && tool_input.source_type === "linkedin_comments") {
+      // Phase 4.2 — extract commenters from a specific post → rank.
+      const cap = Math.max(1, Math.min(50, tool_input.max_results ?? 20));
+      const scoutStep = mkStep(0, "scout", "Extract post commenters",
+        `Extract up to ${cap} commenters/engagers from the provided LinkedIn post URL(s). Use the post-comments actor only. Do not invent people or contact info; no reactions by default.`,
+        {
+          tool_needed: "source_with_apify",
+          expected_output: "Normalized commenters (name, profile URL, comment text).",
+          success_criteria: "Actor returns commenters or reports unavailable cleanly. No fabricated people.",
+          planner_source: "fallback",
+        });
+      (scoutStep as Step & { metadata?: Record<string, unknown> }).metadata = { tool_input };
+      const ariaStep = mkStep(1, "aria", "Rank commenters",
+        "Rank the commenters by ICP fit, role (founder/GTM/operator), and how warm/relevant their comment is. Label hot | warm | maybe | ignore.",
+        { tool_needed: "extract_structured", expected_output: "Ranked commenters with rationale.", success_criteria: "Grounded only in the extracted commenters.", planner_source: "fallback" });
+      parsed = { plan_summary: `Extract & rank post commenters`, steps: [scoutStep, ariaStep] };
+      plannerSource = "staged";
+    } else if (tool_input && (tool_input as { competitor_discovery?: boolean }).competitor_discovery &&
+        ((tool_input as { discovery_mode?: string }).discovery_mode === "website" || (tool_input as { discovery_mode?: string }).discovery_mode === "description")) {
+      // Phase 4 (dynamic) — competitor discovery: website → Hawk(Firecrawl) first,
+      // description → Hawk(infer) first, then Scout(LinkedIn actor) → Aria → [..].
+      const ti = tool_input as typeof tool_input & {
+        discovery_mode?: "website" | "description"; business_website?: string; business_description?: string;
+        needs_comment_drafts?: boolean; needs_dm_drafts?: boolean; signal_type?: string; competitors?: string[];
+      };
+      const dplan = buildCompetitorDiscoveryPlan(ti.discovery_mode!, {
+        website_url: ti.business_website ?? null,
+        description: ti.business_description ?? null,
+        topic: tool_input.query || user_instruction,
+        needs_comment_drafts: ti.needs_comment_drafts,
+        needs_dm_drafts: ti.needs_dm_drafts,
+        max: tool_input.max_results,
+      });
+      // The Scout step must run the LinkedIn actor → give it the apify tool_input.
+      // The Hawk step (website mode) must only Firecrawl → give it a scrape-only tool_input.
+      const scoutToolInput = { ...tool_input, tool_name: "source_with_apify", selected_actor_key: "apify_linkedin_posts", source_type: "linkedin_engagement" };
+      const hawkScrapeToolInput = { tool_name: "scrape_url", selected_actor_key: null, source_type: null, query: ti.business_website ?? null, max_results: 1 };
+      // Inference-only Hawk (description mode): explicit no-tool input so it does
+      // NOT inherit the plan's apify tool_input and re-run the LinkedIn actor.
+      const hawkInferToolInput = { tool_name: null, selected_actor_key: null, source_type: null };
+      const steps: Step[] = dplan.steps.map((s, idx) => {
+        const st = mkStep(idx, s.agent_slug, s.task_title, s.task_description, {
+          tool_needed: s.tool_needed,
+          requires_approval: s.requires_approval ?? false,
+          expected_output: "Grounded output for the discovery pipeline; no fabricated competitors/people.",
+          success_criteria: "Grounded only in prior steps / actor results. No auto-post/DM/send.",
+          planner_source: "fallback",
+        });
+        if (s.agent_slug === "scout") (st as Step & { metadata?: Record<string, unknown> }).metadata = { tool_input: scoutToolInput };
+        else if (s.agent_slug === "hawk") (st as Step & { metadata?: Record<string, unknown> }).metadata = { tool_input: s.tool_needed === "scrape_url" ? hawkScrapeToolInput : hawkInferToolInput };
+        return st;
+      });
+      parsed = { plan_summary: dplan.plan_summary, steps };
+      plannerSource = "staged";
     } else if (tool_input && tool_input.source_type === "linkedin_engagement") {
       // Phase 3 — LinkedIn engagement signal engine. Deterministic staged plan:
       // Scout (apify_linkedin_posts) → Aria (rank) → [Scribe comments] → [Penn DMs].
       const ti = tool_input as typeof tool_input & {
         needs_comment_drafts?: boolean; needs_dm_drafts?: boolean; keywords?: string[];
+        signal_type?: string; competitors?: string[];
       };
+      const isCompetitor = ti.signal_type === "competitor_engagement";
       const cap = Math.max(1, Math.min(20, tool_input.max_results ?? 10));
       const topic = (ti.keywords && ti.keywords.length > 0) ? ti.keywords.join(", ") : (tool_input.query || user_instruction);
+      const compNote = isCompetitor && ti.competitors && ti.competitors.length > 0
+        ? ` (competitors: ${ti.competitors.join(", ")})` : "";
       const steps: Step[] = [];
-      const scoutStep = mkStep(0, "scout", "Find LinkedIn engagement signals",
-        `Find up to ${cap} LinkedIn posts / people engaging on: ${topic}. Use the LinkedIn posts actor only. Do not invent profiles or contact info.`,
+      const scoutStep = mkStep(0, "scout",
+        isCompetitor ? "Find competitor engagement signals" : "Find LinkedIn engagement signals",
+        `Find up to ${cap} LinkedIn posts / people ${isCompetitor ? "engaging around competitors/adjacent tools" : "engaging"} on: ${topic}${compNote}. Use the LinkedIn posts actor only. Do not invent profiles or contact info.`,
         {
           tool_needed: "source_with_apify",
           expected_output: "Normalized LinkedIn engagement items (post, author, topic, signal reason).",
@@ -640,8 +700,10 @@ Deno.serve(async (req) => {
         });
       (scoutStep as Step & { metadata?: Record<string, unknown> }).metadata = { tool_input };
       steps.push(scoutStep);
-      steps.push(mkStep(1, "aria", "Rank engagement signals",
-        `Rank the LinkedIn engagement signals for: ${topic}. Score by ICP fit, role fit (founder/GTM/operator), relevance to Agentory, pain/urgency, and whether engagement is warm enough to comment or DM. Label each hot | warm | maybe | ignore.`,
+      steps.push(mkStep(1, "aria", isCompetitor ? "Rank competitor signals" : "Rank engagement signals",
+        isCompetitor
+          ? `Rank these competitor-engagement signals for: ${topic}${compNote}. Score by ICP fit, founder/GTM/operator role, pain or complaint about the competitor, comparison/switching intent, competitor relevance, recency, and engagement quality. Label hot (explicit complaint/switching/looking for alternatives + high ICP fit) | warm (discussing the competitor/problem, decent ICP fit) | maybe (generic mention) | ignore (irrelevant/non-ICP). Note where a soft comment/DM is appropriate.`
+          : `Rank the LinkedIn engagement signals for: ${topic}. Score by ICP fit, role fit (founder/GTM/operator), relevance to Agentory, pain/urgency, and whether engagement is warm enough to comment or DM. Label each hot | warm | maybe | ignore.`,
         {
           tool_needed: "extract_structured",
           expected_output: "Ranked engagement signals with priority label and rationale.",
@@ -672,7 +734,7 @@ Deno.serve(async (req) => {
       steps.forEach((s, idx) => { s.step_index = idx; });
       const modeLabel = ti.needs_dm_drafts ? "Source → rank → draft DMs"
         : ti.needs_comment_drafts ? "Source → rank → draft comments" : "Source → rank";
-      parsed = { plan_summary: `LinkedIn engagement (${modeLabel}): ${topic}`, steps };
+      parsed = { plan_summary: `${isCompetitor ? "Competitor engagement" : "LinkedIn engagement"} (${modeLabel}): ${topic}`, steps };
       plannerSource = "staged";
     } else if (tool_input && tool_input.tool_name === "source_with_apify") {
       const cap = Math.max(1, Math.min(200, tool_input.max_results ?? 25));
@@ -976,7 +1038,9 @@ Return ONLY valid JSON, no prose, no markdown:
         input: user_instruction,
         needs_approval: firstStep.requires_approval === true,
         tool_needed: firstStep.tool_needed,
-        tool_input: tool_input ?? null,
+        // Per-step tool_input wins (lets step 0 use a different tool than the
+        // plan default, e.g. discovery's Hawk-scrape step 0 before Scout-apify).
+        tool_input: (firstStep as Step & { metadata?: { tool_input?: unknown } }).metadata?.tool_input ?? tool_input ?? null,
         execution_mode: executionMode,
       }),
     }).catch((e) => console.error("[orchestrate] run-agent kickoff failed:", e));

@@ -55,10 +55,18 @@ function LinkedinEngagementView({ output }: { output: any }) {
             <li key={i} className="rounded-lg border border-white/[0.06] bg-white/[0.02] p-3">
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0 flex-1">
-                  <div className="flex items-center gap-1.5 text-[13px] text-[#F0F6FC] font-medium">
+                  <div className="flex items-center gap-1.5 text-[13px] text-[#F0F6FC] font-medium flex-wrap">
                     <User className="h-3.5 w-3.5 text-sky-300" /> {who}
                     {it.engagement_type && (
                       <span className="text-[10px] px-1.5 py-0.5 rounded border border-sky-500/30 bg-sky-500/10 text-sky-300">{it.engagement_type}</span>
+                    )}
+                    {it.competitor_name && (
+                      <span className="text-[10px] px-1.5 py-0.5 rounded border border-amber-500/30 bg-amber-500/10 text-amber-300" title={(it.matched_terms ?? []).join(', ')}>
+                        competitor: {it.competitor_name}{it.competitor_category ? ` · ${it.competitor_category}` : ''}
+                      </span>
+                    )}
+                    {it.conversation_type && (
+                      <span className="text-[10px] px-1.5 py-0.5 rounded border border-white/[0.12] bg-white/[0.04] text-[#9aa4af]">{it.conversation_type.replace(/_/g, ' ')}</span>
                     )}
                   </div>
                   {meta && <div className="text-[11px] text-[#7D8590] mt-0.5">{meta}</div>}

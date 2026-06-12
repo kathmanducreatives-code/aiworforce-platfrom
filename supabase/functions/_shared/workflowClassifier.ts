@@ -28,7 +28,20 @@ import {
   LINKEDIN_ENTITY_URL_RE,
   COMMENT_DRAFT_INTENT_RE,
   DM_DRAFT_INTENT_RE,
+  COMMENTER_EXTRACT_RE,
 } from "./actorRegistry.ts";
+import { matchCompetitors, buildCompetitorSearchQueries } from "./competitorRegistry.ts";
+import { extractInlineBusinessContext, resolveDiscoveryMode } from "./competitorDiscovery.ts";
+
+// Phase 4 — competitor-tracking intent phrases (alternatives/comparison/switch/complaints).
+const COMPETITOR_INTENT_RE =
+  /\b(competitors?|competing tools?|alternatives?|comparison|compare|comparing|switching from|switch from|moving (?:off|away from)|complaints? about|complaining about|vs\.?|versus)\b/i;
+
+// Phase 4 (dynamic) — competitor DISCOVERY intent (find/map my competitors,
+// competitor conversations, competitors for <site>). Distinct from tracking a
+// named competitor (handled by the known-competitor block).
+const COMPETITOR_DISCOVERY_RE =
+  /\b(find (?:\d+ )?(?:my |our )?competitors(?:\s+(?:for|of))?|who are (?:my|our) competitors|competitor conversations|competitive landscape|discover (?:\d+ )?(?:my |our )?competitors|map (?:my|our|the) competitors)\b/i;
 
 export type WorkflowCategory =
   | "simple_chat"
@@ -84,6 +97,16 @@ export interface WorkflowDecision {
   needs_comment_drafts?: boolean;
   needs_dm_drafts?: boolean;
   competitor_related?: boolean;
+  // Phase 4 — competitor engagement (matched competitor keys).
+  competitors?: string[];
+  // Phase 4 (dynamic) — competitor discovery.
+  competitor_discovery?: boolean;
+  discovery_mode?: "website" | "description" | "known" | "needs_context";
+  business_website?: string | null;
+  business_description?: string | null;
+  // Phase 4.2 — deep commenter extraction for a specific post.
+  extract_commenters?: boolean;
+  post_urls?: string[];
 }
 
 const ALL_CATEGORIES: WorkflowCategory[] = [
@@ -140,7 +163,7 @@ const SEND_RE = /\b(send|deliver|fire off|blast)\s+(?:emails?|messages?|outreach
 
 // Unsafe / unsupported.
 const UNSAFE_RE =
-  /\b(personal phone numbers?|home address|scrape private|private personal data|harvest emails for spam|send (?:emails?|messages?) automatically|automatic(?:ally)? send|without approval|start calling them automatically|cold call(?:ing)? (?:automated|automatic)|automatic(?:ally)?\s+(?:comment|post|dm|message|reply|engage|connect|like)|auto[- ]?(?:comment|post|dm|reply|like|engage))\b/i;
+  /\b(personal phone numbers?|home address|scrape private|private personal data|harvest emails for spam|send (?:emails?|messages?) automatically|automatic(?:ally)? send|without approval|start calling them automatically|cold call(?:ing)? (?:automated|automatic)|automatic(?:ally)?\s+(?:comment|post|dm|message|reply|engage|connect|like)|auto[- ]?(?:comment|post|dm|reply|like|engage)|send\s+(?:messages?|dms?|emails?|outreach)\s+to\s+(?:all|every|everyone|each))\b/i;
 
 // Sourcing.
 const COMPANIES_HIRING_RE =
@@ -213,6 +236,13 @@ function defaultDecision(category: WorkflowCategory, partial: Partial<WorkflowDe
     needs_comment_drafts: partial.needs_comment_drafts ?? false,
     needs_dm_drafts: partial.needs_dm_drafts ?? false,
     competitor_related: partial.competitor_related ?? false,
+    competitors: partial.competitors ?? [],
+    competitor_discovery: partial.competitor_discovery ?? false,
+    discovery_mode: partial.discovery_mode,
+    business_website: partial.business_website ?? null,
+    business_description: partial.business_description ?? null,
+    extract_commenters: partial.extract_commenters ?? false,
+    post_urls: partial.post_urls ?? [],
   };
 }
 
@@ -258,6 +288,120 @@ function regexClassify(message: string): WorkflowDecision | null {
       needs_clarification: true,
       clarification_question: SHORT_VAGUE_CLARIFICATION,
     });
+  }
+
+  // Phase 4.2 — deep commenter extraction for a specific post. Needs a post URL;
+  // pilot-chat asks for one if absent. Uses the (opt-in) post-comments actor.
+  if (COMMENTER_EXTRACT_RE.test(m)) {
+    const postUrls = (m.match(new RegExp(URL_RE, "ig")) ?? []).filter((u) => /linkedin\.com/i.test(u));
+    return defaultDecision("signal_sourcing", {
+      reason: "extract commenters from a specific post",
+      confidence: 0.85,
+      signal_type: "competitor_engagement",
+      extract_commenters: true,
+      post_urls: postUrls,
+      selected_tool: "source_with_apify",
+      selected_actor_key: "apify_linkedin_post_comments",
+      source_type: "linkedin_comments",
+      query: m,
+      agents: ["scout", "aria"],
+      execution_mode: "fast",
+      needs_clarification: postUrls.length === 0,
+      clarification_question: postUrls.length === 0
+        ? "Which LinkedIn post should I pull commenters from? Paste the post URL."
+        : null,
+      max_results: extractRequestedCount(m, 20),
+    });
+  }
+
+  // Phase 4 (dynamic) — Competitor DISCOVERY. "Find my competitors", "find
+  // competitors for <site>", "competitor conversations". Resolves business
+  // context (inline here; company_brain/memory resolved in pilot-chat). Must
+  // precede known-competitor + URL branches.
+  if (COMPETITOR_DISCOVERY_RE.test(m)) {
+    const ctx = extractInlineBusinessContext(m);
+    const mode = resolveDiscoveryMode(ctx);
+    // A category/topic ("around/about/on <X>") OR a named competitor means this is
+    // keyword tracking, not discovery — let the known-competitor block handle it.
+    const hasTopicOrCompetitor = /\b(?:around|about|on)\s+[A-Za-z0-9]/i.test(m) || matchCompetitors(m).length > 0;
+    if (mode === "needs_context" && !hasTopicOrCompetitor) {
+      return defaultDecision("signal_sourcing", {
+        reason: "competitor discovery needs business context",
+        confidence: 0.8,
+        signal_type: "competitor_engagement",
+        competitor_discovery: true,
+        discovery_mode: "needs_context",
+        needs_clarification: true,
+        clarification_question:
+          "To find your competitors, share your website, LinkedIn company page, or a one-line description of what you sell — or I can use your saved company profile if you have one.",
+      });
+    }
+    if (mode === "needs_context") {
+      // topic present but no business context → fall through to keyword tracking.
+    } else {
+    const needsComments = COMMENT_DRAFT_INTENT_RE.test(m);
+    const needsDms = DM_DRAFT_INTENT_RE.test(m);
+    return defaultDecision("signal_sourcing", {
+      reason: `competitor discovery (${mode})`,
+      confidence: 0.85,
+      signal_type: "competitor_engagement",
+      competitor_discovery: true,
+      discovery_mode: mode,
+      business_website: ctx.website_url,
+      business_description: ctx.description,
+      selected_tool: "source_with_apify",
+      selected_actor_key: "apify_linkedin_posts",
+      source_type: "linkedin_engagement",
+      query: m,
+      agents: ["hawk", "scout", "aria"],
+      execution_mode: (needsComments || needsDms) ? "outreach" : "fast",
+      needs_comment_drafts: needsComments,
+      needs_dm_drafts: needsDms,
+      needs_outreach: needsDms,
+      requires_approval: needsDms,
+      competitor_related: true,
+      max_results: extractRequestedCount(m, 10),
+    });
+    }
+  }
+
+  // Phase 4 — Competitor Engagement Tracker. Fires when a known competitor is
+  // mentioned, or on explicit competitor intent (alternatives/comparison/switch/
+  // complaints) in a social/sourcing context. Reuses the Phase 3 LinkedIn actors
+  // but tags the workflow as competitor_engagement. Must precede the generic
+  // profile-URL and linkedin_engagement branches.
+  {
+    const compMatches = matchCompetitors(m);
+    const socialCtx = /\b(linkedin|posts?|people|conversations?|engag|talking|comment|track|monitor|complain|switch|leads?|tools?)\b/i.test(m);
+    if (compMatches.length > 0 || (COMPETITOR_INTENT_RE.test(m) && socialCtx)) {
+      const isUrl = /linkedin\.com\/(?:in|company|school|showcase)\//i.test(m);
+      const needsComments = COMMENT_DRAFT_INTENT_RE.test(m);
+      const needsDms = DM_DRAFT_INTENT_RE.test(m);
+      const topicMatch = m.match(/\b(?:about|around|discussing|comparing)\s+([A-Za-z0-9 ,&/+\-]{3,60})/i);
+      const topic = topicMatch
+        ? topicMatch[1].replace(/\b(?:and|then)?\s*(?:draft|write|generate|suggest|create)\b.*$/i, "").trim()
+        : null;
+      const queries = buildCompetitorSearchQueries({ competitors: compMatches, topic, query: m });
+      return defaultDecision("signal_sourcing", {
+        reason: "competitor engagement tracking",
+        confidence: 0.85,
+        signal_type: "competitor_engagement",
+        selected_tool: "source_with_apify",
+        selected_actor_key: isUrl ? "apify_linkedin_profile_posts" : "apify_linkedin_posts",
+        source_type: "linkedin_engagement",
+        query: isUrl ? m : (queries.join(", ") || m),
+        keywords: queries,
+        competitors: compMatches.map((c) => c.key),
+        competitor_related: true,
+        agents: ["scout", "aria"],
+        execution_mode: (needsComments || needsDms) ? "outreach" : "fast",
+        needs_comment_drafts: needsComments,
+        needs_dm_drafts: needsDms,
+        needs_outreach: needsDms,
+        requires_approval: needsDms,
+        max_results: extractRequestedCount(m, 10),
+      });
+    }
   }
 
   // Phase 3 — LinkedIn profile/company URL + posts/monitor intent → profile-posts
@@ -501,6 +645,18 @@ export function normalizeIntent(input: Partial<WorkflowDecision> | Record<string
     needs_comment_drafts: !!raw.needs_comment_drafts,
     needs_dm_drafts: !!raw.needs_dm_drafts,
     competitor_related: !!raw.competitor_related,
+    competitors: Array.isArray(raw.competitors)
+      ? (raw.competitors as unknown[]).filter((k) => typeof k === "string") as string[]
+      : [],
+    competitor_discovery: !!raw.competitor_discovery,
+    discovery_mode: (["website", "description", "known", "needs_context"].includes(raw.discovery_mode))
+      ? raw.discovery_mode : undefined,
+    business_website: typeof raw.business_website === "string" ? raw.business_website : null,
+    business_description: typeof raw.business_description === "string" ? raw.business_description : null,
+    extract_commenters: !!raw.extract_commenters,
+    post_urls: Array.isArray(raw.post_urls)
+      ? (raw.post_urls as unknown[]).filter((u) => typeof u === "string") as string[]
+      : [],
   };
 
   // outreach (or sourcing+outreach) always requires approval before sending.

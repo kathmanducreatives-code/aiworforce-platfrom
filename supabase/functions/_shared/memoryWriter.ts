@@ -6,6 +6,8 @@
 // a memory write error.
 
 import type { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { matchCompetitors } from "./competitorRegistry.ts";
+import { classifyConversationType } from "./competitorDiscovery.ts";
 
 // ---------- Inlined normalizers (mirrors src/components/chat/workspace/workbench/normalize.ts) ----------
 
@@ -173,7 +175,9 @@ export async function writeMemoryFromToolCall(ctx: ToolCallCtx): Promise<void> {
     });
     if (tool === "source_with_apify") {
       const out = ctx.output as any;
-      if (isLinkedinEngagementOutput(out, ctx.selected_actor_key)) {
+      if (isLinkedinCommentersOutput(out, ctx.selected_actor_key)) {
+        await writeLinkedinCommenters(ctx, out);
+      } else if (isLinkedinEngagementOutput(out, ctx.selected_actor_key)) {
         await writeLinkedinEngagement(ctx, out);
       } else if (isPeopleOutput(out)) {
         await writeApifyPeople(ctx, out);
@@ -413,15 +417,50 @@ function isLinkedinEngagementOutput(output: any, selectedActorKey?: string | nul
 async function writeLinkedinEngagement(ctx: ToolCallCtx, output: any): Promise<void> {
   const items: any[] = Array.isArray(output?.items) ? output.items : [];
   if (items.length === 0) return;
+  // Phase 4.2 — competitor-discovery context (Hawk's inferred competitors).
+  const discovery = output?.discovery ?? null;
 
   for (const it of items) {
     const postUrl = it.post_url ?? null;
     const profileUrl = it.post_author_profile_url ?? it.commenter_profile_url ?? null;
     const fullName = it.post_author_name ?? it.commenter_name ?? null;
     const topic = it.topic ?? null;
-    const reason = it.signal_reason ?? null;
     // Skip empty items (nothing to anchor on).
     if (!postUrl && !profileUrl && !it.post_text) continue;
+
+    // Phase 4 + 4.2 — this is a competitor signal if EITHER the post content
+    // mentions a seed competitor, OR it came from a competitor-discovery search
+    // (Hawk's inferred competitors threaded via output.discovery). Otherwise it
+    // stays a generic linkedin_engagement signal.
+    const matchText = `${it.post_text ?? ""} ${topic ?? ""} ${fullName ?? ""} ${it.post_author_company ?? ""}`;
+    const comps = matchCompetitors(matchText);
+    const seed = comps[0] ?? null;
+    const inferredName = Array.isArray(discovery?.inferred_competitors) ? (discovery.inferred_competitors[0] as string | undefined) : undefined;
+    const isCompetitor = !!seed || !!discovery;
+    const signalType = isCompetitor ? "competitor_engagement" : "linkedin_engagement";
+    const competitorName = seed?.name ?? inferredName ?? null;
+    const competitorRaw = isCompetitor
+      ? {
+          competitor_key: seed?.key ?? null,
+          competitor_name: competitorName,
+          competitor_category: seed?.category ?? discovery?.competitor_category ?? null,
+          competitor_confidence: seed ? 0.7 : 0.5,
+          competitor_source: seed ? "post_content" : "ai_inferred",
+          matched_terms: seed?.matched_terms ?? [],
+          conversation_type: classifyConversationType(matchText),
+          matched_query: discovery?.matched_query ?? it.topic ?? null,
+          original_business_description: discovery?.original_business_description ?? null,
+          original_website_url: discovery?.original_website_url ?? null,
+          hypothesis_reason: discovery?.hypothesis_reason ?? (seed ? `seed competitor (${seed.matched_terms.join(", ")})` : null),
+          original_signal_type: "linkedin_engagement",
+        }
+      : null;
+    const reason = it.signal_reason
+      ?? (isCompetitor
+        ? (seed
+            ? `Engaging with content related to competitor ${seed.name} (${seed.matched_terms.join(", ")})`
+            : `Engaging with content related to inferred competitor${competitorName ? ` ${competitorName}` : "/category"}`)
+        : null);
 
     // Optional account from author company (best-effort, deduped by name).
     let accountId: string | null = null;
@@ -451,12 +490,17 @@ async function writeLinkedinEngagement(ctx: ToolCallCtx, output: any): Promise<v
         task_id: ctx.task_id ?? null,
         tool_call_id: ctx.tool_call_id ?? null,
         source: ctx.selected_actor_key ?? "apify_linkedin_posts",
-        signal_type: "linkedin_engagement",
-        signal_label: topic,
-        title: [fullName, topic].filter(Boolean).join(" — ") || (postUrl ?? "LinkedIn engagement"),
+        signal_type: signalType,
+        signal_label: (isCompetitor ? (competitorName ?? (competitorRaw?.competitor_category ?? null)) : topic),
+        title: [fullName, isCompetitor ? (competitorName ?? "competitor") : topic].filter(Boolean).join(" — ") || (postUrl ?? "LinkedIn engagement"),
         description: reason ?? (it.post_text ? String(it.post_text).slice(0, 500) : null),
         source_url: postUrl,
-        raw: it.raw ?? it,
+        raw: isCompetitor
+          ? {
+              ...(typeof (it.raw ?? it) === "object" ? (it.raw ?? it) : { value: it.raw ?? it }),
+              ...competitorRaw,
+            }
+          : (it.raw ?? it),
       })
       .select("id")
       .maybeSingle();
@@ -500,8 +544,87 @@ async function writeLinkedinEngagement(ctx: ToolCallCtx, output: any): Promise<v
       signal_id: sig?.id ?? null,
       lead_type: "person",
       status: "new",
-      reason: reason ?? (topic ? `Engaging with content about ${topic}` : null),
-      raw: { linkedin_engagement: it.raw ?? it },
+      reason: reason
+        ?? (isCompetitor ? `Competitor signal: ${competitorName ?? "category"}` : (topic ? `Engaging with content about ${topic}` : null)),
+      raw: isCompetitor
+        ? { competitor_engagement: it.raw ?? it, competitor_key: seed?.key ?? null, competitor_name: competitorName, competitor_source: competitorRaw?.competitor_source }
+        : { linkedin_engagement: it.raw ?? it },
+    });
+  }
+}
+
+// ---------- Phase 4.2: LinkedIn post commenters ----------
+
+function isLinkedinCommentersOutput(output: any, selectedActorKey?: string | null): boolean {
+  if (selectedActorKey === "apify_linkedin_post_comments") return true;
+  if (!output) return false;
+  if (output.normalized_source_type === "linkedin_comments") return true;
+  if (output.actor_output_type === "linkedin_post_commenters") return true;
+  const list = Array.isArray(output.items) ? output.items : [];
+  return list.length > 0 && list[0]?.type === "linkedin_commenter";
+}
+
+async function writeLinkedinCommenters(ctx: ToolCallCtx, output: any): Promise<void> {
+  const items: any[] = Array.isArray(output?.items) ? output.items : [];
+  if (items.length === 0) return;
+  for (const it of items) {
+    const profileUrl = it.commenter_profile_url ?? it.profile_url ?? null;
+    const fullName = it.commenter_name ?? it.name ?? null;
+    const postUrl = it.post_url ?? null;
+    if (!profileUrl && !fullName) continue;
+
+    // Signal: this person engaged on a (competitor/category) post.
+    const { data: sig } = await ctx.admin
+      .from("signals")
+      .insert({
+        workspace_id: ctx.workspace_id,
+        conversation_id: ctx.conversation_id ?? null,
+        plan_id: ctx.plan_id ?? null,
+        task_id: ctx.task_id ?? null,
+        tool_call_id: ctx.tool_call_id ?? null,
+        source: "apify_linkedin_post_comments",
+        signal_type: "competitor_engagement",
+        signal_label: "post commenter",
+        title: `${fullName ?? "Commenter"} commented on a post`,
+        description: it.comment_text ? String(it.comment_text).slice(0, 500) : "Commented on a competitor/category post",
+        source_url: postUrl,
+        raw: { ...(typeof (it.raw ?? it) === "object" ? (it.raw ?? it) : {}), conversation_type: "audience_engagement", competitor_source: "post_comments", original_signal_type: "linkedin_engagement" },
+      })
+      .select("id")
+      .maybeSingle();
+
+    let contactId: string | null = null;
+    if (profileUrl || fullName) {
+      const contactRow = {
+        workspace_id: ctx.workspace_id,
+        full_name: fullName,
+        headline: it.commenter_headline ?? it.headline ?? null,
+        title: it.commenter_title ?? null,
+        linkedin_url: profileUrl,
+        email: null,   // never invent
+        phone: null,   // never invent
+        source: "linkedin_post_comments",
+        raw: it.raw ?? it,
+      };
+      if (profileUrl) {
+        const { data: c } = await ctx.admin.from("contacts").upsert(contactRow, { onConflict: "workspace_id,linkedin_url" }).select("id").maybeSingle();
+        contactId = c?.id ?? null;
+      } else {
+        const { data: c } = await ctx.admin.from("contacts").insert(contactRow).select("id").maybeSingle();
+        contactId = c?.id ?? null;
+      }
+    }
+
+    await ctx.admin.from("lead_candidates").insert({
+      workspace_id: ctx.workspace_id,
+      conversation_id: ctx.conversation_id ?? null,
+      plan_id: ctx.plan_id ?? null,
+      contact_id: contactId,
+      signal_id: sig?.id ?? null,
+      lead_type: "person",
+      status: "new",
+      reason: "Commented on competitor/category post",
+      raw: { linkedin_post_commenter: it.raw ?? it },
     });
   }
 }

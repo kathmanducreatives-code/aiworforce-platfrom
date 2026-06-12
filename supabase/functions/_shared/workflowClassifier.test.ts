@@ -101,7 +101,7 @@ Deno.test("linkedin_engagement: posts/people/conversations route to apify_linked
   const prompts = [
     "Find LinkedIn posts where founders talk about outbound problems.",
     "Find posts I should comment on about AI SDRs.",
-    "Find people discussing GojiBerry and Clay.",
+    "Find people discussing manual outbound on LinkedIn.",
     "Find founders posting about hiring SDRs.",
   ];
   for (const p of prompts) {
@@ -112,6 +112,97 @@ Deno.test("linkedin_engagement: posts/people/conversations route to apify_linked
     assertEquals(d.source_type, "linkedin_engagement", p);
     assertEquals(d.needs_clarification, false, p);
   }
+});
+
+Deno.test("competitor_engagement safety: auto-DM is unsafe", async () => {
+  assertEquals(await cat("Find people engaging with GojiBerry and automatically DM them."), "unsafe_or_unsupported");
+});
+
+// Phase 4.2 — commenter extraction.
+Deno.test("extract_commenters: needs a post URL", async () => {
+  const d = await classifyWorkflow("Extract commenters from this LinkedIn post and rank them.");
+  assertEquals(d.workflow_category, "signal_sourcing");
+  assertEquals(d.extract_commenters, true);
+  assertEquals(d.selected_actor_key, "apify_linkedin_post_comments");
+  assertEquals(d.needs_clarification, true);
+
+  const d2 = await classifyWorkflow("Find people commenting on this post: https://linkedin.com/posts/abc123 and rank them.");
+  assertEquals(d2.extract_commenters, true);
+  assertEquals(d2.needs_clarification, false);
+  assert((d2.post_urls ?? []).length === 1);
+});
+
+Deno.test("safety: mass-send is unsafe", async () => {
+  assertEquals(await cat("Send messages to all commenters on this post."), "unsafe_or_unsupported");
+});
+
+// Phase 4 (dynamic) — competitor discovery.
+Deno.test("competitor_discovery: no context → clarification", async () => {
+  const d = await classifyWorkflow("Find my competitors.");
+  assertEquals(d.workflow_category, "signal_sourcing");
+  assertEquals(d.signal_type, "competitor_engagement");
+  assertEquals(d.competitor_discovery, true);
+  assertEquals(d.discovery_mode, "needs_context");
+  assertEquals(d.needs_clarification, true);
+  assert(d.clarification_question && d.clarification_question.length > 0);
+});
+
+Deno.test("competitor_discovery: website mode (with and without a count)", async () => {
+  for (const p of [
+    "Find competitors for https://example.com and track LinkedIn conversations",
+    "Find 5 competitors for https://example.com and track LinkedIn conversations",
+  ]) {
+    const d = await classifyWorkflow(p);
+    assertEquals(d.competitor_discovery, true, p);
+    assertEquals(d.discovery_mode, "website", p);
+    assertEquals(d.business_website, "https://example.com", p);
+    assertEquals(d.signal_type, "competitor_engagement", p);
+  }
+});
+
+Deno.test("competitor_discovery: description mode", async () => {
+  const d = await classifyWorkflow("We sell AI employees for GTM teams. Find competitor conversations");
+  assertEquals(d.competitor_discovery, true);
+  assertEquals(d.discovery_mode, "description");
+  assert(d.business_description && /ai employees/i.test(d.business_description));
+});
+
+Deno.test("competitor_discovery does NOT hijack known-competitor tracking", async () => {
+  const d = await classifyWorkflow("Find people talking about Clay and GojiBerry");
+  assertEquals(d.signal_type, "competitor_engagement");
+  assertEquals(d.competitor_discovery, false);
+  assertEquals(d.selected_actor_key, "apify_linkedin_posts");
+});
+
+// Phase 4 — competitor engagement.
+Deno.test("competitor_engagement: keyword mode → apify_linkedin_posts", async () => {
+  for (const p of [
+    "Find people talking about GojiBerry and Clay on LinkedIn.",
+    "Track competitor conversations around AI SDR tools.",
+    "Find posts comparing Clay and Artisan.",
+    "Find people complaining about Apollo.",
+  ]) {
+    const d = await classifyWorkflow(p);
+    assertEquals(d.workflow_category, "signal_sourcing", p);
+    assertEquals(d.signal_type, "competitor_engagement", p);
+    assertEquals(d.selected_actor_key, "apify_linkedin_posts", p);
+    assertEquals(d.source_type, "linkedin_engagement", p);
+  }
+  const g = await classifyWorkflow("Find people talking about GojiBerry and Clay on LinkedIn.");
+  assert(g.competitors!.includes("gojiberry") && g.competitors!.includes("clay"));
+  assert((g.keywords ?? []).some((k) => k.startsWith("GojiBerry")));
+});
+
+Deno.test("competitor_engagement: company URL → profile-posts actor", async () => {
+  const d = await classifyWorkflow("Monitor recent posts from this LinkedIn company page: https://linkedin.com/company/gojiberry");
+  assertEquals(d.signal_type, "competitor_engagement");
+  assertEquals(d.selected_actor_key, "apify_linkedin_profile_posts");
+});
+
+Deno.test("competitor_engagement: generic LinkedIn (no competitor) stays linkedin_engagement", async () => {
+  const d = await classifyWorkflow("Find LinkedIn posts where founders talk about outbound problems.");
+  assertEquals(d.signal_type, "linkedin_engagement");
+  assertEquals(d.selected_actor_key, "apify_linkedin_posts");
 });
 
 Deno.test("linkedin_engagement: profile/company URL → profile-posts actor", async () => {
