@@ -81,8 +81,9 @@ export default function SignalCard({
   const isCompetitor = signal.signal_type === "competitor_engagement";
 
   return (
-    <li className={`rounded-lg border border-white/[0.06] bg-white/[0.02] p-3 transition-opacity ${reviewed ? "opacity-60" : ""}`}>
-      <div className="grid grid-cols-1 md:grid-cols-[1fr_220px] gap-4">
+    <li className={`rounded-lg border border-white/[0.06] bg-white/[0.02] px-3 py-2.5 transition-opacity ${reviewed ? "opacity-60" : ""}`}>
+      <div className="grid grid-cols-1 md:grid-cols-[1fr_220px] gap-3">
+
         {/* LEFT: main content */}
         <div className="min-w-0">
           {/* badges row */}
