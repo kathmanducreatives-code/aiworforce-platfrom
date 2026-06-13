@@ -1,6 +1,7 @@
-import { ExternalLink, MessageSquare, Send, Search, FileText, EyeOff, Check, Building2, User, MapPin, Briefcase } from "lucide-react";
+import { ExternalLink, MessageSquare, Send, Search, FileText, EyeOff, Check, Bookmark, Zap, Building2, User, MapPin, Briefcase } from "lucide-react";
 import { toast } from "sonner";
-import { buildActionCommand, signalTypeLabel, sourceHost, type FeedSignal, type SignalAction } from "@/lib/signalFeedModel";
+import { buildActionCommand, signalTypeLabel, sourceHost, type SignalAction } from "@/lib/signalFeedModel";
+import { nextStatusAfterDraft, type ReviewStatus, type ReviewedSignal } from "@/lib/signalReviewModel";
 
 function sendToPilot(text: string, label: string) {
   window.dispatchEvent(new CustomEvent("chat:send", { detail: text }));
@@ -21,26 +22,35 @@ const PRIORITY_BADGE: Record<string, string> = {
   ignore: "border-white/10 bg-white/[0.03] text-neutral-500",
 };
 
-type ActionDef = { action: SignalAction; label: string; icon: any };
+// Card opacity by review status: new normal, reviewed dim, ignored dimmer.
+const STATUS_OPACITY: Record<ReviewStatus, string> = {
+  new: "",
+  saved: "",
+  actioned: "",
+  reviewed: "opacity-70",
+  ignored: "opacity-40",
+};
 
-function actionsForSignal(s: FeedSignal): ActionDef[] {
+type ActionDef = { action: SignalAction; label: string; icon: any; drafts: boolean };
+
+function actionsForSignal(s: ReviewedSignal): ActionDef[] {
   switch (s.signal_type) {
     case "competitor_engagement":
     case "linkedin_engagement":
       return [
-        { action: "draft_comment", label: "Draft comment", icon: MessageSquare },
-        { action: "draft_dm", label: "Draft DM", icon: Send },
-        { action: "enrich", label: "Enrich", icon: Search },
+        { action: "draft_comment", label: "Draft comment", icon: MessageSquare, drafts: true },
+        { action: "draft_dm", label: "Draft DM", icon: Send, drafts: true },
+        { action: "enrich", label: "Enrich", icon: Search, drafts: false },
       ];
     case "hiring_signal":
       return [
-        { action: "enrich", label: "Enrich company", icon: Search },
-        { action: "create_outreach", label: "Draft outreach", icon: FileText },
+        { action: "enrich", label: "Enrich company", icon: Search, drafts: false },
+        { action: "create_outreach", label: "Draft outreach", icon: FileText, drafts: true },
       ];
     default:
       return [
-        { action: "enrich", label: "Enrich", icon: Search },
-        { action: "create_outreach", label: "Draft outreach", icon: FileText },
+        { action: "enrich", label: "Enrich", icon: Search, drafts: false },
+        { action: "create_outreach", label: "Draft outreach", icon: FileText, drafts: true },
       ];
   }
 }
@@ -66,28 +76,66 @@ function formatDate(iso: string | null): string | null {
   return d.toLocaleDateString();
 }
 
+const STATUS_BADGE: Partial<Record<ReviewStatus, { label: string; className: string; icon: any }>> = {
+  saved: { label: "Saved", className: "border-emerald-500/30 bg-emerald-500/10 text-emerald-300", icon: Bookmark },
+  reviewed: { label: "Reviewed", className: "border-sky-500/30 bg-sky-500/10 text-sky-300", icon: Check },
+  ignored: { label: "Ignored", className: "border-white/10 bg-white/[0.03] text-neutral-500", icon: EyeOff },
+  actioned: { label: "Actioned", className: "border-violet-500/30 bg-violet-500/10 text-violet-300", icon: Zap },
+};
+
 export default function SignalCard({
   signal,
-  onIgnore,
-  reviewed,
+  selectable,
+  selected,
+  onToggleSelect,
+  onSetReview,
+  onDraftAction,
 }: {
-  signal: FeedSignal;
-  onIgnore?: (id: string) => void;
-  reviewed?: boolean;
+  signal: ReviewedSignal;
+  selectable?: boolean;
+  selected?: boolean;
+  onToggleSelect?: (id: string) => void;
+  onSetReview?: (id: string, status: ReviewStatus) => void;
+  onDraftAction?: (id: string) => void;
 }) {
   const actions = actionsForSignal(signal);
   const host = sourceHost(signal.source_url);
   const created = formatDate(signal.created_at);
   const isCompetitor = signal.signal_type === "competitor_engagement";
+  const status = signal.review_status;
+  const statusBadge = STATUS_BADGE[status];
+
+  // Clicking the active status toggles it back to `new`; otherwise sets it.
+  const toggleStatus = (target: ReviewStatus) =>
+    onSetReview?.(signal.id, status === target ? "new" : target);
+
+  const runAction = (a: ActionDef) => {
+    sendToPilot(buildActionCommand(a.action, signal), a.label);
+    if (a.drafts) onDraftAction?.(signal.id);
+  };
+
+  const reviewBtn = (target: ReviewStatus, label: string, Icon: any, activeClass: string) => (
+    <button onClick={() => toggleStatus(target)}
+      className={`inline-flex items-center gap-1 text-[11px] px-2 py-1 rounded-md border transition-colors ${
+        status === target ? activeClass : "border-white/[0.08] bg-white/[0.02] text-neutral-400 hover:text-neutral-200"
+      }`}>
+      <Icon className="h-3 w-3" /> {label}
+    </button>
+  );
 
   return (
-    <li className={`rounded-lg border border-white/[0.06] bg-white/[0.02] px-3 py-2.5 transition-opacity ${reviewed ? "opacity-60" : ""}`}>
+    <li className={`rounded-lg border bg-white/[0.02] px-3 py-2.5 transition-opacity ${STATUS_OPACITY[status]} ${selected ? "border-emerald-500/40 ring-1 ring-emerald-500/20" : "border-white/[0.06]"}`}>
       <div className="grid grid-cols-1 md:grid-cols-[1fr_220px] gap-3">
 
         {/* LEFT: main content */}
         <div className="min-w-0">
           {/* badges row */}
           <div className="flex items-center gap-1.5 flex-wrap mb-1">
+            {selectable && (
+              <input type="checkbox" checked={!!selected} onChange={() => onToggleSelect?.(signal.id)}
+                aria-label="Select signal"
+                className="mr-1 accent-emerald-500 h-3.5 w-3.5 cursor-pointer" />
+            )}
             <span className={`text-[10px] px-1.5 py-0.5 rounded border ${TYPE_BADGE[signal.signal_type] ?? "border-white/15 bg-white/5 text-neutral-300"}`}>
               {signalTypeLabel(signal.signal_type)}
             </span>
@@ -96,9 +144,9 @@ export default function SignalCard({
                 {signal.priority}
               </span>
             )}
-            {reviewed && (
-              <span className="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded border border-emerald-500/30 bg-emerald-500/10 text-emerald-300">
-                <Check className="h-3 w-3" /> Reviewed
+            {statusBadge && (
+              <span className={`inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded border ${statusBadge.className}`}>
+                <statusBadge.icon className="h-3 w-3" /> {statusBadge.label}
               </span>
             )}
           </div>
@@ -178,17 +226,20 @@ export default function SignalCard({
             {actions.map((a) => {
               const Icon = a.icon;
               return (
-                <button key={a.action} onClick={() => sendToPilot(buildActionCommand(a.action, signal), a.label)}
+                <button key={a.action} onClick={() => runAction(a)}
                   className="inline-flex items-center gap-1 text-[11px] px-2 py-1 rounded-md border border-white/[0.08] bg-white/[0.02] text-[#C9D1D9] hover:bg-emerald-500/[0.06] hover:border-emerald-500/30 hover:text-[#F0F6FC] transition-colors">
                   <Icon className="h-3 w-3" /> {a.label}
                 </button>
               );
             })}
-            {onIgnore && (
-              <button onClick={() => onIgnore(signal.id)}
-                className="inline-flex items-center gap-1 text-[11px] px-2 py-1 rounded-md border border-white/[0.08] bg-white/[0.02] text-neutral-400 hover:text-neutral-200">
-                {reviewed ? <><Check className="h-3 w-3" /> Reviewed</> : <><EyeOff className="h-3 w-3" /> Mark reviewed</>}
-              </button>
+
+            {/* review state controls */}
+            {onSetReview && (
+              <div className="inline-flex items-center gap-1.5 ml-auto">
+                {reviewBtn("saved", "Save", Bookmark, "border-emerald-500/30 bg-emerald-500/10 text-emerald-300")}
+                {reviewBtn("reviewed", status === "reviewed" ? "Reviewed" : "Mark reviewed", Check, "border-sky-500/30 bg-sky-500/10 text-sky-300")}
+                {reviewBtn("ignored", "Ignore", EyeOff, "border-white/15 bg-white/[0.04] text-neutral-300")}
+              </div>
             )}
           </div>
         </div>
@@ -196,6 +247,7 @@ export default function SignalCard({
         {/* RIGHT: metadata rail */}
         <div className="md:border-l md:border-white/[0.05] md:pl-3">
           <div className="rounded-md border border-white/[0.06] bg-white/[0.015] p-2.5">
+            <MetaRow label="Status" value={<span className="capitalize">{status}</span>} />
             {signal.priority && <MetaRow label="Priority" value={<span className="capitalize">{signal.priority}</span>} />}
             <MetaRow label="Type" value={signalTypeLabel(signal.signal_type)} />
             {(host || signal.source) && <MetaRow label="Source" value={host ?? signal.source ?? ""} />}
