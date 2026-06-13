@@ -29,8 +29,6 @@ import GetDemo from "./pages/GetDemo";
 import Auth from "./pages/Auth";
 import ClientMetrics from "./pages/ClientMetrics";
 import ClientDetail from "./pages/ClientDetail";
-import LeadScraper from "./pages/LeadScraper";
-import DeepSearch from "./pages/DeepSearch";
 import InterviewScheduler from "./pages/InterviewScheduler";
 import InterviewSettings from "./pages/InterviewSettings";
 import BookInterview from "./pages/BookInterview";

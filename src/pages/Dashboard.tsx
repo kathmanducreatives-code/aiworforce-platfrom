@@ -89,7 +89,7 @@ const Dashboard = () => {
               <MetricCard label="Content drafts"     value={metrics.contentDrafts}     icon={<FileEdit className="h-3.5 w-3.5 text-violet-400" />} />
             </div>
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-              <MetricCard label="Pending approvals" value={metrics.pendingApprovals} icon={<Inbox className="h-3.5 w-3.5 text-amber-400" />} valueColor={metrics.pendingApprovals > 0 ? "primary" : undefined} />
+              <MetricCard label="Pending approvals" value={metrics.pendingApprovals} icon={<Inbox className="h-3.5 w-3.5 text-amber-400" />} valueColor={metrics.pendingApprovals > 0 ? "primary" : "default"} />
               <MetricCard label="Outreach drafts"   value={metrics.outreachDrafts}   icon={<Mail className="h-3.5 w-3.5 text-teal-400" />} />
               <MetricCard label="Saved / actioned"  value={metrics.savedActioned}    icon={<Bookmark className="h-3.5 w-3.5 text-emerald-400" />} />
               <MetricCard label="Time saved"        value={`${metrics.timeSavedMin}m`} icon={<Clock className="h-3.5 w-3.5 text-muted-foreground" />} />
