@@ -27,7 +27,8 @@
     "useDefineForClassFields": true
   },
   "exclude": [
-    "src/remotion"
+    "src/remotion",
+    "src/**/*.test.ts"
   ],
   "include": [
     "src"
