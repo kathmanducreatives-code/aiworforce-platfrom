@@ -293,12 +293,158 @@ export default function OnboardingCompanyBrain() {
             ))}
             <div className="flex justify-between pt-2">
               <Button variant="ghost" onClick={() => setStep(3)}>Back</Button>
-              <Button onClick={saveFollowupsAndFinish} disabled={saving}>{saving ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Finish setup'}</Button>
+              <Button onClick={saveFollowupsAndContinue} disabled={saving}>{saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <>Continue <ArrowRight className="h-4 w-4 ml-1" /></>}</Button>
             </div>
           </Card>
         )}
 
         {step === 5 && (
+          <Card className="p-6 space-y-6">
+            <div>
+              <h2 className="text-xl font-semibold">Refine ICP, goals, voice & safety</h2>
+              <p className="text-sm text-muted-foreground mt-1">All optional — leave anything blank and we'll ask later. We never invent details about your company.</p>
+            </div>
+
+            {/* ICP */}
+            <div className="space-y-3">
+              <h3 className="text-sm font-semibold uppercase tracking-wider text-primary">ICP</h3>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <Label>Buyer roles (comma-separated)</Label>
+                  <Input value={structured.icp.buyer_roles.join(', ')}
+                    onChange={(e) => setStructured({ ...structured, icp: { ...structured.icp, buyer_roles: e.target.value.split(',').map(s => s.trim()).filter(Boolean) } })} />
+                </div>
+                <div>
+                  <Label>Company size</Label>
+                  <Input placeholder="e.g. 50–500 employees" value={structured.icp.company_size}
+                    onChange={(e) => setStructured({ ...structured, icp: { ...structured.icp, company_size: e.target.value } })} />
+                </div>
+                <div>
+                  <Label>Industries (comma-separated)</Label>
+                  <Input value={structured.icp.industries.join(', ')}
+                    onChange={(e) => setStructured({ ...structured, icp: { ...structured.icp, industries: e.target.value.split(',').map(s => s.trim()).filter(Boolean) } })} />
+                </div>
+                <div>
+                  <Label>Geography</Label>
+                  <Input placeholder="e.g. US + EU" value={structured.icp.geography}
+                    onChange={(e) => setStructured({ ...structured, icp: { ...structured.icp, geography: e.target.value } })} />
+                </div>
+              </div>
+              <div>
+                <Label>Pain points (one per line)</Label>
+                <Textarea rows={2} value={structured.icp.pain_points.join('\n')}
+                  onChange={(e) => setStructured({ ...structured, icp: { ...structured.icp, pain_points: e.target.value.split('\n').map(s => s.trim()).filter(Boolean) } })} />
+              </div>
+            </div>
+
+            {/* Goals */}
+            <div className="space-y-3">
+              <h3 className="text-sm font-semibold uppercase tracking-wider text-primary">Goals</h3>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                {(['gtm', 'content', 'outreach', 'competitor_tracking'] as const).map((k) => (
+                  <div key={k}>
+                    <Label className="capitalize">{k.replace(/_/g, ' ')}</Label>
+                    <Input value={structured.goals[k]} onChange={(e) => setStructured({ ...structured, goals: { ...structured.goals, [k]: e.target.value } })} />
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Positioning */}
+            <div className="space-y-3">
+              <h3 className="text-sm font-semibold uppercase tracking-wider text-primary">Positioning</h3>
+              <div>
+                <Label>Main promise</Label>
+                <Input value={structured.positioning.promise} onChange={(e) => setStructured({ ...structured, positioning: { ...structured.positioning, promise: e.target.value } })} />
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <Label>Differentiators (comma-separated)</Label>
+                  <Input value={structured.positioning.differentiators.join(', ')}
+                    onChange={(e) => setStructured({ ...structured, positioning: { ...structured.positioning, differentiators: e.target.value.split(',').map(s => s.trim()).filter(Boolean) } })} />
+                </div>
+                <div>
+                  <Label>Use cases (comma-separated)</Label>
+                  <Input value={structured.positioning.use_cases.join(', ')}
+                    onChange={(e) => setStructured({ ...structured, positioning: { ...structured.positioning, use_cases: e.target.value.split(',').map(s => s.trim()).filter(Boolean) } })} />
+                </div>
+              </div>
+              <div>
+                <Label>Proof points (one per line)</Label>
+                <Textarea rows={2} value={structured.positioning.proof_points.join('\n')}
+                  onChange={(e) => setStructured({ ...structured, positioning: { ...structured.positioning, proof_points: e.target.value.split('\n').map(s => s.trim()).filter(Boolean) } })} />
+              </div>
+            </div>
+
+            {/* Brand voice */}
+            <div className="space-y-3">
+              <h3 className="text-sm font-semibold uppercase tracking-wider text-primary">Brand voice</h3>
+              <div className="flex flex-wrap gap-2">
+                {BRAND_VOICE_TAGS.map((tag) => {
+                  const active = structured.brand_voice.tags.includes(tag);
+                  return (
+                    <button key={tag} type="button"
+                      onClick={() => setStructured({ ...structured, brand_voice: { ...structured.brand_voice, tags: toggleArrayValue(structured.brand_voice.tags, tag) } })}
+                      className={`text-xs rounded-full border px-3 py-1.5 ${active ? 'border-primary bg-primary/10 text-primary' : 'border-border text-muted-foreground'}`}>
+                      {tag}
+                    </button>
+                  );
+                })}
+              </div>
+              <div>
+                <Label>Things to avoid (comma-separated)</Label>
+                <Input placeholder="hype, emojis, jargon…" value={structured.brand_voice.avoid.join(', ')}
+                  onChange={(e) => setStructured({ ...structured, brand_voice: { ...structured.brand_voice, avoid: e.target.value.split(',').map(s => s.trim()).filter(Boolean) } })} />
+              </div>
+            </div>
+
+            {/* Competitors */}
+            <div className="space-y-3">
+              <h3 className="text-sm font-semibold uppercase tracking-wider text-primary">Competitors</h3>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <Label>Known competitors</Label>
+                  <Input value={structured.competitors.known.join(', ')}
+                    onChange={(e) => setStructured({ ...structured, competitors: { ...structured.competitors, known: e.target.value.split(',').map(s => s.trim()).filter(Boolean), unknown: false } })} />
+                </div>
+                <div>
+                  <Label>Adjacent tools</Label>
+                  <Input value={structured.competitors.adjacent.join(', ')}
+                    onChange={(e) => setStructured({ ...structured, competitors: { ...structured.competitors, adjacent: e.target.value.split(',').map(s => s.trim()).filter(Boolean) } })} />
+                </div>
+              </div>
+              <label className="flex items-center gap-2 text-sm text-muted-foreground">
+                <input type="checkbox" checked={structured.competitors.unknown}
+                  onChange={(e) => setStructured({ ...structured, competitors: { ...structured.competitors, unknown: e.target.checked } })} />
+                I'm not sure who my competitors are yet
+              </label>
+            </div>
+
+            {/* Approval rules */}
+            <div className="space-y-3">
+              <h3 className="text-sm font-semibold uppercase tracking-wider text-primary">Approval & safety</h3>
+              <p className="text-xs text-muted-foreground">Agents always default to draft-only. You can loosen later in settings.</p>
+              {([
+                ['draft_only', 'Draft only — never send without my approval'],
+                ['email_requires_approval', 'Email requires my approval before sending'],
+                ['linkedin_manual_only', 'LinkedIn comments & DMs are manual only'],
+              ] as const).map(([key, label]) => (
+                <div key={key} className="flex items-center justify-between rounded-lg border border-border p-3">
+                  <span className="text-sm">{label}</span>
+                  <Switch checked={structured.approval_rules[key]}
+                    onCheckedChange={(v) => setStructured({ ...structured, approval_rules: { ...structured.approval_rules, [key]: v } })} />
+                </div>
+              ))}
+            </div>
+
+            <div className="flex justify-between pt-2">
+              <Button variant="ghost" onClick={() => setStep(4)}>Back</Button>
+              <Button onClick={saveRefineAndFinish} disabled={saving}>{saving ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Finish setup'}</Button>
+            </div>
+          </Card>
+        )}
+
+        {step === 6 && (
           <Card className="p-8 text-center space-y-6">
             <CheckCircle2 className="h-12 w-12 mx-auto text-primary" />
             <h2 className="text-2xl font-bold">Your AI workforce is ready.</h2>
