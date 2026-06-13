@@ -286,29 +286,8 @@ const App = () => (
                       </ProtectedRoute>
                     } />
 
-                    <Route path="/talent-intel" element={
-                      <ProtectedRoute>
-                        <MainLayout>
-                          <TalentIntelligence />
-                        </MainLayout>
-                      </ProtectedRoute>
-                    } />
 
-                    <Route path="/competitor-intel" element={
-                      <ProtectedRoute>
-                        <MainLayout>
-                          <CompetitorIntelligence />
-                        </MainLayout>
-                      </ProtectedRoute>
-                    } />
 
-                    <Route path="/growth-signals" element={
-                      <ProtectedRoute>
-                        <MainLayout>
-                          <GrowthSignals />
-                        </MainLayout>
-                      </ProtectedRoute>
-                    } />
 
                     <Route path="/expert-marketplace" element={
                       <ProtectedRoute>
@@ -347,22 +326,8 @@ const App = () => (
                     <Route path="/candidates/:id" element={<ProtectedRoute><MainLayout><CandidateDossier /></MainLayout></ProtectedRoute>} />
 
                     {/* Departments overview (2x2 team rooms grid) */}
-                    <Route path="/departments" element={
-                      <ProtectedRoute>
-                        <MainLayout>
-                          <DepartmentsOverview />
-                        </MainLayout>
-                      </ProtectedRoute>
-                    } />
 
-                    {/* Department rooms (Talent / Growth / Intelligence / Content) */}
-                    <Route path="/rooms/:dept" element={
-                      <ProtectedRoute>
-                        <MainLayout>
-                          <DepartmentRoom />
-                        </MainLayout>
-                      </ProtectedRoute>
-                    } />
+
 
                     {/* Task plan detail */}
                     <Route path="/plans/:planId" element={
