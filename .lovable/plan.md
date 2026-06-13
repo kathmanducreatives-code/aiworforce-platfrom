@@ -1,88 +1,121 @@
-# Onboarding & Company Brain Activation — Plan
 
-## What already exists (verified)
+# Agentory UI Restructuring Pass
 
-- `OnboardingCompanyBrain.tsx` — 4-step wizard (basics → sources → AI analyze → followups → finalize).
-- `setup-company-brain` edge function — actions `save_basics | save_sources | analyze | generate_followups | save_followups | finalize`, with Firecrawl-backed enrichment when `scrape_url` is configured and a manual-fallback warning otherwise.
-- `company_brain` table with `profile` (jsonb), `onboarding_completed`, `onboarding_completed_at`.
-- `useCompanyBrain` hook + Dashboard banner that links to `/onboarding/company-brain` when `onboarding_completed` is false.
-- Brain is already loaded into `pilot-chat`, `run-agent`, and `orchestrate` and passed to system prompts.
+Frontend/presentation only. No backend, schema, or edge function changes. No route deletions — only consolidation + redirects.
 
-## Gaps vs the request
+## 1. Sidebar restructure (`src/components/Sidebar.tsx`)
 
-1. **Profile shape is flat** (`company_summary`, `target_customer_profile`, …). The request wants nested groups: `icp`, `goals`, `positioning`, `brand_voice`, `competitors`, `approval_rules`. Agents read both, but new groups are missing.
-2. **No `approval_rules`** stored (`draft_only`, `email_requires_approval`, `linkedin_manual_only`). Safety defaults are only enforced in code, not surfaced/recorded per workspace.
-3. **No structured ICP fields** (buyer_roles, company_size, industries, geography, pain_points).
-4. **No structured brand-voice multi-select** (founder-led / technical / casual / premium / direct / educational / no-hype).
-5. **No server-side gate**: `pilot-chat` loads the brain but does not block content/GTM intents when `onboarding_completed === false`. Today an empty-brain user gets generic content.
-6. **No tests** covering "no brain → ask for onboarding" or "brain present → Scribe runs / Claude preferred / `saved_outputs` `content_draft`".
+Collapse 4 groups → 4 groups, fewer items:
 
-## Plan
+```text
+Workspace
+  Dashboard             /dashboard
+  Signals               /signals
+  Conversations         /dashboard  (placeholder until /conversations exists)
+  Awaiting You          /awaiting-you  (badge preserved)
 
-### 1. Extend the profile schema (additive, backward-compatible)
-Keep current flat fields. Add the nested groups requested, defaulting to empty/null so existing brains still validate.
+Growth
+  Leads                 /leads
+  Competitors           /competitors
+  Content               /content
 
-```
-{
-  ...existing flat fields...,
-  icp: { buyer_roles: [], company_size: "", industries: [], geography: "", pain_points: [] },
-  goals: { gtm: "", content: "", competitor_tracking: "", outreach: "", hiring: "" },
-  positioning: { promise: "", differentiators: [], use_cases: [], proof_points: [] },
-  brand_voice: { tone: "", tags: [], style_rules: [], avoid: [] },
-  competitors: { known: [], adjacent: [], unknown: false },
-  approval_rules: { draft_only: true, email_requires_approval: true, linkedin_manual_only: true },
-  onboarding_completed: true
-}
+AI Team
+  Agents                /agents
+  Company Brain         /onboarding/company-brain
+
+Settings
+  Integrations          /settings/integrations  (new stub)
+  Email Sequences       /email-sequences
 ```
 
-A small helper `getBrainDefaults()` lives in `src/lib/companyBrainSchema.ts` (also exported for the edge function via a Deno-friendly mirror in `supabase/functions/_shared/companyBrainSchema.ts`) so both sides agree on shape.
+Bottom: Help & Support, Sign Out, Collapse (unchanged).
 
-### 2. Extend `setup-company-brain` edge function
-- New action `save_structured` that accepts any subset of `{ icp, goals, positioning, brand_voice, competitors, approval_rules }` and shallow-merges into `profile`. No invented defaults — empty strings/arrays stay empty.
-- `analyze` keeps producing the existing flat fields **and** populates the new nested groups from extracted/user data only when supported by enrichment text; otherwise leaves them empty with a warning ("Confirm or edit these before finishing").
-- `finalize` records `approval_rules` (defaulting to safe values when the user did not change them) and `onboarding_completed = true`.
+Removed from sidebar (routes preserved, accessible by URL): Talent room, Growth room, Intelligence room, Content room, Lead Scraper, ICP Intelligence, Deep Search, Growth Signals, Talent Intel, Competitor Intel, Analytics, Interviews, "New Agent" button (moves inside `/agents`).
 
-### 3. Improve the wizard UI
-Add three short steps (kept inside the existing single-page stepper, no route changes):
-- **ICP** — chip multi-selects for buyer roles / industries, free-text for size/geography, textarea for pain points.
-- **Goals & Offer** — short textareas for content / GTM / outreach / competitor-tracking goals and positioning fields (`promise`, `differentiators`, `use_cases`, `proof_points`).
-- **Brand voice & approval rules** — multi-select chips for voice tags (founder-led, technical, casual, premium, direct, educational, no-hype) + three safety toggles (`draft_only`, `email_requires_approval`, `linkedin_manual_only`), all default ON.
+Also remove the duplicate in-sidebar search button (CommandBar already exposes ⌘K globally).
 
-Existing AI-analyze step prefills these where possible; user confirms before "Finish setup". Save uses the new `save_structured` action. Dark premium look reuses existing `Card`, `Input`, `Textarea`, `Button`, chip pattern (`border-primary bg-primary/10` for active) — no new tokens.
+## 2. Route consolidation (`src/App.tsx`)
 
-### 4. Server-side gating for content/GTM intents
-In `pilot-chat/index.ts`, right after the brain is loaded:
-- If `onboarding_completed !== true` AND the classified intent is content/GTM-bound (`content_draft`, `source_signals`, `draft_outreach`, `competitor_tracking`, content-engagement-loop triggers), insert an assistant message asking the user to share their website or a one-line description (or open onboarding) instead of running the workflow. No Apify/Firecrawl call is made.
-- Quick chat (`smalltalk`, `clarification`, `unclear`) is unaffected.
-- Reply includes a `chat:open_onboarding` event hint (existing `chat:prefill` pattern) so the UI can offer a one-click "Complete onboarding" button — handled by adding a listener in `Dashboard.tsx` / chat shell that navigates to `/onboarding/company-brain`.
+Add new pages + redirects (use `<Navigate replace>` to keep deep links working):
 
-### 5. Tests
-Add Deno tests under `supabase/functions/_shared/`:
-- `companyBrainGate.test.ts` — pure function `shouldGateForOnboarding(intent, brain)` returns `true` for content/GTM intents when `onboarding_completed !== true`, `false` otherwise. Covers: missing brain, partial brain (basics only), completed brain.
-- Extend `contentEngagementLoop.test.ts` (already exists) with one case asserting an empty brain + content prompt produces no engagement-loop plan from the gating helper.
-- Vitest `src/lib/companyBrainSchema.test.ts` — `mergeProfile()` keeps user-entered fields, fills missing groups with empty defaults, never invents content.
+| Old route | New behavior |
+|---|---|
+| `/lead-scraper` | Redirect → `/leads` |
+| `/icp-intelligence` | Redirect → `/leads?tab=icp` |
+| `/deep-search` | Redirect → `/leads?tab=research` |
+| `/talent-intel` | Redirect → `/leads?tab=people` |
+| `/growth-signals` | Redirect → `/signals` |
+| `/competitor-intel` | Redirect → `/competitors` |
+| `/analytics` | Redirect → `/dashboard` |
+| `/rooms/:dept`, `/departments` | Redirect → `/agents` |
+| `/interview-scheduler` | Redirect → `/settings/integrations` (kept reachable, hidden) |
+| `/post-interceptor`, `/lead-crm`, `/outreach-engine` | Stay accessible, not in sidebar |
 
-### 6. Safety reaffirmed
-No code path sends, posts, comments, or DMs. `approval_rules` is persisted but is informational + UI-enforced; the existing draft-only flow in `contentEngagementLoop` and outreach planners is unchanged.
+New routes: `/leads`, `/competitors` (already exists as CompetitorMonitor — wrap with new shell), `/content`, `/agents`, `/settings/integrations`.
 
-## Files to add / change
+## 3. New pages (thin shells that wrap existing functionality)
 
-**Add**
-- `src/lib/companyBrainSchema.ts` (+ test)
-- `supabase/functions/_shared/companyBrainSchema.ts`
-- `supabase/functions/_shared/companyBrainGate.ts` (+ test)
+- **`src/pages/Leads.tsx`** — Tabs: Find leads / Saved / ICP / Research. Each tab renders existing components: `LeadScraper`, `LeadCRM`, `ICPManager`, `DeepSearch`. GTM copy, no candidate language.
+- **`src/pages/Competitors.tsx`** — Wraps existing `CompetitorMonitor` + `CompetitorIntelligence` views in one premium shell. Buttons: Add competitor / Find conversations / Analyze my website. Hide Firecrawl key warning unless `import.meta.env.DEV`.
+- **`src/pages/Content.tsx`** — Surfaces founder post drafts, comment drafts, engagement opps from `saved_outputs` + `outreach_drafts` already loaded by `useSignalFeed`. Buttons: Create post / Find posts to comment on / Build content loop (each dispatches existing `chat:send` actions).
+- **`src/pages/Agents.tsx`** — Cards for Pilot, Scout, Aria, Hawk, Penn, Scribe (sourced from `src/data/dockAgents.ts` / `agentProfiles.ts`). Each card: role, capabilities, last activity, Start task → opens AgentBuilder or `chat:send`. Includes "New Agent" button.
+- **`src/pages/SettingsIntegrations.tsx`** — Stub linking to Email Sequences, Interviews, OAuth.
 
-**Change**
-- `src/pages/OnboardingCompanyBrain.tsx` — three extra step panels + `save_structured` calls.
-- `supabase/functions/setup-company-brain/index.ts` — `save_structured` action; analyze writes nested groups when supported.
-- `supabase/functions/pilot-chat/index.ts` — gate content/GTM intents on `onboarding_completed`.
-- `src/pages/Dashboard.tsx` (or chat shell) — listen for `chat:open_onboarding` and navigate.
+## 4. Dashboard rewrite (`src/pages/Dashboard.tsx`)
 
-## Out of scope (explicit)
-- No schema migrations (everything lives in existing `company_brain.profile` jsonb).
-- No new Apify actors or scrapers; Firecrawl path unchanged.
-- No production deploy; no migration `145631`.
-- No auto-send / auto-comment / auto-post / auto-DM additions; safety defaults remain on.
+Replace ScreeningPilot/recruiting metrics with GTM cards: Signals found • Hot leads • Competitor signals • Content drafts • Pending approvals • Outreach drafts • Saved/actioned signals • Time saved. Data pulled from existing hooks (`useSignalFeed`, `useApprovals`, `useSignalReviews`) — no new queries.
 
-## Final report will cover
-Files changed, onboarding flow, profile shape, Firecrawl/manual fallback behavior, how each agent (Scribe / Scout / Aria / Hawk / Penn) consumes the brain, test/typecheck/build results, readiness for final Phase 7 live tests, and any residual gaps.
+Top banner "Complete Company Brain Setup" rendered when `useCompanyBrain().onboarding_completed !== true` (keep existing logic, restyle as prominent hero).
+
+Replace Getting Started steps:
+1. Set up Company Brain
+2. Find signals (Scout)
+3. Review and act (Aria + Scribe + Penn)
+
+Strip: "Welcome to ScreeningPilot", "Create a Screening Job", "Source Talent", "Review Candidates", hiring pipeline / total candidates / AI screening copy.
+
+## 5. Awaiting You copy pass (`src/pages/AwaitingYou.tsx`)
+
+Replace recruiting wording with: pending approvals, outreach drafts, email send approvals, comment/DM draft approvals, content approvals. All actions remain approval-gated (no auto-send introduced).
+
+## 6. Signals page (`src/pages/Signals.tsx`, `src/components/signals/*`)
+
+No structural change. Light copy sweep only: confirm competitor metadata + review states + bulk actions all still wired (already implemented in Phases 5–7).
+
+## 7. Global copy rules
+
+Sweep visible strings in: Dashboard, Sidebar, Awaiting You, new pages, MobileHeader, CommandBar, CommandPalette, empty states.
+
+- candidate → lead / person / contact
+- screening → review / ranking / qualification
+- resume/placement/recruitment/hiring pipeline/screening job → drop or rephrase
+
+Exceptions: `CandidateApply`, `BookInterview`, `JobApplicants`, `ScreeningJobs` (explicit hiring features) keep their wording. Internal variable/table/column names untouched.
+
+## 8. Polish
+
+- Remove dummy room messages (repeated "ok") in chat workspace mock data if present.
+- Confirm chat composer bottom padding (already fixed Phase 5) still clears new pages.
+- Consistent empty states (reuse existing `EmptyState` standard).
+- Keep dark premium tokens; no hardcoded hex.
+
+## 9. Safety (unchanged)
+
+No auto-comment / auto-DM / auto-send code paths added. All new buttons dispatch `chat:send` or open drafts.
+
+## 10. Verification
+
+- Frontend typecheck (auto-run by harness).
+- Visual check via preview: sidebar count down, Dashboard says "Agentory", redirects resolve, new pages render.
+- Grep for "ScreeningPilot", "candidate", "screening" in user-visible strings outside the recruiting exception files.
+
+## Files changed (estimate)
+
+Edited: `src/components/Sidebar.tsx`, `src/App.tsx`, `src/pages/Dashboard.tsx`, `src/pages/AwaitingYou.tsx`, `src/components/MobileHeader.tsx` (nav parity), `src/components/shared/CommandPalette.tsx` (entries).
+Created: `src/pages/Leads.tsx`, `src/pages/Competitors.tsx`, `src/pages/Content.tsx`, `src/pages/Agents.tsx`, `src/pages/SettingsIntegrations.tsx`.
+
+## Out of scope
+
+- No DB migrations, no edge function edits, no new tables.
+- No deletion of legacy page files (kept for redirect targets / direct URL access).
+- No production deploy.

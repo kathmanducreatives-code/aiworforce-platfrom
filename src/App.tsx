@@ -27,11 +27,8 @@ import EmailSequenceSetup from "./pages/EmailSequenceSetup";
 import EmailSequences from "./pages/EmailSequences";
 import GetDemo from "./pages/GetDemo";
 import Auth from "./pages/Auth";
-import DataDashboard from "./pages/DataDashboard";
 import ClientMetrics from "./pages/ClientMetrics";
 import ClientDetail from "./pages/ClientDetail";
-import LeadScraper from "./pages/LeadScraper";
-import DeepSearch from "./pages/DeepSearch";
 import InterviewScheduler from "./pages/InterviewScheduler";
 import InterviewSettings from "./pages/InterviewSettings";
 import BookInterview from "./pages/BookInterview";
@@ -47,19 +44,18 @@ import ICPManager from "./pages/ICPManager";
 import ICPResultsPage from "./pages/ICPResultsPage";
 import ICPCandidateDetail from "./pages/ICPCandidateDetail";
 import ScreeningJobs from "./pages/ScreeningJobs";
+import Leads from "./pages/Leads";
+import Competitors from "./pages/Competitors";
+import Content from "./pages/Content";
+import Agents from "./pages/Agents";
+import SettingsIntegrations from "./pages/SettingsIntegrations";
 import JobApplicants from "./pages/JobApplicants";
 import JobDistribution from "./pages/JobDistribution";
-import CompetitorMonitor from "./pages/CompetitorMonitor";
-import GrowthSignals from "./pages/GrowthSignals";
 import ExpertMarketplace from "./pages/ExpertMarketplace";
 import PostInterceptor from "./pages/PostInterceptor";
 import LeadCRM from "./pages/LeadCRM";
 import OutreachEngine from "./pages/OutreachEngine";
-import TalentIntelligence from "./pages/TalentIntelligence";
-import CompetitorIntelligence from "./pages/CompetitorIntelligence";
 import CandidateDossier from "./pages/candidates/CandidateDossier";
-import DepartmentRoom from "./pages/DepartmentRoom";
-import DepartmentsOverview from "./pages/DepartmentsOverview";
 import TaskPlanPage from "./pages/TaskPlanPage";
 // import VerifyQueue from "./pages/verify/VerifyQueue";
 // import VerifyResults from "./pages/verify/VerifyResults";
@@ -136,6 +132,35 @@ const App = () => (
                       </ProtectedRoute>
                     } />
 
+                    {/* Agentory restructure — new top-level pages */}
+                    <Route path="/leads" element={
+                      <ProtectedRoute><MainLayout><Leads /></MainLayout></ProtectedRoute>
+                    } />
+                    <Route path="/competitors" element={
+                      <ProtectedRoute><MainLayout><Competitors /></MainLayout></ProtectedRoute>
+                    } />
+                    <Route path="/content" element={
+                      <ProtectedRoute><MainLayout><Content /></MainLayout></ProtectedRoute>
+                    } />
+                    <Route path="/agents" element={
+                      <ProtectedRoute><MainLayout><Agents /></MainLayout></ProtectedRoute>
+                    } />
+                    <Route path="/settings/integrations" element={
+                      <ProtectedRoute><MainLayout><SettingsIntegrations /></MainLayout></ProtectedRoute>
+                    } />
+
+                    {/* Legacy route redirects — preserve deep links */}
+                    <Route path="/lead-scraper" element={<Navigate to="/leads" replace />} />
+                    <Route path="/icp-intelligence" element={<Navigate to="/leads?tab=icp" replace />} />
+                    <Route path="/deep-search" element={<Navigate to="/leads?tab=research" replace />} />
+                    <Route path="/talent-intel" element={<Navigate to="/leads?tab=research" replace />} />
+                    <Route path="/growth-signals" element={<Navigate to="/signals" replace />} />
+                    <Route path="/competitor-intel" element={<Navigate to="/competitors" replace />} />
+                    <Route path="/analytics" element={<Navigate to="/dashboard" replace />} />
+                    <Route path="/departments" element={<Navigate to="/agents" replace />} />
+                    <Route path="/rooms/:dept" element={<Navigate to="/agents" replace />} />
+
+
 
                     <Route path="/candidates" element={
                       <ProtectedRoute>
@@ -145,13 +170,8 @@ const App = () => (
                       </ProtectedRoute>
                     } />
 
-                    <Route path="/analytics" element={
-                      <ProtectedRoute>
-                        <MainLayout>
-                          <DataDashboard />
-                        </MainLayout>
-                      </ProtectedRoute>
-                    } />
+
+
 
                     <Route path="/folder/:folderName" element={
                       <ProtectedRoute>
@@ -185,29 +205,8 @@ const App = () => (
                       </ProtectedRoute>
                     } />
 
-                    <Route path="/lead-scraper" element={
-                      <ProtectedRoute>
-                        <MainLayout>
-                          <LeadScraper />
-                        </MainLayout>
-                      </ProtectedRoute>
-                    } />
 
-                    <Route path="/deep-search" element={
-                      <ProtectedRoute>
-                        <MainLayout>
-                          <DeepSearch />
-                        </MainLayout>
-                      </ProtectedRoute>
-                    } />
 
-                    <Route path="/icp-intelligence" element={
-                      <ProtectedRoute>
-                        <MainLayout>
-                          <ICPManager />
-                        </MainLayout>
-                      </ProtectedRoute>
-                    } />
 
                     <Route path="/icp/results/:sessionId" element={
                       <ProtectedRoute>
@@ -270,37 +269,11 @@ const App = () => (
                       </ProtectedRoute>
                     } />
 
-                    <Route path="/competitors" element={
-                      <ProtectedRoute>
-                        <MainLayout>
-                          <CompetitorMonitor />
-                        </MainLayout>
-                      </ProtectedRoute>
-                    } />
 
-                    <Route path="/talent-intel" element={
-                      <ProtectedRoute>
-                        <MainLayout>
-                          <TalentIntelligence />
-                        </MainLayout>
-                      </ProtectedRoute>
-                    } />
 
-                    <Route path="/competitor-intel" element={
-                      <ProtectedRoute>
-                        <MainLayout>
-                          <CompetitorIntelligence />
-                        </MainLayout>
-                      </ProtectedRoute>
-                    } />
 
-                    <Route path="/growth-signals" element={
-                      <ProtectedRoute>
-                        <MainLayout>
-                          <GrowthSignals />
-                        </MainLayout>
-                      </ProtectedRoute>
-                    } />
+
+
 
                     <Route path="/expert-marketplace" element={
                       <ProtectedRoute>
@@ -339,22 +312,8 @@ const App = () => (
                     <Route path="/candidates/:id" element={<ProtectedRoute><MainLayout><CandidateDossier /></MainLayout></ProtectedRoute>} />
 
                     {/* Departments overview (2x2 team rooms grid) */}
-                    <Route path="/departments" element={
-                      <ProtectedRoute>
-                        <MainLayout>
-                          <DepartmentsOverview />
-                        </MainLayout>
-                      </ProtectedRoute>
-                    } />
 
-                    {/* Department rooms (Talent / Growth / Intelligence / Content) */}
-                    <Route path="/rooms/:dept" element={
-                      <ProtectedRoute>
-                        <MainLayout>
-                          <DepartmentRoom />
-                        </MainLayout>
-                      </ProtectedRoute>
-                    } />
+
 
                     {/* Task plan detail */}
                     <Route path="/plans/:planId" element={
