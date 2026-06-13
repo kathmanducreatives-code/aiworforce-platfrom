@@ -68,10 +68,22 @@ export default function OnboardingCompanyBrain() {
   // Step 4
   const [questions, setQuestions] = useState<string[]>([]);
   const [answers, setAnswers] = useState<string[]>([]);
+  // Step 5 — structured refine (ICP / goals / voice / approval)
+  const [structured, setStructured] = useState<StructuredBrain>(getBrainDefaults());
 
   useEffect(() => {
     if (brain?.profile && Object.keys(brain.profile).length) {
       setBasics((b) => ({ ...b, ...Object.fromEntries(Object.entries(brain.profile).filter(([k]) => k in b)) }));
+      // Hydrate structured groups from existing profile when present.
+      const defaults = getBrainDefaults();
+      setStructured({
+        icp: { ...defaults.icp, ...(brain.profile.icp ?? {}) },
+        goals: { ...defaults.goals, ...(brain.profile.goals ?? {}) },
+        positioning: { ...defaults.positioning, ...(brain.profile.positioning ?? {}) },
+        brand_voice: { ...defaults.brand_voice, ...(brain.profile.brand_voice ?? {}) },
+        competitors: { ...defaults.competitors, ...(brain.profile.competitors ?? {}) },
+        approval_rules: { ...defaults.approval_rules, ...(brain.profile.approval_rules ?? {}) },
+      });
     }
   }, [brain?.onboarding_completed]);
 
