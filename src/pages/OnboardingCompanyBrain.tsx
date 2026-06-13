@@ -140,16 +140,29 @@ export default function OnboardingCompanyBrain() {
     finally { setSaving(false); }
   }
 
-  async function saveFollowupsAndFinish() {
+  async function saveFollowupsAndContinue() {
     setSaving(true);
     try {
       const qa = questions.map((q, i) => ({ question: q, answer: answers[i] ?? '' }));
       await call('save_followups', workspaceId!, { qa });
-      await call('finalize', workspaceId!, {});
-      refresh();
       setStep(5);
     } catch (e: any) { toast.error(e.message ?? 'Failed'); }
     finally { setSaving(false); }
+  }
+
+  async function saveRefineAndFinish() {
+    setSaving(true);
+    try {
+      await call('save_structured', workspaceId!, structured);
+      await call('finalize', workspaceId!, {});
+      refresh();
+      setStep(6);
+    } catch (e: any) { toast.error(e.message ?? 'Failed'); }
+    finally { setSaving(false); }
+  }
+
+  function toggleArrayValue(arr: string[], v: string): string[] {
+    return arr.includes(v) ? arr.filter((x) => x !== v) : [...arr, v];
   }
 
   function sendPrefill(text: string) {
