@@ -73,6 +73,25 @@ Deno.serve(async (req) => {
       return json({ ok: true, profile: merged });
     }
 
+    if (action === "save_structured") {
+      // Shallow-merge nested groups: icp/goals/positioning/brand_voice/competitors/approval_rules.
+      // Never invent values; absent keys stay empty.
+      const allowed: (keyof StructuredBrainPatch)[] = [
+        "icp", "goals", "positioning", "brand_voice", "competitors", "approval_rules",
+      ];
+      const patch: StructuredBrainPatch = {};
+      for (const k of allowed) {
+        const v = (body as AnyObj)[k];
+        if (v && typeof v === "object") (patch as AnyObj)[k] = v;
+      }
+      const current = await loadProfile();
+      const merged = mergeProfile(current, patch);
+      const { error } = await admin.from("company_brain").upsert({
+        workspace_id, profile: merged, updated_at: new Date().toISOString(),
+      }, { onConflict: "workspace_id" });
+      if (error) throw error;
+      return json({ ok: true, profile: merged });
+
     if (action === "save_sources") {
       const sources = Array.isArray(body.sources) ? body.sources : [];
       // Clear and re-insert for simplicity
