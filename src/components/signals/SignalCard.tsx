@@ -81,12 +81,13 @@ export default function SignalCard({
   const isCompetitor = signal.signal_type === "competitor_engagement";
 
   return (
-    <li className={`rounded-lg border border-white/[0.06] bg-white/[0.02] p-3 transition-opacity ${reviewed ? "opacity-60" : ""}`}>
-      <div className="grid grid-cols-1 md:grid-cols-[1fr_220px] gap-4">
+    <li className={`rounded-lg border border-white/[0.06] bg-white/[0.02] px-3 py-2.5 transition-opacity ${reviewed ? "opacity-60" : ""}`}>
+      <div className="grid grid-cols-1 md:grid-cols-[1fr_220px] gap-3">
+
         {/* LEFT: main content */}
         <div className="min-w-0">
           {/* badges row */}
-          <div className="flex items-center gap-1.5 flex-wrap mb-1.5">
+          <div className="flex items-center gap-1.5 flex-wrap mb-1">
             <span className={`text-[10px] px-1.5 py-0.5 rounded border ${TYPE_BADGE[signal.signal_type] ?? "border-white/15 bg-white/5 text-neutral-300"}`}>
               {signalTypeLabel(signal.signal_type)}
             </span>
@@ -127,7 +128,7 @@ export default function SignalCard({
           )}
 
           {/* description / snippet */}
-          <div className="text-[12px] text-[#C9D1D9] mt-2 line-clamp-4 whitespace-pre-wrap">
+          <div className="text-[12px] text-[#C9D1D9] mt-1.5 line-clamp-3 whitespace-pre-wrap">
             {signal.post_snippet || signal.description || (
               <span className="text-neutral-500 italic">No detailed reason saved yet.</span>
             )}

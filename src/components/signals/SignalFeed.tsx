@@ -82,7 +82,7 @@ export default function SignalFeed() {
   };
 
   return (
-    <div className="p-4 pb-[180px] space-y-3 text-[#C9D1D9]">
+    <div className="p-4 pb-[260px] md:pb-[240px] space-y-3 text-[#C9D1D9]">
       {/* Header */}
       <div className="flex items-center gap-2 flex-wrap">
         <h1 className="text-lg font-semibold text-[#F0F6FC]">Signal Feed</h1>
