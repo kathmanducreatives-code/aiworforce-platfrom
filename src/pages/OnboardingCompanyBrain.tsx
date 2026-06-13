@@ -178,11 +178,11 @@ export default function OnboardingCompanyBrain() {
           <span className="text-xs font-bold tracking-widest text-primary uppercase">Company Brain Setup</span>
         </div>
         <h1 className="text-3xl font-bold mb-2">Teach your AI workforce about your company</h1>
-        <p className="text-muted-foreground mb-8">Step {Math.min(step, 5)} of 5</p>
+        <p className="text-muted-foreground mb-8">Step {Math.min(step, 6)} of 6</p>
 
-        {step !== 5 && (
+        {step !== 6 && (
           <div className="flex gap-2 mb-8">
-            {[1, 2, 3, 4].map((n) => (
+            {[1, 2, 3, 4, 5].map((n) => (
               <div key={n} className={`h-1.5 flex-1 rounded-full ${n <= step ? 'bg-primary' : 'bg-muted'}`} />
             ))}
           </div>
