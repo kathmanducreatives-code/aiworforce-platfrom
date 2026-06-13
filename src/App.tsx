@@ -270,13 +270,8 @@ const App = () => (
                       </ProtectedRoute>
                     } />
 
-                    <Route path="/competitors" element={
-                      <ProtectedRoute>
-                        <MainLayout>
-                          <CompetitorMonitor />
-                        </MainLayout>
-                      </ProtectedRoute>
-                    } />
+
+
 
 
 
