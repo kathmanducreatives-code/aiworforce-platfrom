@@ -1010,6 +1010,39 @@ Deno.serve(async (req) => {
   const intentResult = await classifyIntent(message);
   console.log("[pilot-chat] intent:", intentResult);
 
+  // 6c.0 Onboarding gate — if Company Brain is incomplete and the user asked
+  // for content/GTM work, ask them to complete onboarding instead of running
+  // expensive workflows that would produce generic output.
+  if (shouldGateForOnboarding(intentResult.intent, {
+    onboarding_completed: brainRow?.onboarding_completed === true,
+    profile: brain as Record<string, unknown>,
+  })) {
+    const { data: saved } = await admin
+      .from("messages")
+      .insert({
+        conversation_id: conversationId,
+        role: "assistant",
+        content: ONBOARDING_GATE_REPLY,
+        agent_slug: "pilot",
+        model_used: "google/gemini-3-flash-preview",
+        metadata: {
+          intent: intentResult.intent,
+          onboarding_gate: true,
+          open_onboarding: true,
+        },
+      })
+      .select("*")
+      .single();
+    return json({
+      type: "reply",
+      conversation_id: conversationId,
+      intent: intentResult.intent,
+      onboarding_gate: true,
+      open_onboarding: true,
+      message: saved,
+    });
+  }
+
   // 6c.i Unclear → ask one clarification, no orchestration.
   if (intentResult.intent === "unclear") {
     const clarification = "I'm not sure what you'd like me to do. Could you add a bit more detail — for example, the role/company type and a location, or a specific URL?";
