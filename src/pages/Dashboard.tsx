@@ -1,202 +1,65 @@
-import { useState, useEffect, useMemo } from "react";
-import OnboardingWizard from "@/components/OnboardingWizard";
+import { useMemo } from "react";
 import { useNavigate } from "react-router-dom";
-import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { useTheme } from "@/contexts/ThemeContext";
 import {
-  Users, TrendingUp, Folder, Brain, Moon, Sun,
-  UserPlus, Mail, Search, Calendar, AlertCircle, ChevronRight,
-  ArrowUpRight, ArrowDownRight, Clock, Crosshair, Zap, MessageSquare
+  Moon, Sun, ChevronRight, Sparkles, Radar, Users, Eye, FileEdit, Inbox, Mail, Bookmark, Clock,
 } from "lucide-react";
-import { Switch } from "@/components/ui/switch";
 import MetricCard from "@/components/shared/MetricCard";
 import SkeletonCard from "@/components/shared/SkeletonCard";
-import ScorePill from "@/components/shared/ScorePill";
 import NotificationCenter from "@/components/shared/NotificationCenter";
-import { cn } from "@/lib/utils";
-import { fetchOutboundMetrics } from "@/services/interceptorService";
-import HandoffFeedItem, { HandoffEvent } from "@/components/dashboard/HandoffFeedItem";
-
 import { useWorkspace } from "@/contexts/WorkspaceContext";
-import { useActivityFeed } from "@/hooks/useActivityFeed";
 import { useCompanyBrain } from "@/hooks/useCompanyBrain";
-import { Sparkles } from "lucide-react";
-
-const FALLBACK_HANDOFFS: HandoffEvent[] = [
-  {
-    type: 'handoff', time: '9:15 AM',
-    from: { agent: 'Scout', dept: 'talent', action: 'Sourced 18 leads matching ICP' },
-    to: { agent: 'Aria', dept: 'talent', action: 'Now screening them in batch' },
-  },
-  {
-    type: 'handoff', time: '8:30 AM',
-    from: { agent: 'Hawk', dept: 'intelligence', action: 'Flagged 2 hot signals overnight' },
-    to: { agent: 'Penn', dept: 'growth', action: 'Drafting outreach for matching leads' },
-  },
-];
+import { useSignalFeed } from "@/hooks/useSignalFeed";
+import { useApprovals } from "@/hooks/useApprovals";
+import { useSignalReviews } from "@/hooks/useSignalReviews";
 
 const Dashboard = () => {
   const navigate = useNavigate();
   const { profile } = useAuth();
   const { theme, toggleTheme } = useTheme();
   const { workspaceId } = useWorkspace();
-  const { events: liveEvents } = useActivityFeed(workspaceId, 30);
-  const [metrics, setMetrics] = useState({
-    totalCandidates: 0,
-    avgFitScore: 0,
-    activeRecruitments: 0,
-    candidatesThisWeek: 0,
-    candidatesLastWeek: 0,
-    pipelineNew: 0,
-    pipelineScreened: 0,
-    pipelineInterviewed: 0,
-    pipelineHired: 0,
-  });
-  const [outbound, setOutbound] = useState<{ total: number; hotPending: number; dmsSent: number; last7: { date: string; count: number }[] } | null>(null);
-  const [recentCandidates, setRecentCandidates] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
+  const { signals, drafts, savedOutputs, loading } = useSignalFeed(workspaceId);
+  const { approvals } = useApprovals(workspaceId);
+  const { reviewsBySignal } = useSignalReviews(workspaceId);
 
-  useEffect(() => {
-    fetchDashboardData();
-    fetchOutboundMetrics().then(setOutbound).catch(() => null);
-  }, []);
-
-  const fetchDashboardData = async () => {
-    try {
-      const { data: candidates } = await supabase
-        .from('resume_analyses')
-        .select('*')
-        .order('created_at', { ascending: false });
-
-      if (candidates) {
-        const now = new Date();
-        const oneWeekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
-        const twoWeeksAgo = new Date(now.getTime() - 14 * 24 * 60 * 60 * 1000);
-
-        const thisWeek = candidates.filter(c => new Date(c.created_at) >= oneWeekAgo).length;
-        const lastWeek = candidates.filter(c => new Date(c.created_at) >= twoWeeksAgo && new Date(c.created_at) < oneWeekAgo).length;
-
-        const fitScores = candidates.map(c => {
-          const fs = c.fit_score as any;
-          return typeof fs === 'object' && fs !== null ? (fs.score || 0) : 0;
-        }).filter(s => s > 0);
-
-        const avgFitScore = fitScores.length > 0
-          ? Math.round(fitScores.reduce((a, b) => a + b, 0) / fitScores.length)
-          : 0;
-
-        const uniqueRoles = new Set(candidates.map(c => c.recruitment_name).filter(Boolean));
-
-        // Pipeline stage counts from real current_stage data
-        let pipelineNew = 0, pipelineScreened = 0, pipelineInterviewed = 0, pipelineHired = 0;
-        candidates.forEach(c => {
-          const stage = (c.current_stage || 'new').toLowerCase();
-          if (stage === 'hired' || stage === 'placed') pipelineHired++;
-          else if (stage === 'interviewed' || stage === 'interview') pipelineInterviewed++;
-          else if (stage === 'screened' || stage === 'screening' || stage === 'reviewed') pipelineScreened++;
-          else pipelineNew++;
-        });
-
-        setMetrics({
-          totalCandidates: candidates.length,
-          avgFitScore,
-          activeRecruitments: uniqueRoles.size,
-          candidatesThisWeek: thisWeek,
-          candidatesLastWeek: lastWeek,
-          pipelineNew,
-          pipelineScreened,
-          pipelineInterviewed,
-          pipelineHired,
-        });
-
-        // Recent candidates for the table
-        setRecentCandidates(candidates.slice(0, 8).map(c => {
-          const fs = c.fit_score as any;
-          const score = typeof fs === 'object' && fs !== null ? (fs.score || 0) : 0;
-          return {
-            id: c.id,
-            name: c.candidate_name || 'Unknown',
-            role: c.recruitment_name || '—',
-            score,
-            stage: c.current_stage || 'new',
-            date: new Date(c.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
-          };
-        }));
-      }
-    } catch (error) {
-      console.error('Error fetching dashboard:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const weekTrend = metrics.candidatesLastWeek > 0
-    ? Math.round(((metrics.candidatesThisWeek - metrics.candidatesLastWeek) / metrics.candidatesLastWeek) * 100)
-    : metrics.candidatesThisWeek > 0 ? 100 : 0;
-
-  // Contextual actions — smart to-do items
-  const contextualActions = useMemo(() => {
-    const actions = [];
-    if (metrics.candidatesThisWeek > 0) {
-      actions.push({
-        icon: <Users className="h-4 w-4 text-emerald-500" />,
-        title: `${metrics.candidatesThisWeek} candidates this week`,
-        subtitle: 'Review new screenings',
-        path: '/candidates',
-      });
-    }
-    if (metrics.activeRecruitments > 0) {
-      actions.push({
-        icon: <Folder className="h-4 w-4 text-primary" />,
-        title: `${metrics.activeRecruitments} active roles`,
-        subtitle: 'Manage job screenings',
-        path: '/screening-jobs',
-      });
-    }
-    actions.push({
-      icon: <Search className="h-4 w-4 text-purple-500" />,
-      title: 'Source new talent',
-      subtitle: 'Start a lead scrape or deep search',
-      path: '/lead-scraper',
-    });
-    actions.push({
-      icon: <Mail className="h-4 w-4 text-teal-500" />,
-      title: 'Email outreach',
-      subtitle: 'Create or manage sequences',
-      path: '/email-sequences',
-    });
-    return actions;
-  }, [metrics]);
+  const metrics = useMemo(() => {
+    const signalsFound = signals.length;
+    const hotLeads = signals.filter((s) => (s.signal_label ?? "").toLowerCase().includes("hot")).length;
+    const competitorSignals = signals.filter((s) => (s.signal_type ?? "").toLowerCase().includes("competitor")).length;
+    const contentDrafts = savedOutputs.filter((o) => (o.type ?? "").includes("content") || (o.type ?? "").includes("post")).length;
+    const outreachDrafts = drafts.length;
+    const savedActioned = Object.values(reviewsBySignal).filter((r) =>
+      r.status === "saved" || r.status === "actioned"
+    ).length;
+    const pendingApprovals = approvals.length;
+    // Rough estimate: 8 min per draft / signal reviewed
+    const timeSavedMin = (savedActioned + outreachDrafts + contentDrafts) * 8;
+    return { signalsFound, hotLeads, competitorSignals, contentDrafts, outreachDrafts, savedActioned, pendingApprovals, timeSavedMin };
+  }, [signals, drafts, savedOutputs, reviewsBySignal, approvals]);
 
   const getGreeting = () => {
     const hour = new Date().getHours();
-    if (hour < 12) return 'Good morning';
-    if (hour < 18) return 'Good afternoon';
-    return 'Good evening';
+    if (hour < 12) return "Good morning";
+    if (hour < 18) return "Good afternoon";
+    return "Good evening";
   };
 
   return (
     <div className="min-h-screen bg-transparent">
       <div className="max-w-[1280px] mx-auto px-6 lg:px-8 py-6">
-
         <CompanyBrainBanner />
 
-        {/* Onboarding Wizard — only shows for new users */}
-        <OnboardingWizard totalCandidates={metrics.totalCandidates} />
-
-        {/* Welcome Header */}
+        {/* Welcome */}
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-6">
           <div className="flex items-center gap-4">
-            {profile?.logo_url && (
-              <img src={profile.logo_url} alt="Logo" className="h-10 w-auto" />
-            )}
+            {profile?.logo_url && <img src={profile.logo_url} alt="Logo" className="h-10 w-auto" />}
             <div>
               <h1 className="text-[22px] font-semibold text-foreground tracking-tight leading-tight">
-                {getGreeting()}, {profile?.full_name?.split(' ')[0] || 'there'}
+                {getGreeting()}, {profile?.full_name?.split(" ")[0] || "there"}
               </h1>
               <p className="text-[13px] text-muted-foreground mt-1">
-                {new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}
+                Here's what your AI workforce surfaced for you today.
               </p>
             </div>
           </div>
@@ -206,239 +69,99 @@ const Dashboard = () => {
               className="w-8 h-8 rounded-full border border-border-subtle hover:border-border bg-card flex items-center justify-center text-muted-foreground hover:text-foreground transition-colors"
               aria-label="Toggle theme"
             >
-              {theme === 'dark' ? <Sun className="h-3.5 w-3.5" /> : <Moon className="h-3.5 w-3.5" />}
+              {theme === "dark" ? <Sun className="h-3.5 w-3.5" /> : <Moon className="h-3.5 w-3.5" />}
             </button>
             <NotificationCenter />
           </div>
         </div>
-        {/* Hero command surface removed in Pass 2.5 — consolidated into CommandDock.
-            Pass 3 will fill this space with Morning Brief content. */}
 
-
-        {/* KPI Metrics Row */}
+        {/* GTM Metrics */}
         {loading ? (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
             <SkeletonCard variant="metric" count={4} className="contents" />
           </div>
         ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-            <MetricCard
-              label="Total Candidates"
-              value={metrics.totalCandidates}
-              icon={<Users className="h-3.5 w-3.5 text-emerald-400" />}
-              trend={{ value: weekTrend, label: 'vs last week' }}
-            />
-            <MetricCard
-              label="Avg Fit Score"
-              value={`${metrics.avgFitScore}%`}
-              icon={<TrendingUp className="h-3.5 w-3.5 text-teal-400" />}
-            />
-            <MetricCard
-              label="Active Roles"
-              value={metrics.activeRecruitments}
-              icon={<Folder className="h-3.5 w-3.5 text-primary" />}
-            />
-            <MetricCard
-              label="AI Screening"
-              value="100%"
-              valueColor="primary"
-              icon={<Brain className="h-3.5 w-3.5 text-purple-400" />}
-              trend={{ value: 0, label: 'powered' }}
-            />
-          </div>
+          <>
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
+              <MetricCard label="Signals found"      value={metrics.signalsFound}      icon={<Radar className="h-3.5 w-3.5 text-emerald-400" />} />
+              <MetricCard label="Hot leads"          value={metrics.hotLeads}          icon={<Users className="h-3.5 w-3.5 text-amber-400" />} />
+              <MetricCard label="Competitor signals" value={metrics.competitorSignals} icon={<Eye className="h-3.5 w-3.5 text-blue-400" />} />
+              <MetricCard label="Content drafts"     value={metrics.contentDrafts}     icon={<FileEdit className="h-3.5 w-3.5 text-violet-400" />} />
+            </div>
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+              <MetricCard label="Pending approvals" value={metrics.pendingApprovals} icon={<Inbox className="h-3.5 w-3.5 text-amber-400" />} valueColor={metrics.pendingApprovals > 0 ? "primary" : undefined} />
+              <MetricCard label="Outreach drafts"   value={metrics.outreachDrafts}   icon={<Mail className="h-3.5 w-3.5 text-teal-400" />} />
+              <MetricCard label="Saved / actioned"  value={metrics.savedActioned}    icon={<Bookmark className="h-3.5 w-3.5 text-emerald-400" />} />
+              <MetricCard label="Time saved"        value={`${metrics.timeSavedMin}m`} icon={<Clock className="h-3.5 w-3.5 text-muted-foreground" />} />
+            </div>
+          </>
         )}
 
-        {/* Two-column: Contextual Actions + Pipeline */}
-        <div className="grid grid-cols-1 lg:grid-cols-5 gap-4 mb-8">
-
-          {/* Contextual Actions (60%) */}
+        {/* Getting started + What needs attention */}
+        <div className="grid grid-cols-1 lg:grid-cols-5 gap-4">
           <div className="lg:col-span-3 rounded-2xl border border-border bg-card/50 p-5">
+            <h3 className="text-sm font-semibold text-foreground mb-4">Getting started with Agentory</h3>
+            <ol className="space-y-3">
+              <Step n={1} title="Set up Company Brain"
+                desc="Tell Agentory what you sell, who you sell to, and your goals."
+                cta="Open" onClick={() => navigate("/onboarding/company-brain")} />
+              <Step n={2} title="Find signals"
+                desc="Scout finds leads, competitor conversations, and engagement opportunities."
+                cta="Go to Signals" onClick={() => navigate("/signals")} />
+              <Step n={3} title="Review and act"
+                desc="Aria ranks signals. Scribe and Penn draft comments, DMs, and outreach for your approval."
+                cta="Open Awaiting You" onClick={() => navigate("/awaiting-you")} />
+            </ol>
+          </div>
+
+          <div className="lg:col-span-2 rounded-2xl border border-border bg-card/50 p-5">
             <h3 className="text-sm font-semibold text-foreground mb-4">What needs attention</h3>
             <div className="space-y-2">
-              {contextualActions.map((action, i) => (
-                <button
-                  key={i}
-                  onClick={() => navigate(action.path)}
-                  className="flex items-center gap-3 w-full px-3 py-3 rounded-xl hover:bg-muted/50 transition-all group text-left"
-                >
-                  <div className="p-2 rounded-xl bg-muted/80 group-hover:bg-primary/10 transition-colors">
-                    {action.icon}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium text-foreground">{action.title}</p>
-                    <p className="text-xs text-muted-foreground">{action.subtitle}</p>
-                  </div>
-                  <ChevronRight className="h-4 w-4 text-muted-foreground/40 group-hover:text-primary transition-colors" />
-                </button>
-              ))}
+              {metrics.pendingApprovals > 0 && (
+                <Action icon={<Inbox className="h-4 w-4 text-amber-400" />} title={`${metrics.pendingApprovals} item${metrics.pendingApprovals === 1 ? "" : "s"} awaiting approval`} onClick={() => navigate("/awaiting-you")} />
+              )}
+              {metrics.hotLeads > 0 && (
+                <Action icon={<Users className="h-4 w-4 text-emerald-400" />} title={`${metrics.hotLeads} hot lead${metrics.hotLeads === 1 ? "" : "s"} to review`} onClick={() => navigate("/signals")} />
+              )}
+              {metrics.competitorSignals > 0 && (
+                <Action icon={<Eye className="h-4 w-4 text-blue-400" />} title={`${metrics.competitorSignals} new competitor signal${metrics.competitorSignals === 1 ? "" : "s"}`} onClick={() => navigate("/competitors")} />
+              )}
+              {metrics.contentDrafts > 0 && (
+                <Action icon={<FileEdit className="h-4 w-4 text-violet-400" />} title={`${metrics.contentDrafts} content draft${metrics.contentDrafts === 1 ? "" : "s"} ready`} onClick={() => navigate("/content")} />
+              )}
+              {metrics.pendingApprovals + metrics.hotLeads + metrics.competitorSignals + metrics.contentDrafts === 0 && (
+                <p className="text-xs text-muted-foreground py-4 text-center">All clear. Ask Pilot for a task to get started.</p>
+              )}
             </div>
-          </div>
-
-          {/* Pipeline Funnel (40%) */}
-          <div className="lg:col-span-2 rounded-2xl border border-border bg-card/50 p-5">
-            <h3 className="text-sm font-semibold text-foreground mb-4">Hiring Pipeline</h3>
-            {loading ? (
-              <SkeletonCard variant="list-item" count={4} />
-            ) : (
-              <div className="space-y-3">
-                {[
-                  { stage: 'New / Sourced', count: metrics.pipelineNew, color: 'bg-primary', pct: metrics.totalCandidates > 0 ? Math.round((metrics.pipelineNew / metrics.totalCandidates) * 100) : 0 },
-                  { stage: 'Screened', count: metrics.pipelineScreened, color: 'bg-emerald-500', pct: metrics.totalCandidates > 0 ? Math.round((metrics.pipelineScreened / metrics.totalCandidates) * 100) : 0 },
-                  { stage: 'Interviewed', count: metrics.pipelineInterviewed, color: 'bg-amber-500', pct: metrics.totalCandidates > 0 ? Math.round((metrics.pipelineInterviewed / metrics.totalCandidates) * 100) : 0 },
-                  { stage: 'Hired', count: metrics.pipelineHired, color: 'bg-purple-500', pct: metrics.totalCandidates > 0 ? Math.round((metrics.pipelineHired / metrics.totalCandidates) * 100) : 0 },
-                ].map((s) => (
-                  <div key={s.stage} className="space-y-1.5">
-                    <div className="flex items-center justify-between text-xs">
-                      <span className="font-medium text-foreground">{s.stage}</span>
-                      <span className="text-muted-foreground tabular-nums">{s.count}</span>
-                    </div>
-                    <div className="h-2 rounded-full bg-muted overflow-hidden">
-                      <div className={cn('h-full rounded-full transition-all duration-700', s.color)} style={{ width: `${s.pct}%` }} />
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
           </div>
         </div>
-
-        {/* Recent Candidates Table */}
-        <div className="rounded-2xl border border-border bg-card/50 p-5">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="text-sm font-semibold text-foreground">Recent Candidates</h3>
-            <button onClick={() => navigate('/candidates')} className="text-xs text-primary hover:text-primary/80 font-medium transition-colors">
-              View all →
-            </button>
-          </div>
-          {loading ? (
-            <SkeletonCard variant="table-row" count={5} />
-          ) : recentCandidates.length === 0 ? (
-            <div className="text-center py-10">
-              <p className="text-sm text-muted-foreground mb-3">No candidates yet</p>
-              <button onClick={() => navigate('/screening')} className="text-sm text-primary hover:text-primary/80 font-medium">
-                Upload your first resume →
-              </button>
-            </div>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b border-border/50 text-xs text-muted-foreground">
-                    <th className="text-left py-2 px-3 font-medium">Name</th>
-                    <th className="text-left py-2 px-3 font-medium hidden sm:table-cell">Role</th>
-                    <th className="text-left py-2 px-3 font-medium">Score</th>
-                    <th className="text-left py-2 px-3 font-medium hidden md:table-cell">Stage</th>
-                    <th className="text-left py-2 px-3 font-medium hidden md:table-cell">Date</th>
-                    <th className="text-right py-2 px-3 font-medium"></th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {recentCandidates.map((c) => (
-                    <tr key={c.id} className="border-b border-border/30 last:border-0 hover:bg-muted/30 transition-colors cursor-pointer" onClick={() => navigate('/candidates')}>
-                      <td className="py-2.5 px-3">
-                        <div className="flex items-center gap-2.5">
-                          <div className="w-7 h-7 rounded-full bg-primary/10 flex items-center justify-center text-xs font-semibold text-primary flex-shrink-0">
-                            {c.name[0]}
-                          </div>
-                          <span className="font-medium text-foreground truncate max-w-[150px]">{c.name}</span>
-                        </div>
-                      </td>
-                      <td className="py-2.5 px-3 text-muted-foreground truncate max-w-[120px] hidden sm:table-cell">{c.role}</td>
-                      <td className="py-2.5 px-3"><ScorePill score={c.score} size="sm" /></td>
-                      <td className="py-2.5 px-3 hidden md:table-cell">
-                        <span className="text-xs px-2 py-0.5 rounded-full bg-muted text-muted-foreground capitalize">{c.stage}</span>
-                      </td>
-                      <td className="py-2.5 px-3 text-muted-foreground text-xs hidden md:table-cell">{c.date}</td>
-                      <td className="py-2.5 px-3 text-right">
-                        <ChevronRight className="h-3.5 w-3.5 text-muted-foreground/30 inline" />
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </div>
-        {/* Outbound Metrics Panel */}
-        <div className="rounded-2xl border border-border bg-card/50 p-5 mt-4">
-          <div className="flex items-center justify-between mb-4">
-            <div className="flex items-center gap-2">
-              <Crosshair className="h-4 w-4 text-primary" />
-              <h3 className="text-sm font-semibold text-foreground">Outbound Performance</h3>
-            </div>
-            <button onClick={() => navigate('/post-interceptor')} className="text-xs text-primary hover:text-primary/80 font-medium transition-colors">
-              Open Interceptor →
-            </button>
-          </div>
-          {!outbound ? (
-            <div className="grid grid-cols-3 gap-4 mb-5">
-              {[1, 2, 3].map(i => <div key={i} className="h-16 bg-muted rounded-xl animate-pulse" />)}
-            </div>
-          ) : (
-            <>
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-5">
-                {[
-                  { label: 'Leads Intercepted', value: outbound.total, icon: <Crosshair className="h-4 w-4 text-primary" /> },
-                  { label: 'Hot Leads Pending', value: outbound.hotPending, icon: <Zap className="h-4 w-4 text-rose-400" /> },
-                  { label: 'DMs Sent', value: outbound.dmsSent, icon: <MessageSquare className="h-4 w-4 text-emerald-400" /> },
-                ].map(m => (
-                  <div key={m.label} className="rounded-xl border border-border bg-background/40 px-4 py-3 flex items-center gap-3">
-                    <div className="p-2 rounded-lg bg-muted/80">{m.icon}</div>
-                    <div>
-                      <p className="text-xl font-bold text-foreground tabular-nums">{m.value}</p>
-                      <p className="text-xs text-muted-foreground">{m.label}</p>
-                    </div>
-                  </div>
-                ))}
-              </div>
-              {/* 7-day bar chart */}
-              <div>
-                <p className="text-xs text-muted-foreground mb-2">Leads last 7 days</p>
-                <div className="flex items-end gap-1 h-12">
-                  {outbound.last7.map(({ date, count }) => {
-                    const max = Math.max(...outbound.last7.map(d => d.count), 1);
-                    const pct = (count / max) * 100;
-                    return (
-                      <div key={date} className="flex-1 flex flex-col items-center gap-1 group" title={`${date}: ${count} leads`}>
-                        <div
-                          className="w-full rounded-t bg-primary/60 group-hover:bg-primary transition-colors"
-                          style={{ height: `${Math.max(pct, count > 0 ? 8 : 2)}%` }}
-                        />
-                        <p className="text-[9px] text-muted-foreground/60 tabular-nums">
-                          {new Date(date + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'short' }).slice(0, 1)}
-                        </p>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            </>
-          )}
-        </div>
-
-        {/* Live Workforce Activity — Handoffs */}
-        <div className="mt-6 rounded-2xl border border-border bg-card/60 backdrop-blur p-5">
-          <div className="flex items-center justify-between mb-4">
-            <div>
-              <h3 className="text-base font-bold text-foreground">Live Workforce Activity</h3>
-              <p className="text-xs text-muted-foreground mt-0.5">Your AI agents handing work to each other in real time</p>
-            </div>
-            <span className="text-[10px] font-semibold uppercase tracking-wider text-emerald-400 flex items-center gap-1.5">
-              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-              Live
-            </span>
-          </div>
-          <div className="space-y-3">
-            {liveEvents.length === 0
-              ? FALLBACK_HANDOFFS.map((ev, i) => <HandoffFeedItem key={`fb-${i}`} event={ev} />)
-              : liveEvents.map((ev) => <HandoffFeedItem key={ev.id} event={ev} />)}
-          </div>
-        </div>
-
       </div>
     </div>
   );
 };
+
+function Step({ n, title, desc, cta, onClick }: { n: number; title: string; desc: string; cta: string; onClick: () => void }) {
+  return (
+    <li className="flex items-start gap-3">
+      <span className="flex items-center justify-center w-6 h-6 rounded-full bg-primary/10 text-primary text-xs font-semibold shrink-0">{n}</span>
+      <div className="flex-1 min-w-0">
+        <p className="text-sm font-medium text-foreground">{title}</p>
+        <p className="text-xs text-muted-foreground mt-0.5">{desc}</p>
+      </div>
+      <button onClick={onClick} className="text-xs font-medium text-primary hover:underline shrink-0">{cta} →</button>
+    </li>
+  );
+}
+
+function Action({ icon, title, onClick }: { icon: React.ReactNode; title: string; onClick: () => void }) {
+  return (
+    <button onClick={onClick} className="flex items-center gap-3 w-full px-3 py-2.5 rounded-xl hover:bg-muted/50 transition-all group text-left">
+      <div className="p-2 rounded-lg bg-muted/80 group-hover:bg-primary/10 transition-colors">{icon}</div>
+      <p className="flex-1 text-sm font-medium text-foreground">{title}</p>
+      <ChevronRight className="h-4 w-4 text-muted-foreground/40 group-hover:text-primary transition-colors" />
+    </button>
+  );
+}
 
 function CompanyBrainBanner() {
   const navigate = useNavigate();
@@ -449,11 +172,11 @@ function CompanyBrainBanner() {
       <div className="flex items-center gap-3">
         <Sparkles className="h-4 w-4 text-primary" />
         <div>
-          <div className="text-sm font-semibold">Complete Company Brain Setup</div>
+          <div className="text-sm font-semibold">Complete Company Brain setup</div>
           <div className="text-xs text-muted-foreground">Teach Pilot, Scout, Aria, Penn, Hawk, and Scribe about your company.</div>
         </div>
       </div>
-      <button onClick={() => navigate('/onboarding/company-brain')} className="text-sm font-semibold text-primary hover:underline">
+      <button onClick={() => navigate("/onboarding/company-brain")} className="text-sm font-semibold text-primary hover:underline">
         Set up now →
       </button>
     </div>
