@@ -1,5 +1,5 @@
 import { motion, AnimatePresence } from 'framer-motion';
-import { Check, Eye, Inbox, X } from 'lucide-react';
+import { Check, Inbox, X } from 'lucide-react';
 import { toast } from 'sonner';
 import AgentAvatar from '@/components/agents/AgentAvatar';
 import { useWorkspace } from '@/contexts/WorkspaceContext';
@@ -18,8 +18,8 @@ export default function AwaitingYou() {
       await decideApproval(id, action);
       toast(action === 'approve' ? 'Approved' : 'Rejected', {
         description: action === 'approve'
-          ? 'Your AI workforce is on it.'
-          : 'The plan has been halted.',
+          ? 'Your AI workforce will act on it.'
+          : 'The draft has been halted.',
       });
     } catch (e) {
       const msg = e instanceof Error ? e.message : 'Something went wrong';
@@ -39,9 +39,9 @@ export default function AwaitingYou() {
             <Inbox className="h-5 w-5 text-amber-400" />
           </div>
           <div>
-            <h1 className="text-2xl font-bold text-foreground tracking-tight">Awaiting Your Approval</h1>
+            <h1 className="text-2xl font-bold text-foreground tracking-tight">Awaiting your approval</h1>
             <p className="text-sm text-muted-foreground mt-1">
-              Your AI workforce completed work and needs your green light.{' '}
+              Drafts, outreach, and comments your AI team prepared. Nothing is sent without your green light.{' '}
               {isReady && `${visible.length} item${visible.length === 1 ? '' : 's'} pending.`}
             </p>
           </div>
@@ -101,7 +101,7 @@ export default function AwaitingYou() {
                 <Check className="h-5 w-5 text-emerald-400" />
               </div>
               <p className="text-sm font-semibold text-foreground">All clear</p>
-              <p className="text-xs text-muted-foreground mt-1">Your AI workforce is running autonomously.</p>
+              <p className="text-xs text-muted-foreground mt-1">No drafts waiting on you right now.</p>
             </motion.div>
           )}
         </div>
