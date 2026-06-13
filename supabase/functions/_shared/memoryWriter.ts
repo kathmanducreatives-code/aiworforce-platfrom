@@ -137,6 +137,21 @@ interface AgentResultCtx extends BaseCtx {
    * lead_candidates created in the current (Penn-only) plan.
    */
   lead_candidate_ids?: string[];
+  /**
+   * Phase 7 — content-loop metadata. When present, Scribe content is saved as a
+   * content_draft tagged with source/subtype/topic/audience/angle so the Signal
+   * Feed can surface it as a founder post / post ideas / comment drafts.
+   */
+  content_loop?: {
+    source?: string;
+    subtype?: string;
+    topic?: string;
+    audience?: string | null;
+    angle?: string;
+    engagement_queries?: string[];
+    competitor_related?: boolean;
+    related_signal_ids?: string[];
+  };
 }
 
 function domainFromUrl(u?: string | null): string | null {
@@ -853,6 +868,21 @@ async function writePennDrafts(ctx: AgentResultCtx): Promise<void> {
 async function writeScribeContent(ctx: AgentResultCtx): Promise<void> {
   const text = (ctx.output_text ?? "").trim();
   if (!text) return;
+  const cl = ctx.content_loop;
+  // Content-loop drafts carry source/subtype/topic/audience/angle so the Signal
+  // Feed can surface founder posts, post ideas, and comment drafts distinctly.
+  const raw: Record<string, unknown> = cl
+    ? {
+        source: cl.source ?? "content_engagement_loop",
+        subtype: cl.subtype ?? "founder_post",
+        topic: cl.topic ?? null,
+        audience: cl.audience ?? null,
+        angle: cl.angle ?? null,
+        engagement_queries: Array.isArray(cl.engagement_queries) ? cl.engagement_queries : [],
+        competitor_related: !!cl.competitor_related,
+        related_signal_ids: Array.isArray(cl.related_signal_ids) ? cl.related_signal_ids : [],
+      }
+    : {};
   await ctx.admin.from("saved_outputs").insert({
     workspace_id: ctx.workspace_id,
     conversation_id: ctx.conversation_id ?? null,
@@ -861,6 +891,6 @@ async function writeScribeContent(ctx: AgentResultCtx): Promise<void> {
     type: "content_draft",
     title: text.split("\n")[0].slice(0, 120),
     body: text,
-    raw: {},
+    raw,
   });
 }

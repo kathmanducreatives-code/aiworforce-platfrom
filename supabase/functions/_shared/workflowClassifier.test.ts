@@ -281,3 +281,92 @@ Deno.test("normalizeIntent: unsafe wipes tools/agents", () => {
   assertEquals(d.agents.length, 0);
   assertEquals(d.execution_mode, "none");
 });
+
+// ---------- Phase 7 — Founder Content + Engagement Loop ----------
+
+Deno.test("content_engagement_loop: post + find people to engage", async () => {
+  const d = await classifyWorkflow(
+    "Write a founder LinkedIn post about what we shipped this week, then find people I should engage with.",
+  );
+  assertEquals(d.workflow_category, "content_creation");
+  assertEquals(d.execution_mode, "content_engagement_loop");
+  assertEquals(d.needs_content, true);
+  assertEquals(d.needs_engagement_search, true);
+  assertEquals(d.signal_type, "linkedin_engagement");
+  assertEquals(d.needs_dm_drafts, false);
+  assertEquals(d.source, "regex");
+});
+
+Deno.test("content_engagement_loop: post ideas + conversations to comment on", async () => {
+  const d = await classifyWorkflow(
+    "Create 3 LinkedIn post ideas for Agentory and find relevant conversations to comment on.",
+  );
+  assertEquals(d.execution_mode, "content_engagement_loop");
+  assertEquals(d.needs_content, true);
+  assertEquals(d.needs_engagement_search, true);
+  assertEquals(d.needs_comment_drafts, true);
+});
+
+Deno.test("content_engagement_loop: turn updates into post + draft comments", async () => {
+  const d = await classifyWorkflow(
+    "Turn these product updates into a LinkedIn post and draft comments for related posts.",
+  );
+  assertEquals(d.execution_mode, "content_engagement_loop");
+  assertEquals(d.needs_comment_drafts, true);
+});
+
+Deno.test("content_engagement_loop: build a founder content loop", async () => {
+  const d = await classifyWorkflow("Help me build a founder content loop for AI GTM agents.");
+  assertEquals(d.execution_mode, "content_engagement_loop");
+  assertEquals(d.needs_content, true);
+  assertEquals(d.needs_engagement_search, true);
+});
+
+Deno.test("content_engagement_loop: competitor content loop tags competitor_engagement", async () => {
+  const d = await classifyWorkflow(
+    "Write a post about why AI SDR tools fail and find competitor conversations to engage with.",
+  );
+  assertEquals(d.execution_mode, "content_engagement_loop");
+  assertEquals(d.signal_type, "competitor_engagement");
+  assertEquals(d.competitor_related, true);
+});
+
+Deno.test("content-only stays Scribe-only (no engagement)", async () => {
+  for (const p of ["Write a LinkedIn post.", "Draft a tweet.", "Create content ideas."]) {
+    const d = await classifyWorkflow(p);
+    assertEquals(d.workflow_category, "content_creation", p);
+    assert(d.execution_mode !== "content_engagement_loop", `${p} must not be a loop`);
+    assertEquals(d.needs_engagement_search ?? false, false, p);
+  }
+});
+
+Deno.test("engagement-only stays Phase 3 linkedin_engagement (no content)", async () => {
+  const d = await classifyWorkflow("Find posts I should comment on about AI SDRs.");
+  assertEquals(d.workflow_category, "signal_sourcing");
+  assertEquals(d.signal_type, "linkedin_engagement");
+  assert(d.execution_mode !== "content_engagement_loop");
+});
+
+Deno.test("engagement-only with replies stays Phase 3 (no post creation)", async () => {
+  const d = await classifyWorkflow("Find posts I should comment on today, then draft thoughtful replies.");
+  assertEquals(d.workflow_category, "signal_sourcing");
+  assert(d.execution_mode !== "content_engagement_loop");
+  assertEquals(d.needs_comment_drafts, true);
+});
+
+Deno.test("unsafe: write a post and automatically comment on 50 posts", async () => {
+  const d = await classifyWorkflow("Write a LinkedIn post and automatically comment on 50 posts.");
+  assertEquals(d.workflow_category, "unsafe_or_unsupported");
+  assertEquals(d.selected_actor_key, null);
+  assertEquals(d.agents.length, 0);
+});
+
+Deno.test("unsafe: auto-DM everyone who likes my post", async () => {
+  const d = await classifyWorkflow("Auto-DM everyone who likes my post.");
+  assertEquals(d.workflow_category, "unsafe_or_unsupported");
+});
+
+Deno.test("unsafe: post this to LinkedIn automatically", async () => {
+  const d = await classifyWorkflow("Post this to LinkedIn automatically.");
+  assertEquals(d.workflow_category, "unsafe_or_unsupported");
+});

@@ -21,6 +21,7 @@ export interface SavedOutputRow {
   title: string | null;
   body: string | null;
   created_at: string | null;
+  raw: Record<string, unknown> | null;
 }
 
 export async function fetchSignals(workspaceId: string, limit = 100): Promise<FeedSignal[]> {
@@ -48,7 +49,7 @@ export async function fetchOutreachDrafts(workspaceId: string, limit = 50): Prom
 export async function fetchSavedOutputs(workspaceId: string, limit = 50): Promise<SavedOutputRow[]> {
   const { data, error } = await supabase
     .from("saved_outputs" as any)
-    .select("id, type, title, body, created_at")
+    .select("id, type, title, body, created_at, raw")
     .eq("workspace_id", workspaceId)
     .order("created_at", { ascending: false })
     .limit(limit);
