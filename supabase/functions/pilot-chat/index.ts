@@ -12,6 +12,7 @@ import { summarizeRegistryForPrompt } from "../_shared/actorRegistry.ts";
 import { classifyWorkflow, SHORT_VAGUE_CLARIFICATION } from "../_shared/workflowClassifier.ts";
 import { validateAgainstCapabilities } from "../_shared/capabilityValidator.ts";
 import { loadConversationMemory, renderMemoryForPrompt, isFollowUpReference, extractTopN, type ConversationMemory } from "../_shared/memoryReader.ts";
+import { shouldGateForOnboarding, ONBOARDING_GATE_REPLY } from "../_shared/companyBrainGate.ts";
 
 
 const cors = {
