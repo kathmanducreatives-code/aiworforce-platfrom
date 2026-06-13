@@ -26,10 +26,15 @@ export interface FeedSignal {
   source_url: string | null;
   source: string | null;
   created_at: string | null;
-  // Phase 4 competitor metadata (from raw), surfaced for cards/filters.
+  // Phase 4 / 4.2 competitor metadata (from raw), surfaced for cards/filters.
   competitor_name: string | null;
-  competitor_source: string | null;
+  competitor_source: string | null;        // post_content | ai_inferred | seed | …
+  competitor_category: string | null;
+  competitor_confidence: number | null;     // 0..1 if present
   conversation_type: string | null;
+  matched_query: string | null;             // the query that surfaced this signal
+  original_business_description: string | null;  // dynamic-discovery context
+  original_website_url: string | null;
   priority: string | null;     // hot|warm|maybe|ignore if present in raw
   raw: Record<string, unknown>;
 }
@@ -66,7 +71,12 @@ export function normalizeSignalRow(row: RawSignalRow): FeedSignal {
     created_at: row?.created_at ?? null,
     competitor_name: str(raw["competitor_name"]),
     competitor_source: str(raw["competitor_source"]),
+    competitor_category: str(raw["competitor_category"]),
+    competitor_confidence: typeof raw["competitor_confidence"] === "number" ? raw["competitor_confidence"] as number : null,
     conversation_type: str(raw["conversation_type"]),
+    matched_query: str(raw["matched_query"]),
+    original_business_description: str(raw["original_business_description"]),
+    original_website_url: str(raw["original_website_url"]),
     priority: str(raw["priority"]) ?? str(raw["competitor_confidence_label"]),
     raw,
   };

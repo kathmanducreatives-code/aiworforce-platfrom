@@ -52,8 +52,9 @@ export default function SignalCard({
           </span>
         )}
         {signal.competitor_name && (
-          <span className="text-[10px] px-1.5 py-0.5 rounded border border-amber-500/30 bg-amber-500/10 text-amber-300">
-            competitor: {signal.competitor_name}{signal.competitor_source === "ai_inferred" ? " (inferred)" : ""}
+          <span className="text-[10px] px-1.5 py-0.5 rounded border border-amber-500/30 bg-amber-500/10 text-amber-300"
+            title={signal.competitor_confidence != null ? `confidence ${Math.round(signal.competitor_confidence * 100)}%` : undefined}>
+            competitor: {signal.competitor_name}{signal.competitor_category ? ` · ${signal.competitor_category}` : ""}{signal.competitor_source === "ai_inferred" ? " (inferred)" : ""}
           </span>
         )}
         {signal.conversation_type && (
@@ -70,6 +71,13 @@ export default function SignalCard({
       )}
       {signal.description && (
         <div className="text-[12px] text-[#C9D1D9] mt-1 line-clamp-3">{signal.description}</div>
+      )}
+      {(signal.matched_query || signal.original_business_description || signal.original_website_url) && (
+        <div className="text-[10px] text-neutral-500 mt-1 space-y-0.5">
+          {signal.matched_query && <div>matched query: <span className="text-neutral-400">{signal.matched_query}</span></div>}
+          {signal.original_business_description && <div>your business: <span className="text-neutral-400">{signal.original_business_description}</span></div>}
+          {signal.original_website_url && <div>from: <span className="text-neutral-400">{signal.original_website_url}</span></div>}
+        </div>
       )}
 
       <div className="mt-2 flex items-center gap-1.5 flex-wrap">

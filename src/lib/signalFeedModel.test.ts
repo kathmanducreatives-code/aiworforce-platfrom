@@ -10,13 +10,40 @@ Deno.test("normalizeSignalRow: maps fields + competitor metadata, no invention",
     description: "Discussing Clay alternatives",
     source_url: "https://linkedin.com/posts/x",
     created_at: "2026-06-12T00:00:00Z",
-    raw: { competitor_name: "Clay", competitor_source: "post_content", conversation_type: "comparison" },
+    raw: {
+      competitor_name: "Clay",
+      competitor_source: "post_content",
+      competitor_category: "data_enrichment",
+      competitor_confidence: 0.82,
+      conversation_type: "comparison",
+      matched_query: "Clay alternatives for outbound",
+      original_business_description: "AI outreach copilot for tiny startups",
+      original_website_url: "https://screeningpilot.com",
+    },
   });
   assertEquals(s.signal_type, "competitor_engagement");
   assertEquals(s.competitor_name, "Clay");
   assertEquals(s.competitor_source, "post_content");
+  assertEquals(s.competitor_category, "data_enrichment");
+  assertEquals(s.competitor_confidence, 0.82);
   assertEquals(s.conversation_type, "comparison");
+  assertEquals(s.matched_query, "Clay alternatives for outbound");
+  assertEquals(s.original_business_description, "AI outreach copilot for tiny startups");
+  assertEquals(s.original_website_url, "https://screeningpilot.com");
   assertEquals(s.source_url, "https://linkedin.com/posts/x");
+});
+
+Deno.test("normalizeSignalRow: competitor_confidence only maps numbers, not strings", () => {
+  const s = normalizeSignalRow({
+    id: "sig-2",
+    signal_type: "competitor_engagement",
+    raw: { competitor_confidence: "high", competitor_category: "data_enrichment" },
+  });
+  assertEquals(s.competitor_confidence, null);
+  assertEquals(s.competitor_category, "data_enrichment");
+  assertEquals(s.matched_query, null);
+  assertEquals(s.original_business_description, null);
+  assertEquals(s.original_website_url, null);
 });
 
 Deno.test("normalizeSignalRow: missing fields fall back, never undefined-crash", () => {
