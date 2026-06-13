@@ -141,6 +141,35 @@ const App = () => (
                       </ProtectedRoute>
                     } />
 
+                    {/* Agentory restructure — new top-level pages */}
+                    <Route path="/leads" element={
+                      <ProtectedRoute><MainLayout><Leads /></MainLayout></ProtectedRoute>
+                    } />
+                    <Route path="/competitors" element={
+                      <ProtectedRoute><MainLayout><Competitors /></MainLayout></ProtectedRoute>
+                    } />
+                    <Route path="/content" element={
+                      <ProtectedRoute><MainLayout><Content /></MainLayout></ProtectedRoute>
+                    } />
+                    <Route path="/agents" element={
+                      <ProtectedRoute><MainLayout><Agents /></MainLayout></ProtectedRoute>
+                    } />
+                    <Route path="/settings/integrations" element={
+                      <ProtectedRoute><MainLayout><SettingsIntegrations /></MainLayout></ProtectedRoute>
+                    } />
+
+                    {/* Legacy route redirects — preserve deep links */}
+                    <Route path="/lead-scraper" element={<Navigate to="/leads" replace />} />
+                    <Route path="/icp-intelligence" element={<Navigate to="/leads?tab=icp" replace />} />
+                    <Route path="/deep-search" element={<Navigate to="/leads?tab=research" replace />} />
+                    <Route path="/talent-intel" element={<Navigate to="/leads?tab=research" replace />} />
+                    <Route path="/growth-signals" element={<Navigate to="/signals" replace />} />
+                    <Route path="/competitor-intel" element={<Navigate to="/competitors" replace />} />
+                    <Route path="/analytics" element={<Navigate to="/dashboard" replace />} />
+                    <Route path="/departments" element={<Navigate to="/agents" replace />} />
+                    <Route path="/rooms/:dept" element={<Navigate to="/agents" replace />} />
+
+
 
                     <Route path="/candidates" element={
                       <ProtectedRoute>
