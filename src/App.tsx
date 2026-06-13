@@ -179,13 +179,8 @@ const App = () => (
                       </ProtectedRoute>
                     } />
 
-                    <Route path="/analytics" element={
-                      <ProtectedRoute>
-                        <MainLayout>
-                          <DataDashboard />
-                        </MainLayout>
-                      </ProtectedRoute>
-                    } />
+
+
 
                     <Route path="/folder/:folderName" element={
                       <ProtectedRoute>
@@ -219,29 +214,8 @@ const App = () => (
                       </ProtectedRoute>
                     } />
 
-                    <Route path="/lead-scraper" element={
-                      <ProtectedRoute>
-                        <MainLayout>
-                          <LeadScraper />
-                        </MainLayout>
-                      </ProtectedRoute>
-                    } />
 
-                    <Route path="/deep-search" element={
-                      <ProtectedRoute>
-                        <MainLayout>
-                          <DeepSearch />
-                        </MainLayout>
-                      </ProtectedRoute>
-                    } />
 
-                    <Route path="/icp-intelligence" element={
-                      <ProtectedRoute>
-                        <MainLayout>
-                          <ICPManager />
-                        </MainLayout>
-                      </ProtectedRoute>
-                    } />
 
                     <Route path="/icp/results/:sessionId" element={
                       <ProtectedRoute>
