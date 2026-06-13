@@ -5,6 +5,7 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { generateJson, logProviderCall } from "../_shared/aiProvider.ts";
 import { isToolConfigured, runTool } from "../_shared/toolRegistry.ts";
+import { mergeProfile, type StructuredBrainPatch } from "../_shared/companyBrainSchema.ts";
 
 const cors = {
   "Access-Control-Allow-Origin": "*",
