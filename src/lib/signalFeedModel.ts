@@ -36,6 +36,14 @@ export interface FeedSignal {
   original_business_description: string | null;  // dynamic-discovery context
   original_website_url: string | null;
   priority: string | null;     // hot|warm|maybe|ignore if present in raw
+  // Phase 5 polish — additional optional context surfaced from raw (never invented).
+  fit_score: number | null;
+  account_name: string | null;
+  contact_name: string | null;
+  role_title: string | null;
+  location: string | null;
+  post_snippet: string | null;
+  reason: string | null;
   raw: Record<string, unknown>;
 }
 
@@ -56,6 +64,18 @@ function str(v: unknown): string | null {
   return typeof v === "string" && v.trim() ? v.trim() : null;
 }
 
+function firstStr(...vs: unknown[]): string | null {
+  for (const v of vs) {
+    const s = str(v);
+    if (s) return s;
+  }
+  return null;
+}
+
+function num(v: unknown): number | null {
+  return typeof v === "number" && Number.isFinite(v) ? v : null;
+}
+
 /** Normalize a raw `signals` row into a feed-ready shape. Never invents data. */
 export function normalizeSignalRow(row: RawSignalRow): FeedSignal {
   const raw = (row?.raw && typeof row.raw === "object") ? row.raw as Record<string, unknown> : {};
@@ -72,12 +92,19 @@ export function normalizeSignalRow(row: RawSignalRow): FeedSignal {
     competitor_name: str(raw["competitor_name"]),
     competitor_source: str(raw["competitor_source"]),
     competitor_category: str(raw["competitor_category"]),
-    competitor_confidence: typeof raw["competitor_confidence"] === "number" ? raw["competitor_confidence"] as number : null,
+    competitor_confidence: num(raw["competitor_confidence"]),
     conversation_type: str(raw["conversation_type"]),
     matched_query: str(raw["matched_query"]),
     original_business_description: str(raw["original_business_description"]),
     original_website_url: str(raw["original_website_url"]),
     priority: str(raw["priority"]) ?? str(raw["competitor_confidence_label"]),
+    fit_score: num(raw["fit_score"]) ?? num(raw["score"]),
+    account_name: firstStr(raw["account_name"], raw["company"], raw["company_name"]),
+    contact_name: firstStr(raw["contact_name"], raw["person_name"], raw["author"], raw["author_name"]),
+    role_title: firstStr(raw["role"], raw["role_title"], raw["title"]),
+    location: firstStr(raw["location"], raw["city"], raw["region"]),
+    post_snippet: firstStr(raw["post_snippet"], raw["snippet"], raw["post_text"]),
+    reason: firstStr(raw["reason"], raw["why"], raw["why_it_matters"]),
     raw,
   };
 }
@@ -89,6 +116,7 @@ export function signalContext(s: FeedSignal): string {
   const parts = [
     signalTypeLabel(s.signal_type),
     s.competitor_name ? `competitor: ${s.competitor_name}` : null,
+    s.account_name ? `company: ${s.account_name}` : null,
     s.title,
     s.source_url,
   ].filter(Boolean);
@@ -116,3 +144,14 @@ export function buildActionCommand(action: SignalAction, s?: FeedSignal): string
 }
 
 export const PRIORITY_RANK: Record<string, number> = { hot: 0, warm: 1, maybe: 2, ignore: 3 };
+
+/** Extract a friendly host label from a URL (no protocol, no www). */
+export function sourceHost(url: string | null | undefined): string | null {
+  if (!url) return null;
+  try {
+    const u = new URL(url);
+    return u.hostname.replace(/^www\./, "");
+  } catch {
+    return null;
+  }
+}
