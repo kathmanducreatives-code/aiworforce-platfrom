@@ -1,121 +1,135 @@
+# Dashboard Redesign — AI Workforce Command Center
 
-# Agentory UI Restructuring Pass
+Frontend-only redesign of `src/pages/Dashboard.tsx`. No backend, schema, edge function, route, or auto-send changes.
 
-Frontend/presentation only. No backend, schema, or edge function changes. No route deletions — only consolidation + redirects.
+## Scope
 
-## 1. Sidebar restructure (`src/components/Sidebar.tsx`)
+- Rewrite `src/pages/Dashboard.tsx` with a new layered layout.
+- Add small presentational subcomponents in `src/components/dashboard/` (new folder).
+- Reuse existing hooks: `useCompanyBrain`, `useSignalFeed`, `useApprovals`, `useSignalReviews`, `useWorkspace`, `useAuth`, `useTheme`.
+- No new data fetching, no new tables, no new edge functions.
 
-Collapse 4 groups → 4 groups, fewer items:
+## New layout (top → bottom)
 
-```text
-Workspace
-  Dashboard             /dashboard
-  Signals               /signals
-  Conversations         /dashboard  (placeholder until /conversations exists)
-  Awaiting You          /awaiting-you  (badge preserved)
-
-Growth
-  Leads                 /leads
-  Competitors           /competitors
-  Content               /content
-
-AI Team
-  Agents                /agents
-  Company Brain         /onboarding/company-brain
-
-Settings
-  Integrations          /settings/integrations  (new stub)
-  Email Sequences       /email-sequences
+```
+┌──────────────────────────────────────────────────────────────┐
+│ 1. Company Brain Readiness Card (only if incomplete)         │
+├──────────────────────────────────────────────────────────────┤
+│ 2. Hero: Today's AI Workforce Brief                          │
+│    "Good afternoon, {first}" + dynamic brief sentence        │
+│    [Review approvals] [Open Signal Feed] [Run growth wf]     │
+├──────────────────────────────────────────────────────────────┤
+│ 3. Metrics grid (4 cols desktop, 2 cols mobile, 2 rows)      │
+│    Signals · Hot leads · Approvals* · Drafts*                │
+│    Competitor signals · Content drafts · Saved/actioned · Time saved │
+│    (* = action-emphasized: amber ring when > 0)              │
+├──────────────────────────┬───────────────────────────────────┤
+│ 4. AI Workforce Activity │ 5. What Needs Attention           │
+│    Scout / Aria / Hawk / │    Task queue rows                │
+│    Penn / Scribe / Pilot │    (approvals, drafts, brain,     │
+│    with derived counts   │     competitor signals)           │
+├──────────────────────────┴───────────────────────────────────┤
+│ 6. Recommended Next Moves (4–5 premium action cards)         │
+├──────────────────────────────────────────────────────────────┤
+│ pb-32 spacer so floating chat composer never overlaps        │
+└──────────────────────────────────────────────────────────────┘
 ```
 
-Bottom: Help & Support, Sign Out, Collapse (unchanged).
+## Section details
 
-Removed from sidebar (routes preserved, accessible by URL): Talent room, Growth room, Intelligence room, Content room, Lead Scraper, ICP Intelligence, Deep Search, Growth Signals, Talent Intel, Competitor Intel, Analytics, Interviews, "New Agent" button (moves inside `/agents`).
+### 1. Company Brain Readiness Card
+- Render only when `data.onboarding_completed === false`.
+- Show missing items derived from `profile` keys: `icp`, `competitors`, `brand_voice`, `goals` (badge per missing item).
+- If `profile` has none of the keys → "Setup needed". If some present → list missing as small chips.
+- CTA "Set up now" → `/onboarding/company-brain`.
+- Premium styling: emerald border, subtle gradient, Sparkles icon, agent name list in copy.
 
-Also remove the duplicate in-sidebar search button (CommandBar already exposes ⌘K globally).
+### 2. Hero — Today's AI Workforce Brief
+- Greeting (existing logic) + first name.
+- Dynamic sentence built from metrics:
+  - "Your AI workforce surfaced {signals} signals, prepared {drafts} drafts, and needs approval on {approvals} items."
+  - Empty fallback: "Your AI workforce is ready. Start by finding signals or completing Company Brain."
+- Action buttons:
+  - "Review approvals" → `navigate('/awaiting-you')`
+  - "Open Signal Feed" → `navigate('/signals')`
+  - "Run growth workflow" → `dispatchEvent(new CustomEvent('chat:send', { detail: { text: 'Run my weekly growth workflow.' } }))`
+- Keep theme toggle + NotificationCenter on the right.
 
-## 2. Route consolidation (`src/App.tsx`)
+### 3. Metrics Grid
+Eight `MetricCard`s. Cards needing user action (Approvals pending > 0, Drafts ready > 0) get an amber/emerald ring + small "View" link. Each card adds a one-line description below the number:
+- Signals found — "{n} saved signals" → /signals
+- Hot leads — "{n} marked hot" → /signals?filter=hot
+- Approvals pending — "{n} need your review" → /awaiting-you (emphasized)
+- Drafts ready — "{n} outreach drafts" → /content (emphasized)
+- Competitor signals — "{n} new this week" → /competitors
+- Content drafts — "{n} saved drafts" → /content
+- Saved / actioned — "{n} signals worked" → /signals
+- Time saved — "~{n}m this week" (no link)
 
-Add new pages + redirects (use `<Navigate replace>` to keep deep links working):
+### 4. AI Workforce Activity panel
+Left column on desktop (lg:col-span-3). Six agent rows with `AgentAvatar`:
+- Scout — "Found {signalsFound} signals" / "Waiting for first workflow."
+- Aria — "Ranked {savedActioned} opportunities" / fallback.
+- Hawk — "Tracked {competitorSignals} competitor signals" / fallback.
+- Penn — "Prepared {outreachDrafts} outreach drafts" / fallback.
+- Scribe — "Saved {contentDrafts} content drafts" / fallback.
+- Pilot — "Coordinating your workflows" (always shown).
+Each row clickable to relevant route. No invented data.
 
-| Old route | New behavior |
-|---|---|
-| `/lead-scraper` | Redirect → `/leads` |
-| `/icp-intelligence` | Redirect → `/leads?tab=icp` |
-| `/deep-search` | Redirect → `/leads?tab=research` |
-| `/talent-intel` | Redirect → `/leads?tab=people` |
-| `/growth-signals` | Redirect → `/signals` |
-| `/competitor-intel` | Redirect → `/competitors` |
-| `/analytics` | Redirect → `/dashboard` |
-| `/rooms/:dept`, `/departments` | Redirect → `/agents` |
-| `/interview-scheduler` | Redirect → `/settings/integrations` (kept reachable, hidden) |
-| `/post-interceptor`, `/lead-crm`, `/outreach-engine` | Stay accessible, not in sidebar |
+### 5. What Needs Attention panel
+Right column (lg:col-span-2). Existing pattern, plus rows for:
+- Approvals pending → /awaiting-you
+- Drafts ready → /content
+- Company Brain incomplete → /onboarding/company-brain (only when not completed)
+- Competitor signals → /competitors
+Empty state: friendly "All clear" copy.
 
-New routes: `/leads`, `/competitors` (already exists as CompetitorMonitor — wrap with new shell), `/content`, `/agents`, `/settings/integrations`.
+### 6. Recommended Next Moves
+Grid of 4–5 cards. Each navigates or dispatches `chat:send` only.
+1. Find competitor conversations — chat:send "Find 5 competitor conversations for my company."
+2. Draft outreach for hot leads — chat:send "Draft outreach for my highest-priority saved leads."
+3. Create a founder post — chat:send "Write a founder LinkedIn post based on this week's activity."
+4. Rank saved signals — chat:send "Rank my saved signals by fit and urgency."
+5. Complete Company Brain — navigate `/onboarding/company-brain` (hidden if completed).
 
-## 3. New pages (thin shells that wrap existing functionality)
+Card: icon, title, one-line subtitle, subtle hover lift.
 
-- **`src/pages/Leads.tsx`** — Tabs: Find leads / Saved / ICP / Research. Each tab renders existing components: `LeadScraper`, `LeadCRM`, `ICPManager`, `DeepSearch`. GTM copy, no candidate language.
-- **`src/pages/Competitors.tsx`** — Wraps existing `CompetitorMonitor` + `CompetitorIntelligence` views in one premium shell. Buttons: Add competitor / Find conversations / Analyze my website. Hide Firecrawl key warning unless `import.meta.env.DEV`.
-- **`src/pages/Content.tsx`** — Surfaces founder post drafts, comment drafts, engagement opps from `saved_outputs` + `outreach_drafts` already loaded by `useSignalFeed`. Buttons: Create post / Find posts to comment on / Build content loop (each dispatches existing `chat:send` actions).
-- **`src/pages/Agents.tsx`** — Cards for Pilot, Scout, Aria, Hawk, Penn, Scribe (sourced from `src/data/dockAgents.ts` / `agentProfiles.ts`). Each card: role, capabilities, last activity, Start task → opens AgentBuilder or `chat:send`. Includes "New Agent" button.
-- **`src/pages/SettingsIntegrations.tsx`** — Stub linking to Email Sequences, Interviews, OAuth.
+## Copy sweep
+Within Dashboard only, ensure no occurrences of: ScreeningPilot, candidate, screening, hiring pipeline, AI screening, placement, recruitment. Use Agentory vocabulary.
 
-## 4. Dashboard rewrite (`src/pages/Dashboard.tsx`)
+## Empty state behavior
+When all counts are zero AND brain incomplete → hero falls back to "ready" copy; metrics still render zeros; Needs Attention shows Company Brain row + onboarding suggestions; Recommended Next Moves stays visible.
 
-Replace ScreeningPilot/recruiting metrics with GTM cards: Signals found • Hot leads • Competitor signals • Content drafts • Pending approvals • Outreach drafts • Saved/actioned signals • Time saved. Data pulled from existing hooks (`useSignalFeed`, `useApprovals`, `useSignalReviews`) — no new queries.
+## Visual / design
+- Reuse existing tokens (`bg-card`, `border-border`, `text-primary` emerald, etc.). No hardcoded colors beyond existing semantic Tailwind utilities already used in the file.
+- Rounded-2xl cards, subtle borders, generous spacing, `pb-32` on outer container for chat composer clearance.
+- Section headers: small uppercase tracking label + larger title.
 
-Top banner "Complete Company Brain Setup" rendered when `useCompanyBrain().onboarding_completed !== true` (keep existing logic, restyle as prominent hero).
+## Files
 
-Replace Getting Started steps:
-1. Set up Company Brain
-2. Find signals (Scout)
-3. Review and act (Aria + Scribe + Penn)
+Edited:
+- `src/pages/Dashboard.tsx` — full rewrite of layout, composed from subcomponents below.
 
-Strip: "Welcome to ScreeningPilot", "Create a Screening Job", "Source Talent", "Review Candidates", hiring pipeline / total candidates / AI screening copy.
+Created (presentational, no logic outside props):
+- `src/components/dashboard/BrainReadinessCard.tsx`
+- `src/components/dashboard/WorkforceBriefHero.tsx`
+- `src/components/dashboard/MetricsGrid.tsx`
+- `src/components/dashboard/WorkforceActivityPanel.tsx`
+- `src/components/dashboard/NeedsAttentionPanel.tsx`
+- `src/components/dashboard/RecommendedMoves.tsx`
 
-## 5. Awaiting You copy pass (`src/pages/AwaitingYou.tsx`)
+Not touched: hooks, routes, sidebar, edge functions, schema, AwaitingYou, Signals, other pages.
 
-Replace recruiting wording with: pending approvals, outreach drafts, email send approvals, comment/DM draft approvals, content approvals. All actions remain approval-gated (no auto-send introduced).
+## Safety
+- All "run" / "draft" / "post" buttons either `navigate(...)` or dispatch `CustomEvent('chat:send', ...)`. Zero direct send/post/DM/comment calls.
+- No new network calls, no new secrets, no new tables.
 
-## 6. Signals page (`src/pages/Signals.tsx`, `src/components/signals/*`)
-
-No structural change. Light copy sweep only: confirm competitor metadata + review states + bulk actions all still wired (already implemented in Phases 5–7).
-
-## 7. Global copy rules
-
-Sweep visible strings in: Dashboard, Sidebar, Awaiting You, new pages, MobileHeader, CommandBar, CommandPalette, empty states.
-
-- candidate → lead / person / contact
-- screening → review / ranking / qualification
-- resume/placement/recruitment/hiring pipeline/screening job → drop or rephrase
-
-Exceptions: `CandidateApply`, `BookInterview`, `JobApplicants`, `ScreeningJobs` (explicit hiring features) keep their wording. Internal variable/table/column names untouched.
-
-## 8. Polish
-
-- Remove dummy room messages (repeated "ok") in chat workspace mock data if present.
-- Confirm chat composer bottom padding (already fixed Phase 5) still clears new pages.
-- Consistent empty states (reuse existing `EmptyState` standard).
-- Keep dark premium tokens; no hardcoded hex.
-
-## 9. Safety (unchanged)
-
-No auto-comment / auto-DM / auto-send code paths added. All new buttons dispatch `chat:send` or open drafts.
-
-## 10. Verification
-
-- Frontend typecheck (auto-run by harness).
-- Visual check via preview: sidebar count down, Dashboard says "Agentory", redirects resolve, new pages render.
-- Grep for "ScreeningPilot", "candidate", "screening" in user-visible strings outside the recruiting exception files.
-
-## Files changed (estimate)
-
-Edited: `src/components/Sidebar.tsx`, `src/App.tsx`, `src/pages/Dashboard.tsx`, `src/pages/AwaitingYou.tsx`, `src/components/MobileHeader.tsx` (nav parity), `src/components/shared/CommandPalette.tsx` (entries).
-Created: `src/pages/Leads.tsx`, `src/pages/Competitors.tsx`, `src/pages/Content.tsx`, `src/pages/Agents.tsx`, `src/pages/SettingsIntegrations.tsx`.
+## Verification
+- Rely on auto typecheck/build.
+- Visual QA via preview: Dashboard renders without errors, sections appear in order, chat composer doesn't overlap last card, all buttons navigate or open chat (no auto actions), no recruiting copy left.
 
 ## Out of scope
-
-- No DB migrations, no edge function edits, no new tables.
-- No deletion of legacy page files (kept for redirect targets / direct URL access).
-- No production deploy.
+- Backend / schema / functions.
+- Sidebar, route, or other-page changes.
+- New data sources or analytics tables.
+- Production deploy.
