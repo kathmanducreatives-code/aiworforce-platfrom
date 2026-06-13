@@ -10,6 +10,8 @@ import { Label } from '@/components/ui/label';
 import { Card } from '@/components/ui/card';
 import { toast } from 'sonner';
 import { ArrowRight, Loader2, Plus, Trash2, Sparkles, CheckCircle2, AlertTriangle } from 'lucide-react';
+import { getBrainDefaults, BRAND_VOICE_TAGS, type StructuredBrain } from '@/lib/companyBrainSchema';
+import { Switch } from '@/components/ui/switch';
 
 const GOAL_OPTIONS = [
   { value: 'leads', label: 'Find clients/leads' },
