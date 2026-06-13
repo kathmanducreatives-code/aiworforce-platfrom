@@ -1,121 +1,58 @@
-# Phase 5 — Signal Feed UI Polish
+# Phase 6 + Phase 7 Final Verification Plan
 
-Frontend-only polish. No backend, schema, edge function, or memory writer/reader changes. All actions continue to dispatch through the existing `chat:send` CustomEvent.
+## Findings from exploration (read-only)
 
-## Files to change
+**🔴 Blocking issue found:** the `signal_reviews` migration file exists at `supabase/migrations/20260613130000_phase6_signal_reviews.sql` but the table is **not present in the database**.
+- `psql \dt public.signal_reviews` → "Did not find any relation".
+- Browser console shows repeated `PGRST205 Could not find the table 'public.signal_reviews'` errors on `/signals` from `fetchSignalReviews`.
+- Consequence: none of the Phase 6 review actions (reviewed / saved / ignored / actioned) are currently persisting in the preview environment.
 
-- `src/components/signals/SignalCard.tsx` — rewrite layout into two columns; show context-specific fields; contextual action set; cleaner reviewed state.
-- `src/components/signals/SignalFeed.tsx` — bottom padding for composer overlap, tab counts, polished active state, filter-empty state, prompt chips in empty state.
-- `src/lib/signalFeedModel.ts` — extend `FeedSignal` with extra optional fields read out of `raw` (fit_score, account/company, contact/person, role, location, post_snippet, reason). No new data invented — only surfacing fields if present in the existing `raw` JSON.
-- (optional) `src/pages/Signals.tsx` — wrap with the standard page container if needed for the bottom-padding fix.
+**🟢 Frontend wiring looks correct** (no code changes needed):
+- `SignalFeed.tsx` bulk actions all dispatch via `chat:send` only — `rank`, `draft_comment`, `draft_dm`, `create_outreach`, plus content-draft follow-ups (`find_engagement`, `draft_comments`). No direct send/post code paths.
+- `useSignalReviews` performs optimistic update + rollback on failure — once the table exists, persistence will work end-to-end without code edits.
+- Phase 7 orchestration (Scribe / Scout / Aria, `contentEngagementLoop`, `workflowClassifier`, `providerRouting`) is present in `supabase/functions/`. No verification of actual model output is possible without running prompts through the live chat.
 
-No changes to: `src/lib/signalsFeed.ts`, `src/hooks/useSignalFeed.ts`, any supabase function, migration, or memory module.
+## Plan
 
-## 1. Card layout (two-column)
+### Step 1 — Apply the pending migration
+Run `supabase/migrations/20260613130000_phase6_signal_reviews.sql` against the database. The file already includes:
+- `signal_reviews` table with status check constraint
+- GRANTs to `authenticated` + `service_role`
+- RLS enabled, workspace-scoped policies pinned to `auth.uid()`
+- Partial unique indexes per signal / per lead candidate
+- `updated_at` trigger
 
-Desktop (`md:` and up): CSS grid `grid-cols-[1fr_220px] gap-4`.
-- **Left rail** (main content): type+priority badges, title, signal_label sub-line, description (line-clamp-4), account/contact line, lead reason, "matched query" line, action buttons row.
-- **Right rail** (metadata panel): vertical key/value list inside a softly bordered panel `rounded-md border border-white/[0.06] bg-white/[0.015] p-2.5 text-[11px]`. Items shown only if value exists:
-  - Priority (colored pill)
-  - Type
-  - Source (domain extracted from `source_url` if `source` empty)
-  - Created (relative + tooltip with ISO)
-  - Fit score (if present in raw)
-  - Confidence (competitor_confidence)
-  - Competitor (name · category)
-  - Conversation type
-  - Matched query (truncated)
+No edits to the SQL needed.
 
-Mobile (`<md`): single column; metadata panel stacks below content.
+### Step 2 — Re-verify in the database
+- `select to_regclass('public.signal_reviews')` → expect non-null.
+- Confirm RLS is enabled and 4 policies are present.
 
-## 2. Contextual content per signal_type
+### Step 3 — Re-verify in the preview
+- Reload `/signals`; confirm console no longer logs `PGRST205`.
+- Spot-check single-signal `Save`, `Mark reviewed`, `Ignore` and bulk equivalents — each should toggle without rollback.
 
-Render a small sub-section above actions:
+### Step 4 — Frontend typecheck/build
+- Run the project build (Lovable harness) and report any TS errors.
 
-- **competitor_engagement**: "Competitor" block — name, category, source tag (`ai_inferred`/`post_content`/`seed`), confidence %, conversation_type, matched_query, business description / website context if present.
-- **linkedin_engagement**: author/person, company/title, post snippet (from `raw.post_snippet` or description), source link.
-- **hiring_signal**: company, role, location, "why this matters" (from `raw.reason` if present), source link.
-- **people_profile**: name, title, company, link.
-- Generic fallback: title + description only.
+### Step 5 — Phase 7 flow verification (manual prompts, documentation only)
+Phase 7 happy-paths require live model calls; I will **not** execute them automatically. The plan documents the expected behavior so you can run them in chat:
+1. *"Write a LinkedIn post about what we shipped this week."* → Scribe only, Claude preferred, `saved_outputs` row of type `content_draft`, no Apify.
+2. *"Write a founder LinkedIn post about AI GTM agents, then find 5 posts I should comment on."* → Scribe → Scout → Aria → Scribe comments, ≤5 LinkedIn results, draft-only.
+3. *"Write a post and automatically comment on 50 LinkedIn posts."* → refusal or draft-only counter-offer.
 
-All fields are read from existing `signal` + `signal.raw`. If a field is missing, the line is omitted. If description is missing entirely show muted "No detailed reason saved yet."
+I will grep the orchestration code to confirm no `auto-post`, `auto-send`, `auto_comment`, or autonomous publishing primitives exist before reporting.
 
-## 3. Contextual actions (still chat:send only)
+### Step 6 — Final report
+Will include:
+- Phase 6 status (after migration applied)
+- Phase 7 code-level safety audit
+- Build/typecheck result
+- Production-deploy go/no-go recommendation
+- Any remaining UI polish issues
 
-Helper `actionsForSignal(s)` returns:
-
-- competitor_engagement → Draft comment, Draft DM, Enrich, Mark reviewed, Source
-- linkedin_engagement → Draft comment, Draft DM, Enrich, Mark reviewed, Source
-- hiring_signal → Enrich company, Draft outreach, Source, Mark reviewed
-- people_profile → Enrich, Draft outreach, Source, Mark reviewed
-- default → Enrich, Draft outreach, Source, Mark reviewed
-
-Source button hidden when `source_url` is null. All other actions dispatch existing `buildActionCommand(...)` via the existing `sendToPilot` helper. No new network paths.
-
-## 4. Reviewed state
-
-Already client-side via `reviewed: Set<string>` in `SignalFeed`. Polish:
-- Reviewed card: `opacity-60`, a small "Reviewed" check chip top-right next to priority badge.
-- Button label toggles "Mark reviewed" ⇄ "Reviewed".
-- Persistence not added (memory: "no schema changes").
-
-## 5. Fix composer overlap
-
-Add `pb-[180px]` (or `pb-44`) to the root `<div>` in `SignalFeed.tsx`. Verify last card is fully scrollable above the floating composer at 1056×777 and at mobile width.
-
-## 6. Tabs + filters polish
-
-- Tab buttons get counts computed client-side from `signals`/`drafts`/`savedOutputs` (e.g. `LinkedIn (12)`). Counts only shown when > 0.
-- Active tab: solid emerald underline + emerald text; inactive: muted with hover.
-- Filters row: align with `flex flex-wrap items-center gap-2`, consistent control heights (h-8), monospace-free.
-- When filtered list is empty but signals exist: show "No signals match these filters." with a "Clear filters" button that resets `query`, `priority`, `hasSource`.
-
-## 7. Empty state
-
-When `signals.length === 0`:
-- Existing empty copy.
-- Add 3 prompt chips that dispatch `chat:send`:
-  - "Find companies hiring GTM roles"
-  - "Find LinkedIn posts about AI SDRs"
-  - "Find competitor conversations for my company"
-
-## 8. Loading + error
-
-- Replace the plain "Loading signals…" with 3 skeleton card placeholders using existing `Skeleton` component.
-- Keep error banner; ensure Retry button styling matches other buttons.
-
-## 9. Model additions (purely surfacing existing `raw` data)
-
-Add optional fields on `FeedSignal` read out of `raw`:
-```ts
-fit_score: number | null;          // raw.fit_score
-account_name: string | null;       // raw.account_name | raw.company | raw.company_name
-contact_name: string | null;       // raw.contact_name | raw.person_name | raw.author
-role_title: string | null;         // raw.role | raw.title
-location: string | null;           // raw.location
-post_snippet: string | null;       // raw.post_snippet | raw.snippet
-reason: string | null;             // raw.reason | raw.why
-```
-No invented values — null when absent. Existing tests in `signalFeedModel.test.ts` continue to pass; add 2–3 cases for the new fields.
-
-## 10. Verification
-
-- `bunx vitest run src/lib/signalFeedModel.test.ts`
-- Build/typecheck runs automatically.
-- Visual check: `/signals` at 1056×777 and 390×844.
-  - Two-column layout on desktop, stacked on mobile.
-  - Last card not hidden under composer.
-  - Competitors tab shows full Phase 4 metadata.
-  - Reviewed dims the card and changes label.
-
-## Out of scope (will NOT do)
-
-- No DB schema, migrations, edge functions, memoryWriter/Reader, actor registry changes.
-- No auto-send/comment/DM/email.
-- No Phase 6 work.
-- No persistence of reviewed state.
-- No deploy.
-
-## Final report will include
-
-Files changed, visual diff summary, overlap fix confirmation, competitor metadata confirmation, reviewed-state behavior, confirmation actions remain `chat:send`-only, typecheck result, any remaining gaps, PR #7 readiness.
+## What I will NOT do
+- No new features.
+- No schema changes beyond running the already-written Phase 6 migration.
+- No production deploy.
+- No edits to edge functions or frontend code unless the build surfaces a real error.
