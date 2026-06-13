@@ -1,9 +1,21 @@
 import { useMemo, useState } from "react";
-import { RefreshCw, Inbox, ListOrdered, Sparkles } from "lucide-react";
+import { RefreshCw, Inbox, ListOrdered, Sparkles, CheckSquare, Square, X, Bookmark, Check, EyeOff, MessageSquare, Send, FileText } from "lucide-react";
 import { toast } from "sonner";
 import { useWorkspace } from "@/contexts/WorkspaceContext";
 import { useSignalFeed } from "@/hooks/useSignalFeed";
+import { useSignalReviews } from "@/hooks/useSignalReviews";
 import { buildActionCommand, type FeedSignal } from "@/lib/signalFeedModel";
+import {
+  mergeReviewState,
+  matchesReviewFilter,
+  buildBulkCommand,
+  nextStatusAfterDraft,
+  REVIEW_FILTERS,
+  type ReviewFilter,
+  type ReviewStatus,
+  type ReviewedSignal,
+  type BulkDraftAction,
+} from "@/lib/signalReviewModel";
 import { Skeleton } from "@/components/ui/skeleton";
 import SignalCard from "./SignalCard";
 
@@ -43,11 +55,22 @@ function sendPrompt(text: string) {
 export default function SignalFeed() {
   const { workspaceId } = useWorkspace();
   const { signals, drafts, savedOutputs, loading, error, refresh } = useSignalFeed(workspaceId);
+  const { reviewsBySignal, setReview, bulkSetReview } = useSignalReviews(workspaceId);
+
   const [tab, setTab] = useState<Tab>("all");
+  const [reviewFilter, setReviewFilter] = useState<ReviewFilter>("all");
+  const [hideIgnored, setHideIgnored] = useState(true);
   const [query, setQuery] = useState("");
   const [priority, setPriority] = useState<string>("");
   const [hasSource, setHasSource] = useState(false);
-  const [reviewed, setReviewed] = useState<Set<string>>(new Set());
+  const [selectMode, setSelectMode] = useState(false);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+
+  // Merge each signal with its persisted review row (default status `new`).
+  const reviewed: ReviewedSignal[] = useMemo(
+    () => signals.map((s) => mergeReviewState(s, reviewsBySignal[s.id])),
+    [signals, reviewsBySignal],
+  );
 
   const counts = useMemo(() => ({
     all: signals.length,
@@ -61,24 +84,73 @@ export default function SignalFeed() {
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
-    return signals.filter((s) => {
+    return reviewed.filter((s) => {
       if (!matchesTab(s, tab)) return false;
+      if (!matchesReviewFilter(s.review_status, reviewFilter)) return false;
+      // Default ("All") view hides ignored unless the user opts in or filters to it.
+      if (reviewFilter === "all" && hideIgnored && s.review_status === "ignored") return false;
       if (priority && (s.priority ?? "").toLowerCase() !== priority) return false;
       if (hasSource && !s.source_url) return false;
       if (q && !(`${s.title} ${s.description ?? ""} ${s.signal_label ?? ""} ${s.competitor_name ?? ""}`.toLowerCase().includes(q))) return false;
       return true;
     });
-  }, [signals, tab, query, priority, hasSource]);
-
-  const toggleReviewed = (id: string) =>
-    setReviewed((prev) => { const next = new Set(prev); next.has(id) ? next.delete(id) : next.add(id); return next; });
+  }, [reviewed, tab, reviewFilter, hideIgnored, query, priority, hasSource]);
 
   const clearFilters = () => { setQuery(""); setPriority(""); setHasSource(false); };
   const hasActiveFilters = !!(query || priority || hasSource);
 
+  // ----- selection -----
+  const toggleSelect = (id: string) =>
+    setSelected((prev) => { const next = new Set(prev); next.has(id) ? next.delete(id) : next.add(id); return next; });
+  const clearSelection = () => setSelected(new Set());
+  const selectAllVisible = () => setSelected(new Set(filtered.map((s) => s.id)));
+  const selectedSignals = useMemo(() => filtered.filter((s) => selected.has(s.id)), [filtered, selected]);
+
+  // ----- single-card review actions -----
+  const handleSetReview = async (id: string, status: ReviewStatus) => {
+    try {
+      await setReview(id, status);
+      toast.success(status === "new" ? "Review cleared" : `Marked ${status}`);
+    } catch {
+      toast.error("Couldn't save review state");
+    }
+  };
+  // After drafting from a card, mark actioned (unless saved/ignored).
+  const handleDraftAction = async (id: string) => {
+    const cur = (reviewed.find((s) => s.id === id)?.review_status) ?? "new";
+    const next = nextStatusAfterDraft(cur);
+    if (next === cur) return;
+    try { await setReview(id, next); } catch { /* draft already sent; review state is best-effort */ }
+  };
+
+  // ----- bulk actions -----
   const rankAll = () => {
     window.dispatchEvent(new CustomEvent("chat:send", { detail: buildActionCommand("rank") }));
     toast.success("Asked Pilot to rank your saved signals");
+  };
+
+  const bulkDraft = (action: BulkDraftAction) => {
+    if (selectedSignals.length === 0) return;
+    window.dispatchEvent(new CustomEvent("chat:send", { detail: buildBulkCommand(action, selectedSignals) }));
+    const verb = action === "rank" ? "Ranking" : "Drafting (no auto-send)";
+    toast.success(`${verb} ${selectedSignals.length} signal${selectedSignals.length > 1 ? "s" : ""} via Pilot`);
+    // Mark drafted signals actioned (preserving explicit saved/ignored).
+    if (action !== "rank") {
+      const ids = selectedSignals.filter((s) => nextStatusAfterDraft(s.review_status) === "actioned").map((s) => s.id);
+      if (ids.length) void bulkSetReview(ids, "actioned").catch(() => {});
+    }
+  };
+
+  const bulkReview = async (status: ReviewStatus) => {
+    const ids = selectedSignals.map((s) => s.id);
+    if (ids.length === 0) return;
+    try {
+      await bulkSetReview(ids, status);
+      toast.success(`Marked ${ids.length} ${status}`);
+      clearSelection();
+    } catch {
+      toast.error("Couldn't update selected signals");
+    }
   };
 
   return (
@@ -88,6 +160,10 @@ export default function SignalFeed() {
         <h1 className="text-lg font-semibold text-[#F0F6FC]">Signal Feed</h1>
         <span className="text-[11px] text-neutral-500">{signals.length} saved signals</span>
         <div className="ml-auto flex items-center gap-2">
+          <button onClick={() => { setSelectMode((v) => !v); clearSelection(); }}
+            className={`inline-flex items-center gap-1 text-[12px] px-2.5 py-1.5 rounded-md border ${selectMode ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-300" : "border-white/[0.08] bg-white/[0.02] hover:bg-white/[0.04]"}`}>
+            {selectMode ? <CheckSquare className="h-3.5 w-3.5" /> : <Square className="h-3.5 w-3.5" />} Select
+          </button>
           <button onClick={rankAll} className="inline-flex items-center gap-1 text-[12px] px-2.5 py-1.5 rounded-md border border-white/[0.08] bg-white/[0.02] hover:bg-white/[0.04]">
             <ListOrdered className="h-3.5 w-3.5" /> Rank by fit
           </button>
@@ -97,7 +173,7 @@ export default function SignalFeed() {
         </div>
       </div>
 
-      {/* Tabs */}
+      {/* Type tabs */}
       <div className="flex items-center gap-1 flex-wrap border-b border-white/[0.06] pb-2">
         {TABS.map((t) => {
           const active = tab === t.key;
@@ -115,8 +191,22 @@ export default function SignalFeed() {
       {/* Filters (signal feed tabs only) */}
       {tab !== "drafts" && tab !== "saved" && (
         <div className="flex items-center gap-2 flex-wrap">
+          {/* review status filter */}
+          <div className="inline-flex items-center gap-0.5 rounded-md border border-white/[0.08] bg-white/[0.02] p-0.5">
+            {REVIEW_FILTERS.map((f) => (
+              <button key={f.key} onClick={() => setReviewFilter(f.key)}
+                className={`text-[11px] px-2 py-1 rounded transition-colors ${reviewFilter === f.key ? "bg-emerald-500/10 text-emerald-300" : "text-neutral-400 hover:text-neutral-200"}`}>
+                {f.label}
+              </button>
+            ))}
+          </div>
+          {reviewFilter === "all" && (
+            <label className="h-8 text-[12px] inline-flex items-center gap-1.5 text-neutral-400 px-2 rounded-md border border-white/[0.08] bg-white/[0.02]">
+              <input type="checkbox" checked={hideIgnored} onChange={(e) => setHideIgnored(e.target.checked)} /> Hide ignored
+            </label>
+          )}
           <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search signals…"
-            className="h-8 text-[12px] px-2.5 rounded-md border border-white/[0.08] bg-white/[0.02] text-[#C9D1D9] placeholder:text-neutral-500 w-48 focus:outline-none focus:border-emerald-500/30" />
+            className="h-8 text-[12px] px-2.5 rounded-md border border-white/[0.08] bg-white/[0.02] text-[#C9D1D9] placeholder:text-neutral-500 w-44 focus:outline-none focus:border-emerald-500/30" />
           <select value={priority} onChange={(e) => setPriority(e.target.value)}
             className="h-8 text-[12px] px-2 rounded-md border border-white/[0.08] bg-[#0d1117] text-[#C9D1D9]">
             <option value="">Any priority</option>
@@ -131,6 +221,24 @@ export default function SignalFeed() {
               Clear filters
             </button>
           )}
+        </div>
+      )}
+
+      {/* Bulk selection toolbar */}
+      {selectMode && tab !== "drafts" && tab !== "saved" && (
+        <div className="sticky top-0 z-10 flex items-center gap-1.5 flex-wrap rounded-md border border-emerald-500/20 bg-[#0d1117]/95 backdrop-blur px-2.5 py-2">
+          <span className="text-[12px] text-emerald-300 font-medium">{selected.size} selected</span>
+          <button onClick={selectAllVisible} className="text-[11px] px-2 py-1 rounded text-neutral-300 hover:text-neutral-100">Select all visible</button>
+          <button onClick={clearSelection} className="text-[11px] px-2 py-1 rounded text-neutral-400 hover:text-neutral-200 inline-flex items-center gap-1"><X className="h-3 w-3" /> Clear</button>
+          <div className="h-4 w-px bg-white/10 mx-1" />
+          <BulkBtn disabled={!selected.size} onClick={() => bulkDraft("rank")} icon={ListOrdered} label="Rank selected" />
+          <BulkBtn disabled={!selected.size} onClick={() => bulkDraft("draft_comment")} icon={MessageSquare} label="Draft comments" />
+          <BulkBtn disabled={!selected.size} onClick={() => bulkDraft("draft_dm")} icon={Send} label="Draft DMs" />
+          <BulkBtn disabled={!selected.size} onClick={() => bulkDraft("create_outreach")} icon={FileText} label="Draft outreach" />
+          <div className="h-4 w-px bg-white/10 mx-1" />
+          <BulkBtn disabled={!selected.size} onClick={() => void bulkReview("saved")} icon={Bookmark} label="Save" />
+          <BulkBtn disabled={!selected.size} onClick={() => void bulkReview("reviewed")} icon={Check} label="Mark reviewed" />
+          <BulkBtn disabled={!selected.size} onClick={() => void bulkReview("ignored")} icon={EyeOff} label="Ignore" />
         </div>
       )}
 
@@ -187,14 +295,28 @@ export default function SignalFeed() {
       {/* Signal feed */}
       {!loading && tab !== "drafts" && tab !== "saved" && (
         filtered.length === 0
-          ? (signals.length > 0 && hasActiveFilters
-              ? <FilterEmpty onClear={clearFilters} />
+          ? (signals.length > 0
+              ? <FilterEmpty onClear={() => { clearFilters(); setReviewFilter("all"); setHideIgnored(true); }} />
               : <EmptyWithPrompts />)
           : <ul className="space-y-2">{filtered.map((s) => (
-              <SignalCard key={s.id} signal={s} reviewed={reviewed.has(s.id)} onIgnore={toggleReviewed} />
+              <SignalCard key={s.id} signal={s}
+                selectable={selectMode}
+                selected={selected.has(s.id)}
+                onToggleSelect={toggleSelect}
+                onSetReview={handleSetReview}
+                onDraftAction={handleDraftAction} />
             ))}</ul>
       )}
     </div>
+  );
+}
+
+function BulkBtn({ onClick, icon: Icon, label, disabled }: { onClick: () => void; icon: any; label: string; disabled?: boolean }) {
+  return (
+    <button onClick={onClick} disabled={disabled}
+      className="inline-flex items-center gap-1 text-[11px] px-2 py-1 rounded-md border border-white/[0.08] bg-white/[0.02] text-[#C9D1D9] hover:bg-emerald-500/[0.06] hover:border-emerald-500/30 hover:text-[#F0F6FC] transition-colors disabled:opacity-40 disabled:cursor-not-allowed">
+      <Icon className="h-3 w-3" /> {label}
+    </button>
   );
 }
 
@@ -230,7 +352,7 @@ function FilterEmpty({ onClear }: { onClear: () => void }) {
   return (
     <div className="flex flex-col items-center gap-2 py-12 text-center text-neutral-500">
       <Inbox className="h-6 w-6" />
-      <div className="text-[12px]">No signals match these filters.</div>
+      <div className="text-[12px]">No signals match this review filter.</div>
       <button onClick={onClear} className="text-[11px] px-2.5 py-1 rounded-md border border-white/[0.08] bg-white/[0.02] hover:bg-white/[0.04] text-neutral-300">
         Clear filters
       </button>
