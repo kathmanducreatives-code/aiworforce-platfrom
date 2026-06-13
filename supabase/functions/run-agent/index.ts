@@ -7,6 +7,7 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { runTool, normalizeApifySourceType } from "../_shared/toolRegistry.ts";
 import { generateText, logProviderCall } from "../_shared/aiProvider.ts";
+import { preferredProviderForAgent } from "../_shared/providerRouting.ts";
 import { getAgentorySystemPrompt, AGENTORY_SYSTEM_PROMPT_VERSION } from "../_shared/agentorySystemPrompt.ts";
 import { summarizeRegistryForPrompt } from "../_shared/actorRegistry.ts";
 
@@ -289,11 +290,14 @@ Deno.serve(async (req) => {
       ? `${buildUserMessage(instruction, input)}\n\nNOTE TO AGENT: ${toolNotice} Do NOT fabricate live data. Acknowledge the limitation, then produce the best plan/analysis you can from available context.`
       : buildUserMessage(instruction, input);
 
-  // Scribe (content/copywriting) prefers Claude/Anthropic for higher-quality
-  // writing when ANTHROPIC_API_KEY is configured. aiProvider falls back to
-  // Gemini/Lovable automatically when the key is absent — no behavior change
-  // for other agents, which stay on the default Gemini provider.
-  const preferredProvider = agent_slug === "scribe" ? "anthropic" : undefined;
+  // Writing agents (Scribe content/comments, Penn outreach/DM copy) prefer
+  // Claude/Anthropic for higher-quality writing when ANTHROPIC_API_KEY is set.
+  // aiProvider falls back to Gemini/Lovable automatically when the key is absent
+  // — planner/controller agents (pilot/scout/hawk/aria) stay on Gemini.
+  const preferredProvider = preferredProviderForAgent(agent_slug);
+  if (preferredProvider === "anthropic" && !Deno.env.get("ANTHROPIC_API_KEY")) {
+    console.log("[run-agent] anthropic preferred for", agent_slug, "but ANTHROPIC_API_KEY missing — falling back to default provider");
+  }
 
   const ai = await generateText({
     taskType: "agent_execution",
@@ -372,6 +376,11 @@ Deno.serve(async (req) => {
         // drafts link to the remembered leads (which live in a prior plan).
         lead_candidate_ids: Array.isArray(tool_input_body?.lead_candidate_ids)
           ? tool_input_body.lead_candidate_ids
+          : undefined,
+        // Phase 7 — content-loop metadata so Scribe drafts are tagged with
+        // subtype/topic/audience/angle/engagement_queries in saved_outputs.raw.
+        content_loop: (tool_input_body?.content_loop && typeof tool_input_body.content_loop === "object")
+          ? tool_input_body.content_loop
           : undefined,
       });
     } catch (e) {

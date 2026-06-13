@@ -731,6 +731,46 @@ Deno.serve(async (req) => {
     );
   }
 
+  // 5c.iii-b Phase 7 — Founder Content + Engagement Loop. content_creation +
+  // engagement search. Deterministic staged plan in orchestrate: Scribe (post,
+  // Claude-preferred) → Scout (LinkedIn search) → Aria (rank) → [Scribe comments]
+  // → [Penn DMs]. Must precede the Scribe-only content_creation branch.
+  if (decision.execution_mode === "content_engagement_loop") {
+    return await delegateToOrchestrate({
+      admin,
+      SUPABASE_URL,
+      SUPABASE_ANON_KEY,
+      authHeader,
+      conversationId,
+      workspaceId,
+      instruction: message,
+      toolInput: {
+        intent: "content_engagement_loop",
+        tool_name: "source_with_apify",
+        selected_actor_key: "apify_linkedin_posts",
+        source_type: "linkedin_engagement",
+        query: decision.query ?? message,
+        role_keywords: [],
+        location: null,
+        max_results: Math.max(1, Math.min(10, decision.max_results ?? 5)),
+        needs_enrichment: false,
+        needs_outreach: !!decision.needs_dm_drafts,
+        execution_mode: "content_engagement_loop",
+        confidence: decision.confidence,
+        missing_fields: [],
+        reason: decision.reason,
+        signal_type: decision.signal_type ?? "linkedin_engagement",
+        needs_content: true,
+        needs_engagement_search: true,
+        needs_comment_drafts: !!decision.needs_comment_drafts,
+        needs_dm_drafts: !!decision.needs_dm_drafts,
+        competitor_related: !!decision.competitor_related,
+      } as unknown as ToolInput,
+      modelUsed: "google/gemini-3-flash-preview",
+      providerUsed: "lovable-ai",
+    });
+  }
+
   // 5c.iv content_creation → Scribe-only delegation. No Apify/Firecrawl.
   if (decision.workflow_category === "content_creation") {
     return await delegateToOrchestrate({

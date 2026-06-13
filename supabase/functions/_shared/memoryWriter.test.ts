@@ -321,6 +321,50 @@ Deno.test("writeMemoryFromAgentResult: Scribe writes content_draft", async () =>
   assertEquals(tables.saved_outputs.length, 1);
   assertEquals(tables.saved_outputs[0].type, "content_draft");
   assertEquals(tables.saved_outputs[0].title, "Hello world");
+  // No content_loop → raw is empty (backwards compatible).
+  assertEquals(tables.saved_outputs[0].raw, {});
+});
+
+Deno.test("writeMemoryFromAgentResult: Scribe content-loop tags subtype/topic/angle", async () => {
+  const { tables, admin } = makeFake();
+  await writeMemoryFromAgentResult({
+    admin,
+    workspace_id: "ws-1",
+    plan_id: "plan-1",
+    agent_slug: "scribe",
+    output_text: "Why we built Agentory\nFounder post body…",
+    content_loop: {
+      source: "content_engagement_loop",
+      subtype: "founder_post",
+      topic: "AI GTM agents",
+      audience: "seed-stage founders",
+      angle: "founder lesson",
+      engagement_queries: ["AI GTM agents", "AI GTM agents for founders"],
+      competitor_related: false,
+    },
+  });
+  const row = tables.saved_outputs[0];
+  assertEquals(row.type, "content_draft");
+  assertEquals(row.raw.source, "content_engagement_loop");
+  assertEquals(row.raw.subtype, "founder_post");
+  assertEquals(row.raw.topic, "AI GTM agents");
+  assertEquals(row.raw.audience, "seed-stage founders");
+  assertEquals(row.raw.angle, "founder lesson");
+  assertEquals(row.raw.engagement_queries.length, 2);
+});
+
+Deno.test("writeMemoryFromAgentResult: Scribe content-loop comment_draft subtype", async () => {
+  const { tables, admin } = makeFake();
+  await writeMemoryFromAgentResult({
+    admin,
+    workspace_id: "ws-1",
+    plan_id: "plan-1",
+    agent_slug: "scribe",
+    output_text: "Comment 1\nComment 2",
+    content_loop: { source: "content_engagement_loop", subtype: "comment_draft", topic: "AI SDRs" },
+  });
+  assertEquals(tables.saved_outputs[0].raw.subtype, "comment_draft");
+  assertEquals(tables.saved_outputs[0].raw.source, "content_engagement_loop");
 });
 
 Deno.test("writeMemoryFromAgentResult: Penn links drafts to explicit remembered lead ids", async () => {

@@ -10,6 +10,7 @@ import { getAgentorySystemPrompt, AGENTORY_SYSTEM_PROMPT_VERSION } from "../_sha
 import { summarizeRegistryForPrompt } from "../_shared/actorRegistry.ts";
 import { buildDraftOutreachPlan } from "../_shared/draftOutreachPlan.ts";
 import { buildCompetitorDiscoveryPlan } from "../_shared/competitorDiscovery.ts";
+import { extractContentLoopInput, buildContentLoopPlan } from "../_shared/contentEngagementLoop.ts";
 
 const cors = {
   "Access-Control-Allow-Origin": "*",
@@ -584,9 +585,130 @@ Deno.serve(async (req) => {
     let parsed: { plan_summary: string; steps: Step[] } | null = null;
     let plannerSource: "ai" | "fallback" | "staged" = "fallback";
 
-    // Content-creation template: Scribe only. No Apify/Firecrawl, no Penn.
-    // Driven by the workflow classifier (tool_input.intent === 'content_creation').
-    if (tool_input && tool_input.intent === "content_creation") {
+    // Phase 7 — Founder Content + Engagement Loop. Deterministic staged plan:
+    // Scribe (founder post / ideas, Claude-preferred) → Scout (LinkedIn search)
+    // → Aria (rank opportunities) → [Scribe comments, Claude-preferred] →
+    // [Penn soft DMs, approval-gated]. No auto-post / auto-comment / auto-DM.
+    if (tool_input && tool_input.intent === "content_engagement_loop") {
+      const ti = tool_input as typeof tool_input & {
+        signal_type?: string; competitor_related?: boolean;
+        needs_comment_drafts?: boolean; needs_dm_drafts?: boolean;
+      };
+      const loopInput = extractContentLoopInput(user_instruction);
+      // Carry classifier-derived flags onto the parsed input.
+      loopInput.competitorRelated = !!ti.competitor_related || loopInput.competitorRelated;
+      loopInput.needsCommentDrafts = !!ti.needs_comment_drafts;
+      loopInput.needsDmDrafts = !!ti.needs_dm_drafts;
+      loopInput.needsEngagementSearch = true;
+      const loopPlan = buildContentLoopPlan(loopInput, companyBrain);
+      const isCompetitor = (ti.signal_type === "competitor_engagement") || !!loopInput.competitorRelated;
+      const cap = Math.max(1, Math.min(10, tool_input.max_results ?? loopPlan.search_budget.max_results_per_query));
+      const topic = loopPlan.post_brief.topic || tool_input.query || user_instruction;
+      const audience = loopPlan.post_brief.audience ?? "the company's ICP";
+      const postSubtype = loopInput.contentFormat === "post_ideas" ? "post_ideas" : "founder_post";
+      const engagementQ = loopPlan.engagement_queries.length ? loopPlan.engagement_queries.join(", ") : topic;
+
+      const steps: Step[] = [];
+
+      // 0) Scribe — founder post / ideas (Claude preferred via run-agent routing).
+      const scribePost = mkStep(0, "scribe",
+        postSubtype === "post_ideas" ? "Draft founder LinkedIn post ideas" : "Draft founder LinkedIn post",
+        `Write ${postSubtype === "post_ideas" ? "a set of distinct founder LinkedIn post ideas" : "a founder LinkedIn post"} about: ${topic}. Audience: ${audience}. Tone: ${loopPlan.post_brief.tone}. Angle: ${loopPlan.post_brief.angle}. Ground it in real context — do NOT invent product details, metrics, or customer names. This is a draft for the founder to review and post manually; nothing is auto-posted.`,
+        {
+          tool_needed: null,
+          expected_output: "On-brand founder content draft (no fabricated facts).",
+          success_criteria: "Draft produced; grounded; nothing auto-posted.",
+          planner_source: "fallback",
+        });
+      (scribePost as Step & { metadata?: Record<string, unknown> }).metadata = {
+        tool_input: {
+          ...tool_input,
+          content_loop: {
+            source: "content_engagement_loop",
+            subtype: postSubtype,
+            topic,
+            audience: loopPlan.post_brief.audience ?? null,
+            angle: loopPlan.post_brief.angle,
+            engagement_queries: loopPlan.engagement_queries,
+            competitor_related: isCompetitor,
+          },
+        },
+      };
+      steps.push(scribePost);
+
+      // 1) Scout — find LinkedIn engagement opportunities for the post topic.
+      const scoutToolInput = {
+        ...tool_input,
+        tool_name: "source_with_apify",
+        selected_actor_key: "apify_linkedin_posts",
+        source_type: "linkedin_engagement",
+        query: engagementQ,
+        keywords: loopPlan.engagement_queries,
+        max_results: cap,
+        signal_type: isCompetitor ? "competitor_engagement" : "linkedin_engagement",
+      };
+      const scoutStep = mkStep(1, "scout",
+        isCompetitor ? "Find competitor engagement opportunities" : "Find LinkedIn engagement opportunities",
+        `Find up to ${cap} LinkedIn posts / conversations to engage with on: ${engagementQ}. Use the LinkedIn posts actor only. Do not invent profiles or contact info; do not harvest commenter/reactor lists.`,
+        {
+          tool_needed: "source_with_apify",
+          expected_output: "Normalized LinkedIn engagement items (post, author, topic, signal reason).",
+          success_criteria: "Actor returns engagement items, or reports unavailable cleanly. No fabricated people.",
+          planner_source: "fallback",
+        });
+      (scoutStep as Step & { metadata?: Record<string, unknown> }).metadata = { tool_input: scoutToolInput };
+      steps.push(scoutStep);
+
+      // 2) Aria — rank engagement opportunities.
+      steps.push(mkStep(2, "aria", "Rank engagement opportunities",
+        `Rank the LinkedIn engagement opportunities for the post about: ${topic}. Score by ICP fit, relevance to the post, reply-worthiness, and urgency. Label hot | warm | maybe | ignore. Note where a thoughtful comment (or soft DM, if requested) is appropriate.`,
+        {
+          tool_needed: "extract_structured",
+          expected_output: "Ranked engagement opportunities with priority label and rationale.",
+          success_criteria: "Every opportunity scored; grounded only in the sourced items.",
+          planner_source: "fallback",
+        }));
+
+      // 3) Scribe — thoughtful comments (Claude preferred), only if requested.
+      if (loopInput.needsCommentDrafts) {
+        const scribeComments = mkStep(steps.length, "scribe", "Draft thoughtful comments",
+          `Draft a short, human, non-pitchy LinkedIn comment for each top-ranked post related to: ${topic}. Add genuine value; ground each comment in the actual post text. No "great post!" filler, no link drops, no fake familiarity. These are drafts for manual review — nothing is auto-posted.`,
+          {
+            tool_needed: "summarize_text",
+            expected_output: "One thoughtful comment draft per top post, ready for manual review.",
+            success_criteria: "Comments specific to each post; nothing auto-posted.",
+            planner_source: "fallback",
+          });
+        (scribeComments as Step & { metadata?: Record<string, unknown> }).metadata = {
+          tool_input: {
+            ...tool_input,
+            content_loop: { source: "content_engagement_loop", subtype: "comment_draft", topic, competitor_related: isCompetitor },
+          },
+        };
+        steps.push(scribeComments);
+      }
+
+      // 4) Penn — soft DMs (Claude preferred), approval-gated, only if requested.
+      if (loopInput.needsDmDrafts) {
+        steps.push(mkStep(steps.length, "penn", "Draft soft follow-up DMs",
+          `Draft a soft, no-pitch LinkedIn DM for each top-ranked person engaging on: ${topic}. Reference the specific post/context, ask one light question, no pitch in the first message. Approval required; never send automatically.`,
+          {
+            tool_needed: "draft_outreach",
+            requires_approval: true,
+            expected_output: "One soft DM per top person, awaiting approval.",
+            success_criteria: "No auto-send; references real post context; no pitch in first message.",
+            planner_source: "fallback",
+          }));
+      }
+
+      steps.forEach((s, idx) => { s.step_index = idx; });
+      const tail = loopInput.needsDmDrafts ? " → draft DMs" : loopInput.needsCommentDrafts ? " → draft comments" : "";
+      parsed = {
+        plan_summary: `${isCompetitor ? "Competitor content loop" : "Content loop"}: post → find engagement → rank${tail}: ${topic.slice(0, 70)}`,
+        steps,
+      };
+      plannerSource = "staged";
+    } else if (tool_input && tool_input.intent === "content_creation") {
       const scribeStep = mkStep(
         0,
         "scribe",

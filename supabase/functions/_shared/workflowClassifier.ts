@@ -65,6 +65,7 @@ export type WorkflowExecutionMode =
   | "outreach"
   | "content"
   | "research"
+  | "content_engagement_loop"
   | "none";
 
 export interface WorkflowDecision {
@@ -107,6 +108,9 @@ export interface WorkflowDecision {
   // Phase 4.2 — deep commenter extraction for a specific post.
   extract_commenters?: boolean;
   post_urls?: string[];
+  // Phase 7 — Founder Content + Engagement Loop.
+  needs_content?: boolean;
+  needs_engagement_search?: boolean;
 }
 
 const ALL_CATEGORIES: WorkflowCategory[] = [
@@ -127,7 +131,7 @@ const ALL_CATEGORIES: WorkflowCategory[] = [
 ];
 
 const ALL_EXECUTION_MODES: WorkflowExecutionMode[] = [
-  "fast", "deep", "outreach", "content", "research", "none",
+  "fast", "deep", "outreach", "content", "research", "content_engagement_loop", "none",
 ];
 
 // ---------- Regex layer ----------
@@ -149,6 +153,19 @@ const CONTENT_CREATION_RE =
 const MARKET_RESEARCH_RE =
   /\b(what changed in|what(?:'?s| is) (?:happening|new) in|current (?:state|status|news|trends?)|latest (?:news|updates?|trends?)|market (?:update|news|trends?|research)|competitor (?:updates?|news|moves?)|what'?s? trending|industry (?:news|trends?))\b/i;
 
+// Phase 7 — Founder Content + Engagement Loop detection. The loop fires when a
+// prompt combines CONTENT creation intent with ENGAGEMENT/distribution intent,
+// or names a "content loop" outright.
+const CONTENT_LOOP_RE = /\b(content (?:engagement )?loop|founder content loop)\b/i;
+const CONTENT_INTENT_LOOSE_RE = /\b(post ideas?|content ideas?|founder (?:post|content|update))\b/i;
+// Genuine content-AUTHORING verb + a content noun. Unlike CONTENT_CREATION_RE,
+// this matches bare "write a post about …" and "turn these updates into a post",
+// but NOT a passing mention like "extract commenters from this LinkedIn post".
+const CONTENT_AUTHOR_RE =
+  /\b(write|draft|create|compose|turn\s+[^.!?]*\binto)\b[^.!?]*\b(posts?|threads?|content|founder update|newsletter|article|blog|caption)\b/i;
+const ENGAGEMENT_FIND_RE =
+  /\b(find|finding|discover|surface|look for|get)\b[^.!?]*\b(people|posts?|conversations?|threads?|leads?|prospects?|accounts?|opportunit(?:y|ies))\b|\b(engage with|comment on|reply to|respond to|people (?:i|to)\s+(?:should\s+)?engage|engagement opportunit(?:y|ies)|relevant conversations|conversations to (?:engage|comment))\b/i;
+
 const AGENT_MANAGEMENT_RE =
   /\b(what (is|are) (scout|aria|hawk|penn|scribe|pilot) (working on|doing)|what can (scout|aria|hawk|penn|scribe) do|which agents?|show me my agents?|list (my )?agents?|what agents do i have|my workforce)\b/i;
 
@@ -163,7 +180,7 @@ const SEND_RE = /\b(send|deliver|fire off|blast)\s+(?:emails?|messages?|outreach
 
 // Unsafe / unsupported.
 const UNSAFE_RE =
-  /\b(personal phone numbers?|home address|scrape private|private personal data|harvest emails for spam|send (?:emails?|messages?) automatically|automatic(?:ally)? send|without approval|start calling them automatically|cold call(?:ing)? (?:automated|automatic)|automatic(?:ally)?\s+(?:comment|post|dm|message|reply|engage|connect|like)|auto[- ]?(?:comment|post|dm|reply|like|engage)|send\s+(?:messages?|dms?|emails?|outreach)\s+to\s+(?:all|every|everyone|each))\b/i;
+  /\b(personal phone numbers?|home address|scrape private|private personal data|harvest emails for spam|send (?:emails?|messages?) automatically|automatic(?:ally)? send|without approval|start calling them automatically|cold call(?:ing)? (?:automated|automatic)|automatic(?:ally)?\s+(?:comment|post|publish|share|dm|message|reply|engage|connect|like)|auto[- ]?(?:comment|post|publish|share|dm|reply|like|engage)|(?:post|publish|share)\s+(?:this|that|it|these|them)?[^.!?]*\bautomatic(?:ally)?|send\s+(?:messages?|dms?|emails?|outreach)\s+to\s+(?:all|every|everyone|each))\b/i;
 
 // Sourcing.
 const COMPANIES_HIRING_RE =
@@ -243,6 +260,8 @@ function defaultDecision(category: WorkflowCategory, partial: Partial<WorkflowDe
     business_description: partial.business_description ?? null,
     extract_commenters: partial.extract_commenters ?? false,
     post_urls: partial.post_urls ?? [],
+    needs_content: partial.needs_content ?? false,
+    needs_engagement_search: partial.needs_engagement_search ?? false,
   };
 }
 
@@ -288,6 +307,60 @@ function regexClassify(message: string): WorkflowDecision | null {
       needs_clarification: true,
       clarification_question: SHORT_VAGUE_CLARIFICATION,
     });
+  }
+
+  // Phase 7 — Founder Content + Engagement Loop. Fires when CONTENT creation
+  // intent combines with ENGAGEMENT/distribution intent (or the prompt names a
+  // "content loop"). Must precede competitor-discovery / linkedin-engagement /
+  // content-only branches. Unsafe auto-action is already handled above, so
+  // "write a post and auto-comment on 50 posts" never reaches here.
+  {
+    // Content intent here means genuine AUTHORING (not a passing "this LinkedIn
+    // post" mention). Engagement intent means finding/engaging with OTHERS'
+    // posts — never the act of authoring one.
+    const hasContentIntent =
+      (CONTENT_AUTHOR_RE.test(m) || CONTENT_LOOP_RE.test(m) || CONTENT_INTENT_LOOSE_RE.test(m)) && !OUTREACH_RE.test(m);
+    const hasEngagementIntent =
+      ENGAGEMENT_FIND_RE.test(m) || COMMENT_DRAFT_INTENT_RE.test(m) || DM_DRAFT_INTENT_RE.test(m);
+    const isContentLoop = CONTENT_LOOP_RE.test(m) || (hasContentIntent && hasEngagementIntent);
+    if (isContentLoop) {
+      const needsComments = COMMENT_DRAFT_INTENT_RE.test(m) || /\bcomment(?:s|ing)?\b|\brepl(?:y|ies)\b/i.test(m);
+      const needsDms = DM_DRAFT_INTENT_RE.test(m) || /\b(dms?|direct messages?|follow[- ]?ups?)\b/i.test(m);
+      const competitorRelated = matchCompetitors(m).length > 0 || COMPETITOR_INTENT_RE.test(m) || /\bcompetitors?\b/i.test(m);
+      const signalType = competitorRelated ? "competitor_engagement" : "linkedin_engagement";
+      const agents = ["scribe", "scout", "aria"];
+      if (needsDms) agents.push("penn");
+      return defaultDecision("content_creation", {
+        reason: competitorRelated ? "content + competitor engagement loop" : "content + engagement loop",
+        confidence: 0.85,
+        execution_mode: "content_engagement_loop",
+        needs_content: true,
+        needs_engagement_search: true,
+        signal_type: signalType,
+        selected_tool: "source_with_apify",
+        selected_actor_key: "apify_linkedin_posts",
+        source_type: "linkedin_engagement",
+        query: m,
+        agents,
+        needs_comment_drafts: needsComments,
+        needs_dm_drafts: needsDms,
+        needs_outreach: needsDms,
+        requires_approval: needsDms,
+        competitor_related: competitorRelated,
+        max_results: extractRequestedCount(m, 5),
+      });
+    }
+    // Content authoring without engagement (and no URL) → Scribe-only. Covers
+    // "Write a LinkedIn post.", "Draft a tweet.", "Create content ideas.".
+    if (hasContentIntent && !looksLikeURL(m)) {
+      return defaultDecision("content_creation", {
+        reason: "content authoring (Scribe-only)",
+        confidence: 0.9,
+        agents: ["scribe"],
+        execution_mode: "content",
+        needs_content: true,
+      });
+    }
   }
 
   // Phase 4.2 — deep commenter extraction for a specific post. Needs a post URL;
@@ -657,6 +730,8 @@ export function normalizeIntent(input: Partial<WorkflowDecision> | Record<string
     post_urls: Array.isArray(raw.post_urls)
       ? (raw.post_urls as unknown[]).filter((u) => typeof u === "string") as string[]
       : [],
+    needs_content: !!raw.needs_content,
+    needs_engagement_search: !!raw.needs_engagement_search,
   };
 
   // outreach (or sourcing+outreach) always requires approval before sending.

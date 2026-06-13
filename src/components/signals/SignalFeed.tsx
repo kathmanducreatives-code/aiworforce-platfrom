@@ -1,10 +1,18 @@
 import { useMemo, useState } from "react";
-import { RefreshCw, Inbox, ListOrdered, Sparkles, CheckSquare, Square, X, Bookmark, Check, EyeOff, MessageSquare, Send, FileText } from "lucide-react";
+import { RefreshCw, Inbox, ListOrdered, Sparkles, CheckSquare, Square, X, Bookmark, Check, EyeOff, MessageSquare, Send, FileText, Radar } from "lucide-react";
 import { toast } from "sonner";
 import { useWorkspace } from "@/contexts/WorkspaceContext";
 import { useSignalFeed } from "@/hooks/useSignalFeed";
 import { useSignalReviews } from "@/hooks/useSignalReviews";
 import { buildActionCommand, type FeedSignal } from "@/lib/signalFeedModel";
+import {
+  contentDraftMeta,
+  contentSubtypeLabel,
+  buildContentDraftCommand,
+  matchesSavedFilter,
+  type SavedFilter,
+} from "@/lib/contentDraftModel";
+import type { SavedOutputRow } from "@/lib/signalsFeed";
 import {
   mergeReviewState,
   matchesReviewFilter,
@@ -65,6 +73,12 @@ export default function SignalFeed() {
   const [hasSource, setHasSource] = useState(false);
   const [selectMode, setSelectMode] = useState(false);
   const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [savedFilter, setSavedFilter] = useState<SavedFilter>("all");
+
+  const savedFiltered = useMemo(
+    () => savedOutputs.filter((o) => matchesSavedFilter(o, savedFilter)),
+    [savedOutputs, savedFilter],
+  );
 
   // Merge each signal with its persisted review row (default status `new`).
   const reviewed: ReviewedSignal[] = useMemo(
@@ -283,13 +297,22 @@ export default function SignalFeed() {
       {/* Saved outputs tab */}
       {!loading && tab === "saved" && (
         savedOutputs.length === 0
-          ? <Empty text="No saved outputs yet. Ask Scribe to write a post, report, or comment drafts." />
-          : <ul className="space-y-2">{savedOutputs.map((o) => (
-              <li key={o.id} className="rounded-lg border border-white/[0.06] bg-white/[0.02] p-3">
-                <div className="flex items-center gap-1.5"><span className="text-[10px] px-1.5 py-0.5 rounded border border-violet-500/30 bg-violet-500/10 text-violet-300">{o.type ?? "output"}</span>{o.created_at && <span className="ml-auto text-[10px] text-neutral-500">{new Date(o.created_at).toLocaleDateString()}</span>}</div>
-                {o.title && <div className="text-[12px] text-[#F0F6FC] mt-1">{o.title}</div>}
-                <div className="text-[12px] text-[#C9D1D9] mt-1 line-clamp-4 whitespace-pre-wrap">{(o.body ?? "").slice(0, 400)}</div>
-              </li>))}</ul>
+          ? <Empty text="No saved outputs yet. Ask Scribe to write a founder post, post ideas, or comment drafts — or build a content loop." />
+          : <>
+              <div className="inline-flex items-center gap-0.5 rounded-md border border-white/[0.08] bg-white/[0.02] p-0.5 mb-2">
+                {([["all", "All"], ["posts", "Content drafts"], ["comments", "Comment drafts"]] as [SavedFilter, string][]).map(([k, label]) => (
+                  <button key={k} onClick={() => setSavedFilter(k)}
+                    className={`text-[11px] px-2 py-1 rounded transition-colors ${savedFilter === k ? "bg-violet-500/10 text-violet-300" : "text-neutral-400 hover:text-neutral-200"}`}>
+                    {label}
+                  </button>
+                ))}
+              </div>
+              {savedFiltered.length === 0
+                ? <Empty text="No saved outputs match this filter." />
+                : <ul className="space-y-2">{savedFiltered.map((o) => (
+                    <SavedOutputCard key={o.id} output={o} />
+                  ))}</ul>}
+            </>
       )}
 
       {/* Signal feed */}
@@ -308,6 +331,51 @@ export default function SignalFeed() {
             ))}</ul>
       )}
     </div>
+  );
+}
+
+function SavedOutputCard({ output }: { output: SavedOutputRow }) {
+  const meta = contentDraftMeta(output);
+  const isContentDraft = output.type === "content_draft";
+  const label = isContentDraft ? contentSubtypeLabel(meta.subtype) : (output.type ?? "output");
+  return (
+    <li className="rounded-lg border border-white/[0.06] bg-white/[0.02] p-3">
+      <div className="flex items-center gap-1.5 flex-wrap">
+        <span className="text-[10px] px-1.5 py-0.5 rounded border border-violet-500/30 bg-violet-500/10 text-violet-300">{label}</span>
+        {meta.isContentLoop && (
+          <span className="text-[10px] px-1.5 py-0.5 rounded border border-emerald-500/30 bg-emerald-500/10 text-emerald-300">content loop</span>
+        )}
+        {meta.competitor_related && (
+          <span className="text-[10px] px-1.5 py-0.5 rounded border border-amber-500/30 bg-amber-500/10 text-amber-300">competitor</span>
+        )}
+        {output.created_at && <span className="ml-auto text-[10px] text-neutral-500">{new Date(output.created_at).toLocaleDateString()}</span>}
+      </div>
+      {output.title && <div className="text-[12px] text-[#F0F6FC] mt-1 font-medium">{output.title}</div>}
+
+      {(meta.topic || meta.audience || meta.angle) && (
+        <div className="text-[10px] text-neutral-500 mt-1 space-y-0.5">
+          {meta.topic && <div>topic: <span className="text-neutral-400">{meta.topic}</span></div>}
+          {meta.audience && <div>audience: <span className="text-neutral-400">{meta.audience}</span></div>}
+          {meta.angle && <div>angle: <span className="text-neutral-400">{meta.angle}</span></div>}
+        </div>
+      )}
+
+      <div className="text-[12px] text-[#C9D1D9] mt-1 line-clamp-4 whitespace-pre-wrap">{(output.body ?? "").slice(0, 400)}</div>
+
+      {/* Draft-only actions for content drafts (never posts). */}
+      {isContentDraft && meta.subtype !== "comment_draft" && (
+        <div className="mt-2 flex items-center gap-1.5 flex-wrap">
+          <button onClick={() => { window.dispatchEvent(new CustomEvent("chat:send", { detail: buildContentDraftCommand("find_engagement", output) })); toast.success("Asked Pilot to find engagement opportunities"); }}
+            className="inline-flex items-center gap-1 text-[11px] px-2 py-1 rounded-md border border-white/[0.08] bg-white/[0.02] text-[#C9D1D9] hover:bg-emerald-500/[0.06] hover:border-emerald-500/30 hover:text-[#F0F6FC] transition-colors">
+            <Radar className="h-3 w-3" /> Find engagement opportunities
+          </button>
+          <button onClick={() => { window.dispatchEvent(new CustomEvent("chat:send", { detail: buildContentDraftCommand("draft_comments", output) })); toast.success("Asked Pilot to draft comments (draft-only)"); }}
+            className="inline-flex items-center gap-1 text-[11px] px-2 py-1 rounded-md border border-white/[0.08] bg-white/[0.02] text-[#C9D1D9] hover:bg-emerald-500/[0.06] hover:border-emerald-500/30 hover:text-[#F0F6FC] transition-colors">
+            <MessageSquare className="h-3 w-3" /> Draft comments from this
+          </button>
+        </div>
+      )}
+    </li>
   );
 }
 
