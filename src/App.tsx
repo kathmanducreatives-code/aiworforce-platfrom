@@ -51,7 +51,6 @@ import Agents from "./pages/Agents";
 import SettingsIntegrations from "./pages/SettingsIntegrations";
 import JobApplicants from "./pages/JobApplicants";
 import JobDistribution from "./pages/JobDistribution";
-import CompetitorMonitor from "./pages/CompetitorMonitor";
 import ExpertMarketplace from "./pages/ExpertMarketplace";
 import PostInterceptor from "./pages/PostInterceptor";
 import LeadCRM from "./pages/LeadCRM";
