@@ -2955,6 +2955,73 @@ export type Database = {
         }
         Relationships: []
       }
+      signal_reviews: {
+        Row: {
+          created_at: string
+          id: string
+          ignored_at: string | null
+          lead_candidate_id: string | null
+          note: string | null
+          reviewed_at: string | null
+          saved_at: string | null
+          signal_id: string | null
+          status: string
+          updated_at: string
+          user_id: string
+          workspace_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          ignored_at?: string | null
+          lead_candidate_id?: string | null
+          note?: string | null
+          reviewed_at?: string | null
+          saved_at?: string | null
+          signal_id?: string | null
+          status?: string
+          updated_at?: string
+          user_id: string
+          workspace_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          ignored_at?: string | null
+          lead_candidate_id?: string | null
+          note?: string | null
+          reviewed_at?: string | null
+          saved_at?: string | null
+          signal_id?: string | null
+          status?: string
+          updated_at?: string
+          user_id?: string
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "signal_reviews_lead_candidate_id_fkey"
+            columns: ["lead_candidate_id"]
+            isOneToOne: false
+            referencedRelation: "lead_candidates"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "signal_reviews_signal_id_fkey"
+            columns: ["signal_id"]
+            isOneToOne: false
+            referencedRelation: "signals"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "signal_reviews_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       signals: {
         Row: {
           confidence: number | null
