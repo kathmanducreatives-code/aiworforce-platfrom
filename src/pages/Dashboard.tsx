@@ -4,7 +4,6 @@ import { useWorkforceState } from '@/hooks/useWorkforceState';
 import CompanyBrainStrip from '@/components/workforce/CompanyBrainStrip';
 import PilotBriefing from '@/components/workforce/PilotBriefing';
 import AgentDock from '@/components/workforce/AgentDock';
-import DecisionQueue from '@/components/workforce/DecisionQueue';
 import WorkflowTimeline from '@/components/workforce/WorkflowTimeline';
 import InlineCommandBar from '@/components/workforce/InlineCommandBar';
 import WorkforceDock from '@/components/workforce/WorkforceDock';
@@ -14,7 +13,7 @@ import type { AgentId } from '@/components/workforce/agents';
 
 const Dashboard = () => {
   const { workspaceId } = useWorkspace();
-  const { agents, timeline, decisions, totals, brainComplete } = useWorkforceState(workspaceId);
+  const { agents, timeline, totals, brainComplete } = useWorkforceState(workspaceId);
   const [selectedId, setSelectedId] = useState<AgentId>('pilot');
 
   return (
@@ -60,7 +59,6 @@ const Dashboard = () => {
 
           {/* Right rail */}
           <div className="lg:col-span-2 space-y-4">
-            <DecisionQueue items={decisions} />
             <InlineCommandBar />
           </div>
         </div>
