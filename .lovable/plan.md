@@ -1,146 +1,161 @@
-## Goal
+# Agentory — AI Workforce OS Redesign
 
-Transform `/onboarding/company-brain` from the current "all cards at once" review screen into a true guided, step-by-step Company Brain activation wizard with one decision per screen, a premium progress rail, AI analysis screen, and a clean review + launch.
+A focused frontend redesign that turns the existing app shell into a **live AI workforce command center**. No routing, auth, data-model or edge-function changes. Reuses current pages, hooks, and Lovable Cloud wiring.
 
-## Scope guardrails
+## Scope
 
-- Frontend-only. No DB migrations, no edge-function changes, no schema changes.
-- Reuse existing `setup-company-brain` actions: `save_basics`, `save_sources`, `analyze`, `save_structured`, `finalize`.
-- Reuse `companyBrainSchema.ts` (`StructuredBrain`, `BRAND_VOICE_TAGS`, `getBrainDefaults`) and `onboardingDraftMap.ts`.
-- Reuse current premium dark/emerald visual language (`BackgroundGrid`, `AgentChipsRow`, glass cards).
-- No landing-page changes. No auto-send/post/DM/comment.
-- Dashboard gating (`BrainReadinessCard`, `RecommendedMoves`) already in place — only minor copy tweak if needed.
+In scope (UI/UX only):
+- New shared design tokens + reusable glass components
+- New Dashboard layout (Pilot Briefing + Agent Work Canvas + Decision Queue + Workflow Timeline)
+- New floating **Agent Dock** with circular DPs, status rings, badges, hover cards
+- New floating glass **Command Bar** (Raycast-style) wired to existing `chat:prefill` event
+- New **Agent Profile Drawer** (right-side sheet)
+- Polish pass on existing 10-step `OnboardingCompanyBrain` wizard (visual only) + add Mission / Signal Pack / Approval-Mode / First-Output screens as new wizard steps reusing existing state
+- Sidebar restyle (same nav items, no route changes)
 
-## New wizard flow (10 visible steps)
+Out of scope:
+- Backend / schema / edge function changes
+- Routing changes, auth changes, new pages
+- Landing page (per repeated user constraint)
+- Auto-send / auto-DM / auto-post (approval-mode toggles default ON, copy-only)
+- Replacing existing hooks (`useSignalFeed`, `useApprovals`, `useCompanyBrain`, …) — they continue to feed real data into the new components
+
+## Design system
+
+Add to `src/index.css` (extends existing `.glass-quiet/surface/loud`):
+- `.agentory-bg` — near-black with low-opacity grid + 3 radial gradients (emerald, teal, deep-purple)
+- `.glass-shine` — diagonal reflection gradient on hover
+- `.glass-edge-top` — `::before` inner top-edge highlight
+- `.ring-status-{emerald|teal|amber|violet|cyan|blue|purple|gray|red}` — status ring colors
+- `.btn-emerald` / `.btn-glass` — primary/secondary button utilities
+- `.pill-status` — glassy capsule with dot
+- Motion: `dock-lift`, `pulse-soft`, `shimmer-agent` keyframes
+
+Colors mapped to agent/role per spec (emerald primary, amber approvals, purple drafting, blue research, gray idle, red blocked).
+
+## New reusable components
+
+Under `src/components/workforce/`:
 
 ```text
-0  Welcome          → website URL or "describe manually"
-1  Analyzing        → animated agent activity while `analyze` runs
-2  Company basics   → name, website, LinkedIn, one-liner, category
-3  ICP              → buyer roles, size, industries, geography, pain points
-4  Goals            → multi-select first focus areas
-5  Competitors      → known + adjacent + "not sure" toggle
-6  Brand voice      → tone chips + style rules + avoid
-7  Approval rules   → 4 safety toggles, safe by default
-8  Review           → collapsible cards + Company Brain completeness %
-9  Launch           → activated agents + first workflow picker
+AgentAvatar.tsx         circular DP w/ optional glow
+AgentStatusRing.tsx     SVG ring around avatar, color by status
+AgentDock.tsx           floating bottom dock (desktop) + hover cards
+AgentHoverCard.tsx      name/role/status/output/next-action popover
+AgentWorkCard.tsx       work module (replaces KPI box)
+AgentProfileDrawer.tsx  right-side Sheet w/ mission, activity, actions
+PilotBriefing.tsx       hero "manager update" card
+DecisionQueue.tsx       Needs-Your-Approval panel
+ApprovalItem.tsx        per-row card (Approve/Edit/Reject)
+WorkflowTimeline.tsx    Linear-style activity log
+CommandBar.tsx          floating glass capsule + suggested chips
+StatusPill.tsx          glassy capsule
+CompanyBrainStrip.tsx   compact top setup strip (replaces big BrainReadinessCard on dashboard)
+agents.ts               canonical agent registry (id, name, role, color, dpInitials)
 ```
 
-Returning users with `onboarding_completed=true` (or substantial existing profile) jump straight to step 8 ("Review your Company Brain") with all cards pre-filled.
+A single `agents.ts` defines Pilot, Scout, Aria, Penn, Hawk, Scribe — every other component reads from it.
 
-## Progress UI
+## Data wiring (no backend changes)
 
-- Top-mounted horizontal stepper rail showing all 10 nodes: completed (emerald check), current (pulsing emerald ring), upcoming (muted dot). Collapses to compact pill `Step 3 of 10 — Define your ICP · 30%` on mobile.
-- Animated emerald progress fill underneath the rail.
-- Persistent footer with `Back` / `Continue` / `Skip` (where allowed). Continue is disabled only on Step 2 until company name exists.
-- Step transitions: framer-motion fade + slide-x (8px), 180ms.
+`Dashboard.tsx` already loads `signals`, `drafts`, `approvals`, `reviewsBySignal`, `brain`. We compute per-agent derived state in a new `useWorkforceState(workspaceId)` hook that returns:
 
-## Step-by-step specifics
+```ts
+{
+  pilot:  { status, todayOutput, nextAction, badgeCount }
+  scout:  { ... signals.length, hot signals }
+  aria:   { ... blocked if brain incomplete }
+  penn:   { ... drafts.length }
+  hawk:   { ... competitor signals }
+  scribe: { ... content drafts }
+  timeline: TimelineItem[]   // built from signals + drafts + approvals timestamps
+  decisions: DecisionItem[]  // from approvals
+}
+```
 
-### Step 0 — Welcome (website-first)
-- Headline: "Teach Agentory your business."
-- Sub: "Your AI workforce uses this Company Brain to find signals, track competitors, write content, and draft outreach."
-- Single large URL input + Company name. CTA "Build Company Brain" → `save_basics` + `save_sources` → Step 1.
-- Link "I'll describe my company manually" → skips Step 1, goes Step 2 with empty draft.
-- Visual: centered glass card, AgentChipsRow idle (Pilot/Hawk/Scout/Scribe/Penn/Aria).
+No new tables. Pure derivation from existing hooks. Empty/loading states return safe defaults so nothing breaks pre-Brain.
 
-### Step 1 — AI analysis
-- Calls `analyze`. Animated stepper cycles through 6 agent lines ("Hawk is reading your website", "Pilot is identifying your business model", "Scout is finding ICP and signal opportunities", "Scribe is extracting positioning and tone", "Aria is preparing prioritization rules", "Penn is learning outreach style"). Agent chips pulse, then light up emerald sequentially.
-- On success: map draft via `mapDraftToStructured` + `mapDraftToBasics`, advance to Step 2 with pre-fill.
-- On Firecrawl-missing warning / error: amber notice "We couldn't analyze the website automatically. You can still build your Company Brain manually." → Continue to Step 2 with empty draft.
+`CommandBar` fires `window.dispatchEvent(new CustomEvent('chat:prefill', { detail: { text } }))` (already used elsewhere) and optionally `navigate(route)` — **no auto-send**.
 
-### Step 2 — Company Basics (one focused card)
-- Fields: company name (required), website, linkedin_company_url, founder_linkedin_url, short_description (one-liner), category (free text).
-- Side panel "What your agents will remember" mirrors entered values live.
+## New Dashboard layout
 
-### Step 3 — ICP
-- Chip inputs: buyer_roles, industries, pain_points (Enter / comma to add, examples placeholder). Text: company_size, geography.
-- "Not sure yet" button pre-fills sensible examples and marks as draft.
+`src/pages/Dashboard.tsx` rewritten to:
 
-### Step 4 — Goals
-- Question: "What should Agentory help with first?"
-- Multi-select premium cards (icon + agent + blurb), backed by 6 options reusing `FIRST_GOALS` ids: leads, competitors, content, outreach, engagement, review.
-- Stored locally + persisted into `goals.gtm/content/competitor_tracking/outreach` keys as a short text summary (no schema change).
+```text
+┌───────────────────────────────────────────────────────────┐
+│ CompanyBrainStrip (compact, only if !brain.completed)     │
+├──────────────────────────────────┬────────────────────────┤
+│ PilotBriefing (hero)             │ DecisionQueue          │
+│                                  │ (Needs Your Approval)  │
+├──────────────────────────────────┤                        │
+│ Agent Work Canvas                │                        │
+│  ┌────┐ ┌────┐ ┌────┐            │                        │
+│  │Scout│Penn │Aria │ …           │                        │
+│  └────┘ └────┘ └────┘            │                        │
+├──────────────────────────────────┴────────────────────────┤
+│ WorkflowTimeline (today)                                  │
+└───────────────────────────────────────────────────────────┘
+       AgentDock (fixed bottom-center)     CommandBar (fixed bottom, glass)
+```
 
-### Step 5 — Competitors
-- Chip inputs: known, adjacent. Toggle "I'm not sure — help me discover them" → sets `competitors.unknown=true` and disables required-ness.
+`MetricsGrid`, `WorkforceBriefHero`, `WorkforceActivityPanel`, `NeedsAttentionPanel`, `RecommendedMoves` are removed from the dashboard (files kept for now, unreferenced).
 
-### Step 6 — Brand Voice
-- Selectable tone chips from `BRAND_VOICE_TAGS` plus new visual-only chips ("concise","bold") merged into the tags array.
-- Free text: tone summary, style_rules (one per line), avoid (one per line).
-- Preview line: "Agentory will use this voice when Scribe writes content and Penn drafts outreach."
+Existing `CommandDock` in `MainLayout` is replaced by the new `AgentDock` + `CommandBar`. The legacy `CommandDock` and `CommandBar` files in `src/components/dock/` stay for now (not imported) to avoid touching unrelated chat workspace plumbing.
 
-### Step 7 — Approval & Safety
-- 4 polished switches, all defaulted ON: draft_only, email_requires_approval, linkedin_manual_only (covers comments + DMs), plus a static "Nothing is sent without approval" badge.
-- Subhead: "Agentory prepares work. You stay in control."
+## Sidebar
 
-### Step 8 — Review (collapsible)
-- 6 collapsible glass cards (Company, ICP, Goals, Competitors, Brand Voice, Approval Rules) using shadcn `Collapsible`. Each shows a clean summary and an "Edit" button that jumps back to its step.
-- Completeness ring (top right): computed locally as % of populated key fields across the 6 groups. Shows "Company Brain N% ready" + bullet list of missing items.
-- Primary CTA "Activate Company Brain" → single `save_basics` + `save_structured` + `finalize`. Secondary "Edit details" stays on the screen.
+Same nav items and routes. Restyle only: glass surface, emerald active indicator (left 2px bar + soft glow), tighter spacing, no heavy borders. Sections per spec: Dashboard / Signals / Conversations / Awaiting You / Leads / Competitors / Content / Agents / Company Brain / Integrations / Email Sequences.
 
-### Step 9 — Launch
-- "Your Company Brain is ready." Confetti-free, premium.
-- Activated agents row (all 6 light emerald with checks).
-- Workflow picker cards (Find signals / Track competitors / Create founder post / Draft outreach / Open Dashboard) reusing `FIRST_GOALS` routes + `chat:prefill` (no auto-send).
+## Onboarding (additive polish)
+
+Keep current 10-step wizard. Visual pass: apply new glass system, add status-dot agent list to the "Analyzing" step using `AgentAvatar` + `AgentStatusRing`. Add three new optional steps **after** Brain Review (gated behind a feature flag prop, default ON):
+
+- `MissionSelector` — 6 mission cards, default "Find hot leads"
+- `SignalPackSelector` — 6 packs w/ owner agent + expected output
+- `ApprovalModeSelector` — Copilot (default) / Autopilot, copy-only toggles
+- `FirstOutputPreview` — reads `signals` + `drafts` already produced to show "Scout found X · Aria marked Y · Penn drafted Z"
+
+All state stored locally; no schema changes. "Go to dashboard" simply `navigate('/dashboard')`.
+
+## Responsive
+
+- Desktop (≥1280): full 3-pane + bottom dock + command bar
+- Tablet (768–1279): DecisionQueue collapses below PilotBriefing; dock stays
+- Mobile (<768): dock becomes bottom nav row; cards stack; drawer is full-screen `Sheet`; command bar shrinks to a single pill that opens a full-screen composer
 
 ## Files
 
-Rewrite:
-- `src/pages/OnboardingCompanyBrain.tsx` — new wizard shell + step routing + save orchestration.
+Created:
+- `src/index.css` additions (one append block, ~120 lines)
+- `src/components/workforce/*` (14 files listed above)
+- `src/components/workforce/agents.ts`
+- `src/hooks/useWorkforceState.ts`
+- `src/components/onboarding/steps/MissionSelector.tsx`
+- `src/components/onboarding/steps/SignalPackSelector.tsx`
+- `src/components/onboarding/steps/ApprovalModeSelector.tsx`
+- `src/components/onboarding/steps/FirstOutputPreview.tsx`
 
-New under `src/components/onboarding/`:
-- `ProgressRail.tsx` — horizontal stepper + animated fill + mobile pill.
-- `WizardFrame.tsx` — shared chrome (background, header, footer with Back/Continue/Skip, framer-motion transition).
-- `steps/WelcomeStep.tsx`
-- `steps/AnalyzingStep.tsx` (already exists conceptually in current file — extract).
-- `steps/BasicsStep.tsx`
-- `steps/IcpStep.tsx`
-- `steps/GoalsStep.tsx`
-- `steps/CompetitorsStep.tsx`
-- `steps/BrandVoiceStep.tsx`
-- `steps/ApprovalStep.tsx`
-- `steps/ReviewStep.tsx` (collapsible cards + completeness ring)
-- `steps/LaunchStep.tsx`
-- `lib/brainCompleteness.ts` — pure function returning `{percent, missing[]}` for the review ring; unit-tested.
+Edited:
+- `src/pages/Dashboard.tsx` — full rewrite using new components
+- `src/components/Sidebar.tsx` — restyle, same nav contract
+- `src/components/MainLayout.tsx` — mount `AgentDock` + `CommandBar` instead of `CommandDock`/`CommandBar`
+- `src/pages/OnboardingCompanyBrain.tsx` — wire 4 new steps + glass polish
 
-Light touch:
-- `src/components/dashboard/BrainReadinessCard.tsx` — already routes to `/onboarding/company-brain`; tweak CTA copy to "Complete Company Brain setup" / "Company Brain active" states if not already matching.
+Untouched: edge functions, migrations, `client.ts`, landing, auth, routing, all other pages.
 
-Unchanged: edge functions, DB, sidebar, App routes, other pages, `companyBrainSchema.ts`, `onboardingDraftMap.ts`.
+## Verification
 
-## Save strategy
-
-- Local React state holds the full `StructuredBrain` + basics during the wizard.
-- Step 0: `save_basics({company_name, website})` + `save_sources({website})`.
-- Steps 2–7: state-only, no per-step network calls (avoids partial writes and keeps wizard snappy).
-- Step 8 "Activate": single batched `save_basics` + `save_structured` + `finalize`.
-- Returning user with existing `company_brain.profile` → preload into state, land on Step 8.
-
-## Animations
-
-- Step container: framer-motion `AnimatePresence` fade/slide-x 180ms.
-- Progress fill: width transition 400ms ease-out.
-- Completed step check: scale-in 200ms.
-- Agent chips during analysis: staggered pulse (existing pattern).
-- Selectable cards: hover lift (translate-y-[-2px] + emerald ring), selected = emerald glow ring + check badge.
-- Buttons: existing loading spinner pattern.
+- `lovable-exec test` for any new unit logic (`useWorkforceState` derivations)
+- Visual QA via `browser--view_preview` on `/dashboard`, `/onboarding/company-brain`, mobile width 390
+- Confirm: no auto-send, approval toggles default ON, brain-incomplete CTA visible, dock hover cards render, command bar prefills chat without sending, typecheck/build pass
 
 ## Safety
 
-- Approval defaults always ON; toggles cannot all be turned off without showing a sticky warning banner — but no enforcement (UI nudge only).
-- Launch workflow cards = `navigate(...)` + `chat:prefill`. No `chat:send`.
+- Approval mode default = Copilot
+- All "Launch" / "Run" actions = `chat:prefill` + `navigate`, never POST
+- Aria stays Blocked while `brain.onboarding_completed === false` (prevents implicit scoring)
+- No new RLS / no schema changes / no new edge functions
 
-## Tests / checks
+## Out-of-scope reminders
 
-- `src/lib/brainCompleteness.test.ts` — empty / partial / full profiles.
-- Existing `onboardingDraftMap.test.ts` remains green.
-- Manual: new-user happy path; Firecrawl-missing path; manual fallback; back/forward across steps preserves state; returning user lands on Review; Activate sets `onboarding_completed=true`; Dashboard reflects completion.
-- Harness typecheck + build.
-
-## Out of scope / remaining gaps
-
-- No new DB columns; "category" stored as an additive key inside existing `profile` JSON.
-- Goal "hiring" omitted (Agentory is GTM, not recruiting).
-- Per-step autosave deferred — single batched save on Activate is the v1.
-- No mobile-specific copy variants beyond responsive layout.
+No landing page edits. No new product phase. No backend workflow changes. No auto-DM/post/comment. No route changes.
