@@ -14,7 +14,7 @@ import { toast } from 'sonner';
 import {
   ArrowRight, ArrowLeft, Loader2, Sparkles, CheckCircle2, AlertTriangle,
   Globe, ShieldCheck, Target, Users, Eye, PenLine, Mail, ListOrdered, MessageSquare,
-  Building2, Compass, Megaphone, Lock, ChevronDown, ChevronRight,
+  Building2, Compass, Megaphone, Lock, ChevronDown, ChevronRight, X,
 } from 'lucide-react';
 import { getBrainDefaults, BRAND_VOICE_TAGS, type StructuredBrain } from '@/lib/companyBrainSchema';
 import { mapDraftToStructured, mapDraftToBasics } from '@/lib/onboardingDraftMap';
