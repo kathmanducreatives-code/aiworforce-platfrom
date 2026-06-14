@@ -72,7 +72,7 @@ export default function BrainReadinessCard() {
           onClick={() => navigate("/onboarding/company-brain")}
           className="shrink-0 inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-primary text-primary-foreground text-sm font-semibold hover:bg-primary/90 transition-colors"
         >
-          Build Company Brain <ArrowRight className="h-4 w-4" />
+          Complete Company Brain setup <ArrowRight className="h-4 w-4" />
         </button>
 
       </div>
