@@ -100,7 +100,7 @@ const Sidebar = ({ collapsed, onToggle }: SidebarProps) => {
                   className={({ isActive }) => cn(
                     'group relative flex items-center gap-2.5 h-8.5 px-3 rounded-md text-[13px] transition-all duration-200 border',
                     isActive
-                      ? 'bg-white/[0.03] text-foreground border-white/[0.06] shadow-[inset_0_1px_0_0_rgba(255,255,255,0.02)]'
+                      ? 'bg-emerald-500/[0.08] text-white border-emerald-500/20 shadow-[inset_0_1px_0_0_rgba(255,255,255,0.04),0_0_18px_-6px_rgba(16,185,129,0.45)] before:absolute before:left-0 before:top-1.5 before:bottom-1.5 before:w-[2px] before:rounded-full before:bg-emerald-400 before:shadow-[0_0_8px_rgba(16,185,129,0.7)]'
                       : 'text-neutral-400 hover:text-foreground hover:bg-white/[0.02] border-transparent',
                     collapsed && 'justify-center px-2',
                   )}
