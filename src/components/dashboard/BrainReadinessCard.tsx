@@ -42,10 +42,10 @@ export default function BrainReadinessCard() {
               <span className="text-[11px] text-muted-foreground">{pct}% complete</span>
             </div>
             <h2 className="text-base font-semibold text-foreground leading-tight">
-              Company Brain is incomplete
+              Teach Agentory your business
             </h2>
             <p className="text-[13px] text-muted-foreground mt-1 max-w-2xl">
-              Teach Pilot, Scout, Aria, Penn, Hawk, and Scribe what you sell, who you sell to, and your goals.
+              Your AI workforce uses this context to find signals, write content, track competitors, and draft outreach. Nothing is sent without your approval.
             </p>
             <div className="flex flex-wrap gap-1.5 mt-3">
               {REQUIRED.map((r) => {
@@ -72,8 +72,9 @@ export default function BrainReadinessCard() {
           onClick={() => navigate("/onboarding/company-brain")}
           className="shrink-0 inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-primary text-primary-foreground text-sm font-semibold hover:bg-primary/90 transition-colors"
         >
-          Set up now <ArrowRight className="h-4 w-4" />
+          Build Company Brain <ArrowRight className="h-4 w-4" />
         </button>
+
       </div>
     </div>
   );

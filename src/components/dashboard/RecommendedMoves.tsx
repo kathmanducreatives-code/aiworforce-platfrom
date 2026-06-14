@@ -16,6 +16,11 @@ interface Move {
 
 export default function RecommendedMoves({ brainIncomplete }: { brainIncomplete: boolean }) {
   const navigate = useNavigate();
+  // When Company Brain is incomplete, content/outreach moves route to onboarding
+  // instead of dispatching a chat prompt — agents need context to be useful.
+  const gated = (text: string) =>
+    brainIncomplete ? () => navigate("/onboarding/company-brain") : () => sendChat(text);
+
   const moves: Move[] = [
     {
       icon: <Eye className="h-4 w-4" />,
@@ -27,15 +32,19 @@ export default function RecommendedMoves({ brainIncomplete }: { brainIncomplete:
     {
       icon: <Mail className="h-4 w-4" />,
       title: "Draft outreach for hot leads",
-      subtitle: "Penn prepares personalized messages for your approval.",
-      onClick: () => sendChat("Draft outreach for my highest-priority saved leads."),
+      subtitle: brainIncomplete
+        ? "Finish Company Brain so Penn knows your voice."
+        : "Penn prepares personalized messages for your approval.",
+      onClick: gated("Draft outreach for my highest-priority saved leads."),
       accent: "text-teal-400 bg-teal-500/10",
     },
     {
       icon: <PenLine className="h-4 w-4" />,
       title: "Create a founder post",
-      subtitle: "Scribe drafts a LinkedIn post in your voice.",
-      onClick: () => sendChat("Write a founder LinkedIn post based on this week's activity."),
+      subtitle: brainIncomplete
+        ? "Finish Company Brain so Scribe writes in your voice."
+        : "Scribe drafts a LinkedIn post in your voice.",
+      onClick: gated("Write a founder LinkedIn post based on this week's activity."),
       accent: "text-violet-400 bg-violet-500/10",
     },
     {
@@ -46,6 +55,7 @@ export default function RecommendedMoves({ brainIncomplete }: { brainIncomplete:
       accent: "text-emerald-400 bg-emerald-500/10",
     },
   ];
+
 
   if (brainIncomplete) {
     moves.push({
