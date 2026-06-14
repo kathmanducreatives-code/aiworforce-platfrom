@@ -908,7 +908,7 @@ export default function OnboardingCompanyBrain() {
             <button
               type="button"
               onClick={() => navigate('/dashboard')}
-              className="rounded-full p-1.5 text-muted-foreground hover:text-foreground hover:bg-muted/40 transition-colors"
+              className="rounded-full p-2 text-muted-foreground hover:text-foreground border border-border/60 bg-card/40 hover:border-primary/40 hover:bg-primary/10 transition-colors"
               aria-label="Close and return to Dashboard"
               title="Close and return to Dashboard"
             >
