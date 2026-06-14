@@ -1,111 +1,146 @@
 ## Goal
 
-Replace the current 6-step form at `/onboarding/company-brain` with a premium, website-first AI setup experience that produces a complete Company Brain quickly and feels like a command center, not a form. Keep the existing `company_brain.profile` shape and `setup-company-brain` edge function — no schema or backend changes.
+Transform `/onboarding/company-brain` from the current "all cards at once" review screen into a true guided, step-by-step Company Brain activation wizard with one decision per screen, a premium progress rail, AI analysis screen, and a clean review + launch.
 
 ## Scope guardrails
 
-- Frontend-only. No DB migrations. No new edge functions. No changes to landing page or unrelated pages.
-- Reuse existing `setup-company-brain` actions: `save_basics`, `save_sources`, `analyze`, `save_structured`, `finalize`. Firecrawl enrichment already lives inside `analyze` via the scrape_url tool — we just trigger it.
-- Zero auto-send / auto-post / auto-DM. First-goal CTA only `navigate(...)` or dispatch `chat:prefill` (existing pattern).
-- Preserve the structured profile shape from `src/lib/companyBrainSchema.ts` (icp / goals / positioning / brand_voice / competitors / approval_rules). Spec-requested fields not in that schema (e.g. `goals.hiring` already exists; `category`, `linkedin_url` as top-level) map onto existing top-level basics fields — no shape drift.
+- Frontend-only. No DB migrations, no edge-function changes, no schema changes.
+- Reuse existing `setup-company-brain` actions: `save_basics`, `save_sources`, `analyze`, `save_structured`, `finalize`.
+- Reuse `companyBrainSchema.ts` (`StructuredBrain`, `BRAND_VOICE_TAGS`, `getBrainDefaults`) and `onboardingDraftMap.ts`.
+- Reuse current premium dark/emerald visual language (`BackgroundGrid`, `AgentChipsRow`, glass cards).
+- No landing-page changes. No auto-send/post/DM/comment.
+- Dashboard gating (`BrainReadinessCard`, `RecommendedMoves`) already in place — only minor copy tweak if needed.
 
-## New flow (5 visible steps + launch)
+## New wizard flow (10 visible steps)
 
 ```text
-1 Welcome     →  website URL (or "describe manually")
-2 Analyzing   →  animated agent status while edge fn runs
-3 Review      →  editable Company Brain cards
-4 First goal  →  pick what AI workforce helps with first
-5 Launch      →  confirmation, approval reminder, CTA
+0  Welcome          → website URL or "describe manually"
+1  Analyzing        → animated agent activity while `analyze` runs
+2  Company basics   → name, website, LinkedIn, one-liner, category
+3  ICP              → buyer roles, size, industries, geography, pain points
+4  Goals            → multi-select first focus areas
+5  Competitors      → known + adjacent + "not sure" toggle
+6  Brand voice      → tone chips + style rules + avoid
+7  Approval rules   → 4 safety toggles, safe by default
+8  Review           → collapsible cards + Company Brain completeness %
+9  Launch           → activated agents + first workflow picker
 ```
 
-### Step 1 — Welcome
-- Headline: "Teach Agentory your business in minutes."
-- Sub: "Your AI workforce uses this context to find signals, write content, track competitors, and draft outreach."
-- Single big input: `website URL` + Company name (required minimum to save basics).
-- Link: "I don't have a website — describe manually" → skips analyze, jumps to Step 3 with empty draft.
-- CTA: "Build Company Brain" → calls `save_basics` + `save_sources` ({website}) → Step 2.
-- Visual: dark glass card, soft emerald grid background, agent avatar row (Pilot / Scout / Hawk / Penn / Scribe) idle chips.
+Returning users with `onboarding_completed=true` (or substantial existing profile) jump straight to step 8 ("Review your Company Brain") with all cards pre-filled.
 
-### Step 2 — AI analysis
-- Calls `analyze` action (already invokes Firecrawl + Gemini server-side).
-- Animated stepper with 6 lines cycling while request pending:
-  - Reading website → Understanding product → Identifying ICP → Extracting use cases → Finding competitor categories → Preparing Company Brain
-- Agent chips light up emerald as each phase ticks (purely visual timing, capped at request duration).
-- On `warnings` returned (Firecrawl unconfigured) or thrown error: show amber notice "Couldn't analyze automatically — continue manually" and proceed to Step 3 with whatever draft exists (or empty).
+## Progress UI
 
-### Step 3 — Review (editable cards, grid layout)
-Cards (each a glass panel, two-column grid on desktop):
-1. **Company basics** — name, website, LinkedIn company, founder LinkedIn, one-line description, product category (free text).
-2. **ICP** — buyer_roles, company_size, industries, geography, pain_points.
-3. **Goals** — gtm, content, competitor_tracking, outreach.
-4. **Positioning** — promise, differentiators, use_cases, proof_points.
-5. **Competitors** — known, adjacent, "Not sure yet" toggle (sets `competitors.unknown=true`).
-6. **Brand voice** — tone, style_rules, avoid, tag chips from `BRAND_VOICE_TAGS`.
-7. **Approval rules** — always-visible safety card with defaults pre-checked: draft_only, email_requires_approval, linkedin_manual_only. Copy: "Nothing is sent without your approval."
+- Top-mounted horizontal stepper rail showing all 10 nodes: completed (emerald check), current (pulsing emerald ring), upcoming (muted dot). Collapses to compact pill `Step 3 of 10 — Define your ICP · 30%` on mobile.
+- Animated emerald progress fill underneath the rail.
+- Persistent footer with `Back` / `Continue` / `Skip` (where allowed). Continue is disabled only on Step 2 until company name exists.
+- Step transitions: framer-motion fade + slide-x (8px), 180ms.
 
-Pre-fills from `analyze` draft (`company_summary` → description, `target_customer_profile` → ICP hint, `competitors` array, `brand_voice`/`positioning` → matching cards) using a small mapping helper. User can edit anything; nothing required beyond company name.
+## Step-by-step specifics
 
-Save = single call to `save_basics` (top-level fields) + `save_structured` (nested groups). Then → Step 4.
+### Step 0 — Welcome (website-first)
+- Headline: "Teach Agentory your business."
+- Sub: "Your AI workforce uses this Company Brain to find signals, track competitors, write content, and draft outreach."
+- Single large URL input + Company name. CTA "Build Company Brain" → `save_basics` + `save_sources` → Step 1.
+- Link "I'll describe my company manually" → skips Step 1, goes Step 2 with empty draft.
+- Visual: centered glass card, AgentChipsRow idle (Pilot/Hawk/Scout/Scribe/Penn/Aria).
 
-### Step 4 — First goal
-Five cards (icon + title + 1-line explanation + example prompt):
-- Find leads (Scout)
-- Track competitor conversations (Hawk)
-- Create founder content (Scribe)
-- Draft outreach (Penn)
-- Find LinkedIn engagement opportunities (Scout)
-- Review saved signals (Pilot)
+### Step 1 — AI analysis
+- Calls `analyze`. Animated stepper cycles through 6 agent lines ("Hawk is reading your website", "Pilot is identifying your business model", "Scout is finding ICP and signal opportunities", "Scribe is extracting positioning and tone", "Aria is preparing prioritization rules", "Penn is learning outreach style"). Agent chips pulse, then light up emerald sequentially.
+- On success: map draft via `mapDraftToStructured` + `mapDraftToBasics`, advance to Step 2 with pre-fill.
+- On Firecrawl-missing warning / error: amber notice "We couldn't analyze the website automatically. You can still build your Company Brain manually." → Continue to Step 2 with empty draft.
 
-Selecting a card stores the goal locally; "Skip" allowed.
+### Step 2 — Company Basics (one focused card)
+- Fields: company name (required), website, linkedin_company_url, founder_linkedin_url, short_description (one-liner), category (free text).
+- Side panel "What your agents will remember" mirrors entered values live.
 
-### Step 5 — Launch confirmation
-- "Your Company Brain is ready." with checklist of activated agents, selected first goal, and approval-rules reminder.
-- Calls `finalize` action (sets `onboarding_completed=true`).
-- CTAs:
-  - Primary: "Launch first workflow" → `navigate(route)` + `dispatchEvent('chat:prefill', { text: examplePrompt })` based on selected goal. No auto-send.
-  - Secondary: "Go to Dashboard" → `/dashboard`.
+### Step 3 — ICP
+- Chip inputs: buyer_roles, industries, pain_points (Enter / comma to add, examples placeholder). Text: company_size, geography.
+- "Not sure yet" button pre-fills sensible examples and marks as draft.
 
-## Manual fallback path
+### Step 4 — Goals
+- Question: "What should Agentory help with first?"
+- Multi-select premium cards (icon + agent + blurb), backed by 6 options reusing `FIRST_GOALS` ids: leads, competitors, content, outreach, engagement, review.
+- Stored locally + persisted into `goals.gtm/content/competitor_tracking/outreach` keys as a short text summary (no schema change).
 
-- "Describe manually" link on Step 1 → skip analyze, go to Step 3 with empty draft + a small sub-form at the top: "What does your company do / who do you sell to / what problem / main goal / competitors / tone" — these write to the matching review cards live (not a separate page).
-- Allow "I'm not sure" toggle on competitors. No field required except company name.
+### Step 5 — Competitors
+- Chip inputs: known, adjacent. Toggle "I'm not sure — help me discover them" → sets `competitors.unknown=true` and disables required-ness.
 
-## Dashboard gating (already partially in place)
+### Step 6 — Brand Voice
+- Selectable tone chips from `BRAND_VOICE_TAGS` plus new visual-only chips ("concise","bold") merged into the tags array.
+- Free text: tone summary, style_rules (one per line), avoid (one per line).
+- Preview line: "Agentory will use this voice when Scribe writes content and Penn drafts outreach."
 
-- `BrainReadinessCard` (existing) keeps rendering when `onboarding_completed=false`. Update its CTA copy to "Teach Agentory your business" → `/onboarding/company-brain`.
-- Add a tiny helper hook usage in content/GTM flows: when chat-driven prompts for content/outreach run without a brain, the Dashboard's "Needs Attention" already surfaces the brain row; add one explicit guard in `RecommendedMoves` content/outreach cards: if `!brain.onboarding_completed`, the card's onClick routes to `/onboarding/company-brain` instead of dispatching `chat:prefill`. No edge-function changes.
+### Step 7 — Approval & Safety
+- 4 polished switches, all defaulted ON: draft_only, email_requires_approval, linkedin_manual_only (covers comments + DMs), plus a static "Nothing is sent without approval" badge.
+- Subhead: "Agentory prepares work. You stay in control."
 
-## Files to change
+### Step 8 — Review (collapsible)
+- 6 collapsible glass cards (Company, ICP, Goals, Competitors, Brand Voice, Approval Rules) using shadcn `Collapsible`. Each shows a clean summary and an "Edit" button that jumps back to its step.
+- Completeness ring (top right): computed locally as % of populated key fields across the 6 groups. Shows "Company Brain N% ready" + bullet list of missing items.
+- Primary CTA "Activate Company Brain" → single `save_basics` + `save_structured` + `finalize`. Secondary "Edit details" stays on the screen.
 
-- Rewrite: `src/pages/OnboardingCompanyBrain.tsx` (new 5-step UX, premium styling).
-- New components under `src/components/onboarding/`:
-  - `WelcomeStep.tsx`
-  - `AnalyzingStep.tsx` (animated stepper + agent chips)
-  - `ReviewStep.tsx` (orchestrates the cards below)
-  - `cards/BasicsCard.tsx`, `IcpCard.tsx`, `GoalsCard.tsx`, `PositioningCard.tsx`, `CompetitorsCard.tsx`, `BrandVoiceCard.tsx`, `ApprovalRulesCard.tsx`
-  - `FirstGoalStep.tsx`
-  - `LaunchStep.tsx`
-  - `AgentChipsRow.tsx`, `ProgressRail.tsx`
-- Small helper: `src/lib/onboardingDraftMap.ts` — maps `analyze` draft → structured cards (pure function, unit-tested).
-- Light edit: `src/components/dashboard/RecommendedMoves.tsx` — route to onboarding when brain incomplete.
-- Light edit: `src/components/dashboard/BrainReadinessCard.tsx` — copy tweak.
+### Step 9 — Launch
+- "Your Company Brain is ready." Confetti-free, premium.
+- Activated agents row (all 6 light emerald with checks).
+- Workflow picker cards (Find signals / Track competitors / Create founder post / Draft outreach / Open Dashboard) reusing `FIRST_GOALS` routes + `chat:prefill` (no auto-send).
 
-Unchanged: edge functions, DB schema, sidebar, routes, other pages, `companyBrainSchema.ts` (only consumed).
+## Files
+
+Rewrite:
+- `src/pages/OnboardingCompanyBrain.tsx` — new wizard shell + step routing + save orchestration.
+
+New under `src/components/onboarding/`:
+- `ProgressRail.tsx` — horizontal stepper + animated fill + mobile pill.
+- `WizardFrame.tsx` — shared chrome (background, header, footer with Back/Continue/Skip, framer-motion transition).
+- `steps/WelcomeStep.tsx`
+- `steps/AnalyzingStep.tsx` (already exists conceptually in current file — extract).
+- `steps/BasicsStep.tsx`
+- `steps/IcpStep.tsx`
+- `steps/GoalsStep.tsx`
+- `steps/CompetitorsStep.tsx`
+- `steps/BrandVoiceStep.tsx`
+- `steps/ApprovalStep.tsx`
+- `steps/ReviewStep.tsx` (collapsible cards + completeness ring)
+- `steps/LaunchStep.tsx`
+- `lib/brainCompleteness.ts` — pure function returning `{percent, missing[]}` for the review ring; unit-tested.
+
+Light touch:
+- `src/components/dashboard/BrainReadinessCard.tsx` — already routes to `/onboarding/company-brain`; tweak CTA copy to "Complete Company Brain setup" / "Company Brain active" states if not already matching.
+
+Unchanged: edge functions, DB, sidebar, App routes, other pages, `companyBrainSchema.ts`, `onboardingDraftMap.ts`.
+
+## Save strategy
+
+- Local React state holds the full `StructuredBrain` + basics during the wizard.
+- Step 0: `save_basics({company_name, website})` + `save_sources({website})`.
+- Steps 2–7: state-only, no per-step network calls (avoids partial writes and keeps wizard snappy).
+- Step 8 "Activate": single batched `save_basics` + `save_structured` + `finalize`.
+- Returning user with existing `company_brain.profile` → preload into state, land on Step 8.
+
+## Animations
+
+- Step container: framer-motion `AnimatePresence` fade/slide-x 180ms.
+- Progress fill: width transition 400ms ease-out.
+- Completed step check: scale-in 200ms.
+- Agent chips during analysis: staggered pulse (existing pattern).
+- Selectable cards: hover lift (translate-y-[-2px] + emerald ring), selected = emerald glow ring + check badge.
+- Buttons: existing loading spinner pattern.
 
 ## Safety
 
-- All "Launch first workflow" actions resolve to `navigate(...)` + `chat:prefill`. No `chat:send`, no direct send/post/DM/comment.
-- Approval rules card is always visible on Review and Launch screens with the four defaults checked and an emerald "Safe by default" badge.
+- Approval defaults always ON; toggles cannot all be turned off without showing a sticky warning banner — but no enforcement (UI nudge only).
+- Launch workflow cards = `navigate(...)` + `chat:prefill`. No `chat:send`.
 
 ## Tests / checks
 
-- Add `src/lib/onboardingDraftMap.test.ts` covering: empty draft, partial draft, competitors as string vs array, brand voice string → tone.
-- Manual: new user (no brain) → onboarding renders; website-first happy path; Firecrawl-missing warning path; manual fallback path; finalize sets `onboarding_completed=true`; Dashboard recognizes completion.
-- Typecheck + build (run by harness).
+- `src/lib/brainCompleteness.test.ts` — empty / partial / full profiles.
+- Existing `onboardingDraftMap.test.ts` remains green.
+- Manual: new-user happy path; Firecrawl-missing path; manual fallback; back/forward across steps preserves state; returning user lands on Review; Activate sets `onboarding_completed=true`; Dashboard reflects completion.
+- Harness typecheck + build.
 
 ## Out of scope / remaining gaps
 
-- No new DB columns. Fields like top-level `category` / `linkedin_url` from the spec map onto existing basics (`linkedin_company_url`) and an additive `category` key inside the existing JSON profile — no schema change.
-- Goal "hiring" intentionally omitted from first-goal cards per Agentory positioning (GTM, not recruiting).
-- No changes to agent prompt assembly — agents already read `company_brain.profile` server-side.
+- No new DB columns; "category" stored as an additive key inside existing `profile` JSON.
+- Goal "hiring" omitted (Agentory is GTM, not recruiting).
+- Per-step autosave deferred — single batched save on Activate is the v1.
+- No mobile-specific copy variants beyond responsive layout.
