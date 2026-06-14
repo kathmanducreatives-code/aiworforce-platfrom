@@ -1,135 +1,111 @@
-# Dashboard Redesign — AI Workforce Command Center
+## Goal
 
-Frontend-only redesign of `src/pages/Dashboard.tsx`. No backend, schema, edge function, route, or auto-send changes.
+Replace the current 6-step form at `/onboarding/company-brain` with a premium, website-first AI setup experience that produces a complete Company Brain quickly and feels like a command center, not a form. Keep the existing `company_brain.profile` shape and `setup-company-brain` edge function — no schema or backend changes.
 
-## Scope
+## Scope guardrails
 
-- Rewrite `src/pages/Dashboard.tsx` with a new layered layout.
-- Add small presentational subcomponents in `src/components/dashboard/` (new folder).
-- Reuse existing hooks: `useCompanyBrain`, `useSignalFeed`, `useApprovals`, `useSignalReviews`, `useWorkspace`, `useAuth`, `useTheme`.
-- No new data fetching, no new tables, no new edge functions.
+- Frontend-only. No DB migrations. No new edge functions. No changes to landing page or unrelated pages.
+- Reuse existing `setup-company-brain` actions: `save_basics`, `save_sources`, `analyze`, `save_structured`, `finalize`. Firecrawl enrichment already lives inside `analyze` via the scrape_url tool — we just trigger it.
+- Zero auto-send / auto-post / auto-DM. First-goal CTA only `navigate(...)` or dispatch `chat:prefill` (existing pattern).
+- Preserve the structured profile shape from `src/lib/companyBrainSchema.ts` (icp / goals / positioning / brand_voice / competitors / approval_rules). Spec-requested fields not in that schema (e.g. `goals.hiring` already exists; `category`, `linkedin_url` as top-level) map onto existing top-level basics fields — no shape drift.
 
-## New layout (top → bottom)
+## New flow (5 visible steps + launch)
 
-```
-┌──────────────────────────────────────────────────────────────┐
-│ 1. Company Brain Readiness Card (only if incomplete)         │
-├──────────────────────────────────────────────────────────────┤
-│ 2. Hero: Today's AI Workforce Brief                          │
-│    "Good afternoon, {first}" + dynamic brief sentence        │
-│    [Review approvals] [Open Signal Feed] [Run growth wf]     │
-├──────────────────────────────────────────────────────────────┤
-│ 3. Metrics grid (4 cols desktop, 2 cols mobile, 2 rows)      │
-│    Signals · Hot leads · Approvals* · Drafts*                │
-│    Competitor signals · Content drafts · Saved/actioned · Time saved │
-│    (* = action-emphasized: amber ring when > 0)              │
-├──────────────────────────┬───────────────────────────────────┤
-│ 4. AI Workforce Activity │ 5. What Needs Attention           │
-│    Scout / Aria / Hawk / │    Task queue rows                │
-│    Penn / Scribe / Pilot │    (approvals, drafts, brain,     │
-│    with derived counts   │     competitor signals)           │
-├──────────────────────────┴───────────────────────────────────┤
-│ 6. Recommended Next Moves (4–5 premium action cards)         │
-├──────────────────────────────────────────────────────────────┤
-│ pb-32 spacer so floating chat composer never overlaps        │
-└──────────────────────────────────────────────────────────────┘
+```text
+1 Welcome     →  website URL (or "describe manually")
+2 Analyzing   →  animated agent status while edge fn runs
+3 Review      →  editable Company Brain cards
+4 First goal  →  pick what AI workforce helps with first
+5 Launch      →  confirmation, approval reminder, CTA
 ```
 
-## Section details
+### Step 1 — Welcome
+- Headline: "Teach Agentory your business in minutes."
+- Sub: "Your AI workforce uses this context to find signals, write content, track competitors, and draft outreach."
+- Single big input: `website URL` + Company name (required minimum to save basics).
+- Link: "I don't have a website — describe manually" → skips analyze, jumps to Step 3 with empty draft.
+- CTA: "Build Company Brain" → calls `save_basics` + `save_sources` ({website}) → Step 2.
+- Visual: dark glass card, soft emerald grid background, agent avatar row (Pilot / Scout / Hawk / Penn / Scribe) idle chips.
 
-### 1. Company Brain Readiness Card
-- Render only when `data.onboarding_completed === false`.
-- Show missing items derived from `profile` keys: `icp`, `competitors`, `brand_voice`, `goals` (badge per missing item).
-- If `profile` has none of the keys → "Setup needed". If some present → list missing as small chips.
-- CTA "Set up now" → `/onboarding/company-brain`.
-- Premium styling: emerald border, subtle gradient, Sparkles icon, agent name list in copy.
+### Step 2 — AI analysis
+- Calls `analyze` action (already invokes Firecrawl + Gemini server-side).
+- Animated stepper with 6 lines cycling while request pending:
+  - Reading website → Understanding product → Identifying ICP → Extracting use cases → Finding competitor categories → Preparing Company Brain
+- Agent chips light up emerald as each phase ticks (purely visual timing, capped at request duration).
+- On `warnings` returned (Firecrawl unconfigured) or thrown error: show amber notice "Couldn't analyze automatically — continue manually" and proceed to Step 3 with whatever draft exists (or empty).
 
-### 2. Hero — Today's AI Workforce Brief
-- Greeting (existing logic) + first name.
-- Dynamic sentence built from metrics:
-  - "Your AI workforce surfaced {signals} signals, prepared {drafts} drafts, and needs approval on {approvals} items."
-  - Empty fallback: "Your AI workforce is ready. Start by finding signals or completing Company Brain."
-- Action buttons:
-  - "Review approvals" → `navigate('/awaiting-you')`
-  - "Open Signal Feed" → `navigate('/signals')`
-  - "Run growth workflow" → `dispatchEvent(new CustomEvent('chat:send', { detail: { text: 'Run my weekly growth workflow.' } }))`
-- Keep theme toggle + NotificationCenter on the right.
+### Step 3 — Review (editable cards, grid layout)
+Cards (each a glass panel, two-column grid on desktop):
+1. **Company basics** — name, website, LinkedIn company, founder LinkedIn, one-line description, product category (free text).
+2. **ICP** — buyer_roles, company_size, industries, geography, pain_points.
+3. **Goals** — gtm, content, competitor_tracking, outreach.
+4. **Positioning** — promise, differentiators, use_cases, proof_points.
+5. **Competitors** — known, adjacent, "Not sure yet" toggle (sets `competitors.unknown=true`).
+6. **Brand voice** — tone, style_rules, avoid, tag chips from `BRAND_VOICE_TAGS`.
+7. **Approval rules** — always-visible safety card with defaults pre-checked: draft_only, email_requires_approval, linkedin_manual_only. Copy: "Nothing is sent without your approval."
 
-### 3. Metrics Grid
-Eight `MetricCard`s. Cards needing user action (Approvals pending > 0, Drafts ready > 0) get an amber/emerald ring + small "View" link. Each card adds a one-line description below the number:
-- Signals found — "{n} saved signals" → /signals
-- Hot leads — "{n} marked hot" → /signals?filter=hot
-- Approvals pending — "{n} need your review" → /awaiting-you (emphasized)
-- Drafts ready — "{n} outreach drafts" → /content (emphasized)
-- Competitor signals — "{n} new this week" → /competitors
-- Content drafts — "{n} saved drafts" → /content
-- Saved / actioned — "{n} signals worked" → /signals
-- Time saved — "~{n}m this week" (no link)
+Pre-fills from `analyze` draft (`company_summary` → description, `target_customer_profile` → ICP hint, `competitors` array, `brand_voice`/`positioning` → matching cards) using a small mapping helper. User can edit anything; nothing required beyond company name.
 
-### 4. AI Workforce Activity panel
-Left column on desktop (lg:col-span-3). Six agent rows with `AgentAvatar`:
-- Scout — "Found {signalsFound} signals" / "Waiting for first workflow."
-- Aria — "Ranked {savedActioned} opportunities" / fallback.
-- Hawk — "Tracked {competitorSignals} competitor signals" / fallback.
-- Penn — "Prepared {outreachDrafts} outreach drafts" / fallback.
-- Scribe — "Saved {contentDrafts} content drafts" / fallback.
-- Pilot — "Coordinating your workflows" (always shown).
-Each row clickable to relevant route. No invented data.
+Save = single call to `save_basics` (top-level fields) + `save_structured` (nested groups). Then → Step 4.
 
-### 5. What Needs Attention panel
-Right column (lg:col-span-2). Existing pattern, plus rows for:
-- Approvals pending → /awaiting-you
-- Drafts ready → /content
-- Company Brain incomplete → /onboarding/company-brain (only when not completed)
-- Competitor signals → /competitors
-Empty state: friendly "All clear" copy.
+### Step 4 — First goal
+Five cards (icon + title + 1-line explanation + example prompt):
+- Find leads (Scout)
+- Track competitor conversations (Hawk)
+- Create founder content (Scribe)
+- Draft outreach (Penn)
+- Find LinkedIn engagement opportunities (Scout)
+- Review saved signals (Pilot)
 
-### 6. Recommended Next Moves
-Grid of 4–5 cards. Each navigates or dispatches `chat:send` only.
-1. Find competitor conversations — chat:send "Find 5 competitor conversations for my company."
-2. Draft outreach for hot leads — chat:send "Draft outreach for my highest-priority saved leads."
-3. Create a founder post — chat:send "Write a founder LinkedIn post based on this week's activity."
-4. Rank saved signals — chat:send "Rank my saved signals by fit and urgency."
-5. Complete Company Brain — navigate `/onboarding/company-brain` (hidden if completed).
+Selecting a card stores the goal locally; "Skip" allowed.
 
-Card: icon, title, one-line subtitle, subtle hover lift.
+### Step 5 — Launch confirmation
+- "Your Company Brain is ready." with checklist of activated agents, selected first goal, and approval-rules reminder.
+- Calls `finalize` action (sets `onboarding_completed=true`).
+- CTAs:
+  - Primary: "Launch first workflow" → `navigate(route)` + `dispatchEvent('chat:prefill', { text: examplePrompt })` based on selected goal. No auto-send.
+  - Secondary: "Go to Dashboard" → `/dashboard`.
 
-## Copy sweep
-Within Dashboard only, ensure no occurrences of: ScreeningPilot, candidate, screening, hiring pipeline, AI screening, placement, recruitment. Use Agentory vocabulary.
+## Manual fallback path
 
-## Empty state behavior
-When all counts are zero AND brain incomplete → hero falls back to "ready" copy; metrics still render zeros; Needs Attention shows Company Brain row + onboarding suggestions; Recommended Next Moves stays visible.
+- "Describe manually" link on Step 1 → skip analyze, go to Step 3 with empty draft + a small sub-form at the top: "What does your company do / who do you sell to / what problem / main goal / competitors / tone" — these write to the matching review cards live (not a separate page).
+- Allow "I'm not sure" toggle on competitors. No field required except company name.
 
-## Visual / design
-- Reuse existing tokens (`bg-card`, `border-border`, `text-primary` emerald, etc.). No hardcoded colors beyond existing semantic Tailwind utilities already used in the file.
-- Rounded-2xl cards, subtle borders, generous spacing, `pb-32` on outer container for chat composer clearance.
-- Section headers: small uppercase tracking label + larger title.
+## Dashboard gating (already partially in place)
 
-## Files
+- `BrainReadinessCard` (existing) keeps rendering when `onboarding_completed=false`. Update its CTA copy to "Teach Agentory your business" → `/onboarding/company-brain`.
+- Add a tiny helper hook usage in content/GTM flows: when chat-driven prompts for content/outreach run without a brain, the Dashboard's "Needs Attention" already surfaces the brain row; add one explicit guard in `RecommendedMoves` content/outreach cards: if `!brain.onboarding_completed`, the card's onClick routes to `/onboarding/company-brain` instead of dispatching `chat:prefill`. No edge-function changes.
 
-Edited:
-- `src/pages/Dashboard.tsx` — full rewrite of layout, composed from subcomponents below.
+## Files to change
 
-Created (presentational, no logic outside props):
-- `src/components/dashboard/BrainReadinessCard.tsx`
-- `src/components/dashboard/WorkforceBriefHero.tsx`
-- `src/components/dashboard/MetricsGrid.tsx`
-- `src/components/dashboard/WorkforceActivityPanel.tsx`
-- `src/components/dashboard/NeedsAttentionPanel.tsx`
-- `src/components/dashboard/RecommendedMoves.tsx`
+- Rewrite: `src/pages/OnboardingCompanyBrain.tsx` (new 5-step UX, premium styling).
+- New components under `src/components/onboarding/`:
+  - `WelcomeStep.tsx`
+  - `AnalyzingStep.tsx` (animated stepper + agent chips)
+  - `ReviewStep.tsx` (orchestrates the cards below)
+  - `cards/BasicsCard.tsx`, `IcpCard.tsx`, `GoalsCard.tsx`, `PositioningCard.tsx`, `CompetitorsCard.tsx`, `BrandVoiceCard.tsx`, `ApprovalRulesCard.tsx`
+  - `FirstGoalStep.tsx`
+  - `LaunchStep.tsx`
+  - `AgentChipsRow.tsx`, `ProgressRail.tsx`
+- Small helper: `src/lib/onboardingDraftMap.ts` — maps `analyze` draft → structured cards (pure function, unit-tested).
+- Light edit: `src/components/dashboard/RecommendedMoves.tsx` — route to onboarding when brain incomplete.
+- Light edit: `src/components/dashboard/BrainReadinessCard.tsx` — copy tweak.
 
-Not touched: hooks, routes, sidebar, edge functions, schema, AwaitingYou, Signals, other pages.
+Unchanged: edge functions, DB schema, sidebar, routes, other pages, `companyBrainSchema.ts` (only consumed).
 
 ## Safety
-- All "run" / "draft" / "post" buttons either `navigate(...)` or dispatch `CustomEvent('chat:send', ...)`. Zero direct send/post/DM/comment calls.
-- No new network calls, no new secrets, no new tables.
 
-## Verification
-- Rely on auto typecheck/build.
-- Visual QA via preview: Dashboard renders without errors, sections appear in order, chat composer doesn't overlap last card, all buttons navigate or open chat (no auto actions), no recruiting copy left.
+- All "Launch first workflow" actions resolve to `navigate(...)` + `chat:prefill`. No `chat:send`, no direct send/post/DM/comment.
+- Approval rules card is always visible on Review and Launch screens with the four defaults checked and an emerald "Safe by default" badge.
 
-## Out of scope
-- Backend / schema / functions.
-- Sidebar, route, or other-page changes.
-- New data sources or analytics tables.
-- Production deploy.
+## Tests / checks
+
+- Add `src/lib/onboardingDraftMap.test.ts` covering: empty draft, partial draft, competitors as string vs array, brand voice string → tone.
+- Manual: new user (no brain) → onboarding renders; website-first happy path; Firecrawl-missing warning path; manual fallback path; finalize sets `onboarding_completed=true`; Dashboard recognizes completion.
+- Typecheck + build (run by harness).
+
+## Out of scope / remaining gaps
+
+- No new DB columns. Fields like top-level `category` / `linkedin_url` from the spec map onto existing basics (`linkedin_company_url`) and an additive `category` key inside the existing JSON profile — no schema change.
+- Goal "hiring" intentionally omitted from first-goal cards per Agentory positioning (GTM, not recruiting).
+- No changes to agent prompt assembly — agents already read `company_brain.profile` server-side.
