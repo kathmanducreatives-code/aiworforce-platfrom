@@ -901,9 +901,20 @@ export default function OnboardingCompanyBrain() {
               Company Brain Setup
             </span>
           </div>
-          <span className="hidden md:inline text-xs text-muted-foreground">
-            Step {stepIndex + 1} of {STEPS.length} — {STEPS[stepIndex].label}
-          </span>
+          <div className="flex items-center gap-3">
+            <span className="hidden md:inline text-xs text-muted-foreground">
+              Step {stepIndex + 1} of {STEPS.length} — {STEPS[stepIndex].label}
+            </span>
+            <button
+              type="button"
+              onClick={() => navigate('/dashboard')}
+              className="rounded-full p-1.5 text-muted-foreground hover:text-foreground hover:bg-muted/40 transition-colors"
+              aria-label="Close and return to Dashboard"
+              title="Close and return to Dashboard"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          </div>
         </div>
         <div className="mb-8"><ProgressRail currentIndex={stepIndex} /></div>
 
