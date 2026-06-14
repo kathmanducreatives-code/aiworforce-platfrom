@@ -5,7 +5,7 @@ describe('mapDraftToStructured', () => {
   it('returns defaults on empty/null draft', () => {
     const a = mapDraftToStructured(null);
     expect(a.competitors.known).toEqual([]);
-    expect(a.competitors.unknown).toBe(true);
+    expect(a.competitors.unknown).toBe(false);
     expect(a.brand_voice.tone).toBe('');
   });
 
