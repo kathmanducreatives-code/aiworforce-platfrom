@@ -819,6 +819,14 @@ export default function OnboardingCompanyBrain() {
             {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : (<>Activate Company Brain <ArrowRight className="h-4 w-4 ml-1.5" /></>)}
           </Button>
           <Button variant="outline" size="lg" onClick={() => goto('basics')}>Edit details</Button>
+          <Button
+            variant="ghost"
+            size="lg"
+            onClick={() => { goto('welcome'); navigate('/onboarding/company-brain?restart=1', { replace: true }); }}
+            className="text-muted-foreground hover:text-foreground sm:ml-auto"
+          >
+            Start from beginning
+          </Button>
         </div>
       </div>
     );
@@ -909,15 +917,17 @@ export default function OnboardingCompanyBrain() {
             <span className="hidden md:inline text-xs text-muted-foreground">
               Step {stepIndex + 1} of {STEPS.length} — {STEPS[stepIndex].label}
             </span>
-            <button
-              type="button"
+            <Button
+              variant="outline"
+              size="sm"
               onClick={() => navigate('/dashboard')}
-              className="rounded-full p-2 text-muted-foreground hover:text-foreground border border-border/60 bg-card/40 hover:border-primary/40 hover:bg-primary/10 transition-colors"
-              aria-label="Close and return to Dashboard"
-              title="Close and return to Dashboard"
+              className="h-9 gap-1.5 border-border/60 bg-card/40 hover:border-primary/40 hover:bg-primary/10"
+              aria-label="Exit to Dashboard"
+              title="Exit to Dashboard"
             >
-              <X className="h-4 w-4" />
-            </button>
+              <X className="h-3.5 w-3.5" />
+              <span className="hidden sm:inline">Exit to Dashboard</span>
+            </Button>
           </div>
         </div>
         <div className="mb-8"><ProgressRail currentIndex={stepIndex} /></div>
