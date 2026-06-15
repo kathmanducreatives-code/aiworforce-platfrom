@@ -91,6 +91,7 @@ Deno.serve(async (req) => {
       }, { onConflict: "workspace_id" });
       if (error) throw error;
       return json({ ok: true, profile: merged });
+    }
 
     if (action === "save_sources") {
       const sources = Array.isArray(body.sources) ? body.sources : [];
