@@ -819,6 +819,14 @@ export default function OnboardingCompanyBrain() {
             {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : (<>Activate Company Brain <ArrowRight className="h-4 w-4 ml-1.5" /></>)}
           </Button>
           <Button variant="outline" size="lg" onClick={() => goto('basics')}>Edit details</Button>
+          <Button
+            variant="ghost"
+            size="lg"
+            onClick={() => { goto('welcome'); navigate('/onboarding/company-brain?restart=1', { replace: true }); }}
+            className="text-muted-foreground hover:text-foreground sm:ml-auto"
+          >
+            Start from beginning
+          </Button>
         </div>
       </div>
     );
