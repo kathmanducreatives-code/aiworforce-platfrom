@@ -71,8 +71,8 @@ const SEND_WORDS = /\b(send|deliver|fire off)\b/i;
 
 function clampForActor(actorKey: string | null, requested: number): number {
   const a = getActorByKey(actorKey);
-  if (!a) return Math.max(1, Math.min(200, requested || 25));
-  const def = a.default_max_results ?? a.default_max_pages ?? 25;
+  if (!a) return Math.max(1, Math.min(200, requested || 5));
+  const def = a.default_max_results ?? a.default_max_pages ?? 5;
   const max = a.max_safe_results ?? a.max_safe_pages ?? 100;
   return Math.max(1, Math.min(max, requested || def));
 }
@@ -81,7 +81,8 @@ export function fallbackParse(prompt: string, intent: Intent | string): ToolInpu
   const t = prompt.toLowerCase();
 
   const numMatch = t.match(/\b(\d{1,4})\b/);
-  let max_results = numMatch ? Math.max(1, Math.min(200, parseInt(numMatch[1], 10))) : 25;
+  // QA-safe default: when the user gives no count, source 5 (never silently 25).
+  let max_results = numMatch ? Math.max(1, Math.min(200, parseInt(numMatch[1], 10))) : 5;
 
   let location: string | null = null;
   for (const loc of LOCATIONS) {
@@ -257,7 +258,7 @@ When ask_clarification=true, ALWAYS pre-fill the alternative action objects so t
 backend can execute the user's choice without re-running you. Never pre-commit
 top-level tool_name/selected_actor_key while waiting on the user.
 
-Default max_results=25 (10 for people_profiles). needs_outreach implies
+Default max_results=5 when the user gives no count (only use a higher number if the user explicitly asks for it). needs_outreach implies
 execution_mode="outreach"; needs_enrichment implies "deep".
 
 EXAMPLES:
@@ -266,7 +267,7 @@ USER: "Currently having issues with development. I think we may need to hire new
 JSON: {"business_goal":"hire experienced engineering help","intent":"source_people_profiles","confidence":0.72,"tool_name":null,"selected_actor_key":null,"source_type":null,"query":"experienced software engineer remote","role_keywords":["Software Engineer","Full Stack Engineer","Backend Engineer","Frontend Engineer"],"location":null,"remote_ok":true,"seniority":"experienced","max_results":10,"execution_mode":"fast","needs_clarification":true,"ask_clarification":true,"clarification_type":"people_vs_agency","clarification":"Do you want individual engineer profiles to hire, or an agency/team that can take on the development work?","people_action":{"intent":"source_people_profiles","tool_name":"source_with_apify","selected_actor_key":"apify_people_search","source_type":"people_profiles","query":"experienced software engineer remote","role_keywords":["Software Engineer","Full Stack Engineer","Backend Engineer","Frontend Engineer"],"location":null,"remote_ok":true,"seniority":"experienced","max_results":10,"execution_mode":"fast"},"companies_action":null,"agency_action":{"intent":"source_agencies","tool_name":null,"selected_actor_key":null,"source_type":null,"query":"experienced software development agency remote","role_keywords":["software development agency","engineering team"],"location":null,"remote_ok":true,"seniority":"experienced","max_results":10,"execution_mode":"fast"},"reason":"User described a development capacity problem; unclear if they want individuals or an agency."}
 
 USER: "Find companies hiring React engineers in London"
-JSON: {"business_goal":"find companies hiring React engineers","intent":"source_companies_hiring","confidence":0.95,"tool_name":"source_with_apify","selected_actor_key":"apify_jobs","source_type":"jobs","query":"React engineer","role_keywords":["React Engineer","React Developer","Frontend Engineer"],"location":"London","remote_ok":false,"seniority":null,"max_results":25,"execution_mode":"fast","needs_clarification":false,"ask_clarification":false,"clarification_type":null,"clarification":null,"people_action":null,"companies_action":null,"agency_action":null,"reason":"Explicit companies-hiring request -> Apify Jobs."}
+JSON: {"business_goal":"find companies hiring React engineers","intent":"source_companies_hiring","confidence":0.95,"tool_name":"source_with_apify","selected_actor_key":"apify_jobs","source_type":"jobs","query":"React engineer","role_keywords":["React Engineer","React Developer","Frontend Engineer"],"location":"London","remote_ok":false,"seniority":null,"max_results":5,"execution_mode":"fast","needs_clarification":false,"ask_clarification":false,"clarification_type":null,"clarification":null,"people_action":null,"companies_action":null,"agency_action":null,"reason":"Explicit companies-hiring request -> Apify Jobs. No count given -> default 5."}
 
 USER: "Find 10 individual React developer profiles in London"
 JSON: {"business_goal":"find individual React developer profiles","intent":"source_people_profiles","confidence":0.97,"tool_name":"source_with_apify","selected_actor_key":"apify_people_search","source_type":"people_profiles","query":"React developer","role_keywords":["React Developer","React Engineer","Frontend Engineer"],"location":"London","remote_ok":false,"seniority":null,"max_results":10,"execution_mode":"fast","needs_clarification":false,"ask_clarification":false,"clarification_type":null,"clarification":null,"people_action":null,"companies_action":null,"agency_action":null,"reason":"Explicit individual-profile request."}
@@ -275,7 +276,7 @@ USER: "Find 10 engineers in London"
 JSON: {"business_goal":"find engineering talent or hiring signals","intent":"unclear","confidence":0.65,"tool_name":null,"selected_actor_key":null,"source_type":null,"query":"engineer","role_keywords":["Engineer","Software Engineer"],"location":"London","remote_ok":false,"seniority":null,"max_results":10,"execution_mode":"fast","needs_clarification":true,"ask_clarification":true,"clarification_type":"people_vs_companies","clarification":"Do you want individual engineer profiles, or companies hiring engineers in London?","people_action":{"intent":"source_people_profiles","tool_name":"source_with_apify","selected_actor_key":"apify_people_search","source_type":"people_profiles","query":"engineer","role_keywords":["Engineer","Software Engineer"],"location":"London","max_results":10,"execution_mode":"fast"},"companies_action":{"intent":"source_companies_hiring","tool_name":"source_with_apify","selected_actor_key":"apify_jobs","source_type":"jobs","query":"engineer","role_keywords":["Engineer","Software Engineer"],"location":"London","max_results":10,"execution_mode":"fast"},"agency_action":null,"reason":"Could mean people profiles or companies hiring."}
 
 USER: "We need more customers. Can you find companies hiring salespeople and draft outreach?"
-JSON: {"business_goal":"find hiring-intent sales leads and draft outreach","intent":"source_companies_hiring","confidence":0.9,"tool_name":"source_with_apify","selected_actor_key":"apify_jobs","source_type":"jobs","query":"sales","role_keywords":["Sales","Sales Development Representative","Account Executive"],"location":null,"remote_ok":false,"seniority":null,"max_results":25,"execution_mode":"outreach","needs_outreach":true,"needs_enrichment":false,"needs_clarification":false,"ask_clarification":false,"clarification_type":null,"clarification":null,"people_action":null,"companies_action":null,"agency_action":null,"reason":"Hiring-intent companies + outreach drafting."}
+JSON: {"business_goal":"find hiring-intent sales leads and draft outreach","intent":"source_companies_hiring","confidence":0.9,"tool_name":"source_with_apify","selected_actor_key":"apify_jobs","source_type":"jobs","query":"sales","role_keywords":["Sales","Sales Development Representative","Account Executive"],"location":null,"remote_ok":false,"seniority":null,"max_results":5,"execution_mode":"outreach","needs_outreach":true,"needs_enrichment":false,"needs_clarification":false,"ask_clarification":false,"clarification_type":null,"clarification":null,"people_action":null,"companies_action":null,"agency_action":null,"reason":"Hiring-intent companies + outreach drafting. No count given -> default 5."}
 
 USER: "Can you check https://stripe.com/jobs and tell me what roles they're hiring for?"
 JSON: {"business_goal":"summarize roles Stripe is hiring for","intent":"analyze_url","confidence":0.95,"tool_name":"scrape_url","selected_actor_key":"firecrawl_scrape_url","source_type":null,"query":"https://stripe.com/jobs","role_keywords":[],"location":null,"remote_ok":false,"seniority":null,"max_results":1,"execution_mode":"fast","needs_clarification":false,"ask_clarification":false,"clarification_type":null,"clarification":null,"people_action":null,"companies_action":null,"agency_action":null,"reason":"Single URL analysis — Firecrawl only, no Apify."}
