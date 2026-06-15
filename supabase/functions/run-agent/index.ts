@@ -200,7 +200,7 @@ Deno.serve(async (req) => {
         let roleKeywords: string[] = Array.isArray(tool_input_body?.role_keywords) ? tool_input_body.role_keywords : [];
         let max_results: number = typeof tool_input_body?.max_results === "number"
           ? Math.max(1, Math.min(200, tool_input_body.max_results))
-          : 25;
+          : 5; // QA-safe default — never silently source 25.
 
         if (!location) {
           const locMatch = (instruction ?? "").match(/\bin\s+([A-Z][A-Za-z\s\-]+?)(?:[.,]|$)/);
@@ -260,7 +260,14 @@ Deno.serve(async (req) => {
 
     // 3) Optional broad research — only attempt if Perplexity is actually configured AND
     //    we're not in fast mode (fast mode skips this entirely to keep cost low).
-    const skipBroadResearch = execution_mode_body === "fast" || tool_input_body?.tool_name === "source_with_apify";
+    // Perplexity (research_web) is OPTIONAL and never required. Skip it entirely
+    // for fast mode, explicit Apify steps, and ALL competitor-discovery steps —
+    // competitor inference is done by Gemini (this step's own output), parsed
+    // downstream. This removes the hard Perplexity dependency.
+    const skipBroadResearch = execution_mode_body === "fast"
+      || tool_input_body?.tool_name === "source_with_apify"
+      || tool_input_body?.competitor_discovery === true
+      || !!tool_input_body?.discovery_mode;
     if (!apifyContext && !scrapedContext && !skipBroadResearch) {
       const toolRes = await runTool("research_web", { query: instruction }, baseCtx);
       if (toolRes.ok && toolRes.data) {
@@ -433,7 +440,19 @@ Deno.serve(async (req) => {
     try {
       const { parseInferredCompetitors, buildCompetitorSearchQueries } = await import("../_shared/competitorDiscovery.ts");
       const inferred = parseInferredCompetitors(apiText ?? "");
-      const queries = buildCompetitorSearchQueries(inferred.competitors, nextToolInput?.query ?? instruction);
+      // Source order: known competitors (user-provided / company-brain, carried on
+      // tool_input.competitors) take precedence, then Gemini-inferred hypotheses.
+      const knownNames: string[] = Array.isArray(tool_input_body?.competitors)
+        ? tool_input_body.competitors
+        : (Array.isArray((nextToolInput as any)?.competitors) ? (nextToolInput as any).competitors : []);
+      const knownHyps = knownNames.filter(Boolean).map((n: string) => ({
+        name: n, category: "other", reason: "known competitor (brain/user-provided)",
+        confidence: 0.9, source: "seed" as const, keywords: [],
+      }));
+      const allHyps = [...knownHyps, ...inferred.competitors];
+      // buildCompetitorSearchQueries sanitizes the topic, so a raw business
+      // description can never become a LinkedIn query; empty → category fallback.
+      const queries = buildCompetitorSearchQueries(allHyps, nextToolInput?.query ?? instruction);
       if (queries.length > 0) {
         nextToolInput = {
           ...nextToolInput,

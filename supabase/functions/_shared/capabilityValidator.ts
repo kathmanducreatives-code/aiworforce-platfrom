@@ -138,13 +138,21 @@ export function validateAgainstCapabilities(decision: WorkflowDecision): Validat
     }
   }
 
-  // 6. content_creation: Scribe-only, no tools required.
+  // 6. content_creation: Scribe-only, no tools required — UNLESS this is the
+  // Phase 7 content + engagement loop (Scribe → Scout → Aria → Scribe), which
+  // legitimately needs the LinkedIn posts actor for the engagement-discovery
+  // step. Do NOT clobber execution_mode/tool in that case.
   if (d.workflow_category === "content_creation") {
-    d.agents = d.agents.length > 0 ? d.agents : ["scribe"];
-    d.execution_mode = "content";
-    d.selected_actor_key = null;
-    d.selected_tool = null;
-    d.source_type = null;
+    if (d.execution_mode === "content_engagement_loop") {
+      if (d.agents.length === 0) d.agents = ["scribe", "scout", "aria"];
+      // keep selected_actor_key = apify_linkedin_posts + source_type set by the classifier.
+    } else {
+      d.agents = d.agents.length > 0 ? d.agents : ["scribe"];
+      d.execution_mode = "content";
+      d.selected_actor_key = null;
+      d.selected_tool = null;
+      d.source_type = null;
+    }
   }
 
   // 7. outreach: always requires approval.

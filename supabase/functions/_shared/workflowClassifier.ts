@@ -241,7 +241,7 @@ function defaultDecision(category: WorkflowCategory, partial: Partial<WorkflowDe
     location: partial.location ?? null,
     remote_ok: partial.remote_ok ?? false,
     seniority: partial.seniority ?? null,
-    max_results: partial.max_results ?? 10,
+    max_results: partial.max_results ?? 5,
     needs_enrichment: partial.needs_enrichment ?? false,
     needs_outreach: partial.needs_outreach ?? false,
     requires_approval: partial.requires_approval ?? false,
@@ -383,7 +383,7 @@ function regexClassify(message: string): WorkflowDecision | null {
       clarification_question: postUrls.length === 0
         ? "Which LinkedIn post should I pull commenters from? Paste the post URL."
         : null,
-      max_results: extractRequestedCount(m, 20),
+      max_results: extractRequestedCount(m, 5),
     });
   }
 
@@ -433,7 +433,7 @@ function regexClassify(message: string): WorkflowDecision | null {
       needs_outreach: needsDms,
       requires_approval: needsDms,
       competitor_related: true,
-      max_results: extractRequestedCount(m, 10),
+      max_results: extractRequestedCount(m, 5),
     });
     }
   }
@@ -472,7 +472,7 @@ function regexClassify(message: string): WorkflowDecision | null {
         needs_dm_drafts: needsDms,
         needs_outreach: needsDms,
         requires_approval: needsDms,
-        max_results: extractRequestedCount(m, 10),
+        max_results: extractRequestedCount(m, 5),
       });
     }
   }
@@ -492,7 +492,7 @@ function regexClassify(message: string): WorkflowDecision | null {
       keywords: liEntityUrls,
       agents: ["scout", "aria"],
       execution_mode: "fast",
-      max_results: extractRequestedCount(m, 10),
+      max_results: extractRequestedCount(m, 5),
     });
   }
 
@@ -543,7 +543,7 @@ function regexClassify(message: string): WorkflowDecision | null {
       needs_outreach: needsDms,
       requires_approval: needsDms,
       competitor_related: competitorHits.length > 0,
-      max_results: extractRequestedCount(m, 10),
+      max_results: extractRequestedCount(m, 5),
     });
   }
 
@@ -610,7 +610,7 @@ function regexClassify(message: string): WorkflowDecision | null {
       selected_actor_key: "apify_people_search",
       source_type: "people_profiles",
       query: m,
-      max_results: 10,
+      max_results: extractRequestedCount(m, 5),
       needs_outreach: OUTREACH_RE.test(m),
       requires_approval: OUTREACH_RE.test(m),
     });
@@ -681,7 +681,7 @@ export function normalizeIntent(input: Partial<WorkflowDecision> | Record<string
     : "none";
 
   const confidence = typeof raw.confidence === "number" ? Math.max(0, Math.min(1, raw.confidence)) : 0.5;
-  let max_results = typeof raw.max_results === "number" ? Math.max(1, Math.min(200, Math.floor(raw.max_results))) : 10;
+  let max_results = typeof raw.max_results === "number" ? Math.max(1, Math.min(200, Math.floor(raw.max_results))) : 5;
 
   const decision: WorkflowDecision = {
     workflow_category: cat,

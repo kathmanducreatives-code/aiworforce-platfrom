@@ -13,7 +13,7 @@ import { classifyWorkflow, SHORT_VAGUE_CLARIFICATION } from "../_shared/workflow
 import { validateAgainstCapabilities } from "../_shared/capabilityValidator.ts";
 import { loadConversationMemory, renderMemoryForPrompt, isFollowUpReference, extractTopN, type ConversationMemory } from "../_shared/memoryReader.ts";
 import { shouldGateForOnboarding, ONBOARDING_GATE_REPLY } from "../_shared/companyBrainGate.ts";
-import { buildCompanyBrainContext, hasUsableBrain } from "../_shared/companyBrainContext.ts";
+import { buildCompanyBrainContext, hasUsableBrain, brainCompetitors } from "../_shared/companyBrainContext.ts";
 
 
 const cors = {
@@ -569,6 +569,33 @@ Deno.serve(async (req) => {
   const filterRe = /\b(only keep|filter|narrow|just keep|drop the|exclude)\b/i;
   const enrichRe = /\b(enrich|research|look up|dig into)\b/i;
 
+  // Phase 2 (P2-02) — refine/filter/rank over REMEMBERED results must ALWAYS win
+  // over re-sourcing. "only keep early-stage", "rank these", "top 5", "keep US
+  // only", "prioritize", "sort by"… are memory operations: never launch a new
+  // Apify run, never use a 25-result default. This precedes (and overrides) the
+  // classifier's sourcing categorization, which previously re-sourced.
+  const refineRe = /\b(only keep|just keep|keep only|narrow(?:\s+down)?|drop the|exclude|remove the|prioriti[sz]e|sort by|rank (?:these|them|the (?:results|leads|signals|candidates))|keep (?:us|u\.s\.|early[- ]stage|seed|series\s+[a-c]|enterprise|smb)\b)/i;
+  const refineTopOnly = /^\s*(?:keep|show|give me)?\s*(?:the\s+)?top\s+\d+\s*\.?\s*$/i;
+  const isRefine = (refineRe.test(message) || refineTopOnly.test(message)) && !draftOutreachRe.test(message);
+  if (isRefine) {
+    if (!hasLeads) {
+      return await replyAndReturn(
+        "I don't have any leads or signals saved in this conversation yet to refine. Run a sourcing workflow first — for example \"find 10 companies hiring GTM roles in the US\" — and I'll keep the results in memory so you can filter, rank, or narrow them next.",
+        { followup: "no_memory", reason: "refine_requires_existing_results" },
+      );
+    }
+    const total = memory.lead_candidates.length;
+    const stageKnown = memory.lead_candidates.filter((l) => l.account?.stage).length;
+    const preview = memory.lead_candidates
+      .slice(0, 10)
+      .map((l) => `• ${l.account?.name ?? l.contact?.full_name ?? "Lead"}${l.account?.stage ? ` — ${l.account.stage}` : ""}${l.account?.industry ? ` (${l.account.industry})` : ""}`)
+      .join("\n");
+    const msg = stageKnown < total
+      ? `I have ${total} leads in memory from your last search, but stage/industry data is missing on ${total - stageKnown} of them, so I can't apply that filter precisely yet. Want me to enrich them with Hawk + Firecrawl first? Quick preview:\n${preview}`
+      : `Refined against the ${total} leads already in memory (no new sourcing). Matches:\n${preview}\n\nReply "draft outreach to the top 5" or "enrich the top 3" to continue.`;
+    return await replyAndReturn(msg, { followup: "filter_applied", filter_target: message, reused_memory: true });
+  }
+
   // Phase 2 patch — no-memory outreach guard must NOT block explicit
   // sourcing+outreach prompts ("Find companies hiring GTM roles and draft
   // outreach"). isFollowUpReference matches "draft outreach", so we exclude
@@ -912,16 +939,24 @@ Deno.serve(async (req) => {
   if (decision.competitor_discovery) {
     let website = decision.business_website ?? null;
     let description = decision.business_description ?? null;
+    // Always load the company brain so we can seed KNOWN competitors (source
+    // order steps 1-2: user-provided + company_brain.competitors.known) and fall
+    // back to the saved profile for website/description.
+    const { data: cbRow } = await admin
+      .from("company_brain").select("profile").eq("workspace_id", workspaceId).maybeSingle();
+    const profile = (cbRow?.profile ?? {}) as Record<string, unknown>;
     if (!website && !description) {
-      // Fall back to the saved company profile (company_brain).
-      const { data: brainRow } = await admin
-        .from("company_brain").select("profile").eq("workspace_id", workspaceId).maybeSingle();
-      const profile = (brainRow?.profile ?? {}) as Record<string, unknown>;
       const what = [profile.what_we_do, profile.who_we_sell_to].filter((x) => typeof x === "string" && x).join(". ");
       if (typeof profile.website === "string" && profile.website) website = profile.website as string;
       else if (what) description = what;
     }
-    const mode = website ? "website" : (description ? "description" : "needs_context");
+    // Known competitors: user-provided (matched by classifier) ∪ brain. These let
+    // Scout search real names even if Hawk infers nothing — and never require Perplexity.
+    const knownCompetitors = Array.from(new Set([
+      ...((decision.competitors ?? []) as string[]),
+      ...brainCompetitors(profile),
+    ].map((c) => String(c).trim()).filter(Boolean)));
+    const mode = website ? "website" : (description ? "description" : (knownCompetitors.length > 0 ? "description" : "needs_context"));
     if (mode === "needs_context") {
       return await replyAndReturn(
         "To find your competitors, share your website, LinkedIn company page, or a one-line description of what you sell — or set up your company profile and I'll use that.",
@@ -939,7 +974,7 @@ Deno.serve(async (req) => {
         query: description ?? website ?? message,
         role_keywords: [],
         location: null,
-        max_results: Math.max(1, Math.min(20, decision.max_results ?? 10)),
+        max_results: Math.max(1, Math.min(20, decision.max_results ?? 5)),
         needs_enrichment: false,
         needs_outreach: !!decision.needs_dm_drafts,
         execution_mode: decision.execution_mode,
@@ -951,6 +986,9 @@ Deno.serve(async (req) => {
         discovery_mode: mode,
         business_website: website,
         business_description: description,
+        // Known competitors flow to Scout (and the inference→search threading) so
+        // the LinkedIn search uses real names/categories, never the raw description.
+        competitors: knownCompetitors,
         needs_comment_drafts: !!decision.needs_comment_drafts,
         needs_dm_drafts: !!decision.needs_dm_drafts,
       } as unknown as ToolInput,
@@ -986,7 +1024,7 @@ Deno.serve(async (req) => {
         query: decision.query ?? message,
         role_keywords: [],
         location: decision.location ?? null,
-        max_results: Math.max(1, Math.min(20, decision.max_results ?? 10)),
+        max_results: Math.max(1, Math.min(20, decision.max_results ?? 5)),
         needs_enrichment: false,
         needs_outreach: !!decision.needs_dm_drafts,
         execution_mode: decision.execution_mode,

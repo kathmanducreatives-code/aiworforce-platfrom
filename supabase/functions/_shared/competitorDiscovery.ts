@@ -146,9 +146,11 @@ export function buildLinkedInSearchQueryGroups(
     groups.category_discussions.push(catTerm);
     groups.comparisons.push(`${catTerm} comparison`);
   }
-  if (opts.topic && opts.topic.trim()) groups.category_discussions.push(opts.topic.trim());
+  const topicTerm = sanitizeSearchTerm(opts.topic);
+  if (topicTerm) groups.category_discussions.push(topicTerm);
   if (groups.category_discussions.length === 0 && names.length === 0) {
-    groups.category_discussions.push("AI SDR tools comparison");
+    // Never fall back to a raw description — use a concrete category query.
+    groups.category_discussions.push(catTerm ?? "AI SDR tools");
   }
   // dedupe each group
   (Object.keys(groups) as (keyof SearchQueryGroups)[]).forEach((k) => {
@@ -197,7 +199,7 @@ export function buildCompetitorDiscoveryPlan(mode: DiscoveryMode, opts: {
   needs_dm_drafts?: boolean;
   max?: number | null;
 } = {}): DiscoveryPlan {
-  const cap = Math.max(1, Math.min(20, opts.max ?? 10));
+  const cap = Math.max(1, Math.min(20, opts.max ?? 5));
   const topic = (opts.topic ?? opts.description ?? opts.website_url ?? "your competitors").toString();
   const steps: DiscoveryPlanStep[] = [];
 
@@ -301,6 +303,21 @@ export interface CompetitorQueryPlan {
 }
 
 const clamp01 = (n: number) => Math.max(0, Math.min(1, n));
+
+/**
+ * Keep only short, search-like terms; reject raw business descriptions/full
+ * sentences so we NEVER run a LinkedIn search on a paragraph. Returns null when
+ * the term is too long or sentence-like — callers fall back to category terms.
+ */
+export function sanitizeSearchTerm(raw: string | null | undefined): string | null {
+  const t = (raw ?? "").trim().replace(/\s+/g, " ").replace(/[.;:]+$/, "");
+  if (!t) return null;
+  const words = t.split(" ");
+  if (words.length > 6) return null;                 // paragraph / description
+  if (/[.!?].+/.test(t)) return null;                // internal sentence break
+  if (/^(?:we|our|i)\b/i.test(t) && words.length > 3) return null; // "we sell X for Y"
+  return t;
+}
 
 /** Classify a post/query's conversation angle (text-only heuristic). */
 export function classifyConversationType(text: string): ConversationType {

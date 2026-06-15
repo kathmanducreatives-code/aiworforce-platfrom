@@ -779,11 +779,15 @@ Deno.serve(async (req) => {
       });
       // The Scout step must run the LinkedIn actor → give it the apify tool_input.
       // The Hawk step (website mode) must only Firecrawl → give it a scrape-only tool_input.
-      const scoutToolInput = { ...tool_input, tool_name: "source_with_apify", selected_actor_key: "apify_linkedin_posts", source_type: "linkedin_engagement" };
-      const hawkScrapeToolInput = { tool_name: "scrape_url", selected_actor_key: null, source_type: null, query: ti.business_website ?? null, max_results: 1 };
+      const knownCompetitors = Array.isArray(ti.competitors) ? ti.competitors : [];
+      const scoutToolInput = { ...tool_input, tool_name: "source_with_apify", selected_actor_key: "apify_linkedin_posts", source_type: "linkedin_engagement", competitors: knownCompetitors };
+      // competitor_discovery flag on the Hawk inputs makes run-agent skip the
+      // optional Perplexity research_web call (inference is Gemini-only) and lets
+      // the inference→search threading carry known competitors into Scout.
+      const hawkScrapeToolInput = { tool_name: "scrape_url", selected_actor_key: null, source_type: null, query: ti.business_website ?? null, max_results: 1, competitor_discovery: true, discovery_mode: ti.discovery_mode, competitors: knownCompetitors };
       // Inference-only Hawk (description mode): explicit no-tool input so it does
       // NOT inherit the plan's apify tool_input and re-run the LinkedIn actor.
-      const hawkInferToolInput = { tool_name: null, selected_actor_key: null, source_type: null };
+      const hawkInferToolInput = { tool_name: null, selected_actor_key: null, source_type: null, competitor_discovery: true, discovery_mode: ti.discovery_mode, competitors: knownCompetitors };
       const steps: Step[] = dplan.steps.map((s, idx) => {
         const st = mkStep(idx, s.agent_slug, s.task_title, s.task_description, {
           tool_needed: s.tool_needed,
@@ -806,7 +810,7 @@ Deno.serve(async (req) => {
         signal_type?: string; competitors?: string[];
       };
       const isCompetitor = ti.signal_type === "competitor_engagement";
-      const cap = Math.max(1, Math.min(20, tool_input.max_results ?? 10));
+      const cap = Math.max(1, Math.min(20, tool_input.max_results ?? 5));
       const topic = (ti.keywords && ti.keywords.length > 0) ? ti.keywords.join(", ") : (tool_input.query || user_instruction);
       const compNote = isCompetitor && ti.competitors && ti.competitors.length > 0
         ? ` (competitors: ${ti.competitors.join(", ")})` : "";
@@ -859,7 +863,7 @@ Deno.serve(async (req) => {
       parsed = { plan_summary: `${isCompetitor ? "Competitor engagement" : "LinkedIn engagement"} (${modeLabel}): ${topic}`, steps };
       plannerSource = "staged";
     } else if (tool_input && tool_input.tool_name === "source_with_apify") {
-      const cap = Math.max(1, Math.min(200, tool_input.max_results ?? 25));
+      const cap = Math.max(1, Math.min(200, tool_input.max_results ?? 5));
       const sourcingStep = mkStep(
         0,
         "scout",

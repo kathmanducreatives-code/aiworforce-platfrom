@@ -865,9 +865,63 @@ async function writePennDrafts(ctx: AgentResultCtx): Promise<void> {
 
 // ---------- Scribe content/reports ----------
 
+/** Render a parsed JSON content object/array into clean readable text. */
+function renderStructuredContent(parsed: unknown): string | null {
+  if (parsed == null) return null;
+  if (typeof parsed === "string") return parsed.trim() || null;
+  const parts: string[] = [];
+  if (Array.isArray(parsed)) {
+    parsed.forEach((x, i) => {
+      if (typeof x === "string" && x.trim()) parts.push(`${i + 1}. ${x.trim()}`);
+      else if (x && typeof x === "object") {
+        const o = x as Record<string, unknown>;
+        const t = (o.text ?? o.comment ?? o.content ?? o.post ?? o.body) as string | undefined;
+        if (typeof t === "string" && t.trim()) parts.push(`${i + 1}. ${t.trim()}`);
+      }
+    });
+    return parts.join("\n\n") || null;
+  }
+  const o = parsed as Record<string, unknown>;
+  const main = (o.post ?? o.content ?? o.body ?? o.text) as string | undefined;
+  if (typeof main === "string" && main.trim()) parts.push(main.trim());
+  if (Array.isArray(o.post_ideas)) o.post_ideas.forEach((p, i) => { if (typeof p === "string" && p.trim()) parts.push(`Idea ${i + 1}: ${p.trim()}`); });
+  if (Array.isArray(o.comments)) o.comments.forEach((c, i) => {
+    const t = typeof c === "string" ? c : ((c as Record<string, unknown>)?.comment ?? (c as Record<string, unknown>)?.text);
+    if (typeof t === "string" && t.trim()) parts.push(`Comment ${i + 1}: ${t.trim()}`);
+  });
+  return parts.length ? parts.join("\n\n") : null;
+}
+
+/**
+ * Clean a Scribe output for storage/display: strip markdown ```json fences,
+ * parse JSON to readable prose when possible, and derive a clean title. Never
+ * stores a raw "```json" fence as the title/body.
+ */
+export function cleanScribeOutput(raw: string): { body: string; title: string; structured: Record<string, unknown> | null } {
+  let text = (raw ?? "").trim();
+  let structured: Record<string, unknown> | null = null;
+  const fence = text.match(/^```[a-zA-Z]*\s*([\s\S]*?)\s*```$/);
+  const inner = (fence ? fence[1] : text).trim();
+  if (/^[[{]/.test(inner)) {
+    try {
+      const parsed = JSON.parse(inner);
+      if (parsed && typeof parsed === "object") structured = Array.isArray(parsed) ? { items: parsed } : parsed as Record<string, unknown>;
+      text = renderStructuredContent(parsed) ?? inner;
+    } catch {
+      text = inner; // parse failed → at least drop the fences
+    }
+  } else if (fence) {
+    text = inner; // non-JSON fenced text → drop the fences
+  }
+  text = text.trim();
+  const title = (text.split("\n").find((l) => l.trim()) ?? "Content draft").replace(/^#+\s*/, "").replace(/^[`*_>\-\s]+/, "").slice(0, 120) || "Content draft";
+  return { body: text, title, structured };
+}
+
 async function writeScribeContent(ctx: AgentResultCtx): Promise<void> {
   const text = (ctx.output_text ?? "").trim();
   if (!text) return;
+  const cleaned = cleanScribeOutput(text);
   const cl = ctx.content_loop;
   // Content-loop drafts carry source/subtype/topic/audience/angle so the Signal
   // Feed can surface founder posts, post ideas, and comment drafts distinctly.
@@ -889,8 +943,8 @@ async function writeScribeContent(ctx: AgentResultCtx): Promise<void> {
     plan_id: ctx.plan_id ?? null,
     task_id: ctx.task_id ?? null,
     type: "content_draft",
-    title: text.split("\n")[0].slice(0, 120),
-    body: text,
-    raw,
+    title: cleaned.title,
+    body: cleaned.body,
+    raw: cleaned.structured ? { ...raw, structured: cleaned.structured } : raw,
   });
 }
