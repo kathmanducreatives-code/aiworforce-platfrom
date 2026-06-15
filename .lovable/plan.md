@@ -1,31 +1,29 @@
-# Onboarding Page: Add Exit & Restart Buttons
+# Fix: Activate Company Brain — Edge Function 400 unknown_action
 
-## Problem
-The Review step (Step 9) currently lacks explicit navigation options to:
-1. Exit onboarding and return to the Dashboard
-2. Restart the entire onboarding flow from Step 1
+## Root cause
 
-While the header has a small X icon that navigates to `/dashboard`, and the `?restart=1` query param exists for restarting, these are not prominent enough for users who want to explicitly close or restart.
+`supabase/functions/setup-company-brain/index.ts` is missing the closing `}` for the `save_structured` handler (opened line 76, returns at line 93, but never closes before `if (action === "save_sources")` at line 95).
 
-## Proposed Changes
+Because of the missing brace, every subsequent `if` branch (`save_sources`, `analyze`, `generate_followups`, `save_followups`, `finalize`) and the final `return json({ error: "unknown_action" })` are syntactically nested inside the `save_structured` block. The previous deploy of the function did not include `save_structured` at all, so calls now fall through to `unknown_action`.
 
-### 1. Header: Make "Exit to Dashboard" More Explicit
-- Replace the bare `X` icon button in the header with a labeled `Button` variant that reads "Exit to Dashboard" alongside a smaller close icon.
-- Keep navigation to `/dashboard`.
+## Fix
 
-### 2. Review Step: Add "Start from Beginning" Button
-- In `renderReview()`, below the existing action buttons ("Activate Company Brain" / "Edit details"), add a ghost-style "Start from beginning" button.
-- On click, navigate to `/onboarding/company-brain?restart=1`.
-- This triggers the existing `restart` logic which forces Step 1 while keeping pre-filled data intact.
+Single one-line edit to `supabase/functions/setup-company-brain/index.ts`:
 
-### 3. Optional: Add to Footer Nav (for non-review steps)
-- In `renderFooter()`, add a small "Exit" link on the left side next to "Back" so users can bail out from any middle step without completing the flow.
+Insert a closing `}` after line 93 (the `return json({ ok: true, profile: merged });` inside the `save_structured` branch) and before the blank line/`if (action === "save_sources")`.
 
-## Files
-- `src/pages/OnboardingCompanyBrain.tsx` — header button update, review step button, optional footer exit link.
+```text
+      if (error) throw error;
+      return json({ ok: true, profile: merged });
+    }                                  // ← add this closing brace
 
-## Acceptance
-- [ ] "Exit to Dashboard" button visible and clickable in the header on all steps.
-- [ ] "Start from beginning" button visible in the Review step.
-- [ ] Clicking restart preserves pre-filled data (does not wipe) and lands on Step 1.
-- [ ] No backend/schema changes needed.
+    if (action === "save_sources") {
+```
+
+No other code, schema, frontend, or config changes. After redeploy, the Activate flow will hit the real `save_structured` branch, persist the structured patch, then call `finalize`.
+
+## Validation
+
+- Typecheck (`bunx tsc --noEmit` — frontend) still passes (unaffected).
+- Manually re-run "Activate Company Brain" from `/onboarding/company-brain` Review step; expect 200 and redirect, no toast error.
+- Check `setup-company-brain` edge logs for a clean `save_structured` → `finalize` sequence.
