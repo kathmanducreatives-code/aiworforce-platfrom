@@ -28,6 +28,10 @@ const Dashboard = () => {
 
         <div className="grid grid-cols-12 gap-5">
           <div className="col-span-12">
+            <CompanyBrainStatusCard />
+          </div>
+
+          <div className="col-span-12">
             <PilotBriefing totals={totals} />
           </div>
 
