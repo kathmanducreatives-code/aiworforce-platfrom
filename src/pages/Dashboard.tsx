@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useWorkspace } from '@/contexts/WorkspaceContext';
 import { useWorkforceState } from '@/hooks/useWorkforceState';
 import CompanyBrainStrip from '@/components/workforce/CompanyBrainStrip';
+import CompanyBrainStatusCard from '@/components/dashboard/CompanyBrainStatusCard';
 import PilotBriefing from '@/components/workforce/PilotBriefing';
 import AgentDock from '@/components/workforce/AgentDock';
 import WorkflowTimeline from '@/components/workforce/WorkflowTimeline';
@@ -26,6 +27,10 @@ const Dashboard = () => {
         <CompanyBrainStrip visible={!brainComplete} />
 
         <div className="grid grid-cols-12 gap-5">
+          <div className="col-span-12">
+            <CompanyBrainStatusCard />
+          </div>
+
           <div className="col-span-12">
             <PilotBriefing totals={totals} />
           </div>
