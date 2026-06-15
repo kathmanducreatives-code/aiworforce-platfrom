@@ -261,6 +261,8 @@ function StepHeader({ eyebrow, title, subtitle }: { eyebrow: string; title: stri
 // ---------- main ----------
 export default function OnboardingCompanyBrain() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const restart = searchParams.get('restart') === '1';
   const { workspaceId, loading: wsLoading } = useWorkspace();
   const { data: brain, refresh } = useCompanyBrain();
 
@@ -310,9 +312,10 @@ export default function OnboardingCompanyBrain() {
       competitors:    { ...defaults.competitors,    ...(p.competitors ?? {}) },
       approval_rules: { ...defaults.approval_rules, ...(p.approval_rules ?? {}) },
     });
-    if (hasAny) setStepIndex(stepIdOf('review'));
+    // When ?restart=1, prefill values but start at Step 1 instead of jumping to Review.
+    if (hasAny && !restart) setStepIndex(stepIdOf('review'));
     setHydrated(true);
-  }, [brain, hydrated]);
+  }, [brain, hydrated, restart]);
 
   // Animate analysis labels
   useEffect(() => {
