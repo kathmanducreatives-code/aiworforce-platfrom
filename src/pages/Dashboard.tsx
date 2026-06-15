@@ -17,53 +17,51 @@ const Dashboard = () => {
 
   return (
     <div className="min-h-screen bg-transparent">
-      {/* Ambient premium backdrop */}
+      {/* Ambient backdrop — quiet, atmospheric only */}
       <div className="pointer-events-none fixed inset-0 -z-10 overflow-hidden">
-        <div className="absolute -top-40 left-1/2 -translate-x-1/2 h-[600px] w-[900px] rounded-full bg-emerald-500/10 blur-[140px]" />
-        <div className="absolute top-1/3 left-1/4 h-[400px] w-[400px] rounded-full bg-emerald-400/5 blur-[120px]" />
+        <div className="absolute -top-48 left-1/2 -translate-x-1/2 h-[420px] w-[720px] rounded-full bg-emerald-500/[0.06] blur-[160px]" />
       </div>
 
-      <div className="mx-auto w-full max-w-[1100px] px-4 sm:px-6 lg:px-8 py-10 pb-40 flex flex-col items-center">
-        <div className="w-full max-w-[920px]">
-          <CompanyBrainStrip visible={!brainComplete} />
-        </div>
+      <div className="mx-auto w-full max-w-[1440px] px-5 lg:px-8 py-6 pb-32">
+        <CompanyBrainStrip visible={!brainComplete} />
 
-        <div className="mt-6 w-full max-w-[920px] flex flex-col items-stretch space-y-8">
-          <PilotBriefing totals={totals} />
+        <div className="grid grid-cols-12 gap-5">
+          <div className="col-span-12">
+            <PilotBriefing totals={totals} />
+          </div>
 
-          <section className="space-y-5">
-            <div className="flex items-end justify-between px-1">
-              <div className="text-center sm:text-left mx-auto sm:mx-0">
-                <h2 className="text-[15px] font-semibold text-white tracking-tight">AI Workforce Dock</h2>
-                <p className="text-[12px] text-neutral-500 mt-0.5">
-                  Choose an AI employee to view their department.
-                </p>
-              </div>
-              <span className="hidden sm:inline text-[11px] text-emerald-400/70 font-mono uppercase tracking-[0.2em]">● Live</span>
+          <section className="col-span-12 space-y-3">
+            <div className="flex items-end justify-between px-0.5">
+              <span className="eyebrow">Workforce</span>
+              <span className="text-[10px] font-mono uppercase tracking-[0.18em] text-emerald-400/70 flex items-center gap-1.5">
+                <span className="h-1.5 w-1.5 rounded-full bg-emerald-400/80" />
+                Live
+              </span>
             </div>
+            <WorkforceDock
+              agents={agents}
+              totals={totals}
+              brainComplete={brainComplete}
+              selectedId={selectedId}
+              onSelect={setSelectedId}
+            />
+          </section>
 
-            <div className="relative rounded-2xl border border-white/[0.06] bg-white/[0.02] backdrop-blur-xl p-5 shadow-[0_8px_40px_-12px_rgba(16,185,129,0.15)]">
-              <WorkforceDock
-                agents={agents}
-                totals={totals}
-                brainComplete={brainComplete}
-                selectedId={selectedId}
-                onSelect={setSelectedId}
-              />
-            </div>
-
+          <div className="col-span-12">
             <DepartmentPreview
               agentId={selectedId}
               totals={totals}
               brainComplete={brainComplete}
             />
+          </div>
 
-            <div className="flex justify-center">
-              <WorkforceHandoffStrip activeId={selectedId} />
-            </div>
-          </section>
+          <div className="col-span-12">
+            <WorkforceHandoffStrip activeId={selectedId} />
+          </div>
 
-          <WorkflowTimeline items={timeline} />
+          <div className="col-span-12">
+            <WorkflowTimeline items={timeline} />
+          </div>
         </div>
       </div>
 

@@ -1,44 +1,93 @@
-# Plan — AI Workforce Dock on Dashboard
+# Dashboard Refinement Plan — Linear/Raycast Density Pass
 
-## Scope
-Replace only the "Agent work canvas" section in `src/pages/Dashboard.tsx`. Keep Company Brain strip, Pilot Briefing, Workflow Timeline, Decision Queue, Inline Command Bar, Sidebar, and the bottom floating Agent Dock unchanged.
+Goal: tighten, widen, and mature the existing dashboard. No IA changes. Same modules: Company Brain strip, Pilot Briefing, AI Workforce Dock, Department Preview, Workflow Timeline, bottom Command Bar (AgentDock).
 
-## Files
+## 1. Layout & width
 
-**New**
-- `src/components/workforce/WorkforceDock.tsx` — horizontal premium glass capsule with circular agent avatars (Pilot, Scout, Aria, Penn, Hawk, Scribe, +). Status ring colors per spec, override Aria → violet and Penn → cyan visually for this dock. Hover lift/scale, tooltip card (name, role, status, output count, next action), notification badges from `useWorkforceState` (Aria shows `!` when blocked). Selected agent gets stronger glow + active ring. Click selects agent + navigates via action button below.
-- `src/components/workforce/DepartmentPreview.tsx` — dynamic panel reacting to selected agent. Title, subtitle, 3–5 stat lines, and 2–3 action buttons (each routes via `react-router-dom`'s `useNavigate`, never auto-sends). Uses `useWorkforceState` totals for live numbers.
-- `src/components/workforce/WorkforceHandoffStrip.tsx` — thin chip row: Scout → Aria → Penn → Pilot → Scribe with arrow separators and subtle glow on currently active step.
-- `src/components/workforce/departmentConfig.ts` — per-agent config: department label, subtitle, route, ringColor, iconKey, statBuilder(totals, brainComplete), actionBuilder(navigate). Centralizes routing so dock and preview stay in sync.
+`src/pages/Dashboard.tsx`
+- Replace the centered `max-w-[1100px]` + nested `max-w-[920px]` columns with a single workspace container: `max-w-[1440px]`, `px-6 lg:px-8`, `py-6 pb-32`. No inner re-centering.
+- Switch the main area to a 12-column grid (`grid grid-cols-12 gap-5`) so modules can span full width and sit on a shared rhythm.
+- Reduce ambient glows: drop the second blur, lower opacity of the first (`bg-emerald-500/[0.06]`, `blur-[160px]`), and shrink it so it reads as atmosphere, not decoration.
+- Vertical rhythm: `space-y-5` between sections (was `space-y-8`).
 
-**Edited**
-- `src/pages/Dashboard.tsx` — remove the "Agent work canvas" block (heading + `AGENT_ORDER.map(...AgentWorkCard...)`). Insert:
-  1. Section header "AI Workforce Dock" + sublabel.
-  2. `<WorkforceDock selectedId={...} onSelect={...} agents={agents} />`
-  3. `<DepartmentPreview agentId={selectedId} totals={totals} brainComplete={brainComplete} />`
-  4. `<WorkforceHandoffStrip activeId={selectedId} />`
-  
-  Add `useState<AgentId>('pilot')` for selected agent. Keep `AgentProfileDrawer` available but selection no longer opens the drawer (dock click selects; drawer remains used by the bottom `AgentDock`).
+Section spans on the grid:
+- Company Brain strip: `col-span-12`
+- Pilot Briefing: `col-span-12` (component itself reflows internally)
+- Workforce Dock: `col-span-12`
+- Department Preview: `col-span-12` (internal 3-zone layout — see §3)
+- Handoff Strip: `col-span-12`, compact inline row
+- Workflow Timeline: `col-span-12`
 
-## Behavior
-- Selection state lives in `Dashboard.tsx` (no global state needed).
-- Plus button: opens a simple "Add agent / workflow (coming soon)" disabled tooltip — no new route.
-- All action buttons use `navigate(route)` to existing pages: Pilot → `/awaiting-you`, Scout → `/signals`, Aria → `/leads` (or `/onboarding/company-brain` when brain incomplete), Penn → `/awaiting-you` + `/email-sequences`, Hawk → `/competitors`, Scribe → `/content`.
-- Badges/stats pulled from `useWorkforceState().totals` and per-agent `badgeCount`. Aria badge renders `!` when `agents.aria.status === 'blocked'`.
-- No backend, schema, hook logic, or routing config changes. No removal of the bottom `AgentDock` (it stays as the global floating dock).
+## 2. Workforce Dock refinement
 
-## Visual
-- Glass capsule: `bg-black/40 border border-white/[0.08] backdrop-blur-2xl`, inner top highlight, soft shadow. Circular avatars 56–64px with glossy radial highlight and colored status ring (existing `accentClasses` in `agents.ts`). Aria override uses violet, Penn override uses cyan to match spec.
-- Hover: `-translate-y-1 scale-110`, tooltip card with name/role/status/output/next action.
-- Active: ring opacity boosted, soft outer glow, agent label brightens.
-- Department Preview: glass card, large agent monogram on left, stats list center, action buttons right (premium outlined emerald primary, ghost secondary).
-- Handoff strip: small mono-uppercase chips with `→` separators, active chip emerald.
+`src/components/workforce/WorkforceDock.tsx`
+- Remove the outer extra glass wrapper added in `Dashboard.tsx` (avoid double surface). Dock becomes the single surface.
+- Reduce avatar size from 68px to 52px; reduce gap from `gap-5` to `gap-3`; reduce padding to `px-4 py-3`.
+- Replace the circular glossy "toy" buttons with a flatter look: 12px radius squircle (`rounded-2xl`), subtle 1px border, no inner radial highlight, no scale-up on hover (use a 1px ring + faint background tint instead). Selected state = thin accent ring (`ring-1`) in agent hex + small accent underline bar beneath the label.
+- Badges: shrink to 16px, neutral slate background with accent text for counts; reserve red only for true errors (`!` stays amber).
+- Labels: single line, `text-[11px]` semibold, uppercase tracking `0.08em`, drop the second role line into a tooltip only.
+- Remove the `Add Agent` button from the dock (move concept to settings later) — reduces playful feel.
+- Container: align-left on desktop (`justify-start`), keep horizontal scroll only on mobile.
 
-## Non-goals
-- No changes to Pilot Briefing, Decision Queue, Timeline, Command Bar, Sidebar, bottom Agent Dock.
-- No new routes, no auto-send/auto-post, no schema or Supabase changes.
-- No landing-page edits.
+`src/pages/Dashboard.tsx` header above dock: replace the centered "AI Workforce Dock / Choose an AI employee" copy with a left-aligned compact header: small uppercase eyebrow `WORKFORCE`, no subtitle, right-aligned `● Live` indicator at `text-[10px]`.
 
-## Verification
-- `bunx tsc --noEmit`
-- Visual check at desktop and ~768px (dock scrolls horizontally on small screens).
+## 3. Department Preview as command panel
+
+`src/components/workforce/DepartmentPreview.tsx`
+- Convert to an explicit 3-zone grid: `grid-cols-[280px_1fr_220px]` on `lg`, stack on mobile.
+  - Left: identity (icon 48px not 64px, title, subtitle, plus one-line "Currently:" status line pulled from `AgentState.statusText`).
+  - Middle: stats laid out as a 4-column inline KPI row (`grid-cols-4 gap-4`), each KPI = uppercase 10.5px label + 20px tabular number; thin divider lines between columns instead of card backgrounds.
+  - Right: vertical action stack, primary CTA flatter (solid accent at 90% opacity, no glow), secondary as ghost buttons; max 3 actions.
+- Card chrome: `rounded-xl` (was `2xl`), border `white/[0.06]`, background `white/[0.015]`, remove the heavy inset highlight + drop shadow; keep only a soft `shadow-black/40`.
+- Remove per-agent ring glow on the icon tile; use a 1px colored border + 1px inner accent line only.
+
+## 4. Pilot Briefing, Handoff Strip, Workflow Timeline
+
+Light refinement only (no structural rewrite):
+- `PilotBriefing`: reduce internal padding to `p-5`, tighten heading to `text-[15px]`, body `text-[13px]`, neutralize any gradient backgrounds to the same `white/[0.02]` surface used by Department Preview for visual consistency.
+- `WorkforceHandoffStrip`: render inline at full width, left-aligned, smaller chips (`h-7 text-[11px]`), arrows `text-neutral-600`. Remove the wrapping `flex justify-center`.
+- `WorkflowTimeline`: widen to full grid width, switch list rows to a 2-column meta layout (`time | actor | event`), monospace timestamps `text-[11px] text-neutral-500`, row height ~32px, hairline dividers `border-white/[0.04]`. Cap height with internal scroll if >8 items.
+
+## 5. Typography & token discipline
+
+`src/index.css` (additive only, no token renames):
+- Add utility classes `.eyebrow` (uppercase, `text-[10.5px]`, `tracking-[0.14em]`, `text-neutral-500`) and `.num` (`font-variant-numeric: tabular-nums`).
+- Apply consistently to all KPI labels and timestamp/number values across the four components above.
+- Heading scale used on the dashboard: section title `text-[13px] font-semibold` (eyebrow style), card title `text-[15px] font-semibold tracking-tight`, KPI value `text-[20px] font-semibold`. No `text-2xl+` on this page.
+
+## 6. Bottom Command Bar (AgentDock)
+
+`src/components/workforce/AgentDock.tsx`
+- Shrink avatar to 36px (was 44px), padding to `px-2.5 py-1.5`, gap `gap-1.5`.
+- Flatter surface: `bg-neutral-950/70` + `border-white/[0.06]`, remove the inset white highlight.
+- Tooltip: tighter (`w-56`, `p-2.5`, `text-[11.5px]`), no accent text — use neutral hierarchy, single accent dot for status.
+- Remove hover `scale-110` / `-translate-y-1`; replace with subtle `bg-white/[0.04]` on hover. No motion on the dock itself.
+- Drop the "Add agent" plus button here as well (consistency with §2).
+
+## Scope guardrails
+
+- No route changes, no removed sections, no business logic edits.
+- No new dependencies.
+- Keep semantic tokens; no hardcoded hex outside the existing per-agent `ringHex` accents (already in `departmentConfig.ts`).
+- Mobile: every section stacks; dock and handoff strip allow horizontal scroll; no horizontal page scroll.
+
+## Files touched
+
+- `src/pages/Dashboard.tsx` — layout, container width, grid, ambient bg, headers
+- `src/components/workforce/WorkforceDock.tsx` — flatter, smaller, left-aligned, no Add
+- `src/components/workforce/DepartmentPreview.tsx` — 3-zone command panel, KPI row, lighter chrome
+- `src/components/workforce/AgentDock.tsx` — compact Raycast-style command bar
+- `src/components/workforce/WorkforceHandoffStrip.tsx` — inline, smaller chips
+- `src/components/workforce/WorkflowTimeline.tsx` — full-width log layout, mono timestamps
+- `src/components/workforce/PilotBriefing.tsx` — spacing + type only
+- `src/index.css` — `.eyebrow`, `.num` utility additions
+
+## Acceptance check
+
+- Main content fills up to 1440px and visibly anchors left/right at ≥1280px viewport.
+- No section is centered inside a narrower inner column.
+- Dock avatars ≤ 52px; no scale-on-hover; selected state = thin accent ring only.
+- Department Preview shows identity | KPI row | actions on one row at `lg`.
+- Bottom command bar avatars ≤ 36px.
+- No `text-2xl+` headings on dashboard; KPI numbers use tabular nums.
+- Typecheck clean.
