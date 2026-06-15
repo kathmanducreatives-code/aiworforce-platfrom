@@ -1,93 +1,78 @@
-# Dashboard Refinement Plan — Linear/Raycast Density Pass
+# Premium Company Brain Onboarding — Final Pass
 
-Goal: tighten, widen, and mature the existing dashboard. No IA changes. Same modules: Company Brain strip, Pilot Briefing, AI Workforce Dock, Department Preview, Workflow Timeline, bottom Command Bar (AgentDock).
+The 10-step wizard at `/onboarding/company-brain` already exists (`src/pages/OnboardingCompanyBrain.tsx`, ~995 lines) with progress rail, agent chips, analysis animation, ChipInput, completeness ring, review collapsibles, and launch screen. The supporting pieces also exist: `useCompanyBrain`, `companyBrainSchema`, `onboardingDraftMap`, `brainCompleteness`, `BrainReadinessCard`, `CompanyBrainStrip`, `setup-company-brain` edge function, and Pilot chat gating in `supabase/functions/_shared/companyBrainGate.ts`.
 
-## 1. Layout & width
+This pass focuses on the **gaps vs. the spec** and a premium polish — not a rewrite.
 
-`src/pages/Dashboard.tsx`
-- Replace the centered `max-w-[1100px]` + nested `max-w-[920px]` columns with a single workspace container: `max-w-[1440px]`, `px-6 lg:px-8`, `py-6 pb-32`. No inner re-centering.
-- Switch the main area to a 12-column grid (`grid grid-cols-12 gap-5`) so modules can span full width and sit on a shared rhythm.
-- Reduce ambient glows: drop the second blur, lower opacity of the first (`bg-emerald-500/[0.06]`, `blur-[160px]`), and shrink it so it reads as atmosphere, not decoration.
-- Vertical rhythm: `space-y-5` between sections (was `space-y-8`).
+## Scope
 
-Section spans on the grid:
-- Company Brain strip: `col-span-12`
-- Pilot Briefing: `col-span-12` (component itself reflows internally)
-- Workforce Dock: `col-span-12`
-- Department Preview: `col-span-12` (internal 3-zone layout — see §3)
-- Handoff Strip: `col-span-12`, compact inline row
-- Workflow Timeline: `col-span-12`
+In scope (frontend only):
+- Polish the wizard chrome and microcopy to match the spec.
+- Add Dashboard entry points for both *incomplete* and *complete* Company Brain states, including **Restart onboarding**.
+- Make the wizard re-entrant from the start when restarted, without destroying saved data.
+- Add an "Add later / Skip for now" affordance on optional steps.
+- Tighten Pilot chat gating to add the missing `analyze_url` / business-specific intents already enumerated in `companyBrainGate.ts` and ensure Pilot loads Company Brain context for gated prompts.
 
-## 2. Workforce Dock refinement
+Out of scope (per user):
+- Landing page, public site
+- New database tables
+- Supabase function shape changes (we only call existing `setup-company-brain` actions: `save_basics`, `save_sources`, `analyze`, `save_structured`, `finalize`)
+- Any auto-send / auto-DM / auto-post / LinkedIn credential capture
 
-`src/components/workforce/WorkforceDock.tsx`
-- Remove the outer extra glass wrapper added in `Dashboard.tsx` (avoid double surface). Dock becomes the single surface.
-- Reduce avatar size from 68px to 52px; reduce gap from `gap-5` to `gap-3`; reduce padding to `px-4 py-3`.
-- Replace the circular glossy "toy" buttons with a flatter look: 12px radius squircle (`rounded-2xl`), subtle 1px border, no inner radial highlight, no scale-up on hover (use a 1px ring + faint background tint instead). Selected state = thin accent ring (`ring-1`) in agent hex + small accent underline bar beneath the label.
-- Badges: shrink to 16px, neutral slate background with accent text for counts; reserve red only for true errors (`!` stays amber).
-- Labels: single line, `text-[11px]` semibold, uppercase tracking `0.08em`, drop the second role line into a tooltip only.
-- Remove the `Add Agent` button from the dock (move concept to settings later) — reduces playful feel.
-- Container: align-left on desktop (`justify-start`), keep horizontal scroll only on mobile.
+## Changes
 
-`src/pages/Dashboard.tsx` header above dock: replace the centered "AI Workforce Dock / Choose an AI employee" copy with a left-aligned compact header: small uppercase eyebrow `WORKFORCE`, no subtitle, right-aligned `● Live` indicator at `text-[10px]`.
+### 1. `src/pages/OnboardingCompanyBrain.tsx` — polish + restart support
+- Read `?restart=1` from the URL. When present, **do not** auto-jump to the Review step during hydration; prefill values but start at Step 1.
+- Add per-step "Skip for now" link on ICP, Competitors, Positioning, and Brand Voice (soft, secondary). "Welcome" keeps "I'll describe my company manually".
+- Replace any "Required / Incomplete" copy with "Recommended / Add later / Needs a little more context".
+- Tighten Welcome subtext, add the trust line "You can edit everything later."
+- Ensure the Goals step renders all 7 spec options: add the missing **Weekly growth system** card alongside existing 6 (`leads`, `competitors`, `content`, `outreach`, `engagement`, `review`).
+- Confirm graceful fallback copy when `analyze` returns warnings (already present — verify text matches spec).
+- Confirm "nothing is sent without approval" line on Safety step.
+- Review step: keep collapsible cards + readiness ring; add explicit **Edit details** secondary that jumps to the first incomplete step, and **Activate Company Brain** primary.
+- Activation step: keep the staggered agent activation, then show the workflow cards. Cards must dispatch `chat:prefill` + `navigate(route)` only — never auto-send (already the behavior).
 
-## 3. Department Preview as command panel
+### 2. `src/pages/Dashboard.tsx` + new `src/components/dashboard/CompanyBrainStatusCard.tsx`
+- Replace the current single `BrainReadinessCard` slot with a status card that handles **both states**:
+  - **Incomplete or skipped:** Title "Company Brain setup", subtitle explaining why it matters, list missing sections from `computeCompleteness`, primary "Continue setup" → `/onboarding/company-brain`, secondary "Start from beginning" → `/onboarding/company-brain?restart=1`.
+  - **Complete:** Title "Company Brain active", show `company_name`, `category`, readiness %, primary "Edit Company Brain" → `/onboarding/company-brain`, secondary "Restart onboarding" → `/onboarding/company-brain?restart=1` (confirm via a lightweight inline confirm — does not delete data).
+- Keep the premium dark glass aesthetic already used on the dashboard.
+- `CompanyBrainStrip` (top warning strip) stays for incomplete state, unchanged.
 
-`src/components/workforce/DepartmentPreview.tsx`
-- Convert to an explicit 3-zone grid: `grid-cols-[280px_1fr_220px]` on `lg`, stack on mobile.
-  - Left: identity (icon 48px not 64px, title, subtitle, plus one-line "Currently:" status line pulled from `AgentState.statusText`).
-  - Middle: stats laid out as a 4-column inline KPI row (`grid-cols-4 gap-4`), each KPI = uppercase 10.5px label + 20px tabular number; thin divider lines between columns instead of card backgrounds.
-  - Right: vertical action stack, primary CTA flatter (solid accent at 90% opacity, no glow), secondary as ghost buttons; max 3 actions.
-- Card chrome: `rounded-xl` (was `2xl`), border `white/[0.06]`, background `white/[0.015]`, remove the heavy inset highlight + drop shadow; keep only a soft `shadow-black/40`.
-- Remove per-agent ring glow on the icon tile; use a 1px colored border + 1px inner accent line only.
+### 3. `src/lib/pilotChat.ts` + `supabase/functions/_shared/companyBrainGate.ts`
+- Confirm `analyze_url`, `content_draft`, `source_signals`, `draft_outreach`, `enrich_existing_leads`, `rank_existing_leads`, `competitor_tracking` all gated (already in `GATED_INTENTS`).
+- In the client classifier (`pilotChat.ts`), make sure prompts about "leads / outreach / competitors / content / signals / our website" map to a gated intent so the existing gate fires the `ONBOARDING_GATE_REPLY` when the brain is empty.
 
-## 4. Pilot Briefing, Handoff Strip, Workflow Timeline
-
-Light refinement only (no structural rewrite):
-- `PilotBriefing`: reduce internal padding to `p-5`, tighten heading to `text-[15px]`, body `text-[13px]`, neutralize any gradient backgrounds to the same `white/[0.02]` surface used by Department Preview for visual consistency.
-- `WorkforceHandoffStrip`: render inline at full width, left-aligned, smaller chips (`h-7 text-[11px]`), arrows `text-neutral-600`. Remove the wrapping `flex justify-center`.
-- `WorkflowTimeline`: widen to full grid width, switch list rows to a 2-column meta layout (`time | actor | event`), monospace timestamps `text-[11px] text-neutral-500`, row height ~32px, hairline dividers `border-white/[0.04]`. Cap height with internal scroll if >8 items.
-
-## 5. Typography & token discipline
-
-`src/index.css` (additive only, no token renames):
-- Add utility classes `.eyebrow` (uppercase, `text-[10.5px]`, `tracking-[0.14em]`, `text-neutral-500`) and `.num` (`font-variant-numeric: tabular-nums`).
-- Apply consistently to all KPI labels and timestamp/number values across the four components above.
-- Heading scale used on the dashboard: section title `text-[13px] font-semibold` (eyebrow style), card title `text-[15px] font-semibold tracking-tight`, KPI value `text-[20px] font-semibold`. No `text-2xl+` on this page.
-
-## 6. Bottom Command Bar (AgentDock)
-
-`src/components/workforce/AgentDock.tsx`
-- Shrink avatar to 36px (was 44px), padding to `px-2.5 py-1.5`, gap `gap-1.5`.
-- Flatter surface: `bg-neutral-950/70` + `border-white/[0.06]`, remove the inset white highlight.
-- Tooltip: tighter (`w-56`, `p-2.5`, `text-[11.5px]`), no accent text — use neutral hierarchy, single accent dot for status.
-- Remove hover `scale-110` / `-translate-y-1`; replace with subtle `bg-white/[0.04]` on hover. No motion on the dock itself.
-- Drop the "Add agent" plus button here as well (consistency with §2).
-
-## Scope guardrails
-
-- No route changes, no removed sections, no business logic edits.
-- No new dependencies.
-- Keep semantic tokens; no hardcoded hex outside the existing per-agent `ringHex` accents (already in `departmentConfig.ts`).
-- Mobile: every section stacks; dock and handoff strip allow horizontal scroll; no horizontal page scroll.
+### 4. Microcopy + visuals (no logic)
+- Apply soft tone strings across steps: "A rough answer is enough.", "You can edit this later.", "Not sure? Skip for now.", "Agentory will improve this as it learns."
+- Audit headings for consistent eyebrow → title → subtitle hierarchy.
+- Verify progress rail shows: step number, X of Y, label, and % at all viewports.
 
 ## Files touched
 
-- `src/pages/Dashboard.tsx` — layout, container width, grid, ambient bg, headers
-- `src/components/workforce/WorkforceDock.tsx` — flatter, smaller, left-aligned, no Add
-- `src/components/workforce/DepartmentPreview.tsx` — 3-zone command panel, KPI row, lighter chrome
-- `src/components/workforce/AgentDock.tsx` — compact Raycast-style command bar
-- `src/components/workforce/WorkforceHandoffStrip.tsx` — inline, smaller chips
-- `src/components/workforce/WorkflowTimeline.tsx` — full-width log layout, mono timestamps
-- `src/components/workforce/PilotBriefing.tsx` — spacing + type only
-- `src/index.css` — `.eyebrow`, `.num` utility additions
+- edit `src/pages/OnboardingCompanyBrain.tsx`
+- edit `src/pages/Dashboard.tsx`
+- new  `src/components/dashboard/CompanyBrainStatusCard.tsx`
+- edit `src/lib/pilotChat.ts` (intent classification tightening only)
+- (optional) edit `supabase/functions/_shared/companyBrainGate.ts` only if a missing intent string is found during implementation
 
-## Acceptance check
+No DB migrations. No edge function deployments unless gate file is touched.
 
-- Main content fills up to 1440px and visibly anchors left/right at ≥1280px viewport.
-- No section is centered inside a narrower inner column.
-- Dock avatars ≤ 52px; no scale-on-hover; selected state = thin accent ring only.
-- Department Preview shows identity | KPI row | actions on one row at `lg`.
-- Bottom command bar avatars ≤ 36px.
-- No `text-2xl+` headings on dashboard; KPI numbers use tabular nums.
-- Typecheck clean.
+## Verification checklist
+
+1. Fresh workspace (no brain row) → Dashboard shows "Company Brain setup" card + top strip; clicking takes user to Step 1.
+2. User skips at Step 1 → returns to Dashboard, setup card still visible, "Start from beginning" reloads Step 1 with no data loss.
+3. User completes flow → Dashboard shows "Company Brain active" card with company name, category, readiness %.
+4. "Restart onboarding" from completed state loads Step 1 with all fields prefilled, does not wipe `company_brain.profile` (only re-saves on Activate).
+5. Each step shows step number, progress %, and Back/Continue.
+6. Website path: enter URL → analysis animation → fields prefilled → continue.
+7. Website failure: warning shown softly, manual flow continues.
+8. Refresh mid-flow keeps already-saved data (basics persist after `save_basics`).
+9. Pilot chat with empty brain on a business-specific prompt returns the gate reply, not generic content.
+10. Approval toggles default to safe; no auto-send anywhere; no LinkedIn credential prompts.
+11. `bunx tsc --noEmit` passes.
+
+## Out of plan / known gaps after this pass
+
+- The `setup-company-brain` edge function's `analyze` quality is unchanged — better extraction would be a separate task.
+- Per-agent activation status icons on Dashboard (post-activation) are not added; only the brain status card.
