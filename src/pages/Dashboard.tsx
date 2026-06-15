@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useWorkspace } from '@/contexts/WorkspaceContext';
 import { useWorkforceState } from '@/hooks/useWorkforceState';
 import CompanyBrainStrip from '@/components/workforce/CompanyBrainStrip';
+import CompanyBrainStatusCard from '@/components/dashboard/CompanyBrainStatusCard';
 import PilotBriefing from '@/components/workforce/PilotBriefing';
 import AgentDock from '@/components/workforce/AgentDock';
 import WorkflowTimeline from '@/components/workforce/WorkflowTimeline';
