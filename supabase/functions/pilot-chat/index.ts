@@ -4,7 +4,7 @@
 // Auth:  verify_jwt = true (user identity needed for conversations.user_id)
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { generateJson, logProviderCall } from "../_shared/aiProvider.ts";
+import { generateJson, generateText, logProviderCall } from "../_shared/aiProvider.ts";
 import { classifyIntent } from "../_shared/intentRouter.ts";
 import { planToolInput, type ToolInput } from "../_shared/toolInputPlanner.ts";
 import { getAgentorySystemPrompt, AGENTORY_SYSTEM_PROMPT_VERSION } from "../_shared/agentorySystemPrompt.ts";
@@ -13,6 +13,7 @@ import { classifyWorkflow, SHORT_VAGUE_CLARIFICATION } from "../_shared/workflow
 import { validateAgainstCapabilities } from "../_shared/capabilityValidator.ts";
 import { loadConversationMemory, renderMemoryForPrompt, isFollowUpReference, extractTopN, type ConversationMemory } from "../_shared/memoryReader.ts";
 import { shouldGateForOnboarding, ONBOARDING_GATE_REPLY } from "../_shared/companyBrainGate.ts";
+import { buildCompanyBrainContext, hasUsableBrain } from "../_shared/companyBrainContext.ts";
 
 
 const cors = {
@@ -524,6 +525,42 @@ Deno.serve(async (req) => {
     });
   }
 
+  // Company Brain context — load once, reuse for all brain-aware direct replies.
+  // (Content/outreach DRAFTING already gets the brain downstream in run-agent;
+  // this covers the chat-reply layer that never reaches an agent.)
+  const { data: cbRow } = await admin
+    .from("company_brain")
+    .select("profile, onboarding_completed")
+    .eq("workspace_id", workspaceId)
+    .maybeSingle();
+  const brainProfile = (cbRow?.profile ?? null) as Record<string, unknown> | null;
+  const brainReady = hasUsableBrain(brainProfile, cbRow?.onboarding_completed === true);
+  const brainCtx = brainReady ? buildCompanyBrainContext(brainProfile) : "";
+
+  // Personalized reply: a single Gemini call seeded with the compact brain
+  // context + a category-specific instruction. Falls back to a static string
+  // if the provider fails, so chat never hard-errors.
+  async function personalizedReply(
+    instruction: string,
+    fallback: string,
+    extraMeta: Record<string, unknown> = {},
+  ): Promise<Response> {
+    const sys =
+      "You are Pilot for Agentory, an AI workforce OS. Use the Company Brain below to make your answer specific to THIS business — naturally, not by dumping it or repeating every field. Be concise (≤120 words). Never invent fields that aren't present; if something's missing, say you don't have it yet. Never claim live data was fetched. No emojis.\n\n<company_brain>\n" +
+      brainCtx + "\n</company_brain>";
+    const ai = await generateText({
+      taskType: "pilot_chat",
+      systemPrompt: sys,
+      messages: [{ role: "user", content: instruction }],
+      temperature: 0.5,
+      maxTokens: 420,
+      functionName: "pilot-chat-personalize",
+      workspaceId,
+    });
+    const text = ai.ok && ai.content?.trim() ? ai.content.trim() : fallback;
+    return await replyAndReturn(text, { brain_aware: brainReady, personalized: ai.ok, ...extraMeta });
+  }
+
   // 5c.0 Phase 2: follow-up shortcuts driven by persistent memory.
   // Only triggers when message references previous results AND we have memory.
   const followUpRef = isFollowUpReference(message);
@@ -676,19 +713,36 @@ Deno.serve(async (req) => {
   // 5c.iii Capabilities / agent_management / approval_review / simple_chat
   // → direct conversational reply.
   if (decision.workflow_category === "simple_chat") {
-    return await replyAndReturn("Hi — I'm Pilot. What would you like to work on?");
+    const greeting = brainReady
+      ? `Hi — I'm Pilot for your workspace. What would you like to work on?`
+      : "Hi — I'm Pilot. What would you like to work on?";
+    return await replyAndReturn(greeting);
   }
 
+  const CAPABILITIES_GENERIC =
+    "Agentory is an AI workforce OS for founders and small teams. I coordinate a five-agent team: Scout (sourcing/signals), Aria (ranking/scoring), Hawk (research/URL analysis), Penn (outreach drafts — approval-gated), Scribe (content/reports). Tools include Apify for structured sourcing, Firecrawl for URL/website analysis, Gemini/Claude for reasoning and writing, and approval-gated email. Tell me what you'd like to do — find leads, analyze a careers page, write a post, draft outreach, or get a daily brief.";
   if (decision.workflow_category === "capabilities") {
-    const msg =
-      "Agentory is an AI workforce OS for founders and small teams. I coordinate a five-agent team: Scout (sourcing/signals), Aria (ranking/scoring), Hawk (research/URL analysis), Penn (outreach drafts — approval-gated), Scribe (content/reports). Tools include Apify for structured sourcing, Firecrawl for URL/website analysis, Gemini/Claude for reasoning and writing, and approval-gated email. Tell me what you'd like to do — find leads, analyze a careers page, write a post, draft outreach, or get a daily brief.";
-    return await replyAndReturn(msg);
+    if (brainReady) {
+      return await personalizedReply(
+        `The user asked what Agentory can do. Briefly name the five agents (Scout sourcing/signals, Aria ranking, Hawk research/URLs, Penn approval-gated outreach, Scribe content) and the tools (Apify, Firecrawl, Gemini/Claude, approval-gated email). THEN recommend the 2–3 most useful workflows for THIS company given its ICP and goals. User message: "${message}"`,
+        CAPABILITIES_GENERIC,
+        { capabilities: true },
+      );
+    }
+    return await replyAndReturn(CAPABILITIES_GENERIC);
   }
 
+  const AGENT_MGMT_GENERIC =
+    "Your AI workforce: Scout (sources companies hiring + candidate profiles), Aria (ranks and scores leads), Hawk (researches URLs and competitors with Firecrawl), Penn (drafts outreach — never sends without your approval), Scribe (writes posts, briefs, reports). Pilot (me) routes the work. Ask me to do something concrete and I'll assign the right agent.";
   if (decision.workflow_category === "agent_management") {
-    const msg =
-      "Your AI workforce: Scout (sources companies hiring + candidate profiles), Aria (ranks and scores leads), Hawk (researches URLs and competitors with Firecrawl), Penn (drafts outreach — never sends without your approval), Scribe (writes posts, briefs, reports). Pilot (me) routes the work. Ask me to do something concrete and I'll assign the right agent.";
-    return await replyAndReturn(msg);
+    if (brainReady) {
+      return await personalizedReply(
+        `The user is asking about the AI team/agents. Describe the five agents (Scout, Aria, Hawk, Penn — approval-gated — and Scribe) and, given this company's goals, note which agents are most relevant to them right now. Keep it tight. User message: "${message}"`,
+        AGENT_MGMT_GENERIC,
+        { agent_management: true },
+      );
+    }
+    return await replyAndReturn(AGENT_MGMT_GENERIC);
   }
 
   if (decision.workflow_category === "approval_review") {
@@ -955,11 +1009,21 @@ Deno.serve(async (req) => {
     });
   }
 
-  // 5c.vi signal_sourcing (vague) → ask one clarification.
+  // 5c.vi signal_sourcing (vague) → brain-aware recommendation, or gate.
   if (decision.workflow_category === "signal_sourcing" && decision.needs_clarification) {
-    return await replyAndReturn(
+    // Business-specific prompt with NO usable brain → ask for Company Brain.
+    // Never scrape random leads, never fall back to a generic signal menu.
+    if (!brainReady) {
+      return await replyAndReturn(ONBOARDING_GATE_REPLY, {
+        gated: "missing_brain",
+        clarification: true,
+      });
+    }
+    // Brain ready → recommend contextual lead strategies grounded in the brain.
+    return await personalizedReply(
+      `The user asked to find leads/prospects but didn't specify a buying signal. Using the Company Brain, recommend a contextual lead strategy — do NOT ask a generic "which signal" menu. Reference their ICP, goals, and competitors naturally. Prefer this order: (1) LinkedIn engagement signals tied to their ICP/category, (2) competitor engagement if competitors are known, (3) companies hiring relevant (GTM/eng) roles, (4) website/company research. End by offering to start with 5 signals saved to the Signal Feed — no outreach, nothing sent without approval. User message: "${message}"`,
       decision.clarification_question ??
-        "Which buying signal should I target first: companies hiring GTM roles, companies hiring engineering roles, founder profiles, or a specific niche?",
+        "Tell me a bit more about the buying signal you want to target and I'll start sourcing.",
       { clarification: true, possible_actions: decision.possible_actions },
     );
   }
