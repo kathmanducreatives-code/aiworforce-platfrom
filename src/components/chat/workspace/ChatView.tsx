@@ -5,6 +5,7 @@ import { AGENT_BY_ID } from '@/data/agentProfiles';
 import { cn } from '@/lib/utils';
 import ExecutionPlanCard from './plan/ExecutionPlanCard';
 import ClarificationCard from './bubbles/ClarificationCard';
+import LeadIntakeCard, { type LeadIntakeFormPayload } from './bubbles/LeadIntakeCard';
 import InterpretationPill from './bubbles/InterpretationPill';
 
 const AGENT_HEX: Record<string, string> = {
@@ -108,6 +109,12 @@ export default function ChatView({ conversationId, agentSlug, pendingUserText, a
           ? meta as { plan_id: string; plan_title?: string; task_count?: number; agents?: string[]; connector_limitations?: string[] }
           : null;
         const toolInput = (meta?.tool_input ?? null) as Record<string, any> | null;
+        const leadForm = meta && meta.ui_form && (meta.ui_form as any).kind === 'lead_intake'
+          ? (meta.ui_form as LeadIntakeFormPayload)
+          : null;
+        const uiActions = Array.isArray(meta?.ui_actions)
+          ? (meta!.ui_actions as Array<{ label: string; message: string }>)
+          : null;
         const isClarification =
           !!meta &&
           (meta.clarification === true || meta.needs_clarification === true || !!meta.pending_clarification) &&
@@ -139,7 +146,26 @@ export default function ChatView({ conversationId, agentSlug, pendingUserText, a
                   executionMode={toolInput.execution_mode ?? null}
                 />
               )}
-              {isClarification && (
+              {leadForm && (
+                <div className="mt-2">
+                  <LeadIntakeCard payload={leadForm} />
+                </div>
+              )}
+              {uiActions && uiActions.length > 0 && (
+                <div className="mt-2 flex flex-col gap-1.5 max-w-[460px]">
+                  {uiActions.map((a, i) => (
+                    <button
+                      key={i}
+                      type="button"
+                      onClick={() => window.dispatchEvent(new CustomEvent('chat:send', { detail: a.message }))}
+                      className="text-left rounded-lg border border-emerald-500/20 bg-emerald-500/[0.04] hover:bg-emerald-500/[0.1] hover:border-emerald-500/40 px-3 py-2 text-[13px] text-[#C9D1D9] transition-colors"
+                    >
+                      {a.label}
+                    </button>
+                  ))}
+                </div>
+              )}
+              {isClarification && !leadForm && (
                 <div className="mt-2">
                   <ClarificationCard
                     question={m.content}

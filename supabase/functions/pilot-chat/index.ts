@@ -13,6 +13,8 @@ import { classifyWorkflow, SHORT_VAGUE_CLARIFICATION } from "../_shared/workflow
 import { validateAgainstCapabilities } from "../_shared/capabilityValidator.ts";
 import { loadConversationMemory, renderMemoryForPrompt, isFollowUpReference, extractTopN, type ConversationMemory } from "../_shared/memoryReader.ts";
 import { shouldGateForOnboarding, ONBOARDING_GATE_REPLY } from "../_shared/companyBrainGate.ts";
+import { isLeadIntakeRequest, extractLeadDetails, hasEnoughToRun, buildLeadIntakeForm, leadRequestToToolInput, leadRequestToInstruction, leadRequestToLinkedInFallbackInstruction, leadRequestToCompaniesInstruction, type LeadRequest } from "../_shared/leadIntake.ts";
+import { getActorByKey, isActorRuntimeEnabled } from "../_shared/actorRegistry.ts";
 import { buildCompanyBrainContext, hasUsableBrain, brainCompetitors } from "../_shared/companyBrainContext.ts";
 
 
@@ -735,6 +737,63 @@ Deno.serve(async (req) => {
     const msg =
       "I can't run that as described — it would involve unsafe or unsupported actions (e.g. scraping private personal data or sending without your approval). I can help with: public business contact research, approval-gated email outreach, LinkedIn outreach drafts, or call scripts. Which of those would you like?";
     return await replyAndReturn(msg, { unsafe: true });
+  }
+
+  // 5c.ii-b Lead intake — "Find me leads / prospects / buyers / companies".
+  // Load brain → if the brief is complete, run Scout directly with a
+  // deterministic source + count; otherwise render the interactive Lead Search
+  // Brief card (prefilled from the Company Brain; the user's input still wins).
+  if (isLeadIntakeRequest(message)) {
+    const details = extractLeadDetails(message);
+    if (hasEnoughToRun(details)) {
+      const req: LeadRequest = {
+        mode: details.mode!,
+        target_role: details.target_role ?? undefined,
+        industry: details.industry ?? undefined,
+        location: details.location ?? undefined,
+        company_category: details.company_category ?? undefined,
+        buying_signal: details.buying_signal ?? undefined,
+        count: details.count ?? 5,
+        needs_outreach: details.needs_outreach,
+        original_user_request: message,
+        company_brain_context_used: brainReady,
+      };
+      const ti = leadRequestToToolInput(req);
+      // Capability check — never promise/run a missing actor. People/profile
+      // search requires the people actor to be enabled; if not, offer an honest
+      // fallback (LinkedIn engagement or companies) instead of delegating.
+      if (req.mode === "people" && ti.selected_actor_key === "apify_people_search") {
+        const actor = getActorByKey("apify_people_search");
+        if (!actor || !isActorRuntimeEnabled(actor)) {
+          return await replyAndReturn(
+            "People/profile search is not configured yet. I can still find likely founders through LinkedIn engagement signals, or you can enable the people-search actor.",
+            {
+              lead_people_unavailable: true,
+              note: "Enable the people-search actor by setting APIFY_ENABLE_PEOPLE_SEARCH (+ actor id).",
+              ui_actions: [
+                { label: "Use LinkedIn engagement search instead", message: leadRequestToLinkedInFallbackInstruction(req) },
+                { label: "Search companies / accounts instead", message: leadRequestToCompaniesInstruction(req) },
+              ],
+            },
+          );
+        }
+      }
+      return await delegateToOrchestrate({
+        admin, SUPABASE_URL, SUPABASE_ANON_KEY, authHeader,
+        conversationId, workspaceId, instruction: leadRequestToInstruction(req),
+        toolInput: {
+          ...ti, confidence: 0.9, missing_fields: [],
+        } as unknown as ToolInput,
+        modelUsed: "google/gemini-3-flash-preview",
+        providerUsed: "lovable-ai",
+      });
+    }
+    // Incomplete brief → interactive form card. (Brain is a default source only.)
+    const form = buildLeadIntakeForm(details, brainProfile, brainReady);
+    const intro = brainReady
+      ? "Tell Scout what kind of leads to find — I've prefilled a few defaults from your Company Brain."
+      : "Tell Scout what kind of leads to find. (Tip: completing your Company Brain lets me prefill this and rank results to your ICP.)";
+    return await replyAndReturn(intro, { ui_form: form, clarification: true, lead_intake: true });
   }
 
   // 5c.iii Capabilities / agent_management / approval_review / simple_chat
