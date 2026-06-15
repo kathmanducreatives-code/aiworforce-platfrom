@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { AnimatePresence, motion } from 'framer-motion';
 import { supabase } from '@/integrations/supabase/client';
 import { useWorkspace } from '@/contexts/WorkspaceContext';
@@ -57,6 +57,7 @@ const FIRST_GOALS = [
   { id: 'outreach',    icon: Mail,         title: 'Draft outreach',                  agent: 'Penn',   blurb: 'Penn drafts approval-ready messages using your Company Brain.',    prompt: 'Draft outreach for my highest-priority saved leads.',           route: '/content' },
   { id: 'engagement',  icon: MessageSquare,title: 'LinkedIn engagement',             agent: 'Scout',  blurb: 'Find posts worth commenting on in your voice.',                    prompt: 'Find LinkedIn posts worth engaging with this week.',            route: '/signals' },
   { id: 'review',      icon: ListOrdered,  title: 'Review saved signals',            agent: 'Pilot',  blurb: 'Pilot helps you rank and review what\'s already in.',              prompt: 'Rank my saved signals by fit and urgency.',                     route: '/signals' },
+  { id: 'weekly',      icon: Compass,      title: 'Weekly growth system',            agent: 'Pilot',  blurb: 'A weekly rhythm: signals in, content out, outreach drafted.',      prompt: 'Set up my weekly growth system: signals, content, outreach.',   route: '/dashboard' },
 ] as const;
 
 type GoalId = typeof FIRST_GOALS[number]['id'];
