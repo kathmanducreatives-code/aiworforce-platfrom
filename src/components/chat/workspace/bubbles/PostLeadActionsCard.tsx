@@ -21,9 +21,7 @@ const ICONS: Record<PostLeadAction, any> = {
   save_only: Save, rank: Star, enrich: Globe, draft_outreach: PenLine, enrich_and_draft: Sparkles, export: Archive,
 };
 
-function send(text: string) {
-  window.dispatchEvent(new CustomEvent('chat:send', { detail: text }));
-}
+import { dispatchChatAction } from '@/lib/chatActions';
 
 export default function PostLeadActionsCard({ payload }: { payload: PostLeadActionsCardPayload }) {
   const [confirming, setConfirming] = useState<PostLeadAction | null>(null);
