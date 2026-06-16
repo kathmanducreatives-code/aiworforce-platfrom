@@ -132,10 +132,10 @@ function Brief({ option, onBack, conversationId }: { option: LeadSourceOption; o
         ))}
       </div>
       <div className="flex items-center gap-2 mt-4">
-        <Button size="sm" disabled={missing} onClick={() => { send(buildInstruction(option.source_type, v, option.available)); setSent(true); }} className="bg-emerald-500/90 hover:bg-emerald-500 text-[#03100a] font-semibold">
+        <Button size="sm" disabled={missing} onClick={() => { send(buildInstruction(option.source_type, v, option.available), conversationId, { lead_request: v, source_type: option.source_type }); setSent(true); }} className="bg-emerald-500/90 hover:bg-emerald-500 text-[#03100a] font-semibold">
           Find leads
         </Button>
-        <Button size="sm" variant="outline" onClick={() => { send(buildInstruction(option.source_type, v, option.available)); setSent(true); }} className="gap-1.5">
+        <Button size="sm" variant="outline" onClick={() => { send(buildInstruction(option.source_type, v, option.available), conversationId, { lead_request: v, source_type: option.source_type, recommended: true }); setSent(true); }} className="gap-1.5">
           <Sparkles className="h-3.5 w-3.5" /> Use recommended
         </Button>
       </div>
