@@ -11,6 +11,7 @@ export type ChatActionSource =
   | 'lead_source_card'
   | 'lead_intake_card'
   | 'post_lead_actions_card'
+  | 'lead_results_panel'
   | 'lead_sourcing_error_card'
   | 'clarification_card'
   | 'ui_actions_button'
@@ -19,6 +20,14 @@ export type ChatActionSource =
   | 'no_results_card'
   | 'recommended_move'
   | 'workforce_brief';
+
+export type LeadResultPanelAction =
+  | 'enrich'
+  | 'draft_outreach'
+  | 'enrich_and_draft'
+  | 'rank'
+  | 'export_csv'
+  | 'save_to_signal_feed';
 
 export interface ChatActionDetail {
   text: string;
