@@ -246,9 +246,18 @@ Deno.serve(async (req) => {
   const message = typeof body?.message === "string" ? body.message.trim() : "";
   const workspaceId = typeof body?.workspace_id === "string" ? body.workspace_id : "";
   let conversationId: string | null = typeof body?.conversation_id === "string" ? body.conversation_id : null;
+  const actionSource: string | null = typeof body?.action_source === "string" ? body.action_source : null;
+  const actionMetadata: Record<string, unknown> | null = body?.metadata && typeof body.metadata === "object" ? body.metadata as Record<string, unknown> : null;
 
   if (!message || !workspaceId) {
     return json({ error: "message and workspace_id are required" }, 400);
+  }
+
+  // Card actions MUST carry the origin conversation_id. Refuse to silently
+  // create a new conversation — that's the bug we're fixing.
+  if (actionSource && !conversationId) {
+    console.warn("[pilot-chat] card action missing conversation_id", { actionSource, workspaceId });
+    return json({ error: "Action could not continue because conversation context was missing. Please retry." }, 400);
   }
 
   const admin = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
