@@ -28,9 +28,7 @@ export interface LeadIntakeFormPayload {
   fields: FormField[];
 }
 
-function send(text: string) {
-  window.dispatchEvent(new CustomEvent('chat:send', { detail: text }));
-}
+import { dispatchChatAction } from '@/lib/chatActions';
 
 type Mode = 'people' | 'companies' | 'signals' | 'competitor_engagement' | 'hiring';
 function modeFromLabel(label: string): Mode {
