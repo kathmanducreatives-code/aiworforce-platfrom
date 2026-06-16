@@ -228,11 +228,19 @@ Deno.serve(async (req) => {
           );
         }
 
+        // Adaptive input validation: fix typos (GGTM→GTM, healtcare→healthcare)
+        // on the query, roles, and location before the actor runs.
+        const { normalizeTerm } = await import("../_shared/inputNormalize.ts");
+        const rawQuery = (tool_input_body?.query as string) ?? instruction;
+        const normalizedQuery = normalizeTerm(rawQuery) || rawQuery;
+        roleKeywords = roleKeywords.map((r) => normalizeTerm(r)).filter(Boolean);
+        if (location) location = normalizeTerm(location);
+
         const apifyInput = {
           selected_actor_key: planned_actor_key ?? undefined,
           source_type,
-          search_goal: tool_input_body?.query ?? instruction,
-          query: tool_input_body?.query ?? instruction,
+          search_goal: normalizedQuery,
+          query: normalizedQuery,
           location: location ?? undefined,
           role_keywords: roleKeywords.length > 0 ? roleKeywords : undefined,
           max_results,
@@ -583,51 +591,68 @@ Deno.serve(async (req) => {
     });
   }
 
-  // Final step.
-  await supabase.from("activity_feed").insert({
-    workspace_id,
-    plan_id,
-    agent_id: agent.id,
-    event_type: "plan_complete",
-    title: "Plan complete",
-    body: `${plan?.plan_summary ?? "Plan"} — complete.`,
-    metadata: { step_index, task_id: task.id },
-  });
-  await supabase.from("task_plans").update({ status: "complete", completed_at: new Date().toISOString() }).eq("id", plan_id);
-
-  // Post-lead actions — when a plan produced leads, offer next-step options with
-  // credit estimates (enrich / draft / rank / save). Enrichable = leads whose
-  // account has a website/domain. Rendered as a chat card; nothing auto-runs.
+  // Final step. Adaptive status — never blindly "complete". For a sourcing plan, derive
+  // complete / partial / failed from produced-vs-requested; emit the right card.
+  let planStatus = "complete";
   try {
-    const { data: leads } = await supabase
-      .from("lead_candidates")
-      .select("id, account:accounts(domain)")
-      .eq("plan_id", plan_id);
+    const { data: srcCalls } = await supabase.from("tool_calls").select("id").eq("plan_id", plan_id).eq("tool_name", "source_with_apify").limit(1);
+    const wasSourcing = (srcCalls ?? []).length > 0;
+
+    const { data: leads } = await supabase.from("lead_candidates").select("id, account:accounts(domain)").eq("plan_id", plan_id);
     const leadRows = (leads ?? []) as Array<{ id: string; account?: { domain?: string | null } | null }>;
-    if (leadRows.length > 0) {
-      const enrichable = leadRows.filter((l) => !!l.account?.domain).length;
-      const { data: planMsg } = await supabase
-        .from("messages")
-        .select("conversation_id")
-        .filter("metadata->>plan_id", "eq", plan_id)
-        .limit(1)
-        .maybeSingle();
-      const conversationId = (planMsg as { conversation_id?: string } | null)?.conversation_id ?? null;
-      if (conversationId) {
+    const { count: sigCount } = await supabase.from("signals").select("id", { count: "exact", head: true }).eq("plan_id", plan_id);
+    const produced = Math.max(leadRows.length, sigCount ?? 0);
+
+    const steps: any[] = Array.isArray(plan?.steps) ? (plan!.steps as any[]) : [];
+    const reqStep = steps.find((s) => typeof s?.metadata?.tool_input?.max_results === "number");
+    const requested = reqStep?.metadata?.tool_input?.max_results ?? produced;
+
+    const { data: planMsg } = await supabase.from("messages").select("conversation_id").filter("metadata->>plan_id", "eq", plan_id).limit(1).maybeSingle();
+    const conversationId = (planMsg as { conversation_id?: string } | null)?.conversation_id ?? null;
+
+    if (wasSourcing) {
+      const { evaluateWorkflowStatus } = await import("../_shared/adaptiveWorkflow.ts");
+      const ev = evaluateWorkflowStatus({ workflow_type: "lead_sourcing", requested, produced });
+      planStatus = ev.status; // complete | partial | failed
+
+      if (produced === 0 && conversationId) {
+        // Actor ran but found nothing — honest "no results", never "complete".
+        const card = {
+          kind: "lead_sourcing_error",
+          title: "No matching leads found",
+          message: "Scout ran but found 0 leads matching your criteria. Try broadening the role, industry, or location — or pick another lead source. No leads saved, no credits charged, nothing sent.",
+          error: "no_results",
+          retry_command: (reqStep?.instruction as string) ?? undefined,
+        };
+        await supabase.from("messages").insert({
+          conversation_id: conversationId, role: "assistant",
+          content: "Scout ran but found 0 matching leads. Try broadening your criteria or another lead source.",
+          agent_slug: "pilot", metadata: { ui_card: card, lead_sourcing_error: true, plan_id, workflow_status: "failed" },
+        });
+      } else if (leadRows.length > 0 && conversationId) {
+        const enrichable = leadRows.filter((l) => !!l.account?.domain).length;
         const { buildPostLeadActionsCard } = await import("../_shared/creditEstimate.ts");
         const card = buildPostLeadActionsCard(leadRows.length, enrichable, leadRows.map((l) => l.id));
+        const partial = planStatus === "partial";
         await supabase.from("messages").insert({
-          conversation_id: conversationId,
-          role: "assistant",
-          content: `${card.title}. ${card.subtitle}`,
+          conversation_id: conversationId, role: "assistant",
+          content: `${partial ? `Found ${produced} of ${requested} — ` : ""}${card.title}. ${card.subtitle}`,
           agent_slug: "pilot",
-          metadata: { ui_card: card, post_lead_actions: true, plan_id },
+          metadata: { ui_card: card, post_lead_actions: true, plan_id, workflow_status: planStatus, attempt_log: [`Attempt 1: sourced ${produced}/${requested}`] },
         });
       }
     }
   } catch (e) {
-    console.warn("[run-agent] post-lead actions card failed:", e);
+    console.warn("[run-agent] adaptive status/card failed:", e);
   }
 
-  return json({ success: true, task_id: task.id, status: "complete", complete: true });
+  await supabase.from("activity_feed").insert({
+    workspace_id, plan_id, agent_id: agent.id, event_type: "plan_complete",
+    title: planStatus === "complete" ? "Plan complete" : `Plan ${planStatus}`,
+    body: `${plan?.plan_summary ?? "Plan"} — ${planStatus}.`,
+    metadata: { step_index, task_id: task.id, workflow_status: planStatus },
+  });
+  await supabase.from("task_plans").update({ status: planStatus, completed_at: new Date().toISOString() }).eq("id", plan_id);
+
+  return json({ success: planStatus !== "failed", task_id: task.id, status: planStatus });
 });
