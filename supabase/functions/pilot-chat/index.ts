@@ -300,11 +300,12 @@ Deno.serve(async (req) => {
     conversationId = created.id;
   }
 
-  // 5. Persist user message
+  // 5. Persist user message (carries card-action metadata when applicable)
   await admin.from("messages").insert({
     conversation_id: conversationId,
     role: "user",
     content: message,
+    metadata: actionSource ? { action_source: actionSource, ...(actionMetadata ?? {}) } : null,
   });
 
   // 5a. Resolve pending clarification (people-vs-companies) BEFORE classifying intent.
