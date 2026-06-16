@@ -10,15 +10,18 @@ interface ActionMeta {
   query?: string | null;
 }
 
+import { dispatchChatAction } from '@/lib/chatActions';
+
 interface Props {
   question: string;
   peopleAction?: ActionMeta | null;
   companiesAction?: ActionMeta | null;
   agencyAction?: ActionMeta | null;
+  conversationId: string | null;
 }
 
-function sendReply(text: string) {
-  window.dispatchEvent(new CustomEvent('chat:send', { detail: text }));
+function sendReply(text: string, conversationId: string | null) {
+  dispatchChatAction({ text, conversation_id: conversationId, action_source: 'clarification_card' });
 }
 
 function preview(a: ActionMeta | null | undefined): string {
