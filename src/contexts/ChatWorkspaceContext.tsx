@@ -81,10 +81,10 @@ export const ChatWorkspaceProvider = ({ children }: { children: ReactNode }) => 
   }, []);
   const closeWorkbench = useCallback(() => setWorkbenchOpen(false), []);
 
-  const open = useCallback(() => setMode((m) => (m === 'closed' ? 'drawer' : m)), []);
+  const open = useCallback(() => setMode((m) => (m === 'closed' ? 'fullscreen' : m)), []);
   const close = useCallback(() => setMode('closed'), []);
   const toggleFullscreen = useCallback(() => {
-    setMode((m) => (m === 'fullscreen' ? 'drawer' : 'fullscreen'));
+    setMode((m) => (m === 'closed' ? 'fullscreen' : 'closed'));
   }, []);
 
   useEffect(() => {
@@ -92,13 +92,9 @@ export const ChatWorkspaceProvider = ({ children }: { children: ReactNode }) => 
       const meta = e.metaKey || e.ctrlKey;
       if (meta && e.key.toLowerCase() === 'k') {
         e.preventDefault();
-        setMode((m) => (m === 'closed' ? 'drawer' : 'closed'));
-      } else if (meta && e.key === 'ArrowUp') {
-        e.preventDefault(); setMode('fullscreen');
-      } else if (meta && e.key === 'ArrowDown') {
-        e.preventDefault(); setMode((m) => (m === 'fullscreen' ? 'drawer' : m));
+        setMode((m) => (m === 'closed' ? 'fullscreen' : 'closed'));
       } else if (e.key === 'Escape') {
-        setMode((m) => (m === 'closed' ? m : m === 'fullscreen' ? 'drawer' : 'closed'));
+        setMode((m) => (m === 'closed' ? m : 'closed'));
       }
     };
     window.addEventListener('keydown', onKey);
