@@ -12,11 +12,12 @@ import NoResultsCard from './NoResultsCard';
 import AriaRankingView from './AriaRankingView';
 import PennDraftView from './PennDraftView';
 import HawkResearchView from './HawkResearchView';
+import LeadResultsView from './LeadResultsView';
 import ChatErrorBoundary from '../ChatErrorBoundary';
 import { normalizeApifyItems, normalizeApifyPeople, isPeopleOutput, normalizeAriaRankings, normalizePennDrafts, normalizeFirecrawl } from './normalize';
-import { Loader2, FlaskConical, FileText, ListChecks, Activity, Code2, Trophy, Mail, Link2 } from 'lucide-react';
+import { Loader2, FlaskConical, FileText, ListChecks, Activity, Code2, Trophy, Mail, Link2, Users } from 'lucide-react';
 
-type Tab = 'summary' | 'results' | 'rankings' | 'drafts' | 'sources' | 'activity' | 'raw';
+type Tab = 'leads' | 'summary' | 'results' | 'rankings' | 'drafts' | 'sources' | 'activity' | 'raw';
 
 export default function WorkbenchPanel() {
   const { selectedOutput, closeWorkbench, workbenchWidth, setWorkbenchWidth } = useChatWorkspace();
