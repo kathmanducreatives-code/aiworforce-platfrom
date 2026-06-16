@@ -79,6 +79,8 @@ interface Props {
 
 export default function ChatView({ conversationId, agentSlug, pendingUserText, awaitingReply }: Props) {
   const { messages } = useChatConversation(conversationId);
+  const { openWorkbench } = useChatWorkspace();
+  const openedPanelsRef = useRef<Set<string>>(new Set());
   const scrollRef = useRef<HTMLDivElement>(null);
   const profile = AGENT_BY_ID[agentSlug];
 
@@ -86,6 +88,24 @@ export default function ChatView({ conversationId, agentSlug, pendingUserText, a
   const showPending = pendingUserText && !messages.some(
     (m) => m.role === 'user' && m.content === pendingUserText,
   );
+
+  // Auto-open the Workbench (Lead Results) when a message arrives with a
+  // ui_panel hint. Guarded per message id so we don't reopen after the user
+  // closes the panel.
+  useEffect(() => {
+    for (const m of messages) {
+      const meta = (m.metadata ?? null) as Record<string, any> | null;
+      const panel = meta?.ui_panel as LeadResultsPanelMeta | undefined;
+      if (panel && panel.kind === 'lead_results' && !openedPanelsRef.current.has(m.id)) {
+        openedPanelsRef.current.add(m.id);
+        openWorkbench({
+          planId: panel.plan_id,
+          panel,
+          conversationId: m.conversation_id ?? conversationId,
+        });
+      }
+    }
+  }, [messages, openWorkbench, conversationId]);
 
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' });
