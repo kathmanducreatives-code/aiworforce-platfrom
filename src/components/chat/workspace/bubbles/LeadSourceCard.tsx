@@ -35,8 +35,10 @@ const ICONS: Record<LeadSourceType, any> = {
   people_profiles: UserSearch, company_search: Building2, memory_refine: Target,
 };
 
-function send(text: string) {
-  window.dispatchEvent(new CustomEvent('chat:send', { detail: text }));
+import { dispatchChatAction, type ChatActionDetail } from '@/lib/chatActions';
+
+function send(text: string, conversationId: string | null, metadata?: ChatActionDetail['metadata']) {
+  dispatchChatAction({ text, conversation_id: conversationId, action_source: 'lead_source_card', metadata });
 }
 
 function clampCount(n: number): number {
