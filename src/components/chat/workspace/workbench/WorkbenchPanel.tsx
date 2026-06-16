@@ -24,41 +24,21 @@ export default function WorkbenchPanel() {
   const isMobile = useIsMobile();
   const data = useWorkbenchData(selectedOutput);
 
+  const leadsPanel = selectedOutput?.panel?.kind === 'lead_results' ? selectedOutput.panel : null;
+
   const status = data.task?.status ?? data.toolCall?.status ?? 'pending';
   const failed = status === 'failed' || status === 'unavailable';
 
-  // Default tab: summary, unless user explicitly opened a tool call from results UI
-  const defaultTab: Tab = useMemo(() => 'summary', []);
+  // Default tab: 'leads' when a lead_results panel hint is present, else 'summary'.
+  const defaultTab: Tab = leadsPanel ? 'leads' : 'summary';
   const [tab, setTab] = useState<Tab>(defaultTab);
 
   // Reset tab when selection changes
   useEffect(() => {
-    setTab('summary');
-  }, [selectedOutput?.taskId, selectedOutput?.toolCallId]);
+    setTab(leadsPanel ? 'leads' : 'summary');
+  }, [selectedOutput?.taskId, selectedOutput?.toolCallId, selectedOutput?.planId, leadsPanel]);
 
-  if (!selectedOutput) {
-    return (
-      <div className="h-full flex flex-col items-center justify-center text-center px-6 text-[#7D8590]">
-        <div className="h-12 w-12 rounded-xl border border-emerald-500/20 bg-emerald-500/5 flex items-center justify-center mb-3">
-          <FlaskConical className="h-5 w-5 text-emerald-300/80" />
-        </div>
-        <div className="text-[13px] text-[#C9D1D9] font-medium">Workbench</div>
-        <div className="text-[12px] mt-1 max-w-xs">
-          Pick a step or tool from any plan to inspect its output, recover from failures, and trigger the next action.
-        </div>
-      </div>
-    );
-  }
-
-  if (data.loading && !data.task && !data.toolCall) {
-    return (
-      <div className="h-full flex items-center justify-center text-[#7D8590] text-[12px]">
-        <Loader2 className="h-3.5 w-3.5 animate-spin mr-2" /> Loading output…
-      </div>
-    );
-  }
-
-  // Derived tabs — only show ones that have data
+  // Derived data — keep ALL hooks above early returns to satisfy hooks rules.
   const output = data.toolCall?.output_json ?? (data.task as any)?.output ?? null;
   const peopleMode = isPeopleOutput(output);
   const apifyItems = useMemo(() => peopleMode ? [] : normalizeApifyItems(output), [output, peopleMode]);
@@ -77,9 +57,9 @@ export default function WorkbenchPanel() {
   const isAria = data.agentSlug === 'aria' || hasRankings;
 
   const tabs: { id: Tab; label: string; icon: any }[] = useMemo(() => {
-    const list: { id: Tab; label: string; icon: any }[] = [
-      { id: 'summary', label: 'Summary', icon: FileText },
-    ];
+    const list: { id: Tab; label: string; icon: any }[] = [];
+    if (leadsPanel) list.push({ id: 'leads', label: 'Leads', icon: Users });
+    list.push({ id: 'summary', label: 'Summary', icon: FileText });
     if (hasResults || failed || isApify) list.push({ id: 'results', label: 'Results', icon: ListChecks });
     if (hasRankings || isAria) list.push({ id: 'rankings', label: 'Rankings', icon: Trophy });
     if (hasDrafts || isPenn) list.push({ id: 'drafts', label: 'Drafts', icon: Mail });
@@ -87,12 +67,34 @@ export default function WorkbenchPanel() {
     list.push({ id: 'activity', label: 'Activity', icon: Activity });
     list.push({ id: 'raw', label: 'Raw', icon: Code2 });
     return list;
-  }, [hasResults, hasRankings, hasDrafts, hasSources, isApify, isFirecrawl, isPenn, isAria, failed]);
+  }, [hasResults, hasRankings, hasDrafts, hasSources, isApify, isFirecrawl, isPenn, isAria, failed, leadsPanel]);
 
   // Snap to a valid tab if the current one isn't available
   useEffect(() => {
-    if (!tabs.some((t) => t.id === tab)) setTab('summary');
+    if (!tabs.some((t) => t.id === tab)) setTab(tabs[0]?.id ?? 'summary');
   }, [tabs, tab]);
+
+  if (!selectedOutput) {
+    return (
+      <div className="h-full flex flex-col items-center justify-center text-center px-6 text-[#7D8590]">
+        <div className="h-12 w-12 rounded-xl border border-emerald-500/20 bg-emerald-500/5 flex items-center justify-center mb-3">
+          <FlaskConical className="h-5 w-5 text-emerald-300/80" />
+        </div>
+        <div className="text-[13px] text-[#C9D1D9] font-medium">Workbench</div>
+        <div className="text-[12px] mt-1 max-w-xs">
+          Pick a step or tool from any plan to inspect its output, recover from failures, and trigger the next action.
+        </div>
+      </div>
+    );
+  }
+
+  if (data.loading && !data.task && !data.toolCall && !leadsPanel) {
+    return (
+      <div className="h-full flex items-center justify-center text-[#7D8590] text-[12px]">
+        <Loader2 className="h-3.5 w-3.5 animate-spin mr-2" /> Loading output…
+      </div>
+    );
+  }
 
   // Mode for NoResultsCard
   const noResultsMode: 'people' | 'jobs' | 'companies' | 'generic' =
