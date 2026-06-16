@@ -1,74 +1,64 @@
-# Diagnosis: code is synced, edge functions are stale
+# Fix Apify Unauthorized — Token Rotation & Verification
 
-## What I verified
+## Why
+Lead sourcing fails with `apify_unauthorized`. The Lead Source Selector and Search Brief work; only Apify auth is broken. Need to rotate `APIFY_API_TOKEN` to the new value, confirm actor flags, redeploy the 3 functions that consume it, and smoke-test in the live chat.
 
-**All expected files exist in the active codebase** (branch `lead-sourcing-actions-credits` is present):
-- `supabase/functions/_shared/leadIntake.ts` (+ `.test.ts`)
-- `supabase/functions/_shared/creditEstimate.ts` (+ `.test.ts`)
-- `supabase/functions/_shared/workflowClassifier.ts`
-- `supabase/functions/pilot-chat/index.ts`, `orchestrate/index.ts`, `run-agent/index.ts`
-- `src/components/chat/workspace/bubbles/LeadSourceCard.tsx`
-- `src/components/chat/workspace/bubbles/PostLeadActionsCard.tsx`
-- `src/components/chat/workspace/ChatView.tsx`
+## Important — token handling
+- Token will be set via the secure secrets manager only (Supabase Edge Function secret).
+- Never committed, never logged, never in frontend, never in DB.
+- Reports will only say "set / verified", never echo the value.
 
-**Backend routing order in `pilot-chat/index.ts` is correct:**
-- Line 789: `isLeadIntakeRequest(message)` block runs BEFORE the old generic `signal_sourcing + needs_clarification` fallback at line 1160.
-- Line 842/846: emits `{ ui_form: { kind: "lead_source_selector", ... } }` for vague lead asks.
-- `isLeadIntakeRequest` in `_shared/leadIntake.ts` matches "Find me leads" via `LEAD_INTAKE_RE`.
+## Steps
 
-**Frontend (`ChatView.tsx`) is wired:**
-- Renders `metadata.ui_form.kind === "lead_source_selector"` via `LeadSourceCard`.
-- Renders `lead_intake` via `LeadIntakeCard`.
-- Renders `metadata.ui_card.kind === "post_lead_actions"` via `PostLeadActionsCard`.
-- `ClarificationCard` is gated to only render when `!leadForm && !leadSelector`, so it can't hide the new card.
+### 1. Update the secret
+Use the secrets tool to update `APIFY_API_TOKEN`. This opens a secure form — I will paste the new value there (no token text in chat, code, or logs).
 
-## Smoking gun — deployed `pilot-chat` is OLD
+### 2. Verify actor flags (read-only)
+Check `secrets--fetch_secrets` and `supabase/functions/_shared/actorRegistry.ts` to confirm these are present and resolve to real actor IDs from the registry (no invented IDs):
+- `APIFY_ENABLE_LINKEDIN_POSTS` + `APIFY_ACTOR_LINKEDIN_POSTS` (default `harvestapi/linkedin-post-search`)
+- `APIFY_ENABLE_LINKEDIN_PROFILE_POSTS` + `APIFY_ACTOR_LINKEDIN_PROFILE_POSTS` (default `harvestapi/linkedin-profile-posts`)
+- Jobs actor (`apify_jobs`, default `curious_coder/linkedin-jobs-scraper`) — enabled-by-default in registry, only needs `APIFY_API_TOKEN`
+- People search (`APIFY_ENABLE_PEOPLE_SEARCH`, `APIFY_ACTOR_PEOPLE_SEARCH`) — already set per secrets list
 
-Direct curl to deployed `pilot-chat` with `"Find me leads"` returns:
+If any optional flag is missing, I will report it but NOT invent values. The honest fallback message for unconfigured people search stays in place.
 
-```json
-{
-  "content": "Which buying signal should I target first: companies hiring GTM roles, ...",
-  "metadata": {
-    "classifier_source": "regex",
-    "possible_actions": ["companies_hiring_gtm","companies_hiring_engineering","founder_profiles","linkedin_engagement","competitor_engagement","specific_niche"],
-    "workflow_category": "signal_sourcing",
-    "prompt_version": "2026-06-09-v2"
-  }
-}
-```
+### 3. Redeploy edge functions
+Deploy exactly these three so they pick up the new token env:
+- `pilot-chat`
+- `orchestrate`
+- `run-agent`
 
-Neither `classifier_source: "regex"` nor that `possible_actions` array exist anywhere in the current source — they belong to a previous version. The new code never reaches its own `buildLeadSourceSelector` branch because the running container is from before the merge.
+No DB writes, no migration `145631`, no other services touched.
 
-## Fix (single action, no code changes)
+### 4. Smoke test A — LinkedIn posts (capped)
+Curl `pilot-chat` with: *"Find 5 LinkedIn posts where founders talk about outbound problems."*
+Expect: no `apify_unauthorized`, `apify_linkedin_posts` runs, `max_results=5`, signals saved, no outreach.
 
-Redeploy the three edge functions from current source:
+### 5. Smoke test B — Lead Source Selector → Hiring signals
+Curl `pilot-chat` with *"Find me leads"* → verify `ui_form.kind = lead_source_selector`. Then submit hiring brief (GTM / B2B SaaS / USA / early-stage / count=5) and verify:
+- same chat / no new thread
+- execution plan emitted
+- Scout sourcing runs against `apify_jobs`
+- no `apify_unauthorized`
+- leads persisted to Signal Feed if found
+- post-lead action card (`ui_card.kind = post_lead_actions`) with 6 options + credit estimates
 
-1. `pilot-chat` (the critical one)
-2. `orchestrate`
-3. `run-agent`
+### 6. Post-lead actions
+Only verify the card renders with the 6 options and credit estimates. Will NOT execute paid actions (Enrich / Draft / Enrich+Draft) without explicit approval. If validating actions, use Save only or Rank.
 
-Then re-run the smoke tests.
+### 7. Report back
+- APIFY_API_TOKEN updated securely (yes/no) — value never shown
+- Which environment was updated (Lovable Cloud / current project)
+- Functions redeployed (the 3 above)
+- Actor enable flags present (per-flag yes/no, no invented IDs)
+- Smoke test A result
+- Smoke test B result
+- `apify_unauthorized` gone (yes/no)
+- Leads saved to Signal Feed (yes/no/none-found)
+- Post-lead action card appeared (yes/no)
+- Remaining errors / missing actor config
 
-## Validation after redeploy
+## Out of scope
+No frontend changes, no DB migrations, no production DB writes, no outreach sends/DMs/comments/posts, no rotation of unrelated secrets, no edits to `actorRegistry.ts`.
 
-1. **Direct backend call** — `POST /pilot-chat` with `"Find me leads"` should return `metadata.ui_form.kind === "lead_source_selector"` and the intro copy "Choose the type of leads you want Scout to find…", not the old "Which buying signal…" text.
-2. **Browser smoke tests** in the preview:
-   - "Find me leads" → Lead Source Selector card
-   - "Scrape leads for me" → Lead Source Selector card
-   - "Find companies hiring GTM roles" → hiring workflow, no selector
-   - "Find people talking about Clay" → competitor flow, no selector
-   - "Find 5 B2B SaaS founders in London" → people flow (or honest fallback if `apify_people_search` is disabled)
-3. **Post-lead actions card** — after a successful sourcing run, verify `PostLeadActionsCard` renders with the 6 options + credit estimates.
-4. **Apify token** — separately, last run showed `apify_unauthorized`. After redeploy, if sourcing still fails with that error, surface it as a token/account issue (not a code issue). I will not rotate the token without your go-ahead.
-
-## Out of scope (per your guardrails)
-
-- No product logic changes.
-- No DB writes, no migration `145631`.
-- No auto-send / auto-DM / auto-post wiring.
-- No Apify token rotation.
-
-## Files to change
-
-None. This is a deploy-only fix.
+Approve to proceed — first action will open the secure secret form for the new token.
