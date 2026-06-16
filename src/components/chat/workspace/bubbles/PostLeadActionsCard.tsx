@@ -23,7 +23,7 @@ const ICONS: Record<PostLeadAction, any> = {
 
 import { dispatchChatAction } from '@/lib/chatActions';
 
-export default function PostLeadActionsCard({ payload }: { payload: PostLeadActionsCardPayload }) {
+export default function PostLeadActionsCard({ payload, conversationId }: { payload: PostLeadActionsCardPayload; conversationId: string | null }) {
   const [confirming, setConfirming] = useState<PostLeadAction | null>(null);
   const [done, setDone] = useState<string | null>(null);
 
@@ -35,7 +35,15 @@ export default function PostLeadActionsCard({ payload }: { payload: PostLeadActi
     );
   }
 
-  const run = (o: ActionOption) => { send(o.command); setDone(`Running: ${o.label}${o.credits > 0 ? ` (~${o.credits} credits)` : ''}. Nothing will be sent without your approval.`); };
+  const run = (o: ActionOption) => {
+    dispatchChatAction({
+      text: o.command,
+      conversation_id: conversationId,
+      action_source: 'post_lead_actions_card',
+      metadata: { post_lead_action: o.action, lead_candidate_ids: payload.lead_candidate_ids },
+    });
+    setDone(`Running: ${o.label}${o.credits > 0 ? ` (~${o.credits} credits)` : ''}. Nothing will be sent without your approval.`);
+  };
 
   return (
     <div className="rounded-xl border border-emerald-500/20 bg-gradient-to-b from-emerald-500/[0.05] to-transparent p-4 max-w-[600px]">
