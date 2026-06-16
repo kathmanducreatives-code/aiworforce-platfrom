@@ -41,6 +41,7 @@ function Option({
   reply,
   disabled,
   disabledHint,
+  conversationId,
 }: {
   icon: any;
   label: string;
@@ -48,12 +49,13 @@ function Option({
   reply: string;
   disabled?: boolean;
   disabledHint?: string;
+  conversationId: string | null;
 }) {
   const btn = (
     <button
       type="button"
       disabled={disabled}
-      onClick={() => !disabled && sendReply(reply)}
+      onClick={() => !disabled && sendReply(reply, conversationId)}
       className={`group w-full text-left rounded-lg border px-3 py-2.5 transition-colors flex items-center gap-3 ${
         disabled
           ? 'border-white/[0.04] bg-white/[0.01] text-[#484F58] cursor-not-allowed'
@@ -92,6 +94,7 @@ export default function ClarificationCard({
   peopleAction,
   companiesAction,
   agencyAction,
+  conversationId,
 }: Props) {
   const any = peopleAction || companiesAction || agencyAction;
   if (!any) return null;
