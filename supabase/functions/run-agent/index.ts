@@ -22,6 +22,18 @@ const json = (body: unknown, status = 200) =>
     status,
     headers: { ...cors, "Content-Type": "application/json" },
   });
+function humanizeApifyError(error: string | null | undefined): string {
+  switch (error) {
+    case "apify_unauthorized": return "Apify authentication failed";
+    case "apify_insufficient_credits": return "the Apify account is out of credits";
+    case "actor_missing":
+    case "actor_key_unknown":
+    case "apify_actor_not_configured":
+    case "apify_not_configured": return "the required Apify actor isn't configured";
+    default: return "Apify could not run the search";
+  }
+}
+
 function buildUserMessage(instruction: string, input: string | null | undefined): string {
   if (!input) return `Task: ${instruction}`;
   return `Task: ${instruction}\n\nInput from previous step:\n${input}`;
@@ -129,6 +141,12 @@ Deno.serve(async (req) => {
   let scrapedContext: string | null = null;
   let apifyContext: string | null = null;
   const toolNotices: string[] = [];
+  // Set when an explicitly-selected Apify sourcing actor can't run (auth/config/
+  // credits). Triggers a clean plan failure + in-chat error card — never a fake
+  // "complete" with zero leads.
+  let sourcingFailure: { error: string; message: string } | null = null;
+  // Attempt log from the adaptive multi-attempt sourcing loop (Scout step).
+  let adaptiveAttempts: Array<Record<string, unknown>> = [];
 
   if (agent_slug === "hawk" || agent_slug === "scout") {
     const baseCtx = {
@@ -212,11 +230,19 @@ Deno.serve(async (req) => {
           );
         }
 
+        // Adaptive input validation: fix typos (GGTM→GTM, healtcare→healthcare)
+        // on the query, roles, and location before the actor runs.
+        const { normalizeTerm } = await import("../_shared/inputNormalize.ts");
+        const rawQuery = (tool_input_body?.query as string) ?? instruction;
+        const normalizedQuery = normalizeTerm(rawQuery) || rawQuery;
+        roleKeywords = roleKeywords.map((r) => normalizeTerm(r)).filter(Boolean);
+        if (location) location = normalizeTerm(location);
+
         const apifyInput = {
           selected_actor_key: planned_actor_key ?? undefined,
           source_type,
-          search_goal: tool_input_body?.query ?? instruction,
-          query: tool_input_body?.query ?? instruction,
+          search_goal: normalizedQuery,
+          query: normalizedQuery,
           location: location ?? undefined,
           role_keywords: roleKeywords.length > 0 ? roleKeywords : undefined,
           max_results,
@@ -232,27 +258,76 @@ Deno.serve(async (req) => {
           normalized_source_type: source_type,
           ...apifyInput,
         });
-        const r = await runTool("source_with_apify", apifyInput, baseCtx);
-        if (r.ok && r.data) {
-          const d = r.data as { items?: any[]; total?: number; summary?: string; run_id?: string };
-          const sample = (d.items ?? []).slice(0, Math.min(max_results, 25));
-          const lens = source_type === "jobs"
-            ? "\n\nNOTE: These are companies/jobs hiring for the requested role, not individual people profiles."
-            : "";
-          apifyContext = `APIFY SOURCING (run ${d.run_id ?? "?"} — ${d.total ?? sample.length} results):\n${d.summary ?? ""}${lens}\n\nITEMS:\n${JSON.stringify(sample, null, 2).slice(0, 8000)}`;
-        } else if (r.unavailable) {
-          const dbg = (r.data ?? {}) as Record<string, unknown>;
-          let reason: string;
-          if (r.error === "actor_missing" || r.error === "actor_key_unknown") {
-            reason = `Actor missing: ${dbg.actor_key ?? planned_actor_key ?? "(none)"} — ${dbg.reason ?? r.error}. Configured: ${Array.isArray(dbg.configured_actor_keys) ? (dbg.configured_actor_keys as string[]).join(", ") : "n/a"}.`;
-          } else if (r.error === "apify_actor_not_configured") {
-            reason = `Apify is connected, but no actor is configured for source_type=${source_type} (requested=${raw_source_type ?? "null"}, expected_actor_key=${dbg.expected_actor_key ?? source_type}).`;
-          } else {
-            reason = `Apify unavailable (${r.error ?? "not configured"}).`;
-          }
-          toolNotices.push(reason);
-        } else if (!r.ok) {
-          toolNotices.push(`Apify failed: ${r.error ?? "unknown"}.`);
+        // Adaptive multi-attempt sourcing: broaden role aliases → industry →
+        // relax stage/location and retry until the requested count is met (or
+        // caps / strict constraints / a tool failure stop it). Items are
+        // validated, deduped across attempts, and capped at the requested count.
+        const { runAdaptiveSourcing, parseStrictConstraints, resolveMaxAttempts } = await import("../_shared/sourcingRetry.ts");
+        const strict = parseStrictConstraints(instruction ?? "");
+        const maxAttempts = resolveMaxAttempts(instruction ?? "", strict);
+        const criteria = {
+          requested: max_results,
+          role: roleKeywords[0] ?? null,
+          industry: (tool_input_body?.industry as string) ?? null,
+          location: location ?? null,
+          stage: (tool_input_body?.stage as string) ?? null,
+          category: (tool_input_body?.company_category as string) ?? null,
+          source_type: (tool_input_body?.source_type as string) ?? source_type ?? null,
+        };
+        const mapItem = (it: any) => ({
+          name: it?.name ?? it?.fullName ?? it?.author?.name ?? it?.actor?.name ?? null,
+          title: it?.title ?? it?.jobTitle ?? it?.position ?? it?.headline ?? null,
+          company: it?.company ?? it?.companyName ?? it?.organization ?? it?.actor?.name ?? null,
+          source_url: it?.url ?? it?.link ?? it?.postUrl ?? it?.linkedinUrl ?? it?.jobUrl ?? it?.query?.post ?? null,
+          location: it?.location ?? it?.companyLocation ?? null,
+          raw: it,
+        });
+        const runAttempt = async (strategy: { role_keywords: string[]; relax_location: boolean }) => {
+          const attemptInput = {
+            ...apifyInput,
+            role_keywords: strategy.role_keywords.length > 0 ? strategy.role_keywords : apifyInput.role_keywords,
+            location: strategy.relax_location ? undefined : apifyInput.location,
+            max_results,
+            // Don't persist per attempt — we persist ONCE below with the capped,
+            // deduped accepted set so DB lead_candidates == accepted count.
+            defer_persistence: true,
+          };
+          const rr = await runTool("source_with_apify", attemptInput, baseCtx);
+          if (rr.ok && rr.data) return { items: ((rr.data as { items?: any[] }).items ?? []).map(mapItem) };
+          // unavailable / !ok = tool failure (auth/config/credits). 0-results is ok+data above.
+          return { items: [], tool_failed: true, error: rr.error ?? "apify_failed" };
+        };
+
+        const adaptive = await runAdaptiveSourcing({ criteria, strict, maxAttempts, runAttempt });
+        adaptiveAttempts = adaptive.attempts as unknown as Array<Record<string, unknown>>;
+
+        const toolFailed = adaptive.status === "failed" && adaptive.attempts.some((a) => !!a.note);
+        if (toolFailed && isApifySelected) {
+          sourcingFailure = { error: adaptive.reason || "apify_failed", message: humanizeApifyError(adaptive.reason) };
+        }
+        if (adaptive.accepted.length > 0) {
+          const rawItems = adaptive.accepted.map((a) => a.raw);
+          // Persist ONCE with only the capped/deduped accepted set, so DB
+          // lead_candidates/signals == accepted count (not the sum of attempts).
+          try {
+            const { writeMemoryFromToolCall } = await import("../_shared/memoryWriter.ts");
+            await writeMemoryFromToolCall({
+              admin: supabase,
+              workspace_id,
+              plan_id,
+              task_id: task.id,
+              tool_call_id: null,
+              tool_name: "source_with_apify",
+              selected_actor_key: planned_actor_key ?? null,
+              output: { items: rawItems, total: rawItems.length, summary: `${adaptive.found}/${adaptive.requested} accepted across ${adaptive.attempts.length} attempt(s)` },
+            });
+          } catch (e) { console.warn("[run-agent] capped persistence failed:", e); }
+
+          const lens = source_type === "jobs" ? "\n\nNOTE: These are companies/jobs hiring for the requested role, not individual people profiles." : "";
+          const log = adaptive.attempts.map((a) => `Attempt ${a.n}: ${a.strategy} — ${a.accepted_count} accepted (total ${a.total_accepted})`).join("\n");
+          apifyContext = `APIFY SOURCING (${adaptive.found}/${adaptive.requested} accepted across ${adaptive.attempts.length} attempt(s)):\nATTEMPTS:\n${log}${lens}\n\nITEMS (accepted, capped):\n${JSON.stringify(rawItems, null, 2).slice(0, 8000)}`;
+        } else if (!toolFailed) {
+          toolNotices.push(`Sourcing ran ${adaptive.attempts.length} attempt(s) and found 0 matching results.`);
         }
       }
     }
@@ -284,6 +359,42 @@ Deno.serve(async (req) => {
     }
   }
 
+
+  // Hard sourcing failure (Apify auth/config/credits) with no results → fail the
+  // plan cleanly and surface an in-chat error card. Never let the LLM fabricate a
+  // "complete" plan with zero leads, and never chain to Aria with nothing to rank.
+  if (sourcingFailure && !apifyContext) {
+    const failMsg = `Scout could not run because ${sourcingFailure.message}.`;
+    await supabase.from("tasks").update({ status: "failed", error_message: sourcingFailure.error, result: { error: sourcingFailure.error, message: failMsg } }).eq("id", task.id);
+    await supabase.from("task_plans").update({ status: "failed" }).eq("id", plan_id);
+    await supabase.from("activity_feed").insert({
+      workspace_id, plan_id, agent_id: agent.id, event_type: "agent_started",
+      title: `${agent.name} could not source leads`, body: failMsg, metadata: { step_index, task_id: task.id, failed: true, error: sourcingFailure.error },
+    });
+    try {
+      const { data: planMsg } = await supabase.from("messages").select("conversation_id").filter("metadata->>plan_id", "eq", plan_id).limit(1).maybeSingle();
+      const conversationId = (planMsg as { conversation_id?: string } | null)?.conversation_id ?? null;
+      if (conversationId) {
+        const criteria = (tool_input_body?.query as string) ?? instruction;
+        const card = {
+          kind: "lead_sourcing_error",
+          title: "Scout could not source leads",
+          message: `${sourcingFailure.message[0].toUpperCase()}${sourcingFailure.message.slice(1)}, so Scout could not run the search. No leads were saved, no credits charged, and nothing was sent.`,
+          source_type: (tool_input_body?.source_type as string) ?? source_type ?? null,
+          criteria, count: typeof tool_input_body?.max_results === "number" ? tool_input_body.max_results : null,
+          error: sourcingFailure.error,
+          retry_command: instruction,
+          lead_request: (tool_input_body && typeof tool_input_body === "object") ? tool_input_body : null,
+        };
+        await supabase.from("messages").insert({
+          conversation_id: conversationId, role: "assistant",
+          content: failMsg + " You can update the Apify token and retry, or pick a different lead source.",
+          agent_slug: "pilot", metadata: { ui_card: card, lead_sourcing_error: true, plan_id },
+        });
+      }
+    } catch (e) { console.warn("[run-agent] sourcing-error card failed:", e); }
+    return json({ success: false, task_id: task.id, status: "failed", error: sourcingFailure.error });
+  }
 
   const contextParts: string[] = [];
   if (scrapedContext) contextParts.push(scrapedContext);
@@ -365,7 +476,7 @@ Deno.serve(async (req) => {
   const finalStatus = needs_approval ? "awaiting_approval" : "complete";
   await supabase.from("tasks").update({
     status: finalStatus,
-    result: { output: apiText, tokens_in: tokensIn, tokens_out: tokensOut },
+    result: { output: apiText, tokens_in: tokensIn, tokens_out: tokensOut, attempt_log: adaptiveAttempts.length ? adaptiveAttempts : undefined },
   }).eq("id", task.id);
 
   // Phase 2: persist agent outputs into structured GTM memory. Fire-and-forget.
@@ -527,40 +638,57 @@ Deno.serve(async (req) => {
     });
   }
 
-  // Final step.
-  await supabase.from("activity_feed").insert({
-    workspace_id,
-    plan_id,
-    agent_id: agent.id,
-    event_type: "plan_complete",
-    title: "Plan complete",
-    body: `${plan?.plan_summary ?? "Plan"} — complete.`,
-    metadata: { step_index, task_id: task.id },
-  });
-  await supabase.from("task_plans").update({ status: "complete", completed_at: new Date().toISOString() }).eq("id", plan_id);
-
-  // Post-lead actions — when a plan produced leads, offer next-step options with
-  // credit estimates (enrich / draft / rank / save). Enrichable = leads whose
-  // account has a website/domain. Rendered as a chat card; nothing auto-runs.
+  // Final step. Adaptive status — never blindly "complete". For a sourcing plan, derive
+  // complete / partial / failed from produced-vs-requested; emit the right card.
+  let planStatus = "complete";
   try {
-    const { data: leads } = await supabase
-      .from("lead_candidates")
-      .select("id, account:accounts(domain)")
-      .eq("plan_id", plan_id);
+    const { data: srcCalls } = await supabase.from("tool_calls").select("id").eq("plan_id", plan_id).eq("tool_name", "source_with_apify").limit(1);
+    const wasSourcing = (srcCalls ?? []).length > 0;
+
+    const { data: leads } = await supabase.from("lead_candidates").select("id, account:accounts(domain)").eq("plan_id", plan_id);
     const leadRows = (leads ?? []) as Array<{ id: string; account?: { domain?: string | null } | null }>;
-    if (leadRows.length > 0) {
-      const enrichable = leadRows.filter((l) => !!l.account?.domain).length;
-      const { data: planMsg } = await supabase
-        .from("messages")
-        .select("conversation_id")
-        .filter("metadata->>plan_id", "eq", plan_id)
-        .limit(1)
-        .maybeSingle();
-      const conversationId = (planMsg as { conversation_id?: string } | null)?.conversation_id ?? null;
-      if (conversationId) {
+    const { count: sigCount } = await supabase.from("signals").select("id", { count: "exact", head: true }).eq("plan_id", plan_id);
+    const produced = Math.max(leadRows.length, sigCount ?? 0);
+
+    const steps: any[] = Array.isArray(plan?.steps) ? (plan!.steps as any[]) : [];
+    const reqStep = steps.find((s) => typeof s?.metadata?.tool_input?.max_results === "number");
+    const requested = reqStep?.metadata?.tool_input?.max_results ?? produced;
+
+    const { data: planMsg } = await supabase.from("messages").select("conversation_id").filter("metadata->>plan_id", "eq", plan_id).limit(1).maybeSingle();
+    const conversationId = (planMsg as { conversation_id?: string } | null)?.conversation_id ?? null;
+
+    // Pull the adaptive attempt log recorded by the Scout step (separate invocation).
+    const { data: scoutTask } = await supabase.from("tasks").select("result").eq("plan_id", plan_id).eq("agent_slug", "scout").order("created_at", { ascending: false }).limit(1).maybeSingle();
+    const attemptLog = ((scoutTask as { result?: { attempt_log?: unknown } } | null)?.result?.attempt_log) ?? [];
+    const attemptSummary = Array.isArray(attemptLog)
+      ? (attemptLog as Array<Record<string, unknown>>).map((a) => `Attempt ${a.n}: ${a.strategy} — ${a.accepted_count} accepted (total ${a.total_accepted})`)
+      : [];
+
+    if (wasSourcing) {
+      const { evaluateWorkflowStatus } = await import("../_shared/adaptiveWorkflow.ts");
+      const ev = evaluateWorkflowStatus({ workflow_type: "lead_sourcing", requested, produced });
+      planStatus = ev.status; // complete | partial | failed
+
+      if (produced === 0 && conversationId) {
+        // Actor ran but found nothing — honest "no results", never "complete".
+        const card = {
+          kind: "lead_sourcing_error",
+          title: "No matching leads found",
+          message: "Scout ran but found 0 leads matching your criteria. Try broadening the role, industry, or location — or pick another lead source. No leads saved, no credits charged, nothing sent.",
+          error: "no_results",
+          retry_command: (reqStep?.instruction as string) ?? undefined,
+        };
+        await supabase.from("messages").insert({
+          conversation_id: conversationId, role: "assistant",
+          content: "Scout ran but found 0 matching leads. Try broadening your criteria or another lead source.",
+          agent_slug: "pilot", metadata: { ui_card: card, lead_sourcing_error: true, plan_id, workflow_status: "failed" },
+        });
+      } else if (leadRows.length > 0 && conversationId) {
+        const enrichable = leadRows.filter((l) => !!l.account?.domain).length;
         const { buildPostLeadActionsCard } = await import("../_shared/creditEstimate.ts");
         const card = buildPostLeadActionsCard(leadRows.length, enrichable, leadRows.map((l) => l.id));
-        // Source-type label for the side-panel title (best-effort from plan summary)
+        const partial = planStatus === "partial";
+        // Side-panel (Workbench / LeadResultsView) — opened by ChatView on ui_panel.
         const planSummary = String(plan?.plan_summary ?? "").toLowerCase();
         const sourceType: string = planSummary.includes("hiring") ? "hiring_signal"
           : planSummary.includes("linkedin") ? "linkedin_engagement"
@@ -585,15 +713,24 @@ Deno.serve(async (req) => {
         await supabase.from("messages").insert({
           conversation_id: conversationId,
           role: "assistant",
-          content: `Scout found ${leadRows.length} lead${leadRows.length === 1 ? "" : "s"}. I opened them in the results panel and saved them for later review. Nothing was sent.`,
+          // Adaptive status reflected in copy; Workbench panel + post-lead card + attempt log all attached.
+          content: `${partial ? `Found ${produced} of ${requested} — ` : ""}Scout found ${leadRows.length} lead${leadRows.length === 1 ? "" : "s"}. I opened them in the results panel and saved them for later review. Nothing was sent.`,
           agent_slug: "pilot",
-          metadata: { ui_card: card, ui_panel: uiPanel, post_lead_actions: true, plan_id },
+          metadata: { ui_card: card, ui_panel: uiPanel, post_lead_actions: true, plan_id, workflow_status: planStatus, attempt_log: attemptSummary.length ? attemptSummary : [`Sourced ${produced}/${requested}`] },
         });
       }
     }
   } catch (e) {
-    console.warn("[run-agent] post-lead actions card failed:", e);
+    console.warn("[run-agent] adaptive status/card failed:", e);
   }
 
-  return json({ success: true, task_id: task.id, status: "complete", complete: true });
+  await supabase.from("activity_feed").insert({
+    workspace_id, plan_id, agent_id: agent.id, event_type: "plan_complete",
+    title: planStatus === "complete" ? "Plan complete" : `Plan ${planStatus}`,
+    body: `${plan?.plan_summary ?? "Plan"} — ${planStatus}.`,
+    metadata: { step_index, task_id: task.id, workflow_status: planStatus },
+  });
+  await supabase.from("task_plans").update({ status: planStatus, completed_at: new Date().toISOString() }).eq("id", plan_id);
+
+  return json({ success: planStatus !== "failed", task_id: task.id, status: planStatus });
 });
