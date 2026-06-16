@@ -180,7 +180,7 @@ const SEND_RE = /\b(send|deliver|fire off|blast)\s+(?:emails?|messages?|outreach
 
 // Unsafe / unsupported.
 const UNSAFE_RE =
-  /\b(personal phone numbers?|home address|scrape private|private personal data|harvest emails for spam|send (?:emails?|messages?) automatically|automatic(?:ally)? send|without approval|start calling them automatically|cold call(?:ing)? (?:automated|automatic)|automatic(?:ally)?\s+(?:comment|post|publish|share|dm|message|reply|engage|connect|like)|auto[- ]?(?:comment|post|publish|share|dm|reply|like|engage)|(?:post|publish|share)\s+(?:this|that|it|these|them)?[^.!?]*\bautomatic(?:ally)?|send\s+(?:messages?|dms?|emails?|outreach)\s+to\s+(?:all|every|everyone|each))\b/i;
+  /\b(personal phone numbers?|home address|scrape private|private personal data|harvest emails for spam|send (?:emails?|messages?) automatically|automatic(?:ally)? send|without approval|start calling them automatically|cold call(?:ing)? (?:automated|automatic)|automatic(?:ally)?\s+(?:comment|post|publish|share|dm|message|email|reply|engage|connect|like)|auto[- ]?(?:comment|post|publish|share|dm|message|email|reply|like|engage|connect)|(?:post|publish|share)\s+(?:this|that|it|these|them)?[^.!?]*\bautomatic(?:ally)?|(?:email|message|dm|text|contact|reach out to)\b[^.!?]{0,30}\bautomatic(?:ally)?|send\s+(?:messages?|dms?|emails?|outreach)\s+to\s+(?:all|every|everyone|each))\b/i;
 
 // Sourcing.
 const COMPANIES_HIRING_RE =

@@ -9,6 +9,17 @@ import { matchCompetitors } from "./competitorRegistry.ts";
 
 export type LeadMode = "people" | "companies" | "signals" | "competitor_engagement" | "hiring";
 
+// Canonical lead-engine taxonomy. Every lead workflow maps to one of these.
+export type LeadSourceType =
+  | "icp_search"
+  | "hiring_signal"
+  | "linkedin_posts"
+  | "linkedin_comments"
+  | "competitor_engagement"
+  | "people_profiles"
+  | "company_search"
+  | "memory_refine";
+
 export interface LeadDetails {
   mode: LeadMode | null;
   target_role: string | null;
@@ -21,25 +32,43 @@ export interface LeadDetails {
 }
 
 export interface LeadRequest {
+  source_type?: LeadSourceType;
   mode: LeadMode;
   target_role?: string;
   industry?: string;
   location?: string;
   company_category?: string;
+  company_size?: string;
+  stage?: string;
   buying_signal?: string;
+  topic?: string;
+  competitors?: string[];
+  post_url?: string;
   count: number;
   needs_outreach: boolean;
   source_preference?: string;
   original_user_request: string;
   company_brain_context_used: boolean;
+  confidence?: number;
+  missing_fields?: string[];
+}
+
+/** Which sourcing actors/tools are configured in this environment. */
+export interface ToolAvailability {
+  people: boolean;   // apify_people_search
+  comments: boolean; // apify_linkedin_post_comments
+  firecrawl: boolean;
 }
 
 // Triggers that should open the Lead Search Brief when under-specified.
 const LEAD_INTAKE_RE =
-  /\b(find\s+me\s+leads|get\s+me\s+(?:some\s+)?(?:leads|prospects)|find\s+(?:me\s+)?(?:people|prospects|buyers|customers)\b|find\s+people\s+to\s+reach\s+out\s+to|find\s+(?:me\s+)?companies(?:\s+for\s+me)?|find\s+buyers|find\s+leads)\b/i;
-// People-by-role asks ("find founders / CEOs / VPs …") also open the brief.
+  /\b(find\s+me\s+leads|scrape\s+(?:me\s+)?leads(?:\s+for\s+me)?|get\s+me\s+(?:some\s+)?(?:leads|prospects)|find\s+(?:me\s+)?(?:people|prospects|buyers|customers)\b|find\s+people\s+to\s+reach\s+out\s+to|find\s+(?:me\s+)?companies(?:\s+for\s+me)?|find\s+buyers|find\s+leads)\b/i;
+// People-by-role asks ("find founders", "find 5 B2B SaaS founders …") also open
+// the lead path. Allows a few words between the verb and the role (count,
+// industry, adjectives), but the LEAD_EXCLUDE guard below still defers LinkedIn/
+// competitor/hiring asks to their Phase 3/4 flows.
 const PEOPLE_ROLE_RE =
-  /\b(find|get|source)\s+(?:me\s+)?(?:\d+\s+)?(founders?|co-?founders?|ceos?|ctos?|cfos?|coos?|cmos?|vps?|heads?\s+of\b|operators?|executives?|decision[-\s]?makers?|buyers?)\b/i;
+  /\b(find|get|source)\b[^.!?\n]{0,40}?\b(founders?|co-?founders?|ceos?|ctos?|cfos?|coos?|cmos?|vps?|heads?\s+of\b|operators?|executives?|decision[-\s]?makers?|buyers?)\b/i;
 // …unless the ask is clearly a Phase 3/4 LinkedIn/competitor/hiring/engagement
 // flow, which the classifier already handles well — don't hijack those.
 const LEAD_EXCLUDE_RE = /\b(linkedin|posts?|commenting|comment on|engag\w*|talking about|conversations?|hiring|competitors?|alternatives?)\b/i;
@@ -149,14 +178,14 @@ export function clampCount(n: number): number {
 }
 
 /**
- * Enough to run Scout directly (skip the form): a determined mode + a concrete
- * target (role or category) + an industry + at least a location or an explicit
- * count. "Find 5 founders building AI software in healthcare in the USA" → run.
- * "Find founders building AI products" → form (no industry/location/count).
+ * Enough to run Scout directly (skip the Source Selector). A determined mode +
+ * a concrete target. When too vague (e.g. bare "find me leads", "find founders"
+ * with no industry/category), we show the Lead Source Selector instead.
+ * "Find founders building AI tools for healthcare" → run (people → fallback).
+ * "Find me leads" → selector.
  */
 export function hasEnoughToRun(d: LeadDetails): boolean {
   if (!d.mode) return false;
-  // Hiring / company / linkedin / competitor modes only need a topic + (count|location|industry|category).
   const hasTarget = !!(d.target_role || d.company_category);
   const hasTopic = !!(d.industry || d.company_category || d.target_role);
   if (d.mode === "hiring" || d.mode === "companies") {
@@ -165,8 +194,10 @@ export function hasEnoughToRun(d: LeadDetails): boolean {
   if (d.mode === "signals" || d.mode === "competitor_engagement") {
     return hasTopic;
   }
-  // people: require a concrete target + industry + (location or explicit count).
-  return hasTarget && !!d.industry && (!!d.location || !!d.count);
+  // people: a concrete role/title PLUS an industry or company category is enough
+  // to attempt the search (count defaults to 5, location optional). A bare role
+  // ("find founders") with no industry/category is too vague → selector.
+  return !!d.target_role && (!!d.industry || !!d.company_category);
 }
 
 // ----- Company Brain prefill (defaults only — user input wins) -----
@@ -285,6 +316,158 @@ export function buildLeadIntakeForm(
   };
 }
 
+// ===========================================================================
+// Lead Source Selector — the 7-engine picker shown for vague prompts. Each
+// source carries its own dynamic Lead Search Brief field schema (prefilled from
+// the Company Brain) plus an availability flag + honest fallback note.
+// ===========================================================================
+
+export interface LeadSourceOption {
+  source_type: LeadSourceType;
+  mode: LeadMode;
+  title: string;
+  description: string;
+  examples: string[];
+  available: boolean;
+  fallback_note: string | null;
+  fields: FormField[];
+}
+
+export interface LeadSourceSelector {
+  kind: "lead_source_selector";
+  title: string;
+  subtitle: string;
+  safety_note: string;
+  brain_used: boolean;
+  brain_missing: boolean;
+  suggested_source?: LeadSourceType;
+  sources: LeadSourceOption[];
+  original_user_request: string;
+}
+
+const countField = (n?: number | null): FormField =>
+  ({ key: "count", label: "Count", type: "select", options: COUNT_OPTIONS, value: String(n ?? 5) });
+
+/** Build the per-source brief fields, prefilled from details + brain. */
+function fieldsForSource(
+  source: LeadSourceType,
+  d: LeadDetails,
+  pre: BrainPrefill,
+  used: boolean,
+  brainCompetitors: string[],
+): FormField[] {
+  const role = d.target_role ?? (used ? pre.target_role : null);
+  const industry = d.industry ?? (used ? pre.industry : null);
+  const location = d.location ?? (used ? pre.location : null) ?? "Any / Global";
+  const t = (k: string, label: string, value: string | null, placeholder: string, required = false): FormField =>
+    ({ key: k, label, type: "text", value, placeholder, required });
+
+  switch (source) {
+    case "hiring_signal":
+      return [
+        t("target_role", "Role type", role, "GTM, SDR, Growth, Marketing, Engineering", true),
+        t("location", "Location", location, "USA, UK, Remote, Global"),
+        t("industry", "Industry", industry, "B2B SaaS, Fintech, Healthcare"),
+        t("stage", "Company stage / size", null, "early-stage, Series A, 1-50"),
+        countField(d.count),
+      ];
+    case "linkedin_posts":
+      return [
+        t("topic", "Topic / pain", d.company_category, "outbound problems, lead gen pain, AI SDR tools", true),
+        t("audience", "Audience", role, "founders, GTM leaders, RevOps"),
+        t("location", "Location (optional)", location, "USA, UK, Global"),
+        countField(d.count),
+      ];
+    case "linkedin_comments":
+      return [
+        t("topic", "Topic / competitor", d.company_category, "outbound automation, Clay alternatives", true),
+        t("post_url", "Post URL (optional)", null, "https://www.linkedin.com/posts/…"),
+        countField(d.count),
+      ];
+    case "competitor_engagement":
+      return [
+        t("competitors", "Competitors", brainCompetitors.join(", ") || null, "Clay, Apollo, Artisan, GojiBerry", true),
+        t("company_category", "Category", d.company_category ?? industry, "AI SDR, GTM data, outbound"),
+        countField(d.count),
+      ];
+    case "people_profiles":
+      return [
+        t("target_role", "Target title", role, "Founder, CEO, Head of Growth", true),
+        t("company_category", "Company category", d.company_category, "AI software, early-stage SaaS"),
+        t("industry", "Industry", industry, "Healthcare, Fintech, B2B SaaS"),
+        t("location", "Location", location, "USA, UK, Remote"),
+        countField(d.count),
+      ];
+    case "company_search":
+      return [
+        t("company_category", "Company category", d.company_category, "AI software, digital health startups", true),
+        t("industry", "Industry", industry, "Healthcare, Fintech"),
+        t("location", "Location", location, "USA, UK, Global"),
+        t("stage", "Stage / size", null, "early-stage, Series A, 1-50"),
+        countField(d.count),
+      ];
+    case "icp_search":
+    default:
+      return [
+        { key: "mode", label: "People or companies", type: "select", required: true, options: ["People / profiles", "Companies / accounts"], value: d.mode === "companies" ? "Companies / accounts" : (d.mode ? "People / profiles" : null) },
+        t("target_role", "Role / title", role, "Founder, Head of Growth"),
+        t("industry", "Industry", industry, "B2B SaaS, Healthcare"),
+        t("location", "Location", location, "USA, UK, Global"),
+        t("company_category", "Company category", d.company_category, "AI software, early-stage SaaS"),
+        countField(d.count),
+      ];
+  }
+}
+
+/**
+ * Build the Lead Source Selector (7 engines). Sources whose actor is not
+ * configured stay visible but are flagged unavailable with an honest fallback.
+ */
+export function buildLeadSourceSelector(
+  details: LeadDetails,
+  profile: Record<string, unknown> | null | undefined,
+  hasBrain: boolean,
+  availability: ToolAvailability,
+): LeadSourceSelector {
+  const pre = brainPrefill(profile);
+  const used = pre.used && hasBrain;
+  const brainCompetitors = arr(obj(obj(profile).competitors).known)
+    .concat(arr(obj(profile).competitors));
+
+  const def = (
+    source: LeadSourceType, mode: LeadMode, title: string, description: string, examples: string[],
+    available: boolean, fallback_note: string | null,
+  ): LeadSourceOption => ({
+    source_type: source, mode, title, description, examples, available, fallback_note,
+    fields: fieldsForSource(source, details, pre, used, brainCompetitors),
+  });
+
+  const sources: LeadSourceOption[] = [
+    def("icp_search", "people", "ICP / normal leads", "Find people or companies matching your ICP.", [], true, null),
+    def("hiring_signal", "hiring", "Hiring signals", "Find companies actively hiring roles that signal growth or pain.", ["GTM roles", "SDR roles", "Growth roles", "Engineering roles"], true, null),
+    def("linkedin_posts", "signals", "LinkedIn intent posts", "Find people posting about relevant pain points or needs.", ["outbound problems", "lead generation pain", "AI SDR tools", "competitor alternatives"], true, null),
+    def("linkedin_comments", "signals", "LinkedIn comments / engagement", "Find people engaging with posts in your category.", ["commenters on AI SDR posts", "people reacting to Clay posts"], availability.comments,
+      availability.comments ? null : "Comment-level scraping isn't configured yet — I'll search LinkedIn posts instead."),
+    def("competitor_engagement", "competitor_engagement", "Competitor engagement", "Find people talking about or engaging with competitors.", ["people talking about Clay", "comparing Apollo and Clay"], true, null),
+    def("people_profiles", "people", "Founder / profile search", "Find individual founders/operators by role, industry, and location.", ["healthcare AI founders", "RevOps leaders in SaaS"], availability.people,
+      availability.people ? null : "People/profile search isn't configured yet — I'll find likely founders through LinkedIn engagement instead."),
+    def("company_search", "companies", "Company / category search", "Find companies in a category, niche, or market.", ["healthcare AI startups", "early-stage digital health"], true,
+      availability.firecrawl ? null : "Website analysis is unavailable, but I'll use your Company Brain / description."),
+  ];
+
+  return {
+    kind: "lead_source_selector",
+    title: "Choose a lead source",
+    subtitle: "Scout can find leads from different signals. Pick the source you want to start with. Nothing will be sent.",
+    safety_note: "Nothing will be sent.",
+    brain_used: used,
+    brain_missing: !hasBrain,
+    suggested_source: used ? (pre.mode === "competitor_engagement" ? "competitor_engagement" : pre.mode === "hiring" ? "hiring_signal" : pre.mode === "people" ? "people_profiles" : undefined) : undefined,
+    sources,
+    original_user_request: "",
+  };
+}
+
 // ----- LeadRequest → execution -----
 
 export function modeFromLabel(label: string | null | undefined): LeadMode {
@@ -330,6 +513,29 @@ export function leadRequestToToolInput(req: LeadRequest): LeadToolInput {
     execution_mode: req.needs_outreach ? "outreach" : "fast",
   };
 
+  // Source-type wins when present (canonical taxonomy). Falls through to the
+  // mode-based mapping below for icp_search / unset source_type.
+  switch (req.source_type) {
+    case "hiring_signal":
+    case "company_search":
+      return { ...base, query: query || req.topic || req.company_category || req.original_user_request, intent: "source_companies_hiring", tool_name: "source_with_apify", selected_actor_key: "apify_jobs", source_type: "jobs", reason: `lead brief: ${req.source_type} → jobs actor` };
+    case "linkedin_posts":
+      return { ...base, query: req.topic || query, intent: "signal_sourcing", tool_name: "source_with_apify", selected_actor_key: "apify_linkedin_posts", source_type: "linkedin_engagement", signal_type: "linkedin_engagement", reason: "lead brief: linkedin intent posts" };
+    case "linkedin_comments":
+      // Comments need a post; without one (or when the actor is off) the caller
+      // falls back to post search. tool_input still names the comments actor.
+      return { ...base, query: req.topic || req.post_url || query, intent: "extract_commenters", tool_name: "source_with_apify", selected_actor_key: "apify_linkedin_post_comments", source_type: "linkedin_comments", signal_type: "linkedin_engagement", reason: "lead brief: linkedin comments/engagement" };
+    case "competitor_engagement":
+      return { ...base, query: (req.competitors ?? []).join(", ") || query, competitors: req.competitors ?? [], intent: "signal_sourcing", tool_name: "source_with_apify", selected_actor_key: "apify_linkedin_posts", source_type: "linkedin_engagement", signal_type: "competitor_engagement", reason: "lead brief: competitor engagement" };
+    case "people_profiles":
+      return { ...base, intent: "source_people", tool_name: "source_with_apify", selected_actor_key: "apify_people_search", source_type: "people_profiles", reason: "lead brief: people/profile search" };
+    case "icp_search":
+    case "memory_refine":
+    case undefined:
+    default:
+      break; // fall through to mode-based mapping
+  }
+
   switch (req.mode) {
     case "hiring":
     case "companies":
@@ -374,12 +580,31 @@ export function leadRequestToInstruction(req: LeadRequest): string {
   const who = [req.target_role, req.company_category].filter(Boolean).join(" ");
   const where = req.location && !/^any/i.test(req.location) ? ` in ${req.location}` : "";
   const ind = req.industry ? ` in ${req.industry}` : "";
-  const subject =
-    req.mode === "hiring" ? `companies hiring ${req.target_role ?? "GTM"} roles${ind}${where}`
-    : req.mode === "companies" ? `${req.company_category ?? "companies"}${ind}${where}`
-    : req.mode === "signals" ? `LinkedIn posts about ${req.company_category ?? req.industry ?? (who || "your space")}${where}`
-    : req.mode === "competitor_engagement" ? `people engaging with competitors${ind}${where}`
-    : `${who || "founders"}${ind}${where}`; // people
+  const comps = (req.competitors ?? []).filter(Boolean).join(", ");
+
+  // Source-type wins (canonical); falls back to mode for icp_search/unset.
+  let subject: string;
+  switch (req.source_type) {
+    case "hiring_signal":
+      subject = `companies hiring ${req.target_role ?? "GTM"} roles${ind}${where}`; break;
+    case "company_search":
+      subject = `${req.company_category ?? "companies"} companies${ind}${where}`; break;
+    case "linkedin_posts":
+      subject = `LinkedIn posts about ${req.topic ?? req.company_category ?? req.industry ?? (who || "your space")}${where}`; break;
+    case "linkedin_comments":
+      subject = `people commenting on ${req.post_url ? `this post: ${req.post_url}` : `posts about ${req.topic ?? req.company_category ?? "your category"}`}`; break;
+    case "competitor_engagement":
+      subject = `people talking about ${comps || "competitors"}${ind}`; break;
+    case "people_profiles":
+      subject = `${who || "founders"}${ind}${where}`; break;
+    default:
+      subject =
+        req.mode === "hiring" ? `companies hiring ${req.target_role ?? "GTM"} roles${ind}${where}`
+        : req.mode === "companies" ? `${req.company_category ?? "companies"}${ind}${where}`
+        : req.mode === "signals" ? `LinkedIn posts about ${req.company_category ?? req.industry ?? (who || "your space")}${where}`
+        : req.mode === "competitor_engagement" ? `people talking about ${comps || "competitors"}${ind}`
+        : `${who || "founders"}${ind}${where}`;
+  }
   const tail = req.needs_outreach
     ? " Save them to Signal Feed and draft outreach for approval (do not send)."
     : " Save them to Signal Feed. Do not send any outreach.";

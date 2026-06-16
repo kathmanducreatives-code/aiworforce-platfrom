@@ -13,7 +13,7 @@ import { classifyWorkflow, SHORT_VAGUE_CLARIFICATION } from "../_shared/workflow
 import { validateAgainstCapabilities } from "../_shared/capabilityValidator.ts";
 import { loadConversationMemory, renderMemoryForPrompt, isFollowUpReference, extractTopN, type ConversationMemory } from "../_shared/memoryReader.ts";
 import { shouldGateForOnboarding, ONBOARDING_GATE_REPLY } from "../_shared/companyBrainGate.ts";
-import { isLeadIntakeRequest, extractLeadDetails, hasEnoughToRun, buildLeadIntakeForm, leadRequestToToolInput, leadRequestToInstruction, leadRequestToLinkedInFallbackInstruction, leadRequestToCompaniesInstruction, type LeadRequest } from "../_shared/leadIntake.ts";
+import { isLeadIntakeRequest, extractLeadDetails, hasEnoughToRun, buildLeadSourceSelector, leadRequestToToolInput, leadRequestToInstruction, leadRequestToLinkedInFallbackInstruction, leadRequestToCompaniesInstruction, type LeadRequest, type ToolAvailability } from "../_shared/leadIntake.ts";
 import { getActorByKey, isActorRuntimeEnabled } from "../_shared/actorRegistry.ts";
 import { buildCompanyBrainContext, hasUsableBrain, brainCompetitors } from "../_shared/companyBrainContext.ts";
 
@@ -563,6 +563,16 @@ Deno.serve(async (req) => {
     return await replyAndReturn(text, { brain_aware: brainReady, personalized: ai.ok, ...extraMeta });
   }
 
+  // Safety FIRST — an unsafe/auto-send ask wins over memory follow-ups and lead
+  // intake (e.g. "these leads, automatically DM them" must refuse, not ask for
+  // leads). Draft-only/approval-gated alternatives offered; nothing is sent.
+  if (decision.workflow_category === "unsafe_or_unsupported") {
+    return await replyAndReturn(
+      "I can't run that as described — it would involve unsafe or unsupported actions (e.g. scraping private personal data or sending without your approval). I can help with: public business contact research, approval-gated email outreach, LinkedIn outreach drafts, or call scripts. Which of those would you like?",
+      { unsafe: true },
+    );
+  }
+
   // 5c.0 Phase 2: follow-up shortcuts driven by persistent memory.
   // Only triggers when message references previous results AND we have memory.
   const followUpRef = isFollowUpReference(message);
@@ -596,6 +606,39 @@ Deno.serve(async (req) => {
       ? `I have ${total} leads in memory from your last search, but stage/industry data is missing on ${total - stageKnown} of them, so I can't apply that filter precisely yet. Want me to enrich them with Hawk + Firecrawl first? Quick preview:\n${preview}`
       : `Refined against the ${total} leads already in memory (no new sourcing). Matches:\n${preview}\n\nReply "draft outreach to the top 5" or "enrich the top 3" to continue.`;
     return await replyAndReturn(msg, { followup: "filter_applied", filter_target: message, reused_memory: true });
+  }
+
+  // Post-lead "Enrich + draft" — enrich the remembered leads (Firecrawl) then
+  // Penn drafts. Memory-only, approval-gated, nothing sent. Placed before the
+  // sourcing pipeline so the word "leads" can't trigger a re-source.
+  const enrichAndDraft = /\benrich\b/i.test(message) && draftOutreachRe.test(message);
+  if (enrichAndDraft && hasLeads) {
+    const n = extractTopN(message, 5);
+    const top = memory.lead_candidates.slice(0, n);
+    const urls = top.map((l) => l.account?.domain).filter(Boolean).map((d) => `https://${d}`);
+    const seed = top.map((l, i) => `${i + 1}. ${l.contact?.full_name ?? l.account?.name ?? "Lead"}${l.account?.domain ? ` (${l.account.domain})` : ""} — ${l.reason ?? ""}`).join("\n");
+    return await delegateToOrchestrate({
+      admin, SUPABASE_URL, SUPABASE_ANON_KEY, authHeader, conversationId, workspaceId,
+      instruction: `Enrich, then draft outreach for these ${top.length} remembered leads. Analyze their company websites first, then write personalized drafts. Do not source new leads. Approval is required before sending.\n\nWebsites: ${urls.join(", ") || "(none on file)"}\n\n${seed}`,
+      toolInput: {
+        intent: "draft_outreach", tool_name: null, selected_actor_key: null, source_type: null,
+        query: message, role_keywords: [], location: null, max_results: top.length,
+        lead_candidate_ids: top.map((l) => l.id), needs_enrichment: true, needs_outreach: true,
+        execution_mode: "outreach", confidence: 0.9, missing_fields: [], reason: "follow-up: enrich + draft from memory",
+      } as unknown as ToolInput,
+      modelUsed: "google/gemini-3-flash-preview", providerUsed: "lovable-ai",
+    });
+  }
+
+  // Post-lead "Save only" / "Review later" — 0 credits, no tool runs. Leads are
+  // already persisted by sourcing; just acknowledge. Must precede the sourcing
+  // pipeline so "save these leads" can't trigger a re-source.
+  const saveOnlyRe = /\b(save|keep)\b[^.!?]*\b(signal feed|for (?:now|later)|review(?:\s+later)?|saved)\b/i;
+  if (saveOnlyRe.test(message) && hasLeads) {
+    return await replyAndReturn(
+      `Kept your ${memory.lead_candidates.length} leads in the Signal Feed — nothing was sent. Ask me to rank, enrich, or draft outreach whenever you're ready.`,
+      { post_lead_action: "save_only", reused_memory: true, credits: 0 },
+    );
   }
 
   // Phase 2 patch — no-memory outreach guard must NOT block explicit
@@ -788,12 +831,19 @@ Deno.serve(async (req) => {
         providerUsed: "lovable-ai",
       });
     }
-    // Incomplete brief → interactive form card. (Brain is a default source only.)
-    const form = buildLeadIntakeForm(details, brainProfile, brainReady);
+    // Vague / incomplete → Lead Source Selector (7 engines, brain-prefilled,
+    // with honest fallbacks for unconfigured actors). No Apify runs from here.
+    const actorOn = (key: string): boolean => { const a = getActorByKey(key); return !!a && isActorRuntimeEnabled(a); };
+    const availability: ToolAvailability = {
+      people: actorOn("apify_people_search"),
+      comments: actorOn("apify_linkedin_post_comments"),
+      firecrawl: !!Deno.env.get("FIRECRAWL_API_KEY"),
+    };
+    const selector = buildLeadSourceSelector(details, brainProfile, brainReady, availability);
     const intro = brainReady
-      ? "Tell Scout what kind of leads to find — I've prefilled a few defaults from your Company Brain."
-      : "Tell Scout what kind of leads to find. (Tip: completing your Company Brain lets me prefill this and rank results to your ICP.)";
-    return await replyAndReturn(intro, { ui_form: form, clarification: true, lead_intake: true });
+      ? "Choose the type of leads you want Scout to find — I've prefilled defaults from your Company Brain. Nothing will be sent."
+      : "Choose the type of leads you want Scout to find. (Completing your Company Brain lets me prefill these and rank results to your ICP.)";
+    return await replyAndReturn(intro, { ui_form: selector, clarification: true, lead_intake: true, lead_source_selector: true });
   }
 
   // 5c.iii Capabilities / agent_management / approval_review / simple_chat
