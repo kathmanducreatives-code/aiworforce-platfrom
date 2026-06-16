@@ -560,12 +560,34 @@ Deno.serve(async (req) => {
       if (conversationId) {
         const { buildPostLeadActionsCard } = await import("../_shared/creditEstimate.ts");
         const card = buildPostLeadActionsCard(leadRows.length, enrichable, leadRows.map((l) => l.id));
+        // Source-type label for the side-panel title (best-effort from plan summary)
+        const planSummary = String(plan?.plan_summary ?? "").toLowerCase();
+        const sourceType: string = planSummary.includes("hiring") ? "hiring_signal"
+          : planSummary.includes("linkedin") ? "linkedin_engagement"
+          : planSummary.includes("people") || planSummary.includes("profile") ? "people"
+          : "lead";
+        const sourceLabel = sourceType === "hiring_signal" ? "hiring-signal"
+          : sourceType === "linkedin_engagement" ? "LinkedIn engagement"
+          : sourceType === "people" ? "people"
+          : "lead";
+        const uiPanel = {
+          kind: "lead_results" as const,
+          title: `${leadRows.length} ${sourceLabel} lead${leadRows.length === 1 ? "" : "s"}`,
+          subtitle: "Found by Scout · Saved for review · Nothing sent",
+          source_type: sourceType,
+          lead_count: leadRows.length,
+          enrichable_count: enrichable,
+          lead_candidate_ids: leadRows.map((l) => l.id),
+          plan_id,
+          default_view: "table",
+          actions: ["enrich", "draft_outreach", "enrich_and_draft", "rank", "export_csv", "save_to_signal_feed"],
+        };
         await supabase.from("messages").insert({
           conversation_id: conversationId,
           role: "assistant",
-          content: `${card.title}. ${card.subtitle}`,
+          content: `Scout found ${leadRows.length} lead${leadRows.length === 1 ? "" : "s"}. I opened them in the results panel and saved them for later review. Nothing was sent.`,
           agent_slug: "pilot",
-          metadata: { ui_card: card, post_lead_actions: true, plan_id },
+          metadata: { ui_card: card, ui_panel: uiPanel, post_lead_actions: true, plan_id },
         });
       }
     }
