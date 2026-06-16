@@ -113,10 +113,22 @@ export default function ChatComposerPro({ restrictDepartment, placeholder, autoF
       });
     };
     const onSend = (e: Event) => {
-      const detail = (e as CustomEvent<string>).detail;
-      if (typeof detail !== 'string' || !detail.trim()) return;
-      setValue('');
-      void submit(detail);
+      const detail = (e as CustomEvent<unknown>).detail;
+      // Legacy form: plain string. New form: { text, conversation_id } so in-chat
+      // card actions stay in their own conversation.
+      if (typeof detail === 'string') {
+        if (!detail.trim()) return;
+        setValue('');
+        void submit(detail);
+        return;
+      }
+      if (detail && typeof detail === 'object') {
+        const d = detail as { text?: unknown; conversation_id?: unknown };
+        if (typeof d.text === 'string' && d.text.trim()) {
+          setValue('');
+          void submit(d.text, typeof d.conversation_id === 'string' ? d.conversation_id : undefined);
+        }
+      }
     };
     window.addEventListener('chat:prefill', onPrefill);
     window.addEventListener('chat:send', onSend);
@@ -174,7 +186,7 @@ export default function ChatComposerPro({ restrictDepartment, placeholder, autoF
     if (cmdId === 'plan') return;
   };
 
-  const submit = async (override?: string) => {
+  const submit = async (override?: string, explicitConvId?: string | null) => {
     const text = (override ?? value).trim();
     if (!text || submitting) return;
 
@@ -192,7 +204,9 @@ export default function ChatComposerPro({ restrictDepartment, placeholder, autoF
     else if (view.kind === 'channel') agentSlug = CHANNEL_DEFAULT_AGENT[view.dept];
     else agentSlug = 'scout';
 
-    const conversationId = view.kind === 'chat' ? view.conversationId : null;
+    // An explicit conversation id (e.g. from an in-chat card action) always wins
+    // so card submits continue in the SAME conversation — never spawn a new one.
+    const conversationId = explicitConvId ?? (view.kind === 'chat' ? view.conversationId : null);
 
     if (!workspaceId) {
       toast.error('No workspace selected');

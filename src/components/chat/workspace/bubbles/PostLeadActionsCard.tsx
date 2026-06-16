@@ -21,11 +21,11 @@ const ICONS: Record<PostLeadAction, any> = {
   save_only: Save, rank: Star, enrich: Globe, draft_outreach: PenLine, enrich_and_draft: Sparkles, export: Archive,
 };
 
-function send(text: string) {
-  window.dispatchEvent(new CustomEvent('chat:send', { detail: text }));
+function send(text: string, conversationId?: string) {
+  window.dispatchEvent(new CustomEvent('chat:send', { detail: { text, conversation_id: conversationId } }));
 }
 
-export default function PostLeadActionsCard({ payload }: { payload: PostLeadActionsCardPayload }) {
+export default function PostLeadActionsCard({ payload, conversationId }: { payload: PostLeadActionsCardPayload; conversationId?: string }) {
   const [confirming, setConfirming] = useState<PostLeadAction | null>(null);
   const [done, setDone] = useState<string | null>(null);
 
@@ -37,7 +37,7 @@ export default function PostLeadActionsCard({ payload }: { payload: PostLeadActi
     );
   }
 
-  const run = (o: ActionOption) => { send(o.command); setDone(`Running: ${o.label}${o.credits > 0 ? ` (~${o.credits} credits)` : ''}. Nothing will be sent without your approval.`); };
+  const run = (o: ActionOption) => { send(o.command, conversationId); setDone(`Running: ${o.label}${o.credits > 0 ? ` (~${o.credits} credits)` : ''}. Nothing will be sent without your approval.`); };
 
   return (
     <div className="rounded-xl border border-emerald-500/20 bg-gradient-to-b from-emerald-500/[0.05] to-transparent p-4 max-w-[600px]">

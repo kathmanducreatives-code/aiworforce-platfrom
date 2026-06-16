@@ -28,8 +28,8 @@ export interface LeadIntakeFormPayload {
   fields: FormField[];
 }
 
-function send(text: string) {
-  window.dispatchEvent(new CustomEvent('chat:send', { detail: text }));
+function send(text: string, conversationId?: string) {
+  window.dispatchEvent(new CustomEvent('chat:send', { detail: { text, conversation_id: conversationId } }));
 }
 
 type Mode = 'people' | 'companies' | 'signals' | 'competitor_engagement' | 'hiring';
@@ -73,7 +73,7 @@ function buildInstruction(v: Record<string, string | boolean>): string {
   return `Find ${count} ${subject}.${tail}`;
 }
 
-export default function LeadIntakeCard({ payload }: { payload: LeadIntakeFormPayload }) {
+export default function LeadIntakeCard({ payload, conversationId }: { payload: LeadIntakeFormPayload; conversationId?: string }) {
   const initial: Record<string, string | boolean> = {};
   for (const f of payload.fields) {
     initial[f.key] = f.type === 'toggle' ? Boolean(f.value) : (f.value == null ? '' : String(f.value));
@@ -88,7 +88,7 @@ export default function LeadIntakeCard({ payload }: { payload: LeadIntakeFormPay
   const submit = (recommended: boolean) => {
     const v = { ...values };
     if (recommended && !v.mode) v.mode = 'People / profiles';
-    send(buildInstruction(v));
+    send(buildInstruction(v), conversationId);
     setSubmitted(true);
   };
 

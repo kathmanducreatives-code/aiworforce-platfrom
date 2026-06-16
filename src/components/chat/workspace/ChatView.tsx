@@ -8,6 +8,7 @@ import ClarificationCard from './bubbles/ClarificationCard';
 import LeadIntakeCard, { type LeadIntakeFormPayload } from './bubbles/LeadIntakeCard';
 import LeadSourceCard, { type LeadSourceSelectorPayload } from './bubbles/LeadSourceCard';
 import PostLeadActionsCard, { type PostLeadActionsCardPayload } from './bubbles/PostLeadActionsCard';
+import LeadSourcingErrorCard, { type LeadSourcingErrorPayload } from './bubbles/LeadSourcingErrorCard';
 import InterpretationPill from './bubbles/InterpretationPill';
 
 const AGENT_HEX: Record<string, string> = {
@@ -114,9 +115,10 @@ export default function ChatView({ conversationId, agentSlug, pendingUserText, a
         const uiFormKind = meta && meta.ui_form ? (meta.ui_form as any).kind : null;
         const leadForm = uiFormKind === 'lead_intake' ? (meta!.ui_form as LeadIntakeFormPayload) : null;
         const leadSelector = uiFormKind === 'lead_source_selector' ? (meta!.ui_form as LeadSourceSelectorPayload) : null;
-        const postLeadCard = meta && meta.ui_card && (meta.ui_card as any).kind === 'post_lead_actions'
-          ? (meta.ui_card as PostLeadActionsCardPayload)
-          : null;
+        const uiCardKind = meta && meta.ui_card ? (meta.ui_card as any).kind : null;
+        const postLeadCard = uiCardKind === 'post_lead_actions' ? (meta!.ui_card as PostLeadActionsCardPayload) : null;
+        const sourcingError = uiCardKind === 'lead_sourcing_error' ? (meta!.ui_card as LeadSourcingErrorPayload) : null;
+        const convId = m.conversation_id;
         const uiActions = Array.isArray(meta?.ui_actions)
           ? (meta!.ui_actions as Array<{ label: string; message: string }>)
           : null;
@@ -153,17 +155,22 @@ export default function ChatView({ conversationId, agentSlug, pendingUserText, a
               )}
               {leadSelector && (
                 <div className="mt-2">
-                  <LeadSourceCard payload={leadSelector} />
+                  <LeadSourceCard payload={leadSelector} conversationId={convId} />
                 </div>
               )}
               {postLeadCard && (
                 <div className="mt-2">
-                  <PostLeadActionsCard payload={postLeadCard} />
+                  <PostLeadActionsCard payload={postLeadCard} conversationId={convId} />
+                </div>
+              )}
+              {sourcingError && (
+                <div className="mt-2">
+                  <LeadSourcingErrorCard payload={sourcingError} conversationId={convId} />
                 </div>
               )}
               {leadForm && (
                 <div className="mt-2">
-                  <LeadIntakeCard payload={leadForm} />
+                  <LeadIntakeCard payload={leadForm} conversationId={convId} />
                 </div>
               )}
               {uiActions && uiActions.length > 0 && (
@@ -172,7 +179,7 @@ export default function ChatView({ conversationId, agentSlug, pendingUserText, a
                     <button
                       key={i}
                       type="button"
-                      onClick={() => window.dispatchEvent(new CustomEvent('chat:send', { detail: a.message }))}
+                      onClick={() => window.dispatchEvent(new CustomEvent('chat:send', { detail: { text: a.message, conversation_id: convId } }))}
                       className="text-left rounded-lg border border-emerald-500/20 bg-emerald-500/[0.04] hover:bg-emerald-500/[0.1] hover:border-emerald-500/40 px-3 py-2 text-[13px] text-[#C9D1D9] transition-colors"
                     >
                       {a.label}

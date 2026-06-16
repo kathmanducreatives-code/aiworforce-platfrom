@@ -22,6 +22,18 @@ const json = (body: unknown, status = 200) =>
     status,
     headers: { ...cors, "Content-Type": "application/json" },
   });
+function humanizeApifyError(error: string | null | undefined): string {
+  switch (error) {
+    case "apify_unauthorized": return "Apify authentication failed";
+    case "apify_insufficient_credits": return "the Apify account is out of credits";
+    case "actor_missing":
+    case "actor_key_unknown":
+    case "apify_actor_not_configured":
+    case "apify_not_configured": return "the required Apify actor isn't configured";
+    default: return "Apify could not run the search";
+  }
+}
+
 function buildUserMessage(instruction: string, input: string | null | undefined): string {
   if (!input) return `Task: ${instruction}`;
   return `Task: ${instruction}\n\nInput from previous step:\n${input}`;
@@ -129,6 +141,10 @@ Deno.serve(async (req) => {
   let scrapedContext: string | null = null;
   let apifyContext: string | null = null;
   const toolNotices: string[] = [];
+  // Set when an explicitly-selected Apify sourcing actor can't run (auth/config/
+  // credits). Triggers a clean plan failure + in-chat error card — never a fake
+  // "complete" with zero leads.
+  let sourcingFailure: { error: string; message: string } | null = null;
 
   if (agent_slug === "hawk" || agent_slug === "scout") {
     const baseCtx = {
@@ -251,8 +267,12 @@ Deno.serve(async (req) => {
             reason = `Apify unavailable (${r.error ?? "not configured"}).`;
           }
           toolNotices.push(reason);
+          // An explicitly-selected sourcing actor that can't run = a hard failure,
+          // not a "no results" — surface it so the plan fails (no fake success).
+          if (isApifySelected) sourcingFailure = { error: r.error ?? "apify_unavailable", message: humanizeApifyError(r.error) };
         } else if (!r.ok) {
           toolNotices.push(`Apify failed: ${r.error ?? "unknown"}.`);
+          if (isApifySelected) sourcingFailure = { error: r.error ?? "apify_failed", message: humanizeApifyError(r.error) };
         }
       }
     }
@@ -284,6 +304,42 @@ Deno.serve(async (req) => {
     }
   }
 
+
+  // Hard sourcing failure (Apify auth/config/credits) with no results → fail the
+  // plan cleanly and surface an in-chat error card. Never let the LLM fabricate a
+  // "complete" plan with zero leads, and never chain to Aria with nothing to rank.
+  if (sourcingFailure && !apifyContext) {
+    const failMsg = `Scout could not run because ${sourcingFailure.message}.`;
+    await supabase.from("tasks").update({ status: "failed", error_message: sourcingFailure.error, result: { error: sourcingFailure.error, message: failMsg } }).eq("id", task.id);
+    await supabase.from("task_plans").update({ status: "failed" }).eq("id", plan_id);
+    await supabase.from("activity_feed").insert({
+      workspace_id, plan_id, agent_id: agent.id, event_type: "agent_started",
+      title: `${agent.name} could not source leads`, body: failMsg, metadata: { step_index, task_id: task.id, failed: true, error: sourcingFailure.error },
+    });
+    try {
+      const { data: planMsg } = await supabase.from("messages").select("conversation_id").filter("metadata->>plan_id", "eq", plan_id).limit(1).maybeSingle();
+      const conversationId = (planMsg as { conversation_id?: string } | null)?.conversation_id ?? null;
+      if (conversationId) {
+        const criteria = (tool_input_body?.query as string) ?? instruction;
+        const card = {
+          kind: "lead_sourcing_error",
+          title: "Scout could not source leads",
+          message: `${sourcingFailure.message[0].toUpperCase()}${sourcingFailure.message.slice(1)}, so Scout could not run the search. No leads were saved, no credits charged, and nothing was sent.`,
+          source_type: (tool_input_body?.source_type as string) ?? source_type ?? null,
+          criteria, count: typeof tool_input_body?.max_results === "number" ? tool_input_body.max_results : null,
+          error: sourcingFailure.error,
+          retry_command: instruction,
+          lead_request: (tool_input_body && typeof tool_input_body === "object") ? tool_input_body : null,
+        };
+        await supabase.from("messages").insert({
+          conversation_id: conversationId, role: "assistant",
+          content: failMsg + " You can update the Apify token and retry, or pick a different lead source.",
+          agent_slug: "pilot", metadata: { ui_card: card, lead_sourcing_error: true, plan_id },
+        });
+      }
+    } catch (e) { console.warn("[run-agent] sourcing-error card failed:", e); }
+    return json({ success: false, task_id: task.id, status: "failed", error: sourcingFailure.error });
+  }
 
   const contextParts: string[] = [];
   if (scrapedContext) contextParts.push(scrapedContext);

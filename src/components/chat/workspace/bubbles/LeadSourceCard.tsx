@@ -35,8 +35,9 @@ const ICONS: Record<LeadSourceType, any> = {
   people_profiles: UserSearch, company_search: Building2, memory_refine: Target,
 };
 
-function send(text: string) {
-  window.dispatchEvent(new CustomEvent('chat:send', { detail: text }));
+function send(text: string, conversationId?: string) {
+  // Carry the card's own conversation id so the run continues in THIS chat.
+  window.dispatchEvent(new CustomEvent('chat:send', { detail: { text, conversation_id: conversationId } }));
 }
 
 function clampCount(n: number): number {
@@ -87,7 +88,7 @@ function buildInstruction(source: LeadSourceType, v: Record<string, string>, ava
   }
 }
 
-function Brief({ option, onBack }: { option: LeadSourceOption; onBack: () => void }) {
+function Brief({ option, onBack, conversationId }: { option: LeadSourceOption; onBack: () => void; conversationId?: string }) {
   const init: Record<string, string> = {};
   for (const f of option.fields) init[f.key] = f.value == null ? '' : String(f.value);
   const [v, setV] = useState<Record<string, string>>(init);
@@ -97,9 +98,12 @@ function Brief({ option, onBack }: { option: LeadSourceOption; onBack: () => voi
   const missing = required.some((f) => !v[f.key]);
 
   if (sent) {
+    const count = v.count ?? '5';
     return (
       <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/[0.04] p-3 text-[13px] text-[#C9D1D9]">
-        Brief sent to Scout ({option.title}) — results will save to the Signal Feed. Nothing will be sent.
+        {option.available
+          ? `Got it — Scout is finding ${count} ${option.title.toLowerCase()} lead${count === '1' ? '' : 's'}. I'll show progress here and save results to the Signal Feed. Nothing will be sent.`
+          : `Got it — ${option.title} isn't configured, so I'll use the available fallback and show progress here. Nothing will be sent.`}
       </div>
     );
   }
@@ -130,10 +134,10 @@ function Brief({ option, onBack }: { option: LeadSourceOption; onBack: () => voi
         ))}
       </div>
       <div className="flex items-center gap-2 mt-4">
-        <Button size="sm" disabled={missing} onClick={() => { send(buildInstruction(option.source_type, v, option.available)); setSent(true); }} className="bg-emerald-500/90 hover:bg-emerald-500 text-[#03100a] font-semibold">
+        <Button size="sm" disabled={missing} onClick={() => { send(buildInstruction(option.source_type, v, option.available), conversationId); setSent(true); }} className="bg-emerald-500/90 hover:bg-emerald-500 text-[#03100a] font-semibold">
           Find leads
         </Button>
-        <Button size="sm" variant="outline" onClick={() => { send(buildInstruction(option.source_type, v, option.available)); setSent(true); }} className="gap-1.5">
+        <Button size="sm" variant="outline" onClick={() => { send(buildInstruction(option.source_type, v, option.available), conversationId); setSent(true); }} className="gap-1.5">
           <Sparkles className="h-3.5 w-3.5" /> Use recommended
         </Button>
       </div>
@@ -144,13 +148,13 @@ function Brief({ option, onBack }: { option: LeadSourceOption; onBack: () => voi
   );
 }
 
-export default function LeadSourceCard({ payload }: { payload: LeadSourceSelectorPayload }) {
+export default function LeadSourceCard({ payload, conversationId }: { payload: LeadSourceSelectorPayload; conversationId?: string }) {
   // Client-side transition: selector → chosen source's brief. Context preserved
   // (same card, same message) — no new chat, no repeated questions.
   const [picked, setPicked] = useState<LeadSourceType | null>(null);
   const option = picked ? payload.sources.find((s) => s.source_type === picked) ?? null : null;
 
-  if (option) return <Brief option={option} onBack={() => setPicked(null)} />;
+  if (option) return <Brief option={option} conversationId={conversationId} onBack={() => setPicked(null)} />;
 
   return (
     <div className="rounded-xl border border-emerald-500/20 bg-gradient-to-b from-emerald-500/[0.05] to-transparent p-4 max-w-[600px]">
