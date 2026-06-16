@@ -146,13 +146,13 @@ function Brief({ option, onBack, conversationId }: { option: LeadSourceOption; o
   );
 }
 
-export default function LeadSourceCard({ payload }: { payload: LeadSourceSelectorPayload }) {
+export default function LeadSourceCard({ payload, conversationId }: { payload: LeadSourceSelectorPayload; conversationId: string | null }) {
   // Client-side transition: selector → chosen source's brief. Context preserved
   // (same card, same message) — no new chat, no repeated questions.
   const [picked, setPicked] = useState<LeadSourceType | null>(null);
   const option = picked ? payload.sources.find((s) => s.source_type === picked) ?? null : null;
 
-  if (option) return <Brief option={option} onBack={() => setPicked(null)} />;
+  if (option) return <Brief option={option} onBack={() => setPicked(null)} conversationId={conversationId} />;
 
   return (
     <div className="rounded-xl border border-emerald-500/20 bg-gradient-to-b from-emerald-500/[0.05] to-transparent p-4 max-w-[600px]">
