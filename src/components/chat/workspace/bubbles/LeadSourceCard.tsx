@@ -89,7 +89,7 @@ function buildInstruction(source: LeadSourceType, v: Record<string, string>, ava
   }
 }
 
-function Brief({ option, onBack }: { option: LeadSourceOption; onBack: () => void }) {
+function Brief({ option, onBack, conversationId }: { option: LeadSourceOption; onBack: () => void; conversationId: string | null }) {
   const init: Record<string, string> = {};
   for (const f of option.fields) init[f.key] = f.value == null ? '' : String(f.value);
   const [v, setV] = useState<Record<string, string>>(init);
