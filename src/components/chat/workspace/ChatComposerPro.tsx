@@ -113,10 +113,20 @@ export default function ChatComposerPro({ restrictDepartment, placeholder, autoF
       });
     };
     const onSend = (e: Event) => {
-      const detail = (e as CustomEvent<string>).detail;
-      if (typeof detail !== 'string' || !detail.trim()) return;
+      const raw = (e as CustomEvent).detail;
+      // Back-compat: plain string detail still works (treated as freeform).
+      const detail = typeof raw === 'string'
+        ? { text: raw, conversation_id: null as string | null }
+        : (raw && typeof raw === 'object' && typeof (raw as { text?: unknown }).text === 'string'
+            ? (raw as { text: string; conversation_id?: string | null; action_source?: string; metadata?: Record<string, unknown> })
+            : null);
+      if (!detail || !detail.text.trim()) return;
       setValue('');
-      void submit(detail);
+      void submit(detail.text, {
+        conversationIdOverride: detail.conversation_id ?? null,
+        actionSource: detail.action_source ?? null,
+        metadata: detail.metadata,
+      });
     };
     window.addEventListener('chat:prefill', onPrefill);
     window.addEventListener('chat:send', onSend);
