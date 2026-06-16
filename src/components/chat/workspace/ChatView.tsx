@@ -9,6 +9,7 @@ import LeadIntakeCard, { type LeadIntakeFormPayload } from './bubbles/LeadIntake
 import LeadSourceCard, { type LeadSourceSelectorPayload } from './bubbles/LeadSourceCard';
 import PostLeadActionsCard, { type PostLeadActionsCardPayload } from './bubbles/PostLeadActionsCard';
 import InterpretationPill from './bubbles/InterpretationPill';
+import { dispatchChatAction } from '@/lib/chatActions';
 
 const AGENT_HEX: Record<string, string> = {
   scout: '#3B82F6', aria: '#8B5CF6', penn: '#10B981', hawk: '#14B8A6', scribe: '#A855F7',
@@ -153,17 +154,17 @@ export default function ChatView({ conversationId, agentSlug, pendingUserText, a
               )}
               {leadSelector && (
                 <div className="mt-2">
-                  <LeadSourceCard payload={leadSelector} />
+                  <LeadSourceCard payload={leadSelector} conversationId={m.conversation_id} />
                 </div>
               )}
               {postLeadCard && (
                 <div className="mt-2">
-                  <PostLeadActionsCard payload={postLeadCard} />
+                  <PostLeadActionsCard payload={postLeadCard} conversationId={m.conversation_id} />
                 </div>
               )}
               {leadForm && (
                 <div className="mt-2">
-                  <LeadIntakeCard payload={leadForm} />
+                  <LeadIntakeCard payload={leadForm} conversationId={m.conversation_id} />
                 </div>
               )}
               {uiActions && uiActions.length > 0 && (
@@ -172,7 +173,7 @@ export default function ChatView({ conversationId, agentSlug, pendingUserText, a
                     <button
                       key={i}
                       type="button"
-                      onClick={() => window.dispatchEvent(new CustomEvent('chat:send', { detail: a.message }))}
+                      onClick={() => dispatchChatAction({ text: a.message, conversation_id: m.conversation_id, action_source: 'ui_actions_button' })}
                       className="text-left rounded-lg border border-emerald-500/20 bg-emerald-500/[0.04] hover:bg-emerald-500/[0.1] hover:border-emerald-500/40 px-3 py-2 text-[13px] text-[#C9D1D9] transition-colors"
                     >
                       {a.label}
@@ -187,6 +188,7 @@ export default function ChatView({ conversationId, agentSlug, pendingUserText, a
                     peopleAction={peopleAction}
                     companiesAction={companiesAction}
                     agencyAction={agencyAction}
+                    conversationId={m.conversation_id}
                   />
                 </div>
               )}

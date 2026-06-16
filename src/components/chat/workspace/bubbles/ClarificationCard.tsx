@@ -10,15 +10,18 @@ interface ActionMeta {
   query?: string | null;
 }
 
+import { dispatchChatAction } from '@/lib/chatActions';
+
 interface Props {
   question: string;
   peopleAction?: ActionMeta | null;
   companiesAction?: ActionMeta | null;
   agencyAction?: ActionMeta | null;
+  conversationId: string | null;
 }
 
-function sendReply(text: string) {
-  window.dispatchEvent(new CustomEvent('chat:send', { detail: text }));
+function sendReply(text: string, conversationId: string | null) {
+  dispatchChatAction({ text, conversation_id: conversationId, action_source: 'clarification_card' });
 }
 
 function preview(a: ActionMeta | null | undefined): string {
@@ -38,6 +41,7 @@ function Option({
   reply,
   disabled,
   disabledHint,
+  conversationId,
 }: {
   icon: any;
   label: string;
@@ -45,12 +49,13 @@ function Option({
   reply: string;
   disabled?: boolean;
   disabledHint?: string;
+  conversationId: string | null;
 }) {
   const btn = (
     <button
       type="button"
       disabled={disabled}
-      onClick={() => !disabled && sendReply(reply)}
+      onClick={() => !disabled && sendReply(reply, conversationId)}
       className={`group w-full text-left rounded-lg border px-3 py-2.5 transition-colors flex items-center gap-3 ${
         disabled
           ? 'border-white/[0.04] bg-white/[0.01] text-[#484F58] cursor-not-allowed'
@@ -89,6 +94,7 @@ export default function ClarificationCard({
   peopleAction,
   companiesAction,
   agencyAction,
+  conversationId,
 }: Props) {
   const any = peopleAction || companiesAction || agencyAction;
   if (!any) return null;
@@ -113,6 +119,7 @@ export default function ClarificationCard({
             label="Individual profiles"
             sub={preview(peopleAction)}
             reply="individual profiles"
+            conversationId={conversationId}
           />
         )}
         {companiesAction && (
@@ -121,6 +128,7 @@ export default function ClarificationCard({
             label="Companies hiring"
             sub={preview(companiesAction)}
             reply="companies hiring"
+            conversationId={conversationId}
           />
         )}
         {agencyAction && (
@@ -131,6 +139,7 @@ export default function ClarificationCard({
             reply="agencies"
             disabled={!agencyAction.tool_name}
             disabledHint="Dedicated agency sourcing isn't configured — Pilot will offer a workaround."
+            conversationId={conversationId}
           />
         )}
       </div>

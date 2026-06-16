@@ -13,6 +13,10 @@ export interface PilotChatInput {
   message: string;
   workspace_id: string;
   conversation_id?: string | null;
+  /** Source of an in-chat card action (e.g. 'post_lead_actions_card'). Backend rejects card actions without conversation_id. */
+  action_source?: string;
+  /** Structured metadata that travels with the action (lead_request, post_lead_action, etc.). */
+  metadata?: Record<string, unknown>;
 }
 
 export interface ChatMessageRow {

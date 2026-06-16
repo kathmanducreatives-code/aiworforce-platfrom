@@ -113,10 +113,20 @@ export default function ChatComposerPro({ restrictDepartment, placeholder, autoF
       });
     };
     const onSend = (e: Event) => {
-      const detail = (e as CustomEvent<string>).detail;
-      if (typeof detail !== 'string' || !detail.trim()) return;
+      const raw = (e as CustomEvent).detail;
+      // Back-compat: plain string detail still works (treated as freeform).
+      const detail = typeof raw === 'string'
+        ? { text: raw, conversation_id: null as string | null }
+        : (raw && typeof raw === 'object' && typeof (raw as { text?: unknown }).text === 'string'
+            ? (raw as { text: string; conversation_id?: string | null; action_source?: string; metadata?: Record<string, unknown> })
+            : null);
+      if (!detail || !detail.text.trim()) return;
       setValue('');
-      void submit(detail);
+      void submit(detail.text, {
+        conversationIdOverride: detail.conversation_id ?? null,
+        actionSource: detail.action_source ?? null,
+        metadata: detail.metadata,
+      });
     };
     window.addEventListener('chat:prefill', onPrefill);
     window.addEventListener('chat:send', onSend);
@@ -174,9 +184,18 @@ export default function ChatComposerPro({ restrictDepartment, placeholder, autoF
     if (cmdId === 'plan') return;
   };
 
-  const submit = async (override?: string) => {
+  const submit = async (
+    override?: string,
+    opts?: {
+      conversationIdOverride?: string | null;
+      actionSource?: string | null;
+      metadata?: Record<string, unknown>;
+    },
+  ) => {
     const text = (override ?? value).trim();
     if (!text || submitting) return;
+
+    const isCardAction = !!opts?.actionSource;
 
     // Resolve target agent slug
     const mentionMatch = text.match(/@(\w+)/);
@@ -192,7 +211,18 @@ export default function ChatComposerPro({ restrictDepartment, placeholder, autoF
     else if (view.kind === 'channel') agentSlug = CHANNEL_DEFAULT_AGENT[view.dept];
     else agentSlug = 'scout';
 
-    const conversationId = view.kind === 'chat' ? view.conversationId : null;
+    // Card actions MUST carry their origin conversation_id. Never fall back to
+    // the active view (which may have changed) and never silently create a
+    // new conversation.
+    const explicitOverride = opts?.conversationIdOverride ?? null;
+    const conversationId = isCardAction
+      ? explicitOverride
+      : (explicitOverride ?? (view.kind === 'chat' ? view.conversationId : null));
+
+    if (isCardAction && !conversationId) {
+      toast.error('Action lost its chat context. Please retry from the original conversation.');
+      return;
+    }
 
     if (!workspaceId) {
       toast.error('No workspace selected');
@@ -207,9 +237,19 @@ export default function ChatComposerPro({ restrictDepartment, placeholder, autoF
     }
     setValue('');
     try {
-      const result = await pilotChat({ message: text, workspace_id: workspaceId, conversation_id: conversationId });
+      const result = await pilotChat({
+        message: text,
+        workspace_id: workspaceId,
+        conversation_id: conversationId,
+        metadata: opts?.metadata,
+        action_source: opts?.actionSource ?? undefined,
+      });
       const newConvId = result?.conversation_id;
-      if (!conversationId && typeof newConvId === 'string' && newConvId) {
+      // Only re-route the view when this was a real freeform new chat (no
+      // prior conversation context AND not a card action). Card actions stay
+      // on whichever view the user is on — their assistant response lands in
+      // the original conversation via realtime.
+      if (!isCardAction && !conversationId && typeof newConvId === 'string' && newConvId) {
         setView({ kind: 'chat', conversationId: newConvId, agentSlug });
       }
       setPending(null);

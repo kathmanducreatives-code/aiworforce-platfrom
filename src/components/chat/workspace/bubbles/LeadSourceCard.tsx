@@ -35,8 +35,10 @@ const ICONS: Record<LeadSourceType, any> = {
   people_profiles: UserSearch, company_search: Building2, memory_refine: Target,
 };
 
-function send(text: string) {
-  window.dispatchEvent(new CustomEvent('chat:send', { detail: text }));
+import { dispatchChatAction, type ChatActionDetail } from '@/lib/chatActions';
+
+function send(text: string, conversationId: string | null, metadata?: ChatActionDetail['metadata']) {
+  dispatchChatAction({ text, conversation_id: conversationId, action_source: 'lead_source_card', metadata });
 }
 
 function clampCount(n: number): number {
@@ -87,7 +89,7 @@ function buildInstruction(source: LeadSourceType, v: Record<string, string>, ava
   }
 }
 
-function Brief({ option, onBack }: { option: LeadSourceOption; onBack: () => void }) {
+function Brief({ option, onBack, conversationId }: { option: LeadSourceOption; onBack: () => void; conversationId: string | null }) {
   const init: Record<string, string> = {};
   for (const f of option.fields) init[f.key] = f.value == null ? '' : String(f.value);
   const [v, setV] = useState<Record<string, string>>(init);
@@ -130,10 +132,10 @@ function Brief({ option, onBack }: { option: LeadSourceOption; onBack: () => voi
         ))}
       </div>
       <div className="flex items-center gap-2 mt-4">
-        <Button size="sm" disabled={missing} onClick={() => { send(buildInstruction(option.source_type, v, option.available)); setSent(true); }} className="bg-emerald-500/90 hover:bg-emerald-500 text-[#03100a] font-semibold">
+        <Button size="sm" disabled={missing} onClick={() => { send(buildInstruction(option.source_type, v, option.available), conversationId, { lead_request: v, source_type: option.source_type }); setSent(true); }} className="bg-emerald-500/90 hover:bg-emerald-500 text-[#03100a] font-semibold">
           Find leads
         </Button>
-        <Button size="sm" variant="outline" onClick={() => { send(buildInstruction(option.source_type, v, option.available)); setSent(true); }} className="gap-1.5">
+        <Button size="sm" variant="outline" onClick={() => { send(buildInstruction(option.source_type, v, option.available), conversationId, { lead_request: v, source_type: option.source_type, recommended: true }); setSent(true); }} className="gap-1.5">
           <Sparkles className="h-3.5 w-3.5" /> Use recommended
         </Button>
       </div>
@@ -144,13 +146,13 @@ function Brief({ option, onBack }: { option: LeadSourceOption; onBack: () => voi
   );
 }
 
-export default function LeadSourceCard({ payload }: { payload: LeadSourceSelectorPayload }) {
+export default function LeadSourceCard({ payload, conversationId }: { payload: LeadSourceSelectorPayload; conversationId: string | null }) {
   // Client-side transition: selector → chosen source's brief. Context preserved
   // (same card, same message) — no new chat, no repeated questions.
   const [picked, setPicked] = useState<LeadSourceType | null>(null);
   const option = picked ? payload.sources.find((s) => s.source_type === picked) ?? null : null;
 
-  if (option) return <Brief option={option} onBack={() => setPicked(null)} />;
+  if (option) return <Brief option={option} onBack={() => setPicked(null)} conversationId={conversationId} />;
 
   return (
     <div className="rounded-xl border border-emerald-500/20 bg-gradient-to-b from-emerald-500/[0.05] to-transparent p-4 max-w-[600px]">
