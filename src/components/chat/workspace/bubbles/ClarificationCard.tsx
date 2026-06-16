@@ -119,6 +119,7 @@ export default function ClarificationCard({
             label="Individual profiles"
             sub={preview(peopleAction)}
             reply="individual profiles"
+            conversationId={conversationId}
           />
         )}
         {companiesAction && (
@@ -127,6 +128,7 @@ export default function ClarificationCard({
             label="Companies hiring"
             sub={preview(companiesAction)}
             reply="companies hiring"
+            conversationId={conversationId}
           />
         )}
         {agencyAction && (
@@ -137,6 +139,7 @@ export default function ClarificationCard({
             reply="agencies"
             disabled={!agencyAction.tool_name}
             disabledHint="Dedicated agency sourcing isn't configured — Pilot will offer a workaround."
+            conversationId={conversationId}
           />
         )}
       </div>
