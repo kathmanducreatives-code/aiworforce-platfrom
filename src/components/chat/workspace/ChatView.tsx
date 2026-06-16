@@ -6,6 +6,8 @@ import { cn } from '@/lib/utils';
 import ExecutionPlanCard from './plan/ExecutionPlanCard';
 import ClarificationCard from './bubbles/ClarificationCard';
 import LeadIntakeCard, { type LeadIntakeFormPayload } from './bubbles/LeadIntakeCard';
+import LeadSourceCard, { type LeadSourceSelectorPayload } from './bubbles/LeadSourceCard';
+import PostLeadActionsCard, { type PostLeadActionsCardPayload } from './bubbles/PostLeadActionsCard';
 import InterpretationPill from './bubbles/InterpretationPill';
 
 const AGENT_HEX: Record<string, string> = {
@@ -109,8 +111,11 @@ export default function ChatView({ conversationId, agentSlug, pendingUserText, a
           ? meta as { plan_id: string; plan_title?: string; task_count?: number; agents?: string[]; connector_limitations?: string[] }
           : null;
         const toolInput = (meta?.tool_input ?? null) as Record<string, any> | null;
-        const leadForm = meta && meta.ui_form && (meta.ui_form as any).kind === 'lead_intake'
-          ? (meta.ui_form as LeadIntakeFormPayload)
+        const uiFormKind = meta && meta.ui_form ? (meta.ui_form as any).kind : null;
+        const leadForm = uiFormKind === 'lead_intake' ? (meta!.ui_form as LeadIntakeFormPayload) : null;
+        const leadSelector = uiFormKind === 'lead_source_selector' ? (meta!.ui_form as LeadSourceSelectorPayload) : null;
+        const postLeadCard = meta && meta.ui_card && (meta.ui_card as any).kind === 'post_lead_actions'
+          ? (meta.ui_card as PostLeadActionsCardPayload)
           : null;
         const uiActions = Array.isArray(meta?.ui_actions)
           ? (meta!.ui_actions as Array<{ label: string; message: string }>)
@@ -146,6 +151,16 @@ export default function ChatView({ conversationId, agentSlug, pendingUserText, a
                   executionMode={toolInput.execution_mode ?? null}
                 />
               )}
+              {leadSelector && (
+                <div className="mt-2">
+                  <LeadSourceCard payload={leadSelector} />
+                </div>
+              )}
+              {postLeadCard && (
+                <div className="mt-2">
+                  <PostLeadActionsCard payload={postLeadCard} />
+                </div>
+              )}
               {leadForm && (
                 <div className="mt-2">
                   <LeadIntakeCard payload={leadForm} />
@@ -165,7 +180,7 @@ export default function ChatView({ conversationId, agentSlug, pendingUserText, a
                   ))}
                 </div>
               )}
-              {isClarification && !leadForm && (
+              {isClarification && !leadForm && !leadSelector && (
                 <div className="mt-2">
                   <ClarificationCard
                     question={m.content}

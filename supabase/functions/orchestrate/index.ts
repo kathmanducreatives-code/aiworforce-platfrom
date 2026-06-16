@@ -733,8 +733,20 @@ Deno.serve(async (req) => {
         max_results: (tool_input as { max_results?: number | null }).max_results ?? null,
         lead_candidate_ids: (tool_input as { lead_candidate_ids?: string[] | null }).lead_candidate_ids ?? null,
       });
+      // Enrich + draft: Hawk (Firecrawl on the remembered leads' websites) → Penn.
+      // The Hawk step instruction carries the lead domains as URLs so run-agent
+      // scrapes them; Penn then drafts from the enriched context. Approval-gated.
+      const enrichFirst = !!(tool_input as { needs_enrichment?: boolean }).needs_enrichment;
+      const steps: Step[] = [];
+      if (enrichFirst) {
+        const hawkStep = mkStep(0, "hawk", "Enrich leads (Firecrawl)",
+          `Analyze the company websites for these remembered leads and extract personalization angles (positioning, recent moves, ICP fit). Skip leads without a website. ${user_instruction}`,
+          { tool_needed: "scrape_url", expected_output: "Per-lead enrichment notes / personalization angles.", success_criteria: "Only real scraped content; skip missing sites; no fabrication.", planner_source: "fallback" });
+        (hawkStep as Step & { metadata?: Record<string, unknown> }).metadata = { tool_input: { ...tool_input, tool_name: "scrape_url", selected_actor_key: null, source_type: null } };
+        steps.push(hawkStep);
+      }
       const s0 = built.steps[0];
-      const pennStep = mkStep(0, "penn", s0.task_title, s0.task_description, {
+      const pennStep = mkStep(steps.length, "penn", s0.task_title, s0.task_description, {
         tool_needed: "draft_outreach",
         requires_approval: true,
         expected_output: s0.expected_output,
@@ -742,7 +754,8 @@ Deno.serve(async (req) => {
         planner_source: "fallback",
       });
       (pennStep as Step & { metadata?: Record<string, unknown> }).metadata = { tool_input };
-      parsed = { plan_summary: built.plan_summary, steps: [pennStep] };
+      steps.push(pennStep);
+      parsed = { plan_summary: enrichFirst ? `Enrich → draft outreach: ${built.plan_summary}`.slice(0, 140) : built.plan_summary, steps };
       plannerSource = "staged";
     } else if (tool_input && tool_input.source_type === "linkedin_comments") {
       // Phase 4.2 — extract commenters from a specific post → rank.

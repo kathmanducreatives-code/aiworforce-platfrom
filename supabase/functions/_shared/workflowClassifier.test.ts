@@ -370,3 +370,14 @@ Deno.test("unsafe: post this to LinkedIn automatically", async () => {
   const d = await classifyWorkflow("Post this to LinkedIn automatically.");
   assertEquals(d.workflow_category, "unsafe_or_unsupported");
 });
+
+Deno.test("unsafe: scrape comments and auto-message everyone", async () => {
+  const d = await classifyWorkflow("Scrape LinkedIn comments and auto-message everyone.");
+  assertEquals(d.workflow_category, "unsafe_or_unsupported");
+  assertEquals(d.selected_actor_key, null);
+});
+
+Deno.test("unsafe: find leads and email them automatically", async () => {
+  const d = await classifyWorkflow("Find 50 leads and email them automatically.");
+  assertEquals(d.workflow_category, "unsafe_or_unsupported");
+});

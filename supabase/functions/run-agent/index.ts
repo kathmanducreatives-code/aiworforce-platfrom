@@ -539,5 +539,39 @@ Deno.serve(async (req) => {
   });
   await supabase.from("task_plans").update({ status: "complete", completed_at: new Date().toISOString() }).eq("id", plan_id);
 
+  // Post-lead actions — when a plan produced leads, offer next-step options with
+  // credit estimates (enrich / draft / rank / save). Enrichable = leads whose
+  // account has a website/domain. Rendered as a chat card; nothing auto-runs.
+  try {
+    const { data: leads } = await supabase
+      .from("lead_candidates")
+      .select("id, account:accounts(domain)")
+      .eq("plan_id", plan_id);
+    const leadRows = (leads ?? []) as Array<{ id: string; account?: { domain?: string | null } | null }>;
+    if (leadRows.length > 0) {
+      const enrichable = leadRows.filter((l) => !!l.account?.domain).length;
+      const { data: planMsg } = await supabase
+        .from("messages")
+        .select("conversation_id")
+        .filter("metadata->>plan_id", "eq", plan_id)
+        .limit(1)
+        .maybeSingle();
+      const conversationId = (planMsg as { conversation_id?: string } | null)?.conversation_id ?? null;
+      if (conversationId) {
+        const { buildPostLeadActionsCard } = await import("../_shared/creditEstimate.ts");
+        const card = buildPostLeadActionsCard(leadRows.length, enrichable, leadRows.map((l) => l.id));
+        await supabase.from("messages").insert({
+          conversation_id: conversationId,
+          role: "assistant",
+          content: `${card.title}. ${card.subtitle}`,
+          agent_slug: "pilot",
+          metadata: { ui_card: card, post_lead_actions: true, plan_id },
+        });
+      }
+    }
+  } catch (e) {
+    console.warn("[run-agent] post-lead actions card failed:", e);
+  }
+
   return json({ success: true, task_id: task.id, status: "complete", complete: true });
 });

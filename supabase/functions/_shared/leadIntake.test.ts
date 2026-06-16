@@ -22,7 +22,7 @@ const BRAIN_STRUCTURED = {
 };
 
 Deno.test("triggers fire on the listed phrases", () => {
-  for (const p of ["Find me leads", "Get me prospects", "Find people to reach out to", "Find companies for me", "Find buyers"]) {
+  for (const p of ["Find me leads", "Scrape leads for me", "Get me prospects", "Find people to reach out to", "Find companies for me", "Find buyers"]) {
     assert(isLeadIntakeRequest(p), `should trigger: ${p}`);
   }
   assert(!isLeadIntakeRequest("What can you do?"));
@@ -46,13 +46,17 @@ Deno.test("#3 complete brief runs directly (no form)", () => {
   assert(hasEnoughToRun(d), "complete brief should run directly");
 });
 
-Deno.test("#4 partial request shows form (founder + AI products prefilled, missing industry/location/count)", () => {
-  const d = extractLeadDetails("Find founders building AI products.");
-  assertEquals(d.mode, "people");
-  assertEquals(d.target_role, "Founder");
-  assert((d.company_category ?? "").toLowerCase().includes("ai products"));
-  assertEquals(d.industry, null);
-  assert(!hasEnoughToRun(d), "partial request should NOT run directly");
+Deno.test("#4 people partials: bare role → selector; role+category → run", () => {
+  // role + category is enough to attempt (people → LinkedIn fallback when disabled).
+  const withCat = extractLeadDetails("Find founders building AI products.");
+  assertEquals(withCat.mode, "people");
+  assertEquals(withCat.target_role, "Founder");
+  assert((withCat.company_category ?? "").toLowerCase().includes("ai products"));
+  assert(hasEnoughToRun(withCat), "role + category should run (not stall)");
+
+  // bare role with no industry/category is too vague → Source Selector.
+  const bare = extractLeadDetails("Find founders.");
+  assert(!hasEnoughToRun(bare), "bare role should fall to the Source Selector");
 });
 
 Deno.test("#6 people vs jobs routing", () => {
@@ -143,6 +147,63 @@ Deno.test("people-unavailable fallbacks: LinkedIn instruction routes away from p
   const co = leadRequestToCompaniesInstruction(req);
   assert(/companies hiring/i.test(co) && co.includes("Find 5"));
   assert(!_isLead(co), "companies/hiring fallback routes to jobs, not the lead form");
+});
+
+import { buildLeadSourceSelector, leadRequestToToolInput as _toTI, type ToolAvailability, type LeadSourceType } from "./leadIntake.ts";
+
+const ALL_AVAILABLE: ToolAvailability = { people: true, comments: true, firecrawl: true };
+
+Deno.test("Lead Source Selector: 7 engines, fields per source, brain competitors prefilled", () => {
+  const sel = buildLeadSourceSelector(extractLeadDetails("Find me leads"), BRAIN_STRUCTURED, true, ALL_AVAILABLE);
+  assertEquals(sel.kind, "lead_source_selector");
+  assertEquals(sel.title, "Choose a lead source");
+  const ids = sel.sources.map((s) => s.source_type);
+  for (const want of ["icp_search", "hiring_signal", "linkedin_posts", "linkedin_comments", "competitor_engagement", "people_profiles", "company_search"]) {
+    assert(ids.includes(want as LeadSourceType), `missing source ${want}`);
+  }
+  // competitor source prefills competitors from brain
+  const comp = sel.sources.find((s) => s.source_type === "competitor_engagement")!;
+  const compField = comp.fields.find((f) => f.key === "competitors")!;
+  assert(String(compField.value ?? "").includes("Clay"));
+  // every source has a count field defaulting to 5
+  for (const s of sel.sources) {
+    const c = s.fields.find((f) => f.key === "count");
+    assertEquals(c?.value, "5");
+  }
+});
+
+Deno.test("Selector: unavailable actors show honest fallbacks, stay visible", () => {
+  const sel = buildLeadSourceSelector(extractLeadDetails("Find me leads"), null, false, { people: false, comments: false, firecrawl: false });
+  const comments = sel.sources.find((s) => s.source_type === "linkedin_comments")!;
+  assert(!comments.available && /configured/i.test(comments.fallback_note ?? ""));
+  const people = sel.sources.find((s) => s.source_type === "people_profiles")!;
+  assert(!people.available && /LinkedIn engagement/i.test(people.fallback_note ?? ""));
+  const company = sel.sources.find((s) => s.source_type === "company_search")!;
+  assert(/Company Brain|description/i.test(company.fallback_note ?? ""), "firecrawl-off note on company search");
+});
+
+Deno.test("source_type routing: each engine maps to the right actor", () => {
+  const mk = (source_type: LeadSourceType, extra: Partial<LeadRequest> = {}): LeadRequest =>
+    ({ source_type, mode: "people", count: 5, needs_outreach: false, original_user_request: "x", company_brain_context_used: false, ...extra });
+  assertEquals(_toTI(mk("hiring_signal")).selected_actor_key, "apify_jobs");
+  assertEquals(_toTI(mk("company_search")).selected_actor_key, "apify_jobs");
+  assertEquals(_toTI(mk("linkedin_posts")).selected_actor_key, "apify_linkedin_posts");
+  assertEquals(_toTI(mk("linkedin_comments")).selected_actor_key, "apify_linkedin_post_comments");
+  const comp = _toTI(mk("competitor_engagement", { competitors: ["Clay", "Apollo"] }));
+  assertEquals(comp.selected_actor_key, "apify_linkedin_posts");
+  assertEquals(comp.signal_type, "competitor_engagement");
+  assertEquals(_toTI(mk("people_profiles")).selected_actor_key, "apify_people_search");
+  assert(_toTI(mk("people_profiles")).selected_actor_key !== "apify_jobs", "people never use jobs");
+});
+
+Deno.test("source instructions route correctly + don't re-open the selector", () => {
+  const base: LeadRequest = { mode: "people", count: 5, needs_outreach: false, original_user_request: "x", company_brain_context_used: false };
+  const hiring = leadRequestToInstruction({ ...base, source_type: "hiring_signal", target_role: "GTM", location: "USA" });
+  assert(/companies hiring GTM roles/i.test(hiring));
+  const comp = leadRequestToInstruction({ ...base, source_type: "competitor_engagement", competitors: ["Clay"] });
+  assert(/talking about Clay/i.test(comp) && !_isLead(comp));
+  const posts = leadRequestToInstruction({ ...base, source_type: "linkedin_posts", topic: "outbound problems" });
+  assert(/LinkedIn posts about outbound problems/i.test(posts) && !_isLead(posts));
 });
 
 Deno.test("instruction is complete + count-accurate", () => {
