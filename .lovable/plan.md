@@ -1,195 +1,142 @@
-# Fix: Card actions must stay in the same conversation
+# Plan — Lead results in the side panel (Workbench)
 
-## Root cause
+## Goal
+After a lead-sourcing plan completes, the chat stays as the command surface and the actual leads render in the **existing right-side Workbench panel** (the same surface that already shows ScoutResultsView / AgentOutputViewer). The panel opens automatically, shows a premium lead table with action buttons (Enrich, Draft, Rank, Export CSV, Save to Signal Feed), and every action continues the **same conversation**.
 
-Every chat card (Lead Source Selector, Lead Search Brief, Post-Lead Actions, Clarification, ui_actions, NoResults, ScoutResultsView, SignalFeed, etc.) submits its action by dispatching:
+## Existing mechanism we reuse
+- Side panel: `ChatWorkspace.tsx` already renders `<WorkbenchPanel />` on the right (desktop) / fullscreen overlay (mobile), controlled by `useChatWorkspace().workbenchOpen` + `openWorkbench({...})`.
+- `WorkbenchPanel.tsx` already has tabs (Summary, Results, Rankings, Drafts, Sources, Activity, Raw) driven by `useWorkbenchData(selectedOutput)`.
+- `ScoutResultsView.tsx` already renders Apify jobs / people / LinkedIn engagement items.
+- Plan/task results already exist in `task_plans` + `tasks` + `tool_calls`; `lead_candidates` (with `account.domain`) is populated post-run.
+- Structured card actions go through `src/lib/chatActions.ts → dispatchChatAction` (conversation-id preserving — built in the previous task).
 
-```ts
-window.dispatchEvent(new CustomEvent('chat:send', { detail: text }))
-```
+We will **not** introduce a parallel artifact system. We will:
+1. Have the backend emit a `ui_panel` hint on the post-lead assistant message.
+2. Have the chat frontend call the existing `openWorkbench(...)` automatically when that hint arrives.
+3. Add one new tab/view (`LeadResultsView`) to the existing `WorkbenchPanel`, fed by a new `useLeadResults(planId)` hook that loads from `lead_candidates`.
+4. Replace the in-chat `PostLeadActionsCard` action toolbar with an action bar **inside** the new side-panel view (keep a compact mirror in chat).
 
-— a plain text string with **no `conversation_id`**.
+## Backend changes
 
-`ChatComposerPro` then resolves the conversation from the *current view*:
-
-```ts
-const conversationId = view.kind === 'chat' ? view.conversationId : null;
-```
-
-Failure modes this produces:
-
-1. If the user submitted the lead brief from `/dashboard` (view = `empty`/`channel`), `conversationId` is `null` → `pilot-chat` creates a **new conversation** for the brief; the composer then `setView({ kind:'chat', conversationId: newConvId })` jumps the user into it.
-2. The execution plan returned by `orchestrate`/`run-agent` (which the lead brief triggered) lands in *that* conversation, while the original "Find me leads" + Lead Source Selector sit in the original chat — the cards appear "in a different conversation".
-3. The Post-Lead Actions card runs after the plan finishes. Clicking "Save only" dispatches text again; if the user has since switched threads (or is in `empty` view from the sidebar), composer again resolves `null` → `pilot-chat` creates *another* new conversation titled "Save these leads to the Signal…".
-4. There is no guard: card actions silently fall back to "start a new chat" instead of erroring.
-
-Additional small bug: dashboard helpers already pass `{ text }` objects to `chat:send`, but the composer's `onSend` only handles `typeof detail === 'string'`, so those silently no-op.
-
-## Fix architecture
-
-Single principle: **a card action must dispatch a structured payload that carries the conversation_id of the message that rendered the card**, and the composer/backend must use that id without exception.
-
-### 1. New helper: `dispatchChatAction`
-
-`src/lib/chatActions.ts` (new):
+### `supabase/functions/run-agent/index.ts` (post-lead block, lines ~542–574)
+When `leadRows.length > 0`, in addition to the existing `ui_card` we add:
 
 ```ts
-export type ChatActionSource =
-  | 'lead_source_card'
-  | 'lead_intake_card'
-  | 'post_lead_actions_card'
-  | 'lead_sourcing_error_card'
-  | 'clarification_card'
-  | 'ui_actions_button'
-  | 'signal_feed_action'
-  | 'scout_results_action'
-  | 'no_results_card'
-  | 'recommended_move'
-  | 'workforce_brief';
-
-export interface ChatActionDetail {
-  text: string;
-  conversation_id: string | null;   // null only for explicit "new chat" entry points
-  action_source?: ChatActionSource;
-  metadata?: Record<string, unknown>;
-}
-
-export function dispatchChatAction(detail: ChatActionDetail) {
-  if (detail.action_source && !detail.conversation_id) {
-    console.warn('[chat-action] missing conversation_id', detail);
-  }
-  window.dispatchEvent(new CustomEvent('chat:send', { detail }));
-}
-
-// Back-compat: plain text from empty-state suggestions
-export function dispatchFreeformSend(text: string) {
-  window.dispatchEvent(new CustomEvent('chat:send', { detail: { text, conversation_id: null } }));
-}
-```
-
-### 2. Card components receive `conversationId`
-
-Update prop signatures (no logic changes other than threading the id):
-
-- `LeadSourceCard({ payload, conversationId })`
-- `LeadIntakeCard({ payload, conversationId })`
-- `PostLeadActionsCard({ payload, conversationId })`
-- `ClarificationCard({ ..., conversationId })`
-- `NoResultsCard({ ..., conversationId })`
-- `ScoutResultsView({ ..., conversationId })`
-- `LeadSourcingErrorCard` (if present in workbench) → same
-
-Replace every internal `window.dispatchEvent(new CustomEvent('chat:send', { detail: text }))` with:
-
-```ts
-dispatchChatAction({
-  text,
-  conversation_id: conversationId,
-  action_source: 'post_lead_actions_card',
-  metadata: { action: o.action, lead_candidate_ids: payload.lead_candidate_ids },
-});
-```
-
-(action_source/metadata vary per card.)
-
-`ChatView.tsx` passes `conversationId={m.conversation_id}` to each card and to the `ui_actions` button group.
-
-SignalFeed / dashboard widgets that already use `chat:send`: switch to `dispatchChatAction({ ..., conversation_id: activeConversationIdFromContext ?? null, action_source: ... })`. For dashboard surfaces where no conversation is active, leave `conversation_id: null` and `action_source: 'recommended_move'` — composer will treat as fresh chat (allowed).
-
-### 3. `ChatComposerPro` accepts structured detail
-
-Rewrite `onSend`:
-
-```ts
-const onSend = (e: Event) => {
-  const raw = (e as CustomEvent).detail;
-  const detail: ChatActionDetail =
-    typeof raw === 'string' ? { text: raw, conversation_id: null }
-    : (raw && typeof raw === 'object' && typeof raw.text === 'string') ? raw
-    : null;
-  if (!detail || !detail.text.trim()) return;
-  void submit(detail);
+const uiPanel = {
+  kind: "lead_results",
+  title: `${leadRows.length} ${sourceLabel} lead${leadRows.length === 1 ? "" : "s"}`,
+  subtitle: `Found by Scout · Saved for review · Nothing sent`,
+  source_type: planMeta?.source_type ?? "hiring_signal",
+  lead_count: leadRows.length,
+  enrichable_count: enrichable,
+  lead_candidate_ids: leadRows.map(l => l.id),
+  plan_id,
+  default_view: "table",
+  actions: ["enrich","draft_outreach","enrich_and_draft","rank","export_csv","save_to_signal_feed"],
 };
 ```
+Persisted on the same assistant message:
+```ts
+metadata: { ui_card: card, ui_panel: uiPanel, post_lead_actions: true, plan_id }
+```
+Assistant `content` becomes: *"Scout found N leads. I opened them in the results panel and saved them for later review. Nothing was sent."*
 
-`submit(detail)`:
+No new tables. We reuse `lead_candidates` + `accounts` + `signals` joined by `plan_id` for the panel.
 
-- Card actions: `if (detail.action_source && !detail.conversation_id) { toast.error('Action lost its conversation context. Please retry.'); return; }`
-- Resolve `conversationId = detail.conversation_id ?? (view.kind === 'chat' ? view.conversationId : null)`.
-- Pass to `pilotChat({ message: detail.text, workspace_id, conversation_id: conversationId, metadata: detail.metadata })`.
-- Only call `setView({ kind:'chat', conversationId: newConvId })` when **both** the prior `conversationId` was `null` **and** `detail.action_source` was absent (real freeform new chat). Never re-route the view for a card action — it already belongs to a conversation.
+### `supabase/functions/pilot-chat/index.ts` (lead_result_action routing)
+Card actions already arrive with `action_source` + `metadata`. Add handling for `metadata.intent === "lead_result_action"` with:
+- `enrich`              → dispatch Hawk/Firecrawl on `lead_candidate_ids` having a `account.domain`; skip rest; emit a status assistant message.
+- `draft_outreach`      → dispatch Penn/Claude using Company Brain + ICP + leads (+ enrichment if present); writes `outreach_drafts`, requires approval, no send.
+- `enrich_and_draft`    → run enrich then draft, both scoped to same `plan_id` / `conversation_id`.
+- `rank`                → dispatch Aria over existing `lead_candidate_ids` only (no Apify call).
+- `export_csv`          → server returns a `ui_panel` patch with a signed/data-URL CSV (built from `lead_candidates` join); no agent run.
+- `save_to_signal_feed` → already implemented `save_only` path; reuse.
 
-### 4. `pilotChat` wrapper
+All branches MUST require `conversation_id` and emit their assistant reply on the same conversation, with `metadata.plan_id` preserved so the Workbench `LeadResultsView` can refresh.
 
-`src/lib/pilotChat.ts`: extend `PilotChatInput` with optional `metadata?: Record<string, unknown>` and forward it in the invoke body.
+## Frontend changes
 
-### 5. Backend `supabase/functions/pilot-chat/index.ts`
+### New: `src/components/chat/workspace/workbench/LeadResultsView.tsx`
+Premium SaaS layout:
+- Sticky header: title + subtitle, source-type chip, count badge.
+- Filter chips: signal type / has-website / fit≥X.
+- Table (default) + card view toggle, columns: Person, Title, Company, Location, Signal, Source, Fit, Status, Website, LinkedIn.
+- Row click → right-side detail drawer inside the panel (existing `WorkbenchPanel` width allows this; we render an inline `<aside>` overlay).
+- Action toolbar (sticky bottom) with credit estimates from `_shared/creditEstimate.ts`:
+  - Enrich (1 cr / website) · Draft (2 cr / lead) · Enrich + draft · Rank (1 cr / 10) · Export CSV · Save to Signal Feed.
+- Each action calls `dispatchResultAction(...)` (see below).
 
-- Read optional `action_source` and `metadata` from the body.
-- If `action_source` is present and `conversation_id` is missing/invalid (or doesn't belong to the caller's workspace), return `400 { error: "Action could not continue because conversation context was missing. Please retry." }` — **never** create a new conversation in this branch.
-- For card-action submissions, skip any "generate conversation title" path that renames the thread (so "Save only" cannot rename the chat to "Save these leads to the Signal…"). Conversation title is only generated on the first freeform turn.
-- Persist `metadata` (lead_request, post_lead_action, etc.) onto the inserted user message so `orchestrate` / `run-agent` can resolve the same `conversation_id` for plan/result/post-lead cards.
+### New: `src/hooks/useLeadResults.ts`
+```ts
+useLeadResults(planId: string | null): {
+  loading, error, items: LeadResultItem[], refresh()
+}
+```
+Selects `lead_candidates` joined with `accounts`, `contacts`, `signals` and `lead_enrichments` for the given `plan_id`, normalises to `LeadResultItem` (shape from the user's spec). Subscribes to Realtime on `lead_candidates` filtered by `plan_id` so the panel updates progressively as Enrich/Draft fill columns.
 
-### 6. `orchestrate` + `run-agent` insertion path
+### `src/components/chat/workspace/workbench/WorkbenchPanel.tsx`
+- Extend `Tab` union with `'leads'`.
+- When the active selection carries a `lead_results` panel hint, default tab = `'leads'` and render `<LeadResultsView planId={...} />`.
 
-Both functions already accept `conversation_id`; audit the call sites that insert execution-plan messages, tool-progress messages, results, error cards, and post-lead-actions cards to make sure they use **the conversation_id from the plan/run metadata**, not a "latest active conversation" lookup. Add a unit-style assertion in the function: refuse to insert if no `conversation_id` is resolvable, instead of falling back.
+### `src/contexts/ChatWorkspaceContext.tsx`
+Extend `WorkbenchSelection` with optional `panel?: { kind: 'lead_results'; planId: string; meta: UiPanel }` so `openWorkbench` can carry the lead-results hint. (Backwards compatible — existing tool-call selections still work.)
 
-### 7. "Save only" special-case
+### `src/components/chat/workspace/ChatView.tsx` (lines ~115–165)
+When a rendered assistant message has `meta.ui_panel?.kind === 'lead_results'`:
+- On mount/first-seen (guarded by a `Set<messageId>` ref to avoid re-opens after manual close), call `openWorkbench({ planId: meta.ui_panel.plan_id, panel: { kind:'lead_results', planId, meta } })`.
+- Keep showing a compact in-chat `PostLeadActionsCard` summary ("Open in results panel" button + Save-only) but move the heavy action buttons into the side panel.
 
-In `pilot-chat`, when `action_source === 'post_lead_actions_card'` and `metadata.action === 'save_only'`:
+### New: `src/lib/chatActions.ts` — add `dispatchResultAction`
+```ts
+dispatchResultAction({
+  conversationId, planId, leadCandidateIds, savedOutputId,
+  action: 'enrich'|'draft_outreach'|'enrich_and_draft'|'rank'|'export_csv'|'save_to_signal_feed',
+  estimatedCredits,
+})
+```
+Internally calls `dispatchChatAction` with `action_source: 'lead_results_panel'` and `metadata: { intent: 'lead_result_action', action, lead_candidate_ids, plan_id, saved_output_id, estimated_credits }`. Conversation-id is required — same guard as before.
 
-- Do not invoke `orchestrate`.
-- Insert a short assistant reply in the same conversation: `"Saved — these leads are in Signal Feed."`
-- No new plan, no sourcing, no title change.
+## React error #310 fix
+Likely cause is `WorkbenchPanel.tsx` calling `useMemo`/`useEffect` *after* an early `return` (the loading branch at line ~57 returns before the later `useMemo`/`useEffect` calls at lines 67–96). We will move all hooks above any early return (standard hooks-order fix). We will also wrap `LeadResultsView` and `PostLeadActionsCard` in the existing `ChatErrorBoundary` slots already present.
 
-### 8. Defensive guards
+After the move, run dev (non-minified) and re-verify there is no `#310`.
 
-- Frontend cards: disable action buttons (with tooltip "Missing chat context") when `conversationId` is falsy.
-- Backend: log `{ action_source, has_conversation_id, workspace_id }` for every card action to make regressions obvious.
-
-## Files to change
-
-Frontend:
-- `src/lib/chatActions.ts` (new)
-- `src/lib/pilotChat.ts` (add `metadata`)
-- `src/components/chat/workspace/ChatComposerPro.tsx` (onSend + submit)
-- `src/components/chat/workspace/ChatView.tsx` (thread `conversationId` into all cards + ui_actions buttons)
-- `src/components/chat/workspace/bubbles/LeadSourceCard.tsx`
-- `src/components/chat/workspace/bubbles/LeadIntakeCard.tsx`
-- `src/components/chat/workspace/bubbles/PostLeadActionsCard.tsx`
-- `src/components/chat/workspace/bubbles/ClarificationCard.tsx`
-- `src/components/chat/workspace/workbench/NoResultsCard.tsx`
-- `src/components/chat/workspace/workbench/ScoutResultsView.tsx`
-- `src/components/signals/SignalFeed.tsx`, `src/components/signals/SignalCard.tsx`
-- `src/components/dashboard/RecommendedMoves.tsx`, `src/components/dashboard/WorkforceBriefHero.tsx`, `src/pages/Content.tsx`, `src/pages/Agents.tsx` (use `dispatchChatAction` / `dispatchFreeformSend`)
-
-Backend (Edge Functions):
-- `supabase/functions/pilot-chat/index.ts` — accept `action_source` + `metadata`, reject missing `conversation_id` for card actions, skip title regen, handle `save_only` inline.
-- `supabase/functions/orchestrate/index.ts` and `supabase/functions/run-agent/index.ts` — strict use of plan/run `conversation_id` for every inserted message (plan, progress, results, post-lead card, errors).
+## CSV export
+Server builds the CSV in `pilot-chat` (`export_csv` branch) and returns it in the assistant `metadata.ui_panel_patch = { csv_data_url, filename }`. `LeadResultsView` watches the latest message for that patch and renders a "Download CSV" button + a small inline preview (first 10 rows) — no new bucket required.
 
 ## Tests
+Unit (Deno) in `supabase/functions/_shared/`:
+- `creditEstimate.test.ts` — add cases for `rank`, `export`, `enrich_and_draft`.
+- New `leadResultPanel.test.ts` — `buildLeadResultsPanel(leadRows, sourceLabel)` shape.
 
-Add `src/lib/chatActions.test.ts` plus a small Deno test for pilot-chat:
+Frontend (vitest):
+- `useLeadResults` — normalises rows correctly; tolerates null account/contact.
+- `ChatView` auto-opens workbench exactly once per `ui_panel` message id.
+- `dispatchResultAction` refuses without `conversationId`.
 
-1. `dispatchChatAction` with `action_source` + no `conversation_id` → composer rejects, no `pilotChat` call.
-2. Lead Source Selector submit → `pilotChat` called with the same `conversation_id` as the rendering message; view does not change.
-3. Lead Intake submit → same conversation; execution plan stored against same `conversation_id`.
-4. Post-lead `save_only` → backend returns reply in same conversation, no `orchestrate` call, no title change.
-5. Post-lead `rank` / `draft_outreach` → orchestrate invoked with same `conversation_id`.
-6. Error card retry → reuses `lead_request` metadata + same `conversation_id`.
-7. Backend: card-action POST with missing `conversation_id` → 400, no insert.
-8. Freeform empty-state send (no view) → still creates a new conversation as before.
+Manual QA matrix (Tests A–E from the brief) executed in the preview.
 
-## Browser QA (after build)
+## Files touched
+**New**
+- `src/components/chat/workspace/workbench/LeadResultsView.tsx`
+- `src/components/chat/workspace/workbench/LeadResultsActionBar.tsx`
+- `src/hooks/useLeadResults.ts`
+- `supabase/functions/_shared/leadResultPanel.ts` (+ test)
 
-Tests A–D from the request: lead brief submit, Save only, Rank by fit, Apify-error retry / change source. Verify in each that:
+**Edited**
+- `supabase/functions/run-agent/index.ts` (emit `ui_panel`, better assistant copy)
+- `supabase/functions/pilot-chat/index.ts` (handle `lead_result_action` intents, CSV export)
+- `src/contexts/ChatWorkspaceContext.tsx` (extend `WorkbenchSelection`)
+- `src/components/chat/workspace/workbench/WorkbenchPanel.tsx` (hooks-order fix, `leads` tab)
+- `src/components/chat/workspace/ChatView.tsx` (auto-open on `ui_panel`)
+- `src/components/chat/workspace/bubbles/PostLeadActionsCard.tsx` (slim chat mirror)
+- `src/lib/chatActions.ts` (`dispatchResultAction`)
+- `supabase/functions/_shared/creditEstimate.ts` (rank/export/combo estimates)
 
-- No new sidebar entry appears.
-- Active conversation stays selected.
-- All follow-up cards render under the original chat.
+## Non-goals
+- No new database tables, no schema migrations.
+- No second/parallel side panel — strictly reuse `WorkbenchPanel`.
+- No auto-send of outreach. Drafts remain approval-gated.
+- Signal Feed remains the long-term store; it just stops being the only visible result.
 
-## Out of scope
-
-- Sidebar UX changes, conversation merging, or auto-selection workarounds.
-- Changes to the actor registry or Apify config.
-- Visual redesign of any card.
+Approve to implement.
