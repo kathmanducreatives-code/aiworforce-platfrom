@@ -249,6 +249,7 @@ export default function WorkbenchPanel() {
             )}
           </ChatErrorBoundary>
         </div>
+        )}
       </div>
     </div>
   );
