@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Copy, Check } from 'lucide-react';
 import { useChatConversation } from '@/hooks/useChatConversation';
+import { useChatWorkspace, type LeadResultsPanelMeta } from '@/contexts/ChatWorkspaceContext';
 import { AGENT_BY_ID } from '@/data/agentProfiles';
 import { cn } from '@/lib/utils';
 import ExecutionPlanCard from './plan/ExecutionPlanCard';
