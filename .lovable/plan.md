@@ -1,142 +1,58 @@
-# Plan — Lead results in the side panel (Workbench)
+# Fix chat workspace half-height issue
 
-## Goal
-After a lead-sourcing plan completes, the chat stays as the command surface and the actual leads render in the **existing right-side Workbench panel** (the same surface that already shows ScoutResultsView / AgentOutputViewer). The panel opens automatically, shows a premium lead table with action buttons (Enrich, Draft, Rank, Export CSV, Save to Signal Feed), and every action continues the **same conversation**.
+## Root cause
+`ChatWorkspaceContext` defaults `open()` to `'drawer'` mode, which `ChatWorkspace.tsx` renders at `height: 70vh` anchored to the bottom (a bottom-sheet). Fullscreen mode already exists but is only reached via a toggle/keyboard shortcut. The drawer also has a drag-resize handle and rounded top corners that reinforce the "half-open sheet" feel on desktop.
 
-## Existing mechanism we reuse
-- Side panel: `ChatWorkspace.tsx` already renders `<WorkbenchPanel />` on the right (desktop) / fullscreen overlay (mobile), controlled by `useChatWorkspace().workbenchOpen` + `openWorkbench({...})`.
-- `WorkbenchPanel.tsx` already has tabs (Summary, Results, Rankings, Drafts, Sources, Activity, Raw) driven by `useWorkbenchData(selectedOutput)`.
-- `ScoutResultsView.tsx` already renders Apify jobs / people / LinkedIn engagement items.
-- Plan/task results already exist in `task_plans` + `tasks` + `tool_calls`; `lead_candidates` (with `account.domain`) is populated post-run.
-- Structured card actions go through `src/lib/chatActions.ts → dispatchChatAction` (conversation-id preserving — built in the previous task).
+## Strategy
+Make the full-height workspace the default on desktop/tablet. Keep mobile full-screen. Retire the desktop bottom-sheet drawer (collapse the two modes into a single full-height workspace; keep `closed` and `fullscreen` only). The result panel and composer already live inside the body — no structural change needed there, only sizing and polish.
 
-We will **not** introduce a parallel artifact system. We will:
-1. Have the backend emit a `ui_panel` hint on the post-lead assistant message.
-2. Have the chat frontend call the existing `openWorkbench(...)` automatically when that hint arrives.
-3. Add one new tab/view (`LeadResultsView`) to the existing `WorkbenchPanel`, fed by a new `useLeadResults(planId)` hook that loads from `lead_candidates`.
-4. Replace the in-chat `PostLeadActionsCard` action toolbar with an action bar **inside** the new side-panel view (keep a compact mirror in chat).
-
-## Backend changes
-
-### `supabase/functions/run-agent/index.ts` (post-lead block, lines ~542–574)
-When `leadRows.length > 0`, in addition to the existing `ui_card` we add:
-
-```ts
-const uiPanel = {
-  kind: "lead_results",
-  title: `${leadRows.length} ${sourceLabel} lead${leadRows.length === 1 ? "" : "s"}`,
-  subtitle: `Found by Scout · Saved for review · Nothing sent`,
-  source_type: planMeta?.source_type ?? "hiring_signal",
-  lead_count: leadRows.length,
-  enrichable_count: enrichable,
-  lead_candidate_ids: leadRows.map(l => l.id),
-  plan_id,
-  default_view: "table",
-  actions: ["enrich","draft_outreach","enrich_and_draft","rank","export_csv","save_to_signal_feed"],
-};
-```
-Persisted on the same assistant message:
-```ts
-metadata: { ui_card: card, ui_panel: uiPanel, post_lead_actions: true, plan_id }
-```
-Assistant `content` becomes: *"Scout found N leads. I opened them in the results panel and saved them for later review. Nothing was sent."*
-
-No new tables. We reuse `lead_candidates` + `accounts` + `signals` joined by `plan_id` for the panel.
-
-### `supabase/functions/pilot-chat/index.ts` (lead_result_action routing)
-Card actions already arrive with `action_source` + `metadata`. Add handling for `metadata.intent === "lead_result_action"` with:
-- `enrich`              → dispatch Hawk/Firecrawl on `lead_candidate_ids` having a `account.domain`; skip rest; emit a status assistant message.
-- `draft_outreach`      → dispatch Penn/Claude using Company Brain + ICP + leads (+ enrichment if present); writes `outreach_drafts`, requires approval, no send.
-- `enrich_and_draft`    → run enrich then draft, both scoped to same `plan_id` / `conversation_id`.
-- `rank`                → dispatch Aria over existing `lead_candidate_ids` only (no Apify call).
-- `export_csv`          → server returns a `ui_panel` patch with a signed/data-URL CSV (built from `lead_candidates` join); no agent run.
-- `save_to_signal_feed` → already implemented `save_only` path; reuse.
-
-All branches MUST require `conversation_id` and emit their assistant reply on the same conversation, with `metadata.plan_id` preserved so the Workbench `LeadResultsView` can refresh.
-
-## Frontend changes
-
-### New: `src/components/chat/workspace/workbench/LeadResultsView.tsx`
-Premium SaaS layout:
-- Sticky header: title + subtitle, source-type chip, count badge.
-- Filter chips: signal type / has-website / fit≥X.
-- Table (default) + card view toggle, columns: Person, Title, Company, Location, Signal, Source, Fit, Status, Website, LinkedIn.
-- Row click → right-side detail drawer inside the panel (existing `WorkbenchPanel` width allows this; we render an inline `<aside>` overlay).
-- Action toolbar (sticky bottom) with credit estimates from `_shared/creditEstimate.ts`:
-  - Enrich (1 cr / website) · Draft (2 cr / lead) · Enrich + draft · Rank (1 cr / 10) · Export CSV · Save to Signal Feed.
-- Each action calls `dispatchResultAction(...)` (see below).
-
-### New: `src/hooks/useLeadResults.ts`
-```ts
-useLeadResults(planId: string | null): {
-  loading, error, items: LeadResultItem[], refresh()
-}
-```
-Selects `lead_candidates` joined with `accounts`, `contacts`, `signals` and `lead_enrichments` for the given `plan_id`, normalises to `LeadResultItem` (shape from the user's spec). Subscribes to Realtime on `lead_candidates` filtered by `plan_id` so the panel updates progressively as Enrich/Draft fill columns.
-
-### `src/components/chat/workspace/workbench/WorkbenchPanel.tsx`
-- Extend `Tab` union with `'leads'`.
-- When the active selection carries a `lead_results` panel hint, default tab = `'leads'` and render `<LeadResultsView planId={...} />`.
+## Changes
 
 ### `src/contexts/ChatWorkspaceContext.tsx`
-Extend `WorkbenchSelection` with optional `panel?: { kind: 'lead_results'; planId: string; meta: UiPanel }` so `openWorkbench` can carry the lead-results hint. (Backwards compatible — existing tool-call selections still work.)
+- `open()` sets mode to `'fullscreen'` (not `'drawer'`).
+- Keyboard shortcut `Cmd/Ctrl+K` toggles `closed` ↔ `fullscreen`.
+- Esc closes from any open state.
+- Keep the `ChatMode` union for backward compat; treat `'drawer'` as alias of `'fullscreen'`.
 
-### `src/components/chat/workspace/ChatView.tsx` (lines ~115–165)
-When a rendered assistant message has `meta.ui_panel?.kind === 'lead_results'`:
-- On mount/first-seen (guarded by a `Set<messageId>` ref to avoid re-opens after manual close), call `openWorkbench({ planId: meta.ui_panel.plan_id, panel: { kind:'lead_results', planId, meta } })`.
-- Keep showing a compact in-chat `PostLeadActionsCard` summary ("Open in results panel" button + Save-only) but move the heavy action buttons into the side panel.
+### `src/components/chat/workspace/ChatWorkspace.tsx`
+- Always render as a full-height surface on desktop:
+  - `fixed inset-0 z-40 h-[100dvh] w-screen`
+  - Remove `rounded-t-2xl`, `bottom: 0; height: <n>vh`, and the `motion` height animation.
+  - Remove drag-resize handle and `onPointer*` logic (no half states to drag between).
+- Animation: subtle 200ms fade + 8px translateY-in / scale 0.99→1; exit reverse. No bouncy spring.
+- Backdrop: replace dim-only backdrop with a blurred dim layer only behind the workspace edges; since workspace is full-screen, backdrop is no longer needed — remove it.
+- Top bar always visible (was fullscreen-only): title left, `Minimize`/`Close` right. Close returns to previous page (calls `close()` which unmounts overlay, leaving the dashboard route intact).
+- Body grid: `Sidebar (280px) | Conversation (flex) | Workbench (when open)`; all three are `h-full` and independently scrollable with `min-h-0`.
+- Composer container: sticky bottom inside the conversation column, `border-t`, `bg-background/80 backdrop-blur`, with `pb-[env(safe-area-inset-bottom)]`. The message list area uses `flex-1 overflow-y-auto` with `pb-4` (composer is a sibling, not overlay, so no extra bottom padding needed).
+- Workbench panel: `h-full`, own `overflow-y-auto`; chat column unaffected vertically when it opens.
 
-### New: `src/lib/chatActions.ts` — add `dispatchResultAction`
-```ts
-dispatchResultAction({
-  conversationId, planId, leadCandidateIds, savedOutputId,
-  action: 'enrich'|'draft_outreach'|'enrich_and_draft'|'rank'|'export_csv'|'save_to_signal_feed',
-  estimatedCredits,
-})
-```
-Internally calls `dispatchChatAction` with `action_source: 'lead_results_panel'` and `metadata: { intent: 'lead_result_action', action, lead_candidate_ids, plan_id, saved_output_id, estimated_credits }`. Conversation-id is required — same guard as before.
+### Mobile
+- Same full-screen overlay (already covered by `inset-0` + existing `MobileNav`). Sidebar hidden via existing `!isMobile` guard. Workbench remains an absolute full-screen layer on mobile.
 
-## React error #310 fix
-Likely cause is `WorkbenchPanel.tsx` calling `useMemo`/`useEffect` *after* an early `return` (the loading branch at line ~57 returns before the later `useMemo`/`useEffect` calls at lines 67–96). We will move all hooks above any early return (standard hooks-order fix). We will also wrap `LeadResultsView` and `PostLeadActionsCard` in the existing `ChatErrorBoundary` slots already present.
+### Responsive
+- Sidebar fixed `w-[280px]` on `lg+`, hidden on `<md`.
+- Workbench width clamped via existing `workbenchWidth`, min 360, max 50vw.
 
-After the move, run dev (non-minified) and re-verify there is no `#310`.
+## Composer fix
+- Composer becomes a flex child after the scrollable message list inside the conversation column, so it can never cover messages.
+- Message list: `flex-1 min-h-0 overflow-y-auto`.
 
-## CSV export
-Server builds the CSV in `pilot-chat` (`export_csv` branch) and returns it in the assistant `metadata.ui_panel_patch = { csv_data_url, filename }`. `LeadResultsView` watches the latest message for that patch and renders a "Download CSV" button + a small inline preview (first 10 rows) — no new bucket required.
+## Result panel compatibility
+- Workbench sits as the 3rd flex column, `h-full`. Opening it shrinks chat horizontally only, never vertically. Both scroll independently.
 
-## Tests
-Unit (Deno) in `supabase/functions/_shared/`:
-- `creditEstimate.test.ts` — add cases for `rank`, `export`, `enrich_and_draft`.
-- New `leadResultPanel.test.ts` — `buildLeadResultsPanel(leadRows, sourceLabel)` shape.
-
-Frontend (vitest):
-- `useLeadResults` — normalises rows correctly; tolerates null account/contact.
-- `ChatView` auto-opens workbench exactly once per `ui_panel` message id.
-- `dispatchResultAction` refuses without `conversationId`.
-
-Manual QA matrix (Tests A–E from the brief) executed in the preview.
+## Animation
+- `initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 8 }} transition={{ duration: 0.2, ease: [0.32, 0.72, 0, 1] }}`.
 
 ## Files touched
-**New**
-- `src/components/chat/workspace/workbench/LeadResultsView.tsx`
-- `src/components/chat/workspace/workbench/LeadResultsActionBar.tsx`
-- `src/hooks/useLeadResults.ts`
-- `supabase/functions/_shared/leadResultPanel.ts` (+ test)
+- `src/contexts/ChatWorkspaceContext.tsx`
+- `src/components/chat/workspace/ChatWorkspace.tsx`
 
-**Edited**
-- `supabase/functions/run-agent/index.ts` (emit `ui_panel`, better assistant copy)
-- `supabase/functions/pilot-chat/index.ts` (handle `lead_result_action` intents, CSV export)
-- `src/contexts/ChatWorkspaceContext.tsx` (extend `WorkbenchSelection`)
-- `src/components/chat/workspace/workbench/WorkbenchPanel.tsx` (hooks-order fix, `leads` tab)
-- `src/components/chat/workspace/ChatView.tsx` (auto-open on `ui_panel`)
-- `src/components/chat/workspace/bubbles/PostLeadActionsCard.tsx` (slim chat mirror)
-- `src/lib/chatActions.ts` (`dispatchResultAction`)
-- `supabase/functions/_shared/creditEstimate.ts` (rank/export/combo estimates)
-
-## Non-goals
-- No new database tables, no schema migrations.
-- No second/parallel side panel — strictly reuse `WorkbenchPanel`.
-- No auto-send of outreach. Drafts remain approval-gated.
-- Signal Feed remains the long-term store; it just stops being the only visible result.
-
-Approve to implement.
+## Test plan
+1. Click composer on dashboard → workspace fills viewport (no half-height).
+2. Open existing conversation → messages fill height, composer pinned bottom.
+3. Send "Find me leads" → Lead Source Selector appears in full workspace, same conversation.
+4. Submit brief → plan stays in same conversation.
+5. Open lead results → side panel opens right, both full-height, both scroll independently.
+6. Click close → returns to dashboard with route unchanged.
+7. Resize 1920→1024 width → no clipping, composer visible, no half state.
+8. Scroll long chat → only message list scrolls; composer & sidebar stay fixed.
