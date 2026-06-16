@@ -1193,7 +1193,9 @@ export async function runTool(
   }
 
   // Phase 2: persist outputs into structured GTM memory. Fire-and-forget.
-  if (result.ok && (tool.name === "source_with_apify" || tool.name === "scrape_url")) {
+  // `defer_persistence` lets an adaptive multi-attempt loop skip per-attempt
+  // writes and persist ONCE with the capped/deduped accepted set instead.
+  if (result.ok && (tool.name === "source_with_apify" || tool.name === "scrape_url") && (input as any)?.defer_persistence !== true) {
     const actorKey = (input as any)?.selected_actor_key ?? null;
     await writeMemoryFromToolCall({
       admin: ctx.admin,
