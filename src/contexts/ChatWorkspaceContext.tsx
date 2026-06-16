@@ -24,11 +24,25 @@ interface PendingState {
   awaiting: boolean;
 }
 
+export interface LeadResultsPanelMeta {
+  kind: 'lead_results';
+  title: string;
+  subtitle: string;
+  source_type: string;
+  lead_count: number;
+  enrichable_count: number;
+  lead_candidate_ids: string[];
+  plan_id: string;
+  actions: string[];
+}
+
 export interface WorkbenchSelection {
   planId: string;
   taskId?: string | null;
   agentSlug?: string | null;
   toolCallId?: string | null;
+  panel?: LeadResultsPanelMeta | null;
+  conversationId?: string | null;
 }
 
 interface Ctx {
