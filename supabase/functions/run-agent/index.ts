@@ -688,11 +688,35 @@ Deno.serve(async (req) => {
         const { buildPostLeadActionsCard } = await import("../_shared/creditEstimate.ts");
         const card = buildPostLeadActionsCard(leadRows.length, enrichable, leadRows.map((l) => l.id));
         const partial = planStatus === "partial";
+        // Side-panel (Workbench / LeadResultsView) — opened by ChatView on ui_panel.
+        const planSummary = String(plan?.plan_summary ?? "").toLowerCase();
+        const sourceType: string = planSummary.includes("hiring") ? "hiring_signal"
+          : planSummary.includes("linkedin") ? "linkedin_engagement"
+          : planSummary.includes("people") || planSummary.includes("profile") ? "people"
+          : "lead";
+        const sourceLabel = sourceType === "hiring_signal" ? "hiring-signal"
+          : sourceType === "linkedin_engagement" ? "LinkedIn engagement"
+          : sourceType === "people" ? "people"
+          : "lead";
+        const uiPanel = {
+          kind: "lead_results" as const,
+          title: `${leadRows.length} ${sourceLabel} lead${leadRows.length === 1 ? "" : "s"}`,
+          subtitle: "Found by Scout · Saved for review · Nothing sent",
+          source_type: sourceType,
+          lead_count: leadRows.length,
+          enrichable_count: enrichable,
+          lead_candidate_ids: leadRows.map((l) => l.id),
+          plan_id,
+          default_view: "table",
+          actions: ["enrich", "draft_outreach", "enrich_and_draft", "rank", "export_csv", "save_to_signal_feed"],
+        };
         await supabase.from("messages").insert({
-          conversation_id: conversationId, role: "assistant",
-          content: `${partial ? `Found ${produced} of ${requested} — ` : ""}${card.title}. ${card.subtitle}`,
+          conversation_id: conversationId,
+          role: "assistant",
+          // Adaptive status reflected in copy; Workbench panel + post-lead card + attempt log all attached.
+          content: `${partial ? `Found ${produced} of ${requested} — ` : ""}Scout found ${leadRows.length} lead${leadRows.length === 1 ? "" : "s"}. I opened them in the results panel and saved them for later review. Nothing was sent.`,
           agent_slug: "pilot",
-          metadata: { ui_card: card, post_lead_actions: true, plan_id, workflow_status: planStatus, attempt_log: attemptSummary.length ? attemptSummary : [`Sourced ${produced}/${requested}`] },
+          metadata: { ui_card: card, ui_panel: uiPanel, post_lead_actions: true, plan_id, workflow_status: planStatus, attempt_log: attemptSummary.length ? attemptSummary : [`Sourced ${produced}/${requested}`] },
         });
       }
     }

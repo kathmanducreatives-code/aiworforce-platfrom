@@ -12,52 +12,33 @@ import NoResultsCard from './NoResultsCard';
 import AriaRankingView from './AriaRankingView';
 import PennDraftView from './PennDraftView';
 import HawkResearchView from './HawkResearchView';
+import LeadResultsView from './LeadResultsView';
 import ChatErrorBoundary from '../ChatErrorBoundary';
 import { normalizeApifyItems, normalizeApifyPeople, isPeopleOutput, normalizeAriaRankings, normalizePennDrafts, normalizeFirecrawl } from './normalize';
-import { Loader2, FlaskConical, FileText, ListChecks, Activity, Code2, Trophy, Mail, Link2 } from 'lucide-react';
+import { Loader2, FlaskConical, FileText, ListChecks, Activity, Code2, Trophy, Mail, Link2, Users } from 'lucide-react';
 
-type Tab = 'summary' | 'results' | 'rankings' | 'drafts' | 'sources' | 'activity' | 'raw';
+type Tab = 'leads' | 'summary' | 'results' | 'rankings' | 'drafts' | 'sources' | 'activity' | 'raw';
 
 export default function WorkbenchPanel() {
   const { selectedOutput, closeWorkbench, workbenchWidth, setWorkbenchWidth } = useChatWorkspace();
   const isMobile = useIsMobile();
   const data = useWorkbenchData(selectedOutput);
 
+  const leadsPanel = selectedOutput?.panel?.kind === 'lead_results' ? selectedOutput.panel : null;
+
   const status = data.task?.status ?? data.toolCall?.status ?? 'pending';
   const failed = status === 'failed' || status === 'unavailable';
 
-  // Default tab: summary, unless user explicitly opened a tool call from results UI
-  const defaultTab: Tab = useMemo(() => 'summary', []);
+  // Default tab: 'leads' when a lead_results panel hint is present, else 'summary'.
+  const defaultTab: Tab = leadsPanel ? 'leads' : 'summary';
   const [tab, setTab] = useState<Tab>(defaultTab);
 
   // Reset tab when selection changes
   useEffect(() => {
-    setTab('summary');
-  }, [selectedOutput?.taskId, selectedOutput?.toolCallId]);
+    setTab(leadsPanel ? 'leads' : 'summary');
+  }, [selectedOutput?.taskId, selectedOutput?.toolCallId, selectedOutput?.planId, leadsPanel]);
 
-  if (!selectedOutput) {
-    return (
-      <div className="h-full flex flex-col items-center justify-center text-center px-6 text-[#7D8590]">
-        <div className="h-12 w-12 rounded-xl border border-emerald-500/20 bg-emerald-500/5 flex items-center justify-center mb-3">
-          <FlaskConical className="h-5 w-5 text-emerald-300/80" />
-        </div>
-        <div className="text-[13px] text-[#C9D1D9] font-medium">Workbench</div>
-        <div className="text-[12px] mt-1 max-w-xs">
-          Pick a step or tool from any plan to inspect its output, recover from failures, and trigger the next action.
-        </div>
-      </div>
-    );
-  }
-
-  if (data.loading && !data.task && !data.toolCall) {
-    return (
-      <div className="h-full flex items-center justify-center text-[#7D8590] text-[12px]">
-        <Loader2 className="h-3.5 w-3.5 animate-spin mr-2" /> Loading output…
-      </div>
-    );
-  }
-
-  // Derived tabs — only show ones that have data
+  // Derived data — keep ALL hooks above early returns to satisfy hooks rules.
   const output = data.toolCall?.output_json ?? (data.task as any)?.output ?? null;
   const peopleMode = isPeopleOutput(output);
   const apifyItems = useMemo(() => peopleMode ? [] : normalizeApifyItems(output), [output, peopleMode]);
@@ -76,9 +57,9 @@ export default function WorkbenchPanel() {
   const isAria = data.agentSlug === 'aria' || hasRankings;
 
   const tabs: { id: Tab; label: string; icon: any }[] = useMemo(() => {
-    const list: { id: Tab; label: string; icon: any }[] = [
-      { id: 'summary', label: 'Summary', icon: FileText },
-    ];
+    const list: { id: Tab; label: string; icon: any }[] = [];
+    if (leadsPanel) list.push({ id: 'leads', label: 'Leads', icon: Users });
+    list.push({ id: 'summary', label: 'Summary', icon: FileText });
     if (hasResults || failed || isApify) list.push({ id: 'results', label: 'Results', icon: ListChecks });
     if (hasRankings || isAria) list.push({ id: 'rankings', label: 'Rankings', icon: Trophy });
     if (hasDrafts || isPenn) list.push({ id: 'drafts', label: 'Drafts', icon: Mail });
@@ -86,12 +67,34 @@ export default function WorkbenchPanel() {
     list.push({ id: 'activity', label: 'Activity', icon: Activity });
     list.push({ id: 'raw', label: 'Raw', icon: Code2 });
     return list;
-  }, [hasResults, hasRankings, hasDrafts, hasSources, isApify, isFirecrawl, isPenn, isAria, failed]);
+  }, [hasResults, hasRankings, hasDrafts, hasSources, isApify, isFirecrawl, isPenn, isAria, failed, leadsPanel]);
 
   // Snap to a valid tab if the current one isn't available
   useEffect(() => {
-    if (!tabs.some((t) => t.id === tab)) setTab('summary');
+    if (!tabs.some((t) => t.id === tab)) setTab(tabs[0]?.id ?? 'summary');
   }, [tabs, tab]);
+
+  if (!selectedOutput) {
+    return (
+      <div className="h-full flex flex-col items-center justify-center text-center px-6 text-[#7D8590]">
+        <div className="h-12 w-12 rounded-xl border border-emerald-500/20 bg-emerald-500/5 flex items-center justify-center mb-3">
+          <FlaskConical className="h-5 w-5 text-emerald-300/80" />
+        </div>
+        <div className="text-[13px] text-[#C9D1D9] font-medium">Workbench</div>
+        <div className="text-[12px] mt-1 max-w-xs">
+          Pick a step or tool from any plan to inspect its output, recover from failures, and trigger the next action.
+        </div>
+      </div>
+    );
+  }
+
+  if (data.loading && !data.task && !data.toolCall && !leadsPanel) {
+    return (
+      <div className="h-full flex items-center justify-center text-[#7D8590] text-[12px]">
+        <Loader2 className="h-3.5 w-3.5 animate-spin mr-2" /> Loading output…
+      </div>
+    );
+  }
 
   // Mode for NoResultsCard
   const noResultsMode: 'people' | 'jobs' | 'companies' | 'generic' =
@@ -134,7 +137,14 @@ export default function WorkbenchPanel() {
       )}
       <div className="flex-1 flex flex-col min-w-0 bg-[#0a0d12] relative">
         <div className="pointer-events-none absolute inset-x-0 top-0 h-32 bg-gradient-to-b from-emerald-500/[0.03] to-transparent" />
-        <WorkbenchHeader data={data} onClose={closeWorkbench} onRefresh={data.refresh} />
+        {!leadsPanel || tab !== 'leads' ? (
+          <WorkbenchHeader data={data} onClose={closeWorkbench} onRefresh={data.refresh} />
+        ) : (
+          <div className="flex items-center justify-between px-4 h-10 border-b border-white/[0.06]">
+            <div className="text-[11px] text-[#7D8590]">Workbench · Lead results</div>
+            <button onClick={closeWorkbench} className="text-[11px] text-[#7D8590] hover:text-[#C9D1D9]">Close</button>
+          </div>
+        )}
 
         <div className="flex items-center gap-0.5 px-3 border-b border-white/[0.06] bg-white/[0.01]">
           {tabs.map((t) => {
@@ -160,6 +170,13 @@ export default function WorkbenchPanel() {
           })}
         </div>
 
+        {tab === 'leads' && leadsPanel ? (
+          <div className="flex-1 min-h-0 relative z-[1]">
+            <ChatErrorBoundary>
+              <LeadResultsView meta={leadsPanel} conversationId={selectedOutput?.conversationId ?? null} />
+            </ChatErrorBoundary>
+          </div>
+        ) : (
         <div className="flex-1 overflow-auto p-4 space-y-3 relative z-[1]">
           <ChatErrorBoundary>
             {tab === 'summary' && (
@@ -232,6 +249,7 @@ export default function WorkbenchPanel() {
             )}
           </ChatErrorBoundary>
         </div>
+        )}
       </div>
     </div>
   );

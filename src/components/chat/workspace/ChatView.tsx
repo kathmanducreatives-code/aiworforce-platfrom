@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Copy, Check } from 'lucide-react';
 import { useChatConversation } from '@/hooks/useChatConversation';
+import { useChatWorkspace, type LeadResultsPanelMeta } from '@/contexts/ChatWorkspaceContext';
 import { AGENT_BY_ID } from '@/data/agentProfiles';
 import { cn } from '@/lib/utils';
 import ExecutionPlanCard from './plan/ExecutionPlanCard';
@@ -8,8 +9,8 @@ import ClarificationCard from './bubbles/ClarificationCard';
 import LeadIntakeCard, { type LeadIntakeFormPayload } from './bubbles/LeadIntakeCard';
 import LeadSourceCard, { type LeadSourceSelectorPayload } from './bubbles/LeadSourceCard';
 import PostLeadActionsCard, { type PostLeadActionsCardPayload } from './bubbles/PostLeadActionsCard';
-import LeadSourcingErrorCard, { type LeadSourcingErrorPayload } from './bubbles/LeadSourcingErrorCard';
 import InterpretationPill from './bubbles/InterpretationPill';
+import { dispatchChatAction } from '@/lib/chatActions';
 
 const AGENT_HEX: Record<string, string> = {
   scout: '#3B82F6', aria: '#8B5CF6', penn: '#10B981', hawk: '#14B8A6', scribe: '#A855F7',
@@ -78,6 +79,8 @@ interface Props {
 
 export default function ChatView({ conversationId, agentSlug, pendingUserText, awaitingReply }: Props) {
   const { messages } = useChatConversation(conversationId);
+  const { openWorkbench } = useChatWorkspace();
+  const openedPanelsRef = useRef<Set<string>>(new Set());
   const scrollRef = useRef<HTMLDivElement>(null);
   const profile = AGENT_BY_ID[agentSlug];
 
@@ -85,6 +88,24 @@ export default function ChatView({ conversationId, agentSlug, pendingUserText, a
   const showPending = pendingUserText && !messages.some(
     (m) => m.role === 'user' && m.content === pendingUserText,
   );
+
+  // Auto-open the Workbench (Lead Results) when a message arrives with a
+  // ui_panel hint. Guarded per message id so we don't reopen after the user
+  // closes the panel.
+  useEffect(() => {
+    for (const m of messages) {
+      const meta = (m.metadata ?? null) as Record<string, any> | null;
+      const panel = meta?.ui_panel as LeadResultsPanelMeta | undefined;
+      if (panel && panel.kind === 'lead_results' && !openedPanelsRef.current.has(m.id)) {
+        openedPanelsRef.current.add(m.id);
+        openWorkbench({
+          planId: panel.plan_id,
+          panel,
+          conversationId: m.conversation_id ?? conversationId,
+        });
+      }
+    }
+  }, [messages, openWorkbench, conversationId]);
 
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' });
@@ -115,10 +136,9 @@ export default function ChatView({ conversationId, agentSlug, pendingUserText, a
         const uiFormKind = meta && meta.ui_form ? (meta.ui_form as any).kind : null;
         const leadForm = uiFormKind === 'lead_intake' ? (meta!.ui_form as LeadIntakeFormPayload) : null;
         const leadSelector = uiFormKind === 'lead_source_selector' ? (meta!.ui_form as LeadSourceSelectorPayload) : null;
-        const uiCardKind = meta && meta.ui_card ? (meta.ui_card as any).kind : null;
-        const postLeadCard = uiCardKind === 'post_lead_actions' ? (meta!.ui_card as PostLeadActionsCardPayload) : null;
-        const sourcingError = uiCardKind === 'lead_sourcing_error' ? (meta!.ui_card as LeadSourcingErrorPayload) : null;
-        const convId = m.conversation_id;
+        const postLeadCard = meta && meta.ui_card && (meta.ui_card as any).kind === 'post_lead_actions'
+          ? (meta.ui_card as PostLeadActionsCardPayload)
+          : null;
         const uiActions = Array.isArray(meta?.ui_actions)
           ? (meta!.ui_actions as Array<{ label: string; message: string }>)
           : null;
@@ -155,22 +175,17 @@ export default function ChatView({ conversationId, agentSlug, pendingUserText, a
               )}
               {leadSelector && (
                 <div className="mt-2">
-                  <LeadSourceCard payload={leadSelector} conversationId={convId} />
+                  <LeadSourceCard payload={leadSelector} conversationId={m.conversation_id} />
                 </div>
               )}
               {postLeadCard && (
                 <div className="mt-2">
-                  <PostLeadActionsCard payload={postLeadCard} conversationId={convId} />
-                </div>
-              )}
-              {sourcingError && (
-                <div className="mt-2">
-                  <LeadSourcingErrorCard payload={sourcingError} conversationId={convId} />
+                  <PostLeadActionsCard payload={postLeadCard} conversationId={m.conversation_id} />
                 </div>
               )}
               {leadForm && (
                 <div className="mt-2">
-                  <LeadIntakeCard payload={leadForm} conversationId={convId} />
+                  <LeadIntakeCard payload={leadForm} conversationId={m.conversation_id} />
                 </div>
               )}
               {uiActions && uiActions.length > 0 && (
@@ -179,7 +194,7 @@ export default function ChatView({ conversationId, agentSlug, pendingUserText, a
                     <button
                       key={i}
                       type="button"
-                      onClick={() => window.dispatchEvent(new CustomEvent('chat:send', { detail: { text: a.message, conversation_id: convId } }))}
+                      onClick={() => dispatchChatAction({ text: a.message, conversation_id: m.conversation_id, action_source: 'ui_actions_button' })}
                       className="text-left rounded-lg border border-emerald-500/20 bg-emerald-500/[0.04] hover:bg-emerald-500/[0.1] hover:border-emerald-500/40 px-3 py-2 text-[13px] text-[#C9D1D9] transition-colors"
                     >
                       {a.label}
@@ -194,6 +209,7 @@ export default function ChatView({ conversationId, agentSlug, pendingUserText, a
                     peopleAction={peopleAction}
                     companiesAction={companiesAction}
                     agencyAction={agencyAction}
+                    conversationId={m.conversation_id}
                   />
                 </div>
               )}
