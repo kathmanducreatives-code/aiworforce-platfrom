@@ -307,21 +307,44 @@ Deno.serve(async (req) => {
         }
         if (adaptive.accepted.length > 0) {
           const rawItems = adaptive.accepted.map((a) => a.raw);
-          // Persist ONCE with only the capped/deduped accepted set, so DB
-          // lead_candidates/signals == accepted count (not the sum of attempts).
-          try {
-            const { writeMemoryFromToolCall } = await import("../_shared/memoryWriter.ts");
-            await writeMemoryFromToolCall({
-              admin: supabase,
-              workspace_id,
-              plan_id,
-              task_id: task.id,
-              tool_call_id: null,
-              tool_name: "source_with_apify",
-              selected_actor_key: planned_actor_key ?? null,
-              output: { items: rawItems, total: rawItems.length, summary: `${adaptive.found}/${adaptive.requested} accepted across ${adaptive.attempts.length} attempt(s)` },
-            });
-          } catch (e) { console.warn("[run-agent] capped persistence failed:", e); }
+          const attachAccounts = Array.isArray(tool_input_body?.attach_to_accounts) ? tool_input_body.attach_to_accounts : null;
+
+          if (attachAccounts && attachAccounts.length > 0) {
+            // Contact discovery: ATTACH discovered decision-makers to existing
+            // account rows (no new leads, no invented contacts) instead of creating.
+            try {
+              const { planContactAttachments } = await import("../_shared/contactDiscovery.ts");
+              const plan = planContactAttachments(rawItems, attachAccounts as Array<{ lead_candidate_id: string; company: string; signal_role?: string | null }>);
+              for (const att of plan) {
+                const { data: c } = await supabase.from("contacts").insert({
+                  workspace_id,
+                  full_name: att.contact.name,
+                  title: att.contact.title,
+                  linkedin_url: att.contact.linkedin_url,
+                  email: att.contact.email,
+                  raw: { source: att.contact.source, via: "contact_discovery", confidence: att.contact.confidence },
+                }).select("id").maybeSingle();
+                if (c?.id) await supabase.from("lead_candidates").update({ contact_id: c.id }).eq("id", att.lead_candidate_id);
+              }
+              console.log("[run-agent] attached contacts:", plan.length);
+            } catch (e) { console.warn("[run-agent] contact attach failed:", e); }
+          } else {
+            // Normal sourcing: persist ONCE with only the capped/deduped accepted
+            // set, so DB lead_candidates/signals == accepted count.
+            try {
+              const { writeMemoryFromToolCall } = await import("../_shared/memoryWriter.ts");
+              await writeMemoryFromToolCall({
+                admin: supabase,
+                workspace_id,
+                plan_id,
+                task_id: task.id,
+                tool_call_id: null,
+                tool_name: "source_with_apify",
+                selected_actor_key: planned_actor_key ?? null,
+                output: { items: rawItems, total: rawItems.length, summary: `${adaptive.found}/${adaptive.requested} accepted across ${adaptive.attempts.length} attempt(s)` },
+              });
+            } catch (e) { console.warn("[run-agent] capped persistence failed:", e); }
+          }
 
           const lens = source_type === "jobs" ? "\n\nNOTE: These are companies/jobs hiring for the requested role, not individual people profiles." : "";
           const log = adaptive.attempts.map((a) => `Attempt ${a.n}: ${a.strategy} — ${a.accepted_count} accepted (total ${a.total_accepted})`).join("\n");

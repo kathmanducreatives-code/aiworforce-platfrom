@@ -15,6 +15,7 @@ import { loadConversationMemory, renderMemoryForPrompt, isFollowUpReference, ext
 import { shouldGateForOnboarding, ONBOARDING_GATE_REPLY } from "../_shared/companyBrainGate.ts";
 import { isLeadIntakeRequest, extractLeadDetails, hasEnoughToRun, buildLeadSourceSelector, leadRequestToToolInput, leadRequestToInstruction, leadRequestToLinkedInFallbackInstruction, leadRequestToCompaniesInstruction, type LeadRequest, type ToolAvailability } from "../_shared/leadIntake.ts";
 import { getActorByKey, isActorRuntimeEnabled } from "../_shared/actorRegistry.ts";
+import { isFindContactsRequest, personaForAccounts, buildContactSearchQueries, contactDiscoveryFallback, type AccountForContacts } from "../_shared/contactDiscovery.ts";
 import { buildCompanyBrainContext, hasUsableBrain, brainCompetitors } from "../_shared/companyBrainContext.ts";
 
 
@@ -801,6 +802,51 @@ Deno.serve(async (req) => {
     const msg =
       "I can't run that as described — it would involve unsafe or unsupported actions (e.g. scraping private personal data or sending without your approval). I can help with: public business contact research, approval-gated email outreach, LinkedIn outreach drafts, or call scripts. Which of those would you like?";
     return await replyAndReturn(msg, { unsafe: true });
+  }
+
+  // 5c.ii-a Contact discovery — "Find decision-makers at these companies".
+  // Operates over the remembered ACCOUNT opportunities; targets the inferred
+  // persona; attaches discovered contacts to those accounts. Honest fallback if
+  // the people-search actor is off — never invents contacts. Must precede lead
+  // intake (which would otherwise treat "find decision-makers" as a new search).
+  if (isFindContactsRequest(message)) {
+    const accountLeads = memory.lead_candidates.filter((l) => !l.contact); // account opportunities (no contact yet)
+    if (accountLeads.length === 0) {
+      return await replyAndReturn(
+        "I don't have account opportunities in this conversation to find contacts for yet. Source companies first (e.g. \"find 5 companies hiring GTM roles in the US\"), then I'll find decision-makers at them.",
+        { followup: "no_accounts_for_contacts" },
+      );
+    }
+    const accounts: AccountForContacts[] = accountLeads.map((l) => ({
+      lead_candidate_id: l.id,
+      company: l.account?.name ?? "",
+      signal_role: l.reason ?? null,
+    })).filter((a) => a.company);
+    const persona = personaForAccounts(accounts);
+    const peopleOn = (() => { const a = getActorByKey("apify_people_search"); return !!a && isActorRuntimeEnabled(a); })();
+
+    if (!peopleOn) {
+      return await replyAndReturn(
+        `${contactDiscoveryFallback()}\n\nFor these ${accounts.length} ${accounts.length === 1 ? "company" : "companies"} I'd target: ${persona.personas.slice(0, 3).join(" / ")}.`,
+        { followup: "contacts_unavailable", recommended_persona: persona, account_count: accounts.length, can_draft: false },
+      );
+    }
+    const queries = buildContactSearchQueries(accounts, persona, { maxQueries: Math.min(10, accounts.length * 2) });
+    return await delegateToOrchestrate({
+      admin, SUPABASE_URL, SUPABASE_ANON_KEY, authHeader, conversationId, workspaceId,
+      instruction: `Find decision-makers (${persona.personas.slice(0, 3).join(", ")}) at these companies: ${accounts.map((a) => a.company).join(", ")}. Attach each contact to its company. Do not invent contacts.`,
+      toolInput: {
+        intent: "source_people", tool_name: "source_with_apify", selected_actor_key: "apify_people_search",
+        source_type: "people_profiles", query: queries.join(", "), role_keywords: persona.personas.map((p) => p.toLowerCase()),
+        location: null, max_results: Math.max(1, Math.min(25, accounts.length)),
+        needs_enrichment: false, needs_outreach: false, execution_mode: "fast", confidence: 0.85, missing_fields: [],
+        reason: "contact discovery: attach decision-makers to account opportunities",
+        // run-agent attaches results to these accounts (match by company; no invent).
+        attach_to_accounts: accounts.map((a) => ({ lead_candidate_id: a.lead_candidate_id, company: a.company, signal_role: a.signal_role })),
+        user_input: { keywords: queries },
+      } as unknown as ToolInput,
+      modelUsed: "google/gemini-3-flash-preview", providerUsed: "lovable-ai",
+    });
   }
 
   // 5c.ii-b Lead intake — "Find me leads / prospects / buyers / companies".
