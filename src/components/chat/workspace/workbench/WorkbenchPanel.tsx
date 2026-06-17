@@ -20,7 +20,7 @@ import { Loader2, FlaskConical, FileText, ListChecks, Activity, Code2, Trophy, M
 type Tab = 'leads' | 'summary' | 'results' | 'rankings' | 'drafts' | 'sources' | 'activity' | 'raw';
 
 export default function WorkbenchPanel() {
-  const { selectedOutput, closeWorkbench, workbenchWidth, setWorkbenchWidth } = useChatWorkspace();
+  const { selectedOutput, closeWorkbench } = useChatWorkspace();
   const isMobile = useIsMobile();
   const data = useWorkbenchData(selectedOutput);
 
