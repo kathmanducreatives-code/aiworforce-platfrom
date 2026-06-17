@@ -157,19 +157,21 @@ export default function LeadSourceCard({ payload, conversationId }: { payload: L
 
   if (option) return <Brief option={option} onBack={() => setPicked(null)} conversationId={conversationId} />;
 
+  const paneW = useChatPaneWidth();
+  const twoCol = paneW >= 520;
   return (
-    <div className="rounded-xl border border-emerald-500/20 bg-gradient-to-b from-emerald-500/[0.05] to-transparent p-4 max-w-[600px]">
-      <div className="flex items-center gap-2 mb-1">
-        <span className="h-6 w-6 rounded-md bg-emerald-500/10 border border-emerald-500/25 flex items-center justify-center">
+    <div className="rounded-xl border border-emerald-500/20 bg-gradient-to-b from-emerald-500/[0.05] to-transparent p-4 max-w-[600px] min-w-0">
+      <div className="flex items-center gap-2 mb-1 min-w-0">
+        <span className="h-6 w-6 rounded-md bg-emerald-500/10 border border-emerald-500/25 flex items-center justify-center shrink-0">
           <Target className="h-3.5 w-3.5 text-emerald-300" />
         </span>
-        <div className="text-[13px] font-semibold text-[#F0F6FC]">{payload.title}</div>
+        <div className="text-[13px] font-semibold text-[#F0F6FC] truncate">{payload.title}</div>
       </div>
-      <p className="text-[12px] text-[#7D8590] leading-relaxed mb-3">{payload.subtitle}</p>
+      <p className="text-[12px] text-[#7D8590] leading-relaxed mb-3 break-words">{payload.subtitle}</p>
       {payload.brain_missing && (
-        <p className="text-[11px] text-amber-300/80 mb-3">Completing your Company Brain lets Scout prefill these and rank results to your ICP.</p>
+        <p className="text-[11px] text-amber-300/80 mb-3 break-words">Completing your Company Brain lets Scout prefill these and rank results to your ICP.</p>
       )}
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+      <div className="grid gap-2" style={{ gridTemplateColumns: twoCol ? 'repeat(2, minmax(0,1fr))' : '1fr' }}>
         {payload.sources.map((s) => {
           const Icon = ICONS[s.source_type] ?? Target;
           const suggested = payload.suggested_source === s.source_type;
