@@ -41,13 +41,19 @@ export interface LeadResultsPanelMeta {
   lead_candidate_ids: string[];
   plan_id: string;
   actions: string[];
-  /** Extended (optional / additive). */
+  // Extended (optional / additive) — union of main's spreadsheet metadata and
+  // the branch's account/contact model. Older `lead_results` panels omit these.
   view?: 'spreadsheet' | 'cards';
   account_count?: number;
   contact_count?: number;
   locked_columns?: string[];
   available_actions?: string[];
   recommended_next_action?: LeadRecommendedAction;
+  // Branch account/contact fields emitted by run-agent's ui_panel.
+  can_draft?: boolean;
+  contact_status?: 'needs_contact' | 'contact_found';
+  recommended_persona?: { personas: string[]; primary: string; reason: string };
+  next_action?: { action: string; label: string; reason: string };
 }
 
 export interface WorkbenchSelection {

@@ -60,7 +60,7 @@ function buildInstruction(source: LeadSourceType, v: Record<string, string>, ava
   const stage = (v.stage ?? '').trim();
   const where = location && !/^any/i.test(location) ? ` in ${location}` : '';
   const ind = industry ? ` in ${industry}` : '';
-  const tail = ' Save them to Signal Feed. Do not send any outreach.';
+  const tail = ' Open results in Workbench. Do not send any outreach.';
 
   switch (source) {
     case 'hiring_signal':

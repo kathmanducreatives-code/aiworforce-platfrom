@@ -13,8 +13,9 @@ import { classifyWorkflow, SHORT_VAGUE_CLARIFICATION } from "../_shared/workflow
 import { validateAgainstCapabilities } from "../_shared/capabilityValidator.ts";
 import { loadConversationMemory, renderMemoryForPrompt, isFollowUpReference, extractTopN, type ConversationMemory } from "../_shared/memoryReader.ts";
 import { shouldGateForOnboarding, ONBOARDING_GATE_REPLY } from "../_shared/companyBrainGate.ts";
-import { isLeadIntakeRequest, extractLeadDetails, hasEnoughToRun, buildLeadSourceSelector, leadRequestToToolInput, leadRequestToInstruction, leadRequestToLinkedInFallbackInstruction, leadRequestToCompaniesInstruction, type LeadRequest, type ToolAvailability } from "../_shared/leadIntake.ts";
+import { isLeadIntakeRequest, hasNewSourcingIntent, extractLeadDetails, hasEnoughToRun, buildLeadSourceSelector, leadRequestToToolInput, leadRequestToInstruction, leadRequestToLinkedInFallbackInstruction, leadRequestToCompaniesInstruction, type LeadRequest, type ToolAvailability } from "../_shared/leadIntake.ts";
 import { getActorByKey, isActorRuntimeEnabled } from "../_shared/actorRegistry.ts";
+import { isFindContactsRequest, personaForAccounts, buildContactSearchQueries, contactDiscoveryFallback, type AccountForContacts } from "../_shared/contactDiscovery.ts";
 import { buildCompanyBrainContext, hasUsableBrain, brainCompetitors } from "../_shared/companyBrainContext.ts";
 
 
@@ -590,6 +591,10 @@ Deno.serve(async (req) => {
   const draftOutreachRe = /\b(draft|write|send)\s+(outreach|emails?|messages?)\b/i;
   const filterRe = /\b(only keep|filter|narrow|just keep|drop the|exclude)\b/i;
   const enrichRe = /\b(enrich|research|look up|dig into)\b/i;
+  // A NEW sourcing brief (e.g. a Lead Search Brief: "Find 5 founders … Save them
+  // to Signal Feed.") must NEVER be captured by the memory save/refine/enrich
+  // handlers just because it mentions "save"/"signal feed". New sourcing wins.
+  const newSourcing = hasNewSourcingIntent(message);
 
   // Phase 2 (P2-02) — refine/filter/rank over REMEMBERED results must ALWAYS win
   // over re-sourcing. "only keep early-stage", "rank these", "top 5", "keep US
@@ -598,7 +603,7 @@ Deno.serve(async (req) => {
   // classifier's sourcing categorization, which previously re-sourced.
   const refineRe = /\b(only keep|just keep|keep only|narrow(?:\s+down)?|drop the|exclude|remove the|prioriti[sz]e|sort by|rank (?:these|them|the (?:results|leads|signals|candidates))|keep (?:us|u\.s\.|early[- ]stage|seed|series\s+[a-c]|enterprise|smb)\b)/i;
   const refineTopOnly = /^\s*(?:keep|show|give me)?\s*(?:the\s+)?top\s+\d+\s*\.?\s*$/i;
-  const isRefine = (refineRe.test(message) || refineTopOnly.test(message)) && !draftOutreachRe.test(message);
+  const isRefine = (refineRe.test(message) || refineTopOnly.test(message)) && !draftOutreachRe.test(message) && !newSourcing;
   if (isRefine) {
     if (!hasLeads) {
       return await replyAndReturn(
@@ -622,7 +627,7 @@ Deno.serve(async (req) => {
   // Penn drafts. Memory-only, approval-gated, nothing sent. Placed before the
   // sourcing pipeline so the word "leads" can't trigger a re-source.
   const enrichAndDraft = /\benrich\b/i.test(message) && draftOutreachRe.test(message);
-  if (enrichAndDraft && hasLeads) {
+  if (enrichAndDraft && hasLeads && !newSourcing) {
     const n = extractTopN(message, 5);
     const top = memory.lead_candidates.slice(0, n);
     const urls = top.map((l) => l.account?.domain).filter(Boolean).map((d) => `https://${d}`);
@@ -644,7 +649,7 @@ Deno.serve(async (req) => {
   // already persisted by sourcing; just acknowledge. Must precede the sourcing
   // pipeline so "save these leads" can't trigger a re-source.
   const saveOnlyRe = /\b(save|keep)\b[^.!?]*\b(signal feed|for (?:now|later)|review(?:\s+later)?|saved)\b/i;
-  if (saveOnlyRe.test(message) && hasLeads) {
+  if (saveOnlyRe.test(message) && hasLeads && !newSourcing) {
     return await replyAndReturn(
       `Kept your ${memory.lead_candidates.length} leads in the Signal Feed — nothing was sent. Ask me to rank, enrich, or draft outreach whenever you're ready.`,
       { post_lead_action: "save_only", reused_memory: true, credits: 0 },
@@ -677,6 +682,17 @@ Deno.serve(async (req) => {
     if (draftOutreachRe.test(message) && hasLeads) {
       const n = extractTopN(message, 5);
       const top = memory.lead_candidates.slice(0, n);
+      // Draft-outreach gate: personalized outreach needs a real contact. If these
+      // are account opportunities (no decision-maker attached), don't fabricate a
+      // recipient — point the user to find contacts first (or a generic template).
+      const withContact = top.filter((l) => l.contact?.full_name || (l.contact as { linkedin_url?: string })?.linkedin_url);
+      const wantsGeneric = /\b(generic|template|account[- ]level)\b/i.test(message);
+      if (withContact.length === 0 && !wantsGeneric) {
+        return await replyAndReturn(
+          `These are account opportunities — I have ${top.length} compan${top.length === 1 ? "y" : "ies"} showing intent, but no decision-maker contact attached yet. I won't fabricate a recipient. Reply "find decision-makers" to locate contacts, or "draft a generic account-level template" if you want a non-personalized version. Nothing will be sent.`,
+          { followup: "draft_needs_contact", reused_memory: true, can_draft: false },
+        );
+      }
       const seedSummary = top
         .map((l, i) => {
           const who = l.contact?.full_name ?? l.account?.name ?? "Lead";
@@ -790,6 +806,51 @@ Deno.serve(async (req) => {
     const msg =
       "I can't run that as described — it would involve unsafe or unsupported actions (e.g. scraping private personal data or sending without your approval). I can help with: public business contact research, approval-gated email outreach, LinkedIn outreach drafts, or call scripts. Which of those would you like?";
     return await replyAndReturn(msg, { unsafe: true });
+  }
+
+  // 5c.ii-a Contact discovery — "Find decision-makers at these companies".
+  // Operates over the remembered ACCOUNT opportunities; targets the inferred
+  // persona; attaches discovered contacts to those accounts. Honest fallback if
+  // the people-search actor is off — never invents contacts. Must precede lead
+  // intake (which would otherwise treat "find decision-makers" as a new search).
+  if (isFindContactsRequest(message)) {
+    const accountLeads = memory.lead_candidates.filter((l) => !l.contact); // account opportunities (no contact yet)
+    if (accountLeads.length === 0) {
+      return await replyAndReturn(
+        "I don't have account opportunities in this conversation to find contacts for yet. Source companies first (e.g. \"find 5 companies hiring GTM roles in the US\"), then I'll find decision-makers at them.",
+        { followup: "no_accounts_for_contacts" },
+      );
+    }
+    const accounts: AccountForContacts[] = accountLeads.map((l) => ({
+      lead_candidate_id: l.id,
+      company: l.account?.name ?? "",
+      signal_role: l.reason ?? null,
+    })).filter((a) => a.company);
+    const persona = personaForAccounts(accounts);
+    const peopleOn = (() => { const a = getActorByKey("apify_people_search"); return !!a && isActorRuntimeEnabled(a); })();
+
+    if (!peopleOn) {
+      return await replyAndReturn(
+        `${contactDiscoveryFallback()}\n\nFor these ${accounts.length} ${accounts.length === 1 ? "company" : "companies"} I'd target: ${persona.personas.slice(0, 3).join(" / ")}.`,
+        { followup: "contacts_unavailable", recommended_persona: persona, account_count: accounts.length, can_draft: false },
+      );
+    }
+    const queries = buildContactSearchQueries(accounts, persona, { maxQueries: Math.min(10, accounts.length * 2) });
+    return await delegateToOrchestrate({
+      admin, SUPABASE_URL, SUPABASE_ANON_KEY, authHeader, conversationId, workspaceId,
+      instruction: `Find decision-makers (${persona.personas.slice(0, 3).join(", ")}) at these companies: ${accounts.map((a) => a.company).join(", ")}. Attach each contact to its company. Do not invent contacts.`,
+      toolInput: {
+        intent: "source_people", tool_name: "source_with_apify", selected_actor_key: "apify_people_search",
+        source_type: "people_profiles", query: queries.join(", "), role_keywords: persona.personas.map((p) => p.toLowerCase()),
+        location: null, max_results: Math.max(1, Math.min(25, accounts.length)),
+        needs_enrichment: false, needs_outreach: false, execution_mode: "fast", confidence: 0.85, missing_fields: [],
+        reason: "contact discovery: attach decision-makers to account opportunities",
+        // run-agent attaches results to these accounts (match by company; no invent).
+        attach_to_accounts: accounts.map((a) => ({ lead_candidate_id: a.lead_candidate_id, company: a.company, signal_role: a.signal_role })),
+        user_input: { keywords: queries },
+      } as unknown as ToolInput,
+      modelUsed: "google/gemini-3-flash-preview", providerUsed: "lovable-ai",
+    });
   }
 
   // 5c.ii-b Lead intake — "Find me leads / prospects / buyers / companies".

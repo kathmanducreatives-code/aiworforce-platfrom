@@ -307,21 +307,44 @@ Deno.serve(async (req) => {
         }
         if (adaptive.accepted.length > 0) {
           const rawItems = adaptive.accepted.map((a) => a.raw);
-          // Persist ONCE with only the capped/deduped accepted set, so DB
-          // lead_candidates/signals == accepted count (not the sum of attempts).
-          try {
-            const { writeMemoryFromToolCall } = await import("../_shared/memoryWriter.ts");
-            await writeMemoryFromToolCall({
-              admin: supabase,
-              workspace_id,
-              plan_id,
-              task_id: task.id,
-              tool_call_id: null,
-              tool_name: "source_with_apify",
-              selected_actor_key: planned_actor_key ?? null,
-              output: { items: rawItems, total: rawItems.length, summary: `${adaptive.found}/${adaptive.requested} accepted across ${adaptive.attempts.length} attempt(s)` },
-            });
-          } catch (e) { console.warn("[run-agent] capped persistence failed:", e); }
+          const attachAccounts = Array.isArray(tool_input_body?.attach_to_accounts) ? tool_input_body.attach_to_accounts : null;
+
+          if (attachAccounts && attachAccounts.length > 0) {
+            // Contact discovery: ATTACH discovered decision-makers to existing
+            // account rows (no new leads, no invented contacts) instead of creating.
+            try {
+              const { planContactAttachments } = await import("../_shared/contactDiscovery.ts");
+              const plan = planContactAttachments(rawItems, attachAccounts as Array<{ lead_candidate_id: string; company: string; signal_role?: string | null }>);
+              for (const att of plan) {
+                const { data: c } = await supabase.from("contacts").insert({
+                  workspace_id,
+                  full_name: att.contact.name,
+                  title: att.contact.title,
+                  linkedin_url: att.contact.linkedin_url,
+                  email: att.contact.email,
+                  raw: { source: att.contact.source, via: "contact_discovery", confidence: att.contact.confidence },
+                }).select("id").maybeSingle();
+                if (c?.id) await supabase.from("lead_candidates").update({ contact_id: c.id }).eq("id", att.lead_candidate_id);
+              }
+              console.log("[run-agent] attached contacts:", plan.length);
+            } catch (e) { console.warn("[run-agent] contact attach failed:", e); }
+          } else {
+            // Normal sourcing: persist ONCE with only the capped/deduped accepted
+            // set, so DB lead_candidates/signals == accepted count.
+            try {
+              const { writeMemoryFromToolCall } = await import("../_shared/memoryWriter.ts");
+              await writeMemoryFromToolCall({
+                admin: supabase,
+                workspace_id,
+                plan_id,
+                task_id: task.id,
+                tool_call_id: null,
+                tool_name: "source_with_apify",
+                selected_actor_key: planned_actor_key ?? null,
+                output: { items: rawItems, total: rawItems.length, summary: `${adaptive.found}/${adaptive.requested} accepted across ${adaptive.attempts.length} attempt(s)` },
+              });
+            } catch (e) { console.warn("[run-agent] capped persistence failed:", e); }
+          }
 
           const lens = source_type === "jobs" ? "\n\nNOTE: These are companies/jobs hiring for the requested role, not individual people profiles." : "";
           const log = adaptive.attempts.map((a) => `Attempt ${a.n}: ${a.strategy} — ${a.accepted_count} accepted (total ${a.total_accepted})`).join("\n");
@@ -645,8 +668,8 @@ Deno.serve(async (req) => {
     const { data: srcCalls } = await supabase.from("tool_calls").select("id").eq("plan_id", plan_id).eq("tool_name", "source_with_apify").limit(1);
     const wasSourcing = (srcCalls ?? []).length > 0;
 
-    const { data: leads } = await supabase.from("lead_candidates").select("id, account:accounts(domain)").eq("plan_id", plan_id);
-    const leadRows = (leads ?? []) as Array<{ id: string; account?: { domain?: string | null } | null }>;
+    const { data: leads } = await supabase.from("lead_candidates").select("id, contact_id, account:accounts(name, domain, linkedin_url), contact:contacts(full_name, title, linkedin_url, email)").eq("plan_id", plan_id);
+    const leadRows = (leads ?? []) as Array<{ id: string; contact_id?: string | null; account?: { name?: string | null; domain?: string | null; linkedin_url?: string | null } | null; contact?: { full_name?: string | null; title?: string | null; linkedin_url?: string | null; email?: string | null } | null }>;
     const { count: sigCount } = await supabase.from("signals").select("id", { count: "exact", head: true }).eq("plan_id", plan_id);
     const produced = Math.max(leadRows.length, sigCount ?? 0);
 
@@ -684,63 +707,66 @@ Deno.serve(async (req) => {
           agent_slug: "pilot", metadata: { ui_card: card, lead_sourcing_error: true, plan_id, workflow_status: "failed" },
         });
       } else if (leadRows.length > 0 && conversationId) {
-        const enrichable = leadRows.filter((l) => !!l.account?.domain).length;
-        const contactCount = leadRows.filter((l: any) => !!l.contact_id || !!l.contact?.id).length;
-        const accountCount = leadRows.filter((l: any) => !!l.account_id || !!l.account?.id).length;
-        const { buildPostLeadActionsCard } = await import("../_shared/creditEstimate.ts");
-        const card = buildPostLeadActionsCard(leadRows.length, enrichable, leadRows.map((l) => l.id));
-        const partial = planStatus === "partial";
-        // Side-panel (Workbench / LeadResultsView) — opened by ChatView on ui_panel.
+        const lo = await import("../_shared/leadOpportunity.ts");
         const planSummary = String(plan?.plan_summary ?? "").toLowerCase();
         const sourceType: string = planSummary.includes("hiring") ? "hiring_signal"
           : planSummary.includes("linkedin") ? "linkedin_engagement"
-          : planSummary.includes("people") || planSummary.includes("profile") ? "people"
-          : "lead";
-        const sourceLabel = sourceType === "hiring_signal" ? "hiring-signal"
-          : sourceType === "linkedin_engagement" ? "LinkedIn engagement"
-          : sourceType === "people" ? "people"
-          : "lead";
-
-        const allAccountOnly = contactCount === 0;
-        const recommended_next_action = allAccountOnly
-          ? { action: "find_contacts", label: "Find decision-makers", reason: "These companies show intent, but no contacts are attached yet.", estimated_credits: leadRows.length }
-          : enrichable > 0
-            ? { action: "research_company", label: "Research company context", reason: "Enrichment will make outreach more personalized.", estimated_credits: enrichable }
-            : { action: "draft_outreach", label: "Generate approval-ready outreach", reason: "Penn can now draft personalized messages.", estimated_credits: contactCount * 2 };
-
+          : planSummary.includes("people") || planSummary.includes("profile") ? "people_profiles"
+          : planSummary.includes("competitor") ? "competitor_engagement"
+          : "company_search";
+        // Account vs contact split — contact-ready only with real person data.
+        const contactRows = leadRows.filter((l) => !!l.contact_id && lo.canDraftOutreach({ name: l.contact?.full_name, linkedin_url: l.contact?.linkedin_url, email: l.contact?.email }));
+        const contacts = contactRows.length;
+        const accounts = leadRows.length;
+        const canDraft = contacts > 0;
+        const allAccountOnly = contacts === 0;
+        // Domain discovery before enrichment (fixes "0 websites").
+        const domainGuesses = leadRows.map((l) => lo.guessDomain({ website: null, linkedin_url: l.account?.linkedin_url, source_url: null, company: l.account?.name }));
+        const realDomains = leadRows.filter((l) => !!l.account?.domain).length;
+        const enrichable = Math.max(realDomains, domainGuesses.filter((g) => g.confidence !== "unavailable").length);
+        const persona = lo.inferContactPersona((reqStep?.instruction as string) ?? planSummary);
+        const nextAction = lo.recommendNextAction({ accounts, contacts, enriched_contacts: 0, requested });
+        const recommended_next_action = { action: nextAction.action, label: nextAction.label, reason: nextAction.reason, estimated_credits: allAccountOnly ? leadRows.length : (canDraft ? contacts * 2 : enrichable) };
+        const header = lo.buildLeadResultsHeader({ accounts, contacts });
+        const { buildPostLeadActionsCard } = await import("../_shared/creditEstimate.ts");
+        const card = buildPostLeadActionsCard(leadRows.length, enrichable, leadRows.map((l) => l.id));
+        const partial = planStatus === "partial";
+        const actions = canDraft
+          ? ["enrich", "draft_outreach", "enrich_and_draft", "rank", "export_csv", "save_to_signal_feed"]
+          : ["find_contacts", "research_company", "rank", "export_csv", "save_to_signal_feed"];
         const uiPanel = {
           kind: "lead_results" as const,
           view: "spreadsheet" as const,
-          title: allAccountOnly
-            ? `${leadRows.length} account opportunit${leadRows.length === 1 ? "y" : "ies"} found`
-            : `${leadRows.length} ${sourceLabel} lead${leadRows.length === 1 ? "" : "s"}`,
-          subtitle: allAccountOnly
-            ? "Scout found companies showing intent. Unlock contacts, enrichment, and outreach when ready."
-            : "Found by Scout · Saved for review · Nothing sent",
+          title: header,
+          subtitle: lo.LEAD_RESULTS_SUBTITLE,
           source_type: sourceType,
           lead_count: leadRows.length,
-          account_count: accountCount,
-          contact_count: contactCount,
+          account_count: accounts,
+          contact_count: contacts,
           enrichable_count: enrichable,
+          can_draft: canDraft,
+          recommended_persona: persona,
+          contact_status: canDraft ? "contact_found" : "needs_contact",
+          next_action: nextAction,
           lead_candidate_ids: leadRows.map((l) => l.id),
           plan_id,
           default_view: "table",
+          actions,
           locked_columns: ["decision_maker", "contact_info", "company_enrichment", "personalized_message"],
-          actions: ["enrich", "draft_outreach", "enrich_and_draft", "rank", "export_csv", "save_to_signal_feed"],
-          available_actions: ["find_contacts", "research_company", "draft_outreach", "rank", "export_csv", "save_to_signal_feed"],
+          available_actions: actions,
           recommended_next_action,
         };
 
         const chatCopy = allAccountOnly
-          ? `${partial ? `Found ${produced} of ${requested} — ` : ""}Scout found ${leadRows.length} account opportunit${leadRows.length === 1 ? "y" : "ies"}. I opened them in the lead table. Decision-maker, enrichment, and outreach columns are locked until you run those actions. Nothing was sent.`
-          : `${partial ? `Found ${produced} of ${requested} — ` : ""}Scout found ${leadRows.length} contact-ready lead${leadRows.length === 1 ? "" : "s"}. I opened them in the lead table. You can now research companies or generate approval-ready outreach.`;
+          ? `${partial ? `Found ${produced} of ${requested} — ` : ""}Scout found ${accounts} account opportunit${accounts === 1 ? "y" : "ies"}. These companies show intent, but decision-maker contacts aren't attached yet. I opened them in the lead table; contact, enrichment, and outreach columns are locked until you run those actions. Recommended next step: find decision-makers. Nothing was sent.`
+          : `${partial ? `Found ${produced} of ${requested} — ` : ""}Scout found ${contacts} contact-ready lead${contacts === 1 ? "" : "s"}. I opened them in the lead table. Recommended next step: rank by fit, then research or draft outreach. Nothing was sent.`;
 
         await supabase.from("messages").insert({
           conversation_id: conversationId,
           role: "assistant",
           content: chatCopy,
           agent_slug: "pilot",
-          metadata: { ui_card: card, ui_panel: uiPanel, post_lead_actions: true, plan_id, workflow_status: planStatus, attempt_log: attemptSummary.length ? attemptSummary : [`Sourced ${produced}/${requested}`] },
+          metadata: { ui_card: card, ui_panel: uiPanel, post_lead_actions: true, plan_id, workflow_status: planStatus, can_draft: canDraft, next_action: nextAction.action, attempt_log: attemptSummary.length ? attemptSummary : [`Sourced ${produced}/${requested}`] },
         });
       }
     }
