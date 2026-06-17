@@ -12,6 +12,7 @@ export type ChatActionSource =
   | 'lead_intake_card'
   | 'post_lead_actions_card'
   | 'lead_results_panel'
+  | 'lead_table_action'
   | 'lead_sourcing_error_card'
   | 'clarification_card'
   | 'ui_actions_button'
@@ -27,7 +28,9 @@ export type LeadResultPanelAction =
   | 'enrich_and_draft'
   | 'rank'
   | 'export_csv'
-  | 'save_to_signal_feed';
+  | 'save_to_signal_feed'
+  | 'find_contacts'
+  | 'research_company';
 
 export interface ChatActionDetail {
   text: string;
@@ -39,8 +42,6 @@ export interface ChatActionDetail {
 
 export function dispatchChatAction(detail: ChatActionDetail) {
   if (detail.action_source && !detail.conversation_id) {
-    // This indicates a wiring bug — a card was rendered without a conversation_id.
-    // The composer will surface a user-facing error and refuse to send.
     // eslint-disable-next-line no-console
     console.warn('[chat-action] missing conversation_id for card action', detail);
   }
@@ -63,6 +64,8 @@ const ACTION_COMMAND: Record<LeadResultPanelAction, (n: number) => string> = {
   rank: () => `Rank these leads by fit.`,
   export_csv: () => `Export these leads as CSV.`,
   save_to_signal_feed: () => `Save these leads to the Signal Feed for later review.`,
+  find_contacts: (n) => `Find decision-makers for the selected ${n} ${n === 1 ? 'account' : 'accounts'}.`,
+  research_company: (n) => `Research company context for the selected ${n} ${n === 1 ? 'account' : 'accounts'} using Hawk + Firecrawl.`,
 };
 
 export interface ResultActionDetail {
@@ -72,6 +75,7 @@ export interface ResultActionDetail {
   action: LeadResultPanelAction;
   estimatedCredits?: number;
   savedOutputId?: string | null;
+  confirmed?: boolean;
 }
 
 export function dispatchResultAction(detail: ResultActionDetail) {
@@ -80,14 +84,15 @@ export function dispatchResultAction(detail: ResultActionDetail) {
   dispatchChatAction({
     text,
     conversation_id: detail.conversationId,
-    action_source: 'lead_results_panel',
+    action_source: 'lead_table_action',
     metadata: {
-      intent: 'lead_result_action',
+      intent: 'lead_table_action',
       action: detail.action,
       lead_candidate_ids: detail.leadCandidateIds,
       plan_id: detail.planId,
       saved_output_id: detail.savedOutputId ?? null,
       estimated_credits: detail.estimatedCredits ?? 0,
+      confirmed: detail.confirmed ?? false,
     },
   });
 }
