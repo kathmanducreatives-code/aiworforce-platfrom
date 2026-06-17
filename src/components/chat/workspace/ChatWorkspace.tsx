@@ -112,7 +112,7 @@ export default function ChatWorkspace() {
               </div>
 
               {showSplit && (
-                <div className="basis-[60%] flex-1 min-w-0 border-l border-white/[0.06] bg-[#0a0d12] overflow-hidden">
+                <div className="basis-1/2 flex-1 min-w-0 border-l border-white/[0.06] bg-[#0a0d12] overflow-hidden">
                   <ChatErrorBoundary>
                     <WorkbenchPanel />
                   </ChatErrorBoundary>
