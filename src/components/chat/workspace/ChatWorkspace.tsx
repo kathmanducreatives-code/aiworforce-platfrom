@@ -132,3 +132,46 @@ function MobileNav() {
     </div>
   );
 }
+
+function ChatPane({
+  isMobile,
+  view,
+  pending,
+}: {
+  isMobile: boolean;
+  view: ReturnType<typeof useChatWorkspace>['view'];
+  pending: ReturnType<typeof useChatWorkspace>['pending'];
+}) {
+  return (
+    <>
+      {isMobile && <MobileNav />}
+      <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
+        <ChatErrorBoundary>
+          {view.kind === 'empty' && <EmptyState />}
+          {view.kind === 'conversation' && <ConversationView planId={view.planId} />}
+          {view.kind === 'channel' && <ChannelView dept={view.dept} />}
+          {view.kind === 'agent' && <DirectAgentView slug={view.slug} />}
+          {view.kind === 'chat' && view.conversationId && (
+            <ChatView
+              conversationId={view.conversationId}
+              agentSlug={view.agentSlug}
+              pendingUserText={pending?.conversationId === view.conversationId ? pending.text : null}
+              awaitingReply={pending?.conversationId === view.conversationId && pending.awaiting}
+            />
+          )}
+        </ChatErrorBoundary>
+      </div>
+      <div
+        className="border-t border-border/60 px-4 py-3 bg-background/80 backdrop-blur shrink-0"
+        style={{ paddingBottom: 'calc(0.75rem + env(safe-area-inset-bottom))' }}
+      >
+        <ChatErrorBoundary>
+          <ChatComposerPro
+            restrictDepartment={view.kind === 'channel' ? view.dept : undefined}
+            autoFocus
+          />
+        </ChatErrorBoundary>
+      </div>
+    </>
+  );
+}
