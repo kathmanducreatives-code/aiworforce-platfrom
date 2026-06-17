@@ -1,122 +1,118 @@
-# Lead Workbench — Spreadsheet-Style Side Panel
+# Resizable Chat ↔ Workbench Split (Lovable-style)
 
-Replace the card-list `LeadResultsView` with a premium, Clay/Airtable-style table inside the existing right-side Workbench. Rows = lead opportunities. Columns are either always visible (company, signal, persona, contact status, fit, source, status) or **locked** behind credit-gated unlock actions (decision maker, contact info, enrichment, personalized message). All actions stay in the same conversation and route through the existing `dispatchResultAction` dispatcher — no new chats, no sending, no DB migrations, no production deploys.
+Goal: replace the current rigid `basis-1/2` split with a polished, draggable 40/60 split that persists, with safe min/max widths and narrow-aware reflow in the chat pane and Workbench.
 
-## Scope guardrails
-
-- No migration 145631; no production DB changes.
-- No auto-send / DM / comment / post / email. Drafts only.
-- No production deploy without approval. `run-agent` edge function changes are limited to extending the `ui_panel` payload — they will be deployed only if/when the user approves.
-- No fabricated emails, phone numbers, or contacts. Locked columns stay locked when source data is unavailable.
-- Visual + presentation work only on the frontend side; backend changes are additive metadata.
+No backend changes. No landing/page logic changes. No migrations. No auto-send.
 
 ## Files to change
 
-Frontend
-- `src/lib/chatActions.ts` — extend `LeadResultPanelAction` with `find_contacts`, `research_company`, `confirm` flag; keep existing actions backward compatible.
-- `src/contexts/ChatWorkspaceContext.tsx` — extend `LeadResultsPanelMeta` (view, counts, locked_columns, recommended_next_action, available_actions). All optional, defaulted when missing so old messages still render.
-- `src/hooks/useLeadResults.ts` — broaden the normalized row shape to the new `LeadTableRow` type (decision-maker / enrichment / draft statuses, persona, signal source, found_via). Join `lead_enrichments` and `outreach_drafts` (best-effort `.select` with graceful fallback if relations missing).
-- `src/components/chat/workspace/workbench/LeadResultsView.tsx` — rewrite as a spreadsheet wrapper: header + recommendation banner + summary chips + bulk toolbar + table + detail drawer.
-- New `src/components/chat/workspace/workbench/leadTable/` directory:
-  - `LeadTable.tsx` — sticky header, sticky first column, horizontal scroll, row hover/select, compact density.
-  - `LeadTableRow.tsx` — cell renderers per column.
-  - `LockedCell.tsx` — blurred preview + "Unlock — N credits" inline button.
-  - `StatusChip.tsx`, `CreditBadge.tsx`, `RecommendationBanner.tsx`, `BulkActionToolbar.tsx`.
-  - `LeadDetailDrawer.tsx` — right-slide drawer inside the panel (Company / Signal / Recommended Contact / Enrichment / Draft / Activity / Raw).
-  - `credits.ts` — single source of truth for credit estimates and recommended-next-action logic.
-  - `csv.ts` — CSV export including locked placeholder values.
+1. `src/components/chat/workspace/ChatWorkspace.tsx`
+   - Replace the two-div `basis-1/2` split with a new `ResizableWorkspaceSplit` component when `showSplit` is true (desktop + workbench open).
+   - Keep mobile full-screen Workbench overlay path unchanged.
+   - Keep top bar, history Sheet, composer, ChatErrorBoundary wrapping unchanged.
+   - Pass a `paneWidth` (px) down to the chat pane via a small context so the Lead Source Selector can reflow.
 
-Backend (additive only; deploy gated on approval)
-- `supabase/functions/run-agent/index.ts` — extend the emitted `ui_panel` for `kind: "lead_results"` with: `view: "spreadsheet"`, `lead_count`, `account_count`, `contact_count`, `locked_columns`, `available_actions`, `recommended_next_action {action,label,reason,estimated_credits}`. Existing fields preserved.
-- No new edge function; backend action handling for `find_contacts` / `research_company` is out of scope for this UI change. The dispatcher sends the structured intent; if the backend has no handler yet, the assistant message gracefully reports "not configured yet" using existing fallback copy patterns. No fake data is ever rendered.
+2. New: `src/components/chat/workspace/ResizableWorkspaceSplit.tsx`
+   - Two children (chat, workbench) + a draggable divider between them.
+   - Constraints (px-based, evaluated against current container width):
+     - chat min 360px, workbench min 560px
+     - chat max 60% of container, workbench max 75% of container
+   - Default ratio 0.40 (chat fraction).
+   - Pointer-events-based drag (pointerdown/move/up + setPointerCapture), `cursor-col-resize`, `select-none` + `user-select:none` on body during drag, subtle active state on handle.
+   - Double-click handle → reset to 0.40.
+   - Persist ratio in `localStorage` under `agentory:workspace-split-ratio`, written **on pointerup only** (not on every move).
+   - On mount: read saved ratio, clamp against current min/max, fall back to 0.40.
+   - Re-clamp on window resize so the panes never violate min/max.
+   - Divider visuals: 6px hit area, 1px centered line (`border-white/[0.06]`), 28px tall handle pill with `GripVertical` icon, hover/active glow using `bg-primary/20`.
+   - Exposes `onWidthsChange?(chatPx, wbPx)` so the chat pane width can drive narrow reflow.
 
-## Column spec
+3. New: `src/components/chat/workspace/ChatPaneWidthContext.tsx`
+   - Tiny context exposing the current chat-pane pixel width.
+   - Provider wraps the chat column inside `ResizableWorkspaceSplit`.
+   - Hook `useChatPaneWidth()` returns a number (default `Infinity` when no split).
 
-Always visible: Select · Company/Account · Signal · Recommended Persona · Contact Status · Fit Score · Source · Status.
-Locked (visible but blurred + unlock CTA): Decision Maker 🔒 · Contact Info 🔒 · Company Enrichment 🔒 · Personalized Message 🔒.
-Trailing: Notes / Next Step · Row Actions.
+4. `src/components/chat/workspace/workbench/LeadResultsView.tsx` (and/or the Lead Source Selector card it renders)
+   - Read `useChatPaneWidth()` — only applies when the selector is rendered inside the chat pane (same-chat surface). Workbench-rendered tables are unaffected.
+   - Switch the source-cards grid from fixed `sm:grid-cols-2` to width-aware: 1 column when chat pane < 520px, 2 columns otherwise.
+   - Add `min-w-0` and `break-words` on card bodies; remove any `whitespace-nowrap` from descriptions.
 
-Unlock state derived from row data:
-- Decision Maker / Contact Info → unlocked when `contact_id` present.
-- Company Enrichment → unlocked when `lead_enrichments` row exists for the account.
-- Personalized Message → unlocked when `outreach_drafts` row exists for the contact/account.
+5. `src/components/chat/workspace/workbench/WorkbenchPanel.tsx`
+   - Ensure root is `flex flex-col h-full min-w-0 overflow-hidden`.
+   - Sticky `WorkbenchHeader` (`sticky top-0 z-10 bg-[#0a0d12]`).
+   - Body wrapper: `flex-1 min-h-0 overflow-auto`. Tables get `overflow-x-auto` inside their own container, never the page.
+   - Default tab: confirm it is **not** Raw JSON (already the case after prior change — verify and lock with a small comment/test).
 
-## Credit model
+6. `src/contexts/ChatWorkspaceContext.tsx`
+   - No API changes required for split, but add two helpers used by the new split:
+     - `splitRatio: number` + `setSplitRatio(n: number)` (lightweight, no persistence — persistence lives in the split component itself; context is only used to share the value with anything that needs it later). Optional — can be kept fully local in `ResizableWorkspaceSplit` if no other consumer needs it. Default plan: keep it local, skip context changes.
 
-Local-only estimates in `credits.ts` (no ledger writes):
-- find_contacts: 1 per row missing contact
-- research_company: 1 per row with website and no enrichment
-- draft_outreach: 2 per row with contact and no draft
-- rank: ceil(rows/10)
-- enrich_and_draft: research + draft combined
-- export_csv / save: 0
+## Layout architecture
 
-Confirmation dialog before any non-zero action. Estimate is stored in dispatched metadata; nothing is deducted.
+```
+ChatWorkspace (fixed inset-0, flex-col)
+├── TopBar  (history toggle · title · close)
+├── Body  (flex-1, flex, min-h-0)
+│    └── ResizableWorkspaceSplit  (when workbenchOpen && !isMobile)
+│         ├── ChatPane    (min 360px, flex-col, composer pinned bottom)
+│         ├── Divider     (6px, draggable, dbl-click reset)
+│         └── WorkbenchPane (min 560px, sticky header, scroll body)
+│        (else: ChatPane fills width)
+├── Mobile Workbench overlay (unchanged)
+└── History Sheet (unchanged)
+```
 
-## Recommended next action logic
+## Resize behavior details
 
-In order of precedence:
-1. All rows missing contact → "Find decision-makers".
-2. Contacts exist, no enrichment → "Research company context".
-3. Contacts + enrichment, no drafts → "Generate approval-ready outreach".
-4. Partial scout result → "Broaden search".
-5. Any rows missing website → "Find domains".
-Rendered as a banner above the table with one primary CTA + reason + credit estimate.
+- Ratio stored as chat fraction (0..1). Persisted only on `pointerup` and on double-click reset.
+- Drag math: `nextChatPx = clamp(e.clientX - containerLeft, minChat, containerW - minWb)` then clamped again against the % caps (chat ≤ 60%, wb ≤ 75% → chat ≥ 25%).
+- During drag: add `data-resizing` on the split root → CSS disables transitions and sets `cursor-col-resize` + `user-select:none` globally via a class on `<body>`.
+- Window resize listener re-applies clamp without writing to storage.
+- Closing Workbench does not erase saved ratio. Reopening restores it.
 
-## Action dispatch
+## Narrow chat-pane reflow (Lead Source Selector)
 
-All bulk + row + banner actions call `dispatchResultAction({ conversationId, planId, leadCandidateIds, action, estimatedCredits })`. `conversationId` comes from `WorkbenchSelection.conversationId` (already plumbed). Export CSV runs locally and does not dispatch.
+- Provider gives current chat pane width in px.
+- Source-cards grid: `gridTemplateColumns: paneWidth < 520 ? '1fr' : 'repeat(2, minmax(0,1fr))'`.
+- Card root: add `min-w-0`; description gets `break-words leading-snug`; icons + title row uses `flex-wrap` if extremely narrow.
+- "Nothing will be sent" banner stays full width above the grid.
 
-## Detail drawer
+## Workbench polish
 
-Click a row → in-panel drawer (absolute overlay inside the LeadResultsView container, not a new modal). Sections fed from the same normalized row + on-demand fetch of raw `lead_candidates` JSON. Closes with Esc or backdrop click. Does not navigate, does not change conversation.
+- Header sticky, single 1px bottom border matching `border-white/[0.06]`.
+- Tabs row sticky directly under header (already structured this way — verify alignment after split).
+- Lead table container: `overflow-x-auto` with `min-w-[720px]` table so it scrolls inside the pane only.
+- Action toolbar lives inside the Workbench scroll container's sticky top section so buttons never escape.
 
-## Chat copy
+## Responsive rules
 
-When the backend emits the panel, the existing assistant message is updated (text-only) to:
-- Account-only: "Scout found N account opportunities. I opened them in the lead table. Decision-maker, enrichment, and outreach columns are locked until you run those actions. Nothing was sent."
-- Contact-ready: "Scout found N contact-ready leads. I opened them in the lead table. You can now research companies or generate approval-ready outreach."
-Selection is based on whether any row already has a contact.
+- Desktop ≥ 1024px (current `isMobile` threshold is 768): use `ResizableWorkspaceSplit`.
+- Mobile (< 768px): unchanged full-screen overlay for Workbench.
+- Tablet 768–1023px: still split, but cap default chat fraction at min 360px (clamp will naturally handle it). If container width < `minChat + minWb` (920px), force single-pane Workbench overlay (mobile behavior) — small guard inside `ChatWorkspace`.
 
-## Backward compatibility
+## Visual consistency
 
-- Messages emitted before this change render with the new table using sensible defaults (all advanced columns locked, recommendation = Find decision-makers when no contact data found in DB).
-- Old `actions` array (`enrich`, `draft_outreach`, …) still works; new actions added alongside.
+- Divider uses the same `border-white/[0.06]` token used elsewhere.
+- Handle pill: `h-7 w-1.5 rounded-full bg-white/10 group-hover:bg-primary/40 transition-colors`.
+- No new colors; reuse existing tokens. No hardcoded hex outside what's already used in this file (`#0a0d12`).
 
-## Visual design
+## Tests / QA checklist
 
-Pitch-black surface, emerald accents, glassmorphic header — consistent with the existing Workbench. Sticky table head, sticky select+company column, monospaced numeric cells, status chips, locked cells with `backdrop-blur-sm` + diagonal lock pattern + inline credit CTA, compact 36px row height, hover row tint, keyboard row navigation (↑/↓, Space to select, Enter to open drawer).
+Manual browser QA after build:
+- A: Workbench open → defaults to 40/60.
+- B: Drag divider both directions → smooth, min/max enforced, no horizontal page scroll.
+- C: Double-click divider → resets to 40/60.
+- D: Refresh → saved ratio restored.
+- E: Close & reopen Workbench → saved ratio restored, no layout jump.
+- F: Resize browser smaller/larger → panes re-clamp, never below mins.
+- G: At chat width < 520px → Lead Source Selector collapses to 1 column, no overflow.
+- H: Composer stays pinned, Workbench header stays sticky, tables scroll inside their pane only.
+- I: Conversation history Sheet still opens/closes without affecting split.
+- J: Raw JSON tab is not the default.
 
-## Tests
+## Out of scope (explicitly not touched)
 
-- `src/components/chat/workspace/workbench/leadTable/__tests__/LeadTable.test.tsx`
-  - renders rows + locked columns when contacts/enrichment/drafts missing
-  - unlocks decision-maker column when `contact_id` present
-  - unlocks enrichment column when enrichment row present
-  - unlocks personalized message when draft row present
-  - draft row action disabled when no contact
-  - bulk find_contacts dispatches with correct `conversation_id` and credit estimate
-  - confirmation required for paid actions; zero-credit actions skip confirm
-  - CSV export contains "Locked — not generated" for locked cells
-  - recommendation banner reflects the precedence rules
-- Existing `run-agent` and `pilot-chat` tests remain untouched.
-
-## Browser QA (post-build, preview only)
-
-A. "Find 5 companies hiring GTM roles in B2B SaaS USA" → spreadsheet opens, 5 rows, advanced columns locked, banner = Find decision-makers.
-B. Click Find decision-makers → credit confirm; if backend handler missing, honest fallback assistant message; no fake contacts.
-C. Click Research company → confirm; Firecrawl-backed enrichment populates column when backend returns; rows without websites stay locked with "Needs domain".
-D. Click Generate outreach → blocked if no contact; otherwise draft appears in the unlocked column; approval required; nothing sent.
-E. Export CSV → file downloads with locked placeholders.
-F. All actions stay in the same conversation; no new chats spawned.
-
-## Out of scope
-
-- Backend handlers for `find_contacts` / `research_company` if not already wired (UI dispatches the intent; backend wiring is a separate task).
-- Real credit ledger / deduction.
-- Any DB migration.
-- Production deploy.
-
-## Final report (delivered after build)
-
-Files changed, table behavior, locked-column behavior, credit estimate behavior, backend metadata diff, action dispatch wiring, contact/enrichment/draft unlock behavior, CSV export behavior, test results, browser QA results, remaining gaps.
+- Landing page.
+- Backend / edge functions / migrations.
+- `dispatchChatAction`, `dispatchResultAction`, `useLeadResults`, locked-column logic, credit logic, account/contact logic.
+- Conversation continuity (`conversation_id`).
+- Auto-send / outreach behavior.

@@ -13,6 +13,7 @@ import ChatComposerPro from './ChatComposerPro';
 import ChatErrorBoundary from './ChatErrorBoundary';
 import WorkbenchPanel from './workbench/WorkbenchPanel';
 import { Sheet, SheetContent } from '@/components/ui/sheet';
+import ResizableWorkspaceSplit from './ResizableWorkspaceSplit';
 import { TooltipProvider, Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
 
 export default function ChatWorkspace() {
@@ -71,54 +72,23 @@ export default function ChatWorkspace() {
               </div>
             </div>
 
-            {/* Body: 50/50 split when workbench open, otherwise chat fills */}
-            <div className="flex-1 flex min-h-0 overflow-hidden">
-              <div
-                className={cn(
-                  'flex flex-col min-w-0 min-h-0 overflow-hidden relative',
-                  showSplit ? 'basis-1/2 flex-1' : 'flex-1',
-                )}
-              >
-                {isMobile && <MobileNav />}
-
-                <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
-                  <ChatErrorBoundary>
-                    {view.kind === 'empty' && <EmptyState />}
-                    {view.kind === 'conversation' && <ConversationView planId={view.planId} />}
-                    {view.kind === 'channel' && <ChannelView dept={view.dept} />}
-                    {view.kind === 'agent' && <DirectAgentView slug={view.slug} />}
-                    {view.kind === 'chat' && view.conversationId && (
-                      <ChatView
-                        conversationId={view.conversationId}
-                        agentSlug={view.agentSlug}
-                        pendingUserText={pending?.conversationId === view.conversationId ? pending.text : null}
-                        awaitingReply={pending?.conversationId === view.conversationId && pending.awaiting}
-                      />
-                    )}
-                  </ChatErrorBoundary>
-                </div>
-
-                <div
-                  className="border-t border-border/60 px-4 py-3 bg-background/80 backdrop-blur shrink-0"
-                  style={{ paddingBottom: 'calc(0.75rem + env(safe-area-inset-bottom))' }}
-                >
-                  <ChatErrorBoundary>
-                    <ChatComposerPro
-                      restrictDepartment={view.kind === 'channel' ? view.dept : undefined}
-                      autoFocus
-                    />
-                  </ChatErrorBoundary>
-                </div>
-              </div>
-
-              {showSplit && (
-                <div className="basis-1/2 flex-1 min-w-0 border-l border-white/[0.06] bg-[#0a0d12] overflow-hidden">
+            {/* Body: resizable split when workbench open, otherwise chat fills */}
+            {showSplit ? (
+              <ResizableWorkspaceSplit
+                chat={<ChatPane isMobile={isMobile} view={view} pending={pending} />}
+                workbench={
                   <ChatErrorBoundary>
                     <WorkbenchPanel />
                   </ChatErrorBoundary>
+                }
+              />
+            ) : (
+              <div className="flex-1 flex min-h-0 overflow-hidden">
+                <div className="flex flex-col min-w-0 min-h-0 overflow-hidden relative flex-1">
+                  <ChatPane isMobile={isMobile} view={view} pending={pending} />
                 </div>
-              )}
-            </div>
+              </div>
+            )}
 
             {/* Workbench (mobile fullscreen overlay) */}
             {workbenchOpen && isMobile && (
@@ -160,5 +130,48 @@ function MobileNav() {
         </button>
       ))}
     </div>
+  );
+}
+
+function ChatPane({
+  isMobile,
+  view,
+  pending,
+}: {
+  isMobile: boolean;
+  view: ReturnType<typeof useChatWorkspace>['view'];
+  pending: ReturnType<typeof useChatWorkspace>['pending'];
+}) {
+  return (
+    <>
+      {isMobile && <MobileNav />}
+      <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
+        <ChatErrorBoundary>
+          {view.kind === 'empty' && <EmptyState />}
+          {view.kind === 'conversation' && <ConversationView planId={view.planId} />}
+          {view.kind === 'channel' && <ChannelView dept={view.dept} />}
+          {view.kind === 'agent' && <DirectAgentView slug={view.slug} />}
+          {view.kind === 'chat' && view.conversationId && (
+            <ChatView
+              conversationId={view.conversationId}
+              agentSlug={view.agentSlug}
+              pendingUserText={pending?.conversationId === view.conversationId ? pending.text : null}
+              awaitingReply={pending?.conversationId === view.conversationId && pending.awaiting}
+            />
+          )}
+        </ChatErrorBoundary>
+      </div>
+      <div
+        className="border-t border-border/60 px-4 py-3 bg-background/80 backdrop-blur shrink-0"
+        style={{ paddingBottom: 'calc(0.75rem + env(safe-area-inset-bottom))' }}
+      >
+        <ChatErrorBoundary>
+          <ChatComposerPro
+            restrictDepartment={view.kind === 'channel' ? view.dept : undefined}
+            autoFocus
+          />
+        </ChatErrorBoundary>
+      </div>
+    </>
   );
 }
