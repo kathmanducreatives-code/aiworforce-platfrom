@@ -1,58 +1,122 @@
-# Fix chat workspace half-height issue
+# Lead Workbench — Spreadsheet-Style Side Panel
 
-## Root cause
-`ChatWorkspaceContext` defaults `open()` to `'drawer'` mode, which `ChatWorkspace.tsx` renders at `height: 70vh` anchored to the bottom (a bottom-sheet). Fullscreen mode already exists but is only reached via a toggle/keyboard shortcut. The drawer also has a drag-resize handle and rounded top corners that reinforce the "half-open sheet" feel on desktop.
+Replace the card-list `LeadResultsView` with a premium, Clay/Airtable-style table inside the existing right-side Workbench. Rows = lead opportunities. Columns are either always visible (company, signal, persona, contact status, fit, source, status) or **locked** behind credit-gated unlock actions (decision maker, contact info, enrichment, personalized message). All actions stay in the same conversation and route through the existing `dispatchResultAction` dispatcher — no new chats, no sending, no DB migrations, no production deploys.
 
-## Strategy
-Make the full-height workspace the default on desktop/tablet. Keep mobile full-screen. Retire the desktop bottom-sheet drawer (collapse the two modes into a single full-height workspace; keep `closed` and `fullscreen` only). The result panel and composer already live inside the body — no structural change needed there, only sizing and polish.
+## Scope guardrails
 
-## Changes
+- No migration 145631; no production DB changes.
+- No auto-send / DM / comment / post / email. Drafts only.
+- No production deploy without approval. `run-agent` edge function changes are limited to extending the `ui_panel` payload — they will be deployed only if/when the user approves.
+- No fabricated emails, phone numbers, or contacts. Locked columns stay locked when source data is unavailable.
+- Visual + presentation work only on the frontend side; backend changes are additive metadata.
 
-### `src/contexts/ChatWorkspaceContext.tsx`
-- `open()` sets mode to `'fullscreen'` (not `'drawer'`).
-- Keyboard shortcut `Cmd/Ctrl+K` toggles `closed` ↔ `fullscreen`.
-- Esc closes from any open state.
-- Keep the `ChatMode` union for backward compat; treat `'drawer'` as alias of `'fullscreen'`.
+## Files to change
 
-### `src/components/chat/workspace/ChatWorkspace.tsx`
-- Always render as a full-height surface on desktop:
-  - `fixed inset-0 z-40 h-[100dvh] w-screen`
-  - Remove `rounded-t-2xl`, `bottom: 0; height: <n>vh`, and the `motion` height animation.
-  - Remove drag-resize handle and `onPointer*` logic (no half states to drag between).
-- Animation: subtle 200ms fade + 8px translateY-in / scale 0.99→1; exit reverse. No bouncy spring.
-- Backdrop: replace dim-only backdrop with a blurred dim layer only behind the workspace edges; since workspace is full-screen, backdrop is no longer needed — remove it.
-- Top bar always visible (was fullscreen-only): title left, `Minimize`/`Close` right. Close returns to previous page (calls `close()` which unmounts overlay, leaving the dashboard route intact).
-- Body grid: `Sidebar (280px) | Conversation (flex) | Workbench (when open)`; all three are `h-full` and independently scrollable with `min-h-0`.
-- Composer container: sticky bottom inside the conversation column, `border-t`, `bg-background/80 backdrop-blur`, with `pb-[env(safe-area-inset-bottom)]`. The message list area uses `flex-1 overflow-y-auto` with `pb-4` (composer is a sibling, not overlay, so no extra bottom padding needed).
-- Workbench panel: `h-full`, own `overflow-y-auto`; chat column unaffected vertically when it opens.
+Frontend
+- `src/lib/chatActions.ts` — extend `LeadResultPanelAction` with `find_contacts`, `research_company`, `confirm` flag; keep existing actions backward compatible.
+- `src/contexts/ChatWorkspaceContext.tsx` — extend `LeadResultsPanelMeta` (view, counts, locked_columns, recommended_next_action, available_actions). All optional, defaulted when missing so old messages still render.
+- `src/hooks/useLeadResults.ts` — broaden the normalized row shape to the new `LeadTableRow` type (decision-maker / enrichment / draft statuses, persona, signal source, found_via). Join `lead_enrichments` and `outreach_drafts` (best-effort `.select` with graceful fallback if relations missing).
+- `src/components/chat/workspace/workbench/LeadResultsView.tsx` — rewrite as a spreadsheet wrapper: header + recommendation banner + summary chips + bulk toolbar + table + detail drawer.
+- New `src/components/chat/workspace/workbench/leadTable/` directory:
+  - `LeadTable.tsx` — sticky header, sticky first column, horizontal scroll, row hover/select, compact density.
+  - `LeadTableRow.tsx` — cell renderers per column.
+  - `LockedCell.tsx` — blurred preview + "Unlock — N credits" inline button.
+  - `StatusChip.tsx`, `CreditBadge.tsx`, `RecommendationBanner.tsx`, `BulkActionToolbar.tsx`.
+  - `LeadDetailDrawer.tsx` — right-slide drawer inside the panel (Company / Signal / Recommended Contact / Enrichment / Draft / Activity / Raw).
+  - `credits.ts` — single source of truth for credit estimates and recommended-next-action logic.
+  - `csv.ts` — CSV export including locked placeholder values.
 
-### Mobile
-- Same full-screen overlay (already covered by `inset-0` + existing `MobileNav`). Sidebar hidden via existing `!isMobile` guard. Workbench remains an absolute full-screen layer on mobile.
+Backend (additive only; deploy gated on approval)
+- `supabase/functions/run-agent/index.ts` — extend the emitted `ui_panel` for `kind: "lead_results"` with: `view: "spreadsheet"`, `lead_count`, `account_count`, `contact_count`, `locked_columns`, `available_actions`, `recommended_next_action {action,label,reason,estimated_credits}`. Existing fields preserved.
+- No new edge function; backend action handling for `find_contacts` / `research_company` is out of scope for this UI change. The dispatcher sends the structured intent; if the backend has no handler yet, the assistant message gracefully reports "not configured yet" using existing fallback copy patterns. No fake data is ever rendered.
 
-### Responsive
-- Sidebar fixed `w-[280px]` on `lg+`, hidden on `<md`.
-- Workbench width clamped via existing `workbenchWidth`, min 360, max 50vw.
+## Column spec
 
-## Composer fix
-- Composer becomes a flex child after the scrollable message list inside the conversation column, so it can never cover messages.
-- Message list: `flex-1 min-h-0 overflow-y-auto`.
+Always visible: Select · Company/Account · Signal · Recommended Persona · Contact Status · Fit Score · Source · Status.
+Locked (visible but blurred + unlock CTA): Decision Maker 🔒 · Contact Info 🔒 · Company Enrichment 🔒 · Personalized Message 🔒.
+Trailing: Notes / Next Step · Row Actions.
 
-## Result panel compatibility
-- Workbench sits as the 3rd flex column, `h-full`. Opening it shrinks chat horizontally only, never vertically. Both scroll independently.
+Unlock state derived from row data:
+- Decision Maker / Contact Info → unlocked when `contact_id` present.
+- Company Enrichment → unlocked when `lead_enrichments` row exists for the account.
+- Personalized Message → unlocked when `outreach_drafts` row exists for the contact/account.
 
-## Animation
-- `initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 8 }} transition={{ duration: 0.2, ease: [0.32, 0.72, 0, 1] }}`.
+## Credit model
 
-## Files touched
-- `src/contexts/ChatWorkspaceContext.tsx`
-- `src/components/chat/workspace/ChatWorkspace.tsx`
+Local-only estimates in `credits.ts` (no ledger writes):
+- find_contacts: 1 per row missing contact
+- research_company: 1 per row with website and no enrichment
+- draft_outreach: 2 per row with contact and no draft
+- rank: ceil(rows/10)
+- enrich_and_draft: research + draft combined
+- export_csv / save: 0
 
-## Test plan
-1. Click composer on dashboard → workspace fills viewport (no half-height).
-2. Open existing conversation → messages fill height, composer pinned bottom.
-3. Send "Find me leads" → Lead Source Selector appears in full workspace, same conversation.
-4. Submit brief → plan stays in same conversation.
-5. Open lead results → side panel opens right, both full-height, both scroll independently.
-6. Click close → returns to dashboard with route unchanged.
-7. Resize 1920→1024 width → no clipping, composer visible, no half state.
-8. Scroll long chat → only message list scrolls; composer & sidebar stay fixed.
+Confirmation dialog before any non-zero action. Estimate is stored in dispatched metadata; nothing is deducted.
+
+## Recommended next action logic
+
+In order of precedence:
+1. All rows missing contact → "Find decision-makers".
+2. Contacts exist, no enrichment → "Research company context".
+3. Contacts + enrichment, no drafts → "Generate approval-ready outreach".
+4. Partial scout result → "Broaden search".
+5. Any rows missing website → "Find domains".
+Rendered as a banner above the table with one primary CTA + reason + credit estimate.
+
+## Action dispatch
+
+All bulk + row + banner actions call `dispatchResultAction({ conversationId, planId, leadCandidateIds, action, estimatedCredits })`. `conversationId` comes from `WorkbenchSelection.conversationId` (already plumbed). Export CSV runs locally and does not dispatch.
+
+## Detail drawer
+
+Click a row → in-panel drawer (absolute overlay inside the LeadResultsView container, not a new modal). Sections fed from the same normalized row + on-demand fetch of raw `lead_candidates` JSON. Closes with Esc or backdrop click. Does not navigate, does not change conversation.
+
+## Chat copy
+
+When the backend emits the panel, the existing assistant message is updated (text-only) to:
+- Account-only: "Scout found N account opportunities. I opened them in the lead table. Decision-maker, enrichment, and outreach columns are locked until you run those actions. Nothing was sent."
+- Contact-ready: "Scout found N contact-ready leads. I opened them in the lead table. You can now research companies or generate approval-ready outreach."
+Selection is based on whether any row already has a contact.
+
+## Backward compatibility
+
+- Messages emitted before this change render with the new table using sensible defaults (all advanced columns locked, recommendation = Find decision-makers when no contact data found in DB).
+- Old `actions` array (`enrich`, `draft_outreach`, …) still works; new actions added alongside.
+
+## Visual design
+
+Pitch-black surface, emerald accents, glassmorphic header — consistent with the existing Workbench. Sticky table head, sticky select+company column, monospaced numeric cells, status chips, locked cells with `backdrop-blur-sm` + diagonal lock pattern + inline credit CTA, compact 36px row height, hover row tint, keyboard row navigation (↑/↓, Space to select, Enter to open drawer).
+
+## Tests
+
+- `src/components/chat/workspace/workbench/leadTable/__tests__/LeadTable.test.tsx`
+  - renders rows + locked columns when contacts/enrichment/drafts missing
+  - unlocks decision-maker column when `contact_id` present
+  - unlocks enrichment column when enrichment row present
+  - unlocks personalized message when draft row present
+  - draft row action disabled when no contact
+  - bulk find_contacts dispatches with correct `conversation_id` and credit estimate
+  - confirmation required for paid actions; zero-credit actions skip confirm
+  - CSV export contains "Locked — not generated" for locked cells
+  - recommendation banner reflects the precedence rules
+- Existing `run-agent` and `pilot-chat` tests remain untouched.
+
+## Browser QA (post-build, preview only)
+
+A. "Find 5 companies hiring GTM roles in B2B SaaS USA" → spreadsheet opens, 5 rows, advanced columns locked, banner = Find decision-makers.
+B. Click Find decision-makers → credit confirm; if backend handler missing, honest fallback assistant message; no fake contacts.
+C. Click Research company → confirm; Firecrawl-backed enrichment populates column when backend returns; rows without websites stay locked with "Needs domain".
+D. Click Generate outreach → blocked if no contact; otherwise draft appears in the unlocked column; approval required; nothing sent.
+E. Export CSV → file downloads with locked placeholders.
+F. All actions stay in the same conversation; no new chats spawned.
+
+## Out of scope
+
+- Backend handlers for `find_contacts` / `research_company` if not already wired (UI dispatches the intent; backend wiring is a separate task).
+- Real credit ledger / deduction.
+- Any DB migration.
+- Production deploy.
+
+## Final report (delivered after build)
+
+Files changed, table behavior, locked-column behavior, credit estimate behavior, backend metadata diff, action dispatch wiring, contact/enrichment/draft unlock behavior, CSV export behavior, test results, browser QA results, remaining gaps.

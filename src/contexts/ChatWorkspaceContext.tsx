@@ -24,6 +24,13 @@ interface PendingState {
   awaiting: boolean;
 }
 
+export interface LeadRecommendedAction {
+  action: string;
+  label: string;
+  reason: string;
+  estimated_credits?: number;
+}
+
 export interface LeadResultsPanelMeta {
   kind: 'lead_results';
   title: string;
@@ -34,9 +41,15 @@ export interface LeadResultsPanelMeta {
   lead_candidate_ids: string[];
   plan_id: string;
   actions: string[];
-  // Account/contact lead model (optional — older messages may omit these).
+  // Extended (optional / additive) — union of main's spreadsheet metadata and
+  // the branch's account/contact model. Older `lead_results` panels omit these.
+  view?: 'spreadsheet' | 'cards';
   account_count?: number;
   contact_count?: number;
+  locked_columns?: string[];
+  available_actions?: string[];
+  recommended_next_action?: LeadRecommendedAction;
+  // Branch account/contact fields emitted by run-agent's ui_panel.
   can_draft?: boolean;
   contact_status?: 'needs_contact' | 'contact_found';
   recommended_persona?: { personas: string[]; primary: string; reason: string };
@@ -60,6 +73,7 @@ interface Ctx {
   workbenchOpen: boolean;
   workbenchWidth: number;
   selectedOutput: WorkbenchSelection | null;
+  historyOpen: boolean;
   open: () => void;
   close: () => void;
   toggleFullscreen: () => void;
@@ -69,6 +83,9 @@ interface Ctx {
   openWorkbench: (sel: WorkbenchSelection) => void;
   closeWorkbench: () => void;
   setWorkbenchWidth: (w: number) => void;
+  openHistory: () => void;
+  closeHistory: () => void;
+  toggleHistory: () => void;
 }
 
 const ChatWorkspaceContext = createContext<Ctx | null>(null);
@@ -81,12 +98,16 @@ export const ChatWorkspaceProvider = ({ children }: { children: ReactNode }) => 
   const [workbenchOpen, setWorkbenchOpen] = useState(false);
   const [workbenchWidth, setWorkbenchWidth] = useState(520);
   const [selectedOutput, setSelectedOutput] = useState<WorkbenchSelection | null>(null);
+  const [historyOpen, setHistoryOpen] = useState(false);
 
   const openWorkbench = useCallback((sel: WorkbenchSelection) => {
     setSelectedOutput(sel);
     setWorkbenchOpen(true);
   }, []);
   const closeWorkbench = useCallback(() => setWorkbenchOpen(false), []);
+  const openHistory = useCallback(() => setHistoryOpen(true), []);
+  const closeHistory = useCallback(() => setHistoryOpen(false), []);
+  const toggleHistory = useCallback(() => setHistoryOpen((v) => !v), []);
 
   const open = useCallback(() => setMode((m) => (m === 'closed' ? 'fullscreen' : m)), []);
   const close = useCallback(() => setMode('closed'), []);
@@ -101,6 +122,7 @@ export const ChatWorkspaceProvider = ({ children }: { children: ReactNode }) => 
         e.preventDefault();
         setMode((m) => (m === 'closed' ? 'fullscreen' : 'closed'));
       } else if (e.key === 'Escape') {
+        setHistoryOpen((h) => (h ? false : h));
         setMode((m) => (m === 'closed' ? m : 'closed'));
       }
     };
@@ -110,7 +132,7 @@ export const ChatWorkspaceProvider = ({ children }: { children: ReactNode }) => 
 
   return (
     <ChatWorkspaceContext.Provider
-      value={{ mode, view, height, pending, workbenchOpen, workbenchWidth, selectedOutput, open, close, toggleFullscreen, setHeight, setView, setPending, openWorkbench, closeWorkbench, setWorkbenchWidth }}
+      value={{ mode, view, height, pending, workbenchOpen, workbenchWidth, selectedOutput, historyOpen, open, close, toggleFullscreen, setHeight, setView, setPending, openWorkbench, closeWorkbench, setWorkbenchWidth, openHistory, closeHistory, toggleHistory }}
     >
       {children}
     </ChatWorkspaceContext.Provider>

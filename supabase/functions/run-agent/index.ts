@@ -714,35 +714,30 @@ Deno.serve(async (req) => {
           : planSummary.includes("people") || planSummary.includes("profile") ? "people_profiles"
           : planSummary.includes("competitor") ? "competitor_engagement"
           : "company_search";
-
-        // Account vs contact split. A row is "contact-ready" only with real person data.
+        // Account vs contact split — contact-ready only with real person data.
         const contactRows = leadRows.filter((l) => !!l.contact_id && lo.canDraftOutreach({ name: l.contact?.full_name, linkedin_url: l.contact?.linkedin_url, email: l.contact?.email }));
         const contacts = contactRows.length;
         const accounts = leadRows.length;
         const canDraft = contacts > 0;
-
-        // Domain discovery before enrichment (fixes "0 websites"): real domain →
-        // enrichable; otherwise a labelled probable domain still counts as enrichable.
-        const domainGuesses = leadRows.map((l) => lo.guessDomain({ website: null, linkedin_url: l.account?.linkedin_url, source_url: null, company: l.account?.name }) );
+        const allAccountOnly = contacts === 0;
+        // Domain discovery before enrichment (fixes "0 websites").
+        const domainGuesses = leadRows.map((l) => lo.guessDomain({ website: null, linkedin_url: l.account?.linkedin_url, source_url: null, company: l.account?.name }));
         const realDomains = leadRows.filter((l) => !!l.account?.domain).length;
         const enrichable = Math.max(realDomains, domainGuesses.filter((g) => g.confidence !== "unavailable").length);
-
         const persona = lo.inferContactPersona((reqStep?.instruction as string) ?? planSummary);
         const nextAction = lo.recommendNextAction({ accounts, contacts, enriched_contacts: 0, requested });
+        const recommended_next_action = { action: nextAction.action, label: nextAction.label, reason: nextAction.reason, estimated_credits: allAccountOnly ? leadRows.length : (canDraft ? contacts * 2 : enrichable) };
         const header = lo.buildLeadResultsHeader({ accounts, contacts });
-
         const { buildPostLeadActionsCard } = await import("../_shared/creditEstimate.ts");
         const card = buildPostLeadActionsCard(leadRows.length, enrichable, leadRows.map((l) => l.id));
         const partial = planStatus === "partial";
-
-        // Action gating: no contacts → Find contacts (Draft outreach withheld).
         const actions = canDraft
           ? ["enrich", "draft_outreach", "enrich_and_draft", "rank", "export_csv", "save_to_signal_feed"]
           : ["find_contacts", "research_company", "rank", "export_csv", "save_to_signal_feed"];
-
         const uiPanel = {
           kind: "lead_results" as const,
-          title: header, // "N account opportunities" / "N contact-ready leads" / "N opportunities · M contacts"
+          view: "spreadsheet" as const,
+          title: header,
           subtitle: lo.LEAD_RESULTS_SUBTITLE,
           source_type: sourceType,
           lead_count: leadRows.length,
@@ -757,17 +752,19 @@ Deno.serve(async (req) => {
           plan_id,
           default_view: "table",
           actions,
+          locked_columns: ["decision_maker", "contact_info", "company_enrichment", "personalized_message"],
+          available_actions: actions,
+          recommended_next_action,
         };
 
-        const partialPrefix = partial ? `Found ${produced} of ${requested} — ` : "";
-        const content = canDraft
-          ? `${partialPrefix}Scout found ${contacts} contact-ready lead${contacts === 1 ? "" : "s"}. I opened them in Workbench. Recommended next step: rank by fit before drafting outreach. Nothing was sent.`
-          : `${partialPrefix}Scout found ${accounts} account opportunit${accounts === 1 ? "y" : "ies"}. These companies are showing intent, but decision-maker contacts aren't attached yet. I opened them in Workbench. Recommended next step: find contacts at these companies. Nothing was sent.`;
+        const chatCopy = allAccountOnly
+          ? `${partial ? `Found ${produced} of ${requested} — ` : ""}Scout found ${accounts} account opportunit${accounts === 1 ? "y" : "ies"}. These companies show intent, but decision-maker contacts aren't attached yet. I opened them in the lead table; contact, enrichment, and outreach columns are locked until you run those actions. Recommended next step: find decision-makers. Nothing was sent.`
+          : `${partial ? `Found ${produced} of ${requested} — ` : ""}Scout found ${contacts} contact-ready lead${contacts === 1 ? "" : "s"}. I opened them in the lead table. Recommended next step: rank by fit, then research or draft outreach. Nothing was sent.`;
 
         await supabase.from("messages").insert({
           conversation_id: conversationId,
           role: "assistant",
-          content,
+          content: chatCopy,
           agent_slug: "pilot",
           metadata: { ui_card: card, ui_panel: uiPanel, post_lead_actions: true, plan_id, workflow_status: planStatus, can_draft: canDraft, next_action: nextAction.action, attempt_log: attemptSummary.length ? attemptSummary : [`Sourced ${produced}/${requested}`] },
         });
