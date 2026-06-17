@@ -107,30 +107,21 @@ function Brief({ option, onBack, conversationId }: { option: LeadSourceOption; o
     );
   }
 
+  const paneW = useChatPaneWidth();
+  const twoCol = paneW >= 520;
   return (
     <div className="rounded-xl border border-emerald-500/20 bg-gradient-to-b from-emerald-500/[0.05] to-transparent p-4 max-w-[560px] min-w-0">
-      <NarrowGridBrief option={option} v={v} set={set} missing={missing} send={send} setSent={setSent} conversationId={conversationId} onBack={onBack} />
-    </div>
-  );
-}
-
-function NarrowGridBrief(_props: any): null { return null; }
-// (NOTE: helper kept for type stability; actual brief inlined below if needed.)
-
-function _UNUSED_to_satisfy_old_layout() {
-  return (
-    <div className="rounded-xl border border-emerald-500/20 bg-gradient-to-b from-emerald-500/[0.05] to-transparent p-4 max-w-[560px]">
       <button onClick={onBack} className="flex items-center gap-1 text-[11px] text-[#7D8590] hover:text-emerald-300 mb-2">
         <ArrowLeft className="h-3 w-3" /> Back to sources
       </button>
-      <div className="text-[13px] font-semibold text-[#F0F6FC] mb-0.5">Lead Search Brief · {option.title}</div>
-      <p className="text-[12px] text-[#7D8590] mb-3">{option.description}</p>
+      <div className="text-[13px] font-semibold text-[#F0F6FC] mb-0.5 break-words">Lead Search Brief · {option.title}</div>
+      <p className="text-[12px] text-[#7D8590] mb-3 break-words">{option.description}</p>
       {!option.available && option.fallback_note && (
-        <p className="text-[11px] text-amber-300/80 mb-3">{option.fallback_note}</p>
+        <p className="text-[11px] text-amber-300/80 mb-3 break-words">{option.fallback_note}</p>
       )}
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+      <div className="grid gap-3" style={{ gridTemplateColumns: twoCol ? 'repeat(2, minmax(0,1fr))' : '1fr' }}>
         {option.fields.map((f) => (
-          <div key={f.key} className="space-y-1">
+          <div key={f.key} className="space-y-1 min-w-0">
             <Label className="text-[12px] text-[#C9D1D9]">{f.label}{f.required ? ' *' : ''}</Label>
             {f.type === 'select' ? (
               <Select value={v[f.key] ?? ''} onValueChange={(val) => set(f.key, val)}>
@@ -143,7 +134,7 @@ function _UNUSED_to_satisfy_old_layout() {
           </div>
         ))}
       </div>
-      <div className="flex items-center gap-2 mt-4">
+      <div className="flex items-center gap-2 mt-4 flex-wrap">
         <Button size="sm" disabled={missing} onClick={() => { send(buildInstruction(option.source_type, v, option.available), conversationId, { lead_request: v, source_type: option.source_type }); setSent(true); }} className="bg-emerald-500/90 hover:bg-emerald-500 text-[#03100a] font-semibold">
           Find leads
         </Button>
