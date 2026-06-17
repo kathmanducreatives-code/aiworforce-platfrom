@@ -105,36 +105,10 @@ export default function WorkbenchPanel() {
   const noResultsLocation = taskPayload.location ?? data.toolCall?.output_json?.location ?? null;
   const noResultsRole = Array.isArray(taskPayload.role_keywords) ? taskPayload.role_keywords[0] : null;
 
-  // Drag-resize (desktop only)
-  const onResizePointerDown = (e: React.PointerEvent) => {
-    if (isMobile) return;
-    (e.target as HTMLElement).setPointerCapture(e.pointerId);
-    const startX = e.clientX;
-    const startW = workbenchWidth;
-    const move = (ev: PointerEvent) => {
-      const dx = startX - ev.clientX;
-      const next = Math.max(360, Math.min(900, startW + dx));
-      setWorkbenchWidth(next);
-    };
-    const up = () => {
-      window.removeEventListener('pointermove', move);
-      window.removeEventListener('pointerup', up);
-    };
-    window.addEventListener('pointermove', move);
-    window.addEventListener('pointerup', up);
-  };
-
   const rawData = data.toolCall?.output_json ?? data.task?.output ?? null;
 
   return (
     <div className="h-full flex flex-row">
-      {!isMobile && (
-        <div
-          onPointerDown={onResizePointerDown}
-          className="w-1 hover:w-1.5 bg-transparent hover:bg-emerald-500/30 cursor-col-resize transition-all shrink-0"
-          aria-hidden
-        />
-      )}
       <div className="flex-1 flex flex-col min-w-0 bg-[#0a0d12] relative">
         <div className="pointer-events-none absolute inset-x-0 top-0 h-32 bg-gradient-to-b from-emerald-500/[0.03] to-transparent" />
         {!leadsPanel || tab !== 'leads' ? (
