@@ -1,5 +1,5 @@
 import { motion, AnimatePresence } from 'framer-motion';
-import { X } from 'lucide-react';
+import { X, PanelLeft } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useChatWorkspace } from '@/contexts/ChatWorkspaceContext';
 import { useIsMobile } from '@/hooks/use-mobile';
@@ -12,11 +12,13 @@ import ChatView from './ChatView';
 import ChatComposerPro from './ChatComposerPro';
 import ChatErrorBoundary from './ChatErrorBoundary';
 import WorkbenchPanel from './workbench/WorkbenchPanel';
-import { TooltipProvider } from '@/components/ui/tooltip';
+import { Sheet, SheetContent } from '@/components/ui/sheet';
+import { TooltipProvider, Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
 
 export default function ChatWorkspace() {
-  const { mode, view, close, setView, pending, workbenchOpen, workbenchWidth } = useChatWorkspace();
+  const { mode, view, close, setView, pending, workbenchOpen, historyOpen, openHistory, closeHistory } = useChatWorkspace();
   const isMobile = useIsMobile();
+  const showSplit = workbenchOpen && !isMobile;
 
   return (
     <TooltipProvider delayDuration={300}>
@@ -39,10 +41,24 @@ export default function ChatWorkspace() {
             aria-label="AI Workforce Chat"
           >
             {/* Top bar */}
-            <div className="flex items-center justify-between px-5 h-12 border-b border-border/60 shrink-0">
-              <div className="flex items-center gap-2 text-sm font-semibold text-foreground">
-                <span className="h-1.5 w-1.5 rounded-full bg-primary animate-pulse" />
-                ScreeningPilot · AI Workforce
+            <div className="flex items-center justify-between px-3 h-12 border-b border-border/60 shrink-0">
+              <div className="flex items-center gap-2">
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <button
+                      onClick={openHistory}
+                      className="h-7 w-7 inline-flex items-center justify-center rounded hover:bg-foreground/5 text-muted-foreground hover:text-foreground"
+                      aria-label="Conversation history"
+                    >
+                      <PanelLeft className="h-3.5 w-3.5" />
+                    </button>
+                  </TooltipTrigger>
+                  <TooltipContent side="bottom">Conversation history</TooltipContent>
+                </Tooltip>
+                <div className="flex items-center gap-2 text-sm font-semibold text-foreground pl-1">
+                  <span className="h-1.5 w-1.5 rounded-full bg-primary animate-pulse" />
+                  ScreeningPilot · AI Workforce
+                </div>
               </div>
               <div className="flex items-center gap-1">
                 <button
@@ -55,14 +71,16 @@ export default function ChatWorkspace() {
               </div>
             </div>
 
-            {/* Body */}
+            {/* Body: 50/50 split when workbench open, otherwise chat fills */}
             <div className="flex-1 flex min-h-0 overflow-hidden">
-              {!isMobile && <ConversationsSidebar wide />}
-
-              <div className="flex-1 flex flex-col min-w-0 min-h-0 overflow-hidden relative">
+              <div
+                className={cn(
+                  'flex flex-col min-w-0 min-h-0 overflow-hidden relative',
+                  showSplit ? 'basis-1/2 flex-1' : 'flex-1',
+                )}
+              >
                 {isMobile && <MobileNav />}
 
-                {/* Active view (scrollable area) */}
                 <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
                   <ChatErrorBoundary>
                     {view.kind === 'empty' && <EmptyState />}
@@ -80,7 +98,6 @@ export default function ChatWorkspace() {
                   </ChatErrorBoundary>
                 </div>
 
-                {/* Composer pinned at bottom inside the conversation column */}
                 <div
                   className="border-t border-border/60 px-4 py-3 bg-background/80 backdrop-blur shrink-0"
                   style={{ paddingBottom: 'calc(0.75rem + env(safe-area-inset-bottom))' }}
@@ -94,12 +111,8 @@ export default function ChatWorkspace() {
                 </div>
               </div>
 
-              {/* Workbench (desktop side panel) */}
-              {workbenchOpen && !isMobile && (
-                <div
-                  className="border-l border-white/[0.06] bg-[#0a0d12] shrink-0 h-full overflow-hidden"
-                  style={{ width: workbenchWidth }}
-                >
+              {showSplit && (
+                <div className="basis-1/2 flex-1 min-w-0 border-l border-white/[0.06] bg-[#0a0d12] overflow-hidden">
                   <ChatErrorBoundary>
                     <WorkbenchPanel />
                   </ChatErrorBoundary>
@@ -115,6 +128,15 @@ export default function ChatWorkspace() {
                 </ChatErrorBoundary>
               </div>
             )}
+
+            {/* Conversation history drawer */}
+            <Sheet open={historyOpen} onOpenChange={(o) => (o ? openHistory() : closeHistory())}>
+              <SheetContent side="left" className="p-0 w-[300px] sm:max-w-[320px] bg-background border-r border-white/[0.06]">
+                <div className="h-full flex flex-col">
+                  <ConversationsSidebar wide />
+                </div>
+              </SheetContent>
+            </Sheet>
           </motion.div>
         )}
       </AnimatePresence>
