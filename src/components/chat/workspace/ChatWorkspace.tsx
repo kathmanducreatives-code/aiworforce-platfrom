@@ -76,7 +76,7 @@ export default function ChatWorkspace() {
               <div
                 className={cn(
                   'flex flex-col min-w-0 min-h-0 overflow-hidden relative',
-                  showSplit ? 'basis-[40%] flex-1' : 'flex-1',
+                  showSplit ? 'basis-1/2 flex-1' : 'flex-1',
                 )}
               >
                 {isMobile && <MobileNav />}
