@@ -67,6 +67,7 @@ interface Ctx {
   workbenchOpen: boolean;
   workbenchWidth: number;
   selectedOutput: WorkbenchSelection | null;
+  historyOpen: boolean;
   open: () => void;
   close: () => void;
   toggleFullscreen: () => void;
@@ -76,6 +77,9 @@ interface Ctx {
   openWorkbench: (sel: WorkbenchSelection) => void;
   closeWorkbench: () => void;
   setWorkbenchWidth: (w: number) => void;
+  openHistory: () => void;
+  closeHistory: () => void;
+  toggleHistory: () => void;
 }
 
 const ChatWorkspaceContext = createContext<Ctx | null>(null);
