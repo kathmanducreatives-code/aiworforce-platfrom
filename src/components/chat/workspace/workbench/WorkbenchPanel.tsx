@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect } from 'react';
 import { useChatWorkspace } from '@/contexts/ChatWorkspaceContext';
-import { useIsMobile } from '@/hooks/use-mobile';
+
 import { useWorkbenchData } from './useWorkbenchData';
 import WorkbenchHeader from './WorkbenchHeader';
 import AgentOutputViewer from './AgentOutputViewer';
@@ -21,7 +21,7 @@ type Tab = 'leads' | 'summary' | 'results' | 'rankings' | 'drafts' | 'sources' |
 
 export default function WorkbenchPanel() {
   const { selectedOutput, closeWorkbench } = useChatWorkspace();
-  const isMobile = useIsMobile();
+  
   const data = useWorkbenchData(selectedOutput);
 
   const leadsPanel = selectedOutput?.panel?.kind === 'lead_results' ? selectedOutput.panel : null;
