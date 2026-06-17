@@ -24,6 +24,13 @@ interface PendingState {
   awaiting: boolean;
 }
 
+export interface LeadRecommendedAction {
+  action: string;
+  label: string;
+  reason: string;
+  estimated_credits?: number;
+}
+
 export interface LeadResultsPanelMeta {
   kind: 'lead_results';
   title: string;
@@ -34,6 +41,13 @@ export interface LeadResultsPanelMeta {
   lead_candidate_ids: string[];
   plan_id: string;
   actions: string[];
+  /** Extended (optional / additive). */
+  view?: 'spreadsheet' | 'cards';
+  account_count?: number;
+  contact_count?: number;
+  locked_columns?: string[];
+  available_actions?: string[];
+  recommended_next_action?: LeadRecommendedAction;
 }
 
 export interface WorkbenchSelection {
