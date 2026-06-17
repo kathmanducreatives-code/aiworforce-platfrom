@@ -92,12 +92,16 @@ export const ChatWorkspaceProvider = ({ children }: { children: ReactNode }) => 
   const [workbenchOpen, setWorkbenchOpen] = useState(false);
   const [workbenchWidth, setWorkbenchWidth] = useState(520);
   const [selectedOutput, setSelectedOutput] = useState<WorkbenchSelection | null>(null);
+  const [historyOpen, setHistoryOpen] = useState(false);
 
   const openWorkbench = useCallback((sel: WorkbenchSelection) => {
     setSelectedOutput(sel);
     setWorkbenchOpen(true);
   }, []);
   const closeWorkbench = useCallback(() => setWorkbenchOpen(false), []);
+  const openHistory = useCallback(() => setHistoryOpen(true), []);
+  const closeHistory = useCallback(() => setHistoryOpen(false), []);
+  const toggleHistory = useCallback(() => setHistoryOpen((v) => !v), []);
 
   const open = useCallback(() => setMode((m) => (m === 'closed' ? 'fullscreen' : m)), []);
   const close = useCallback(() => setMode('closed'), []);
@@ -112,6 +116,7 @@ export const ChatWorkspaceProvider = ({ children }: { children: ReactNode }) => 
         e.preventDefault();
         setMode((m) => (m === 'closed' ? 'fullscreen' : 'closed'));
       } else if (e.key === 'Escape') {
+        setHistoryOpen((h) => (h ? false : h));
         setMode((m) => (m === 'closed' ? m : 'closed'));
       }
     };
@@ -121,7 +126,7 @@ export const ChatWorkspaceProvider = ({ children }: { children: ReactNode }) => 
 
   return (
     <ChatWorkspaceContext.Provider
-      value={{ mode, view, height, pending, workbenchOpen, workbenchWidth, selectedOutput, open, close, toggleFullscreen, setHeight, setView, setPending, openWorkbench, closeWorkbench, setWorkbenchWidth }}
+      value={{ mode, view, height, pending, workbenchOpen, workbenchWidth, selectedOutput, historyOpen, open, close, toggleFullscreen, setHeight, setView, setPending, openWorkbench, closeWorkbench, setWorkbenchWidth, openHistory, closeHistory, toggleHistory }}
     >
       {children}
     </ChatWorkspaceContext.Provider>
