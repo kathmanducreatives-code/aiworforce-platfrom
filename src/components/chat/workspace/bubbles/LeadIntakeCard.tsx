@@ -66,8 +66,8 @@ function buildInstruction(v: Record<string, string | boolean>): string {
     : mode === 'competitor_engagement' ? `people engaging with competitors${ind}${where}`
     : `${who || 'founders'}${ind}${where}`;
   const tail = outreach
-    ? ' Save them to Signal Feed and draft outreach for approval (do not send).'
-    : ' Save them to Signal Feed. Do not send any outreach.';
+    ? ' Open results in Workbench and draft outreach for approval (do not send).'
+    : ' Open results in Workbench. Do not send any outreach.';
   return `Find ${count} ${subject}.${tail}`;
 }
 

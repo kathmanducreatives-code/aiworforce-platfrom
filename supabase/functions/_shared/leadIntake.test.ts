@@ -206,6 +206,29 @@ Deno.test("source instructions route correctly + don't re-open the selector", ()
   assert(/LinkedIn posts about outbound problems/i.test(posts) && !_isLead(posts));
 });
 
+Deno.test("hasNewSourcingIntent: a lead brief beats save/refine handlers", async () => {
+  const { hasNewSourcingIntent } = await import("./leadIntake.ts");
+  // #1/#2 new sourcing brief (even with "Save them to Signal Feed") → new sourcing.
+  assert(hasNewSourcingIntent("Find 5 founder AI Software in healthcare in USA. Save them to Signal Feed. Do not send any outreach."));
+  assert(hasNewSourcingIntent("Find 5 companies hiring GTM roles. Save them to Signal Feed."));
+  assert(hasNewSourcingIntent("Find 5 founder/profile leads in healthcare AI software in the USA. Open results in Workbench."));
+  // #3/#4 genuine save actions (no sourcing verb) → NOT new sourcing.
+  assert(!hasNewSourcingIntent("Save these leads to the Signal Feed for later review."));
+  assert(!hasNewSourcingIntent("Save these 4 leads."));
+  // #5 refine → not new sourcing.
+  assert(!hasNewSourcingIntent("Only keep US companies."));
+  assert(!hasNewSourcingIntent("Rank these leads by fit."));
+});
+
+Deno.test("founder brief still routes to lead intake (people) after copy change", () => {
+  const msg = "Find 5 founder AI Software in healthcare in USA. Open results in Workbench. Do not send any outreach.";
+  assert(isLeadIntakeRequest(msg));
+  const d = extractLeadDetails(msg);
+  assertEquals(d.target_role, "Founder");
+  assertEquals(d.location, "USA");
+  assert(hasEnoughToRun(d), "founder + healthcare/AI software → runs (people)");
+});
+
 Deno.test("instruction is complete + count-accurate", () => {
   const req: LeadRequest = { mode: "people", target_role: "Founder", industry: "Healthcare", location: "USA", company_category: "AI software", count: 5, needs_outreach: false, original_user_request: "Find me leads", company_brain_context_used: true };
   const instr = leadRequestToInstruction(req);

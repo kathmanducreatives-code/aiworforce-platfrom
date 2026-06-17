@@ -73,6 +73,18 @@ const PEOPLE_ROLE_RE =
 // flow, which the classifier already handles well — don't hijack those.
 const LEAD_EXCLUDE_RE = /\b(linkedin|posts?|commenting|comment on|engag\w*|talking about|conversations?|hiring|competitors?|alternatives?)\b/i;
 
+// A NEW sourcing command (find/search/scrape/source + a target). Used to stop
+// memory save/refine/enrich handlers from swallowing fresh sourcing briefs that
+// happen to contain words like "save"/"signal feed".
+const SOURCING_VERB_RE = /\b(find|search|scrape|source|discover)\b/i;
+const SOURCING_TARGET_RE = /\b(\d+\s+)?(founders?|co-?founders?|ceos?|ctos?|cfos?|coos?|cmos?|vps?|heads?\s+of\b|operators?|executives?|decision[-\s]?makers?|people|profiles?|prospects?|buyers?|customers?|leads?|companies|accounts?|startups?|orgs?|hiring|job openings?|linkedin\s+posts?|competitors?)\b/i;
+
+export function hasNewSourcingIntent(message: string): boolean {
+  const m = message ?? "";
+  if (/\bget\s+me\s+(?:some\s+)?(?:leads|prospects)\b/i.test(m)) return true;
+  return SOURCING_VERB_RE.test(m) && (SOURCING_TARGET_RE.test(m) || /\bfind\s+\d+\b/i.test(m));
+}
+
 export function isLeadIntakeRequest(message: string): boolean {
   const m = message ?? "";
   // LinkedIn / competitor / hiring / engagement asks are Phase 3/4 flows the

@@ -13,7 +13,7 @@ import { classifyWorkflow, SHORT_VAGUE_CLARIFICATION } from "../_shared/workflow
 import { validateAgainstCapabilities } from "../_shared/capabilityValidator.ts";
 import { loadConversationMemory, renderMemoryForPrompt, isFollowUpReference, extractTopN, type ConversationMemory } from "../_shared/memoryReader.ts";
 import { shouldGateForOnboarding, ONBOARDING_GATE_REPLY } from "../_shared/companyBrainGate.ts";
-import { isLeadIntakeRequest, extractLeadDetails, hasEnoughToRun, buildLeadSourceSelector, leadRequestToToolInput, leadRequestToInstruction, leadRequestToLinkedInFallbackInstruction, leadRequestToCompaniesInstruction, type LeadRequest, type ToolAvailability } from "../_shared/leadIntake.ts";
+import { isLeadIntakeRequest, hasNewSourcingIntent, extractLeadDetails, hasEnoughToRun, buildLeadSourceSelector, leadRequestToToolInput, leadRequestToInstruction, leadRequestToLinkedInFallbackInstruction, leadRequestToCompaniesInstruction, type LeadRequest, type ToolAvailability } from "../_shared/leadIntake.ts";
 import { getActorByKey, isActorRuntimeEnabled } from "../_shared/actorRegistry.ts";
 import { isFindContactsRequest, personaForAccounts, buildContactSearchQueries, contactDiscoveryFallback, type AccountForContacts } from "../_shared/contactDiscovery.ts";
 import { buildCompanyBrainContext, hasUsableBrain, brainCompetitors } from "../_shared/companyBrainContext.ts";
@@ -591,6 +591,10 @@ Deno.serve(async (req) => {
   const draftOutreachRe = /\b(draft|write|send)\s+(outreach|emails?|messages?)\b/i;
   const filterRe = /\b(only keep|filter|narrow|just keep|drop the|exclude)\b/i;
   const enrichRe = /\b(enrich|research|look up|dig into)\b/i;
+  // A NEW sourcing brief (e.g. a Lead Search Brief: "Find 5 founders … Save them
+  // to Signal Feed.") must NEVER be captured by the memory save/refine/enrich
+  // handlers just because it mentions "save"/"signal feed". New sourcing wins.
+  const newSourcing = hasNewSourcingIntent(message);
 
   // Phase 2 (P2-02) — refine/filter/rank over REMEMBERED results must ALWAYS win
   // over re-sourcing. "only keep early-stage", "rank these", "top 5", "keep US
@@ -599,7 +603,7 @@ Deno.serve(async (req) => {
   // classifier's sourcing categorization, which previously re-sourced.
   const refineRe = /\b(only keep|just keep|keep only|narrow(?:\s+down)?|drop the|exclude|remove the|prioriti[sz]e|sort by|rank (?:these|them|the (?:results|leads|signals|candidates))|keep (?:us|u\.s\.|early[- ]stage|seed|series\s+[a-c]|enterprise|smb)\b)/i;
   const refineTopOnly = /^\s*(?:keep|show|give me)?\s*(?:the\s+)?top\s+\d+\s*\.?\s*$/i;
-  const isRefine = (refineRe.test(message) || refineTopOnly.test(message)) && !draftOutreachRe.test(message);
+  const isRefine = (refineRe.test(message) || refineTopOnly.test(message)) && !draftOutreachRe.test(message) && !newSourcing;
   if (isRefine) {
     if (!hasLeads) {
       return await replyAndReturn(
@@ -623,7 +627,7 @@ Deno.serve(async (req) => {
   // Penn drafts. Memory-only, approval-gated, nothing sent. Placed before the
   // sourcing pipeline so the word "leads" can't trigger a re-source.
   const enrichAndDraft = /\benrich\b/i.test(message) && draftOutreachRe.test(message);
-  if (enrichAndDraft && hasLeads) {
+  if (enrichAndDraft && hasLeads && !newSourcing) {
     const n = extractTopN(message, 5);
     const top = memory.lead_candidates.slice(0, n);
     const urls = top.map((l) => l.account?.domain).filter(Boolean).map((d) => `https://${d}`);
@@ -645,7 +649,7 @@ Deno.serve(async (req) => {
   // already persisted by sourcing; just acknowledge. Must precede the sourcing
   // pipeline so "save these leads" can't trigger a re-source.
   const saveOnlyRe = /\b(save|keep)\b[^.!?]*\b(signal feed|for (?:now|later)|review(?:\s+later)?|saved)\b/i;
-  if (saveOnlyRe.test(message) && hasLeads) {
+  if (saveOnlyRe.test(message) && hasLeads && !newSourcing) {
     return await replyAndReturn(
       `Kept your ${memory.lead_candidates.length} leads in the Signal Feed — nothing was sent. Ask me to rank, enrich, or draft outreach whenever you're ready.`,
       { post_lead_action: "save_only", reused_memory: true, credits: 0 },
