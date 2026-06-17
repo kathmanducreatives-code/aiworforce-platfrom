@@ -685,6 +685,8 @@ Deno.serve(async (req) => {
         });
       } else if (leadRows.length > 0 && conversationId) {
         const enrichable = leadRows.filter((l) => !!l.account?.domain).length;
+        const contactCount = leadRows.filter((l: any) => !!l.contact_id || !!l.contact?.id).length;
+        const accountCount = leadRows.filter((l: any) => !!l.account_id || !!l.account?.id).length;
         const { buildPostLeadActionsCard } = await import("../_shared/creditEstimate.ts");
         const card = buildPostLeadActionsCard(leadRows.length, enrichable, leadRows.map((l) => l.id));
         const partial = planStatus === "partial";
@@ -698,23 +700,45 @@ Deno.serve(async (req) => {
           : sourceType === "linkedin_engagement" ? "LinkedIn engagement"
           : sourceType === "people" ? "people"
           : "lead";
+
+        const allAccountOnly = contactCount === 0;
+        const recommended_next_action = allAccountOnly
+          ? { action: "find_contacts", label: "Find decision-makers", reason: "These companies show intent, but no contacts are attached yet.", estimated_credits: leadRows.length }
+          : enrichable > 0
+            ? { action: "research_company", label: "Research company context", reason: "Enrichment will make outreach more personalized.", estimated_credits: enrichable }
+            : { action: "draft_outreach", label: "Generate approval-ready outreach", reason: "Penn can now draft personalized messages.", estimated_credits: contactCount * 2 };
+
         const uiPanel = {
           kind: "lead_results" as const,
-          title: `${leadRows.length} ${sourceLabel} lead${leadRows.length === 1 ? "" : "s"}`,
-          subtitle: "Found by Scout · Saved for review · Nothing sent",
+          view: "spreadsheet" as const,
+          title: allAccountOnly
+            ? `${leadRows.length} account opportunit${leadRows.length === 1 ? "y" : "ies"} found`
+            : `${leadRows.length} ${sourceLabel} lead${leadRows.length === 1 ? "" : "s"}`,
+          subtitle: allAccountOnly
+            ? "Scout found companies showing intent. Unlock contacts, enrichment, and outreach when ready."
+            : "Found by Scout · Saved for review · Nothing sent",
           source_type: sourceType,
           lead_count: leadRows.length,
+          account_count: accountCount,
+          contact_count: contactCount,
           enrichable_count: enrichable,
           lead_candidate_ids: leadRows.map((l) => l.id),
           plan_id,
           default_view: "table",
+          locked_columns: ["decision_maker", "contact_info", "company_enrichment", "personalized_message"],
           actions: ["enrich", "draft_outreach", "enrich_and_draft", "rank", "export_csv", "save_to_signal_feed"],
+          available_actions: ["find_contacts", "research_company", "draft_outreach", "rank", "export_csv", "save_to_signal_feed"],
+          recommended_next_action,
         };
+
+        const chatCopy = allAccountOnly
+          ? `${partial ? `Found ${produced} of ${requested} — ` : ""}Scout found ${leadRows.length} account opportunit${leadRows.length === 1 ? "y" : "ies"}. I opened them in the lead table. Decision-maker, enrichment, and outreach columns are locked until you run those actions. Nothing was sent.`
+          : `${partial ? `Found ${produced} of ${requested} — ` : ""}Scout found ${leadRows.length} contact-ready lead${leadRows.length === 1 ? "" : "s"}. I opened them in the lead table. You can now research companies or generate approval-ready outreach.`;
+
         await supabase.from("messages").insert({
           conversation_id: conversationId,
           role: "assistant",
-          // Adaptive status reflected in copy; Workbench panel + post-lead card + attempt log all attached.
-          content: `${partial ? `Found ${produced} of ${requested} — ` : ""}Scout found ${leadRows.length} lead${leadRows.length === 1 ? "" : "s"}. I opened them in the results panel and saved them for later review. Nothing was sent.`,
+          content: chatCopy,
           agent_slug: "pilot",
           metadata: { ui_card: card, ui_panel: uiPanel, post_lead_actions: true, plan_id, workflow_status: planStatus, attempt_log: attemptSummary.length ? attemptSummary : [`Sourced ${produced}/${requested}`] },
         });
