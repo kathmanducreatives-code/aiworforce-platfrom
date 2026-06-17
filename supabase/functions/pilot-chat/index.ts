@@ -677,6 +677,17 @@ Deno.serve(async (req) => {
     if (draftOutreachRe.test(message) && hasLeads) {
       const n = extractTopN(message, 5);
       const top = memory.lead_candidates.slice(0, n);
+      // Draft-outreach gate: personalized outreach needs a real contact. If these
+      // are account opportunities (no decision-maker attached), don't fabricate a
+      // recipient — point the user to find contacts first (or a generic template).
+      const withContact = top.filter((l) => l.contact?.full_name || (l.contact as { linkedin_url?: string })?.linkedin_url);
+      const wantsGeneric = /\b(generic|template|account[- ]level)\b/i.test(message);
+      if (withContact.length === 0 && !wantsGeneric) {
+        return await replyAndReturn(
+          `These are account opportunities — I have ${top.length} compan${top.length === 1 ? "y" : "ies"} showing intent, but no decision-maker contact attached yet. I won't fabricate a recipient. Reply "find decision-makers" to locate contacts, or "draft a generic account-level template" if you want a non-personalized version. Nothing will be sent.`,
+          { followup: "draft_needs_contact", reused_memory: true, can_draft: false },
+        );
+      }
       const seedSummary = top
         .map((l, i) => {
           const who = l.contact?.full_name ?? l.account?.name ?? "Lead";

@@ -27,7 +27,9 @@ export type LeadResultPanelAction =
   | 'enrich_and_draft'
   | 'rank'
   | 'export_csv'
-  | 'save_to_signal_feed';
+  | 'save_to_signal_feed'
+  | 'find_contacts'
+  | 'research_company';
 
 export interface ChatActionDetail {
   text: string;
@@ -63,6 +65,8 @@ const ACTION_COMMAND: Record<LeadResultPanelAction, (n: number) => string> = {
   rank: () => `Rank these leads by fit.`,
   export_csv: () => `Export these leads as CSV.`,
   save_to_signal_feed: () => `Save these leads to the Signal Feed for later review.`,
+  find_contacts: () => `Find decision-makers at these companies.`,
+  research_company: () => `Research these companies (analyze their websites for context).`,
 };
 
 export interface ResultActionDetail {

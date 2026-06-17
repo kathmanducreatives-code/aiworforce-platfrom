@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import {
   ExternalLink, Globe, Linkedin, Sparkles, PenLine, Star, Archive, Save,
-  Download, Loader2, Filter, Building2, MapPin, User,
+  Download, Loader2, Filter, Building2, MapPin, User, UserSearch, Search, ArrowRight,
 } from 'lucide-react';
 import { useLeadResults, type LeadResultItem } from '@/hooks/useLeadResults';
 import { dispatchResultAction, type LeadResultPanelAction } from '@/lib/chatActions';
@@ -40,6 +40,8 @@ const ACTION_ICONS: Record<LeadResultPanelAction, any> = {
   rank: Star,
   export_csv: Download,
   save_to_signal_feed: Save,
+  find_contacts: UserSearch,
+  research_company: Search,
 };
 
 const ACTION_LABELS: Record<LeadResultPanelAction, string> = {
@@ -49,6 +51,8 @@ const ACTION_LABELS: Record<LeadResultPanelAction, string> = {
   rank: 'Rank by fit',
   export_csv: 'Export CSV',
   save_to_signal_feed: 'Save to Signal Feed',
+  find_contacts: 'Find decision-makers',
+  research_company: 'Research company',
 };
 
 function creditsFor(action: LeadResultPanelAction, leadCount: number, enrichable: number): number {
@@ -107,10 +111,37 @@ export default function LeadResultsView({ meta, conversationId }: Props) {
             </div>
             <div className="text-[11px] text-[#7D8590] mt-0.5">{meta.subtitle}</div>
           </div>
-          <span className="text-[10px] uppercase tracking-wider px-2 py-0.5 rounded-md border border-emerald-500/25 bg-emerald-500/[0.08] text-emerald-300 shrink-0">
-            {meta.source_type.replace(/_/g, ' ')}
-          </span>
+          <div className="flex flex-col items-end gap-1 shrink-0">
+            <span className="text-[10px] uppercase tracking-wider px-2 py-0.5 rounded-md border border-emerald-500/25 bg-emerald-500/[0.08] text-emerald-300">
+              {meta.source_type.replace(/_/g, ' ')}
+            </span>
+            {meta.contact_status && (
+              <span className={`text-[10px] px-2 py-0.5 rounded-md border ${
+                meta.contact_status === 'contact_found'
+                  ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-300'
+                  : 'border-amber-500/30 bg-amber-500/10 text-amber-300'
+              }`}>
+                {meta.contact_status === 'contact_found' ? 'Contact found' : 'Needs contact'}
+              </span>
+            )}
+          </div>
         </div>
+
+        {/* Next best action */}
+        {meta.next_action && (
+          <div className="mt-2 flex items-center gap-2 rounded-lg border border-emerald-500/20 bg-emerald-500/[0.05] px-2.5 py-1.5">
+            <ArrowRight className="h-3.5 w-3.5 text-emerald-300 shrink-0" />
+            <div className="min-w-0">
+              <div className="text-[11.5px] text-[#F0F6FC] font-medium">Recommended: {meta.next_action.label}</div>
+              <div className="text-[10.5px] text-[#7D8590]">{meta.next_action.reason}</div>
+            </div>
+          </div>
+        )}
+        {meta.contact_status === 'needs_contact' && meta.recommended_persona && (
+          <div className="mt-1.5 text-[10.5px] text-[#7D8590]">
+            Recommended contact: <span className="text-[#C9D1D9]">{meta.recommended_persona.personas.slice(0, 3).join(' / ')}</span> — {meta.recommended_persona.reason}
+          </div>
+        )}
 
         {/* Filters */}
         <div className="mt-3 flex items-center gap-1.5 flex-wrap">
@@ -202,6 +233,11 @@ export default function LeadResultsView({ meta, conversationId }: Props) {
                     </div>
                     {it.fit_reason && (
                       <div className="text-[11px] text-[#9aa4af] mt-1.5 line-clamp-2">{it.fit_reason}</div>
+                    )}
+                    {!it.person_name && (
+                      <div className="mt-1 inline-flex items-center gap-1 text-[10.5px] text-amber-300/80">
+                        <UserSearch className="h-3 w-3" /> Decision-maker not found yet
+                      </div>
                     )}
                   </div>
                   <div className="flex flex-col gap-1 shrink-0">

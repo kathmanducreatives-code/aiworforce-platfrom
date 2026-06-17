@@ -645,8 +645,8 @@ Deno.serve(async (req) => {
     const { data: srcCalls } = await supabase.from("tool_calls").select("id").eq("plan_id", plan_id).eq("tool_name", "source_with_apify").limit(1);
     const wasSourcing = (srcCalls ?? []).length > 0;
 
-    const { data: leads } = await supabase.from("lead_candidates").select("id, account:accounts(domain)").eq("plan_id", plan_id);
-    const leadRows = (leads ?? []) as Array<{ id: string; account?: { domain?: string | null } | null }>;
+    const { data: leads } = await supabase.from("lead_candidates").select("id, contact_id, account:accounts(name, domain, linkedin_url), contact:contacts(full_name, title, linkedin_url, email)").eq("plan_id", plan_id);
+    const leadRows = (leads ?? []) as Array<{ id: string; contact_id?: string | null; account?: { name?: string | null; domain?: string | null; linkedin_url?: string | null } | null; contact?: { full_name?: string | null; title?: string | null; linkedin_url?: string | null; email?: string | null } | null }>;
     const { count: sigCount } = await supabase.from("signals").select("id", { count: "exact", head: true }).eq("plan_id", plan_id);
     const produced = Math.max(leadRows.length, sigCount ?? 0);
 
@@ -684,39 +684,69 @@ Deno.serve(async (req) => {
           agent_slug: "pilot", metadata: { ui_card: card, lead_sourcing_error: true, plan_id, workflow_status: "failed" },
         });
       } else if (leadRows.length > 0 && conversationId) {
-        const enrichable = leadRows.filter((l) => !!l.account?.domain).length;
-        const { buildPostLeadActionsCard } = await import("../_shared/creditEstimate.ts");
-        const card = buildPostLeadActionsCard(leadRows.length, enrichable, leadRows.map((l) => l.id));
-        const partial = planStatus === "partial";
-        // Side-panel (Workbench / LeadResultsView) — opened by ChatView on ui_panel.
+        const lo = await import("../_shared/leadOpportunity.ts");
         const planSummary = String(plan?.plan_summary ?? "").toLowerCase();
         const sourceType: string = planSummary.includes("hiring") ? "hiring_signal"
           : planSummary.includes("linkedin") ? "linkedin_engagement"
-          : planSummary.includes("people") || planSummary.includes("profile") ? "people"
-          : "lead";
-        const sourceLabel = sourceType === "hiring_signal" ? "hiring-signal"
-          : sourceType === "linkedin_engagement" ? "LinkedIn engagement"
-          : sourceType === "people" ? "people"
-          : "lead";
+          : planSummary.includes("people") || planSummary.includes("profile") ? "people_profiles"
+          : planSummary.includes("competitor") ? "competitor_engagement"
+          : "company_search";
+
+        // Account vs contact split. A row is "contact-ready" only with real person data.
+        const contactRows = leadRows.filter((l) => !!l.contact_id && lo.canDraftOutreach({ name: l.contact?.full_name, linkedin_url: l.contact?.linkedin_url, email: l.contact?.email }));
+        const contacts = contactRows.length;
+        const accounts = leadRows.length;
+        const canDraft = contacts > 0;
+
+        // Domain discovery before enrichment (fixes "0 websites"): real domain →
+        // enrichable; otherwise a labelled probable domain still counts as enrichable.
+        const domainGuesses = leadRows.map((l) => lo.guessDomain({ website: null, linkedin_url: l.account?.linkedin_url, source_url: null, company: l.account?.name }) );
+        const realDomains = leadRows.filter((l) => !!l.account?.domain).length;
+        const enrichable = Math.max(realDomains, domainGuesses.filter((g) => g.confidence !== "unavailable").length);
+
+        const persona = lo.inferContactPersona((reqStep?.instruction as string) ?? planSummary);
+        const nextAction = lo.recommendNextAction({ accounts, contacts, enriched_contacts: 0, requested });
+        const header = lo.buildLeadResultsHeader({ accounts, contacts });
+
+        const { buildPostLeadActionsCard } = await import("../_shared/creditEstimate.ts");
+        const card = buildPostLeadActionsCard(leadRows.length, enrichable, leadRows.map((l) => l.id));
+        const partial = planStatus === "partial";
+
+        // Action gating: no contacts → Find contacts (Draft outreach withheld).
+        const actions = canDraft
+          ? ["enrich", "draft_outreach", "enrich_and_draft", "rank", "export_csv", "save_to_signal_feed"]
+          : ["find_contacts", "research_company", "rank", "export_csv", "save_to_signal_feed"];
+
         const uiPanel = {
           kind: "lead_results" as const,
-          title: `${leadRows.length} ${sourceLabel} lead${leadRows.length === 1 ? "" : "s"}`,
-          subtitle: "Found by Scout · Saved for review · Nothing sent",
+          title: header, // "N account opportunities" / "N contact-ready leads" / "N opportunities · M contacts"
+          subtitle: lo.LEAD_RESULTS_SUBTITLE,
           source_type: sourceType,
           lead_count: leadRows.length,
+          account_count: accounts,
+          contact_count: contacts,
           enrichable_count: enrichable,
+          can_draft: canDraft,
+          recommended_persona: persona,
+          contact_status: canDraft ? "contact_found" : "needs_contact",
+          next_action: nextAction,
           lead_candidate_ids: leadRows.map((l) => l.id),
           plan_id,
           default_view: "table",
-          actions: ["enrich", "draft_outreach", "enrich_and_draft", "rank", "export_csv", "save_to_signal_feed"],
+          actions,
         };
+
+        const partialPrefix = partial ? `Found ${produced} of ${requested} — ` : "";
+        const content = canDraft
+          ? `${partialPrefix}Scout found ${contacts} contact-ready lead${contacts === 1 ? "" : "s"}. I opened them in Workbench. Recommended next step: rank by fit before drafting outreach. Nothing was sent.`
+          : `${partialPrefix}Scout found ${accounts} account opportunit${accounts === 1 ? "y" : "ies"}. These companies are showing intent, but decision-maker contacts aren't attached yet. I opened them in Workbench. Recommended next step: find contacts at these companies. Nothing was sent.`;
+
         await supabase.from("messages").insert({
           conversation_id: conversationId,
           role: "assistant",
-          // Adaptive status reflected in copy; Workbench panel + post-lead card + attempt log all attached.
-          content: `${partial ? `Found ${produced} of ${requested} — ` : ""}Scout found ${leadRows.length} lead${leadRows.length === 1 ? "" : "s"}. I opened them in the results panel and saved them for later review. Nothing was sent.`,
+          content,
           agent_slug: "pilot",
-          metadata: { ui_card: card, ui_panel: uiPanel, post_lead_actions: true, plan_id, workflow_status: planStatus, attempt_log: attemptSummary.length ? attemptSummary : [`Sourced ${produced}/${requested}`] },
+          metadata: { ui_card: card, ui_panel: uiPanel, post_lead_actions: true, plan_id, workflow_status: planStatus, can_draft: canDraft, next_action: nextAction.action, attempt_log: attemptSummary.length ? attemptSummary : [`Sourced ${produced}/${requested}`] },
         });
       }
     }

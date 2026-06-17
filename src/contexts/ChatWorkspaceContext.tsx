@@ -34,6 +34,13 @@ export interface LeadResultsPanelMeta {
   lead_candidate_ids: string[];
   plan_id: string;
   actions: string[];
+  // Account/contact lead model (optional — older messages may omit these).
+  account_count?: number;
+  contact_count?: number;
+  can_draft?: boolean;
+  contact_status?: 'needs_contact' | 'contact_found';
+  recommended_persona?: { personas: string[]; primary: string; reason: string };
+  next_action?: { action: string; label: string; reason: string };
 }
 
 export interface WorkbenchSelection {
