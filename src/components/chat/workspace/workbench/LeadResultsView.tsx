@@ -1,65 +1,15 @@
-import { useMemo, useState } from 'react';
-import {
-  ExternalLink, Globe, Linkedin, Sparkles, PenLine, Star, Archive, Save,
-  Download, Loader2, Filter, Building2, MapPin, User,
-} from 'lucide-react';
-import { useLeadResults, type LeadResultItem } from '@/hooks/useLeadResults';
+import { useMemo, useState, useCallback } from 'react';
+import { useLeadResults, type LeadTableRow } from '@/hooks/useLeadResults';
 import { dispatchResultAction, type LeadResultPanelAction } from '@/lib/chatActions';
 import type { LeadResultsPanelMeta } from '@/contexts/ChatWorkspaceContext';
-
-function toCsv(items: LeadResultItem[]): string {
-  const cols: (keyof LeadResultItem)[] = [
-    'person_name', 'title', 'company_name', 'website', 'linkedin_url',
-    'location', 'signal_type', 'signal_summary', 'fit_score', 'status',
-  ];
-  const esc = (v: unknown) => {
-    if (v == null) return '';
-    const s = String(v).replace(/"/g, '""');
-    return /[",\n]/.test(s) ? `"${s}"` : s;
-  };
-  const header = cols.join(',');
-  const rows = items.map((it) => cols.map((c) => esc(it[c])).join(','));
-  return [header, ...rows].join('\n');
-}
-
-function downloadCsv(filename: string, csv: string) {
-  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url; a.download = filename;
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-  setTimeout(() => URL.revokeObjectURL(url), 1000);
-}
-
-const ACTION_ICONS: Record<LeadResultPanelAction, any> = {
-  enrich: Globe,
-  draft_outreach: PenLine,
-  enrich_and_draft: Sparkles,
-  rank: Star,
-  export_csv: Download,
-  save_to_signal_feed: Save,
-};
-
-const ACTION_LABELS: Record<LeadResultPanelAction, string> = {
-  enrich: 'Enrich with Firecrawl',
-  draft_outreach: 'Draft outreach with Claude',
-  enrich_and_draft: 'Enrich + draft',
-  rank: 'Rank by fit',
-  export_csv: 'Export CSV',
-  save_to_signal_feed: 'Save to Signal Feed',
-};
-
-function creditsFor(action: LeadResultPanelAction, leadCount: number, enrichable: number): number {
-  switch (action) {
-    case 'rank': return Math.ceil(leadCount / 10);
-    case 'enrich': return enrichable;
-    case 'draft_outreach': return leadCount * 2;
-    case 'enrich_and_draft': return enrichable + leadCount * 2;
-    default: return 0;
-  }
-}
+import LeadTable from './leadTable/LeadTable';
+import LockedCell from './leadTable/LockedCell';
+import RecommendationBanner from './leadTable/RecommendationBanner';
+import BulkActionToolbar from './leadTable/BulkActionToolbar';
+import LeadDetailDrawer from './leadTable/LeadDetailDrawer';
+import { estimateCredits, recommendNextAction, ACTION_LABEL } from './leadTable/credits';
+import { rowsToCsv, downloadCsv } from './leadTable/csv';
+import { Loader2, Filter } from 'lucide-react';
 
 interface Props {
   meta: LeadResultsPanelMeta;
@@ -69,39 +19,114 @@ interface Props {
 export default function LeadResultsView({ meta, conversationId }: Props) {
   const { items, loading, error, refresh } = useLeadResults(meta.plan_id);
   const [onlyWithWebsite, setOnlyWithWebsite] = useState(false);
-  const [minFit, setMinFit] = useState<number>(0);
+  const [minFit, setMinFit] = useState(0);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [drawerRow, setDrawerRow] = useState<LeadTableRow | null>(null);
+  const [confirmAction, setConfirmAction] = useState<{ action: LeadResultPanelAction; ids: string[]; credits: number } | null>(null);
 
-  const filtered = useMemo(() => items.filter((it) => {
-    if (onlyWithWebsite && !it.website) return false;
-    if (minFit > 0 && (it.fit_score ?? 0) < minFit) return false;
+  const filtered = useMemo(() => items.filter((r) => {
+    if (onlyWithWebsite && !r.website) return false;
+    if (minFit > 0 && (r.fit_score ?? 0) < minFit) return false;
     return true;
   }), [items, onlyWithWebsite, minFit]);
 
-  const leadIds = useMemo(() => filtered.map((i) => i.lead_candidate_id), [filtered]);
-  const enrichableCount = useMemo(() => filtered.filter((i) => !!i.website).length, [filtered]);
+  const selectedRows = useMemo(
+    () => filtered.filter((r) => selected.has(r.id)),
+    [filtered, selected],
+  );
+  const targetRows = selectedRows.length > 0 ? selectedRows : filtered;
 
-  const handle = (action: LeadResultPanelAction) => {
+  const bulkCredits = useMemo<Record<LeadResultPanelAction, number>>(() => ({
+    enrich: estimateCredits('enrich', selectedRows),
+    enrich_and_draft: estimateCredits('enrich_and_draft', selectedRows),
+    find_contacts: estimateCredits('find_contacts', selectedRows),
+    research_company: estimateCredits('research_company', selectedRows),
+    draft_outreach: estimateCredits('draft_outreach', selectedRows),
+    rank: estimateCredits('rank', selectedRows),
+    export_csv: 0,
+    save_to_signal_feed: 0,
+  }), [selectedRows]);
+
+  const counts = useMemo(() => ({
+    found: items.length,
+    contactReady: items.filter((r) => r.contact_status !== 'needs_contact').length,
+    needContact: items.filter((r) => r.contact_status === 'needs_contact').length,
+    enrichable: items.filter((r) => !!r.website && r.enrichment_status !== 'enriched').length,
+    draftReady: items.filter((r) => r.draft_status === 'drafted' || r.draft_status === 'approved').length,
+  }), [items]);
+
+  const recommendation = useMemo(() => meta.recommended_next_action
+    ? {
+        action: (meta.recommended_next_action.action as LeadResultPanelAction) ?? 'find_contacts',
+        label: meta.recommended_next_action.label,
+        reason: meta.recommended_next_action.reason,
+        estimated_credits: meta.recommended_next_action.estimated_credits ?? 0,
+      }
+    : recommendNextAction(items),
+  [items, meta.recommended_next_action]);
+
+  const toggle = useCallback((id: string) => {
+    setSelected((s) => {
+      const n = new Set(s);
+      if (n.has(id)) n.delete(id); else n.add(id);
+      return n;
+    });
+  }, []);
+  const toggleAll = useCallback(() => {
+    setSelected((s) => {
+      if (s.size === filtered.length) return new Set();
+      return new Set(filtered.map((r) => r.id));
+    });
+  }, [filtered]);
+
+  const runAction = useCallback((action: LeadResultPanelAction, rows: LeadTableRow[]) => {
     if (action === 'export_csv') {
-      const csv = toCsv(filtered);
-      downloadCsv(`leads-${meta.plan_id.slice(0, 8)}.csv`, csv);
+      downloadCsv(`leads-${meta.plan_id.slice(0, 8)}.csv`, rowsToCsv(rows));
+      return;
+    }
+    const credits = estimateCredits(action, rows);
+    if (credits > 0) {
+      setConfirmAction({ action, ids: rows.map((r) => r.id), credits });
       return;
     }
     dispatchResultAction({
       conversationId,
       planId: meta.plan_id,
-      leadCandidateIds: leadIds,
+      leadCandidateIds: rows.map((r) => r.id),
       action,
-      estimatedCredits: creditsFor(action, filtered.length, enrichableCount),
+      estimatedCredits: credits,
     });
-  };
+  }, [conversationId, meta.plan_id]);
+
+  const onBulkAction = useCallback((a: LeadResultPanelAction) => runAction(a, targetRows), [runAction, targetRows]);
+  const onUnlock = useCallback((a: LeadResultPanelAction, id: string) => {
+    const row = items.find((r) => r.id === id);
+    if (!row) return;
+    runAction(a, [row]);
+  }, [runAction, items]);
+
+  const onRunRecommendation = useCallback(() => runAction(recommendation.action, items), [runAction, recommendation.action, items]);
+
+  const confirmAndDispatch = useCallback(() => {
+    if (!confirmAction) return;
+    dispatchResultAction({
+      conversationId,
+      planId: meta.plan_id,
+      leadCandidateIds: confirmAction.ids,
+      action: confirmAction.action,
+      estimatedCredits: confirmAction.credits,
+      confirmed: true,
+    });
+    setConfirmAction(null);
+  }, [confirmAction, conversationId, meta.plan_id]);
 
   return (
-    <div className="h-full flex flex-col">
-      {/* Sticky header */}
-      <div className="px-4 pt-4 pb-3 border-b border-white/[0.06] bg-[#0a0d12]/95 backdrop-blur sticky top-0 z-10">
+    <div className="h-full flex flex-col bg-[#0a0d12] relative">
+      {/* Header */}
+      <div className="px-4 pt-3 pb-2 border-b border-white/[0.06]">
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
-            <div className="text-[14px] font-semibold text-[#F0F6FC] flex items-center gap-2">
+            <div className="text-[13.5px] font-semibold text-[#F0F6FC] flex items-center gap-2">
               <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" />
               {meta.title}
             </div>
@@ -112,145 +137,115 @@ export default function LeadResultsView({ meta, conversationId }: Props) {
           </span>
         </div>
 
-        {/* Filters */}
-        <div className="mt-3 flex items-center gap-1.5 flex-wrap">
-          <Filter className="h-3 w-3 text-[#7D8590]" />
-          <button
-            onClick={() => setOnlyWithWebsite((v) => !v)}
-            className={`text-[10.5px] px-2 py-0.5 rounded-md border transition-colors ${
-              onlyWithWebsite
-                ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-300'
-                : 'border-white/10 bg-white/[0.02] text-[#9aa4af] hover:text-[#C9D1D9]'
-            }`}
-          >
-            Has website ({items.filter((i) => !!i.website).length})
-          </button>
-          {[60, 75, 90].map((v) => (
+        {/* Summary chips */}
+        <div className="mt-2.5 flex items-center gap-1.5 flex-wrap text-[10.5px]">
+          <Chip label="Found" v={counts.found} tone="default" />
+          <Chip label="Contact-ready" v={counts.contactReady} tone={counts.contactReady > 0 ? 'good' : 'muted'} />
+          <Chip label="Needs contact" v={counts.needContact} tone={counts.needContact > 0 ? 'warn' : 'muted'} />
+          <Chip label="Enrichable" v={counts.enrichable} tone={counts.enrichable > 0 ? 'good' : 'muted'} />
+          <Chip label="Drafts" v={counts.draftReady} tone={counts.draftReady > 0 ? 'good' : 'muted'} />
+
+          <div className="ml-auto flex items-center gap-1.5">
+            <Filter className="h-3 w-3 text-[#7D8590]" />
             <button
-              key={v}
-              onClick={() => setMinFit(minFit === v ? 0 : v)}
-              className={`text-[10.5px] px-2 py-0.5 rounded-md border transition-colors ${
-                minFit === v
-                  ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-300'
-                  : 'border-white/10 bg-white/[0.02] text-[#9aa4af] hover:text-[#C9D1D9]'
-              }`}
+              onClick={() => setOnlyWithWebsite((v) => !v)}
+              className={`px-2 py-0.5 rounded border transition-colors ${onlyWithWebsite ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-300' : 'border-white/10 bg-white/[0.02] text-[#9aa4af] hover:text-[#C9D1D9]'}`}
             >
-              Fit ≥ {v}
+              Has website
             </button>
-          ))}
-          <span className="ml-auto text-[10.5px] text-[#7D8590]">
-            {filtered.length} of {items.length} shown
-          </span>
+            {[60, 75, 90].map((v) => (
+              <button
+                key={v}
+                onClick={() => setMinFit(minFit === v ? 0 : v)}
+                className={`px-2 py-0.5 rounded border transition-colors ${minFit === v ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-300' : 'border-white/10 bg-white/[0.02] text-[#9aa4af] hover:text-[#C9D1D9]'}`}
+              >
+                Fit ≥ {v}
+              </button>
+            ))}
+          </div>
         </div>
       </div>
+
+      <RecommendationBanner rec={recommendation} onRun={onRunRecommendation} />
+      <BulkActionToolbar
+        selectedCount={selectedRows.length}
+        onClear={() => setSelected(new Set())}
+        onAction={onBulkAction}
+        credits={bulkCredits}
+      />
 
       {/* Body */}
-      <div className="flex-1 overflow-auto px-4 py-3">
-        {loading && items.length === 0 && (
-          <div className="flex items-center justify-center text-[12px] text-[#7D8590] py-12">
-            <Loader2 className="h-3.5 w-3.5 animate-spin mr-2" /> Loading leads…
-          </div>
-        )}
-        {error && (
-          <div className="text-[12px] text-amber-300 bg-amber-500/10 border border-amber-500/25 rounded-md p-2">
-            {error} <button onClick={refresh} className="underline ml-2">Retry</button>
-          </div>
-        )}
-        {!loading && filtered.length === 0 && (
-          <div className="text-[12px] text-[#7D8590] py-12 text-center">
-            No leads match these filters.
-          </div>
-        )}
+      {loading && items.length === 0 ? (
+        <div className="flex-1 flex items-center justify-center text-[12px] text-[#7D8590]">
+          <Loader2 className="h-3.5 w-3.5 animate-spin mr-2" /> Loading leads…
+        </div>
+      ) : error ? (
+        <div className="m-3 text-[12px] text-amber-300 bg-amber-500/10 border border-amber-500/25 rounded-md p-2">
+          {error} <button onClick={refresh} className="underline ml-2">Retry</button>
+        </div>
+      ) : filtered.length === 0 ? (
+        <div className="flex-1 flex items-center justify-center text-[12px] text-[#7D8590]">No leads match these filters.</div>
+      ) : (
+        <LeadTable
+          rows={filtered}
+          selected={selected}
+          onToggle={toggle}
+          onToggleAll={toggleAll}
+          onOpen={setDrawerRow}
+          onUnlock={onUnlock}
+        />
+      )}
 
-        {filtered.length > 0 && (
-          <ul className="space-y-2">
-            {filtered.map((it) => (
-              <li
-                key={it.id}
-                className="rounded-lg border border-white/[0.06] bg-white/[0.02] hover:bg-white/[0.04] transition-colors p-3"
-              >
-                <div className="flex items-start justify-between gap-3">
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <span className="text-[13px] font-medium text-[#F0F6FC] inline-flex items-center gap-1.5">
-                        {it.person_name ? <User className="h-3.5 w-3.5 text-emerald-300" /> : <Building2 className="h-3.5 w-3.5 text-emerald-300" />}
-                        {it.person_name ?? it.company_name ?? 'Lead'}
-                      </span>
-                      {typeof it.fit_score === 'number' && (
-                        <span className="text-[10px] px-1.5 py-0.5 rounded border border-emerald-500/30 bg-emerald-500/10 text-emerald-300 font-mono">
-                          fit {it.fit_score}
-                        </span>
-                      )}
-                      {it.status && it.status !== 'new' && (
-                        <span className="text-[10px] px-1.5 py-0.5 rounded border border-white/10 bg-white/[0.04] text-[#9aa4af]">
-                          {it.status}
-                        </span>
-                      )}
-                    </div>
-                    <div className="text-[12px] text-[#C9D1D9] mt-0.5">
-                      {[it.title, it.company_name].filter(Boolean).join(' · ')}
-                    </div>
-                    <div className="mt-1 flex items-center gap-3 text-[11px] text-[#7D8590] flex-wrap">
-                      {it.location && (
-                        <span className="inline-flex items-center gap-1"><MapPin className="h-3 w-3" /> {it.location}</span>
-                      )}
-                      {it.signal_type && (
-                        <span className="inline-flex items-center gap-1">
-                          <Sparkles className="h-3 w-3 text-emerald-300/80" /> {it.signal_type}
-                        </span>
-                      )}
-                    </div>
-                    {it.fit_reason && (
-                      <div className="text-[11px] text-[#9aa4af] mt-1.5 line-clamp-2">{it.fit_reason}</div>
-                    )}
-                  </div>
-                  <div className="flex flex-col gap-1 shrink-0">
-                    {it.website && (
-                      <a href={it.website} target="_blank" rel="noopener noreferrer"
-                         className="inline-flex items-center gap-1 text-[11px] text-emerald-300 hover:text-emerald-200">
-                        <Globe className="h-3 w-3" /> Site <ExternalLink className="h-2.5 w-2.5" />
-                      </a>
-                    )}
-                    {it.linkedin_url && (
-                      <a href={it.linkedin_url} target="_blank" rel="noopener noreferrer"
-                         className="inline-flex items-center gap-1 text-[11px] text-sky-300 hover:text-sky-200">
-                        <Linkedin className="h-3 w-3" /> LinkedIn
-                      </a>
-                    )}
-                  </div>
-                </div>
-              </li>
-            ))}
-          </ul>
-        )}
+      {/* Footer note */}
+      <div className="border-t border-white/[0.06] bg-[#0a0d12]/95 backdrop-blur px-3 py-1.5 text-[10px] text-[#7D8590] flex items-center justify-between">
+        <span>{filtered.length} of {items.length} shown · drafts require approval — nothing is sent automatically</span>
+        <span className="font-mono">Agentory credits estimated locally</span>
       </div>
 
-      {/* Sticky action bar */}
-      <div className="border-t border-white/[0.06] bg-[#0a0d12]/95 backdrop-blur px-3 py-2.5">
-        <div className="flex items-center gap-1.5 flex-wrap">
-          {(meta.actions as LeadResultPanelAction[]).map((a) => {
-            const Icon = ACTION_ICONS[a] ?? Star;
-            const credits = creditsFor(a, filtered.length, enrichableCount);
-            const disabled = filtered.length === 0;
-            return (
-              <button
-                key={a}
-                onClick={() => handle(a)}
-                disabled={disabled}
-                title={ACTION_LABELS[a]}
-                className="inline-flex items-center gap-1.5 text-[11.5px] px-2.5 py-1.5 rounded-md border border-white/[0.08] bg-white/[0.02] text-[#C9D1D9] hover:bg-emerald-500/[0.08] hover:border-emerald-500/30 hover:text-[#F0F6FC] disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-              >
-                <Icon className="h-3 w-3" />
-                {ACTION_LABELS[a]}
-                {credits > 0 && (
-                  <span className="text-[10px] text-emerald-300/80 ml-0.5">~{credits}c</span>
-                )}
-              </button>
-            );
-          })}
+      <LeadDetailDrawer row={drawerRow} onClose={() => setDrawerRow(null)} />
+
+      {confirmAction && (
+        <ConfirmDialog
+          title={ACTION_LABEL[confirmAction.action]}
+          rows={confirmAction.ids.length}
+          credits={confirmAction.credits}
+          onCancel={() => setConfirmAction(null)}
+          onConfirm={confirmAndDispatch}
+        />
+      )}
+    </div>
+  );
+}
+
+function Chip({ label, v, tone }: { label: string; v: number; tone: 'default' | 'good' | 'warn' | 'muted' }) {
+  const cls =
+    tone === 'good' ? 'border-emerald-500/30 bg-emerald-500/[0.08] text-emerald-200'
+    : tone === 'warn' ? 'border-amber-500/30 bg-amber-500/[0.08] text-amber-200'
+    : tone === 'muted' ? 'border-white/[0.06] bg-white/[0.02] text-[#7D8590]'
+    : 'border-white/10 bg-white/[0.04] text-[#C9D1D9]';
+  return (
+    <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded border ${cls}`}>
+      <span className="text-[10px] text-[#7D8590] uppercase tracking-wider">{label}</span>
+      <span className="font-mono text-[11px]">{v}</span>
+    </span>
+  );
+}
+
+function ConfirmDialog({ title, rows, credits, onCancel, onConfirm }: { title: string; rows: number; credits: number; onCancel: () => void; onConfirm: () => void }) {
+  return (
+    <div className="absolute inset-0 z-40 flex items-center justify-center pointer-events-none">
+      <div className="absolute inset-0 bg-black/60 pointer-events-auto" onClick={onCancel} aria-hidden />
+      <div className="relative pointer-events-auto w-[360px] max-w-full rounded-lg border border-emerald-500/30 bg-[#0a0d12] shadow-2xl p-4">
+        <div className="text-[10px] uppercase tracking-wider text-emerald-300/80">Confirm</div>
+        <div className="text-[14px] font-semibold text-[#F0F6FC] mt-0.5">{title}</div>
+        <div className="text-[12px] text-[#C9D1D9] mt-2">
+          Run on <span className="font-mono text-emerald-200">{rows}</span> {rows === 1 ? 'lead' : 'leads'}.
+          <br />Estimated cost: <span className="font-mono text-emerald-200">~{credits} Agentory credits</span>.
         </div>
-        <div className="mt-1.5 text-[10px] text-[#7D8590]">
-          Estimated Agentory credits. Drafts require approval — nothing is sent automatically.
+        <div className="text-[10.5px] text-[#7D8590] mt-2">Nothing will be sent. Drafts require explicit approval.</div>
+        <div className="mt-3 flex items-center justify-end gap-2">
+          <button onClick={onCancel} className="text-[11.5px] px-2.5 py-1 rounded border border-white/10 bg-white/[0.02] text-[#C9D1D9] hover:bg-white/[0.06]">Cancel</button>
+          <button onClick={onConfirm} className="text-[11.5px] px-2.5 py-1 rounded border border-emerald-500/40 bg-emerald-500/[0.15] text-emerald-100 hover:bg-emerald-500/[0.25]">Confirm</button>
         </div>
       </div>
     </div>
