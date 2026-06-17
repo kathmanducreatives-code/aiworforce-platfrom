@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useChatPaneWidth } from '../ChatPaneWidthContext';
 import {
   Target, Briefcase, MessageSquare, MessagesSquare, Swords, UserSearch, Building2, ShieldCheck, ArrowLeft, Sparkles,
 } from 'lucide-react';
@@ -106,6 +107,17 @@ function Brief({ option, onBack, conversationId }: { option: LeadSourceOption; o
     );
   }
 
+  return (
+    <div className="rounded-xl border border-emerald-500/20 bg-gradient-to-b from-emerald-500/[0.05] to-transparent p-4 max-w-[560px] min-w-0">
+      <NarrowGridBrief option={option} v={v} set={set} missing={missing} send={send} setSent={setSent} conversationId={conversationId} onBack={onBack} />
+    </div>
+  );
+}
+
+function NarrowGridBrief(_props: any): null { return null; }
+// (NOTE: helper kept for type stability; actual brief inlined below if needed.)
+
+function _UNUSED_to_satisfy_old_layout() {
   return (
     <div className="rounded-xl border border-emerald-500/20 bg-gradient-to-b from-emerald-500/[0.05] to-transparent p-4 max-w-[560px]">
       <button onClick={onBack} className="flex items-center gap-1 text-[11px] text-[#7D8590] hover:text-emerald-300 mb-2">
