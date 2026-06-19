@@ -1,159 +1,149 @@
+# Premium Workbench + Resizable Layout Redesign
 
-# Agentory chat ↔ Workbench sync + artifact model
+Two-part scope: (1) make the chat ↔ Workbench split truly resizable and stable at every size, (2) collapse the messy Workbench tabs into a clean **Table / Insights / Activity** structure that feels like a premium AI execution surface, not a debug viewer.
 
-Codex/Claude-style: chat = command surface, Workbench = structured output surface. Every meaningful AI result becomes a linked, addressable artifact. UI changes only — no backend rewrite, no DB migrations, no production deploy, no outbound automation.
+No backend logic, no migrations, no auto-send. UI/layout/presentation only.
 
-## 1. Artifact model (frontend state)
+---
 
-New module `src/lib/workbenchArtifacts.ts`:
+## 1. Resizable chat + Workbench layout
 
+File: `src/components/chat/workspace/ResizableWorkspaceSplit.tsx` (rewrite for correctness + polish).
+
+- CSS Grid: `gridTemplateColumns: ${chatPx}px 6px 1fr`, both columns `minmax(0, …)` via `min-w-0` children.
+- Default ratio **0.4** (chat 40 / workbench 60). Persist to `localStorage` key `agentory:workspace-split-ratio` on `pointerup`. Restore on mount.
+- Constraints: chat min **380px**, workbench min **620px**, chat max **60%**, workbench max **75%** (i.e. chat min ≥ 25%).
+- Drag implementation: `pointerdown` → `setPointerCapture` + rAF-throttled `pointermove` updating ratio; `pointerup`/`pointercancel` releases + saves.
+- Double-click divider → reset to 0.4 + persist.
+- While dragging: add body class disabling text selection + forcing `col-resize` cursor globally; subtle emerald glow on divider; centered grip handle.
+- Container `overflow-hidden`; each pane is `flex flex-col min-w-0 min-h-0 overflow-hidden`.
+- Responsive fallback: if container `< 1000px` (min chat + min wb + divider), `ChatWorkspace` swaps the split for a **Chat | Workbench** tabbed view (already present — keep & verify threshold).
+
+## 2. Conversation history
+
+- Already a drawer/overlay (no layout shrink). Verify: closes on Escape, outside click, close button; never creates a new conversation.
+
+## 3. Chat panel polish (at all widths)
+
+Files: `ChatView.tsx`, `bubbles/LeadSourceCard.tsx`, composer.
+
+- Message list `flex-1 overflow-auto` + bottom padding ≥ composer height so messages aren't hidden.
+- User bubbles: `max-w-[min(680px,85%)] break-words` — never collapse to vertical single-column text.
+- Composer pinned at bottom, width = pane width, no horizontal scroll.
+- `LeadSourceCard`: consume `ChatPaneWidthContext`; grid is `grid-cols-2` when pane ≥ 520px, else `grid-cols-1`. Card padding stays comfortable, badges/icons aligned, "Nothing will be sent" caption always visible, no truncation by ellipsis on critical copy.
+
+## 4. Workbench redesign — only 3 tabs
+
+File: `src/components/chat/workspace/workbench/WorkbenchPanel.tsx` (major refactor).
+
+New tab union:
 ```ts
-export type WorkbenchArtifactKind =
-  | "lead_results" | "competitor_analysis" | "content_draft"
-  | "outreach_drafts" | "website_audit" | "qa_report"
-  | "coding_prompt" | "csv_export" | "report" | "generic";
-
-export type WorkbenchArtifactStatus =
-  "running" | "complete" | "partial" | "failed" | "blocked";
-
-export interface WorkbenchArtifact {
-  id: string;                    // stable: ui_panel.artifact_id || msg.id || plan_id
-  conversation_id: string;
-  source_message_id?: string;
-  user_message_id?: string;
-  assistant_message_id?: string;
-  plan_id?: string;
-  run_id?: string;
-  kind: WorkbenchArtifactKind;
-  title: string;
-  subtitle?: string;             // short preview of the user request
-  created_at: string;
-  status: WorkbenchArtifactStatus;
-  panel: unknown;                // existing panel meta (LeadResultsPanelMeta, etc.)
-  metadata?: Record<string, unknown>;
-}
+type Tab = 'table' | 'insights' | 'activity';
 ```
 
-Plus `buildArtifactFromMessage(msg, prevUserMsg)` that:
-- reads `metadata.ui_panel` if present
-- derives `kind` from `ui_panel.kind` (defaults: lead_results → existing, anything else → generic for now)
-- derives `id` from `ui_panel.artifact_id` ?? `plan_id` ?? `msg.id` (backward compat)
-- derives `subtitle` from the immediately-preceding user message text (truncated ~120 chars)
-- derives `status` from `ui_panel.status` or workflow_status
+- **Default tab: `table`**, always. Never default to summary/sources/raw.
+- Remove `summary`, `sources`, `rankings`, `drafts`, `leads`, `raw` from the visible tab bar. The underlying views are reused inside the new tabs (no deletion of view files needed):
+  - `LeadResultsView` + `AgentOutputViewer` + `AriaRankingView` + `PennDraftView` render inside **Table**, chosen by data shape.
+  - `SummaryView` + `HawkResearchView` (collapsed source list) render inside **Insights**.
+  - Activity list stays in **Activity**.
+- **Raw JSON tab removed from UI.** Keep `RawJsonView` file but gate any usage behind `import.meta.env.DEV` (dev-only debug bar at the very bottom of the panel, collapsed). No actor payloads, dataset IDs, tracking IDs, or Apify response surfaces in production UI.
 
-## 2. ChatWorkspaceContext extension
+## 5. Header redesign (`WorkbenchHeader.tsx`)
 
-Extend (do not replace) `src/contexts/ChatWorkspaceContext.tsx`:
+- Small `WORKBENCH` eyebrow (kept).
+- Title rules for lead panels:
+  - account-only: `N account opportunities found`
+  - contact-ready: `N contact-ready leads found`
+  - mixed: `N opportunities · M contacts found`
+  - non-lead: concise task title (not raw prompt).
+- Subtitle (lead): `Scout found companies showing intent. Unlock decision-makers, enrichment, and outreach when ready.`
+- Original prompt rendered as small secondary line `Request: …`, truncated.
+- Chip row simplified: Source · Signal · Status · Actor · Count. Drop dataset/run IDs from the visible chip set.
+- Sticky header + sticky tab bar; refresh + close on the right.
 
-New state:
-- `artifactsByConversation: Record<string, WorkbenchArtifact[]>`
-- `activeArtifactId: string | null`
-- `lastArtifactByConversation: Record<string, string>` (persisted in localStorage `agentory:last-artifact`)
-- Derived: `activeWorkbenchArtifact`, `activeConversationId` (from `view`)
+## 6. Recommended action banner
 
-New actions:
-- `registerArtifact(a: WorkbenchArtifact)` — upsert by id; if newer for active conversation, set active + open Workbench; if for another conversation, mark "new result" indicator only.
-- `openArtifact(id)` — set active + open Workbench (no rerun, no nav).
-- `closeWorkbench()` — preserves `activeArtifactId` so View results can reopen.
-- `setChatOnlyMode(bool)` — separate from `workbenchOpen`; suppresses auto-open within the conversation.
-
-Backward compat: `selectedOutput` becomes a derived view of `activeWorkbenchArtifact` so existing `WorkbenchPanel`/`useWorkbenchData` keep working.
-
-## 3. Auto-open + "new result" indicator
-
-Move the auto-open effect from `ChatView.tsx` into a single `useArtifactSync(conversationId, messages)` hook:
-- Iterates messages, builds artifacts, calls `registerArtifact`.
-- Auto-open only if `conversationId === activeConversationId` AND user has not toggled chat-only mode for this conversation.
-- For other conversations, increment a per-conversation `unseenArtifacts` counter shown as a dot in `ConversationsSidebar`.
-
-## 4. "View results" button per assistant message
-
-In `ChatView.tsx`, under each assistant message whose `metadata.ui_panel` exists (or that the artifact builder maps to an artifact), render a compact button:
-
+A single slim banner above the table, only when `panel.recommended_next_action` (or inferred) exists:
 ```
-[▸ View results · 5 account opportunities found]
+Recommended next: Find decision-makers
+These companies show intent, but no contacts are attached yet.
+[ Run · ~5c ]
 ```
+- One primary action only. Compact (one row at wide width, two rows at narrow).
+- Paid actions go through existing confirmation flow + `dispatchResultAction`, preserving `conversation_id`.
 
-Click → `openArtifact(artifact.id)`. Also added to `ExecutionPlanCard` when its plan_id has an artifact. No rerun, no new chat.
+## 7. Table tab redesign (`LeadResultsView.tsx` + `leadTable/*`)
 
-## 5. Workbench multi-artifact switcher
+Columns (lead/account opportunities):
+`Company · Signal · Recommended Persona · Decision Maker 🔒 · Contact Info 🔒 · Company Enrichment 🔒 · Personalized Message 🔒 · Fit · Status`
 
-Update `WorkbenchHeader.tsx`:
-- Title = artifact.title; second line = `From: {subtitle}` (preview of originating user message).
-- Status chip (running/partial/complete/failed/blocked) with existing color tokens.
-- If `artifactsByConversation[active].length > 1`, show a compact dropdown "Viewing: …" listing all artifacts (title · kind · time · status). Selecting one calls `openArtifact`.
-- Close button calls `closeWorkbench()` (state preserved).
+- **Company**: name, domain status (`No website` chip when missing), location.
+- **Signal**: meaningful label (e.g. `Hiring signal · Head of GTM Enablement · LinkedIn Jobs`) instead of generic "company".
+- **Recommended Persona**: from `panel.recommended_persona.primary` (Founder/CEO/VP Sales/Head of Growth/etc.); fallback `Suggested after ranking`.
+- **Locked cells** become click-to-unlock CTAs:
+  - Decision Maker → `Find decision-maker · ~1c`
+  - Contact Info → `Needs decision-maker` (if none) / `Unlock contact info · ~1c`
+  - Company Enrichment → `Research company · ~1c` / `Needs domain`
+  - Personalized Message → `Needs contact` / `Generate draft · ~2c`
+- **Fit**: existing score chip. **Status**: existing badge.
+- Table scrolls horizontally inside its own `overflow-x-auto` wrapper; never causes page horizontal scroll. Sticky first column on narrow widths.
 
-## 6. Workbench states
+## 8. Actions simplification
 
-`WorkbenchPanel.tsx` already routes by panel kind; add status-aware shells:
-- running → skeleton rows in Table tab + ActivityTimeline live
-- partial → existing recommended-action banner + "X of Y found" chip
-- failed → `FailureRecoveryCard` with Retry (dispatches in same conversation)
-- complete → current behavior
-- Keep the 3 tabs (Table · Insights · Activity). Raw stays DEV-only (already done).
+- Default global actions (top-right of table): `Find decision-makers · Rank · Export`. `Draft` only when ≥1 row has a contact.
+- Bulk toolbar appears only when rows are selected: `Find decision-makers · Research companies · Rank selected · Generate outreach (when contacts) · Export selected · Save selected`.
+- Every action: preserves `conversation_id`, uses `dispatchChatAction`/`dispatchResultAction`, confirms credits for paid, never sends/posts/DMs/emails.
 
-## 7. Action dispatch contract
+## 9. Insights tab (new composition)
 
-Refactor `src/lib/chatActions.ts` so every workbench action goes through:
+Sections, each a small card:
+1. **What Scout found** — 1-sentence summary from panel/task.
+2. **Why it matters** — heuristic from signal type (jobs → growth/pipeline pressure, etc.).
+3. **What's missing** — checks `contact_status`, missing domains, missing personas.
+4. **Recommended next** — same source as banner, slightly expanded.
+5. **Search strategy** — exact query + broadening terms from task payload.
+6. **Sources used** (collapsed `<details>`): provider + count; "View source links" reveals list. No raw long URLs by default.
 
-```ts
-dispatchWorkbenchAction({
-  conversationId, artifactId, action, rowIds?, estimatedCredits?, metadata?
-})
-```
+## 10. Activity tab
 
-Internally still posts to `pilot-chat`/`run-agent` as today, but always includes `conversation_id` and `artifact_id` in the message metadata so the resulting assistant message carries `ui_panel.artifact_id` (so retries/Find-DM/Rank append a new artifact tied to same conversation, not a new chat). Backend functions are not modified in this pass; the frontend tags outgoing requests and tolerates missing `artifact_id` in responses by falling back to message-id-derived ids.
+- Clean timeline list: `HH:MM · Title` + optional one-line body.
+- Map `event_type` to friendly labels (`tool_call_started` → `… started`, etc.). Hide raw provider blobs.
 
-## 8. Conversation rename & delete
+## 11. Empty / fallback states
 
-In `ConversationsSidebar.tsx` add a per-row kebab menu:
-- Rename → inline editable input, optimistic update of `conversations.title` via existing `useUserConversations` hook (add `renameConversation`, `deleteConversation` mutations using supabase client; RLS already scopes to user).
-- Delete → AlertDialog confirmation. On confirm: soft logic — if current schema supports `archived_at`/`deleted_at` use it; otherwise delete row. If the deleted conversation is active, `setView({kind:'empty'})` and `closeWorkbench()`. Artifacts in memory for that conversation are dropped.
-- New result dot per row from `unseenArtifacts`.
+Polished cards (replace generic "No results") for: no contacts, no websites, no drafts, actor unavailable — copy per spec.
 
-Will inspect `useUserConversations` and the `conversations` table columns before choosing soft vs hard delete; default to hard delete only if no archived column exists.
-
-## 9. Backward compatibility
-
-- Old assistant messages with `ui_panel.kind = "lead_results"` and no `artifact_id` get a synthetic id from `plan_id || msg.id` — they show "View results" and open exactly the same panel as today.
-- `WorkbenchPanel`/`LeadResultsView` props unchanged; they read from the active artifact's `panel`.
-
-## 10. Out of scope (explicit)
-
-- No landing page changes.
-- No DB migrations. Migration 145631 not touched.
-- No edge function deploys (pilot-chat / run-agent / orchestrate unchanged). Optional follow-up plan can add `artifact_id` server-side later.
-- No outbound automation: all drafts remain approval-gated as today.
-- No new tabs in Workbench; no Raw/Sources surfacing.
-
-## 11. Tests & QA
-
-Add Vitest unit tests:
-- `workbenchArtifacts.test.ts`: builder maps `ui_panel` correctly; backward-compat id derivation; subtitle from preceding user msg.
-- `ChatWorkspaceContext.test.tsx`: registerArtifact auto-opens for active conv only; close preserves id; openArtifact switches active; multiple artifacts per conv coexist.
-
-Browser QA flows A–G from the request, performed via the preview after build.
-
-## 12. Files touched (planned)
-
-Created:
-- `src/lib/workbenchArtifacts.ts`
-- `src/hooks/useArtifactSync.ts`
-- `src/components/chat/workspace/ViewResultsButton.tsx`
-- `src/components/chat/workspace/workbench/ArtifactSwitcher.tsx`
-- `src/components/chat/workspace/ConversationRowMenu.tsx`
-- tests under `src/lib/__tests__/` and `src/contexts/__tests__/`
+## 12. Files changed
 
 Edited:
-- `src/contexts/ChatWorkspaceContext.tsx`
-- `src/components/chat/workspace/ChatView.tsx`
-- `src/components/chat/workspace/ChatWorkspace.tsx` (chat-only toggle)
-- `src/components/chat/workspace/ConversationsSidebar.tsx`
-- `src/components/chat/workspace/workbench/WorkbenchHeader.tsx`
-- `src/components/chat/workspace/workbench/WorkbenchPanel.tsx` (status-aware shells)
-- `src/components/chat/workspace/plan/ExecutionPlanCard.tsx`
-- `src/lib/chatActions.ts`
-- `src/hooks/useUserConversations.ts` (add rename/delete)
+- `src/components/chat/workspace/ResizableWorkspaceSplit.tsx`
+- `src/components/chat/workspace/ChatWorkspace.tsx` (verify responsive fallback threshold + key wiring)
+- `src/components/chat/workspace/ChatView.tsx` (bubble width + composer padding)
+- `src/components/chat/workspace/bubbles/LeadSourceCard.tsx` (grid reflow via pane width)
+- `src/components/chat/workspace/workbench/WorkbenchPanel.tsx` (3-tab refactor, default `table`, dev-only raw)
+- `src/components/chat/workspace/workbench/WorkbenchHeader.tsx` (title/subtitle/chip rules)
+- `src/components/chat/workspace/workbench/LeadResultsView.tsx` + `leadTable/*` (columns, locked CTAs, internal h-scroll, recommended banner)
+- `src/components/chat/workspace/workbench/OutputActionBar.tsx` (compact default actions + bulk variant)
 
-Not touched: landing, supabase/migrations, supabase/functions/*, screening pipeline, auth.
+New:
+- `src/components/chat/workspace/workbench/InsightsView.tsx`
+- `src/components/chat/workspace/workbench/ActivityTimeline.tsx`
+- `src/components/chat/workspace/workbench/RecommendedActionBanner.tsx`
+
+Kept but no longer in tab bar (reused inside Table/Insights or dev-only):
+- `SummaryView.tsx`, `HawkResearchView.tsx`, `AriaRankingView.tsx`, `PennDraftView.tsx`, `RawJsonView.tsx` (dev-only).
+
+## 13. Verification
+
+- Build passes (auto).
+- Browser QA at 1280×800 and 1057×778:
+  - Default opens 40/60; drag resizes live; double-click resets; refresh restores ratio.
+  - Only `Table · Insights · Activity` tabs visible; Table is default; no Raw/Sources visible.
+  - Lead Source Selector reflows 2→1 col under ~520px chat pane.
+  - No page horizontal scroll at any split.
+  - Composer stays pinned; no message hidden behind it.
+  - Actions preserve conversation; no auto-send.
+
+## 14. Out of scope
+
+Landing page, backend logic, DB migrations, edge functions, auth, any auto-outbound.

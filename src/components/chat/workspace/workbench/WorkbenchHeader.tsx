@@ -4,7 +4,6 @@ import AgentBadge from '../plan/AgentBadge';
 import type { WorkbenchData } from './useWorkbenchData';
 import type { LeadResultsPanelMeta } from '@/contexts/ChatWorkspaceContext';
 import { workflowTypeFromToolCall, WORKFLOW_LABELS } from './workflowType';
-import ArtifactSwitcher from './ArtifactSwitcher';
 
 const STATUS_TONE: Record<string, string> = {
   pending: 'bg-white/[0.04] text-[#7D8590] border-white/[0.08]',
@@ -67,7 +66,6 @@ export default function WorkbenchHeader({
           )}
         </div>
         <div className="flex items-center gap-1 shrink-0">
-          <ArtifactSwitcher />
           <button
             onClick={onRefresh}
             disabled={data.loading}

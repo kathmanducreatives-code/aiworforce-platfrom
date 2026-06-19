@@ -1,5 +1,4 @@
-import { useMemo, useState, useRef, useEffect } from 'react';
-import { MoreVertical, Pencil, Trash2 } from 'lucide-react';
+import { useMemo, useState } from 'react';
 import { cn } from '@/lib/utils';
 import { useWorkspace } from '@/contexts/WorkspaceContext';
 import { useAgents } from '@/hooks/useAgents';
@@ -8,10 +7,6 @@ import { useRelativeTime } from '@/hooks/useRelativeTime';
 import { useUserConversations, type ChatConversationRow } from '@/hooks/useUserConversations';
 import { DEPTS } from '@/lib/agentDeptIndex';
 import { AGENT_PROFILES, AGENT_BY_ID } from '@/data/agentProfiles';
-import {
-  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
-  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
-} from '@/components/ui/alert-dialog';
 
 type Filter = 'all' | 'active' | 'done';
 
@@ -39,141 +34,41 @@ function InitialCircle({ slug, name, size = 24, active = false }: { slug: string
   );
 }
 
-function ConversationItem({
-  conv, onAskDelete,
-}: {
-  conv: ChatConversationRow;
-  onAskDelete: (c: ChatConversationRow) => void;
-}) {
-  const { view, setView, unseenByConversation, artifactsByConversation } = useChatWorkspace();
-  const { renameConversation } = useUserConversations();
+function ConversationItem({ conv }: { conv: ChatConversationRow }) {
+  const { view, setView } = useChatWorkspace();
   const rel = useRelativeTime(conv.updated_at);
   const active = view.kind === 'chat' && view.conversationId === conv.id;
   const profile = AGENT_BY_ID[conv.agent_slug];
   const title = (conv.title ?? '').slice(0, 30) || 'New chat';
-  const unseen = unseenByConversation[conv.id] ?? 0;
-  const hasResults = (artifactsByConversation[conv.id] ?? []).length > 0;
-  const [menuOpen, setMenuOpen] = useState(false);
-  const [editing, setEditing] = useState(false);
-  const [draft, setDraft] = useState(title);
-  const wrapRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    const onDown = (e: MouseEvent) => {
-      if (!wrapRef.current?.contains(e.target as Node)) setMenuOpen(false);
-    };
-    document.addEventListener('mousedown', onDown);
-    return () => document.removeEventListener('mousedown', onDown);
-  }, []);
-
-  const commitRename = async () => {
-    setEditing(false);
-    if (draft.trim() && draft.trim() !== title) {
-      await renameConversation(conv.id, draft.trim());
-    }
-  };
 
   return (
-    <div
-      ref={wrapRef}
+    <button
+      onClick={() => setView({ kind: 'chat', conversationId: conv.id, agentSlug: conv.agent_slug })}
       className={cn(
-        'group relative w-full py-1.5 px-2 rounded-md transition-colors flex items-start gap-2',
+        'w-full text-left py-1.5 px-2 rounded-md transition-colors flex items-start gap-2',
         active ? 'bg-white/[0.04] text-[#F0F6FC]' : 'text-[#7D8590] hover:text-[#F0F6FC] hover:bg-white/[0.02]',
       )}
     >
-      <button
-        onClick={() => !editing && setView({ kind: 'chat', conversationId: conv.id, agentSlug: conv.agent_slug })}
-        className="flex items-start gap-2 flex-1 min-w-0 text-left"
-        type="button"
-      >
-        <InitialCircle slug={conv.agent_slug} name={profile?.name ?? conv.agent_slug} size={24} />
-        <div className="flex-1 min-w-0">
-          {editing ? (
-            <input
-              autoFocus
-              value={draft}
-              onChange={(e) => setDraft(e.target.value)}
-              onBlur={commitRename}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') { e.preventDefault(); commitRename(); }
-                if (e.key === 'Escape') { setEditing(false); setDraft(title); }
-              }}
-              onClick={(e) => e.stopPropagation()}
-              className="w-full text-xs bg-transparent border border-white/10 rounded px-1 py-0.5 text-[#F0F6FC] focus:outline-none focus:border-emerald-500/40"
-              maxLength={120}
-            />
-          ) : (
-            <div className="text-xs line-clamp-1 flex items-center gap-1.5">
-              <span className="truncate">{title}</span>
-              {unseen > 0 && (
-                <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 shrink-0" title="New result" />
-              )}
-              {hasResults && unseen === 0 && (
-                <span className="h-1 w-1 rounded-full bg-white/20 shrink-0" title="Has results" />
-              )}
-            </div>
-          )}
-          <div className="text-[10px] text-[#484F58] mt-0.5">{rel}</div>
-        </div>
-      </button>
-      <button
-        type="button"
-        onClick={(e) => { e.stopPropagation(); setMenuOpen((v) => !v); }}
-        className="opacity-0 group-hover:opacity-100 focus:opacity-100 h-6 w-6 inline-flex items-center justify-center rounded text-[#7D8590] hover:text-[#F0F6FC] hover:bg-white/[0.06]"
-        aria-label="Conversation menu"
-      >
-        <MoreVertical className="h-3.5 w-3.5" />
-      </button>
-      {menuOpen && (
-        <div className="absolute right-1 top-9 z-50 w-[150px] rounded-md border border-white/[0.08] bg-[#0a0d12] shadow-xl overflow-hidden py-1">
-          <button
-            type="button"
-            onClick={() => { setMenuOpen(false); setDraft(title); setEditing(true); }}
-            className="w-full text-left px-3 py-1.5 text-[12px] text-[#C9D1D9] hover:bg-white/[0.05] flex items-center gap-2"
-          >
-            <Pencil className="h-3 w-3" /> Rename
-          </button>
-          <button
-            type="button"
-            onClick={() => { setMenuOpen(false); onAskDelete(conv); }}
-            className="w-full text-left px-3 py-1.5 text-[12px] text-rose-300 hover:bg-rose-500/10 flex items-center gap-2"
-          >
-            <Trash2 className="h-3 w-3" /> Delete
-          </button>
-        </div>
-      )}
-    </div>
+      <InitialCircle slug={conv.agent_slug} name={profile?.name ?? conv.agent_slug} size={24} />
+      <div className="flex-1 min-w-0">
+        <div className="text-xs line-clamp-1">{title}</div>
+        <div className="text-[10px] text-[#484F58] mt-0.5">{rel}</div>
+      </div>
+    </button>
   );
 }
 
 export default function ConversationsSidebar({ wide }: { wide?: boolean }) {
   const { workspaceId } = useWorkspace();
   const { agents } = useAgents(workspaceId);
-  const { view, setView, closeWorkbench, forgetConversation } = useChatWorkspace();
-  const { conversations, deleteConversation } = useUserConversations();
+  const { view, setView } = useChatWorkspace();
+  const { conversations } = useUserConversations();
   const [filter, setFilter] = useState<Filter>('all');
-  const [toDelete, setToDelete] = useState<ChatConversationRow | null>(null);
-  const [deleting, setDeleting] = useState(false);
 
   const filtered = useMemo(() => {
     if (filter === 'all') return conversations;
     return conversations.filter((c) => c.status === (filter === 'active' ? 'active' : 'done'));
   }, [conversations, filter]);
-
-  const handleConfirmDelete = async () => {
-    if (!toDelete) return;
-    setDeleting(true);
-    const wasActive = view.kind === 'chat' && view.conversationId === toDelete.id;
-    const { error } = await deleteConversation(toDelete.id);
-    setDeleting(false);
-    if (error) return; // optimistic update already reverted via realtime
-    forgetConversation(toDelete.id);
-    if (wasActive) {
-      closeWorkbench();
-      setView({ kind: 'empty' });
-    }
-    setToDelete(null);
-  };
 
   return (
     <aside
@@ -204,12 +99,13 @@ export default function ConversationsSidebar({ wide }: { wide?: boolean }) {
         ) : (
           <ul className="space-y-0.5">
             {filtered.map((c) => (
-              <li key={c.id}><ConversationItem conv={c} onAskDelete={setToDelete} /></li>
+              <li key={c.id}><ConversationItem conv={c} /></li>
             ))}
           </ul>
         )}
       </div>
 
+      {/* Channels */}
       <div className="px-3 pt-3 pb-2 border-t border-white/[0.06]">
         <div className="text-[10px] uppercase tracking-widest text-[#484F58] mb-1">Channels</div>
         <ul className="space-y-0.5">
@@ -235,6 +131,7 @@ export default function ConversationsSidebar({ wide }: { wide?: boolean }) {
         </ul>
       </div>
 
+      {/* Team */}
       <div className="px-3 py-3 border-t border-white/[0.06]">
         <div className="text-[10px] uppercase tracking-widest text-[#484F58] mb-2">Your team</div>
         <div className="flex items-center gap-1.5 flex-wrap">
@@ -258,27 +155,6 @@ export default function ConversationsSidebar({ wide }: { wide?: boolean }) {
           })}
         </div>
       </div>
-
-      <AlertDialog open={!!toDelete} onOpenChange={(o) => !o && setToDelete(null)}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Delete conversation?</AlertDialogTitle>
-            <AlertDialogDescription>
-              This permanently removes "{toDelete?.title ?? 'New chat'}" and its messages. Results saved to other surfaces are not affected.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel disabled={deleting}>Cancel</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={(e) => { e.preventDefault(); handleConfirmDelete(); }}
-              disabled={deleting}
-              className="bg-rose-500 hover:bg-rose-600 text-white"
-            >
-              {deleting ? 'Deleting…' : 'Delete'}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
     </aside>
   );
 }

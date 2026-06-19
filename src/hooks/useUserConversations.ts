@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 
 export interface ChatConversationRow {
@@ -41,30 +41,8 @@ export function useUserConversations() {
     ch.subscribe();
 
     return () => { cancelled = true; supabase.removeChannel(ch); };
+
   }, []);
 
-  const renameConversation = useCallback(async (id: string, title: string) => {
-    const trimmed = title.trim().slice(0, 120);
-    if (!trimmed) return { error: new Error('Title cannot be empty') as Error };
-    setConversations((prev) => prev.map((c) => (c.id === id ? { ...c, title: trimmed } : c)));
-    const { error } = await supabase
-      .from('conversations' as any)
-      .update({ title: trimmed })
-      .eq('id', id);
-    if (error) {
-      // Reload on failure (server is source of truth).
-      const { data } = await supabase
-        .from('conversations' as any).select('*').order('updated_at', { ascending: false }).limit(50);
-      setConversations((data ?? []) as unknown as ChatConversationRow[]);
-    }
-    return { error };
-  }, []);
-
-  const deleteConversation = useCallback(async (id: string) => {
-    setConversations((prev) => prev.filter((c) => c.id !== id));
-    const { error } = await supabase.from('conversations' as any).delete().eq('id', id);
-    return { error };
-  }, []);
-
-  return { conversations, loading, renameConversation, deleteConversation };
+  return { conversations, loading };
 }

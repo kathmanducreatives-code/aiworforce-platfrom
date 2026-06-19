@@ -96,32 +96,3 @@ export function dispatchResultAction(detail: ResultActionDetail) {
     },
   });
 }
-
-// New artifact-aware action dispatcher. Wraps dispatchResultAction so every
-// Workbench/lead-table action always carries conversation_id + artifact_id
-// in metadata. Backend still receives the same shape as today; the extra
-// fields travel in metadata for future server-side artifact linking.
-export interface WorkbenchActionDetail {
-  conversationId: string | null;
-  artifactId?: string | null;
-  planId: string;
-  action: LeadResultPanelAction;
-  rowIds?: string[];
-  estimatedCredits?: number;
-  metadata?: Record<string, unknown>;
-}
-
-export function dispatchWorkbenchAction(detail: WorkbenchActionDetail) {
-  dispatchResultAction({
-    conversationId: detail.conversationId,
-    planId: detail.planId,
-    leadCandidateIds: detail.rowIds ?? [],
-    action: detail.action,
-    estimatedCredits: detail.estimatedCredits,
-  });
-  // Best-effort echo with artifact id for future backend correlation.
-  if (detail.artifactId) {
-    // eslint-disable-next-line no-console
-    console.debug('[workbench-action]', { artifactId: detail.artifactId, action: detail.action, planId: detail.planId });
-  }
-}

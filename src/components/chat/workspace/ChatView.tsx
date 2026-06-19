@@ -1,7 +1,7 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Copy, Check } from 'lucide-react';
 import { useChatConversation } from '@/hooks/useChatConversation';
-import { useChatWorkspace } from '@/contexts/ChatWorkspaceContext';
+import { useChatWorkspace, type LeadResultsPanelMeta } from '@/contexts/ChatWorkspaceContext';
 import { AGENT_BY_ID } from '@/data/agentProfiles';
 import { cn } from '@/lib/utils';
 import ExecutionPlanCard from './plan/ExecutionPlanCard';
@@ -10,9 +10,7 @@ import LeadIntakeCard, { type LeadIntakeFormPayload } from './bubbles/LeadIntake
 import LeadSourceCard, { type LeadSourceSelectorPayload } from './bubbles/LeadSourceCard';
 import PostLeadActionsCard, { type PostLeadActionsCardPayload } from './bubbles/PostLeadActionsCard';
 import InterpretationPill from './bubbles/InterpretationPill';
-import ViewResultsButton from './ViewResultsButton';
 import { dispatchChatAction } from '@/lib/chatActions';
-import { buildArtifactsFromMessages, buildArtifactFromMessage } from '@/lib/workbenchArtifacts';
 
 const AGENT_HEX: Record<string, string> = {
   scout: '#3B82F6', aria: '#8B5CF6', penn: '#10B981', hawk: '#14B8A6', scribe: '#A855F7',
@@ -81,7 +79,8 @@ interface Props {
 
 export default function ChatView({ conversationId, agentSlug, pendingUserText, awaitingReply }: Props) {
   const { messages } = useChatConversation(conversationId);
-  const { registerArtifact } = useChatWorkspace();
+  const { openWorkbench } = useChatWorkspace();
+  const openedPanelsRef = useRef<Set<string>>(new Set());
   const scrollRef = useRef<HTMLDivElement>(null);
   const profile = AGENT_BY_ID[agentSlug];
 
@@ -90,20 +89,23 @@ export default function ChatView({ conversationId, agentSlug, pendingUserText, a
     (m) => m.role === 'user' && m.content === pendingUserText,
   );
 
-  // Build artifact list (one per assistant message carrying ui_panel)
-  const artifacts = useMemo(() => buildArtifactsFromMessages(messages), [messages]);
-  const artifactByMessageId = useMemo(() => {
-    const map = new Map<string, ReturnType<typeof buildArtifactFromMessage>>();
-    for (const a of artifacts) if (a?.source_message_id) map.set(a.source_message_id, a);
-    return map;
-  }, [artifacts]);
-
-  // Register every artifact with the context. The context dedupes by id and
-  // only auto-opens the first time it sees a given artifact id, so closing
-  // the Workbench won't reopen it on subsequent renders.
+  // Auto-open the Workbench (Lead Results) when a message arrives with a
+  // ui_panel hint. Guarded per message id so we don't reopen after the user
+  // closes the panel.
   useEffect(() => {
-    for (const a of artifacts) if (a) registerArtifact(a);
-  }, [artifacts, registerArtifact]);
+    for (const m of messages) {
+      const meta = (m.metadata ?? null) as Record<string, any> | null;
+      const panel = meta?.ui_panel as LeadResultsPanelMeta | undefined;
+      if (panel && panel.kind === 'lead_results' && !openedPanelsRef.current.has(m.id)) {
+        openedPanelsRef.current.add(m.id);
+        openWorkbench({
+          planId: panel.plan_id,
+          panel,
+          conversationId: m.conversation_id ?? conversationId,
+        });
+      }
+    }
+  }, [messages, openWorkbench, conversationId]);
 
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' });
@@ -223,10 +225,6 @@ export default function ChatView({ conversationId, agentSlug, pendingUserText, a
                   }}
                 />
               )}
-              {(() => {
-                const a = artifactByMessageId.get(m.id);
-                return a ? <ViewResultsButton artifact={a} /> : null;
-              })()}
             </div>
           </div>
         );
