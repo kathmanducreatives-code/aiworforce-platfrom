@@ -111,19 +111,25 @@ export default function ResizableWorkspaceSplit({ chat, workbench, workbenchOpen
     try { localStorage.setItem(STORAGE_KEY, String(DEFAULT_RATIO)); } catch { /* noop */ }
   }, []);
 
+  const isCollapsed = !workbenchOpen && !workbenchClosing;
+  const gridCols = isCollapsed
+    ? `1fr 0px 0px`
+    : containerW > 0
+      ? `${chatPx}px ${DIVIDER_PX}px 1fr`
+      : `minmax(0, 2fr) ${DIVIDER_PX}px minmax(0, 3fr)`;
+
   return (
     <div
       ref={containerRef}
       className="flex-1 min-h-0 grid overflow-hidden relative"
       style={{
-        gridTemplateColumns: containerW > 0
-          ? `${chatPx}px ${DIVIDER_PX}px 1fr`
-          : `minmax(0, 2fr) ${DIVIDER_PX}px minmax(0, 3fr)`,
+        gridTemplateColumns: gridCols,
+        transition: dragging ? 'none' : 'grid-template-columns 300ms cubic-bezier(0.32, 0.72, 0, 1)',
       }}
       data-resizing={dragging || undefined}
     >
       <div className="min-w-0 min-h-0 overflow-hidden flex flex-col">
-        <ChatPaneWidthProvider width={chatPx || 0}>
+        <ChatPaneWidthProvider width={isCollapsed ? containerW : (chatPx || 0)}>
           {chat}
         </ChatPaneWidthProvider>
       </div>
@@ -132,17 +138,18 @@ export default function ResizableWorkspaceSplit({ chat, workbench, workbenchOpen
         role="separator"
         aria-orientation="vertical"
         aria-label="Resize chat and workbench"
-        tabIndex={0}
-        onPointerDown={onPointerDown}
-        onPointerMove={onPointerMove}
-        onPointerUp={endDrag}
-        onPointerCancel={endDrag}
-        onDoubleClick={onDoubleClick}
+        tabIndex={isCollapsed ? -1 : 0}
+        onPointerDown={isCollapsed ? undefined : onPointerDown}
+        onPointerMove={isCollapsed ? undefined : onPointerMove}
+        onPointerUp={isCollapsed ? undefined : endDrag}
+        onPointerCancel={isCollapsed ? undefined : endDrag}
+        onDoubleClick={isCollapsed ? undefined : onDoubleClick}
         className={cn(
-          'group relative cursor-col-resize select-none touch-none',
+          'group relative cursor-col-resize select-none touch-none transition-opacity duration-200',
           'before:absolute before:inset-y-0 before:left-1/2 before:-translate-x-1/2 before:w-px before:bg-white/[0.06]',
-          'hover:before:bg-emerald-400/30 transition-colors',
+          'hover:before:bg-emerald-400/30',
           dragging && 'before:bg-emerald-400/60',
+          isCollapsed && 'opacity-0 pointer-events-none',
         )}
       >
         <div
@@ -158,7 +165,7 @@ export default function ResizableWorkspaceSplit({ chat, workbench, workbenchOpen
         </div>
       </div>
 
-      <div className="min-w-0 min-h-0 overflow-hidden flex flex-col bg-[#0a0d12]">
+      <div className={cn('min-w-0 min-h-0 overflow-hidden flex flex-col bg-[#0a0d12] transition-opacity duration-200', isCollapsed && 'opacity-0')}>
         {workbench}
       </div>
     </div>
