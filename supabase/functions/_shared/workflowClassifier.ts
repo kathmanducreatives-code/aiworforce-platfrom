@@ -272,7 +272,7 @@ function regexClassify(message: string): WorkflowDecision | null {
   if (!m) return defaultDecision("unclear", { reason: "empty prompt", confidence: 1, source: "default" });
 
   // Order matters: most specific first.
-  if (UNSAFE_RE.test(m) || (SEND_RE.test(m) && /\bautomatic|without approval\b/i.test(m))) {
+  if (UNSAFE_RE.test(m) || (SEND_RE.test(m) && /\bautomatic|without approval|right now|right away|immediately|\bnow\b\.?$/i.test(m))) {
     return defaultDecision("unsafe_or_unsupported", {
       reason: "matches unsafe/unsupported pattern",
       possible_actions: ["public_business_research", "linkedin_outreach_draft", "approval_gated_email"],

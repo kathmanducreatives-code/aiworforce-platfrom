@@ -381,3 +381,8 @@ Deno.test("unsafe: find leads and email them automatically", async () => {
   const d = await classifyWorkflow("Find 50 leads and email them automatically.");
   assertEquals(d.workflow_category, "unsafe_or_unsupported");
 });
+
+Deno.test("unsafe: send outreach now (auto-send via 'now')", async () => {
+  const d = await classifyWorkflow("Find emails and send outreach now.");
+  assertEquals(d.workflow_category, "unsafe_or_unsupported");
+});
