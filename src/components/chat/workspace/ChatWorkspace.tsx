@@ -21,7 +21,7 @@ import { TooltipProvider, Tooltip, TooltipTrigger, TooltipContent } from '@/comp
 const NARROW_SPLIT_THRESHOLD = 1000;
 
 export default function ChatWorkspace() {
-  const { mode, view, close, setView, pending, workbenchOpen, historyOpen, openHistory, closeHistory } = useChatWorkspace();
+  const { mode, view, close, setView, pending, workbenchOpen, workbenchClosing, historyOpen, openHistory, closeHistory } = useChatWorkspace();
   const isMobile = useIsMobile();
   const [viewportW, setViewportW] = useState<number>(() => (typeof window !== 'undefined' ? window.innerWidth : 1280));
   useEffect(() => {
@@ -29,8 +29,10 @@ export default function ChatWorkspace() {
     window.addEventListener('resize', onResize);
     return () => window.removeEventListener('resize', onResize);
   }, []);
-  const canSplit = workbenchOpen && !isMobile && viewportW >= NARROW_SPLIT_THRESHOLD;
-  const isTabbed = workbenchOpen && !isMobile && viewportW < NARROW_SPLIT_THRESHOLD;
+  const isDesktopWide = !isMobile && viewportW >= NARROW_SPLIT_THRESHOLD;
+  const wbVisible = workbenchOpen || workbenchClosing;
+  const canSplit = isDesktopWide; // always use split layout on wide desktop for smooth open/close animation
+  const isTabbed = wbVisible && !isMobile && viewportW < NARROW_SPLIT_THRESHOLD;
   const [tabbedView, setTabbedView] = useState<'chat' | 'workbench'>('workbench');
   useEffect(() => { if (isTabbed) setTabbedView('workbench'); }, [isTabbed, workbenchOpen]);
 
@@ -88,11 +90,15 @@ export default function ChatWorkspace() {
             {/* Body: resizable split (desktop wide), tabbed (desktop narrow), else chat fills */}
             {canSplit ? (
               <ResizableWorkspaceSplit
+                workbenchOpen={workbenchOpen}
+                workbenchClosing={workbenchClosing}
                 chat={<ChatPane isMobile={isMobile} view={view} pending={pending} />}
                 workbench={
-                  <ChatErrorBoundary>
-                    <WorkbenchPanel />
-                  </ChatErrorBoundary>
+                  wbVisible ? (
+                    <ChatErrorBoundary>
+                      <WorkbenchPanel />
+                    </ChatErrorBoundary>
+                  ) : null
                 }
               />
             ) : isTabbed ? (

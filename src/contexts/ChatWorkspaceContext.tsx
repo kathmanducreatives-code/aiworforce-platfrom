@@ -71,6 +71,7 @@ interface Ctx {
   height: number;
   pending: PendingState | null;
   workbenchOpen: boolean;
+  workbenchClosing: boolean;
   workbenchWidth: number;
   selectedOutput: WorkbenchSelection | null;
   historyOpen: boolean;
@@ -96,15 +97,27 @@ export const ChatWorkspaceProvider = ({ children }: { children: ReactNode }) => 
   const [height, setHeight] = useState<number>(70);
   const [pending, setPending] = useState<PendingState | null>(null);
   const [workbenchOpen, setWorkbenchOpen] = useState(false);
+  const [workbenchClosing, setWorkbenchClosing] = useState(false);
   const [workbenchWidth, setWorkbenchWidth] = useState(520);
   const [selectedOutput, setSelectedOutput] = useState<WorkbenchSelection | null>(null);
   const [historyOpen, setHistoryOpen] = useState(false);
+  const closeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const openWorkbench = useCallback((sel: WorkbenchSelection) => {
+    if (closeTimerRef.current) { clearTimeout(closeTimerRef.current); closeTimerRef.current = null; }
+    setWorkbenchClosing(false);
     setSelectedOutput(sel);
     setWorkbenchOpen(true);
   }, []);
-  const closeWorkbench = useCallback(() => setWorkbenchOpen(false), []);
+  const closeWorkbench = useCallback(() => {
+    setWorkbenchClosing(true);
+    if (closeTimerRef.current) clearTimeout(closeTimerRef.current);
+    closeTimerRef.current = setTimeout(() => {
+      setWorkbenchOpen(false);
+      setWorkbenchClosing(false);
+      closeTimerRef.current = null;
+    }, 300);
+  }, []);
   const openHistory = useCallback(() => setHistoryOpen(true), []);
   const closeHistory = useCallback(() => setHistoryOpen(false), []);
   const toggleHistory = useCallback(() => setHistoryOpen((v) => !v), []);
@@ -132,7 +145,7 @@ export const ChatWorkspaceProvider = ({ children }: { children: ReactNode }) => 
 
   return (
     <ChatWorkspaceContext.Provider
-      value={{ mode, view, height, pending, workbenchOpen, workbenchWidth, selectedOutput, historyOpen, open, close, toggleFullscreen, setHeight, setView, setPending, openWorkbench, closeWorkbench, setWorkbenchWidth, openHistory, closeHistory, toggleHistory }}
+      value={{ mode, view, height, pending, workbenchOpen, workbenchClosing, workbenchWidth, selectedOutput, historyOpen, open, close, toggleFullscreen, setHeight, setView, setPending, openWorkbench, closeWorkbench, setWorkbenchWidth, openHistory, closeHistory, toggleHistory }}
     >
       {children}
     </ChatWorkspaceContext.Provider>
