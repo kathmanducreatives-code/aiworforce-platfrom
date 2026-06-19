@@ -29,11 +29,11 @@ const PROVIDER_LABEL: Record<string, string> = {
 };
 
 export default function WorkbenchHeader({
-  data, onClose, onRefresh,
-}: { data: WorkbenchData; onClose: () => void; onRefresh: () => void }) {
+  data, onClose, onRefresh, panel,
+}: { data: WorkbenchData; onClose: () => void; onRefresh: () => void; panel?: LeadResultsPanelMeta | null }) {
   const { planTitle, task, agentSlug, agentName, toolCall } = data;
   const taskPayload = (task?.payload ?? {}) as Record<string, any>;
-  const taskTitle: string = taskPayload.task_title ?? task?.description ?? null;
+  const rawTaskTitle: string | null = taskPayload.task_title ?? task?.description ?? null;
   const status = task?.status ?? toolCall?.status ?? 'pending';
   const toolLabel = toolCall?.tool_name;
   const provider = toolCall?.provider ? (PROVIDER_LABEL[toolCall.provider.toLowerCase()] ?? toolCall.provider) : null;
@@ -44,18 +44,25 @@ export default function WorkbenchHeader({
     ? String(toolCall.output_json.run_id).slice(-8)
     : null;
 
+  const conciseTitle = panel
+    ? `${panel.lead_count ?? 0} ${panel.lead_count === 1 ? 'opportunity' : 'opportunities'} found`
+    : (rawTaskTitle || planTitle || 'Workbench');
+  const subtitle = panel
+    ? (rawTaskTitle || planTitle || null)
+    : (rawTaskTitle && planTitle && rawTaskTitle !== planTitle ? `From: ${planTitle}` : null);
+
   return (
-    <div className="px-4 pt-4 pb-3 border-b border-white/[0.06] bg-gradient-to-b from-emerald-500/[0.04] via-white/[0.015] to-transparent backdrop-blur-sm sticky top-0 z-10">
+    <div className="px-4 pt-3 pb-2.5 border-b border-white/[0.06] bg-gradient-to-b from-emerald-500/[0.04] via-white/[0.015] to-transparent backdrop-blur-sm shrink-0">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0 flex-1">
           <div className="text-[10px] uppercase tracking-widest text-emerald-300/80 font-semibold">
             Workbench
           </div>
-          <h2 className="mt-1 text-[15px] text-[#F0F6FC] font-semibold leading-snug truncate">
-            {taskTitle || planTitle}
+          <h2 className="mt-0.5 text-[15px] text-[#F0F6FC] font-semibold leading-snug truncate" title={conciseTitle}>
+            {conciseTitle}
           </h2>
-          {taskTitle && planTitle && taskTitle !== planTitle && (
-            <div className="mt-0.5 text-[11px] text-[#7D8590] truncate">From: {planTitle}</div>
+          {subtitle && (
+            <div className="mt-0.5 text-[11px] text-[#7D8590] truncate" title={subtitle}>{subtitle}</div>
           )}
         </div>
         <div className="flex items-center gap-1 shrink-0">
