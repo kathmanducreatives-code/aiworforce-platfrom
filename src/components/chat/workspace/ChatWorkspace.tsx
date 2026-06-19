@@ -90,11 +90,15 @@ export default function ChatWorkspace() {
             {/* Body: resizable split (desktop wide), tabbed (desktop narrow), else chat fills */}
             {canSplit ? (
               <ResizableWorkspaceSplit
+                workbenchOpen={workbenchOpen}
+                workbenchClosing={workbenchClosing}
                 chat={<ChatPane isMobile={isMobile} view={view} pending={pending} />}
                 workbench={
-                  <ChatErrorBoundary>
-                    <WorkbenchPanel />
-                  </ChatErrorBoundary>
+                  wbVisible ? (
+                    <ChatErrorBoundary>
+                      <WorkbenchPanel />
+                    </ChatErrorBoundary>
+                  ) : null
                 }
               />
             ) : isTabbed ? (
