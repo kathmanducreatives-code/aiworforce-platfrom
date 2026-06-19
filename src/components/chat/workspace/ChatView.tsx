@@ -114,12 +114,12 @@ export default function ChatView({ conversationId, agentSlug, pendingUserText, a
   const lastIsUser = (messages[messages.length - 1]?.role === 'user') || !!showPending;
 
   return (
-    <div ref={scrollRef} className="flex-1 overflow-y-auto px-6 py-5 space-y-5">
+    <div ref={scrollRef} className="flex-1 overflow-y-auto px-6 py-5 space-y-4">
       {messages.map((m) => {
         if (m.role === 'user') {
           return (
             <div key={m.id} className="flex justify-end">
-              <div className="max-w-[min(680px,85%)] rounded-2xl bg-emerald-500/[0.10] border border-emerald-500/20 px-3.5 py-2 text-[14px] leading-relaxed text-[#F0F6FC] whitespace-pre-wrap break-words">
+              <div className="max-w-[min(620px,78%)] rounded-2xl bg-emerald-500/[0.10] border border-emerald-500/20 backdrop-blur-md px-3.5 py-2 text-[13.5px] leading-relaxed text-[#E6F4EC] whitespace-pre-wrap break-words shadow-[0_2px_12px_rgba(0,0,0,0.25)]">
                 {m.content}
               </div>
             </div>
@@ -157,12 +157,12 @@ export default function ChatView({ conversationId, agentSlug, pendingUserText, a
             <div className="min-w-0 flex-1">
               <div className="text-[12px] text-[#7D8590] mb-1">{name}</div>
               {structured ? (
-                <div className="relative rounded-md bg-white/[0.03] border border-white/[0.06] p-4 text-[14px] leading-relaxed text-[#F0F6FC] whitespace-pre-wrap">
+                <div className="relative rounded-2xl bg-white/[0.03] border border-white/[0.06] backdrop-blur-xl p-4 text-[13.5px] leading-relaxed text-[#F0F6FC] whitespace-pre-wrap shadow-[0_2px_12px_rgba(0,0,0,0.25)]">
                   <div className="absolute top-2 right-2"><CopyButton text={m.content} /></div>
                   {m.content}
                 </div>
               ) : (
-                <div className={cn('text-[14px] leading-relaxed whitespace-pre-wrap', m.is_error ? 'text-[#7D8590]' : 'text-[#F0F6FC]')}>
+                <div className={cn('text-[13.5px] leading-relaxed whitespace-pre-wrap', m.is_error ? 'text-[#7D8590]' : 'text-[#F0F6FC]')}>
                   {m.content}
                 </div>
               )}
