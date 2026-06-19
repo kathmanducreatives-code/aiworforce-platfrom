@@ -1,19 +1,10 @@
 import { useState } from 'react';
-import { Radar, Crown, BarChart3, PenLine, Eye, FileText } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { AGENT_ORDER, AGENTS, type AgentId } from './agents';
 import type { AgentState } from '@/hooks/useWorkforceState';
 import { DEPT_CONFIG, type DeptTotals } from './departmentConfig';
+import AgentAvatar from '@/components/chat/workspace/agents/AgentAvatar';
 
-const ICONS = {
-  command: Crown,
-  radar: Radar,
-  rank: BarChart3,
-  pen: PenLine,
-  eye: Eye,
-  doc: FileText,
-  plus: Crown,
-} as const;
 
 interface Props {
   agents: Record<AgentId, AgentState>;
@@ -39,7 +30,7 @@ export default function WorkforceDock({ agents, totals, brainComplete, selectedI
           const meta = AGENTS[id];
           const cfg = DEPT_CONFIG[id];
           const state = agents[id];
-          const Icon = ICONS[cfg.iconKey];
+
           const isSelected = selectedId === id;
           const isHover = hoverId === id;
           const badge = cfg.badge(totals, brainComplete, state.badgeCount);
