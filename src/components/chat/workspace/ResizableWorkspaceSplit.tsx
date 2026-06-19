@@ -38,9 +38,11 @@ function clampChatPx(desiredPx: number, containerW: number): number {
 interface Props {
   chat: ReactNode;
   workbench: ReactNode;
+  workbenchOpen?: boolean;
+  workbenchClosing?: boolean;
 }
 
-export default function ResizableWorkspaceSplit({ chat, workbench }: Props) {
+export default function ResizableWorkspaceSplit({ chat, workbench, workbenchOpen = true, workbenchClosing = false }: Props) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const [containerW, setContainerW] = useState(0);
   const [ratio, setRatio] = useState<number>(() => readSavedRatio());
