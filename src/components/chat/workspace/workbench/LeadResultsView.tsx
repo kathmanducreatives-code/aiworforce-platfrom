@@ -121,7 +121,8 @@ export default function LeadResultsView({ meta, conversationId }: Props) {
   }, [confirmAction, conversationId, meta.plan_id]);
 
   return (
-    <div className="h-full flex flex-col bg-[#0a0d12] relative">
+    <div className="h-full w-full min-w-0 flex flex-col bg-[#0a0d12] relative overflow-hidden">
+
       {/* Header */}
       <div className="px-4 pt-3 pb-2 border-b border-white/[0.06]">
         <div className="flex items-start justify-between gap-3">

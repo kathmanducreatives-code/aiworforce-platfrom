@@ -1,5 +1,6 @@
+import { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, PanelLeft } from 'lucide-react';
+import { X, PanelLeft, MessageSquare, FlaskConical } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useChatWorkspace } from '@/contexts/ChatWorkspaceContext';
 import { useIsMobile } from '@/hooks/use-mobile';
@@ -14,12 +15,24 @@ import ChatErrorBoundary from './ChatErrorBoundary';
 import WorkbenchPanel from './workbench/WorkbenchPanel';
 import { Sheet, SheetContent } from '@/components/ui/sheet';
 import ResizableWorkspaceSplit from './ResizableWorkspaceSplit';
+import { ChatPaneWidthProvider } from './ChatPaneWidthContext';
 import { TooltipProvider, Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
+
+const NARROW_SPLIT_THRESHOLD = 1000;
 
 export default function ChatWorkspace() {
   const { mode, view, close, setView, pending, workbenchOpen, historyOpen, openHistory, closeHistory } = useChatWorkspace();
   const isMobile = useIsMobile();
-  const showSplit = workbenchOpen && !isMobile;
+  const [viewportW, setViewportW] = useState<number>(() => (typeof window !== 'undefined' ? window.innerWidth : 1280));
+  useEffect(() => {
+    const onResize = () => setViewportW(window.innerWidth);
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
+  }, []);
+  const canSplit = workbenchOpen && !isMobile && viewportW >= NARROW_SPLIT_THRESHOLD;
+  const isTabbed = workbenchOpen && !isMobile && viewportW < NARROW_SPLIT_THRESHOLD;
+  const [tabbedView, setTabbedView] = useState<'chat' | 'workbench'>('workbench');
+  useEffect(() => { if (isTabbed) setTabbedView('workbench'); }, [isTabbed, workbenchOpen]);
 
   return (
     <TooltipProvider delayDuration={300}>
@@ -72,8 +85,8 @@ export default function ChatWorkspace() {
               </div>
             </div>
 
-            {/* Body: resizable split when workbench open, otherwise chat fills */}
-            {showSplit ? (
+            {/* Body: resizable split (desktop wide), tabbed (desktop narrow), else chat fills */}
+            {canSplit ? (
               <ResizableWorkspaceSplit
                 chat={<ChatPane isMobile={isMobile} view={view} pending={pending} />}
                 workbench={
@@ -82,6 +95,41 @@ export default function ChatWorkspace() {
                   </ChatErrorBoundary>
                 }
               />
+            ) : isTabbed ? (
+              <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
+                <div className="flex items-center gap-1 px-3 h-9 border-b border-white/[0.06] bg-[#0a0d12]/60 shrink-0">
+                  <button
+                    onClick={() => setTabbedView('chat')}
+                    className={cn(
+                      'inline-flex items-center gap-1.5 text-[12px] px-3 h-7 rounded-md transition-colors',
+                      tabbedView === 'chat' ? 'bg-emerald-500/10 text-emerald-200 border border-emerald-500/30' : 'text-[#7D8590] hover:text-[#C9D1D9]',
+                    )}
+                  >
+                    <MessageSquare className="h-3.5 w-3.5" /> Chat
+                  </button>
+                  <button
+                    onClick={() => setTabbedView('workbench')}
+                    className={cn(
+                      'inline-flex items-center gap-1.5 text-[12px] px-3 h-7 rounded-md transition-colors',
+                      tabbedView === 'workbench' ? 'bg-emerald-500/10 text-emerald-200 border border-emerald-500/30' : 'text-[#7D8590] hover:text-[#C9D1D9]',
+                    )}
+                  >
+                    <FlaskConical className="h-3.5 w-3.5" /> Workbench
+                  </button>
+                </div>
+                <div className="flex-1 min-h-0 overflow-hidden relative">
+                  <div className={cn('absolute inset-0 flex flex-col', tabbedView === 'chat' ? '' : 'hidden')}>
+                    <ChatPaneWidthProvider width={viewportW}>
+                      <ChatPane isMobile={isMobile} view={view} pending={pending} />
+                    </ChatPaneWidthProvider>
+                  </div>
+                  <div className={cn('absolute inset-0 flex flex-col bg-[#0a0d12]', tabbedView === 'workbench' ? '' : 'hidden')}>
+                    <ChatErrorBoundary>
+                      <WorkbenchPanel />
+                    </ChatErrorBoundary>
+                  </div>
+                </div>
+              </div>
             ) : (
               <div className="flex-1 flex min-h-0 overflow-hidden">
                 <div className="flex flex-col min-w-0 min-h-0 overflow-hidden relative flex-1">
