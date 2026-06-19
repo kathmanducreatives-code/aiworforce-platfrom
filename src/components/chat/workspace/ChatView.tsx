@@ -119,10 +119,11 @@ export default function ChatView({ conversationId, agentSlug, pendingUserText, a
         if (m.role === 'user') {
           return (
             <div key={m.id} className="flex justify-end">
-              <div className="max-w-[80%] text-[14px] leading-relaxed text-[#F0F6FC] whitespace-pre-wrap text-right">
+              <div className="max-w-[min(680px,85%)] rounded-2xl bg-emerald-500/[0.10] border border-emerald-500/20 px-3.5 py-2 text-[14px] leading-relaxed text-[#F0F6FC] whitespace-pre-wrap break-words">
                 {m.content}
               </div>
             </div>
+
           );
         }
         const slug = m.agent_slug ?? agentSlug;
