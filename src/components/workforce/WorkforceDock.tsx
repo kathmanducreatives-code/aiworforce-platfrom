@@ -1,19 +1,10 @@
 import { useState } from 'react';
-import { Radar, Crown, BarChart3, PenLine, Eye, FileText } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { AGENT_ORDER, AGENTS, type AgentId } from './agents';
 import type { AgentState } from '@/hooks/useWorkforceState';
 import { DEPT_CONFIG, type DeptTotals } from './departmentConfig';
+import AgentAvatar from '@/components/chat/workspace/agents/AgentAvatar';
 
-const ICONS = {
-  command: Crown,
-  radar: Radar,
-  rank: BarChart3,
-  pen: PenLine,
-  eye: Eye,
-  doc: FileText,
-  plus: Crown,
-} as const;
 
 interface Props {
   agents: Record<AgentId, AgentState>;
@@ -39,7 +30,7 @@ export default function WorkforceDock({ agents, totals, brainComplete, selectedI
           const meta = AGENTS[id];
           const cfg = DEPT_CONFIG[id];
           const state = agents[id];
-          const Icon = ICONS[cfg.iconKey];
+
           const isSelected = selectedId === id;
           const isHover = hoverId === id;
           const badge = cfg.badge(totals, brainComplete, state.badgeCount);
@@ -88,22 +79,17 @@ export default function WorkforceDock({ agents, totals, brainComplete, selectedI
                 }
               >
                 <span
-                  className="relative h-9 w-9 rounded-md flex items-center justify-center border"
+                  className="relative h-10 w-10 rounded-full flex items-center justify-center"
                   style={{
-                    borderColor: isSelected ? `${cfg.ringHex}55` : 'rgba(255,255,255,0.08)',
-                    background: isSelected ? `${cfg.ringHex}12` : 'rgba(255,255,255,0.02)',
+                    boxShadow: isSelected ? `0 0 0 2px ${cfg.ringHex}88` : undefined,
                   }}
                 >
-                  <Icon
-                    className="h-[18px] w-[18px]"
-                    style={{ color: isSelected || isHover ? cfg.ringHex : '#a3a3a3' }}
-                    strokeWidth={1.75}
-                  />
+                  <AgentAvatar slug={id} size="md" ring={!isSelected} />
                   {badge != null && badge !== 0 && badge !== '0' && (
                     <span
-                      className="absolute -top-1 -right-1 min-w-[15px] h-[15px] px-1 rounded-full text-[9.5px] font-semibold flex items-center justify-center border border-black/80 tabular-nums"
+                      className="absolute -top-1 -right-1 min-w-[15px] h-[15px] px-1 rounded-full text-[9.5px] font-semibold flex items-center justify-center border border-black/80 tabular-nums z-10"
                       style={{
-                        background: badge === '!' ? '#f59e0b' : 'rgba(255,255,255,0.10)',
+                        background: badge === '!' ? '#f59e0b' : 'rgba(20,20,20,0.92)',
                         color: badge === '!' ? '#000' : '#fff',
                       }}
                     >
