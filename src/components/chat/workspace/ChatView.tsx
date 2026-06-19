@@ -231,9 +231,12 @@ export default function ChatView({ conversationId, agentSlug, pendingUserText, a
 
       {awaitingReply && lastIsUser && (
         <div className="flex items-start gap-3">
-          <InitialCircle slug={agentSlug} />
+          <AgentAvatar slug={agentSlug} size="sm" status="thinking" />
           <div className="min-w-0 flex-1">
-            <div className="text-[12px] text-[#7D8590] mb-1">{profile?.name ?? agentSlug}</div>
+            <div className="flex items-baseline gap-1.5 mb-1">
+              <span className="text-[12.5px] font-semibold text-[#E6EDF3]">{profile.name}</span>
+              <span className="text-[11px]" style={{ color: profile.accentHex ?? '#7D8590' }}>· {profile.role}</span>
+            </div>
             <TypingDots />
           </div>
         </div>
