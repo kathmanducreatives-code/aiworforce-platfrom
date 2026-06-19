@@ -90,8 +90,8 @@ export default function InsightsView({ data, panel }: Props) {
         <Card icon={ChevronRight} eyebrow="Recommended next" tone="good">
           <div className="text-[13px] text-[#F0F6FC] font-medium">{rec.label}</div>
           <div className="text-[12px] text-[#9aa4af] mt-1">{rec.reason}</div>
-          {'estimated_credits' in rec && rec.estimated_credits != null && (
-            <div className="text-[11px] text-emerald-300/80 mt-1.5 font-mono">~{rec.estimated_credits} credits</div>
+          {(rec as any).estimated_credits != null && (
+            <div className="text-[11px] text-emerald-300/80 mt-1.5 font-mono">~{(rec as any).estimated_credits} credits</div>
           )}
         </Card>
       )}
