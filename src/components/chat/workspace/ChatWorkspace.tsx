@@ -1,5 +1,6 @@
+import { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, PanelLeft } from 'lucide-react';
+import { X, PanelLeft, MessageSquare, FlaskConical } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useChatWorkspace } from '@/contexts/ChatWorkspaceContext';
 import { useIsMobile } from '@/hooks/use-mobile';
@@ -14,7 +15,10 @@ import ChatErrorBoundary from './ChatErrorBoundary';
 import WorkbenchPanel from './workbench/WorkbenchPanel';
 import { Sheet, SheetContent } from '@/components/ui/sheet';
 import ResizableWorkspaceSplit from './ResizableWorkspaceSplit';
+import { ChatPaneWidthProvider } from './ChatPaneWidthContext';
 import { TooltipProvider, Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
+
+const NARROW_SPLIT_THRESHOLD = 1000;
 
 export default function ChatWorkspace() {
   const { mode, view, close, setView, pending, workbenchOpen, historyOpen, openHistory, closeHistory } = useChatWorkspace();
