@@ -119,7 +119,7 @@ export default function WorkbenchPanel() {
     <div className="h-full w-full flex flex-col min-w-0 min-h-0 overflow-hidden bg-[#0a0d12] relative">
       <div className="pointer-events-none absolute inset-x-0 top-0 h-32 bg-gradient-to-b from-emerald-500/[0.03] to-transparent" />
       {!leadsPanel || tab !== 'leads' ? (
-        <WorkbenchHeader data={data} onClose={closeWorkbench} onRefresh={data.refresh} />
+        <WorkbenchHeader data={data} panel={leadsPanel} onClose={closeWorkbench} onRefresh={data.refresh} />
       ) : (
         <div className="flex items-center justify-between px-4 h-10 border-b border-white/[0.06] shrink-0">
           <div className="text-[11px] text-[#7D8590]">Workbench · Lead results</div>
