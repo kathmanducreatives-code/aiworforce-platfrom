@@ -71,6 +71,7 @@ interface Ctx {
   height: number;
   pending: PendingState | null;
   workbenchOpen: boolean;
+  workbenchClosing: boolean;
   workbenchWidth: number;
   selectedOutput: WorkbenchSelection | null;
   historyOpen: boolean;
