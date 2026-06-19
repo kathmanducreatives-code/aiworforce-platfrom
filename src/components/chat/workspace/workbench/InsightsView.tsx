@@ -49,10 +49,12 @@ export default function InsightsView({ data, panel }: Props) {
 
   const rec = panel?.recommended_next_action ?? panel?.next_action ?? null;
 
-  const strategy = useMemo(() => {
-    const query = taskPayload.query ?? taskPayload.search_query ?? taskPayload.task_title ?? null;
-    const broadening = (taskPayload.role_keywords as string[]) ?? (taskPayload.keywords as string[]) ?? null;
-    if (!query && !broadening) return null;
+  const strategy = useMemo<{ query: string | null; broadening: string[] } | null>(() => {
+    const q = taskPayload.query ?? taskPayload.search_query ?? taskPayload.task_title ?? null;
+    const query = q != null ? String(q) : null;
+    const raw = taskPayload.role_keywords ?? taskPayload.keywords ?? null;
+    const broadening = Array.isArray(raw) ? raw.map((x) => String(x)) : [];
+    if (!query && broadening.length === 0) return null;
     return { query, broadening };
   }, [taskPayload]);
 
