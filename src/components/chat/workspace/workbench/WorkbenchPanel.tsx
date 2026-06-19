@@ -116,50 +116,49 @@ export default function WorkbenchPanel() {
   const rawData = data.toolCall?.output_json ?? data.task?.output ?? null;
 
   return (
-    <div className="h-full flex flex-row">
-      <div className="flex-1 flex flex-col min-w-0 bg-[#0a0d12] relative">
-        <div className="pointer-events-none absolute inset-x-0 top-0 h-32 bg-gradient-to-b from-emerald-500/[0.03] to-transparent" />
-        {!leadsPanel || tab !== 'leads' ? (
-          <WorkbenchHeader data={data} onClose={closeWorkbench} onRefresh={data.refresh} />
-        ) : (
-          <div className="flex items-center justify-between px-4 h-10 border-b border-white/[0.06]">
-            <div className="text-[11px] text-[#7D8590]">Workbench · Lead results</div>
-            <button onClick={closeWorkbench} className="text-[11px] text-[#7D8590] hover:text-[#C9D1D9]">Close</button>
-          </div>
-        )}
-
-        <div className="flex items-center gap-0.5 px-3 border-b border-white/[0.06] bg-white/[0.01]">
-          {tabs.map((t) => {
-            const Icon = t.icon;
-            const active = tab === t.id;
-            return (
-              <button
-                key={t.id}
-                onClick={() => setTab(t.id)}
-                className={`group inline-flex items-center gap-1.5 text-[12px] px-3 py-2 -mb-px border-b-2 transition-colors ${
-                  active
-                    ? 'border-emerald-400 text-[#F0F6FC]'
-                    : 'border-transparent text-[#7D8590] hover:text-[#C9D1D9]'
-                }`}
-              >
-                <Icon className={`h-3.5 w-3.5 ${active ? 'text-emerald-300' : ''}`} />
-                {t.label}
-                {t.id === 'summary' && failed && (
-                  <span className="ml-0.5 h-1.5 w-1.5 rounded-full bg-amber-400 animate-pulse" />
-                )}
-              </button>
-            );
-          })}
+    <div className="h-full w-full flex flex-col min-w-0 min-h-0 overflow-hidden bg-[#0a0d12] relative">
+      <div className="pointer-events-none absolute inset-x-0 top-0 h-32 bg-gradient-to-b from-emerald-500/[0.03] to-transparent" />
+      {!leadsPanel || tab !== 'leads' ? (
+        <WorkbenchHeader data={data} onClose={closeWorkbench} onRefresh={data.refresh} />
+      ) : (
+        <div className="flex items-center justify-between px-4 h-10 border-b border-white/[0.06] shrink-0">
+          <div className="text-[11px] text-[#7D8590]">Workbench · Lead results</div>
+          <button onClick={closeWorkbench} className="text-[11px] text-[#7D8590] hover:text-[#C9D1D9]">Close</button>
         </div>
+      )}
 
-        {tab === 'leads' && leadsPanel ? (
-          <div className="flex-1 min-h-0 relative z-[1]">
-            <ChatErrorBoundary>
-              <LeadResultsView meta={leadsPanel} conversationId={selectedOutput?.conversationId ?? null} />
-            </ChatErrorBoundary>
-          </div>
-        ) : (
-        <div className="flex-1 overflow-auto p-4 space-y-3 relative z-[1]">
+      <div className="flex items-center gap-0.5 px-3 border-b border-white/[0.06] bg-[#0a0d12]/95 backdrop-blur sticky top-0 z-[5] shrink-0 overflow-x-auto">
+        {tabs.map((t) => {
+          const Icon = t.icon;
+          const active = tab === t.id;
+          return (
+            <button
+              key={t.id}
+              onClick={() => setTab(t.id)}
+              className={`group inline-flex items-center gap-1.5 text-[12px] px-3 py-2 -mb-px border-b-2 transition-colors shrink-0 ${
+                active
+                  ? 'border-emerald-400 text-[#F0F6FC]'
+                  : 'border-transparent text-[#7D8590] hover:text-[#C9D1D9]'
+              }`}
+            >
+              <Icon className={`h-3.5 w-3.5 ${active ? 'text-emerald-300' : ''}`} />
+              {t.label}
+              {t.id === 'summary' && failed && (
+                <span className="ml-0.5 h-1.5 w-1.5 rounded-full bg-amber-400 animate-pulse" />
+              )}
+            </button>
+          );
+        })}
+      </div>
+
+      {tab === 'leads' && leadsPanel ? (
+        <div className="flex-1 min-h-0 min-w-0 relative z-[1] overflow-hidden">
+          <ChatErrorBoundary>
+            <LeadResultsView meta={leadsPanel} conversationId={selectedOutput?.conversationId ?? null} />
+          </ChatErrorBoundary>
+        </div>
+      ) : (
+      <div className="flex-1 min-w-0 overflow-auto p-4 space-y-3 relative z-[1]">
           <ChatErrorBoundary>
             {tab === 'summary' && (
               <>
