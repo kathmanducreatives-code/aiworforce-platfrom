@@ -48,7 +48,7 @@ export default function AgentAvatar({
           ring && ringClass,
         )}
       >
-        {resolved && !failed ? (
+        {resolved && resolved.image && !failed ? (
           <img
             src={resolved.image}
             alt={resolved.name}
@@ -56,6 +56,7 @@ export default function AgentAvatar({
             onError={() => setFailed(true)}
             className="w-full h-full object-cover"
           />
+
         ) : (
           <span className={cn('font-bold text-foreground/80', s.text)}>{initial}</span>
         )}

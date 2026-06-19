@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Copy, Check } from 'lucide-react';
 import { useChatConversation } from '@/hooks/useChatConversation';
 import { useChatWorkspace, type LeadResultsPanelMeta } from '@/contexts/ChatWorkspaceContext';
-import { AGENT_BY_ID } from '@/data/agentProfiles';
+import { resolveAgent, resolveAgentFromMetadata } from '@/lib/agentResolver';
 import { cn } from '@/lib/utils';
 import ExecutionPlanCard from './plan/ExecutionPlanCard';
 import ClarificationCard from './bubbles/ClarificationCard';
@@ -10,28 +10,9 @@ import LeadIntakeCard, { type LeadIntakeFormPayload } from './bubbles/LeadIntake
 import LeadSourceCard, { type LeadSourceSelectorPayload } from './bubbles/LeadSourceCard';
 import PostLeadActionsCard, { type PostLeadActionsCardPayload } from './bubbles/PostLeadActionsCard';
 import InterpretationPill from './bubbles/InterpretationPill';
+import AgentAvatar from './agents/AgentAvatar';
 import { dispatchChatAction } from '@/lib/chatActions';
 
-const AGENT_HEX: Record<string, string> = {
-  scout: '#3B82F6', aria: '#8B5CF6', penn: '#10B981', hawk: '#14B8A6', scribe: '#A855F7',
-};
-
-function InitialCircle({ slug, size = 22 }: { slug: string; size?: number }) {
-  const profile = AGENT_BY_ID[slug];
-  const hex = AGENT_HEX[slug] ?? '#7D8590';
-  const letter = (profile?.name ?? slug).charAt(0).toUpperCase();
-  return (
-    <div
-      className="rounded-full flex items-center justify-center shrink-0"
-      style={{
-        width: size, height: size,
-        backgroundColor: `${hex}26`, color: hex,
-        fontSize: 11, fontWeight: 600, lineHeight: 1,
-      }}
-      aria-hidden
-    >{letter}</div>
-  );
-}
 
 function isStructured(text: string): boolean {
   if (!text) return false;
@@ -82,7 +63,7 @@ export default function ChatView({ conversationId, agentSlug, pendingUserText, a
   const { openWorkbench } = useChatWorkspace();
   const openedPanelsRef = useRef<Set<string>>(new Set());
   const scrollRef = useRef<HTMLDivElement>(null);
-  const profile = AGENT_BY_ID[agentSlug];
+  const profile = resolveAgent(agentSlug);
 
   // Hide pending user text once it appears in real messages
   const showPending = pendingUserText && !messages.some(
@@ -126,10 +107,15 @@ export default function ChatView({ conversationId, agentSlug, pendingUserText, a
 
           );
         }
-        const slug = m.agent_slug ?? agentSlug;
-        const name = AGENT_BY_ID[slug]?.name ?? slug;
+        const meta0 = (m.metadata ?? null) as Record<string, any> | null;
+        const msgProfile = resolveAgentFromMetadata(meta0, m.agent_slug ?? agentSlug);
+        const slug = msgProfile.id;
+        const name = msgProfile.name;
+        const role = msgProfile.role;
+        const accent = msgProfile.accentHex ?? '#7D8590';
+
         const structured = isStructured(m.content);
-        const meta = (m.metadata ?? null) as Record<string, any> | null;
+        const meta = meta0;
         const planMeta = meta && meta.type === 'execution_plan' && typeof meta.plan_id === 'string'
           ? meta as { plan_id: string; plan_title?: string; task_count?: number; agents?: string[]; connector_limitations?: string[] }
           : null;
@@ -153,9 +139,13 @@ export default function ChatView({ conversationId, agentSlug, pendingUserText, a
         const agencyAction = toolInput?.agency_action ?? meta?.agency_action ?? null;
         return (
           <div key={m.id} className="flex items-start gap-3">
-            <InitialCircle slug={slug} />
+            <AgentAvatar slug={slug} size="sm" />
             <div className="min-w-0 flex-1">
-              <div className="text-[12px] text-[#7D8590] mb-1">{name}</div>
+              <div className="flex items-baseline gap-1.5 mb-1">
+                <span className="text-[12.5px] font-semibold text-[#E6EDF3]">{name}</span>
+                <span className="text-[11px]" style={{ color: accent }}>· {role}</span>
+              </div>
+
               {structured ? (
                 <div className="relative rounded-2xl bg-white/[0.03] border border-white/[0.06] backdrop-blur-xl p-4 text-[13.5px] leading-relaxed text-[#F0F6FC] whitespace-pre-wrap shadow-[0_2px_12px_rgba(0,0,0,0.25)]">
                   <div className="absolute top-2 right-2"><CopyButton text={m.content} /></div>
@@ -241,9 +231,12 @@ export default function ChatView({ conversationId, agentSlug, pendingUserText, a
 
       {awaitingReply && lastIsUser && (
         <div className="flex items-start gap-3">
-          <InitialCircle slug={agentSlug} />
+          <AgentAvatar slug={agentSlug} size="sm" status="thinking" />
           <div className="min-w-0 flex-1">
-            <div className="text-[12px] text-[#7D8590] mb-1">{profile?.name ?? agentSlug}</div>
+            <div className="flex items-baseline gap-1.5 mb-1">
+              <span className="text-[12.5px] font-semibold text-[#E6EDF3]">{profile.name}</span>
+              <span className="text-[11px]" style={{ color: profile.accentHex ?? '#7D8590' }}>· {profile.role}</span>
+            </div>
             <TypingDots />
           </div>
         </div>

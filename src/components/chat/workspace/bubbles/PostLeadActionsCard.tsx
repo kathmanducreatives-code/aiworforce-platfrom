@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { ShieldCheck, ExternalLink } from 'lucide-react';
 import { dispatchChatAction } from '@/lib/chatActions';
 import { useChatWorkspace } from '@/contexts/ChatWorkspaceContext';
+import AgentAvatar from '../agents/AgentAvatar';
 
 type PostLeadAction = 'save_only' | 'rank' | 'enrich' | 'draft_outreach' | 'enrich_and_draft' | 'export';
 
@@ -73,6 +74,10 @@ export default function PostLeadActionsCard({ payload, conversationId }: { paylo
 
   return (
     <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+      <span className="inline-flex items-center gap-1.5 mr-1">
+        <AgentAvatar slug="pilot" size="xs" />
+        <span className="text-[12px] text-[#9aa4af]">Pilot</span>
+      </span>
       {(payload.plan_id || selectedOutput?.planId) && (
         <button
           type="button"
