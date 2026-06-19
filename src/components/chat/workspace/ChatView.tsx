@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Copy, Check } from 'lucide-react';
 import { useChatConversation } from '@/hooks/useChatConversation';
 import { useChatWorkspace, type LeadResultsPanelMeta } from '@/contexts/ChatWorkspaceContext';
-import { AGENT_BY_ID } from '@/data/agentProfiles';
+import { resolveAgent, resolveAgentFromMetadata } from '@/lib/agentResolver';
 import { cn } from '@/lib/utils';
 import ExecutionPlanCard from './plan/ExecutionPlanCard';
 import ClarificationCard from './bubbles/ClarificationCard';
@@ -10,28 +10,9 @@ import LeadIntakeCard, { type LeadIntakeFormPayload } from './bubbles/LeadIntake
 import LeadSourceCard, { type LeadSourceSelectorPayload } from './bubbles/LeadSourceCard';
 import PostLeadActionsCard, { type PostLeadActionsCardPayload } from './bubbles/PostLeadActionsCard';
 import InterpretationPill from './bubbles/InterpretationPill';
+import AgentAvatar from './agents/AgentAvatar';
 import { dispatchChatAction } from '@/lib/chatActions';
 
-const AGENT_HEX: Record<string, string> = {
-  scout: '#3B82F6', aria: '#8B5CF6', penn: '#10B981', hawk: '#14B8A6', scribe: '#A855F7',
-};
-
-function InitialCircle({ slug, size = 22 }: { slug: string; size?: number }) {
-  const profile = AGENT_BY_ID[slug];
-  const hex = AGENT_HEX[slug] ?? '#7D8590';
-  const letter = (profile?.name ?? slug).charAt(0).toUpperCase();
-  return (
-    <div
-      className="rounded-full flex items-center justify-center shrink-0"
-      style={{
-        width: size, height: size,
-        backgroundColor: `${hex}26`, color: hex,
-        fontSize: 11, fontWeight: 600, lineHeight: 1,
-      }}
-      aria-hidden
-    >{letter}</div>
-  );
-}
 
 function isStructured(text: string): boolean {
   if (!text) return false;
