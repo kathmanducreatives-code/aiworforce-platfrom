@@ -105,7 +105,7 @@ export default function InsightsView({ data, panel }: Props) {
           {strategy.broadening && Array.isArray(strategy.broadening) && strategy.broadening.length > 0 && (
             <div className="text-[12px] text-[#C9D1D9] mt-1.5">
               <span className="text-[#7D8590]">Broadening:</span>{' '}
-              <span className="font-mono text-[#E6EDF3]">{strategy.broadening.join(', ')}</span>
+              <span className="font-mono text-[#E6EDF3]">{(strategy.broadening as string[]).join(', ')}</span>
             </div>
           )}
         </Card>
