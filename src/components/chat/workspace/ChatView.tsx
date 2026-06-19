@@ -115,7 +115,7 @@ export default function ChatView({ conversationId, agentSlug, pendingUserText, a
         const accent = msgProfile.accentHex ?? '#7D8590';
 
         const structured = isStructured(m.content);
-        const meta = (m.metadata ?? null) as Record<string, any> | null;
+        const meta = meta0;
         const planMeta = meta && meta.type === 'execution_plan' && typeof meta.plan_id === 'string'
           ? meta as { plan_id: string; plan_title?: string; task_count?: number; agents?: string[]; connector_limitations?: string[] }
           : null;
