@@ -2,6 +2,7 @@ import { X, RefreshCw } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import AgentBadge from '../plan/AgentBadge';
 import type { WorkbenchData } from './useWorkbenchData';
+import type { LeadResultsPanelMeta } from '@/contexts/ChatWorkspaceContext';
 import { workflowTypeFromToolCall, WORKFLOW_LABELS } from './workflowType';
 
 const STATUS_TONE: Record<string, string> = {
