@@ -223,6 +223,10 @@ export default function ChatView({ conversationId, agentSlug, pendingUserText, a
                   }}
                 />
               )}
+              {(() => {
+                const a = artifactByMessageId.get(m.id);
+                return a ? <ViewResultsButton artifact={a} /> : null;
+              })()}
             </div>
           </div>
         );
