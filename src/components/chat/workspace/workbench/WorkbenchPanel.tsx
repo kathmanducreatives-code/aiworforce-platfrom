@@ -21,22 +21,13 @@ type Tab = 'leads' | 'summary' | 'results' | 'rankings' | 'drafts' | 'sources' |
 
 export default function WorkbenchPanel() {
   const { selectedOutput, closeWorkbench } = useChatWorkspace();
-  
+
   const data = useWorkbenchData(selectedOutput);
 
   const leadsPanel = selectedOutput?.panel?.kind === 'lead_results' ? selectedOutput.panel : null;
 
   const status = data.task?.status ?? data.toolCall?.status ?? 'pending';
   const failed = status === 'failed' || status === 'unavailable';
-
-  // Default tab: 'leads' when a lead_results panel hint is present, else 'summary'.
-  const defaultTab: Tab = leadsPanel ? 'leads' : 'summary';
-  const [tab, setTab] = useState<Tab>(defaultTab);
-
-  // Reset tab when selection changes
-  useEffect(() => {
-    setTab(leadsPanel ? 'leads' : 'summary');
-  }, [selectedOutput?.taskId, selectedOutput?.toolCallId, selectedOutput?.planId, leadsPanel]);
 
   // Derived data — keep ALL hooks above early returns to satisfy hooks rules.
   const output = data.toolCall?.output_json ?? (data.task as any)?.output ?? null;
@@ -56,14 +47,31 @@ export default function WorkbenchPanel() {
   const isPenn = data.agentSlug === 'penn' || hasDrafts;
   const isAria = data.agentSlug === 'aria' || hasRankings;
 
+  // Default tab: results-first; never default to summary or raw.
+  const pickDefault = (): Tab => {
+    if (leadsPanel) return 'leads';
+    if (hasResults) return 'results';
+    if (hasRankings) return 'rankings';
+    if (hasDrafts) return 'drafts';
+    if (hasSources) return 'sources';
+    return 'summary';
+  };
+  const [tab, setTab] = useState<Tab>(pickDefault);
+
+  // Reset tab when selection changes
+  useEffect(() => {
+    setTab(pickDefault());
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedOutput?.taskId, selectedOutput?.toolCallId, selectedOutput?.planId, leadsPanel, hasResults, hasRankings, hasDrafts, hasSources]);
+
   const tabs: { id: Tab; label: string; icon: any }[] = useMemo(() => {
     const list: { id: Tab; label: string; icon: any }[] = [];
     if (leadsPanel) list.push({ id: 'leads', label: 'Leads', icon: Users });
-    list.push({ id: 'summary', label: 'Summary', icon: FileText });
     if (hasResults || failed || isApify) list.push({ id: 'results', label: 'Results', icon: ListChecks });
     if (hasRankings || isAria) list.push({ id: 'rankings', label: 'Rankings', icon: Trophy });
     if (hasDrafts || isPenn) list.push({ id: 'drafts', label: 'Drafts', icon: Mail });
     if (hasSources || isFirecrawl) list.push({ id: 'sources', label: 'Sources', icon: Link2 });
+    list.push({ id: 'summary', label: 'Summary', icon: FileText });
     list.push({ id: 'activity', label: 'Activity', icon: Activity });
     list.push({ id: 'raw', label: 'Raw', icon: Code2 });
     return list;
