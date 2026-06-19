@@ -63,7 +63,7 @@ export default function ChatView({ conversationId, agentSlug, pendingUserText, a
   const { openWorkbench } = useChatWorkspace();
   const openedPanelsRef = useRef<Set<string>>(new Set());
   const scrollRef = useRef<HTMLDivElement>(null);
-  const profile = AGENT_BY_ID[agentSlug];
+  const profile = resolveAgent(agentSlug);
 
   // Hide pending user text once it appears in real messages
   const showPending = pendingUserText && !messages.some(
@@ -107,8 +107,13 @@ export default function ChatView({ conversationId, agentSlug, pendingUserText, a
 
           );
         }
-        const slug = m.agent_slug ?? agentSlug;
-        const name = AGENT_BY_ID[slug]?.name ?? slug;
+        const meta0 = (m.metadata ?? null) as Record<string, any> | null;
+        const msgProfile = resolveAgentFromMetadata(meta0, m.agent_slug ?? agentSlug);
+        const slug = msgProfile.id;
+        const name = msgProfile.name;
+        const role = msgProfile.role;
+        const accent = msgProfile.accentHex ?? '#7D8590';
+
         const structured = isStructured(m.content);
         const meta = (m.metadata ?? null) as Record<string, any> | null;
         const planMeta = meta && meta.type === 'execution_plan' && typeof meta.plan_id === 'string'
@@ -134,9 +139,13 @@ export default function ChatView({ conversationId, agentSlug, pendingUserText, a
         const agencyAction = toolInput?.agency_action ?? meta?.agency_action ?? null;
         return (
           <div key={m.id} className="flex items-start gap-3">
-            <InitialCircle slug={slug} />
+            <AgentAvatar slug={slug} size="sm" />
             <div className="min-w-0 flex-1">
-              <div className="text-[12px] text-[#7D8590] mb-1">{name}</div>
+              <div className="flex items-baseline gap-1.5 mb-1">
+                <span className="text-[12.5px] font-semibold text-[#E6EDF3]">{name}</span>
+                <span className="text-[11px]" style={{ color: accent }}>· {role}</span>
+              </div>
+
               {structured ? (
                 <div className="relative rounded-2xl bg-white/[0.03] border border-white/[0.06] backdrop-blur-xl p-4 text-[13.5px] leading-relaxed text-[#F0F6FC] whitespace-pre-wrap shadow-[0_2px_12px_rgba(0,0,0,0.25)]">
                   <div className="absolute top-2 right-2"><CopyButton text={m.content} /></div>
