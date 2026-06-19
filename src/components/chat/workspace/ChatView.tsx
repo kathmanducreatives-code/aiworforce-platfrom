@@ -232,11 +232,12 @@ export default function ChatView({ conversationId, agentSlug, pendingUserText, a
 
       {showPending && (
         <div className="flex justify-end">
-          <div className="max-w-[80%] text-[14px] leading-relaxed text-[#F0F6FC] whitespace-pre-wrap text-right opacity-80">
+          <div className="max-w-[min(680px,85%)] rounded-2xl bg-emerald-500/[0.08] border border-emerald-500/15 px-3.5 py-2 text-[14px] leading-relaxed text-[#F0F6FC] whitespace-pre-wrap break-words opacity-80">
             {pendingUserText}
           </div>
         </div>
       )}
+
 
       {awaitingReply && lastIsUser && (
         <div className="flex items-start gap-3">
