@@ -76,6 +76,8 @@ export default function ChatComposerPro({ restrictDepartment, placeholder, autoF
   const [submitting, setSubmitting] = useState(false);
   const [showSuggestions, setShowSuggestions] = useState(false);
   const taRef = useRef<HTMLTextAreaElement>(null);
+  const composingRef = useRef(false); // IME composition guard
+  const autosizeRafRef = useRef<number | null>(null);
 
   const mentionCandidates = useMemo(
     () =>
@@ -88,12 +90,20 @@ export default function ChatComposerPro({ restrictDepartment, placeholder, autoF
   const channelCandidates = useMemo(() => DEPTS.filter((d) => d.id.startsWith(query.toLowerCase())), [query]);
   const commandCandidates = useMemo(() => COMMANDS.filter((c) => c.id.startsWith(query.toLowerCase())), [query]);
 
-  // Auto-resize
-  useEffect(() => {
-    const el = taRef.current;
-    if (!el) return;
-    el.style.height = 'auto';
-    el.style.height = Math.min(el.scrollHeight, 240) + 'px';
+  // Auto-resize — coalesced via rAF so fast typing/paste doesn't thrash layout.
+  useLayoutEffect(() => {
+    if (autosizeRafRef.current != null) cancelAnimationFrame(autosizeRafRef.current);
+    autosizeRafRef.current = requestAnimationFrame(() => {
+      const el = taRef.current;
+      if (!el) return;
+      const prev = el.style.height;
+      el.style.height = 'auto';
+      const next = Math.min(el.scrollHeight, 240) + 'px';
+      if (prev !== next) el.style.height = next;
+    });
+    return () => {
+      if (autosizeRafRef.current != null) cancelAnimationFrame(autosizeRafRef.current);
+    };
   }, [value]);
 
   useEffect(() => {
