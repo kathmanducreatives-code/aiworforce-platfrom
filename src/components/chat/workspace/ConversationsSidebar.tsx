@@ -5,56 +5,57 @@ import { useAgents } from '@/hooks/useAgents';
 import { useChatWorkspace } from '@/contexts/ChatWorkspaceContext';
 import { useRelativeTime } from '@/hooks/useRelativeTime';
 import { useUserConversations, type ChatConversationRow } from '@/hooks/useUserConversations';
+import { useConversationActions } from '@/hooks/useConversationActions';
 import { DEPTS } from '@/lib/agentDeptIndex';
-import { AGENT_PROFILES, AGENT_BY_ID } from '@/data/agentProfiles';
+import { AGENT_PROFILES } from '@/data/agentProfiles';
+import AgentAvatar from './agents/AgentAvatar';
+import ConversationRowMenu from './ConversationRowMenu';
+import RenameConversationDialog from './RenameConversationDialog';
+import DeleteConversationDialog from './DeleteConversationDialog';
+import { Search, Plus } from 'lucide-react';
 
 type Filter = 'all' | 'active' | 'done';
 
-const AGENT_HEX: Record<string, string> = {
-  scout: '#3B82F6',
-  aria: '#8B5CF6',
-  penn: '#10B981',
-  hawk: '#14B8A6',
-  scribe: '#A855F7',
-};
-
-function InitialCircle({ slug, name, size = 24, active = false }: { slug: string; name: string; size?: number; active?: boolean }) {
-  const hex = AGENT_HEX[slug] ?? '#7D8590';
-  const alpha = active ? '40' : '26';
-  return (
-    <div
-      className="rounded-full flex items-center justify-center"
-      style={{
-        width: size, height: size,
-        backgroundColor: `${hex}${alpha}`, color: hex,
-        fontSize: size <= 20 ? 10 : 11, fontWeight: active ? 600 : 500, lineHeight: 1,
-      }}
-      aria-label={name}
-    >{name.charAt(0).toUpperCase()}</div>
-  );
-}
-
-function ConversationItem({ conv }: { conv: ChatConversationRow }) {
-  const { view, setView } = useChatWorkspace();
+function ConversationItem({
+  conv,
+  onRename,
+  onDelete,
+}: {
+  conv: ChatConversationRow;
+  onRename: (c: ChatConversationRow) => void;
+  onDelete: (c: ChatConversationRow) => void;
+}) {
+  const { view, setView, closeWorkbench } = useChatWorkspace();
   const rel = useRelativeTime(conv.updated_at);
   const active = view.kind === 'chat' && view.conversationId === conv.id;
-  const profile = AGENT_BY_ID[conv.agent_slug];
-  const title = (conv.title ?? '').slice(0, 30) || 'New chat';
+  const title = (conv.title ?? '').slice(0, 40) || 'New chat';
 
   return (
-    <button
-      onClick={() => setView({ kind: 'chat', conversationId: conv.id, agentSlug: conv.agent_slug })}
+    <div
       className={cn(
-        'w-full text-left py-1.5 px-2 rounded-md transition-colors flex items-start gap-2',
-        active ? 'bg-white/[0.04] text-[#F0F6FC]' : 'text-[#7D8590] hover:text-[#F0F6FC] hover:bg-white/[0.02]',
+        'group relative w-full flex items-start gap-2 pl-2.5 pr-1 py-1.5 rounded-md transition-colors cursor-pointer',
+        active
+          ? 'bg-white/[0.05] text-[#F0F6FC]'
+          : 'text-[#7D8590] hover:text-[#F0F6FC] hover:bg-white/[0.025]',
       )}
+      onClick={() => {
+        if (!active) closeWorkbench();
+        setView({ kind: 'chat', conversationId: conv.id, agentSlug: conv.agent_slug });
+      }}
     >
-      <InitialCircle slug={conv.agent_slug} name={profile?.name ?? conv.agent_slug} size={24} />
+      {active && <span aria-hidden className="absolute left-0 top-1.5 bottom-1.5 w-[2px] rounded-r bg-emerald-400" />}
+      <AgentAvatar slug={conv.agent_slug} size="xs" ring={false} />
       <div className="flex-1 min-w-0">
         <div className="text-xs line-clamp-1">{title}</div>
         <div className="text-[10px] text-[#484F58] mt-0.5">{rel}</div>
       </div>
-    </button>
+      <div className="opacity-0 group-hover:opacity-100 transition-opacity" onClick={(e) => e.stopPropagation()}>
+        <ConversationRowMenu
+          onRename={() => onRename(conv)}
+          onDelete={() => onDelete(conv)}
+        />
+      </div>
+    </div>
   );
 }
 
@@ -63,29 +64,49 @@ export default function ConversationsSidebar({ wide }: { wide?: boolean }) {
   const { agents } = useAgents(workspaceId);
   const { view, setView } = useChatWorkspace();
   const { conversations } = useUserConversations();
+  const { createConversation } = useConversationActions();
   const [filter, setFilter] = useState<Filter>('all');
+  const [query, setQuery] = useState('');
+  const [renameTarget, setRenameTarget] = useState<ChatConversationRow | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<ChatConversationRow | null>(null);
 
   const filtered = useMemo(() => {
-    if (filter === 'all') return conversations;
-    return conversations.filter((c) => c.status === (filter === 'active' ? 'active' : 'done'));
-  }, [conversations, filter]);
+    const q = query.trim().toLowerCase();
+    return conversations
+      .filter((c) => filter === 'all' ? true : c.status === (filter === 'active' ? 'active' : 'done'))
+      .filter((c) => !q || (c.title ?? '').toLowerCase().includes(q));
+  }, [conversations, filter, query]);
 
   return (
     <aside
       className={cn(
-        'shrink-0 border-r border-white/[0.06] flex flex-col overflow-hidden bg-background/40',
-        wide ? 'w-[260px]' : 'w-[220px]',
+        'shrink-0 border-r border-white/[0.06] flex flex-col overflow-hidden bg-background/80 backdrop-blur-xl',
+        wide ? 'w-[300px]' : 'w-[240px]',
       )}
     >
-      <div className="px-3 pt-3 pb-2">
-        <div className="text-[10px] uppercase tracking-widest text-[#484F58] mb-2">Conversations</div>
-        <div className="flex items-center gap-3">
+      <div className="px-3 pt-3 pb-2 space-y-2">
+        <button
+          onClick={() => void createConversation('pilot')}
+          className="w-full inline-flex items-center justify-center gap-1.5 h-8 rounded-md bg-emerald-500/15 hover:bg-emerald-500/25 border border-emerald-500/30 text-emerald-200 text-[12px] font-medium transition-colors"
+        >
+          <Plus className="h-3.5 w-3.5" /> New chat
+        </button>
+        <div className="relative">
+          <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3 w-3 text-[#484F58]" />
+          <input
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Search conversations"
+            className="w-full h-7 pl-7 pr-2 rounded-md bg-white/[0.03] border border-white/[0.06] text-[12px] text-[#F0F6FC] placeholder:text-[#484F58] outline-none focus:border-white/[0.12]"
+          />
+        </div>
+        <div className="flex items-center gap-3 pt-0.5">
           {(['all', 'active', 'done'] as Filter[]).map((f) => (
             <button
               key={f}
               onClick={() => setFilter(f)}
               className={cn(
-                'text-[12px] capitalize transition-colors duration-150',
+                'text-[11px] capitalize transition-colors duration-150',
                 filter === f ? 'text-[#F0F6FC]' : 'text-[#7D8590] hover:text-[#F0F6FC]',
               )}
             >{f}</button>
@@ -99,7 +120,9 @@ export default function ConversationsSidebar({ wide }: { wide?: boolean }) {
         ) : (
           <ul className="space-y-0.5">
             {filtered.map((c) => (
-              <li key={c.id}><ConversationItem conv={c} /></li>
+              <li key={c.id}>
+                <ConversationItem conv={c} onRename={setRenameTarget} onDelete={setDeleteTarget} />
+              </li>
             ))}
           </ul>
         )}
@@ -118,7 +141,7 @@ export default function ConversationsSidebar({ wide }: { wide?: boolean }) {
                   className={cn(
                     'w-full flex items-center gap-1.5 py-1.5 text-xs transition-colors duration-150',
                     active
-                      ? 'border-l-2 border-white pl-2 text-[#F0F6FC]'
+                      ? 'border-l-2 border-emerald-400 pl-2 text-[#F0F6FC]'
                       : 'pl-2.5 text-[#7D8590] hover:text-[#F0F6FC]',
                   )}
                 >
@@ -146,15 +169,28 @@ export default function ConversationsSidebar({ wide }: { wide?: boolean }) {
                 className="relative"
                 title={a.name}
               >
-                <InitialCircle slug={a.id} name={a.name} size={24} active={active} />
+                <AgentAvatar slug={a.id} size="xs" ring={active} />
                 {isRunning && (
-                  <span className="absolute -bottom-0.5 -right-0.5 h-1.5 w-1.5 rounded-full bg-[#10B981]" />
+                  <span className="absolute -bottom-0.5 -right-0.5 h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" />
                 )}
               </button>
             );
           })}
         </div>
       </div>
+
+      <RenameConversationDialog
+        open={!!renameTarget}
+        onOpenChange={(o) => { if (!o) setRenameTarget(null); }}
+        conversationId={renameTarget?.id ?? null}
+        currentTitle={renameTarget?.title ?? null}
+      />
+      <DeleteConversationDialog
+        open={!!deleteTarget}
+        onOpenChange={(o) => { if (!o) setDeleteTarget(null); }}
+        conversationId={deleteTarget?.id ?? null}
+        title={deleteTarget?.title ?? null}
+      />
     </aside>
   );
 }

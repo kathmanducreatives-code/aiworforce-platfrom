@@ -87,6 +87,8 @@ interface Ctx {
   openHistory: () => void;
   closeHistory: () => void;
   toggleHistory: () => void;
+  composerFocused: boolean;
+  setComposerFocused: (v: boolean) => void;
 }
 
 const ChatWorkspaceContext = createContext<Ctx | null>(null);
@@ -101,7 +103,13 @@ export const ChatWorkspaceProvider = ({ children }: { children: ReactNode }) => 
   const [workbenchWidth, setWorkbenchWidth] = useState(520);
   const [selectedOutput, setSelectedOutput] = useState<WorkbenchSelection | null>(null);
   const [historyOpen, setHistoryOpen] = useState(false);
+  const [composerFocused, setComposerFocusedState] = useState(false);
   const closeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const setComposerFocused = useCallback((v: boolean) => {
+    setComposerFocusedState(v);
+    if (v) setHistoryOpen(false);
+  }, []);
 
   const openWorkbench = useCallback((sel: WorkbenchSelection) => {
     if (closeTimerRef.current) { clearTimeout(closeTimerRef.current); closeTimerRef.current = null; }
@@ -145,7 +153,7 @@ export const ChatWorkspaceProvider = ({ children }: { children: ReactNode }) => 
 
   return (
     <ChatWorkspaceContext.Provider
-      value={{ mode, view, height, pending, workbenchOpen, workbenchClosing, workbenchWidth, selectedOutput, historyOpen, open, close, toggleFullscreen, setHeight, setView, setPending, openWorkbench, closeWorkbench, setWorkbenchWidth, openHistory, closeHistory, toggleHistory }}
+      value={{ mode, view, height, pending, workbenchOpen, workbenchClosing, workbenchWidth, selectedOutput, historyOpen, open, close, toggleFullscreen, setHeight, setView, setPending, openWorkbench, closeWorkbench, setWorkbenchWidth, openHistory, closeHistory, toggleHistory, composerFocused, setComposerFocused }}
     >
       {children}
     </ChatWorkspaceContext.Provider>

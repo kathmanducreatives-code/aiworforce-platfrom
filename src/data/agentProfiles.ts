@@ -3,6 +3,7 @@ import scoutImg from '@/assets/agents/scout.png';
 import pennImg from '@/assets/agents/penn.png';
 import hawkImg from '@/assets/agents/hawk.png';
 import scribeImg from '@/assets/agents/scribe.png';
+import pilotImg from '@/assets/agents/pilot.png';
 
 export type AgentDept = 'talent' | 'growth' | 'content' | 'intelligence' | 'operations';
 export type AgentModelKey = 'gpt-4o' | 'claude-sonnet' | 'claude-haiku' | 'gemini-pro';
@@ -34,7 +35,7 @@ export const PILOT_PROFILE: AgentProfile = {
   name: 'Pilot',
   role: 'Manager',
   department: 'operations',
-  image: null,
+  image: pilotImg,
   model: 'claude-sonnet',
   accentHex: '#10B981',
   description: 'Coordinates the AI workforce',

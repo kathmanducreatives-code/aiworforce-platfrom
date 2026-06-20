@@ -1,6 +1,6 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, PanelLeft, MessageSquare, FlaskConical } from 'lucide-react';
+import { X, PanelLeft, MessageSquare, FlaskConical, Plus } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useChatWorkspace } from '@/contexts/ChatWorkspaceContext';
 import { useIsMobile } from '@/hooks/use-mobile';
@@ -17,11 +17,12 @@ import { Sheet, SheetContent } from '@/components/ui/sheet';
 import ResizableWorkspaceSplit from './ResizableWorkspaceSplit';
 import { ChatPaneWidthProvider } from './ChatPaneWidthContext';
 import { TooltipProvider, Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
+import { useConversationActions } from '@/hooks/useConversationActions';
 
 const NARROW_SPLIT_THRESHOLD = 1000;
 
 export default function ChatWorkspace() {
-  const { mode, view, close, setView, pending, workbenchOpen, workbenchClosing, historyOpen, openHistory, closeHistory } = useChatWorkspace();
+  const { mode, view, close, setView, pending, workbenchOpen, workbenchClosing, historyOpen, openHistory, closeHistory, toggleHistory, closeWorkbench } = useChatWorkspace();
   const isMobile = useIsMobile();
   const [viewportW, setViewportW] = useState<number>(() => (typeof window !== 'undefined' ? window.innerWidth : 1280));
   useEffect(() => {
@@ -31,10 +32,32 @@ export default function ChatWorkspace() {
   }, []);
   const isDesktopWide = !isMobile && viewportW >= NARROW_SPLIT_THRESHOLD;
   const wbVisible = workbenchOpen || workbenchClosing;
-  const canSplit = isDesktopWide; // always use split layout on wide desktop for smooth open/close animation
+  const canSplit = isDesktopWide;
   const isTabbed = wbVisible && !isMobile && viewportW < NARROW_SPLIT_THRESHOLD;
   const [tabbedView, setTabbedView] = useState<'chat' | 'workbench'>('workbench');
   useEffect(() => { if (isTabbed) setTabbedView('workbench'); }, [isTabbed, workbenchOpen]);
+
+  // Open history once when workspace first opens, and on desktop only.
+  const openedOnceRef = useRef(false);
+  useEffect(() => {
+    if (mode !== 'closed' && !openedOnceRef.current && !isMobile) {
+      openedOnceRef.current = true;
+      openHistory();
+    }
+    if (mode === 'closed') openedOnceRef.current = false;
+  }, [mode, isMobile, openHistory]);
+
+  // Cmd/Ctrl+B toggles history
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'b' && mode !== 'closed') {
+        e.preventDefault();
+        toggleHistory();
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [mode, toggleHistory]);
 
   return (
     <TooltipProvider delayDuration={300}>
@@ -77,6 +100,7 @@ export default function ChatWorkspace() {
                 </div>
               </div>
               <div className="flex items-center gap-1">
+                <NewChatButton />
                 <button
                   onClick={close}
                   className="h-7 w-7 inline-flex items-center justify-center rounded hover:bg-foreground/5 text-muted-foreground hover:text-foreground"
@@ -165,6 +189,25 @@ export default function ChatWorkspace() {
         )}
       </AnimatePresence>
     </TooltipProvider>
+  );
+}
+
+function NewChatButton() {
+  const { createConversation } = useConversationActions();
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <button
+          onClick={() => void createConversation('pilot')}
+          className="h-7 w-7 inline-flex items-center justify-center rounded hover:bg-foreground/5 text-muted-foreground hover:text-foreground"
+          aria-label="New chat"
+          title="New chat (⌘N)"
+        >
+          <Plus className="h-3.5 w-3.5" />
+        </button>
+      </TooltipTrigger>
+      <TooltipContent side="bottom">New chat</TooltipContent>
+    </Tooltip>
   );
 }
 

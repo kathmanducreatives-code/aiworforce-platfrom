@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Copy, Check } from 'lucide-react';
 import { useChatConversation } from '@/hooks/useChatConversation';
 import { useChatWorkspace, type LeadResultsPanelMeta } from '@/contexts/ChatWorkspaceContext';
-import { resolveAgent, resolveAgentFromMetadata } from '@/lib/agentResolver';
+import { resolveAgentFromMetadata } from '@/lib/agentResolver';
 import { cn } from '@/lib/utils';
 import ExecutionPlanCard from './plan/ExecutionPlanCard';
 import ClarificationCard from './bubbles/ClarificationCard';
@@ -11,6 +11,7 @@ import LeadSourceCard, { type LeadSourceSelectorPayload } from './bubbles/LeadSo
 import PostLeadActionsCard, { type PostLeadActionsCardPayload } from './bubbles/PostLeadActionsCard';
 import InterpretationPill from './bubbles/InterpretationPill';
 import AgentAvatar from './agents/AgentAvatar';
+import AgentTypingIndicator from './AgentTypingIndicator';
 import { dispatchChatAction } from '@/lib/chatActions';
 
 
@@ -37,19 +38,6 @@ function CopyButton({ text }: { text: string }) {
   );
 }
 
-function TypingDots() {
-  return (
-    <span className="inline-flex items-center gap-1 ml-1">
-      {[0, 200, 400].map((d) => (
-        <span
-          key={d}
-          className="h-1 w-1 rounded-full bg-[#484F58] animate-pulse"
-          style={{ animationDelay: `${d}ms`, animationDuration: '1s' }}
-        />
-      ))}
-    </span>
-  );
-}
 
 interface Props {
   conversationId: string;
@@ -63,7 +51,7 @@ export default function ChatView({ conversationId, agentSlug, pendingUserText, a
   const { openWorkbench } = useChatWorkspace();
   const openedPanelsRef = useRef<Set<string>>(new Set());
   const scrollRef = useRef<HTMLDivElement>(null);
-  const profile = resolveAgent(agentSlug);
+  
 
   // Hide pending user text once it appears in real messages
   const showPending = pendingUserText && !messages.some(
@@ -230,16 +218,7 @@ export default function ChatView({ conversationId, agentSlug, pendingUserText, a
 
 
       {awaitingReply && lastIsUser && (
-        <div className="flex items-start gap-3">
-          <AgentAvatar slug={agentSlug} size="sm" status="thinking" />
-          <div className="min-w-0 flex-1">
-            <div className="flex items-baseline gap-1.5 mb-1">
-              <span className="text-[12.5px] font-semibold text-[#E6EDF3]">{profile.name}</span>
-              <span className="text-[11px]" style={{ color: profile.accentHex ?? '#7D8590' }}>· {profile.role}</span>
-            </div>
-            <TypingDots />
-          </div>
-        </div>
+        <AgentTypingIndicator slug={agentSlug} />
       )}
     </div>
   );
