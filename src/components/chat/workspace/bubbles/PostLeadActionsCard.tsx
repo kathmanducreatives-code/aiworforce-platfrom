@@ -3,6 +3,7 @@ import { ShieldCheck, ExternalLink } from 'lucide-react';
 import { dispatchChatAction } from '@/lib/chatActions';
 import { useChatWorkspace } from '@/contexts/ChatWorkspaceContext';
 import AgentAvatar from '../agents/AgentAvatar';
+import { toast } from 'sonner';
 
 type PostLeadAction = 'save_only' | 'rank' | 'enrich' | 'draft_outreach' | 'enrich_and_draft' | 'export';
 
