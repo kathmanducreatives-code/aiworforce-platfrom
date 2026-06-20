@@ -249,11 +249,12 @@ export default function ChatComposerPro({ restrictDepartment, placeholder, autoF
 
     open();
     setSubmitting(true);
-    // Optimistic: stash pending text against (possibly future) conversation id
+    // Clear composer FIRST so the user can keep typing the next message
+    // immediately, then stash optimistic pending state.
+    if (!override) setValue('');
     if (conversationId) {
       setPending({ conversationId, text, awaiting: true });
     }
-    setValue('');
     try {
       const result = await pilotChat({
         message: text,
@@ -263,21 +264,25 @@ export default function ChatComposerPro({ restrictDepartment, placeholder, autoF
         action_source: opts?.actionSource ?? undefined,
       });
       const newConvId = result?.conversation_id;
-      // Only re-route the view when this was a real freeform new chat (no
-      // prior conversation context AND not a card action). Card actions stay
-      // on whichever view the user is on — their assistant response lands in
-      // the original conversation via realtime.
       if (!isCardAction && !conversationId && typeof newConvId === 'string' && newConvId) {
         setView({ kind: 'chat', conversationId: newConvId, agentSlug });
       }
       setPending(null);
     } catch (e) {
       setPending(null);
+      // Restore the user's text so they don't lose it on failure.
+      if (!override) setValue(text);
       toast.error('Could not send message', { description: e instanceof Error ? e.message : String(e) });
     } finally {
       setSubmitting(false);
     }
   };
+
+  // Keep submitRef pointing at the latest closure so window listeners
+  // dispatched via chat:send always use current state.
+  useEffect(() => {
+    submitRef.current = (text, opts) => { void submit(text, opts); };
+  });
 
   const handleKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
     if (popup) {
