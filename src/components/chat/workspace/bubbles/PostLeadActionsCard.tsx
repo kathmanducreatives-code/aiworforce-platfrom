@@ -46,8 +46,10 @@ export default function PostLeadActionsCard({ payload, conversationId }: { paylo
         panel: payload.panel,
         conversationId: conversationId ?? null,
       });
+      toast.success('Result opened in Workbench');
     } else if (selectedOutput?.planId) {
       openWorkbench(selectedOutput);
+      toast.success('Result opened in Workbench');
     }
   };
 

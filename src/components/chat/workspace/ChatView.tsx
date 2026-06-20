@@ -11,6 +11,7 @@ import LeadSourceCard, { type LeadSourceSelectorPayload } from './bubbles/LeadSo
 import PostLeadActionsCard, { type PostLeadActionsCardPayload } from './bubbles/PostLeadActionsCard';
 import InterpretationPill from './bubbles/InterpretationPill';
 import AgentAvatar from './agents/AgentAvatar';
+import AgentTypingIndicator from './AgentTypingIndicator';
 import { dispatchChatAction } from '@/lib/chatActions';
 
 
@@ -230,16 +231,7 @@ export default function ChatView({ conversationId, agentSlug, pendingUserText, a
 
 
       {awaitingReply && lastIsUser && (
-        <div className="flex items-start gap-3">
-          <AgentAvatar slug={agentSlug} size="sm" status="thinking" />
-          <div className="min-w-0 flex-1">
-            <div className="flex items-baseline gap-1.5 mb-1">
-              <span className="text-[12.5px] font-semibold text-[#E6EDF3]">{profile.name}</span>
-              <span className="text-[11px]" style={{ color: profile.accentHex ?? '#7D8590' }}>· {profile.role}</span>
-            </div>
-            <TypingDots />
-          </div>
-        </div>
+        <AgentTypingIndicator slug={agentSlug} />
       )}
     </div>
   );
