@@ -164,8 +164,14 @@ export default function ChatComposerPro({ restrictDepartment, placeholder, autoF
   const handleChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     const v = e.target.value;
     setValue(v);
-    setShowSuggestions(false);
-    detectPopup(v, e.target.selectionStart ?? v.length);
+    if (showSuggestions) setShowSuggestions(false);
+    // Only run popup detection when a trigger char is at/near the caret or
+    // a popup is already open. Avoids per-keystroke state churn on plain text.
+    const caret = e.target.selectionStart ?? v.length;
+    const prevChar = caret > 0 ? v[caret - 1] : '';
+    if (popup || prevChar === '@' || prevChar === '#' || prevChar === '/' || /[\w]/.test(prevChar)) {
+      detectPopup(v, caret);
+    }
   };
 
   const replaceTrigger = (_trigger: '@' | '#' | '/', insert: string) => {
