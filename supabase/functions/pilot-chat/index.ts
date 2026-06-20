@@ -13,7 +13,7 @@ import { classifyWorkflow, SHORT_VAGUE_CLARIFICATION } from "../_shared/workflow
 import { validateAgainstCapabilities } from "../_shared/capabilityValidator.ts";
 import { loadConversationMemory, renderMemoryForPrompt, isFollowUpReference, extractTopN, type ConversationMemory } from "../_shared/memoryReader.ts";
 import { shouldGateForOnboarding, ONBOARDING_GATE_REPLY } from "../_shared/companyBrainGate.ts";
-import { isLeadIntakeRequest, hasNewSourcingIntent, extractLeadDetails, hasEnoughToRun, buildLeadSourceSelector, leadRequestToToolInput, leadRequestToInstruction, leadRequestToLinkedInFallbackInstruction, leadRequestToCompaniesInstruction, type LeadRequest, type ToolAvailability } from "../_shared/leadIntake.ts";
+import { isLeadIntakeRequest, hasNewSourcingIntent, isSaveExistingResultsRequest, extractLeadDetails, hasEnoughToRun, buildLeadSourceSelector, leadRequestToToolInput, leadRequestToInstruction, leadRequestToLinkedInFallbackInstruction, leadRequestToCompaniesInstruction, type LeadRequest, type ToolAvailability } from "../_shared/leadIntake.ts";
 import { getActorByKey, isActorRuntimeEnabled } from "../_shared/actorRegistry.ts";
 import { isFindContactsRequest, personaForAccounts, buildContactSearchQueries, contactDiscoveryFallback, type AccountForContacts } from "../_shared/contactDiscovery.ts";
 import { buildCompanyBrainContext, hasUsableBrain, brainCompetitors } from "../_shared/companyBrainContext.ts";
@@ -647,12 +647,23 @@ Deno.serve(async (req) => {
 
   // Post-lead "Save only" / "Review later" — 0 credits, no tool runs. Leads are
   // already persisted by sourcing; just acknowledge. Must precede the sourcing
-  // pipeline so "save these leads" can't trigger a re-source.
-  const saveOnlyRe = /\b(save|keep)\b[^.!?]*\b(signal feed|for (?:now|later)|review(?:\s+later)?|saved)\b/i;
-  if (saveOnlyRe.test(message) && hasLeads && !newSourcing) {
+  // pipeline so bare "save these leads" / "save them" / "add to signal feed"
+  // can't trigger a re-source or fall through to the generic-sourcing fallback.
+  // isSaveExistingResultsRequest already excludes fresh sourcing briefs
+  // ("find 5 founders and save them"), so the !newSourcing check is belt-and-braces.
+  const isSaveExisting = isSaveExistingResultsRequest(message);
+  if (isSaveExisting && !newSourcing) {
+    if (hasLeads) {
+      return await replyAndReturn(
+        `Kept your ${memory.lead_candidates.length} leads in the Signal Feed — nothing was sent. Ask me to rank, enrich, or draft outreach whenever you're ready.`,
+        { post_lead_action: "save_only", reused_memory: true, credits: 0 },
+      );
+    }
+    // Save intent but nothing in memory yet — acknowledge honestly. Do NOT
+    // re-source and do NOT fall through to the generic-sourcing fallback.
     return await replyAndReturn(
-      `Kept your ${memory.lead_candidates.length} leads in the Signal Feed — nothing was sent. Ask me to rank, enrich, or draft outreach whenever you're ready.`,
-      { post_lead_action: "save_only", reused_memory: true, credits: 0 },
+      "There aren't any leads or results in this conversation to save yet. Run a sourcing workflow first (for example \"find 10 companies hiring GTM roles in the US\"), and I'll keep the results so you can save, rank, enrich, or draft outreach next.",
+      { post_lead_action: "save_only", reason: "no_results_to_save", credits: 0 },
     );
   }
 
@@ -1254,10 +1265,65 @@ Deno.serve(async (req) => {
     );
   }
 
-  // For url_analysis / people_sourcing / company_hiring_sourcing / outreach
-  // we fall through to the legacy classifyIntent + planToolInput pipeline,
-  // which already handles people-vs-companies clarification persistence and
-  // Apify/Firecrawl ToolInput building.
+  // Phase 4 (consolidation) — workflowClassifier is the PRIMARY decision layer.
+  // company_hiring_sourcing and people_sourcing are resolved deterministically
+  // here (no second classifyIntent + planToolInput round-trip, no chance of the
+  // legacy people-vs-companies two-option card overriding the 7-option Lead
+  // Source Selector). Disabled-actor cases were already returned honestly by the
+  // validator (5c.i) and lead intake (5c.ii-b) above, so reaching here means the
+  // selected actor is available.
+  if (decision.workflow_category === "company_hiring_sourcing") {
+    return await delegateToOrchestrate({
+      admin, SUPABASE_URL, SUPABASE_ANON_KEY, authHeader, conversationId: conversationId!, workspaceId,
+      instruction: message,
+      toolInput: {
+        intent: "source_companies_hiring",
+        tool_name: "source_with_apify",
+        selected_actor_key: decision.selected_actor_key ?? "apify_jobs",
+        source_type: "jobs",
+        query: decision.query ?? message,
+        role_keywords: decision.role_keywords ?? [],
+        location: decision.location ?? null,
+        max_results: Math.max(1, Math.min(50, decision.max_results ?? 5)),
+        needs_enrichment: false,
+        needs_outreach: !!decision.needs_outreach,
+        execution_mode: decision.needs_outreach ? "outreach" : "fast",
+        confidence: decision.confidence,
+        missing_fields: [],
+        reason: "classifier: company_hiring_sourcing → jobs (deterministic, no legacy round-trip)",
+      } as unknown as ToolInput,
+      modelUsed: "google/gemini-3-flash-preview", providerUsed: "lovable-ai",
+    });
+  }
+
+  if (decision.workflow_category === "people_sourcing") {
+    return await delegateToOrchestrate({
+      admin, SUPABASE_URL, SUPABASE_ANON_KEY, authHeader, conversationId: conversationId!, workspaceId,
+      instruction: message,
+      toolInput: {
+        intent: "source_people",
+        tool_name: "source_with_apify",
+        selected_actor_key: decision.selected_actor_key ?? "apify_people_search",
+        source_type: "people_profiles",
+        query: decision.query ?? message,
+        role_keywords: decision.role_keywords ?? [],
+        location: decision.location ?? null,
+        max_results: Math.max(1, Math.min(25, decision.max_results ?? 5)),
+        needs_enrichment: false,
+        needs_outreach: !!decision.needs_outreach,
+        execution_mode: decision.needs_outreach ? "outreach" : "fast",
+        confidence: decision.confidence,
+        missing_fields: [],
+        reason: "classifier: people_sourcing → people search (deterministic, no legacy round-trip)",
+      } as unknown as ToolInput,
+      modelUsed: "google/gemini-3-flash-preview", providerUsed: "lovable-ai",
+    });
+  }
+
+  // For url_analysis / outreach (and any residual) we fall through to the legacy
+  // classifyIntent + planToolInput pipeline as a DEEP FALLBACK only. It still
+  // handles Firecrawl URL analysis and the explicit "people or companies?"
+  // clarification for genuinely ambiguous asks the classifier left unresolved.
 
 
 

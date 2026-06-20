@@ -11,6 +11,8 @@ import {
   leadRequestToCompaniesInstruction,
   modeFromLabel,
   isLeadIntakeRequest as _isLead,
+  hasNewSourcingIntent,
+  isSaveExistingResultsRequest,
   type LeadRequest,
 } from "./leadIntake.ts";
 
@@ -234,4 +236,40 @@ Deno.test("instruction is complete + count-accurate", () => {
   const instr = leadRequestToInstruction(req);
   assert(instr.startsWith("Find 5 "));
   assert(/healthcare/i.test(instr) && /usa/i.test(instr) && /founder/i.test(instr));
+});
+
+// ---- Phase 1: save-only ("save these leads") must NOT re-source ----
+Deno.test("Phase1 save-existing: bare save phrases acknowledge (no new sourcing)", () => {
+  for (const m of [
+    "Save these leads",
+    "save them",
+    "save this list",
+    "keep these leads",
+    "save these results",
+    "save for later",
+    "add to signal feed",
+    "add these to the signal feed",
+    "mark these saved",
+  ]) {
+    assertEquals(isSaveExistingResultsRequest(m), true, `should be save-existing: ${m}`);
+    assertEquals(hasNewSourcingIntent(m), false, `should NOT be new sourcing: ${m}`);
+  }
+});
+
+Deno.test("Phase1 save-existing: fresh sourcing briefs that mention save are NOT save-only", () => {
+  for (const m of [
+    "Find 5 founders in London and save them",
+    "find founders and save them",
+    "search companies and save them",
+    "Find 5 founder AI Software in healthcare in USA. Save them to Signal Feed.",
+  ]) {
+    assertEquals(isSaveExistingResultsRequest(m), false, `fresh sourcing, not save-only: ${m}`);
+    assertEquals(hasNewSourcingIntent(m), true, `should be new sourcing: ${m}`);
+  }
+});
+
+Deno.test("Phase1 save-existing: 'only keep US companies' is refine, not save-existing", () => {
+  // refine is handled by pilot-chat's refineRe; isSaveExistingResultsRequest must
+  // not claim it (no save/keep-these wording with a results object).
+  assertEquals(isSaveExistingResultsRequest("Only keep US companies"), false);
 });

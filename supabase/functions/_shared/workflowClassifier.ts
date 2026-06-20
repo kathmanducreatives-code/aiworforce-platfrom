@@ -634,17 +634,43 @@ function regexClassify(message: string): WorkflowDecision | null {
     });
   }
 
-  // Generic sourcing-ish words that don't match any specific bucket above.
-  if (COMPANY_INTENT_RE.test(m) || /\b(find|source|leads?|prospects?|candidates?)\b/i.test(m)) {
+  // Clear COMPANY/account/category intent (e.g. "companies", "accounts",
+  // "startups", "orgs") with no more-specific bucket above → companies-hiring
+  // (Jobs actor). This is the legitimate "company / category search" source.
+  if (COMPANY_INTENT_RE.test(m)) {
     return defaultDecision("company_hiring_sourcing", {
-      reason: "generic sourcing — defaulting to companies-hiring (apify_jobs)",
-      confidence: 0.6,
+      reason: "company/account intent — companies-hiring (apify_jobs)",
+      confidence: 0.7,
       agents: ["scout", "aria"],
       execution_mode: "fast",
       selected_tool: "source_with_apify",
       selected_actor_key: "apify_jobs",
       source_type: "jobs",
       query: m,
+    });
+  }
+
+  // Generic sourcing words (find/source/leads/prospects/candidates) with NO
+  // company, hiring, people, LinkedIn, or competitor signal → do NOT silently
+  // default to Jobs. Surface the Lead Source Selector via a clarification so the
+  // user picks the actual source. (pilot-chat shows the 7-option selector when
+  // isLeadIntakeRequest matches; otherwise this menu keeps it off the Jobs path.)
+  if (/\b(find|source|sourcing|leads?|prospects?|candidates?|buyers?|customers?)\b/i.test(m)) {
+    return defaultDecision("signal_sourcing", {
+      reason: "generic sourcing — needs source selection (no silent jobs default)",
+      confidence: 0.6,
+      needs_clarification: true,
+      clarification_question:
+        "Which kind of leads should I find? Options: ICP/normal leads, companies hiring, LinkedIn intent posts, LinkedIn comments/engagement, competitor engagement, founder/profile search, or company/category search.",
+      possible_actions: [
+        "icp_search",
+        "companies_hiring",
+        "linkedin_intent_posts",
+        "linkedin_comments",
+        "competitor_engagement",
+        "founder_profiles",
+        "company_category_search",
+      ],
     });
   }
 

@@ -85,6 +85,21 @@ export function hasNewSourcingIntent(message: string): boolean {
   return SOURCING_VERB_RE.test(m) && (SOURCING_TARGET_RE.test(m) || /\bfind\s+\d+\b/i.test(m));
 }
 
+// "Save these / save them / keep these results / add to signal feed / mark
+// saved / save for later" over the CURRENT result set. The sourcing run already
+// persists leads — this is a 0-credit acknowledgement, NOT a new search.
+// Callers MUST still guard with !hasNewSourcingIntent(message) so a fresh brief
+// like "find 5 founders and save them" routes to sourcing, not here.
+const SAVE_EXISTING_RE =
+  /\b(?:save|keep|store|add|mark)\b[^.!?]*\b(?:these|those|them|this list|the (?:leads?|results?|list|companies|accounts?|signals?)|to (?:the )?signal feed|for (?:now|later)|saved|signal feed)\b|\b(?:save|keep) (?:these|those|them|it)\b/i;
+
+export function isSaveExistingResultsRequest(message: string): boolean {
+  const m = (message ?? "").trim();
+  if (!m) return false;
+  if (hasNewSourcingIntent(m)) return false; // a fresh sourcing brief wins
+  return SAVE_EXISTING_RE.test(m);
+}
+
 export function isLeadIntakeRequest(message: string): boolean {
   const m = message ?? "";
   // LinkedIn / competitor / hiring / engagement asks are Phase 3/4 flows the

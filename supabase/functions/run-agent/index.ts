@@ -10,6 +10,7 @@ import { generateText, logProviderCall } from "../_shared/aiProvider.ts";
 import { preferredProviderForAgent } from "../_shared/providerRouting.ts";
 import { getAgentorySystemPrompt, AGENTORY_SYSTEM_PROMPT_VERSION } from "../_shared/agentorySystemPrompt.ts";
 import { summarizeRegistryForPrompt } from "../_shared/actorRegistry.ts";
+import { buildCompanyBrainContext, hasUsableBrain } from "../_shared/companyBrainContext.ts";
 
 
 const cors = {
@@ -41,11 +42,15 @@ function buildUserMessage(instruction: string, input: string | null | undefined)
 
 type CompanyBrain = Record<string, unknown> | null;
 
-function renderCompanyBrain(brain: CompanyBrain): string {
-  if (!brain || Object.keys(brain).length === 0) {
-    return `<company_brain>\n(empty — workspace has not completed onboarding yet.)\n</company_brain>`;
+// Compact, labeled Company Brain summary for agent prompts — name, one-line
+// description, ICP, target roles, industries, geography, goals, competitors,
+// plus an explicit note when context is missing. Never dumps the full raw JSON
+// profile (avoids verbosity + hallucination from stray fields).
+function renderBrainForAgent(brain: CompanyBrain): string {
+  if (!hasUsableBrain(brain, null)) {
+    return `<company_brain>\n(no company brain yet — workspace hasn't completed onboarding. Do not invent company details, ICP, or competitors.)\n</company_brain>`;
   }
-  return `<company_brain>\n${JSON.stringify(brain, null, 2)}\n</company_brain>`;
+  return `<company_brain>\n${buildCompanyBrainContext(brain as Record<string, unknown>)}\n</company_brain>`;
 }
 
 
@@ -129,12 +134,15 @@ Deno.serve(async (req) => {
     .maybeSingle();
   const brain = (brainRow?.profile ?? null) as CompanyBrain;
 
+  // Inject a compact, labeled brain summary (not the raw JSON). We omit
+  // companyBrain from getAgentorySystemPrompt so it doesn't add its own
+  // JSON-trimmed block, then append the labeled summary once.
+  const brainBlock = renderBrainForAgent(brain);
   const systemPrompt = `${agent.role_prompt ?? `You are ${agent.name}.`}\n\n${getAgentorySystemPrompt({
     taskType: "agent_execution",
     currentAgent: agent_slug ?? agent.slug ?? undefined,
-    companyBrain: brain as Record<string, unknown> | null,
     actorRegistrySummary: summarizeRegistryForPrompt(),
-  })}`;
+  })}\n\n${brainBlock}`;
 
   // --- Tool layer: hawk + scout get live tools (Firecrawl scrape, Apify sourcing). Broad web search is optional. ---
   let toolContext: string | null = null;
@@ -147,6 +155,10 @@ Deno.serve(async (req) => {
   let sourcingFailure: { error: string; message: string } | null = null;
   // Attempt log from the adaptive multi-attempt sourcing loop (Scout step).
   let adaptiveAttempts: Array<Record<string, unknown>> = [];
+  // Set when an Apify sourcing actor RAN successfully but accepted 0 qualified
+  // leads (not a tool failure). We then skip Aria — there is nothing to rank.
+  let zeroAcceptedSourcing = false;
+  let sourcingAttemptsCount = 0;
 
   if (agent_slug === "hawk" || agent_slug === "scout") {
     const baseCtx = {
@@ -351,6 +363,12 @@ Deno.serve(async (req) => {
           apifyContext = `APIFY SOURCING (${adaptive.found}/${adaptive.requested} accepted across ${adaptive.attempts.length} attempt(s)):\nATTEMPTS:\n${log}${lens}\n\nITEMS (accepted, capped):\n${JSON.stringify(rawItems, null, 2).slice(0, 8000)}`;
         } else if (!toolFailed) {
           toolNotices.push(`Sourcing ran ${adaptive.attempts.length} attempt(s) and found 0 matching results.`);
+          // Actor ran fine but accepted 0 qualified leads. Mark it so we skip
+          // Aria (nothing to rank) and finalize as no_results below.
+          if (isApifySelected) {
+            zeroAcceptedSourcing = true;
+            sourcingAttemptsCount = adaptive.attempts.length;
+          }
         }
       }
     }
@@ -417,6 +435,62 @@ Deno.serve(async (req) => {
       }
     } catch (e) { console.warn("[run-agent] sourcing-error card failed:", e); }
     return json({ success: false, task_id: task.id, status: "failed", error: sourcingFailure.error });
+  }
+
+  // Sourcing actor RAN but accepted 0 qualified leads (no tool failure). There is
+  // nothing to rank, so SKIP Aria (and any downstream step): do not chain, do not
+  // call the LLM, do not persist fake rows, do not emit a post-lead actions card.
+  // Finalize the plan honestly as no_qualified_matches.
+  if (zeroAcceptedSourcing && !apifyContext) {
+    const { data: planRow } = await supabase.from("task_plans").select("steps").eq("id", plan_id).maybeSingle();
+    const planSteps: any[] = Array.isArray(planRow?.steps) ? (planRow!.steps as any[]) : [];
+    const nextStepSlug: string | null = planSteps[(step_index as number) + 1]?.agent_slug ?? null;
+    const ariaFollows = planSteps.some((s, i) => i > (step_index as number) && s?.agent_slug === "aria");
+
+    const msg = ariaFollows
+      ? `Scout ran ${sourcingAttemptsCount} attempt(s) and found 0 qualified matches. Aria was skipped because there were no accepted leads to rank. Try broadening the role, industry, or location — or pick another lead source. No leads were saved, no credits charged, and nothing was sent.`
+      : `Scout ran ${sourcingAttemptsCount} attempt(s) and found 0 qualified matches. Try broadening the role, industry, or location — or pick another lead source. No leads were saved, no credits charged, and nothing was sent.`;
+
+    await supabase.from("tasks").update({
+      status: "complete",
+      result: { output: msg, no_qualified_matches: true, attempt_log: adaptiveAttempts.length ? adaptiveAttempts : undefined },
+    }).eq("id", task.id);
+    await supabase.from("task_plans").update({ status: "failed", completed_at: new Date().toISOString() }).eq("id", plan_id);
+
+    if (ariaFollows && nextStepSlug === "aria") {
+      await supabase.from("activity_feed").insert({
+        workspace_id, plan_id, agent_id: agent.id, event_type: "handoff",
+        title: "Aria skipped — no accepted leads to rank",
+        body: "Scout accepted 0 qualified leads, so ranking was skipped.",
+        metadata: { step_index, task_id: task.id, skipped_agent: "aria", reason: "no_accepted_leads" },
+      });
+    }
+    await supabase.from("activity_feed").insert({
+      workspace_id, plan_id, agent_id: agent.id, event_type: "plan_complete",
+      title: "Plan failed — no qualified matches",
+      body: msg,
+      metadata: { step_index, task_id: task.id, workflow_status: "no_qualified_matches" },
+    });
+
+    try {
+      const { data: planMsg } = await supabase.from("messages").select("conversation_id").filter("metadata->>plan_id", "eq", plan_id).limit(1).maybeSingle();
+      const conversationId = (planMsg as { conversation_id?: string } | null)?.conversation_id ?? null;
+      if (conversationId) {
+        const card = {
+          kind: "lead_sourcing_error",
+          title: "No qualified matches found",
+          message: msg,
+          error: "no_qualified_matches",
+          retry_command: instruction,
+        };
+        await supabase.from("messages").insert({
+          conversation_id: conversationId, role: "assistant",
+          content: msg, agent_slug: "pilot",
+          metadata: { ui_card: card, lead_sourcing_error: true, plan_id, workflow_status: "no_qualified_matches", aria_skipped: ariaFollows },
+        });
+      }
+    } catch (e) { console.warn("[run-agent] no-qualified-matches card failed:", e); }
+    return json({ success: false, task_id: task.id, status: "no_qualified_matches", aria_skipped: ariaFollows });
   }
 
   const contextParts: string[] = [];

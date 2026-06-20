@@ -386,3 +386,34 @@ Deno.test("unsafe: send outreach now (auto-send via 'now')", async () => {
   const d = await classifyWorkflow("Find emails and send outreach now.");
   assertEquals(d.workflow_category, "unsafe_or_unsupported");
 });
+
+// ---- Phase 3: generic sourcing fallback must NOT silently default to jobs ----
+Deno.test("Phase3: 'Find more customers' → clarification, not silent jobs", async () => {
+  const d = await classifyWorkflow("Find more customers");
+  assert(d.selected_actor_key !== "apify_jobs", "must not silently pick jobs");
+  assert(d.needs_clarification, "should ask which source");
+});
+
+Deno.test("Phase3: bare 'find some leads' → clarification, not jobs", async () => {
+  const d = await classifyWorkflow("find some leads");
+  assertEquals(d.workflow_category, "signal_sourcing");
+  assertEquals(d.selected_actor_key, null);
+  assert(d.needs_clarification);
+});
+
+Deno.test("Phase3: 'Find me leads' classifier → not jobs (pilot shows selector)", async () => {
+  const d = await classifyWorkflow("Find me leads");
+  assert(d.selected_actor_key !== "apify_jobs", "broad lead ask must not default to jobs");
+});
+
+Deno.test("Phase3 regression: explicit companies-hiring still → jobs", async () => {
+  const d = await classifyWorkflow("Find 5 companies hiring React engineers in London");
+  assertEquals(d.workflow_category, "company_hiring_sourcing");
+  assertEquals(d.selected_actor_key, "apify_jobs");
+});
+
+Deno.test("Phase3: clear company/category intent → jobs (company search source)", async () => {
+  const d = await classifyWorkflow("find companies in fintech");
+  assertEquals(d.workflow_category, "company_hiring_sourcing");
+  assertEquals(d.selected_actor_key, "apify_jobs");
+});
