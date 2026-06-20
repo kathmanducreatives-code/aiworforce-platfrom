@@ -1,129 +1,116 @@
-# Premium Slack-style Chat Workspace + Pilot Avatar
 
-Make Agentory's chat workspace feel like a premium AI-employee command center. Chat-first by default, focused composer, real per-agent typing/working states, clean Workbench discipline. Also ship the new Pilot profile picture across the platform.
+# Agentory Chat → AI Employee Command Center
 
-No backend workflow logic changes. No DB migrations. No auto-send.
+Two-phase upgrade: (1) fix the chat composer/workspace glitches at the root, (2) give Pilot a real workflow brain powered by Lovable AI Gateway that knows what Agentory can do, what tools are configured, and what to do next — without any production-DB or auto-send changes.
 
-## 1. Pilot avatar (cross-platform)
+Guardrails respected end-to-end: no migrations (including 145631), no auto-send/DM/comment/post/email, all outbound stays draft-only and approval-gated, landing page untouched.
 
-- Save the uploaded image as `src/assets/agents/pilot.png` (via lovable-assets → `pilot.png.asset.json`, or direct asset import if other agent PNGs are local — match the existing pattern in `src/data/agentProfiles.ts`).
-- Update `PILOT_PROFILE.image` in `src/data/agentProfiles.ts` from `null` → the imported Pilot image.
-- All existing surfaces (`AgentAvatar` chat/workspace variant, WorkforceDock, CommandDock, ActivityTimeline, conversation rows, typing indicator) already resolve via `resolveAgent` / `AGENT_BY_ID`, so they pick up the new Pilot image automatically. Verify no place still renders a "P" initial fallback.
+---
 
-## 2. Default workspace state
+## Phase 1 — Composer & workspace stability (root causes)
 
-In `ChatWorkspaceContext.tsx`:
-- Keep `workbenchOpen` default `false` (already true).
-- Add `historyOpen` default `true` (currently defaults `false`) — but only on first open of the workspace (not every render).
-- Add `composerFocused: boolean` + `setComposerFocused`.
-- Auto-collapse: when `composerFocused` becomes `true`, call `closeHistory()`. Do not auto-reopen on blur.
-- `Esc` key: if `historyOpen` and composer focused → close history first, then fall through to existing close logic.
+Findings from auditing `ChatComposerPro.tsx`, `ChatView.tsx`, `ChatWorkspaceContext.tsx`, `ChatWorkspace.tsx`, `chatActions.ts`:
 
-In `ChatWorkspace.tsx`:
-- On mount of the workspace (mode flips to fullscreen), call `openHistory()` once if no explicit user toggle has happened yet.
-- Ensure Workbench remains closed unless a result/panel is explicitly produced (today `openWorkbench` is only called from result/panel events — keep as-is).
+1. `setComposerFocused(true)` calls `setHistoryOpen(false)` on every focus — combined with the focus-flip side effects, this causes the sidebar to collapse and the chat column to re-layout while typing begins, producing the perceived "jump".
+2. The textarea's `onSelect` runs `detectPopup` on every keystroke (selection moves with each char), triggering popup state churn and re-renders that fight the controlled input.
+3. The autosize effect runs synchronously on every `value` change without `requestAnimationFrame`, causing height thrash on fast typing and paste.
+4. `chat:send` / `chat:prefill` window listeners are registered with an empty dep array but read `submit`/`workspaceId` from closure — stale closures + double registration in StrictMode can drop or duplicate sends.
+5. `ChatView` likely re-keys/remounts on `workbenchOpen`/`historyOpen` changes via parent layout; composer state survives only because it's not under that subtree, but suggestion popups and typing indicators do remount.
+6. `setPending` is called before `setValue('')`, and the realtime subscription may echo the user message before pending clears → brief duplicate bubble flash.
+7. No IME composition guard on Enter → kana/pinyin/etc. send half-composed text.
 
-## 3. Conversation history drawer
+Fixes:
+- Stop coupling focus to history. Move "collapse history on first focus" to a one-shot triggered by the first non-empty keystroke after focus, not by `onFocus` itself; gate it behind a ref so it never fires twice for the same focus session.
+- Replace `onSelect`-driven popup detection with an `onChange`+caret check, and only run `detectPopup` when the last typed char is `@`, `#`, `/`, or while a popup is already open.
+- Wrap autosize in `requestAnimationFrame` and bail when `scrollHeight` hasn't changed; clamp once on paste via a `useLayoutEffect`.
+- Convert the `chat:send` / `chat:prefill` listeners to use a ref-backed `submitRef.current(...)` so the handler identity is stable and StrictMode double-mount is safe.
+- Add IME guard: track `onCompositionStart/End` and ignore Enter while composing.
+- Order optimistic state correctly: `setValue('')` → `setPending(...)` → fire request; on realtime echo, dedupe pending by `(conversation_id, client_msg_id)`.
+- Add `React.memo` + stable keys to `MessageList`, agent typing indicators, and Workbench panel so opening/closing Workbench or history never remounts the composer subtree.
+- Workspace context: split `workbenchOpen`/`historyOpen`/`composerFocused` into separate contexts (or selectors) so composer doesn't re-render when those toggle.
 
-Upgrade `ConversationsSidebar.tsx` and the drawer in `ChatWorkspace.tsx`:
+Acceptance for Phase 1:
+- Fast typing, long paste, multiline, backspace, IME input: no flicker, no lost chars, no focus loss.
+- Toggling history or Workbench mid-typing does not reset input or move the caret.
+- Agent typing indicator appears/disappears without shifting composer.
+- Send clears input only after request resolves; failure restores text into composer.
 
-- Header row:
-  - `+ New chat` button (primary emerald pill).
-  - Search input (filters by `title` client-side).
-  - Filters: All / Active / Done (already there — keep).
-- Conversation row:
-  - Use real `AgentAvatar` (chat/workspace variant) instead of `InitialCircle`.
-  - Hover reveals a kebab menu (`⋯`) with: Rename, Delete.
-  - "New result" dot: small emerald pulse on rows where `updated_at > lastSeen` and conversation isn't active.
-- Replace ad-hoc avatars + add active-row highlight (emerald left border).
-- Drawer auto-closes when composer is focused; reopens via top-bar `PanelLeft` button or `Cmd/Ctrl+B`.
+---
 
-New hook `useConversationActions` in `src/hooks/useConversationActions.ts`:
-- `createConversation()` → inserts row in `conversations`, opens it, closes Workbench, focuses composer.
-- `renameConversation(id, title)` → optimistic update + supabase update.
-- `deleteConversation(id)` → supabase delete, navigate to most recent remaining conversation or `{ kind: 'empty' }`.
+## Phase 2 — Workflow brain (Pilot)
 
-New components:
-- `ConversationRowMenu.tsx` (dropdown with Rename/Delete).
-- `RenameConversationDialog.tsx` (inline-or-modal; simple modal w/ shadcn Dialog).
-- `DeleteConversationDialog.tsx` (shadcn AlertDialog with "Delete conversation?" copy).
-- `ChatHeaderMenu.tsx` — kebab in `ChatView` header to rename/delete current chat.
+### 2a. Workflow Capability Registry
+New `src/lib/workflows/capabilities.ts` exporting a typed `WORKFLOW_CAPABILITIES: WorkflowCapability[]` covering the full list in the brief (GTM/lead, market/competitor, content, ops/intelligence, product). Each entry: id, owning agent, tool(s), required/optional context, example prompts, output kind (workbench panel), `safety_level`, `enabled`, `fallback`.
 
-Keyboard:
-- `Cmd/Ctrl+N` → new chat.
-- `Cmd/Ctrl+B` → toggle history.
-- `Esc` → close history when open.
+### 2b. Tool Availability Registry
+New `src/lib/workflows/tools.ts` + a thin edge function `tool-availability` that returns the runtime-configured state of: Lovable AI/Gemini, Claude (if key present), Apify jobs/people/posts/comments actors (via env flags already in secrets — e.g. `APIFY_ENABLE_PEOPLE_SEARCH`), Firecrawl, Resend (drafts only), Supabase storage, CSV export. Each tool reports `enabled`, `configured`, `reason_if_unavailable`, `fallback_workflow`. Cached client-side per session.
 
-## 4. Composer focus behavior
+### 2c. Smart router (`pilot-chat` upgrade)
+Replace the current ad-hoc routing in `supabase/functions/pilot-chat` with a two-pass design:
 
-In `ChatComposerPro.tsx`:
-- `onFocus` → `setComposerFocused(true)` + `closeHistory()`.
-- `onBlur` → `setComposerFocused(false)` (do NOT reopen history).
-- Preserve typed text (don't unmount).
-- Smooth Sheet slide-out (already animated by shadcn Sheet — fine).
+1. Deterministic pre-checks: safety refusals (auto-send patterns), structured card actions (already carry `action_source`), continuation of an active workbench artifact, slash commands.
+2. LLM intent classification via Lovable AI Gateway (`google/gemini-3-flash-preview`) using the capability + tool registries as the schema. Returns the `WorkflowRoutingDecision` shape from the brief. Use AI SDK `Output.object` with a small Zod schema; keep enum of workflow IDs short to avoid Gemini's structured-output limit.
+3. Post-checks: enforce `safety_decision`, downgrade to `draft_only` when applicable, force `should_run=false` when required tool is disabled and surface fallback.
 
-## 5. Workbench discipline
+Priority order matches the brief (safety → card actions → artifact ops → new intent → memory → general Q&A).
 
-Already opens only via `openWorkbench(sel)` from result panel emissions. Confirm:
-- `ChatWorkspace` mount does not call `openWorkbench`.
-- `setView({ kind: 'chat' ... })` (clicking a conversation row) does NOT auto-open Workbench. Add: when switching conversations, call `closeWorkbench()` unless the target conversation has a pending panel selection.
-- "View results" pills on result-producing messages already trigger `openWorkbench` — verify in `PostLeadActionsCard`. Add a small toast: `"Result opened in Workbench"`.
+### 2d. Context loader
+Before routing, `pilot-chat` loads: Company Brain profile, last N messages, latest workbench artifact for the conversation, available tools. This object is passed into the classifier prompt so Pilot can default to ICP, reuse known competitors, etc., and ask at most one focused clarification (or open a structured form card when many fields are missing).
 
-## 6. Agent typing / working indicator
+### 2e. Execution planner
+New `src/lib/workflows/planner.ts` (server-mirrored in `_shared/planner.ts`) maps a `workflow_id` → ordered steps with prechecks, agents, tools, success criteria, fallback. `run-agent` consumes this plan instead of per-workflow branches.
 
-Create `src/components/chat/workspace/AgentTypingIndicator.tsx`:
-- Props: `slug`, `verb` (e.g. "sourcing", "ranking", "drafting", "researching", "writing", "thinking"), optional `subtle`.
-- Renders: `<AgentAvatar size="sm" status="thinking" />` + `{Name} is {verb}` + 3-dot framer-motion staggered pulse + soft accent glow ring.
-- Use agent's `accentHex` for dots/ring.
+### 2f. Self-check / verification
+After each step, planner records: tool actually invoked, output count vs requested, status (`complete | partial | failed`), and whether any unsafe action was attempted. Status surfaces honestly in the workbench panel and chat. No LLM-fabricated "done" when the underlying tool errored or is disabled.
 
-Replace the existing `TypingDots` block at `ChatView.tsx:232-243` with `AgentTypingIndicator`. Pick verb from a helper `inferVerb(slug, lastWorkflowStep)`:
-- pilot → "thinking" / "coordinating"
-- scout → "sourcing"
-- aria → "ranking"
-- hawk → "researching"
-- penn → "drafting"
-- scribe → "writing"
+### 2g. Typing/working indicators
+Wire the existing `AgentTypingIndicator` to the planner's `step_id`/`agent_id` stream so the right agent (Pilot → Scout → Aria → Hawk → Penn → Scribe) appears at the right moment, keyed by `(conversation_id, plan_id, step_id)` so they never duplicate or shift layout.
 
-Plug the indicator into `AgentBubble.tsx` `state === 'thinking'` branch too (replace inline implementation), and into `ConversationView` if it renders a pending state.
+### 2h. General Q&A mode
+When `intent = qa`, Pilot answers from the capability registry + current context, never invoking Apify/Firecrawl. "What can you do?", "Why did this fail?", "What does Scout do?" become first-class.
 
-For execution-state messaging across multiple agents in one turn (Scout → Aria → Pilot), the typing indicator subscribes to the active plan's current step (already surfaced via plan/task data) and updates the verb + agent slug as steps progress. Read from existing `usePlanDetail` / activity timeline data; do not change backend.
+### 2i. Safety
+Hard-refuse list enforced in router AND in `run-agent` (defense in depth): no auto-DM/email/comment/post/send, no fabricated contacts/emails, disabled tools never silently "succeed".
 
-## 7. UI style polish
+---
 
-- Conversation rows: compact (h-9), agent avatar 24px, active row has left-edge emerald accent bar, hover reveals `⋯`.
-- Drawer: glass surface `bg-background/80 backdrop-blur-xl`, subtle inner border.
-- Active agent glow in WorkforceDock when their plan step is running (uses existing accent).
-- Smooth Sheet animation already in place.
+## Files to add / change
 
-## 8. Files touched
+Add:
+- `src/lib/workflows/capabilities.ts`, `tools.ts`, `planner.ts`, `router.ts` (client types + helpers)
+- `src/lib/workflows/useToolAvailability.ts` (cached hook)
+- `supabase/functions/_shared/workflows/{capabilities,tools,planner,router,safety}.ts`
+- `supabase/functions/tool-availability/index.ts` (read-only env probe)
+- Tests under `src/lib/workflows/__tests__/` and `src/components/chat/workspace/__tests__/`
 
-```text
-new:
-  src/components/chat/workspace/AgentTypingIndicator.tsx
-  src/components/chat/workspace/ConversationRowMenu.tsx
-  src/components/chat/workspace/RenameConversationDialog.tsx
-  src/components/chat/workspace/DeleteConversationDialog.tsx
-  src/components/chat/workspace/ChatHeaderMenu.tsx
-  src/hooks/useConversationActions.ts
-  src/assets/agents/pilot.png (+ .asset.json if using CDN)
+Change:
+- `src/components/chat/workspace/ChatComposerPro.tsx` — focus/popup/autosize/IME/listener fixes
+- `src/contexts/ChatWorkspaceContext.tsx` — decouple focus from history; split context
+- `src/components/chat/workspace/ChatView.tsx` + `ChatWorkspace.tsx` — memoization, stable keys
+- `src/lib/chatActions.ts` — pending/echo dedupe, client_msg_id
+- `supabase/functions/pilot-chat/index.ts` — two-pass router + context loader (Lovable AI Gateway)
+- `supabase/functions/run-agent/index.ts` — execute via planner + self-check
+- `supabase/functions/orchestrate/index.ts` — emit step events for typing indicators
 
-edited:
-  src/data/agentProfiles.ts            (Pilot image)
-  src/contexts/ChatWorkspaceContext.tsx (default historyOpen, composerFocused, esc/kbd)
-  src/components/chat/workspace/ChatWorkspace.tsx (mount-time open history, kbd shortcuts)
-  src/components/chat/workspace/ConversationsSidebar.tsx (new chat btn, search, row menu, AgentAvatar)
-  src/components/chat/workspace/ChatComposerPro.tsx (focus/blur wiring)
-  src/components/chat/workspace/ChatView.tsx (AgentTypingIndicator, header menu)
-  src/components/chat/workspace/ConversationView.tsx (use AgentTypingIndicator)
-  src/components/chat/workspace/bubbles/AgentBubble.tsx (use AgentTypingIndicator)
-  src/components/chat/workspace/bubbles/PostLeadActionsCard.tsx (toast on View results)
-```
+Do NOT touch: landing page, any DB migration, production tables, auth schema.
 
-## 9. Verification
+---
 
-- `bunx tsc --noEmit`
-- Browser QA per spec (Test A–H): open workspace → history open + workbench closed; focus composer → history collapses; new/rename/delete flows; lead workflow shows Scout/Aria typing indicators then Workbench opens; close Workbench → "View results" reopens it.
-- Confirm Pilot avatar appears in: WorkforceDock, CommandDock, ConversationsSidebar (any pilot convo), typing indicator, ActivityTimeline.
+## Tests (Vitest + manual QA)
 
-## Constraints honored
-- No backend workflow/route changes, no DB migration, no `145631`, no auto-send/DM/email, drafts stay approval-gated, landing untouched, existing Lead Source Selector / Dynamic Lead Brief / dispatchChatAction / dispatchResultAction / LeadResultsView / locked columns / capped persistence untouched.
+Composer: typing-doesn't-reset across history/Workbench toggles, IME safe, paste long, multiline, send-clears-only-on-success, prefill/send events fire once.
+
+Router: hiring search, founder/profile (or honest fallback when people actor off), competitor engagement, content draft, outreach draft (blocks if no contacts), refuses auto-send, uses Company Brain defaults, single focused clarification, save-only doesn't catch new sourcing, memory-refine doesn't catch new workflow, failed tool stays failed, partial stays partial, Workbench opens correct artifact, disabled tool shows honest fallback, general Q&A doesn't run tools.
+
+Browser QA script per the brief's section 15.
+
+---
+
+## Out of scope (per your rules)
+- No DB migrations, including 145631.
+- No production data changes.
+- No auto-send/DM/comment/post/email anywhere; all outbound stays draft + approval.
+- No landing page edits.
+
+## Final report (delivered after build)
+Root cause of typing glitches, files changed, registry contents, router behavior matrix, planner self-check examples, fallback matrix, safety matrix, test results, `tsc`/Deno/build results, browser QA results, remaining gaps.
