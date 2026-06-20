@@ -38,19 +38,6 @@ function CopyButton({ text }: { text: string }) {
   );
 }
 
-function TypingDots() {
-  return (
-    <span className="inline-flex items-center gap-1 ml-1">
-      {[0, 200, 400].map((d) => (
-        <span
-          key={d}
-          className="h-1 w-1 rounded-full bg-[#484F58] animate-pulse"
-          style={{ animationDelay: `${d}ms`, animationDuration: '1s' }}
-        />
-      ))}
-    </span>
-  );
-}
 
 interface Props {
   conversationId: string;
