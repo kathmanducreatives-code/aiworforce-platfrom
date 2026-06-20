@@ -191,6 +191,28 @@ export default function ChatWorkspace() {
   );
 }
 
+function NewChatButton() {
+  // Lazy import to avoid circular module loads at top of file
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  const { useConversationActions } = require('@/hooks/useConversationActions');
+  const { createConversation } = useConversationActions();
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <button
+          onClick={() => void createConversation('pilot')}
+          className="h-7 w-7 inline-flex items-center justify-center rounded hover:bg-foreground/5 text-muted-foreground hover:text-foreground"
+          aria-label="New chat"
+          title="New chat (⌘N)"
+        >
+          <Plus className="h-3.5 w-3.5" />
+        </button>
+      </TooltipTrigger>
+      <TooltipContent side="bottom">New chat</TooltipContent>
+    </Tooltip>
+  );
+}
+
 function MobileNav() {
   const { setView } = useChatWorkspace();
   const tabs: { id: string; label: string; onClick: () => void }[] = [
