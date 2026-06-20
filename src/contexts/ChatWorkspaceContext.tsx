@@ -106,9 +106,11 @@ export const ChatWorkspaceProvider = ({ children }: { children: ReactNode }) => 
   const [composerFocused, setComposerFocusedState] = useState(false);
   const closeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  // NOTE: do NOT auto-close history on focus. That coupling caused layout
+  // jumps the moment the user clicked into the composer. History collapse is
+  // now an explicit user action (or first-keystroke handled by the composer).
   const setComposerFocused = useCallback((v: boolean) => {
     setComposerFocusedState(v);
-    if (v) setHistoryOpen(false);
   }, []);
 
   const openWorkbench = useCallback((sel: WorkbenchSelection) => {
