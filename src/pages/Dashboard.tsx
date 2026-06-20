@@ -2,7 +2,6 @@ import { useState } from 'react';
 import { useWorkspace } from '@/contexts/WorkspaceContext';
 import { useWorkforceState } from '@/hooks/useWorkforceState';
 import CompanyBrainStrip from '@/components/workforce/CompanyBrainStrip';
-import CompanyBrainStatusCard from '@/components/dashboard/CompanyBrainStatusCard';
 import PilotBriefing from '@/components/workforce/PilotBriefing';
 import AgentDock from '@/components/workforce/AgentDock';
 import WorkflowTimeline from '@/components/workforce/WorkflowTimeline';
@@ -10,6 +9,7 @@ import WorkforceDock from '@/components/workforce/WorkforceDock';
 import DepartmentPreview from '@/components/workforce/DepartmentPreview';
 import WorkforceHandoffStrip from '@/components/workforce/WorkforceHandoffStrip';
 import type { AgentId } from '@/components/workforce/agents';
+
 
 const Dashboard = () => {
   const { workspaceId } = useWorkspace();
@@ -28,12 +28,9 @@ const Dashboard = () => {
 
         <div className="grid grid-cols-12 gap-5">
           <div className="col-span-12">
-            <CompanyBrainStatusCard />
-          </div>
-
-          <div className="col-span-12">
             <PilotBriefing totals={totals} />
           </div>
+
 
           <section className="col-span-12 space-y-3">
             <div className="flex items-end justify-between px-0.5">
