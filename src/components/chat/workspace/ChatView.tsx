@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Copy, Check } from 'lucide-react';
 import { useChatConversation } from '@/hooks/useChatConversation';
 import { useChatWorkspace, type LeadResultsPanelMeta } from '@/contexts/ChatWorkspaceContext';
-import { resolveAgent, resolveAgentFromMetadata } from '@/lib/agentResolver';
+import { resolveAgentFromMetadata } from '@/lib/agentResolver';
 import { cn } from '@/lib/utils';
 import ExecutionPlanCard from './plan/ExecutionPlanCard';
 import ClarificationCard from './bubbles/ClarificationCard';
@@ -51,7 +51,7 @@ export default function ChatView({ conversationId, agentSlug, pendingUserText, a
   const { openWorkbench } = useChatWorkspace();
   const openedPanelsRef = useRef<Set<string>>(new Set());
   const scrollRef = useRef<HTMLDivElement>(null);
-  const profile = resolveAgent(agentSlug);
+  
 
   // Hide pending user text once it appears in real messages
   const showPending = pendingUserText && !messages.some(
