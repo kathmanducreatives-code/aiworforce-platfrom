@@ -110,6 +110,10 @@ export default function ChatComposerPro({ restrictDepartment, placeholder, autoF
     if (autoFocus) taRef.current?.focus();
   }, [autoFocus]);
 
+  // Stable ref to the latest submit() so window listeners never go stale
+  // (and StrictMode double-mount can't drop/duplicate dispatched sends).
+  const submitRef = useRef<(text: string, opts?: Parameters<typeof submit>[1]) => void>(() => {});
+
   // External prefill (from EmptyState rows)
   useEffect(() => {
     const onPrefill = (e: Event) => {
@@ -131,8 +135,7 @@ export default function ChatComposerPro({ restrictDepartment, placeholder, autoF
             ? (raw as { text: string; conversation_id?: string | null; action_source?: string; metadata?: Record<string, unknown> })
             : null);
       if (!detail || !detail.text.trim()) return;
-      setValue('');
-      void submit(detail.text, {
+      submitRef.current(detail.text, {
         conversationIdOverride: detail.conversation_id ?? null,
         actionSource: detail.action_source ?? null,
         metadata: detail.metadata,
@@ -144,7 +147,6 @@ export default function ChatComposerPro({ restrictDepartment, placeholder, autoF
       window.removeEventListener('chat:prefill', onPrefill);
       window.removeEventListener('chat:send', onSend);
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const detectPopup = (text: string, caret: number) => {
