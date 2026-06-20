@@ -450,6 +450,8 @@ export default function ChatComposerPro({ restrictDepartment, placeholder, autoF
           value={value}
           onChange={handleChange}
           onKeyDown={handleKeyDown}
+          onCompositionStart={() => { composingRef.current = true; }}
+          onCompositionEnd={() => { composingRef.current = false; }}
           onFocus={() => {
             if (openOnFocus && mode === 'closed') open();
             setComposerFocused(true);
@@ -459,7 +461,6 @@ export default function ChatComposerPro({ restrictDepartment, placeholder, autoF
             setComposerFocused(false);
             setTimeout(() => setShowSuggestions(false), 100);
           }}
-          onSelect={(e) => detectPopup(value, (e.target as HTMLTextAreaElement).selectionStart ?? value.length)}
           placeholder={placeholder ?? (view.kind === 'channel' ? `Message #${view.dept}…` : 'Message your workforce...')}
           className="flex-1 resize-none bg-transparent outline-none text-[14px] leading-relaxed text-[#F0F6FC] placeholder:text-[#484F58] max-h-[240px] min-h-[24px] py-1 px-1"
         />
