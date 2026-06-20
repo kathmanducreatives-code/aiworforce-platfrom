@@ -285,6 +285,12 @@ export default function ChatComposerPro({ restrictDepartment, placeholder, autoF
   });
 
   const handleKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
+    // IME composition guard — never act on Enter while user is composing
+    // (kana, pinyin, hangul, etc.). `e.nativeEvent.isComposing` covers most
+    // browsers; the ref catches the rest.
+    const composing = composingRef.current || (e.nativeEvent as KeyboardEvent['nativeEvent'] & { isComposing?: boolean }).isComposing;
+    if (composing) return;
+
     if (popup) {
       const list =
         popup === 'mention' ? mentionCandidates :
@@ -311,7 +317,7 @@ export default function ChatComposerPro({ restrictDepartment, placeholder, autoF
     }
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
-      submit();
+      void submit();
     }
   };
 
