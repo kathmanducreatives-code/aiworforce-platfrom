@@ -32,7 +32,7 @@ export function useConversationActions() {
         .select('id, agent_slug')
         .single();
       if (error || !data) throw error ?? new Error('Failed to create');
-      const row = data as { id: string; agent_slug: string };
+      const row = data as unknown as { id: string; agent_slug: string };
       closeWorkbench();
       setView({ kind: 'chat', conversationId: row.id, agentSlug: row.agent_slug });
       return row.id;
