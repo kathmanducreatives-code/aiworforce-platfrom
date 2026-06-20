@@ -99,6 +99,7 @@ export default function ChatWorkspace() {
                 </div>
               </div>
               <div className="flex items-center gap-1">
+                <NewChatButton />
                 <button
                   onClick={close}
                   className="h-7 w-7 inline-flex items-center justify-center rounded hover:bg-foreground/5 text-muted-foreground hover:text-foreground"
