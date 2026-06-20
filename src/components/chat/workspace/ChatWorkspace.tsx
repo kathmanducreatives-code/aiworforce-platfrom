@@ -17,6 +17,7 @@ import { Sheet, SheetContent } from '@/components/ui/sheet';
 import ResizableWorkspaceSplit from './ResizableWorkspaceSplit';
 import { ChatPaneWidthProvider } from './ChatPaneWidthContext';
 import { TooltipProvider, Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
+import { useConversationActions } from '@/hooks/useConversationActions';
 
 const NARROW_SPLIT_THRESHOLD = 1000;
 
@@ -192,9 +193,6 @@ export default function ChatWorkspace() {
 }
 
 function NewChatButton() {
-  // Lazy import to avoid circular module loads at top of file
-  // eslint-disable-next-line @typescript-eslint/no-var-requires
-  const { useConversationActions } = require('@/hooks/useConversationActions');
   const { createConversation } = useConversationActions();
   return (
     <Tooltip>
