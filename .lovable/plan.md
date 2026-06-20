@@ -1,87 +1,129 @@
-# Slack-style AI Employee Chat — Implementation Plan
+# Premium Slack-style Chat Workspace + Pilot Avatar
 
-Goal: every assistant/workflow message, plan card, handoff, and Activity log shows the correct agent's profile picture (Scout/Aria/Hawk/Penn/Scribe) using the PNGs already in `src/assets/agents/`. Pilot keeps a premium "P" initials avatar (no remote/base64). No backend changes.
+Make Agentory's chat workspace feel like a premium AI-employee command center. Chat-first by default, focused composer, real per-agent typing/working states, clean Workbench discipline. Also ship the new Pilot profile picture across the platform.
 
-## 1. Single source-of-truth profile config
+No backend workflow logic changes. No DB migrations. No auto-send.
 
-Update `src/data/agentProfiles.ts` (do **not** create a duplicate file):
+## 1. Pilot avatar (cross-platform)
 
-- Add a `pilot` profile entry with `image: null` (Pilot has no PNG), `department: 'operations'`, `role: 'Manager'`, model unchanged or omitted.
-- Add fields per profile: `accent` (existing dept hex/tailwind), `description` (short blurb), `fallback` initial.
-- Make `AgentProfile.image` `string | null`; update existing consumers that assume non-null (small grep pass — `AgentAvatar`, `dockAgents.ts`, etc.) to handle null via initial fallback.
-- Continue exporting `AGENT_BY_ID` / `AGENT_BY_NAME`, plus a new helper `resolveAgent(slugOrName)` that lowercases and falls back to Pilot.
+- Save the uploaded image as `src/assets/agents/pilot.png` (via lovable-assets → `pilot.png.asset.json`, or direct asset import if other agent PNGs are local — match the existing pattern in `src/data/agentProfiles.ts`).
+- Update `PILOT_PROFILE.image` in `src/data/agentProfiles.ts` from `null` → the imported Pilot image.
+- All existing surfaces (`AgentAvatar` chat/workspace variant, WorkforceDock, CommandDock, ActivityTimeline, conversation rows, typing indicator) already resolve via `resolveAgent` / `AGENT_BY_ID`, so they pick up the new Pilot image automatically. Verify no place still renders a "P" initial fallback.
 
-This becomes the only place avatars/roles are defined.
+## 2. Default workspace state
 
-## 2. New shared `AgentAvatar` for the chat workspace
+In `ChatWorkspaceContext.tsx`:
+- Keep `workbenchOpen` default `false` (already true).
+- Add `historyOpen` default `true` (currently defaults `false`) — but only on first open of the workspace (not every render).
+- Add `composerFocused: boolean` + `setComposerFocused`.
+- Auto-collapse: when `composerFocused` becomes `true`, call `closeHistory()`. Do not auto-reopen on blur.
+- `Esc` key: if `historyOpen` and composer focused → close history first, then fall through to existing close logic.
 
-Add `src/components/chat/workspace/agents/AgentAvatar.tsx`:
+In `ChatWorkspace.tsx`:
+- On mount of the workspace (mode flips to fullscreen), call `openHistory()` once if no explicit user toggle has happened yet.
+- Ensure Workbench remains closed unless a result/panel is explicitly produced (today `openWorkbench` is only called from result/panel events — keep as-is).
 
-- Props: `slug`, `size` (`xs|sm|md|lg`, default sm = 28px), `status?: 'idle'|'thinking'|'running'|'done'|'blocked'`, `ring?: boolean`.
-- Renders circular `<img src={profile.image}>` when present; otherwise a tinted initials circle using the existing dept hex (Pilot uses emerald "P").
-- Adds subtle dept-accent ring and an optional animated pulse glow when `status` is `thinking`/`running`.
-- Uses `onError` to fall back to initials so a missing/broken file never shows a broken image icon.
+## 3. Conversation history drawer
 
-Re-export from `@/components/chat/workspace/agents` for easy imports. The existing `src/components/agents/AgentAvatar.tsx` is left alone (used by /agents pages).
+Upgrade `ConversationsSidebar.tsx` and the drawer in `ChatWorkspace.tsx`:
 
-## 3. Slack-style chat bubbles (`ChatView.tsx`)
+- Header row:
+  - `+ New chat` button (primary emerald pill).
+  - Search input (filters by `title` client-side).
+  - Filters: All / Active / Done (already there — keep).
+- Conversation row:
+  - Use real `AgentAvatar` (chat/workspace variant) instead of `InitialCircle`.
+  - Hover reveals a kebab menu (`⋯`) with: Rename, Delete.
+  - "New result" dot: small emerald pulse on rows where `updated_at > lastSeen` and conversation isn't active.
+- Replace ad-hoc avatars + add active-row highlight (emerald left border).
+- Drawer auto-closes when composer is focused; reopens via top-bar `PanelLeft` button or `Cmd/Ctrl+B`.
 
-Replace the local `InitialCircle` with `AgentAvatar`:
+New hook `useConversationActions` in `src/hooks/useConversationActions.ts`:
+- `createConversation()` → inserts row in `conversations`, opens it, closes Workbench, focuses composer.
+- `renameConversation(id, title)` → optimistic update + supabase update.
+- `deleteConversation(id)` → supabase delete, navigate to most recent remaining conversation or `{ kind: 'empty' }`.
 
-- Each assistant message renders: avatar (sm), then header row with `Name` + dept-colored `· Role` chip, then bubble body.
-- Group consecutive messages by same `agent_slug`: avatar + name only on the first; subsequent messages indent and skip the header (Slack-style).
-- Typing indicator uses `AgentAvatar` for the agent currently expected to reply (derive from latest plan step / `agentSlug` prop, default Pilot).
-- Keep bubble styles (glass for structured, plain text otherwise) — only the identity row changes.
-- Agent resolution order per message: `metadata.agent_id` → `metadata.agent` → `m.agent_slug` → workflow-step heuristic (`source_*`→scout, `rank_*`/`score_*`→aria, `enrich_*`/`research_*`→hawk, `draft_*`/`outreach_*`→penn, `content_*`/`report_*`→scribe) → Pilot.
+New components:
+- `ConversationRowMenu.tsx` (dropdown with Rename/Delete).
+- `RenameConversationDialog.tsx` (inline-or-modal; simple modal w/ shadcn Dialog).
+- `DeleteConversationDialog.tsx` (shadcn AlertDialog with "Delete conversation?" copy).
+- `ChatHeaderMenu.tsx` — kebab in `ChatView` header to rename/delete current chat.
 
-Add a tiny helper `src/lib/agentResolver.ts` for that resolution (pure function, unit-friendly).
+Keyboard:
+- `Cmd/Ctrl+N` → new chat.
+- `Cmd/Ctrl+B` → toggle history.
+- `Esc` → close history when open.
 
-## 4. Execution plan card + handoff row
+## 4. Composer focus behavior
 
-- `src/components/chat/workspace/plan/AgentBadge.tsx`: swap the letter circle for `<AgentAvatar size="xs" />`; keep the colored name label.
-- `src/components/chat/workspace/bubbles/HandoffRow.tsx`: already uses images via `profileById`; extend to render Pilot fallback when `from`/`to` resolves to pilot. Add a small "Pilot → Scout → Aria → Pilot" caption when the parent passes a chain.
-- `AgentBubble.tsx` (used by structured agent bubbles) keeps its avatar but routes through `AgentAvatar` for consistency.
+In `ChatComposerPro.tsx`:
+- `onFocus` → `setComposerFocused(true)` + `closeHistory()`.
+- `onBlur` → `setComposerFocused(false)` (do NOT reopen history).
+- Preserve typed text (don't unmount).
+- Smooth Sheet slide-out (already animated by shadcn Sheet — fine).
 
-## 5. Workbench Activity timeline
+## 5. Workbench discipline
 
-`src/components/chat/workspace/workbench/ActivityTimeline.tsx`:
+Already opens only via `openWorkbench(sel)` from result panel emissions. Confirm:
+- `ChatWorkspace` mount does not call `openWorkbench`.
+- `setView({ kind: 'chat' ... })` (clicking a conversation row) does NOT auto-open Workbench. Add: when switching conversations, call `closeWorkbench()` unless the target conversation has a pending panel selection.
+- "View results" pills on result-producing messages already trigger `openWorkbench` — verify in `PostLeadActionsCard`. Add a small toast: `"Result opened in Workbench"`.
 
-- Read `a.agent_id` / `a.metadata?.agent` from `DBActivity`; resolve via `resolveAgent`.
-- Replace the green dot bullet with a 20px `AgentAvatar` aligned on the timeline rail.
-- Title rewritten as "{AgentName} {verb}" (Scout searched LinkedIn Jobs, Aria ranked 5 accounts, Pilot opened Workbench) using a small map keyed by `event_type`.
-- Empty state copy stays.
+## 6. Agent typing / working indicator
 
-## 6. Compact post-result pills (already partly done)
+Create `src/components/chat/workspace/AgentTypingIndicator.tsx`:
+- Props: `slug`, `verb` (e.g. "sourcing", "ranking", "drafting", "researching", "writing", "thinking"), optional `subtle`.
+- Renders: `<AgentAvatar size="sm" status="thinking" />` + `{Name} is {verb}` + 3-dot framer-motion staggered pulse + soft accent glow ring.
+- Use agent's `accentHex` for dots/ring.
 
-Confirm `PostLeadActionsCard.tsx` renders compact pills only (no giant card). Add a Pilot avatar + one-line completion sentence above the pills using `AgentAvatar size="xs"`. No logic changes to `dispatchChatAction`.
+Replace the existing `TypingDots` block at `ChatView.tsx:232-243` with `AgentTypingIndicator`. Pick verb from a helper `inferVerb(slug, lastWorkflowStep)`:
+- pilot → "thinking" / "coordinating"
+- scout → "sourcing"
+- aria → "ranking"
+- hawk → "researching"
+- penn → "drafting"
+- scribe → "writing"
 
-## 7. Agent presence bar (optional, low-risk addition)
+Plug the indicator into `AgentBubble.tsx` `state === 'thinking'` branch too (replace inline implementation), and into `ConversationView` if it renders a pending state.
 
-If room exists in the Workbench header / chat header, add `AgentPresenceBar` (new, ~60 lines) that lists Pilot, Scout, Aria, Hawk, Penn, Scribe as small avatars with a status dot derived from current plan tasks (`useWorkbenchData`). Hidden on narrow widths. Skip if header is already crowded — gated behind viewport width check.
+For execution-state messaging across multiple agents in one turn (Scout → Aria → Pilot), the typing indicator subscribes to the active plan's current step (already surfaced via plan/task data) and updates the verb + agent slug as steps progress. Read from existing `usePlanDetail` / activity timeline data; do not change backend.
 
-## 8. QA / verification
+## 7. UI style polish
 
-- `bun run typecheck` (no `image` null regressions).
-- Browser QA the five flows listed in the prompt (Lead, Decision-makers, Research, Draft, Content) and check avatars render from local PNGs; Pilot stays as initials.
-- Force a broken `image` to verify `onError` initials fallback (dev-only manual check).
-- Confirm no remote URLs / base64 introduced (`rg "data:image|https?://.*\\.png" src/data src/components/chat`).
+- Conversation rows: compact (h-9), agent avatar 24px, active row has left-edge emerald accent bar, hover reveals `⋯`.
+- Drawer: glass surface `bg-background/80 backdrop-blur-xl`, subtle inner border.
+- Active agent glow in WorkforceDock when their plan step is running (uses existing accent).
+- Smooth Sheet animation already in place.
 
-## Out of scope
+## 8. Files touched
 
-- No backend/edge-function changes.
-- No new image assets; Pilot stays as initials.
-- No changes to `dispatchChatAction` / `dispatchResultAction` logic, lead workflow, or conversation continuity.
-- `src/components/agents/AgentAvatar.tsx` and `src/components/workforce/AgentAvatar.tsx` left untouched (different surfaces).
+```text
+new:
+  src/components/chat/workspace/AgentTypingIndicator.tsx
+  src/components/chat/workspace/ConversationRowMenu.tsx
+  src/components/chat/workspace/RenameConversationDialog.tsx
+  src/components/chat/workspace/DeleteConversationDialog.tsx
+  src/components/chat/workspace/ChatHeaderMenu.tsx
+  src/hooks/useConversationActions.ts
+  src/assets/agents/pilot.png (+ .asset.json if using CDN)
 
-## Files touched
+edited:
+  src/data/agentProfiles.ts            (Pilot image)
+  src/contexts/ChatWorkspaceContext.tsx (default historyOpen, composerFocused, esc/kbd)
+  src/components/chat/workspace/ChatWorkspace.tsx (mount-time open history, kbd shortcuts)
+  src/components/chat/workspace/ConversationsSidebar.tsx (new chat btn, search, row menu, AgentAvatar)
+  src/components/chat/workspace/ChatComposerPro.tsx (focus/blur wiring)
+  src/components/chat/workspace/ChatView.tsx (AgentTypingIndicator, header menu)
+  src/components/chat/workspace/ConversationView.tsx (use AgentTypingIndicator)
+  src/components/chat/workspace/bubbles/AgentBubble.tsx (use AgentTypingIndicator)
+  src/components/chat/workspace/bubbles/PostLeadActionsCard.tsx (toast on View results)
+```
 
-- edit `src/data/agentProfiles.ts` (add pilot, allow null image, helpers)
-- new `src/lib/agentResolver.ts`
-- new `src/components/chat/workspace/agents/AgentAvatar.tsx`
-- edit `src/components/chat/workspace/ChatView.tsx`
-- edit `src/components/chat/workspace/plan/AgentBadge.tsx`
-- edit `src/components/chat/workspace/bubbles/AgentBubble.tsx`
-- edit `src/components/chat/workspace/bubbles/HandoffRow.tsx`
-- edit `src/components/chat/workspace/bubbles/PostLeadActionsCard.tsx`
-- edit `src/components/chat/workspace/workbench/ActivityTimeline.tsx`
-- (optional) new `src/components/chat/workspace/agents/AgentPresenceBar.tsx`
+## 9. Verification
+
+- `bunx tsc --noEmit`
+- Browser QA per spec (Test A–H): open workspace → history open + workbench closed; focus composer → history collapses; new/rename/delete flows; lead workflow shows Scout/Aria typing indicators then Workbench opens; close Workbench → "View results" reopens it.
+- Confirm Pilot avatar appears in: WorkforceDock, CommandDock, ConversationsSidebar (any pilot convo), typing indicator, ActivityTimeline.
+
+## Constraints honored
+- No backend workflow/route changes, no DB migration, no `145631`, no auto-send/DM/email, drafts stay approval-gated, landing untouched, existing Lead Source Selector / Dynamic Lead Brief / dispatchChatAction / dispatchResultAction / LeadResultsView / locked columns / capped persistence untouched.
