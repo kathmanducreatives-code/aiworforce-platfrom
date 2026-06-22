@@ -180,7 +180,7 @@ export default function WorkforceDock({ agents, totals, brainComplete, selectedI
               badge={badge}
               ringHex={cfg.ringHex}
               onSelect={() => onSelect(id)}
-              onHoverChange={(h) => setHoverId(h ? id : (cur) => (cur === id ? null : cur) as AgentId | null)}
+              onHoverChange={(h) => setHoverId(h ? id : null)}
             />
           );
         })}
