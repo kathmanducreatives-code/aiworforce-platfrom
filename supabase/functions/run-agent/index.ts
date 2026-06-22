@@ -159,6 +159,10 @@ Deno.serve(async (req) => {
   // leads (not a tool failure). We then skip Aria — there is nothing to rank.
   let zeroAcceptedSourcing = false;
   let sourcingAttemptsCount = 0;
+  // AI Source Planner artifacts (carried into the Scout task result so the final
+  // step can render Workbench Insights + a definitive process narrative).
+  let sourcePlanMeta: Record<string, unknown> | null = null;
+  let sourceQualityMeta: Record<string, unknown> | null = null;
 
   if (agent_slug === "hawk" || agent_slug === "scout") {
     const baseCtx = {
@@ -246,9 +250,67 @@ Deno.serve(async (req) => {
         // on the query, roles, and location before the actor runs.
         const { normalizeTerm } = await import("../_shared/inputNormalize.ts");
         const rawQuery = (tool_input_body?.query as string) ?? instruction;
-        const normalizedQuery = normalizeTerm(rawQuery) || rawQuery;
+        let normalizedQuery = normalizeTerm(rawQuery) || rawQuery;
         roleKeywords = roleKeywords.map((r) => normalizeTerm(r)).filter(Boolean);
         if (location) location = normalizeTerm(location);
+
+        let plannedUserInput: Record<string, unknown> | undefined =
+          (tool_input_body?.user_input && typeof tool_input_body.user_input === "object")
+            ? tool_input_body.user_input as Record<string, unknown> : undefined;
+
+        // ---- AI Source Planner (Phase 4): Gemini shapes the best GENERIC actor
+        // input for the (already deterministically-selected) actor; a deterministic
+        // planner + validator are the authoritative fallback/guardrail. Never lets
+        // the model pick the actor or run a tool. Only runs when we know the actor's
+        // schema; otherwise the existing deterministic input is used unchanged.
+        try {
+          const { getActorInputSchema } = await import("../_shared/actorInputSchemas.ts");
+          const plannerSchema = getActorInputSchema(planned_actor_key);
+          if (plannerSchema) {
+            const { planActorInput } = await import("../_shared/actorInputPlanner.ts");
+            const { parseStrictConstraints: _psc } = await import("../_shared/sourcingRetry.ts");
+            const strictForPlan = _psc(instruction ?? "");
+            const postUrls = Array.isArray((plannedUserInput?.postUrls)) ? plannedUserInput!.postUrls as string[]
+              : ((instruction ?? "").match(/https?:\/\/(?:[a-z]{2,3}\.)?linkedin\.com\/[^\s)"']+/ig) ?? []);
+            const planRes = await planActorInput({
+              user_request: instruction ?? "",
+              actor_key: planned_actor_key!,
+              source_type: plannerSchema.source_type,
+              count: max_results,
+              normalized: {
+                role: roleKeywords[0] ?? (tool_input_body?.target_role as string) ?? undefined,
+                industry: (tool_input_body?.industry as string) ?? undefined,
+                location: location ?? undefined,
+                company_stage: (tool_input_body?.stage as string) ?? undefined,
+                topic: (tool_input_body?.query as string) ?? undefined,
+                count: max_results,
+              },
+              competitors: Array.isArray(tool_input_body?.competitors) ? tool_input_body.competitors as string[] : undefined,
+              post_urls: postUrls,
+              strict: strictForPlan,
+              strict_location_value: strictForPlan.location ? (location ?? null) : null,
+            });
+            const pin = planRes.input as Record<string, unknown>;
+            if (typeof pin.query === "string" && pin.query.trim()) normalizedQuery = pin.query.trim();
+            if (Array.isArray(pin.role_keywords) && (pin.role_keywords as unknown[]).length) roleKeywords = pin.role_keywords as string[];
+            if (typeof pin.location === "string" && pin.location.trim()) location = pin.location.trim();
+            if (pin.user_input && typeof pin.user_input === "object") {
+              plannedUserInput = { ...(plannedUserInput ?? {}), ...(pin.user_input as Record<string, unknown>) };
+            }
+            sourcePlanMeta = {
+              source: planRes.source,
+              actor_key: planned_actor_key,
+              primary_query: planRes.plan.query_strategy.primary_query,
+              role_aliases: planRes.plan.query_strategy.role_aliases ?? [],
+              broadening_level: planRes.plan.query_strategy.broadening_level,
+              expected_entity_type: planRes.plan.expected_entity_type,
+              validation_ok: planRes.validation.ok,
+              validation_warnings: planRes.validation.warnings,
+              missing_info: planRes.plan.missing_info,
+            };
+            console.log("[run-agent] source planner", { source: planRes.source, valid: planRes.validation.ok, query: normalizedQuery, roles: roleKeywords.length });
+          }
+        } catch (e) { console.warn("[run-agent] source planner failed, using deterministic input:", e); }
 
         const apifyInput = {
           selected_actor_key: planned_actor_key ?? undefined,
@@ -260,9 +322,7 @@ Deno.serve(async (req) => {
           max_results,
           // Phase 3 — pass whitelisted structured input (e.g. LinkedIn targetUrls,
           // keywords, topics) through to the actor-specific input adapter.
-          input: (tool_input_body?.user_input && typeof tool_input_body.user_input === "object")
-            ? tool_input_body.user_input
-            : undefined,
+          input: plannedUserInput,
         };
 
         console.log("[run-agent] apify input", {
@@ -294,6 +354,7 @@ Deno.serve(async (req) => {
           location: it?.location ?? it?.companyLocation ?? null,
           raw: it,
         });
+        const rawAllItems: ReturnType<typeof mapItem>[] = [];
         const runAttempt = async (strategy: { role_keywords: string[]; relax_location: boolean }) => {
           const attemptInput = {
             ...apifyInput,
@@ -305,13 +366,37 @@ Deno.serve(async (req) => {
             defer_persistence: true,
           };
           const rr = await runTool("source_with_apify", attemptInput, baseCtx);
-          if (rr.ok && rr.data) return { items: ((rr.data as { items?: any[] }).items ?? []).map(mapItem) };
+          if (rr.ok && rr.data) {
+            const mapped = ((rr.data as { items?: any[] }).items ?? []).map(mapItem);
+            rawAllItems.push(...mapped); // accumulate for source-quality reject reasons
+            return { items: mapped };
+          }
           // unavailable / !ok = tool failure (auth/config/credits). 0-results is ok+data above.
           return { items: [], tool_failed: true, error: rr.error ?? "apify_failed" };
         };
 
         const adaptive = await runAdaptiveSourcing({ criteria, strict, maxAttempts, runAttempt });
         adaptiveAttempts = adaptive.attempts as unknown as Array<Record<string, unknown>>;
+
+        // Source Quality Engine (Phase 6): honest raw vs accepted vs persisted
+        // counts + reject reasons, surfaced in Workbench Insights + narrative.
+        try {
+          const { summarizeSourceQuality, classifyResults, topRejectReasons } = await import("../_shared/sourceQuality.ts");
+          const classified = classifyResults(rawAllItems, criteria, strict);
+          const counts = summarizeSourceQuality({
+            attempts: adaptive.attempts,
+            accepted_count: adaptive.found,
+            requested_count: max_results,
+            duplicate_count: classified.duplicates.length,
+            reject_reason_counts: classified.reject_reason_counts,
+          });
+          sourceQualityMeta = {
+            ...counts,
+            top_reject_reasons: topRejectReasons(classified.reject_reason_counts),
+            attempt_labels: adaptive.attempts.map((a) => a.strategy),
+            needs_permission_to_broaden: !!adaptive.needs_permission_to_broaden,
+          };
+        } catch (e) { console.warn("[run-agent] source quality summary failed:", e); }
 
         const toolFailed = adaptive.status === "failed" && adaptive.attempts.some((a) => !!a.note);
         if (toolFailed && isApifySelected) {
@@ -573,7 +658,7 @@ Deno.serve(async (req) => {
   const finalStatus = needs_approval ? "awaiting_approval" : "complete";
   await supabase.from("tasks").update({
     status: finalStatus,
-    result: { output: apiText, tokens_in: tokensIn, tokens_out: tokensOut, attempt_log: adaptiveAttempts.length ? adaptiveAttempts : undefined },
+    result: { output: apiText, tokens_in: tokensIn, tokens_out: tokensOut, attempt_log: adaptiveAttempts.length ? adaptiveAttempts : undefined, source_plan: sourcePlanMeta ?? undefined, source_quality: sourceQualityMeta ?? undefined },
   }).eq("id", task.id);
 
   // Phase 2: persist agent outputs into structured GTM memory. Fire-and-forget.
@@ -756,10 +841,26 @@ Deno.serve(async (req) => {
 
     // Pull the adaptive attempt log recorded by the Scout step (separate invocation).
     const { data: scoutTask } = await supabase.from("tasks").select("result").eq("plan_id", plan_id).eq("agent_slug", "scout").order("created_at", { ascending: false }).limit(1).maybeSingle();
-    const attemptLog = ((scoutTask as { result?: { attempt_log?: unknown } } | null)?.result?.attempt_log) ?? [];
+    const scoutResult = (scoutTask as { result?: Record<string, unknown> } | null)?.result ?? {};
+    const attemptLog = (scoutResult.attempt_log as unknown) ?? [];
     const attemptSummary = Array.isArray(attemptLog)
       ? (attemptLog as Array<Record<string, unknown>>).map((a) => `Attempt ${a.n}: ${a.strategy} — ${a.accepted_count} accepted (total ${a.total_accepted})`)
       : [];
+    // AI Source Planner artifacts (Phase 8 Workbench Insights).
+    const sourcePlan = (scoutResult.source_plan as Record<string, unknown> | undefined) ?? null;
+    const sourceQuality = (scoutResult.source_quality as Record<string, unknown> | undefined) ?? null;
+    const searchInsights = (sourcePlan || sourceQuality) ? {
+      source: sourcePlan?.actor_key ?? null,
+      planner: sourcePlan?.source ?? null, // ai | ai_repaired | deterministic
+      primary_query: sourcePlan?.primary_query ?? null,
+      role_aliases: sourcePlan?.role_aliases ?? [],
+      attempts: attemptSummary,
+      raw_reviewed: sourceQuality?.raw_result_count ?? null,
+      accepted: sourceQuality?.accepted_count ?? null,
+      rejected: sourceQuality?.rejected_count ?? null,
+      duplicates: sourceQuality?.duplicate_count ?? null,
+      main_reject_reasons: sourceQuality?.top_reject_reasons ?? [],
+    } : null;
 
     if (wasSourcing) {
       const { evaluateWorkflowStatus } = await import("../_shared/adaptiveWorkflow.ts");
@@ -829,11 +930,18 @@ Deno.serve(async (req) => {
           locked_columns: ["decision_maker", "contact_info", "company_enrichment", "personalized_message"],
           available_actions: actions,
           recommended_next_action,
+          // Phase 8 — Workbench Insights: summarized search strategy (never raw JSON / dataset IDs).
+          insights: searchInsights,
         };
 
+        // Phase 7 — definitive AI-employee process line (raw reviewed → accepted),
+        // so the user sees the workflow, never "30 results" when accepted is 0.
+        const reviewedLine = searchInsights?.raw_reviewed != null
+          ? `Scout reviewed ${searchInsights.raw_reviewed} raw result${searchInsights.raw_reviewed === 1 ? "" : "s"} and accepted ${produced}. `
+          : "";
         const chatCopy = allAccountOnly
-          ? `${partial ? `Found ${produced} of ${requested} — ` : ""}Scout found ${accounts} account opportunit${accounts === 1 ? "y" : "ies"}. These companies show intent, but decision-maker contacts aren't attached yet. I opened them in the lead table; contact, enrichment, and outreach columns are locked until you run those actions. Recommended next step: find decision-makers. Nothing was sent.`
-          : `${partial ? `Found ${produced} of ${requested} — ` : ""}Scout found ${contacts} contact-ready lead${contacts === 1 ? "" : "s"}. I opened them in the lead table. Recommended next step: rank by fit, then research or draft outreach. Nothing was sent.`;
+          ? `${partial ? `Found ${produced} of ${requested} — ` : ""}${reviewedLine}Scout found ${accounts} account opportunit${accounts === 1 ? "y" : "ies"}. These companies show intent, but decision-maker contacts aren't attached yet. I opened them in the lead table; contact, enrichment, and outreach columns are locked until you run those actions. Recommended next step: find decision-makers. Nothing was sent.`
+          : `${partial ? `Found ${produced} of ${requested} — ` : ""}${reviewedLine}Scout found ${contacts} contact-ready lead${contacts === 1 ? "" : "s"}. I opened them in the lead table. Recommended next step: rank by fit, then research or draft outreach. Nothing was sent.`;
 
         await supabase.from("messages").insert({
           conversation_id: conversationId,

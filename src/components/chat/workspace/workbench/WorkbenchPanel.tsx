@@ -17,7 +17,7 @@ import ChatErrorBoundary from '../ChatErrorBoundary';
 import { normalizeApifyItems, normalizeApifyPeople, isPeopleOutput, normalizeAriaRankings, normalizePennDrafts, normalizeFirecrawl } from './normalize';
 import { Loader2, FlaskConical, FileText, ListChecks, Activity, Code2, Trophy, Mail, Link2, Users } from 'lucide-react';
 
-type Tab = 'leads' | 'summary' | 'results' | 'rankings' | 'drafts' | 'sources' | 'activity' | 'raw';
+type Tab = 'leads' | 'insights' | 'summary' | 'results' | 'rankings' | 'drafts' | 'sources' | 'activity' | 'raw';
 
 export default function WorkbenchPanel() {
   const { selectedOutput, closeWorkbench, workbenchWidth, setWorkbenchWidth } = useChatWorkspace();
@@ -59,6 +59,7 @@ export default function WorkbenchPanel() {
   const tabs: { id: Tab; label: string; icon: any }[] = useMemo(() => {
     const list: { id: Tab; label: string; icon: any }[] = [];
     if (leadsPanel) list.push({ id: 'leads', label: 'Leads', icon: Users });
+    if (leadsPanel && (leadsPanel as { insights?: unknown }).insights) list.push({ id: 'insights', label: 'Insights', icon: FlaskConical });
     list.push({ id: 'summary', label: 'Summary', icon: FileText });
     if (hasResults || failed || isApify) list.push({ id: 'results', label: 'Results', icon: ListChecks });
     if (hasRankings || isAria) list.push({ id: 'rankings', label: 'Rankings', icon: Trophy });
@@ -179,6 +180,38 @@ export default function WorkbenchPanel() {
         ) : (
         <div className="flex-1 overflow-auto p-4 space-y-3 relative z-[1]">
           <ChatErrorBoundary>
+            {tab === 'insights' && leadsPanel && (() => {
+              const ins = (leadsPanel as { insights?: Record<string, any> }).insights ?? {};
+              const Row = ({ k, v }: { k: string; v: React.ReactNode }) => (
+                <div className="flex gap-2 text-[12px] py-0.5"><span className="text-[#7D8590] w-32 shrink-0">{k}</span><span className="text-[#C9D1D9]">{v}</span></div>
+              );
+              return (
+                <div className="space-y-3">
+                  <div className="text-[12px] font-semibold text-[#F0F6FC]">Search strategy</div>
+                  <div className="rounded-lg border border-white/[0.06] bg-white/[0.02] p-3">
+                    <Row k="Source" v={ins.source ?? '—'} />
+                    <Row k="Input planner" v={ins.planner ?? 'deterministic'} />
+                    {ins.primary_query && <Row k="Primary query" v={ins.primary_query} />}
+                    {Array.isArray(ins.role_aliases) && ins.role_aliases.length > 0 && <Row k="Role aliases" v={ins.role_aliases.join(', ')} />}
+                  </div>
+                  {Array.isArray(ins.attempts) && ins.attempts.length > 0 && (
+                    <div className="rounded-lg border border-white/[0.06] bg-white/[0.02] p-3">
+                      <div className="text-[11px] uppercase tracking-wider text-[#7D8590] mb-1">Attempts</div>
+                      {ins.attempts.map((a: string, i: number) => <div key={i} className="text-[12px] text-[#C9D1D9]">{a}</div>)}
+                    </div>
+                  )}
+                  <div className="rounded-lg border border-white/[0.06] bg-white/[0.02] p-3">
+                    <Row k="Raw reviewed" v={ins.raw_reviewed ?? '—'} />
+                    <Row k="Accepted" v={ins.accepted ?? '—'} />
+                    <Row k="Rejected" v={ins.rejected ?? '—'} />
+                    <Row k="Duplicates" v={ins.duplicates ?? '—'} />
+                    {Array.isArray(ins.main_reject_reasons) && ins.main_reject_reasons.length > 0 && (
+                      <Row k="Main reject reasons" v={ins.main_reject_reasons.join(', ')} />
+                    )}
+                  </div>
+                </div>
+              );
+            })()}
             {tab === 'summary' && (
               <>
                 <SummaryView

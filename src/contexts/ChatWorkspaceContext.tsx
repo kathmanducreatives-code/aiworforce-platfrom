@@ -54,6 +54,19 @@ export interface LeadResultsPanelMeta {
   contact_status?: 'needs_contact' | 'contact_found';
   recommended_persona?: { personas: string[]; primary: string; reason: string };
   next_action?: { action: string; label: string; reason: string };
+  // AI Source Planner — Workbench Insights (search-strategy summary, not raw JSON).
+  insights?: {
+    source?: string | null;
+    planner?: string | null;
+    primary_query?: string | null;
+    role_aliases?: string[];
+    attempts?: string[];
+    raw_reviewed?: number | null;
+    accepted?: number | null;
+    rejected?: number | null;
+    duplicates?: number | null;
+    main_reject_reasons?: string[];
+  } | null;
 }
 
 export interface WorkbenchSelection {
