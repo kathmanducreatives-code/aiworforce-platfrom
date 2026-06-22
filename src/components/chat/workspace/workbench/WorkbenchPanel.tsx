@@ -1,5 +1,6 @@
 import { useState, useMemo, useEffect } from 'react';
 import { useChatWorkspace } from '@/contexts/ChatWorkspaceContext';
+import { dispatchNextAction, isSendNextAction, NEXT_ACTION_LABEL, type NextActionId } from '@/lib/chatActions';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { useWorkbenchData } from './useWorkbenchData';
 import WorkbenchHeader from './WorkbenchHeader';
@@ -181,34 +182,77 @@ export default function WorkbenchPanel() {
         <div className="flex-1 overflow-auto p-4 space-y-3 relative z-[1]">
           <ChatErrorBoundary>
             {tab === 'insights' && leadsPanel && (() => {
-              const ins = (leadsPanel as { insights?: Record<string, any> }).insights ?? {};
+              const panel = leadsPanel as Record<string, any>;
+              const ins = panel.insights ?? {};
+              const outcome = panel.outcome ?? null;
+              const nextActions: string[] = Array.isArray(panel.next_actions) ? panel.next_actions : [];
+              const sourceBrief: string | null = panel.source_brief ?? null;
+              const acceptRate = (typeof ins.raw_reviewed === 'number' && ins.raw_reviewed > 0 && typeof ins.accepted === 'number')
+                ? Math.round((ins.accepted / ins.raw_reviewed) * 100) : null;
+              const tone = outcome?.status === 'complete' ? 'text-emerald-300'
+                : outcome?.status === 'partial' ? 'text-amber-300' : 'text-red-300';
               const Row = ({ k, v }: { k: string; v: React.ReactNode }) => (
                 <div className="flex gap-2 text-[12px] py-0.5"><span className="text-[#7D8590] w-32 shrink-0">{k}</span><span className="text-[#C9D1D9]">{v}</span></div>
               );
               return (
                 <div className="space-y-3">
-                  <div className="text-[12px] font-semibold text-[#F0F6FC]">Search strategy</div>
-                  <div className="rounded-lg border border-white/[0.06] bg-white/[0.02] p-3">
-                    <Row k="Source" v={ins.source ?? '—'} />
-                    <Row k="Input planner" v={ins.planner ?? 'deterministic'} />
-                    {ins.primary_query && <Row k="Primary query" v={ins.primary_query} />}
-                    {Array.isArray(ins.role_aliases) && ins.role_aliases.length > 0 && <Row k="Role aliases" v={ins.role_aliases.join(', ')} />}
-                  </div>
-                  {Array.isArray(ins.attempts) && ins.attempts.length > 0 && (
+                  {/* Outcome */}
+                  {outcome?.line && (
                     <div className="rounded-lg border border-white/[0.06] bg-white/[0.02] p-3">
-                      <div className="text-[11px] uppercase tracking-wider text-[#7D8590] mb-1">Attempts</div>
-                      {ins.attempts.map((a: string, i: number) => <div key={i} className="text-[12px] text-[#C9D1D9]">{a}</div>)}
+                      <div className={`text-[12px] font-semibold ${tone}`}>{outcome.line}</div>
                     </div>
                   )}
-                  <div className="rounded-lg border border-white/[0.06] bg-white/[0.02] p-3">
-                    <Row k="Raw reviewed" v={ins.raw_reviewed ?? '—'} />
-                    <Row k="Accepted" v={ins.accepted ?? '—'} />
-                    <Row k="Rejected" v={ins.rejected ?? '—'} />
-                    <Row k="Duplicates" v={ins.duplicates ?? '—'} />
-                    {Array.isArray(ins.main_reject_reasons) && ins.main_reject_reasons.length > 0 && (
-                      <Row k="Main reject reasons" v={ins.main_reject_reasons.join(', ')} />
-                    )}
+                  {/* Search strategy — human phrasing */}
+                  <div>
+                    <div className="text-[12px] font-semibold text-[#F0F6FC] mb-1">Search strategy</div>
+                    <div className="rounded-lg border border-white/[0.06] bg-white/[0.02] p-3">
+                      {ins.primary_query && (
+                        <div className="text-[12px] text-[#C9D1D9] mb-1.5">
+                          Scout searched <span className="text-[#F0F6FC]">{ins.source ?? 'the source'}</span> using:{' '}
+                          <span className="text-emerald-300">{ins.primary_query}</span>
+                        </div>
+                      )}
+                      <Row k="Input planner" v={ins.planner === 'ai' ? 'Claude' : (ins.planner ?? 'deterministic')} />
+                      {Array.isArray(ins.role_aliases) && ins.role_aliases.length > 0 && <Row k="Role aliases" v={ins.role_aliases.join(', ')} />}
+                    </div>
                   </div>
+                  {/* Quality summary */}
+                  <div>
+                    <div className="text-[12px] font-semibold text-[#F0F6FC] mb-1">Quality summary</div>
+                    <div className="rounded-lg border border-white/[0.06] bg-white/[0.02] p-3">
+                      <Row k="Raw reviewed" v={ins.raw_reviewed ?? '—'} />
+                      <Row k="Accepted" v={ins.accepted ?? '—'} />
+                      <Row k="Rejected" v={ins.rejected ?? '—'} />
+                      <Row k="Duplicates" v={ins.duplicates ?? '—'} />
+                      {acceptRate != null && <Row k="Acceptance rate" v={`${acceptRate}%`} />}
+                      {Array.isArray(ins.main_reject_reasons) && ins.main_reject_reasons.length > 0 && (
+                        <Row k="Main reject reason" v={ins.main_reject_reasons.join(', ')} />
+                      )}
+                    </div>
+                  </div>
+                  {/* Attempts */}
+                  {Array.isArray(ins.attempts) && ins.attempts.length > 0 && (
+                    <div>
+                      <div className="text-[12px] font-semibold text-[#F0F6FC] mb-1">Attempts</div>
+                      <div className="rounded-lg border border-white/[0.06] bg-white/[0.02] p-3 space-y-0.5">
+                        {ins.attempts.map((a: string, i: number) => <div key={i} className="text-[12px] text-[#C9D1D9]">{a}</div>)}
+                      </div>
+                    </div>
+                  )}
+                  {/* Next actions — Broaden search etc. */}
+                  {nextActions.length > 0 && (
+                    <div className="flex flex-wrap gap-2 pt-1">
+                      {(nextActions as NextActionId[]).filter((a) => isSendNextAction(a)).map((a) => (
+                        <button
+                          key={a}
+                          onClick={() => dispatchNextAction(a, { conversationId: selectedOutput?.conversationId ?? null, sourceBrief, planId: panel.plan_id })}
+                          className={`h-7 px-3 rounded-md text-[12px] font-medium ${a === 'broaden_search' ? 'bg-emerald-500/90 hover:bg-emerald-500 text-[#03100a]' : 'border border-white/[0.1] text-[#C9D1D9] hover:bg-white/[0.04]'}`}
+                        >
+                          {NEXT_ACTION_LABEL[a] ?? a}
+                        </button>
+                      ))}
+                    </div>
+                  )}
                 </div>
               );
             })()}

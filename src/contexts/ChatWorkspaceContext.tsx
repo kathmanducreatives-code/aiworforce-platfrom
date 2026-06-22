@@ -67,6 +67,10 @@ export interface LeadResultsPanelMeta {
     duplicates?: number | null;
     main_reject_reasons?: string[];
   } | null;
+  // Humanized outcome + next-action pills (complete/partial/failed).
+  outcome?: { status: 'complete' | 'partial' | 'failed'; line: string; quality_lines: string[] } | null;
+  next_actions?: string[];
+  source_brief?: string | null;
 }
 
 export interface WorkbenchSelection {

@@ -1,5 +1,6 @@
-import { AlertTriangle, RotateCw, ListFilter, Bookmark, Settings } from 'lucide-react';
+import { AlertTriangle, RotateCw, ListFilter, Bookmark, Settings, Maximize2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { dispatchNextAction, isSendNextAction, NEXT_ACTION_LABEL, type NextActionId } from '@/lib/chatActions';
 
 export interface LeadSourcingErrorPayload {
   kind: 'lead_sourcing_error';
@@ -11,6 +12,8 @@ export interface LeadSourcingErrorPayload {
   error?: string;
   retry_command?: string;   // reruns the same brief
   lead_request?: Record<string, unknown>;
+  next_actions?: string[];  // recovery pills (broaden_search, edit_criteria, …)
+  source_brief?: string;    // the brief to broaden from
 }
 
 function send(text: string, conversationId?: string) {
@@ -35,20 +38,59 @@ export default function LeadSourcingErrorCard({ payload, conversationId }: { pay
         <div className="text-emerald-400/70">No leads saved · no credits charged · nothing sent.</div>
       </div>
       <div className="flex flex-wrap items-center gap-2">
-        {payload.retry_command && (
-          <Button size="sm" onClick={() => send(payload.retry_command!, conversationId)} className="h-7 gap-1.5 bg-emerald-500/90 hover:bg-emerald-500 text-[#03100a] font-semibold text-[12px]">
-            <RotateCw className="h-3 w-3" /> Retry
-          </Button>
+        {/* Recovery pills from backend next_actions (broaden/edit/change source/…). */}
+        {Array.isArray(payload.next_actions) && payload.next_actions.length > 0 ? (
+          <>
+            {(payload.next_actions as NextActionId[]).filter((a) => a !== 'done').map((a) => {
+              const primary = a === 'broaden_search';
+              return (
+                <Button
+                  key={a}
+                  size="sm"
+                  variant={primary ? 'default' : 'outline'}
+                  onClick={() => {
+                    if (isSendNextAction(a)) {
+                      dispatchNextAction(a, { conversationId: conversationId ?? null, sourceBrief: payload.source_brief ?? payload.retry_command ?? null });
+                    } else {
+                      // view_details → ask for the search details inline.
+                      send('Show the search details for that last search.', conversationId);
+                    }
+                  }}
+                  className={primary
+                    ? 'h-7 gap-1.5 bg-emerald-500/90 hover:bg-emerald-500 text-[#03100a] font-semibold text-[12px]'
+                    : 'h-7 gap-1.5 text-[12px]'}
+                >
+                  {a === 'broaden_search' && <RotateCw className="h-3 w-3" />}
+                  {(a === 'edit_criteria' || a === 'change_source') && <ListFilter className="h-3 w-3" />}
+                  {a === 'view_details' && <Maximize2 className="h-3 w-3" />}
+                  {NEXT_ACTION_LABEL[a] ?? a}
+                </Button>
+              );
+            })}
+            {(payload.error === 'apify_unauthorized' || payload.error === 'apify_not_configured') && (
+              <a href="/settings/integrations" className="inline-flex items-center gap-1.5 h-7 px-3 rounded-md border border-white/[0.1] text-[12px] text-[#C9D1D9] hover:bg-white/[0.04]">
+                <Settings className="h-3 w-3" /> Open setup
+              </a>
+            )}
+          </>
+        ) : (
+          <>
+            {payload.retry_command && (
+              <Button size="sm" onClick={() => send(payload.retry_command!, conversationId)} className="h-7 gap-1.5 bg-emerald-500/90 hover:bg-emerald-500 text-[#03100a] font-semibold text-[12px]">
+                <RotateCw className="h-3 w-3" /> Retry
+              </Button>
+            )}
+            <Button size="sm" variant="outline" onClick={() => send('Find me leads.', conversationId)} className="h-7 gap-1.5 text-[12px]">
+              <ListFilter className="h-3 w-3" /> Change lead source
+            </Button>
+            <Button size="sm" variant="outline" onClick={() => send('Save this lead brief for later.', conversationId)} className="h-7 gap-1.5 text-[12px]">
+              <Bookmark className="h-3 w-3" /> Save brief for later
+            </Button>
+            <a href="/settings/integrations" className="inline-flex items-center gap-1.5 h-7 px-3 rounded-md border border-white/[0.1] text-[12px] text-[#C9D1D9] hover:bg-white/[0.04]">
+              <Settings className="h-3 w-3" /> Open setup
+            </a>
+          </>
         )}
-        <Button size="sm" variant="outline" onClick={() => send('Find me leads.', conversationId)} className="h-7 gap-1.5 text-[12px]">
-          <ListFilter className="h-3 w-3" /> Change lead source
-        </Button>
-        <Button size="sm" variant="outline" onClick={() => send('Save this lead brief for later.', conversationId)} className="h-7 gap-1.5 text-[12px]">
-          <Bookmark className="h-3 w-3" /> Save brief for later
-        </Button>
-        <a href="/settings/integrations" className="inline-flex items-center gap-1.5 h-7 px-3 rounded-md border border-white/[0.1] text-[12px] text-[#C9D1D9] hover:bg-white/[0.04]">
-          <Settings className="h-3 w-3" /> Open setup
-        </a>
       </div>
     </div>
   );

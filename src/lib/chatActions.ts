@@ -20,6 +20,7 @@ export type ChatActionSource =
   | 'scout_results_action'
   | 'no_results_card'
   | 'recommended_move'
+  | 'broaden_search'
   | 'workforce_brief';
 
 export type LeadResultPanelAction =
@@ -95,4 +96,62 @@ export function dispatchResultAction(detail: ResultActionDetail) {
       confirmed: detail.confirmed ?? false,
     },
   });
+}
+
+// ---- Next-action pills (complete / partial / failed) ----
+// Backend emits metadata.next_actions (action ids) + metadata.source_brief.
+export type NextActionId =
+  | 'broaden_search' | 'use_results' | 'edit_criteria' | 'change_source'
+  | 'view_details' | 'done' | LeadResultPanelAction;
+
+export const NEXT_ACTION_LABEL: Record<NextActionId, string> = {
+  broaden_search: 'Broaden search',
+  use_results: 'Use these results',
+  edit_criteria: 'Edit criteria',
+  change_source: 'Change source',
+  view_details: 'View details',
+  done: 'Done',
+  enrich: 'Enrich',
+  draft_outreach: 'Draft outreach',
+  enrich_and_draft: 'Enrich + draft',
+  rank: 'Rank',
+  export_csv: 'Export CSV',
+  save_to_signal_feed: 'Save to Signal Feed',
+  find_contacts: 'Find decision-makers',
+  research_company: 'Research company',
+};
+
+// Actions that send a chat command. view_details/use_results/done are UI-local
+// (open Workbench / dismiss) and handled by the rendering component.
+const NEXT_ACTION_COMMAND: Partial<Record<NextActionId, (brief: string) => string>> = {
+  broaden_search: (brief) => brief
+    ? `Broaden the search and try again to fill the remaining results: ${brief}`
+    : 'Broaden the search and try again.',
+  edit_criteria: () => 'Find me leads.',      // re-opens the Lead Source Selector
+  change_source: () => 'Find me leads.',      // re-opens the Lead Source Selector
+  rank: () => 'Rank these leads by fit.',
+  export_csv: () => 'Export these leads as CSV.',
+  find_contacts: () => 'Find decision-makers for these accounts.',
+  draft_outreach: () => 'Draft outreach to the top 5.',
+};
+
+/** True when the action sends a chat command (vs. a UI-local action). */
+export function isSendNextAction(action: NextActionId): boolean {
+  return action in NEXT_ACTION_COMMAND;
+}
+
+/** Dispatch a next-action pill. Returns false for UI-local actions the caller must handle. */
+export function dispatchNextAction(
+  action: NextActionId,
+  ctx: { conversationId: string | null; sourceBrief?: string | null; planId?: string | null },
+): boolean {
+  const cmd = NEXT_ACTION_COMMAND[action];
+  if (!cmd) return false; // view_details / use_results / done → handled locally
+  dispatchChatAction({
+    text: cmd(ctx.sourceBrief ?? ''),
+    conversation_id: ctx.conversationId,
+    action_source: action === 'broaden_search' ? 'broaden_search' : 'recommended_move',
+    metadata: { intent: action, plan_id: ctx.planId ?? null, source_brief: ctx.sourceBrief ?? null },
+  });
+  return true;
 }

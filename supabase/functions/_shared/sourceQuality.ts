@@ -99,6 +99,72 @@ export function summarizeSourceQuality(opts: {
   };
 }
 
+// ---- Outcome explanation + next actions (Workbench UX layer) ----
+
+export type OutcomeReport = {
+  status: "complete" | "partial" | "failed";
+  outcome_line: string;
+  quality_lines: string[];
+  // Action ids the UI renders as pills. Order = priority.
+  next_actions: string[];
+};
+
+/** Acceptance rate as an integer percent (0 when no raw results). */
+export function acceptanceRate(counts: { raw_result_count: number; accepted_count: number }): number {
+  if (!counts.raw_result_count) return 0;
+  return Math.round((counts.accepted_count / counts.raw_result_count) * 100);
+}
+
+/**
+ * Human "AI employee report" outcome + next-action pills, derived from the
+ * honest counts. Complete/partial show forward actions; failed shows recovery
+ * actions. `has_contacts` toggles find_contacts vs draft-ready actions.
+ */
+export function buildOutcomeReport(opts: {
+  counts: SourceQualityCounts;
+  requested: number;
+  has_contacts?: boolean;
+}): OutcomeReport {
+  const { counts } = opts;
+  const requested = opts.requested ?? counts.requested_count;
+  const accepted = counts.accepted_count;
+
+  const quality_lines: string[] = [
+    `Scout reviewed ${counts.raw_result_count} raw result${counts.raw_result_count === 1 ? "" : "s"}.`,
+  ];
+  if (accepted > 0) quality_lines.push(`${accepted} ${accepted === 1 ? "was" : "were"} accepted as qualified opportunit${accepted === 1 ? "y" : "ies"}.`);
+  if (counts.rejected_count > 0) quality_lines.push(`${counts.rejected_count} ${counts.rejected_count === 1 ? "was" : "were"} rejected.`);
+  if (counts.duplicate_count > 0) quality_lines.push(`${counts.duplicate_count} duplicate${counts.duplicate_count === 1 ? "" : "s"} removed.`);
+  const reasons = topRejectReasons(counts.reject_reason_counts, 1);
+  if (reasons.length) quality_lines.push(`Main reject reason: ${reasons[0].replace(/\s*\(\d+\)$/, "")}.`);
+  if (counts.raw_result_count > 0) quality_lines.push(`Acceptance rate: ${acceptanceRate(counts)}%.`);
+
+  if (counts.status === "complete") {
+    return {
+      status: "complete",
+      outcome_line: "Result: Complete — Scout met the requested count.",
+      quality_lines,
+      next_actions: opts.has_contacts
+        ? ["rank", "draft_outreach", "export_csv", "done"]
+        : ["find_contacts", "rank", "export_csv", "done"],
+    };
+  }
+  if (counts.status === "partial") {
+    return {
+      status: "partial",
+      outcome_line: `Result: Partial — Scout found ${accepted} of ${requested} requested opportunit${requested === 1 ? "y" : "ies"}.`,
+      quality_lines,
+      next_actions: ["broaden_search", "use_results", "find_contacts", "export_csv", "done"],
+    };
+  }
+  return {
+    status: "failed",
+    outcome_line: "Result: No qualified matches — Scout reviewed results, but none matched closely enough.",
+    quality_lines,
+    next_actions: ["broaden_search", "edit_criteria", "change_source", "view_details", "done"],
+  };
+}
+
 /** Definitive AI-employee process narrative for chat/activity (Phase 7). */
 export function buildProcessNarrative(opts: {
   actor_label: string;

@@ -239,3 +239,37 @@ Deno.test("planner: AI call budget capped at 3 per run", async () => {
   const res = await planActorInput({ user_request: "Find 5 companies hiring GTM in USA", actor_key: "apify_jobs", source_type: "hiring_signal", count: 5, normalized: { role: "GTM" } });
   assert(res.ai_calls <= 3, `ai_calls must be capped at 3, got ${res.ai_calls}`);
 });
+
+// ============ Outcome report + next-action pills (Workbench UX) ============
+import { buildOutcomeReport, acceptanceRate } from "./sourceQuality.ts";
+
+Deno.test("outcome: complete copy + forward actions", () => {
+  const r = buildOutcomeReport({ counts: { raw_result_count: 8, accepted_count: 5, rejected_count: 3, duplicate_count: 0, persisted_count: 5, requested_count: 5, reject_reason_counts: {}, status: "complete" }, requested: 5, has_contacts: false });
+  assertEquals(r.status, "complete");
+  assert(/Complete/.test(r.outcome_line));
+  assert(r.next_actions.includes("find_contacts"));
+  assert(!r.next_actions.includes("broaden_search"), "complete should not offer broaden");
+});
+
+Deno.test("outcome: partial copy + Broaden search action", () => {
+  const r = buildOutcomeReport({ counts: { raw_result_count: 10, accepted_count: 4, rejected_count: 6, duplicate_count: 0, persisted_count: 4, requested_count: 5, reject_reason_counts: { "wrong role": 6 }, status: "partial" }, requested: 5 });
+  assertEquals(r.status, "partial");
+  assert(/Partial — Scout found 4 of 5/.test(r.outcome_line), r.outcome_line);
+  assert(r.next_actions.includes("broaden_search"));
+  assert(r.next_actions.includes("use_results"));
+  assert(r.quality_lines.some((l) => /Main reject reason: wrong role/.test(l)));
+});
+
+Deno.test("outcome: failed copy + recovery actions", () => {
+  const r = buildOutcomeReport({ counts: { raw_result_count: 10, accepted_count: 0, rejected_count: 10, duplicate_count: 0, persisted_count: 0, requested_count: 5, reject_reason_counts: { "wrong role": 10 }, status: "failed" }, requested: 5 });
+  assertEquals(r.status, "failed");
+  assert(/No qualified matches/.test(r.outcome_line));
+  for (const a of ["broaden_search", "edit_criteria", "change_source", "view_details", "done"]) {
+    assert(r.next_actions.includes(a), `failed should offer ${a}`);
+  }
+});
+
+Deno.test("acceptanceRate: percent of raw accepted (0 when no raw)", () => {
+  assertEquals(acceptanceRate({ raw_result_count: 10, accepted_count: 5 }), 50);
+  assertEquals(acceptanceRate({ raw_result_count: 0, accepted_count: 0 }), 0);
+});
