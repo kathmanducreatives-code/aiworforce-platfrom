@@ -64,18 +64,16 @@ function DockItem({
         onClick={onSelect}
         aria-label={`Select ${meta.name}`}
         aria-pressed={isSelected}
-        style={{ y: lift }}
         className={cn(
           'group relative flex flex-col items-center gap-1.5 px-2 py-2 rounded-xl outline-none',
           'focus-visible:ring-2 focus-visible:ring-emerald-400/60 focus-visible:ring-offset-2 focus-visible:ring-offset-black',
           'transition-colors duration-150',
           isSelected ? 'bg-white/[0.04]' : 'bg-transparent hover:bg-white/[0.025]',
         )}
-        style={
-          isSelected
-            ? { y: lift, boxShadow: `inset 0 0 0 1px ${ringHex}55` }
-            : { y: lift }
-        }
+        style={{
+          y: lift,
+          ...(isSelected ? { boxShadow: `inset 0 0 0 1px ${ringHex}55` } : {}),
+        }}
       >
         <motion.span
           className="relative flex items-center justify-center rounded-full"
