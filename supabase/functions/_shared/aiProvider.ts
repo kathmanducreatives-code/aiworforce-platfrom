@@ -213,7 +213,13 @@ export async function generateText(opts: GenerateOpts): Promise<GenerateResult> 
 
   let lastErr = "no attempts";
   let lastCode = "unknown";
+  let skipLovable = false;
   for (const att of attempts) {
+    // Lovable out of credits (402) / rate-limited: skip remaining Lovable
+    // attempts but STILL fall through to Anthropic (the documented fallback)
+    // instead of failing the whole call. Fixes the case where TEST Lovable is
+    // 402 yet ANTHROPIC_API_KEY is configured.
+    if (skipLovable && att.provider === "lovable-ai") continue;
     const r = await att.run();
     if (r.ok && r.content) {
       const latencyMs = Date.now() - started;
@@ -232,8 +238,9 @@ export async function generateText(opts: GenerateOpts): Promise<GenerateResult> 
       fn: opts.functionName, task: opts.taskType,
       provider: att.provider, model: att.model, error: lastErr,
     });
-    // Don't retry on credits_exhausted — surface immediately.
-    if (lastCode === "credits_exhausted") break;
+    // On credits/rate errors, don't waste more Lovable calls — but let the loop
+    // continue to any configured Anthropic fallback attempt.
+    if (lastCode === "credits_exhausted" || lastCode === "rate_limited") skipLovable = true;
   }
 
   return {

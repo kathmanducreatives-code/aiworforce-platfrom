@@ -38,3 +38,15 @@ const PLANNER_TASK_TYPES: ReadonlySet<TaskType> = new Set<TaskType>([
 export function isPlannerTask(taskType: TaskType): boolean {
   return PLANNER_TASK_TYPES.has(taskType);
 }
+
+/**
+ * Source-planner provider override (pure). The Actor Input Planner may be
+ * pinned to Claude/Anthropic via SOURCE_PLANNER_PROVIDER (e.g. when the Lovable
+ * gateway is out of credits). Returns "anthropic" for anthropic|claude, else
+ * undefined (use the default Gemini/Lovable path). The caller reads the env
+ * value and passes it here, keeping this module pure/testable.
+ */
+export function resolveSourcePlannerProvider(envValue: string | null | undefined): ProviderName | undefined {
+  const v = (envValue ?? "").trim().toLowerCase();
+  return (v === "anthropic" || v === "claude") ? "anthropic" : undefined;
+}

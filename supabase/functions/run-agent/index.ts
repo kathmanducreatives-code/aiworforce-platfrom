@@ -299,16 +299,25 @@ Deno.serve(async (req) => {
             }
             sourcePlanMeta = {
               source: planRes.source,
+              planner_mode: planRes.planner_mode,
+              provider_used: planRes.provider_used,
+              model_used: planRes.model_used,
+              ai_calls: planRes.ai_calls,
+              gemini_used: planRes.provider_used === "lovable-ai",
+              claude_used: planRes.provider_used === "anthropic",
+              deterministic_fallback_used: planRes.planner_mode === "deterministic_fallback",
               actor_key: planned_actor_key,
               primary_query: planRes.plan.query_strategy.primary_query,
               role_aliases: planRes.plan.query_strategy.role_aliases ?? [],
               broadening_level: planRes.plan.query_strategy.broadening_level,
               expected_entity_type: planRes.plan.expected_entity_type,
+              generated_actor_input: planRes.plan.input,
+              sanitized_actor_input: planRes.input,
               validation_ok: planRes.validation.ok,
               validation_warnings: planRes.validation.warnings,
               missing_info: planRes.plan.missing_info,
             };
-            console.log("[run-agent] source planner", { source: planRes.source, valid: planRes.validation.ok, query: normalizedQuery, roles: roleKeywords.length });
+            console.log("[run-agent] source planner", { mode: planRes.planner_mode, provider: planRes.provider_used, model: planRes.model_used, valid: planRes.validation.ok, query: normalizedQuery, roles: roleKeywords.length });
           }
         } catch (e) { console.warn("[run-agent] source planner failed, using deterministic input:", e); }
 

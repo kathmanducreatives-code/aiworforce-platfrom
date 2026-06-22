@@ -5,7 +5,8 @@
 // it only shapes the input. Deterministic validators (actorInputValidator) and
 // the existing capabilityValidator/actorRegistry remain authoritative.
 
-import { generateJson } from "./aiProvider.ts";
+import { generateJson, type ProviderName } from "./aiProvider.ts";
+import { resolveSourcePlannerProvider } from "./providerRouting.ts";
 import { getActorByKey } from "./actorRegistry.ts";
 import { normalizeTerm, sanitizeQuery, capCount } from "./inputNormalize.ts";
 import { roleAliases, industrySynonyms, broadenCompetitorQueries } from "./broaden.ts";
@@ -71,9 +72,20 @@ export type PlanResult = {
   input: Record<string, unknown>;
   source: "ai" | "ai_repaired" | "deterministic";
   validation: ValidationResult;
+  // Provider transparency for QA/budget. planner_mode: "claude" | "gemini" |
+  // "deterministic_fallback".
+  provider_used: ProviderName | "none";
+  model_used: string;
+  planner_mode: "claude" | "gemini" | "deterministic_fallback";
+  ai_calls: number;
 };
 
 const CONFIDENCE_FLOOR = 0.65;
+
+// Budget guard (Phase 3). Each run-agent invocation is a fresh isolate, so the
+// module counter is effectively per sourcing run. Caps prevent runaway AI spend.
+const SOURCE_PLANNER_MAX_AI_CALLS_PER_RUN = 3;
+let _plannerAiCalls = 0;
 
 function locationStrategy(strictLoc: boolean | undefined, location?: string): "strict" | "flexible" | "global" {
   if (strictLoc) return "strict";
@@ -258,9 +270,23 @@ export async function planActorInput(args: PlanArgs): Promise<PlanResult> {
   const det = buildDeterministicPlan(args);
   const strictCtx: StrictRequestContext = { strict: args.strict ?? {}, strict_location_value: args.strict_location_value ?? null };
 
+  // Provider override (Phase 1): SOURCE_PLANNER_PROVIDER=anthropic|claude pins
+  // the planner to Claude (e.g. when Lovable is 402). Otherwise default path
+  // (Lovable/Gemini, with aiProvider's Anthropic fallback).
+  const envProvider = (() => { try { return Deno.env.get("SOURCE_PLANNER_PROVIDER"); } catch { return null; } })();
+  const preferredProvider = resolveSourcePlannerProvider(envProvider);
+
+  // Track which provider/model actually answered so QA can see it.
+  let providerUsed: ProviderName | "none" = "none";
+  let modelUsed = "";
+
   // No schema → we can't safely validate AI output; use deterministic.
   if (!schema) {
-    return { plan: det, input: det.input, source: "deterministic", validation: { ok: true, errors: [], warnings: ["no schema for actor"] } };
+    return {
+      plan: det, input: det.input, source: "deterministic",
+      validation: { ok: true, errors: [], warnings: ["no schema for actor"] },
+      provider_used: "none", model_used: "", planner_mode: "deterministic_fallback", ai_calls: _plannerAiCalls,
+    };
   }
 
   const finalize = (plan: ActorInputPlan, source: PlanResult["source"]): PlanResult => {
@@ -268,21 +294,38 @@ export async function planActorInput(args: PlanArgs): Promise<PlanResult> {
     const v = validateActorInputAgainstSchema(sanitized, schema);
     const sc = validateStrictConstraints(sanitized, strictCtx);
     const validation: ValidationResult = { ok: v.ok && sc.ok, reason: v.reason ?? sc.reason, errors: [...v.errors, ...sc.errors], warnings: [...v.warnings, ...sc.warnings] };
-    return { plan: { ...plan, input: sanitized }, input: sanitized, source, validation };
+    const planner_mode: PlanResult["planner_mode"] =
+      source === "deterministic" ? "deterministic_fallback"
+        : providerUsed === "anthropic" ? "claude" : "gemini";
+    return {
+      plan: { ...plan, input: sanitized }, input: sanitized, source, validation,
+      provider_used: source === "deterministic" ? "none" : providerUsed,
+      model_used: source === "deterministic" ? "" : modelUsed,
+      planner_mode, ai_calls: _plannerAiCalls,
+    };
   };
 
+  // Budget guard (Phase 3): cap AI planner calls per isolate/run.
   let ai: Awaited<ReturnType<typeof generateJson>> | null = null;
-  try {
-    ai = await generateJson({
-      taskType: "helper",
-      systemPrompt: SYSTEM_PROMPT,
-      messages: [{ role: "user", content: buildUserPrompt(args, schema, det) }],
-      temperature: 0.2,
-      maxTokens: 700,
-      jsonMode: true,
-      functionName: "actorInputPlanner",
-    });
-  } catch { ai = null; }
+  if (_plannerAiCalls >= SOURCE_PLANNER_MAX_AI_CALLS_PER_RUN) {
+    console.warn("[actorInputPlanner] AI call budget reached — deterministic fallback", { calls: _plannerAiCalls });
+  } else {
+    _plannerAiCalls++;
+    try {
+      ai = await generateJson({
+        taskType: "helper",
+        systemPrompt: SYSTEM_PROMPT,
+        messages: [{ role: "user", content: buildUserPrompt(args, schema, det) }],
+        temperature: 0.2,
+        maxTokens: 700,
+        jsonMode: true,
+        functionName: "actorInputPlanner",
+        preferredProvider,
+      });
+    } catch { ai = null; }
+    if (ai) { providerUsed = ai.provider; modelUsed = ai.model; }
+    console.log("[actorInputPlanner] ai", { requested_provider: preferredProvider ?? "default", provider_used: providerUsed, model: modelUsed, ok: ai?.ok, calls: _plannerAiCalls });
+  }
 
   if (ai?.ok && ai.json) {
     const coerced = coercePlan(ai.json, det);
@@ -301,6 +344,9 @@ export async function planActorInput(args: PlanArgs): Promise<PlanResult> {
     }
   }
 
-  // Deterministic fallback (also covers confidence < floor).
+  // Deterministic fallback (also covers confidence < floor, invalid JSON, budget cap).
   return finalize(det, "deterministic");
 }
+
+/** Test helper: reset the per-isolate AI call counter. */
+export function _resetPlannerBudget(): void { _plannerAiCalls = 0; }

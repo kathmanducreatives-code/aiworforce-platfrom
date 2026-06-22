@@ -200,3 +200,42 @@ Deno.test("quality: classifyResults rejects junk, removes duplicates, records re
   assert(c.reject_reason_counts["wrong location (strict)"] >= 1);
   assert(topRejectReasons(c.reject_reason_counts).length > 0);
 });
+
+// ============ Provider override + budget (Claude switch) ============
+import { resolveSourcePlannerProvider } from "./providerRouting.ts";
+import { planActorInput, _resetPlannerBudget } from "./actorInputPlanner.ts";
+
+Deno.test("provider: SOURCE_PLANNER_PROVIDER=anthropic|claude → anthropic", () => {
+  assertEquals(resolveSourcePlannerProvider("anthropic"), "anthropic");
+  assertEquals(resolveSourcePlannerProvider("claude"), "anthropic");
+  assertEquals(resolveSourcePlannerProvider("Claude"), "anthropic");
+  assertEquals(resolveSourcePlannerProvider("gemini"), undefined);
+  assertEquals(resolveSourcePlannerProvider(""), undefined);
+  assertEquals(resolveSourcePlannerProvider(null), undefined);
+});
+
+Deno.test("planner: deterministic fallback works without any AI provider", async () => {
+  _resetPlannerBudget();
+  // No AI keys in deno test → generateJson returns no_provider → deterministic.
+  const res = await planActorInput({ user_request: "Find 5 companies hiring GTM roles in B2B SaaS in USA", actor_key: "apify_jobs", source_type: "hiring_signal", count: 5, normalized: { role: "GTM", industry: "B2B SaaS", location: "USA" } });
+  assertEquals(res.planner_mode, "deterministic_fallback");
+  assertEquals(res.provider_used, "none");
+  assert(res.validation.ok, "deterministic input must be valid");
+  assertEquals(res.input.max_results, 5);
+});
+
+Deno.test("planner: unknown actor → deterministic, no AI call", async () => {
+  _resetPlannerBudget();
+  const res = await planActorInput({ user_request: "x", actor_key: "apify_unknown_actor", source_type: "hiring_signal", count: 5 });
+  assertEquals(res.planner_mode, "deterministic_fallback");
+  assertEquals(res.ai_calls, 0); // no schema → never attempts AI
+});
+
+Deno.test("planner: AI call budget capped at 3 per run", async () => {
+  _resetPlannerBudget();
+  for (let i = 0; i < 5; i++) {
+    await planActorInput({ user_request: "Find 5 companies hiring GTM in USA", actor_key: "apify_jobs", source_type: "hiring_signal", count: 5, normalized: { role: "GTM" } });
+  }
+  const res = await planActorInput({ user_request: "Find 5 companies hiring GTM in USA", actor_key: "apify_jobs", source_type: "hiring_signal", count: 5, normalized: { role: "GTM" } });
+  assert(res.ai_calls <= 3, `ai_calls must be capped at 3, got ${res.ai_calls}`);
+});
