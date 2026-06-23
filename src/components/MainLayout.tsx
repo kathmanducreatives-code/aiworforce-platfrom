@@ -67,7 +67,9 @@ const MainLayout = ({ children }: MainLayoutProps) => {
           <div className={isMobile ? 'px-4 py-6 pb-32' : 'pb-32'}>
             <RouteErrorBoundary>
               <WorkspaceGate>
-                {children}
+                <OnboardingGate>
+                  {children}
+                </OnboardingGate>
               </WorkspaceGate>
             </RouteErrorBoundary>
           </div>
