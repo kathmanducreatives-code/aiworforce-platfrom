@@ -1001,23 +1001,50 @@ Deno.serve(async (req) => {
           source_brief: sourceBrief,
         };
 
-        // Phase 7 — definitive AI-employee process line (raw reviewed → accepted),
-        // so the user sees the workflow, never "30 results" when accepted is 0.
-        const reviewedLine = searchInsights?.raw_reviewed != null
-          ? `Scout reviewed ${searchInsights.raw_reviewed} raw result${searchInsights.raw_reviewed === 1 ? "" : "s"} and accepted ${produced}. `
-          : "";
-        // Partial invites broadening to fill the gap; complete confirms.
-        const partialTail = partial ? ` Want me to broaden the search to fill the last ${Math.max(1, requested - produced)}?` : "";
-        const chatCopy = allAccountOnly
-          ? `${partial ? `Found ${produced} of ${requested} — ` : ""}${reviewedLine}Scout found ${accounts} account opportunit${accounts === 1 ? "y" : "ies"}. These companies show intent, but decision-maker contacts aren't attached yet. I opened them in the lead table; contact, enrichment, and outreach columns are locked until you run those actions. Recommended next step: find decision-makers.${partialTail} Nothing was sent.`
-          : `${partial ? `Found ${produced} of ${requested} — ` : ""}${reviewedLine}Scout found ${contacts} contact-ready lead${contacts === 1 ? "" : "s"}. I opened them in the lead table. Recommended next step: rank by fit, then research or draft outreach.${partialTail} Nothing was sent.`;
+        // Phase 7 — split the post-lead summary into per-agent messages so the
+        // chat reads like a Slack-style team: Scout reports sourcing, Aria reports
+        // ranking (only if it actually ran), and Pilot wraps with the workbench
+        // open + recommended next action card.
+        const ariaInPlan = Array.isArray(plan?.steps)
+          ? (plan!.steps as any[]).some((s) => s?.agent_slug === "aria")
+          : false;
+        const reviewedSummary = searchInsights?.raw_reviewed != null
+          ? `I reviewed ${searchInsights.raw_reviewed} raw result${searchInsights.raw_reviewed === 1 ? "" : "s"} and accepted ${produced} qualified ${allAccountOnly ? "account opportunit" + (produced === 1 ? "y" : "ies") : "lead" + (produced === 1 ? "" : "s")}.`
+          : `I accepted ${produced} qualified ${allAccountOnly ? "account opportunit" + (produced === 1 ? "y" : "ies") : "lead" + (produced === 1 ? "" : "s")}.`;
+        const partialPrefix = partial ? `Found ${produced} of ${requested}. ` : "";
 
+        // 1. Scout speaks the sourcing outcome
         await supabase.from("messages").insert({
           conversation_id: conversationId,
           role: "assistant",
-          content: chatCopy,
+          content: `${partialPrefix}${reviewedSummary}`,
+          agent_slug: "scout",
+          metadata: { plan_id, agent_id: "scout", workflow_step: "source_leads", status: planStatus, attempt_log: attemptSummary.length ? attemptSummary : [`Sourced ${produced}/${requested}`] },
+        });
+
+        // 2. Aria speaks ranking (if it was in the plan)
+        if (ariaInPlan) {
+          await supabase.from("messages").insert({
+            conversation_id: conversationId,
+            role: "assistant",
+            content: "I ranked the accepted opportunities against your Company Brain.",
+            agent_slug: "aria",
+            metadata: { plan_id, agent_id: "aria", workflow_step: "rank", status: "complete" },
+          });
+        }
+
+        // 3. Pilot wraps with workbench-open + next action card. The ui_panel
+        // stays on this Pilot message so the existing auto-open hook still fires.
+        const partialTail = partial ? ` Want me to broaden the search to fill the last ${Math.max(1, requested - produced)}?` : "";
+        const pilotWrap = allAccountOnly
+          ? `I opened the results in Workbench. Contact/enrichment/outreach columns are locked until you run those actions. Recommended next step: find decision-makers.${partialTail} Nothing was sent.`
+          : `I opened the results in Workbench. Recommended next step: ${ariaInPlan ? "review the ranked list" : "rank by fit"}, then research or draft outreach.${partialTail} Nothing was sent.`;
+        await supabase.from("messages").insert({
+          conversation_id: conversationId,
+          role: "assistant",
+          content: pilotWrap,
           agent_slug: "pilot",
-          metadata: { ui_card: card, ui_panel: uiPanel, post_lead_actions: true, plan_id, workflow_status: planStatus, can_draft: canDraft, next_action: nextAction.action, next_actions: outcome.next_actions, source_brief: sourceBrief, attempt_log: attemptSummary.length ? attemptSummary : [`Sourced ${produced}/${requested}`] },
+          metadata: { ui_card: card, ui_panel: uiPanel, post_lead_actions: true, plan_id, agent_id: "pilot", workflow_status: planStatus, can_draft: canDraft, next_action: nextAction.action, next_actions: outcome.next_actions, source_brief: sourceBrief },
         });
       }
     }
