@@ -175,13 +175,13 @@ export default function CommandDock({ sidebarCollapsed = false }: CommandDockPro
       <div
         className={cn(
           "fixed z-40 flex justify-center px-4 pointer-events-none",
-          isMobile ? "left-0 right-0" : sidebarCollapsed ? "left-16 right-0" : "left-[248px] right-0"
+          isMobile ? "left-0 right-0" : sidebarCollapsed ? "left-[68px] right-0" : "left-[260px] right-0"
         )}
         style={{
           bottom: 'calc(env(safe-area-inset-bottom, 0px) + 24px)',
         }}
       >
-        <div className={cn('w-full max-w-3xl pointer-events-auto relative', !isMobile && 'ml-16')}>
+        <div className={cn('w-full max-w-3xl pointer-events-auto relative', !isMobile && 'ml-[68px]')}>
           {/* Ambient emerald glow */}
           <motion.div
             aria-hidden
