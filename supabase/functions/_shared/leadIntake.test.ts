@@ -273,3 +273,26 @@ Deno.test("Phase1 save-existing: 'only keep US companies' is refine, not save-ex
   // not claim it (no save/keep-these wording with a results object).
   assertEquals(isSaveExistingResultsRequest("Only keep US companies"), false);
 });
+
+// ---- Submitted-brief source mapping (lead_source_brief routing) ----
+Deno.test("submitted-brief mapping: company_search → jobs actor (account opportunities)", () => {
+  const ti = leadRequestToToolInput({ source_type: "company_search", mode: "companies", company_category: "Recruiting Agency", industry: "B2B", location: "USA", target_role: "Founder", count: 5, needs_outreach: false, original_user_request: "x", company_brain_context_used: false });
+  assertEquals(ti.selected_actor_key, "apify_jobs");
+  assertEquals(ti.source_type, "jobs");
+});
+
+Deno.test("submitted-brief mapping: people_profiles → people actor, never jobs", () => {
+  const ti = leadRequestToToolInput({ source_type: "people_profiles", mode: "people", target_role: "Founder", industry: "B2B", location: "USA", count: 5, needs_outreach: false, original_user_request: "x", company_brain_context_used: false });
+  assertEquals(ti.selected_actor_key, "apify_people_search");
+  assert(ti.selected_actor_key !== "apify_jobs");
+});
+
+Deno.test("submitted-brief mapping: icp_search + companies mode → jobs (account)", () => {
+  const ti = leadRequestToToolInput({ source_type: "icp_search", mode: "companies", company_category: "Recruiting Agency", count: 5, needs_outreach: false, original_user_request: "x", company_brain_context_used: false });
+  assertEquals(ti.selected_actor_key, "apify_jobs");
+});
+
+Deno.test("modeFromLabel: people/companies labels", () => {
+  assertEquals(modeFromLabel("People / profiles"), "people");
+  assertEquals(modeFromLabel("Companies / accounts"), "companies");
+});

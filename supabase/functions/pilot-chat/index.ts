@@ -13,7 +13,8 @@ import { classifyWorkflow, SHORT_VAGUE_CLARIFICATION } from "../_shared/workflow
 import { validateAgainstCapabilities } from "../_shared/capabilityValidator.ts";
 import { loadConversationMemory, renderMemoryForPrompt, isFollowUpReference, extractTopN, type ConversationMemory } from "../_shared/memoryReader.ts";
 import { shouldGateForOnboarding, ONBOARDING_GATE_REPLY } from "../_shared/companyBrainGate.ts";
-import { isLeadIntakeRequest, hasNewSourcingIntent, isSaveExistingResultsRequest, extractLeadDetails, hasEnoughToRun, buildLeadSourceSelector, leadRequestToToolInput, leadRequestToInstruction, leadRequestToLinkedInFallbackInstruction, leadRequestToCompaniesInstruction, type LeadRequest, type ToolAvailability } from "../_shared/leadIntake.ts";
+import { isLeadIntakeRequest, hasNewSourcingIntent, isSaveExistingResultsRequest, extractLeadDetails, hasEnoughToRun, buildLeadSourceSelector, leadRequestToToolInput, leadRequestToInstruction, leadRequestToLinkedInFallbackInstruction, leadRequestToCompaniesInstruction, modeFromLabel, type LeadRequest, type LeadMode, type LeadSourceType, type ToolAvailability } from "../_shared/leadIntake.ts";
+import { normalizeTerm } from "../_shared/inputNormalize.ts";
 import { getActorByKey, isActorRuntimeEnabled } from "../_shared/actorRegistry.ts";
 import { isFindContactsRequest, personaForAccounts, buildContactSearchQueries, contactDiscoveryFallback, type AccountForContacts } from "../_shared/contactDiscovery.ts";
 import { buildCompanyBrainContext, hasUsableBrain, brainCompetitors } from "../_shared/companyBrainContext.ts";
@@ -584,6 +585,19 @@ Deno.serve(async (req) => {
     );
   }
 
+  // Submitted Lead Search Brief detection (computed early so no intermediate
+  // handler — validator clarification, etc. — can intercept it). When present,
+  // the dedicated handler below trusts this structured metadata and never
+  // reopens the Lead Source Selector.
+  const submittedBrief = (actionSource === "lead_source_card" || actionSource === "lead_source_brief")
+    && actionMetadata?.lead_request && typeof actionMetadata.lead_request === "object" && !Array.isArray(actionMetadata.lead_request)
+    ? actionMetadata.lead_request as Record<string, unknown>
+    : null;
+  const submittedSourceType = typeof actionMetadata?.source_type === "string"
+    ? actionMetadata.source_type as LeadSourceType
+    : null;
+  const hasSubmittedBrief = !!(submittedBrief && submittedSourceType);
+
   // 5c.0 Phase 2: follow-up shortcuts driven by persistent memory.
   // Only triggers when message references previous results AND we have memory.
   const followUpRef = isFollowUpReference(message);
@@ -804,8 +818,10 @@ Deno.serve(async (req) => {
 
 
   // 5c.i Validator rejected (e.g. people actor disabled, Firecrawl missing,
-  // unknown actor) → surface its clarification and stop.
-  if (!validated.ok && validated.clarification) {
+  // unknown actor) → surface its clarification and stop. Skipped for a submitted
+  // Lead Search Brief — that flows to the deterministic handler below (which has
+  // its own honest people-actor fallback) so it never reopens the selector.
+  if (!validated.ok && validated.clarification && !hasSubmittedBrief) {
     return await replyAndReturn(validated.clarification, {
       clarification: true,
       validator_reason: validated.reason ?? null,
@@ -860,6 +876,108 @@ Deno.serve(async (req) => {
         attach_to_accounts: accounts.map((a) => ({ lead_candidate_id: a.lead_candidate_id, company: a.company, signal_role: a.signal_role })),
         user_input: { keywords: queries },
       } as unknown as ToolInput,
+      modelUsed: "google/gemini-3-flash-preview", providerUsed: "lovable-ai",
+    });
+  }
+
+  // 5c.ii-a2 Submitted Lead Search Brief — the user already picked a source in
+  // the Lead Source Selector and filled the brief. TRUST the structured metadata
+  // (source_type + lead_request); never re-parse the text and never reopen the
+  // selector. Run the selected workflow deterministically, or ask for the ONE
+  // specific missing field. This is the fix for "brief submit reopens selector".
+  if (submittedBrief && submittedSourceType) {
+    const norm = (s: unknown) => { const t = typeof s === "string" ? s.trim() : ""; return t ? (normalizeTerm(t) || t) : ""; };
+    const lr = submittedBrief;
+    const count = Math.max(1, Math.min(25, parseInt(String(lr.count ?? "5"), 10) || 5));
+    const role = norm(lr.target_role);
+    const industry = norm(lr.industry);
+    const location = norm(lr.location);
+    const category = norm(lr.company_category);
+    const topic = norm(lr.topic);
+    const competitorsRaw = norm(lr.competitors);
+    const postUrl = typeof lr.post_url === "string" ? lr.post_url.trim() : "";
+    const stage = norm(lr.stage);
+    const modeLabel = typeof lr.mode === "string" ? lr.mode : "";
+
+    // Resolve the effective source_type + mode. ICP / normal leads decides
+    // people vs. company opportunities (account-first unless people is explicit).
+    let effSource: LeadSourceType = submittedSourceType;
+    let mode: LeadMode = modeFromLabel(modeLabel);
+    const PERSON_ROLE_RE = /\b(founder|co-?founder|ceo|cto|cfo|coo|cmo|vp|head|owner|partner|director|chief|president|operator)\b/i;
+    if (submittedSourceType === "icp_search") {
+      const wantsPeople = /\b(people|profile|person|individual)\b/i.test(modeLabel);
+      const wantsCompanies = /\b(compan|account|agenc|firm|org)/i.test(modeLabel);
+      if (wantsPeople) { effSource = "people_profiles"; mode = "people"; }
+      else if (wantsCompanies) { effSource = "company_search"; mode = "companies"; }
+      else if (category) { effSource = "company_search"; mode = "companies"; }       // role+category → account opportunities first
+      else if (role && PERSON_ROLE_RE.test(role)) { effSource = "people_profiles"; mode = "people"; }
+      else { effSource = "company_search"; mode = "companies"; }
+    }
+
+    const sourceLabel = ({
+      icp_search: "ICP / normal leads", hiring_signal: "Hiring signals", company_search: "Company / category search",
+      people_profiles: "Founder / profile search", linkedin_posts: "LinkedIn intent posts",
+      linkedin_comments: "LinkedIn comments / engagement", competitor_engagement: "Competitor engagement", memory_refine: "Refine",
+    } as Record<string, string>)[submittedSourceType] ?? "that source";
+
+    // Minimum-field check — ask for the SPECIFIC missing field, never the selector.
+    const hasFocus = !!(role || category || industry || topic || competitorsRaw);
+    const missingField =
+      (effSource === "linkedin_comments" && !postUrl && !topic && !category) ? "a LinkedIn post URL or a topic"
+      : (effSource === "competitor_engagement" && !competitorsRaw && !category && !topic) ? "a competitor name or category"
+      : (!hasFocus && !location) ? "a role/persona, company category, or location"
+      : null;
+    if (missingField) {
+      return await replyAndReturn(
+        `I have ${sourceLabel} selected — I just need ${missingField} to run the search. Reply with that and Scout will start. Nothing will be sent.`,
+        { lead_brief_missing_field: true, source_type: submittedSourceType, lead_request: lr },
+      );
+    }
+
+    const competitors = competitorsRaw ? competitorsRaw.split(/[,;]+/).map((c) => c.trim()).filter(Boolean) : undefined;
+    const req: LeadRequest = {
+      source_type: effSource, mode,
+      target_role: role || undefined, industry: industry || undefined, location: location || undefined,
+      company_category: category || undefined, topic: topic || undefined, stage: stage || undefined,
+      competitors, post_url: postUrl || undefined,
+      count, needs_outreach: false,
+      original_user_request: message, company_brain_context_used: brainReady,
+    };
+    const ti = leadRequestToToolInput(req);
+
+    // People capability check — honest fallback (offer companies/LinkedIn), NEVER the selector.
+    if (ti.selected_actor_key === "apify_people_search") {
+      const actor = getActorByKey("apify_people_search");
+      if (!actor || !isActorRuntimeEnabled(actor)) {
+        const companiesReq: LeadRequest = { ...req, source_type: "company_search", mode: "companies" };
+        return await replyAndReturn(
+          `People/profile search isn't configured yet, so I can't pull individual ${role || "founder"} profiles. I can instead find matching companies/accounts${category ? ` (${category})` : ""}, or LinkedIn engagement signals — which would you like? Nothing will be sent.`,
+          { lead_people_unavailable: true, source_type: submittedSourceType,
+            ui_actions: [
+              { label: "Search companies / accounts instead", message: leadRequestToCompaniesInstruction(companiesReq) },
+              { label: "Use LinkedIn engagement instead", message: leadRequestToLinkedInFallbackInstruction(req) },
+            ] },
+        );
+      }
+    }
+
+    // Clearer instruction copy (Fix 3) for the ICP people/company shapes.
+    const ind = industry ? ` in ${industry}` : "";
+    const where = location && !/^any/i.test(location) ? ` in ${location}` : "";
+    let instruction: string;
+    if (effSource === "people_profiles") {
+      instruction = `Find ${count} ${role || "founder"} profiles${category ? ` at ${category}` : ""}${ind}${where}. Open results in Workbench. Do not send outreach.`;
+    } else if (effSource === "company_search") {
+      instruction = `Find ${count} ${category || "companies"}${ind}${where}${role ? ` where a ${role.toLowerCase()} or owner is likely the decision-maker` : ""}. Open results in Workbench. Do not send outreach.`;
+    } else {
+      instruction = leadRequestToInstruction(req);
+    }
+
+    console.log("[pilot-chat] submitted lead brief", { source_type: submittedSourceType, effSource, mode, actor: ti.selected_actor_key });
+    return await delegateToOrchestrate({
+      admin, SUPABASE_URL, SUPABASE_ANON_KEY, authHeader,
+      conversationId: conversationId!, workspaceId, instruction,
+      toolInput: { ...ti, confidence: 0.95, missing_fields: [] } as unknown as ToolInput,
       modelUsed: "google/gemini-3-flash-preview", providerUsed: "lovable-ai",
     });
   }

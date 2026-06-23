@@ -14,6 +14,11 @@ const TYPO_MAP: Record<string, string> = {
   foudner: "founder",
   enginer: "engineer",
   markting: "marketing",
+  recruting: "recruiting",
+  recruitng: "recruiting",
+  recuiting: "recruiting",
+  agencey: "agency",
+  agncy: "agency",
 };
 
 // Multi-word phrase fixes applied before word-level fixes.

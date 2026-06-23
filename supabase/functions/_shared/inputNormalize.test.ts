@@ -61,3 +61,8 @@ Deno.test("dedupeByKey removes duplicates across attempts", () => {
   const items = [{ id: "a" }, { id: "b" }, { id: "a" }, { id: "" }];
   assertEquals(dedupeByKey(items, (x) => x.id).length, 2);
 });
+
+Deno.test("normalizeTerm: Recruting → recruiting (typo fix, no literal typo)", () => {
+  assert(!/recruting/i.test(normalizeTerm("Recruting Agency")), "should not contain the typo");
+  assertEquals(normalizeTerm("recruting"), "recruiting");
+});
