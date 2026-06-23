@@ -69,10 +69,15 @@ export default function Workflows() {
     return map;
   }, [filtered]);
 
-  const recommended = useMemo(
-    () => WORKFLOWS.filter((w) => w.recommended && resolveStatus(w, tools) !== 'coming_soon').slice(0, 4),
-    [tools]
-  );
+  const recommended = useMemo(() => {
+    const fromBrain = recommendWorkflows(brain?.profile, WORKFLOWS, 4)
+      .map((r) => ({ workflow: r.workflow, reason: r.reasons[0] }));
+    if (fromBrain.length > 0) return fromBrain;
+    return WORKFLOWS
+      .filter((w) => w.recommended && resolveStatus(w, tools) !== 'coming_soon')
+      .slice(0, 4)
+      .map((w) => ({ workflow: w, reason: undefined as string | undefined }));
+  }, [brain?.profile, tools]);
 
   const lastRunByWorkflow = useMemo(() => {
     const map: Record<string, number> = {};
