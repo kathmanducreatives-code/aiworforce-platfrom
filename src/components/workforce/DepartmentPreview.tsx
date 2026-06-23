@@ -35,38 +35,32 @@ export default function DepartmentPreview({ agentId, totals, brainComplete }: Pr
   const actions = cfg.actions(totals, brainComplete);
 
   return (
-    <div
-      className={cn(
-        'rounded-xl p-5 lg:p-6',
-        'bg-white/[0.015] border border-white/[0.06] backdrop-blur-xl',
-        'shadow-[0_8px_24px_-12px_rgba(0,0,0,0.5)]',
-      )}
-    >
-      <div className="grid grid-cols-1 lg:grid-cols-[300px_1fr_200px] gap-6 lg:gap-8 items-start">
+    <div className={cn('card-premium p-6 lg:p-7')}>
+      <div className="grid grid-cols-1 lg:grid-cols-[320px_1fr_220px] gap-7 lg:gap-9 items-start">
         {/* Identity */}
-        <div className="flex items-start gap-3.5">
+        <div className="flex items-start gap-4">
           <div
-            className="h-11 w-11 rounded-lg flex items-center justify-center border shrink-0"
+            className="h-12 w-12 rounded-lg flex items-center justify-center border shrink-0"
             style={{
               borderColor: `${cfg.ringHex}40`,
               background: `${cfg.ringHex}10`,
             }}
           >
-            <Icon className="h-[20px] w-[20px]" style={{ color: cfg.ringHex }} strokeWidth={1.75} />
+            <Icon className="h-[22px] w-[22px]" style={{ color: cfg.ringHex }} strokeWidth={1.75} />
           </div>
           <div className="min-w-0">
-            <div className="eyebrow mb-1">{meta.name} · {meta.role}</div>
-            <h3 className="text-[15px] font-semibold text-white tracking-tight leading-tight">{cfg.title}</h3>
-            <p className="text-[12.5px] text-neutral-400 mt-1 leading-snug">{cfg.subtitle}</p>
+            <div className="eyebrow mb-1.5">{meta.name} · {meta.role}</div>
+            <h3 className="text-[20px] font-semibold text-white tracking-tight leading-tight">{cfg.title}</h3>
+            <p className="text-[14.5px] text-neutral-400 mt-1.5 leading-snug">{cfg.subtitle}</p>
           </div>
         </div>
 
         {/* Stats — inline KPI row, no individual card chrome */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-px bg-white/[0.04] rounded-lg overflow-hidden border border-white/[0.04]">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-px bg-white/[0.05] rounded-lg overflow-hidden border border-white/[0.06]">
           {stats.map((s) => (
-            <div key={s.label} className="px-4 py-3 bg-[#0a0a0a]">
+            <div key={s.label} className="px-4 py-4 bg-[#0a0a0a]">
               <div className="eyebrow">{s.label}</div>
-              <div className={cn('text-[20px] font-semibold num mt-1 leading-none', toneClass[s.tone ?? 'default'])}>
+              <div className={cn('text-[26px] font-semibold num mt-2 leading-none tracking-tight', toneClass[s.tone ?? 'default'])}>
                 {s.value}
               </div>
             </div>
@@ -74,16 +68,16 @@ export default function DepartmentPreview({ agentId, totals, brainComplete }: Pr
         </div>
 
         {/* Actions */}
-        <div className="flex flex-col gap-1.5">
+        <div className="flex flex-col gap-2">
           {actions.map((a) => (
             <button
               key={a.label}
               onClick={() => navigate(a.route)}
               className={cn(
-                'group inline-flex items-center justify-between gap-2 px-3 h-9 rounded-md text-[12.5px] font-medium transition-colors',
+                'group inline-flex items-center justify-between gap-2 px-4 h-10 rounded-md text-[14px] font-semibold transition-colors',
                 a.primary
                   ? 'text-black'
-                  : 'text-neutral-300 bg-white/[0.025] border border-white/[0.06] hover:bg-white/[0.05] hover:text-white',
+                  : 'text-neutral-200 bg-white/[0.03] border border-white/[0.08] hover:bg-white/[0.06] hover:text-white',
               )}
               style={
                 a.primary
@@ -95,7 +89,7 @@ export default function DepartmentPreview({ agentId, totals, brainComplete }: Pr
               }
             >
               <span>{a.label}</span>
-              <ArrowUpRight className="h-3.5 w-3.5 opacity-70 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform" />
+              <ArrowUpRight className="h-4 w-4 opacity-70 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform" />
             </button>
           ))}
         </div>
