@@ -207,7 +207,7 @@ export default function ExecutionPlanCard({ planId, meta }: Props) {
         <AgentProcessRail
           className="pt-1 shrink-0"
           steps={tasks.map((t) => ({
-            slug: t.agent_id ? agentById[t.agent_id] ?? null : null,
+            slug: slugForTask(t),
             status: t.status as any,
           }))}
         />
@@ -217,7 +217,7 @@ export default function ExecutionPlanCard({ planId, meta }: Props) {
               key={t.id}
               index={i}
               task={t}
-              agentSlug={t.agent_id ? agentById[t.agent_id] ?? null : null}
+              agentSlug={slugForTask(t)}
               latestToolCall={latestToolCallByTask[t.id] ?? null}
               approval={approvalByTask[t.id] ?? null}
               connectorMissingFor={connectorMissingFor}
