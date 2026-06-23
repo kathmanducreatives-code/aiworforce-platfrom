@@ -12,6 +12,8 @@ import {
 } from '@/lib/workflows/registry';
 import { useToolAvailability } from '@/lib/workflows/useToolAvailability';
 import { useWorkspace } from '@/contexts/WorkspaceContext';
+import { useCompanyBrain } from '@/hooks/useCompanyBrain';
+import { recommendWorkflows } from '@/lib/workflows/recommend';
 import { pilotChat } from '@/lib/pilotChat';
 import { listRecentRuns, recordRun, summarizeInputs, type RecentRun } from '@/lib/workflows/recentRuns';
 import { AGENT_BY_ID } from '@/data/agentProfiles';
