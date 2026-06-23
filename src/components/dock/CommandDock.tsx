@@ -27,7 +27,11 @@ const CHIPS = [
   'Run morning standup',
 ];
 
-export default function CommandDock() {
+interface CommandDockProps {
+  sidebarCollapsed?: boolean;
+}
+
+export default function CommandDock({ sidebarCollapsed = false }: CommandDockProps) {
   const { mode, open, view, setView, setPending } = useChatWorkspace();
   const { workspaceId } = useWorkspace();
   const isMobile = useIsMobile();
