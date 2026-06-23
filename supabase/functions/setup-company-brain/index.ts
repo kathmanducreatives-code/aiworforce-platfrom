@@ -74,10 +74,11 @@ Deno.serve(async (req) => {
     }
 
     if (action === "save_structured") {
-      // Shallow-merge nested groups: icp/goals/positioning/brand_voice/competitors/approval_rules.
-      // Never invent values; absent keys stay empty.
+      // Shallow-merge nested groups. Never invent values; absent keys stay empty.
       const allowed: (keyof StructuredBrainPatch)[] = [
-        "icp", "goals", "positioning", "brand_voice", "competitors", "approval_rules",
+        "founder", "company", "icp", "goals", "gtm", "positioning",
+        "brand_voice", "competitors", "approval_rules",
+        "workflow_preferences", "integration_status", "onboarding_meta",
       ];
       const patch: StructuredBrainPatch = {};
       for (const k of allowed) {
