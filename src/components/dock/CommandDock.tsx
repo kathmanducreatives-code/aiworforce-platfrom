@@ -27,7 +27,11 @@ const CHIPS = [
   'Run morning standup',
 ];
 
-export default function CommandDock() {
+interface CommandDockProps {
+  sidebarCollapsed?: boolean;
+}
+
+export default function CommandDock({ sidebarCollapsed = false }: CommandDockProps) {
   const { mode, open, view, setView, setPending } = useChatWorkspace();
   const { workspaceId } = useWorkspace();
   const isMobile = useIsMobile();
@@ -167,9 +171,12 @@ export default function CommandDock() {
         )}
       </AnimatePresence>
 
-      {/* The dock — floating, centered, bottom */}
+      {/* The dock — floating, centered within main content area, bottom */}
       <div
-        className="fixed left-0 right-0 z-40 flex justify-center px-4 pointer-events-none"
+        className={cn(
+          "fixed z-40 flex justify-center px-4 pointer-events-none",
+          isMobile ? "left-0 right-0" : sidebarCollapsed ? "left-16 right-0" : "left-[248px] right-0"
+        )}
         style={{
           bottom: 'calc(env(safe-area-inset-bottom, 0px) + 24px)',
         }}
