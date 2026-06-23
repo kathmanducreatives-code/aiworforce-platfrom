@@ -274,17 +274,17 @@ function CategoryButton({ active, onClick, label, count }: { active: boolean; on
     <button
       onClick={onClick}
       className={cn(
-        'w-full flex items-center justify-between px-3 h-8 rounded-md text-[12.5px] transition-all border',
+        'w-full flex items-center justify-between px-3 h-9 rounded-md text-[14.5px] transition-all border',
         active
-          ? 'bg-emerald-500/[0.08] text-foreground border-emerald-500/20'
-          : 'text-neutral-400 hover:text-foreground hover:bg-white/[0.02] border-transparent',
+          ? 'bg-emerald-500/[0.09] text-foreground font-semibold border-emerald-500/25'
+          : 'text-neutral-300 hover:text-foreground hover:bg-white/[0.03] border-transparent',
       )}
     >
       <span className="flex items-center gap-2">
-        {active && <ChevronRight className="w-3 h-3 text-emerald-400" />}
+        {active && <ChevronRight className="w-3.5 h-3.5 text-emerald-400" />}
         {label}
       </span>
-      <span className="text-[10px] font-mono text-neutral-600">{count}</span>
+      <span className="text-[11.5px] font-mono text-neutral-500 tabular-nums">{count}</span>
     </button>
   );
 }
