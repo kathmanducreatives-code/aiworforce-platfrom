@@ -23,19 +23,20 @@ function uniq(a: string[]): string[] {
 
 export function brainCompanyName(p: Profile): string | null {
   const o = obj(p);
-  return str(o.company_name) ?? str(o.company) ?? str(o.name);
+  const company = obj(o.company);
+  return str(company.name) ?? str(o.company_name) ?? str(o.company) ?? str(o.name);
 }
 
 export function brainCompetitors(p: Profile): string[] {
   const o = obj(p);
   const c = obj(o.competitors);
-  // structured: competitors.known/adjacent ; flat: competitors as array/string
   return uniq([...arr(c.known), ...arr(c.adjacent), ...arr(o.competitors)]);
 }
 
 export function brainDescription(p: Profile): string | null {
   const o = obj(p);
-  return str(o.what_we_do) ?? str(o.description) ?? str(obj(o.positioning).promise);
+  const company = obj(o.company);
+  return str(company.description) ?? str(o.what_we_do) ?? str(o.description) ?? str(o.short_description) ?? str(obj(o.positioning).promise);
 }
 
 export function brainICP(p: Profile): string | null {
