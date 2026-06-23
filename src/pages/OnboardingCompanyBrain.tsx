@@ -729,7 +729,7 @@ export default function OnboardingCompanyBrain() {
                 <div className="text-xs text-muted-foreground">{hint}</div>
               </div>
               <Switch
-                checked={structured.approval_rules[key]}
+                checked={!!structured.approval_rules[key as keyof typeof structured.approval_rules]}
                 onCheckedChange={(v) => setStructured({ ...structured, approval_rules: { ...structured.approval_rules, [key]: v } })}
               />
             </div>
