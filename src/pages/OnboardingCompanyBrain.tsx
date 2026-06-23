@@ -388,6 +388,7 @@ export default function OnboardingCompanyBrain() {
       }));
       const mapped = mapDraftToStructured(draft);
       setStructured((s) => ({
+        ...s,
         icp:            { ...mapped.icp,            ...nonEmpty(s.icp) },
         goals:          { ...mapped.goals,          ...nonEmpty(s.goals) },
         positioning:    { ...mapped.positioning,    ...nonEmpty(s.positioning) },
