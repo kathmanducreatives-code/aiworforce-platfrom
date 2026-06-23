@@ -26,7 +26,9 @@ Deno.serve((req) => {
 
   const apifyToken = present("APIFY_API_TOKEN");
   const peopleEnabled = bool("APIFY_ENABLE_PEOPLE_SEARCH", false) && apifyToken;
-  const commentsEnabled = bool("APIFY_ENABLE_COMMENTS", false) && apifyToken;
+  // Use the canonical flag name (matches actorRegistry: apify_linkedin_post_comments);
+  // accept the legacy APIFY_ENABLE_COMMENTS as an alias so older envs still work.
+  const commentsEnabled = (bool("APIFY_ENABLE_LINKEDIN_POST_COMMENTS", false) || bool("APIFY_ENABLE_COMMENTS", false)) && apifyToken;
 
   const availability = {
     gemini: {

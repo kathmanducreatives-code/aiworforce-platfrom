@@ -47,7 +47,10 @@ export const DEFAULT_TOOL_AVAILABILITY: ToolAvailabilityMap = {
   apify_people: { key: 'apify_people', enabled: false, configured: false, reason_if_unavailable: 'People actor disabled by workspace flag', fallback_workflow: 'linkedin_intent_posts' },
   apify_posts: { key: 'apify_posts', enabled: true, configured: true },
   apify_comments: { key: 'apify_comments', enabled: false, configured: false, reason_if_unavailable: 'Comments actor not configured', fallback_workflow: 'linkedin_intent_posts' },
-  firecrawl: { key: 'firecrawl', enabled: true, configured: true },
+  // Conservative offline default: Firecrawl needs FIRECRAWL_API_KEY, so don't
+  // claim "ready" when the tool-availability probe is unreachable — the live
+  // edge function reports the true state.
+  firecrawl: { key: 'firecrawl', enabled: false, configured: false, reason_if_unavailable: 'No Firecrawl key configured', fallback_workflow: 'market_research' },
   resend_draft: { key: 'resend_draft', enabled: true, configured: true },
   supabase: { key: 'supabase', enabled: true, configured: true },
   csv_export: { key: 'csv_export', enabled: true, configured: true },
