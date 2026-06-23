@@ -1,4 +1,6 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
+import { Sparkles, X } from 'lucide-react';
 import { useWorkspace } from '@/contexts/WorkspaceContext';
 import { useWorkforceState } from '@/hooks/useWorkforceState';
 import CompanyBrainStrip from '@/components/workforce/CompanyBrainStrip';
