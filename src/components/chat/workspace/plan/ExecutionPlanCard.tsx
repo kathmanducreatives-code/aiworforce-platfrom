@@ -46,17 +46,25 @@ export default function ExecutionPlanCard({ planId, meta }: Props) {
   const { plan, tasks, activity, approvals, toolCalls, loading } = usePlanDetail(planId);
   const { setView, openWorkbench } = useChatWorkspace();
 
-  const handleOpenOutput = (taskId: string, toolCallId?: string | null) => {
-    const task = tasks.find((t) => t.id === taskId);
-    const slug = task?.agent_id ? agentById[task.agent_id] ?? null : null;
-    openWorkbench({ planId, taskId, agentSlug: slug, toolCallId: toolCallId ?? null });
-  };
-
   const agentById = useMemo(() => {
     const m: Record<string, string> = {};
     for (const a of agents) m[a.id] = a.slug;
     return m;
   }, [agents]);
+
+  /** Prefer the task's own agent_slug column; fall back to id lookup. */
+  const slugForTask = (t: { agent_id?: string | null; agent_slug?: string | null; description?: string | null; payload?: any }): string | null => {
+    if (t.agent_slug) return t.agent_slug;
+    if (t.agent_id && agentById[t.agent_id]) return agentById[t.agent_id];
+    const fromPayload = t.payload?.agent_slug ?? t.payload?.metadata?.agent_slug ?? null;
+    return fromPayload ?? null;
+  };
+
+  const handleOpenOutput = (taskId: string, toolCallId?: string | null) => {
+    const task = tasks.find((t) => t.id === taskId);
+    const slug = task ? slugForTask(task) : null;
+    openWorkbench({ planId, taskId, agentSlug: slug, toolCallId: toolCallId ?? null });
+  };
 
   const latestToolCallByTask = useMemo(() => {
     const m: Record<string, DBToolCall> = {};
@@ -108,7 +116,7 @@ export default function ExecutionPlanCard({ planId, meta }: Props) {
   const agentSlugs = useMemo(() => {
     const set = new Set<string>();
     for (const t of tasks) {
-      const slug = t.agent_id ? agentById[t.agent_id] : null;
+      const slug = slugForTask(t);
       if (slug) set.add(slug);
     }
     for (const a of meta?.agents ?? []) set.add(a.toLowerCase());
@@ -138,10 +146,7 @@ export default function ExecutionPlanCard({ planId, meta }: Props) {
   }, [toolCalls]);
 
   const executionMode = meta?.execution_mode ?? (plan as any)?.payload?.execution_mode ?? null;
-  const pennInvolved = agentSlugs.includes('penn') || tasks.some((t) => {
-    const slug = t.agent_id ? agentById[t.agent_id] : null;
-    return slug === 'penn';
-  });
+  const pennInvolved = agentSlugs.includes('penn') || tasks.some((t) => slugForTask(t) === 'penn');
 
   if (loading && !plan) {
     return (
@@ -202,7 +207,7 @@ export default function ExecutionPlanCard({ planId, meta }: Props) {
         <AgentProcessRail
           className="pt-1 shrink-0"
           steps={tasks.map((t) => ({
-            slug: t.agent_id ? agentById[t.agent_id] ?? null : null,
+            slug: slugForTask(t),
             status: t.status as any,
           }))}
         />
@@ -212,7 +217,7 @@ export default function ExecutionPlanCard({ planId, meta }: Props) {
               key={t.id}
               index={i}
               task={t}
-              agentSlug={t.agent_id ? agentById[t.agent_id] ?? null : null}
+              agentSlug={slugForTask(t)}
               latestToolCall={latestToolCallByTask[t.id] ?? null}
               approval={approvalByTask[t.id] ?? null}
               connectorMissingFor={connectorMissingFor}

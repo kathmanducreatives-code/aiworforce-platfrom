@@ -169,6 +169,7 @@ export interface DBTask {
   id: string;
   plan_id: string;
   agent_id: string | null;
+  agent_slug?: string | null;
   step_index: number;
   description: string;
   status: 'pending' | 'running' | 'complete' | 'failed' | 'skipped';
