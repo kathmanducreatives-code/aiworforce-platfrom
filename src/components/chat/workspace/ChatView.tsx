@@ -1,8 +1,8 @@
-import { useEffect, useRef, useState } from 'react';
-import { Copy, Check } from 'lucide-react';
+import { Fragment, useEffect, useRef, useState } from 'react';
+import { ArrowRight, Copy, Check } from 'lucide-react';
 import { useChatConversation } from '@/hooks/useChatConversation';
 import { useChatWorkspace, type LeadResultsPanelMeta } from '@/contexts/ChatWorkspaceContext';
-import { resolveAgentFromMetadata } from '@/lib/agentResolver';
+import { resolveAgent, resolveAgentFromMetadata } from '@/lib/agentResolver';
 import { cn } from '@/lib/utils';
 import ExecutionPlanCard from './plan/ExecutionPlanCard';
 import ClarificationCard from './bubbles/ClarificationCard';
@@ -10,9 +10,22 @@ import LeadIntakeCard, { type LeadIntakeFormPayload } from './bubbles/LeadIntake
 import LeadSourceCard, { type LeadSourceSelectorPayload } from './bubbles/LeadSourceCard';
 import PostLeadActionsCard, { type PostLeadActionsCardPayload } from './bubbles/PostLeadActionsCard';
 import InterpretationPill from './bubbles/InterpretationPill';
+import SafetyChip from './bubbles/SafetyChip';
 import AgentAvatar from './agents/AgentAvatar';
 import AgentTypingIndicator from './AgentTypingIndicator';
 import { dispatchChatAction } from '@/lib/chatActions';
+
+/** Convert a #RRGGBB hex to an rgba() string with the given alpha. */
+function hexToRgba(hex: string, alpha: number): string {
+  const h = hex.replace('#', '');
+  const v = h.length === 3 ? h.split('').map((c) => c + c).join('') : h;
+  const r = parseInt(v.slice(0, 2), 16);
+  const g = parseInt(v.slice(2, 4), 16);
+  const b = parseInt(v.slice(4, 6), 16);
+  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+}
+
+
 
 
 function isStructured(text: string): boolean {
