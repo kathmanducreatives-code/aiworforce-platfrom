@@ -3,7 +3,7 @@ import AgentBadge from './AgentBadge';
 import ToolStatusBadge from './ToolStatusBadge';
 import ApprovalBadge from './ApprovalBadge';
 import { CheckCircle2, Circle, Loader2, XCircle } from 'lucide-react';
-import { resolveAgent } from '@/lib/agentResolver';
+import { resolveAgent, inferAgentFromContent } from '@/lib/agentResolver';
 
 /** Tiny per-agent outcome chip rendered next to the agent badge. */
 function ReactionChip({ slug, task, toolCall }: { slug: string | null; task: DBTask; toolCall?: DBToolCall | null }) {
@@ -88,6 +88,15 @@ export default function ExecutionTaskRow({
   const actorKey = metaToolInput?.selected_actor_key ?? null;
   const actorReason = metaToolInput?.reason ?? null;
 
+  // Final fallback: infer agent from the task title/description so a planning
+  // or untagged step never misleadingly claims Pilot's identity for sourcing,
+  // ranking, research, drafting, or content work.
+  const effectiveSlug = agentSlug
+    ?? (task as any).agent_slug
+    ?? payload.agent_slug
+    ?? inferAgentFromContent(`${title} ${task.description ?? ''}`)
+    ?? null;
+
   const canOpenOutput =
     !!onOpenOutput && (task.status === 'complete' || task.status === 'failed' || !!latestToolCall);
 
@@ -102,8 +111,8 @@ export default function ExecutionTaskRow({
           {String(index + 1).padStart(2, '0')}
         </span>
         <StatusIcon status={task.status} />
-        <AgentBadge slug={agentSlug} />
-        <ReactionChip slug={agentSlug} task={task} toolCall={latestToolCall} />
+        <AgentBadge slug={effectiveSlug} />
+        <ReactionChip slug={effectiveSlug} task={task} toolCall={latestToolCall} />
 
         <div className="flex-1 min-w-[200px]">
           <div className="text-[13px] text-[#F0F6FC] leading-snug">{title}</div>

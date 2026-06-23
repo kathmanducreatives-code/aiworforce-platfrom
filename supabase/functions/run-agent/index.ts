@@ -531,7 +531,8 @@ Deno.serve(async (req) => {
         await supabase.from("messages").insert({
           conversation_id: conversationId, role: "assistant",
           content: failMsg + " You can update the Apify token and retry, or pick a different lead source.",
-          agent_slug: "pilot", metadata: { ui_card: card, lead_sourcing_error: true, plan_id },
+          agent_slug: "scout",
+          metadata: { ui_card: card, lead_sourcing_error: true, plan_id, agent_id: "scout", workflow_step: "source_leads", status: "failed" },
         });
       }
     } catch (e) { console.warn("[run-agent] sourcing-error card failed:", e); }
@@ -548,20 +549,22 @@ Deno.serve(async (req) => {
     const nextStepSlug: string | null = planSteps[(step_index as number) + 1]?.agent_slug ?? null;
     const ariaFollows = planSteps.some((s, i) => i > (step_index as number) && s?.agent_slug === "aria");
 
-    // Decision-maker (contact-discovery) runs get a SPECIFIC honest message —
-    // never the generic "0 matching leads" — plus persona-broadening actions.
+    // Decision-maker (contact-discovery) runs get SPECIFIC honest copy — never the
+    // generic "0 matching leads". Per-agent messages (Scout/Aria/Pilot) per main.
     const attachAccts = Array.isArray(tool_input_body?.attach_to_accounts) ? tool_input_body.attach_to_accounts : null;
     const isContactDiscovery = !!(attachAccts && attachAccts.length > 0);
     const acctN = attachAccts?.length ?? 0;
-    const msg = isContactDiscovery
-      ? `Scout searched for decision-makers at ${acctN} account${acctN === 1 ? "" : "s"} but didn't find verified profiles. No contacts were attached, no credits charged, and nothing was sent. Try a broader persona, draft an account-level template, or export the accounts.`
-      : ariaFollows
-        ? `Scout ran ${sourcingAttemptsCount} attempt(s) and found 0 qualified matches. Aria was skipped because there were no accepted leads to rank. Try broadening the role, industry, or location — or pick another lead source. No leads were saved, no credits charged, and nothing was sent.`
-        : `Scout ran ${sourcingAttemptsCount} attempt(s) and found 0 qualified matches. Try broadening the role, industry, or location — or pick another lead source. No leads were saved, no credits charged, and nothing was sent.`;
+    const scoutMsg = isContactDiscovery
+      ? `I searched for decision-makers at ${acctN} account${acctN === 1 ? "" : "s"} but didn't find verified profiles. No contacts were attached.`
+      : `I reviewed ${sourcingAttemptsCount} attempt(s) and accepted 0 qualified leads. None of the raw results matched closely enough.`;
+    const ariaSkipMsg = "Skipped — there were no accepted leads to rank.";
+    const pilotRecMsg = isContactDiscovery
+      ? "Try a broader persona, draft an account-level template, or export the accounts. No contacts attached, no credits charged, nothing sent."
+      : "Try broadening the role, industry, or location — or pick another lead source. No leads were saved, no credits charged, nothing sent.";
 
     await supabase.from("tasks").update({
       status: "complete",
-      result: { output: msg, no_qualified_matches: true, attempt_log: adaptiveAttempts.length ? adaptiveAttempts : undefined },
+      result: { output: scoutMsg, no_qualified_matches: true, attempt_log: adaptiveAttempts.length ? adaptiveAttempts : undefined },
     }).eq("id", task.id);
     await supabase.from("task_plans").update({ status: "failed", completed_at: new Date().toISOString() }).eq("id", plan_id);
 
@@ -576,7 +579,7 @@ Deno.serve(async (req) => {
     await supabase.from("activity_feed").insert({
       workspace_id, plan_id, agent_id: agent.id, event_type: "plan_complete",
       title: "Plan failed — no qualified matches",
-      body: msg,
+      body: scoutMsg,
       metadata: { step_index, task_id: task.id, workflow_status: "no_qualified_matches" },
     });
     await supabase.from("activity_feed").insert({
@@ -593,10 +596,25 @@ Deno.serve(async (req) => {
         const failActions = isContactDiscovery
           ? ["broaden_search", "export_csv", "done"]
           : ["broaden_search", "edit_criteria", "change_source", "view_details", "done"];
+        // Scout: honest sourcing result
+        await supabase.from("messages").insert({
+          conversation_id: conversationId, role: "assistant",
+          content: scoutMsg, agent_slug: "scout",
+          metadata: { plan_id, agent_id: "scout", workflow_step: "source_leads", status: "no_qualified_matches", attempt_log: adaptiveAttempts.length ? adaptiveAttempts : undefined },
+        });
+        // Aria: skipped (only when ranking was actually in the plan)
+        if (ariaFollows) {
+          await supabase.from("messages").insert({
+            conversation_id: conversationId, role: "assistant",
+            content: ariaSkipMsg, agent_slug: "aria",
+            metadata: { plan_id, agent_id: "aria", workflow_step: "rank", status: "skipped", reason: "no_accepted_leads" },
+          });
+        }
+        // Pilot: coordinator recommendation + UI card actions
         const card = {
           kind: "lead_sourcing_error",
           title: isContactDiscovery ? "No decision-makers found" : "No qualified matches found",
-          message: msg,
+          message: pilotRecMsg,
           error: isContactDiscovery ? "no_decision_makers" : "no_qualified_matches",
           retry_command: instruction,
           next_actions: failActions,
@@ -604,8 +622,8 @@ Deno.serve(async (req) => {
         };
         await supabase.from("messages").insert({
           conversation_id: conversationId, role: "assistant",
-          content: msg, agent_slug: "pilot",
-          metadata: { ui_card: card, lead_sourcing_error: true, plan_id, workflow_status: "no_qualified_matches", aria_skipped: ariaFollows, next_actions: failActions, source_brief: instruction },
+          content: pilotRecMsg, agent_slug: "pilot",
+          metadata: { ui_card: card, lead_sourcing_error: true, plan_id, agent_id: "pilot", workflow_status: "no_qualified_matches", aria_skipped: ariaFollows, next_actions: failActions, source_brief: instruction },
         });
       }
     } catch (e) { console.warn("[run-agent] no-qualified-matches card failed:", e); }
@@ -903,12 +921,16 @@ Deno.serve(async (req) => {
 
       if (produced === 0 && conversationId) {
         // Actor ran but found nothing — honest "no results", never "complete".
+        // Scout speaks the operational result, then Pilot wraps with the recommendation card.
         const failBrief = (reqStep?.instruction as string) ?? undefined;
         const failActions = ["broaden_search", "edit_criteria", "change_source", "view_details", "done"];
+        const reviewedCount = sourceQuality?.raw_result_count ?? "the";
+        const scoutLine = `I reviewed ${reviewedCount} raw result${sourceQuality?.raw_result_count === 1 ? "" : "s"}, but none matched closely enough. I didn't save any leads.`;
+        const pilotLine = "Try broadening your criteria or changing the source. No credits charged, nothing sent.";
         const card = {
           kind: "lead_sourcing_error",
           title: "No qualified matches",
-          message: `Scout reviewed ${produced === 0 ? (sourceQuality?.raw_result_count ?? "the") : produced} raw result${sourceQuality?.raw_result_count === 1 ? "" : "s"}, but none matched closely enough. I didn't save any leads. Try broadening your criteria or changing the source. No credits charged, nothing sent.`,
+          message: `${scoutLine} ${pilotLine}`,
           error: "no_qualified_matches",
           retry_command: failBrief,
           next_actions: failActions,
@@ -916,8 +938,15 @@ Deno.serve(async (req) => {
         };
         await supabase.from("messages").insert({
           conversation_id: conversationId, role: "assistant",
-          content: `Scout reviewed ${sourceQuality?.raw_result_count ?? "the"} raw results, but none matched closely enough. I didn't save any leads. Try broadening your criteria or changing the source.`,
-          agent_slug: "pilot", metadata: { ui_card: card, lead_sourcing_error: true, plan_id, workflow_status: "failed", next_actions: failActions, source_brief: failBrief },
+          content: scoutLine,
+          agent_slug: "scout",
+          metadata: { plan_id, agent_id: "scout", workflow_step: "source_leads", status: "no_qualified_matches" },
+        });
+        await supabase.from("messages").insert({
+          conversation_id: conversationId, role: "assistant",
+          content: pilotLine,
+          agent_slug: "pilot",
+          metadata: { ui_card: card, lead_sourcing_error: true, plan_id, agent_id: "pilot", workflow_status: "failed", next_actions: failActions, source_brief: failBrief },
         });
       } else if (leadRows.length > 0 && conversationId) {
         const lo = await import("../_shared/leadOpportunity.ts");
@@ -983,23 +1012,50 @@ Deno.serve(async (req) => {
           source_brief: sourceBrief,
         };
 
-        // Phase 7 — definitive AI-employee process line (raw reviewed → accepted),
-        // so the user sees the workflow, never "30 results" when accepted is 0.
-        const reviewedLine = searchInsights?.raw_reviewed != null
-          ? `Scout reviewed ${searchInsights.raw_reviewed} raw result${searchInsights.raw_reviewed === 1 ? "" : "s"} and accepted ${produced}. `
-          : "";
-        // Partial invites broadening to fill the gap; complete confirms.
-        const partialTail = partial ? ` Want me to broaden the search to fill the last ${Math.max(1, requested - produced)}?` : "";
-        const chatCopy = allAccountOnly
-          ? `${partial ? `Found ${produced} of ${requested} — ` : ""}${reviewedLine}Scout found ${accounts} account opportunit${accounts === 1 ? "y" : "ies"}. These companies show intent, but decision-maker contacts aren't attached yet. I opened them in the lead table; contact, enrichment, and outreach columns are locked until you run those actions. Recommended next step: find decision-makers.${partialTail} Nothing was sent.`
-          : `${partial ? `Found ${produced} of ${requested} — ` : ""}${reviewedLine}Scout found ${contacts} contact-ready lead${contacts === 1 ? "" : "s"}. I opened them in the lead table. Recommended next step: rank by fit, then research or draft outreach.${partialTail} Nothing was sent.`;
+        // Phase 7 — split the post-lead summary into per-agent messages so the
+        // chat reads like a Slack-style team: Scout reports sourcing, Aria reports
+        // ranking (only if it actually ran), and Pilot wraps with the workbench
+        // open + recommended next action card.
+        const ariaInPlan = Array.isArray(plan?.steps)
+          ? (plan!.steps as any[]).some((s) => s?.agent_slug === "aria")
+          : false;
+        const reviewedSummary = searchInsights?.raw_reviewed != null
+          ? `I reviewed ${searchInsights.raw_reviewed} raw result${searchInsights.raw_reviewed === 1 ? "" : "s"} and accepted ${produced} qualified ${allAccountOnly ? "account opportunit" + (produced === 1 ? "y" : "ies") : "lead" + (produced === 1 ? "" : "s")}.`
+          : `I accepted ${produced} qualified ${allAccountOnly ? "account opportunit" + (produced === 1 ? "y" : "ies") : "lead" + (produced === 1 ? "" : "s")}.`;
+        const partialPrefix = partial ? `Found ${produced} of ${requested}. ` : "";
 
+        // 1. Scout speaks the sourcing outcome
         await supabase.from("messages").insert({
           conversation_id: conversationId,
           role: "assistant",
-          content: chatCopy,
+          content: `${partialPrefix}${reviewedSummary}`,
+          agent_slug: "scout",
+          metadata: { plan_id, agent_id: "scout", workflow_step: "source_leads", status: planStatus, attempt_log: attemptSummary.length ? attemptSummary : [`Sourced ${produced}/${requested}`] },
+        });
+
+        // 2. Aria speaks ranking (if it was in the plan)
+        if (ariaInPlan) {
+          await supabase.from("messages").insert({
+            conversation_id: conversationId,
+            role: "assistant",
+            content: "I ranked the accepted opportunities against your Company Brain.",
+            agent_slug: "aria",
+            metadata: { plan_id, agent_id: "aria", workflow_step: "rank", status: "complete" },
+          });
+        }
+
+        // 3. Pilot wraps with workbench-open + next action card. The ui_panel
+        // stays on this Pilot message so the existing auto-open hook still fires.
+        const partialTail = partial ? ` Want me to broaden the search to fill the last ${Math.max(1, requested - produced)}?` : "";
+        const pilotWrap = allAccountOnly
+          ? `I opened the results in Workbench. Contact/enrichment/outreach columns are locked until you run those actions. Recommended next step: find decision-makers.${partialTail} Nothing was sent.`
+          : `I opened the results in Workbench. Recommended next step: ${ariaInPlan ? "review the ranked list" : "rank by fit"}, then research or draft outreach.${partialTail} Nothing was sent.`;
+        await supabase.from("messages").insert({
+          conversation_id: conversationId,
+          role: "assistant",
+          content: pilotWrap,
           agent_slug: "pilot",
-          metadata: { ui_card: card, ui_panel: uiPanel, post_lead_actions: true, plan_id, workflow_status: planStatus, can_draft: canDraft, next_action: nextAction.action, next_actions: outcome.next_actions, source_brief: sourceBrief, attempt_log: attemptSummary.length ? attemptSummary : [`Sourced ${produced}/${requested}`] },
+          metadata: { ui_card: card, ui_panel: uiPanel, post_lead_actions: true, plan_id, agent_id: "pilot", workflow_status: planStatus, can_draft: canDraft, next_action: nextAction.action, next_actions: outcome.next_actions, source_brief: sourceBrief },
         });
       }
     }

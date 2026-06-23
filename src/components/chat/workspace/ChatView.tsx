@@ -114,7 +114,7 @@ export default function ChatView({ conversationId, agentSlug, pendingUserText, a
           );
         }
         const meta0 = (m.metadata ?? null) as Record<string, any> | null;
-        const msgProfile = resolveAgentFromMetadata(meta0, m.agent_slug ?? agentSlug);
+        const msgProfile = resolveAgentFromMetadata(meta0, m.agent_slug ?? agentSlug, m.content);
         const slug = msgProfile.id;
         const name = msgProfile.name;
         const role = msgProfile.role;

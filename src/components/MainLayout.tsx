@@ -53,7 +53,7 @@ const MainLayout = ({ children }: MainLayoutProps) => {
 
         <main
           className={`min-h-screen overflow-auto transition-all duration-300 relative z-10 ${
-            isMobile ? 'ml-0 pt-[72px]' : isSidebarCollapsed ? 'ml-16' : 'ml-[248px]'
+            isMobile ? 'ml-0 pt-[72px]' : isSidebarCollapsed ? 'ml-[68px]' : 'ml-[260px]'
           }`}
         >
           {/* Top Command Bar */}

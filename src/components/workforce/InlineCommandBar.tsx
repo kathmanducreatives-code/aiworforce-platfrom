@@ -30,39 +30,39 @@ export default function InlineCommandBar() {
   return (
     <section
       className={cn(
-        'relative rounded-2xl p-4',
-        'bg-white/[0.025] border border-white/[0.08] backdrop-blur-2xl',
+        'relative rounded-dock p-5',
+        'bg-white/[0.03] border border-white/[0.08] backdrop-blur-2xl',
         'shadow-[inset_0_1px_0_0_rgba(255,255,255,0.05),0_0_0_1px_rgba(16,185,129,0)]',
-        'focus-within:shadow-[inset_0_1px_0_0_rgba(255,255,255,0.05),0_0_0_1px_rgba(16,185,129,0.35),0_0_32px_rgba(16,185,129,0.18)]',
+        'focus-within:shadow-[inset_0_1px_0_0_rgba(255,255,255,0.06),0_0_0_1px_rgba(16,185,129,0.4),0_0_38px_rgba(16,185,129,0.22)]',
         'transition-shadow',
       )}
     >
-      <form onSubmit={onSubmit} className="flex items-center gap-2.5">
-        <div className="h-8 w-8 rounded-lg bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center shrink-0">
-          <Command className="h-4 w-4 text-emerald-400" />
+      <form onSubmit={onSubmit} className="flex items-center gap-3">
+        <div className="h-10 w-10 rounded-lg bg-emerald-500/12 border border-emerald-500/35 flex items-center justify-center shrink-0">
+          <Command className="h-[18px] w-[18px] text-emerald-300" />
         </div>
         <input
           value={value}
           onChange={(e) => setValue(e.target.value)}
           placeholder="Ask Pilot to run a workflow…"
-          className="flex-1 bg-transparent outline-none text-[14px] text-white placeholder:text-neutral-500"
+          className="flex-1 bg-transparent outline-none text-[15.5px] text-white placeholder:text-neutral-500"
         />
         <button
           type="submit"
           disabled={!value.trim()}
-          className="h-8 w-8 rounded-lg flex items-center justify-center bg-emerald-500/15 hover:bg-emerald-500/25 border border-emerald-500/30 text-emerald-300 disabled:opacity-30"
+          className="h-10 w-10 rounded-lg flex items-center justify-center bg-emerald-500/18 hover:bg-emerald-500/28 border border-emerald-500/35 text-emerald-200 disabled:opacity-30 transition-colors"
           aria-label="Send to Pilot"
         >
-          <ArrowRight className="h-4 w-4" />
+          <ArrowRight className="h-[18px] w-[18px]" />
         </button>
       </form>
-      <div className="mt-3 flex flex-wrap gap-1.5">
+      <div className="mt-4 flex flex-wrap gap-2">
         {CHIPS.map((c) => (
           <button
             key={c.label}
             type="button"
             onClick={() => run(c.prompt, c.route)}
-            className="inline-flex items-center h-7 px-2.5 rounded-full text-[11px] text-neutral-300 bg-white/[0.03] hover:bg-white/[0.07] hover:text-white border border-white/[0.06] transition-colors"
+            className="inline-flex items-center h-8 px-3 rounded-full text-[13px] font-medium text-neutral-200 bg-white/[0.04] hover:bg-white/[0.08] hover:text-white border border-white/[0.07] transition-colors"
           >
             {c.label}
           </button>
