@@ -3,7 +3,7 @@ import { useAuth } from '@/hooks/useAuth';
 import {
   LayoutDashboard, Radar, MessageSquare, Inbox,
   Users, Eye, BookOpen, Sparkles, Brain,
-  Mail, Plug, LogOut, HelpCircle, PanelLeftClose, PanelLeft,
+  Mail, Plug, LogOut, HelpCircle, PanelLeftClose, PanelLeft, Workflow,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -19,6 +19,7 @@ const navGroups: NavGroup[] = [
       { path: '/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
       { path: '/signals', icon: Radar, label: 'Signals' },
       { path: '/dashboard', icon: MessageSquare, label: 'Conversations' },
+      { path: '/workflows', icon: Workflow, label: 'Workflows' },
       { path: '/awaiting-you', icon: Inbox, label: 'Awaiting You', badge: '4', badgeColor: 'amber' },
     ],
   },
