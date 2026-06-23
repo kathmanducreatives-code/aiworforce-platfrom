@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react';
 import { ArrowUp, Hash, Loader2, Slash, X, AtSign } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
@@ -67,7 +67,7 @@ export default function ChatComposerPro({ restrictDepartment, placeholder, autoF
   const { workspaceId } = useWorkspace();
   const { agents } = useAgents(workspaceId);
   const { count: pendingApprovalCount } = useApprovals(workspaceId);
-  const { open, mode, view, setView, setPending } = useChatWorkspace();
+  const { open, mode, view, setView, setPending, setComposerFocused } = useChatWorkspace();
 
   const [value, setValue] = useState('');
   const [popup, setPopup] = useState<null | 'mention' | 'channel' | 'command'>(null);
@@ -76,6 +76,8 @@ export default function ChatComposerPro({ restrictDepartment, placeholder, autoF
   const [submitting, setSubmitting] = useState(false);
   const [showSuggestions, setShowSuggestions] = useState(false);
   const taRef = useRef<HTMLTextAreaElement>(null);
+  const composingRef = useRef(false); // IME composition guard
+  const autosizeRafRef = useRef<number | null>(null);
 
   const mentionCandidates = useMemo(
     () =>
@@ -88,17 +90,29 @@ export default function ChatComposerPro({ restrictDepartment, placeholder, autoF
   const channelCandidates = useMemo(() => DEPTS.filter((d) => d.id.startsWith(query.toLowerCase())), [query]);
   const commandCandidates = useMemo(() => COMMANDS.filter((c) => c.id.startsWith(query.toLowerCase())), [query]);
 
-  // Auto-resize
-  useEffect(() => {
-    const el = taRef.current;
-    if (!el) return;
-    el.style.height = 'auto';
-    el.style.height = Math.min(el.scrollHeight, 240) + 'px';
+  // Auto-resize — coalesced via rAF so fast typing/paste doesn't thrash layout.
+  useLayoutEffect(() => {
+    if (autosizeRafRef.current != null) cancelAnimationFrame(autosizeRafRef.current);
+    autosizeRafRef.current = requestAnimationFrame(() => {
+      const el = taRef.current;
+      if (!el) return;
+      const prev = el.style.height;
+      el.style.height = 'auto';
+      const next = Math.min(el.scrollHeight, 240) + 'px';
+      if (prev !== next) el.style.height = next;
+    });
+    return () => {
+      if (autosizeRafRef.current != null) cancelAnimationFrame(autosizeRafRef.current);
+    };
   }, [value]);
 
   useEffect(() => {
     if (autoFocus) taRef.current?.focus();
   }, [autoFocus]);
+
+  // Stable ref to the latest submit() so window listeners never go stale
+  // (and StrictMode double-mount can't drop/duplicate dispatched sends).
+  const submitRef = useRef<(text: string, opts?: Parameters<typeof submit>[1]) => void>(() => {});
 
   // External prefill (from EmptyState rows)
   useEffect(() => {
@@ -121,8 +135,7 @@ export default function ChatComposerPro({ restrictDepartment, placeholder, autoF
             ? (raw as { text: string; conversation_id?: string | null; action_source?: string; metadata?: Record<string, unknown> })
             : null);
       if (!detail || !detail.text.trim()) return;
-      setValue('');
-      void submit(detail.text, {
+      submitRef.current(detail.text, {
         conversationIdOverride: detail.conversation_id ?? null,
         actionSource: detail.action_source ?? null,
         metadata: detail.metadata,
@@ -134,7 +147,6 @@ export default function ChatComposerPro({ restrictDepartment, placeholder, autoF
       window.removeEventListener('chat:prefill', onPrefill);
       window.removeEventListener('chat:send', onSend);
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const detectPopup = (text: string, caret: number) => {
@@ -152,8 +164,14 @@ export default function ChatComposerPro({ restrictDepartment, placeholder, autoF
   const handleChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     const v = e.target.value;
     setValue(v);
-    setShowSuggestions(false);
-    detectPopup(v, e.target.selectionStart ?? v.length);
+    if (showSuggestions) setShowSuggestions(false);
+    // Only run popup detection when a trigger char is at/near the caret or
+    // a popup is already open. Avoids per-keystroke state churn on plain text.
+    const caret = e.target.selectionStart ?? v.length;
+    const prevChar = caret > 0 ? v[caret - 1] : '';
+    if (popup || prevChar === '@' || prevChar === '#' || prevChar === '/') {
+      detectPopup(v, caret);
+    }
   };
 
   const replaceTrigger = (_trigger: '@' | '#' | '/', insert: string) => {
@@ -231,11 +249,12 @@ export default function ChatComposerPro({ restrictDepartment, placeholder, autoF
 
     open();
     setSubmitting(true);
-    // Optimistic: stash pending text against (possibly future) conversation id
+    // Clear composer FIRST so the user can keep typing the next message
+    // immediately, then stash optimistic pending state.
+    if (!override) setValue('');
     if (conversationId) {
       setPending({ conversationId, text, awaiting: true });
     }
-    setValue('');
     try {
       const result = await pilotChat({
         message: text,
@@ -245,23 +264,33 @@ export default function ChatComposerPro({ restrictDepartment, placeholder, autoF
         action_source: opts?.actionSource ?? undefined,
       });
       const newConvId = result?.conversation_id;
-      // Only re-route the view when this was a real freeform new chat (no
-      // prior conversation context AND not a card action). Card actions stay
-      // on whichever view the user is on — their assistant response lands in
-      // the original conversation via realtime.
       if (!isCardAction && !conversationId && typeof newConvId === 'string' && newConvId) {
         setView({ kind: 'chat', conversationId: newConvId, agentSlug });
       }
       setPending(null);
     } catch (e) {
       setPending(null);
+      // Restore the user's text so they don't lose it on failure.
+      if (!override) setValue(text);
       toast.error('Could not send message', { description: e instanceof Error ? e.message : String(e) });
     } finally {
       setSubmitting(false);
     }
   };
 
+  // Keep submitRef pointing at the latest closure so window listeners
+  // dispatched via chat:send always use current state.
+  useEffect(() => {
+    submitRef.current = (text, opts) => { void submit(text, opts); };
+  });
+
   const handleKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
+    // IME composition guard — never act on Enter while user is composing
+    // (kana, pinyin, hangul, etc.). `e.nativeEvent.isComposing` covers most
+    // browsers; the ref catches the rest.
+    const composing = composingRef.current || (e.nativeEvent as KeyboardEvent['nativeEvent'] & { isComposing?: boolean }).isComposing;
+    if (composing) return;
+
     if (popup) {
       const list =
         popup === 'mention' ? mentionCandidates :
@@ -288,7 +317,7 @@ export default function ChatComposerPro({ restrictDepartment, placeholder, autoF
     }
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
-      submit();
+      void submit();
     }
   };
 
@@ -421,12 +450,17 @@ export default function ChatComposerPro({ restrictDepartment, placeholder, autoF
           value={value}
           onChange={handleChange}
           onKeyDown={handleKeyDown}
+          onCompositionStart={() => { composingRef.current = true; }}
+          onCompositionEnd={() => { composingRef.current = false; }}
           onFocus={() => {
             if (openOnFocus && mode === 'closed') open();
+            setComposerFocused(true);
             if (!value) setShowSuggestions(true);
           }}
-          onBlur={() => setTimeout(() => setShowSuggestions(false), 100)}
-          onSelect={(e) => detectPopup(value, (e.target as HTMLTextAreaElement).selectionStart ?? value.length)}
+          onBlur={() => {
+            setComposerFocused(false);
+            setTimeout(() => setShowSuggestions(false), 100);
+          }}
           placeholder={placeholder ?? (view.kind === 'channel' ? `Message #${view.dept}…` : 'Message your workforce...')}
           className="flex-1 resize-none bg-transparent outline-none text-[14px] leading-relaxed text-[#F0F6FC] placeholder:text-[#484F58] max-h-[240px] min-h-[24px] py-1 px-1"
         />

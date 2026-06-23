@@ -1,5 +1,6 @@
+import { useEffect, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, PanelLeft } from 'lucide-react';
+import { X, PanelLeft, MessageSquare, FlaskConical, Plus } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useChatWorkspace } from '@/contexts/ChatWorkspaceContext';
 import { useIsMobile } from '@/hooks/use-mobile';
@@ -13,12 +14,50 @@ import ChatComposerPro from './ChatComposerPro';
 import ChatErrorBoundary from './ChatErrorBoundary';
 import WorkbenchPanel from './workbench/WorkbenchPanel';
 import { Sheet, SheetContent } from '@/components/ui/sheet';
+import ResizableWorkspaceSplit from './ResizableWorkspaceSplit';
+import { ChatPaneWidthProvider } from './ChatPaneWidthContext';
 import { TooltipProvider, Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
+import { useConversationActions } from '@/hooks/useConversationActions';
+
+const NARROW_SPLIT_THRESHOLD = 1000;
 
 export default function ChatWorkspace() {
-  const { mode, view, close, setView, pending, workbenchOpen, historyOpen, openHistory, closeHistory } = useChatWorkspace();
+  const { mode, view, close, setView, pending, workbenchOpen, workbenchClosing, historyOpen, openHistory, closeHistory, toggleHistory, closeWorkbench } = useChatWorkspace();
   const isMobile = useIsMobile();
-  const showSplit = workbenchOpen && !isMobile;
+  const [viewportW, setViewportW] = useState<number>(() => (typeof window !== 'undefined' ? window.innerWidth : 1280));
+  useEffect(() => {
+    const onResize = () => setViewportW(window.innerWidth);
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
+  }, []);
+  const isDesktopWide = !isMobile && viewportW >= NARROW_SPLIT_THRESHOLD;
+  const wbVisible = workbenchOpen || workbenchClosing;
+  const canSplit = isDesktopWide;
+  const isTabbed = wbVisible && !isMobile && viewportW < NARROW_SPLIT_THRESHOLD;
+  const [tabbedView, setTabbedView] = useState<'chat' | 'workbench'>('workbench');
+  useEffect(() => { if (isTabbed) setTabbedView('workbench'); }, [isTabbed, workbenchOpen]);
+
+  // Open history once when workspace first opens, and on desktop only.
+  const openedOnceRef = useRef(false);
+  useEffect(() => {
+    if (mode !== 'closed' && !openedOnceRef.current && !isMobile) {
+      openedOnceRef.current = true;
+      openHistory();
+    }
+    if (mode === 'closed') openedOnceRef.current = false;
+  }, [mode, isMobile, openHistory]);
+
+  // Cmd/Ctrl+B toggles history
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'b' && mode !== 'closed') {
+        e.preventDefault();
+        toggleHistory();
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [mode, toggleHistory]);
 
   return (
     <TooltipProvider delayDuration={300}>
@@ -61,6 +100,7 @@ export default function ChatWorkspace() {
                 </div>
               </div>
               <div className="flex items-center gap-1">
+                <NewChatButton />
                 <button
                   onClick={close}
                   className="h-7 w-7 inline-flex items-center justify-center rounded hover:bg-foreground/5 text-muted-foreground hover:text-foreground"
@@ -71,54 +111,62 @@ export default function ChatWorkspace() {
               </div>
             </div>
 
-            {/* Body: 50/50 split when workbench open, otherwise chat fills */}
-            <div className="flex-1 flex min-h-0 overflow-hidden">
-              <div
-                className={cn(
-                  'flex flex-col min-w-0 min-h-0 overflow-hidden relative',
-                  showSplit ? 'basis-[40%] flex-1' : 'flex-1',
-                )}
-              >
-                {isMobile && <MobileNav />}
-
-                <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
-                  <ChatErrorBoundary>
-                    {view.kind === 'empty' && <EmptyState />}
-                    {view.kind === 'conversation' && <ConversationView planId={view.planId} />}
-                    {view.kind === 'channel' && <ChannelView dept={view.dept} />}
-                    {view.kind === 'agent' && <DirectAgentView slug={view.slug} />}
-                    {view.kind === 'chat' && view.conversationId && (
-                      <ChatView
-                        conversationId={view.conversationId}
-                        agentSlug={view.agentSlug}
-                        pendingUserText={pending?.conversationId === view.conversationId ? pending.text : null}
-                        awaitingReply={pending?.conversationId === view.conversationId && pending.awaiting}
-                      />
+            {/* Body: resizable split (desktop wide), tabbed (desktop narrow), else chat fills */}
+            {canSplit ? (
+              <ResizableWorkspaceSplit
+                workbenchOpen={workbenchOpen}
+                workbenchClosing={workbenchClosing}
+                chat={<ChatPane isMobile={isMobile} view={view} pending={pending} />}
+                workbench={
+                  wbVisible ? (
+                    <ChatErrorBoundary>
+                      <WorkbenchPanel />
+                    </ChatErrorBoundary>
+                  ) : null
+                }
+              />
+            ) : isTabbed ? (
+              <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
+                <div className="flex items-center gap-1 px-3 h-9 border-b border-white/[0.06] bg-[#0a0d12]/60 shrink-0">
+                  <button
+                    onClick={() => setTabbedView('chat')}
+                    className={cn(
+                      'inline-flex items-center gap-1.5 text-[12px] px-3 h-7 rounded-md transition-colors',
+                      tabbedView === 'chat' ? 'bg-emerald-500/10 text-emerald-200 border border-emerald-500/30' : 'text-[#7D8590] hover:text-[#C9D1D9]',
                     )}
-                  </ChatErrorBoundary>
+                  >
+                    <MessageSquare className="h-3.5 w-3.5" /> Chat
+                  </button>
+                  <button
+                    onClick={() => setTabbedView('workbench')}
+                    className={cn(
+                      'inline-flex items-center gap-1.5 text-[12px] px-3 h-7 rounded-md transition-colors',
+                      tabbedView === 'workbench' ? 'bg-emerald-500/10 text-emerald-200 border border-emerald-500/30' : 'text-[#7D8590] hover:text-[#C9D1D9]',
+                    )}
+                  >
+                    <FlaskConical className="h-3.5 w-3.5" /> Workbench
+                  </button>
                 </div>
-
-                <div
-                  className="border-t border-border/60 px-4 py-3 bg-background/80 backdrop-blur shrink-0"
-                  style={{ paddingBottom: 'calc(0.75rem + env(safe-area-inset-bottom))' }}
-                >
-                  <ChatErrorBoundary>
-                    <ChatComposerPro
-                      restrictDepartment={view.kind === 'channel' ? view.dept : undefined}
-                      autoFocus
-                    />
-                  </ChatErrorBoundary>
+                <div className="flex-1 min-h-0 overflow-hidden relative">
+                  <div className={cn('absolute inset-0 flex flex-col', tabbedView === 'chat' ? '' : 'hidden')}>
+                    <ChatPaneWidthProvider width={viewportW}>
+                      <ChatPane isMobile={isMobile} view={view} pending={pending} />
+                    </ChatPaneWidthProvider>
+                  </div>
+                  <div className={cn('absolute inset-0 flex flex-col bg-[#0a0d12]', tabbedView === 'workbench' ? '' : 'hidden')}>
+                    <ChatErrorBoundary>
+                      <WorkbenchPanel />
+                    </ChatErrorBoundary>
+                  </div>
                 </div>
               </div>
-
-              {showSplit && (
-                <div className="basis-[60%] flex-1 min-w-0 border-l border-white/[0.06] bg-[#0a0d12] overflow-hidden">
-                  <ChatErrorBoundary>
-                    <WorkbenchPanel />
-                  </ChatErrorBoundary>
+            ) : (
+              <div className="flex-1 flex min-h-0 overflow-hidden">
+                <div className="flex flex-col min-w-0 min-h-0 overflow-hidden relative flex-1">
+                  <ChatPane isMobile={isMobile} view={view} pending={pending} />
                 </div>
-              )}
-            </div>
+              </div>
+            )}
 
             {/* Workbench (mobile fullscreen overlay) */}
             {workbenchOpen && isMobile && (
@@ -144,6 +192,25 @@ export default function ChatWorkspace() {
   );
 }
 
+function NewChatButton() {
+  const { createConversation } = useConversationActions();
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <button
+          onClick={() => void createConversation('pilot')}
+          className="h-7 w-7 inline-flex items-center justify-center rounded hover:bg-foreground/5 text-muted-foreground hover:text-foreground"
+          aria-label="New chat"
+          title="New chat (⌘N)"
+        >
+          <Plus className="h-3.5 w-3.5" />
+        </button>
+      </TooltipTrigger>
+      <TooltipContent side="bottom">New chat</TooltipContent>
+    </Tooltip>
+  );
+}
+
 function MobileNav() {
   const { setView } = useChatWorkspace();
   const tabs: { id: string; label: string; onClick: () => void }[] = [
@@ -160,5 +227,48 @@ function MobileNav() {
         </button>
       ))}
     </div>
+  );
+}
+
+function ChatPane({
+  isMobile,
+  view,
+  pending,
+}: {
+  isMobile: boolean;
+  view: ReturnType<typeof useChatWorkspace>['view'];
+  pending: ReturnType<typeof useChatWorkspace>['pending'];
+}) {
+  return (
+    <>
+      {isMobile && <MobileNav />}
+      <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
+        <ChatErrorBoundary>
+          {view.kind === 'empty' && <EmptyState />}
+          {view.kind === 'conversation' && <ConversationView planId={view.planId} />}
+          {view.kind === 'channel' && <ChannelView dept={view.dept} />}
+          {view.kind === 'agent' && <DirectAgentView slug={view.slug} />}
+          {view.kind === 'chat' && view.conversationId && (
+            <ChatView
+              conversationId={view.conversationId}
+              agentSlug={view.agentSlug}
+              pendingUserText={pending?.conversationId === view.conversationId ? pending.text : null}
+              awaitingReply={pending?.conversationId === view.conversationId && pending.awaiting}
+            />
+          )}
+        </ChatErrorBoundary>
+      </div>
+      <div
+        className="border-t border-border/60 px-4 py-3 bg-background/80 backdrop-blur shrink-0"
+        style={{ paddingBottom: 'calc(0.75rem + env(safe-area-inset-bottom))' }}
+      >
+        <ChatErrorBoundary>
+          <ChatComposerPro
+            restrictDepartment={view.kind === 'channel' ? view.dept : undefined}
+            autoFocus
+          />
+        </ChatErrorBoundary>
+      </div>
+    </>
   );
 }

@@ -10,49 +10,22 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 import { openAgentBuilder } from '@/hooks/useAgentBuilder';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { toast } from 'sonner';
+import AgentAvatar from '@/components/chat/workspace/agents/AgentAvatar';
 
 const PLACEHOLDERS = [
   'Ask your workforce anything...',
   '@Scout find backend engineers in Berlin',
-  'Summarize this week’s pipeline',
+  'Summarize this week\u2019s pipeline',
   'What changed across competitors today?',
-  '@Penn draft outreach for today’s leads',
+  '@Penn draft outreach for today\u2019s leads',
 ];
 
 const CHIPS = [
   'Brief me on today',
   'Show pending approvals',
-  'What’s @Penn working on?',
+  'What\u2019s @Penn working on?',
   'Run morning standup',
 ];
-
-const AGENT_HEX: Record<string, string> = {
-  scout: '#10B981',
-  aria: '#8B5CF6',
-  penn: '#10B981',
-  hawk: '#14B8A6',
-  scribe: '#A855F7',
-};
-
-function AgentBadge({ agent, size = 24 }: { agent: AgentProfile; size?: number }) {
-  const hex = AGENT_HEX[agent.id] ?? '#7D8590';
-  return (
-    <div
-      className="rounded-full flex items-center justify-center shrink-0 border border-white/[0.04] bg-white/[0.02] shadow-[0_1px_2px_rgba(0,0,0,0.3)] transition-all duration-300 hover:scale-105"
-      style={{
-        width: size,
-        height: size,
-        color: hex,
-        fontSize: 10,
-        fontWeight: 600,
-        lineHeight: 1,
-      }}
-      aria-hidden
-    >
-      {agent.name.charAt(0).toUpperCase()}
-    </div>
-  );
-}
 
 export default function CommandDock() {
   const { mode, open, view, setView, setPending } = useChatWorkspace();
@@ -290,7 +263,7 @@ export default function CommandDock() {
                         <Tooltip key={a.id}>
                           <TooltipTrigger asChild>
                             <button type="button" className="rounded-full">
-                              <AgentBadge agent={a} />
+                              <AgentAvatar slug={a.id} size="sm" ring />
                             </button>
                           </TooltipTrigger>
                           <TooltipContent side="top" className="text-xs bg-[#0A0A0A] border-white/[0.04] text-neutral-300">{a.name} — active</TooltipContent>
@@ -300,7 +273,7 @@ export default function CommandDock() {
                   ) : (
                     <div className="flex items-center gap-1.5 mr-1">
                       {visibleAgents.slice(0, 3).map((a) => (
-                        <AgentBadge key={a.id} agent={a} size={22} />
+                        <AgentAvatar key={a.id} slug={a.id} size="xs" ring />
                       ))}
                       <span className="text-mono-label text-neutral-500">+2</span>
                     </div>

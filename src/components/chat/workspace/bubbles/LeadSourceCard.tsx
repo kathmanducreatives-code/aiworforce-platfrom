@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useChatPaneWidth } from '../ChatPaneWidthContext';
 import {
   Target, Briefcase, MessageSquare, MessagesSquare, Swords, UserSearch, Building2, ShieldCheck, ArrowLeft, Sparkles,
 } from 'lucide-react';
@@ -106,19 +107,21 @@ function Brief({ option, onBack, conversationId }: { option: LeadSourceOption; o
     );
   }
 
+  const paneW = useChatPaneWidth();
+  const twoCol = paneW >= 520;
   return (
-    <div className="rounded-xl border border-emerald-500/20 bg-gradient-to-b from-emerald-500/[0.05] to-transparent p-4 max-w-[560px]">
+    <div className="rounded-xl border border-emerald-500/20 bg-gradient-to-b from-emerald-500/[0.05] to-transparent p-4 w-full min-w-0">
       <button onClick={onBack} className="flex items-center gap-1 text-[11px] text-[#7D8590] hover:text-emerald-300 mb-2">
         <ArrowLeft className="h-3 w-3" /> Back to sources
       </button>
-      <div className="text-[13px] font-semibold text-[#F0F6FC] mb-0.5">Lead Search Brief · {option.title}</div>
-      <p className="text-[12px] text-[#7D8590] mb-3">{option.description}</p>
+      <div className="text-[13px] font-semibold text-[#F0F6FC] mb-0.5 break-words">Lead Search Brief · {option.title}</div>
+      <p className="text-[12px] text-[#7D8590] mb-3 break-words">{option.description}</p>
       {!option.available && option.fallback_note && (
-        <p className="text-[11px] text-amber-300/80 mb-3">{option.fallback_note}</p>
+        <p className="text-[11px] text-amber-300/80 mb-3 break-words">{option.fallback_note}</p>
       )}
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+      <div className="grid gap-3" style={{ gridTemplateColumns: twoCol ? 'repeat(2, minmax(0,1fr))' : '1fr' }}>
         {option.fields.map((f) => (
-          <div key={f.key} className="space-y-1">
+          <div key={f.key} className="space-y-1 min-w-0">
             <Label className="text-[12px] text-[#C9D1D9]">{f.label}{f.required ? ' *' : ''}</Label>
             {f.type === 'select' ? (
               <Select value={v[f.key] ?? ''} onValueChange={(val) => set(f.key, val)}>
@@ -131,7 +134,7 @@ function Brief({ option, onBack, conversationId }: { option: LeadSourceOption; o
           </div>
         ))}
       </div>
-      <div className="flex items-center gap-2 mt-4">
+      <div className="flex items-center gap-2 mt-4 flex-wrap">
         <Button size="sm" disabled={missing} onClick={() => { send(buildInstruction(option.source_type, v, option.available), conversationId, { lead_request: v, source_type: option.source_type }); setSent(true); }} className="bg-emerald-500/90 hover:bg-emerald-500 text-[#03100a] font-semibold">
           Find leads
         </Button>
@@ -154,19 +157,21 @@ export default function LeadSourceCard({ payload, conversationId }: { payload: L
 
   if (option) return <Brief option={option} onBack={() => setPicked(null)} conversationId={conversationId} />;
 
+  const paneW = useChatPaneWidth();
+  const twoCol = paneW >= 520;
   return (
-    <div className="rounded-xl border border-emerald-500/20 bg-gradient-to-b from-emerald-500/[0.05] to-transparent p-4 max-w-[600px]">
-      <div className="flex items-center gap-2 mb-1">
-        <span className="h-6 w-6 rounded-md bg-emerald-500/10 border border-emerald-500/25 flex items-center justify-center">
+    <div className="rounded-xl border border-emerald-500/20 bg-gradient-to-b from-emerald-500/[0.05] to-transparent p-4 w-full min-w-0">
+      <div className="flex items-center gap-2 mb-1 min-w-0">
+        <span className="h-6 w-6 rounded-md bg-emerald-500/10 border border-emerald-500/25 flex items-center justify-center shrink-0">
           <Target className="h-3.5 w-3.5 text-emerald-300" />
         </span>
-        <div className="text-[13px] font-semibold text-[#F0F6FC]">{payload.title}</div>
+        <div className="text-[13px] font-semibold text-[#F0F6FC] truncate">{payload.title}</div>
       </div>
-      <p className="text-[12px] text-[#7D8590] leading-relaxed mb-3">{payload.subtitle}</p>
+      <p className="text-[12px] text-[#7D8590] leading-relaxed mb-3 break-words">{payload.subtitle}</p>
       {payload.brain_missing && (
-        <p className="text-[11px] text-amber-300/80 mb-3">Completing your Company Brain lets Scout prefill these and rank results to your ICP.</p>
+        <p className="text-[11px] text-amber-300/80 mb-3 break-words">Completing your Company Brain lets Scout prefill these and rank results to your ICP.</p>
       )}
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+      <div className="grid gap-2" style={{ gridTemplateColumns: twoCol ? 'repeat(2, minmax(0,1fr))' : '1fr' }}>
         {payload.sources.map((s) => {
           const Icon = ICONS[s.source_type] ?? Target;
           const suggested = payload.suggested_source === s.source_type;

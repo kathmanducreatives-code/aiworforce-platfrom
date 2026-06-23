@@ -17,7 +17,6 @@ interface Props {
 export default function WorkforceHandoffStrip({ activeId }: Props) {
   return (
     <div className="flex items-center flex-wrap gap-1.5 px-0.5">
-      <span className="eyebrow mr-2">Pipeline</span>
       {FLOW.map((step, i) => {
         const active = step.id === activeId;
         const hex = DEPT_CONFIG[step.id].ringHex;

@@ -88,6 +88,7 @@ interface Ctx {
   height: number;
   pending: PendingState | null;
   workbenchOpen: boolean;
+  workbenchClosing: boolean;
   workbenchWidth: number;
   selectedOutput: WorkbenchSelection | null;
   historyOpen: boolean;
@@ -103,6 +104,8 @@ interface Ctx {
   openHistory: () => void;
   closeHistory: () => void;
   toggleHistory: () => void;
+  composerFocused: boolean;
+  setComposerFocused: (v: boolean) => void;
 }
 
 const ChatWorkspaceContext = createContext<Ctx | null>(null);
@@ -113,15 +116,35 @@ export const ChatWorkspaceProvider = ({ children }: { children: ReactNode }) => 
   const [height, setHeight] = useState<number>(70);
   const [pending, setPending] = useState<PendingState | null>(null);
   const [workbenchOpen, setWorkbenchOpen] = useState(false);
+  const [workbenchClosing, setWorkbenchClosing] = useState(false);
   const [workbenchWidth, setWorkbenchWidth] = useState(520);
   const [selectedOutput, setSelectedOutput] = useState<WorkbenchSelection | null>(null);
   const [historyOpen, setHistoryOpen] = useState(false);
+  const [composerFocused, setComposerFocusedState] = useState(false);
+  const closeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // NOTE: do NOT auto-close history on focus. That coupling caused layout
+  // jumps the moment the user clicked into the composer. History collapse is
+  // now an explicit user action (or first-keystroke handled by the composer).
+  const setComposerFocused = useCallback((v: boolean) => {
+    setComposerFocusedState(v);
+  }, []);
 
   const openWorkbench = useCallback((sel: WorkbenchSelection) => {
+    if (closeTimerRef.current) { clearTimeout(closeTimerRef.current); closeTimerRef.current = null; }
+    setWorkbenchClosing(false);
     setSelectedOutput(sel);
     setWorkbenchOpen(true);
   }, []);
-  const closeWorkbench = useCallback(() => setWorkbenchOpen(false), []);
+  const closeWorkbench = useCallback(() => {
+    setWorkbenchClosing(true);
+    if (closeTimerRef.current) clearTimeout(closeTimerRef.current);
+    closeTimerRef.current = setTimeout(() => {
+      setWorkbenchOpen(false);
+      setWorkbenchClosing(false);
+      closeTimerRef.current = null;
+    }, 300);
+  }, []);
   const openHistory = useCallback(() => setHistoryOpen(true), []);
   const closeHistory = useCallback(() => setHistoryOpen(false), []);
   const toggleHistory = useCallback(() => setHistoryOpen((v) => !v), []);
@@ -149,7 +172,7 @@ export const ChatWorkspaceProvider = ({ children }: { children: ReactNode }) => 
 
   return (
     <ChatWorkspaceContext.Provider
-      value={{ mode, view, height, pending, workbenchOpen, workbenchWidth, selectedOutput, historyOpen, open, close, toggleFullscreen, setHeight, setView, setPending, openWorkbench, closeWorkbench, setWorkbenchWidth, openHistory, closeHistory, toggleHistory }}
+      value={{ mode, view, height, pending, workbenchOpen, workbenchClosing, workbenchWidth, selectedOutput, historyOpen, open, close, toggleFullscreen, setHeight, setView, setPending, openWorkbench, closeWorkbench, setWorkbenchWidth, openHistory, closeHistory, toggleHistory, composerFocused, setComposerFocused }}
     >
       {children}
     </ChatWorkspaceContext.Provider>
