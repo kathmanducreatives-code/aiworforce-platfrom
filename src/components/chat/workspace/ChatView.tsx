@@ -101,13 +101,13 @@ export default function ChatView({ conversationId, agentSlug, pendingUserText, a
 
   return (
 
-    <div ref={scrollRef} className="flex-1 overflow-y-auto px-6 py-5 space-y-4">
+    <div ref={scrollRef} className="flex-1 overflow-y-auto px-6 py-6 space-y-5">
       {messages.map((m) => {
         if (m.role === 'user') {
           prevAgentSlug = null;
           return (
             <div key={m.id} className="flex justify-end">
-              <div className="max-w-[min(620px,78%)] rounded-2xl bg-emerald-500/[0.10] border border-emerald-500/20 backdrop-blur-md px-3.5 py-2 text-[13.5px] leading-relaxed text-[#E6F4EC] whitespace-pre-wrap break-words shadow-[0_2px_12px_rgba(0,0,0,0.25)]">
+              <div className="max-w-[min(720px,70%)] rounded-2xl bg-emerald-500/[0.13] border border-emerald-500/30 backdrop-blur-md px-4 py-2.5 text-[15.5px] leading-[1.55] text-[#EAF7F0] whitespace-pre-wrap break-words shadow-[0_4px_18px_rgba(0,0,0,0.32),inset_0_1px_0_rgba(255,255,255,0.06)]">
                 {m.content}
               </div>
             </div>
@@ -119,64 +119,24 @@ export default function ChatView({ conversationId, agentSlug, pendingUserText, a
         const name = msgProfile.name;
         const role = msgProfile.role;
         const accent = msgProfile.accentHex ?? '#7D8590';
-        const tintBg = hexToRgba(accent, 0.045);
+        const tintBg = hexToRgba(accent, 0.055);
         const tintBorder = hexToRgba(accent, 0.22);
-
-        const structured = isStructured(m.content);
-        const meta = meta0;
-        const planMeta = meta && meta.type === 'execution_plan' && typeof meta.plan_id === 'string'
-          ? meta as { plan_id: string; plan_title?: string; task_count?: number; agents?: string[]; connector_limitations?: string[] }
-          : null;
-        const toolInput = (meta?.tool_input ?? null) as Record<string, any> | null;
-        const uiFormKind = meta && meta.ui_form ? (meta.ui_form as any).kind : null;
-        const leadForm = uiFormKind === 'lead_intake' ? (meta!.ui_form as LeadIntakeFormPayload) : null;
-        const leadSelector = uiFormKind === 'lead_source_selector' ? (meta!.ui_form as LeadSourceSelectorPayload) : null;
-        const postLeadCard = meta && meta.ui_card && (meta.ui_card as any).kind === 'post_lead_actions'
-          ? (meta.ui_card as PostLeadActionsCardPayload)
-          : null;
-        const uiActions = Array.isArray(meta?.ui_actions)
-          ? (meta!.ui_actions as Array<{ label: string; message: string }>)
-          : null;
-        const isClarification =
-          !!meta &&
-          (meta.clarification === true || meta.needs_clarification === true || !!meta.pending_clarification) &&
-          (toolInput?.people_action || toolInput?.companies_action || toolInput?.agency_action ||
-            meta.people_action || meta.companies_action || meta.agency_action);
-        const peopleAction = toolInput?.people_action ?? meta?.people_action ?? null;
-        const companiesAction = toolInput?.companies_action ?? meta?.companies_action ?? null;
-        const agencyAction = toolInput?.agency_action ?? meta?.agency_action ?? null;
-        const showPennSafety = slug === 'penn';
-
-        // Insert handoff divider when the speaker changes between agents.
-        const handoffFrom = prevAgentSlug && prevAgentSlug !== slug ? prevAgentSlug : null;
-        prevAgentSlug = slug;
-
-        return (
-          <Fragment key={m.id}>
-            {handoffFrom && <HandoffDivider fromSlug={handoffFrom} toSlug={slug} />}
-            <div className="flex items-start gap-3">
-              <AgentAvatar slug={slug} size="sm" />
-              <div className="min-w-0 flex-1">
-                <div className="flex items-baseline gap-1.5 mb-1">
-                  <span className="text-[12.5px] font-semibold text-[#E6EDF3]">{name}</span>
-                  <span className="text-[11px]" style={{ color: accent }}>· {role}</span>
-                </div>
-
+...
                 {structured ? (
                   <div
-                    className="relative rounded-2xl border-l-2 backdrop-blur-xl p-4 text-[13.5px] leading-relaxed text-[#F0F6FC] whitespace-pre-wrap shadow-[0_2px_12px_rgba(0,0,0,0.25)]"
-                    style={{ backgroundColor: tintBg, borderColor: tintBorder, borderLeftColor: accent }}
+                    className="chat-message-bubble relative rounded-2xl border border-l-2 backdrop-blur-xl p-4 text-[15.5px] leading-[1.58] text-[#F0F6FC] whitespace-pre-wrap shadow-[0_2px_14px_rgba(0,0,0,0.28),inset_0_1px_0_rgba(255,255,255,0.04)]"
+                    style={{ backgroundColor: tintBg, borderColor: tintBorder, borderLeftColor: accent, maxWidth: 'min(860px, 86%)' }}
                   >
-                    <div className="absolute top-2 right-2"><CopyButton text={m.content} /></div>
+                    <div className="absolute top-2.5 right-2.5"><CopyButton text={m.content} /></div>
                     {m.content}
                   </div>
                 ) : (
                   <div
                     className={cn(
-                      'rounded-xl border-l-2 px-3 py-2 text-[13.5px] leading-relaxed whitespace-pre-wrap',
+                      'chat-message-bubble rounded-2xl border border-l-2 px-4 py-3 text-[15.5px] leading-[1.58] whitespace-pre-wrap shadow-[inset_0_1px_0_rgba(255,255,255,0.03)]',
                       m.is_error ? 'text-[#9aa4af]' : 'text-[#F0F6FC]',
                     )}
-                    style={{ backgroundColor: tintBg, borderLeftColor: accent }}
+                    style={{ backgroundColor: tintBg, borderColor: tintBorder, borderLeftColor: accent, maxWidth: 'min(860px, 86%)' }}
                   >
                     {m.content}
                   </div>
