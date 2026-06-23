@@ -8,7 +8,9 @@ import AgentBadge from './AgentBadge';
 import ExecutionTaskRow from './ExecutionTaskRow';
 import ActivityMiniFeed from './ActivityMiniFeed';
 import PlanStatusPill from './PlanStatusPill';
+import AgentProcessRail from '../agents/AgentProcessRail';
 import type { DBToolCall, DBApproval } from '@/lib/orchestration';
+
 
 interface Props {
   planId: string;
