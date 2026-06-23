@@ -305,12 +305,19 @@ export default function OnboardingCompanyBrain() {
     }));
     const defaults = getBrainDefaults();
     setStructured({
+      ...defaults,
       icp:            { ...defaults.icp,            ...(p.icp ?? {}) },
       goals:          { ...defaults.goals,          ...(p.goals ?? {}) },
       positioning:    { ...defaults.positioning,    ...(p.positioning ?? {}) },
       brand_voice:    { ...defaults.brand_voice,    ...(p.brand_voice ?? {}) },
       competitors:    { ...defaults.competitors,    ...(p.competitors ?? {}) },
       approval_rules: { ...defaults.approval_rules, ...(p.approval_rules ?? {}) },
+      founder:        { ...defaults.founder,        ...(p.founder ?? {}) },
+      company:        { ...defaults.company,        ...(p.company ?? {}) },
+      gtm:            { ...defaults.gtm,            ...(p.gtm ?? {}) },
+      workflow_preferences: { ...defaults.workflow_preferences, ...(p.workflow_preferences ?? {}) },
+      integration_status:   { ...defaults.integration_status, ...(p.integration_status ?? {}) },
+      onboarding_meta:      { ...defaults.onboarding_meta,    ...(p.onboarding_meta ?? {}) },
     });
     // When ?restart=1, prefill values but start at Step 1 instead of jumping to Review.
     if (hasAny && !restart) setStepIndex(stepIdOf('review'));
