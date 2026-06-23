@@ -146,10 +146,7 @@ export default function ExecutionPlanCard({ planId, meta }: Props) {
   }, [toolCalls]);
 
   const executionMode = meta?.execution_mode ?? (plan as any)?.payload?.execution_mode ?? null;
-  const pennInvolved = agentSlugs.includes('penn') || tasks.some((t) => {
-    const slug = t.agent_id ? agentById[t.agent_id] : null;
-    return slug === 'penn';
-  });
+  const pennInvolved = agentSlugs.includes('penn') || tasks.some((t) => slugForTask(t) === 'penn');
 
   if (loading && !plan) {
     return (
