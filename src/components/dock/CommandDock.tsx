@@ -196,7 +196,7 @@ export default function CommandDock() {
                       animate={{ opacity: 1, y: 0 }}
                       exit={{ opacity: 0, y: -2 }}
                       transition={{ duration: 0.2, ease: 'easeOut' }}
-                      className="flex gap-2 overflow-x-auto flex-nowrap scrollbar-none px-0.5"
+                      className="flex gap-2 overflow-x-auto flex-nowrap scrollbar-none px-0.5 justify-center"
                     >
                       {CHIPS.map((c) => (
                         <motion.button
