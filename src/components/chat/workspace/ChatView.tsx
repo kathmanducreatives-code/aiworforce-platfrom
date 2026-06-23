@@ -265,3 +265,25 @@ export default function ChatView({ conversationId, agentSlug, pendingUserText, a
     </div>
   );
 }
+
+function HandoffDivider({ fromSlug, toSlug }: { fromSlug: string; toSlug: string }) {
+  const from = resolveAgent(fromSlug);
+  const to = resolveAgent(toSlug);
+  const fromAccent = from.accentHex ?? '#7D8590';
+  const toAccent = to.accentHex ?? '#10B981';
+  return (
+    <div className="flex items-center justify-center gap-2 py-1 select-none">
+      <span className="h-px w-10" style={{ background: `linear-gradient(90deg, transparent, ${fromAccent}55)` }} />
+      <AgentAvatar slug={from.id} size="xs" ring={false} />
+      <ArrowRight className="h-3 w-3 text-[#7D8590]" />
+      <AgentAvatar slug={to.id} size="xs" ring={false} />
+      <span className="text-[10.5px] uppercase tracking-wider text-[#7D8590]">
+        <span style={{ color: fromAccent }}>{from.name}</span>
+        {' → '}
+        <span style={{ color: toAccent }}>{to.name}</span>
+      </span>
+      <span className="h-px w-10" style={{ background: `linear-gradient(90deg, ${toAccent}55, transparent)` }} />
+    </div>
+  );
+}
+
