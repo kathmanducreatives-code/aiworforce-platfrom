@@ -356,7 +356,7 @@ export default function ChatComposerPro({ restrictDepartment, placeholder, autoF
       {/* Quick suggestions (plain text, middle dot) */}
       {showSuggestions && !value && (
         <div className="absolute bottom-full left-0 right-0 mb-3 px-1 pointer-events-auto">
-          <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[12px] text-[#484F58]">
+          <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1 text-[13px] text-[#6e7681]">
             {suggestions.map((s, i) => (
               <span key={s} className="flex items-center gap-2">
                 <button
