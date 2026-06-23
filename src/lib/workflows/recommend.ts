@@ -15,21 +15,21 @@ function arr(v: unknown): string[] {
 // Map goal/channel keywords to workflow ids that satisfy them.
 const GOAL_TO_WORKFLOWS: Record<string, string[]> = {
   find_leads: ['find_hiring_signal_accounts', 'find_icp_accounts', 'find_decision_makers'],
-  research_companies: ['enrich_companies', 'find_decision_makers'],
-  draft_outreach: ['draft_outreach', 'generate_cold_call_openers'],
-  create_content: ['create_linkedin_content', 'create_founder_post'],
+  research_companies: ['research_company', 'enrich_companies', 'find_decision_makers'],
+  draft_outreach: ['draft_outreach', 'cold_call_openers', 'followup_messages'],
+  create_content: ['linkedin_post_from_signals', 'content_ideas', 'founder_weekly_update'],
   audit_website: ['website_audit'],
-  track_competitors: ['competitor_snapshot', 'competitor_monitor'],
-  organize_founder_ops: ['daily_briefing'],
+  track_competitors: ['competitor_snapshot', 'competitor_changes', 'market_signal_brief'],
+  organize_founder_ops: ['daily_workforce_briefing', 'review_approvals', 'summarize_pending_work'],
 };
 
 const CHANNEL_BOOSTS: Record<string, string[]> = {
-  'cold call': ['generate_cold_call_openers', 'find_decision_makers'],
-  linkedin: ['create_linkedin_content', 'find_decision_makers'],
-  email: ['draft_outreach', 'find_decision_makers'],
-  content: ['create_linkedin_content', 'website_audit'],
+  'cold call': ['cold_call_openers', 'find_decision_makers'],
+  linkedin: ['linkedin_post_from_signals', 'find_decision_makers'],
+  email: ['draft_outreach', 'followup_messages', 'find_decision_makers'],
+  content: ['linkedin_post_from_signals', 'content_ideas', 'website_audit'],
   partnerships: ['enrich_companies'],
-  'paid content': ['create_linkedin_content'],
+  'paid content': ['linkedin_post_from_signals', 'content_ideas'],
 };
 
 export interface RankedWorkflow {
