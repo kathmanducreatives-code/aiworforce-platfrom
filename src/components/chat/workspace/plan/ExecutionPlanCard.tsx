@@ -46,17 +46,25 @@ export default function ExecutionPlanCard({ planId, meta }: Props) {
   const { plan, tasks, activity, approvals, toolCalls, loading } = usePlanDetail(planId);
   const { setView, openWorkbench } = useChatWorkspace();
 
-  const handleOpenOutput = (taskId: string, toolCallId?: string | null) => {
-    const task = tasks.find((t) => t.id === taskId);
-    const slug = task?.agent_id ? agentById[task.agent_id] ?? null : null;
-    openWorkbench({ planId, taskId, agentSlug: slug, toolCallId: toolCallId ?? null });
-  };
-
   const agentById = useMemo(() => {
     const m: Record<string, string> = {};
     for (const a of agents) m[a.id] = a.slug;
     return m;
   }, [agents]);
+
+  /** Prefer the task's own agent_slug column; fall back to id lookup. */
+  const slugForTask = (t: { agent_id?: string | null; agent_slug?: string | null; description?: string | null; payload?: any }): string | null => {
+    if (t.agent_slug) return t.agent_slug;
+    if (t.agent_id && agentById[t.agent_id]) return agentById[t.agent_id];
+    const fromPayload = t.payload?.agent_slug ?? t.payload?.metadata?.agent_slug ?? null;
+    return fromPayload ?? null;
+  };
+
+  const handleOpenOutput = (taskId: string, toolCallId?: string | null) => {
+    const task = tasks.find((t) => t.id === taskId);
+    const slug = task ? slugForTask(task) : null;
+    openWorkbench({ planId, taskId, agentSlug: slug, toolCallId: toolCallId ?? null });
+  };
 
   const latestToolCallByTask = useMemo(() => {
     const m: Record<string, DBToolCall> = {};
