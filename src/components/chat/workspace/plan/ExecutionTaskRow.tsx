@@ -88,6 +88,15 @@ export default function ExecutionTaskRow({
   const actorKey = metaToolInput?.selected_actor_key ?? null;
   const actorReason = metaToolInput?.reason ?? null;
 
+  // Final fallback: infer agent from the task title/description so a planning
+  // or untagged step never misleadingly claims Pilot's identity for sourcing,
+  // ranking, research, drafting, or content work.
+  const effectiveSlug = agentSlug
+    ?? (task as any).agent_slug
+    ?? payload.agent_slug
+    ?? inferAgentFromContent(`${title} ${task.description ?? ''}`)
+    ?? null;
+
   const canOpenOutput =
     !!onOpenOutput && (task.status === 'complete' || task.status === 'failed' || !!latestToolCall);
 
