@@ -27,6 +27,7 @@ import EmailSequenceSetup from "./pages/EmailSequenceSetup";
 import EmailSequences from "./pages/EmailSequences";
 import GetDemo from "./pages/GetDemo";
 import Auth from "./pages/Auth";
+import ResetPassword from "./pages/ResetPassword";
 import ClientMetrics from "./pages/ClientMetrics";
 import ClientDetail from "./pages/ClientDetail";
 import InterviewScheduler from "./pages/InterviewScheduler";
