@@ -12,6 +12,8 @@ import {
 } from '@/lib/workflows/registry';
 import { useToolAvailability } from '@/lib/workflows/useToolAvailability';
 import { useWorkspace } from '@/contexts/WorkspaceContext';
+import { useCompanyBrain } from '@/hooks/useCompanyBrain';
+import { recommendWorkflows } from '@/lib/workflows/recommend';
 import { pilotChat } from '@/lib/pilotChat';
 import { listRecentRuns, recordRun, summarizeInputs, type RecentRun } from '@/lib/workflows/recentRuns';
 import { AGENT_BY_ID } from '@/data/agentProfiles';
@@ -33,6 +35,7 @@ const AGENT_FILTERS: { id: string; label: string }[] = [
 export default function Workflows() {
   const tools = useToolAvailability();
   const { workspaceId } = useWorkspace();
+  const { data: brain } = useCompanyBrain();
   const navigate = useNavigate();
   const [query, setQuery] = useState('');
   const [cat, setCat] = useState<WorkflowCategory | 'all'>('all');
@@ -66,10 +69,15 @@ export default function Workflows() {
     return map;
   }, [filtered]);
 
-  const recommended = useMemo(
-    () => WORKFLOWS.filter((w) => w.recommended && resolveStatus(w, tools) !== 'coming_soon').slice(0, 4),
-    [tools]
-  );
+  const recommended = useMemo(() => {
+    const fromBrain = recommendWorkflows(brain?.profile, WORKFLOWS, 4)
+      .map((r) => ({ workflow: r.workflow, reason: r.reasons[0] }));
+    if (fromBrain.length > 0) return fromBrain;
+    return WORKFLOWS
+      .filter((w) => w.recommended && resolveStatus(w, tools) !== 'coming_soon')
+      .slice(0, 4)
+      .map((w) => ({ workflow: w, reason: undefined as string | undefined }));
+  }, [brain?.profile, tools]);
 
   const lastRunByWorkflow = useMemo(() => {
     const map: Record<string, number> = {};
@@ -210,14 +218,18 @@ export default function Workflows() {
                   <h2 className="text-[18px] font-semibold text-foreground tracking-tight">Recommended for your company</h2>
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-                  {recommended.map((w) => (
-                    <WorkflowCard
-                      key={`r-${w.id}`}
-                      workflow={w}
-                      status={resolveStatus(w, tools)}
-                      lastRunAt={lastRunByWorkflow[w.id]}
-                      onSelect={() => setSelected(w)}
-                    />
+                  {recommended.map(({ workflow: w, reason }) => (
+                    <div key={`r-${w.id}`} className="flex flex-col gap-1.5">
+                      <WorkflowCard
+                        workflow={w}
+                        status={resolveStatus(w, tools)}
+                        lastRunAt={lastRunByWorkflow[w.id]}
+                        onSelect={() => setSelected(w)}
+                      />
+                      {reason && (
+                        <p className="text-[11.5px] text-emerald-300/80 px-1">{reason}</p>
+                      )}
+                    </div>
                   ))}
                 </div>
               </section>

@@ -29,4 +29,21 @@ describe('recommendWorkflows', () => {
     const ranked = recommendWorkflows({ founder: { first_help_goal: 'create_content' } }).map((r) => r.workflow.id);
     expect(ranked).toContain('linkedin_post_from_signals');
   });
+
+  it('uses workflow_preferences.priority_workflows as top signal', () => {
+    const brain = {
+      founder: { first_help_goal: 'create_content' },
+      workflow_preferences: { priority_workflows: ['draft_outreach'] },
+    };
+    const ranked = recommendWorkflows(brain, undefined, 4);
+    expect(ranked[0]?.workflow.id).toBe('draft_outreach');
+  });
+
+  it('limit param caps results', () => {
+    const brain = {
+      founder: { first_help_goal: 'find_leads' },
+      gtm: { primary_channel: 'email', motion: 'outbound' },
+    };
+    expect(recommendWorkflows(brain, undefined, 2).length).toBeLessThanOrEqual(2);
+  });
 });
