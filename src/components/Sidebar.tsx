@@ -19,6 +19,7 @@ const navGroups: NavGroup[] = [
       { path: '/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
       { path: '/signals', icon: Radar, label: 'Signals' },
       { path: '/dashboard', icon: MessageSquare, label: 'Conversations' },
+      { path: '/workflows', icon: Workflow, label: 'Workflows' },
       { path: '/awaiting-you', icon: Inbox, label: 'Awaiting You', badge: '4', badgeColor: 'amber' },
     ],
   },
