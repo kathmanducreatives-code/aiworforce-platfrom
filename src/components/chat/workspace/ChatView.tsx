@@ -207,13 +207,13 @@ export default function ChatView({ conversationId, agentSlug, pendingUserText, a
                   </div>
                 )}
                 {uiActions && uiActions.length > 0 && (
-                  <div className="mt-2 flex flex-col gap-1.5 max-w-[460px]">
+                  <div className="mt-2.5 flex flex-wrap gap-2 max-w-[640px]">
                     {uiActions.map((a, i) => (
                       <button
                         key={i}
                         type="button"
                         onClick={() => dispatchChatAction({ text: a.message, conversation_id: m.conversation_id, action_source: 'ui_actions_button' })}
-                        className="text-left rounded-lg border border-emerald-500/20 bg-emerald-500/[0.04] hover:bg-emerald-500/[0.1] hover:border-emerald-500/40 px-3 py-2 text-[13px] text-[#C9D1D9] transition-colors"
+                        className="inline-flex items-center rounded-full border border-emerald-500/25 bg-emerald-500/[0.06] hover:bg-emerald-500/[0.14] hover:border-emerald-500/50 px-3.5 py-1.5 text-[14px] font-medium text-[#D8E5DD] transition-colors"
                       >
                         {a.label}
                       </button>
