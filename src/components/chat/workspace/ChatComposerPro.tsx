@@ -477,10 +477,10 @@ export default function ChatComposerPro({ restrictDepartment, placeholder, autoF
               animate={{ x: 0, opacity: 1 }}
               exit={{ x: 8, opacity: 0 }}
               transition={{ duration: 0.2, ease: 'easeOut' }}
-              className="h-7 w-7 shrink-0 rounded-full bg-[#10B981] text-white flex items-center justify-center hover:bg-[#0EA372] transition-colors"
+              className="h-9 w-9 shrink-0 rounded-full bg-[#10B981] text-white flex items-center justify-center hover:bg-[#0EA372] transition-colors shadow-[0_0_18px_rgba(16,185,129,0.35)]"
               aria-label="Send"
             >
-              {submitting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <ArrowUp className="h-3.5 w-3.5" />}
+              {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <ArrowUp className="h-4 w-4" />}
             </motion.button>
           )}
         </AnimatePresence>
