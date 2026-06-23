@@ -549,13 +549,13 @@ Deno.serve(async (req) => {
     const nextStepSlug: string | null = planSteps[(step_index as number) + 1]?.agent_slug ?? null;
     const ariaFollows = planSteps.some((s, i) => i > (step_index as number) && s?.agent_slug === "aria");
 
-    const msg = ariaFollows
-      ? `Scout ran ${sourcingAttemptsCount} attempt(s) and found 0 qualified matches. Aria was skipped because there were no accepted leads to rank. Try broadening the role, industry, or location — or pick another lead source. No leads were saved, no credits charged, and nothing was sent.`
-      : `Scout ran ${sourcingAttemptsCount} attempt(s) and found 0 qualified matches. Try broadening the role, industry, or location — or pick another lead source. No leads were saved, no credits charged, and nothing was sent.`;
+    const scoutMsg = `I reviewed ${sourcingAttemptsCount} attempt(s) and accepted 0 qualified leads. None of the raw results matched closely enough.`;
+    const ariaSkipMsg = "Skipped — there were no accepted leads to rank.";
+    const pilotRecMsg = "Try broadening the role, industry, or location — or pick another lead source. No leads were saved, no credits charged, nothing sent.";
 
     await supabase.from("tasks").update({
       status: "complete",
-      result: { output: msg, no_qualified_matches: true, attempt_log: adaptiveAttempts.length ? adaptiveAttempts : undefined },
+      result: { output: scoutMsg, no_qualified_matches: true, attempt_log: adaptiveAttempts.length ? adaptiveAttempts : undefined },
     }).eq("id", task.id);
     await supabase.from("task_plans").update({ status: "failed", completed_at: new Date().toISOString() }).eq("id", plan_id);
 
@@ -570,7 +570,7 @@ Deno.serve(async (req) => {
     await supabase.from("activity_feed").insert({
       workspace_id, plan_id, agent_id: agent.id, event_type: "plan_complete",
       title: "Plan failed — no qualified matches",
-      body: msg,
+      body: scoutMsg,
       metadata: { step_index, task_id: task.id, workflow_status: "no_qualified_matches" },
     });
     await supabase.from("activity_feed").insert({
@@ -585,10 +585,25 @@ Deno.serve(async (req) => {
       const conversationId = (planMsg as { conversation_id?: string } | null)?.conversation_id ?? null;
       if (conversationId) {
         const failActions = ["broaden_search", "edit_criteria", "change_source", "view_details", "done"];
+        // Scout: honest sourcing result
+        await supabase.from("messages").insert({
+          conversation_id: conversationId, role: "assistant",
+          content: scoutMsg, agent_slug: "scout",
+          metadata: { plan_id, agent_id: "scout", workflow_step: "source_leads", status: "no_qualified_matches", attempt_log: adaptiveAttempts.length ? adaptiveAttempts : undefined },
+        });
+        // Aria: skipped (only when ranking was actually in the plan)
+        if (ariaFollows) {
+          await supabase.from("messages").insert({
+            conversation_id: conversationId, role: "assistant",
+            content: ariaSkipMsg, agent_slug: "aria",
+            metadata: { plan_id, agent_id: "aria", workflow_step: "rank", status: "skipped", reason: "no_accepted_leads" },
+          });
+        }
+        // Pilot: coordinator recommendation + UI card actions
         const card = {
           kind: "lead_sourcing_error",
           title: "No qualified matches found",
-          message: msg,
+          message: pilotRecMsg,
           error: "no_qualified_matches",
           retry_command: instruction,
           next_actions: failActions,
@@ -596,8 +611,8 @@ Deno.serve(async (req) => {
         };
         await supabase.from("messages").insert({
           conversation_id: conversationId, role: "assistant",
-          content: msg, agent_slug: "pilot",
-          metadata: { ui_card: card, lead_sourcing_error: true, plan_id, workflow_status: "no_qualified_matches", aria_skipped: ariaFollows, next_actions: failActions, source_brief: instruction },
+          content: pilotRecMsg, agent_slug: "pilot",
+          metadata: { ui_card: card, lead_sourcing_error: true, plan_id, agent_id: "pilot", workflow_status: "no_qualified_matches", aria_skipped: ariaFollows, next_actions: failActions, source_brief: instruction },
         });
       }
     } catch (e) { console.warn("[run-agent] no-qualified-matches card failed:", e); }
