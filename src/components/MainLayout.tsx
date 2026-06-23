@@ -9,6 +9,7 @@ import ChatWorkspace from "./chat/workspace/ChatWorkspace";
 import AgentBuilderModal from "./agents/AgentBuilderModal";
 import RouteErrorBoundary from "./RouteErrorBoundary";
 import WorkspaceGate from "./WorkspaceGate";
+import OnboardingGate from "./OnboardingGate";
 import ChatErrorBoundary from "./chat/workspace/ChatErrorBoundary";
 import { ChatWorkspaceProvider } from "@/contexts/ChatWorkspaceContext";
 import { useIsMobile } from "@/hooks/use-mobile";
