@@ -111,8 +111,8 @@ export default function ExecutionTaskRow({
           {String(index + 1).padStart(2, '0')}
         </span>
         <StatusIcon status={task.status} />
-        <AgentBadge slug={agentSlug} />
-        <ReactionChip slug={agentSlug} task={task} toolCall={latestToolCall} />
+        <AgentBadge slug={effectiveSlug} />
+        <ReactionChip slug={effectiveSlug} task={task} toolCall={latestToolCall} />
 
         <div className="flex-1 min-w-[200px]">
           <div className="text-[13px] text-[#F0F6FC] leading-snug">{title}</div>
