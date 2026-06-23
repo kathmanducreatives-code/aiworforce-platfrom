@@ -74,7 +74,7 @@ const MainLayout = ({ children }: MainLayoutProps) => {
 
         {/* Persistent command dock — unified composer + agent surface */}
         <ChatErrorBoundary>
-          <CommandDock />
+          <CommandDock sidebarCollapsed={isSidebarCollapsed} />
         </ChatErrorBoundary>
 
         {/* Full Chat Workspace drawer / fullscreen */}
