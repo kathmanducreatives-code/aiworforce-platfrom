@@ -159,7 +159,21 @@ export default {
 			borderRadius: {
 				lg: 'var(--radius)',
 				md: 'calc(var(--radius) - 2px)',
-				sm: 'calc(var(--radius) - 4px)'
+				sm: 'calc(var(--radius) - 4px)',
+				control: 'var(--radius-control)',
+				card: 'var(--radius-card)',
+				panel: 'var(--radius-panel)',
+				dock: 'var(--radius-dock)'
+			},
+			fontSize: {
+				micro: ['12px', { lineHeight: '1.4' }],
+				'xs-plus': ['13px', { lineHeight: '1.45' }],
+				'sm-plus': ['14.5px', { lineHeight: '1.5' }],
+				'base-plus': ['15.5px', { lineHeight: '1.55' }],
+				md: ['17px', { lineHeight: '1.45' }],
+				'lg-plus': ['20px', { lineHeight: '1.4' }],
+				xxl: ['28px', { lineHeight: '1.2' }],
+				page: ['36px', { lineHeight: '1.15', letterSpacing: '-0.02em' }]
 			},
 			keyframes: {
 				'accordion-down': {
