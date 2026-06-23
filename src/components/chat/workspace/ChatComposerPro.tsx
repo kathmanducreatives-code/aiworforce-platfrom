@@ -428,12 +428,12 @@ export default function ChatComposerPro({ restrictDepartment, placeholder, autoF
       )}
 
       <div className={cn(
-        'flex items-end gap-2 rounded-xl bg-[#131920] border border-white/[0.06]',
-        'px-3 py-2.5 transition-[border-color] duration-150',
-        'focus-within:border-white/[0.12]',
+        'flex items-end gap-2.5 rounded-2xl bg-[#0f141a] border border-white/[0.07]',
+        'px-4 py-3 transition-[border-color,box-shadow] duration-150',
+        'focus-within:border-emerald-500/35 focus-within:shadow-[0_0_0_3px_rgba(16,185,129,0.10)]',
       )}>
         {contextLabel && (
-          <div className="shrink-0 inline-flex items-center gap-1 h-6 px-2 rounded-md border border-white/[0.08] text-[12px] text-[#7D8590]">
+          <div className="shrink-0 inline-flex items-center gap-1 h-7 px-2.5 rounded-md border border-white/[0.08] text-[12.5px] text-[#9aa4af]">
             <span>{contextLabel}</span>
             <button
               onClick={() => setView({ kind: 'empty' })}
@@ -461,9 +461,10 @@ export default function ChatComposerPro({ restrictDepartment, placeholder, autoF
             setComposerFocused(false);
             setTimeout(() => setShowSuggestions(false), 100);
           }}
-          placeholder={placeholder ?? (view.kind === 'channel' ? `Message #${view.dept}…` : 'Message your workforce...')}
-          className="flex-1 resize-none bg-transparent outline-none text-[14px] leading-relaxed text-[#F0F6FC] placeholder:text-[#484F58] max-h-[240px] min-h-[24px] py-1 px-1"
+          placeholder={placeholder ?? (view.kind === 'channel' ? `Message #${view.dept}…` : 'Message your AI workforce…')}
+          className="flex-1 resize-none bg-transparent outline-none text-[16px] leading-[1.55] text-[#F0F6FC] placeholder:text-[#6e7681] max-h-[240px] min-h-[28px] py-1 px-1"
         />
+
 
         <AnimatePresence initial={false}>
           {(hasText || submitting) && (
