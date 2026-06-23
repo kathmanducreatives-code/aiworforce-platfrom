@@ -3,6 +3,47 @@ import AgentBadge from './AgentBadge';
 import ToolStatusBadge from './ToolStatusBadge';
 import ApprovalBadge from './ApprovalBadge';
 import { CheckCircle2, Circle, Loader2, XCircle } from 'lucide-react';
+import { resolveAgent } from '@/lib/agentResolver';
+
+/** Tiny per-agent outcome chip rendered next to the agent badge. */
+function ReactionChip({ slug, task, toolCall }: { slug: string | null; task: DBTask; toolCall?: DBToolCall | null }) {
+  if (task.status !== 'complete' && task.status !== 'skipped' && task.status !== 'failed') return null;
+  const profile = resolveAgent(slug);
+  const accent = profile.accentHex ?? '#7D8590';
+  const out = (task.output ?? {}) as Record<string, any>;
+  const tcOut = (toolCall?.output_json ?? {}) as Record<string, any>;
+  const total = typeof tcOut.total === 'number' ? tcOut.total : (typeof out.total === 'number' ? out.total : null);
+
+  let label: string | null = null;
+  if (task.status === 'skipped') label = 'Skipped';
+  else if (task.status === 'failed') label = 'Blocked';
+  else {
+    switch (profile.id) {
+      case 'scout':  label = total != null ? `${total} qualified` : 'Sourced'; break;
+      case 'aria':   label = total != null ? `${total} ranked` : 'Ranked'; break;
+      case 'hawk':   label = total != null ? `${total} researched` : 'Researched'; break;
+      case 'penn':   label = total != null ? `${total} drafts` : 'Draft ready'; break;
+      case 'scribe': label = 'Written'; break;
+      case 'pilot':  label = 'Coordinated'; break;
+      default:       label = 'Done';
+    }
+  }
+  if (!label) return null;
+  const dim = task.status === 'skipped';
+  return (
+    <span
+      className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[10.5px] font-medium border"
+      style={{
+        color: dim ? '#7D8590' : accent,
+        borderColor: dim ? 'rgba(125,133,144,0.25)' : `${accent}55`,
+        background: dim ? 'rgba(125,133,144,0.05)' : `${accent}14`,
+      }}
+    >
+      {label}
+    </span>
+  );
+}
+
 
 interface Props {
   index: number;
