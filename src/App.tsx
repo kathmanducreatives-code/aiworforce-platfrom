@@ -57,6 +57,7 @@ import LeadCRM from "./pages/LeadCRM";
 import OutreachEngine from "./pages/OutreachEngine";
 import CandidateDossier from "./pages/candidates/CandidateDossier";
 import TaskPlanPage from "./pages/TaskPlanPage";
+import Workflows from "./pages/Workflows";
 // import VerifyQueue from "./pages/verify/VerifyQueue";
 // import VerifyResults from "./pages/verify/VerifyResults";
 // import InterviewDashboard from "./pages/interviews/InterviewDashboard";
