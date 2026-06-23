@@ -121,33 +121,33 @@ export default function Workflows() {
     <div className="min-h-screen w-full pb-16">
       {/* Background grid */}
       <div className="pointer-events-none fixed inset-0 z-0 bg-[radial-gradient(ellipse_at_top,rgba(16,185,129,0.05),transparent_60%)]" />
-      <div className="relative z-10 max-w-[1400px] mx-auto px-6 lg:px-10 pt-10">
+      <div className="relative z-10 max-w-[1400px] mx-auto px-6 lg:px-10 pt-12">
         {/* Header */}
-        <header className="flex flex-col gap-2 mb-8">
-          <div className="flex items-center gap-2 text-[10px] font-mono uppercase tracking-wider text-emerald-400/80">
-            <WorkflowIcon className="w-3 h-3" /> Workflow Center
+        <header className="flex flex-col gap-3 mb-10">
+          <div className="inline-flex items-center gap-2 self-start text-[11.5px] font-mono font-semibold uppercase tracking-[0.16em] text-emerald-300 border border-emerald-500/25 bg-emerald-500/[0.06] rounded-full px-3 py-1.5">
+            <WorkflowIcon className="w-3.5 h-3.5" /> Workflow Center
           </div>
-          <h1 className="text-[28px] font-medium text-foreground leading-tight">Workflows</h1>
-          <p className="text-[13.5px] text-neutral-400 max-w-xl">
+          <h1 className="text-page font-semibold text-foreground tracking-tight">Workflows</h1>
+          <p className="text-[15.5px] text-neutral-300 max-w-2xl leading-relaxed">
             Run repeatable AI employee playbooks without writing a prompt. Pick a workflow, fill the inputs, and results open in Workbench.
           </p>
         </header>
 
         {/* Controls */}
-        <div className="flex flex-col lg:flex-row gap-3 mb-6">
+        <div className="flex flex-col lg:flex-row gap-3 mb-8">
           <div className="relative flex-1">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-neutral-500" />
+            <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-neutral-400" />
             <input
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               placeholder="Search workflows…"
-              className="w-full h-10 pl-9 pr-3 rounded-md bg-white/[0.03] border border-white/[0.06] text-[13px] text-foreground placeholder:text-neutral-600 focus:outline-none focus:border-emerald-500/30"
+              className="w-full h-11 pl-10 pr-3 rounded-md bg-white/[0.03] border border-white/[0.08] text-[15.5px] text-foreground placeholder:text-neutral-500 focus:outline-none focus:border-emerald-500/35"
             />
           </div>
           <select
             value={agentFilter}
             onChange={(e) => setAgentFilter(e.target.value)}
-            className="h-10 px-3 rounded-md bg-white/[0.03] border border-white/[0.06] text-[13px] text-foreground focus:outline-none focus:border-emerald-500/30"
+            className="h-11 px-4 rounded-md bg-white/[0.03] border border-white/[0.08] text-[14.5px] text-foreground focus:outline-none focus:border-emerald-500/35"
           >
             {AGENT_FILTERS.map((a) => (
               <option key={a.id} value={a.id} className="bg-[#0a0a0a]">{a.label}</option>
@@ -155,12 +155,12 @@ export default function Workflows() {
           </select>
         </div>
 
-        <div className="grid grid-cols-12 gap-6">
+        <div className="grid grid-cols-12 gap-7">
           {/* Sidebar filters */}
-          <aside className="col-span-12 lg:col-span-3 space-y-4">
+          <aside className="col-span-12 lg:col-span-3 space-y-6">
             <div>
-              <p className="text-[10px] font-mono uppercase tracking-wider text-neutral-600 mb-2 px-1">Departments</p>
-              <div className="space-y-px">
+              <p className="eyebrow mb-3 px-1">Departments</p>
+              <div className="space-y-0.5">
                 <CategoryButton active={cat === 'all'} onClick={() => setCat('all')} label="All workflows" count={WORKFLOWS.length} />
                 {CATEGORY_ORDER.map((c) => (
                   <CategoryButton
@@ -176,21 +176,23 @@ export default function Workflows() {
 
             {/* Recent runs */}
             <div>
-              <p className="text-[10px] font-mono uppercase tracking-wider text-neutral-600 mb-2 px-1 flex items-center gap-1.5">
-                <History className="w-3 h-3" /> Recent runs
+              <p className="eyebrow mb-3 px-1 flex items-center gap-2">
+                <History className="w-3.5 h-3.5" /> Recent runs
               </p>
               {recent.length === 0 ? (
-                <p className="text-[11.5px] text-neutral-600 px-1">No runs yet. Pick a workflow to start.</p>
+                <p className="text-[13px] text-neutral-500 px-1 leading-relaxed">
+                  No runs yet. Pick a workflow to start your first AI employee playbook.
+                </p>
               ) : (
                 <div className="space-y-1">
                   {recent.slice(0, 5).map((r) => (
-                    <div key={r.id} className="group flex items-center justify-between gap-2 p-2 rounded-md hover:bg-white/[0.02] cursor-pointer"
+                    <div key={r.id} className="group flex items-center justify-between gap-2 p-2.5 rounded-md hover:bg-white/[0.03] cursor-pointer"
                       onClick={() => navigate('/dashboard', { state: { conversationId: r.conversationId } })}>
                       <div className="min-w-0 flex-1">
-                        <p className="text-[12px] text-foreground truncate">{r.workflowTitle}</p>
-                        <p className="text-[10px] text-neutral-500 truncate">{r.inputSummary}</p>
+                        <p className="text-[14px] text-foreground truncate">{r.workflowTitle}</p>
+                        <p className="text-[12px] text-neutral-500 truncate mt-0.5">{r.inputSummary}</p>
                       </div>
-                      <ExternalLink className="w-3 h-3 text-neutral-600 group-hover:text-emerald-400 shrink-0" />
+                      <ExternalLink className="w-3.5 h-3.5 text-neutral-600 group-hover:text-emerald-400 shrink-0" />
                     </div>
                   ))}
                 </div>
@@ -199,15 +201,15 @@ export default function Workflows() {
           </aside>
 
           {/* Main grid */}
-          <main className="col-span-12 lg:col-span-9 space-y-8">
+          <main className="col-span-12 lg:col-span-9 space-y-10">
             {/* Recommended */}
             {recommended.length > 0 && cat === 'all' && !query && (
               <section>
-                <div className="flex items-center gap-2 mb-3">
-                  <Sparkles className="w-3.5 h-3.5 text-emerald-400" />
-                  <h2 className="text-[13px] font-medium text-foreground">Recommended for your company</h2>
+                <div className="flex items-center gap-2 mb-4">
+                  <Sparkles className="w-4 h-4 text-emerald-400" />
+                  <h2 className="text-[18px] font-semibold text-foreground tracking-tight">Recommended for your company</h2>
                 </div>
-                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
+                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
                   {recommended.map((w) => (
                     <WorkflowCard
                       key={`r-${w.id}`}
@@ -227,13 +229,13 @@ export default function Workflows() {
               if (!items || items.length === 0) return null;
               return (
                 <section key={c}>
-                  <div className="flex items-center justify-between mb-3">
-                    <h2 className="text-[13px] font-medium text-foreground flex items-center gap-2">
+                  <div className="flex items-center justify-between mb-4">
+                    <h2 className="text-[18px] font-semibold text-foreground tracking-tight flex items-center gap-2.5">
                       {CATEGORY_LABEL[c]}
-                      <span className="text-[10px] font-mono text-neutral-600">{items.length}</span>
+                      <span className="text-[12px] font-mono text-neutral-500">{items.length}</span>
                     </h2>
                   </div>
-                  <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
+                  <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
                     {items.map((w) => (
                       <WorkflowCard
                         key={w.id}
@@ -249,7 +251,7 @@ export default function Workflows() {
             })}
 
             {filtered.length === 0 && (
-              <div className="text-center py-16 text-neutral-500 text-[13px] border border-dashed border-white/[0.06] rounded-xl">
+              <div className="text-center py-16 text-neutral-400 text-[14.5px] border border-dashed border-white/[0.08] rounded-card">
                 No workflows match your filters.
               </div>
             )}
