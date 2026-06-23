@@ -1,82 +1,136 @@
-## Root cause
 
-The Slack-style visuals already key off `agent_slug` / metadata, but the backend writes almost every assistant message with `agent_slug: "pilot"`. So no matter how nice the bubbles look, `ChatView` resolves them to Pilot. Specifically:
+# Agentory Premium Polish — Typography, Spacing & Hierarchy
 
-- `supabase/functions/run-agent/index.ts` hard-codes `agent_slug: "pilot"` on every chat message it inserts: sourcing-failure card (L531), no-qualified-matches card (L596), no-results card (L908), and the main post-lead result card (L988) — even though the actual work was done by Scout/Aria/Hawk.
-- `supabase/functions/pilot-chat/index.ts` correctly emits Pilot for plan announcements, but also writes Pilot for messages that are really Scout/Aria operational updates (L352, L389, L429, L528, L1492, L1551, L1629, L1649, L1665).
-- `ExecutionTaskRow` derives the row agent from `agentById[task.agent_id]`. When the task row's `agent_id` doesn't map (or is the Pilot agent for a planning/coordination step), the badge falls back to Pilot. The planning/wrap-up steps therefore visually claim Scout/Aria's work.
-- `ChatView` already supports `resolveAgentFromMetadata` and falls back to `m.agent_slug`, so the fix is to (a) make the backend write the correct slug, and (b) provide a content-based inference fallback for legacy rows.
+A visual/design-system pass only. No layout restructure, no backend changes, no migrations, no removal of any existing feature (Workflows, Workbench, dock, sidebar, avatars all stay). Landing page untouched.
 
-## What to change
+## 1. Foundation — design tokens (single source of truth)
 
-### 1. Single source of truth for agent identity (frontend)
+Edit `src/index.css` and `tailwind.config.ts` to introduce typography + radius tokens and bump the base size.
 
-- Extend `src/data/agentProfiles.ts` with explicit `responsibilities: string[]` per agent (matching the spec) so a runtime helper can route by responsibility, and re-export from `src/lib/agentResolver.ts`.
-- Add `inferAgentFromContent(text)` in `src/lib/agentResolver.ts` using the regex rules from the spec (scout/aria/hawk/penn/scribe → default pilot). Use it in `resolveAgentFromMetadata` as the last step before falling back to Pilot.
-- Update `ChatView.tsx` ownership chain to:
-  `meta.agent_id || meta.agent_slug || m.agent_slug || inferAgentFromMetadata(meta) || inferAgentFromContent(m.content) || 'pilot'`.
-- Remove the duplicate-name risk by rendering only `Name · Role` once (already the case, but assert it after backend changes).
+```css
+:root {
+  /* type scale */
+  --font-micro: 12px;
+  --font-xs:    13px;
+  --font-sm:    14.5px;
+  --font-base:  15.5px;
+  --font-md:    17px;
+  --font-lg:    20px;
+  --font-xl:    28px;
+  --font-page:  36px;
 
-### 2. Backend message ownership (no DB migration, no schema change)
+  /* line-height */
+  --line-tight:   1.25;
+  --line-normal:  1.55;
+  --line-relaxed: 1.70;
 
-In `supabase/functions/run-agent/index.ts`, update every `messages.insert` to attribute the correct agent. Concretely:
+  /* radii */
+  --radius-control: 12px;
+  --radius-card:    20px;
+  --radius-panel:   24px;
+  --radius-dock:    24px;
 
-- Sourcing-failure card (L531): `agent_slug: "scout"`, metadata `{ agent_id: "scout", workflow_step: "source_leads", status: "failed" }`. Optionally emit a short Pilot summary message afterwards ("Try broadening or change the source").
-- No-qualified-matches (L596): split into two inserts — Scout: "I reviewed N raw results and accepted 0…", Aria (only if it was in the plan): "Skipped — no accepted leads to rank", Pilot: short recommendation. Each carries the matching `agent_slug` + metadata.
-- No-results in the final-step block (L908): Scout speaks the "reviewed X raw results, none matched" line; Pilot adds the recommendation.
-- Post-lead success card (L988): Scout speaks the "reviewed/accepted" line; Pilot speaks the short coordinator wrap-up ("I opened the results in Workbench…"); the `ui_panel` + `post_lead_actions` payload moves onto the Pilot wrap-up message so the existing Workbench auto-open still fires. Both messages carry `metadata.agent_id`.
-- Handoff activity rows (L806, L562) already record `from_agent_slug` / `to_agent_slug`; no change.
+  /* text contrast (HSL, dark theme) */
+  --text-primary:   0 0% 98%;
+  --text-secondary: 0 0% 78%;   /* was ~65% — brighter */
+  --text-tertiary:  0 0% 60%;
+  --text-disabled:  0 0% 40%;
+}
 
-In `supabase/functions/pilot-chat/index.ts`, audit every hard-coded `agent_slug: "pilot"` insert and change those that represent Scout/Aria/Hawk/Penn/Scribe work to use the correct slug. The plan-announcement message (L194) and clarification/safety messages stay as Pilot. Add `metadata.agent_id` alongside `agent_slug` on every assistant insert so the frontend ownership chain is unambiguous.
-
-### 3. Card-action handlers speak as the right agent
-
-When the user clicks a post-lead pill, the chat handler dispatches a new message. Update the action→agent map in the relevant pilot-chat branch (around L290–L430 and L1490–L1665):
-
-- `find_decision_makers` / `find_contacts` → Scout
-- `rank` / `rank_by_fit` → Aria
-- `enrich` / `research_company` → Hawk
-- `draft_outreach` / `write_followup` → Penn (must keep `SafetyChip` and `draft_only: true`)
-- `write_content` / `linkedin_post` → Scribe
-
-Pilot may insert a one-line handoff message before chaining ("Handing this to Hawk."), then the agent's own message follows.
-
-### 4. Execution plan rows + presence
-
-- `ExecutionTaskRow`: when `agentSlug` is null, fall back to inferring from `task.payload.agent_slug` and finally `inferAgentFromContent(task.description ?? title)` before defaulting to Pilot, so a planning step that wasn't tagged doesn't masquerade as Pilot.
-- `ExecutionPlanCard`: do not show Pilot as the row owner for sourcing/ranking steps — derive the badge from the plan-step `agent_slug` if `agentById[agent_id]` returns nothing.
-- `AgentPresenceBar`: pulse only the agent whose task is currently `running` (driven by `tasks[].agent_id` resolved through the same mapping). Pilot stays present, but never pulses for Scout/Aria/Hawk work.
-
-### 5. Legacy messages
-
-For older rows in the conversation that were written with `agent_slug: "pilot"`, the new `inferAgentFromContent` fallback inside `ChatView` will retroactively re-attribute the bubble (Scout/Aria/Hawk/Penn/Scribe keywords). No DB write needed.
-
-### 6. Safety / scope guarantees (unchanged)
-
-- No DB migration, no schema change.
-- No auto-send / DM / comment / email — Penn output stays `draft_only: true`, `SafetyChip` continues to render for `slug === 'penn'`.
-- No landing-page edits.
-
-## Files touched
-
-```text
-src/data/agentProfiles.ts                                     (+responsibilities)
-src/lib/agentResolver.ts                                      (+inferAgentFromContent, ownership chain)
-src/components/chat/workspace/ChatView.tsx                    (ownership chain, content fallback)
-src/components/chat/workspace/plan/ExecutionPlanCard.tsx      (row slug fallback)
-src/components/chat/workspace/plan/ExecutionTaskRow.tsx       (badge fallback, reaction chip slug)
-src/components/chat/workspace/agents/AgentPresenceBar.tsx     (pulse correct agent)
-supabase/functions/run-agent/index.ts                         (Scout/Aria/Hawk own their inserts; Pilot wraps)
-supabase/functions/pilot-chat/index.ts                        (correct agent_slug + metadata.agent_id per insert; action→agent map)
+html, body { font-size: 15.5px; line-height: var(--line-normal); }
 ```
 
-## Acceptance / QA
+Add Tailwind utilities mapped to these tokens (`text-micro`, `text-sm-plus`, `text-base-plus`, `text-md`, `text-lg-plus`, `text-page`, plus `rounded-card`, `rounded-panel`, `rounded-dock`). Keep existing classes working — just add the new ones and migrate hotspots.
 
-After build + deploy of `run-agent` and `pilot-chat`:
+Add an `.eyebrow` utility refresh: 13.5px, `tracking-[0.16em]`, `text-secondary/80`.
 
-- "Find 5 companies hiring GTM roles in B2B in USA" produces, in order: Pilot coordinator note → Scout "creating search strategy" → Scout "reviewed N, accepted X" → Aria "ranked against Company Brain" → Pilot "opened results in Workbench, recommended next step…". No bubble in this sequence reads "Pilot · Manager" except the first and last.
-- ExecutionPlanCard step 1 row shows `Scout · Sourcing`, step 2 shows `Aria · Ranking`. Pilot only appears on coordination/wrap rows when present.
-- "Find decision-makers" pill → Scout responds. "Rank by fit" → Aria. "Research these companies" → Hawk. "Draft outreach" → Penn (with `Draft only · Nothing sent`). "Write a LinkedIn post" → Scribe.
-- Failed sourcing path emits Scout "accepted 0", Aria "Skipped", Pilot recommendation.
-- Presence bar pulses Scout during sourcing, Aria during ranking — not Pilot.
-- No new DB migrations created; no calls to outreach/email/DM webhooks added.
+## 2. Sidebar (`src/components/Sidebar.tsx`)
+
+- Nav label: 13px → **14.5px**, weight 500; active item weight 600 + emerald glow already present.
+- Increase row vertical padding by 2px, group gap +4px.
+- Inactive icon/text contrast: `text-neutral-400` → `text-neutral-300`.
+- PRO badge: subtle emerald gradient border, 11.5px uppercase, slightly more padding.
+
+## 3. Dashboard polish
+
+Files: `src/pages/Dashboard.tsx`, `src/components/workforce/PilotBriefing.tsx`, `src/components/workforce/WorkforceDock.tsx`, `src/components/workforce/DepartmentPreview.tsx`.
+
+- **PilotBriefing**: headline → 20px/600, bullets 15.5px with `line-relaxed`, "Next move" promoted to its own callout chip (emerald border, 14.5px).
+- **WorkforceDock**: agent label 10.5px → **12px**, badge text 9.5px → **11px**, base avatar 44→48, max 68→72. Hover tooltip text 11.5→13px.
+- **DepartmentPreview**: section title 18→20px, metric numbers ~22→28px, metric labels 11→13px, more breathing room (`gap-5` → `gap-6`).
+- Section eyebrow "Workforce" uses new `.eyebrow` token.
+
+## 4. Workflows page (`src/pages/Workflows.tsx`, `src/components/workflows/WorkflowCard.tsx`)
+
+- Add "Workflow Center" eyebrow badge above the page title.
+- Page title 28→**36px**, subtitle **15.5px**, search input text **15.5px** with h-11.
+- Category chips 13→**14.5px**.
+- **WorkflowCard**: padding `p-4` → `p-5`, title 14→**17px/600**, description 12→**14.5px** with `line-clamp-3`, agent avatars 22→**26px**, metadata row 10→**12.5px**, status chip 10→**12px**.
+- Recommended cards: subtle animated emerald inner glow (CSS-only, no JS).
+- Section heading "Recommended" 13→**18px** with eyebrow above.
+- Card radius standardized to `rounded-card` (20px).
+
+## 5. Command dock (`src/components/workforce/InlineCommandBar.tsx` + `WorkforceDock` if relevant)
+
+- Container padding p-4 → p-5, radius → `rounded-dock`.
+- Input text 14 → **15.5px**, placeholder same, height bump.
+- Chips 11 → **13px**, h-7 → h-8, gap-1.5 → gap-2.
+- Submit button 32→36px, icon 16→18px.
+- Soft glass: `bg-white/[0.03]` + stronger `backdrop-blur-2xl` + inner highlight ring.
+
+## 6. Workbench polish
+
+Identify primary Workbench files via `rg "Workbench"` and update table + chrome (no logic change):
+
+- Table header: 11px uppercase → **12.5px** with `tracking-[0.12em]`.
+- Table body cell: 13 → **14.5px**, row height +6px.
+- Status chips: 11 → **12.5px**, +2px padding.
+- Tabs: 13 → **15px**, h-9 → h-10.
+- Workbench panel title: 16 → **19px**.
+- Recommendation banner copy 13 → **15px**, icon size up.
+
+## 7. Cards, chips, hierarchy
+
+- Replace hard `bg-black/60` card surfaces with `bg-white/[0.025]` + `border-white/[0.08]` + subtle inner highlight (`shadow-[inset_0_1px_0_0_rgba(255,255,255,0.04)]`).
+- Recommended/active state: emerald 1px border + soft outer emerald glow.
+- Standardize radius via tokens (controls 12, cards 20, panels/dock 24).
+- Audit muted text: bump `text-neutral-500` → `text-neutral-400` where used for secondary content.
+
+## 8. Truncation & responsive
+
+- Add `truncate`/`line-clamp-*` only where overflow is a real risk; widen sidebar by 8px if labels clip at 14.5px.
+- Visual QA via Playwright headless at 1024, 1280, 1440 widths on `/dashboard`, `/workflows`, `/workbench` (or equivalent). Capture screenshots, verify no horizontal overflow, no clipped CTAs, dock not covering content.
+
+## 9. Extras
+
+- Hover preview on agents already exists in `WorkforceDock` — only resize and tighten copy.
+- Recent-runs empty state copy update on Workflows page.
+- "LIVE" indicator: 10→**12px**, consistent dot+label component.
+
+## Files expected to change
+
+- `src/index.css`, `tailwind.config.ts` (tokens, utilities)
+- `src/components/Sidebar.tsx`
+- `src/pages/Dashboard.tsx`
+- `src/components/workforce/PilotBriefing.tsx`
+- `src/components/workforce/WorkforceDock.tsx`
+- `src/components/workforce/DepartmentPreview.tsx`
+- `src/components/workforce/InlineCommandBar.tsx`
+- `src/pages/Workflows.tsx`
+- `src/components/workflows/WorkflowCard.tsx`
+- Workbench component(s) — discovered during implementation
+- Minor: shared chip/badge styles if centralized
+
+## Out of scope
+
+Landing page, routing, backend functions, DB, RLS, agent ownership logic, Workflows registry, chat orchestration.
+
+## QA
+
+- `tsgo` typecheck + build.
+- Playwright screenshots at 1024 / 1280 / 1440 on dashboard, workflows, workbench, dock open.
+- Visual diff vs current preview — confirm: bigger but still dense; no clipping; no horizontal scroll; emerald accents intentional.
+
+## Deliverable
+
+A short report listing files changed, token additions, before/after font sizes for each surface, QA screenshots, and any residual gaps (e.g. tables that need a deeper redesign beyond a polish pass).
