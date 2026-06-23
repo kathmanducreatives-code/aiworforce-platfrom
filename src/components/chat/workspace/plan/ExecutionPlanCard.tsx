@@ -8,7 +8,9 @@ import AgentBadge from './AgentBadge';
 import ExecutionTaskRow from './ExecutionTaskRow';
 import ActivityMiniFeed from './ActivityMiniFeed';
 import PlanStatusPill from './PlanStatusPill';
+import AgentProcessRail from '../agents/AgentProcessRail';
 import type { DBToolCall, DBApproval } from '@/lib/orchestration';
+
 
 interface Props {
   planId: string;
@@ -196,24 +198,34 @@ export default function ExecutionPlanCard({ planId, meta }: Props) {
       )}
 
 
-      <ul className="mt-3 space-y-2">
-        {tasks.map((t, i) => (
-          <ExecutionTaskRow
-            key={t.id}
-            index={i}
-            task={t}
-            agentSlug={t.agent_id ? agentById[t.agent_id] ?? null : null}
-            latestToolCall={latestToolCallByTask[t.id] ?? null}
-            approval={approvalByTask[t.id] ?? null}
-            connectorMissingFor={connectorMissingFor}
-            onReviewApproval={() => setView({ kind: 'conversation', planId })}
-            onOpenOutput={handleOpenOutput}
-          />
-        ))}
-        {tasks.length === 0 && (
-          <li className="text-[12px] text-[#7D8590] italic">Plan is being created…</li>
-        )}
-      </ul>
+      <div className="mt-3 flex gap-3 items-start">
+        <AgentProcessRail
+          className="pt-1 shrink-0"
+          steps={tasks.map((t) => ({
+            slug: t.agent_id ? agentById[t.agent_id] ?? null : null,
+            status: t.status as any,
+          }))}
+        />
+        <ul className="flex-1 min-w-0 space-y-2">
+          {tasks.map((t, i) => (
+            <ExecutionTaskRow
+              key={t.id}
+              index={i}
+              task={t}
+              agentSlug={t.agent_id ? agentById[t.agent_id] ?? null : null}
+              latestToolCall={latestToolCallByTask[t.id] ?? null}
+              approval={approvalByTask[t.id] ?? null}
+              connectorMissingFor={connectorMissingFor}
+              onReviewApproval={() => setView({ kind: 'conversation', planId })}
+              onOpenOutput={handleOpenOutput}
+            />
+          ))}
+          {tasks.length === 0 && (
+            <li className="text-[12px] text-[#7D8590] italic">Plan is being created…</li>
+          )}
+        </ul>
+      </div>
+
 
       <ActivityMiniFeed events={activity} />
 

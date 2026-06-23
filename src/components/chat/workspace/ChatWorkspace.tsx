@@ -13,6 +13,8 @@ import ChatView from './ChatView';
 import ChatComposerPro from './ChatComposerPro';
 import ChatErrorBoundary from './ChatErrorBoundary';
 import WorkbenchPanel from './workbench/WorkbenchPanel';
+import AgentPresenceBar from './agents/AgentPresenceBar';
+
 import { Sheet, SheetContent } from '@/components/ui/sheet';
 import ResizableWorkspaceSplit from './ResizableWorkspaceSplit';
 import { ChatPaneWidthProvider } from './ChatPaneWidthContext';
@@ -98,6 +100,10 @@ export default function ChatWorkspace() {
                   <span className="h-1.5 w-1.5 rounded-full bg-primary animate-pulse" />
                   ScreeningPilot · AI Workforce
                 </div>
+                <div className="hidden md:flex pl-3 ml-1 border-l border-white/[0.06]">
+                  <AgentPresenceBar activeSlug={view.kind === 'chat' ? view.agentSlug : view.kind === 'agent' ? view.slug : 'pilot'} />
+                </div>
+
               </div>
               <div className="flex items-center gap-1">
                 <NewChatButton />
