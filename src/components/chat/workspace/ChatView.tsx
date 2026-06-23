@@ -271,17 +271,16 @@ function HandoffDivider({ fromSlug, toSlug }: { fromSlug: string; toSlug: string
   const fromAccent = from.accentHex ?? '#7D8590';
   const toAccent = to.accentHex ?? '#10B981';
   return (
-    <div className="flex items-center justify-center gap-2 py-1 select-none">
-      <span className="h-px w-10" style={{ background: `linear-gradient(90deg, transparent, ${fromAccent}55)` }} />
-      <AgentAvatar slug={from.id} size="xs" ring={false} />
-      <ArrowRight className="h-3 w-3 text-[#7D8590]" />
-      <AgentAvatar slug={to.id} size="xs" ring={false} />
-      <span className="text-[10.5px] uppercase tracking-wider text-[#7D8590]">
-        <span style={{ color: fromAccent }}>{from.name}</span>
-        {' → '}
-        <span style={{ color: toAccent }}>{to.name}</span>
-      </span>
-      <span className="h-px w-10" style={{ background: `linear-gradient(90deg, ${toAccent}55, transparent)` }} />
+    <div className="flex items-center justify-center gap-3 py-2 select-none">
+      <span className="h-px flex-1 max-w-[120px]" style={{ background: `linear-gradient(90deg, transparent, ${fromAccent}55)` }} />
+      <div className="flex items-center gap-2 px-2.5 py-1 rounded-full border border-white/[0.07] bg-white/[0.025] backdrop-blur-md">
+        <AgentAvatar slug={from.id} size="xs" ring={false} />
+        <span className="text-[12.5px] font-medium" style={{ color: fromAccent }}>{from.name}</span>
+        <ArrowRight className="h-3 w-3 text-[#7D8590]" />
+        <AgentAvatar slug={to.id} size="xs" ring={false} />
+        <span className="text-[12.5px] font-medium" style={{ color: toAccent }}>{to.name}</span>
+      </div>
+      <span className="h-px flex-1 max-w-[120px]" style={{ background: `linear-gradient(90deg, ${toAccent}55, transparent)` }} />
     </div>
   );
 }
