@@ -73,7 +73,7 @@ export function recommendWorkflows(
         reasons.push(`fits ${ch}`);
       }
     }
-    if (motion === 'outbound' && ['find_decision_makers', 'draft_outreach', 'enrich_companies'].includes(wf.id)) {
+    if (motion === 'outbound' && ['find_decision_makers', 'draft_outreach', 'enrich_companies', 'cold_call_openers'].includes(wf.id)) {
       score += 10;
       reasons.push('outbound motion');
     }
