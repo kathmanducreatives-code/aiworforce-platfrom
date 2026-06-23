@@ -3,7 +3,7 @@ import { useAuth } from '@/hooks/useAuth';
 import {
   LayoutDashboard, Radar, MessageSquare, Inbox,
   Users, Eye, BookOpen, Sparkles, Brain,
-  Mail, Plug, LogOut, HelpCircle, PanelLeftClose, PanelLeft,
+  Mail, Plug, LogOut, HelpCircle, PanelLeftClose, PanelLeft, Workflow,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
