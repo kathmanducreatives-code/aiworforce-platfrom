@@ -1,5 +1,6 @@
 import { cn } from '@/lib/utils';
-import { AGENT_BY_NAME, deptRing, deptText, type AgentProfile } from '@/data/agentProfiles';
+import { resolveAgent } from '@/lib/agentResolver';
+import AgentAvatar from './workspace/agents/AgentAvatar';
 import { User } from 'lucide-react';
 
 interface Props {
@@ -10,8 +11,16 @@ interface Props {
   nested?: boolean;
 }
 
+function hexToRgba(hex: string, alpha: number): string {
+  const h = hex.replace('#', '');
+  const v = h.length === 3 ? h.split('').map((c) => c + c).join('') : h;
+  const r = parseInt(v.slice(0, 2), 16);
+  const g = parseInt(v.slice(2, 4), 16);
+  const b = parseInt(v.slice(4, 6), 16);
+  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+}
+
 export default function ChatBubble({ role, agentName, text, timestamp, nested }: Props) {
-  const agent: AgentProfile | undefined = agentName ? AGENT_BY_NAME[agentName.toLowerCase()] : undefined;
   const isUser = role === 'user';
   const isSystem = role === 'system';
 
@@ -25,6 +34,10 @@ export default function ChatBubble({ role, agentName, text, timestamp, nested }:
     );
   }
 
+  const profile = !isUser ? resolveAgent(agentName) : null;
+  const accent = profile?.accentHex ?? '#10B981';
+  const tintBg = hexToRgba(accent, 0.06);
+
   return (
     <div className={cn('flex gap-3 group', isUser && 'flex-row-reverse', nested && 'pl-10')}>
       {/* Avatar */}
@@ -33,29 +46,22 @@ export default function ChatBubble({ role, agentName, text, timestamp, nested }:
           <div className="h-8 w-8 rounded-full bg-primary/15 border border-primary/30 flex items-center justify-center">
             <User className="h-4 w-4 text-primary" />
           </div>
-        ) : agent ? (
-          <img
-            src={agent.image}
-            alt={agent.name}
-            className={cn('h-8 w-8 rounded-full object-cover ring-2', deptRing[agent.department])}
-          />
         ) : (
-          <div className="h-8 w-8 rounded-full bg-muted border border-border" />
+          <AgentAvatar slug={profile?.id} size="sm" />
         )}
       </div>
 
       {/* Bubble */}
       <div className={cn('flex-1 min-w-0', isUser && 'flex flex-col items-end')}>
-        <div className="flex items-baseline gap-2 mb-1">
-          {!isUser && agent && (
+        <div className="flex items-baseline gap-1.5 mb-1">
+          {isUser ? (
+            <span className="text-xs font-semibold text-foreground">You</span>
+          ) : profile ? (
             <>
-              <span className="text-xs font-semibold text-foreground">{agent.name}</span>
-              <span className={cn('text-[10px] uppercase tracking-wider', deptText[agent.department])}>
-                {agent.department}
-              </span>
+              <span className="text-xs font-semibold text-foreground">{profile.name}</span>
+              <span className="text-[11px]" style={{ color: accent }}>· {profile.role}</span>
             </>
-          )}
-          {isUser && <span className="text-xs font-semibold text-foreground">You</span>}
+          ) : null}
           {timestamp && (
             <span className="text-[10px] text-muted-foreground/60">{formatTime(timestamp)}</span>
           )}
@@ -65,8 +71,9 @@ export default function ChatBubble({ role, agentName, text, timestamp, nested }:
             'inline-block max-w-[85%] rounded-2xl px-3.5 py-2.5 text-sm leading-relaxed whitespace-pre-wrap',
             isUser
               ? 'bg-primary text-primary-foreground rounded-tr-sm'
-              : 'bg-muted/70 text-foreground border border-border/40 rounded-tl-sm',
+              : 'border-l-2 rounded-tl-sm text-foreground',
           )}
+          style={!isUser ? { backgroundColor: tintBg, borderLeftColor: accent } : undefined}
         >
           {text}
         </div>
