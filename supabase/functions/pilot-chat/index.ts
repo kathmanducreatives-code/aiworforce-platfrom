@@ -15,6 +15,7 @@ import { loadConversationMemory, renderMemoryForPrompt, isFollowUpReference, ext
 import { shouldGateForOnboarding, ONBOARDING_GATE_REPLY } from "../_shared/companyBrainGate.ts";
 import { isLeadIntakeRequest, hasNewSourcingIntent, isSaveExistingResultsRequest, extractLeadDetails, hasEnoughToRun, buildLeadSourceSelector, leadRequestToToolInput, leadRequestToInstruction, leadRequestToLinkedInFallbackInstruction, leadRequestToCompaniesInstruction, modeFromLabel, type LeadRequest, type LeadMode, type LeadSourceType, type ToolAvailability } from "../_shared/leadIntake.ts";
 import { normalizeTerm } from "../_shared/inputNormalize.ts";
+import { getSourceCapability } from "../_shared/sourceCapabilities.ts";
 import { getActorByKey, isActorRuntimeEnabled } from "../_shared/actorRegistry.ts";
 import { isFindContactsRequest, personaForAccounts, buildContactSearchQueries, contactDiscoveryFallback, type AccountForContacts } from "../_shared/contactDiscovery.ts";
 import { buildCompanyBrainContext, hasUsableBrain, brainCompetitors } from "../_shared/companyBrainContext.ts";
@@ -945,20 +946,33 @@ Deno.serve(async (req) => {
     };
     const ti = leadRequestToToolInput(req);
 
-    // People capability check — honest fallback (offer companies/LinkedIn), NEVER the selector.
-    if (ti.selected_actor_key === "apify_people_search") {
-      const actor = getActorByKey("apify_people_search");
-      if (!actor || !isActorRuntimeEnabled(actor)) {
-        const companiesReq: LeadRequest = { ...req, source_type: "company_search", mode: "companies" };
+    // Capability gate — if the selected source's actor isn't runtime-configured,
+    // show an HONEST unavailable state + fallback. Never reopen the selector,
+    // never silently reroute to jobs. (Main product rule.)
+    const runActor = getActorByKey(ti.selected_actor_key);
+    const actorReady = !!runActor && isActorRuntimeEnabled(runActor);
+    if (!actorReady) {
+      const cap = getSourceCapability(effSource);
+      const companiesReq: LeadRequest = { ...req, source_type: "company_search", mode: "companies" };
+      if (ti.selected_actor_key === "apify_people_search") {
         return await replyAndReturn(
           `People/profile search isn't configured yet, so I can't pull individual ${role || "founder"} profiles. I can instead find matching companies/accounts${category ? ` (${category})` : ""}, or LinkedIn engagement signals — which would you like? Nothing will be sent.`,
-          { lead_people_unavailable: true, source_type: submittedSourceType,
+          { lead_people_unavailable: true, source_unavailable: true, source_type: submittedSourceType,
             ui_actions: [
               { label: "Search companies / accounts instead", message: leadRequestToCompaniesInstruction(companiesReq) },
               { label: "Use LinkedIn engagement instead", message: leadRequestToLinkedInFallbackInstruction(req) },
             ] },
         );
       }
+      // Comments / posts-disabled / other sources → honest message + LinkedIn/company fallback.
+      return await replyAndReturn(
+        cap?.unavailable_message ?? "That lead source isn't configured yet. I can search companies/accounts or LinkedIn intent posts instead. Nothing will be sent.",
+        { source_unavailable: true, source_type: submittedSourceType,
+          ui_actions: [
+            { label: "Search LinkedIn intent posts instead", message: leadRequestToLinkedInFallbackInstruction(req) },
+            { label: "Search companies / accounts instead", message: leadRequestToCompaniesInstruction(companiesReq) },
+          ] },
+      );
     }
 
     // Clearer instruction copy (Fix 3) for the ICP people/company shapes.

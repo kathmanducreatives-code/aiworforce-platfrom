@@ -548,9 +548,16 @@ Deno.serve(async (req) => {
     const nextStepSlug: string | null = planSteps[(step_index as number) + 1]?.agent_slug ?? null;
     const ariaFollows = planSteps.some((s, i) => i > (step_index as number) && s?.agent_slug === "aria");
 
-    const msg = ariaFollows
-      ? `Scout ran ${sourcingAttemptsCount} attempt(s) and found 0 qualified matches. Aria was skipped because there were no accepted leads to rank. Try broadening the role, industry, or location — or pick another lead source. No leads were saved, no credits charged, and nothing was sent.`
-      : `Scout ran ${sourcingAttemptsCount} attempt(s) and found 0 qualified matches. Try broadening the role, industry, or location — or pick another lead source. No leads were saved, no credits charged, and nothing was sent.`;
+    // Decision-maker (contact-discovery) runs get a SPECIFIC honest message —
+    // never the generic "0 matching leads" — plus persona-broadening actions.
+    const attachAccts = Array.isArray(tool_input_body?.attach_to_accounts) ? tool_input_body.attach_to_accounts : null;
+    const isContactDiscovery = !!(attachAccts && attachAccts.length > 0);
+    const acctN = attachAccts?.length ?? 0;
+    const msg = isContactDiscovery
+      ? `Scout searched for decision-makers at ${acctN} account${acctN === 1 ? "" : "s"} but didn't find verified profiles. No contacts were attached, no credits charged, and nothing was sent. Try a broader persona, draft an account-level template, or export the accounts.`
+      : ariaFollows
+        ? `Scout ran ${sourcingAttemptsCount} attempt(s) and found 0 qualified matches. Aria was skipped because there were no accepted leads to rank. Try broadening the role, industry, or location — or pick another lead source. No leads were saved, no credits charged, and nothing was sent.`
+        : `Scout ran ${sourcingAttemptsCount} attempt(s) and found 0 qualified matches. Try broadening the role, industry, or location — or pick another lead source. No leads were saved, no credits charged, and nothing was sent.`;
 
     await supabase.from("tasks").update({
       status: "complete",
@@ -583,12 +590,14 @@ Deno.serve(async (req) => {
       const { data: planMsg } = await supabase.from("messages").select("conversation_id").filter("metadata->>plan_id", "eq", plan_id).limit(1).maybeSingle();
       const conversationId = (planMsg as { conversation_id?: string } | null)?.conversation_id ?? null;
       if (conversationId) {
-        const failActions = ["broaden_search", "edit_criteria", "change_source", "view_details", "done"];
+        const failActions = isContactDiscovery
+          ? ["broaden_search", "export_csv", "done"]
+          : ["broaden_search", "edit_criteria", "change_source", "view_details", "done"];
         const card = {
           kind: "lead_sourcing_error",
-          title: "No qualified matches found",
+          title: isContactDiscovery ? "No decision-makers found" : "No qualified matches found",
           message: msg,
-          error: "no_qualified_matches",
+          error: isContactDiscovery ? "no_decision_makers" : "no_qualified_matches",
           retry_command: instruction,
           next_actions: failActions,
           source_brief: instruction,
