@@ -96,16 +96,21 @@ export default function ChatView({ conversationId, agentSlug, pendingUserText, a
   const lastIsUser = (messages[messages.length - 1]?.role === 'user') || !!showPending;
 
   return (
+  // Track the prior agent so we can render a Slack-style handoff divider
+  // between two consecutive agent messages from different team members.
+  let prevAgentSlug: string | null = null;
+
+  return (
     <div ref={scrollRef} className="flex-1 overflow-y-auto px-6 py-5 space-y-4">
       {messages.map((m) => {
         if (m.role === 'user') {
+          prevAgentSlug = null;
           return (
             <div key={m.id} className="flex justify-end">
               <div className="max-w-[min(620px,78%)] rounded-2xl bg-emerald-500/[0.10] border border-emerald-500/20 backdrop-blur-md px-3.5 py-2 text-[13.5px] leading-relaxed text-[#E6F4EC] whitespace-pre-wrap break-words shadow-[0_2px_12px_rgba(0,0,0,0.25)]">
                 {m.content}
               </div>
             </div>
-
           );
         }
         const meta0 = (m.metadata ?? null) as Record<string, any> | null;
@@ -114,6 +119,8 @@ export default function ChatView({ conversationId, agentSlug, pendingUserText, a
         const name = msgProfile.name;
         const role = msgProfile.role;
         const accent = msgProfile.accentHex ?? '#7D8590';
+        const tintBg = hexToRgba(accent, 0.045);
+        const tintBorder = hexToRgba(accent, 0.22);
 
         const structured = isStructured(m.content);
         const meta = meta0;
@@ -138,88 +145,110 @@ export default function ChatView({ conversationId, agentSlug, pendingUserText, a
         const peopleAction = toolInput?.people_action ?? meta?.people_action ?? null;
         const companiesAction = toolInput?.companies_action ?? meta?.companies_action ?? null;
         const agencyAction = toolInput?.agency_action ?? meta?.agency_action ?? null;
-        return (
-          <div key={m.id} className="flex items-start gap-3">
-            <AgentAvatar slug={slug} size="sm" />
-            <div className="min-w-0 flex-1">
-              <div className="flex items-baseline gap-1.5 mb-1">
-                <span className="text-[12.5px] font-semibold text-[#E6EDF3]">{name}</span>
-                <span className="text-[11px]" style={{ color: accent }}>· {role}</span>
-              </div>
+        const showPennSafety = slug === 'penn';
 
-              {structured ? (
-                <div className="relative rounded-2xl bg-white/[0.03] border border-white/[0.06] backdrop-blur-xl p-4 text-[13.5px] leading-relaxed text-[#F0F6FC] whitespace-pre-wrap shadow-[0_2px_12px_rgba(0,0,0,0.25)]">
-                  <div className="absolute top-2 right-2"><CopyButton text={m.content} /></div>
-                  {m.content}
+        // Insert handoff divider when the speaker changes between agents.
+        const handoffFrom = prevAgentSlug && prevAgentSlug !== slug ? prevAgentSlug : null;
+        prevAgentSlug = slug;
+
+        return (
+          <Fragment key={m.id}>
+            {handoffFrom && <HandoffDivider fromSlug={handoffFrom} toSlug={slug} />}
+            <div className="flex items-start gap-3">
+              <AgentAvatar slug={slug} size="sm" />
+              <div className="min-w-0 flex-1">
+                <div className="flex items-baseline gap-1.5 mb-1">
+                  <span className="text-[12.5px] font-semibold text-[#E6EDF3]">{name}</span>
+                  <span className="text-[11px]" style={{ color: accent }}>· {role}</span>
                 </div>
-              ) : (
-                <div className={cn('text-[13.5px] leading-relaxed whitespace-pre-wrap', m.is_error ? 'text-[#7D8590]' : 'text-[#F0F6FC]')}>
-                  {m.content}
-                </div>
-              )}
-              {toolInput && (toolInput.business_goal || toolInput.intent || toolInput.selected_actor_key || toolInput.execution_mode) && !isClarification && !planMeta && (
-                <InterpretationPill
-                  businessGoal={toolInput.business_goal ?? null}
-                  intent={toolInput.intent ?? null}
-                  selectedActorKey={toolInput.selected_actor_key ?? null}
-                  executionMode={toolInput.execution_mode ?? null}
-                />
-              )}
-              {leadSelector && (
-                <div className="mt-2">
-                  <LeadSourceCard payload={leadSelector} conversationId={m.conversation_id} />
-                </div>
-              )}
-              {postLeadCard && (
-                <div className="mt-2">
-                  <PostLeadActionsCard payload={postLeadCard} conversationId={m.conversation_id} />
-                </div>
-              )}
-              {leadForm && (
-                <div className="mt-2">
-                  <LeadIntakeCard payload={leadForm} conversationId={m.conversation_id} />
-                </div>
-              )}
-              {uiActions && uiActions.length > 0 && (
-                <div className="mt-2 flex flex-col gap-1.5 max-w-[460px]">
-                  {uiActions.map((a, i) => (
-                    <button
-                      key={i}
-                      type="button"
-                      onClick={() => dispatchChatAction({ text: a.message, conversation_id: m.conversation_id, action_source: 'ui_actions_button' })}
-                      className="text-left rounded-lg border border-emerald-500/20 bg-emerald-500/[0.04] hover:bg-emerald-500/[0.1] hover:border-emerald-500/40 px-3 py-2 text-[13px] text-[#C9D1D9] transition-colors"
-                    >
-                      {a.label}
-                    </button>
-                  ))}
-                </div>
-              )}
-              {isClarification && !leadForm && !leadSelector && (
-                <div className="mt-2">
-                  <ClarificationCard
-                    question={m.content}
-                    peopleAction={peopleAction}
-                    companiesAction={companiesAction}
-                    agencyAction={agencyAction}
-                    conversationId={m.conversation_id}
+
+                {structured ? (
+                  <div
+                    className="relative rounded-2xl border-l-2 backdrop-blur-xl p-4 text-[13.5px] leading-relaxed text-[#F0F6FC] whitespace-pre-wrap shadow-[0_2px_12px_rgba(0,0,0,0.25)]"
+                    style={{ backgroundColor: tintBg, borderColor: tintBorder, borderLeftColor: accent }}
+                  >
+                    <div className="absolute top-2 right-2"><CopyButton text={m.content} /></div>
+                    {m.content}
+                  </div>
+                ) : (
+                  <div
+                    className={cn(
+                      'rounded-xl border-l-2 px-3 py-2 text-[13.5px] leading-relaxed whitespace-pre-wrap',
+                      m.is_error ? 'text-[#9aa4af]' : 'text-[#F0F6FC]',
+                    )}
+                    style={{ backgroundColor: tintBg, borderLeftColor: accent }}
+                  >
+                    {m.content}
+                  </div>
+                )}
+                {showPennSafety && (
+                  <div className="mt-1.5"><SafetyChip /></div>
+                )}
+                {toolInput && (toolInput.business_goal || toolInput.intent || toolInput.selected_actor_key || toolInput.execution_mode) && !isClarification && !planMeta && (
+                  <InterpretationPill
+                    businessGoal={toolInput.business_goal ?? null}
+                    intent={toolInput.intent ?? null}
+                    selectedActorKey={toolInput.selected_actor_key ?? null}
+                    executionMode={toolInput.execution_mode ?? null}
                   />
-                </div>
-              )}
-              {planMeta && (
-                <ExecutionPlanCard
-                  planId={planMeta.plan_id}
-                  meta={{
-                    plan_title: planMeta.plan_title,
-                    task_count: planMeta.task_count,
-                    agents: planMeta.agents,
-                    connector_limitations: planMeta.connector_limitations,
-                  }}
-                />
-              )}
+                )}
+                {leadSelector && (
+                  <div className="mt-2">
+                    <LeadSourceCard payload={leadSelector} conversationId={m.conversation_id} />
+                  </div>
+                )}
+                {postLeadCard && (
+                  <div className="mt-2">
+                    <PostLeadActionsCard payload={postLeadCard} conversationId={m.conversation_id} />
+                  </div>
+                )}
+                {leadForm && (
+                  <div className="mt-2">
+                    <LeadIntakeCard payload={leadForm} conversationId={m.conversation_id} />
+                  </div>
+                )}
+                {uiActions && uiActions.length > 0 && (
+                  <div className="mt-2 flex flex-col gap-1.5 max-w-[460px]">
+                    {uiActions.map((a, i) => (
+                      <button
+                        key={i}
+                        type="button"
+                        onClick={() => dispatchChatAction({ text: a.message, conversation_id: m.conversation_id, action_source: 'ui_actions_button' })}
+                        className="text-left rounded-lg border border-emerald-500/20 bg-emerald-500/[0.04] hover:bg-emerald-500/[0.1] hover:border-emerald-500/40 px-3 py-2 text-[13px] text-[#C9D1D9] transition-colors"
+                      >
+                        {a.label}
+                      </button>
+                    ))}
+                  </div>
+                )}
+                {isClarification && !leadForm && !leadSelector && (
+                  <div className="mt-2">
+                    <ClarificationCard
+                      question={m.content}
+                      peopleAction={peopleAction}
+                      companiesAction={companiesAction}
+                      agencyAction={agencyAction}
+                      conversationId={m.conversation_id}
+                    />
+                  </div>
+                )}
+                {planMeta && (
+                  <ExecutionPlanCard
+                    planId={planMeta.plan_id}
+                    meta={{
+                      plan_title: planMeta.plan_title,
+                      task_count: planMeta.task_count,
+                      agents: planMeta.agents,
+                      connector_limitations: planMeta.connector_limitations,
+                    }}
+                  />
+                )}
+              </div>
             </div>
-          </div>
+          </Fragment>
         );
       })}
+
 
       {showPending && (
         <div className="flex justify-end">
