@@ -35,6 +35,7 @@ const AGENT_FILTERS: { id: string; label: string }[] = [
 export default function Workflows() {
   const tools = useToolAvailability();
   const { workspaceId } = useWorkspace();
+  const { data: brain } = useCompanyBrain();
   const navigate = useNavigate();
   const [query, setQuery] = useState('');
   const [cat, setCat] = useState<WorkflowCategory | 'all'>('all');
