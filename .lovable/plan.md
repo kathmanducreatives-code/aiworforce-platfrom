@@ -1,37 +1,78 @@
-## Goal
-Transform the Workforce dock on `/dashboard` into a smooth, Apple-style magnifying dock with fluid hover physics — while keeping all current behavior (selection, badges, tooltip, department ring color).
+## Slack-style AI team chat — polish pass
 
-## Scope
-Only `src/components/workforce/WorkforceDock.tsx` (and a tiny CSS-only polish on its container). No logic, route, or data changes. Selection state, badge logic, and tooltip content stay identical.
+Most of the team-chat plumbing already exists:
+- `AGENT_PROFILES` + `PILOT_PROFILE` with the six local PNGs (`src/data/agentProfiles.ts`).
+- `AgentAvatar` with broken-image fallback and pulse state.
+- `AgentTypingIndicator` with per-agent verbs ("Scout is sourcing…", "Aria is ranking…", etc.).
+- `agentResolver` with metadata-first + keyword inference fallback.
+- `ChatView` already renders avatar + name + role chip per message; `ActivityTimeline` already uses agent avatars; `HandoffRow` exists; `PostLeadActionsCard` already renders as compact pills with the safety chip.
 
-## Design Direction
-Apple macOS dock magnification:
-- Cursor-proximity scaling: avatars near the pointer grow (up to ~1.55×), neighbors scale proportionally on a smooth bell curve, distant ones stay at base size.
-- Subtle vertical lift on the hovered item (translateY -6px) so it appears to "pop" out of the rail.
-- Spring physics (stiffness 280, damping 22, mass 0.5) — feels fluid, not stiff.
-- Labels under each avatar fade/translate in only when that avatar is in the magnification zone (Apple-like reveal).
-- The selected agent keeps its emerald ring and underline; the active glow intensifies when also hovered.
-- Dock surface: deeper glass (`bg-white/[0.02]` + `backdrop-blur-2xl`), softer inner border, ambient bottom shadow `0 24px 60px -20px rgba(0,0,0,0.8)` so it floats.
-- Rounded `rounded-2xl`, increased internal padding, items aligned to `items-end` so they grow upward (true dock behavior).
-- Badges follow the avatar scale (transform-origin top-right) so they don't detach.
+So this is a **visual/interaction polish pass**, not a rebuild. Backend/orchestration logic and DB are untouched. No production migrations. No auto-send behavior changes.
 
-## Technical
-- Use `framer-motion`'s `useMotionValue` + `useTransform` + `useSpring` driven by `onMouseMove` on the dock rail, exactly like `OperativeDock.tsx` already does in this codebase (proven pattern).
-- Each item measures its center via `ref.current.getBoundingClientRect()` inside the `useTransform` to compute distance from cursor → maps to size via `[-140, 0, 140] → [BASE, MAX, BASE]`.
-- `BASE = 44`, `MAX = 68`. Lift uses the same distance mapped to `[0, -6, 0]`.
-- On `mouseLeave`, set mouseX to `Infinity` so all items spring back to base.
-- Wrap the avatar (`AgentAvatar slug=...`) inside a `motion.div` with animated `width/height`; AgentAvatar already accepts a `size` prop but width/height on the wrapper is enough — keep AgentAvatar untouched.
-- Keep keyboard focus ring and `aria-pressed` semantics intact.
-- Mobile (touch / no hover): magnification disabled — items render at a fixed comfortable size (`size-12`), since `onMouseMove` won't fire. No regression.
+### What changes
 
-## Out of scope
-- `OperativeDock`, `AgentDock`, header, other layout sections.
-- Any change to selection behavior, routing, or data flow.
-- Visual changes to avatar artwork or badge content.
+1. **Per-agent accent in the chat bubble** (`src/components/chat/workspace/ChatView.tsx`)
+   - Apply a subtle left-border + tinted background derived from `profile.accentHex` so Scout messages read blue, Aria violet, Hawk amber, Penn green, Scribe rose, Pilot emerald.
+   - Keep the existing structured/plain split; only the chrome changes (no layout shift).
 
-## Acceptance
-- Hovering across the dock produces a smooth Apple-like wave of magnification.
-- Selected agent still shows emerald ring + underline.
-- Badges scale with their avatar and stay anchored.
-- No layout shift in the rest of the page (dock height reserves max size).
-- Touch devices show a clean, static dock with no broken hover state.
+2. **Dedupe agent header** (`ChatView.tsx`, `src/components/chat/ChatBubble.tsx`)
+   - Audit the name/role render path so the header is **"Pilot · Manager"** once, never **"Pilot \n Pilot · Manager"**. Guard against double-labelling when both `agentName` prop and metadata resolve to the same profile.
+
+3. **AgentPresenceBar (new)** — `src/components/chat/workspace/agents/AgentPresenceBar.tsx`
+   - Tiny horizontal strip of the six avatars (Pilot, Scout, Aria, Hawk, Penn, Scribe) shown in the chat workspace top bar.
+   - State per avatar: `idle | thinking | running | done | blocked`, computed from the latest plan/task/activity for the active conversation (read-only via existing `usePlanDetail` / activity hooks; no new tables).
+   - Active agent gets a soft accent pulse; others stay muted. Tooltip = "Name · Role · status".
+
+4. **Inline handoff dividers in chat** (`ChatView.tsx`)
+   - When two consecutive agent messages have different `agent_id`, insert a slim `HandoffRow`-style divider: `[Scout] → [Aria]  ·  handed off`. Reuse the existing `HandoffRow` component (relocate import).
+   - One per transition, never stacked.
+
+5. **Process rail on execution plan messages** (`src/components/chat/workspace/plan/ExecutionPlanCard.tsx`)
+   - Add a thin left rail showing the ordered agent column for that plan (e.g. Pilot ↓ Scout ↓ Aria ↓ Pilot) with the currently-running step highlighted.
+   - Pure presentational; derived from the existing `tasks` array's `agent_id` order.
+
+6. **Agent reaction chips on completed steps** (`ExecutionTaskRow.tsx`)
+   - When a task is complete, render a tiny outcome chip next to the agent badge using the agent's accent:
+     - Scout → "{n} qualified" / "0 accepted"
+     - Aria → "Ranked" / "Skipped"
+     - Hawk → "Researched" / "Needs domains"
+     - Penn → "Draft ready" / "Blocked — no contact"
+     - Scribe → "Written"
+   - Falls back silently when counts aren't available.
+
+7. **"Nothing sent" safety chip** consolidated
+   - Keep the existing chip in `PostLeadActionsCard`; reuse the same tiny chip component for Penn-authored draft messages in `ChatView` so the badge looks identical everywhere instead of repeated long copy.
+
+8. **ChatBubble parity** (`src/components/chat/ChatBubble.tsx`)
+   - Bring the older `ChatBubble` (used by `PlanningThread` / `DirectAgentView`) to the same Slack-style look: accent-tinted bubble, single header, AgentAvatar with fallback.
+
+### What is explicitly NOT touched
+
+- No DB migration. No edits to `supabase/` SQL or `supabase/functions/chat-respond/index.ts` workflow logic.
+- No changes to `ChatComposerPro`, `LeadSourceCard`, `LeadIntakeCard`, `ClarificationCard`, Workbench data hooks, or the actor/source planner.
+- No new outreach/email/DM behavior. Penn stays draft-only and approval-gated.
+- Landing page untouched.
+
+### File map
+
+```text
+edit   src/data/agentProfiles.ts                      # add bubbleClass tokens
+edit   src/components/chat/workspace/ChatView.tsx     # per-agent accent + handoff divider + dedup
+edit   src/components/chat/ChatBubble.tsx             # accent + dedup parity
+edit   src/components/chat/workspace/plan/ExecutionPlanCard.tsx
+edit   src/components/chat/workspace/plan/ExecutionTaskRow.tsx  # reaction chips
+edit   src/components/chat/workspace/ChatWorkspace.tsx          # mount AgentPresenceBar
+new    src/components/chat/workspace/agents/AgentPresenceBar.tsx
+new    src/components/chat/workspace/agents/AgentProcessRail.tsx
+new    src/components/chat/workspace/bubbles/SafetyChip.tsx
+```
+
+### QA after build
+
+- Send any prompt → assistant message renders once with `Name · Role`, no duplicate.
+- Lead sourcing prompt → presence bar pulses Scout, then Aria, then settles on Pilot; chat shows handoff divider between Scout and Aria; execution plan card shows the process rail.
+- Penn draft message shows the "Draft only · Nothing sent" chip once (not paragraph copy).
+- Broken `<img>` simulated → AgentAvatar falls back to initials, no broken-image icon.
+- Activity timeline still shows per-agent avatars/colors (unchanged).
+- Compact result pills under Pilot's summary unchanged; no giant action card returns.
+- Workbench auto-open, lead source selector, intake form, clarifications, and same-chat continuity all still work.
