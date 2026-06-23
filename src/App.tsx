@@ -149,6 +149,9 @@ const App = () => (
                     <Route path="/settings/integrations" element={
                       <ProtectedRoute><MainLayout><SettingsIntegrations /></MainLayout></ProtectedRoute>
                     } />
+                    <Route path="/workflows" element={
+                      <ProtectedRoute><MainLayout><Workflows /></MainLayout></ProtectedRoute>
+                    } />
 
                     {/* Legacy route redirects — preserve deep links */}
                     <Route path="/lead-scraper" element={<Navigate to="/leads" replace />} />
