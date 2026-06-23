@@ -160,18 +160,18 @@ export default function LeadSourceCard({ payload, conversationId }: { payload: L
   const paneW = useChatPaneWidth();
   const twoCol = paneW >= 520;
   return (
-    <div className="rounded-xl border border-emerald-500/20 bg-gradient-to-b from-emerald-500/[0.05] to-transparent p-4 w-full min-w-0">
-      <div className="flex items-center gap-2 mb-1 min-w-0">
-        <span className="h-6 w-6 rounded-md bg-emerald-500/10 border border-emerald-500/25 flex items-center justify-center shrink-0">
-          <Target className="h-3.5 w-3.5 text-emerald-300" />
+    <div className="rounded-2xl border border-emerald-500/22 bg-gradient-to-b from-emerald-500/[0.06] to-transparent backdrop-blur-xl p-5 w-full min-w-0 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
+      <div className="flex items-center gap-2.5 mb-1.5 min-w-0">
+        <span className="h-7 w-7 rounded-lg bg-emerald-500/12 border border-emerald-500/30 flex items-center justify-center shrink-0">
+          <Target className="h-4 w-4 text-emerald-300" />
         </span>
-        <div className="text-[13px] font-semibold text-[#F0F6FC] truncate">{payload.title}</div>
+        <div className="text-[15.5px] font-semibold text-[#F0F6FC] truncate">{payload.title}</div>
       </div>
-      <p className="text-[12px] text-[#7D8590] leading-relaxed mb-3 break-words">{payload.subtitle}</p>
+      <p className="text-[13.5px] text-[#9aa4af] leading-relaxed mb-4 break-words">{payload.subtitle}</p>
       {payload.brain_missing && (
-        <p className="text-[11px] text-amber-300/80 mb-3 break-words">Completing your Company Brain lets Scout prefill these and rank results to your ICP.</p>
+        <p className="text-[12.5px] text-amber-300/85 mb-3 break-words">Completing your Company Brain lets Scout prefill these and rank results to your ICP.</p>
       )}
-      <div className="grid gap-2" style={{ gridTemplateColumns: twoCol ? 'repeat(2, minmax(0,1fr))' : '1fr' }}>
+      <div className="grid gap-2.5" style={{ gridTemplateColumns: twoCol ? 'repeat(2, minmax(0,1fr))' : '1fr' }}>
         {payload.sources.map((s) => {
           const Icon = ICONS[s.source_type] ?? Target;
           const suggested = payload.suggested_source === s.source_type;
@@ -180,27 +180,27 @@ export default function LeadSourceCard({ payload, conversationId }: { payload: L
               key={s.source_type}
               type="button"
               onClick={() => setPicked(s.source_type)}
-              className={`group text-left rounded-lg border px-3 py-2.5 transition-colors flex items-start gap-3 ${
-                suggested ? 'border-emerald-500/40 bg-emerald-500/[0.07]' : 'border-white/[0.08] bg-white/[0.02] hover:bg-emerald-500/[0.06] hover:border-emerald-500/30'
+              className={`group text-left rounded-xl border px-3.5 py-3 transition-colors flex items-start gap-3 ${
+                suggested ? 'border-emerald-500/45 bg-emerald-500/[0.08] shadow-[inset_0_1px_0_rgba(16,185,129,0.10)]' : 'border-white/[0.08] bg-white/[0.025] hover:bg-emerald-500/[0.06] hover:border-emerald-500/30'
               }`}
             >
-              <span className="h-7 w-7 rounded-md bg-emerald-500/10 text-emerald-300 flex items-center justify-center shrink-0 mt-0.5">
-                <Icon className="h-3.5 w-3.5" />
+              <span className="h-8 w-8 rounded-lg bg-emerald-500/12 text-emerald-300 flex items-center justify-center shrink-0 mt-0.5">
+                <Icon className="h-4 w-4" />
               </span>
               <div className="min-w-0 flex-1">
-                <div className="text-[13px] font-medium text-[#F0F6FC] flex items-center gap-1.5">
+                <div className="text-[14.5px] font-semibold text-[#F0F6FC] flex items-center gap-1.5 flex-wrap">
                   {s.title}
-                  {suggested && <span className="text-[9px] uppercase tracking-wide text-emerald-300/90 border border-emerald-500/30 rounded px-1">suggested</span>}
-                  {!s.available && <span className="text-[9px] uppercase tracking-wide text-amber-300/80 border border-amber-500/30 rounded px-1">fallback</span>}
+                  {suggested && <span className="text-[10px] uppercase tracking-wide text-emerald-300 border border-emerald-500/35 rounded px-1.5 py-0.5">suggested</span>}
+                  {!s.available && <span className="text-[10px] uppercase tracking-wide text-amber-300/90 border border-amber-500/35 rounded px-1.5 py-0.5">fallback</span>}
                 </div>
-                <div className="text-[11px] text-[#7D8590] mt-0.5 leading-snug">{s.description}</div>
+                <div className="text-[12.5px] text-[#9aa4af] mt-1 leading-relaxed">{s.description}</div>
               </div>
             </button>
           );
         })}
       </div>
-      <div className="flex items-center gap-1.5 mt-3 text-[11px] text-[#7D8590]">
-        <ShieldCheck className="h-3 w-3 text-emerald-400/70" /> {payload.safety_note}
+      <div className="flex items-center gap-1.5 mt-4 text-[12.5px] text-[#9aa4af]">
+        <ShieldCheck className="h-3.5 w-3.5 text-emerald-400/80" /> {payload.safety_note}
       </div>
     </div>
   );

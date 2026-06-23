@@ -102,12 +102,12 @@ export default function ExecutionTaskRow({
 
   return (
     <li
-      className={`rounded-lg border border-white/[0.06] bg-white/[0.02] p-3 ${canOpenOutput ? 'hover:bg-white/[0.04] hover:border-white/[0.10] cursor-pointer transition-colors' : ''}`}
+      className={`rounded-xl border border-white/[0.06] bg-white/[0.025] p-3.5 ${canOpenOutput ? 'hover:bg-white/[0.045] hover:border-white/[0.10] cursor-pointer transition-colors' : ''}`}
       onClick={canOpenOutput ? () => onOpenOutput!(task.id, latestToolCall?.id ?? null) : undefined}
     >
 
       <div className="flex items-start gap-3 flex-wrap">
-        <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-white/[0.05] text-[#7D8590] shrink-0">
+        <span className="text-[11px] font-mono px-1.5 py-0.5 rounded bg-white/[0.05] text-[#9aa4af] shrink-0">
           {String(index + 1).padStart(2, '0')}
         </span>
         <StatusIcon status={task.status} />
@@ -115,9 +115,9 @@ export default function ExecutionTaskRow({
         <ReactionChip slug={effectiveSlug} task={task} toolCall={latestToolCall} />
 
         <div className="flex-1 min-w-[200px]">
-          <div className="text-[13px] text-[#F0F6FC] leading-snug">{title}</div>
+          <div className="text-[15px] text-[#F0F6FC] leading-snug font-medium">{title}</div>
           {task.description && task.description !== title && (
-            <div className="text-[12px] text-[#7D8590] mt-0.5">{task.description}</div>
+            <div className="text-[13px] text-[#9aa4af] mt-1 leading-relaxed">{task.description}</div>
           )}
         </div>
       </div>

@@ -1,136 +1,69 @@
+## Premium Chat Polish Plan
 
-# Agentory Premium Polish — Typography, Spacing & Hierarchy
+Scope: visual + UX upgrade of the main chat surface only. No backend, DB, orchestration, or auto-send changes.
 
-A visual/design-system pass only. No layout restructure, no backend changes, no migrations, no removal of any existing feature (Workflows, Workbench, dock, sidebar, avatars all stay). Landing page untouched.
+### 1. Shared typography + token additions
+- `src/index.css`: add chat-scoped tokens — `--chat-body: 15.5px`, `--chat-meta: 13px`, `--chat-name: 15px`, `--chat-plan-title: 17.5px`, plus a `.chat-message-bubble` / `.user-message-bubble` max-width helper and a softer `--chat-glass` background.
+- `tailwind.config.ts`: expose `text-chat`, `text-chat-meta`, `text-chat-name`, `rounded-bubble` utilities so components stop using `text-[10px]/[11px]` in non-metadata spots.
 
-## 1. Foundation — design tokens (single source of truth)
+### 2. ChatBubble (`src/components/chat/ChatBubble.tsx`)
+- Bump body to 15.5px, name to 15px semibold, role label to 13px.
+- Apply `max-w-[min(860px,86%)]` for agents and `max-w-[min(720px,70%)]` for user; right-align user with a brighter emerald glass tint and stronger border.
+- Increase padding (`px-4 py-3`), `line-height: 1.58`, softer inner highlight ring on hover.
+- Keep accent border-left; tune per-agent accents (Pilot emerald, Scout cyan, Aria violet, Hawk amber, Penn lime, Scribe rose) via `agentResolver` accents (no logic change, just palette tuning).
 
-Edit `src/index.css` and `tailwind.config.ts` to introduce typography + radius tokens and bump the base size.
+### 3. AgentBubble (`src/components/chat/workspace/bubbles/AgentBubble.tsx`)
+- Same type scale upgrades; agent name 15px, dept label 12.5px (still metadata).
+- Replace harsh `bg-card/80` with softer glass (`bg-white/[0.03] backdrop-blur-xl`) and subtle inner highlight.
+- Thinking/working copy switches to agent-owned phrasing ("Scout is sourcing…", "Aria is ranking…", "Hawk is researching…", "Penn is drafting…", "Scribe is writing…") based on `profile.id`.
+- Compact meta row (tokens/time) shrinks to true metadata size (11.5px) — only place tiny text is allowed.
 
-```css
-:root {
-  /* type scale */
-  --font-micro: 12px;
-  --font-xs:    13px;
-  --font-sm:    14.5px;
-  --font-base:  15.5px;
-  --font-md:    17px;
-  --font-lg:    20px;
-  --font-xl:    28px;
-  --font-page:  36px;
+### 4. Handoff divider
+- Update `AgentHandoffDivider` (or create if missing under `src/components/chat/workspace/`): centered pill `Pilot → Scout` with mini avatars, 12.5px label, thin gradient hairlines left/right, only rendered when consecutive speaker changes.
+- Wire into `ChatView` message map (no state changes — derived from existing message list).
 
-  /* line-height */
-  --line-tight:   1.25;
-  --line-normal:  1.55;
-  --line-relaxed: 1.70;
+### 5. ExecutionPlanCard + ExecutionTaskRow
+- Title 17.5px, instruction 15px, step title 15.5px, agent label 13px.
+- Status pill larger and higher contrast; agent sequence chips use bigger avatars (20px) + name.
+- Step row: agent owner column on the left, action text 15px, tool chips 12.5px, less vertical dead space, alternating row tint.
+- Failure copy mapping: when a task fails with `no_results` / `provider_missing` / `no_qualified`, render the specific Scout messages spec'd in section 8 + compact action pills (Broaden / Try another source / Edit criteria / View details / Done). Pills dispatch existing actions only.
 
-  /* radii */
-  --radius-control: 12px;
-  --radius-card:    20px;
-  --radius-panel:   24px;
-  --radius-dock:    24px;
+### 6. Recent Activity / ActivityMiniFeed
+- Filter out provider strings (`lovable-ai:*`, `google/gemini-*`, raw `started`/`finished` without context) behind a `devRaw` flag (default off).
+- Render as timeline rows: agent avatar + verb phrase ("Scout ran Apify Jobs", "Aria skipped — no accepted contacts"), 14px text, subtle timestamp right-aligned.
+- Keep data source unchanged; transformation is presentational in the component.
 
-  /* text contrast (HSL, dark theme) */
-  --text-primary:   0 0% 98%;
-  --text-secondary: 0 0% 78%;   /* was ~65% — brighter */
-  --text-tertiary:  0 0% 60%;
-  --text-disabled:  0 0% 40%;
-}
+### 7. Composer (`InlineCommandBar` / `ChatComposerPro`)
+- Input 16px, placeholder 15.5px with rotating hints ("Message your AI workforce…", "Ask Pilot or mention @Scout…", "Run a workflow or ask for company work…").
+- Slightly taller (min-h 56px), more horizontal padding, icon size 18px, premium focus ring (emerald glow).
+- Visual-only `@Scout/@Aria/@Hawk/@Penn/@Scribe` hint chips above input on focus when empty; no autocomplete logic.
 
-html, body { font-size: 15.5px; line-height: var(--line-normal); }
-```
+### 8. Empty / waiting state
+- Pilot greeting compact; 4 suggestion pills: Find hiring-signal accounts · Research these companies · Draft outreach · Create LinkedIn post.
+- Reduce vertical blank space; center block max-width 640px.
 
-Add Tailwind utilities mapped to these tokens (`text-micro`, `text-sm-plus`, `text-base-plus`, `text-md`, `text-lg-plus`, `text-page`, plus `rounded-card`, `rounded-panel`, `rounded-dock`). Keep existing classes working — just add the new ones and migrate hotspots.
+### 9. Scroll + split behavior
+- `ChatView`: keep existing auto-scroll, but suppress when user scrolled up >120px; show a small "New activity ↓" pill bottom-right.
+- Verify 40/60 and 50/50 with Workbench open — adjust bubble max-widths via container queries (`@container`) so they reflow.
 
-Add an `.eyebrow` utility refresh: 13.5px, `tracking-[0.16em]`, `text-secondary/80`.
+### 10. QA (Playwright via shell)
+Run scenarios A–E from the brief at 1280px and 1440px, capture screenshots of: empty state, lead source selector, hiring-signal plan, decision-maker failure, failed sourcing, long composer input, and split mode with Workbench open. Verify no clipping, readable type, no horizontal overflow.
 
-## 2. Sidebar (`src/components/Sidebar.tsx`)
+### Files expected to change
+- `src/index.css`, `tailwind.config.ts`
+- `src/components/chat/ChatBubble.tsx`
+- `src/components/chat/workspace/ChatView.tsx`
+- `src/components/chat/workspace/bubbles/AgentBubble.tsx`
+- `src/components/chat/workspace/bubbles/SafetyChip.tsx` (spacing only)
+- `src/components/chat/workspace/agents/AgentHandoffDivider.tsx` (new or updated)
+- `src/components/chat/workspace/plan/ExecutionPlanCard.tsx`
+- `src/components/chat/workspace/plan/ExecutionTaskRow.tsx`
+- `src/components/chat/workspace/plan/ActivityMiniFeed.tsx`
+- `src/components/workforce/InlineCommandBar.tsx` (composer)
+- Lead source / intake cards under `src/components/chat/workspace/` (typography + spacing only)
 
-- Nav label: 13px → **14.5px**, weight 500; active item weight 600 + emerald glow already present.
-- Increase row vertical padding by 2px, group gap +4px.
-- Inactive icon/text contrast: `text-neutral-400` → `text-neutral-300`.
-- PRO badge: subtle emerald gradient border, 11.5px uppercase, slightly more padding.
-
-## 3. Dashboard polish
-
-Files: `src/pages/Dashboard.tsx`, `src/components/workforce/PilotBriefing.tsx`, `src/components/workforce/WorkforceDock.tsx`, `src/components/workforce/DepartmentPreview.tsx`.
-
-- **PilotBriefing**: headline → 20px/600, bullets 15.5px with `line-relaxed`, "Next move" promoted to its own callout chip (emerald border, 14.5px).
-- **WorkforceDock**: agent label 10.5px → **12px**, badge text 9.5px → **11px**, base avatar 44→48, max 68→72. Hover tooltip text 11.5→13px.
-- **DepartmentPreview**: section title 18→20px, metric numbers ~22→28px, metric labels 11→13px, more breathing room (`gap-5` → `gap-6`).
-- Section eyebrow "Workforce" uses new `.eyebrow` token.
-
-## 4. Workflows page (`src/pages/Workflows.tsx`, `src/components/workflows/WorkflowCard.tsx`)
-
-- Add "Workflow Center" eyebrow badge above the page title.
-- Page title 28→**36px**, subtitle **15.5px**, search input text **15.5px** with h-11.
-- Category chips 13→**14.5px**.
-- **WorkflowCard**: padding `p-4` → `p-5`, title 14→**17px/600**, description 12→**14.5px** with `line-clamp-3`, agent avatars 22→**26px**, metadata row 10→**12.5px**, status chip 10→**12px**.
-- Recommended cards: subtle animated emerald inner glow (CSS-only, no JS).
-- Section heading "Recommended" 13→**18px** with eyebrow above.
-- Card radius standardized to `rounded-card` (20px).
-
-## 5. Command dock (`src/components/workforce/InlineCommandBar.tsx` + `WorkforceDock` if relevant)
-
-- Container padding p-4 → p-5, radius → `rounded-dock`.
-- Input text 14 → **15.5px**, placeholder same, height bump.
-- Chips 11 → **13px**, h-7 → h-8, gap-1.5 → gap-2.
-- Submit button 32→36px, icon 16→18px.
-- Soft glass: `bg-white/[0.03]` + stronger `backdrop-blur-2xl` + inner highlight ring.
-
-## 6. Workbench polish
-
-Identify primary Workbench files via `rg "Workbench"` and update table + chrome (no logic change):
-
-- Table header: 11px uppercase → **12.5px** with `tracking-[0.12em]`.
-- Table body cell: 13 → **14.5px**, row height +6px.
-- Status chips: 11 → **12.5px**, +2px padding.
-- Tabs: 13 → **15px**, h-9 → h-10.
-- Workbench panel title: 16 → **19px**.
-- Recommendation banner copy 13 → **15px**, icon size up.
-
-## 7. Cards, chips, hierarchy
-
-- Replace hard `bg-black/60` card surfaces with `bg-white/[0.025]` + `border-white/[0.08]` + subtle inner highlight (`shadow-[inset_0_1px_0_0_rgba(255,255,255,0.04)]`).
-- Recommended/active state: emerald 1px border + soft outer emerald glow.
-- Standardize radius via tokens (controls 12, cards 20, panels/dock 24).
-- Audit muted text: bump `text-neutral-500` → `text-neutral-400` where used for secondary content.
-
-## 8. Truncation & responsive
-
-- Add `truncate`/`line-clamp-*` only where overflow is a real risk; widen sidebar by 8px if labels clip at 14.5px.
-- Visual QA via Playwright headless at 1024, 1280, 1440 widths on `/dashboard`, `/workflows`, `/workbench` (or equivalent). Capture screenshots, verify no horizontal overflow, no clipped CTAs, dock not covering content.
-
-## 9. Extras
-
-- Hover preview on agents already exists in `WorkforceDock` — only resize and tighten copy.
-- Recent-runs empty state copy update on Workflows page.
-- "LIVE" indicator: 10→**12px**, consistent dot+label component.
-
-## Files expected to change
-
-- `src/index.css`, `tailwind.config.ts` (tokens, utilities)
-- `src/components/Sidebar.tsx`
-- `src/pages/Dashboard.tsx`
-- `src/components/workforce/PilotBriefing.tsx`
-- `src/components/workforce/WorkforceDock.tsx`
-- `src/components/workforce/DepartmentPreview.tsx`
-- `src/components/workforce/InlineCommandBar.tsx`
-- `src/pages/Workflows.tsx`
-- `src/components/workflows/WorkflowCard.tsx`
-- Workbench component(s) — discovered during implementation
-- Minor: shared chip/badge styles if centralized
-
-## Out of scope
-
-Landing page, routing, backend functions, DB, RLS, agent ownership logic, Workflows registry, chat orchestration.
-
-## QA
-
-- `tsgo` typecheck + build.
-- Playwright screenshots at 1024 / 1280 / 1440 on dashboard, workflows, workbench, dock open.
-- Visual diff vs current preview — confirm: bigger but still dense; no clipping; no horizontal scroll; emerald accents intentional.
-
-## Deliverable
-
-A short report listing files changed, token additions, before/after font sizes for each surface, QA screenshots, and any residual gaps (e.g. tables that need a deeper redesign beyond a polish pass).
+### Out of scope (explicit)
+- Landing page
+- DB / migrations / RLS
+- Workflow registry, Workbench logic, agent orchestration, agent ownership routing
+- Any auto-send / auto-DM / outreach behavior — outreach stays draft + approval gated

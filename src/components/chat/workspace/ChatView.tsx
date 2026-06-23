@@ -101,13 +101,13 @@ export default function ChatView({ conversationId, agentSlug, pendingUserText, a
 
   return (
 
-    <div ref={scrollRef} className="flex-1 overflow-y-auto px-6 py-5 space-y-4">
+    <div ref={scrollRef} className="flex-1 overflow-y-auto px-6 py-6 space-y-5">
       {messages.map((m) => {
         if (m.role === 'user') {
           prevAgentSlug = null;
           return (
             <div key={m.id} className="flex justify-end">
-              <div className="max-w-[min(620px,78%)] rounded-2xl bg-emerald-500/[0.10] border border-emerald-500/20 backdrop-blur-md px-3.5 py-2 text-[13.5px] leading-relaxed text-[#E6F4EC] whitespace-pre-wrap break-words shadow-[0_2px_12px_rgba(0,0,0,0.25)]">
+              <div className="max-w-[min(720px,70%)] rounded-2xl bg-emerald-500/[0.13] border border-emerald-500/30 backdrop-blur-md px-4 py-2.5 text-[15.5px] leading-[1.55] text-[#EAF7F0] whitespace-pre-wrap break-words shadow-[0_4px_18px_rgba(0,0,0,0.32),inset_0_1px_0_rgba(255,255,255,0.06)]">
                 {m.content}
               </div>
             </div>
@@ -119,7 +119,7 @@ export default function ChatView({ conversationId, agentSlug, pendingUserText, a
         const name = msgProfile.name;
         const role = msgProfile.role;
         const accent = msgProfile.accentHex ?? '#7D8590';
-        const tintBg = hexToRgba(accent, 0.045);
+        const tintBg = hexToRgba(accent, 0.055);
         const tintBorder = hexToRgba(accent, 0.22);
 
         const structured = isStructured(m.content);
@@ -147,7 +147,6 @@ export default function ChatView({ conversationId, agentSlug, pendingUserText, a
         const agencyAction = toolInput?.agency_action ?? meta?.agency_action ?? null;
         const showPennSafety = slug === 'penn';
 
-        // Insert handoff divider when the speaker changes between agents.
         const handoffFrom = prevAgentSlug && prevAgentSlug !== slug ? prevAgentSlug : null;
         prevAgentSlug = slug;
 
@@ -157,26 +156,26 @@ export default function ChatView({ conversationId, agentSlug, pendingUserText, a
             <div className="flex items-start gap-3">
               <AgentAvatar slug={slug} size="sm" />
               <div className="min-w-0 flex-1">
-                <div className="flex items-baseline gap-1.5 mb-1">
-                  <span className="text-[12.5px] font-semibold text-[#E6EDF3]">{name}</span>
-                  <span className="text-[11px]" style={{ color: accent }}>· {role}</span>
+                <div className="flex items-baseline gap-2 mb-1.5">
+                  <span className="text-[15px] font-semibold text-[#E6EDF3]">{name}</span>
+                  <span className="text-[12.5px] font-medium" style={{ color: accent }}>· {role}</span>
                 </div>
 
                 {structured ? (
                   <div
-                    className="relative rounded-2xl border-l-2 backdrop-blur-xl p-4 text-[13.5px] leading-relaxed text-[#F0F6FC] whitespace-pre-wrap shadow-[0_2px_12px_rgba(0,0,0,0.25)]"
-                    style={{ backgroundColor: tintBg, borderColor: tintBorder, borderLeftColor: accent }}
+                    className="chat-message-bubble relative rounded-2xl border border-l-2 backdrop-blur-xl p-4 text-[15.5px] leading-[1.58] text-[#F0F6FC] whitespace-pre-wrap shadow-[0_2px_14px_rgba(0,0,0,0.28),inset_0_1px_0_rgba(255,255,255,0.04)]"
+                    style={{ backgroundColor: tintBg, borderColor: tintBorder, borderLeftColor: accent, maxWidth: 'min(860px, 86%)' }}
                   >
-                    <div className="absolute top-2 right-2"><CopyButton text={m.content} /></div>
+                    <div className="absolute top-2.5 right-2.5"><CopyButton text={m.content} /></div>
                     {m.content}
                   </div>
                 ) : (
                   <div
                     className={cn(
-                      'rounded-xl border-l-2 px-3 py-2 text-[13.5px] leading-relaxed whitespace-pre-wrap',
+                      'chat-message-bubble rounded-2xl border border-l-2 px-4 py-3 text-[15.5px] leading-[1.58] whitespace-pre-wrap shadow-[inset_0_1px_0_rgba(255,255,255,0.03)]',
                       m.is_error ? 'text-[#9aa4af]' : 'text-[#F0F6FC]',
                     )}
-                    style={{ backgroundColor: tintBg, borderLeftColor: accent }}
+                    style={{ backgroundColor: tintBg, borderColor: tintBorder, borderLeftColor: accent, maxWidth: 'min(860px, 86%)' }}
                   >
                     {m.content}
                   </div>
@@ -208,13 +207,13 @@ export default function ChatView({ conversationId, agentSlug, pendingUserText, a
                   </div>
                 )}
                 {uiActions && uiActions.length > 0 && (
-                  <div className="mt-2 flex flex-col gap-1.5 max-w-[460px]">
+                  <div className="mt-2.5 flex flex-wrap gap-2 max-w-[640px]">
                     {uiActions.map((a, i) => (
                       <button
                         key={i}
                         type="button"
                         onClick={() => dispatchChatAction({ text: a.message, conversation_id: m.conversation_id, action_source: 'ui_actions_button' })}
-                        className="text-left rounded-lg border border-emerald-500/20 bg-emerald-500/[0.04] hover:bg-emerald-500/[0.1] hover:border-emerald-500/40 px-3 py-2 text-[13px] text-[#C9D1D9] transition-colors"
+                        className="inline-flex items-center rounded-full border border-emerald-500/25 bg-emerald-500/[0.06] hover:bg-emerald-500/[0.14] hover:border-emerald-500/50 px-3.5 py-1.5 text-[14px] font-medium text-[#D8E5DD] transition-colors"
                       >
                         {a.label}
                       </button>
@@ -252,7 +251,7 @@ export default function ChatView({ conversationId, agentSlug, pendingUserText, a
 
       {showPending && (
         <div className="flex justify-end">
-          <div className="max-w-[min(680px,85%)] rounded-2xl bg-emerald-500/[0.08] border border-emerald-500/15 px-3.5 py-2 text-[14px] leading-relaxed text-[#F0F6FC] whitespace-pre-wrap break-words opacity-80">
+          <div className="max-w-[min(720px,70%)] rounded-2xl bg-emerald-500/[0.10] border border-emerald-500/20 px-4 py-2.5 text-[15.5px] leading-[1.55] text-[#EAF7F0] whitespace-pre-wrap break-words opacity-80">
             {pendingUserText}
           </div>
         </div>
@@ -272,17 +271,16 @@ function HandoffDivider({ fromSlug, toSlug }: { fromSlug: string; toSlug: string
   const fromAccent = from.accentHex ?? '#7D8590';
   const toAccent = to.accentHex ?? '#10B981';
   return (
-    <div className="flex items-center justify-center gap-2 py-1 select-none">
-      <span className="h-px w-10" style={{ background: `linear-gradient(90deg, transparent, ${fromAccent}55)` }} />
-      <AgentAvatar slug={from.id} size="xs" ring={false} />
-      <ArrowRight className="h-3 w-3 text-[#7D8590]" />
-      <AgentAvatar slug={to.id} size="xs" ring={false} />
-      <span className="text-[10.5px] uppercase tracking-wider text-[#7D8590]">
-        <span style={{ color: fromAccent }}>{from.name}</span>
-        {' → '}
-        <span style={{ color: toAccent }}>{to.name}</span>
-      </span>
-      <span className="h-px w-10" style={{ background: `linear-gradient(90deg, ${toAccent}55, transparent)` }} />
+    <div className="flex items-center justify-center gap-3 py-2 select-none">
+      <span className="h-px flex-1 max-w-[120px]" style={{ background: `linear-gradient(90deg, transparent, ${fromAccent}55)` }} />
+      <div className="flex items-center gap-2 px-2.5 py-1 rounded-full border border-white/[0.07] bg-white/[0.025] backdrop-blur-md">
+        <AgentAvatar slug={from.id} size="xs" ring={false} />
+        <span className="text-[12.5px] font-medium" style={{ color: fromAccent }}>{from.name}</span>
+        <ArrowRight className="h-3 w-3 text-[#7D8590]" />
+        <AgentAvatar slug={to.id} size="xs" ring={false} />
+        <span className="text-[12.5px] font-medium" style={{ color: toAccent }}>{to.name}</span>
+      </div>
+      <span className="h-px flex-1 max-w-[120px]" style={{ background: `linear-gradient(90deg, ${toAccent}55, transparent)` }} />
     </div>
   );
 }

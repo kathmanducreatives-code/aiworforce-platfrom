@@ -159,16 +159,16 @@ export default function ExecutionPlanCard({ planId, meta }: Props) {
   if (!plan && taskCount === 0) return null;
 
   return (
-    <div className="rounded-xl border border-white/[0.06] bg-white/[0.03] p-4 mt-2 max-w-full overflow-hidden">
+    <div className="rounded-2xl border border-white/[0.07] bg-white/[0.025] backdrop-blur-xl p-5 mt-3 max-w-full overflow-hidden shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
       <div className="flex items-start justify-between gap-3 flex-wrap">
         <div className="min-w-0 flex-1">
-          <div className="text-[10px] uppercase tracking-widest text-[#7D8590] font-semibold mb-0.5">Execution plan</div>
-          <div className="text-[14px] text-[#F0F6FC] font-medium leading-snug truncate">{title}</div>
+          <div className="text-[11px] uppercase tracking-[0.14em] text-[#7D8590] font-semibold mb-1">Execution plan</div>
+          <div className="text-[17.5px] text-[#F0F6FC] font-semibold leading-snug">{title}</div>
         </div>
         <PlanStatusPill status={normalizedStatus} />
       </div>
 
-      <div className="mt-2 flex items-center gap-2 flex-wrap text-[11px] text-[#7D8590]">
+      <div className="mt-3 flex items-center gap-2 flex-wrap text-[12.5px] text-[#9aa4af]">
         <span>{taskCount} step{taskCount === 1 ? '' : 's'}</span>
         {totalResults > 0 && (
           <>
