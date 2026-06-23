@@ -77,8 +77,11 @@ export function recommendWorkflows(
       score += 10;
       reasons.push('outbound motion');
     }
-    if (wf.recommended) score += 5;
-    if (wf.status === 'ready') score += 2;
+    // Tie-breakers only count when the brain already matched this workflow.
+    if (score > 0) {
+      if (wf.recommended) score += 5;
+      if (wf.status === 'ready') score += 2;
+    }
 
     return { workflow: wf, score, reasons };
   });
