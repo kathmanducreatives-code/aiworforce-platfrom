@@ -251,7 +251,7 @@ export default function ChatView({ conversationId, agentSlug, pendingUserText, a
 
       {showPending && (
         <div className="flex justify-end">
-          <div className="max-w-[min(680px,85%)] rounded-2xl bg-emerald-500/[0.08] border border-emerald-500/15 px-3.5 py-2 text-[14px] leading-relaxed text-[#F0F6FC] whitespace-pre-wrap break-words opacity-80">
+          <div className="max-w-[min(720px,70%)] rounded-2xl bg-emerald-500/[0.10] border border-emerald-500/20 px-4 py-2.5 text-[15.5px] leading-[1.55] text-[#EAF7F0] whitespace-pre-wrap break-words opacity-80">
             {pendingUserText}
           </div>
         </div>
