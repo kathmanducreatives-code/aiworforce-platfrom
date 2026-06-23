@@ -116,7 +116,7 @@ export default function ExecutionPlanCard({ planId, meta }: Props) {
   const agentSlugs = useMemo(() => {
     const set = new Set<string>();
     for (const t of tasks) {
-      const slug = t.agent_id ? agentById[t.agent_id] : null;
+      const slug = slugForTask(t);
       if (slug) set.add(slug);
     }
     for (const a of meta?.agents ?? []) set.add(a.toLowerCase());
