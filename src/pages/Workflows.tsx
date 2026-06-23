@@ -218,14 +218,18 @@ export default function Workflows() {
                   <h2 className="text-[18px] font-semibold text-foreground tracking-tight">Recommended for your company</h2>
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-                  {recommended.map((w) => (
-                    <WorkflowCard
-                      key={`r-${w.id}`}
-                      workflow={w}
-                      status={resolveStatus(w, tools)}
-                      lastRunAt={lastRunByWorkflow[w.id]}
-                      onSelect={() => setSelected(w)}
-                    />
+                  {recommended.map(({ workflow: w, reason }) => (
+                    <div key={`r-${w.id}`} className="flex flex-col gap-1.5">
+                      <WorkflowCard
+                        workflow={w}
+                        status={resolveStatus(w, tools)}
+                        lastRunAt={lastRunByWorkflow[w.id]}
+                        onSelect={() => setSelected(w)}
+                      />
+                      {reason && (
+                        <p className="text-[11.5px] text-emerald-300/80 px-1">{reason}</p>
+                      )}
+                    </div>
                   ))}
                 </div>
               </section>
