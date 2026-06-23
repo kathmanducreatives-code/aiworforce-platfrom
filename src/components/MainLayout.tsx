@@ -9,6 +9,7 @@ import ChatWorkspace from "./chat/workspace/ChatWorkspace";
 import AgentBuilderModal from "./agents/AgentBuilderModal";
 import RouteErrorBoundary from "./RouteErrorBoundary";
 import WorkspaceGate from "./WorkspaceGate";
+import OnboardingGate from "./OnboardingGate";
 import ChatErrorBoundary from "./chat/workspace/ChatErrorBoundary";
 import { ChatWorkspaceProvider } from "@/contexts/ChatWorkspaceContext";
 import { useIsMobile } from "@/hooks/use-mobile";
@@ -66,7 +67,9 @@ const MainLayout = ({ children }: MainLayoutProps) => {
           <div className={isMobile ? 'px-4 py-6 pb-32' : 'pb-32'}>
             <RouteErrorBoundary>
               <WorkspaceGate>
-                {children}
+                <OnboardingGate>
+                  {children}
+                </OnboardingGate>
               </WorkspaceGate>
             </RouteErrorBoundary>
           </div>

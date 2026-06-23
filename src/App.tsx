@@ -27,6 +27,7 @@ import EmailSequenceSetup from "./pages/EmailSequenceSetup";
 import EmailSequences from "./pages/EmailSequences";
 import GetDemo from "./pages/GetDemo";
 import Auth from "./pages/Auth";
+import ResetPassword from "./pages/ResetPassword";
 import ClientMetrics from "./pages/ClientMetrics";
 import ClientDetail from "./pages/ClientDetail";
 import InterviewScheduler from "./pages/InterviewScheduler";
@@ -98,6 +99,7 @@ const App = () => (
                     {/* Public Routes */}
                     <Route path="/" element={<Landing />} />
                     <Route path="/auth" element={<Auth />} />
+                    <Route path="/reset-password" element={<ResetPassword />} />
                     <Route path="/features" element={<Features />} />
                     <Route path="/pricing" element={<Pricing />} />
                     <Route path="/get-demo" element={<GetDemo />} />

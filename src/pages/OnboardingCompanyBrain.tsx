@@ -305,12 +305,19 @@ export default function OnboardingCompanyBrain() {
     }));
     const defaults = getBrainDefaults();
     setStructured({
+      ...defaults,
       icp:            { ...defaults.icp,            ...(p.icp ?? {}) },
       goals:          { ...defaults.goals,          ...(p.goals ?? {}) },
       positioning:    { ...defaults.positioning,    ...(p.positioning ?? {}) },
       brand_voice:    { ...defaults.brand_voice,    ...(p.brand_voice ?? {}) },
       competitors:    { ...defaults.competitors,    ...(p.competitors ?? {}) },
       approval_rules: { ...defaults.approval_rules, ...(p.approval_rules ?? {}) },
+      founder:        { ...defaults.founder,        ...(p.founder ?? {}) },
+      company:        { ...defaults.company,        ...(p.company ?? {}) },
+      gtm:            { ...defaults.gtm,            ...(p.gtm ?? {}) },
+      workflow_preferences: { ...defaults.workflow_preferences, ...(p.workflow_preferences ?? {}) },
+      integration_status:   { ...defaults.integration_status, ...(p.integration_status ?? {}) },
+      onboarding_meta:      { ...defaults.onboarding_meta,    ...(p.onboarding_meta ?? {}) },
     });
     // When ?restart=1, prefill values but start at Step 1 instead of jumping to Review.
     if (hasAny && !restart) setStepIndex(stepIdOf('review'));
@@ -381,6 +388,7 @@ export default function OnboardingCompanyBrain() {
       }));
       const mapped = mapDraftToStructured(draft);
       setStructured((s) => ({
+        ...s,
         icp:            { ...mapped.icp,            ...nonEmpty(s.icp) },
         goals:          { ...mapped.goals,          ...nonEmpty(s.goals) },
         positioning:    { ...mapped.positioning,    ...nonEmpty(s.positioning) },
@@ -721,7 +729,7 @@ export default function OnboardingCompanyBrain() {
                 <div className="text-xs text-muted-foreground">{hint}</div>
               </div>
               <Switch
-                checked={structured.approval_rules[key]}
+                checked={!!structured.approval_rules[key as keyof typeof structured.approval_rules]}
                 onCheckedChange={(v) => setStructured({ ...structured, approval_rules: { ...structured.approval_rules, [key]: v } })}
               />
             </div>
