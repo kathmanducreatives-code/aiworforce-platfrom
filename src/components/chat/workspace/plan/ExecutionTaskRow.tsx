@@ -3,7 +3,7 @@ import AgentBadge from './AgentBadge';
 import ToolStatusBadge from './ToolStatusBadge';
 import ApprovalBadge from './ApprovalBadge';
 import { CheckCircle2, Circle, Loader2, XCircle } from 'lucide-react';
-import { resolveAgent } from '@/lib/agentResolver';
+import { resolveAgent, inferAgentFromContent } from '@/lib/agentResolver';
 
 /** Tiny per-agent outcome chip rendered next to the agent badge. */
 function ReactionChip({ slug, task, toolCall }: { slug: string | null; task: DBTask; toolCall?: DBToolCall | null }) {
