@@ -95,12 +95,12 @@ export default function ChatView({ conversationId, agentSlug, pendingUserText, a
 
   const lastIsUser = (messages[messages.length - 1]?.role === 'user') || !!showPending;
 
-  return (
   // Track the prior agent so we can render a Slack-style handoff divider
   // between two consecutive agent messages from different team members.
   let prevAgentSlug: string | null = null;
 
   return (
+
     <div ref={scrollRef} className="flex-1 overflow-y-auto px-6 py-5 space-y-4">
       {messages.map((m) => {
         if (m.role === 'user') {
