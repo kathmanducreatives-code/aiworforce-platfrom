@@ -181,7 +181,7 @@ export default function CommandDock({ sidebarCollapsed = false }: CommandDockPro
           bottom: 'calc(env(safe-area-inset-bottom, 0px) + 24px)',
         }}
       >
-        <div className={cn('w-full max-w-3xl pointer-events-auto relative')}>
+        <div className={cn('w-full max-w-3xl pointer-events-auto relative', !isMobile && 'ml-8')}>
           {/* Ambient emerald glow */}
           <motion.div
             aria-hidden
