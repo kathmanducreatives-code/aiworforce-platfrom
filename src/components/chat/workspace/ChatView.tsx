@@ -121,7 +121,46 @@ export default function ChatView({ conversationId, agentSlug, pendingUserText, a
         const accent = msgProfile.accentHex ?? '#7D8590';
         const tintBg = hexToRgba(accent, 0.055);
         const tintBorder = hexToRgba(accent, 0.22);
-...
+
+        const structured = isStructured(m.content);
+        const meta = meta0;
+        const planMeta = meta && meta.type === 'execution_plan' && typeof meta.plan_id === 'string'
+          ? meta as { plan_id: string; plan_title?: string; task_count?: number; agents?: string[]; connector_limitations?: string[] }
+          : null;
+        const toolInput = (meta?.tool_input ?? null) as Record<string, any> | null;
+        const uiFormKind = meta && meta.ui_form ? (meta.ui_form as any).kind : null;
+        const leadForm = uiFormKind === 'lead_intake' ? (meta!.ui_form as LeadIntakeFormPayload) : null;
+        const leadSelector = uiFormKind === 'lead_source_selector' ? (meta!.ui_form as LeadSourceSelectorPayload) : null;
+        const postLeadCard = meta && meta.ui_card && (meta.ui_card as any).kind === 'post_lead_actions'
+          ? (meta.ui_card as PostLeadActionsCardPayload)
+          : null;
+        const uiActions = Array.isArray(meta?.ui_actions)
+          ? (meta!.ui_actions as Array<{ label: string; message: string }>)
+          : null;
+        const isClarification =
+          !!meta &&
+          (meta.clarification === true || meta.needs_clarification === true || !!meta.pending_clarification) &&
+          (toolInput?.people_action || toolInput?.companies_action || toolInput?.agency_action ||
+            meta.people_action || meta.companies_action || meta.agency_action);
+        const peopleAction = toolInput?.people_action ?? meta?.people_action ?? null;
+        const companiesAction = toolInput?.companies_action ?? meta?.companies_action ?? null;
+        const agencyAction = toolInput?.agency_action ?? meta?.agency_action ?? null;
+        const showPennSafety = slug === 'penn';
+
+        const handoffFrom = prevAgentSlug && prevAgentSlug !== slug ? prevAgentSlug : null;
+        prevAgentSlug = slug;
+
+        return (
+          <Fragment key={m.id}>
+            {handoffFrom && <HandoffDivider fromSlug={handoffFrom} toSlug={slug} />}
+            <div className="flex items-start gap-3">
+              <AgentAvatar slug={slug} size="sm" />
+              <div className="min-w-0 flex-1">
+                <div className="flex items-baseline gap-2 mb-1.5">
+                  <span className="text-[15px] font-semibold text-[#E6EDF3]">{name}</span>
+                  <span className="text-[12.5px] font-medium" style={{ color: accent }}>· {role}</span>
+                </div>
+
                 {structured ? (
                   <div
                     className="chat-message-bubble relative rounded-2xl border border-l-2 backdrop-blur-xl p-4 text-[15.5px] leading-[1.58] text-[#F0F6FC] whitespace-pre-wrap shadow-[0_2px_14px_rgba(0,0,0,0.28),inset_0_1px_0_rgba(255,255,255,0.04)]"
