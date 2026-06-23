@@ -78,3 +78,38 @@ Deno.test("never invents: no competitors line when absent", () => {
   const ctx = buildCompanyBrainContext({ company_name: "X", what_we_do: "Y" });
   assert(!ctx.includes("Competitors:"), "should not fabricate competitors");
 });
+
+Deno.test("buildCompanyBrainContext: extended fields render", () => {
+  const ext = {
+    founder: { name: "Prasidha", role: "Founder", timezone: "UTC+5:45", first_help_goal: "find_leads" },
+    company: { name: "Agentory", stage: "pre-seed", team_size: "2-5", description: "AI workforce OS", category: "AI tools" },
+    icp: { buyer_roles: ["Founder"], industries: ["B2B SaaS"], geography: "US", company_size: "1-50", pain_points: [], disqualifiers: ["enterprise", "non-B2B"] },
+    gtm: { motion: "outbound", primary_channel: "cold call", preferred_channels: ["LinkedIn", "email"], biggest_bottleneck: "writing outreach", current_tools: ["Notion"], thirty_day_goal: "find 100 qualified leads" },
+    positioning: { promise: "Delegate GTM", differentiators: ["multi-agent"], use_cases: [], proof_points: ["3x faster pipeline"], offer: "AI workforce subscription", pricing: "$99/mo", avoid_positioning: ["replace humans"] },
+    brand_voice: { tone: "premium", tags: ["founder-led"], style_rules: [], avoid: ["hype words"], example_message: "" },
+    competitors: { known: ["Clay"], adjacent: [], unknown: false },
+    approval_rules: { draft_only: true, email_requires_approval: true, linkedin_manual_only: true, daily_credit_limit: 100 },
+    workflow_preferences: { priority_workflows: ["find_hiring_signal_accounts", "generate_cold_call_openers"] },
+    integration_status: {
+      apify: { status: "connected", label: "Apify" },
+      calendar: { status: "setup_needed", label: "Google Calendar" },
+    },
+  };
+  const ctx = buildCompanyBrainContext(ext);
+  assert(ctx.includes("Founder: Prasidha (Founder)"));
+  assert(ctx.includes("stage pre-seed"));
+  assert(ctx.includes("Disqualifiers: enterprise, non-B2B"));
+  assert(ctx.includes("GTM: motion outbound"));
+  assert(ctx.includes("primary cold call"));
+  assert(ctx.includes("bottleneck: writing outreach"));
+  assert(ctx.includes("Offer: AI workforce subscription ($99/mo)"));
+  assert(ctx.includes("Proof: 3x faster pipeline"));
+  assert(ctx.includes("Avoid positioning: replace humans"));
+  assert(ctx.includes("Voice avoid: hype words"));
+  assert(ctx.includes("Priority workflows: find_hiring_signal_accounts"));
+  assert(ctx.includes("Integrations ready: Apify"));
+  assert(ctx.includes("Integrations setup needed: Google Calendar"));
+  assert(ctx.length <= 1800, `context too long: ${ctx.length} chars`);
+  assert(!ctx.includes("{"), "should not dump raw JSON");
+});
+
