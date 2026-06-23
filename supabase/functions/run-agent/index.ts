@@ -910,12 +910,16 @@ Deno.serve(async (req) => {
 
       if (produced === 0 && conversationId) {
         // Actor ran but found nothing — honest "no results", never "complete".
+        // Scout speaks the operational result, then Pilot wraps with the recommendation card.
         const failBrief = (reqStep?.instruction as string) ?? undefined;
         const failActions = ["broaden_search", "edit_criteria", "change_source", "view_details", "done"];
+        const reviewedCount = sourceQuality?.raw_result_count ?? "the";
+        const scoutLine = `I reviewed ${reviewedCount} raw result${sourceQuality?.raw_result_count === 1 ? "" : "s"}, but none matched closely enough. I didn't save any leads.`;
+        const pilotLine = "Try broadening your criteria or changing the source. No credits charged, nothing sent.";
         const card = {
           kind: "lead_sourcing_error",
           title: "No qualified matches",
-          message: `Scout reviewed ${produced === 0 ? (sourceQuality?.raw_result_count ?? "the") : produced} raw result${sourceQuality?.raw_result_count === 1 ? "" : "s"}, but none matched closely enough. I didn't save any leads. Try broadening your criteria or changing the source. No credits charged, nothing sent.`,
+          message: `${scoutLine} ${pilotLine}`,
           error: "no_qualified_matches",
           retry_command: failBrief,
           next_actions: failActions,
@@ -923,8 +927,15 @@ Deno.serve(async (req) => {
         };
         await supabase.from("messages").insert({
           conversation_id: conversationId, role: "assistant",
-          content: `Scout reviewed ${sourceQuality?.raw_result_count ?? "the"} raw results, but none matched closely enough. I didn't save any leads. Try broadening your criteria or changing the source.`,
-          agent_slug: "pilot", metadata: { ui_card: card, lead_sourcing_error: true, plan_id, workflow_status: "failed", next_actions: failActions, source_brief: failBrief },
+          content: scoutLine,
+          agent_slug: "scout",
+          metadata: { plan_id, agent_id: "scout", workflow_step: "source_leads", status: "no_qualified_matches" },
+        });
+        await supabase.from("messages").insert({
+          conversation_id: conversationId, role: "assistant",
+          content: pilotLine,
+          agent_slug: "pilot",
+          metadata: { ui_card: card, lead_sourcing_error: true, plan_id, agent_id: "pilot", workflow_status: "failed", next_actions: failActions, source_brief: failBrief },
         });
       } else if (leadRows.length > 0 && conversationId) {
         const lo = await import("../_shared/leadOpportunity.ts");
