@@ -531,7 +531,8 @@ Deno.serve(async (req) => {
         await supabase.from("messages").insert({
           conversation_id: conversationId, role: "assistant",
           content: failMsg + " You can update the Apify token and retry, or pick a different lead source.",
-          agent_slug: "pilot", metadata: { ui_card: card, lead_sourcing_error: true, plan_id },
+          agent_slug: "scout",
+          metadata: { ui_card: card, lead_sourcing_error: true, plan_id, agent_id: "scout", workflow_step: "source_leads", status: "failed" },
         });
       }
     } catch (e) { console.warn("[run-agent] sourcing-error card failed:", e); }
