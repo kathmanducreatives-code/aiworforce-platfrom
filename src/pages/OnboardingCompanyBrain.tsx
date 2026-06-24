@@ -1246,22 +1246,26 @@ export default function OnboardingCompanyBrain() {
             </Button>
           </div>
         </div>
-        <div className="mb-8"><ProgressRail currentIndex={stepIndex} /></div>
+        <div className="mb-8"><ProgressRail currentIndex={launchVisible ? STEPS.length - 1 : stepIndex} /></div>
 
         <AnimatePresence mode="wait">
-          <StepShell key={step}>
-            {step === 'welcome'         && renderWelcome()}
-            {step === 'founder'         && renderFounder()}
-            {step === 'company'         && renderCompany()}
-            {step === 'analyzing'       && renderAnalyzing()}
-            {step === 'icp'             && renderIcp()}
-            {step === 'gtm'             && renderGtm()}
-            {step === 'positioning'     && renderPositioning()}
-            {step === 'voice'           && renderVoice()}
-            {step === 'workflow_prefs'  && renderWorkflowPrefs()}
-            {step === 'integrations'    && renderIntegrations()}
-            {step === 'approval'        && renderApproval()}
-            {step === 'review'          && renderReview()}
+          <StepShell key={launchVisible ? 'launch' : step}>
+            {launchVisible ? renderLaunch() : (
+              <>
+                {step === 'welcome'         && renderWelcome()}
+                {step === 'founder'         && renderFounder()}
+                {step === 'company'         && renderCompany()}
+                {step === 'analyzing'       && renderAnalyzing()}
+                {step === 'icp'             && renderIcp()}
+                {step === 'gtm'             && renderGtm()}
+                {step === 'positioning'     && renderPositioning()}
+                {step === 'voice'           && renderVoice()}
+                {step === 'workflow_prefs'  && renderWorkflowPrefs()}
+                {step === 'integrations'    && renderIntegrations()}
+                {step === 'approval'        && renderApproval()}
+                {step === 'review'          && renderReview()}
+              </>
+            )}
           </StepShell>
         </AnimatePresence>
 
