@@ -26,6 +26,7 @@ import { computeCompleteness } from '@/lib/brainCompleteness';
 import { recommendWorkflows } from '@/lib/workflows/recommend';
 import { WORKFLOWS } from '@/lib/workflows/registry';
 import { pilotChat } from '@/lib/pilotChat';
+import BrainOrb from '@/components/onboarding/BrainOrb';
 
 // ---------- helpers ----------
 async function call(action: string, workspace_id: string, payload: Record<string, any> = {}) {
@@ -46,9 +47,10 @@ const AGENTS = [
   { slug: 'scribe', name: 'Scribe' },
 ];
 
-const ANALYSIS_STEPS = [
-  'Hawk is reading your website',
-  'Pilot is identifying your business model',
+type AnalysisPhase = { agent: string; label: string; status: 'ok' | 'skipped' | 'failed' | 'running' };
+const DEFAULT_PHASES: AnalysisPhase[] = [
+  { agent: 'hawk',  label: 'Hawk is reading your website',          status: 'running' },
+  { agent: 'pilot', label: 'Pilot is mapping your business model',  status: 'running' },
 ];
 
 const TONE_CHIPS = [...BRAND_VOICE_TAGS, 'concise', 'bold'] as const;
@@ -146,29 +148,38 @@ function ProgressRail({ currentIndex }: { currentIndex: number }) {
   const pct = Math.round(((currentIndex + 1) / STEPS.length) * 100);
   return (
     <div className="space-y-3">
-      <div className="hidden md:flex items-center gap-1">
+      <div className="hidden md:flex items-stretch gap-1.5">
         {STEPS.map((s, i) => {
           const done = i < currentIndex;
           const active = i === currentIndex;
           return (
-            <div key={s.id} className="flex items-center gap-1 flex-1 last:flex-initial">
+            <div
+              key={s.id}
+              className="group relative flex-1 flex flex-col items-center"
+              title={`${i + 1}. ${s.label}`}
+            >
               <div
                 className={
-                  'h-6 w-6 shrink-0 rounded-full border flex items-center justify-center text-[10px] font-semibold transition-all ' +
+                  'h-1.5 w-full rounded-full transition-all duration-500 ' +
                   (done
-                    ? 'border-primary bg-primary/15 text-primary'
+                    ? 'bg-primary shadow-[0_0_10px_rgba(16,185,129,0.55)]'
                     : active
-                    ? 'border-primary bg-primary/10 text-primary shadow-[0_0_0_4px_rgba(16,185,129,0.12)]'
-                    : 'border-border/60 bg-card/40 text-muted-foreground')
+                    ? 'bg-gradient-to-r from-primary to-primary/40 shadow-[0_0_14px_rgba(16,185,129,0.65)]'
+                    : 'bg-border/40')
                 }
               >
-                {done ? <CheckCircle2 className="h-3 w-3" /> : i + 1}
+                {active && (
+                  <div className="h-full w-full rounded-full bg-primary/60 animate-pulse" />
+                )}
               </div>
-              {i < STEPS.length - 1 && (
-                <div className="h-px flex-1 bg-border/60 relative overflow-hidden">
-                  <div className={'h-full bg-primary/70 transition-all duration-500 ' + (done ? 'w-full' : 'w-0')} />
-                </div>
-              )}
+              <span
+                className={
+                  'mt-2 text-[10px] tracking-[0.14em] uppercase truncate transition-colors ' +
+                  (done || active ? 'text-foreground/80' : 'text-muted-foreground/60')
+                }
+              >
+                {s.label}
+              </span>
             </div>
           );
         })}
@@ -179,7 +190,7 @@ function ProgressRail({ currentIndex }: { currentIndex: number }) {
         </span>
         <span className="text-primary font-medium">{pct}%</span>
       </div>
-      <div className="h-1 w-full rounded-full bg-border/40 overflow-hidden">
+      <div className="md:hidden h-1 w-full rounded-full bg-border/40 overflow-hidden">
         <div
           className="h-full bg-primary shadow-[0_0_12px_rgba(16,185,129,0.5)] transition-all duration-500 ease-out"
           style={{ width: `${pct}%` }}
@@ -261,10 +272,10 @@ function Field({ label, hint, className = '', children }: { label: string; hint?
 
 function StepHeader({ eyebrow, title, subtitle }: { eyebrow: string; title: string; subtitle?: string }) {
   return (
-    <div className="mb-6">
-      <div className="text-[11px] font-semibold tracking-[0.18em] text-primary uppercase mb-2">{eyebrow}</div>
-      <h2 className="text-2xl sm:text-3xl font-semibold tracking-tight text-foreground">{title}</h2>
-      {subtitle && <p className="text-sm text-muted-foreground mt-2 max-w-2xl leading-relaxed">{subtitle}</p>}
+    <div className="mb-8">
+      <div className="text-[12px] font-semibold tracking-[0.22em] text-emerald-400 uppercase mb-3">{eyebrow}</div>
+      <h2 className="text-[32px] sm:text-[40px] font-semibold tracking-tight text-foreground leading-[1.08]">{title}</h2>
+      {subtitle && <p className="text-[17px] text-muted-foreground mt-3 max-w-2xl leading-[1.55]">{subtitle}</p>}
     </div>
   );
 }
