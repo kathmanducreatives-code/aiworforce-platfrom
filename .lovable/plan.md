@@ -1,99 +1,142 @@
+# Post-Onboarding Product Guide
 
-# Plan — Premium Onboarding & Company Brain Activation
+Goal: After Activate Company Brain, Pilot walks the user through Agentory's 6 core areas with a premium guided tour, plus persistent navigation help on every major page. Skippable, restartable, non-blocking, no fake data.
 
-Scope: visual upgrade + honest analyzer mapping + persistent Company Brain context propagation. No landing-page edits, no DB migrations, no auto-send. All existing 12-step logic, auth gate, save/resume, schema, integration readiness, and first-safe-workflow logic preserved.
+## 1. State & persistence
 
-## 1. New presentation primitives (`src/components/onboarding/`)
-New, isolated components — no behavior change to wizard state machine.
+Store completion in `company_brain.profile.onboarding_meta` (already exists, no migration):
 
-- `OnboardingShell.tsx` — full-bleed dark canvas, animated emerald grid + radial glow background, top-rail progress + optional left mini-timeline on ≥1280px, eyebrow/title/subtitle slot, footer slot.
-- `ProgressRail.tsx` — 12 connected segment nodes with completed (emerald glow) / current (pulse) / future (muted) states. Hover tooltip labels (Founder, Company, Analyze, ICP, GTM, Positioning, Voice, Workflows, Integrations, Safety, Review, Launch). Sticky "Step N of 12 · {label}" line.
-- `StepCard.tsx` — glassmorphic surface (backdrop blur, layered borders, inner highlight), dimensional shadow, emerald edge glow when active.
-- `Chip.tsx` / `ChipGroup.tsx` — premium selectable chip with emerald border + soft glow + subtle scale-in on select.
-- `FieldLabel.tsx` — uppercase letter-spaced label primitive (12.5–13.5px).
-- `AgentOrb.tsx` — uses `AgentAvatar` from workforce, animated halo when "active".
-- `BrainOrb.tsx` — welcome-screen central orb with 6 orbiting agent avatars and animated connection lines (CSS/Framer only).
-- `AnalyzerTimeline.tsx` — honest step list driven by actual analyzer phases returned by backend (no fake fan-out); pulses while running, checks on done, warns on skipped.
-- `ExtractedCard.tsx` — editable mapped-info card with confidence badge (High/Medium/Needs review), Accept/Edit/Reset actions.
-- `BrainReadinessMeter.tsx` — derived from `computeCompleteness`, shows Good/Strong/Needs detail with segmented gauge.
+```
+onboarding_meta: {
+  product_tour_completed: boolean,
+  product_tour_completed_at: string | null,
+  product_tour_skipped_at: string | null,
+  first_run_helper_dismissed: boolean,
+}
+```
 
-Typography tokens applied via Tailwind utility composition in shell (no global font swap):
-- eyebrow `text-[12px] tracking-[0.18em] uppercase text-emerald-400`
-- title `text-[34px] md:text-[42px] leading-[1.08] font-semibold tracking-tight`
-- subtitle `text-[17px] leading-[1.55] text-muted-foreground`
-- input text `text-base`, labels per FieldLabel, helper `text-[13.5px]`.
+- New hook `src/hooks/useProductTour.ts` wraps `useCompanyBrain` to read/write these flags via existing `setup-company-brain` `save_structured` action (extend allowlist to include the new keys — already permits `onboarding_meta`).
+- Tour auto-opens once when: brain is activated AND `product_tour_completed` is false AND `product_tour_skipped_at` is null.
+- Restart entry points set both flags back to false and open the tour.
 
-## 2. Wizard refactor (`src/pages/OnboardingCompanyBrain.tsx`)
-Keep the existing 12-step `StepId` union, save/resume meta writes, `save_structured`/`save_basics` calls, integration-readiness usage, and first-safe-workflow dispatch. Replace JSX only with the new primitives.
+## 2. Tour component
 
-Per-step copy and visual updates:
-- **welcome**: "Build your Company Brain" + safety line, BrainOrb visual, CTA "Build Company Brain".
-- **founder**: title "Who's leading this workspace?" + Pilot avatar; goal options as premium chip cards using `FIRST_HELP_LABEL` expanded with "Find decision-makers" mapping.
-- **company**: website + LinkedIn inputs, "Analyze with Hawk + Pilot" button transitions to analyzing step.
-- **analyzing**: AnalyzerTimeline driven by actual response. Honest copy when scrape unavailable: "LinkedIn analysis isn't configured — using website + manual inputs." Calls existing `setup-company-brain` `analyze` (already returns `enriched`, `connectors`, `warnings`, `draft`). Stores draft in local state for review cards.
-- **post-analyze review** (rendered inside same `analyzing` → `icp` transition as a sub-state, no new step id): ExtractedCard list for Company summary / ICP / Positioning / Competitors / Voice / Recommended workflows. Each Accept dispatches `save_structured` with only that section. No silent overwrite — nothing is saved until user accepts.
-- **icp / gtm / positioning / voice / workflow_prefs / approval**: same fields, new visual layer, examples + helper text per spec, disqualifier emphasis, bottleneck chip cards, Scribe voice preview (deterministic preview from selected tags — no fake AI).
-- **integrations**: capability cards (Ready / Setup needed / Optional / Unavailable) from `useIntegrationReadiness`. Never render secret values. Locked-workflow explainer.
-- **review**: section cards with edit jumps, BrainReadinessMeter, CTA "Activate Company Brain".
-- **launch (post-activation)**: new in-page screen after `onboarding_completed` flip, before route change. Recommended first workflow from `recommendWorkflows(brain).slice(0,1)`; if its required provider isn't `connected`, fall back to `daily_briefing` and show explainer. Buttons: "Run first workflow" (existing draft-only pilotChat path) / "Go to dashboard".
+New folder `src/components/tour/`:
 
-State additions (local only): `analyzerDraft`, `acceptedSections`, `analyzerPhases` (derived from response), `launchVisible`.
+- `ProductTour.tsx` — premium overlay (dark glass card, Pilot avatar from `agentProfiles`, animated transitions via framer-motion already in project). Not a generic spotlight library — fixed centered modal with a "spotlight panel" describing the area, plus a small thumbnail/illustration. No DOM-anchored highlights (avoids brittle selectors and layout breaks at 1280/1440).
+- `tourSteps.ts` — 6 steps: Dashboard, Workflows, Conversations, Workbench, Awaiting You, Company Brain. Each step: `{ id, agent: 'pilot', title, body, bullets[], primaryCta: {label, route}, illustration }`.
+- Progress: numbered dots 1–6 + linear bar.
+- Controls: Back, Next, Skip tour, "Take me there" (navigates to the page and closes tour).
+- Final step → CTA "Start recommended workflow" using `recommendWorkflows` top result and the goal-based copy in section 8.
 
-## 3. Honest analyzer mapping
-Edge function `setup-company-brain` (`analyze` action) already returns a structured draft + warnings + connector flags. Extend it minimally:
-- Add a `phases` array to the response describing what actually ran: `[{ agent:'hawk', label:'Reading your website', status:'ok'|'skipped'|'failed' }, { agent:'pilot', label:'Identifying business model', status:'ok' }]`. Derived from existing `scrapeReady` / `researchReady` / per-source try-catch — no new tool calls.
-- Map the existing draft fields to Company Brain sections in the client (`src/lib/onboardingDraftMap.ts`, already imported) — extend it if needed to also emit a `competitors.known` suggestion list and `positioning.differentiators` array from the analyzer's `competitors` / `positioning` strings.
-- No prefill into the saved brain until user clicks Accept on a card. Edited values always win.
+Step copy comes verbatim from the user's brief (sections 2 and 8).
 
-No new edge functions, no migration.
+## 3. Trigger points
 
-## 4. Company Brain context propagation (verification + small fixes)
-`buildCompanyBrainContext` already covers founder/ICP/GTM/positioning/voice/competitors/disqualifiers/workflow prefs/integration status. Audit downstream callers and ensure they inject it:
+- `OnboardingCompanyBrain.tsx`: after `launchVisible` activation success, set `product_tour_pending=true` in sessionStorage and redirect to `/dashboard` (existing flow). Dashboard mounts the tour on detecting pending OR uncompleted state.
+- `MainLayout.tsx`: mount `<ProductTour />` once (renders null unless open) so it's available across pages without re-mount churn.
 
-- `supabase/functions/pilot-chat/index.ts` — confirm `buildCompanyBrainContext` is prepended to system prompt; if missing, add.
-- `supabase/functions/run-agent/index.ts` — same.
-- `supabase/functions/chat-respond/index.ts` — same.
-- `supabase/functions/daily-brief/index.ts` — same.
-- Lead/ICP filtering: `src/hooks/useICPResults.ts` / `useLeadResults.ts` — verify ICP disqualifiers and industries are passed into scoring; add a thin selector `src/lib/brain/useBrainContext.ts` that exposes `{ icp, competitors, voice, positioning, gtm, founder }` for client-side rankers and content drafters.
-- Competitor suggestions: `src/pages/CompetitorIntelligence.tsx` / `Competitors.tsx` — seed suggestions from `brain.competitors.known ∪ adjacent`.
+## 4. Restart entry points
 
-Read-only audit first; only patch the smallest set where context isn't currently passed. No behavior change to ranking math beyond plumbing.
+- Dashboard: "Restart product tour" link in the first-run helper card and in a small "?" menu in the header.
+- User menu (existing avatar dropdown in `MainLayout`): add "Restart product tour".
+- Help & Support: add a "Restart product tour" button on `SettingsIntegrations` help section (or new lightweight `/help` if missing — confirm in build).
+- Command palette (existing global search): add a command "Restart product tour".
 
-## 5. Animations
-Framer-motion only (already a dep). Step transitions: 240ms fade+slide-x(8). Chip select: scale 0.98→1 + emerald shadow. Progress segment fill: 400ms ease-out. Analyzer pulse: 1.6s loop on active phase. Activation flourish: 600ms emerald glow expansion on BrainOrb. No bounces, no neon strobes.
+## 5. First-run helper card (Dashboard)
 
-## 6. Files changed
-Created:
-- `src/components/onboarding/OnboardingShell.tsx`
-- `src/components/onboarding/ProgressRail.tsx`
-- `src/components/onboarding/StepCard.tsx`
-- `src/components/onboarding/Chip.tsx`
-- `src/components/onboarding/FieldLabel.tsx`
-- `src/components/onboarding/BrainOrb.tsx`
-- `src/components/onboarding/AnalyzerTimeline.tsx`
-- `src/components/onboarding/ExtractedCard.tsx`
-- `src/components/onboarding/BrainReadinessMeter.tsx`
-- `src/lib/brain/useBrainContext.ts`
+New `src/components/dashboard/FirstRunHelper.tsx`:
+
+- Shows when `first_run_helper_dismissed` is false.
+- 3-step checklist: Run a workflow → Review output in Workbench → Approve next actions.
+- CTAs: Run recommended workflow (links to `/workflows` with top recommendation pre-selected), Open Workflows, Ask Pilot, Skip.
+- Dismiss persists to `onboarding_meta.first_run_helper_dismissed`.
+
+## 6. Page-level empty states
+
+Update empty states only — no data shape changes — on:
+
+- `Dashboard.tsx` — replace existing first-run banner empty copy with the brief's text.
+- `Workflows.tsx` — empty/recommended header copy.
+- `Conversations` (chat workspace empty view) — Ask Pilot copy.
+- Workbench surfaces (`Leads.tsx` table empty, output panels in `OutreachEngine.tsx`, `LeadCRM.tsx`) — "Your results will appear here after a workflow runs."
+- `AwaitingYou.tsx` — "No approvals yet. Drafts and risky actions wait here before anything is sent."
+
+All empty states use the existing glass surface tokens (`bg-card/40`, emerald accent) — consistent with Verdant theme.
+
+## 7. Contextual "What is this?" micro-help
+
+New `src/components/help/InfoHint.tsx`:
+
+- Small `(i)` icon button → shadcn `Tooltip` (or `Popover` on mobile).
+- Single `helpContent.ts` registry keyed by term: `company_brain`, `workflows`, `workbench`, `awaiting_you`, `setup_needed`, `draft_only`, `locked_columns`, `credits`, `agent_role`.
+- Drop `<InfoHint topic="setup_needed" />` next to labels in `Workflows.tsx`, `AwaitingYou.tsx`, lead tables, and agent cards. No layout changes — inline icon.
+
+## 8. "Ask Pilot about this page"
+
+New `src/components/help/AskPilotAboutPage.tsx`:
+
+- Small ghost button in each major page header.
+- A `pagePromptRegistry.ts` maps route → prompt, e.g. `/workflows` → "Explain the Workflows page and what I should do first. Reference my Company Brain."
+- On click: opens the existing chat workspace (use `ChatWorkspaceContext`) and dispatches a new conversation pre-seeded with the page prompt. Pilot already receives `buildCompanyBrainContext` so answers are personalized.
+
+Mounted on: Dashboard, Workflows, Conversations, Workbench pages (Leads, OutreachEngine, LeadCRM), AwaitingYou, Agents, Company Brain settings.
+
+## 9. Goal-aware recommended first move
+
+Extend `src/lib/workflows/recommend.ts`:
+
+- New `recommendFirstMove(brain)` returns `{ headline, body, workflowSlug }` keyed by `workflow_preferences.primary_goal` (`leads`, `content`, `research`) with the exact copy from the brief.
+- Used by both the tour's final step and the Dashboard FirstRunHelper "Run recommended workflow" CTA.
+
+## 10. Out of scope / explicit non-goals
+
+- No DB migration — uses existing `company_brain.profile.onboarding_meta`.
+- No real tour-library dependency (no Shepherd/Driver.js). Built with framer-motion + shadcn Dialog/Card.
+- No fake activity, no auto-run of outreach. The recommended workflow CTA reuses the existing safe draft-only run path.
+- No changes to routes, auth, or RLS.
+
+## 11. Technical notes
+
+```
+New files:
+  src/hooks/useProductTour.ts
+  src/components/tour/ProductTour.tsx
+  src/components/tour/tourSteps.ts
+  src/components/dashboard/FirstRunHelper.tsx
+  src/components/help/InfoHint.tsx
+  src/components/help/helpContent.ts
+  src/components/help/AskPilotAboutPage.tsx
+  src/components/help/pagePromptRegistry.ts
 
 Edited:
-- `src/pages/OnboardingCompanyBrain.tsx` (UI rewrite, state machine preserved)
-- `src/lib/onboardingDraftMap.ts` (extend mapping to competitors/positioning arrays)
-- `supabase/functions/setup-company-brain/index.ts` (add `phases` to analyze response only)
-- Possibly `supabase/functions/{pilot-chat,run-agent,chat-respond,daily-brief}/index.ts` only if audit shows brain context isn't already injected.
+  src/components/MainLayout.tsx          (mount ProductTour, header restart link)
+  src/pages/Dashboard.tsx                (FirstRunHelper, empty copy, AskPilot)
+  src/pages/Workflows.tsx                (empty copy, InfoHint, AskPilot)
+  src/pages/AwaitingYou.tsx              (empty copy, InfoHint, AskPilot)
+  src/pages/Leads.tsx + OutreachEngine.tsx + LeadCRM.tsx (workbench empty + AskPilot)
+  src/pages/Agents.tsx                   (agent role InfoHint)
+  src/pages/OnboardingCompanyBrain.tsx   (set product_tour_pending on activate)
+  src/lib/workflows/recommend.ts         (recommendFirstMove)
+  src/lib/companyBrainSchema.ts + supabase/functions/_shared/companyBrainSchema.ts
+                                         (extend onboarding_meta keys)
+  supabase/functions/setup-company-brain/index.ts
+                                         (allow new onboarding_meta keys in save_structured)
 
-Untouched: landing, schema, migrations, auth, OnboardingGate, Workflows page logic, agents/runtime, registry, integration-readiness function.
+Tests:
+  src/lib/workflows/recommend.test.ts    (add recommendFirstMove cases)
+  src/components/tour/tourSteps.test.ts  (6 steps, copy snapshot, ids unique)
+```
 
-## 7. QA
-- `bunx vitest run` for existing onboarding/recommend tests.
-- `npx tsgo --noEmit`.
-- Playwright headless against localhost: A (first-time signup lands in onboarding), B (analyze with `https://agentory.space/` shows real timeline + editable extracted cards), C (chips/inputs render premium), D (refresh resumes), E (integrations readiness honest), F (review + activate), G (first safe workflow draft-only). Screenshots saved under `/tmp/browser/onboarding/`.
+## 12. QA checklist
 
-## 8. Out of scope
-- Landing page edits.
-- Any DB migration (including 145631).
-- Auto-send / auto-DM / auto-post anywhere.
-- Changing scoring/filter math beyond passing brain context through.
-- New AI providers or new edge functions beyond extending `analyze` response.
-
-## 9. Acceptance
-Onboarding looks premium (glass, emerald glow, typography hierarchy), progress is unmistakable, analyzer is honest and renders editable Company Brain cards, integration readiness is clear, safety is reassuring, review shows a real Brain preview with readiness meter, activation triggers a compelling first-safe-workflow screen, and Pilot/Scout/Aria/Hawk/Penn/Scribe receive Company Brain context on every call.
+- Fresh user: finish onboarding → activate → tour appears on Dashboard automatically.
+- Step through all 6 steps; verify copy, progress, Back/Next/Skip/Take me there.
+- Skip → tour closes, does not reappear on refresh, restart works from user menu, dashboard, command palette, help.
+- FirstRunHelper appears once; dismiss persists.
+- Empty states render correct copy on each page with no real data.
+- InfoHint tooltips render on desktop, popover on touch.
+- "Ask Pilot about this page" opens chat with correct seeded prompt; Pilot uses Company Brain context.
+- Recommended first move matches `primary_goal`.
+- No layout shift at 1280 and 1440 widths.
+- Typecheck and existing tests pass; no new runtime errors.

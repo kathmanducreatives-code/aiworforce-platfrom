@@ -10,6 +10,8 @@ import WorkflowTimeline from '@/components/workforce/WorkflowTimeline';
 import WorkforceDock from '@/components/workforce/WorkforceDock';
 import DepartmentPreview from '@/components/workforce/DepartmentPreview';
 import WorkforceHandoffStrip from '@/components/workforce/WorkforceHandoffStrip';
+import FirstRunHelper from '@/components/dashboard/FirstRunHelper';
+import AskPilotAboutPage from '@/components/help/AskPilotAboutPage';
 import type { AgentId } from '@/components/workforce/agents';
 
 
@@ -38,15 +40,19 @@ const Dashboard = () => {
       </div>
 
       <div className="mx-auto w-full max-w-[1440px] px-5 lg:px-8 py-6 pb-32">
+        <div className="flex items-center justify-end mb-3">
+          <AskPilotAboutPage />
+        </div>
+
         {showFirstRun && (
           <div className="mb-4 flex items-start gap-3 rounded-xl border border-emerald-500/30 bg-emerald-500/[0.06] p-4">
             <div className="h-9 w-9 rounded-lg bg-emerald-500/15 border border-emerald-500/30 flex items-center justify-center shrink-0">
               <Sparkles className="h-4 w-4 text-emerald-300" />
             </div>
             <div className="flex-1 min-w-0">
-              <div className="text-sm font-semibold text-foreground">Welcome to Agentory.</div>
+              <div className="text-sm font-semibold text-foreground">Welcome to your AI workforce.</div>
               <div className="text-[13px] text-neutral-300 mt-0.5">
-                Your first workflow is drafting 5 results in the background. Nothing is sent — review when ready.
+                Your Company Brain is ready. Pilot will walk you through how Agentory works — skip anytime.
               </div>
             </div>
             <button
@@ -59,6 +65,8 @@ const Dashboard = () => {
             </button>
           </div>
         )}
+
+        <FirstRunHelper />
 
         <CompanyBrainStrip visible={!brainComplete} />
 
