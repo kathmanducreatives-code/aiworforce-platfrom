@@ -481,6 +481,11 @@ export default function OnboardingCompanyBrain() {
       const res: any = await call('analyze', workspaceId!);
       const w: string[] = res?.warnings ?? [];
       setWarnings(w);
+      if (Array.isArray(res?.phases) && res.phases.length) {
+        setAnalysisPhases(res.phases as AnalysisPhase[]);
+      } else {
+        setAnalysisPhases((prev) => prev.map((p) => ({ ...p, status: 'ok' as const })));
+      }
       const draft = { ...(res?.profile ?? {}), ...(res?.draft ?? {}) };
       const mappedBasics = mapDraftToBasics(draft);
       setBasics((b) => ({
@@ -489,6 +494,17 @@ export default function OnboardingCompanyBrain() {
         category: b.category || mappedBasics.category,
       }));
       const mapped = mapDraftToStructured(draft);
+      // Build human summary of what was mapped (for the "What we found" banner on next step)
+      const summary: string[] = [];
+      if (mappedBasics.short_description) summary.push(`Description: ${mappedBasics.short_description}`);
+      if (mappedBasics.category) summary.push(`Category: ${mappedBasics.category}`);
+      if (mapped.icp.buyer_roles.length) summary.push(`Buyer roles: ${mapped.icp.buyer_roles.join(', ')}`);
+      if (mapped.icp.industries.length) summary.push(`Industries: ${mapped.icp.industries.join(', ')}`);
+      if (mapped.icp.pain_points.length) summary.push(`Pain points: ${mapped.icp.pain_points.slice(0, 3).join(' · ')}`);
+      if (mapped.positioning.promise) summary.push(`Positioning: ${mapped.positioning.promise}`);
+      if (mapped.competitors.known.length) summary.push(`Competitors: ${mapped.competitors.known.join(', ')}`);
+      if (mapped.brand_voice.tone) summary.push(`Voice: ${mapped.brand_voice.tone}`);
+      setMappedSummary(summary);
       setStructured((s) => ({
         ...s,
         icp:            { ...mapped.icp,            ...nonEmpty(s.icp) },
@@ -496,7 +512,7 @@ export default function OnboardingCompanyBrain() {
         brand_voice:    { ...mapped.brand_voice,    ...nonEmpty(s.brand_voice) },
         competitors:    { ...mapped.competitors,    ...nonEmpty(s.competitors) },
       }));
-      await new Promise((r) => setTimeout(r, 700));
+      await new Promise((r) => setTimeout(r, 1200));
       goto('icp');
     } catch (e: any) {
       setWarnings(["We couldn't analyze the website automatically. You can still build your Company Brain manually."]);
