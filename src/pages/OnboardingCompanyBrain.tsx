@@ -808,6 +808,7 @@ export default function OnboardingCompanyBrain() {
           </Field>
         </div>
       </Card>
+      </div>
     );
   }
 
