@@ -27,6 +27,7 @@ import { recommendWorkflows } from '@/lib/workflows/recommend';
 import { WORKFLOWS } from '@/lib/workflows/registry';
 import { pilotChat } from '@/lib/pilotChat';
 import BrainOrb from '@/components/onboarding/BrainOrb';
+import { markTourPending } from '@/hooks/useProductTour';
 
 // ---------- helpers ----------
 async function call(action: string, workspace_id: string, payload: Record<string, any> = {}) {
@@ -1171,7 +1172,7 @@ export default function OnboardingCompanyBrain() {
               <Button
                 size="lg"
                 className="h-12 px-7 text-[15px] font-semibold"
-                onClick={() => navigate('/workflows', { state: { firstRun: true } })}
+                onClick={() => { markTourPending(); navigate('/workflows', { state: { firstRun: true } }); }}
               >
                 Run first workflow <ArrowRight className="h-4 w-4 ml-2" />
               </Button>
@@ -1179,7 +1180,7 @@ export default function OnboardingCompanyBrain() {
                 size="lg"
                 variant="outline"
                 className="h-12 px-6"
-                onClick={() => navigate('/dashboard', { state: { firstRun: true }, replace: true })}
+                onClick={() => { markTourPending(); navigate('/dashboard', { state: { firstRun: true }, replace: true }); }}
               >
                 Go to dashboard
               </Button>
