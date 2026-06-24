@@ -1130,6 +1130,72 @@ export default function OnboardingCompanyBrain() {
     );
   }
 
+  function renderLaunch() {
+    // Pick the recommended first workflow honoring readiness.
+    const priorityIds = structured.workflow_preferences.priority_workflows;
+    const pool = (priorityIds
+      .map((id) => WORKFLOWS.find((w) => w.id === id))
+      .filter(Boolean) as typeof WORKFLOWS);
+    const recPool = pool.length ? pool : recommendedWorkflows.map((r) => r.workflow);
+    const chosen = recPool.find((w) => w.status === 'ready') ?? recPool[0] ?? WORKFLOWS.find((w) => w.id === 'daily_workforce_briefing');
+    const ready = chosen?.status === 'ready';
+    return (
+      <Card className="p-8 sm:p-12 relative overflow-hidden">
+        <div className="absolute inset-0 -z-10 pointer-events-none">
+          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 h-[460px] w-[460px] rounded-full bg-emerald-500/15 blur-3xl animate-pulse" />
+        </div>
+        <div className="grid md:grid-cols-[1.1fr,1fr] gap-10 items-center">
+          <div>
+            <div className="text-[12px] font-semibold tracking-[0.22em] text-emerald-400 uppercase mb-3">Activated</div>
+            <h1 className="text-[36px] sm:text-[46px] font-semibold tracking-tight leading-[1.05]">
+              Your Company Brain is <span className="bg-gradient-to-r from-emerald-300 to-emerald-500 bg-clip-text text-transparent">ready</span>.
+            </h1>
+            <p className="text-[17px] text-muted-foreground mt-4 leading-[1.55] max-w-xl">
+              Run one safe workflow to see Agentory work with your context. Nothing will be sent.
+            </p>
+            {chosen && (
+              <div className="mt-6 rounded-2xl border border-primary/30 bg-primary/[0.06] p-5">
+                <div className="text-[11px] font-semibold tracking-[0.2em] text-emerald-400 uppercase mb-1.5">Recommended first workflow</div>
+                <div className="text-[18px] font-semibold text-foreground">{chosen.title}</div>
+                <div className="text-[14px] text-muted-foreground mt-1.5 leading-[1.5]">{chosen.description}</div>
+                <div className="mt-3 flex items-center gap-2">
+                  <span className="text-[11px] uppercase tracking-wider text-muted-foreground">{chosen.primaryAgent}</span>
+                  <span className="text-muted-foreground/40">·</span>
+                  <span className={'text-[11px] uppercase tracking-wider ' + (ready ? 'text-emerald-400' : 'text-amber-300')}>
+                    {ready ? 'Ready' : 'Setup needed'}
+                  </span>
+                </div>
+              </div>
+            )}
+            <div className="mt-7 flex flex-col sm:flex-row gap-3">
+              <Button
+                size="lg"
+                className="h-12 px-7 text-[15px] font-semibold"
+                onClick={() => navigate('/workflows', { state: { firstRun: true } })}
+              >
+                Run first workflow <ArrowRight className="h-4 w-4 ml-2" />
+              </Button>
+              <Button
+                size="lg"
+                variant="outline"
+                className="h-12 px-6"
+                onClick={() => navigate('/dashboard', { state: { firstRun: true }, replace: true })}
+              >
+                Go to dashboard
+              </Button>
+            </div>
+            <div className="mt-5 inline-flex items-center gap-2 rounded-full border border-primary/30 bg-primary/10 text-primary px-3 py-1.5 text-[12px]">
+              <ShieldCheck className="h-3.5 w-3.5" /> Draft-only · 5 results · nothing is sent
+            </div>
+          </div>
+          <div className="hidden md:flex items-center justify-center">
+            <BrainOrb size={300} active />
+          </div>
+        </div>
+      </Card>
+    );
+  }
+
   // ---------- footer nav ----------
   function renderFooter() {
     if (step === 'welcome' || step === 'analyzing' || step === 'company' || step === 'review') return null;
