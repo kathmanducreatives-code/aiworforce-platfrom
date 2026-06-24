@@ -763,8 +763,34 @@ export default function OnboardingCompanyBrain() {
 
   function renderIcp() {
     return (
-      <Card className="p-6 sm:p-8">
-        <StepHeader eyebrow="ICP" title="Who do you sell to?" subtitle="Use commas or Enter to add chips. Skip what you're unsure about." />
+      <div className="space-y-4">
+        {mappedSummary.length > 0 && (
+          <div className="rounded-2xl border border-primary/30 bg-primary/[0.06] p-4 sm:p-5">
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <div className="text-[11px] font-semibold tracking-[0.22em] text-emerald-400 uppercase mb-1.5">What Agentory found</div>
+                <div className="text-[14px] text-foreground/90">Here's what we extracted from your website. Edit anything below before saving.</div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setMappedSummary([])}
+                className="text-[12px] text-muted-foreground hover:text-foreground"
+              >
+                Dismiss
+              </button>
+            </div>
+            <ul className="mt-3 grid gap-1.5 sm:grid-cols-2">
+              {mappedSummary.map((line, i) => (
+                <li key={i} className="text-[13px] text-muted-foreground flex gap-2">
+                  <ChevronRight className="h-3.5 w-3.5 mt-0.5 text-primary/70 shrink-0" />
+                  <span className="truncate">{line}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+        <Card className="p-6 sm:p-8">
+        <StepHeader eyebrow="ICP" title="Who do you sell to?" subtitle="Scout uses this to find better accounts. Aria uses this to reject bad-fit results." />
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <Field label="Buyer roles" hint="e.g. Founder, Head of Growth, RevOps">
             <ChipInput value={structured.icp.buyer_roles} placeholder="Founder, Head of Growth…" onChange={(v) => setStructured({ ...structured, icp: { ...structured.icp, buyer_roles: v } })} />
