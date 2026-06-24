@@ -47,3 +47,23 @@ describe('recommendWorkflows', () => {
     expect(recommendWorkflows(brain, undefined, 2).length).toBeLessThanOrEqual(2);
   });
 });
+
+describe('recommendFirstMove', () => {
+  it('returns goal-keyed copy for create_content', () => {
+    const move = recommendFirstMove({ founder: { first_help_goal: 'create_content' } });
+    expect(move.workflowId).toBe('linkedin_post_from_signals');
+    expect(move.headline.toLowerCase()).toContain('linkedin');
+  });
+  it('honors priority workflow over goal', () => {
+    const move = recommendFirstMove({
+      founder: { first_help_goal: 'create_content' },
+      workflow_preferences: { priority_workflows: ['draft_outreach'] },
+    });
+    expect(move.workflowId).toBe('draft_outreach');
+  });
+  it('falls back to a safe default when brain is empty', () => {
+    const move = recommendFirstMove(null);
+    expect(move.workflowId.length).toBeGreaterThan(0);
+    expect(move.headline.length).toBeGreaterThan(0);
+  });
+});
