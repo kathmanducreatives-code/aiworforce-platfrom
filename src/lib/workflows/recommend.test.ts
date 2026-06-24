@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { recommendWorkflows } from './recommend';
+import { recommendWorkflows, recommendFirstMove } from './recommend';
 
 describe('recommendWorkflows', () => {
   it('returns empty when brain has no signals', () => {
