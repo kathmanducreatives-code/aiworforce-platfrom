@@ -26,6 +26,7 @@ import { computeCompleteness } from '@/lib/brainCompleteness';
 import { recommendWorkflows } from '@/lib/workflows/recommend';
 import { WORKFLOWS } from '@/lib/workflows/registry';
 import { pilotChat } from '@/lib/pilotChat';
+import BrainOrb from '@/components/onboarding/BrainOrb';
 
 // ---------- helpers ----------
 async function call(action: string, workspace_id: string, payload: Record<string, any> = {}) {
@@ -46,9 +47,10 @@ const AGENTS = [
   { slug: 'scribe', name: 'Scribe' },
 ];
 
-const ANALYSIS_STEPS = [
-  'Hawk is reading your website',
-  'Pilot is identifying your business model',
+type AnalysisPhase = { agent: string; label: string; status: 'ok' | 'skipped' | 'failed' | 'running' };
+const DEFAULT_PHASES: AnalysisPhase[] = [
+  { agent: 'hawk',  label: 'Hawk is reading your website',          status: 'running' },
+  { agent: 'pilot', label: 'Pilot is mapping your business model',  status: 'running' },
 ];
 
 const TONE_CHIPS = [...BRAND_VOICE_TAGS, 'concise', 'bold'] as const;
@@ -146,29 +148,38 @@ function ProgressRail({ currentIndex }: { currentIndex: number }) {
   const pct = Math.round(((currentIndex + 1) / STEPS.length) * 100);
   return (
     <div className="space-y-3">
-      <div className="hidden md:flex items-center gap-1">
+      <div className="hidden md:flex items-stretch gap-1.5">
         {STEPS.map((s, i) => {
           const done = i < currentIndex;
           const active = i === currentIndex;
           return (
-            <div key={s.id} className="flex items-center gap-1 flex-1 last:flex-initial">
+            <div
+              key={s.id}
+              className="group relative flex-1 flex flex-col items-center"
+              title={`${i + 1}. ${s.label}`}
+            >
               <div
                 className={
-                  'h-6 w-6 shrink-0 rounded-full border flex items-center justify-center text-[10px] font-semibold transition-all ' +
+                  'h-1.5 w-full rounded-full transition-all duration-500 ' +
                   (done
-                    ? 'border-primary bg-primary/15 text-primary'
+                    ? 'bg-primary shadow-[0_0_10px_rgba(16,185,129,0.55)]'
                     : active
-                    ? 'border-primary bg-primary/10 text-primary shadow-[0_0_0_4px_rgba(16,185,129,0.12)]'
-                    : 'border-border/60 bg-card/40 text-muted-foreground')
+                    ? 'bg-gradient-to-r from-primary to-primary/40 shadow-[0_0_14px_rgba(16,185,129,0.65)]'
+                    : 'bg-border/40')
                 }
               >
-                {done ? <CheckCircle2 className="h-3 w-3" /> : i + 1}
+                {active && (
+                  <div className="h-full w-full rounded-full bg-primary/60 animate-pulse" />
+                )}
               </div>
-              {i < STEPS.length - 1 && (
-                <div className="h-px flex-1 bg-border/60 relative overflow-hidden">
-                  <div className={'h-full bg-primary/70 transition-all duration-500 ' + (done ? 'w-full' : 'w-0')} />
-                </div>
-              )}
+              <span
+                className={
+                  'mt-2 text-[10px] tracking-[0.14em] uppercase truncate transition-colors ' +
+                  (done || active ? 'text-foreground/80' : 'text-muted-foreground/60')
+                }
+              >
+                {s.label}
+              </span>
             </div>
           );
         })}
@@ -179,7 +190,7 @@ function ProgressRail({ currentIndex }: { currentIndex: number }) {
         </span>
         <span className="text-primary font-medium">{pct}%</span>
       </div>
-      <div className="h-1 w-full rounded-full bg-border/40 overflow-hidden">
+      <div className="md:hidden h-1 w-full rounded-full bg-border/40 overflow-hidden">
         <div
           className="h-full bg-primary shadow-[0_0_12px_rgba(16,185,129,0.5)] transition-all duration-500 ease-out"
           style={{ width: `${pct}%` }}
@@ -261,10 +272,10 @@ function Field({ label, hint, className = '', children }: { label: string; hint?
 
 function StepHeader({ eyebrow, title, subtitle }: { eyebrow: string; title: string; subtitle?: string }) {
   return (
-    <div className="mb-6">
-      <div className="text-[11px] font-semibold tracking-[0.18em] text-primary uppercase mb-2">{eyebrow}</div>
-      <h2 className="text-2xl sm:text-3xl font-semibold tracking-tight text-foreground">{title}</h2>
-      {subtitle && <p className="text-sm text-muted-foreground mt-2 max-w-2xl leading-relaxed">{subtitle}</p>}
+    <div className="mb-8">
+      <div className="text-[12px] font-semibold tracking-[0.22em] text-emerald-400 uppercase mb-3">{eyebrow}</div>
+      <h2 className="text-[32px] sm:text-[40px] font-semibold tracking-tight text-foreground leading-[1.08]">{title}</h2>
+      {subtitle && <p className="text-[17px] text-muted-foreground mt-3 max-w-2xl leading-[1.55]">{subtitle}</p>}
     </div>
   );
 }
@@ -314,7 +325,9 @@ export default function OnboardingCompanyBrain() {
     category: '',
   });
   const [structured, setStructured] = useState<StructuredBrain>(getBrainDefaults());
-  const [analysisIdx, setAnalysisIdx] = useState(0);
+  const [analysisPhases, setAnalysisPhases] = useState<AnalysisPhase[]>(DEFAULT_PHASES);
+  const [mappedSummary, setMappedSummary] = useState<string[]>([]);
+  const [launchVisible, setLaunchVisible] = useState(false);
 
   const step = STEPS[stepIndex].id;
 
@@ -357,15 +370,11 @@ export default function OnboardingCompanyBrain() {
     setHydrated(true);
   }, [brain, hydrated, restart]);
 
-  // Animate analysis labels
+  // Reset analyzer phases when entering analyzing step (actual statuses come from server)
   useEffect(() => {
-    if (step !== 'analyzing') return;
-    setAnalysisIdx(0);
-    const t = setInterval(() => {
-      setAnalysisIdx((i) => Math.min(i + 1, ANALYSIS_STEPS.length - 1));
-    }, 1100);
-    return () => clearInterval(t);
+    if (step === 'analyzing') setAnalysisPhases(DEFAULT_PHASES);
   }, [step]);
+
 
   const recommendedWorkflows = useMemo(
     () => recommendWorkflows({
@@ -472,6 +481,11 @@ export default function OnboardingCompanyBrain() {
       const res: any = await call('analyze', workspaceId!);
       const w: string[] = res?.warnings ?? [];
       setWarnings(w);
+      if (Array.isArray(res?.phases) && res.phases.length) {
+        setAnalysisPhases(res.phases as AnalysisPhase[]);
+      } else {
+        setAnalysisPhases((prev) => prev.map((p) => ({ ...p, status: 'ok' as const })));
+      }
       const draft = { ...(res?.profile ?? {}), ...(res?.draft ?? {}) };
       const mappedBasics = mapDraftToBasics(draft);
       setBasics((b) => ({
@@ -480,6 +494,17 @@ export default function OnboardingCompanyBrain() {
         category: b.category || mappedBasics.category,
       }));
       const mapped = mapDraftToStructured(draft);
+      // Build human summary of what was mapped (for the "What we found" banner on next step)
+      const summary: string[] = [];
+      if (mappedBasics.short_description) summary.push(`Description: ${mappedBasics.short_description}`);
+      if (mappedBasics.category) summary.push(`Category: ${mappedBasics.category}`);
+      if (mapped.icp.buyer_roles.length) summary.push(`Buyer roles: ${mapped.icp.buyer_roles.join(', ')}`);
+      if (mapped.icp.industries.length) summary.push(`Industries: ${mapped.icp.industries.join(', ')}`);
+      if (mapped.icp.pain_points.length) summary.push(`Pain points: ${mapped.icp.pain_points.slice(0, 3).join(' · ')}`);
+      if (mapped.positioning.promise) summary.push(`Positioning: ${mapped.positioning.promise}`);
+      if (mapped.competitors.known.length) summary.push(`Competitors: ${mapped.competitors.known.join(', ')}`);
+      if (mapped.brand_voice.tone) summary.push(`Voice: ${mapped.brand_voice.tone}`);
+      setMappedSummary(summary);
       setStructured((s) => ({
         ...s,
         icp:            { ...mapped.icp,            ...nonEmpty(s.icp) },
@@ -487,7 +512,7 @@ export default function OnboardingCompanyBrain() {
         brand_voice:    { ...mapped.brand_voice,    ...nonEmpty(s.brand_voice) },
         competitors:    { ...mapped.competitors,    ...nonEmpty(s.competitors) },
       }));
-      await new Promise((r) => setTimeout(r, 700));
+      await new Promise((r) => setTimeout(r, 1200));
       goto('icp');
     } catch (e: any) {
       setWarnings(["We couldn't analyze the website automatically. You can still build your Company Brain manually."]);
@@ -564,10 +589,9 @@ export default function OnboardingCompanyBrain() {
       await call('finalize', workspaceId!, { current_primary_goal: firstHelp });
       refresh();
 
-      // Fire-and-await the first safe workflow (drafts only, count=5).
-      await dispatchFirstSafeWorkflow();
-
-      navigate('/dashboard', { state: { firstRun: true }, replace: true });
+      // Show launch screen — dispatch first safe workflow non-blocking, navigate on user action.
+      setLaunchVisible(true);
+      void dispatchFirstSafeWorkflow();
     } catch (e: any) {
       toast.error(e.message ?? 'Failed to activate');
     } finally {
@@ -578,25 +602,34 @@ export default function OnboardingCompanyBrain() {
   // ---------- renderers ----------
   function renderWelcome() {
     return (
-      <Card className="p-8 sm:p-10">
-        <div className="max-w-2xl">
-          <h1 className="text-3xl sm:text-4xl font-semibold tracking-tight">Teach Agentory your business.</h1>
-          <p className="text-muted-foreground mt-3 text-[15px] leading-relaxed">
-            Your AI workforce uses this Company Brain to find signals, write content, and draft outreach.
-            Nothing is sent without your approval.
-          </p>
+      <Card className="p-8 sm:p-12 overflow-hidden relative">
+        <div className="absolute inset-0 -z-10 opacity-60 pointer-events-none">
+          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 h-[420px] w-[420px] rounded-full bg-emerald-500/10 blur-3xl" />
         </div>
-        <div className="mt-8 flex flex-col-reverse sm:flex-row sm:items-center sm:justify-between gap-3">
-          <div className="text-xs text-muted-foreground">
-            <ShieldCheck className="inline h-3.5 w-3.5 mr-1 text-primary" />
-            12 short steps. Draft-only by default. ~3 minutes.
+        <div className="grid grid-cols-1 md:grid-cols-[1.1fr,1fr] gap-10 items-center">
+          <div>
+            <div className="text-[12px] font-semibold tracking-[0.22em] text-emerald-400 uppercase mb-3">Step 1 of 12 · Welcome</div>
+            <h1 className="text-[40px] sm:text-[52px] font-semibold tracking-tight leading-[1.02]">
+              Build your <span className="bg-gradient-to-r from-emerald-300 to-emerald-500 bg-clip-text text-transparent">Company Brain</span>.
+            </h1>
+            <p className="text-[18px] text-muted-foreground mt-5 leading-[1.55] max-w-xl">
+              Agentory uses this to help your AI workforce find signals, research companies, write content,
+              and draft outreach with the right context.
+            </p>
+            <div className="mt-7 inline-flex items-center gap-2 rounded-full border border-primary/30 bg-primary/10 text-primary px-3 py-1.5 text-[13px]">
+              <ShieldCheck className="h-3.5 w-3.5" />
+              Draft-only by default. Nothing is sent without approval.
+            </div>
+            <div className="mt-8 flex flex-col sm:flex-row gap-3">
+              <Button size="lg" onClick={() => persistStep('founder')} className="h-12 px-7 text-[15px] font-semibold">
+                Build Company Brain <ArrowRight className="h-4 w-4 ml-2" />
+              </Button>
+              <div className="text-[13px] text-muted-foreground self-center">12 steps · ~3 minutes</div>
+            </div>
           </div>
-          <AgentChipsRow activeCount={0} />
-        </div>
-        <div className="mt-8 flex justify-end">
-          <Button size="lg" onClick={() => persistStep('founder')} className="h-12 px-6 text-base">
-            Begin <ArrowRight className="h-4 w-4 ml-1.5" />
-          </Button>
+          <div className="hidden md:flex items-center justify-center">
+            <BrainOrb size={300} active />
+          </div>
         </div>
       </Card>
     );
@@ -688,30 +721,37 @@ export default function OnboardingCompanyBrain() {
             <div className="absolute -inset-2 rounded-3xl bg-primary/10 blur-2xl -z-10" />
           </div>
           <div>
-            <h2 className="text-2xl font-semibold tracking-tight">Hawk and Pilot are studying your business.</h2>
-            <p className="text-sm text-muted-foreground mt-1">Usually ~10 seconds. Keep this tab open.</p>
+            <div className="text-[12px] font-semibold tracking-[0.22em] text-emerald-400 uppercase mb-2">Analyzing</div>
+            <h2 className="text-[28px] sm:text-[34px] font-semibold tracking-tight leading-[1.1]">Hawk and Pilot are studying your business.</h2>
+            <p className="text-[16px] text-muted-foreground mt-2 leading-[1.55]">We'll show exactly what we found — you can edit anything before saving.</p>
           </div>
         </div>
         <div className="mt-8 space-y-2">
-          {ANALYSIS_STEPS.map((label, i) => {
-            const done = i < analysisIdx;
-            const active = i === analysisIdx;
+          {analysisPhases.map((phase, i) => {
+            const ok = phase.status === 'ok';
+            const failed = phase.status === 'failed';
+            const skipped = phase.status === 'skipped';
+            const running = phase.status === 'running';
             return (
               <div
-                key={label}
+                key={`${phase.agent}-${i}`}
                 className={
-                  'flex items-center gap-3 rounded-xl border px-3.5 py-2.5 transition-all ' +
-                  (done
+                  'flex items-center gap-3 rounded-xl border px-4 py-3 transition-all ' +
+                  (ok
                     ? 'border-primary/30 bg-primary/[0.06] text-foreground'
-                    : active
-                    ? 'border-primary/40 bg-primary/[0.08] text-foreground'
-                    : 'border-border/60 bg-card/40 text-muted-foreground')
+                    : failed
+                    ? 'border-rose-500/30 bg-rose-500/[0.06] text-foreground'
+                    : skipped
+                    ? 'border-border/60 bg-card/40 text-muted-foreground'
+                    : 'border-primary/40 bg-primary/[0.08] text-foreground')
                 }
               >
-                {done ? <CheckCircle2 className="h-4 w-4 text-primary" />
-                  : active ? <Loader2 className="h-4 w-4 text-primary animate-spin" />
+                {ok ? <CheckCircle2 className="h-4 w-4 text-primary" />
+                  : failed ? <AlertTriangle className="h-4 w-4 text-rose-400" />
+                  : running ? <Loader2 className="h-4 w-4 text-primary animate-spin" />
                   : <span className="h-1.5 w-1.5 rounded-full bg-muted-foreground/40" />}
-                <span className="text-sm">{label}</span>
+                <span className="text-[15px] flex-1">{phase.label}</span>
+                {skipped && <span className="text-[10px] tracking-widest uppercase text-muted-foreground/70">not configured</span>}
               </div>
             );
           })}
@@ -723,8 +763,34 @@ export default function OnboardingCompanyBrain() {
 
   function renderIcp() {
     return (
-      <Card className="p-6 sm:p-8">
-        <StepHeader eyebrow="ICP" title="Who do you sell to?" subtitle="Use commas or Enter to add chips. Skip what you're unsure about." />
+      <div className="space-y-4">
+        {mappedSummary.length > 0 && (
+          <div className="rounded-2xl border border-primary/30 bg-primary/[0.06] p-4 sm:p-5">
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <div className="text-[11px] font-semibold tracking-[0.22em] text-emerald-400 uppercase mb-1.5">What Agentory found</div>
+                <div className="text-[14px] text-foreground/90">Here's what we extracted from your website. Edit anything below before saving.</div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setMappedSummary([])}
+                className="text-[12px] text-muted-foreground hover:text-foreground"
+              >
+                Dismiss
+              </button>
+            </div>
+            <ul className="mt-3 grid gap-1.5 sm:grid-cols-2">
+              {mappedSummary.map((line, i) => (
+                <li key={i} className="text-[13px] text-muted-foreground flex gap-2">
+                  <ChevronRight className="h-3.5 w-3.5 mt-0.5 text-primary/70 shrink-0" />
+                  <span className="truncate">{line}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+        <Card className="p-6 sm:p-8">
+        <StepHeader eyebrow="ICP" title="Who do you sell to?" subtitle="Scout uses this to find better accounts. Aria uses this to reject bad-fit results." />
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <Field label="Buyer roles" hint="e.g. Founder, Head of Growth, RevOps">
             <ChipInput value={structured.icp.buyer_roles} placeholder="Founder, Head of Growth…" onChange={(v) => setStructured({ ...structured, icp: { ...structured.icp, buyer_roles: v } })} />
@@ -742,6 +808,7 @@ export default function OnboardingCompanyBrain() {
           </Field>
         </div>
       </Card>
+      </div>
     );
   }
 
@@ -1063,8 +1130,75 @@ export default function OnboardingCompanyBrain() {
     );
   }
 
+  function renderLaunch() {
+    // Pick the recommended first workflow honoring readiness.
+    const priorityIds = structured.workflow_preferences.priority_workflows;
+    const pool = (priorityIds
+      .map((id) => WORKFLOWS.find((w) => w.id === id))
+      .filter(Boolean) as typeof WORKFLOWS);
+    const recPool = pool.length ? pool : recommendedWorkflows.map((r) => r.workflow);
+    const chosen = recPool.find((w) => w.status === 'ready') ?? recPool[0] ?? WORKFLOWS.find((w) => w.id === 'daily_workforce_briefing');
+    const ready = chosen?.status === 'ready';
+    return (
+      <Card className="p-8 sm:p-12 relative overflow-hidden">
+        <div className="absolute inset-0 -z-10 pointer-events-none">
+          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 h-[460px] w-[460px] rounded-full bg-emerald-500/15 blur-3xl animate-pulse" />
+        </div>
+        <div className="grid md:grid-cols-[1.1fr,1fr] gap-10 items-center">
+          <div>
+            <div className="text-[12px] font-semibold tracking-[0.22em] text-emerald-400 uppercase mb-3">Activated</div>
+            <h1 className="text-[36px] sm:text-[46px] font-semibold tracking-tight leading-[1.05]">
+              Your Company Brain is <span className="bg-gradient-to-r from-emerald-300 to-emerald-500 bg-clip-text text-transparent">ready</span>.
+            </h1>
+            <p className="text-[17px] text-muted-foreground mt-4 leading-[1.55] max-w-xl">
+              Run one safe workflow to see Agentory work with your context. Nothing will be sent.
+            </p>
+            {chosen && (
+              <div className="mt-6 rounded-2xl border border-primary/30 bg-primary/[0.06] p-5">
+                <div className="text-[11px] font-semibold tracking-[0.2em] text-emerald-400 uppercase mb-1.5">Recommended first workflow</div>
+                <div className="text-[18px] font-semibold text-foreground">{chosen.title}</div>
+                <div className="text-[14px] text-muted-foreground mt-1.5 leading-[1.5]">{chosen.description}</div>
+                <div className="mt-3 flex items-center gap-2">
+                  <span className="text-[11px] uppercase tracking-wider text-muted-foreground">{chosen.primaryAgent}</span>
+                  <span className="text-muted-foreground/40">·</span>
+                  <span className={'text-[11px] uppercase tracking-wider ' + (ready ? 'text-emerald-400' : 'text-amber-300')}>
+                    {ready ? 'Ready' : 'Setup needed'}
+                  </span>
+                </div>
+              </div>
+            )}
+            <div className="mt-7 flex flex-col sm:flex-row gap-3">
+              <Button
+                size="lg"
+                className="h-12 px-7 text-[15px] font-semibold"
+                onClick={() => navigate('/workflows', { state: { firstRun: true } })}
+              >
+                Run first workflow <ArrowRight className="h-4 w-4 ml-2" />
+              </Button>
+              <Button
+                size="lg"
+                variant="outline"
+                className="h-12 px-6"
+                onClick={() => navigate('/dashboard', { state: { firstRun: true }, replace: true })}
+              >
+                Go to dashboard
+              </Button>
+            </div>
+            <div className="mt-5 inline-flex items-center gap-2 rounded-full border border-primary/30 bg-primary/10 text-primary px-3 py-1.5 text-[12px]">
+              <ShieldCheck className="h-3.5 w-3.5" /> Draft-only · 5 results · nothing is sent
+            </div>
+          </div>
+          <div className="hidden md:flex items-center justify-center">
+            <BrainOrb size={300} active />
+          </div>
+        </div>
+      </Card>
+    );
+  }
+
   // ---------- footer nav ----------
   function renderFooter() {
+    if (launchVisible) return null;
     if (step === 'welcome' || step === 'analyzing' || step === 'company' || step === 'review') return null;
     const stepDef = STEPS[stepIndex];
     const canContinue = true;
@@ -1113,22 +1247,26 @@ export default function OnboardingCompanyBrain() {
             </Button>
           </div>
         </div>
-        <div className="mb-8"><ProgressRail currentIndex={stepIndex} /></div>
+        <div className="mb-8"><ProgressRail currentIndex={launchVisible ? STEPS.length - 1 : stepIndex} /></div>
 
         <AnimatePresence mode="wait">
-          <StepShell key={step}>
-            {step === 'welcome'         && renderWelcome()}
-            {step === 'founder'         && renderFounder()}
-            {step === 'company'         && renderCompany()}
-            {step === 'analyzing'       && renderAnalyzing()}
-            {step === 'icp'             && renderIcp()}
-            {step === 'gtm'             && renderGtm()}
-            {step === 'positioning'     && renderPositioning()}
-            {step === 'voice'           && renderVoice()}
-            {step === 'workflow_prefs'  && renderWorkflowPrefs()}
-            {step === 'integrations'    && renderIntegrations()}
-            {step === 'approval'        && renderApproval()}
-            {step === 'review'          && renderReview()}
+          <StepShell key={launchVisible ? 'launch' : step}>
+            {launchVisible ? renderLaunch() : (
+              <>
+                {step === 'welcome'         && renderWelcome()}
+                {step === 'founder'         && renderFounder()}
+                {step === 'company'         && renderCompany()}
+                {step === 'analyzing'       && renderAnalyzing()}
+                {step === 'icp'             && renderIcp()}
+                {step === 'gtm'             && renderGtm()}
+                {step === 'positioning'     && renderPositioning()}
+                {step === 'voice'           && renderVoice()}
+                {step === 'workflow_prefs'  && renderWorkflowPrefs()}
+                {step === 'integrations'    && renderIntegrations()}
+                {step === 'approval'        && renderApproval()}
+                {step === 'review'          && renderReview()}
+              </>
+            )}
           </StepShell>
         </AnimatePresence>
 
