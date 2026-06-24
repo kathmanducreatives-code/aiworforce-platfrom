@@ -1,142 +1,155 @@
-# Post-Onboarding Product Guide
 
-Goal: After Activate Company Brain, Pilot walks the user through Agentory's 6 core areas with a premium guided tour, plus persistent navigation help on every major page. Skippable, restartable, non-blocking, no fake data.
+# Premium Workflow Center Redesign
 
-## 1. State & persistence
+Visual-only upgrade to `/workflows`. No changes to registry, routing, run flow, readiness logic, edge functions, or DB. No migrations.
 
-Store completion in `company_brain.profile.onboarding_meta` (already exists, no migration):
+## Scope (UI only)
 
-```
-onboarding_meta: {
-  product_tour_completed: boolean,
-  product_tour_completed_at: string | null,
-  product_tour_skipped_at: string | null,
-  first_run_helper_dismissed: boolean,
-}
-```
+Files to edit:
+- `src/pages/Workflows.tsx` — restructure layout
+- `src/components/workflows/WorkflowCard.tsx` — premium card with thumbnail
+- `src/components/workflows/AgentAvatar.tsx` — reused (no logic change)
 
-- New hook `src/hooks/useProductTour.ts` wraps `useCompanyBrain` to read/write these flags via existing `setup-company-brain` `save_structured` action (extend allowlist to include the new keys — already permits `onboarding_meta`).
-- Tour auto-opens once when: brain is activated AND `product_tour_completed` is false AND `product_tour_skipped_at` is null.
-- Restart entry points set both flags back to false and open the tour.
+Files to create:
+- `src/components/workflows/WorkflowThumbnail.tsx` — symbolic SVG visual per workflow
+- `src/components/workflows/FeaturedWorkflowCard.tsx` — larger "Start here" tile
+- `src/components/workflows/StatStrip.tsx` — hero metric strip
+- `src/components/workflows/CategoryRail.tsx` — polished left nav with icons
+- `src/components/workflows/FilterChips.tsx` — Recommended/Ready/Setup/Coming soon/Recent chips
+- `src/lib/workflows/visualMeta.ts` — per-workflow icon + accent + thumbnail variant + agent accent map
 
-## 2. Tour component
+No new dependencies. Uses existing lucide-react + framer-motion + tailwind tokens (emerald accents, glass surfaces).
 
-New folder `src/components/tour/`:
+## Page Structure
 
-- `ProductTour.tsx` — premium overlay (dark glass card, Pilot avatar from `agentProfiles`, animated transitions via framer-motion already in project). Not a generic spotlight library — fixed centered modal with a "spotlight panel" describing the area, plus a small thumbnail/illustration. No DOM-anchored highlights (avoids brittle selectors and layout breaks at 1280/1440).
-- `tourSteps.ts` — 6 steps: Dashboard, Workflows, Conversations, Workbench, Awaiting You, Company Brain. Each step: `{ id, agent: 'pilot', title, body, bullets[], primaryCta: {label, route}, illustration }`.
-- Progress: numbered dots 1–6 + linear bar.
-- Controls: Back, Next, Skip tour, "Take me there" (navigates to the page and closes tour).
-- Final step → CTA "Start recommended workflow" using `recommendWorkflows` top result and the goal-based copy in section 8.
-
-Step copy comes verbatim from the user's brief (sections 2 and 8).
-
-## 3. Trigger points
-
-- `OnboardingCompanyBrain.tsx`: after `launchVisible` activation success, set `product_tour_pending=true` in sessionStorage and redirect to `/dashboard` (existing flow). Dashboard mounts the tour on detecting pending OR uncompleted state.
-- `MainLayout.tsx`: mount `<ProductTour />` once (renders null unless open) so it's available across pages without re-mount churn.
-
-## 4. Restart entry points
-
-- Dashboard: "Restart product tour" link in the first-run helper card and in a small "?" menu in the header.
-- User menu (existing avatar dropdown in `MainLayout`): add "Restart product tour".
-- Help & Support: add a "Restart product tour" button on `SettingsIntegrations` help section (or new lightweight `/help` if missing — confirm in build).
-- Command palette (existing global search): add a command "Restart product tour".
-
-## 5. First-run helper card (Dashboard)
-
-New `src/components/dashboard/FirstRunHelper.tsx`:
-
-- Shows when `first_run_helper_dismissed` is false.
-- 3-step checklist: Run a workflow → Review output in Workbench → Approve next actions.
-- CTAs: Run recommended workflow (links to `/workflows` with top recommendation pre-selected), Open Workflows, Ask Pilot, Skip.
-- Dismiss persists to `onboarding_meta.first_run_helper_dismissed`.
-
-## 6. Page-level empty states
-
-Update empty states only — no data shape changes — on:
-
-- `Dashboard.tsx` — replace existing first-run banner empty copy with the brief's text.
-- `Workflows.tsx` — empty/recommended header copy.
-- `Conversations` (chat workspace empty view) — Ask Pilot copy.
-- Workbench surfaces (`Leads.tsx` table empty, output panels in `OutreachEngine.tsx`, `LeadCRM.tsx`) — "Your results will appear here after a workflow runs."
-- `AwaitingYou.tsx` — "No approvals yet. Drafts and risky actions wait here before anything is sent."
-
-All empty states use the existing glass surface tokens (`bg-card/40`, emerald accent) — consistent with Verdant theme.
-
-## 7. Contextual "What is this?" micro-help
-
-New `src/components/help/InfoHint.tsx`:
-
-- Small `(i)` icon button → shadcn `Tooltip` (or `Popover` on mobile).
-- Single `helpContent.ts` registry keyed by term: `company_brain`, `workflows`, `workbench`, `awaiting_you`, `setup_needed`, `draft_only`, `locked_columns`, `credits`, `agent_role`.
-- Drop `<InfoHint topic="setup_needed" />` next to labels in `Workflows.tsx`, `AwaitingYou.tsx`, lead tables, and agent cards. No layout changes — inline icon.
-
-## 8. "Ask Pilot about this page"
-
-New `src/components/help/AskPilotAboutPage.tsx`:
-
-- Small ghost button in each major page header.
-- A `pagePromptRegistry.ts` maps route → prompt, e.g. `/workflows` → "Explain the Workflows page and what I should do first. Reference my Company Brain."
-- On click: opens the existing chat workspace (use `ChatWorkspaceContext`) and dispatches a new conversation pre-seeded with the page prompt. Pilot already receives `buildCompanyBrainContext` so answers are personalized.
-
-Mounted on: Dashboard, Workflows, Conversations, Workbench pages (Leads, OutreachEngine, LeadCRM), AwaitingYou, Agents, Company Brain settings.
-
-## 9. Goal-aware recommended first move
-
-Extend `src/lib/workflows/recommend.ts`:
-
-- New `recommendFirstMove(brain)` returns `{ headline, body, workflowSlug }` keyed by `workflow_preferences.primary_goal` (`leads`, `content`, `research`) with the exact copy from the brief.
-- Used by both the tour's final step and the Dashboard FirstRunHelper "Run recommended workflow" CTA.
-
-## 10. Out of scope / explicit non-goals
-
-- No DB migration — uses existing `company_brain.profile.onboarding_meta`.
-- No real tour-library dependency (no Shepherd/Driver.js). Built with framer-motion + shadcn Dialog/Card.
-- No fake activity, no auto-run of outreach. The recommended workflow CTA reuses the existing safe draft-only run path.
-- No changes to routes, auth, or RLS.
-
-## 11. Technical notes
-
-```
-New files:
-  src/hooks/useProductTour.ts
-  src/components/tour/ProductTour.tsx
-  src/components/tour/tourSteps.ts
-  src/components/dashboard/FirstRunHelper.tsx
-  src/components/help/InfoHint.tsx
-  src/components/help/helpContent.ts
-  src/components/help/AskPilotAboutPage.tsx
-  src/components/help/pagePromptRegistry.ts
-
-Edited:
-  src/components/MainLayout.tsx          (mount ProductTour, header restart link)
-  src/pages/Dashboard.tsx                (FirstRunHelper, empty copy, AskPilot)
-  src/pages/Workflows.tsx                (empty copy, InfoHint, AskPilot)
-  src/pages/AwaitingYou.tsx              (empty copy, InfoHint, AskPilot)
-  src/pages/Leads.tsx + OutreachEngine.tsx + LeadCRM.tsx (workbench empty + AskPilot)
-  src/pages/Agents.tsx                   (agent role InfoHint)
-  src/pages/OnboardingCompanyBrain.tsx   (set product_tour_pending on activate)
-  src/lib/workflows/recommend.ts         (recommendFirstMove)
-  src/lib/companyBrainSchema.ts + supabase/functions/_shared/companyBrainSchema.ts
-                                         (extend onboarding_meta keys)
-  supabase/functions/setup-company-brain/index.ts
-                                         (allow new onboarding_meta keys in save_structured)
-
-Tests:
-  src/lib/workflows/recommend.test.ts    (add recommendFirstMove cases)
-  src/components/tour/tourSteps.test.ts  (6 steps, copy snapshot, ids unique)
+```text
+┌─────────────────────────────────────────────────────────────┐
+│ HERO                                                        │
+│  WORKFLOW CENTER (eyebrow)        [Ask Pilot about page]    │
+│  Workflows                                                  │
+│  Run repeatable AI employee playbooks…                      │
+│  ┌──────┬──────┬──────┬──────┐                              │
+│  │ Recm │Ready │Setup │ Runs │  ← StatStrip (glass)         │
+│  └──────┴──────┴──────┴──────┘                              │
+├─────────────────────────────────────────────────────────────┤
+│ [🔍 Search workflows… (large)]   [Agent ▾]   [Sort ▾]       │
+│ [All] [Recommended] [Ready] [Setup] [Coming soon] [Recent]  │
+├──────────────┬──────────────────────────────────────────────┤
+│ CATEGORY     │  Start here  (cat='all', !query, !filter)    │
+│  RAIL        │  ┌────────────┬────────────┬────────────┐    │
+│ All        n │  │ Featured 1 │ Featured 2 │ Featured 3 │    │
+│ Growth     n │  └────────────┴────────────┴────────────┘    │
+│ Research   n │                                              │
+│ Outreach   n │  Recommended for your company                │
+│ Content    n │  Based on your Company Brain…                │
+│ Competitor n │  [card] [card] [card] [card]                 │
+│ Operations n │                                              │
+│              │  Growth · 4                                  │
+│ Recent runs  │  [card] [card] [card]                        │
+│ ─────────    │  Research · 3                                │
+│ • run 1      │  …                                           │
+│ • run 2      │                                              │
+└──────────────┴──────────────────────────────────────────────┘
 ```
 
-## 12. QA checklist
+## Components
 
-- Fresh user: finish onboarding → activate → tour appears on Dashboard automatically.
-- Step through all 6 steps; verify copy, progress, Back/Next/Skip/Take me there.
-- Skip → tour closes, does not reappear on refresh, restart works from user menu, dashboard, command palette, help.
-- FirstRunHelper appears once; dismiss persists.
-- Empty states render correct copy on each page with no real data.
-- InfoHint tooltips render on desktop, popover on touch.
-- "Ask Pilot about this page" opens chat with correct seeded prompt; Pilot uses Company Brain context.
-- Recommended first move matches `primary_goal`.
-- No layout shift at 1280 and 1440 widths.
-- Typecheck and existing tests pass; no new runtime errors.
+### WorkflowThumbnail (symbolic visual)
+Pure SVG, no images. Takes `variant` keyed by workflow id with sensible fallback by `outputType`. Variants:
+
+- `radar` — concentric pulse rings + dots (hiring signals)
+- `target` — crosshair + matched nodes (ICP match)
+- `org` — tree of contact nodes (decision-makers)
+- `stack` — layered cards (enrich companies)
+- `lens` — magnifier over a card (research company)
+- `browser` — window mock with highlighted bars (audit)
+- `message` — composer card with line ruler (outreach draft)
+- `wave` — phone waveform (cold call openers)
+- `feed` — content tile w/ paragraphs (LinkedIn post)
+- `briefing` — report sheet with timeline (weekly update)
+- `versus` — two stacked rows (competitor)
+- `gear` — operations default
+
+Each variant renders with the workflow's agent accent (emerald/violet/amber/blue/rose/green), uses subtle radial glow background, soft inner border, and a faint Agentory grid underlay. ~110px tall, full-width of card. Hover: thumbnail brightens slightly (CSS only), no movement.
+
+### WorkflowCard (rebuilt)
+Layout:
+```
+┌──────────────────────────┐
+│ [thumbnail w/ glow]      │  ← WorkflowThumbnail
+├──────────────────────────┤
+│ [Recommended] [Ready]    │  ← top badges row
+│ Title                    │
+│ Short description (2L)   │
+│ "Selected during onb."   │  ← optional reason (subtle emerald)
+├──────────────────────────┤
+│ [avatars]  Lead table · 5│
+│ Run workflow         →   │  ← hover-reveal underline + chev
+└──────────────────────────┘
+```
+- Glass surface: `bg-white/[0.025] backdrop-blur-xl`, border `border-white/[0.08]`, hover `border-emerald-500/35 + soft glow + lift (translate-y-[-2px])`.
+- Setup needed: amber wrench chip + bottom "Configure provider →" line (not alarming).
+- Coming soon: muted, no hover lift, "Notify me when ready" hint (static, no action change).
+- Heights normalize with `min-h` per row.
+
+### FeaturedWorkflowCard ("Start here")
+Larger horizontal card (col-span flexible), bigger thumbnail (~160px), title at 20px, short why-recommended reason, agent row + CTA. Uses top 2–3 from `recommendWorkflows()` (existing logic).
+
+### StatStrip
+Four glass tiles:
+- Recommended (count of `recommended.length`)
+- Ready (`WORKFLOWS.filter(status==='ready').length`)
+- Setup needed (count)
+- Recent runs (recent.length)
+
+Pure derived counts — no fetches, no new state.
+
+### CategoryRail
+- Icon per category (Sparkles=Growth, Search=Research, Send=Outreach, FileText=Content, Swords=Competitor, Settings=Operations)
+- Selected: emerald glass background, left emerald bar, semibold
+- Hover: soft white/3 background
+- Count chip right-aligned, tabular-nums
+
+### FilterChips
+Toolbar chips that filter `filtered` array client-side:
+- All / Recommended / Ready / Setup needed / Coming soon / Recently used
+- Only adds local `chip` state in `Workflows.tsx`; merges into existing filter pipeline.
+- Sort dropdown: Recommended (default) / Most used (uses lastRunByWorkflow count) / Newest (registry order) / Ready first.
+
+## Typography
+- Page title: `text-[34px] font-semibold tracking-tight` (was `text-page`)
+- Eyebrow: unchanged
+- Section headers: `text-[20px] font-semibold`
+- Card title: `text-[17px]` → `text-[18px] font-semibold`
+- Card desc: `text-[14.5px] text-neutral-300 leading-relaxed`
+- Badges: `text-[11.5px]` consistent casing
+- More vertical breathing room: gaps `gap-6` between sections, `gap-5` between cards.
+
+## Motion
+- Section fade-in via existing `animate-fade-in`.
+- Card hover: 150ms transform/opacity/border. No bounce.
+- Thumbnail glow tween on hover only via Tailwind `group-hover:opacity-*`.
+- Filter chip transitions: 120ms color/border.
+
+## Empty / unavailable states
+- No filter match: keep current copy, upgrade to glass dashed panel with icon + "Clear filters" button (local state reset).
+- Setup needed card: persistent amber line + "Open setup →" (links to `/integrations` if already used elsewhere; otherwise opens existing config panel — no new route).
+- Coming soon: muted gray pill + "We'll light this up soon" caption.
+- No recent runs: same copy in sidebar, slightly larger, with subtle Sparkles icon.
+
+## Constraints honored
+- Registry, capabilities, readiness, run dispatch, `pilotChat`, navigation untouched.
+- No new backend calls, no edge fn, no DB, no migration, no landing page.
+- No auto-send / auto-outreach.
+- Pure presentational + minor local state (chip filter, sort).
+
+## QA
+- Typecheck.
+- Existing tests pass (none target this page directly).
+- Visual check at 1280 and 1440.
+- Verify Run flow still dispatches via `WorkflowConfigPanel`.
+
+## Out of scope
+- Hover-preview output drawer (deferred).
+- Standalone workflow detail route.
+- Any persistence of chip/sort selection.
