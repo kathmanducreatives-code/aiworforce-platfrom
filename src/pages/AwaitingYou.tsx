@@ -107,8 +107,8 @@ export default function AwaitingYou() {
               <div className="inline-flex w-12 h-12 rounded-full bg-emerald-500/10 border border-emerald-500/30 items-center justify-center mb-3">
                 <Check className="h-5 w-5 text-emerald-400" />
               </div>
-              <p className="text-sm font-semibold text-foreground">All clear</p>
-              <p className="text-xs text-muted-foreground mt-1">No drafts waiting on you right now.</p>
+              <p className="text-sm font-semibold text-foreground">No approvals yet</p>
+              <p className="text-xs text-muted-foreground mt-1">Drafts and risky actions will wait here before anything is sent.</p>
             </motion.div>
           )}
         </div>
