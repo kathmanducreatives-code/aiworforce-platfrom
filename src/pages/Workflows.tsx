@@ -134,12 +134,17 @@ export default function Workflows() {
       <div className="relative z-10 max-w-[1400px] mx-auto px-6 lg:px-10 pt-12">
         {/* Header */}
         <header className="flex flex-col gap-3 mb-10">
-          <div className="inline-flex items-center gap-2 self-start text-[11.5px] font-mono font-semibold uppercase tracking-[0.16em] text-emerald-300 border border-emerald-500/25 bg-emerald-500/[0.06] rounded-full px-3 py-1.5">
-            <WorkflowIcon className="w-3.5 h-3.5" /> Workflow Center
+          <div className="flex items-center justify-between gap-3">
+            <div className="inline-flex items-center gap-2 self-start text-[11.5px] font-mono font-semibold uppercase tracking-[0.16em] text-emerald-300 border border-emerald-500/25 bg-emerald-500/[0.06] rounded-full px-3 py-1.5">
+              <WorkflowIcon className="w-3.5 h-3.5" /> Workflow Center
+            </div>
+            <AskPilotAboutPage />
           </div>
-          <h1 className="text-page font-semibold text-foreground tracking-tight">Workflows</h1>
+          <h1 className="text-page font-semibold text-foreground tracking-tight flex items-center gap-2">
+            Workflows <InfoHint topic="workflows" size="sm" />
+          </h1>
           <p className="text-[15.5px] text-neutral-300 max-w-2xl leading-relaxed">
-            Run repeatable AI employee playbooks without writing a prompt. Pick a workflow, fill the inputs, and results open in Workbench.
+            Pick a playbook. Agentory will route it to the right AI employees. Cards marked <span className="text-amber-300 font-medium">Setup needed</span> <InfoHint topic="setup_needed" /> require a provider or integration first.
           </p>
         </header>
 
