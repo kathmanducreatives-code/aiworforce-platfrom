@@ -27,6 +27,7 @@ export type NormalizedRequest = {
   role?: string;
   industry?: string;
   location?: string;
+  company_category?: string;
   company_stage?: string;
   count: number;
   competitor?: string;
@@ -124,8 +125,19 @@ export function buildDeterministicPlan(args: PlanArgs): ActorInputPlan {
     }
     case "people_profiles":
     case "icp_search": {
-      primaryQuery = sanitizeQuery([role, industry].filter(Boolean).join(" ")) ?? (role ?? args.user_request);
-      input = { query: primaryQuery, location, role_keywords: roles.length ? roles : (role ? [role] : []), max_results: n };
+      // Industry/category MUST be in the query or the actor returns any "Founder
+      // in <city>". Fold in industry + company_category; fall back to topic.
+      const category = args.normalized?.company_category ? normalizeTerm(args.normalized.company_category) : undefined;
+      let focus = [industry, category].filter(Boolean).join(" ");
+      if (!focus && topic && topic.toLowerCase() !== (role ?? "").toLowerCase()) focus = topic;
+      primaryQuery = sanitizeQuery([role, focus].filter(Boolean).join(" ")) ?? (role ?? args.user_request);
+      const keywordTerms = [industry, category].filter(Boolean) as string[];
+      input = {
+        query: primaryQuery, location,
+        role_keywords: roles.length ? roles : (role ? [role] : []),
+        max_results: n,
+        ...(keywordTerms.length ? { user_input: { keywords: keywordTerms } } : {}),
+      };
       break;
     }
     case "linkedin_intent_posts": {

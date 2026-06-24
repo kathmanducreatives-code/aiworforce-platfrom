@@ -46,11 +46,11 @@ Deno.test("matchContactToAccount matches by company (exact + normalized)", () =>
 
 Deno.test("planContactAttachments: one contact per account, deduped, no invented", () => {
   const raw = [
-    { name: "Jane", company: "HireRight", title: "VP Sales", linkedinUrl: "x" },
-    { name: "Jane2", company: "HireRight", title: "Head of Sales" }, // 2nd for same account → ignored
-    { company: "Stripe", title: "VP Sales" },                        // no name → dropped
-    { name: "Carl", company: "Stripe", title: "VP Sales" },          // attaches to lc2
-    { name: "Nobody", company: "Acme" },                             // no matching account → dropped
+    { name: "Jane", company: "HireRight", title: "VP Sales", linkedinUrl: "https://linkedin.com/in/jane" },
+    { name: "Jane2", company: "HireRight", title: "Head of Sales", linkedinUrl: "https://linkedin.com/in/jane2" }, // 2nd for same account → ignored
+    { company: "Stripe", title: "VP Sales", linkedinUrl: "https://linkedin.com/in/x" }, // no name → dropped
+    { name: "Carl", company: "Stripe", title: "VP Sales", linkedinUrl: "https://linkedin.com/in/carl" }, // attaches to lc2
+    { name: "Nobody", company: "Acme", title: "CEO", linkedinUrl: "https://linkedin.com/in/nobody" }, // no matching account → dropped
   ];
   const plan = planContactAttachments(raw, accounts);
   assertEquals(plan.length, 2);

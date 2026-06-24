@@ -59,12 +59,19 @@ function titleize(s: string): string {
     .join(" ");
 }
 
-// ["react","developer"] -> ["React Developer"]. Planner-supplied multi-word
-// titles (via filters.currentJobTitles) take precedence and skip this.
+// Each role keyword is its OWN title alias: ["founder","co-founder","ceo"] ->
+// ["Founder","Co-Founder","CEO"] (deduped). The actor filters on a LIST of
+// titles, so joining them into one string ("Founder Co-Founder Ceo") matched
+// nobody — that was the main people-search yield bug.
 function deriveJobTitles(role_keywords: string[] | null | undefined): string[] {
   if (!Array.isArray(role_keywords)) return [];
-  const joined = role_keywords.map((k) => String(k).trim()).filter(Boolean).join(" ");
-  return joined ? [titleize(joined)] : [];
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const k of role_keywords) {
+    const t = titleize(String(k).trim());
+    if (t && !seen.has(t.toLowerCase())) { seen.add(t.toLowerCase()); out.push(t); }
+  }
+  return out;
 }
 
 function strArray(v: unknown): string[] | null {
@@ -143,10 +150,20 @@ export function buildHarvestApiPeopleInput(generic: GenericPeopleInput): Record<
       ? [normLoc]
       : null;
 
-  // searchQuery — explicit filter, else role + location, else raw query. Cap 300.
-  const partsQuery = [
-    currentJobTitles.length ? currentJobTitles.join(" ") : (generic.role_keywords ?? []).join(" "),
-    normLoc ?? (generic.location ?? ""),
+  // searchQuery — must carry INDUSTRY/CATEGORY context, not just title+location,
+  // or the actor returns any "Founder in London". Compose: one representative
+  // title + industry keywords (user_input.keywords) + location. Explicit
+  // f.searchQuery wins; generic.query is the final fallback. Cap 300.
+  const keywordTerms = strArray(f.keywords) ?? [];
+  const repTitle = currentJobTitles[0] ?? (generic.role_keywords ?? [])[0] ?? "";
+  const loc = normLoc ?? (generic.location ?? "");
+  // Base on generic.query (planner fills it with role + industry/category), then
+  // fold in any extra keyword terms + location if not already present.
+  const baseTerms = String(generic.query ?? "").trim() || repTitle;
+  const composedQuery = [
+    baseTerms,
+    keywordTerms.filter((k) => !baseTerms.toLowerCase().includes(k.toLowerCase())).join(" "),
+    loc && !baseTerms.toLowerCase().includes(loc.toLowerCase()) ? loc : "",
   ]
     .map((p) => String(p).trim())
     .filter(Boolean)
@@ -155,7 +172,7 @@ export function buildHarvestApiPeopleInput(generic: GenericPeopleInput): Record<
   const rawQuery =
     typeof f.searchQuery === "string" && f.searchQuery.trim()
       ? f.searchQuery.trim()
-      : partsQuery || String(generic.query ?? "").trim();
+      : composedQuery || repTitle;
   const searchQuery = rawQuery.slice(0, 300);
 
   const maxItems = Math.max(1, Math.min(100, Number(generic.max_results) || 10));

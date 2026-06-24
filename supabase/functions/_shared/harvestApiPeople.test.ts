@@ -20,12 +20,13 @@ function test(name: string, fn: () => void) {
 }
 
 // ---- Test 1: "Find 10 individual React developer profiles in London" ----
-// Planner produces role_keywords ["react","developer"], location "London", max 10.
+// Planner produces role_keywords as DISTINCT title aliases (one element per
+// title); a multi-word title stays one element. location "London", max 10.
 test("T1 react developer London — core mapping", () => {
   const out = buildHarvestApiPeopleInput({
     query: "react developer",
     location: "London",
-    role_keywords: ["react", "developer"],
+    role_keywords: ["React Developer"],
     max_results: 10,
   });
   assert.equal(out.profileScraperMode, "Full");
@@ -33,7 +34,8 @@ test("T1 react developer London — core mapping", () => {
   assert.equal(out.startPage, 1);
   assert.deepEqual(out.locations, ["London"]);
   assert.deepEqual(out.currentJobTitles, ["React Developer"]);
-  assert.equal(out.searchQuery, "React Developer London");
+  // searchQuery is composed from the (industry-aware) query + location.
+  assert.equal(out.searchQuery, "react developer London");
   // No raw Agentory fields leaked.
   assert.equal("location" in out, false);
   assert.equal("max_results" in out, false);

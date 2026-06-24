@@ -281,6 +281,7 @@ Deno.serve(async (req) => {
                 role: roleKeywords[0] ?? (tool_input_body?.target_role as string) ?? undefined,
                 industry: (tool_input_body?.industry as string) ?? undefined,
                 location: location ?? undefined,
+                company_category: (tool_input_body?.company_category as string) ?? undefined,
                 company_stage: (tool_input_body?.stage as string) ?? undefined,
                 topic: (tool_input_body?.query as string) ?? undefined,
                 count: max_results,
@@ -554,9 +555,18 @@ Deno.serve(async (req) => {
     const attachAccts = Array.isArray(tool_input_body?.attach_to_accounts) ? tool_input_body.attach_to_accounts : null;
     const isContactDiscovery = !!(attachAccts && attachAccts.length > 0);
     const acctN = attachAccts?.length ?? 0;
+    // Specific reject reasons (e.g. "wrong title, weak company match, wrong location")
+    // instead of a generic "0 matching leads".
+    const rawReviewed = Number((sourceQualityMeta as { raw_result_count?: number } | null)?.raw_result_count ?? 0);
+    const rejReasons = Array.isArray((sourceQualityMeta as { top_reject_reasons?: string[] } | null)?.top_reject_reasons)
+      ? (sourceQualityMeta as { top_reject_reasons: string[] }).top_reject_reasons.map((r) => r.replace(/\s*\(\d+\)$/, "")).join(", ")
+      : "";
+    const reasonTail = rejReasons ? ` Main reject reasons: ${rejReasons}.` : "";
     const scoutMsg = isContactDiscovery
-      ? `I searched for decision-makers at ${acctN} account${acctN === 1 ? "" : "s"} but didn't find verified profiles. No contacts were attached.`
-      : `I reviewed ${sourcingAttemptsCount} attempt(s) and accepted 0 qualified leads. None of the raw results matched closely enough.`;
+      ? `I searched for decision-makers at ${acctN} account${acctN === 1 ? "" : "s"} but no verified contacts matched the account names closely enough. No contacts were attached.`
+      : rawReviewed > 0
+        ? `I reviewed ${rawReviewed} profile${rawReviewed === 1 ? "" : "s"}; 0 matched the requested persona and location closely enough.${reasonTail}`
+        : `I reviewed ${sourcingAttemptsCount} attempt(s) and accepted 0 qualified leads. None of the raw results matched closely enough.`;
     const ariaSkipMsg = "Skipped — there were no accepted leads to rank.";
     const pilotRecMsg = isContactDiscovery
       ? "Try a broader persona, draft an account-level template, or export the accounts. No contacts attached, no credits charged, nothing sent."
