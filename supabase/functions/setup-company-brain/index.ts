@@ -125,9 +125,12 @@ Deno.serve(async (req) => {
       const researchReady = isToolConfigured("research_web").ready;
       const enrichments: { url: string; summary: string }[] = [];
       const warnings: string[] = [];
+      const phases: { agent: string; label: string; status: "ok" | "skipped" | "failed" }[] = [];
 
       if (scrapeReady && sources.length) {
         const targets = sources.slice(0, 3); // limit
+        let anyOk = false;
+        let anyFail = false;
         for (const s of targets) {
           try {
             const r = await runTool("scrape_url", { url: s.url }, {
@@ -136,25 +139,41 @@ Deno.serve(async (req) => {
             if (r.ok && r.data) {
               const txt = typeof r.data === "string" ? r.data : JSON.stringify(r.data).slice(0, 2000);
               enrichments.push({ url: s.url, summary: txt.slice(0, 2000) });
+              anyOk = true;
+            } else {
+              anyFail = true;
             }
-          } catch (_) { /* non-blocking */ }
+          } catch (_) { anyFail = true; }
         }
+        phases.push({
+          agent: "hawk",
+          label: "Reading your website",
+          status: anyOk ? "ok" : anyFail ? "failed" : "skipped",
+        });
       } else if (sources.length) {
-        warnings.push("Live enrichment requires Firecrawl. Continuing with manually entered data.");
+        warnings.push("Live website analysis isn't configured yet. Continuing with manual inputs.");
+        phases.push({ agent: "hawk", label: "Reading your website", status: "skipped" });
+      } else {
+        phases.push({ agent: "hawk", label: "Reading your website", status: "skipped" });
       }
+
+      // LinkedIn analysis is not currently wired — keep it honest.
+      phases.push({ agent: "scout", label: "LinkedIn company lookup", status: "skipped" });
 
       const ai = await generateJson({
         taskType: "company_brain_analyze",
         systemPrompt: "You produce a faithful structured company profile. Leave a field empty (null or '') if it is not supported by the user-provided input. NEVER invent facts.",
         messages: [{
           role: "user",
-          content: `User-provided company info:\n${JSON.stringify(profile, null, 2)}\n\nSources:\n${JSON.stringify(sources, null, 2)}\n\nEnrichment excerpts (may be empty):\n${JSON.stringify(enrichments, null, 2)}\n\nReturn ONLY JSON:\n{\n  "company_summary": "1-2 sentences about what the company does",\n  "target_customer_profile": "who they sell/serve",\n  "target_candidate_profile": "who they typically hire (if applicable)",\n  "offer_summary": "core offer/service",\n  "positioning": "how they position vs competitors",\n  "brand_voice": "tone of voice",\n  "outreach_style": "outreach style guidelines",\n  "competitors": ["..."],\n  "agent_instructions": "short instructions for all agents"\n}`
+          content: `User-provided company info:\n${JSON.stringify(profile, null, 2)}\n\nSources:\n${JSON.stringify(sources, null, 2)}\n\nEnrichment excerpts (may be empty):\n${JSON.stringify(enrichments, null, 2)}\n\nReturn ONLY JSON:\n{\n  "company_summary": "1-2 sentences about what the company does",\n  "category": "short product category",\n  "target_customer_profile": "who they sell/serve",\n  "target_candidate_profile": "who they typically hire (if applicable)",\n  "offer_summary": "core offer/service",\n  "positioning": "how they position vs competitors",\n  "differentiators": ["..."],\n  "brand_voice": "tone of voice",\n  "outreach_style": "outreach style guidelines",\n  "competitors": ["..."],\n  "icp": { "buyer_roles": ["..."], "industries": ["..."], "company_size": "", "geography": "", "pain_points": ["..."] },\n  "agent_instructions": "short instructions for all agents"\n}`
         }],
         temperature: 0.3,
         maxTokens: 1200,
         functionName: "setup-company-brain",
         workspaceId: workspace_id,
       });
+
+      phases.push({ agent: "pilot", label: "Mapping business model", status: ai.ok ? "ok" : "failed" });
 
       await logProviderCall(admin, {
         workspace_id, function_name: "setup-company-brain", task_type: "company_brain_analyze",
@@ -163,7 +182,7 @@ Deno.serve(async (req) => {
 
       const draft = (ai.ok && ai.json ? ai.json : {}) as AnyObj;
       const merged = await saveProfile({ ...draft, enriched: enrichments.length > 0 });
-      return json({ ok: true, draft, profile: merged, warnings, enriched: enrichments.length > 0, connectors: { scrape_url: scrapeReady, research_web: researchReady } });
+      return json({ ok: true, draft, profile: merged, warnings, phases, enriched: enrichments.length > 0, connectors: { scrape_url: scrapeReady, research_web: researchReady } });
     }
 
     if (action === "generate_followups") {
