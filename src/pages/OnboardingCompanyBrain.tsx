@@ -589,10 +589,9 @@ export default function OnboardingCompanyBrain() {
       await call('finalize', workspaceId!, { current_primary_goal: firstHelp });
       refresh();
 
-      // Fire-and-await the first safe workflow (drafts only, count=5).
-      await dispatchFirstSafeWorkflow();
-
-      navigate('/dashboard', { state: { firstRun: true }, replace: true });
+      // Show launch screen — dispatch first safe workflow non-blocking, navigate on user action.
+      setLaunchVisible(true);
+      void dispatchFirstSafeWorkflow();
     } catch (e: any) {
       toast.error(e.message ?? 'Failed to activate');
     } finally {
@@ -603,25 +602,34 @@ export default function OnboardingCompanyBrain() {
   // ---------- renderers ----------
   function renderWelcome() {
     return (
-      <Card className="p-8 sm:p-10">
-        <div className="max-w-2xl">
-          <h1 className="text-3xl sm:text-4xl font-semibold tracking-tight">Teach Agentory your business.</h1>
-          <p className="text-muted-foreground mt-3 text-[15px] leading-relaxed">
-            Your AI workforce uses this Company Brain to find signals, write content, and draft outreach.
-            Nothing is sent without your approval.
-          </p>
+      <Card className="p-8 sm:p-12 overflow-hidden relative">
+        <div className="absolute inset-0 -z-10 opacity-60 pointer-events-none">
+          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 h-[420px] w-[420px] rounded-full bg-emerald-500/10 blur-3xl" />
         </div>
-        <div className="mt-8 flex flex-col-reverse sm:flex-row sm:items-center sm:justify-between gap-3">
-          <div className="text-xs text-muted-foreground">
-            <ShieldCheck className="inline h-3.5 w-3.5 mr-1 text-primary" />
-            12 short steps. Draft-only by default. ~3 minutes.
+        <div className="grid grid-cols-1 md:grid-cols-[1.1fr,1fr] gap-10 items-center">
+          <div>
+            <div className="text-[12px] font-semibold tracking-[0.22em] text-emerald-400 uppercase mb-3">Step 1 of 12 · Welcome</div>
+            <h1 className="text-[40px] sm:text-[52px] font-semibold tracking-tight leading-[1.02]">
+              Build your <span className="bg-gradient-to-r from-emerald-300 to-emerald-500 bg-clip-text text-transparent">Company Brain</span>.
+            </h1>
+            <p className="text-[18px] text-muted-foreground mt-5 leading-[1.55] max-w-xl">
+              Agentory uses this to help your AI workforce find signals, research companies, write content,
+              and draft outreach with the right context.
+            </p>
+            <div className="mt-7 inline-flex items-center gap-2 rounded-full border border-primary/30 bg-primary/10 text-primary px-3 py-1.5 text-[13px]">
+              <ShieldCheck className="h-3.5 w-3.5" />
+              Draft-only by default. Nothing is sent without approval.
+            </div>
+            <div className="mt-8 flex flex-col sm:flex-row gap-3">
+              <Button size="lg" onClick={() => persistStep('founder')} className="h-12 px-7 text-[15px] font-semibold">
+                Build Company Brain <ArrowRight className="h-4 w-4 ml-2" />
+              </Button>
+              <div className="text-[13px] text-muted-foreground self-center">12 steps · ~3 minutes</div>
+            </div>
           </div>
-          <AgentChipsRow activeCount={0} />
-        </div>
-        <div className="mt-8 flex justify-end">
-          <Button size="lg" onClick={() => persistStep('founder')} className="h-12 px-6 text-base">
-            Begin <ArrowRight className="h-4 w-4 ml-1.5" />
-          </Button>
+          <div className="hidden md:flex items-center justify-center">
+            <BrainOrb size={300} active />
+          </div>
         </div>
       </Card>
     );
