@@ -325,7 +325,9 @@ export default function OnboardingCompanyBrain() {
     category: '',
   });
   const [structured, setStructured] = useState<StructuredBrain>(getBrainDefaults());
-  const [analysisIdx, setAnalysisIdx] = useState(0);
+  const [analysisPhases, setAnalysisPhases] = useState<AnalysisPhase[]>(DEFAULT_PHASES);
+  const [mappedSummary, setMappedSummary] = useState<string[]>([]);
+  const [launchVisible, setLaunchVisible] = useState(false);
 
   const step = STEPS[stepIndex].id;
 
@@ -368,15 +370,11 @@ export default function OnboardingCompanyBrain() {
     setHydrated(true);
   }, [brain, hydrated, restart]);
 
-  // Animate analysis labels
+  // Reset analyzer phases when entering analyzing step (actual statuses come from server)
   useEffect(() => {
-    if (step !== 'analyzing') return;
-    setAnalysisIdx(0);
-    const t = setInterval(() => {
-      setAnalysisIdx((i) => Math.min(i + 1, ANALYSIS_STEPS.length - 1));
-    }, 1100);
-    return () => clearInterval(t);
+    if (step === 'analyzing') setAnalysisPhases(DEFAULT_PHASES);
   }, [step]);
+
 
   const recommendedWorkflows = useMemo(
     () => recommendWorkflows({
