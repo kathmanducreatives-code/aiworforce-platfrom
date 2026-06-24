@@ -697,30 +697,37 @@ export default function OnboardingCompanyBrain() {
             <div className="absolute -inset-2 rounded-3xl bg-primary/10 blur-2xl -z-10" />
           </div>
           <div>
-            <h2 className="text-2xl font-semibold tracking-tight">Hawk and Pilot are studying your business.</h2>
-            <p className="text-sm text-muted-foreground mt-1">Usually ~10 seconds. Keep this tab open.</p>
+            <div className="text-[12px] font-semibold tracking-[0.22em] text-emerald-400 uppercase mb-2">Analyzing</div>
+            <h2 className="text-[28px] sm:text-[34px] font-semibold tracking-tight leading-[1.1]">Hawk and Pilot are studying your business.</h2>
+            <p className="text-[16px] text-muted-foreground mt-2 leading-[1.55]">We'll show exactly what we found — you can edit anything before saving.</p>
           </div>
         </div>
         <div className="mt-8 space-y-2">
-          {ANALYSIS_STEPS.map((label, i) => {
-            const done = i < analysisIdx;
-            const active = i === analysisIdx;
+          {analysisPhases.map((phase, i) => {
+            const ok = phase.status === 'ok';
+            const failed = phase.status === 'failed';
+            const skipped = phase.status === 'skipped';
+            const running = phase.status === 'running';
             return (
               <div
-                key={label}
+                key={`${phase.agent}-${i}`}
                 className={
-                  'flex items-center gap-3 rounded-xl border px-3.5 py-2.5 transition-all ' +
-                  (done
+                  'flex items-center gap-3 rounded-xl border px-4 py-3 transition-all ' +
+                  (ok
                     ? 'border-primary/30 bg-primary/[0.06] text-foreground'
-                    : active
-                    ? 'border-primary/40 bg-primary/[0.08] text-foreground'
-                    : 'border-border/60 bg-card/40 text-muted-foreground')
+                    : failed
+                    ? 'border-rose-500/30 bg-rose-500/[0.06] text-foreground'
+                    : skipped
+                    ? 'border-border/60 bg-card/40 text-muted-foreground'
+                    : 'border-primary/40 bg-primary/[0.08] text-foreground')
                 }
               >
-                {done ? <CheckCircle2 className="h-4 w-4 text-primary" />
-                  : active ? <Loader2 className="h-4 w-4 text-primary animate-spin" />
+                {ok ? <CheckCircle2 className="h-4 w-4 text-primary" />
+                  : failed ? <AlertTriangle className="h-4 w-4 text-rose-400" />
+                  : running ? <Loader2 className="h-4 w-4 text-primary animate-spin" />
                   : <span className="h-1.5 w-1.5 rounded-full bg-muted-foreground/40" />}
-                <span className="text-sm">{label}</span>
+                <span className="text-[15px] flex-1">{phase.label}</span>
+                {skipped && <span className="text-[10px] tracking-widest uppercase text-muted-foreground/70">not configured</span>}
               </div>
             );
           })}
