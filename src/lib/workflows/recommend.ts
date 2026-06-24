@@ -91,3 +91,89 @@ export function recommendWorkflows(
     .sort((a, b) => b.score - a.score)
     .slice(0, limit);
 }
+
+// ---------- First-move recommendation (used by the product tour & first-run helper) ----------
+
+export interface FirstMove {
+  headline: string;
+  body: string;
+  workflowId: string;
+}
+
+const DEFAULT_FIRST_MOVE: FirstMove = {
+  headline: 'Run your first safe workflow',
+  body: 'Pick a playbook from the Workflow Center. Agentory will run it draft-only — nothing is sent until you approve.',
+  workflowId: 'find_icp_accounts',
+};
+
+const GOAL_FIRST_MOVE: Record<string, FirstMove> = {
+  find_leads: {
+    headline: 'Find 5 hiring-signal accounts',
+    body: 'Scout will source, Aria will rank, and results will open in Workbench.',
+    workflowId: 'find_hiring_signal_accounts',
+  },
+  draft_outreach: {
+    headline: 'Draft outreach to 5 prospects',
+    body: 'Penn will write approval-ready drafts using your voice. Nothing is sent automatically.',
+    workflowId: 'draft_outreach',
+  },
+  create_content: {
+    headline: 'Create your first LinkedIn post from your positioning',
+    body: 'Scribe will draft it in your voice. Nothing is posted automatically.',
+    workflowId: 'linkedin_post_from_signals',
+  },
+  audit_website: {
+    headline: 'Audit your website',
+    body: 'Hawk will research, Aria will prioritize issues, and Scribe will summarize.',
+    workflowId: 'website_audit',
+  },
+  research_companies: {
+    headline: 'Research your top target account',
+    body: 'Hawk gathers public signals, Aria highlights what matters, and Scribe writes a one-pager.',
+    workflowId: 'research_company',
+  },
+  track_competitors: {
+    headline: 'Snapshot your top competitor',
+    body: 'Hawk pulls a competitor snapshot and Aria summarizes the changes worth watching.',
+    workflowId: 'competitor_snapshot',
+  },
+  organize_founder_ops: {
+    headline: 'Get your daily workforce briefing',
+    body: 'Pilot summarizes what changed, what needs approval, and what to do next.',
+    workflowId: 'daily_workforce_briefing',
+  },
+};
+
+export function recommendFirstMove(brain: BrainLike): FirstMove {
+  const wfp = (brain?.workflow_preferences ?? {}) as Record<string, unknown>;
+  const priority = arr(wfp.priority_workflows);
+  const founder = (brain?.founder ?? {}) as Record<string, unknown>;
+  const goal = lower(founder.first_help_goal);
+
+  // 1) Honor an explicit onboarding selection if present.
+  if (priority.length > 0) {
+    const id = priority[0];
+    const wf = WORKFLOWS.find((w) => w.id === id);
+    if (wf) {
+      return {
+        headline: `Run ${wf.title}`,
+        body: wf.description,
+        workflowId: wf.id,
+      };
+    }
+  }
+
+  // 2) Fall back to goal-keyed copy.
+  if (goal && GOAL_FIRST_MOVE[goal]) return GOAL_FIRST_MOVE[goal];
+
+  // 3) Fall back to the top-ranked recommendation, then a safe default.
+  const top = recommendWorkflows(brain, WORKFLOWS, 1)[0];
+  if (top) {
+    return {
+      headline: `Run ${top.workflow.title}`,
+      body: top.workflow.description,
+      workflowId: top.workflow.id,
+    };
+  }
+  return DEFAULT_FIRST_MOVE;
+}
