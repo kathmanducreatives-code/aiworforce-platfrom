@@ -112,7 +112,10 @@ export const WORKFLOWS: WorkflowDefinition[] = [
     outputType: 'lead_table',
     estimatedCredits: '~5 credits',
     status: 'ready',
-    requiredCapabilities: ['firecrawl'],
+    // ICP/account search runs through the Apify jobs/account route (no Firecrawl
+    // required to produce account opportunities). Firecrawl enrichment is an
+    // optional downstream step, not a hard gate — READY when the jobs route is.
+    requiredCapabilities: ['apify_jobs'],
     safety: 'Nothing will be sent. Results open in Workbench.',
     recommended: true,
     fields: [
