@@ -20,6 +20,8 @@ import { AGENT_BY_ID } from '@/data/agentProfiles';
 import WorkflowCard from '@/components/workflows/WorkflowCard';
 import WorkflowConfigPanel from '@/components/workflows/WorkflowConfigPanel';
 import AgentAvatar from '@/components/workflows/AgentAvatar';
+import InfoHint from '@/components/help/InfoHint';
+import AskPilotAboutPage from '@/components/help/AskPilotAboutPage';
 import { cn } from '@/lib/utils';
 
 const AGENT_FILTERS: { id: string; label: string }[] = [
