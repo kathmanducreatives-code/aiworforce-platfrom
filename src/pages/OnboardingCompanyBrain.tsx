@@ -1198,6 +1198,7 @@ export default function OnboardingCompanyBrain() {
 
   // ---------- footer nav ----------
   function renderFooter() {
+    if (launchVisible) return null;
     if (step === 'welcome' || step === 'analyzing' || step === 'company' || step === 'review') return null;
     const stepDef = STEPS[stepIndex];
     const canContinue = true;
