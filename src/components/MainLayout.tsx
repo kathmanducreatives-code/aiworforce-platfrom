@@ -11,6 +11,7 @@ import RouteErrorBoundary from "./RouteErrorBoundary";
 import WorkspaceGate from "./WorkspaceGate";
 import OnboardingGate from "./OnboardingGate";
 import ChatErrorBoundary from "./chat/workspace/ChatErrorBoundary";
+import ProductTour from "./tour/ProductTour";
 import { ChatWorkspaceProvider } from "@/contexts/ChatWorkspaceContext";
 import { useIsMobile } from "@/hooks/use-mobile";
 
@@ -87,6 +88,9 @@ const MainLayout = ({ children }: MainLayoutProps) => {
 
         {/* Agent Builder full-screen takeover (mounted globally) */}
         <AgentBuilderModal />
+
+        {/* Premium Pilot-led product walkthrough — mounted once, opens on cue */}
+        <ProductTour />
       </div>
     </ChatWorkspaceProvider>
   );
