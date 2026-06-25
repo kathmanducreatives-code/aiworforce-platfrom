@@ -9,6 +9,7 @@ import ClarificationCard from './bubbles/ClarificationCard';
 import LeadIntakeCard, { type LeadIntakeFormPayload } from './bubbles/LeadIntakeCard';
 import LeadSourceCard, { type LeadSourceSelectorPayload } from './bubbles/LeadSourceCard';
 import PostLeadActionsCard, { type PostLeadActionsCardPayload } from './bubbles/PostLeadActionsCard';
+import WorkflowConfirmationCard from './bubbles/WorkflowConfirmationCard';
 import InterpretationPill from './bubbles/InterpretationPill';
 import SafetyChip from './bubbles/SafetyChip';
 import AgentAvatar from './agents/AgentAvatar';
@@ -241,6 +242,14 @@ export default function ChatView({ conversationId, agentSlug, pendingUserText, a
                       connector_limitations: planMeta.connector_limitations,
                     }}
                   />
+                )}
+                {meta && meta.type === 'workflow_confirmation' && meta.workflow_confirmation && (
+                  <div className="mt-2">
+                    <WorkflowConfirmationCard
+                      payload={meta.workflow_confirmation as any}
+                      conversationId={m.conversation_id}
+                    />
+                  </div>
                 )}
               </div>
             </div>

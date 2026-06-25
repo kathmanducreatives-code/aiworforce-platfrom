@@ -66,4 +66,12 @@ describe('recommendFirstMove', () => {
     expect(move.workflowId.length).toBeGreaterThan(0);
     expect(move.headline.length).toBeGreaterThan(0);
   });
+  it('returns new metadata fields on recommendFirstMove', () => {
+    const move = recommendFirstMove({ founder: { first_help_goal: 'find_leads' } });
+    expect(move.workflowName).toBe('Find hiring-signal accounts');
+    expect(move.why).toContain('first goal');
+    expect(move.agentTeam).toEqual(['scout', 'aria']);
+    expect(move.outputDescription).toBeTruthy();
+    expect(move.safetyNote).toBeTruthy();
+  });
 });

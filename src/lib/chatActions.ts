@@ -10,6 +10,7 @@
 export type ChatActionSource =
   | 'lead_source_card'
   | 'lead_intake_card'
+  | 'lead_source_brief'
   | 'post_lead_actions_card'
   | 'lead_results_panel'
   | 'lead_table_action'
@@ -21,7 +22,10 @@ export type ChatActionSource =
   | 'no_results_card'
   | 'recommended_move'
   | 'broaden_search'
-  | 'workforce_brief';
+  | 'workforce_brief'
+  | 'first_run_helper'
+  | 'workflow_center'
+  | 'onboarding_first_run';
 
 export type LeadResultPanelAction =
   | 'enrich'
@@ -154,4 +158,35 @@ export function dispatchNextAction(
     metadata: { intent: action, plan_id: ctx.planId ?? null, source_brief: ctx.sourceBrief ?? null },
   });
   return true;
+}
+
+/** Command map from nextStepEngine action_ids to chat commands. */
+const NEXT_STEP_COMMANDS: Record<string, string> = {
+  find_hiring_signal_accounts: 'Find hiring-signal accounts.',
+  find_decision_makers: 'Find decision-makers for these accounts.',
+  enrich_companies: 'Enrich companies.',
+  draft_outreach: 'Draft outreach to the top accounts.',
+  export_csv: 'Export these leads as CSV.',
+  linkedin_post_from_signals: 'Create a LinkedIn post from recent signals.',
+  website_audit: 'Audit a target website.',
+  competitor_snapshot: 'Snapshot a competitor.',
+  broaden_search: 'Broaden the search.',
+};
+
+/** Dispatch a recommended next-step from the SummaryView card. */
+export function dispatchNextStepAction(args: {
+  action_id: string;
+  label: string;
+  conversation_id: string | null;
+}): void {
+  const cmd = NEXT_STEP_COMMANDS[args.action_id] ?? `Run: ${args.label}`;
+  dispatchChatAction({
+    text: cmd,
+    conversation_id: args.conversation_id,
+    action_source: args.action_id === 'broaden_search' ? 'broaden_search' : 'recommended_move',
+    metadata: {
+      confirmed: true,
+      intent: args.action_id,
+    },
+  });
 }

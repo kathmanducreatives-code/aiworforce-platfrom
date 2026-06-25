@@ -92,6 +92,218 @@ function coerceDecision(obj: unknown): Decision | null {
   return null;
 }
 
+type UserIntent =
+  | "workflow_request"
+  | "question"
+  | "smalltalk"
+  | "edit_existing_result"
+  | "approval_action"
+  | "navigation_help"
+  | "unknown";
+
+async function classifyUserIntent(prompt: string, workspaceId: string): Promise<UserIntent> {
+  const t = prompt.trim().toLowerCase();
+  
+  // 1. Check smalltalk via regex
+  const GREETING_RE = /^\s*(hi|hello|hey|yo|sup|gm|good (morning|afternoon|evening)|thanks|thank you|ty|cool|nice|ok|okay|got it|cheers)[\s.!?]*$/i;
+  if (GREETING_RE.test(t)) return "smalltalk";
+
+  // 2. Check navigation help
+  const NAV_RE = /\b(go to|open|show|navigate to)\s+(dashboard|workbench|workflows?|conversations?|settings?|brain)\b/i;
+  if (NAV_RE.test(t)) return "navigation_help";
+
+  // 3. Check approval action
+  const APPROVAL_RE = /\b(approve|send|reject|cancel|review)\b.*\b(drafts?|outreach|emails?|messages?)\b/i;
+  if (APPROVAL_RE.test(t) && !/\b(find|source|get)\b/i.test(t)) return "approval_action";
+
+  // 4. Use LLM for precise classification
+  const systemPrompt = `You classify the user's message into exactly one of these intents for a GTM AI Workforce platform:
+- "workflow_request": The user wants to start or run business work (e.g. find leads, source companies, find decision-makers, enrich leads, audit a website, draft outreach, create content, analyze competitors, summarize results, export CSV, etc.).
+- "question": The user is asking an informational or help question (e.g. "What can you do?", "How does Workbench work?", "Who is Scout?", "How do I setup Firecrawl?").
+- "smalltalk": Greeting, thanking, or casual chit-chat (e.g. "hi", "thanks", "how are you").
+- "edit_existing_result": Request to modify, filter, or change existing inputs/parameters (e.g. "change the count to 10", "make it USA strict").
+- "approval_action": Action related to approving or sending drafted outreach.
+- "navigation_help": Request to navigate to a page.
+- "unknown": Anything else that doesn't fit the above.
+
+Respond with ONLY a JSON object containing the "intent" key. Example: {"intent": "workflow_request"}`;
+
+  try {
+    const ai = await generateJson({
+      taskType: "helper",
+      systemPrompt,
+      messages: [{ role: "user", content: prompt }],
+      temperature: 0.1,
+      maxTokens: 50,
+      jsonMode: true,
+      functionName: "classifyUserIntent",
+      workspaceId,
+    });
+    if (ai.ok && ai.json) {
+      const res = (ai.json as any).intent;
+      const valid = ["workflow_request", "question", "smalltalk", "edit_existing_result", "approval_action", "navigation_help", "unknown"];
+      if (valid.includes(res)) return res as UserIntent;
+    }
+  } catch (e) {
+    console.error("classifyUserIntent failed:", e);
+  }
+
+  return "unknown";
+}
+
+async function generateWorkflowConfirmation(prompt: string, workspaceId: string, admin: any): Promise<any> {
+  const { data: cbRow } = await admin
+    .from("company_brain")
+    .select("profile")
+    .eq("workspace_id", workspaceId)
+    .maybeSingle();
+  const profile = cbRow?.profile ?? {};
+  const company = profile?.company ?? {};
+  const icp = profile?.icp ?? {};
+
+  const systemPrompt = \`You are a GTM AI workforce coordinator. The user wants to run a business workflow.
+Your goal is to parse their request and generate a structured workflow confirmation object.
+Use the following templates as your reference for matching workflows:
+1. ID: "find_hiring_signal_accounts"
+   Name: "Find hiring-signal accounts"
+   Team: ["pilot", "scout", "aria"]
+   Inputs: {"count": number (default 5), "source": "hiring signals", "industry": "...", "location": "...", "persona": "..."}
+   Output: "Account opportunities in Workbench"
+   Safety: "Nothing will be sent. Draft-only by default."
+   Estimated Credits: 5
+
+2. ID: "find_decision_makers"
+   Name: "Find decision-makers"
+   Team: ["pilot", "scout"]
+   Inputs: {"count": number (default 5), "industry": "...", "location": "...", "persona": "..."}
+   Output: "Decision-maker contacts in Workbench"
+   Safety: "Nothing will be sent. Draft-only by default."
+   Estimated Credits: 5
+
+3. ID: "enrich_companies"
+   Name: "Enrich target companies"
+   Team: ["pilot", "hawk"]
+   Inputs: {"count": number (default 5), "industry": "...", "location": "..."}
+   Output: "Company details and context in Workbench"
+   Safety: "Nothing will be sent."
+   Estimated Credits: 5
+
+4. ID: "draft_outreach"
+   Name: "Draft outreach sequences"
+   Team: ["pilot", "penn"]
+   Inputs: {"count": number (default 5), "persona": "..."}
+   Output: "Outreach drafts in Awaiting You"
+   Safety: "Nothing will be sent. Draft-only by default."
+   Estimated Credits: 5
+
+5. ID: "linkedin_post_from_signals"
+   Name: "Create LinkedIn content"
+   Team: ["pilot", "scribe"]
+   Inputs: {"topic": "...", "style": "tactical insight"}
+   Output: "Social post drafts in content draft panel"
+   Safety: "Nothing will be sent."
+   Estimated Credits: 5
+
+6. ID: "website_audit"
+   Name: "Website Audit"
+   Team: ["pilot", "hawk", "scribe"]
+   Inputs: {"url": "..."}
+   Output: "Website audit report in report panel"
+   Safety: "Nothing will be sent."
+   Estimated Credits: 5
+
+7. ID: "competitor_snapshot"
+   Name: "Competitor Snapshot"
+   Team: ["pilot", "hawk", "aria"]
+   Inputs: {"competitor": "..."}
+   Output: "Competitor analysis report"
+   Safety: "Nothing will be sent."
+   Estimated Credits: 5
+
+Use these default company values if the user's prompt is missing them:
+- Company Industry: "\${company.industry ?? "B2B SaaS"}"
+- Company Location: "\${company.location ?? "USA"}"
+- Target Persona: "\${icp.buyer_roles?.[0] ?? "Founder / Head of Growth"}"
+
+Response format: Return ONLY a JSON object of this structure:
+{
+  "workflow_id": "string",
+  "workflow_name": "string",
+  "goal": "string (clear, concise description of the user request)",
+  "agent_team": ["pilot", "scout", ...],
+  "inputs": { ... },
+  "output": "string",
+  "safety": "string",
+  "estimated_credits": number
+}\`;
+
+  try {
+    const ai = await generateJson({
+      taskType: "helper",
+      systemPrompt,
+      messages: [{ role: "user", content: prompt }],
+      temperature: 0.1,
+      maxTokens: 500,
+      jsonMode: true,
+      functionName: "generateWorkflowConfirmation",
+      workspaceId,
+    });
+    if (ai.ok && ai.json) {
+      return ai.json;
+    }
+  } catch (e) {
+    console.error("generateWorkflowConfirmation failed:", e);
+  }
+
+  return {
+    workflow_id: "find_hiring_signal_accounts",
+    workflow_name: "Find hiring-signal accounts",
+    goal: prompt,
+    agent_team: ["pilot", "scout", "aria"],
+    inputs: { count: 5, source: "hiring signals", location: company.location ?? "USA", industry: company.industry ?? "B2B SaaS" },
+    output: "Account opportunities in Workbench",
+    safety: "Nothing will be sent. Draft-only by default.",
+    estimated_credits: 5,
+  };
+}
+
+async function showWorkflowConfirmation(
+  message: string,
+  conversationId: string,
+  workspaceId: string,
+  admin: any,
+  baseMeta: any,
+  category: string
+): Promise<Response> {
+  console.log("[pilot-chat] showWorkflowConfirmation: showing card", { category, message });
+  const confirmation = await generateWorkflowConfirmation(message, workspaceId, admin);
+  const confirmContent = `I'll set up this workflow for you. Review the details below and click Start when ready.`;
+  const { data: saved } = await admin
+    .from("messages")
+    .insert({
+      conversation_id: conversationId,
+      role: "assistant",
+      content: confirmContent,
+      agent_slug: "pilot",
+      model_used: "google/gemini-3-flash-preview",
+      metadata: {
+        ...baseMeta,
+        type: "workflow_confirmation",
+        workflow_confirmation: confirmation,
+        prompt_version: AGENTORY_SYSTEM_PROMPT_VERSION,
+      },
+    })
+    .select("*")
+    .single();
+  return json({
+    type: "reply",
+    conversation_id: conversationId,
+    workflow_category: category,
+    workflow_confirmation: true,
+    message: saved,
+  });
+}
+
 // ---------- Delegation helper ----------
 
 interface DelegateArgs {
@@ -105,9 +317,30 @@ interface DelegateArgs {
   toolInput?: ToolInput | null;
   modelUsed: string;
   providerUsed: string;
+  workflowInputs?: Record<string, any> | null;
 }
 
 async function delegateToOrchestrate(a: DelegateArgs): Promise<Response> {
+  const toolInput = a.toolInput;
+  if (toolInput && a.workflowInputs) {
+    const inputs = a.workflowInputs;
+    if (typeof inputs.count === "number") {
+      toolInput.max_results = inputs.count;
+    }
+    if (typeof inputs.location === "string") {
+      toolInput.location = inputs.location;
+    }
+    if (typeof inputs.industry === "string") {
+      toolInput.query = inputs.industry;
+    }
+    if (typeof inputs.persona === "string") {
+      toolInput.role_keywords = [inputs.persona];
+    }
+    if (typeof inputs.url === "string") {
+      toolInput.query = inputs.url;
+    }
+  }
+
   const orchResponse = await fetch(`${a.SUPABASE_URL}/functions/v1/orchestrate`, {
     method: "POST",
     headers: {
@@ -118,7 +351,7 @@ async function delegateToOrchestrate(a: DelegateArgs): Promise<Response> {
     body: JSON.stringify({
       user_instruction: a.instruction,
       workspace_id: a.workspaceId,
-      tool_input: a.toolInput ?? null,
+      tool_input: toolInput ?? null,
     }),
   });
   const orchBody = await orchResponse.json().catch(() => ({} as any));
@@ -251,6 +484,7 @@ Deno.serve(async (req) => {
   let conversationId: string | null = typeof body?.conversation_id === "string" ? body.conversation_id : null;
   const actionSource: string | null = typeof body?.action_source === "string" ? body.action_source : null;
   const actionMetadata: Record<string, unknown> | null = body?.metadata && typeof body.metadata === "object" ? body.metadata as Record<string, unknown> : null;
+  const isPreConfirmed = !!actionMetadata?.confirmed;
 
   if (!message || !workspaceId) {
     return json({ error: "message and workspace_id are required" }, 400);
@@ -643,6 +877,9 @@ Deno.serve(async (req) => {
   // sourcing pipeline so the word "leads" can't trigger a re-source.
   const enrichAndDraft = /\benrich\b/i.test(message) && draftOutreachRe.test(message);
   if (enrichAndDraft && hasLeads && !newSourcing) {
+    if (!isPreConfirmed) {
+      return await showWorkflowConfirmation(message, conversationId!, workspaceId, admin, baseMeta, "outreach");
+    }
     const n = extractTopN(message, 5);
     const top = memory.lead_candidates.slice(0, n);
     const urls = top.map((l) => l.account?.domain).filter(Boolean).map((d) => `https://${d}`);
@@ -706,6 +943,9 @@ Deno.serve(async (req) => {
 
     // Draft outreach to top N
     if (draftOutreachRe.test(message) && hasLeads) {
+      if (!isPreConfirmed) {
+        return await showWorkflowConfirmation(message, conversationId!, workspaceId, admin, baseMeta, "outreach");
+      }
       const n = extractTopN(message, 5);
       const top = memory.lead_candidates.slice(0, n);
       // Draft-outreach gate: personalized outreach needs a real contact. If these
@@ -776,6 +1016,9 @@ Deno.serve(async (req) => {
 
     // Enrich top N — delegate to Hawk via Firecrawl on remembered account domains.
     if (enrichRe.test(message) && hasLeads) {
+      if (!isPreConfirmed) {
+        return await showWorkflowConfirmation(message, conversationId!, workspaceId, admin, baseMeta, "url_analysis");
+      }
       const n = extractTopN(message, 3);
       const top = memory.lead_candidates.slice(0, n);
       const urls = top
@@ -1435,6 +1678,44 @@ Deno.serve(async (req) => {
   // Source Selector). Disabled-actor cases were already returned honestly by the
   // validator (5c.i) and lead intake (5c.ii-b) above, so reaching here means the
   // selected actor is available.
+
+  // Phase 5 — Workflow Confirmation Gate.
+  // When a user types a workflow request in chat (not from Dashboard, Workflows,
+  // or an already-confirmed card action), show a structured confirmation card
+  // instead of immediately running. Pre-confirmed sources bypass this.
+  const CONFIRMABLE_CATEGORIES = ["company_hiring_sourcing", "people_sourcing", "signal_sourcing", "outreach", "content_creation", "url_analysis", "market_research"];
+  const needsConfirmation = !isPreConfirmed && CONFIRMABLE_CATEGORIES.includes(decision.workflow_category);
+
+  if (needsConfirmation) {
+    console.log("[pilot-chat] workflow_confirmation_gate: showing card", { category: decision.workflow_category, actionSource });
+    const confirmation = await generateWorkflowConfirmation(message, workspaceId, admin);
+    const confirmContent = `I'll set up this workflow for you. Review the details below and click Start when ready.`;
+    const { data: saved } = await admin
+      .from("messages")
+      .insert({
+        conversation_id: conversationId,
+        role: "assistant",
+        content: confirmContent,
+        agent_slug: "pilot",
+        model_used: "google/gemini-3-flash-preview",
+        metadata: {
+          ...baseMeta,
+          type: "workflow_confirmation",
+          workflow_confirmation: confirmation,
+          prompt_version: AGENTORY_SYSTEM_PROMPT_VERSION,
+        },
+      })
+      .select("*")
+      .single();
+    return json({
+      type: "reply",
+      conversation_id: conversationId,
+      workflow_category: decision.workflow_category,
+      workflow_confirmation: true,
+      message: saved,
+    });
+  }
+
   if (decision.workflow_category === "company_hiring_sourcing") {
     return await delegateToOrchestrate({
       admin, SUPABASE_URL, SUPABASE_ANON_KEY, authHeader, conversationId: conversationId!, workspaceId,
@@ -1456,6 +1737,7 @@ Deno.serve(async (req) => {
         reason: "classifier: company_hiring_sourcing → jobs (deterministic, no legacy round-trip)",
       } as unknown as ToolInput,
       modelUsed: "google/gemini-3-flash-preview", providerUsed: "lovable-ai",
+      workflowInputs: actionMetadata?.workflow_inputs,
     });
   }
 
@@ -1480,6 +1762,7 @@ Deno.serve(async (req) => {
         reason: "classifier: people_sourcing → people search (deterministic, no legacy round-trip)",
       } as unknown as ToolInput,
       modelUsed: "google/gemini-3-flash-preview", providerUsed: "lovable-ai",
+      workflowInputs: actionMetadata?.workflow_inputs,
     });
   }
 
@@ -1633,6 +1916,7 @@ Deno.serve(async (req) => {
       toolInput,
       modelUsed: "google/gemini-3-flash-preview",
       providerUsed: "lovable-ai",
+      workflowInputs: actionMetadata?.workflow_inputs,
     });
   }
 

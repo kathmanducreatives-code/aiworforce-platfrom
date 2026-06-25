@@ -543,7 +543,7 @@ export default function OnboardingCompanyBrain() {
     }
     const prompt = chosen.buildPrompt(values);
     const baseMeta = chosen.buildMetadata?.(values) ?? { workflow_id: chosen.id, workflow_inputs: values };
-    const metadata = { ...baseMeta, draft_only: true, first_run: true, workflow_title: chosen.title, agents_used: chosen.agents };
+    const metadata = { ...baseMeta, draft_only: true, first_run: true, workflow_title: chosen.title, agents_used: chosen.agents, confirmed: true };
 
     try {
       await pilotChat({

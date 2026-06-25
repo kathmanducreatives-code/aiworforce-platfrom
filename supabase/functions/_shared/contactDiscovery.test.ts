@@ -158,3 +158,27 @@ Deno.test("exact company URL matching and best candidate scoring", () => {
   assertEquals(planMultiple.length, 1);
   assertEquals(planMultiple[0].contact.name, "High Title"); // CEO score is higher than Head of Growth
 });
+
+Deno.test("normalizeDiscoveredContact extracts company_url from nested currentPosition and matches account company url", () => {
+  const accountsWithUrls: AccountForContacts[] = [
+    { lead_candidate_id: "lc_google", company: "Tabz (FKA HealNow)", linkedin_company_url: "https://www.linkedin.com/company/google" },
+  ];
+  const rawContact = {
+    name: "Janine Lee",
+    linkedinUrl: "https://www.linkedin.com/in/janinelee",
+    currentPosition: [
+      {
+        position: "Global Head of Learning",
+        companyName: "Google",
+        companyLinkedinUrl: "https://www.linkedin.com/company/google/"
+      }
+    ]
+  };
+  const c = normalizeDiscoveredContact(rawContact);
+  assert(c);
+  assertEquals(c.company_url, "https://www.linkedin.com/company/google/");
+  
+  const match = matchContactToAccount(c, accountsWithUrls);
+  assertEquals(match, "lc_google");
+});
+

@@ -194,7 +194,13 @@ export function normalizeDiscoveredContact(raw: unknown): DiscoveredContact | nu
   
   if (!companyStr && !headline) return null; // reject weak/no company signal
   
-  const company_url = (r.companyUrl ?? r.companyLinkedinUrl ?? r.companyPageUrl ?? null) || null;
+  const company_url = (
+    r.companyUrl ?? r.companyLinkedinUrl ?? r.companyPageUrl ??
+    r.currentPosition?.companyLinkedinUrl ?? r.currentPosition?.companyUrl ?? r.currentPosition?.companyPageUrl ??
+    (Array.isArray(r.currentPosition) ? (r.currentPosition[0]?.companyLinkedinUrl ?? r.currentPosition[0]?.companyUrl ?? r.currentPosition[0]?.companyPageUrl) : undefined) ??
+    (Array.isArray(r.experience) ? (r.experience[0]?.companyLinkedinUrl ?? r.experience[0]?.companyUrl ?? r.experience[0]?.companyPageUrl) : undefined) ??
+    r.positions?.[0]?.companyLinkedinUrl ?? r.positions?.[0]?.companyUrl ?? null
+  ) || null;
   const location = (r.location ?? r.locationName ?? null) || null;
   const source_url = linkedin_url;
   

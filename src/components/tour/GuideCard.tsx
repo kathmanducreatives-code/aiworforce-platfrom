@@ -191,23 +191,25 @@ export default function GuideCard({
             onClick={onSkip}
             className="h-8 px-2.5 rounded-md text-[12px] font-medium text-neutral-400 hover:text-foreground hover:bg-white/[0.05]"
           >
-            Skip
+            {isLast ? 'Open Dashboard' : 'Skip'}
           </button>
         </div>
         <div className="flex items-center gap-1.5">
-          <button
-            type="button"
-            onClick={onOpen}
-            className="h-8 px-2.5 rounded-md text-[12px] font-medium text-emerald-300 hover:text-emerald-200 border border-emerald-500/30 hover:border-emerald-500/50 bg-emerald-500/[0.06]"
-          >
-            {step.ctaLabel}
-          </button>
+          {!isLast && (
+            <button
+              type="button"
+              onClick={onOpen}
+              className="h-8 px-2.5 rounded-md text-[12px] font-medium text-emerald-300 hover:text-emerald-200 border border-emerald-500/30 hover:border-emerald-500/50 bg-emerald-500/[0.06]"
+            >
+              {step.ctaLabel}
+            </button>
+          )}
           <button
             type="button"
             onClick={onNext}
-            className="h-8 px-3 rounded-md text-[12.5px] font-semibold bg-emerald-500 hover:bg-emerald-400 text-black shadow-[0_0_18px_rgba(16,185,129,0.35)] flex items-center gap-1"
+            className="h-8 px-3 rounded-md text-[12.5px] font-semibold bg-emerald-500 hover:bg-emerald-400 text-black shadow-[0_0_18px_rgba(16,185,129,0.35)] flex items-center gap-1 transition-all"
           >
-            {isLast ? 'Finish' : 'Next'} <ArrowRight className="h-3 w-3" />
+            {isLast ? 'Run recommended workflow' : 'Next'} <ArrowRight className="h-3 w-3" />
           </button>
         </div>
       </div>

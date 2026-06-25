@@ -98,12 +98,24 @@ export interface FirstMove {
   headline: string;
   body: string;
   workflowId: string;
+  workflowName: string;
+  why: string;
+  agentTeam: string[];
+  outputDescription: string;
+  safetyNote: string;
+  estimatedCredits: string;
 }
 
 const DEFAULT_FIRST_MOVE: FirstMove = {
   headline: 'Run your first safe workflow',
   body: 'Pick a playbook from the Workflow Center. Agentory will run it draft-only — nothing is sent until you approve.',
   workflowId: 'find_icp_accounts',
+  workflowName: 'Find ICP accounts',
+  why: 'Matches your goal of finding company accounts matching your ICP.',
+  agentTeam: ['scout', 'aria'],
+  outputDescription: '5 high-fit accounts corresponding to your ideal customer profile.',
+  safetyNote: 'Draft-only. No messages will be sent.',
+  estimatedCredits: '5',
 };
 
 const GOAL_FIRST_MOVE: Record<string, FirstMove> = {
@@ -111,36 +123,78 @@ const GOAL_FIRST_MOVE: Record<string, FirstMove> = {
     headline: 'Find 5 hiring-signal accounts',
     body: 'Scout will source, Aria will rank, and results will open in Workbench.',
     workflowId: 'find_hiring_signal_accounts',
+    workflowName: 'Find hiring-signal accounts',
+    why: 'Matches your first goal of finding company accounts based on hiring signals.',
+    agentTeam: ['scout', 'aria'],
+    outputDescription: '5 high-intent accounts currently hiring for target roles.',
+    safetyNote: 'Draft-only. Results open in Workbench.',
+    estimatedCredits: '5',
   },
   draft_outreach: {
     headline: 'Draft outreach to 5 prospects',
     body: 'Penn will write approval-ready drafts using your voice. Nothing is sent automatically.',
     workflowId: 'draft_outreach',
+    workflowName: 'Draft outreach',
+    why: 'Matches your goal of drafting personalized outreach sequences.',
+    agentTeam: ['penn'],
+    outputDescription: 'Drafted emails or openers in your voice stored in Awaiting You.',
+    safetyNote: 'Nothing is sent automatically. All outreach is draft-only.',
+    estimatedCredits: '5',
   },
   create_content: {
     headline: 'Create your first LinkedIn post from your positioning',
     body: 'Scribe will draft it in your voice. Nothing is posted automatically.',
     workflowId: 'linkedin_post_from_signals',
+    workflowName: 'Create LinkedIn post',
+    why: 'Matches your content goal of publishing brand-aligned posts.',
+    agentTeam: ['scribe'],
+    outputDescription: 'A structured, engaging LinkedIn post draft ready for review.',
+    safetyNote: 'Nothing is posted. Drafts are saved in Workbench.',
+    estimatedCredits: '5',
   },
   audit_website: {
     headline: 'Audit your website',
     body: 'Hawk will research, Aria will prioritize issues, and Scribe will summarize.',
     workflowId: 'website_audit',
+    workflowName: 'Audit website',
+    why: 'Matches your goal of auditing websites for growth.',
+    agentTeam: ['hawk', 'aria', 'scribe'],
+    outputDescription: 'A prioritization of website issues and copy improvement suggestions.',
+    safetyNote: 'Passive website analysis only. No changes are made to your website.',
+    estimatedCredits: '5',
   },
   research_companies: {
     headline: 'Research your top target account',
     body: 'Hawk gathers public signals, Aria highlights what matters, and Scribe writes a one-pager.',
     workflowId: 'research_company',
+    workflowName: 'Research company',
+    why: 'Matches your goal of deep-diving into target accounts.',
+    agentTeam: ['hawk', 'aria', 'scribe'],
+    outputDescription: 'A comprehensive research profile detailing signals and personalization hooks.',
+    safetyNote: 'Passive research only.',
+    estimatedCredits: '5',
   },
   track_competitors: {
     headline: 'Snapshot your top competitor',
     body: 'Hawk pulls a competitor snapshot and Aria summarizes the changes worth watching.',
     workflowId: 'competitor_snapshot',
+    workflowName: 'Competitor snapshot',
+    why: 'Matches your goal of tracking competitors.',
+    agentTeam: ['hawk', 'aria'],
+    outputDescription: 'A snapshot of changes and actionable threats/opportunities.',
+    safetyNote: 'Passive monitoring only.',
+    estimatedCredits: '5',
   },
   organize_founder_ops: {
     headline: 'Get your daily workforce briefing',
     body: 'Pilot summarizes what changed, what needs approval, and what to do next.',
     workflowId: 'daily_workforce_briefing',
+    workflowName: 'Daily workforce briefing',
+    why: 'Matches your goal of organizing founder operations.',
+    agentTeam: ['pilot'],
+    outputDescription: 'A briefing email listing approvals, tasks, and recommendations.',
+    safetyNote: 'No external messages sent.',
+    estimatedCredits: '5',
   },
 };
 
@@ -149,6 +203,18 @@ export function recommendFirstMove(brain: BrainLike): FirstMove {
   const priority = arr(wfp.priority_workflows);
   const founder = (brain?.founder ?? {}) as Record<string, unknown>;
   const goal = lower(founder.first_help_goal);
+
+  // Helper to map workflow output type to description
+  const mapOutput = (outputType: string) => {
+    switch (outputType) {
+      case 'lead_table': return '5 high-fit accounts in Workbench.';
+      case 'contact_table': return 'Decision maker contacts in Workbench.';
+      case 'draft_list': return 'Personalized outreach drafts in Awaiting You.';
+      case 'content_doc': return 'Brand-aligned post drafts.';
+      case 'audit_report': return 'Actionable audit report.';
+      default: return 'Structured workspace output.';
+    }
+  };
 
   // 1) Honor an explicit onboarding selection if present.
   if (priority.length > 0) {
@@ -159,6 +225,12 @@ export function recommendFirstMove(brain: BrainLike): FirstMove {
         headline: `Run ${wf.title}`,
         body: wf.description,
         workflowId: wf.id,
+        workflowName: wf.title,
+        why: `Matches your explicitly selected workflow: ${wf.title}.`,
+        agentTeam: wf.agents,
+        outputDescription: mapOutput(wf.outputType),
+        safetyNote: wf.safety || 'Draft-only. Nothing is sent without your approval.',
+        estimatedCredits: wf.estimatedCredits || '5',
       };
     }
   }
@@ -173,6 +245,12 @@ export function recommendFirstMove(brain: BrainLike): FirstMove {
       headline: `Run ${top.workflow.title}`,
       body: top.workflow.description,
       workflowId: top.workflow.id,
+      workflowName: top.workflow.title,
+      why: top.reasons.join(', ') || `Matches your onboarding settings.`,
+      agentTeam: top.workflow.agents,
+      outputDescription: mapOutput(top.workflow.outputType),
+      safetyNote: top.workflow.safety || 'Draft-only. Nothing is sent without your approval.',
+      estimatedCredits: top.workflow.estimatedCredits || '5',
     };
   }
   return DEFAULT_FIRST_MOVE;

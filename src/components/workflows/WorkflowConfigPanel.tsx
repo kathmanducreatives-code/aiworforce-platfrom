@@ -11,6 +11,7 @@ import {
 import { useToolAvailability } from '@/lib/workflows/useToolAvailability';
 import { TOOL_LABELS, type ToolKey } from '@/lib/workflows/tools';
 import { AGENT_BY_ID } from '@/data/agentProfiles';
+import { useCompanyBrain } from '@/hooks/useCompanyBrain';
 
 interface Props {
   workflow: WorkflowDefinition | null;
@@ -21,19 +22,43 @@ interface Props {
 
 export default function WorkflowConfigPanel({ workflow, open, onClose, onRun }: Props) {
   const tools = useToolAvailability();
+  const { data: brain } = useCompanyBrain();
   const [values, setValues] = useState<Record<string, string | number | string[]>>({});
   const [running, setRunning] = useState(false);
 
   useEffect(() => {
     if (!workflow) return;
     const initial: Record<string, string | number | string[]> = {};
+    const company = brain?.profile?.company || {};
+    const icp = brain?.profile?.icp || {};
+    const competitors = brain?.profile?.competitors || {};
+
     workflow.fields.forEach((f) => {
-      if (f.defaultValue !== undefined) initial[f.id] = f.defaultValue;
+      // Best-effort pre-fill from Company Brain
+      let val = f.defaultValue;
+      if (workflow.id === 'find_hiring_signal_accounts') {
+        if (f.id === 'industry' && company.industry) val = company.industry;
+        if (f.id === 'location' && company.location) val = company.location;
+        if (f.id === 'stage' && company.stage) val = company.stage;
+      } else if (workflow.id === 'find_icp_accounts') {
+        if (f.id === 'category' && company.category) val = company.category;
+        if (f.id === 'persona' && icp.buyer_roles?.[0]) val = icp.buyer_roles[0];
+        if (f.id === 'industry' && company.industry) val = company.industry;
+        if (f.id === 'location' && company.location) val = company.location;
+      } else if (workflow.id === 'website_audit') {
+        if (f.id === 'url' && company.website_url) val = company.website_url;
+      } else if (workflow.id === 'research_company') {
+        if (f.id === 'domain' && company.website_url) val = company.website_url;
+      } else if (workflow.id === 'competitor_snapshot') {
+        if (f.id === 'domain' && competitors.known?.[0]) val = competitors.known[0];
+      }
+
+      if (val !== undefined) initial[f.id] = val;
       else if (f.type === 'number') initial[f.id] = 0;
       else initial[f.id] = '';
     });
     setValues(initial);
-  }, [workflow]);
+  }, [workflow, brain]);
 
   const status = useMemo(
     () => (workflow ? resolveStatus(workflow, tools) : 'ready'),
@@ -146,6 +171,22 @@ export default function WorkflowConfigPanel({ workflow, open, onClose, onRun }: 
               ))}
             </div>
           )}
+
+          {/* Expected Output */}
+          <div className="space-y-1">
+            <span className="text-[11px] font-mono uppercase tracking-wider text-neutral-500">Expected Output</span>
+            <p className="text-[12.5px] text-neutral-300 font-medium">
+              {workflow.outputType === 'lead_table'
+                ? 'Account opportunities in Workbench'
+                : workflow.outputType === 'contact_table'
+                ? 'Decision-maker contacts in Workbench'
+                : workflow.outputType === 'draft_list'
+                ? 'Outreach drafts in Awaiting You'
+                : workflow.outputType === 'content_doc'
+                ? 'Content draft'
+                : 'Website audit report'}
+            </p>
+          </div>
 
           <div className="flex items-start gap-2 p-3 rounded-lg border border-emerald-500/15 bg-emerald-500/[0.03] text-[11.5px] text-emerald-200/90">
             <ShieldCheck className="w-3.5 h-3.5 mt-0.5 shrink-0 text-emerald-400" />

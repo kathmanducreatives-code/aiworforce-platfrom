@@ -44,11 +44,11 @@ export function recommendNextAction(rows: LeadTableRow[], partial = false): Reco
   const noEnrich = rows.filter((r) => r.enrichment_status !== 'enriched').length;
   const noDraft = rows.filter((r) => r.draft_status !== 'drafted' && r.draft_status !== 'approved').length;
 
-  if (noContact === rows.length) {
+  if (noContact > 0) {
     return {
       action: 'find_contacts',
       label: 'Find decision-makers',
-      reason: 'You have account intent, but no contacts yet.',
+      reason: 'Scout can look for Founder, CEO, Head of Growth, or VP Sales contacts at these accounts.',
       estimated_credits: estimateCredits('find_contacts', rows),
     };
   }
