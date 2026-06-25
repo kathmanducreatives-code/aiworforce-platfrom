@@ -220,6 +220,9 @@ export default function Workflows() {
             <p className="text-[15.5px] text-neutral-300 leading-relaxed">
               Run repeatable AI employee playbooks without writing a prompt. Pick a workflow, fill the inputs, and Agentory opens the output in Workbench.
             </p>
+            <p className="text-[12.5px] text-neutral-400">
+              Pick a workflow when you want a repeatable process. Use Conversations when you want custom work.
+            </p>
           </div>
           <StatStrip
             recommended={chipCounts.recommended || 0}
