@@ -47,6 +47,14 @@ const navGroups: NavGroup[] = [
   },
 ];
 
+const TOUR_TAG_BY_LABEL: Record<string, string | undefined> = {
+  Dashboard: 'sidebar-dashboard',
+  Conversations: 'sidebar-conversations',
+  Workflows: 'sidebar-workflows',
+  'Awaiting You': 'sidebar-awaiting',
+  'Company Brain': 'sidebar-company-brain',
+};
+
 interface SidebarProps {
   collapsed: boolean;
   onToggle: () => void;
