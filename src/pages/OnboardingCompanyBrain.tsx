@@ -1221,7 +1221,7 @@ export default function OnboardingCompanyBrain() {
   }
 
   return (
-    <div className="min-h-screen w-full text-foreground py-8 sm:py-10 px-4">
+    <div data-tour="company-brain-main" className="min-h-screen w-full text-foreground py-8 sm:py-10 px-4">
       <BackgroundGrid />
       <div className="max-w-5xl mx-auto">
         <div className="flex items-center justify-between mb-5">
