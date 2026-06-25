@@ -100,11 +100,14 @@ const Sidebar = ({ collapsed, onToggle }: SidebarProps) => {
               </div>
             )}
             <div className="space-y-0.5">
-              {group.items.map((item) => (
+              {group.items.map((item) => {
+                const tourTag = TOUR_TAG_BY_LABEL[item.label];
+                return (
                 <NavLink
                   key={`${group.label}-${item.path}-${item.label}`}
                   to={item.path}
                   end={item.path === '/dashboard'}
+                  data-tour={tourTag}
                   className={({ isActive }) => cn(
                     'group relative flex items-center gap-3 h-10 px-3 rounded-md text-[14.5px] transition-all duration-200 border',
                     isActive
