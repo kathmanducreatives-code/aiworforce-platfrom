@@ -13,8 +13,11 @@ describe('TOUR_STEPS', () => {
     for (const s of TOUR_STEPS) {
       expect(s.title.length).toBeGreaterThan(0);
       expect(s.body.length).toBeGreaterThan(20);
-      expect(s.bullets.length).toBeGreaterThan(1);
+      expect(s.where.length).toBeGreaterThan(0);
+      expect(s.useItFor.length).toBeGreaterThan(0);
+      expect(s.tryFirst.length).toBeGreaterThan(0);
       expect(s.ctaRoute.startsWith('/')).toBe(true);
+      expect(s.anchorSelector.startsWith('[data-tour=')).toBe(true);
     }
   });
 });
