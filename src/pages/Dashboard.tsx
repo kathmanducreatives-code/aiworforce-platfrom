@@ -70,7 +70,7 @@ const Dashboard = () => {
 
         <CompanyBrainStrip visible={!brainComplete} />
 
-        <div className="grid grid-cols-12 gap-5">
+        <div data-tour="dashboard-main" className="grid grid-cols-12 gap-5">
           <div className="col-span-12">
             <PilotBriefing totals={totals} />
           </div>
