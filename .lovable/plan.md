@@ -1,69 +1,145 @@
-## Premium Chat Polish Plan
+## Goal
 
-Scope: visual + UX upgrade of the main chat surface only. No backend, DB, orchestration, or auto-send changes.
+Replace the centered modal product tour with a Pilot-led **spotlight tour** that highlights real UI elements (sidebar items, command dock, page areas) and anchors a small glass guide card next to each one. The tour teaches *where* each feature lives, *what* it's for, and *what to try first*.
 
-### 1. Shared typography + token additions
-- `src/index.css`: add chat-scoped tokens — `--chat-body: 15.5px`, `--chat-meta: 13px`, `--chat-name: 15px`, `--chat-plan-title: 17.5px`, plus a `.chat-message-bubble` / `.user-message-bubble` max-width helper and a softer `--chat-glass` background.
-- `tailwind.config.ts`: expose `text-chat`, `text-chat-meta`, `text-chat-name`, `rounded-bubble` utilities so components stop using `text-[10px]/[11px]` in non-metadata spots.
+No DB migrations, no landing-page changes, no automation/email side-effects. All existing tour state, copy registry, first-run helper, and restart entry points are preserved.
 
-### 2. ChatBubble (`src/components/chat/ChatBubble.tsx`)
-- Bump body to 15.5px, name to 15px semibold, role label to 13px.
-- Apply `max-w-[min(860px,86%)]` for agents and `max-w-[min(720px,70%)]` for user; right-align user with a brighter emerald glass tint and stronger border.
-- Increase padding (`px-4 py-3`), `line-height: 1.58`, softer inner highlight ring on hover.
-- Keep accent border-left; tune per-agent accents (Pilot emerald, Scout cyan, Aria violet, Hawk amber, Penn lime, Scribe rose) via `agentResolver` accents (no logic change, just palette tuning).
+---
 
-### 3. AgentBubble (`src/components/chat/workspace/bubbles/AgentBubble.tsx`)
-- Same type scale upgrades; agent name 15px, dept label 12.5px (still metadata).
-- Replace harsh `bg-card/80` with softer glass (`bg-white/[0.03] backdrop-blur-xl`) and subtle inner highlight.
-- Thinking/working copy switches to agent-owned phrasing ("Scout is sourcing…", "Aria is ranking…", "Hawk is researching…", "Penn is drafting…", "Scribe is writing…") based on `profile.id`.
-- Compact meta row (tokens/time) shrinks to true metadata size (11.5px) — only place tiny text is allowed.
+## 1. Tag the real UI with stable anchors (no visual change)
 
-### 4. Handoff divider
-- Update `AgentHandoffDivider` (or create if missing under `src/components/chat/workspace/`): centered pill `Pilot → Scout` with mini avatars, 12.5px label, thin gradient hairlines left/right, only rendered when consecutive speaker changes.
-- Wire into `ChatView` message map (no state changes — derived from existing message list).
+Add `data-tour="<id>"` attributes to existing elements so the spotlight can find them across routes:
 
-### 5. ExecutionPlanCard + ExecutionTaskRow
-- Title 17.5px, instruction 15px, step title 15.5px, agent label 13px.
-- Status pill larger and higher contrast; agent sequence chips use bigger avatars (20px) + name.
-- Step row: agent owner column on the left, action text 15px, tool chips 12.5px, less vertical dead space, alternating row tint.
-- Failure copy mapping: when a task fails with `no_results` / `provider_missing` / `no_qualified`, render the specific Scout messages spec'd in section 8 + compact action pills (Broaden / Try another source / Edit criteria / View details / Done). Pills dispatch existing actions only.
+- `src/components/Sidebar.tsx` — add per-item `data-tour` to the NavLinks:
+  - `sidebar-dashboard`, `sidebar-conversations`, `sidebar-workflows`, `sidebar-awaiting`, `sidebar-company-brain`
+  - (Conversations and Dashboard share `/dashboard`; we tag both rows by `label` match.)
+- `src/components/dock/CommandDock.tsx` — add `data-tour="command-dock"` on the outer container.
+- `src/pages/Dashboard.tsx` — add `data-tour="dashboard-main"` on the main grid wrapper.
+- `src/pages/Workflows.tsx` — add `data-tour="workflows-featured"` on the "Start here" / featured section (fallback to the workflow grid if missing).
+- `src/pages/AwaitingYou.tsx` — add `data-tour="awaiting-queue"` on the queue container.
+- `src/pages/OnboardingCompanyBrain.tsx` — add `data-tour="company-brain-main"` on the page wrapper.
 
-### 6. Recent Activity / ActivityMiniFeed
-- Filter out provider strings (`lovable-ai:*`, `google/gemini-*`, raw `started`/`finished` without context) behind a `devRaw` flag (default off).
-- Render as timeline rows: agent avatar + verb phrase ("Scout ran Apify Jobs", "Aria skipped — no accepted contacts"), 14px text, subtle timestamp right-aligned.
-- Keep data source unchanged; transformation is presentational in the component.
+These are purely additive attributes — no style or logic changes.
 
-### 7. Composer (`InlineCommandBar` / `ChatComposerPro`)
-- Input 16px, placeholder 15.5px with rotating hints ("Message your AI workforce…", "Ask Pilot or mention @Scout…", "Run a workflow or ask for company work…").
-- Slightly taller (min-h 56px), more horizontal padding, icon size 18px, premium focus ring (emerald glow).
-- Visual-only `@Scout/@Aria/@Hawk/@Penn/@Scribe` hint chips above input on focus when empty; no autocomplete logic.
+---
 
-### 8. Empty / waiting state
-- Pilot greeting compact; 4 suggestion pills: Find hiring-signal accounts · Research these companies · Draft outreach · Create LinkedIn post.
-- Reduce vertical blank space; center block max-width 640px.
+## 2. New spotlight tour engine
 
-### 9. Scroll + split behavior
-- `ChatView`: keep existing auto-scroll, but suppress when user scrolled up >120px; show a small "New activity ↓" pill bottom-right.
-- Verify 40/60 and 50/50 with Workbench open — adjust bubble max-widths via container queries (`@container`) so they reflow.
+### `src/components/tour/useAnchorRect.ts` (new)
+Hook that:
+- Resolves a CSS selector to an element, returns its `DOMRect` (in viewport coords).
+- Re-measures on `resize`, `scroll` (capture), `MutationObserver` on `<body>`, and a `requestAnimationFrame` poll for 1s after route changes.
+- Returns `null` if the anchor is missing, so the card can fall back to centered.
 
-### 10. QA (Playwright via shell)
-Run scenarios A–E from the brief at 1280px and 1440px, capture screenshots of: empty state, lead source selector, hiring-signal plan, decision-maker failure, failed sourcing, long composer input, and split mode with Workbench open. Verify no clipping, readable type, no horizontal overflow.
+### `src/components/tour/SpotlightOverlay.tsx` (new)
+- Fixed full-viewport SVG overlay at `z-[115]`.
+- Renders a dark mask (`rgba(0,0,0,0.55)`) with a rounded-rect cutout around the anchor rect (padding ~8px, radius ~12px), using SVG `mask` with `fill-rule: evenodd`.
+- Adds an animated emerald ring (`stroke="#10b981"`, soft glow filter) around the cutout.
+- Click on the mask (outside the cutout) triggers `onDismiss` (skip).
+- Clicks inside the cutout pass through (`pointer-events: none` on the mask path, `auto` on backdrop).
+- When no anchor rect, renders a subtler full-screen dim only (no cutout).
 
-### Files expected to change
-- `src/index.css`, `tailwind.config.ts`
-- `src/components/chat/ChatBubble.tsx`
-- `src/components/chat/workspace/ChatView.tsx`
-- `src/components/chat/workspace/bubbles/AgentBubble.tsx`
-- `src/components/chat/workspace/bubbles/SafetyChip.tsx` (spacing only)
-- `src/components/chat/workspace/agents/AgentHandoffDivider.tsx` (new or updated)
-- `src/components/chat/workspace/plan/ExecutionPlanCard.tsx`
-- `src/components/chat/workspace/plan/ExecutionTaskRow.tsx`
-- `src/components/chat/workspace/plan/ActivityMiniFeed.tsx`
-- `src/components/workforce/InlineCommandBar.tsx` (composer)
-- Lead source / intake cards under `src/components/chat/workspace/` (typography + spacing only)
+### `src/components/tour/GuideCard.tsx` (new)
+Small glass card (~320–360px wide) at `z-[120]`, used by ProductTour:
+- Pilot avatar, eyebrow "Pilot · Workforce guide", "Step N of 6".
+- Title, 3-line body, and the **Where / Use it for / Try first** mini-grid (rendered from the new step fields).
+- Footer: Back · Skip · "Open <feature>" (secondary) · Next/Finish (primary).
+- Subtle emerald border + glow, `bg-[#0a0c0a]/92 backdrop-blur-xl`.
+- Receives `anchorRect`, computes placement (right of sidebar items, above the dock, below top areas, beside cards) with viewport clamping. Falls back to centered when `anchorRect` is null or viewport < 900px wide.
+- Renders an SVG pointer/arrow from card edge to the anchor when placed adjacent.
 
-### Out of scope (explicit)
-- Landing page
-- DB / migrations / RLS
-- Workflow registry, Workbench logic, agent orchestration, agent ownership routing
-- Any auto-send / auto-DM / outreach behavior — outreach stays draft + approval gated
+### `src/components/tour/ProductTour.tsx` (rewrite)
+- Keep public API: default export + `restartProductTour()` event.
+- Keep `useProductTour` integration (auto-open, skip/complete/restart persistence in `onboarding_meta`). **No changes to `useProductTour.ts`.**
+- New flow per step:
+  1. If step has `route` and current path !== route, do nothing extra (user can press "Open <feature>" to navigate; tour stays active across routes because it's mounted in `MainLayout`).
+  2. Resolve `step.anchorSelector` via `useAnchorRect`.
+  3. Render `<SpotlightOverlay rect={rect} onDismiss={skip} />` + `<GuideCard rect={rect} step={...} />`.
+- "Open feature" button: `navigate(step.route)` and keeps tour open; anchor re-measures after route render.
+- Keyboard: Esc = skip, ← / → = back / next.
+
+---
+
+## 3. Updated step data — `src/components/tour/tourSteps.ts`
+
+Extend `ProductTourStep` with:
+```ts
+where: string;
+useItFor: string;
+tryFirst: string;
+route: string;             // "Open <feature>" target
+anchorSelector: string;    // primary anchor
+fallbackSelector?: string; // optional secondary
+placement?: 'right' | 'left' | 'top' | 'bottom' | 'auto';
+```
+
+Six steps, all wired to real anchors:
+
+1. **Dashboard** — `[data-tour="sidebar-dashboard"]`, fallback `[data-tour="dashboard-main"]`, placement `right`, route `/dashboard`.
+2. **Workflows** — `[data-tour="sidebar-workflows"]`, fallback `[data-tour="workflows-featured"]`, placement `right`, route `/workflows`.
+3. **Conversations** — `[data-tour="sidebar-conversations"]`, fallback `[data-tour="command-dock"]`, placement `right` (sidebar) or `top` (dock).
+4. **Workbench** — no sidebar entry. Anchor `[data-tour="workflows-featured"]` when on `/workflows`, else centered with copy explaining "appears after a workflow runs". Route: `/workflows`.
+5. **Awaiting You** — `[data-tour="sidebar-awaiting"]`, fallback `[data-tour="awaiting-queue"]`, placement `right`, route `/awaiting-you`.
+6. **Company Brain** — `[data-tour="sidebar-company-brain"]`, fallback `[data-tour="company-brain-main"]`, placement `right`, route `/onboarding/company-brain`.
+
+Copy uses the **Where / Use it for / Try first** structure from the brief; existing `tourSteps.test.ts` updated to assert the new fields (length > 0).
+
+---
+
+## 4. Page-level micro-help
+
+Add a single subtle helper line under the page title on:
+- `src/pages/Workflows.tsx` — "Pick a workflow when you want a repeatable process. Use Conversations when you want custom work."
+- `src/pages/AwaitingYou.tsx` — "Drafts and risky actions wait here. Nothing is sent without approval."
+- `src/pages/OnboardingCompanyBrain.tsx` — "Update this when your ICP, offer, voice, or goals change."
+- Conversations helper text is added to the empty/intro area on `Dashboard.tsx` only if there's a clean slot; otherwise skipped (no Conversations page exists separately).
+
+Styled as `text-[12.5px] text-neutral-400` next to existing `AskPilotAboutPage` chips. No new components.
+
+---
+
+## 5. First-run helper
+
+No behavior change. It already shows after onboarding and offers Restart tour. Keep as-is.
+
+---
+
+## 6. Files changed
+
+**New**
+- `src/components/tour/useAnchorRect.ts`
+- `src/components/tour/SpotlightOverlay.tsx`
+- `src/components/tour/GuideCard.tsx`
+
+**Edited**
+- `src/components/tour/ProductTour.tsx` — rewritten to use spotlight engine; preserves public API.
+- `src/components/tour/tourSteps.ts` — extended schema + anchors + Where/Use/Try copy.
+- `src/components/tour/tourSteps.test.ts` — assert new fields.
+- `src/components/Sidebar.tsx` — add `data-tour` per item (purely additive).
+- `src/components/dock/CommandDock.tsx` — add `data-tour="command-dock"`.
+- `src/pages/Dashboard.tsx` — add `data-tour="dashboard-main"`.
+- `src/pages/Workflows.tsx` — add `data-tour="workflows-featured"` + helper line.
+- `src/pages/AwaitingYou.tsx` — add `data-tour="awaiting-queue"` + helper line.
+- `src/pages/OnboardingCompanyBrain.tsx` — add `data-tour="company-brain-main"` + helper line.
+
+**Unchanged**
+- `useProductTour.ts`, `FirstRunHelper.tsx`, `AskPilotAboutPage.tsx`, edge functions, DB, routes.
+
+---
+
+## 7. QA
+
+- Typecheck + `tourSteps.test.ts` pass.
+- Manual: complete onboarding → tour auto-opens → step 1 highlights Dashboard nav row with emerald ring and a card to its right.
+- "Open Workflows" navigates and the highlight re-attaches to the Workflows row.
+- Esc and Skip both close + persist `product_tour_skipped_at`.
+- Finish persists `product_tour_completed`. Tour does not re-open. Restart from FirstRunHelper reopens at step 1.
+- Sidebar collapsed (68px): highlight still wraps the icon row; card placement clamps inside viewport.
+- 1280 and 1440 widths verified visually.
+
+## 8. Out of scope / not touched
+
+- No DB migrations. No edits to `useProductTour.ts` persistence shape.
+- No landing page edits.
+- No new automation, email, DM, or webhook triggers.
+- No changes to Workbench, Workflow run engine, or Company Brain edge functions.

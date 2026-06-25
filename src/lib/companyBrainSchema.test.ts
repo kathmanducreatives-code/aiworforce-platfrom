@@ -34,4 +34,22 @@ describe('companyBrainSchema', () => {
     expect(isOnboardingComplete({})).toBe(false);
     expect(isOnboardingComplete({ onboarding_completed: true })).toBe(true);
   });
+
+  it('includes extended brain sections in defaults', () => {
+    const d = getBrainDefaults();
+    expect(d.founder.name).toBe('');
+    expect(d.company.stage).toBe('');
+    expect(d.icp.disqualifiers).toEqual([]);
+    expect(d.gtm.preferred_channels).toEqual([]);
+    expect(d.positioning.avoid_positioning).toEqual([]);
+    expect(d.workflow_preferences.priority_workflows).toEqual([]);
+    expect(d.approval_rules.daily_credit_limit).toBe(100);
+  });
+
+  it('mergeProfile preserves user-entered new-section values', () => {
+    const merged = mergeProfile({ founder: { name: 'Prasidha' } }, { gtm: { motion: 'outbound' } } as any);
+    expect((merged.founder as any).name).toBe('Prasidha');
+    expect((merged.gtm as any).motion).toBe('outbound');
+    expect((merged.workflow_preferences as any).priority_workflows).toEqual([]);
+  });
 });

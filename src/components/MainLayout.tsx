@@ -9,7 +9,9 @@ import ChatWorkspace from "./chat/workspace/ChatWorkspace";
 import AgentBuilderModal from "./agents/AgentBuilderModal";
 import RouteErrorBoundary from "./RouteErrorBoundary";
 import WorkspaceGate from "./WorkspaceGate";
+import OnboardingGate from "./OnboardingGate";
 import ChatErrorBoundary from "./chat/workspace/ChatErrorBoundary";
+import ProductTour from "./tour/ProductTour";
 import { ChatWorkspaceProvider } from "@/contexts/ChatWorkspaceContext";
 import { useIsMobile } from "@/hooks/use-mobile";
 
@@ -66,7 +68,9 @@ const MainLayout = ({ children }: MainLayoutProps) => {
           <div className={isMobile ? 'px-4 py-6 pb-32' : 'pb-32'}>
             <RouteErrorBoundary>
               <WorkspaceGate>
-                {children}
+                <OnboardingGate>
+                  {children}
+                </OnboardingGate>
               </WorkspaceGate>
             </RouteErrorBoundary>
           </div>
@@ -84,6 +88,9 @@ const MainLayout = ({ children }: MainLayoutProps) => {
 
         {/* Agent Builder full-screen takeover (mounted globally) */}
         <AgentBuilderModal />
+
+        {/* Premium Pilot-led product walkthrough — mounted once, opens on cue */}
+        <ProductTour />
       </div>
     </ChatWorkspaceProvider>
   );

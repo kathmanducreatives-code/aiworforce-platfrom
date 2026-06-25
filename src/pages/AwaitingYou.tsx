@@ -5,6 +5,8 @@ import AgentAvatar from '@/components/agents/AgentAvatar';
 import { useWorkspace } from '@/contexts/WorkspaceContext';
 import { useApprovals } from '@/hooks/useApprovals';
 import { decideApproval } from '@/lib/orchestration';
+import InfoHint from '@/components/help/InfoHint';
+import AskPilotAboutPage from '@/components/help/AskPilotAboutPage';
 import { useState } from 'react';
 
 export default function AwaitingYou() {
@@ -38,16 +40,21 @@ export default function AwaitingYou() {
           <div className="w-11 h-11 rounded-xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-center shrink-0">
             <Inbox className="h-5 w-5 text-amber-400" />
           </div>
-          <div>
-            <h1 className="text-2xl font-bold text-foreground tracking-tight">Awaiting your approval</h1>
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center justify-between gap-3">
+              <h1 className="text-2xl font-bold text-foreground tracking-tight flex items-center gap-2">
+                Awaiting your approval <InfoHint topic="awaiting_you" size="sm" />
+              </h1>
+              <AskPilotAboutPage />
+            </div>
             <p className="text-sm text-muted-foreground mt-1">
-              Drafts, outreach, and comments your AI team prepared. Nothing is sent without your green light.{' '}
+              Outreach, drafts, and risky actions wait here until you approve them. <span className="text-emerald-300/90">Draft-only</span> <InfoHint topic="draft_only" /> by default — nothing is sent automatically.{' '}
               {isReady && `${visible.length} item${visible.length === 1 ? '' : 's'} pending.`}
             </p>
           </div>
         </div>
 
-        <div className="space-y-3">
+        <div data-tour="awaiting-queue" className="space-y-3">
           <AnimatePresence>
             {visible.map((item) => {
               const agentName = item.title.split(' ')[0] || 'Agent';
@@ -100,8 +107,8 @@ export default function AwaitingYou() {
               <div className="inline-flex w-12 h-12 rounded-full bg-emerald-500/10 border border-emerald-500/30 items-center justify-center mb-3">
                 <Check className="h-5 w-5 text-emerald-400" />
               </div>
-              <p className="text-sm font-semibold text-foreground">All clear</p>
-              <p className="text-xs text-muted-foreground mt-1">No drafts waiting on you right now.</p>
+              <p className="text-sm font-semibold text-foreground">No approvals yet</p>
+              <p className="text-xs text-muted-foreground mt-1">Drafts and risky actions will wait here before anything is sent.</p>
             </motion.div>
           )}
         </div>

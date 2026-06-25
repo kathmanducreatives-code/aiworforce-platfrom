@@ -1,6 +1,8 @@
-import { Clock, Sparkles, AlertTriangle, Wrench } from 'lucide-react';
+import { ArrowRight, Clock, Sparkles, Wrench } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import AgentAvatar from './AgentAvatar';
+import WorkflowThumbnail from './WorkflowThumbnail';
+import { OUTPUT_LABEL } from '@/lib/workflows/visualMeta';
 import type { WorkflowDefinition, WorkflowStatus } from '@/lib/workflows/registry';
 
 interface Props {
@@ -10,33 +12,23 @@ interface Props {
   onSelect: () => void;
 }
 
-const OUTPUT_LABEL: Record<string, string> = {
-  lead_table: 'Lead table',
-  contact_table: 'Contact table',
-  enrichment_table: 'Enrichment',
-  draft_list: 'Drafts',
-  content_doc: 'Content',
-  audit_report: 'Audit report',
-  briefing: 'Briefing',
-};
-
 function StatusChip({ status }: { status: WorkflowStatus }) {
   if (status === 'ready') {
     return (
-      <span className="inline-flex items-center gap-1.5 text-[12px] font-medium px-2 py-0.5 rounded border border-emerald-500/25 bg-emerald-500/[0.07] text-emerald-300">
+      <span className="inline-flex items-center gap-1.5 text-[11.5px] font-medium px-2 py-0.5 rounded-full border border-emerald-500/30 bg-emerald-500/[0.08] text-emerald-300">
         <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 shadow-[0_0_6px_rgba(16,185,129,0.7)]" /> Ready
       </span>
     );
   }
   if (status === 'setup_needed') {
     return (
-      <span className="inline-flex items-center gap-1.5 text-[12px] font-medium px-2 py-0.5 rounded border border-amber-500/25 bg-amber-500/[0.07] text-amber-300">
+      <span className="inline-flex items-center gap-1.5 text-[11.5px] font-medium px-2 py-0.5 rounded-full border border-amber-500/30 bg-amber-500/[0.07] text-amber-300">
         <Wrench className="w-3 h-3" /> Setup needed
       </span>
     );
   }
   return (
-    <span className="inline-flex items-center gap-1.5 text-[12px] font-medium px-2 py-0.5 rounded border border-white/10 bg-white/[0.03] text-neutral-400">
+    <span className="inline-flex items-center gap-1.5 text-[11.5px] font-medium px-2 py-0.5 rounded-full border border-white/10 bg-white/[0.03] text-neutral-400">
       Coming soon
     </span>
   );
@@ -54,58 +46,68 @@ function timeAgo(ts: number): string {
 
 export default function WorkflowCard({ workflow, status, lastRunAt, onSelect }: Props) {
   const disabled = status === 'coming_soon';
+  const cta = status === 'setup_needed' ? 'Configure provider' : status === 'coming_soon' ? 'Coming soon' : 'Run workflow';
   return (
     <button
       type="button"
       onClick={onSelect}
       disabled={disabled}
       className={cn(
-        'group text-left relative flex flex-col gap-4 p-5 rounded-card border bg-white/[0.025] backdrop-blur-xl transition-all duration-200',
-        'border-white/[0.08] hover:border-emerald-500/35 hover:bg-white/[0.04] hover:shadow-[0_0_28px_-12px_rgba(16,185,129,0.5)]',
-        'shadow-[inset_0_1px_0_0_rgba(255,255,255,0.04)]',
-        workflow.recommended && 'card-premium-recommended',
-        disabled && 'opacity-60 hover:border-white/[0.08] hover:shadow-none cursor-not-allowed',
+        'group text-left relative flex flex-col rounded-card border bg-white/[0.025] backdrop-blur-xl overflow-hidden transition-all duration-200',
+        'border-white/[0.08] shadow-[inset_0_1px_0_0_rgba(255,255,255,0.04)]',
+        !disabled && 'hover:border-emerald-500/35 hover:bg-white/[0.04] hover:-translate-y-0.5 hover:shadow-[0_18px_40px_-22px_rgba(16,185,129,0.55)]',
+        disabled && 'opacity-60 cursor-not-allowed',
       )}
     >
-      <div className="flex items-start justify-between gap-3">
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2 mb-2 flex-wrap">
-            {workflow.recommended && (
-              <span className="inline-flex items-center gap-1 text-[11px] uppercase tracking-[0.12em] font-mono font-semibold text-emerald-300 border border-emerald-500/30 bg-emerald-500/[0.08] rounded px-2 py-0.5">
-                <Sparkles className="w-3 h-3" /> Recommended
-              </span>
-            )}
-            <StatusChip status={status} />
+      <WorkflowThumbnail workflow={workflow} />
+
+      <div className="flex flex-col gap-3 p-5 flex-1">
+        <div className="flex items-center gap-1.5 flex-wrap">
+          {workflow.recommended && (
+            <span className="inline-flex items-center gap-1 text-[10.5px] uppercase tracking-[0.14em] font-mono font-semibold text-emerald-300 border border-emerald-500/30 bg-emerald-500/[0.08] rounded-full px-2 py-0.5">
+              <Sparkles className="w-3 h-3" /> Recommended
+            </span>
+          )}
+          <StatusChip status={status} />
+        </div>
+
+        <div>
+          <h3 className="text-[17.5px] font-semibold text-foreground leading-snug tracking-tight">{workflow.title}</h3>
+          <p className="text-[14px] text-neutral-300/90 mt-1.5 line-clamp-2 leading-relaxed">{workflow.description}</p>
+        </div>
+
+        <div className="mt-auto flex items-center justify-between gap-2 pt-3 border-t border-white/[0.06]">
+          <div className="flex items-center -space-x-2">
+            {workflow.agents.map((a) => (
+              <AgentAvatar key={a} agentId={a} size={24} className="ring-2 ring-[#0a0a0a]" />
+            ))}
           </div>
-          <h3 className="text-[17px] font-semibold text-foreground leading-snug tracking-tight">{workflow.title}</h3>
-          <p className="text-[14.5px] text-neutral-300 mt-1.5 line-clamp-3 leading-snug">{workflow.description}</p>
+          <div className="flex items-center gap-1.5 text-[12px] font-mono text-neutral-400">
+            <span>{OUTPUT_LABEL[workflow.outputType] || workflow.outputType}</span>
+            <span className="text-neutral-700">·</span>
+            <span>{workflow.estimatedCredits}</span>
+          </div>
+        </div>
+
+        <div className="flex items-center justify-between gap-2">
+          {lastRunAt ? (
+            <span className="inline-flex items-center gap-1.5 text-[11.5px] text-neutral-500">
+              <Clock className="w-3 h-3" /> Last run {timeAgo(lastRunAt)}
+            </span>
+          ) : <span />}
+          <span
+            className={cn(
+              'inline-flex items-center gap-1 text-[12.5px] font-medium transition-all',
+              status === 'ready' && 'text-emerald-300 group-hover:gap-2',
+              status === 'setup_needed' && 'text-amber-300',
+              status === 'coming_soon' && 'text-neutral-500',
+            )}
+          >
+            {cta}
+            {!disabled && <ArrowRight className="w-3.5 h-3.5 transition-transform group-hover:translate-x-0.5" />}
+          </span>
         </div>
       </div>
-
-      <div className="flex items-center justify-between gap-2 pt-3 border-t border-white/[0.06]">
-        <div className="flex items-center -space-x-2">
-          {workflow.agents.map((a) => (
-            <AgentAvatar key={a} agentId={a} size={26} className="ring-2 ring-[#0a0a0a]" />
-          ))}
-        </div>
-        <div className="flex items-center gap-2 text-[12.5px] font-mono text-neutral-400">
-          <span>{OUTPUT_LABEL[workflow.outputType] || workflow.outputType}</span>
-          <span className="text-neutral-700">·</span>
-          <span>{workflow.estimatedCredits}</span>
-        </div>
-      </div>
-
-      {lastRunAt && (
-        <div className="flex items-center gap-1.5 text-[12px] text-neutral-500">
-          <Clock className="w-3.5 h-3.5" /> Last run {timeAgo(lastRunAt)}
-        </div>
-      )}
-
-      {status === 'setup_needed' && (
-        <div className="flex items-center gap-1.5 text-[12px] text-amber-300">
-          <AlertTriangle className="w-3.5 h-3.5" /> Needs a provider before it can run
-        </div>
-      )}
     </button>
   );
 }
