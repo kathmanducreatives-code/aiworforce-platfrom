@@ -133,7 +133,6 @@ const Sidebar = ({ collapsed, onToggle }: SidebarProps) => {
                     </>
                   )}
                 </NavLink>
-                </NavLink>
                 );
               })}
             </div>
