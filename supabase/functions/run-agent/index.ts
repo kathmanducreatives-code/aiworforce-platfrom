@@ -440,6 +440,12 @@ Deno.serve(async (req) => {
             try {
               const { planContactAttachments } = await import("../_shared/contactDiscovery.ts");
               const plan = planContactAttachments(rawItems, attachAccounts as Array<{ lead_candidate_id: string; company: string; signal_role?: string | null }>);
+              
+              const candidateIds = attachAccounts.map(a => a.lead_candidate_id).filter(Boolean);
+              if (candidateIds.length > 0) {
+                await supabase.from("lead_candidates").update({ plan_id }).in("id", candidateIds);
+              }
+
               for (const att of plan) {
                 const { data: c } = await supabase.from("contacts").insert({
                   workspace_id,

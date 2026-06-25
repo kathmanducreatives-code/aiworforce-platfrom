@@ -8,17 +8,103 @@ export interface AccountForContacts {
   lead_candidate_id: string;
   company: string;
   signal_role?: string | null; // the hiring role / signal that drives persona
+  linkedin_company_url?: string | null;
+  website_url?: string | null;
+  domain?: string | null;
+}
+
+export interface CompanyContactTarget {
+  account_id: string;
+  company_name: string;
+  domain?: string;
+  website_url?: string;
+  linkedin_company_url?: string;
+  source_url?: string;
+  signal_title?: string;
+  industry?: string;
+  category?: string;
+  location?: string;
+  recommended_personas: string[];
+  confidence_notes: string[];
+  needs_company_resolution?: boolean;
+}
+
+export function resolveCompanyContactTarget(accountRow: any): CompanyContactTarget {
+  const account = accountRow.account || {};
+  const signal = accountRow.signal || {};
+  
+  const account_id = account.id || accountRow.account_id || accountRow.lead_candidate_id || "";
+  const company_name = account.name || accountRow.company || "";
+  
+  let website_url = account.website_url || undefined;
+  let domain = account.domain || undefined;
+  const linkedin_company_url = account.linkedin_url || undefined;
+  const source_url = signal.source_url || accountRow.source_url || undefined;
+  const signal_title = accountRow.lead_type || accountRow.signal_role || "";
+  const industry = account.industry || undefined;
+  const location = account.location || undefined;
+  
+  const confidence_notes: string[] = [];
+  
+  const isJobBoard = (url: string) => {
+    if (!url) return false;
+    const l = url.toLowerCase();
+    return l.includes("linkedin.com/jobs") || l.includes("indeed.com") || l.includes("ziprecruiter.com") || l.includes("glassdoor.com") || l.includes("simplyhired.com");
+  };
+  
+  if (website_url && isJobBoard(website_url)) {
+    website_url = undefined;
+    confidence_notes.push("website_url is a job board link");
+  }
+  
+  if (domain && (domain.includes("linkedin.com") || domain.includes("indeed.com") || domain.includes("ziprecruiter.com"))) {
+    domain = undefined;
+    confidence_notes.push("domain is a job board/social link");
+  }
+  
+  const personaRec = inferContactPersona(signal_title || "");
+  const recommended_personas = personaRec.personas;
+  
+  let needs_company_resolution = false;
+  if (!linkedin_company_url && !website_url && !domain) {
+    needs_company_resolution = true;
+    confidence_notes.push("needs_company_resolution");
+  }
+  
+  if (domain && !website_url) {
+    confidence_notes.push("probable_domain");
+  }
+  
+  return {
+    account_id,
+    company_name,
+    domain,
+    website_url,
+    linkedin_company_url,
+    source_url,
+    signal_title,
+    industry,
+    location,
+    recommended_personas,
+    confidence_notes,
+    needs_company_resolution,
+  };
 }
 
 export interface DiscoveredContact {
   name: string;
   title: string | null;
   linkedin_url: string | null;
+  profile_url?: string | null;
   email: string | null;
   company: string | null;
   headline: string | null; // fallback company signal (e.g. "Founder at Acme AI")
   confidence: number;
   source: string | null;
+  location?: string | null;
+  source_url?: string | null;
+  company_url?: string | null;
+  confidence_signals?: string[];
 }
 
 export type ContactMatch = {
@@ -75,29 +161,61 @@ export function buildContactSearchQueries(
 export function normalizeDiscoveredContact(raw: unknown): DiscoveredContact | null {
   if (!raw || typeof raw !== "object") return null;
   const r = raw as Record<string, any>;
+  
   const name = (
     r.name ?? r.fullName ?? r.full_name ?? r.author?.name ??
     [r.firstName, r.lastName].filter(Boolean).join(" ")
   ).toString().trim();
-  if (!name) return null; // no-invent rule
+  if (!name) return null; // reject missing name
+  
+  const linkedin_url = (r.linkedin_url ?? r.linkedinUrl ?? r.profileUrl ?? r.publicProfileUrl ?? r.url ?? null) || null;
+  if (!linkedin_url) return null; // reject missing profile URL
+  
   const headline = (r.headline ?? r.occupation ?? null) || null;
-  // Company can be nested in HarvestAPI profiles (currentPosition/experience),
-  // not just a flat field. Pull from the common shapes.
+  
+  const title = (r.title ?? r.position ?? r.jobTitle ?? r.currentPosition?.title ?? (Array.isArray(r.currentPosition) ? r.currentPosition[0]?.position : undefined) ?? headline ?? null) || null;
+  if (!title) return null; // reject missing title
+  
+  const tLower = title.toLowerCase();
+  const wrongTitleKeywords = ["intern", "student", "trainee", "retired", "unemployed", "assistant", "candidate", "freelancer", "academic", "professor", "teacher"];
+  if (wrongTitleKeywords.some(kw => tLower.includes(kw))) {
+    return null; // reject obviously wrong title
+  }
+  
   const company = (
     r.company ?? r.companyName ?? r.currentCompany?.name ?? r.currentCompany ??
     r.currentPosition?.companyName ?? (Array.isArray(r.currentPosition) ? r.currentPosition[0]?.companyName : undefined) ??
     (Array.isArray(r.experience) ? (r.experience[0]?.companyName ?? r.experience[0]?.company) : undefined) ??
     r.positions?.[0]?.companyName ?? null
   );
+  
+  const compName = typeof company === "object" && company ? (company.name || company.companyName || null) : company;
+  const companyStr = (typeof compName === "string" ? compName.trim() : null) || null;
+  
+  if (!companyStr && !headline) return null; // reject weak/no company signal
+  
+  const company_url = (r.companyUrl ?? r.companyLinkedinUrl ?? r.companyPageUrl ?? null) || null;
+  const location = (r.location ?? r.locationName ?? null) || null;
+  const source_url = linkedin_url;
+  
+  const confidence_signals: string[] = ["has_name", "has_title", "has_profile_url"];
+  if (companyStr) confidence_signals.push("has_company");
+  if (headline) confidence_signals.push("has_headline");
+  
   return {
     name,
-    title: (r.title ?? r.position ?? r.jobTitle ?? r.currentPosition?.title ?? (Array.isArray(r.currentPosition) ? r.currentPosition[0]?.position : undefined) ?? headline ?? null) || null,
-    linkedin_url: (r.linkedin_url ?? r.linkedinUrl ?? r.profileUrl ?? r.publicProfileUrl ?? r.url ?? null) || null,
+    title,
+    linkedin_url,
+    profile_url: linkedin_url,
     email: (r.email ?? (Array.isArray(r.emails) ? r.emails[0] : undefined) ?? null) || null,
-    company: (typeof company === "string" ? company.trim() : null) || null,
+    company: companyStr,
     headline,
     confidence: typeof r.confidence === "number" ? r.confidence : 0.6,
     source: (r.source ?? r.via ?? "apify_people_search") || null,
+    location,
+    source_url,
+    company_url,
+    confidence_signals,
   };
 }
 
@@ -116,9 +234,22 @@ function normCompany(s: string | null | undefined): string {
 export function matchContactToAccountDetailed(contact: DiscoveredContact, accounts: AccountForContacts[]): ContactMatch {
   const cc = normCompany(contact.company);
   const headlineNorm = normCompany(contact.headline);
-  if (!cc && !headlineNorm) {
+  if (!cc && !headlineNorm && !contact.company_url) {
     return { matched: false, confidence: "low", reasons: ["contact has no company signal"], lead_candidate_id: null };
   }
+  
+  if (contact.company_url) {
+    const contactUrlClean = contact.company_url.toLowerCase().replace(/\/$/, "");
+    for (const a of accounts) {
+      if (a.linkedin_company_url) {
+        const aUrlClean = a.linkedin_company_url.toLowerCase().replace(/\/$/, "");
+        if (contactUrlClean === aUrlClean) {
+          return { matched: true, confidence: "high", reasons: ["exact company LinkedIn URL match"], lead_candidate_id: a.lead_candidate_id };
+        }
+      }
+    }
+  }
+  
   // 1. exact normalized company match → high
   for (const a of accounts) {
     if (cc && normCompany(a.company) === cc) {
@@ -157,6 +288,8 @@ export interface ContactAttachment { lead_candidate_id: string; contact: Discove
 export function planContactAttachments(rawContacts: unknown[], accounts: AccountForContacts[]): ContactAttachment[] {
   const taken = new Set<string>();
   const out: ContactAttachment[] = [];
+  const candidates: Array<{ lead_candidate_id: string; contact: DiscoveredContact; confidence: "high" | "medium"; score: number }> = [];
+  
   for (const raw of rawContacts ?? []) {
     const c = normalizeDiscoveredContact(raw);
     if (!c) continue;
@@ -164,10 +297,45 @@ export function planContactAttachments(rawContacts: unknown[], accounts: Account
     const m = matchContactToAccountDetailed(c, accounts);
     if (!m.matched || !m.lead_candidate_id) continue; // company mismatch → reject
     if (m.confidence === "low") continue;             // low confidence → reject
-    if (taken.has(m.lead_candidate_id)) continue;     // one decision-maker per account
-    taken.add(m.lead_candidate_id);
-    out.push({ lead_candidate_id: m.lead_candidate_id, contact: c, confidence: m.confidence });
+    
+    const acc = accounts.find(a => a.lead_candidate_id === m.lead_candidate_id);
+    const personaRec = inferContactPersona(acc?.signal_role ?? "");
+    
+    let personaScore = 0;
+    const titleLower = c.title.toLowerCase();
+    
+    if (titleLower.includes(personaRec.primary.toLowerCase())) {
+      personaScore = 10;
+    } else {
+      const idx = personaRec.personas.findIndex(p => titleLower.includes(p.toLowerCase()));
+      if (idx !== -1) {
+        personaScore = 8 - idx;
+      }
+    }
+    
+    const confidenceScore = m.confidence === "high" ? 5 : 2;
+    const totalScore = personaScore + confidenceScore;
+    
+    candidates.push({
+      lead_candidate_id: m.lead_candidate_id,
+      contact: c,
+      confidence: m.confidence,
+      score: totalScore
+    });
   }
+  
+  candidates.sort((a, b) => b.score - a.score);
+  
+  for (const cand of candidates) {
+    if (taken.has(cand.lead_candidate_id)) continue;
+    taken.add(cand.lead_candidate_id);
+    out.push({
+      lead_candidate_id: cand.lead_candidate_id,
+      contact: cand.contact,
+      confidence: cand.confidence
+    });
+  }
+  
   return out;
 }
 

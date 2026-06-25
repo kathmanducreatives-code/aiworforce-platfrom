@@ -72,7 +72,7 @@ Deno.test("#8 header never says 'lead leads'", () => {
 
 Deno.test("persona inference by signal role", () => {
   assert(inferContactPersona("Senior Account Executive").personas.includes("VP Sales"));
-  assert(inferContactPersona("ABM Marketing Manager").personas.includes("Head of Marketing"));
+  assert(inferContactPersona("ABM Marketing Manager").personas.includes("Head of Growth"));
   assert(inferContactPersona("Technical Recruiter").personas.includes("Head of People"));
   assertEquals(inferContactPersona("").primary, "Founder");
 });

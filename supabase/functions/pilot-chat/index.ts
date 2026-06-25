@@ -17,7 +17,7 @@ import { isLeadIntakeRequest, hasNewSourcingIntent, isSaveExistingResultsRequest
 import { normalizeTerm } from "../_shared/inputNormalize.ts";
 import { getSourceCapability } from "../_shared/sourceCapabilities.ts";
 import { getActorByKey, isActorRuntimeEnabled } from "../_shared/actorRegistry.ts";
-import { isFindContactsRequest, personaForAccounts, buildContactSearchQueries, contactDiscoveryFallback, type AccountForContacts } from "../_shared/contactDiscovery.ts";
+import { isFindContactsRequest, personaForAccounts, buildContactSearchQueries, contactDiscoveryFallback, resolveCompanyContactTarget, type AccountForContacts } from "../_shared/contactDiscovery.ts";
 import { buildCompanyBrainContext, hasUsableBrain, brainCompetitors } from "../_shared/companyBrainContext.ts";
 
 
@@ -853,29 +853,60 @@ Deno.serve(async (req) => {
       lead_candidate_id: l.id,
       company: l.account?.name ?? "",
       signal_role: l.reason ?? null,
+      linkedin_company_url: l.account?.linkedin_url ?? null,
+      website_url: l.account?.website_url ?? null,
+      domain: l.account?.domain ?? null,
     })).filter((a) => a.company);
+    
     const persona = personaForAccounts(accounts);
-    const peopleOn = (() => { const a = getActorByKey("apify_people_search"); return !!a && isActorRuntimeEnabled(a); })();
+    
+    const resolvedTargets = accountLeads.map((l) => resolveCompanyContactTarget({
+      account_id: l.id,
+      company: l.account?.name ?? "",
+      signal_role: l.reason ?? null,
+      account: l.account,
+      signal: l.signal,
+    }));
+    
+    const linkedinUrls = resolvedTargets
+      .map((t) => t.linkedin_company_url)
+      .filter((u): u is string => typeof u === "string" && u.trim().length > 0);
+      
+    const hasCompanyUrls = linkedinUrls.length > 0;
+    const selectedActorKey = hasCompanyUrls ? "apify_linkedin_company_employees" : "apify_people_search";
+    
+    const actorEnabled = (() => { const a = getActorByKey(selectedActorKey); return !!a && isActorRuntimeEnabled(a); })();
 
-    if (!peopleOn) {
+    if (!actorEnabled) {
       return await replyAndReturn(
         `${contactDiscoveryFallback()}\n\nFor these ${accounts.length} ${accounts.length === 1 ? "company" : "companies"} I'd target: ${persona.personas.slice(0, 3).join(" / ")}.`,
         { followup: "contacts_unavailable", recommended_persona: persona, account_count: accounts.length, can_draft: false },
       );
     }
+    
     const queries = buildContactSearchQueries(accounts, persona, { maxQueries: Math.min(10, accounts.length * 2) });
+    
     return await delegateToOrchestrate({
       admin, SUPABASE_URL, SUPABASE_ANON_KEY, authHeader, conversationId, workspaceId,
       instruction: `Find decision-makers (${persona.personas.slice(0, 3).join(", ")}) at these companies: ${accounts.map((a) => a.company).join(", ")}. Attach each contact to its company. Do not invent contacts.`,
       toolInput: {
-        intent: "source_people", tool_name: "source_with_apify", selected_actor_key: "apify_people_search",
-        source_type: "people_profiles", query: queries.join(", "), role_keywords: persona.personas.map((p) => p.toLowerCase()),
+        intent: "source_people", tool_name: "source_with_apify", selected_actor_key: selectedActorKey,
+        source_type: "people_profiles", query: hasCompanyUrls ? linkedinUrls.join(", ") : queries.join(", "), role_keywords: persona.personas.map((p) => p.toLowerCase()),
         location: null, max_results: Math.max(1, Math.min(25, accounts.length)),
         needs_enrichment: false, needs_outreach: false, execution_mode: "fast", confidence: 0.85, missing_fields: [],
         reason: "contact discovery: attach decision-makers to account opportunities",
         // run-agent attaches results to these accounts (match by company; no invent).
-        attach_to_accounts: accounts.map((a) => ({ lead_candidate_id: a.lead_candidate_id, company: a.company, signal_role: a.signal_role })),
-        user_input: { keywords: queries },
+        attach_to_accounts: accounts.map((a) => ({
+          lead_candidate_id: a.lead_candidate_id,
+          company: a.company,
+          signal_role: a.signal_role,
+          linkedin_company_url: a.linkedin_company_url,
+          website_url: a.website_url,
+          domain: a.domain
+        })),
+        user_input: hasCompanyUrls 
+          ? { companies: linkedinUrls, jobTitles: persona.personas }
+          : { keywords: queries },
       } as unknown as ToolInput,
       modelUsed: "google/gemini-3-flash-preview", providerUsed: "lovable-ai",
     });

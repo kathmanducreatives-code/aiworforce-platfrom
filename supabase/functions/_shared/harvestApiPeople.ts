@@ -217,3 +217,50 @@ export function buildHarvestApiPeopleInput(generic: GenericPeopleInput): Record<
 
   return out;
 }
+
+export function buildHarvestApiCompanyEmployeesInput(generic: any): Record<string, unknown> {
+  const f = (generic.user_input ?? {}) as Record<string, unknown>;
+  
+  let companies: string[] = [];
+  if (Array.isArray(generic.companies)) {
+    companies = generic.companies.filter((x: unknown): x is string => typeof x === "string" && !!String(x).trim());
+  } else if (Array.isArray(f.companies)) {
+    companies = f.companies.filter((x: unknown): x is string => typeof x === "string" && !!String(x).trim());
+  } else if (typeof f.companyUrl === "string" && f.companyUrl.trim()) {
+    companies = [f.companyUrl.trim()];
+  } else if (typeof generic.query === "string" && generic.query.includes("linkedin.com/company/")) {
+    companies = [generic.query.trim()];
+  }
+  
+  let mode = "Full";
+  if (typeof f.mode === "string" && HARVEST_SCRAPER_MODES.has(f.mode)) {
+    mode = f.mode;
+  } else if (typeof f.profileScraperMode === "string" && HARVEST_SCRAPER_MODES.has(f.profileScraperMode)) {
+    mode = f.profileScraperMode;
+  }
+  
+  const maxItems = Math.max(1, Math.min(100, Number(generic.max_results) || Number(generic.maxItems) || 10));
+  
+  const jobTitles = strArray(f.jobTitles) || strArray(f.currentJobTitles) || deriveJobTitles(generic.role_keywords);
+  
+  const explicitLocations = strArray(f.locations);
+  const normLoc = normalizeLocationName(generic.location);
+  const locations = explicitLocations
+    ? explicitLocations.map((l) => normalizeLocationName(l) ?? l)
+    : normLoc
+      ? [normLoc]
+      : null;
+      
+  const searchQuery = typeof f.searchQuery === "string" ? f.searchQuery : (generic.query && !generic.query.includes("linkedin.com/company/") ? generic.query : undefined);
+  
+  const out: Record<string, unknown> = {
+    companies,
+    mode,
+    maxItems,
+  };
+  if (jobTitles && jobTitles.length > 0) out.jobTitles = jobTitles;
+  if (locations && locations.length > 0) out.locations = locations;
+  if (searchQuery) out.searchQuery = searchQuery;
+  
+  return out;
+}

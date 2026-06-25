@@ -14,8 +14,9 @@ export interface ConversationMemory {
     fit_score: number | null;
     priority: string | null;
     reason: string | null;
-    account: { id: string; name: string; domain: string | null; stage: string | null; industry: string | null } | null;
+    account: { id: string; name: string; domain: string | null; stage: string | null; industry: string | null; website_url?: string | null; linkedin_url?: string | null; location?: string | null } | null;
     contact: { id: string; full_name: string | null; title: string | null; linkedin_url: string | null } | null;
+    signal?: { source_url: string | null } | null;
   }>;
   accounts: Array<{ id: string; name: string; domain: string | null; stage: string | null; industry: string | null }>;
   contacts: Array<{ id: string; full_name: string | null; title: string | null; linkedin_url: string | null }>;
@@ -48,7 +49,7 @@ export async function loadConversationMemory(args: {
     // 1) lead_candidates for this conversation (fallback to workspace recent if none)
     let lcQuery = admin
       .from("lead_candidates")
-      .select("id, plan_id, lead_type, status, fit_score, priority, reason, account_id, contact_id, accounts(id,name,domain,stage,industry), contacts(id,full_name,title,linkedin_url)")
+      .select("id, plan_id, lead_type, status, fit_score, priority, reason, account_id, contact_id, signal_id, accounts(id,name,domain,stage,industry,website_url,linkedin_url,location), contacts(id,full_name,title,linkedin_url), signals(source_url)")
       .eq("workspace_id", workspace_id)
       .order("fit_score", { ascending: false, nullsFirst: false })
       .order("created_at", { ascending: false })
@@ -65,10 +66,22 @@ export async function loadConversationMemory(args: {
       priority: r.priority ?? null,
       reason: r.reason ?? null,
       account: r.accounts
-        ? { id: r.accounts.id, name: r.accounts.name, domain: r.accounts.domain ?? null, stage: r.accounts.stage ?? null, industry: r.accounts.industry ?? null }
+        ? {
+            id: r.accounts.id,
+            name: r.accounts.name,
+            domain: r.accounts.domain ?? null,
+            stage: r.accounts.stage ?? null,
+            industry: r.accounts.industry ?? null,
+            website_url: r.accounts.website_url ?? null,
+            linkedin_url: r.accounts.linkedin_url ?? null,
+            location: r.accounts.location ?? null,
+          }
         : null,
       contact: r.contacts
         ? { id: r.contacts.id, full_name: r.contacts.full_name ?? null, title: r.contacts.title ?? null, linkedin_url: r.contacts.linkedin_url ?? null }
+        : null,
+      signal: r.signals
+        ? { source_url: r.signals.source_url ?? null }
         : null,
     }));
 

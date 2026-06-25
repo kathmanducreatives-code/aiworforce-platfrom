@@ -189,6 +189,9 @@ const COMPANIES_HIRING_RE =
 const PEOPLE_PROFILES_RE =
   /\b(individual (?:profiles?|people|engineers?|developers?|founders?|candidates?)|find (\d+ )?(?:individual )?(?:engineers?|developers?|react developers?|backend engineers?|frontend engineers?|founders?|candidates?|profiles?) (?:in|from|based in)|founder profiles?|senior (?:engineers?|developers?|backend|frontend|fullstack))\b/i;
 
+const EXPLICIT_PEOPLE_RE = /\b(founders?|ceos?|operators?|people|decision[- ]?makers?|heads? of|vps?|directors?)\b/i;
+const EXPLICIT_COMPANY_SUBJECT_RE = /\b(find|get|show|source)\s+(\d+\s+)?(companies|accounts|agencies|businesses|organizations)\b/i;
+
 const VAGUE_SOURCING_RE =
   /\b(find (?:me )?(?:more )?(?:leads?|customers?|prospects?)|i need (?:more )?customers|find compan(?:y|ies) (?:that )?(?:probably|might) need this|find people (?:likely|who might) (?:to )?buy)\b/i;
 
@@ -600,7 +603,8 @@ function regexClassify(message: string): WorkflowDecision | null {
   }
 
   // people-vs-company resolution: explicit people language and NOT company language.
-  if (PEOPLE_PROFILES_RE.test(m) || (PEOPLE_INTENT_RE.test(m) && !COMPANY_INTENT_RE.test(m))) {
+  const isPeopleFirst = EXPLICIT_PEOPLE_RE.test(m) && !EXPLICIT_COMPANY_SUBJECT_RE.test(m);
+  if (PEOPLE_PROFILES_RE.test(m) || isPeopleFirst || (PEOPLE_INTENT_RE.test(m) && !COMPANY_INTENT_RE.test(m))) {
     return defaultDecision("people_sourcing", {
       reason: "individual people / profile language",
       confidence: 0.9,

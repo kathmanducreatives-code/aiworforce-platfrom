@@ -128,6 +128,29 @@ export const ACTOR_INPUT_SCHEMAS: Record<string, ActorInputSchema> = {
     ],
   },
 
+  apify_linkedin_company_employees: {
+    actor_key: "apify_linkedin_company_employees",
+    label: "Apify LinkedIn Company Employees",
+    purpose: "Find decision-maker / employee profiles at specific companies using company page URLs.",
+    source_type: "people_profiles",
+    apify_source_type: "people_profiles",
+    expected_entity_type: "contact",
+    fields: [
+      { name: "companies", type: "array", required: true, description: "LinkedIn company page URLs to scrape." },
+      GENERIC_QUERY, GENERIC_LOCATION, GENERIC_ROLES, GENERIC_MAX,
+    ],
+    max_results_field: "max_results",
+    query_fields: ["query"],
+    location_fields: ["location"],
+    role_fields: ["role_keywords"],
+    strict_fields: ["companies"],
+    allowed_user_input_keys: ["companies", "companyUrl", "mode", "jobTitles", "locations", "searchQuery"],
+    examples: [
+      { user_request: "Find 5 employees at Google",
+        input: { companies: ["https://linkedin.com/company/google"], max_results: 5 } },
+    ],
+  },
+
   apify_linkedin_posts: {
     actor_key: "apify_linkedin_posts",
     label: "Apify LinkedIn Post Search",

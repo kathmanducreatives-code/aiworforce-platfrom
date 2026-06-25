@@ -417,3 +417,13 @@ Deno.test("Phase3: clear company/category intent → jobs (company search source
   assertEquals(d.workflow_category, "company_hiring_sourcing");
   assertEquals(d.selected_actor_key, "apify_jobs");
 });
+
+Deno.test("Decision-maker Discovery 2.0: explicit founder routing", async () => {
+  assertEquals(await cat("Find 5 founders at recruiting agencies in USA"), "people_sourcing");
+  assertEquals(await cat("Find 5 CEOs of healthcare AI companies in London"), "people_sourcing");
+  assertEquals(await cat("Find heads of growth at B2B SaaS companies"), "people_sourcing");
+  
+  assertEquals(await cat("Find 5 recruiting agencies in USA"), "company_hiring_sourcing");
+  assertEquals(await cat("Find 5 companies in healthcare AI"), "company_hiring_sourcing");
+  assertEquals(await cat("Find 5 agencies hiring SDRs"), "company_hiring_sourcing");
+});

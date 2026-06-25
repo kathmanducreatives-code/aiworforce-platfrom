@@ -198,6 +198,27 @@ export const ACTOR_REGISTRY: Record<string, ActorEntry> = {
       "Individual people/profile sourcing is not configured yet. I can find companies hiring those roles using the jobs actor.",
   },
 
+  apify_linkedin_company_employees: {
+    key: "apify_linkedin_company_employees",
+    tool_name: "source_with_apify",
+    actor_id: actorId("APIFY_ACTOR_LINKEDIN_COMPANY_EMPLOYEES", "harvestapi/linkedin-company-employees"),
+    source_type: "people_profiles",
+    label: "LinkedIn Company Employees Scraper",
+    enabled: true,
+    requires_explicit_opt_in: true,
+    best_for: [
+      "finding decision-makers at specific companies using company URLs",
+      "company-scoped contact discovery",
+      "employee search by company page",
+    ],
+    not_for: ["broad generic search when company URL is missing", "job search"],
+    output_type: "people_profiles",
+    default_max_results: 10,
+    max_safe_results: 25,
+    compliance_level: "restricted_people_data",
+    required_env: "APIFY_API_TOKEN",
+  },
+
   apify_profile_enrichment: {
     key: "apify_profile_enrichment",
     tool_name: "source_with_apify",
