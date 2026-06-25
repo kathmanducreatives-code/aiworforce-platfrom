@@ -54,7 +54,7 @@ export default function AwaitingYou() {
           </div>
         </div>
 
-        <div className="space-y-3">
+        <div data-tour="awaiting-queue" className="space-y-3">
           <AnimatePresence>
             {visible.map((item) => {
               const agentName = item.title.split(' ')[0] || 'Agent';

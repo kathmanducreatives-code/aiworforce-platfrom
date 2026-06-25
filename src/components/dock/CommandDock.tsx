@@ -173,6 +173,7 @@ export default function CommandDock({ sidebarCollapsed = false }: CommandDockPro
 
       {/* The dock — floating, centered within main content area, bottom */}
       <div
+        data-tour="command-dock"
         className={cn(
           "fixed z-40 flex justify-center px-4 pointer-events-none",
           isMobile ? "left-0 right-0" : sidebarCollapsed ? "left-[68px] right-0" : "left-[260px] right-0"
