@@ -311,7 +311,7 @@ export default function Workflows() {
           <main className="col-span-12 lg:col-span-9 space-y-12">
             {/* Featured "Start here" */}
             {showFeatured && (
-              <section className="animate-fade-in">
+              <section data-tour="workflows-featured" className="animate-fade-in">
                 <div className="flex items-center gap-2 mb-4">
                   <Sparkles className="w-4 h-4 text-emerald-400" />
                   <h2 className="text-[20px] font-semibold text-foreground tracking-tight">Start here</h2>
