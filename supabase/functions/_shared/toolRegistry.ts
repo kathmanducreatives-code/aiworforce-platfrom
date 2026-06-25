@@ -631,12 +631,30 @@ function normalizeLinkedinCommenterItem(raw: any) {
 
 function normalizeApifyPeopleItem(raw: any) {
   const r = raw && typeof raw === "object" ? raw : {};
+  // HarvestAPI profile-search nests the useful fields: name = firstName+lastName
+  // (no combined field), title/company in currentPosition[0], location is an
+  // object. Flat pickStr alone returned nulls → real founders rejected. Extract
+  // the nested shapes too, and emit a top-level `name` for generic consumers.
+  const cp = Array.isArray(r.currentPosition) ? (r.currentPosition[0] ?? {}) : (r.currentPosition ?? {});
+  const exp = Array.isArray(r.experience) ? (r.experience[0] ?? {}) : {};
+  const nameCombo = [r.firstName, r.lastName].filter(Boolean).join(" ").trim() || null;
+  const full_name = pickStr(r, ["full_name", "fullName", "name", "personName", "displayName"]) ?? nameCombo;
+  const locObj = r.location;
+  const location = typeof locObj === "string"
+    ? locObj
+    : (locObj?.parsed?.text ?? locObj?.linkedinText ?? locObj?.parsed?.city ?? null)
+      ?? pickStr(r, ["geoLocation", "city", "place", "country"]);
+  const company = pickStr(r, ["currentCompany", "companyName", "company", "employer", "organization"])
+    ?? pickStr(cp, ["companyName", "company"]) ?? pickStr(exp, ["companyName", "company"]) ?? null;
+  const title = pickStr(r, ["currentJobTitle", "jobTitle", "title", "position"])
+    ?? pickStr(cp, ["position", "title"]) ?? pickStr(exp, ["position", "title"]) ?? null;
   return {
-    full_name:   pickStr(r, ["full_name", "fullName", "name", "personName", "displayName"]),
-    headline:    pickStr(r, ["headline", "title_headline", "subtitle"]),
-    title:       pickStr(r, ["currentJobTitle", "jobTitle", "title", "position"]),
-    location:    pickStr(r, ["location", "geoLocation", "city", "place", "country"]),
-    company:     pickStr(r, ["currentCompany", "companyName", "company", "employer", "organization"]),
+    name:        full_name, // generic consumers (run-agent mapItem) read `name`
+    full_name,
+    headline:    pickStr(r, ["headline", "title_headline", "subtitle", "occupation"]),
+    title,
+    location,
+    company,
     profile_url: pickStr(r, ["profileUrl", "profile_url", "linkedinUrl", "linkedin_url", "url", "publicProfileUrl"]),
     summary:     pickStr(r, ["summary", "about", "description"]),
     source:      "apify",

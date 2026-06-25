@@ -91,7 +91,7 @@ export function normalizeDiscoveredContact(raw: unknown): DiscoveredContact | nu
   );
   return {
     name,
-    title: (r.title ?? r.position ?? r.jobTitle ?? r.currentPosition?.title ?? headline ?? null) || null,
+    title: (r.title ?? r.position ?? r.jobTitle ?? r.currentPosition?.title ?? (Array.isArray(r.currentPosition) ? r.currentPosition[0]?.position : undefined) ?? headline ?? null) || null,
     linkedin_url: (r.linkedin_url ?? r.linkedinUrl ?? r.profileUrl ?? r.publicProfileUrl ?? r.url ?? null) || null,
     email: (r.email ?? (Array.isArray(r.emails) ? r.emails[0] : undefined) ?? null) || null,
     company: (typeof company === "string" ? company.trim() : null) || null,

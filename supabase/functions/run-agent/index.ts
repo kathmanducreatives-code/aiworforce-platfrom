@@ -356,14 +356,25 @@ Deno.serve(async (req) => {
           category: (tool_input_body?.company_category as string) ?? null,
           source_type: (tool_input_body?.source_type as string) ?? source_type ?? null,
         };
-        const mapItem = (it: any) => ({
-          name: it?.name ?? it?.fullName ?? it?.author?.name ?? it?.actor?.name ?? null,
-          title: it?.title ?? it?.jobTitle ?? it?.position ?? it?.headline ?? null,
-          company: it?.company ?? it?.companyName ?? it?.organization ?? it?.actor?.name ?? null,
-          source_url: it?.url ?? it?.link ?? it?.postUrl ?? it?.linkedinUrl ?? it?.jobUrl ?? it?.query?.post ?? null,
-          location: it?.location ?? it?.companyLocation ?? null,
-          raw: it,
-        });
+        const mapItem = (it: any) => {
+          // HarvestAPI people profiles nest the useful fields: name = firstName+
+          // lastName, title/company live in currentPosition[0], location is an
+          // object. Extract those so real profiles aren't rejected as "missing
+          // name/company / wrong role".
+          const cp = Array.isArray(it?.currentPosition) ? it.currentPosition[0] : (it?.currentPosition ?? null);
+          const fullName = [it?.firstName, it?.lastName].filter(Boolean).join(" ").trim();
+          const locObj = it?.location;
+          const locStr = typeof locObj === "string" ? locObj
+            : (locObj?.parsed?.text ?? locObj?.linkedinText ?? locObj?.parsed?.city ?? null);
+          return {
+            name: it?.name ?? it?.fullName ?? (fullName || null) ?? it?.author?.name ?? it?.actor?.name ?? null,
+            title: it?.title ?? it?.jobTitle ?? it?.position ?? cp?.position ?? cp?.title ?? it?.headline ?? null,
+            company: it?.company ?? it?.companyName ?? cp?.companyName ?? it?.organization ?? it?.actor?.name ?? null,
+            source_url: it?.url ?? it?.link ?? it?.postUrl ?? it?.linkedinUrl ?? it?.jobUrl ?? it?.query?.post ?? null,
+            location: locStr ?? it?.companyLocation ?? null,
+            raw: it,
+          };
+        };
         const rawAllItems: ReturnType<typeof mapItem>[] = [];
         const runAttempt = async (strategy: { role_keywords: string[]; relax_location: boolean }) => {
           const attemptInput = {
