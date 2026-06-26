@@ -41,15 +41,13 @@ const BookInterview = () => {
       if (!token) return;
 
       try {
-        // Fetch the slot by token
-        const { data: slot, error: slotError } = await supabase
-          .from('interview_slots')
-          .select('*')
-          .eq('booking_token', token)
-          .eq('status', 'available')
-          .single();
+        // Fetch the slot + interview type + availability via SECURITY DEFINER RPC
+        const { data: ctx, error: ctxError } = await supabase.rpc(
+          'get_interview_booking_context',
+          { p_token: token }
+        );
 
-        if (slotError || !slot) {
+        if (ctxError || !ctx) {
           toast({
             title: 'Invalid Link',
             description: 'This booking link is no longer valid.',
@@ -58,25 +56,10 @@ const BookInterview = () => {
           return;
         }
 
-        setSlotData(slot);
-
-        // Fetch interview type
-        const { data: type } = await supabase
-          .from('interview_types')
-          .select('*')
-          .eq('id', slot.interview_type_id)
-          .single();
-
-        if (type) setInterviewType(type as InterviewType);
-
-        // Fetch recruiter availability
-        const { data: avail } = await supabase
-          .from('interview_availability')
-          .select('*')
-          .eq('user_id', slot.recruiter_id)
-          .eq('is_active', true);
-
-        if (avail) setAvailability(avail as InterviewAvailability[]);
+        const ctxObj = ctx as any;
+        setSlotData(ctxObj.slot);
+        if (ctxObj.interview_type) setInterviewType(ctxObj.interview_type as InterviewType);
+        if (ctxObj.availability) setAvailability(ctxObj.availability as InterviewAvailability[]);
       } catch (error) {
         console.error('Error fetching slot data:', error);
       } finally {
@@ -126,30 +109,18 @@ const BookInterview = () => {
       const scheduledAt = new Date(selectedDate);
       scheduledAt.setHours(parseInt(hours), parseInt(minutes), 0, 0);
 
-      // Create the interview
-      const { data: interview, error: interviewError } = await supabase
-        .from('interviews')
-        .insert({
-          slot_id: slotData.id,
-          candidate_name: candidateName,
-          candidate_email: candidateEmail,
-          interview_type_id: slotData.interview_type_id,
-          recruiter_id: slotData.recruiter_id,
-          scheduled_at: scheduledAt.toISOString(),
-          duration_minutes: interviewType?.duration_minutes || 30,
-          meeting_link: interviewType?.meeting_link_template || null,
-          status: 'scheduled',
-        })
-        .select()
-        .single();
+      // Book interview via SECURITY DEFINER RPC (server validates token + slot atomically)
+      const { data: interview, error: interviewError } = await supabase.rpc(
+        'book_interview_with_token',
+        {
+          p_token: token!,
+          p_candidate_name: candidateName,
+          p_candidate_email: candidateEmail,
+          p_scheduled_at: scheduledAt.toISOString(),
+        }
+      );
 
       if (interviewError) throw interviewError;
-
-      // Update slot status to booked
-      await supabase
-        .from('interview_slots')
-        .update({ status: 'booked' })
-        .eq('id', slotData.id);
 
       setBookedInterview(interview);
       setIsBooked(true);

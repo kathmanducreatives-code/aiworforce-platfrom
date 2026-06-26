@@ -14,6 +14,7 @@ export default function CandidateApply() {
   const [step, setStep] = useState<Step>('landing');
   const [job, setJob] = useState<any>(null);
   const [applicationId, setApplicationId] = useState<string | null>(null);
+  const [accessToken, setAccessToken] = useState<string | null>(null);
   const [extractedData, setExtractedData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -76,7 +77,7 @@ export default function CandidateApply() {
     const { data: appData, error: insertError } = await supabase
       .from('screening_applications')
       .insert({ job_id: job.id })
-      .select('id')
+      .select('id, access_token')
       .single();
 
     if (insertError || !appData) {
@@ -84,13 +85,15 @@ export default function CandidateApply() {
       return;
     }
 
-    // Save parsed resume data to the newly created application
-    await supabase
-      .from('screening_applications')
-      .update({ extracted_data: data })
-      .eq('id', appData.id);
+    // Save parsed resume data via token-gated RPC (anon UPDATE is no longer allowed directly)
+    await supabase.rpc('update_screening_application_with_token', {
+      p_id: appData.id,
+      p_access_token: (appData as any).access_token,
+      p_extracted_data: data,
+    });
 
     setApplicationId(appData.id);
+    setAccessToken((appData as any).access_token);
     setExtractedData(data);
     setStep('screening');
   };
@@ -124,7 +127,7 @@ export default function CandidateApply() {
     case 'resume':
       return <ResumeUploadStep jobId={job.id} onComplete={handleResumeComplete} />;
     case 'screening':
-      return <ScreeningChatStep applicationId={applicationId!} extractedData={extractedData} onComplete={handleScreeningComplete} />;
+      return <ScreeningChatStep applicationId={applicationId!} accessToken={accessToken!} extractedData={extractedData} onComplete={handleScreeningComplete} />;
     case 'already_applied':
       return (
         <div className="min-h-screen flex items-center justify-center bg-background p-4">
