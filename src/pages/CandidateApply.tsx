@@ -76,7 +76,7 @@ export default function CandidateApply() {
     const { data: appData, error: insertError } = await supabase
       .from('screening_applications')
       .insert({ job_id: job.id })
-      .select('id')
+      .select('id, access_token')
       .single();
 
     if (insertError || !appData) {
@@ -84,13 +84,15 @@ export default function CandidateApply() {
       return;
     }
 
-    // Save parsed resume data to the newly created application
-    await supabase
-      .from('screening_applications')
-      .update({ extracted_data: data })
-      .eq('id', appData.id);
+    // Save parsed resume data via token-gated RPC (anon UPDATE is no longer allowed directly)
+    await supabase.rpc('update_screening_application_with_token', {
+      p_id: appData.id,
+      p_access_token: (appData as any).access_token,
+      p_extracted_data: data,
+    });
 
     setApplicationId(appData.id);
+    setAccessToken((appData as any).access_token);
     setExtractedData(data);
     setStep('screening');
   };
