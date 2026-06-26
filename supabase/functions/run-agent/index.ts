@@ -403,7 +403,53 @@ Deno.serve(async (req) => {
         // counts + reject reasons, surfaced in Workbench Insights + narrative.
         try {
           const { summarizeSourceQuality, classifyResults, topRejectReasons } = await import("../_shared/sourceQuality.ts");
+          const { evaluateLeadQuality, buildWhyThisLead } = await import("../_shared/leadQuality.ts");
           const classified = classifyResults(rawAllItems, criteria, strict);
+
+          // Claude-Code-level quality scoring of the accepted set, against
+          // Company Brain + the user's request. Surfaced in Workbench Insights
+          // (tier mix + why-samples); never fabricates fields.
+          const brainLite = brain ? {
+            icp: (brain as Record<string, unknown>).icp as Record<string, unknown> | undefined,
+            gtm: (brain as Record<string, unknown>).gtm as Record<string, unknown> | undefined,
+            positioning: (brain as Record<string, unknown>).positioning as Record<string, unknown> | undefined,
+            company: (brain as Record<string, unknown>).company as Record<string, unknown> | undefined,
+          } : null;
+          const qReq = {
+            role: criteria.role, industry: criteria.industry, location: criteria.location,
+            stage: criteria.stage, category: criteria.category,
+            strict_location: strict.location, strict_industry: strict.industry, strict_stage: strict.stage,
+          };
+          const qStrictness = (strict.location || strict.industry || strict.stage) ? "strict" as const : "flexible" as const;
+          const tierCounts: Record<string, number> = { hot: 0, qualified: 0, weak: 0, rejected: 0 };
+          const whySamples: string[] = [];
+          let scoreSum = 0;
+          for (const it of classified.accepted) {
+            const r = (it.raw ?? {}) as Record<string, unknown>;
+            const q = evaluateLeadQuality({
+              lead: {
+                name: it.name ?? it.company, company: it.company, title: it.title, location: it.location,
+                website: (r.companyUrl ?? r.website ?? r.company_website ?? r.url) as string | undefined,
+                industry: (r.industry ?? r.category) as string | undefined,
+                team_size: (r.team_size ?? r.companySize ?? r.employees) as string | undefined,
+                exact_signal: (r.exact_signal ?? r.jobTitle ?? r.positionName ?? r.title) as string | undefined,
+                signal_type: source_type === "jobs" ? "hiring" : undefined,
+                source_url: it.source_url,
+              },
+              companyBrain: brainLite,
+              sourceType: criteria.source_type ?? source_type,
+              userRequest: qReq,
+              strictness: qStrictness,
+            });
+            tierCounts[q.tier] = (tierCounts[q.tier] ?? 0) + 1;
+            scoreSum += q.score;
+            if (whySamples.length < 3 && q.accepted) whySamples.push(`${(it.name ?? it.company ?? "Lead")}: ${buildWhyThisLead(q)}`);
+          }
+          const leadQualitySummary = {
+            tiers: tierCounts,
+            avg_score: classified.accepted.length ? Math.round(scoreSum / classified.accepted.length) : 0,
+            why_samples: whySamples,
+          };
           const counts = summarizeSourceQuality({
             attempts: adaptive.attempts,
             accepted_count: adaptive.found,
@@ -416,6 +462,7 @@ Deno.serve(async (req) => {
             top_reject_reasons: topRejectReasons(classified.reject_reason_counts),
             attempt_labels: adaptive.attempts.map((a) => a.strategy),
             needs_permission_to_broaden: !!adaptive.needs_permission_to_broaden,
+            lead_quality: leadQualitySummary,
           };
           // Phase 5 — clean AI-employee activity timeline (no raw logs/provider noise).
           const plannerLabel = (sourcePlanMeta?.planner_mode === "claude") ? "Claude"
