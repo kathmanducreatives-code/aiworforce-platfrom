@@ -126,12 +126,19 @@ export default function ExecutionPlanCard({ planId, meta }: Props) {
     return Array.from(set);
   }, [tasks, agentById, meta?.agents]);
 
-  // Derive normalized status
+  // Derive normalized status — uiState is the single source of truth, but
+  // we keep the legacy fallbacks so the status pill is never blank.
   const pendingApprovals = approvals.some((a) => a.status === 'pending');
   const anyFailed = tasks.some((t) => t.status === 'failed');
   const anyRunning = tasks.some((t) => t.status === 'running' || t.status === 'pending');
   const allComplete = tasks.length > 0 && tasks.every((t) => t.status === 'complete' || t.status === 'skipped');
   const normalizedStatus: string =
+    uiState === 'stale' ? 'stale' :
+    uiState === 'partial' ? 'partial' :
+    uiState === 'waiting_confirmation' ? 'awaiting_approval' :
+    uiState === 'running' || uiState === 'streaming_progress' ? 'running' :
+    uiState === 'complete' ? 'complete' :
+    uiState === 'failed' ? 'failed' :
     rawStatus === 'failed' ? 'failed' :
     pendingApprovals ? 'awaiting_approval' :
     anyRunning ? 'running' :
