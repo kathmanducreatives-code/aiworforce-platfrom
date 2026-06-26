@@ -112,16 +112,15 @@ export default function ScreeningChatStep({ applicationId, accessToken, extracte
       const updatedAnswers = [...answers, newAnswer];
       setAnswers(updatedAnswers);
 
-      // Save answers to DB
+      // Save answers via token-gated RPC
       const totalTime = Math.round((Date.now() - startTime) / 1000);
-      await supabase
-        .from('screening_applications')
-        .update({
-          screening_answers: updatedAnswers,
-          tab_switches: tabSwitches,
-          total_time_seconds: totalTime,
-        })
-        .eq('id', applicationId);
+      await supabase.rpc('update_screening_application_with_token', {
+        p_id: applicationId,
+        p_access_token: accessToken,
+        p_screening_answers: updatedAnswers,
+        p_tab_switches: tabSwitches,
+        p_total_time_seconds: totalTime,
+      });
 
       const nextIndex = currentIndex + 1;
 
