@@ -60,7 +60,7 @@ export default function DashboardChecklist() {
           return;
         }
 
-        const planIds = plans.map((p) => p.id);
+        const planIds = (plans as any[]).map((p) => p.id);
 
         const { data: leads } = await supabase
           .from('lead_candidates' as any)
