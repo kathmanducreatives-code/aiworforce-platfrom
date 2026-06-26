@@ -241,6 +241,27 @@ export default function ExecutionPlanCard({ planId, meta }: Props) {
         </ul>
       </div>
 
+      {isWorkflowActive(uiState) && (() => {
+        const activeTask = tasks.find((t) => t.status === 'running' || t.status === 'pending') ?? null;
+        const tc = activeTask ? latestToolCallByTask[activeTask.id] : null;
+        const stage = inferStage({
+          agentSlug: activeTask ? slugForTask(activeTask) : null,
+          description: activeTask?.description ?? null,
+          toolName: tc?.tool_name ?? null,
+        });
+        const longRunning = isLongRunning(lastActivityAt);
+        return <LiveProgressLine stage={stage} longRunning={longRunning} />;
+      })()}
+
+      {uiState === 'stale' && (
+        <div className="mt-2 flex items-center gap-2 text-[11px] text-amber-300 bg-amber-500/5 border border-amber-500/20 rounded px-2 py-1.5">
+          <Clock className="h-3 w-3" />
+          This run looks stale — no backend activity for a while. You can keep waiting or retry.
+        </div>
+      )}
+      {uiState === 'running' && secondsSinceChange > 25 && (
+        <div className="mt-2 text-[11px] text-[#9aa4af]">Still working — waiting for the latest backend update.</div>
+      )}
 
       <ActivityMiniFeed events={activity} />
 
