@@ -13,6 +13,7 @@ interface Question {
 
 interface ScreeningChatStepProps {
   applicationId: string;
+  accessToken: string;
   extractedData: any;
   onComplete: () => void;
 }
@@ -22,7 +23,7 @@ interface Message {
   content: string;
 }
 
-export default function ScreeningChatStep({ applicationId, extractedData, onComplete }: ScreeningChatStepProps) {
+export default function ScreeningChatStep({ applicationId, accessToken, extractedData, onComplete }: ScreeningChatStepProps) {
   const [questions, setQuestions] = useState<Question[]>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [messages, setMessages] = useState<Message[]>([]);
