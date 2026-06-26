@@ -57,7 +57,12 @@ export function deriveWorkflowUiState(input: DeriveWorkflowInput): WorkflowRunUi
 
   const anyFailed = tasks.some((t) => t.status === 'failed');
   const anyRunning = tasks.some((t) => t.status === 'running' || t.status === 'pending');
+  const allTerminal = tasks.length > 0 && tasks.every((t) => t.status === 'complete' || t.status === 'skipped' || t.status === 'failed');
   const allDone = tasks.length > 0 && tasks.every((t) => t.status === 'complete' || t.status === 'skipped');
+
+  if (allTerminal && anyFailed) return 'partial';
+  if (allDone) return 'complete';
+  if (plan.status === 'complete') return 'complete';
 
   if (allDone && anyFailed) return 'partial';
   if (allDone) return 'complete';
