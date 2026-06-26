@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import { Loader2, Gauge, ShieldCheck } from 'lucide-react';
+import { Loader2, Gauge, ShieldCheck, Clock } from 'lucide-react';
 import { usePlanDetail } from '@/hooks/usePlanDetail';
 import { useAgents } from '@/hooks/useAgents';
 import { useWorkspace } from '@/contexts/WorkspaceContext';
@@ -9,6 +9,9 @@ import ExecutionTaskRow from './ExecutionTaskRow';
 import ActivityMiniFeed from './ActivityMiniFeed';
 import PlanStatusPill from './PlanStatusPill';
 import AgentProcessRail from '../agents/AgentProcessRail';
+import LiveProgressLine from './LiveProgressLine';
+import { inferStage } from '@/lib/chat/progressCopy';
+import { isWorkflowActive, isLongRunning } from '@/lib/chat/state';
 import type { DBToolCall, DBApproval } from '@/lib/orchestration';
 
 
@@ -43,7 +46,7 @@ const TOOL_PROVIDER_KEY: Record<string, string> = {
 export default function ExecutionPlanCard({ planId, meta }: Props) {
   const { workspaceId } = useWorkspace();
   const { agents } = useAgents(workspaceId);
-  const { plan, tasks, activity, approvals, toolCalls, loading } = usePlanDetail(planId);
+  const { plan, tasks, activity, approvals, toolCalls, loading, uiState, lastActivityAt, secondsSinceChange } = usePlanDetail(planId);
   const { setView, openWorkbench } = useChatWorkspace();
 
   const agentById = useMemo(() => {
