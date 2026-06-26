@@ -8,6 +8,7 @@ const STATUS_TONE: Record<string, string> = {
   complete: 'bg-emerald-500/10 text-emerald-300 border-emerald-500/20',
   partial: 'bg-emerald-500/10 text-emerald-300 border-emerald-500/20',
   failed: 'bg-rose-500/10 text-rose-300 border-rose-500/20',
+  stale: 'bg-zinc-500/10 text-zinc-300 border-zinc-500/25',
 };
 
 export default function PlanStatusPill({ status }: Props) {
