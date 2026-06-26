@@ -161,7 +161,7 @@ async function generateWorkflowConfirmation(prompt: string, workspaceId: string,
   const company = profile?.company ?? {};
   const icp = profile?.icp ?? {};
 
-  const systemPrompt = \`You are a GTM AI workforce coordinator. The user wants to run a business workflow.
+  const systemPrompt = `You are a GTM AI workforce coordinator. The user wants to run a business workflow.
 Your goal is to parse their request and generate a structured workflow confirmation object.
 Use the following templates as your reference for matching workflows:
 1. ID: "find_hiring_signal_accounts"
@@ -235,7 +235,7 @@ Response format: Return ONLY a JSON object of this structure:
   "output": "string",
   "safety": "string",
   "estimated_credits": number
-}\`;
+}`;
 
   try {
     const ai = await generateJson({
