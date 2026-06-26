@@ -394,8 +394,8 @@ function ConfirmDialog({ action, rows, credits, onCancel, onConfirm }: { action:
       <div className="absolute inset-0 bg-black/60 pointer-events-auto backdrop-blur-[2px]" onClick={onCancel} aria-hidden />
       <div className="relative pointer-events-auto w-[400px] max-w-[calc(100%-32px)] rounded-xl border border-emerald-500/25 bg-gradient-to-b from-emerald-500/[0.04] to-[#0a0d12] shadow-2xl p-5 animate-in fade-in slide-in-from-bottom-2 duration-200">
         {/* Header */}
-        <div className="text-[11px] font-mono uppercase tracking-[0.2em] text-[#7D8590] mb-0.5">
-          Run next step
+        <div className="text-[11px] font-mono uppercase tracking-[0.2em] text-emerald-400/80 mb-0.5">
+          Next step ready
         </div>
         <h4 className="text-[16px] font-bold text-white tracking-tight">{label}</h4>
 

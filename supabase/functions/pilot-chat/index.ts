@@ -267,6 +267,38 @@ Response format: Return ONLY a JSON object of this structure:
   };
 }
 
+// Short, natural Pilot reply shown ABOVE the compact workflow card. This is the
+// "conversational handoff" — Pilot acknowledges the request and previews who
+// will do what, in 2-3 sentences. Keyed on workflow_id with a graceful generic
+// fallback built from the agent team so it stays consistent if the planner
+// picks an unexpected workflow. Never promises to send anything.
+function buildWorkflowHandoffMessage(confirmation: any): string {
+  const id = String(confirmation?.workflow_id ?? "");
+  switch (id) {
+    case "find_hiring_signal_accounts":
+      return "Got it — I'll turn this into a sourcing workflow.\n\nScout will look for account opportunities, Aria will rank the best matches, and I'll open the results in Workbench. Nothing will be sent.";
+    case "find_decision_makers":
+      return "Got it — I'll prepare the next step.\n\nScout will search for decision-makers at these accounts and attach only verified company-matched contacts. Nothing will be sent.";
+    case "enrich_companies":
+      return "Got it — I'll set up enrichment.\n\nHawk will gather company context and open the details in Workbench. Nothing will be sent.";
+    case "draft_outreach":
+      return "Got it — Penn can prepare drafts for your review.\n\nNothing will be sent automatically. Drafts will wait for your approval.";
+    case "linkedin_post_from_signals":
+      return "Got it — Scribe can draft this content.\n\nScribe will prepare post drafts for your review. Nothing will be posted.";
+    case "website_audit":
+      return "Got it — I'll set this up as a website audit.\n\nHawk will review the site, Aria will prioritize issues, and Scribe can summarize the recommendations.";
+    case "competitor_snapshot":
+      return "Got it — I'll set up a competitor snapshot.\n\nHawk will gather competitor signals and Aria will highlight what matters. Nothing will be sent.";
+    default: {
+      const team: string[] = Array.isArray(confirmation?.agent_team) ? confirmation.agent_team : [];
+      const names = team.filter((s) => s && s !== "pilot").map((s) => s[0].toUpperCase() + s.slice(1));
+      const who = names.length ? `${names.join(" and ")} will handle this` : "I'll handle this";
+      const out = confirmation?.output ? ` and I'll open the results in Workbench` : "";
+      return `Got it — I'll set up "${confirmation?.workflow_name ?? "this workflow"}".\n\n${who}${out}. Nothing will be sent.`;
+    }
+  }
+}
+
 async function showWorkflowConfirmation(
   message: string,
   conversationId: string,
@@ -277,7 +309,7 @@ async function showWorkflowConfirmation(
 ): Promise<Response> {
   console.log("[pilot-chat] showWorkflowConfirmation: showing card", { category, message });
   const confirmation = await generateWorkflowConfirmation(message, workspaceId, admin);
-  const confirmContent = `I'll set up this workflow for you. Review the details below and click Start when ready.`;
+  const confirmContent = buildWorkflowHandoffMessage(confirmation);
   const { data: saved } = await admin
     .from("messages")
     .insert({
@@ -1689,7 +1721,7 @@ Deno.serve(async (req) => {
   if (needsConfirmation) {
     console.log("[pilot-chat] workflow_confirmation_gate: showing card", { category: decision.workflow_category, actionSource });
     const confirmation = await generateWorkflowConfirmation(message, workspaceId, admin);
-    const confirmContent = `I'll set up this workflow for you. Review the details below and click Start when ready.`;
+    const confirmContent = buildWorkflowHandoffMessage(confirmation);
     const { data: saved } = await admin
       .from("messages")
       .insert({
