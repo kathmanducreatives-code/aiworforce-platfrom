@@ -44,7 +44,7 @@ export default function DashboardChecklist() {
     async function fetchStatus() {
       try {
         const { data: plans } = await supabase
-          .from('plans')
+          .from('task_plans' as any)
           .select('id')
           .eq('workspace_id', workspaceId);
 
@@ -60,7 +60,7 @@ export default function DashboardChecklist() {
           return;
         }
 
-        const planIds = plans.map((p) => p.id);
+        const planIds = (plans as any[]).map((p) => p.id);
 
         const { data: leads } = await supabase
           .from('lead_candidates' as any)

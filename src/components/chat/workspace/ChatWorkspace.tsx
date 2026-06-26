@@ -49,6 +49,37 @@ export default function ChatWorkspace() {
     if (mode === 'closed') openedOnceRef.current = false;
   }, [mode, isMobile, openHistory]);
 
+  // Restore the last-active conversation when the workspace opens on an empty view.
+  const restoredOnceRef = useRef(false);
+  useEffect(() => {
+    if (mode === 'closed') { restoredOnceRef.current = false; return; }
+    if (restoredOnceRef.current) return;
+    if (view.kind !== 'empty') { restoredOnceRef.current = true; return; }
+    let cancelled = false;
+    (async () => {
+      try {
+        const { getLastConversationId } = await import('@/hooks/useUserConversations');
+        const { supabase } = await import('@/integrations/supabase/client');
+        const lastId = getLastConversationId();
+        if (!lastId) { restoredOnceRef.current = true; return; }
+        const { data } = await supabase.from('conversations' as any).select('id, agent_slug').eq('id', lastId).maybeSingle();
+        if (cancelled) return;
+        const row = data as unknown as { id: string; agent_slug: string } | null;
+        if (row) setView({ kind: 'chat', conversationId: row.id, agentSlug: row.agent_slug ?? 'pilot' });
+      } finally {
+        restoredOnceRef.current = true;
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [mode, view.kind, setView]);
+
+  // Persist active conversation id so we can restore on reload.
+  useEffect(() => {
+    if (view.kind === 'chat' && view.conversationId) {
+      import('@/hooks/useUserConversations').then((m) => m.setLastConversationId(view.conversationId));
+    }
+  }, [view]);
+
   // Cmd/Ctrl+B toggles history
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {

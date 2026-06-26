@@ -63,7 +63,7 @@ export default function ConversationsSidebar({ wide }: { wide?: boolean }) {
   const { workspaceId } = useWorkspace();
   const { agents } = useAgents(workspaceId);
   const { view, setView } = useChatWorkspace();
-  const { conversations } = useUserConversations();
+  const { conversations, state: convState, error: convError, retry } = useUserConversations();
   const { createConversation } = useConversationActions();
   const [filter, setFilter] = useState<Filter>('all');
   const [query, setQuery] = useState('');
@@ -115,8 +115,31 @@ export default function ConversationsSidebar({ wide }: { wide?: boolean }) {
       </div>
 
       <div className="flex-1 overflow-y-auto px-1.5">
-        {filtered.length === 0 ? (
-          <div className="text-xs text-[#484F58] px-2 py-3">No conversations.</div>
+        {convState === 'loading' ? (
+          <ul className="space-y-1 px-1.5 pt-2" aria-label="Loading conversations">
+            {Array.from({ length: 6 }).map((_, i) => (
+              <li key={i} className="flex items-start gap-2 py-1.5">
+                <div className="h-5 w-5 rounded-full bg-white/[0.05] animate-pulse" />
+                <div className="flex-1 space-y-1">
+                  <div className="h-2.5 w-3/4 rounded bg-white/[0.05] animate-pulse" />
+                  <div className="h-2 w-1/3 rounded bg-white/[0.04] animate-pulse" />
+                </div>
+              </li>
+            ))}
+          </ul>
+        ) : convState === 'error' ? (
+          <div className="px-2 py-3 space-y-2">
+            <div className="text-xs text-red-300/90">Couldn’t load chat history.</div>
+            {convError && <div className="text-[10px] text-[#484F58] line-clamp-2">{convError}</div>}
+            <button
+              onClick={() => retry()}
+              className="text-[11px] px-2 py-1 rounded-md bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.08] text-[#F0F6FC]"
+            >Retry</button>
+          </div>
+        ) : filtered.length === 0 ? (
+          <div className="text-xs text-[#7D8590] px-2 py-3 leading-relaxed">
+            No conversations yet. Start by asking your AI workforce to run a workflow.
+          </div>
         ) : (
           <ul className="space-y-0.5">
             {filtered.map((c) => (
