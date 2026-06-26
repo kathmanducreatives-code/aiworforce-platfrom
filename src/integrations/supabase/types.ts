@@ -3415,6 +3415,46 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      book_interview_with_token: {
+        Args: {
+          p_candidate_email: string
+          p_candidate_name: string
+          p_scheduled_at: string
+          p_token: string
+        }
+        Returns: {
+          cancellation_reason: string | null
+          cancelled_at: string | null
+          candidate_email: string
+          candidate_id: string | null
+          candidate_name: string
+          candidate_source:
+            | Database["public"]["Enums"]["candidate_source"]
+            | null
+          created_at: string | null
+          duration_minutes: number
+          feedback: string | null
+          id: string
+          interview_type_id: string | null
+          location: string | null
+          meeting_link: string | null
+          notes: string | null
+          recruiter_id: string | null
+          reminder_15min_sent: boolean | null
+          reminder_1h_sent: boolean | null
+          reminder_24h_sent: boolean | null
+          scheduled_at: string
+          slot_id: string | null
+          status: Database["public"]["Enums"]["interview_status"]
+          updated_at: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "interviews"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       get_client_branding: {
         Args: { client_uuid: string }
         Returns: {
@@ -3426,6 +3466,10 @@ export type Database = {
           primary_color: string
           secondary_color: string
         }[]
+      }
+      get_interview_booking_context: {
+        Args: { p_token: string }
+        Returns: Json
       }
       get_room_member_profiles: {
         Args: { room_uuid: string }
@@ -3447,6 +3491,46 @@ export type Database = {
       provision_workspace_for_user: {
         Args: { _user_id: string }
         Returns: string
+      }
+      update_screening_application_with_token: {
+        Args: {
+          p_access_token: string
+          p_candidate_edits?: Json
+          p_extracted_data?: Json
+          p_id: string
+          p_screening_answers?: Json
+          p_status?: string
+          p_tab_switches?: number
+          p_total_time_seconds?: number
+        }
+        Returns: {
+          access_token: string
+          candidate_edits: Json | null
+          completed_at: string | null
+          created_at: string
+          extracted_data: Json | null
+          id: string
+          interview_questions: Json | null
+          is_archived: boolean | null
+          job_id: string
+          match_category: string | null
+          match_score: number | null
+          recruiter_notes: string | null
+          recruiter_status: string | null
+          red_flags: Json | null
+          resume_url: string | null
+          screening_answers: Json | null
+          status: string
+          strengths: Json | null
+          tab_switches: number
+          total_time_seconds: number
+        }
+        SetofOptions: {
+          from: "*"
+          to: "screening_applications"
+          isOneToOne: true
+          isSetofReturn: false
+        }
       }
     }
     Enums: {
