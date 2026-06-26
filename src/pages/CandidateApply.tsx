@@ -14,6 +14,7 @@ export default function CandidateApply() {
   const [step, setStep] = useState<Step>('landing');
   const [job, setJob] = useState<any>(null);
   const [applicationId, setApplicationId] = useState<string | null>(null);
+  const [accessToken, setAccessToken] = useState<string | null>(null);
   const [extractedData, setExtractedData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
