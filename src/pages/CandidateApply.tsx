@@ -127,7 +127,7 @@ export default function CandidateApply() {
     case 'resume':
       return <ResumeUploadStep jobId={job.id} onComplete={handleResumeComplete} />;
     case 'screening':
-      return <ScreeningChatStep applicationId={applicationId!} extractedData={extractedData} onComplete={handleScreeningComplete} />;
+      return <ScreeningChatStep applicationId={applicationId!} accessToken={accessToken!} extractedData={extractedData} onComplete={handleScreeningComplete} />;
     case 'already_applied':
       return (
         <div className="min-h-screen flex items-center justify-center bg-background p-4">
