@@ -45,7 +45,7 @@ export default function LeadTable({ rows, selected, onToggle, onToggleAll, onOpe
                 aria-label="Select all"
               />
             </th>
-            <th className={`${COL_W.company} sticky left-9 z-[3] bg-[#0a0d12]/95 border-b border-white/[0.08] px-2 py-2`}>Company / Account</th>
+            <th className={`${COL_W.company} sticky left-9 z-[5] bg-[#0a0d12] border-b border-r border-white/[0.08] px-2 py-2`}>Company / Account</th>
             <th className={`${COL_W.signal} border-b border-white/[0.08] px-2 py-2`}>Signal</th>
             <th className={`${COL_W.persona} border-b border-white/[0.08] px-2 py-2`}>Recommended Persona</th>
             <th className={`${COL_W.contactStatus} border-b border-white/[0.08] px-2 py-2`}>Contact Status</th>
