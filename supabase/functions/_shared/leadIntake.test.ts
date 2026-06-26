@@ -296,3 +296,20 @@ Deno.test("modeFromLabel: people/companies labels", () => {
   assertEquals(modeFromLabel("People / profiles"), "people");
   assertEquals(modeFromLabel("Companies / accounts"), "companies");
 });
+
+// Routing regression: "recruiting agencies" is a company CATEGORY, not a hiring
+// signal — a founders-of-agencies ask must be people mode, not hiring/jobs.
+Deno.test("extractLeadDetails: founders of recruiting agencies → people (not hiring)", () => {
+  const d = extractLeadDetails("Find 5 founders of recruiting agencies in USA.");
+  assertEquals(d.mode, "people");
+});
+
+Deno.test("extractLeadDetails: companies hiring SDRs → hiring", () => {
+  const d = extractLeadDetails("Find agencies hiring SDRs in USA.");
+  assertEquals(d.mode, "hiring");
+});
+
+Deno.test("extractLeadDetails: CEOs of healthcare AI companies → people", () => {
+  const d = extractLeadDetails("Find 5 CEOs of healthcare AI companies in London.");
+  assertEquals(d.mode, "people");
+});

@@ -189,8 +189,33 @@ const COMPANIES_HIRING_RE =
 const PEOPLE_PROFILES_RE =
   /\b(individual (?:profiles?|people|engineers?|developers?|founders?|candidates?)|find (\d+ )?(?:individual )?(?:engineers?|developers?|react developers?|backend engineers?|frontend engineers?|founders?|candidates?|profiles?) (?:in|from|based in)|founder profiles?|senior (?:engineers?|developers?|backend|frontend|fullstack))\b/i;
 
-const EXPLICIT_PEOPLE_RE = /\b(founders?|ceos?|operators?|people|decision[- ]?makers?|heads? of|vps?|directors?)\b/i;
-const EXPLICIT_COMPANY_SUBJECT_RE = /\b(find|get|show|source)\s+(\d+\s+)?(companies|accounts|agencies|businesses|organizations)\b/i;
+// Subject detection for "find <X>" sourcing requests. The goal is to identify
+// the PRIMARY SUBJECT (people vs company), not merely whether persona/company
+// words appear — because persona words often appear as BUYERS ("companies
+// selling to founders") rather than as the subject.
+const PEOPLE_NOUN_RE =
+  /\b(co-?founders?|founders?|ceos?|ctos?|coos?|cmos?|cros?|cfos?|operators?|executives?|leaders?|heads? of [a-z]+|vps?|vice presidents?|directors?|decision[- ]?makers?|people|individuals?|professionals?|candidates?|recruiters?|engineers?|developers?|reps?|managers?)\b/i;
+const COMPANY_NOUN_RE =
+  /\b(compan(?:y|ies)|startups?|scaleups?|agenc(?:y|ies)|businesses?|organi[sz]ations?|firms?|vendors?|brands?|accounts?|orgs?|studios?|labs?)\b/i;
+// Buyer/persona clauses — text from here on describes who the company SELLS TO,
+// not the subject being sourced. Stripped before subject detection.
+const BUYER_CLAUSE_RE =
+  /\b(?:selling to|sell to|that sell to|who sell to|whose (?:buyers?|customers?|clients?|users?|icp)\s+(?:are|is)|targeting|marketing to|serving|that target|catering to|for (?:founders?|ceos?|smbs?|enterprises?))\b.*$/i;
+const SOURCING_VERB_RE =
+  /\b(find|get|show|source|sourcing|list|look for|search for|pull|give me|identify)\b/i;
+
+// "people" if a person head-noun is the subject, "company" if a company head-noun
+// is, else null. When both appear, the one nearer the start wins (the object of
+// "find"), after buyer clauses are removed.
+function detectSourcingSubject(message: string): "people" | "company" | null {
+  const m = message.replace(BUYER_CLAUSE_RE, " ");
+  const pPeople = m.search(PEOPLE_NOUN_RE);
+  const pCompany = m.search(COMPANY_NOUN_RE);
+  if (pPeople >= 0 && pCompany >= 0) return pPeople <= pCompany ? "people" : "company";
+  if (pPeople >= 0) return "people";
+  if (pCompany >= 0) return "company";
+  return null;
+}
 
 const VAGUE_SOURCING_RE =
   /\b(find (?:me )?(?:more )?(?:leads?|customers?|prospects?)|i need (?:more )?customers|find compan(?:y|ies) (?:that )?(?:probably|might) need this|find people (?:likely|who might) (?:to )?buy)\b/i;
@@ -602,11 +627,21 @@ function regexClassify(message: string): WorkflowDecision | null {
     });
   }
 
-  // people-vs-company resolution: explicit people language and NOT company language.
-  const isPeopleFirst = EXPLICIT_PEOPLE_RE.test(m) && !EXPLICIT_COMPANY_SUBJECT_RE.test(m);
-  if (PEOPLE_PROFILES_RE.test(m) || isPeopleFirst || (PEOPLE_INTENT_RE.test(m) && !COMPANY_INTENT_RE.test(m))) {
+  // Subject-based people-vs-company resolution. The PRIMARY SUBJECT (people vs
+  // company), not the mere presence of persona/company words, decides the route.
+  // Buyer clauses ("selling to founders", "whose buyers are founders") are
+  // stripped first so persona-as-buyer never flips a company request to people.
+  const sourcingSubject = detectSourcingSubject(m);
+  const hasSourcingVerb = SOURCING_VERB_RE.test(m);
+
+  // People-first: subject is founders/CEOs/heads/operators/profiles.
+  if (
+    PEOPLE_PROFILES_RE.test(m) ||
+    (hasSourcingVerb && sourcingSubject === "people") ||
+    (PEOPLE_INTENT_RE.test(m) && !COMPANY_INTENT_RE.test(m) && sourcingSubject !== "company")
+  ) {
     return defaultDecision("people_sourcing", {
-      reason: "individual people / profile language",
+      reason: "individual people / profile subject",
       confidence: 0.9,
       agents: ["scout", "aria"],
       execution_mode: "fast",
@@ -615,6 +650,24 @@ function regexClassify(message: string): WorkflowDecision | null {
       source_type: "people_profiles",
       query: m,
       max_results: extractRequestedCount(m, 5),
+      needs_outreach: OUTREACH_RE.test(m),
+      requires_approval: OUTREACH_RE.test(m),
+    });
+  }
+
+  // Company/account-first: subject is companies/startups/agencies/businesses
+  // (incl. "companies selling to founders" after buyer-clause stripping). Routes
+  // to the company/category search (apify_jobs is the company source in this build).
+  if (hasSourcingVerb && sourcingSubject === "company") {
+    return defaultDecision("company_hiring_sourcing", {
+      reason: "company / account subject — company/category search",
+      confidence: 0.85,
+      agents: ["scout", "aria"],
+      execution_mode: "fast",
+      selected_tool: "source_with_apify",
+      selected_actor_key: "apify_jobs",
+      source_type: "jobs",
+      query: m,
       needs_outreach: OUTREACH_RE.test(m),
       requires_approval: OUTREACH_RE.test(m),
     });
