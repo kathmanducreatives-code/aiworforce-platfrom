@@ -73,6 +73,13 @@ export default function ChatWorkspace() {
     return () => { cancelled = true; };
   }, [mode, view.kind, setView]);
 
+  // Persist active conversation id so we can restore on reload.
+  useEffect(() => {
+    if (view.kind === 'chat' && view.conversationId) {
+      import('@/hooks/useUserConversations').then((m) => m.setLastConversationId(view.conversationId));
+    }
+  }, [view]);
+
   // Cmd/Ctrl+B toggles history
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
