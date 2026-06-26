@@ -27,19 +27,16 @@ export interface PersonaRecommendation {
 
 export function inferContactPersona(signalRole: string | null | undefined): PersonaRecommendation {
   const r = (signalRole ?? "").toLowerCase();
-  if (/(account exec|\bae\b|\bsdr\b|\bbdr\b|\bsales\b|\bgtm\b|go-to-market|\brevenue\b|business development|\bquota\b)/.test(r)) {
-    return { personas: ["Founder", "CEO", "Head of Sales", "VP Sales", "Revenue Leader"], primary: "VP Sales", reason: "They own the GTM/sales hire and the budget behind it." };
+  if (/(account exec|\bae\b|\bsdr\b|\bbdr\b|\bsales\b|\bgtm\b|go-to-market|\brevenue\b|business development|\bquota\b|\bgrowth\b|\bmarketing\b)/.test(r)) {
+    return { personas: ["Founder", "Co-Founder", "CEO", "VP Sales", "Head of Sales", "Head of Growth", "Revenue Lead"], primary: "VP Sales", reason: "They own GTM, sales, and growth decisions." };
   }
-  if (/\b(marketing|growth|demand gen|demand generation|abm|brand|content|seo|paid)\b/.test(r)) {
-    return { personas: ["Founder", "Head of Growth", "VP Marketing", "Head of Marketing"], primary: "Head of Marketing", reason: "They own the marketing function this hire reports into." };
+  if (/(recruit\w*|talent|people|hr|human resources)/.test(r)) {
+    return { personas: ["Founder", "CEO", "Head of People", "Talent Lead", "Recruiting Lead"], primary: "Head of People", reason: "They own talent and recruiting decisions." };
   }
-  if (/\b(recruit\w*|talent|people|hr|human resources)\b/.test(r)) {
-    return { personas: ["Founder", "Head of People", "Recruiting Leader"], primary: "Head of People", reason: "They own hiring/recruiting decisions." };
+  if (/(engineer|developer|product|design|data|cto|engineering)/.test(r)) {
+    return { personas: ["Founder", "CEO", "CTO", "Head of Engineering"], primary: "CTO", reason: "They own technical and engineering decisions." };
   }
-  if (/\b(engineer|developer|product|design|data)\b/.test(r)) {
-    return { personas: ["Founder", "CTO", "VP Engineering", "Head of Product"], primary: "CTO", reason: "They own the technical/product hire." };
-  }
-  return { personas: ["Founder", "CEO", "Head of Growth"], primary: "Founder", reason: "Founders/owners are the safest decision-maker entry point." };
+  return { personas: ["Founder", "Co-Founder", "CEO", "Owner"], primary: "Founder", reason: "Early-stage decision makers are the safest entry point." };
 }
 
 // ---- Opportunity status ----

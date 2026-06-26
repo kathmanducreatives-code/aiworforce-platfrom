@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { Search, Workflow as WorkflowIcon, Sparkles, History, ExternalLink, X } from 'lucide-react';
 import { toast } from 'sonner';
 import {
@@ -49,6 +49,7 @@ export default function Workflows() {
   const { workspaceId } = useWorkspace();
   const { data: brain } = useCompanyBrain();
   const navigate = useNavigate();
+  const location = useLocation();
   const [query, setQuery] = useState('');
   const [cat, setCat] = useState<WorkflowCategory | 'all'>('all');
   const [agentFilter, setAgentFilter] = useState<string>('all');
@@ -62,6 +63,17 @@ export default function Workflows() {
     window.addEventListener('workflow:run-recorded', onChange);
     return () => window.removeEventListener('workflow:run-recorded', onChange);
   }, []);
+
+  useEffect(() => {
+    const state = location.state as { firstRun?: boolean; workflowId?: string } | null;
+    if (state?.workflowId) {
+      const found = WORKFLOWS.find((w) => w.id === state.workflowId);
+      if (found) {
+        setSelected(found);
+      }
+      navigate(location.pathname, { replace: true, state: null });
+    }
+  }, [location, navigate]);
 
   const statusByWorkflow = useMemo(() => {
     const map: Record<string, ReturnType<typeof resolveStatus>> = {};
@@ -181,7 +193,7 @@ export default function Workflows() {
         message: prompt,
         workspace_id: workspaceId,
         action_source: 'workflow_center',
-        metadata: { ...metadata, workflow_run_id: runId, workflow_title: workflow.title, agents_used: workflow.agents },
+        metadata: { ...metadata, workflow_run_id: runId, workflow_title: workflow.title, agents_used: workflow.agents, confirmed: true },
       });
       setSelected(null);
       toast.success(`${workflow.title} dispatched`, { description: `${AGENT_BY_ID[workflow.primaryAgent]?.name || 'Pilot'} is on it.` });

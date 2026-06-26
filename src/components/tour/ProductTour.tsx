@@ -1,7 +1,9 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { AnimatePresence } from 'framer-motion';
 import { useProductTour } from '@/hooks/useProductTour';
+import { useCompanyBrain } from '@/hooks/useCompanyBrain';
+import { recommendFirstMove } from '@/lib/workflows/recommend';
 import { TOUR_STEPS } from './tourSteps';
 import { useAnchorRect } from './useAnchorRect';
 import SpotlightOverlay from './SpotlightOverlay';
@@ -18,8 +20,11 @@ export default function ProductTour() {
   const navigate = useNavigate();
   const location = useLocation();
   const { shouldAutoOpen, consumeTourPending, markCompleted, markSkipped, restart } = useProductTour();
+  const { data: brain } = useCompanyBrain();
   const [open, setOpen] = useState(false);
   const [index, setIndex] = useState(0);
+
+  const firstMove = useMemo(() => recommendFirstMove(brain?.profile), [brain?.profile]);
 
   // Auto-open once per session if conditions match, or on explicit restart.
   useEffect(() => {
@@ -65,8 +70,22 @@ export default function ProductTour() {
   if (!open || !step) return null;
 
   const close = () => setOpen(false);
-  const skip = async () => { close(); await markSkipped(); };
-  const finish = async () => { close(); await markCompleted(); };
+  const skip = async () => {
+    close();
+    await markSkipped();
+    if (location.pathname !== '/dashboard') {
+      navigate('/dashboard');
+    }
+  };
+  const finish = async () => {
+    close();
+    await markCompleted();
+    if (firstMove?.workflowId) {
+      navigate('/workflows', { state: { firstRun: true, workflowId: firstMove.workflowId } });
+    } else {
+      navigate('/workflows');
+    }
+  };
 
   const next = () => {
     if (isLast) void finish();

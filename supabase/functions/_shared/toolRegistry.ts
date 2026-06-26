@@ -10,7 +10,7 @@
 
 import type { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { ACTOR_REGISTRY, getActorByKey, isActorRuntimeEnabled } from "./actorRegistry.ts";
-import { buildHarvestApiPeopleInput } from "./harvestApiPeople.ts";
+import { buildHarvestApiPeopleInput, buildHarvestApiCompanyEmployeesInput } from "./harvestApiPeople.ts";
 import { writeMemoryFromToolCall } from "./memoryWriter.ts";
 import { buildLinkedinEngagementInput, buildLinkedinProfilePostsInput } from "./linkedinEngagementInput.ts";
 import { normalizeLinkedinEngagementItem } from "./linkedinEngagementOutput.ts";
@@ -392,6 +392,15 @@ const APIFY_ACTORS: Record<string, ApifyActorCfg> = {
     input_adapter: ({ query, location, role_keywords, max_results, user_input }) =>
       buildHarvestApiPeopleInput({ query, location, role_keywords, max_results, user_input }),
   },
+  apify_linkedin_company_employees: {
+    actor_id: "harvestapi/linkedin-company-employees",
+    source_type: "people_profiles",
+    enabled_by_default: false,
+    use_for: ["company-scoped LinkedIn employee search", "finding contacts at specific company LinkedIn URLs"],
+    description: "LinkedIn company employees scraper — restricted, opt-in only",
+    input_adapter: ({ query, location, role_keywords, max_results, user_input }) =>
+      buildHarvestApiCompanyEmployeesInput({ query, location, role_keywords, max_results, user_input }),
+  },
   profile_enrichment: {
     actor_id: "atomus/linkedin-profile-scraper",
     source_type: "profile_enrichment",
@@ -558,6 +567,7 @@ export function normalizeApifySourceType(raw?: string | null): string {
 const OPT_IN_ONLY_ACTOR_IDS = new Set<string>([
   "apify/google-search-scraper",
   "harvestapi/linkedin-profile-search",
+  "harvestapi/linkedin-company-employees",
   "atomus/linkedin-profile-scraper",
 ]);
 

@@ -58,7 +58,7 @@ export default function WorkbenchPanel() {
         </div>
         <div className="text-[13px] text-[#C9D1D9] font-medium">Workbench</div>
         <div className="text-[12px] mt-1 max-w-xs">
-          Pick a step or tool from any plan to inspect its output, recover from failures, and trigger the next action.
+          Results will appear here after a workflow runs. Start with a recommended workflow from Dashboard or Workflows.
         </div>
       </div>
     );

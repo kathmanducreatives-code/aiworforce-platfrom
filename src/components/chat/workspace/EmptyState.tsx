@@ -38,6 +38,14 @@ export default function EmptyState({ onPickPrompt }: Props) {
         >
           What needs to get done?
         </motion.h2>
+        <motion.p
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ duration: 0.3, delay: 0.2 }}
+          className="text-[13.5px] text-[#848d97] mt-2 leading-relaxed"
+        >
+          Ask Pilot for custom work, or use Workflows for repeatable playbooks.
+        </motion.p>
 
         <ul className="mt-8">
           {SUGGESTIONS.map((s, i) => (

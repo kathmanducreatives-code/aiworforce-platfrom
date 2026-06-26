@@ -9,7 +9,9 @@ import BulkActionToolbar from './leadTable/BulkActionToolbar';
 import LeadDetailDrawer from './leadTable/LeadDetailDrawer';
 import { estimateCredits, recommendNextAction, ACTION_LABEL } from './leadTable/credits';
 import { rowsToCsv, downloadCsv } from './leadTable/csv';
-import { Loader2, Filter } from 'lucide-react';
+import { Loader2, Filter, Sparkles, X } from 'lucide-react';
+import { useToolAvailability } from '@/lib/workflows/useToolAvailability';
+import { useChatWorkspace } from '@/contexts/ChatWorkspaceContext';
 
 interface Props {
   meta: LeadResultsPanelMeta;
@@ -18,6 +20,9 @@ interface Props {
 
 export default function LeadResultsView({ meta, conversationId }: Props) {
   const { items, loading, error, refresh } = useLeadResults(meta.plan_id);
+  const { closeWorkbench } = useChatWorkspace();
+  const tools = useToolAvailability();
+  const [showHelper, setShowHelper] = useState(true);
   const [onlyWithWebsite, setOnlyWithWebsite] = useState(false);
   const [minFit, setMinFit] = useState(0);
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -120,6 +125,9 @@ export default function LeadResultsView({ meta, conversationId }: Props) {
     setConfirmAction(null);
   }, [confirmAction, conversationId, meta.plan_id]);
 
+  const isApifyPeopleReady = tools.apify_people?.configured && tools.apify_people?.enabled;
+  const isFirecrawlReady = tools.firecrawl?.configured && tools.firecrawl?.enabled;
+
   return (
     <div className="h-full w-full min-w-0 flex flex-col bg-[#0a0d12] relative overflow-hidden">
 
@@ -167,6 +175,18 @@ export default function LeadResultsView({ meta, conversationId }: Props) {
         </div>
       </div>
 
+      {showHelper && (
+        <div className="mx-4 mt-3 mb-1.5 flex items-start gap-3 rounded-lg border border-emerald-500/20 bg-emerald-500/[0.04] p-3 text-[12.5px] text-[#C9D1D9] relative">
+          <Sparkles className="h-4 w-4 text-emerald-400 shrink-0 mt-0.5" />
+          <div className="flex-1 pr-6">
+            This is Workbench. Your workflow output appears here. Review the accounts, check why they were accepted, then choose the next step.
+          </div>
+          <button onClick={() => setShowHelper(false)} className="absolute top-3 right-3 text-[#7D8590] hover:text-[#C9D1D9] transition-colors">
+            <X className="h-3.5 w-3.5" />
+          </button>
+        </div>
+      )}
+
       <RecommendationBanner rec={recommendation} onRun={onRunRecommendation} />
       <BulkActionToolbar
         selectedCount={selectedRows.length}
@@ -197,6 +217,78 @@ export default function LeadResultsView({ meta, conversationId }: Props) {
         />
       )}
 
+      {/* Obvious Action Buttons Group */}
+      <div className="px-4 py-3 bg-[#0a0d12]/60 border-t border-white/[0.05] flex flex-wrap items-center justify-between gap-3">
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            onClick={() => onBulkAction('find_contacts')}
+            disabled={!isApifyPeopleReady || counts.needContact === 0}
+            className={`h-8 px-3 rounded text-[11.5px] font-semibold flex items-center gap-1.5 transition-colors ${
+              !isApifyPeopleReady
+                ? 'border border-dashed border-amber-500/30 bg-amber-500/5 text-amber-400 cursor-not-allowed'
+                : counts.needContact === 0
+                ? 'border border-white/5 bg-white/[0.01] text-neutral-500 cursor-not-allowed'
+                : 'bg-emerald-500 hover:bg-emerald-400 text-black shadow-[0_0_12px_rgba(16,185,129,0.15)]'
+            }`}
+            title={!isApifyPeopleReady ? 'Setup needed: Apify' : counts.needContact === 0 ? 'All contacts found' : 'Find decision makers for these accounts'}
+          >
+            Find decision-makers {!isApifyPeopleReady && '(Setup needed)'}
+          </button>
+
+          <button
+            onClick={() => onBulkAction('research_company')}
+            disabled={!isFirecrawlReady || counts.enrichable === 0 || counts.contactReady === 0}
+            className={`h-8 px-3 rounded text-[11.5px] font-semibold flex items-center gap-1.5 transition-colors ${
+              !isFirecrawlReady
+                ? 'border border-dashed border-amber-500/30 bg-amber-500/5 text-amber-400 cursor-not-allowed'
+                : counts.enrichable === 0
+                ? 'border border-white/5 bg-white/[0.01] text-neutral-500 cursor-not-allowed'
+                : counts.contactReady === 0
+                ? 'border border-white/10 bg-white/[0.03] text-neutral-400 cursor-not-allowed'
+                : 'border border-emerald-500/30 hover:border-emerald-500/50 bg-emerald-500/10 hover:bg-emerald-500/15 text-emerald-300'
+            }`}
+            title={
+              !isFirecrawlReady
+                ? 'Setup needed: Firecrawl'
+                : counts.contactReady === 0
+                ? 'Locked: Find decision-makers first'
+                : counts.enrichable === 0
+                ? 'All companies enriched'
+                : 'Enrich target companies'
+            }
+          >
+            Enrich companies {!isFirecrawlReady && '(Setup needed)'}
+          </button>
+
+          <button
+            onClick={() => onBulkAction('draft_outreach')}
+            disabled={counts.contactReady === 0}
+            className={`h-8 px-3 rounded text-[11.5px] font-semibold flex items-center gap-1.5 transition-colors ${
+              counts.contactReady === 0
+                ? 'border border-white/5 bg-white/[0.01] text-neutral-500 cursor-not-allowed'
+                : 'border border-emerald-500/30 hover:border-emerald-500/50 bg-emerald-500/10 hover:bg-emerald-500/15 text-emerald-300'
+            }`}
+            title={counts.contactReady === 0 ? 'Locked: Find contacts first' : 'Draft outreach sequences'}
+          >
+            Draft outreach
+          </button>
+
+          <button
+            onClick={() => onBulkAction('export_csv')}
+            className="h-8 px-3 rounded border border-white/10 hover:border-white/20 bg-white/[0.02] hover:bg-white/[0.04] text-[11.5px] font-semibold text-neutral-300 transition-colors"
+          >
+            Export CSV
+          </button>
+        </div>
+
+        <button
+          onClick={() => closeWorkbench()}
+          className="h-8 px-4 rounded border border-white/10 hover:bg-white/[0.05] text-[11.5px] font-semibold text-neutral-300 transition-colors"
+        >
+          Done
+        </button>
+      </div>
+
       {/* Footer note */}
       <div className="border-t border-white/[0.06] bg-[#0a0d12]/95 backdrop-blur px-3 py-1.5 text-[10px] text-[#7D8590] flex items-center justify-between">
         <span>{filtered.length} of {items.length} shown · drafts require approval — nothing is sent automatically</span>
@@ -207,7 +299,7 @@ export default function LeadResultsView({ meta, conversationId }: Props) {
 
       {confirmAction && (
         <ConfirmDialog
-          title={ACTION_LABEL[confirmAction.action]}
+          action={confirmAction.action}
           rows={confirmAction.ids.length}
           credits={confirmAction.credits}
           onCancel={() => setConfirmAction(null)}
@@ -232,21 +324,136 @@ function Chip({ label, v, tone }: { label: string; v: number; tone: 'default' | 
   );
 }
 
-function ConfirmDialog({ title, rows, credits, onCancel, onConfirm }: { title: string; rows: number; credits: number; onCancel: () => void; onConfirm: () => void }) {
+function getActionDescription(action: LeadResultPanelAction, rows: number): string {
+  switch (action) {
+    case 'find_contacts':
+      return `Scout will search decision-makers for ${rows} account rows.`;
+    case 'research_company':
+    case 'enrich':
+      return `Hawk will enrich company context for ${rows} account ${rows === 1 ? 'row' : 'rows'}.`;
+    case 'draft_outreach':
+      return `Penn will draft outreach sequences for ${rows} account ${rows === 1 ? 'row' : 'rows'}.`;
+    case 'enrich_and_draft':
+      return `Hawk and Penn will enrich and draft outreach for ${rows} account ${rows === 1 ? 'row' : 'rows'}.`;
+    case 'rank':
+      return `Aria will rank ${rows} account ${rows === 1 ? 'row' : 'rows'} against your ICP.`;
+    default:
+      return `${action.replace(/_/g, ' ')} will run for ${rows} account ${rows === 1 ? 'row' : 'rows'}.`;
+  }
+}
+
+function getActionAgentTeam(action: LeadResultPanelAction): string[] {
+  switch (action) {
+    case 'find_contacts': return ['pilot', 'scout'];
+    case 'research_company':
+    case 'enrich': return ['pilot', 'hawk'];
+    case 'draft_outreach': return ['pilot', 'penn'];
+    case 'enrich_and_draft': return ['pilot', 'hawk', 'penn'];
+    case 'rank': return ['pilot', 'aria'];
+    default: return ['pilot'];
+  }
+}
+
+function getActionLabel(action: LeadResultPanelAction): string {
+  switch (action) {
+    case 'find_contacts': return 'Find decision-makers';
+    case 'research_company':
+    case 'enrich': return 'Enrich companies';
+    case 'draft_outreach': return 'Draft outreach';
+    case 'enrich_and_draft': return 'Enrich & draft outreach';
+    case 'rank': return 'Rank against ICP';
+    default: return action.replace(/_/g, ' ');
+  }
+}
+
+function getActionOutputDescription(action: LeadResultPanelAction): string {
+  switch (action) {
+    case 'find_contacts':
+      return 'Decision-maker contacts in Workbench';
+    case 'research_company':
+    case 'enrich':
+      return 'Company details and context in Workbench';
+    case 'draft_outreach':
+      return 'Outreach drafts in Awaiting You';
+    case 'enrich_and_draft':
+      return 'Company context in Workbench and drafts in Awaiting You';
+    case 'rank':
+      return 'ICP rank scores in Workbench';
+    default:
+      return 'Structured workspace output';
+  }
+}
+
+function ConfirmDialog({ action, rows, credits, onCancel, onConfirm }: { action: LeadResultPanelAction; rows: number; credits: number; onCancel: () => void; onConfirm: () => void }) {
+  const desc = getActionDescription(action, rows);
+  const team = getActionAgentTeam(action);
+  const label = getActionLabel(action);
+  const outputDesc = getActionOutputDescription(action);
   return (
     <div className="absolute inset-0 z-40 flex items-center justify-center pointer-events-none">
-      <div className="absolute inset-0 bg-black/60 pointer-events-auto" onClick={onCancel} aria-hidden />
-      <div className="relative pointer-events-auto w-[360px] max-w-full rounded-lg border border-emerald-500/30 bg-[#0a0d12] shadow-2xl p-4">
-        <div className="text-[10px] uppercase tracking-wider text-emerald-300/80">Confirm</div>
-        <div className="text-[14px] font-semibold text-[#F0F6FC] mt-0.5">{title}</div>
-        <div className="text-[12px] text-[#C9D1D9] mt-2">
-          Run on <span className="font-mono text-emerald-200">{rows}</span> {rows === 1 ? 'lead' : 'leads'}.
-          <br />Estimated cost: <span className="font-mono text-emerald-200">~{credits} Agentory credits</span>.
+      <div className="absolute inset-0 bg-black/60 pointer-events-auto backdrop-blur-[2px]" onClick={onCancel} aria-hidden />
+      <div className="relative pointer-events-auto w-[400px] max-w-[calc(100%-32px)] rounded-xl border border-emerald-500/25 bg-gradient-to-b from-emerald-500/[0.04] to-[#0a0d12] shadow-2xl p-5 animate-in fade-in slide-in-from-bottom-2 duration-200">
+        {/* Header */}
+        <div className="text-[11px] font-mono uppercase tracking-[0.2em] text-emerald-400/80 mb-0.5">
+          Next step ready
         </div>
-        <div className="text-[10.5px] text-[#7D8590] mt-2">Nothing will be sent. Drafts require explicit approval.</div>
-        <div className="mt-3 flex items-center justify-end gap-2">
-          <button onClick={onCancel} className="text-[11.5px] px-2.5 py-1 rounded border border-white/10 bg-white/[0.02] text-[#C9D1D9] hover:bg-white/[0.06]">Cancel</button>
-          <button onClick={onConfirm} className="text-[11.5px] px-2.5 py-1 rounded border border-emerald-500/40 bg-emerald-500/[0.15] text-emerald-100 hover:bg-emerald-500/[0.25]">Confirm</button>
+        <h4 className="text-[16px] font-bold text-white tracking-tight">{label}</h4>
+
+        <div className="mt-3.5 space-y-3">
+          {/* Task description */}
+          <div>
+            <div className="text-[11px] font-mono text-[#7D8590] uppercase tracking-wider">Task:</div>
+            <p className="text-[13px] text-[#C9D1D9] mt-0.5 leading-relaxed">{desc}</p>
+          </div>
+
+          {/* Agent team */}
+          <div>
+            <div className="text-[11px] font-mono text-[#7D8590] uppercase tracking-wider mb-1">Agent team:</div>
+            <div className="flex items-center gap-1.5 text-[12.5px] text-[#C9D1D9] font-semibold bg-white/[0.02] border border-white/[0.06] rounded-lg p-2">
+              {team.map((slug, idx) => (
+                <div key={slug} className="flex items-center gap-1.5">
+                  <span className="text-[#C9D1D9] capitalize">{slug}</span>
+                  {idx < team.length - 1 && (
+                    <span className="text-neutral-600 text-[10px]">→</span>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Expected Output */}
+          <div>
+            <div className="text-[11px] font-mono text-[#7D8590] uppercase tracking-wider">Expected Output:</div>
+            <p className="text-[12.5px] text-[#C9D1D9] mt-0.5 leading-relaxed">{outputDesc}</p>
+          </div>
+
+          {/* Footer */}
+          <div className="pt-2 border-t border-white/[0.06] flex items-center justify-between text-[12px]">
+            <div className="text-[#7D8590]">
+              Estimated: <span className="font-mono text-emerald-300">~{credits} credits</span>
+            </div>
+            <div className="flex items-center gap-1 text-[#7D8590]">
+              <svg className="h-3.5 w-3.5 text-emerald-400/80" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" /></svg>
+              Nothing will be sent
+            </div>
+          </div>
+
+          {/* Actions */}
+          <div className="flex items-center gap-3 pt-1">
+            <button
+              onClick={onConfirm}
+              className="flex items-center gap-1.5 text-[13px] font-bold px-4 py-2 rounded-lg bg-emerald-500 text-black hover:bg-emerald-400 transition-colors shadow-[0_0_16px_rgba(16,185,129,0.15)]"
+            >
+              <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3" /></svg>
+              Start
+            </button>
+            <button
+              onClick={onCancel}
+              className="text-[13px] px-3 py-2 rounded-lg text-neutral-400 hover:text-neutral-200 transition-colors"
+            >
+              Cancel
+            </button>
+          </div>
         </div>
       </div>
     </div>

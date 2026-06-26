@@ -11,6 +11,7 @@ import WorkforceDock from '@/components/workforce/WorkforceDock';
 import DepartmentPreview from '@/components/workforce/DepartmentPreview';
 import WorkforceHandoffStrip from '@/components/workforce/WorkforceHandoffStrip';
 import FirstRunHelper from '@/components/dashboard/FirstRunHelper';
+import DashboardChecklist from '@/components/dashboard/DashboardChecklist';
 import AskPilotAboutPage from '@/components/help/AskPilotAboutPage';
 import type { AgentId } from '@/components/workforce/agents';
 
@@ -67,6 +68,7 @@ const Dashboard = () => {
         )}
 
         <FirstRunHelper />
+        <DashboardChecklist />
 
         <CompanyBrainStrip visible={!brainComplete} />
 
