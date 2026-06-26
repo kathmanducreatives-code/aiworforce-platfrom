@@ -44,7 +44,7 @@ export default function DashboardChecklist() {
     async function fetchStatus() {
       try {
         const { data: plans } = await supabase
-          .from('plans')
+          .from('task_plans' as any)
           .select('id')
           .eq('workspace_id', workspaceId);
 
