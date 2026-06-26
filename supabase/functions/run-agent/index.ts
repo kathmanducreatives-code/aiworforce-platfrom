@@ -401,6 +401,10 @@ Deno.serve(async (req) => {
 
         // Source Quality Engine (Phase 6): honest raw vs accepted vs persisted
         // counts + reject reasons, surfaced in Workbench Insights + narrative.
+        // Per-lead quality keyed by normalized company name, reused below to
+        // persist fit_score + raw.lead_quality onto each Workbench row.
+        const normName = (s: unknown) => String(s ?? "").toLowerCase().replace(/[^a-z0-9]+/g, "").trim();
+        const leadQualityByName = new Map<string, { score: number; tier: string; why: string; matched_icp: string[]; missing_fields: string[]; confidence: string; reasons: string[] }>();
         try {
           const { summarizeSourceQuality, classifyResults, topRejectReasons } = await import("../_shared/sourceQuality.ts");
           const { evaluateLeadQuality, buildWhyThisLead } = await import("../_shared/leadQuality.ts");
@@ -416,7 +420,9 @@ Deno.serve(async (req) => {
             company: (brain as Record<string, unknown>).company as Record<string, unknown> | undefined,
           } : null;
           const qReq = {
-            role: criteria.role, industry: criteria.industry, location: criteria.location,
+            // For hiring/company sourcing the requested industry is encoded in
+            // the query string, so fall back to it when no explicit industry field.
+            role: criteria.role, industry: criteria.industry ?? (strict.industry ? null : criteria.query), location: criteria.location,
             stage: criteria.stage, category: criteria.category,
             strict_location: strict.location, strict_industry: strict.industry, strict_stage: strict.stage,
           };
@@ -444,6 +450,12 @@ Deno.serve(async (req) => {
             tierCounts[q.tier] = (tierCounts[q.tier] ?? 0) + 1;
             scoreSum += q.score;
             if (whySamples.length < 3 && q.accepted) whySamples.push(`${(it.name ?? it.company ?? "Lead")}: ${buildWhyThisLead(q)}`);
+            const nk = normName(it.name ?? it.company);
+            if (nk) leadQualityByName.set(nk, {
+              score: q.score, tier: q.tier, why: buildWhyThisLead(q),
+              matched_icp: q.matched_icp_fields, missing_fields: q.missing_fields,
+              confidence: q.confidence, reasons: q.reasons,
+            });
           }
           const leadQualitySummary = {
             tiers: tierCounts,
@@ -522,6 +534,39 @@ Deno.serve(async (req) => {
                 output: { items: rawItems, total: rawItems.length, summary: `${adaptive.found}/${adaptive.requested} accepted across ${adaptive.attempts.length} attempt(s)` },
               });
             } catch (e) { console.warn("[run-agent] capped persistence failed:", e); }
+
+            // Phase 3 — persist per-row lead quality onto each Workbench row
+            // (fit_score + raw.lead_quality), matched by company name. Uses an
+            // existing jsonb column, so no migration. Never overwrites real data.
+            try {
+              const { data: rows } = await supabase
+                .from("lead_candidates")
+                .select("id, account_id, raw, fit_score")
+                .eq("plan_id", plan_id);
+              const acctIds = (rows ?? []).map((r) => (r as Record<string, unknown>).account_id).filter(Boolean) as string[];
+              const nameById = new Map<string, string>();
+              if (acctIds.length) {
+                const { data: accts } = await supabase.from("accounts").select("id, name").in("id", acctIds);
+                for (const a of accts ?? []) nameById.set((a as Record<string, unknown>).id as string, String((a as Record<string, unknown>).name ?? ""));
+              }
+              for (const row of rows ?? []) {
+                const r = row as Record<string, unknown>;
+                const q = leadQualityByName.get(normName(nameById.get(r.account_id as string) ?? ""));
+                if (!q) continue;
+                const existingRaw = (r.raw ?? {}) as Record<string, unknown>;
+                await supabase.from("lead_candidates").update({
+                  fit_score: typeof r.fit_score === "number" ? r.fit_score : q.score,
+                  raw: {
+                    ...existingRaw,
+                    lead_quality: { score: q.score, confidence: q.confidence, reasons: q.reasons },
+                    fit_tier: q.tier,
+                    why_this_lead: q.why,
+                    matched_icp: q.matched_icp,
+                    missing_fields: q.missing_fields,
+                  },
+                }).eq("id", r.id as string);
+              }
+            } catch (e) { console.warn("[run-agent] per-row quality persistence failed:", e); }
           }
 
           const lens = source_type === "jobs" ? "\n\nNOTE: These are companies/jobs hiring for the requested role, not individual people profiles." : "";

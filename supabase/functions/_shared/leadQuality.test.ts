@@ -122,6 +122,79 @@ Deno.test("no Company Brain → neutral scoring, still rejects unverified junk",
   assert(junk.reject_reasons.some((x) => x.includes("missing name")));
 });
 
+Deno.test("GTM hiring lead (B2B SaaS, USA, no website) scores qualified+", () => {
+  const r = evaluateLeadQuality({
+    lead: { name: "ScaleCo", location: "Austin, USA", exact_signal: "Hiring Account Executive", signal_type: "hiring", website: "https://www.linkedin.com/jobs/view/9" },
+    companyBrain: BRAIN, sourceType: "hiring_signal",
+    userRequest: { role: "GTM", industry: "B2B SaaS", location: "USA" },
+  });
+  assert(r.score >= 60, `expected qualified+, got ${r.score} (${r.tier})`);
+  assert(r.accepted && (r.tier === "qualified" || r.tier === "hot"));
+});
+
+Deno.test("founding GTM hire scores hot", () => {
+  const r = evaluateLeadQuality({
+    lead: { name: "SeedCo", location: "USA", exact_signal: "Hiring Founding SDR", signal_type: "hiring" },
+    companyBrain: BRAIN, sourceType: "hiring_signal",
+    userRequest: { role: "GTM", industry: "B2B SaaS", location: "USA" },
+  });
+  assert(r.tier === "hot" || r.tier === "qualified", `founding GTM hire should be strong, got ${r.tier} (${r.score})`);
+  assert(r.accepted);
+  assert(r.matched_icp_fields.includes("stage"), "founding hire implies early-stage");
+});
+
+Deno.test("strong job post counts as intent signal even without a company website", () => {
+  const r = evaluateLeadQuality({
+    lead: { name: "NoSite Inc", location: "USA", exact_signal: "Hiring Head of Growth" },
+    companyBrain: BRAIN, sourceType: "hiring_signal",
+    userRequest: { role: "GTM", industry: "B2B SaaS", location: "USA" },
+  });
+  assert(r.reasons.some((x) => /hiring/i.test(x)), "hiring should be a scored signal");
+  assert(!r.reject_reasons.length, "missing website must not hard-reject a strong hiring signal");
+  assert(r.score >= 60);
+});
+
+Deno.test("missing website lowers confidence but does not auto-reject hiring lead", () => {
+  const r = evaluateLeadQuality({
+    lead: { name: "Anon", location: "USA", exact_signal: "Hiring SDR" },
+    companyBrain: BRAIN, sourceType: "hiring_signal",
+    userRequest: { role: "GTM", location: "USA" },
+  });
+  assert(r.missing_fields.includes("website"));
+  assert(r.confidence !== "high", "no verified site → not high confidence");
+  assert(!r.reject_reasons.length, "should not be rejected just for missing website");
+});
+
+Deno.test("non-GTM hiring is not over-credited for a GTM request", () => {
+  const r = evaluateLeadQuality({
+    lead: { name: "JanitorCo", location: "USA", exact_signal: "Hiring Office Cleaner", signal_type: "hiring" },
+    companyBrain: BRAIN, sourceType: "hiring_signal",
+    userRequest: { role: "GTM", industry: "B2B SaaS", location: "USA" },
+  });
+  // Generic non-GTM hire gets the lower signal tier + no persona credit.
+  assert(!r.matched_icp_fields.includes("buyer_role"), "office cleaner hire is not a GTM persona signal");
+});
+
+Deno.test("US city/state location matches a USA target (qualifies a US GTM-hiring lead)", () => {
+  const r = evaluateLeadQuality({
+    lead: { name: "Ivo", location: "San Francisco, CA", exact_signal: "Director of GTM Strategy", signal_type: "hiring", website: "https://www.linkedin.com/jobs/view/1" },
+    companyBrain: BRAIN, sourceType: "hiring_signal",
+    userRequest: { role: "GTM", industry: "B2B SaaS", location: "USA" },
+  });
+  assert(r.matched_icp_fields.includes("geography"), "San Francisco, CA should match USA");
+  assert(r.score >= 60 && r.accepted, `US GTM-hiring lead should qualify, got ${r.score} (${r.tier})`);
+});
+
+Deno.test("non-US location does not match a USA target", () => {
+  const r = evaluateLeadQuality({
+    lead: { name: "Toronto Co", location: "Toronto, ON, Canada", exact_signal: "Hiring AE", signal_type: "hiring" },
+    companyBrain: BRAIN, sourceType: "hiring_signal",
+    userRequest: { role: "GTM", location: "USA", strict_location: true }, strictness: "strict",
+  });
+  assert(!r.matched_icp_fields.includes("geography"));
+  assert(r.reject_reasons.some((x) => x.includes("geography")));
+});
+
 Deno.test("confidence reflects data completeness", () => {
   const high = evaluateLeadQuality({
     lead: { name: "Full", title: "Founder", industry: "B2B SaaS", location: "USA", website: "https://full.com", exact_signal: "Hiring SDR" },

@@ -92,6 +92,16 @@ const NON_COMPANY_HOSTS =
 
 const STAGE_LARGE = /\b(public|ipo|enterprise|fortune|10000\+|5001-10000|1001-5000|501-1000)\b/i;
 const EARLY_STAGE_REQ = /\b(early|seed|pre-seed|startup|early-stage|small)\b/i;
+// GTM / revenue-team roles whose active hiring is a strong buying signal.
+const GTM_ROLE = /\b(gtm|go-?to-?market|sales|growth|account executive|\bae\b|sdr|bdr|revenue|revops|business development|demand gen|head of growth|vp sales|chief revenue)\b/i;
+// Seniority/founding markers that strengthen a hiring signal (first GTM hire, etc.).
+const SENIOR_OR_FOUNDING = /\b(founding|first|head of|vp|director|lead|chief|principal)\b/i;
+
+// US location recognition — a lead in "San Francisco, CA" or "Austin, Texas"
+// matches a "USA" target. Full state names + 2-letter abbreviations + nation.
+const US_NAMES = /\b(united states|u\.?s\.?a?\.?|alabama|alaska|arizona|arkansas|california|colorado|connecticut|delaware|florida|georgia|hawaii|idaho|illinois|indiana|iowa|kansas|kentucky|louisiana|maine|maryland|massachusetts|michigan|minnesota|mississippi|missouri|montana|nebraska|nevada|new hampshire|new jersey|new mexico|new york|north carolina|north dakota|ohio|oklahoma|oregon|pennsylvania|rhode island|south carolina|south dakota|tennessee|texas|utah|vermont|virginia|washington|west virginia|wisconsin|wyoming)\b/i;
+const US_STATE_ABBR = /,\s*(al|ak|az|ar|ca|co|ct|de|fl|ga|hi|id|il|in|ia|ks|ky|la|me|md|ma|mi|mn|ms|mo|mt|ne|nv|nh|nj|nm|ny|nc|nd|oh|ok|or|pa|ri|sc|sd|tn|tx|ut|vt|va|wa|wv|wi|wy)\b/i;
+function looksUS(loc: string): boolean { return US_NAMES.test(loc) || US_STATE_ABBR.test(loc); }
 
 function lc(s: unknown): string { return String(s ?? "").toLowerCase().trim(); }
 function arr(v: unknown): string[] { return Array.isArray(v) ? v.map((x) => String(x).trim()).filter(Boolean) : []; }
@@ -168,10 +178,9 @@ export function evaluateLeadQuality(args: EvaluateLeadQualityArgs): LeadQualityR
   const geoTarget = lc(req.location || icp.geography);
   const geoStrict = strict || !!req.strict_location;
   if (geoTarget && location) {
+    const targetIsUS = /\b(usa|u\.?s\.?a?\.?|united states|america)\b/.test(geoTarget);
     const geoMatch = location.includes(geoTarget) || geoTarget.includes(location) ||
-      // common US synonyms
-      (geoTarget.includes("united states") && /\b(usa|u\.s\.|united states|us)\b/.test(location)) ||
-      (geoTarget.includes("usa") && /\bunited states\b/.test(location));
+      (targetIsUS && looksUS(location));
     if (geoMatch) { matched_icp_fields.push("geography"); reasons.push(`location matches ${req.location || icp.geography}`); }
     else if (geoStrict) reject_reasons.push("wrong geography (strict)");
   }
@@ -209,16 +218,34 @@ export function evaluateLeadQuality(args: EvaluateLeadQualityArgs): LeadQualityR
   // ===================== SCORING =====================
   let score = 0;
 
-  // Signal / intent strength (30)
-  if (lead.exact_signal) { score += 30; reasons.push(`signal: ${lead.exact_signal}`); }
+  // Signal / intent strength (30). For hiring-signal sources the company IS the
+  // lead and the active role they're hiring is the buying signal — so a relevant
+  // GTM/Sales hire counts heavily (a founding/first GTM hire even more), and a
+  // missing company website does NOT weaken the signal.
+  // Whether THIS lead's hired role is a GTM/revenue role (based on the lead's
+  // own signal, not merely the request — so a non-GTM hire isn't over-credited
+  // just because the user asked for GTM).
+  const signalText = `${lc(lead.exact_signal)} ${lc(lead.signal_type)} ${title}`;
+  const isGtmHire = GTM_ROLE.test(signalText);
+  const isSeniorFounding = SENIOR_OR_FOUNDING.test(signalText);
+  if (isHiring) {
+    if (isGtmHire && isSeniorFounding) { score += 30; reasons.push(`strong hiring signal: ${lead.exact_signal ?? "founding/senior GTM hire"}`); }
+    else if (isGtmHire) { score += 26; reasons.push(`active GTM hiring${lead.exact_signal ? `: ${lead.exact_signal}` : ""}`); }
+    else if (lead.exact_signal) { score += 20; reasons.push(`hiring signal: ${lead.exact_signal}`); }
+    else { score += 16; reasons.push("active hiring signal"); }
+  } else if (lead.exact_signal) { score += 30; reasons.push(`signal: ${lead.exact_signal}`); }
   else if (lead.signal_type) { score += 22; reasons.push(`signal: ${lead.signal_type}`); }
-  else if (isHiring) { score += 18; }
   else if (isPeople) { score += 12; } // a relevant person IS a soft signal
   else { score += 4; }
 
   // ICP fit (25): industry + pain-point alignment
   let icpPts = 0;
   if (matched_icp_fields.includes("industry")) icpPts += 16;
+  else if (isHiring && industryTargets.length && !reject_reasons.some((r) => r.includes("industry"))) {
+    // Hiring search was scoped to the requested industry and nothing contradicts
+    // it — credit it as consistent (not a fabricated exact match).
+    icpPts += 12; matched_icp_fields.push("industry"); reasons.push(`industry consistent with scoped search (${industryTargets[0]})`);
+  }
   const painHit = arr(icp.pain_points).length ? containsAny(haystack, arr(icp.pain_points)) : null;
   if (painHit) { icpPts += 9; matched_icp_fields.push("pain_point"); reasons.push(`addresses pain point: ${painHit}`); }
   if (icpPts === 0 && industryTargets.length === 0) icpPts = 8; // no ICP to match against → neutral partial
@@ -226,7 +253,10 @@ export function evaluateLeadQuality(args: EvaluateLeadQualityArgs): LeadQualityR
 
   // Buyer/persona relevance (15)
   const personaRoles = [req.role, ...arr(icp.buyer_roles)].filter(Boolean) as string[];
-  if (personaRoles.length && title) {
+  if (isHiring && isGtmHire) {
+    // Hiring for the targeted GTM role IS the persona-relevance signal here.
+    score += 15; matched_icp_fields.push("buyer_role"); reasons.push("hiring for the targeted GTM role");
+  } else if (personaRoles.length && title) {
     const roleHit = containsAny(title, personaRoles) || /\b(founder|co-?founder|ceo|cto|coo|cmo|cro|vp|head of|director|chief)\b/i.test(title) ? (containsAny(title, personaRoles) ?? "leadership") : null;
     if (roleHit) { score += 15; matched_icp_fields.push("buyer_role"); reasons.push(`persona matches ${roleHit}`); }
   } else if (!personaRoles.length) {
@@ -235,8 +265,11 @@ export function evaluateLeadQuality(args: EvaluateLeadQualityArgs): LeadQualityR
     missing_fields.push("title");
   }
 
-  // Company size / stage (10)
-  if (stageReq && sizeHay) {
+  // Company size / stage (10). A founding/first GTM hire is itself an
+  // early-stage signal even when team_size is unknown.
+  const foundingHire = /\b(founding|first)\b/.test(signalText);
+  if (foundingHire && !STAGE_LARGE.test(sizeHay)) { score += 10; matched_icp_fields.push("stage"); reasons.push("founding hire → early-stage fit"); }
+  else if (stageReq && sizeHay) {
     if (wantsEarly && !STAGE_LARGE.test(sizeHay)) { score += 10; matched_icp_fields.push("stage"); reasons.push("size/stage fits early-stage"); }
     else if (!wantsEarly) { score += 6; }
   } else { score += 4; }
