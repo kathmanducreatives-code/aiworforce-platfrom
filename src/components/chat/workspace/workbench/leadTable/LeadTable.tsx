@@ -33,10 +33,10 @@ export default function LeadTable({ rows, selected, onToggle, onToggleAll, onOpe
 
   return (
     <div className="flex-1 min-h-0 overflow-auto">
-      <table className="w-full border-separate border-spacing-0 text-[12px]">
-        <thead className="sticky top-0 z-[2] bg-[#0a0d12]/95 backdrop-blur">
+      <table className="w-max min-w-full border-separate border-spacing-0 text-[12px]">
+        <thead className="sticky top-0 z-[4] bg-[#0a0d12] backdrop-blur">
           <tr className="text-left text-[10.5px] uppercase tracking-wider text-[#7D8590]">
-            <th className={`${COL_W.select} sticky left-0 z-[3] bg-[#0a0d12]/95 border-b border-white/[0.08] px-2 py-2`}>
+            <th className={`${COL_W.select} sticky left-0 z-[5] bg-[#0a0d12] border-b border-r border-white/[0.08] px-2 py-2`}>
               <input
                 type="checkbox"
                 checked={allChecked}
