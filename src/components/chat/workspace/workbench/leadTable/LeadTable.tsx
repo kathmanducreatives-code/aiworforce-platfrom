@@ -33,10 +33,10 @@ export default function LeadTable({ rows, selected, onToggle, onToggleAll, onOpe
 
   return (
     <div className="flex-1 min-h-0 overflow-auto">
-      <table className="w-full border-separate border-spacing-0 text-[12px]">
-        <thead className="sticky top-0 z-[2] bg-[#0a0d12]/95 backdrop-blur">
+      <table className="w-max min-w-full border-separate border-spacing-0 text-[12px]">
+        <thead className="sticky top-0 z-[4] bg-[#0a0d12] backdrop-blur">
           <tr className="text-left text-[10.5px] uppercase tracking-wider text-[#7D8590]">
-            <th className={`${COL_W.select} sticky left-0 z-[3] bg-[#0a0d12]/95 border-b border-white/[0.08] px-2 py-2`}>
+            <th className={`${COL_W.select} sticky left-0 z-[5] bg-[#0a0d12] border-b border-r border-white/[0.08] px-2 py-2`}>
               <input
                 type="checkbox"
                 checked={allChecked}
@@ -45,7 +45,7 @@ export default function LeadTable({ rows, selected, onToggle, onToggleAll, onOpe
                 aria-label="Select all"
               />
             </th>
-            <th className={`${COL_W.company} sticky left-9 z-[3] bg-[#0a0d12]/95 border-b border-white/[0.08] px-2 py-2`}>Company / Account</th>
+            <th className={`${COL_W.company} sticky left-9 z-[5] bg-[#0a0d12] border-b border-r border-white/[0.08] px-2 py-2`}>Company / Account</th>
             <th className={`${COL_W.signal} border-b border-white/[0.08] px-2 py-2`}>Signal</th>
             <th className={`${COL_W.persona} border-b border-white/[0.08] px-2 py-2`}>Recommended Persona</th>
             <th className={`${COL_W.contactStatus} border-b border-white/[0.08] px-2 py-2`}>Contact Status</th>
@@ -69,7 +69,7 @@ export default function LeadTable({ rows, selected, onToggle, onToggleAll, onOpe
                 key={r.id}
                 className={`group ${isSel ? 'bg-emerald-500/[0.05]' : 'hover:bg-white/[0.02]'}`}
               >
-                <td className={`${COL_W.select} sticky left-0 z-[1] ${isSel ? 'bg-emerald-500/[0.05]' : 'bg-[#0a0d12] group-hover:bg-white/[0.02]'} border-b border-white/[0.05] px-2`}>
+                <td className={`${COL_W.select} sticky left-0 z-[1] bg-[#0a0d12] border-b border-r border-white/[0.05] px-2`}>
                   <input
                     type="checkbox"
                     checked={isSel}
@@ -77,7 +77,7 @@ export default function LeadTable({ rows, selected, onToggle, onToggleAll, onOpe
                     className="h-3 w-3 rounded accent-emerald-500 cursor-pointer"
                   />
                 </td>
-                <td className={`${COL_W.company} sticky left-9 z-[1] ${isSel ? 'bg-emerald-500/[0.05]' : 'bg-[#0a0d12] group-hover:bg-white/[0.02]'} border-b border-white/[0.05] px-2 py-1.5`}>
+                <td className={`${COL_W.company} sticky left-9 z-[1] bg-[#0a0d12] border-b border-r border-white/[0.05] px-2 py-1.5`}>
                   <button onClick={() => onOpen(r)} className="text-left w-full">
                     <div className="text-[12.5px] font-medium text-[#F0F6FC] truncate">{r.company_name ?? 'Unknown company'}</div>
                     <div className="text-[10.5px] text-[#7D8590] truncate inline-flex items-center gap-1">
