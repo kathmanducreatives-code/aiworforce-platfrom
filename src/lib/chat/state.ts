@@ -64,9 +64,7 @@ export function deriveWorkflowUiState(input: DeriveWorkflowInput): WorkflowRunUi
   if (allDone) return 'complete';
   if (plan.status === 'complete') return 'complete';
 
-  if (allDone && anyFailed) return 'partial';
-  if (allDone) return 'complete';
-  if (plan.status === 'complete') return 'complete';
+
 
   if (anyRunning) {
     // Stale guard: a running plan with no activity for 24h is shown as stale,
