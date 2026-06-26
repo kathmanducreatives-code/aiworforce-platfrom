@@ -1,145 +1,122 @@
-## Goal
+# Plan — Conversations reliability + alive execution states
 
-Replace the centered modal product tour with a Pilot-led **spotlight tour** that highlights real UI elements (sidebar items, command dock, page areas) and anchors a small glass guide card next to each one. The tour teaches *where* each feature lives, *what* it's for, and *what to try first*.
+Goal: make the chat feel ChatGPT-reliable and ChatGPT-alive while keeping the AI-workforce identity. Scope is presentation + frontend state. No schema migrations, no production data writes, no landing-page changes, no auto-send / DM / email / post. Migration 145631 untouched.
 
-No DB migrations, no landing-page changes, no automation/email side-effects. All existing tour state, copy registry, first-run helper, and restart entry points are preserved.
+## 1. Chat history reliability (`useUserConversations`, `useConversationActions`, sidebar)
 
----
+Rewrite `src/hooks/useUserConversations.ts`:
+- Wait for `supabase.auth.getSession()` before the first fetch (avoids the "sometimes empty history" caused by the race documented in our auth-ready note).
+- Filter `conversations` by the current `user_id` explicitly so RLS edge cases don't return an empty set silently.
+- Track `state: 'idle' | 'loading' | 'ready' | 'empty' | 'error'` and expose `retry()`.
+- Realtime channel filtered by `user_id=eq.<uid>`; on INSERT/UPDATE/DELETE patch the local array in place (no full re-fetch storm).
+- Sort by `updated_at desc`; dedupe by id.
+- Persist `lastConversationId` in `localStorage`; restore on workspace open when the row still exists, otherwise fall back to most-recent.
 
-## 1. Tag the real UI with stable anchors (no visual change)
+Rewrite `src/hooks/useChatConversation.ts`:
+- Same auth-ready gate.
+- Append/patch messages by id; keep optimistic temp messages with `temp_id`; reconcile when the real row arrives (replace by `temp_id`).
+- Expose `state` + `retry()` so the message list can show a real error/retry surface instead of an empty container.
 
-Add `data-tour="<id>"` attributes to existing elements so the spotlight can find them across routes:
+`useConversationActions.createConversation`:
+- Guard against double-click: keep an in-flight ref so a second click reuses the in-flight promise (kills duplicate blank chats).
+- After insert, optimistically prepend to the cache used by `useUserConversations` (instant appearance, no waiting for realtime).
+- Auto-title from the first user message (first 60 chars) the first time we persist a message in a "New chat".
 
-- `src/components/Sidebar.tsx` — add per-item `data-tour` to the NavLinks:
-  - `sidebar-dashboard`, `sidebar-conversations`, `sidebar-workflows`, `sidebar-awaiting`, `sidebar-company-brain`
-  - (Conversations and Dashboard share `/dashboard`; we tag both rows by `label` match.)
-- `src/components/dock/CommandDock.tsx` — add `data-tour="command-dock"` on the outer container.
-- `src/pages/Dashboard.tsx` — add `data-tour="dashboard-main"` on the main grid wrapper.
-- `src/pages/Workflows.tsx` — add `data-tour="workflows-featured"` on the "Start here" / featured section (fallback to the workflow grid if missing).
-- `src/pages/AwaitingYou.tsx` — add `data-tour="awaiting-queue"` on the queue container.
-- `src/pages/OnboardingCompanyBrain.tsx` — add `data-tour="company-brain-main"` on the page wrapper.
+Sidebar (`ConversationsSidebar.tsx`):
+- Skeleton rows while `state === 'loading'`.
+- Empty state copy: "No conversations yet. Ask your AI workforce to run a workflow."
+- Retry button on `error`.
+- Show last-message preview (1 line) and a small status chip (`Running / Needs approval / Failed / Complete`) derived from the latest plan linked to the conversation.
 
-These are purely additive attributes — no style or logic changes.
+## 2. Conversation state model
 
----
+Add `src/lib/chat/state.ts` exporting the union types from the brief (`ConversationLoadState`, `MessageSendState`, `WorkflowRunUiState`) and small helpers (`deriveWorkflowUiState(plan, tasks, approvals, lastActivityAt)`).
 
-## 2. New spotlight tour engine
+Every consumer (`ConversationView`, `ChatView`, `ExecutionPlanCard`, sidebar row) renders from these types so no state is silent.
 
-### `src/components/tour/useAnchorRect.ts` (new)
-Hook that:
-- Resolves a CSS selector to an element, returns its `DOMRect` (in viewport coords).
-- Re-measures on `resize`, `scroll` (capture), `MutationObserver` on `<body>`, and a `requestAnimationFrame` poll for 1s after route changes.
-- Returns `null` if the anchor is missing, so the card can fall back to centered.
+## 3. Execution card — no more frozen "Executing"
 
-### `src/components/tour/SpotlightOverlay.tsx` (new)
-- Fixed full-viewport SVG overlay at `z-[115]`.
-- Renders a dark mask (`rgba(0,0,0,0.55)`) with a rounded-rect cutout around the anchor rect (padding ~8px, radius ~12px), using SVG `mask` with `fill-rule: evenodd`.
-- Adds an animated emerald ring (`stroke="#10b981"`, soft glow filter) around the cutout.
-- Click on the mask (outside the cutout) triggers `onDismiss` (skip).
-- Clicks inside the cutout pass through (`pointer-events: none` on the mask path, `auto` on backdrop).
-- When no anchor rect, renders a subtler full-screen dim only (no cutout).
+`ExecutionPlanCard.tsx` + `ExecutionTaskRow.tsx`:
+- Replace the static "executing" pill with a state derived from `deriveWorkflowUiState`: `preparing | waiting_confirmation | running | streaming_progress | partial | complete | failed`.
+- Animated border (shimmer) while running, pulse dot on the active step, agent avatar stack, elapsed timer, "last activity Xs ago".
+- "View output" only when the step truly has output; otherwise show the honest reason (zero results / connector missing / skipped — already wired in metadata).
+- New `LiveProgressLine.tsx` under the active step: rotates workflow-aware copy from `src/lib/chat/progressCopy.ts` (the lead-sourcing / decision-maker / enrichment / outreach / content / fallback strings from the brief). Rotation is tied to the current step type, not faked.
 
-### `src/components/tour/GuideCard.tsx` (new)
-Small glass card (~320–360px wide) at `z-[120]`, used by ProductTour:
-- Pilot avatar, eyebrow "Pilot · Workforce guide", "Step N of 6".
-- Title, 3-line body, and the **Where / Use it for / Try first** mini-grid (rendered from the new step fields).
-- Footer: Back · Skip · "Open <feature>" (secondary) · Next/Finish (primary).
-- Subtle emerald border + glow, `bg-[#0a0c0a]/92 backdrop-blur-xl`.
-- Receives `anchorRect`, computes placement (right of sidebar items, above the dock, below top areas, beside cards) with viewport clamping. Falls back to centered when `anchorRect` is null or viewport < 900px wide.
-- Renders an SVG pointer/arrow from card edge to the anchor when placed adjacent.
+## 4. Execution heartbeat (`useExecutionHeartbeat`)
 
-### `src/components/tour/ProductTour.tsx` (rewrite)
-- Keep public API: default export + `restartProductTour()` event.
-- Keep `useProductTour` integration (auto-open, skip/complete/restart persistence in `onboarding_meta`). **No changes to `useProductTour.ts`.**
-- New flow per step:
-  1. If step has `route` and current path !== route, do nothing extra (user can press "Open <feature>" to navigate; tour stays active across routes because it's mounted in `MainLayout`).
-  2. Resolve `step.anchorSelector` via `useAnchorRect`.
-  3. Render `<SpotlightOverlay rect={rect} onDismiss={skip} />` + `<GuideCard rect={rect} step={...} />`.
-- "Open feature" button: `navigate(step.route)` and keeps tour open; anchor re-measures after route render.
-- Keyboard: Esc = skip, ← / → = back / next.
+New hook wrapping `usePlanDetail`:
+- While `state` is preparing/running, run a 4s poll in addition to the realtime channel (covers dropped sockets — already the documented cause of "stuck Executing").
+- Track `lastChangeAt`; if no change for 25s show "Still working — waiting for the latest backend update", at 90s show "This is taking longer than expected. Keep waiting or retry." Never auto-mark failed.
+- Stop polling on `complete | failed | cancelled`.
 
----
+## 5. Alive agent messages (`ConversationView` / `buildPlanMessages`)
 
-## 3. Updated step data — `src/components/tour/tourSteps.ts`
+Expand `src/lib/chatMessageStream.ts`:
+- Map activity/task events to the correct owning agent (Pilot coordinator, Scout sourcing, Aria ranking, Hawk research, Penn drafts, Scribe content) using the existing `slugForTask` rules; fall back to step-type inference instead of generic "Agent · Operations".
+- Emit short, human messages on milestones: search-strategy ready, raw reviewed/accepted, ranking done, drafts queued, Workbench opened. No raw provider names as primary content.
+- AgentTypingIndicator shows current speaker while their step is running.
 
-Extend `ProductTourStep` with:
-```ts
-where: string;
-useItFor: string;
-tryFirst: string;
-route: string;             // "Open <feature>" target
-anchorSelector: string;    // primary anchor
-fallbackSelector?: string; // optional secondary
-placement?: 'right' | 'left' | 'top' | 'bottom' | 'auto';
-```
+## 6. Workbench open trigger
 
-Six steps, all wired to real anchors:
+Only auto-open Workbench when at least one task has real output. Otherwise show the inline honest reason in the chat (no blank "No output" cards).
 
-1. **Dashboard** — `[data-tour="sidebar-dashboard"]`, fallback `[data-tour="dashboard-main"]`, placement `right`, route `/dashboard`.
-2. **Workflows** — `[data-tour="sidebar-workflows"]`, fallback `[data-tour="workflows-featured"]`, placement `right`, route `/workflows`.
-3. **Conversations** — `[data-tour="sidebar-conversations"]`, fallback `[data-tour="command-dock"]`, placement `right` (sidebar) or `top` (dock).
-4. **Workbench** — no sidebar entry. Anchor `[data-tour="workflows-featured"]` when on `/workflows`, else centered with copy explaining "appears after a workflow runs". Route: `/workflows`.
-5. **Awaiting You** — `[data-tour="sidebar-awaiting"]`, fallback `[data-tour="awaiting-queue"]`, placement `right`, route `/awaiting-you`.
-6. **Company Brain** — `[data-tour="sidebar-company-brain"]`, fallback `[data-tour="company-brain-main"]`, placement `right`, route `/onboarding/company-brain`.
+## 7. Loading / transition polish
 
-Copy uses the **Where / Use it for / Try first** structure from the brief; existing `tourSteps.test.ts` updated to assert the new fields (length > 0).
+- Message-list skeleton on first load.
+- Smooth scroll-to-latest on append; freeze auto-scroll when user is scrolled up + "new activity ↓" pill (extend existing `unread` logic in `ConversationView`).
+- Disabled send button while `MessageSendState === 'sending'`; retry chip on `failed`.
+- Reconnect banner if a realtime channel errors (`channel.subscribe` status).
 
----
+## 8. Errors
 
-## 4. Page-level micro-help
+Centralize via `toast.error` + inline banners using the exact copy from the brief ("Couldn't load chat history. Retry.", "This workflow could not start because Apify is not configured.", etc.). No silent failures.
 
-Add a single subtle helper line under the page title on:
-- `src/pages/Workflows.tsx` — "Pick a workflow when you want a repeatable process. Use Conversations when you want custom work."
-- `src/pages/AwaitingYou.tsx` — "Drafts and risky actions wait here. Nothing is sent without approval."
-- `src/pages/OnboardingCompanyBrain.tsx` — "Update this when your ICP, offer, voice, or goals change."
-- Conversations helper text is added to the empty/intro area on `Dashboard.tsx` only if there's a clean slot; otherwise skipped (no Conversations page exists separately).
+## 9. Light state cleanup (UI-only, no DB writes)
 
-Styled as `text-[12.5px] text-neutral-400` next to existing `AskPilotAboutPage` chips. No new components.
+- Frontend filter: hide plans whose `status='executing'` with no activity for >24h from the "running" badge; render them as `stale` in the sidebar with a "Mark as done" UI action that updates only that conversation row.
+- No automatic deletes. No data migration.
 
----
+## 10. Tests
 
-## 5. First-run helper
+`src/lib/chat/__tests__/`:
+- `state.test.ts` — `deriveWorkflowUiState` truth table (no tasks, all complete, mixed failed, awaiting approval, stale).
+- `progressCopy.test.ts` — every workflow type returns a non-empty rotation.
+- `useUserConversations.test.tsx` — dedupes, sorts by updated_at, retries on error.
+- `useChatConversation.test.tsx` — optimistic temp message reconciles by temp_id, no duplicates after realtime echo.
 
-No behavior change. It already shows after onboarding and offers Restart tour. Keep as-is.
+## 11. Validation
 
----
+- `npx tsc --noEmit`
+- `npm run build`
+- `deno test supabase/functions/_shared --allow-all` (no edge-function changes, but run to confirm clean)
+- Manual browser QA: history reliability flow (A), running-state flow (B), slow-backend flow (C — simulated by pausing the heartbeat), zero-results flow (D).
+- Safety scan: no secrets, no migrations, migration 145631 untouched, no landing change, no auto-send/DM/post/email.
 
-## 6. Files changed
+## Files touched
 
-**New**
-- `src/components/tour/useAnchorRect.ts`
-- `src/components/tour/SpotlightOverlay.tsx`
-- `src/components/tour/GuideCard.tsx`
+Modify:
+- `src/hooks/useUserConversations.ts`
+- `src/hooks/useChatConversation.ts`
+- `src/hooks/useConversationActions.ts`
+- `src/hooks/usePlanDetail.ts`
+- `src/components/chat/workspace/ConversationsSidebar.tsx`
+- `src/components/chat/workspace/ConversationView.tsx`
+- `src/components/chat/workspace/ChatView.tsx`
+- `src/components/chat/workspace/ChatWorkspace.tsx` (restore-last-conversation on open)
+- `src/components/chat/workspace/plan/ExecutionPlanCard.tsx`
+- `src/components/chat/workspace/plan/ExecutionTaskRow.tsx`
+- `src/components/chat/workspace/plan/ActivityMiniFeed.tsx`
+- `src/lib/chatMessageStream.ts`
 
-**Edited**
-- `src/components/tour/ProductTour.tsx` — rewritten to use spotlight engine; preserves public API.
-- `src/components/tour/tourSteps.ts` — extended schema + anchors + Where/Use/Try copy.
-- `src/components/tour/tourSteps.test.ts` — assert new fields.
-- `src/components/Sidebar.tsx` — add `data-tour` per item (purely additive).
-- `src/components/dock/CommandDock.tsx` — add `data-tour="command-dock"`.
-- `src/pages/Dashboard.tsx` — add `data-tour="dashboard-main"`.
-- `src/pages/Workflows.tsx` — add `data-tour="workflows-featured"` + helper line.
-- `src/pages/AwaitingYou.tsx` — add `data-tour="awaiting-queue"` + helper line.
-- `src/pages/OnboardingCompanyBrain.tsx` — add `data-tour="company-brain-main"` + helper line.
+Create:
+- `src/lib/chat/state.ts`
+- `src/lib/chat/progressCopy.ts`
+- `src/hooks/useExecutionHeartbeat.ts`
+- `src/components/chat/workspace/plan/LiveProgressLine.tsx`
+- tests in `src/lib/chat/__tests__/` and `src/hooks/__tests__/`
 
-**Unchanged**
-- `useProductTour.ts`, `FirstRunHelper.tsx`, `AskPilotAboutPage.tsx`, edge functions, DB, routes.
+Out of scope: schema migrations, landing page, edge functions, outreach automation, production data mutations.
 
----
+## Open question
 
-## 7. QA
-
-- Typecheck + `tourSteps.test.ts` pass.
-- Manual: complete onboarding → tour auto-opens → step 1 highlights Dashboard nav row with emerald ring and a card to its right.
-- "Open Workflows" navigates and the highlight re-attaches to the Workflows row.
-- Esc and Skip both close + persist `product_tour_skipped_at`.
-- Finish persists `product_tour_completed`. Tour does not re-open. Restart from FirstRunHelper reopens at step 1.
-- Sidebar collapsed (68px): highlight still wraps the icon row; card placement clamps inside viewport.
-- 1280 and 1440 widths verified visually.
-
-## 8. Out of scope / not touched
-
-- No DB migrations. No edits to `useProductTour.ts` persistence shape.
-- No landing page edits.
-- No new automation, email, DM, or webhook triggers.
-- No changes to Workbench, Workflow run engine, or Company Brain edge functions.
+The brief mentions "delete/archive chat action if existing backend supports it." The current `conversations` table has no `archived_at` column. Should I (a) keep delete-only (current behavior) or (b) add a lightweight client-side "Done" toggle using the existing `status` column? I'll default to (b) unless you say otherwise — it requires no schema change.
