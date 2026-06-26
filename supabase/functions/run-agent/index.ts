@@ -401,9 +401,67 @@ Deno.serve(async (req) => {
 
         // Source Quality Engine (Phase 6): honest raw vs accepted vs persisted
         // counts + reject reasons, surfaced in Workbench Insights + narrative.
+        // Per-lead quality keyed by normalized company name, reused below to
+        // persist fit_score + raw.lead_quality onto each Workbench row.
+        const normName = (s: unknown) => String(s ?? "").toLowerCase().replace(/[^a-z0-9]+/g, "").trim();
+        const leadQualityByName = new Map<string, { score: number; tier: string; why: string; matched_icp: string[]; missing_fields: string[]; confidence: string; reasons: string[] }>();
         try {
           const { summarizeSourceQuality, classifyResults, topRejectReasons } = await import("../_shared/sourceQuality.ts");
+          const { evaluateLeadQuality, buildWhyThisLead } = await import("../_shared/leadQuality.ts");
           const classified = classifyResults(rawAllItems, criteria, strict);
+
+          // Claude-Code-level quality scoring of the accepted set, against
+          // Company Brain + the user's request. Surfaced in Workbench Insights
+          // (tier mix + why-samples); never fabricates fields.
+          const brainLite = brain ? {
+            icp: (brain as Record<string, unknown>).icp as Record<string, unknown> | undefined,
+            gtm: (brain as Record<string, unknown>).gtm as Record<string, unknown> | undefined,
+            positioning: (brain as Record<string, unknown>).positioning as Record<string, unknown> | undefined,
+            company: (brain as Record<string, unknown>).company as Record<string, unknown> | undefined,
+          } : null;
+          const qReq = {
+            // For hiring/company sourcing the requested industry is encoded in
+            // the query string, so fall back to it when no explicit industry field.
+            role: criteria.role, industry: criteria.industry ?? (strict.industry ? null : criteria.query), location: criteria.location,
+            stage: criteria.stage, category: criteria.category,
+            strict_location: strict.location, strict_industry: strict.industry, strict_stage: strict.stage,
+          };
+          const qStrictness = (strict.location || strict.industry || strict.stage) ? "strict" as const : "flexible" as const;
+          const tierCounts: Record<string, number> = { hot: 0, qualified: 0, weak: 0, rejected: 0 };
+          const whySamples: string[] = [];
+          let scoreSum = 0;
+          for (const it of classified.accepted) {
+            const r = (it.raw ?? {}) as Record<string, unknown>;
+            const q = evaluateLeadQuality({
+              lead: {
+                name: it.name ?? it.company, company: it.company, title: it.title, location: it.location,
+                website: (r.companyUrl ?? r.website ?? r.company_website ?? r.url) as string | undefined,
+                industry: (r.industry ?? r.category) as string | undefined,
+                team_size: (r.team_size ?? r.companySize ?? r.employees) as string | undefined,
+                exact_signal: (r.exact_signal ?? r.jobTitle ?? r.positionName ?? r.title) as string | undefined,
+                signal_type: source_type === "jobs" ? "hiring" : undefined,
+                source_url: it.source_url,
+              },
+              companyBrain: brainLite,
+              sourceType: criteria.source_type ?? source_type,
+              userRequest: qReq,
+              strictness: qStrictness,
+            });
+            tierCounts[q.tier] = (tierCounts[q.tier] ?? 0) + 1;
+            scoreSum += q.score;
+            if (whySamples.length < 3 && q.accepted) whySamples.push(`${(it.name ?? it.company ?? "Lead")}: ${buildWhyThisLead(q)}`);
+            const nk = normName(it.name ?? it.company);
+            if (nk) leadQualityByName.set(nk, {
+              score: q.score, tier: q.tier, why: buildWhyThisLead(q),
+              matched_icp: q.matched_icp_fields, missing_fields: q.missing_fields,
+              confidence: q.confidence, reasons: q.reasons,
+            });
+          }
+          const leadQualitySummary = {
+            tiers: tierCounts,
+            avg_score: classified.accepted.length ? Math.round(scoreSum / classified.accepted.length) : 0,
+            why_samples: whySamples,
+          };
           const counts = summarizeSourceQuality({
             attempts: adaptive.attempts,
             accepted_count: adaptive.found,
@@ -416,6 +474,7 @@ Deno.serve(async (req) => {
             top_reject_reasons: topRejectReasons(classified.reject_reason_counts),
             attempt_labels: adaptive.attempts.map((a) => a.strategy),
             needs_permission_to_broaden: !!adaptive.needs_permission_to_broaden,
+            lead_quality: leadQualitySummary,
           };
           // Phase 5 — clean AI-employee activity timeline (no raw logs/provider noise).
           const plannerLabel = (sourcePlanMeta?.planner_mode === "claude") ? "Claude"
@@ -475,6 +534,39 @@ Deno.serve(async (req) => {
                 output: { items: rawItems, total: rawItems.length, summary: `${adaptive.found}/${adaptive.requested} accepted across ${adaptive.attempts.length} attempt(s)` },
               });
             } catch (e) { console.warn("[run-agent] capped persistence failed:", e); }
+
+            // Phase 3 — persist per-row lead quality onto each Workbench row
+            // (fit_score + raw.lead_quality), matched by company name. Uses an
+            // existing jsonb column, so no migration. Never overwrites real data.
+            try {
+              const { data: rows } = await supabase
+                .from("lead_candidates")
+                .select("id, account_id, raw, fit_score")
+                .eq("plan_id", plan_id);
+              const acctIds = (rows ?? []).map((r) => (r as Record<string, unknown>).account_id).filter(Boolean) as string[];
+              const nameById = new Map<string, string>();
+              if (acctIds.length) {
+                const { data: accts } = await supabase.from("accounts").select("id, name").in("id", acctIds);
+                for (const a of accts ?? []) nameById.set((a as Record<string, unknown>).id as string, String((a as Record<string, unknown>).name ?? ""));
+              }
+              for (const row of rows ?? []) {
+                const r = row as Record<string, unknown>;
+                const q = leadQualityByName.get(normName(nameById.get(r.account_id as string) ?? ""));
+                if (!q) continue;
+                const existingRaw = (r.raw ?? {}) as Record<string, unknown>;
+                await supabase.from("lead_candidates").update({
+                  fit_score: typeof r.fit_score === "number" ? r.fit_score : q.score,
+                  raw: {
+                    ...existingRaw,
+                    lead_quality: { score: q.score, confidence: q.confidence, reasons: q.reasons },
+                    fit_tier: q.tier,
+                    why_this_lead: q.why,
+                    matched_icp: q.matched_icp,
+                    missing_fields: q.missing_fields,
+                  },
+                }).eq("id", r.id as string);
+              }
+            } catch (e) { console.warn("[run-agent] per-row quality persistence failed:", e); }
           }
 
           const lens = source_type === "jobs" ? "\n\nNOTE: These are companies/jobs hiring for the requested role, not individual people profiles." : "";

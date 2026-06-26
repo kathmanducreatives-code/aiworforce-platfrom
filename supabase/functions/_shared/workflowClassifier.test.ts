@@ -70,6 +70,41 @@ Deno.test("company_hiring_sourcing: companies hiring <role>", async () => {
   assertEquals(await cat("Find companies hiring React engineers in London."), "company_hiring_sourcing");
 });
 
+// ---- Company vs people subject routing (regression for live QA misroutes) ----
+Deno.test("routing: founders OF agencies → people (not jobs)", async () => {
+  const d = await classifyWorkflow("Find 5 founders of recruiting agencies in USA.");
+  assertEquals(d.workflow_category, "people_sourcing");
+  assertEquals(d.selected_actor_key, "apify_people_search");
+});
+
+Deno.test("routing: companies selling TO founders → company (not people)", async () => {
+  const d = await classifyWorkflow("Find 5 early-stage B2B SaaS companies selling to founders in USA.");
+  assertEquals(d.workflow_category, "company_hiring_sourcing");
+  assertEquals(d.source_type, "jobs");
+});
+
+Deno.test("routing: recruiting agencies → company", async () => {
+  assertEquals(await cat("Find 5 recruiting agencies in USA."), "company_hiring_sourcing");
+});
+
+Deno.test("routing: CEOs of healthcare AI companies → people", async () => {
+  const d = await classifyWorkflow("Find 5 CEOs of healthcare AI companies in London.");
+  assertEquals(d.workflow_category, "people_sourcing");
+});
+
+Deno.test("routing: companies hiring GTM in B2B SaaS USA → company_hiring", async () => {
+  assertEquals(await cat("Find companies hiring GTM roles in B2B SaaS in USA."), "company_hiring_sourcing");
+});
+
+Deno.test("routing: heads of growth at B2B SaaS companies → people", async () => {
+  const d = await classifyWorkflow("Find heads of growth at B2B SaaS companies.");
+  assertEquals(d.workflow_category, "people_sourcing");
+});
+
+Deno.test("routing: companies whose buyers are founders → company", async () => {
+  assertEquals(await cat("Find B2B SaaS companies whose buyers are founders."), "company_hiring_sourcing");
+});
+
 Deno.test("outreach: draft outreach", async () => {
   const d = await classifyWorkflow("Draft outreach to the top leads.");
   assertEquals(d.workflow_category, "outreach");

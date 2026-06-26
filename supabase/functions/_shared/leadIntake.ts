@@ -113,7 +113,11 @@ export function isLeadIntakeRequest(message: string): boolean {
 const COUNT_RE = /\b(\d{1,3})\b/;
 const PEOPLE_HINT = /\b(founders?|ceos?|cto|cfo|coo|cmo|vps?|head of|heads? of|operators?|buyers?|executives?|leaders?|people|profiles?|prospects?|reps?|managers?|directors?|analysts?)\b/i;
 const COMPANY_HINT = /\b(companies|accounts?|startups?|orgs?|organi[sz]ations?|businesses)\b/i;
-const HIRING_HINT = /\b(hiring|job openings?|recruit(?:ing|ers?)?|roles open|open roles)\b/i;
+// Real hiring SIGNALS only. "recruiting"/"recruiters" is NOT a hiring signal —
+// "recruiting agencies" is a company CATEGORY and "recruiters" are people, so
+// treating them as hiring wrongly routed "find founders of recruiting agencies"
+// to the jobs actor. Hiring mode needs an actual hiring phrase.
+const HIRING_HINT = /\b(hiring|job openings?|roles open|open roles|job posts?)\b/i;
 const COMPETITOR_HINT = /\b(competitors?|competing|alternatives?|switching from|vs\.?\s)\b/i;
 const LINKEDIN_HINT = /\b(linkedin (?:posts?|conversations?)|posts? about|conversations? about|engaging|commenting)\b/i;
 const OUTREACH_HINT = /\b(draft|write|send)\s+(outreach|emails?|messages?|dms?)\b|also draft outreach|reach out/i;
