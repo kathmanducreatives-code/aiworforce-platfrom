@@ -152,6 +152,9 @@ const App = () => (
                     <Route path="/settings/integrations" element={
                       <ProtectedRoute><MainLayout><SettingsIntegrations /></MainLayout></ProtectedRoute>
                     } />
+                    <Route path="/settings/billing" element={
+                      <ProtectedRoute><MainLayout><SettingsBilling /></MainLayout></ProtectedRoute>
+                    } />
                     <Route path="/workflows" element={
                       <ProtectedRoute><MainLayout><Workflows /></MainLayout></ProtectedRoute>
                     } />
