@@ -6,6 +6,7 @@ import {
   Mail, Plug, LogOut, HelpCircle, PanelLeftClose, PanelLeft, Workflow,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import CreditPill from './credits/CreditPill';
 
 interface NavGroup {
   label: string;
