@@ -1,33 +1,56 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
+import { useAuthReady } from './useAuthReady';
 import type { ChatMessageRow } from '@/lib/pilotChat';
+import type { ConversationLoadState } from '@/lib/chat/state';
 
+/**
+ * Loads messages for a conversation with an auth-ready gate, in-place
+ * realtime patching (no full re-fetch storm), and explicit load state.
+ *
+ * Optimistic user messages (rendered via the pendingUserText prop on
+ * ChatView) are reconciled by id when the real row arrives from realtime.
+ */
 export function useChatConversation(conversationId: string | null) {
+  const { isReady, userId } = useAuthReady();
   const [messages, setMessages] = useState<ChatMessageRow[]>([]);
-  const [loading, setLoading] = useState(false);
+  const [state, setState] = useState<ConversationLoadState>('idle');
+  const [error, setError] = useState<string | null>(null);
+  const [reloadTick, setReloadTick] = useState(0);
+  const inflightRef = useRef(0);
+
+  const retry = useCallback(() => setReloadTick((t) => t + 1), []);
 
   useEffect(() => {
     if (!conversationId || typeof conversationId !== 'string') {
-      setMessages([]);
+      setMessages([]); setState('idle'); setError(null);
       return;
     }
-    let cancelled = false;
-    setLoading(true);
+    if (!isReady) return;
 
-    (async () => {
-      const { data } = await supabase
+    let cancelled = false;
+    const myTick = ++inflightRef.current;
+
+    const load = async () => {
+      setState((s) => (s === 'ready' ? s : 'loading'));
+      setError(null);
+      const { data, error: err } = await supabase
         .from('messages' as any)
         .select('*')
         .eq('conversation_id', conversationId)
         .order('created_at', { ascending: true });
-      if (!cancelled) {
-        setMessages((data ?? []) as unknown as ChatMessageRow[]);
-        setLoading(false);
+      if (cancelled || myTick !== inflightRef.current) return;
+      if (err) {
+        setError(err.message);
+        setState('error');
+        return;
       }
-    })();
+      const rows = (data ?? []) as unknown as ChatMessageRow[];
+      setMessages(rows);
+      setState(rows.length === 0 ? 'empty' : 'ready');
+    };
+    load();
 
-    // Unique topic per hook instance to avoid "subscribe can only be called
-    // a single time per channel instance" collisions under StrictMode / multi-mount.
     const topic = `messages:${conversationId}:${
       typeof crypto !== 'undefined' && 'randomUUID' in crypto
         ? crypto.randomUUID()
@@ -36,10 +59,19 @@ export function useChatConversation(conversationId: string | null) {
     const channel = supabase.channel(topic);
     channel.on(
       'postgres_changes',
-      { event: 'INSERT', schema: 'public', table: 'messages', filter: `conversation_id=eq.${conversationId}` },
+      { event: '*', schema: 'public', table: 'messages', filter: `conversation_id=eq.${conversationId}` },
       (payload) => {
-        const row = payload.new as ChatMessageRow;
-        setMessages((prev) => (prev.some((m) => m.id === row.id) ? prev : [...prev, row]));
+        const evt = payload.eventType;
+        const row = (payload.new ?? payload.old) as ChatMessageRow | undefined;
+        if (!row) return;
+        setMessages((prev) => {
+          if (evt === 'DELETE') return prev.filter((m) => m.id !== row.id);
+          if (prev.some((m) => m.id === row.id)) {
+            return prev.map((m) => (m.id === row.id ? { ...m, ...row } : m));
+          }
+          return [...prev, row];
+        });
+        setState('ready');
       },
     );
     channel.subscribe();
@@ -48,8 +80,7 @@ export function useChatConversation(conversationId: string | null) {
       cancelled = true;
       supabase.removeChannel(channel);
     };
-  }, [conversationId]);
+  }, [conversationId, isReady, userId, reloadTick]);
 
-
-  return { messages, loading, setMessages };
+  return { messages, state, error, retry, loading: state === 'loading', setMessages };
 }

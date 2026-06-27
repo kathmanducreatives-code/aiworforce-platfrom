@@ -1,8 +1,9 @@
 import { useMemo, useState } from "react";
-import { RefreshCw, Inbox, ListOrdered, Sparkles, CheckSquare, Square, X, Bookmark, Check, EyeOff, MessageSquare, Send, FileText, Radar } from "lucide-react";
+import { RefreshCw, Inbox, ListOrdered, Sparkles, CheckSquare, Square, X, Bookmark, Check, EyeOff, MessageSquare, Send, FileText, Radar, Settings2, Plus, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { useWorkspace } from "@/contexts/WorkspaceContext";
-import { useSignalFeed } from "@/hooks/useSignalFeed";
+import { useCompanyBrain } from "@/hooks/useCompanyBrain";
+import { useSignalFeed, type RadarCategory } from "@/hooks/useSignalFeed";
 import { useSignalReviews } from "@/hooks/useSignalReviews";
 import { buildActionCommand, type FeedSignal } from "@/lib/signalFeedModel";
 import {
@@ -25,7 +26,12 @@ import {
   type BulkDraftAction,
 } from "@/lib/signalReviewModel";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Button } from "@/components/ui/button";
 import SignalCard from "./SignalCard";
+import RadarSummaryCards from "./RadarSummaryCards";
+import EditRadarDrawer from "./EditRadarDrawer";
+import LoadMoreConfirmDialog from "./LoadMoreConfirmDialog";
+import SetupNeededCard from "./SetupNeededCard";
 
 type Tab = "all" | "linkedin" | "competitors" | "people" | "hiring" | "drafts" | "saved";
 
@@ -47,10 +53,10 @@ const EMPTY_PROMPTS = [
 
 function matchesTab(s: FeedSignal, tab: Tab): boolean {
   switch (tab) {
-    case "linkedin": return s.signal_type === "linkedin_engagement";
-    case "competitors": return s.signal_type === "competitor_engagement";
-    case "people": return s.signal_type === "people_profile";
-    case "hiring": return s.signal_type === "hiring_signal";
+    case "linkedin": return s.signal_type === "linkedin_engagement" || s.signal_type === "linkedin_intent";
+    case "competitors": return s.signal_type === "competitor_engagement" || s.signal_type === "competitor";
+    case "people": return s.signal_type === "people_profile" || s.signal_type === "people";
+    case "hiring": return s.signal_type === "hiring_signal" || s.signal_type === "hiring";
     default: return true;
   }
 }
@@ -62,7 +68,8 @@ function sendPrompt(text: string) {
 
 export default function SignalFeed() {
   const { workspaceId } = useWorkspace();
-  const { signals, drafts, savedOutputs, loading, error, refresh } = useSignalFeed(workspaceId);
+  const { data: brainData, refresh: refreshBrain } = useCompanyBrain();
+  const { signals, drafts, savedOutputs, loading, error, refresh, runRadarScan, scanning, lastRun, lastScanAt } = useSignalFeed(workspaceId);
   const { reviewsBySignal, setReview, bulkSetReview } = useSignalReviews(workspaceId);
 
   const [tab, setTab] = useState<Tab>("all");
@@ -75,6 +82,8 @@ export default function SignalFeed() {
   const [priority, setPriority] = useState<string>("");
   const [hasSource, setHasSource] = useState(false);
   const [selectMode, setSelectMode] = useState(false);
+  const [editRadarOpen, setEditRadarOpen] = useState(false);
+  const [loadMoreOpen, setLoadMoreOpen] = useState(false);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [savedFilter, setSavedFilter] = useState<SavedFilter>("all");
 
@@ -91,10 +100,10 @@ export default function SignalFeed() {
 
   const counts = useMemo(() => ({
     all: signals.length,
-    linkedin: signals.filter((s) => s.signal_type === "linkedin_engagement").length,
-    competitors: signals.filter((s) => s.signal_type === "competitor_engagement").length,
-    people: signals.filter((s) => s.signal_type === "people_profile").length,
-    hiring: signals.filter((s) => s.signal_type === "hiring_signal").length,
+    linkedin: signals.filter((s) => s.signal_type === "linkedin_engagement" || s.signal_type === "linkedin_intent").length,
+    competitors: signals.filter((s) => s.signal_type === "competitor_engagement" || s.signal_type === "competitor").length,
+    people: signals.filter((s) => s.signal_type === "people_profile" || s.signal_type === "people").length,
+    hiring: signals.filter((s) => s.signal_type === "hiring_signal" || s.signal_type === "hiring").length,
     drafts: drafts.length,
     saved: savedOutputs.length,
   } as Record<Tab, number>), [signals, drafts, savedOutputs]);
@@ -177,11 +186,118 @@ export default function SignalFeed() {
     }
   };
 
+  // ----- radar scan handlers -----
+  const handleRunRadar = async () => {
+    try {
+      const result = await runRadarScan({ mode: "default" });
+      const ready = Object.values(result.per_category).filter((c) => c.status === "ready").length;
+      const setupNeeded = Object.values(result.per_category).filter((c) => c.status === "setup_needed").length;
+      if (result.inserted > 0) {
+        toast.success(`Scout saved ${result.inserted} new signal${result.inserted > 1 ? "s" : ""}${setupNeeded ? ` · ${setupNeeded} source${setupNeeded > 1 ? "s" : ""} need setup` : ""}`);
+      } else if (ready === 0) {
+        toast.warning("No sources are ready. Open Settings → Integrations.");
+      } else {
+        toast.message("Scout didn't find new ICP-matched signals this run. Try editing your radar.");
+      }
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Radar scan failed");
+    }
+  };
+
+  const handleScanCategory = async (cat: RadarCategory) => {
+    try {
+      const result = await runRadarScan({ mode: "category", category: cat, limit: 6, confirmed: true });
+      const c = result.per_category[cat];
+      if (c?.status === "setup_needed") toast.warning(`${cat.replace(/_/g, " ")}: ${c.reason ?? "setup needed"}`);
+      else if (result.inserted === 0) toast.message("No new signals in this category right now.");
+      else toast.success(`Saved ${result.inserted} ${cat.replace(/_/g, " ")} signal${result.inserted > 1 ? "s" : ""}`);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Scan failed");
+    }
+  };
+
+  const handleConfirmLoadMore = async () => {
+    setLoadMoreOpen(false);
+    try {
+      const result = await runRadarScan({ mode: "load_more", confirmed: true });
+      toast.success(`Loaded ${result.inserted} additional signal${result.inserted === 1 ? "" : "s"}`);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Load more failed");
+    }
+  };
+
+  // ----- counts/status per radar category -----
+  const radarCounts: Record<RadarCategory, number> = useMemo(() => ({
+    hiring: signals.filter((s) => s.signal_type === "hiring" || s.signal_type === "hiring_signal").length,
+    linkedin_intent: signals.filter((s) => s.signal_type === "linkedin_intent" || s.signal_type === "linkedin_engagement").length,
+    competitor: signals.filter((s) => s.signal_type === "competitor" || s.signal_type === "competitor_engagement").length,
+    workflow_trend: signals.filter((s) => s.signal_type === "workflow_trend").length,
+    people: signals.filter((s) => s.signal_type === "people" || s.signal_type === "people_profile").length,
+  }), [signals]);
+
+  const radarStatus = lastRun?.per_category ?? null;
+
+  const prefs = (brainData?.profile as any)?.signal_preferences ?? {};
+  const topKeywords: Partial<Record<RadarCategory, string>> = {
+    hiring: (prefs.hiring_roles?.[0] ?? (brainData?.profile as any)?.icp?.buyer_roles?.[0]) || undefined,
+    linkedin_intent: prefs.linkedin_topics?.[0] || undefined,
+    competitor: prefs.competitors?.[0] || (brainData?.profile as any)?.competitors?.known?.[0] || undefined,
+    workflow_trend: prefs.workflow_topics?.[0] || undefined,
+  };
+
   return (
-    <div className="p-4 pb-[260px] md:pb-[240px] space-y-3 text-[#C9D1D9]">
-      {/* Header */}
-      <div className="flex items-center gap-2 flex-wrap">
-        <h1 className="text-lg font-semibold text-[#F0F6FC]">Signal Feed</h1>
+    <div className="p-4 pb-[260px] md:pb-[240px] space-y-4 text-[#C9D1D9]">
+      {/* Premium header */}
+      <div className="flex items-start gap-3 flex-wrap">
+        <div className="min-w-0">
+          <div className="flex items-center gap-2">
+            <Radar className="h-5 w-5 text-emerald-300" />
+            <h1 className="text-xl font-semibold text-[#F0F6FC]">Signal Feed</h1>
+            <span className="text-[11px] px-2 py-0.5 rounded-full border border-emerald-500/30 bg-emerald-500/10 text-emerald-300">Your ICP-aware market radar</span>
+          </div>
+          <p className="text-[12px] text-neutral-400 mt-1">
+            Scout scans hiring, LinkedIn conversations, competitors, and workflow trends using your Company Brain.
+          </p>
+          <p className="text-[11px] text-neutral-600 mt-0.5">
+            Default weekly radar: 10 signals included. Load more uses extra credits.
+          </p>
+        </div>
+        <div className="ml-auto flex items-center gap-2 flex-wrap">
+          <Button onClick={handleRunRadar} disabled={scanning} size="sm">
+            {scanning ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Radar className="h-3.5 w-3.5" />}
+            Run radar scan
+          </Button>
+          <Button onClick={() => setEditRadarOpen(true)} variant="outline" size="sm">
+            <Settings2 className="h-3.5 w-3.5" /> Edit radar
+          </Button>
+          <Button onClick={() => setLoadMoreOpen(true)} variant="outline" size="sm" disabled={scanning}>
+            <Plus className="h-3.5 w-3.5" /> Load more
+          </Button>
+        </div>
+      </div>
+
+      {/* Radar summary */}
+      <RadarSummaryCards
+        counts={radarCounts}
+        status={radarStatus}
+        topKeywords={topKeywords}
+        lastScanAt={lastScanAt}
+        onScanCategory={handleScanCategory}
+      />
+
+      {/* Setup-needed banners from last run */}
+      {radarStatus && Object.entries(radarStatus).some(([_, v]) => v.status === "setup_needed") && (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+          {(Object.entries(radarStatus) as [RadarCategory, typeof radarStatus[RadarCategory]][])
+            .filter(([_, v]) => v.status === "setup_needed")
+            .map(([cat, v]) => (
+              <SetupNeededCard key={cat} label={cat.replace(/_/g, " ")} reason={v.reason} />
+            ))}
+        </div>
+      )}
+
+      {/* Existing toolbar */}
+      <div className="flex items-center gap-2 flex-wrap pt-1 border-t border-white/[0.04]">
         <span className="text-[11px] text-neutral-500">{signals.length} saved signals</span>
         <div className="ml-auto flex items-center gap-2">
           <button onClick={() => { setSelectMode((v) => !v); clearSelection(); }}
@@ -196,6 +312,20 @@ export default function SignalFeed() {
           </button>
         </div>
       </div>
+
+      <EditRadarDrawer
+        open={editRadarOpen}
+        onOpenChange={setEditRadarOpen}
+        workspaceId={workspaceId}
+        brainProfile={(brainData?.profile as any) ?? null}
+        onSaved={() => refreshBrain()}
+      />
+      <LoadMoreConfirmDialog
+        open={loadMoreOpen}
+        onOpenChange={setLoadMoreOpen}
+        onConfirm={() => void handleConfirmLoadMore()}
+        loading={scanning}
+      />
 
       {/* Type tabs */}
       <div className="flex items-center gap-1 flex-wrap border-b border-white/[0.06] pb-2">
@@ -334,7 +464,7 @@ export default function SignalFeed() {
         filtered.length === 0
           ? (signals.length > 0
               ? <FilterEmpty onClear={() => { clearFilters(); setReviewFilter("all"); setHideIgnored(true); }} />
-              : <EmptyWithPrompts />)
+              : <EmptyWithPrompts onRunRadar={handleRunRadar} scanning={scanning} />)
           : <ul className="space-y-2">{filtered.map((s) => (
               <SignalCard key={s.id} signal={s}
                 selectable={selectMode}
@@ -411,17 +541,28 @@ function Empty({ text }: { text: string }) {
   );
 }
 
-function EmptyWithPrompts() {
+function EmptyWithPrompts({ onRunRadar, scanning }: { onRunRadar?: () => void; scanning?: boolean }) {
   return (
-    <div className="flex flex-col items-center gap-3 py-12 text-center text-neutral-500">
-      <Inbox className="h-6 w-6" />
-      <div className="text-[12px] max-w-sm">
-        No saved signals yet. Ask Scout to find hiring signals, LinkedIn engagement, or competitor conversations.
+    <div className="flex flex-col items-center gap-3 py-16 text-center">
+      <div className="p-3 rounded-full bg-emerald-500/10 border border-emerald-500/20">
+        <Radar className="h-6 w-6 text-emerald-300" />
       </div>
-      <div className="flex flex-wrap items-center justify-center gap-1.5 mt-1">
+      <div>
+        <div className="text-[14px] font-medium text-[#F0F6FC]">Scout hasn't scanned your market yet</div>
+        <div className="text-[12px] text-neutral-400 max-w-sm mt-1">
+          Run your first ICP radar scan to load 10 signals across hiring, LinkedIn intent, competitors, and workflow trends.
+        </div>
+      </div>
+      {onRunRadar && (
+        <Button onClick={onRunRadar} disabled={scanning} className="mt-1">
+          {scanning ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Radar className="h-3.5 w-3.5" />}
+          Run first radar scan
+        </Button>
+      )}
+      <div className="flex flex-wrap items-center justify-center gap-1.5 mt-2">
         {EMPTY_PROMPTS.map((p) => (
           <button key={p} onClick={() => sendPrompt(p)}
-            className="inline-flex items-center gap-1 text-[11px] px-2.5 py-1 rounded-full border border-emerald-500/20 bg-emerald-500/[0.04] text-emerald-300 hover:bg-emerald-500/[0.1] transition-colors">
+            className="inline-flex items-center gap-1 text-[11px] px-2.5 py-1 rounded-full border border-white/[0.08] bg-white/[0.02] text-neutral-400 hover:bg-white/[0.04] hover:text-neutral-200 transition-colors">
             <Sparkles className="h-3 w-3" /> {p}
           </button>
         ))}

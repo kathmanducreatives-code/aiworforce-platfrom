@@ -205,3 +205,58 @@ Deno.test("confidence reflects data completeness", () => {
   const low = evaluateLeadQuality({ lead: { name: "Sparse" }, sourceType: "company_search" });
   assertEquals(low.confidence, "low");
 });
+
+// ---- Assistant / founder-support hiring acceptance ----
+Deno.test("assistant-role: 'Co-Founder @ Company' rejected as a profile title", () => {
+  const r = evaluateLeadQuality({
+    lead: { name: "Acme", title: "Co-Founder @ Company", exact_signal: "Co-Founder", location: "USA", signal_type: "hiring" },
+    companyBrain: BRAIN, sourceType: "hiring_signal",
+    userRequest: { role: "Executive Assistant", location: "USA" },
+  });
+  assert(!r.accepted, "a co-founder profile row is not a hiring signal");
+  assert(r.reject_reasons.some((x) => /profile title/i.test(x)), "should flag the profile title");
+});
+
+Deno.test("assistant-role: 'Hiring Executive Assistant to CEO' accepted", () => {
+  const r = evaluateLeadQuality({
+    lead: { name: "Acme", exact_signal: "Hiring Executive Assistant to CEO", location: "USA", signal_type: "hiring" },
+    companyBrain: BRAIN, sourceType: "hiring_signal",
+    userRequest: { role: "Executive Assistant", industry: "B2B SaaS", location: "USA" },
+  });
+  assert(r.accepted, "executive-assistant hire should be accepted");
+  assert(r.score >= 60, `expected qualified+, got ${r.score} (${r.tier})`);
+  assert(r.matched_icp_fields.includes("buyer_role"), "support hire is a persona signal");
+  const why = buildWhyThisLead(r);
+  assert(/founder-support|executive assistant/i.test(why), `why_this_lead should mention the support role: ${why}`);
+});
+
+Deno.test("assistant-role: bare CEO title rejected even without an explicit role", () => {
+  const r = evaluateLeadQuality({
+    lead: { name: "Acme", title: "CEO", exact_signal: "CEO", location: "USA", signal_type: "hiring" },
+    companyBrain: BRAIN, sourceType: "hiring_signal",
+  });
+  assert(!r.accepted);
+  assert(r.reject_reasons.some((x) => /profile title/i.test(x)));
+});
+
+Deno.test("assistant-role: 'Founder Associate' as a job signal is NOT a profile title", () => {
+  // "Founder Associate" is a support role (in SUPPORT_ROLE_ALIASES). As a hiring
+  // signal it must survive the profile-title guard (bare "founder" is excluded).
+  const r = evaluateLeadQuality({
+    lead: { name: "Acme", exact_signal: "Hiring Founder Associate", location: "USA", signal_type: "hiring" },
+    companyBrain: BRAIN, sourceType: "hiring_signal",
+    userRequest: { role: "Executive Assistant", location: "USA" },
+  });
+  assert(!r.reject_reasons.some((x) => /profile title/i.test(x)), "Founder Associate is a support role, not a profile title");
+  assert(r.accepted, "founder-associate hire should be accepted");
+});
+
+Deno.test("assistant-role: 'Assistant to CEO' (contains 'CEO') is accepted", () => {
+  const r = evaluateLeadQuality({
+    lead: { name: "Acme", exact_signal: "Hiring Assistant to CEO", location: "USA", signal_type: "hiring" },
+    companyBrain: BRAIN, sourceType: "hiring_signal",
+    userRequest: { role: "Executive Assistant", location: "USA" },
+  });
+  assert(!r.reject_reasons.some((x) => /profile title/i.test(x)), "support role must not be mistaken for a CEO profile title");
+  assert(r.accepted);
+});

@@ -32,6 +32,7 @@ import {
 } from "./actorRegistry.ts";
 import { matchCompetitors, buildCompetitorSearchQueries } from "./competitorRegistry.ts";
 import { extractInlineBusinessContext, resolveDiscoveryMode } from "./competitorDiscovery.ts";
+import { roleAliases, SUPPORT_ROLE_ALIASES, SUPPORT_ROLE_RE } from "./broaden.ts";
 
 // Phase 4 — competitor-tracking intent phrases (alternatives/comparison/switch/complaints).
 const COMPETITOR_INTENT_RE =
@@ -183,8 +184,26 @@ const UNSAFE_RE =
   /\b(personal phone numbers?|home address|scrape private|private personal data|harvest emails for spam|send (?:emails?|messages?) automatically|automatic(?:ally)? send|without approval|start calling them automatically|cold call(?:ing)? (?:automated|automatic)|automatic(?:ally)?\s+(?:comment|post|publish|share|dm|message|email|reply|engage|connect|like)|auto[- ]?(?:comment|post|publish|share|dm|message|email|reply|like|engage|connect)|(?:post|publish|share)\s+(?:this|that|it|these|them)?[^.!?]*\bautomatic(?:ally)?|(?:email|message|dm|text|contact|reach out to)\b[^.!?]{0,30}\bautomatic(?:ally)?|send\s+(?:messages?|dms?|emails?|outreach)\s+to\s+(?:all|every|everyone|each))\b/i;
 
 // Sourcing.
+// Hiring role tokens. Includes assistant / founder-support / operations roles
+// (Executive Assistant, Chief of Staff, Founder's Office, etc.) so that
+// "founders hiring for assistant roles" / "companies hiring executive assistants"
+// route to company_hiring_sourcing (apify_jobs) — NOT people_sourcing. The
+// support-role tokens mirror SUPPORT_ROLE_RE in broaden.ts.
 const COMPANIES_HIRING_RE =
-  /\b(compan(?:y|ies) (?:that are )?hiring|hiring (?:for )?(?:gtm|sdr|bdr|engineers?|sales|marketing|developers?|react|backend|frontend|product|content))\b|\bfind compan(?:y|ies)\b.*\bhiring\b|\bhiring intent\b/i;
+  /\b(compan(?:y|ies) (?:that are )?hiring|hiring (?:for )?(?:gtm|sdr|bdr|engineers?|sales|marketing|developers?|react|backend|frontend|product|content|executive assistants?|administrative assistants?|admin assistants?|operations assistants?|operations associates?|virtual assistants?|personal assistants?|founder office|founder'?s office|founders? office|founder associate|chief of staff|office managers?|business operations associates?|assistant to (?:the )?(?:ceo|founder)|ea to (?:the )?(?:ceo|founder)|assistants?|admins?))\b|\bfind compan(?:y|ies)\b.*\bhiring\b|\bhiring intent\b/i;
+
+// Extract the hired role(s) from a hiring/company query so Scout's actor input
+// and Aria's ranking carry real role intent (not just the raw message).
+// Assistant / founder-support queries expand to the full SUPPORT_ROLE_ALIASES.
+function extractHiringRoleKeywords(m: string): string[] {
+  if (SUPPORT_ROLE_RE.test(m)) return [...SUPPORT_ROLE_ALIASES];
+  const roleMatch = m.match(/\b(gtm|go-?to-?market|sdrs?|bdrs?|engineers?|sales|marketing|growth|developers?|react|backend|frontend|product|content|recruiters?)\b/i);
+  if (roleMatch) {
+    const aliases = roleAliases(roleMatch[0]);
+    return aliases.length ? aliases : [roleMatch[0]];
+  }
+  return [];
+}
 
 const PEOPLE_PROFILES_RE =
   /\b(individual (?:profiles?|people|engineers?|developers?|founders?|candidates?)|find (\d+ )?(?:individual )?(?:engineers?|developers?|react developers?|backend engineers?|frontend engineers?|founders?|candidates?|profiles?) (?:in|from|based in)|founder profiles?|senior (?:engineers?|developers?|backend|frontend|fullstack))\b/i;
@@ -622,6 +641,7 @@ function regexClassify(message: string): WorkflowDecision | null {
       selected_actor_key: "apify_jobs",
       source_type: "jobs",
       query: m,
+      role_keywords: extractHiringRoleKeywords(m),
       needs_outreach: OUTREACH_RE.test(m),
       requires_approval: OUTREACH_RE.test(m),
     });
@@ -668,6 +688,7 @@ function regexClassify(message: string): WorkflowDecision | null {
       selected_actor_key: "apify_jobs",
       source_type: "jobs",
       query: m,
+      role_keywords: extractHiringRoleKeywords(m),
       needs_outreach: OUTREACH_RE.test(m),
       requires_approval: OUTREACH_RE.test(m),
     });
@@ -704,6 +725,7 @@ function regexClassify(message: string): WorkflowDecision | null {
       selected_actor_key: "apify_jobs",
       source_type: "jobs",
       query: m,
+      role_keywords: extractHiringRoleKeywords(m),
     });
   }
 

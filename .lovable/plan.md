@@ -1,145 +1,148 @@
-## Goal
 
-Replace the centered modal product tour with a Pilot-led **spotlight tour** that highlights real UI elements (sidebar items, command dock, page areas) and anchors a small glass guide card next to each one. The tour teaches *where* each feature lives, *what* it's for, and *what to try first*.
+# Agentory Credit & Pricing System
 
-No DB migrations, no landing-page changes, no automation/email side-effects. All existing tour state, copy registry, first-run helper, and restart entry points are preserved.
+A fair, transparent credit system across product + landing. Single source of truth for plans, workflow costs, and a clean reserve → finalize → (partial-refund) lifecycle. No auto-outreach. No risky migrations.
 
----
+## 1. Source-of-truth config (new)
 
-## 1. Tag the real UI with stable anchors (no visual change)
+Create three pure TS modules so nothing is hardcoded twice:
 
-Add `data-tour="<id>"` attributes to existing elements so the spotlight can find them across routes:
+- `src/lib/pricing/plans.ts` — `PRICING_PLANS` (Free Trial, Starter, Founder Pro [highlighted], Growth, Scale) with `priceMonthly`, `credits`, `seats`, `overagePerCredit`, `features[]`, `description`.
+- `src/lib/pricing/workflowCosts.ts` — `WORKFLOW_CREDIT_COSTS` map per spec + helper `getWorkflowCost(id)`. Also exports human-readable metadata: `runs`, `output`, `safetyNote`, `category`.
+- `src/lib/pricing/budgetCaps.ts` — `WORKFLOW_BUDGET_CAPS_USD` (internal/admin only; never rendered to end users).
 
-- `src/components/Sidebar.tsx` — add per-item `data-tour` to the NavLinks:
-  - `sidebar-dashboard`, `sidebar-conversations`, `sidebar-workflows`, `sidebar-awaiting`, `sidebar-company-brain`
-  - (Conversations and Dashboard share `/dashboard`; we tag both rows by `label` match.)
-- `src/components/dock/CommandDock.tsx` — add `data-tour="command-dock"` on the outer container.
-- `src/pages/Dashboard.tsx` — add `data-tour="dashboard-main"` on the main grid wrapper.
-- `src/pages/Workflows.tsx` — add `data-tour="workflows-featured"` on the "Start here" / featured section (fallback to the workflow grid if missing).
-- `src/pages/AwaitingYou.tsx` — add `data-tour="awaiting-queue"` on the queue container.
-- `src/pages/OnboardingCompanyBrain.tsx` — add `data-tour="company-brain-main"` on the page wrapper.
+Mirror the same constants for Deno edge functions in `supabase/functions/_shared/pricing.ts` (re-declared, not imported across runtimes).
 
-These are purely additive attributes — no style or logic changes.
+## 2. Credit lifecycle helpers
 
----
+### Frontend (`src/lib/credits/`)
+- `estimate.ts` → `estimateWorkflowCredits(workflowId, params)` (uses cost catalog + per-row math like signal radar / lead count / enrichable count).
+- `client.ts` → thin wrappers calling edge functions: `reserveCredits`, `finalizeCharge`, `refundCredits`, `getBalance`.
+- `useCreditBalance.ts` hook (React Query, 30s stale).
+- `format.ts` → `formatCredits(n)`, `creditsToOverageUsd(n, planId)`.
 
-## 2. New spotlight tour engine
+### Backend (`supabase/functions/`)
+New edge functions, all CORS-enabled, JWT-validated:
+- `credits-balance` (GET) — returns `{ balance, plan_id, monthly_allowance, period_end, recent_transactions[] }`.
+- `credits-reserve` (POST) — `{ workflow_id, estimated_credits, conversation_id?, task_plan_id?, metadata }` → returns `{ transaction_id, reserved, balance_after }`. Rejects with `402 INSUFFICIENT_CREDITS` if balance < estimate (unless `DEV_BYPASS_CREDITS=true`).
+- `credits-finalize` (POST) — `{ transaction_id, actual_credits, status: 'charged'|'partial'|'minimum_charge'|'not_charged', result_summary }`. Computes refund delta.
+- `credits-refund` (POST) — admin/internal.
 
-### `src/components/tour/useAnchorRect.ts` (new)
-Hook that:
-- Resolves a CSS selector to an element, returns its `DOMRect` (in viewport coords).
-- Re-measures on `resize`, `scroll` (capture), `MutationObserver` on `<body>`, and a `requestAnimationFrame` poll for 1s after route changes.
-- Returns `null` if the anchor is missing, so the card can fall back to centered.
+Shared helper `supabase/functions/_shared/creditLedger.ts` with: `reserve()`, `finalize()`, `refund()`, `getBalance()`, and the minimum-charge policy (0 / 10–25% / proportional / full, per spec section 4).
 
-### `src/components/tour/SpotlightOverlay.tsx` (new)
-- Fixed full-viewport SVG overlay at `z-[115]`.
-- Renders a dark mask (`rgba(0,0,0,0.55)`) with a rounded-rect cutout around the anchor rect (padding ~8px, radius ~12px), using SVG `mask` with `fill-rule: evenodd`.
-- Adds an animated emerald ring (`stroke="#10b981"`, soft glow filter) around the cutout.
-- Click on the mask (outside the cutout) triggers `onDismiss` (skip).
-- Clicks inside the cutout pass through (`pointer-events: none` on the mask path, `auto` on backdrop).
-- When no anchor rect, renders a subtler full-screen dim only (no cutout).
+## 3. Database approach (no migration 145631)
 
-### `src/components/tour/GuideCard.tsx` (new)
-Small glass card (~320–360px wide) at `z-[120]`, used by ProductTour:
-- Pilot avatar, eyebrow "Pilot · Workforce guide", "Step N of 6".
-- Title, 3-line body, and the **Where / Use it for / Try first** mini-grid (rendered from the new step fields).
-- Footer: Back · Skip · "Open <feature>" (secondary) · Next/Finish (primary).
-- Subtle emerald border + glow, `bg-[#0a0c0a]/92 backdrop-blur-xl`.
-- Receives `anchorRect`, computes placement (right of sidebar items, above the dock, below top areas, beside cards) with viewport clamping. Falls back to centered when `anchorRect` is null or viewport < 900px wide.
-- Renders an SVG pointer/arrow from card edge to the anchor when placed adjacent.
+Audit first: existing tables include `workspaces`, `workspace_members`, `task_plans`, `tool_calls`, `signals`, `conversations` — but no credits table.
 
-### `src/components/tour/ProductTour.tsx` (rewrite)
-- Keep public API: default export + `restartProductTour()` event.
-- Keep `useProductTour` integration (auto-open, skip/complete/restart persistence in `onboarding_meta`). **No changes to `useProductTour.ts`.**
-- New flow per step:
-  1. If step has `route` and current path !== route, do nothing extra (user can press "Open <feature>" to navigate; tour stays active across routes because it's mounted in `MainLayout`).
-  2. Resolve `step.anchorSelector` via `useAnchorRect`.
-  3. Render `<SpotlightOverlay rect={rect} onDismiss={skip} />` + `<GuideCard rect={rect} step={...} />`.
-- "Open feature" button: `navigate(step.route)` and keeps tour open; anchor re-measures after route render.
-- Keyboard: Esc = skip, ← / → = back / next.
+**Proposed new migration** (separate file, NOT the forbidden 145631; will be presented for explicit approval before applying):
 
----
+```sql
+CREATE TABLE public.workspace_credits (
+  workspace_id uuid PRIMARY KEY REFERENCES public.workspaces(id) ON DELETE CASCADE,
+  plan_id text NOT NULL DEFAULT 'free_trial',
+  credit_balance integer NOT NULL DEFAULT 30,
+  monthly_credit_allowance integer NOT NULL DEFAULT 30,
+  billing_status text NOT NULL DEFAULT 'trial',
+  current_period_start timestamptz DEFAULT now(),
+  current_period_end timestamptz DEFAULT (now() + interval '30 days'),
+  created_at timestamptz DEFAULT now(),
+  updated_at timestamptz DEFAULT now()
+);
 
-## 3. Updated step data — `src/components/tour/tourSteps.ts`
+CREATE TABLE public.credit_transactions (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  workspace_id uuid NOT NULL REFERENCES public.workspaces(id) ON DELETE CASCADE,
+  conversation_id uuid, task_plan_id uuid, workflow_id text,
+  transaction_type text NOT NULL, status text NOT NULL,
+  estimated_credits integer, reserved_credits integer,
+  actual_credits integer, refunded_credits integer DEFAULT 0,
+  provider_cost_usd numeric, reason text,
+  metadata jsonb DEFAULT '{}', created_at timestamptz DEFAULT now()
+);
 
-Extend `ProductTourStep` with:
-```ts
-where: string;
-useItFor: string;
-tryFirst: string;
-route: string;             // "Open <feature>" target
-anchorSelector: string;    // primary anchor
-fallbackSelector?: string; // optional secondary
-placement?: 'right' | 'left' | 'top' | 'bottom' | 'auto';
+-- GRANTs + RLS scoped to has_workspace_access(auth.uid(), workspace_id).
+-- provider_cost_usd hidden from SELECT for non-owners via view.
 ```
 
-Six steps, all wired to real anchors:
+Provisioning: extend `provision_workspace_for_user` to also seed `workspace_credits` (30 trial credits).
 
-1. **Dashboard** — `[data-tour="sidebar-dashboard"]`, fallback `[data-tour="dashboard-main"]`, placement `right`, route `/dashboard`.
-2. **Workflows** — `[data-tour="sidebar-workflows"]`, fallback `[data-tour="workflows-featured"]`, placement `right`, route `/workflows`.
-3. **Conversations** — `[data-tour="sidebar-conversations"]`, fallback `[data-tour="command-dock"]`, placement `right` (sidebar) or `top` (dock).
-4. **Workbench** — no sidebar entry. Anchor `[data-tour="workflows-featured"]` when on `/workflows`, else centered with copy explaining "appears after a workflow runs". Route: `/workflows`.
-5. **Awaiting You** — `[data-tour="sidebar-awaiting"]`, fallback `[data-tour="awaiting-queue"]`, placement `right`, route `/awaiting-you`.
-6. **Company Brain** — `[data-tour="sidebar-company-brain"]`, fallback `[data-tour="company-brain-main"]`, placement `right`, route `/onboarding/company-brain`.
+**Fallback if user declines migration:** v1 read-only mode — store balance in `company_brain.profile.credits` JSON, derive transactions from `tool_calls`. All TS interfaces stay identical so swap is mechanical.
 
-Copy uses the **Where / Use it for / Try first** structure from the brief; existing `tourSteps.test.ts` updated to assert the new fields (length > 0).
+## 4. Workflow integration points
 
----
+Wire estimate → reserve → finalize into existing flows. Logic is unchanged; the credit calls wrap dispatch.
 
-## 4. Page-level micro-help
+- **Signal Feed radar scan** (`useSignalFeed.runRadarScan`, `run-radar-scan/index.ts`): reserve 6 on Start; finalize based on accepted signal count.
+- **Load More signals** (`LoadMoreConfirmDialog`): already has confirm — add explicit `~6 credits` line + reserve on confirm.
+- **Lead workflows** (`buildPostLeadActionsCard`): the existing `credits` field already exists; rename consumers to use the unified estimator + show reservation in confirmation card.
+- **Workflow Center** (`src/pages/Workflows.tsx` + `WorkflowCard.tsx`): every card surfaces `~N credits` chip from cost catalog + safety note for outbound.
+- **Pilot dispatch** (`pilot-chat`, `run-agent`): on plan creation, attach `estimated_credits`; on tool_call completion, finalize.
 
-Add a single subtle helper line under the page title on:
-- `src/pages/Workflows.tsx` — "Pick a workflow when you want a repeatable process. Use Conversations when you want custom work."
-- `src/pages/AwaitingYou.tsx` — "Drafts and risky actions wait here. Nothing is sent without approval."
-- `src/pages/OnboardingCompanyBrain.tsx` — "Update this when your ICP, offer, voice, or goals change."
-- Conversations helper text is added to the empty/intro area on `Dashboard.tsx` only if there's a clean slot; otherwise skipped (no Conversations page exists separately).
+## 5. UI surfaces
 
-Styled as `text-[12.5px] text-neutral-400` next to existing `AskPilotAboutPage` chips. No new components.
+| Surface | Change |
+|---|---|
+| Sidebar header | New `CreditPill` showing `Credits: 742` → opens drawer |
+| `CreditDrawer` (new) | Plan, balance, monthly allowance, next reset, recent 20 transactions, Upgrade CTA, Buy More (disabled "Coming soon" if Stripe not wired) |
+| Workflow confirmation cards | Estimated credits, agents that will run, output preview, safety note |
+| Workbench post-run banner | "Credits used: 11 of 15 estimated — Scout found 3 strong matches; weak rejected" |
+| Awaiting You drafts | Footer line: "Credits already used. Sending is manual and external." |
+| Settings → Billing & Credits (new page `src/pages/SettingsBilling.tsx`) | Plan, usage bar, transaction history table, overage pricing, upgrade/downgrade placeholders |
+| Insufficient balance | Inline blocker with Upgrade CTA, Start disabled |
 
----
+All copy: "Nothing will be sent automatically." preserved everywhere outbound is touched.
 
-## 5. First-run helper
+## 6. Landing page pricing section
 
-No behavior change. It already shows after onboarding and offers Restart tour. Keep as-is.
+Rewrite `src/components/landing/PricingCard.tsx`:
+- New headline: *"Pay for workflows, not seats of software you do not use."*
+- Replace current 3 plans with 5 from `PRICING_PLANS` (Founder Pro highlighted).
+- Add **How credits work** 5-step block.
+- Add **Example** block (5 hiring leads ≈ 15 credits).
+- Add **Founder Pro value** approx-usage block with "Approximate usage depends on workflow type and provider availability."
+- Add safety footnote: "Nothing is sent automatically. All outreach is draft-only and approval-gated."
+- No other landing changes.
 
----
+## 7. Dev/test mode
 
-## 6. Files changed
+Read `import.meta.env.VITE_DEV_BYPASS_CREDITS` (client) and `DEV_BYPASS_CREDITS` (edge). When true:
+- Still call estimate + show confirmation.
+- Skip reserve/finalize DB writes.
+- Badge in confirmation: *"Credits estimated locally · not charged in dev"*.
 
-**New**
-- `src/components/tour/useAnchorRect.ts`
-- `src/components/tour/SpotlightOverlay.tsx`
-- `src/components/tour/GuideCard.tsx`
+## 8. Tests
 
-**Edited**
-- `src/components/tour/ProductTour.tsx` — rewritten to use spotlight engine; preserves public API.
-- `src/components/tour/tourSteps.ts` — extended schema + anchors + Where/Use/Try copy.
-- `src/components/tour/tourSteps.test.ts` — assert new fields.
-- `src/components/Sidebar.tsx` — add `data-tour` per item (purely additive).
-- `src/components/dock/CommandDock.tsx` — add `data-tour="command-dock"`.
-- `src/pages/Dashboard.tsx` — add `data-tour="dashboard-main"`.
-- `src/pages/Workflows.tsx` — add `data-tour="workflows-featured"` + helper line.
-- `src/pages/AwaitingYou.tsx` — add `data-tour="awaiting-queue"` + helper line.
-- `src/pages/OnboardingCompanyBrain.tsx` — add `data-tour="company-brain-main"` + helper line.
+- `src/lib/pricing/__tests__/workflowCosts.test.ts` — estimator math, partial/min-charge policy, insufficient-balance guard.
+- `supabase/functions/_shared/creditLedger.test.ts` — reserve→finalize→refund flows, minimum-charge edges, dev bypass.
+- Component smoke: `CreditDrawer` renders balance; `PricingCard` renders 5 plans; confirmation card shows estimated credits.
 
-**Unchanged**
-- `useProductTour.ts`, `FirstRunHelper.tsx`, `AskPilotAboutPage.tsx`, edge functions, DB, routes.
+## 9. Safety guardrails (hard rules)
 
----
+- ❌ No migration `145631`.
+- ❌ No secrets/env committed.
+- ❌ No auto-send / DM / comment / post / email — outreach stays draft-only.
+- ❌ No production DB writes during implementation.
+- ✅ Provider cost USD never rendered to end users.
+- ✅ Setup-needed workflows charge 0 (early return before reserve).
 
-## 7. QA
+## 10. Files (new / changed)
 
-- Typecheck + `tourSteps.test.ts` pass.
-- Manual: complete onboarding → tour auto-opens → step 1 highlights Dashboard nav row with emerald ring and a card to its right.
-- "Open Workflows" navigates and the highlight re-attaches to the Workflows row.
-- Esc and Skip both close + persist `product_tour_skipped_at`.
-- Finish persists `product_tour_completed`. Tour does not re-open. Restart from FirstRunHelper reopens at step 1.
-- Sidebar collapsed (68px): highlight still wraps the icon row; card placement clamps inside viewport.
-- 1280 and 1440 widths verified visually.
+**New (~14):**
+`src/lib/pricing/{plans,workflowCosts,budgetCaps}.ts`,
+`src/lib/credits/{estimate,client,format}.ts`, `src/hooks/useCreditBalance.ts`,
+`src/components/credits/{CreditPill,CreditDrawer,InsufficientCreditsCard,WorkflowEstimateRow}.tsx`,
+`src/pages/SettingsBilling.tsx`,
+`supabase/functions/_shared/{pricing,creditLedger}.ts`,
+`supabase/functions/credits-balance/index.ts`, `credits-reserve/index.ts`, `credits-finalize/index.ts`.
 
-## 8. Out of scope / not touched
+**Modified (~10):**
+`src/components/landing/PricingCard.tsx`, `src/components/Sidebar.tsx`, `src/App.tsx` (route), `src/pages/Workflows.tsx`, `src/components/workflows/WorkflowCard.tsx`, `src/components/signals/{SignalFeed,LoadMoreConfirmDialog}.tsx`, `src/hooks/useSignalFeed.ts`, `supabase/functions/run-radar-scan/index.ts`, `supabase/functions/_shared/creditEstimate.ts` (delegate to new catalog).
 
-- No DB migrations. No edits to `useProductTour.ts` persistence shape.
-- No landing page edits.
-- No new automation, email, DM, or webhook triggers.
-- No changes to Workbench, Workflow run engine, or Company Brain edge functions.
+## 11. Open questions before I build
+
+1. **Migration approval:** Apply the new `workspace_credits` + `credit_transactions` migration now, or start with the JSON-fallback (v1) and migrate later?
+2. **Trial credits on existing workspaces:** backfill 30 credits to all existing workspaces, or only new ones from now on?
+3. **Stripe checkout:** wire the existing built-in Stripe payments tool for upgrades now, or ship as "Contact us" first?
+4. **Dev bypass:** OK to default `DEV_BYPASS_CREDITS=true` in preview/TEST so QA never burns real credits?
+
+Once these are answered I'll execute the build in one pass.

@@ -36,6 +36,10 @@ export interface LeadTableRow {
 
   fit_score?: number | null;
   fit_reason?: string | null;
+  fit_tier?: string | null;
+  why_this_lead?: string | null;
+  matched_icp?: string[];
+  missing_fields?: string[];
 
   enrichment_status: EnrichmentStatus;
   enrichment_summary?: string | null;
@@ -78,7 +82,7 @@ export function useLeadResults(planId: string | null) {
       const { data, error: err } = await supabase
         .from('lead_candidates' as any)
         .select(
-          'id, plan_id, lead_type, status, fit_score, priority, reason, account_id, contact_id, ' +
+          'id, plan_id, lead_type, status, fit_score, priority, reason, raw, account_id, contact_id, ' +
           'accounts(id,name,domain,industry,stage), contacts(id,full_name,title,linkedin_url,email)',
         )
         .eq('plan_id', planId)
@@ -117,6 +121,9 @@ export function useLeadResults(planId: string | null) {
       } catch { /* ignore */ }
 
       const normalized: LeadTableRow[] = rows.map((r) => {
+        // lead-quality metadata persisted by run-agent (fit_tier, why_this_lead,
+        // matched_icp, missing_fields) lives on the raw jsonb.
+        const rawMeta = (r.raw && typeof r.raw === 'object') ? r.raw as Record<string, any> : {};
         const domain = r.accounts?.domain as string | undefined;
         const website = domain ? (domain.startsWith('http') ? domain : `https://${domain}`) : null;
         const domain_status: DomainStatus = domain ? 'confirmed' : 'missing';
@@ -160,6 +167,10 @@ export function useLeadResults(planId: string | null) {
           contact_status,
           fit_score: typeof r.fit_score === 'number' ? r.fit_score : null,
           fit_reason: r.reason ?? null,
+          fit_tier: typeof rawMeta.fit_tier === 'string' ? rawMeta.fit_tier : null,
+          why_this_lead: typeof rawMeta.why_this_lead === 'string' ? rawMeta.why_this_lead : null,
+          matched_icp: Array.isArray(rawMeta.matched_icp) ? rawMeta.matched_icp : [],
+          missing_fields: Array.isArray(rawMeta.missing_fields) ? rawMeta.missing_fields : [],
           enrichment_status,
           enrichment_summary: enr?.summary ?? null,
           personalization_angles: Array.isArray(enr?.personalization_angles) ? enr.personalization_angles : [],

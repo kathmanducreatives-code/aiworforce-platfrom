@@ -13,6 +13,7 @@ interface Question {
 
 interface ScreeningChatStepProps {
   applicationId: string;
+  accessToken: string;
   extractedData: any;
   onComplete: () => void;
 }
@@ -22,7 +23,7 @@ interface Message {
   content: string;
 }
 
-export default function ScreeningChatStep({ applicationId, extractedData, onComplete }: ScreeningChatStepProps) {
+export default function ScreeningChatStep({ applicationId, accessToken, extractedData, onComplete }: ScreeningChatStepProps) {
   const [questions, setQuestions] = useState<Question[]>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [messages, setMessages] = useState<Message[]>([]);
@@ -111,16 +112,15 @@ export default function ScreeningChatStep({ applicationId, extractedData, onComp
       const updatedAnswers = [...answers, newAnswer];
       setAnswers(updatedAnswers);
 
-      // Save answers to DB
+      // Save answers via token-gated RPC
       const totalTime = Math.round((Date.now() - startTime) / 1000);
-      await supabase
-        .from('screening_applications')
-        .update({
-          screening_answers: updatedAnswers,
-          tab_switches: tabSwitches,
-          total_time_seconds: totalTime,
-        })
-        .eq('id', applicationId);
+      await supabase.rpc('update_screening_application_with_token', {
+        p_id: applicationId,
+        p_access_token: accessToken,
+        p_screening_answers: updatedAnswers,
+        p_tab_switches: tabSwitches,
+        p_total_time_seconds: totalTime,
+      });
 
       const nextIndex = currentIndex + 1;
 

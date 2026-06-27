@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import { Loader2, Gauge, ShieldCheck } from 'lucide-react';
+import { Loader2, Gauge, ShieldCheck, Clock } from 'lucide-react';
 import { usePlanDetail } from '@/hooks/usePlanDetail';
 import { useAgents } from '@/hooks/useAgents';
 import { useWorkspace } from '@/contexts/WorkspaceContext';
@@ -9,6 +9,9 @@ import ExecutionTaskRow from './ExecutionTaskRow';
 import ActivityMiniFeed from './ActivityMiniFeed';
 import PlanStatusPill from './PlanStatusPill';
 import AgentProcessRail from '../agents/AgentProcessRail';
+import LiveProgressLine from './LiveProgressLine';
+import { inferStage } from '@/lib/chat/progressCopy';
+import { isWorkflowActive, isLongRunning } from '@/lib/chat/state';
 import type { DBToolCall, DBApproval } from '@/lib/orchestration';
 
 
@@ -43,7 +46,7 @@ const TOOL_PROVIDER_KEY: Record<string, string> = {
 export default function ExecutionPlanCard({ planId, meta }: Props) {
   const { workspaceId } = useWorkspace();
   const { agents } = useAgents(workspaceId);
-  const { plan, tasks, activity, approvals, toolCalls, loading } = usePlanDetail(planId);
+  const { plan, tasks, activity, approvals, toolCalls, loading, uiState, lastActivityAt, secondsSinceChange } = usePlanDetail(planId);
   const { setView, openWorkbench } = useChatWorkspace();
 
   const agentById = useMemo(() => {
@@ -123,12 +126,19 @@ export default function ExecutionPlanCard({ planId, meta }: Props) {
     return Array.from(set);
   }, [tasks, agentById, meta?.agents]);
 
-  // Derive normalized status
+  // Derive normalized status — uiState is the single source of truth, but
+  // we keep the legacy fallbacks so the status pill is never blank.
   const pendingApprovals = approvals.some((a) => a.status === 'pending');
   const anyFailed = tasks.some((t) => t.status === 'failed');
   const anyRunning = tasks.some((t) => t.status === 'running' || t.status === 'pending');
   const allComplete = tasks.length > 0 && tasks.every((t) => t.status === 'complete' || t.status === 'skipped');
   const normalizedStatus: string =
+    uiState === 'stale' ? 'stale' :
+    uiState === 'partial' ? 'partial' :
+    uiState === 'waiting_confirmation' ? 'awaiting_approval' :
+    uiState === 'running' || uiState === 'streaming_progress' ? 'running' :
+    uiState === 'complete' ? 'complete' :
+    uiState === 'failed' ? 'failed' :
     rawStatus === 'failed' ? 'failed' :
     pendingApprovals ? 'awaiting_approval' :
     anyRunning ? 'running' :
@@ -231,6 +241,27 @@ export default function ExecutionPlanCard({ planId, meta }: Props) {
         </ul>
       </div>
 
+      {isWorkflowActive(uiState) && (() => {
+        const activeTask = tasks.find((t) => t.status === 'running' || t.status === 'pending') ?? null;
+        const tc = activeTask ? latestToolCallByTask[activeTask.id] : null;
+        const stage = inferStage({
+          agentSlug: activeTask ? slugForTask(activeTask) : null,
+          description: activeTask?.description ?? null,
+          toolName: tc?.tool_name ?? null,
+        });
+        const longRunning = isLongRunning(lastActivityAt);
+        return <LiveProgressLine stage={stage} longRunning={longRunning} />;
+      })()}
+
+      {uiState === 'stale' && (
+        <div className="mt-2 flex items-center gap-2 text-[11px] text-amber-300 bg-amber-500/5 border border-amber-500/20 rounded px-2 py-1.5">
+          <Clock className="h-3 w-3" />
+          This run looks stale — no backend activity for a while. You can keep waiting or retry.
+        </div>
+      )}
+      {uiState === 'running' && secondsSinceChange > 25 && (
+        <div className="mt-2 text-[11px] text-[#9aa4af]">Still working — waiting for the latest backend update.</div>
+      )}
 
       <ActivityMiniFeed events={activity} />
 

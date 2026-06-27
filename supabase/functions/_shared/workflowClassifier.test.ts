@@ -462,3 +462,53 @@ Deno.test("Decision-maker Discovery 2.0: explicit founder routing", async () => 
   assertEquals(await cat("Find 5 companies in healthcare AI"), "company_hiring_sourcing");
   assertEquals(await cat("Find 5 agencies hiring SDRs"), "company_hiring_sourcing");
 });
+
+// ---- Assistant / founder-support hiring routing ----
+// "founders hiring for assistant roles" must route to company_hiring_sourcing
+// (apify_jobs), NOT people_sourcing — "founders" here is the HIRER and
+// "assistant roles" is the hiring signal. Before the fix, "assistant" was absent
+// from the hiring-role list so this fell through to people_sourcing.
+Deno.test("routing: founders hiring for assistant roles → company_hiring (jobs)", async () => {
+  const d = await classifyWorkflow(
+    "I want founders hiring for assistant roles so I can target them with my AI SaaS product. Help me find the leads.",
+  );
+  assertEquals(d.workflow_category, "company_hiring_sourcing");
+  assertEquals(d.selected_actor_key, "apify_jobs");
+  assertEquals(d.source_type, "jobs");
+  assert(d.role_keywords.length > 0, "should extract assistant role keywords for Scout");
+});
+
+Deno.test("routing: companies/founders hiring assistant variants → jobs", async () => {
+  for (const p of [
+    "Find companies hiring executive assistants",
+    "Find founders hiring operations assistants in USA",
+    "Find startups hiring founder office associates",
+    "Find companies hiring admin assistants",
+    "Find founders hiring virtual assistants",
+  ]) {
+    const d = await classifyWorkflow(p);
+    assertEquals(d.workflow_category, "company_hiring_sourcing", p);
+    assertEquals(d.selected_actor_key, "apify_jobs", p);
+    assertEquals(d.source_type, "jobs", p);
+  }
+});
+
+Deno.test("routing: assistant-role hiring expands to support role_keywords", async () => {
+  const d = await classifyWorkflow("Find companies hiring executive assistants in USA");
+  assert(d.role_keywords.some((k) => /executive assistant/i.test(k)), "should include Executive Assistant");
+  assert(d.role_keywords.some((k) => /chief of staff/i.test(k)), "should broaden to Chief of Staff");
+  assert(d.role_keywords.some((k) => /founder/i.test(k)), "should include founder-support variants");
+});
+
+// Regression: assistant tokens must NOT flip people-first / company-first rules.
+Deno.test("routing regression: founders OF agencies still people (not jobs)", async () => {
+  const d = await classifyWorkflow("Find 5 founders of recruiting agencies in USA.");
+  assertEquals(d.workflow_category, "people_sourcing");
+  assertEquals(d.selected_actor_key, "apify_people_search");
+});
+
+Deno.test("safety: assistant-role search + auto-send is unsafe", async () => {
+  const d = await classifyWorkflow("Find founders hiring assistants and automatically email them.");
+  assertEquals(d.workflow_category, "unsafe_or_unsupported");
+  assertEquals(d.selected_actor_key, null);
+});
