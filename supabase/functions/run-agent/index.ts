@@ -241,8 +241,12 @@ Deno.serve(async (req) => {
           location = locMatch?.[1]?.trim() ?? null;
         }
         if (roleKeywords.length === 0) {
+          // Multi-word assistant/support tokens are listed before bare
+          // "assistant"/"admin" so "executive assistant" is captured as one
+          // phrase. roleAliases() then expands any support role to the full
+          // SUPPORT_ROLE_ALIASES set (EA, Chief of Staff, Founder's Office…).
           roleKeywords = Array.from(
-            new Set(((instruction ?? "").toLowerCase().match(/\b(marketing|marketer|sales|engineer|developer|designer|founder|product|react|frontend|backend|growth|recruiter)\b/g) ?? [])),
+            new Set(((instruction ?? "").toLowerCase().match(/\b(marketing|marketer|sales|engineer|developer|designer|founder|product|react|frontend|backend|growth|recruiter|executive assistant|administrative assistant|admin assistant|operations assistant|operations associate|virtual assistant|personal assistant|founder office|founder'?s office|founder associate|chief of staff|office manager|assistant|admin)\b/g) ?? [])),
           );
         }
 

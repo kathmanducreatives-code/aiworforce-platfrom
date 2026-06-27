@@ -6,6 +6,7 @@
 
 import { evaluateWorkflowStatus } from "./adaptiveWorkflow.ts";
 import { keyForItem, type SourcedItem, type SourcingCriteria, type StrictConstraints, type AttemptRecord } from "./sourcingRetry.ts";
+import { SUPPORT_ROLE_RE, isSupportRoleText } from "./broaden.ts";
 
 export type SourceQualityCounts = {
   raw_result_count: number;
@@ -19,6 +20,18 @@ export type SourceQualityCounts = {
 };
 
 const ROLE_WORDS = /\b(gtm|go-to-market|sdr|bdr|sales|growth|account executive|ae|marketing|revops|founder|ceo|cto|engineer|developer|business development)\b/i;
+
+// Founding / C-suite words that, as a row's title, describe a PERSON's current
+// role — not an open job posting. In a jobs/hiring source such a row is profile
+// data that leaked in, not a hiring signal. (Bare "founder" is intentionally NOT
+// here: "Founder Associate" / "Founder's Office" are support roles and are
+// rescued by the SUPPORT_ROLE_RE guard below.)
+const PROFILE_TITLE_RE = /\b(co-?founder|ceo|cto|coo|cmo|cro|cfo|chief executive)\b/i;
+
+/** jobs / hiring / company-account sources (rows are companies with openings). */
+function isJobsLikeSource(c: SourcingCriteria): boolean {
+  return /job|hiring|company|account/.test(String(c.source_type ?? ""));
+}
 
 export type Classified = {
   accepted: SourcedItem[];
@@ -50,9 +63,39 @@ export function classifyResults(items: SourcedItem[], c: SourcingCriteria, stric
     }
 
     const title = (it.title ?? "").toString();
+    const supportRequested = isSupportRoleText(c.role) || isSupportRoleText(c.category);
+    const titleIsSupport = SUPPORT_ROLE_RE.test(title);
+
     if (c.role && title) {
       const roleRe = new RegExp(c.role.split(/\s+/)[0].replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i");
-      if (!roleRe.test(title) && !ROLE_WORDS.test(title)) { rejected.push({ item: it, reason: "wrong role" }); bump("wrong role"); continue; }
+      const titleMatchesRole = roleRe.test(title);
+      if (supportRequested) {
+        // Assistant / founder-support search: the row must actually BE a
+        // support-role hire (or explicitly match the requested role). A generic
+        // founder/CEO/Sales title is NOT an assistant hiring signal — reject it
+        // rather than filling the result with weak profile rows.
+        if (!titleIsSupport && !titleMatchesRole) {
+          rejected.push({ item: it, reason: "not an assistant/founder-support role" });
+          bump("not an assistant/founder-support role");
+          continue;
+        }
+      } else if (!titleMatchesRole && !ROLE_WORDS.test(title)) {
+        rejected.push({ item: it, reason: "wrong role" }); bump("wrong role"); continue;
+      }
+    }
+
+    // Defense-in-depth for jobs/hiring sources: a bare founder / co-founder /
+    // C-suite title is a person's current role (profile data), not an open job
+    // posting. Reject it unless the row also carries a support-role hire (e.g.
+    // "Assistant to CEO", "EA to Founder"). Does NOT apply to people-profile
+    // sources, where "founder"/"CEO" IS the requested persona.
+    if (
+      isJobsLikeSource(c) && title && PROFILE_TITLE_RE.test(title) && !titleIsSupport
+      && !(c.role && new RegExp(c.role.split(/\s+/)[0].replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i").test(title))
+    ) {
+      rejected.push({ item: it, reason: "profile title (founder/CEO), not a hiring signal" });
+      bump("profile title (founder/CEO), not a hiring signal");
+      continue;
     }
 
     const key = keyForItem(it);

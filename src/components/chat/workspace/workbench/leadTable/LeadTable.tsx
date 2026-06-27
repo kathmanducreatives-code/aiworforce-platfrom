@@ -92,6 +92,9 @@ export default function LeadTable({ rows, selected, onToggle, onToggleAll, onOpe
                 <td className={`${COL_W.signal} border-b border-white/[0.05] px-2 py-1.5 align-top`}>
                   <div className="text-[11.5px] text-[#C9D1D9] truncate">{r.signal_type ?? '—'}</div>
                   <div className="text-[10.5px] text-[#7D8590] line-clamp-2">{r.signal_summary ?? ''}</div>
+                  {r.why_this_lead && (
+                    <div className="text-[10px] text-emerald-300/70 line-clamp-2 mt-0.5">{r.why_this_lead}</div>
+                  )}
                 </td>
                 <td className={`${COL_W.persona} border-b border-white/[0.05] px-2 py-1.5 align-top text-[11.5px] text-[#C9D1D9]`}>
                   {r.recommended_persona ?? <span className="text-[#7D8590]">—</span>}
@@ -152,7 +155,19 @@ export default function LeadTable({ rows, selected, onToggle, onToggleAll, onOpe
                   )}
                 </td>
                 <td className={`${COL_W.fit} border-b border-white/[0.05] px-2 py-1.5 align-top font-mono text-[11px] text-emerald-200`}>
-                  {typeof r.fit_score === 'number' ? r.fit_score : <span className="text-[#7D8590]">—</span>}
+                  {typeof r.fit_score === 'number' ? (
+                    <div>
+                      <div>{r.fit_score}</div>
+                      {r.fit_tier && (
+                        <div className={`text-[8.5px] uppercase tracking-wide mt-0.5 ${
+                          r.fit_tier === 'hot' ? 'text-emerald-300'
+                          : r.fit_tier === 'qualified' ? 'text-emerald-400/70'
+                          : r.fit_tier === 'weak' ? 'text-amber-300/70'
+                          : 'text-[#7D8590]'
+                        }`}>{r.fit_tier}</div>
+                      )}
+                    </div>
+                  ) : <span className="text-[#7D8590]">—</span>}
                 </td>
                 <td className={`${COL_W.source} border-b border-white/[0.05] px-2 py-1.5 align-top text-[11px] text-[#9aa4af] truncate`}>
                   {r.signal_type ?? '—'}

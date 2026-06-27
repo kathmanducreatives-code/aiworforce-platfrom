@@ -21,9 +21,50 @@ const INDUSTRY_SYNONYMS: Record<string, string[]> = {
   "ai software": ["AI software", "AI tools", "AI products"],
 };
 
+// Assistant / founder-support / operations roles. Active hiring for one of these
+// is a strong buying signal for any product that removes manual founder-ops
+// workload. This list is the SINGLE SOURCE OF TRUTH — the workflow classifier
+// (routing), the actor-input planner (role_keywords), and the lead-quality /
+// source-quality acceptance layers all detect support roles via SUPPORT_ROLE_RE
+// and expand to this alias set. Keep the regex and the list in sync.
+export const SUPPORT_ROLE_ALIASES = [
+  "Executive Assistant",
+  "Founder Assistant",
+  "Assistant to Founder",
+  "Assistant to CEO",
+  "Operations Assistant",
+  "Admin Assistant",
+  "Administrative Assistant",
+  "Virtual Assistant",
+  "Personal Assistant",
+  "Founder's Office",
+  "Founder Office",
+  "Founder Associate",
+  "Chief of Staff",
+  "Operations Associate",
+  "Business Operations Associate",
+  "Office Manager",
+  "EA to CEO",
+  "EA to Founder",
+];
+
+// Matches any assistant / founder-support / operations role (incl. bare
+// "assistant"/"admin") in a query, job title, or signal text. Tolerates plurals
+// and the founder's/founders'/founder-office variants.
+export const SUPPORT_ROLE_RE =
+  /\b(executive assistants?|administrative assistants?|admin assistants?|operations assistants?|operations associates?|operations coordinators?|virtual assistants?|personal assistants?|founders?(?:['’]s)?\s+(?:office|associate|assistant)|founder office|assistant to (?:the )?(?:ceo|founder|cfo|coo|cto|president)|ea to (?:the )?(?:ceo|founder)|chief of staff|office managers?|business operations associates?|assistants?|admins?)\b/i;
+
+/** True when the text mentions an assistant / founder-support / operations role. */
+export function isSupportRoleText(s: string | null | undefined): boolean {
+  return !!s && SUPPORT_ROLE_RE.test(String(s));
+}
+
 export function roleAliases(role: string | null | undefined): string[] {
   const key = (role ?? "").trim().toLowerCase();
   if (!key) return [];
+  // Any assistant / founder-support role expands to the full alias set so the
+  // jobs actor searches every support-role variant (EA, Chief of Staff, etc.).
+  if (SUPPORT_ROLE_RE.test(role ?? "")) return [...SUPPORT_ROLE_ALIASES];
   return ROLE_ALIASES[key] ?? [role!.trim()];
 }
 
