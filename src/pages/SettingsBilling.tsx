@@ -175,6 +175,6 @@ export default function SettingsBilling() {
           </div>
         </section>
       </div>
-    </MainLayout>
+    </div>
   );
 }
