@@ -1,6 +1,6 @@
 import { useNavigate } from 'react-router-dom';
 import { ArrowLeft, Check, Coins, Sparkles } from 'lucide-react';
-import MainLayout from '@/components/MainLayout';
+
 import { Button } from '@/components/ui/button';
 import { useCreditBalance } from '@/hooks/useCreditBalance';
 import { PRICING_PLANS, getPlan } from '@/lib/pricing/plans';
