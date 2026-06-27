@@ -189,6 +189,27 @@ export default function SignalCard({
             </div>
           )}
 
+          {/* matched ICP chips */}
+          {signal.matched_icp && signal.matched_icp.length > 0 && (
+            <div className="mt-1.5 flex flex-wrap gap-1">
+              {signal.matched_icp.slice(0, 5).map((m) => {
+                const [k, v] = m.split(":");
+                return (
+                  <span key={m} className="text-[10px] px-1.5 py-0.5 rounded border border-emerald-500/20 bg-emerald-500/[0.04] text-emerald-300/90">
+                    <span className="text-emerald-300/60">{k}:</span> {v ?? m}
+                  </span>
+                );
+              })}
+            </div>
+          )}
+
+          {/* recommended next action */}
+          {signal.next_action && (
+            <div className="mt-1.5 text-[11px] text-emerald-300/90">
+              <span className="text-neutral-500">Next: </span>{signal.next_action}
+            </div>
+          )}
+
           {/* competitor block */}
           {isCompetitor && signal.competitor_name && (
             <div className="mt-2 rounded-md border border-amber-500/15 bg-amber-500/[0.04] px-2.5 py-2 text-[11px] text-amber-100/90">

@@ -1,122 +1,132 @@
-# Plan — Conversations reliability + alive execution states
+# Signal Feed v1 — ICP-Aware Market Radar
 
-Goal: make the chat feel ChatGPT-reliable and ChatGPT-alive while keeping the AI-workforce identity. Scope is presentation + frontend state. No schema migrations, no production data writes, no landing-page changes, no auto-send / DM / email / post. Migration 145631 untouched.
+Turn `/signals` into a working radar that defaults to 10 ICP-matched signals across hiring, LinkedIn intent, competitor conversations, and workflow trends — sourced through capability-gated providers, scored, deduped, and editable by the user.
 
-## 1. Chat history reliability (`useUserConversations`, `useConversationActions`, sidebar)
+## Scope guardrails (from brief)
+- No landing-page changes. No new migration (reuse existing `signals` table + `company_brain.profile` JSON). Migration `145631` untouched.
+- No auto-send / auto-DM / auto-comment / auto-post / auto-email anywhere.
+- No fake signals — unavailable sources render "setup-needed" cards.
+- Live QA in TEST only, <$5 spend.
 
-Rewrite `src/hooks/useUserConversations.ts`:
-- Wait for `supabase.auth.getSession()` before the first fetch (avoids the "sometimes empty history" caused by the race documented in our auth-ready note).
-- Filter `conversations` by the current `user_id` explicitly so RLS edge cases don't return an empty set silently.
-- Track `state: 'idle' | 'loading' | 'ready' | 'empty' | 'error'` and expose `retry()`.
-- Realtime channel filtered by `user_id=eq.<uid>`; on INSERT/UPDATE/DELETE patch the local array in place (no full re-fetch storm).
-- Sort by `updated_at desc`; dedupe by id.
-- Persist `lastConversationId` in `localStorage`; restore on workspace open when the row still exists, otherwise fall back to most-recent.
+## 1. Storage (reuse, no migration)
+- **Signals**: existing `public.signals` row (`signal_type`, `signal_label`, `title`, `description`, `source_url`, `source`, `raw`, `conversation_id`, `plan_id`). New status/score/priority/why/matched_icp/next_action live inside `raw` so we avoid a migration. `normalizeSignalRow` already surfaces several of these.
+- **Preferences**: `company_brain.profile.signal_preferences` (new JSON sub-object). Read/write via existing `useCompanyBrain` + a small upsert helper.
 
-Rewrite `src/hooks/useChatConversation.ts`:
-- Same auth-ready gate.
-- Append/patch messages by id; keep optimistic temp messages with `temp_id`; reconcile when the real row arrives (replace by `temp_id`).
-- Expose `state` + `retry()` so the message list can show a real error/retry surface instead of an empty container.
+```ts
+signal_preferences: {
+  keywords, competitors, hiring_roles, linkedin_topics,
+  workflow_topics, geographies, industries, disqualifiers,
+  default_mix: { hiring, linkedin_intent, competitors, workflows, people },
+  frequency: 'weekly' | 'daily' | 'manual',
+}
+```
+Defaults derived from Company Brain (`icp.industries`, `icp.buyer_roles`, `competitors.known`, `icp.geography`, `gtm.*`) when the field is empty.
 
-`useConversationActions.createConversation`:
-- Guard against double-click: keep an in-flight ref so a second click reuses the in-flight promise (kills duplicate blank chats).
-- After insert, optimistically prepend to the cache used by `useUserConversations` (instant appearance, no waiting for realtime).
-- Auto-title from the first user message (first 60 chars) the first time we persist a message in a "New chat".
+## 2. Backend — new edge function `run-radar-scan`
+`supabase/functions/run-radar-scan/index.ts` (JWT-validated, workspace-scoped).
 
-Sidebar (`ConversationsSidebar.tsx`):
-- Skeleton rows while `state === 'loading'`.
-- Empty state copy: "No conversations yet. Ask your AI workforce to run a workflow."
-- Retry button on `error`.
-- Show last-message preview (1 line) and a small status chip (`Running / Needs approval / Failed / Complete`) derived from the latest plan linked to the conversation.
+Inputs: `{ workspace_id, mode: 'default'|'load_more'|'category', category?, limit? }`.
 
-## 2. Conversation state model
+Pipeline:
+1. Load `company_brain.profile` + `signal_preferences` (fallback to defaults).
+2. Capability check via existing `integration-readiness` logic — Apify (hiring/people), Firecrawl (workflow/page extract), LinkedIn actor (intent posts).
+3. Build per-category queries from ICP + prefs. Default mix = 3 hiring / 3 LinkedIn intent / 2 competitor / 2 workflow trends (10 total).
+4. Run only ready providers in parallel. Skipped categories return `{ status: 'setup_needed', reason }`.
+5. Normalize → dedupe (URL + title hash + 7-day window using existing rows) → score via new `_shared/signalQuality.ts` `evaluateSignalQuality()`.
+6. Reject disqualifier matches, weak/no-action signals, irrelevant geographies (strict mode).
+7. Persist accepted signals to `signals` table with `raw.score`, `raw.priority`, `raw.why_it_matters`, `raw.matched_icp`, `raw.next_action`, `raw.status='new'`.
+8. Return `{ signals: [...], per_category: {hiring: {found, accepted, status}, ...}, credits_used }`.
 
-Add `src/lib/chat/state.ts` exporting the union types from the brief (`ConversationLoadState`, `MessageSendState`, `WorkflowRunUiState`) and small helpers (`deriveWorkflowUiState(plan, tasks, approvals, lastActivityAt)`).
+Modes:
+- `default` — first run, returns up to 10.
+- `load_more` — appends N more (default 10), requires `confirmed: true` body flag.
+- `category` — targeted scan from chat ("find LinkedIn posts about AI SDRs").
 
-Every consumer (`ConversationView`, `ChatView`, `ExecutionPlanCard`, sidebar row) renders from these types so no state is silent.
+## 3. Scoring helper — `supabase/functions/_shared/signalQuality.ts`
+Pure function (testable, no imports):
+```ts
+evaluateSignalQuality({ signal, companyBrain, signalPreferences, sourceType })
+  → { accepted, priority, score, reason, matched_icp, missing_context, next_action }
+```
+Weights: ICP industry/role match (+), competitor keyword match (+), recency (decay), source confidence (provider-driven), intent verbs ("looking for", "hiring", "frustrated with"), disqualifier hit (hard reject), geography mismatch in strict mode (reject), no clear action (reject).
 
-## 3. Execution card — no more frozen "Executing"
+## 4. Frontend rewrite — `src/components/signals/SignalFeed.tsx`
 
-`ExecutionPlanCard.tsx` + `ExecutionTaskRow.tsx`:
-- Replace the static "executing" pill with a state derived from `deriveWorkflowUiState`: `preparing | waiting_confirmation | running | streaming_progress | partial | complete | failed`.
-- Animated border (shimmer) while running, pulse dot on the active step, agent avatar stack, elapsed timer, "last activity Xs ago".
-- "View output" only when the step truly has output; otherwise show the honest reason (zero results / connector missing / skipped — already wired in metadata).
-- New `LiveProgressLine.tsx` under the active step: rotates workflow-aware copy from `src/lib/chat/progressCopy.ts` (the lead-sourcing / decision-maker / enrichment / outreach / content / fallback strings from the brief). Rotation is tied to the current step type, not faked.
+Replace current empty-feeling layout with:
 
-## 4. Execution heartbeat (`useExecutionHeartbeat`)
+### Header
+"Signal Feed — Your ICP-aware market radar" + Scout subtitle. Actions row: `Run radar scan`, `Edit radar`, `Refresh`, `Rank by fit`, `Load more`. Credit note line.
 
-New hook wrapping `usePlanDetail`:
-- While `state` is preparing/running, run a 4s poll in addition to the realtime channel (covers dropped sockets — already the documented cause of "stuck Executing").
-- Track `lastChangeAt`; if no change for 25s show "Still working — waiting for the latest backend update", at 90s show "This is taking longer than expected. Keep waiting or retry." Never auto-mark failed.
-- Stop polling on `complete | failed | cancelled`.
+### Radar summary (4 cards) — `RadarSummaryCards.tsx` (new)
+Hiring · LinkedIn intent · Competitor conversations · Workflow trends. Each shows count, ready/setup-needed badge, top keyword from prefs, last scan time, category CTA.
 
-## 5. Alive agent messages (`ConversationView` / `buildPlanMessages`)
+### Signal list
+Reuse `SignalCard.tsx`, extend to show: priority pill, why-it-matters block, matched-ICP chips, next-action button. Sort by `priority → score → recency`. Empty state = premium card with "Run your first ICP radar scan to load 10 signals" CTA.
 
-Expand `src/lib/chatMessageStream.ts`:
-- Map activity/task events to the correct owning agent (Pilot coordinator, Scout sourcing, Aria ranking, Hawk research, Penn drafts, Scribe content) using the existing `slugForTask` rules; fall back to step-type inference instead of generic "Agent · Operations".
-- Emit short, human messages on milestones: search-strategy ready, raw reviewed/accepted, ranking done, drafts queued, Workbench opened. No raw provider names as primary content.
-- AgentTypingIndicator shows current speaker while their step is running.
+### Edit Radar drawer — `EditRadarDrawer.tsx` (new)
+Sheet with type-ahead chip inputs for industries, personas, geographies, competitors, keywords, pain points, hiring roles, workflow topics, disqualifiers; sliders for default mix; frequency select. Saves to `company_brain.profile.signal_preferences`.
 
-## 6. Workbench open trigger
+### Load-more confirm — `LoadMoreConfirmDialog.tsx` (new)
+Modal: "Load 10 more signals? Scout will scan additional sources based on your radar settings. Estimated cost: ~X credits. Nothing will be sent." Requires explicit confirm before the edge call.
 
-Only auto-open Workbench when at least one task has real output. Otherwise show the inline honest reason in the chat (no blank "No output" cards).
+### Setup-needed cards — `SetupNeededCard.tsx` (new)
+Per-category explainer with link to Settings → Integrations.
 
-## 7. Loading / transition polish
+## 5. Hook + data layer
+- `src/hooks/useSignalFeed.ts` — extend with `runRadarScan(mode, opts)`, `perCategoryStatus`, `lastScanAt` (read from most recent row), preferences read/write.
+- `src/lib/signalPreferences.ts` (new) — defaults builder from Company Brain, validation.
+- `src/lib/signalFeedModel.ts` — extend normalizer to surface `priority`, `score`, `why_it_matters`, `matched_icp`, `next_action`, `status` from `raw`.
 
-- Message-list skeleton on first load.
-- Smooth scroll-to-latest on append; freeze auto-scroll when user is scrolled up + "new activity ↓" pill (extend existing `unread` logic in `ConversationView`).
-- Disabled send button while `MessageSendState === 'sending'`; retry chip on `failed`.
-- Reconnect banner if a realtime channel errors (`channel.subscribe` status).
+## 6. Chat / Pilot routing
+Add Scout capability + route in existing intent router:
+- "find more signals this week" / "find LinkedIn posts about X" / "show competitor conversations for X" → invoke `run-radar-scan` via Pilot's tool layer, surface confirmation card before external scans, then post Scout's summary line and link to `/signals`.
+- Wire through existing `_shared/toolRegistry.ts` (new tool: `run_radar_scan`) and `intentRouter.ts` — no new orchestration framework.
 
-## 8. Errors
+## 7. Actions on a signal
+Card buttons (no auto-send): Save · Ignore · Mark reviewed · Turn into lead (existing lead candidate flow) · Find decision-maker (Pilot prompt) · Enrich company · Create LinkedIn post (drafts only) · Add to Workflow Radar (writes to `saved_outputs`). All update `raw.status` via an RPC-free direct update (RLS already scoped).
 
-Centralize via `toast.error` + inline banners using the exact copy from the brief ("Couldn't load chat history. Retry.", "This workflow could not start because Apify is not configured.", etc.). No silent failures.
+## 8. Tests
+- `src/lib/signalPreferences.test.ts` — defaults from brain, override merge, disqualifier validation.
+- `supabase/functions/_shared/signalQuality.test.ts` — default mix totals 10, ICP keyword influence, disqualifier rejects, duplicate rejects, hiring/competitor/workflow scoring, geography strict mode, no-action reject.
+- `src/components/signals/SignalFeed.test.tsx` (light) — empty state renders, load-more shows confirm, setup-needed renders when capability missing.
 
-## 9. Light state cleanup (UI-only, no DB writes)
+## 9. Browser QA (TEST workspace, <$5)
+Scenarios A–E from brief: empty → first scan → edit radar → load more confirm → save/ignore/review filters. Verify no outbound side effects.
 
-- Frontend filter: hide plans whose `status='executing'` with no activity for >24h from the "running" badge; render them as `stale` in the sidebar with a "Mark as done" UI action that updates only that conversation row.
-- No automatic deletes. No data migration.
+## 10. Validation
+```
+deno test supabase/functions/_shared --allow-all
+npx tsc --noEmit
+npm run build
+deno check supabase/functions/pilot-chat/index.ts || true
+deno check supabase/functions/run-agent/index.ts || true
+deno check supabase/functions/run-radar-scan/index.ts
+```
 
-## 10. Tests
+## Files
 
-`src/lib/chat/__tests__/`:
-- `state.test.ts` — `deriveWorkflowUiState` truth table (no tasks, all complete, mixed failed, awaiting approval, stale).
-- `progressCopy.test.ts` — every workflow type returns a non-empty rotation.
-- `useUserConversations.test.tsx` — dedupes, sorts by updated_at, retries on error.
-- `useChatConversation.test.tsx` — optimistic temp message reconciles by temp_id, no duplicates after realtime echo.
+**New**
+- `supabase/functions/run-radar-scan/index.ts`
+- `supabase/functions/_shared/signalQuality.ts` (+ `.test.ts`)
+- `supabase/functions/_shared/signalSources.ts` (provider adapters: hiring/Apify, linkedin/actor-or-skip, competitor/Firecrawl, workflow/Firecrawl)
+- `src/lib/signalPreferences.ts` (+ `.test.ts`)
+- `src/components/signals/RadarSummaryCards.tsx`
+- `src/components/signals/EditRadarDrawer.tsx`
+- `src/components/signals/LoadMoreConfirmDialog.tsx`
+- `src/components/signals/SetupNeededCard.tsx`
 
-## 11. Validation
+**Modified**
+- `src/components/signals/SignalFeed.tsx` (full layout rebuild)
+- `src/components/signals/SignalCard.tsx` (priority, why-it-matters, matched-ICP, next-action)
+- `src/hooks/useSignalFeed.ts` (radar scan, prefs, per-category status)
+- `src/lib/signalFeedModel.ts` (surface new `raw.*` fields)
+- `src/lib/companyBrainSchema.ts` (add `signal_preferences` typing — additive, no migration)
+- `supabase/functions/_shared/toolRegistry.ts` + `intentRouter.ts` (Scout `run_radar_scan` tool)
+- `supabase/functions/pilot-chat/index.ts` (route radar intents; emit confirmation card before scan)
 
-- `npx tsc --noEmit`
-- `npm run build`
-- `deno test supabase/functions/_shared --allow-all` (no edge-function changes, but run to confirm clean)
-- Manual browser QA: history reliability flow (A), running-state flow (B), slow-backend flow (C — simulated by pausing the heartbeat), zero-results flow (D).
-- Safety scan: no secrets, no migrations, migration 145631 untouched, no landing change, no auto-send/DM/post/email.
+**Not touched**: landing, migration `145631`, any other migration files, env/secrets.
 
-## Files touched
-
-Modify:
-- `src/hooks/useUserConversations.ts`
-- `src/hooks/useChatConversation.ts`
-- `src/hooks/useConversationActions.ts`
-- `src/hooks/usePlanDetail.ts`
-- `src/components/chat/workspace/ConversationsSidebar.tsx`
-- `src/components/chat/workspace/ConversationView.tsx`
-- `src/components/chat/workspace/ChatView.tsx`
-- `src/components/chat/workspace/ChatWorkspace.tsx` (restore-last-conversation on open)
-- `src/components/chat/workspace/plan/ExecutionPlanCard.tsx`
-- `src/components/chat/workspace/plan/ExecutionTaskRow.tsx`
-- `src/components/chat/workspace/plan/ActivityMiniFeed.tsx`
-- `src/lib/chatMessageStream.ts`
-
-Create:
-- `src/lib/chat/state.ts`
-- `src/lib/chat/progressCopy.ts`
-- `src/hooks/useExecutionHeartbeat.ts`
-- `src/components/chat/workspace/plan/LiveProgressLine.tsx`
-- tests in `src/lib/chat/__tests__/` and `src/hooks/__tests__/`
-
-Out of scope: schema migrations, landing page, edge functions, outreach automation, production data mutations.
-
-## Open question
-
-The brief mentions "delete/archive chat action if existing backend supports it." The current `conversations` table has no `archived_at` column. Should I (a) keep delete-only (current behavior) or (b) add a lightweight client-side "Done" toggle using the existing `status` column? I'll default to (b) unless you say otherwise — it requires no schema change.
+## Out of scope / deferred
+- Weekly cron / scheduled radar (manual scan only in v1; preferences include frequency for v2 cron).
+- People/profile provider (renders setup-needed unless `APIFY_ENABLE_PEOPLE_SEARCH=true`).
+- New DB columns for status/score (kept in `raw` to honor no-migration rule).
