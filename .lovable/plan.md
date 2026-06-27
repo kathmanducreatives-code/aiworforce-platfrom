@@ -1,132 +1,148 @@
-# Signal Feed v1 — ICP-Aware Market Radar
 
-Turn `/signals` into a working radar that defaults to 10 ICP-matched signals across hiring, LinkedIn intent, competitor conversations, and workflow trends — sourced through capability-gated providers, scored, deduped, and editable by the user.
+# Agentory Credit & Pricing System
 
-## Scope guardrails (from brief)
-- No landing-page changes. No new migration (reuse existing `signals` table + `company_brain.profile` JSON). Migration `145631` untouched.
-- No auto-send / auto-DM / auto-comment / auto-post / auto-email anywhere.
-- No fake signals — unavailable sources render "setup-needed" cards.
-- Live QA in TEST only, <$5 spend.
+A fair, transparent credit system across product + landing. Single source of truth for plans, workflow costs, and a clean reserve → finalize → (partial-refund) lifecycle. No auto-outreach. No risky migrations.
 
-## 1. Storage (reuse, no migration)
-- **Signals**: existing `public.signals` row (`signal_type`, `signal_label`, `title`, `description`, `source_url`, `source`, `raw`, `conversation_id`, `plan_id`). New status/score/priority/why/matched_icp/next_action live inside `raw` so we avoid a migration. `normalizeSignalRow` already surfaces several of these.
-- **Preferences**: `company_brain.profile.signal_preferences` (new JSON sub-object). Read/write via existing `useCompanyBrain` + a small upsert helper.
+## 1. Source-of-truth config (new)
 
-```ts
-signal_preferences: {
-  keywords, competitors, hiring_roles, linkedin_topics,
-  workflow_topics, geographies, industries, disqualifiers,
-  default_mix: { hiring, linkedin_intent, competitors, workflows, people },
-  frequency: 'weekly' | 'daily' | 'manual',
-}
+Create three pure TS modules so nothing is hardcoded twice:
+
+- `src/lib/pricing/plans.ts` — `PRICING_PLANS` (Free Trial, Starter, Founder Pro [highlighted], Growth, Scale) with `priceMonthly`, `credits`, `seats`, `overagePerCredit`, `features[]`, `description`.
+- `src/lib/pricing/workflowCosts.ts` — `WORKFLOW_CREDIT_COSTS` map per spec + helper `getWorkflowCost(id)`. Also exports human-readable metadata: `runs`, `output`, `safetyNote`, `category`.
+- `src/lib/pricing/budgetCaps.ts` — `WORKFLOW_BUDGET_CAPS_USD` (internal/admin only; never rendered to end users).
+
+Mirror the same constants for Deno edge functions in `supabase/functions/_shared/pricing.ts` (re-declared, not imported across runtimes).
+
+## 2. Credit lifecycle helpers
+
+### Frontend (`src/lib/credits/`)
+- `estimate.ts` → `estimateWorkflowCredits(workflowId, params)` (uses cost catalog + per-row math like signal radar / lead count / enrichable count).
+- `client.ts` → thin wrappers calling edge functions: `reserveCredits`, `finalizeCharge`, `refundCredits`, `getBalance`.
+- `useCreditBalance.ts` hook (React Query, 30s stale).
+- `format.ts` → `formatCredits(n)`, `creditsToOverageUsd(n, planId)`.
+
+### Backend (`supabase/functions/`)
+New edge functions, all CORS-enabled, JWT-validated:
+- `credits-balance` (GET) — returns `{ balance, plan_id, monthly_allowance, period_end, recent_transactions[] }`.
+- `credits-reserve` (POST) — `{ workflow_id, estimated_credits, conversation_id?, task_plan_id?, metadata }` → returns `{ transaction_id, reserved, balance_after }`. Rejects with `402 INSUFFICIENT_CREDITS` if balance < estimate (unless `DEV_BYPASS_CREDITS=true`).
+- `credits-finalize` (POST) — `{ transaction_id, actual_credits, status: 'charged'|'partial'|'minimum_charge'|'not_charged', result_summary }`. Computes refund delta.
+- `credits-refund` (POST) — admin/internal.
+
+Shared helper `supabase/functions/_shared/creditLedger.ts` with: `reserve()`, `finalize()`, `refund()`, `getBalance()`, and the minimum-charge policy (0 / 10–25% / proportional / full, per spec section 4).
+
+## 3. Database approach (no migration 145631)
+
+Audit first: existing tables include `workspaces`, `workspace_members`, `task_plans`, `tool_calls`, `signals`, `conversations` — but no credits table.
+
+**Proposed new migration** (separate file, NOT the forbidden 145631; will be presented for explicit approval before applying):
+
+```sql
+CREATE TABLE public.workspace_credits (
+  workspace_id uuid PRIMARY KEY REFERENCES public.workspaces(id) ON DELETE CASCADE,
+  plan_id text NOT NULL DEFAULT 'free_trial',
+  credit_balance integer NOT NULL DEFAULT 30,
+  monthly_credit_allowance integer NOT NULL DEFAULT 30,
+  billing_status text NOT NULL DEFAULT 'trial',
+  current_period_start timestamptz DEFAULT now(),
+  current_period_end timestamptz DEFAULT (now() + interval '30 days'),
+  created_at timestamptz DEFAULT now(),
+  updated_at timestamptz DEFAULT now()
+);
+
+CREATE TABLE public.credit_transactions (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  workspace_id uuid NOT NULL REFERENCES public.workspaces(id) ON DELETE CASCADE,
+  conversation_id uuid, task_plan_id uuid, workflow_id text,
+  transaction_type text NOT NULL, status text NOT NULL,
+  estimated_credits integer, reserved_credits integer,
+  actual_credits integer, refunded_credits integer DEFAULT 0,
+  provider_cost_usd numeric, reason text,
+  metadata jsonb DEFAULT '{}', created_at timestamptz DEFAULT now()
+);
+
+-- GRANTs + RLS scoped to has_workspace_access(auth.uid(), workspace_id).
+-- provider_cost_usd hidden from SELECT for non-owners via view.
 ```
-Defaults derived from Company Brain (`icp.industries`, `icp.buyer_roles`, `competitors.known`, `icp.geography`, `gtm.*`) when the field is empty.
 
-## 2. Backend — new edge function `run-radar-scan`
-`supabase/functions/run-radar-scan/index.ts` (JWT-validated, workspace-scoped).
+Provisioning: extend `provision_workspace_for_user` to also seed `workspace_credits` (30 trial credits).
 
-Inputs: `{ workspace_id, mode: 'default'|'load_more'|'category', category?, limit? }`.
+**Fallback if user declines migration:** v1 read-only mode — store balance in `company_brain.profile.credits` JSON, derive transactions from `tool_calls`. All TS interfaces stay identical so swap is mechanical.
 
-Pipeline:
-1. Load `company_brain.profile` + `signal_preferences` (fallback to defaults).
-2. Capability check via existing `integration-readiness` logic — Apify (hiring/people), Firecrawl (workflow/page extract), LinkedIn actor (intent posts).
-3. Build per-category queries from ICP + prefs. Default mix = 3 hiring / 3 LinkedIn intent / 2 competitor / 2 workflow trends (10 total).
-4. Run only ready providers in parallel. Skipped categories return `{ status: 'setup_needed', reason }`.
-5. Normalize → dedupe (URL + title hash + 7-day window using existing rows) → score via new `_shared/signalQuality.ts` `evaluateSignalQuality()`.
-6. Reject disqualifier matches, weak/no-action signals, irrelevant geographies (strict mode).
-7. Persist accepted signals to `signals` table with `raw.score`, `raw.priority`, `raw.why_it_matters`, `raw.matched_icp`, `raw.next_action`, `raw.status='new'`.
-8. Return `{ signals: [...], per_category: {hiring: {found, accepted, status}, ...}, credits_used }`.
+## 4. Workflow integration points
 
-Modes:
-- `default` — first run, returns up to 10.
-- `load_more` — appends N more (default 10), requires `confirmed: true` body flag.
-- `category` — targeted scan from chat ("find LinkedIn posts about AI SDRs").
+Wire estimate → reserve → finalize into existing flows. Logic is unchanged; the credit calls wrap dispatch.
 
-## 3. Scoring helper — `supabase/functions/_shared/signalQuality.ts`
-Pure function (testable, no imports):
-```ts
-evaluateSignalQuality({ signal, companyBrain, signalPreferences, sourceType })
-  → { accepted, priority, score, reason, matched_icp, missing_context, next_action }
-```
-Weights: ICP industry/role match (+), competitor keyword match (+), recency (decay), source confidence (provider-driven), intent verbs ("looking for", "hiring", "frustrated with"), disqualifier hit (hard reject), geography mismatch in strict mode (reject), no clear action (reject).
+- **Signal Feed radar scan** (`useSignalFeed.runRadarScan`, `run-radar-scan/index.ts`): reserve 6 on Start; finalize based on accepted signal count.
+- **Load More signals** (`LoadMoreConfirmDialog`): already has confirm — add explicit `~6 credits` line + reserve on confirm.
+- **Lead workflows** (`buildPostLeadActionsCard`): the existing `credits` field already exists; rename consumers to use the unified estimator + show reservation in confirmation card.
+- **Workflow Center** (`src/pages/Workflows.tsx` + `WorkflowCard.tsx`): every card surfaces `~N credits` chip from cost catalog + safety note for outbound.
+- **Pilot dispatch** (`pilot-chat`, `run-agent`): on plan creation, attach `estimated_credits`; on tool_call completion, finalize.
 
-## 4. Frontend rewrite — `src/components/signals/SignalFeed.tsx`
+## 5. UI surfaces
 
-Replace current empty-feeling layout with:
+| Surface | Change |
+|---|---|
+| Sidebar header | New `CreditPill` showing `Credits: 742` → opens drawer |
+| `CreditDrawer` (new) | Plan, balance, monthly allowance, next reset, recent 20 transactions, Upgrade CTA, Buy More (disabled "Coming soon" if Stripe not wired) |
+| Workflow confirmation cards | Estimated credits, agents that will run, output preview, safety note |
+| Workbench post-run banner | "Credits used: 11 of 15 estimated — Scout found 3 strong matches; weak rejected" |
+| Awaiting You drafts | Footer line: "Credits already used. Sending is manual and external." |
+| Settings → Billing & Credits (new page `src/pages/SettingsBilling.tsx`) | Plan, usage bar, transaction history table, overage pricing, upgrade/downgrade placeholders |
+| Insufficient balance | Inline blocker with Upgrade CTA, Start disabled |
 
-### Header
-"Signal Feed — Your ICP-aware market radar" + Scout subtitle. Actions row: `Run radar scan`, `Edit radar`, `Refresh`, `Rank by fit`, `Load more`. Credit note line.
+All copy: "Nothing will be sent automatically." preserved everywhere outbound is touched.
 
-### Radar summary (4 cards) — `RadarSummaryCards.tsx` (new)
-Hiring · LinkedIn intent · Competitor conversations · Workflow trends. Each shows count, ready/setup-needed badge, top keyword from prefs, last scan time, category CTA.
+## 6. Landing page pricing section
 
-### Signal list
-Reuse `SignalCard.tsx`, extend to show: priority pill, why-it-matters block, matched-ICP chips, next-action button. Sort by `priority → score → recency`. Empty state = premium card with "Run your first ICP radar scan to load 10 signals" CTA.
+Rewrite `src/components/landing/PricingCard.tsx`:
+- New headline: *"Pay for workflows, not seats of software you do not use."*
+- Replace current 3 plans with 5 from `PRICING_PLANS` (Founder Pro highlighted).
+- Add **How credits work** 5-step block.
+- Add **Example** block (5 hiring leads ≈ 15 credits).
+- Add **Founder Pro value** approx-usage block with "Approximate usage depends on workflow type and provider availability."
+- Add safety footnote: "Nothing is sent automatically. All outreach is draft-only and approval-gated."
+- No other landing changes.
 
-### Edit Radar drawer — `EditRadarDrawer.tsx` (new)
-Sheet with type-ahead chip inputs for industries, personas, geographies, competitors, keywords, pain points, hiring roles, workflow topics, disqualifiers; sliders for default mix; frequency select. Saves to `company_brain.profile.signal_preferences`.
+## 7. Dev/test mode
 
-### Load-more confirm — `LoadMoreConfirmDialog.tsx` (new)
-Modal: "Load 10 more signals? Scout will scan additional sources based on your radar settings. Estimated cost: ~X credits. Nothing will be sent." Requires explicit confirm before the edge call.
-
-### Setup-needed cards — `SetupNeededCard.tsx` (new)
-Per-category explainer with link to Settings → Integrations.
-
-## 5. Hook + data layer
-- `src/hooks/useSignalFeed.ts` — extend with `runRadarScan(mode, opts)`, `perCategoryStatus`, `lastScanAt` (read from most recent row), preferences read/write.
-- `src/lib/signalPreferences.ts` (new) — defaults builder from Company Brain, validation.
-- `src/lib/signalFeedModel.ts` — extend normalizer to surface `priority`, `score`, `why_it_matters`, `matched_icp`, `next_action`, `status` from `raw`.
-
-## 6. Chat / Pilot routing
-Add Scout capability + route in existing intent router:
-- "find more signals this week" / "find LinkedIn posts about X" / "show competitor conversations for X" → invoke `run-radar-scan` via Pilot's tool layer, surface confirmation card before external scans, then post Scout's summary line and link to `/signals`.
-- Wire through existing `_shared/toolRegistry.ts` (new tool: `run_radar_scan`) and `intentRouter.ts` — no new orchestration framework.
-
-## 7. Actions on a signal
-Card buttons (no auto-send): Save · Ignore · Mark reviewed · Turn into lead (existing lead candidate flow) · Find decision-maker (Pilot prompt) · Enrich company · Create LinkedIn post (drafts only) · Add to Workflow Radar (writes to `saved_outputs`). All update `raw.status` via an RPC-free direct update (RLS already scoped).
+Read `import.meta.env.VITE_DEV_BYPASS_CREDITS` (client) and `DEV_BYPASS_CREDITS` (edge). When true:
+- Still call estimate + show confirmation.
+- Skip reserve/finalize DB writes.
+- Badge in confirmation: *"Credits estimated locally · not charged in dev"*.
 
 ## 8. Tests
-- `src/lib/signalPreferences.test.ts` — defaults from brain, override merge, disqualifier validation.
-- `supabase/functions/_shared/signalQuality.test.ts` — default mix totals 10, ICP keyword influence, disqualifier rejects, duplicate rejects, hiring/competitor/workflow scoring, geography strict mode, no-action reject.
-- `src/components/signals/SignalFeed.test.tsx` (light) — empty state renders, load-more shows confirm, setup-needed renders when capability missing.
 
-## 9. Browser QA (TEST workspace, <$5)
-Scenarios A–E from brief: empty → first scan → edit radar → load more confirm → save/ignore/review filters. Verify no outbound side effects.
+- `src/lib/pricing/__tests__/workflowCosts.test.ts` — estimator math, partial/min-charge policy, insufficient-balance guard.
+- `supabase/functions/_shared/creditLedger.test.ts` — reserve→finalize→refund flows, minimum-charge edges, dev bypass.
+- Component smoke: `CreditDrawer` renders balance; `PricingCard` renders 5 plans; confirmation card shows estimated credits.
 
-## 10. Validation
-```
-deno test supabase/functions/_shared --allow-all
-npx tsc --noEmit
-npm run build
-deno check supabase/functions/pilot-chat/index.ts || true
-deno check supabase/functions/run-agent/index.ts || true
-deno check supabase/functions/run-radar-scan/index.ts
-```
+## 9. Safety guardrails (hard rules)
 
-## Files
+- ❌ No migration `145631`.
+- ❌ No secrets/env committed.
+- ❌ No auto-send / DM / comment / post / email — outreach stays draft-only.
+- ❌ No production DB writes during implementation.
+- ✅ Provider cost USD never rendered to end users.
+- ✅ Setup-needed workflows charge 0 (early return before reserve).
 
-**New**
-- `supabase/functions/run-radar-scan/index.ts`
-- `supabase/functions/_shared/signalQuality.ts` (+ `.test.ts`)
-- `supabase/functions/_shared/signalSources.ts` (provider adapters: hiring/Apify, linkedin/actor-or-skip, competitor/Firecrawl, workflow/Firecrawl)
-- `src/lib/signalPreferences.ts` (+ `.test.ts`)
-- `src/components/signals/RadarSummaryCards.tsx`
-- `src/components/signals/EditRadarDrawer.tsx`
-- `src/components/signals/LoadMoreConfirmDialog.tsx`
-- `src/components/signals/SetupNeededCard.tsx`
+## 10. Files (new / changed)
 
-**Modified**
-- `src/components/signals/SignalFeed.tsx` (full layout rebuild)
-- `src/components/signals/SignalCard.tsx` (priority, why-it-matters, matched-ICP, next-action)
-- `src/hooks/useSignalFeed.ts` (radar scan, prefs, per-category status)
-- `src/lib/signalFeedModel.ts` (surface new `raw.*` fields)
-- `src/lib/companyBrainSchema.ts` (add `signal_preferences` typing — additive, no migration)
-- `supabase/functions/_shared/toolRegistry.ts` + `intentRouter.ts` (Scout `run_radar_scan` tool)
-- `supabase/functions/pilot-chat/index.ts` (route radar intents; emit confirmation card before scan)
+**New (~14):**
+`src/lib/pricing/{plans,workflowCosts,budgetCaps}.ts`,
+`src/lib/credits/{estimate,client,format}.ts`, `src/hooks/useCreditBalance.ts`,
+`src/components/credits/{CreditPill,CreditDrawer,InsufficientCreditsCard,WorkflowEstimateRow}.tsx`,
+`src/pages/SettingsBilling.tsx`,
+`supabase/functions/_shared/{pricing,creditLedger}.ts`,
+`supabase/functions/credits-balance/index.ts`, `credits-reserve/index.ts`, `credits-finalize/index.ts`.
 
-**Not touched**: landing, migration `145631`, any other migration files, env/secrets.
+**Modified (~10):**
+`src/components/landing/PricingCard.tsx`, `src/components/Sidebar.tsx`, `src/App.tsx` (route), `src/pages/Workflows.tsx`, `src/components/workflows/WorkflowCard.tsx`, `src/components/signals/{SignalFeed,LoadMoreConfirmDialog}.tsx`, `src/hooks/useSignalFeed.ts`, `supabase/functions/run-radar-scan/index.ts`, `supabase/functions/_shared/creditEstimate.ts` (delegate to new catalog).
 
-## Out of scope / deferred
-- Weekly cron / scheduled radar (manual scan only in v1; preferences include frequency for v2 cron).
-- People/profile provider (renders setup-needed unless `APIFY_ENABLE_PEOPLE_SEARCH=true`).
-- New DB columns for status/score (kept in `raw` to honor no-migration rule).
+## 11. Open questions before I build
+
+1. **Migration approval:** Apply the new `workspace_credits` + `credit_transactions` migration now, or start with the JSON-fallback (v1) and migrate later?
+2. **Trial credits on existing workspaces:** backfill 30 credits to all existing workspaces, or only new ones from now on?
+3. **Stripe checkout:** wire the existing built-in Stripe payments tool for upgrades now, or ship as "Contact us" first?
+4. **Dev bypass:** OK to default `DEV_BYPASS_CREDITS=true` in preview/TEST so QA never burns real credits?
+
+Once these are answered I'll execute the build in one pass.
