@@ -70,7 +70,7 @@ export default function EditRadarDrawer({ open, onOpenChange, workspaceId, brain
     setSaving(true);
     try {
       const next = { ...(brainProfile ?? {}), signal_preferences: prefs };
-      const { error } = await supabase
+      const { error } = await (supabase as any)
         .from("company_brain")
         .upsert({ workspace_id: workspaceId, profile: next, updated_at: new Date().toISOString() }, { onConflict: "workspace_id" });
       if (error) throw error;
