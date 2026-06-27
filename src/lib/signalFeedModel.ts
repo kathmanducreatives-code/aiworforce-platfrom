@@ -44,6 +44,9 @@ export interface FeedSignal {
   location: string | null;
   post_snippet: string | null;
   reason: string | null;
+  matched_icp: string[];
+  next_action: string | null;
+  status: string | null;
   raw: Record<string, unknown>;
 }
 
@@ -105,6 +108,11 @@ export function normalizeSignalRow(row: RawSignalRow): FeedSignal {
     location: firstStr(raw["location"], raw["city"], raw["region"]),
     post_snippet: firstStr(raw["post_snippet"], raw["snippet"], raw["post_text"]),
     reason: firstStr(raw["reason"], raw["why"], raw["why_it_matters"]),
+    matched_icp: Array.isArray(raw["matched_icp"])
+      ? (raw["matched_icp"] as unknown[]).filter((x): x is string => typeof x === "string")
+      : [],
+    next_action: str(raw["next_action"]),
+    status: str(raw["status"]),
     raw,
   };
 }
