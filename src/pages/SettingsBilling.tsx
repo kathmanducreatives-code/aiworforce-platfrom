@@ -27,7 +27,7 @@ export default function SettingsBilling() {
   const txns = state?.transactions ?? [];
 
   return (
-    <MainLayout>
+    <div className="min-h-screen">
       <div className="max-w-5xl mx-auto p-6 md:p-8 space-y-8 text-[#E6EBF0]">
         <button onClick={() => navigate(-1)} className="inline-flex items-center gap-1.5 text-[12.5px] text-neutral-400 hover:text-white">
           <ArrowLeft className="h-3.5 w-3.5" /> Back
