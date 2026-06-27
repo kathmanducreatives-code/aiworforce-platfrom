@@ -150,7 +150,10 @@ const Sidebar = ({ collapsed, onToggle }: SidebarProps) => {
       </nav>
 
       {/* Bottom utility */}
-      <div className="border-t border-white/[0.04] px-2 py-2.5 space-y-0.5">
+      <div className="border-t border-white/[0.04] px-2 py-2.5 space-y-1.5">
+        <div className={cn('px-1', collapsed && 'px-0')}>
+          <CreditPill collapsed={collapsed} />
+        </div>
         <button
           className={cn(
             'flex items-center gap-3 h-9 px-3 rounded-md text-[13.5px] text-neutral-300 hover:text-white hover:bg-white/[0.03] border border-transparent transition-all w-full',
