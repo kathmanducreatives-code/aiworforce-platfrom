@@ -15,6 +15,8 @@
 // Scoring (max 100): signal 30 · ICP fit 25 · persona 15 · size/stage 10 ·
 // geography 10 · website verification 10.
 
+import { SUPPORT_ROLE_RE, isSupportRoleText } from "./broaden.ts";
+
 export interface LeadInput {
   name?: string | null;
   company?: string | null;
@@ -96,6 +98,12 @@ const EARLY_STAGE_REQ = /\b(early|seed|pre-seed|startup|early-stage|small)\b/i;
 const GTM_ROLE = /\b(gtm|go-?to-?market|sales|growth|account executive|\bae\b|sdr|bdr|revenue|revops|business development|demand gen|head of growth|vp sales|chief revenue)\b/i;
 // Seniority/founding markers that strengthen a hiring signal (first GTM hire, etc.).
 const SENIOR_OR_FOUNDING = /\b(founding|first|head of|vp|director|lead|chief|principal)\b/i;
+// Founding / C-suite words that, as a row's signal/title, describe a person's
+// CURRENT role — not an open job posting. In a hiring source such a row is
+// profile data leaked into a jobs result, not a hiring signal. Bare "founder" is
+// intentionally excluded: "Founder Associate" / "Founder's Office" are support
+// roles and are rescued by the SUPPORT_ROLE_RE guard.
+const PROFILE_TITLE_RE = /\b(co-?founder|ceo|cto|coo|cmo|cro|cfo|chief executive)\b/i;
 
 // US location recognition — a lead in "San Francisco, CA" or "Austin, Texas"
 // matches a "USA" target. Full state names + 2-letter abbreviations + nation.
@@ -150,6 +158,7 @@ export function evaluateLeadQuality(args: EvaluateLeadQualityArgs): LeadQualityR
   const sourceType = lc(args.sourceType ?? req.category ?? "");
   const isPeople = sourceType.includes("people") || sourceType.includes("profile");
   const isHiring = sourceType.includes("hiring") || sourceType.includes("job");
+  const supportRequested = isSupportRoleText(req.role) || isSupportRoleText(req.category);
 
   const reasons: string[] = [];
   const reject_reasons: string[] = [];
@@ -215,6 +224,19 @@ export function evaluateLeadQuality(args: EvaluateLeadQualityArgs): LeadQualityR
   const hasSignal = !!lead.exact_signal || !!lead.signal_type || isHiring || isPeople;
   if (!hasSignal && (isHiring || sourceType.includes("signal"))) reject_reasons.push("no relevant signal");
 
+  // Hiring sources: a bare founder / co-founder / C-suite title is a person's
+  // CURRENT role (profile data leaked into a jobs result), not an open job
+  // posting. Hard-reject it unless the row also carries a support-role hire
+  // ("Assistant to CEO", "EA to Founder") or a GTM/revenue hire. This is the
+  // last line of defense against "Co-Founder @ Company" rows being accepted as
+  // hiring signals; sourceQuality.classifyResults rejects them at the gate too.
+  if (isHiring) {
+    const sigText = [lead.exact_signal, lead.signal_type, lead.title].map(lc).join(" ");
+    if (sigText && PROFILE_TITLE_RE.test(sigText) && !SUPPORT_ROLE_RE.test(sigText) && !GTM_ROLE.test(sigText)) {
+      reject_reasons.push("founder/co-founder/C-suite profile title, not a hiring signal");
+    }
+  }
+
   // ===================== SCORING =====================
   let score = 0;
 
@@ -227,9 +249,16 @@ export function evaluateLeadQuality(args: EvaluateLeadQualityArgs): LeadQualityR
   // just because the user asked for GTM).
   const signalText = `${lc(lead.exact_signal)} ${lc(lead.signal_type)} ${title}`;
   const isGtmHire = GTM_ROLE.test(signalText);
+  const isSupportHire = SUPPORT_ROLE_RE.test(signalText);
   const isSeniorFounding = SENIOR_OR_FOUNDING.test(signalText);
   if (isHiring) {
-    if (isGtmHire && isSeniorFounding) { score += 30; reasons.push(`strong hiring signal: ${lead.exact_signal ?? "founding/senior GTM hire"}`); }
+    if (isSupportHire) {
+      // Hiring an Executive Assistant / Chief of Staff / Founder's Office role
+      // is a strong buying signal for anything that removes manual founder-ops
+      // workload. Credit it like a founding GTM hire.
+      score += 30;
+      reasons.push(`Hiring a ${lead.exact_signal ?? title ?? "founder-support role"} — a founder-support role that signals manual founder-ops workload`);
+    } else if (isGtmHire && isSeniorFounding) { score += 30; reasons.push(`strong hiring signal: ${lead.exact_signal ?? "founding/senior GTM hire"}`); }
     else if (isGtmHire) { score += 26; reasons.push(`active GTM hiring${lead.exact_signal ? `: ${lead.exact_signal}` : ""}`); }
     else if (lead.exact_signal) { score += 20; reasons.push(`hiring signal: ${lead.exact_signal}`); }
     else { score += 16; reasons.push("active hiring signal"); }
@@ -256,6 +285,10 @@ export function evaluateLeadQuality(args: EvaluateLeadQualityArgs): LeadQualityR
   if (isHiring && isGtmHire) {
     // Hiring for the targeted GTM role IS the persona-relevance signal here.
     score += 15; matched_icp_fields.push("buyer_role"); reasons.push("hiring for the targeted GTM role");
+  } else if (isHiring && isSupportHire) {
+    // Hiring for a founder-support role IS the persona-relevance signal for an
+    // assistant-role search.
+    score += 15; matched_icp_fields.push("buyer_role"); reasons.push("hiring for the targeted founder-support role");
   } else if (personaRoles.length && title) {
     const roleHit = containsAny(title, personaRoles) || /\b(founder|co-?founder|ceo|cto|coo|cmo|cro|vp|head of|director|chief)\b/i.test(title) ? (containsAny(title, personaRoles) ?? "leadership") : null;
     if (roleHit) { score += 15; matched_icp_fields.push("buyer_role"); reasons.push(`persona matches ${roleHit}`); }
