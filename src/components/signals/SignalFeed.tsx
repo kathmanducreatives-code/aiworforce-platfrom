@@ -450,7 +450,7 @@ export default function SignalFeed() {
         filtered.length === 0
           ? (signals.length > 0
               ? <FilterEmpty onClear={() => { clearFilters(); setReviewFilter("all"); setHideIgnored(true); }} />
-              : <EmptyWithPrompts />)
+              : <EmptyWithPrompts onRunRadar={handleRunRadar} scanning={scanning} />)
           : <ul className="space-y-2">{filtered.map((s) => (
               <SignalCard key={s.id} signal={s}
                 selectable={selectMode}
