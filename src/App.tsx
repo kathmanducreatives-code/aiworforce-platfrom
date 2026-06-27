@@ -50,6 +50,7 @@ import Competitors from "./pages/Competitors";
 import Content from "./pages/Content";
 import Agents from "./pages/Agents";
 import SettingsIntegrations from "./pages/SettingsIntegrations";
+import SettingsBilling from "./pages/SettingsBilling";
 import JobApplicants from "./pages/JobApplicants";
 import JobDistribution from "./pages/JobDistribution";
 import ExpertMarketplace from "./pages/ExpertMarketplace";
