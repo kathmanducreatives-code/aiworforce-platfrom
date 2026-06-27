@@ -1,8 +1,9 @@
 import { useMemo, useState } from "react";
-import { RefreshCw, Inbox, ListOrdered, Sparkles, CheckSquare, Square, X, Bookmark, Check, EyeOff, MessageSquare, Send, FileText, Radar } from "lucide-react";
+import { RefreshCw, Inbox, ListOrdered, Sparkles, CheckSquare, Square, X, Bookmark, Check, EyeOff, MessageSquare, Send, FileText, Radar, Settings2, Plus, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { useWorkspace } from "@/contexts/WorkspaceContext";
-import { useSignalFeed } from "@/hooks/useSignalFeed";
+import { useCompanyBrain } from "@/hooks/useCompanyBrain";
+import { useSignalFeed, type RadarCategory } from "@/hooks/useSignalFeed";
 import { useSignalReviews } from "@/hooks/useSignalReviews";
 import { buildActionCommand, type FeedSignal } from "@/lib/signalFeedModel";
 import {
@@ -25,7 +26,12 @@ import {
   type BulkDraftAction,
 } from "@/lib/signalReviewModel";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Button } from "@/components/ui/button";
 import SignalCard from "./SignalCard";
+import RadarSummaryCards from "./RadarSummaryCards";
+import EditRadarDrawer from "./EditRadarDrawer";
+import LoadMoreConfirmDialog from "./LoadMoreConfirmDialog";
+import SetupNeededCard from "./SetupNeededCard";
 
 type Tab = "all" | "linkedin" | "competitors" | "people" | "hiring" | "drafts" | "saved";
 
