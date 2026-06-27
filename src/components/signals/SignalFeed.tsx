@@ -527,17 +527,28 @@ function Empty({ text }: { text: string }) {
   );
 }
 
-function EmptyWithPrompts() {
+function EmptyWithPrompts({ onRunRadar, scanning }: { onRunRadar?: () => void; scanning?: boolean }) {
   return (
-    <div className="flex flex-col items-center gap-3 py-12 text-center text-neutral-500">
-      <Inbox className="h-6 w-6" />
-      <div className="text-[12px] max-w-sm">
-        No saved signals yet. Ask Scout to find hiring signals, LinkedIn engagement, or competitor conversations.
+    <div className="flex flex-col items-center gap-3 py-16 text-center">
+      <div className="p-3 rounded-full bg-emerald-500/10 border border-emerald-500/20">
+        <Radar className="h-6 w-6 text-emerald-300" />
       </div>
-      <div className="flex flex-wrap items-center justify-center gap-1.5 mt-1">
+      <div>
+        <div className="text-[14px] font-medium text-[#F0F6FC]">Scout hasn't scanned your market yet</div>
+        <div className="text-[12px] text-neutral-400 max-w-sm mt-1">
+          Run your first ICP radar scan to load 10 signals across hiring, LinkedIn intent, competitors, and workflow trends.
+        </div>
+      </div>
+      {onRunRadar && (
+        <Button onClick={onRunRadar} disabled={scanning} className="mt-1">
+          {scanning ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Radar className="h-3.5 w-3.5" />}
+          Run first radar scan
+        </Button>
+      )}
+      <div className="flex flex-wrap items-center justify-center gap-1.5 mt-2">
         {EMPTY_PROMPTS.map((p) => (
           <button key={p} onClick={() => sendPrompt(p)}
-            className="inline-flex items-center gap-1 text-[11px] px-2.5 py-1 rounded-full border border-emerald-500/20 bg-emerald-500/[0.04] text-emerald-300 hover:bg-emerald-500/[0.1] transition-colors">
+            className="inline-flex items-center gap-1 text-[11px] px-2.5 py-1 rounded-full border border-white/[0.08] bg-white/[0.02] text-neutral-400 hover:bg-white/[0.04] hover:text-neutral-200 transition-colors">
             <Sparkles className="h-3 w-3" /> {p}
           </button>
         ))}
