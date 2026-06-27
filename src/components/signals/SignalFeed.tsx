@@ -53,10 +53,10 @@ const EMPTY_PROMPTS = [
 
 function matchesTab(s: FeedSignal, tab: Tab): boolean {
   switch (tab) {
-    case "linkedin": return s.signal_type === "linkedin_engagement";
-    case "competitors": return s.signal_type === "competitor_engagement";
-    case "people": return s.signal_type === "people_profile";
-    case "hiring": return s.signal_type === "hiring_signal";
+    case "linkedin": return s.signal_type === "linkedin_engagement" || s.signal_type === "linkedin_intent";
+    case "competitors": return s.signal_type === "competitor_engagement" || s.signal_type === "competitor";
+    case "people": return s.signal_type === "people_profile" || s.signal_type === "people";
+    case "hiring": return s.signal_type === "hiring_signal" || s.signal_type === "hiring";
     default: return true;
   }
 }
