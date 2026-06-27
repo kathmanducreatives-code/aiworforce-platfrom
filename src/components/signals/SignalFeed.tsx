@@ -68,7 +68,8 @@ function sendPrompt(text: string) {
 
 export default function SignalFeed() {
   const { workspaceId } = useWorkspace();
-  const { signals, drafts, savedOutputs, loading, error, refresh } = useSignalFeed(workspaceId);
+  const { data: brainData, refresh: refreshBrain } = useCompanyBrain();
+  const { signals, drafts, savedOutputs, loading, error, refresh, runRadarScan, scanning, lastRun, lastScanAt } = useSignalFeed(workspaceId);
   const { reviewsBySignal, setReview, bulkSetReview } = useSignalReviews(workspaceId);
 
   const [tab, setTab] = useState<Tab>("all");
@@ -78,6 +79,8 @@ export default function SignalFeed() {
   const [priority, setPriority] = useState<string>("");
   const [hasSource, setHasSource] = useState(false);
   const [selectMode, setSelectMode] = useState(false);
+  const [editRadarOpen, setEditRadarOpen] = useState(false);
+  const [loadMoreOpen, setLoadMoreOpen] = useState(false);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [savedFilter, setSavedFilter] = useState<SavedFilter>("all");
 
