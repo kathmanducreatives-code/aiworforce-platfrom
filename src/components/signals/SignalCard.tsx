@@ -136,8 +136,12 @@ export default function SignalCard({
                 aria-label="Select signal"
                 className="mr-1 accent-emerald-500 h-3.5 w-3.5 cursor-pointer" />
             )}
-            <span className={`text-[10px] px-1.5 py-0.5 rounded border ${TYPE_BADGE[signal.signal_type] ?? "border-white/15 bg-white/5 text-neutral-300"}`}>
-              {signalTypeLabel(signal.signal_type)}
+            <span className={`text-[10px] px-1.5 py-0.5 rounded border ${
+              signal.quality === "needs_verification" ? "border-amber-500/40 bg-amber-500/10 text-amber-300"
+              : signal.quality === "legacy" ? "border-white/10 bg-white/[0.03] text-neutral-500"
+              : (TYPE_BADGE[signal.signal_type] ?? "border-white/15 bg-white/5 text-neutral-300")
+            }`}>
+              {signal.quality_badge || signalTypeLabel(signal.signal_type)}
             </span>
             {signal.priority && (
               <span className={`text-[10px] px-1.5 py-0.5 rounded border ${PRIORITY_BADGE[signal.priority.toLowerCase()] ?? "border-white/15 bg-white/5 text-neutral-300"}`}>
@@ -175,17 +179,31 @@ export default function SignalCard({
             </div>
           )}
 
-          {/* description / snippet */}
+          {/* description / snippet — falls back to the why/verification note so a
+              card is never blank ("No detailed reason saved yet" is gone). */}
           <div className="text-[12px] text-[#C9D1D9] mt-1.5 line-clamp-3 whitespace-pre-wrap">
-            {signal.post_snippet || signal.description || (
-              <span className="text-neutral-500 italic">No detailed reason saved yet.</span>
+            {signal.post_snippet || signal.description || signal.why_text || (
+              <span className="text-neutral-500 italic">Needs verification.</span>
             )}
           </div>
 
-          {/* reason / why it matters */}
-          {signal.reason && signal.reason !== signal.description && (
+          {/* why it matters (always present: real reason or an honest verification note) */}
+          {signal.why_text && signal.why_text !== signal.description && signal.why_text !== signal.post_snippet && (
             <div className="text-[11px] text-neutral-400 mt-1.5">
-              <span className="text-neutral-500">Why it matters: </span>{signal.reason}
+              <span className="text-neutral-500">
+                {signal.quality === "verified" ? "Why it matters: " : "Verification: "}
+              </span>{signal.why_text}
+            </div>
+          )}
+
+          {/* matched ICP chips (verified signals only) */}
+          {signal.matched_icp.length > 0 && (
+            <div className="mt-1.5 flex flex-wrap gap-1">
+              {signal.matched_icp.map((m) => (
+                <span key={m} className="text-[10px] px-1.5 py-0.5 rounded border border-emerald-500/25 bg-emerald-500/[0.06] text-emerald-300">
+                  {m}
+                </span>
+              ))}
             </div>
           )}
 

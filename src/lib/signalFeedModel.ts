@@ -45,7 +45,16 @@ export interface FeedSignal {
   post_snippet: string | null;
   reason: string | null;
   raw: Record<string, unknown>;
+  // Signal-quality classification (computed; reads raw.signal_quality if a
+  // backfill already persisted one). Drives the feed default filter + badge.
+  quality: SignalQuality;
+  quality_badge: string;       // "Hiring signal" | "Needs verification" | "Legacy / Needs verification"
+  why_text: string | null;     // why_it_matters, or an honest verification note — never blank
+  matched_icp: string[];
+  show_by_default: boolean;     // verified signals only
 }
+
+export type SignalQuality = "verified" | "needs_verification" | "legacy";
 
 const SIGNAL_TYPE_LABELS: Record<string, string> = {
   hiring_signal: "Hiring signal",
@@ -80,7 +89,7 @@ function num(v: unknown): number | null {
 export function normalizeSignalRow(row: RawSignalRow): FeedSignal {
   const raw = (row?.raw && typeof row.raw === "object") ? row.raw as Record<string, unknown> : {};
   const signalType = str(row?.signal_type) ?? "signal";
-  return {
+  const base = {
     id: row?.id ?? "",
     signal_type: signalType,
     signal_label: str(row?.signal_label),
@@ -107,6 +116,141 @@ export function normalizeSignalRow(row: RawSignalRow): FeedSignal {
     reason: firstStr(raw["reason"], raw["why"], raw["why_it_matters"]),
     raw,
   };
+  const q = classifySignalQuality(base);
+  return { ...base, ...q };
+}
+
+// ---------- Signal quality (data-trust) classifier ----------
+
+const HIRING_SIGNAL_TYPES = new Set(["hiring_signal", "hiring", "jobs"]);
+
+// Founder-support / assistant roles — these ARE the trustworthy "company is
+// scaling ops" hiring signals (Executive Assistant, Founder's Office, Chief of
+// Staff, Operations Associate, Founder Associate-ops, …).
+const SUPPORT_ROLE_RE =
+  /\b(executive assistant|exec(?:utive)? assistant|administrative assistant|admin assistant|personal assistant|virtual assistant|assistant to (?:the )?(?:ceo|founder)|founder'?s?\s+assistant|founder'?s?\s+associate|founder'?s?\s+office|chief of staff|operations?\s+(?:associate|assistant|manager|coordinator|support)|business operations?|ops associate|ops assistant)\b/i;
+
+// Bare founder / C-level / equity-track titles — a "hiring Co-Founder" listing is
+// not an operational hiring-demand signal even if it has a real job URL.
+const BARE_FOUNDER_EXEC_RE =
+  /(\bco-?founders?\b|\bentrepreneur in residence\b|\beir\b|\bchief (?:executive|technology|operating|financial) officer\b|^\s*(?:founders?|ceos?|ctos?|cfos?|coos?|president|owner)\b|\bfuture\b[^,]*\bfounder\b)/i;
+
+type SignalQualityInput = Pick<FeedSignal,
+  "signal_type" | "signal_label" | "title" | "source_url" | "reason" | "account_name" | "raw">;
+
+/** The role a hiring signal is about: explicit signal_label, else "X hiring <role>". */
+export function parseHiringRole(s: Pick<FeedSignal, "signal_label" | "title">): string {
+  if (s.signal_label) return s.signal_label;
+  const m = (s.title ?? "").match(/\bhiring\s+(.+)$/i);
+  return (m ? m[1] : (s.title ?? "")).trim();
+}
+
+function roleClass(role: string): "support" | "founder_exec" | "other" {
+  const r = role.toLowerCase();
+  if (SUPPORT_ROLE_RE.test(r)) return "support";        // support roles win even if "founder" appears
+  if (BARE_FOUNDER_EXEC_RE.test(r)) return "founder_exec";
+  return "other";
+}
+
+/** A factual why_it_matters derived from a REAL job posting — not fabricated. */
+export function computeHiringWhy(role: string, company: string | null): string {
+  const co = company ?? "This company";
+  return `${co} is hiring a ${role} — an active job posting that signals operational hiring demand and likely founder/ops workload, relevant to AI assistant / workforce-automation tooling.`;
+}
+
+/**
+ * Classify a hiring signal's trustworthiness. A backfilled raw.signal_quality is
+ * trusted when present. Non-hiring signals are passed through as verified.
+ */
+export function classifySignalQuality(s: SignalQualityInput): {
+  quality: SignalQuality; quality_badge: string; why_text: string | null;
+  matched_icp: string[]; show_by_default: boolean;
+} {
+  const raw = (s.raw && typeof s.raw === "object") ? s.raw : {};
+  const isHiring = HIRING_SIGNAL_TYPES.has(s.signal_type) || /hiring/i.test(s.signal_type);
+  const savedReason = firstStr(raw["why_it_matters"], raw["reason"], raw["why"]) ?? s.reason;
+
+  if (!isHiring) {
+    return {
+      quality: "verified",
+      quality_badge: signalTypeLabel(s.signal_type),
+      why_text: savedReason,
+      matched_icp: [],
+      show_by_default: true,
+    };
+  }
+
+  const role = parseHiringRole(s) || "a role";
+  const cls = roleClass(role);
+  const hasJobUrl = !!str(s.source_url) || !!str(raw["job_url"]);
+  const hasProof = hasJobUrl || !!str(raw["exact_signal"]) || !!str(raw["job_title"]) || !!savedReason;
+  const saved = str(raw["signal_quality"]);
+
+  let quality: SignalQuality;
+  let why_text: string | null;
+  if (cls === "founder_exec") {
+    quality = "needs_verification";
+    why_text = savedReason ?? `"${role}" is a founder / co-founder listing, not a confirmed hiring-demand signal — verify it's a real operational role before acting.`;
+  } else if (!hasProof) {
+    quality = "legacy";
+    why_text = savedReason ?? `No job post, source link, or reason saved — this hiring signal can't be verified.`;
+  } else if (savedReason) {
+    quality = "verified";
+    why_text = savedReason;
+  } else {
+    // Real job posting for a valid role, but no saved reason yet → needs verification.
+    quality = "needs_verification";
+    why_text = `Real job posting for "${role}", but no saved reason yet — verify before acting.`;
+  }
+
+  // A persisted backfill verdict overrides the on-the-fly guess.
+  if (saved === "verified" || saved === "needs_verification" || saved === "legacy") quality = saved;
+
+  const quality_badge =
+    quality === "verified" ? "Hiring signal"
+    : quality === "needs_verification" ? "Needs verification"
+    : "Legacy / Needs verification";
+  const matched_icp = quality === "verified"
+    ? ["Active hiring", cls === "support" ? "Founder-support / assistant role" : role]
+    : [];
+  return { quality, quality_badge, why_text, matched_icp, show_by_default: quality === "verified" };
+}
+
+/**
+ * Cleanup/backfill patch for one signals row — merge into `raw` (raw || patch).
+ * NEVER deletes; only sets signal_quality + a factual why_it_matters for valid
+ * hiring rows. Returns null for non-hiring rows (left untouched).
+ */
+export function buildSignalQualityPatch(row: RawSignalRow): Record<string, unknown> | null {
+  const fs = {
+    signal_type: str(row?.signal_type) ?? "signal",
+    signal_label: str(row?.signal_label),
+    title: str(row?.title),
+    source_url: str(row?.source_url),
+    reason: null,
+    account_name: firstStr((row?.raw ?? {})["account_name"], (row?.raw ?? {})["company"], (row?.raw ?? {})["company_name"]),
+    raw: (row?.raw && typeof row.raw === "object") ? row.raw as Record<string, unknown> : {},
+  };
+  const isHiring = HIRING_SIGNAL_TYPES.has(fs.signal_type) || /hiring/i.test(fs.signal_type);
+  if (!isHiring) return null;
+
+  const role = parseHiringRole(fs) || "a role";
+  const cls = roleClass(role);
+  const hasJobUrl = !!str(fs.source_url) || !!str(fs.raw["job_url"]);
+  const savedWhy = firstStr(fs.raw["why_it_matters"], fs.raw["reason"], fs.raw["why"]);
+  const hasProof = hasJobUrl || !!str(fs.raw["exact_signal"]) || !!str(fs.raw["job_title"]) || !!savedWhy;
+
+  if (cls === "founder_exec") {
+    return { signal_quality: "needs_verification", quality_reason: "founder/co-founder listing — not a hiring-demand signal" };
+  }
+  if (!hasProof) {
+    return { signal_quality: "legacy", quality_reason: "no job/source link to verify" };
+  }
+  // Valid role + real job posting → verified; compute a factual why if missing.
+  const patch: Record<string, unknown> = { signal_quality: "verified" };
+  if (!savedWhy) patch["why_it_matters"] = computeHiringWhy(role, fs.account_name);
+  patch["matched_icp"] = ["Active hiring", cls === "support" ? "Founder-support / assistant role" : role];
+  return patch;
 }
 
 export type SignalAction = "draft_comment" | "draft_dm" | "enrich" | "rank" | "create_outreach";

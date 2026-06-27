@@ -68,6 +68,9 @@ export default function SignalFeed() {
   const [tab, setTab] = useState<Tab>("all");
   const [reviewFilter, setReviewFilter] = useState<ReviewFilter>("all");
   const [hideIgnored, setHideIgnored] = useState(true);
+  // Data-trust: the default feed shows only verified signals; this reveals
+  // legacy / needs-verification rows (rules 6 & 7).
+  const [showUnverified, setShowUnverified] = useState(false);
   const [query, setQuery] = useState("");
   const [priority, setPriority] = useState<string>("");
   const [hasSource, setHasSource] = useState(false);
@@ -103,12 +106,19 @@ export default function SignalFeed() {
       if (!matchesReviewFilter(s.review_status, reviewFilter)) return false;
       // Default ("All") view hides ignored unless the user opts in or filters to it.
       if (reviewFilter === "all" && hideIgnored && s.review_status === "ignored") return false;
+      // Data-trust: hide legacy / needs-verification signals unless toggled on.
+      if (!showUnverified && !s.show_by_default) return false;
       if (priority && (s.priority ?? "").toLowerCase() !== priority) return false;
       if (hasSource && !s.source_url) return false;
       if (q && !(`${s.title} ${s.description ?? ""} ${s.signal_label ?? ""} ${s.competitor_name ?? ""}`.toLowerCase().includes(q))) return false;
       return true;
     });
-  }, [reviewed, tab, reviewFilter, hideIgnored, query, priority, hasSource]);
+  }, [reviewed, tab, reviewFilter, hideIgnored, showUnverified, query, priority, hasSource]);
+
+  const unverifiedCount = useMemo(
+    () => reviewed.filter((s) => !s.show_by_default && s.review_status !== "ignored").length,
+    [reviewed],
+  );
 
   const clearFilters = () => { setQuery(""); setPriority(""); setHasSource(false); };
   const hasActiveFilters = !!(query || priority || hasSource);
@@ -229,6 +239,10 @@ export default function SignalFeed() {
           </select>
           <label className="h-8 text-[12px] inline-flex items-center gap-1.5 text-neutral-400 px-2 rounded-md border border-white/[0.08] bg-white/[0.02]">
             <input type="checkbox" checked={hasSource} onChange={(e) => setHasSource(e.target.checked)} /> Has source
+          </label>
+          <label className={`h-8 text-[12px] inline-flex items-center gap-1.5 px-2 rounded-md border ${showUnverified ? "border-amber-500/40 bg-amber-500/10 text-amber-300" : "border-white/[0.08] bg-white/[0.02] text-neutral-400"}`}>
+            <input type="checkbox" checked={showUnverified} onChange={(e) => setShowUnverified(e.target.checked)} />
+            Show unverified{unverifiedCount > 0 ? ` (${unverifiedCount})` : ""}
           </label>
           {hasActiveFilters && (
             <button onClick={clearFilters} className="h-8 text-[12px] px-2.5 rounded-md text-neutral-400 hover:text-neutral-200">
