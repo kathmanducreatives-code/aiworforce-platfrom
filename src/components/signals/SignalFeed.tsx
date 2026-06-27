@@ -97,10 +97,10 @@ export default function SignalFeed() {
 
   const counts = useMemo(() => ({
     all: signals.length,
-    linkedin: signals.filter((s) => s.signal_type === "linkedin_engagement").length,
-    competitors: signals.filter((s) => s.signal_type === "competitor_engagement").length,
-    people: signals.filter((s) => s.signal_type === "people_profile").length,
-    hiring: signals.filter((s) => s.signal_type === "hiring_signal").length,
+    linkedin: signals.filter((s) => s.signal_type === "linkedin_engagement" || s.signal_type === "linkedin_intent").length,
+    competitors: signals.filter((s) => s.signal_type === "competitor_engagement" || s.signal_type === "competitor").length,
+    people: signals.filter((s) => s.signal_type === "people_profile" || s.signal_type === "people").length,
+    hiring: signals.filter((s) => s.signal_type === "hiring_signal" || s.signal_type === "hiring").length,
     drafts: drafts.length,
     saved: savedOutputs.length,
   } as Record<Tab, number>), [signals, drafts, savedOutputs]);
