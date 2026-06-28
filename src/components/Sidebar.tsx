@@ -142,16 +142,6 @@ const Sidebar = ({ collapsed, onToggle }: SidebarProps) => {
           {!collapsed && <span>Help & Support</span>}
         </button>
         <button
-          onClick={signOut}
-          className={cn(
-            'flex items-center gap-3 h-9 px-3 rounded-md text-[13.5px] text-neutral-300 hover:text-rose-300 hover:bg-white/[0.03] border border-transparent transition-all w-full',
-            collapsed && 'justify-center px-2'
-          )}
-        >
-          <LogOut className="h-4 w-4 text-neutral-400 group-hover:text-rose-300" />
-          {!collapsed && <span>Sign Out</span>}
-        </button>
-        <button
           onClick={onToggle}
           className={cn(
             'flex items-center gap-3 h-9 px-3 rounded-md text-[13.5px] text-neutral-300 hover:text-white hover:bg-white/[0.03] border border-transparent transition-all w-full',
