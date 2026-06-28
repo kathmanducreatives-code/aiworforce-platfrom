@@ -49,7 +49,7 @@ export default function SettingsBilling() {
           </div>
         )}
 
-        {/* Plan + usage */}
+        {/* Plan & credits */}
         <section className="rounded-2xl border border-white/[0.07] bg-white/[0.02] p-6">
           <div className="flex flex-wrap items-start justify-between gap-4">
             <div>
@@ -59,10 +59,10 @@ export default function SettingsBilling() {
               <div className="text-[12px] text-neutral-500 mt-1 capitalize">Billing status: {state?.billing_status ?? 'trial'}</div>
             </div>
             <div className="text-right">
-              <div className="text-[11px] uppercase tracking-[0.14em] font-mono text-neutral-500">Balance</div>
+              <div className="text-[11px] uppercase tracking-[0.14em] font-mono text-neutral-500">Credits remaining</div>
               <div className="text-3xl font-semibold text-[#F0F6FC] tabular-nums">{loading ? '—' : formatCredits(balance)}</div>
               <div className="text-[12px] text-neutral-500">
-                of {formatCredits(allowance)} · resets{' '}
+                of {formatCredits(allowance)} monthly credits · next reset{' '}
                 {state?.current_period_end
                   ? new Date(state.current_period_end).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
                   : '—'}
@@ -73,7 +73,7 @@ export default function SettingsBilling() {
             <div className="h-full bg-gradient-to-r from-emerald-400 to-emerald-500" style={{ width: `${pct}%` }} />
           </div>
           <div className="mt-2 flex items-center justify-between text-[12px] text-neutral-500 tabular-nums">
-            <span>{formatCredits(used)} used</span>
+            <span>{formatCredits(used)} credits used this period</span>
             <span>{pct}%</span>
           </div>
           <div className="mt-4 text-[12px] text-neutral-500">
