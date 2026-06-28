@@ -20,10 +20,10 @@ export default function WorkflowEstimateRow({ estimatedCredits, agents, runs, ou
       <div className="flex items-center justify-between gap-2">
         <span className="inline-flex items-center gap-1.5 text-emerald-300">
           <Sparkles className="h-3.5 w-3.5" />
-          <span className="font-medium">Estimated cost</span>
+          <span className="font-medium">Estimated credits</span>
         </span>
         <span className="font-mono tabular-nums text-emerald-300">
-          ~{formatCredits(estimatedCredits)} credits
+          ~{formatCredits(estimatedCredits)}
         </span>
       </div>
       {(runs || output || (agents && agents.length > 0)) && (
@@ -40,7 +40,7 @@ export default function WorkflowEstimateRow({ estimatedCredits, agents, runs, ou
       )}
       <div className="flex items-center gap-1.5 text-[11.5px] text-neutral-500 pt-1 border-t border-white/[0.05]">
         <ShieldCheck className="h-3 w-3 text-emerald-400/70" />
-        {safetyNote || 'Nothing will be sent automatically. All outreach stays draft-only.'}
+        {safetyNote || 'Credits are only used after you click Start. Nothing will be sent automatically.'}
       </div>
       {isDevBypass() && (
         <div className="text-[11px] text-amber-300/80 pt-0.5">
