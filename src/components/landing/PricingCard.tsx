@@ -107,7 +107,7 @@ const PricingCard = () => {
                 {value && (
                   <div className="rounded-lg border border-white/[0.05] bg-white/[0.015] p-2.5 mb-4">
                     <div className="text-[10px] uppercase tracking-wider text-white/40 font-mono mb-1">
-                      Approx. usage
+                      Approx. credits
                     </div>
                     <ul className="space-y-0.5">
                       {value.map((v) => (
