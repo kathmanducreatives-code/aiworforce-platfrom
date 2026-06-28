@@ -20,8 +20,8 @@ export default function InsufficientCreditsCard({ needed, balance, onClose }: Pr
             Not enough credits to run this workflow
           </div>
           <div className="text-[13px] text-amber-100/80 mt-1">
-            You need <span className="font-mono tabular-nums">{formatCredits(needed)}</span> credits and have{' '}
-            <span className="font-mono tabular-nums">{formatCredits(balance)}</span>. Upgrade or buy more to continue.
+            Credits remaining: <span className="font-mono tabular-nums">{formatCredits(balance)}</span>. You need{' '}
+            <span className="font-mono tabular-nums">{formatCredits(needed)}</span> to run this workflow. Upgrade or buy more to continue.
           </div>
         </div>
       </div>

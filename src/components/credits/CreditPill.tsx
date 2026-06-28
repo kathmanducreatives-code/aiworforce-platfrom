@@ -33,7 +33,7 @@ export default function CreditPill({ collapsed }: Props) {
         {!collapsed && (
           <>
             <span className="truncate flex-1 text-left tabular-nums">
-              {loading ? '…' : `${formatCredits(balance)} credits`}
+              {loading ? '…' : low ? `Low · ${formatCredits(balance)} credits left` : `${formatCredits(balance)} credits`}
             </span>
             {state?.billing_status === 'trial' && (
               <span className="text-[10px] font-mono uppercase tracking-wider opacity-70">Trial</span>

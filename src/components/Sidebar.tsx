@@ -1,12 +1,12 @@
 import { NavLink } from 'react-router-dom';
-import { useAuth } from '@/hooks/useAuth';
 import {
   LayoutDashboard, Radar, MessageSquare, Inbox,
   Users, Eye, BookOpen, Sparkles, Brain,
-  Mail, Plug, LogOut, HelpCircle, PanelLeftClose, PanelLeft, Workflow,
+  Mail, Plug, HelpCircle, PanelLeftClose, PanelLeft, Workflow,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import CreditPill from './credits/CreditPill';
+import ProfileMenu from './account/ProfileMenu';
 
 interface NavGroup {
   label: string;
@@ -63,8 +63,6 @@ interface SidebarProps {
 }
 
 const Sidebar = ({ collapsed, onToggle }: SidebarProps) => {
-  const { signOut, profile } = useAuth();
-
   return (
     <aside
       className={cn(
@@ -72,29 +70,9 @@ const Sidebar = ({ collapsed, onToggle }: SidebarProps) => {
         collapsed ? 'w-[68px]' : 'w-[260px]'
       )}
     >
-      {/* Workspace header */}
-      <div className={cn('flex items-center gap-3 px-4 py-5 border-b border-white/[0.03]', collapsed && 'justify-center px-0')}>
-        <div className="w-8 h-8 rounded-full flex items-center justify-center text-[13px] font-semibold text-white shrink-0 shadow-inner"
-             style={{ background: 'linear-gradient(135deg, hsl(var(--primary-dark)) 0%, hsl(var(--primary)) 100%)' }}>
-          {profile?.full_name?.[0]?.toUpperCase() || 'A'}
-        </div>
-        {!collapsed && (
-          <>
-            <div className="flex-1 min-w-0">
-              <p className="text-[14.5px] font-medium text-foreground truncate leading-tight">{profile?.full_name || 'Agentory'}</p>
-            </div>
-            <span
-              className="text-[10.5px] font-mono font-semibold tracking-[0.1em] text-emerald-300 rounded px-2 py-[3px]"
-              style={{
-                background: 'linear-gradient(135deg, rgba(16,185,129,0.18), rgba(16,185,129,0.06))',
-                border: '1px solid rgba(16,185,129,0.28)',
-                boxShadow: '0 0 12px -4px rgba(16,185,129,0.35), inset 0 1px 0 rgba(255,255,255,0.05)',
-              }}
-            >
-              PRO
-            </span>
-          </>
-        )}
+      {/* Workspace header + profile menu */}
+      <div className={cn('px-2 py-3 border-b border-white/[0.03]', collapsed && 'px-1')}>
+        <ProfileMenu collapsed={collapsed} />
       </div>
 
       {/* Navigation */}
@@ -162,16 +140,6 @@ const Sidebar = ({ collapsed, onToggle }: SidebarProps) => {
         >
           <HelpCircle className="h-4 w-4 text-neutral-400" />
           {!collapsed && <span>Help & Support</span>}
-        </button>
-        <button
-          onClick={signOut}
-          className={cn(
-            'flex items-center gap-3 h-9 px-3 rounded-md text-[13.5px] text-neutral-300 hover:text-rose-300 hover:bg-white/[0.03] border border-transparent transition-all w-full',
-            collapsed && 'justify-center px-2'
-          )}
-        >
-          <LogOut className="h-4 w-4 text-neutral-400 group-hover:text-rose-300" />
-          {!collapsed && <span>Sign Out</span>}
         </button>
         <button
           onClick={onToggle}

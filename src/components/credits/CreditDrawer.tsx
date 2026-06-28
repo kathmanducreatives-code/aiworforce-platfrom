@@ -39,10 +39,10 @@ export default function CreditDrawer({ open, onClose }: Props) {
       <SheetContent side="right" className="w-full sm:max-w-md bg-[#070708]/95 border-l border-white/[0.06] text-[#E6EBF0] overflow-y-auto">
         <SheetHeader className="text-left">
           <SheetTitle className="flex items-center gap-2 text-[#F0F6FC]">
-            <Sparkles className="h-4 w-4 text-emerald-300" /> Credits & usage
+            <Sparkles className="h-4 w-4 text-emerald-300" /> Credits
           </SheetTitle>
           <SheetDescription className="text-neutral-400 text-[13px]">
-            Credits are used when your AI workforce runs real work. Confirmation cards always show the estimated cost first.
+            Credits are used when your AI workforce runs real work. Confirmation cards always show the estimated credits first.
           </SheetDescription>
         </SheetHeader>
 
@@ -55,12 +55,12 @@ export default function CreditDrawer({ open, onClose }: Props) {
         <div className="mt-5 rounded-xl border border-white/[0.07] bg-white/[0.02] p-4">
           <div className="flex items-end justify-between gap-3">
             <div>
-              <div className="text-[11px] uppercase tracking-[0.14em] font-mono text-neutral-500">Balance</div>
+              <div className="text-[11px] uppercase tracking-[0.14em] font-mono text-neutral-500">Credits remaining</div>
               <div className="text-3xl font-semibold tabular-nums text-[#F0F6FC]">
                 {loading ? '—' : formatCredits(balance)}
               </div>
               <div className="text-[12px] text-neutral-400 mt-1">
-                of {formatCredits(allowance)} this cycle · resets {resetDate}
+                of {formatCredits(allowance)} monthly credits · next reset {resetDate}
               </div>
             </div>
             <div className="text-right">
@@ -74,7 +74,7 @@ export default function CreditDrawer({ open, onClose }: Props) {
             <div className="h-full bg-gradient-to-r from-emerald-400 to-emerald-500" style={{ width: `${pct}%` }} />
           </div>
           <div className="mt-1.5 flex items-center justify-between text-[11px] text-neutral-500 tabular-nums">
-            <span>{formatCredits(used)} used</span>
+            <span>{formatCredits(used)} credits used this period</span>
             <span>{pct}%</span>
           </div>
         </div>
@@ -101,14 +101,14 @@ export default function CreditDrawer({ open, onClose }: Props) {
 
         <div className="mt-6">
           <div className="flex items-center justify-between mb-2">
-            <div className="text-[11px] uppercase tracking-[0.14em] font-mono text-neutral-500">Recent activity</div>
+            <div className="text-[11px] uppercase tracking-[0.14em] font-mono text-neutral-500">Recent credit activity</div>
             <button onClick={() => { onClose(); navigate('/settings/billing'); }} className="text-[11px] text-emerald-300 inline-flex items-center gap-1 hover:underline">
               View all <ExternalLink className="h-3 w-3" />
             </button>
           </div>
           {txns.length === 0 ? (
             <div className="rounded-md border border-white/[0.06] bg-white/[0.02] p-4 text-[12.5px] text-neutral-500">
-              No activity yet. Run a workflow from the Workflow Center to get started.
+              No credit activity yet. Credits will appear here after workflows run.
             </div>
           ) : (
             <div className="space-y-1.5">
