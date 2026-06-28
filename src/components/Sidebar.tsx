@@ -1,12 +1,12 @@
 import { NavLink } from 'react-router-dom';
-import { useAuth } from '@/hooks/useAuth';
 import {
   LayoutDashboard, Radar, MessageSquare, Inbox,
   Users, Eye, BookOpen, Sparkles, Brain,
-  Mail, Plug, LogOut, HelpCircle, PanelLeftClose, PanelLeft, Workflow,
+  Mail, Plug, HelpCircle, PanelLeftClose, PanelLeft, Workflow,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import CreditPill from './credits/CreditPill';
+import ProfileMenu from './account/ProfileMenu';
 
 interface NavGroup {
   label: string;
