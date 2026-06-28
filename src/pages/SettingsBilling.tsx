@@ -35,10 +35,10 @@ export default function SettingsBilling() {
 
         <header>
           <h1 className="text-2xl font-semibold text-[#F0F6FC] tracking-tight flex items-center gap-2">
-            <Coins className="h-5 w-5 text-emerald-300" /> Billing & credits
+            <Coins className="h-5 w-5 text-emerald-300" /> Billing & Credits
           </h1>
           <p className="text-[14px] text-neutral-400 mt-1.5 max-w-2xl">
-            Credits are consumed only when Agentory runs real work. You always see the estimated credit cost before starting.
+            Credits are consumed only when Agentory runs real work. You always see the estimated credits before starting.
             If a workflow returns partial results, Agentory charges fairly.
           </p>
         </header>
