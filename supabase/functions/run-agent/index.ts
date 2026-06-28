@@ -326,6 +326,21 @@ Deno.serve(async (req) => {
           }
         } catch (e) { console.warn("[run-agent] source planner failed, using deterministic input:", e); }
 
+        // Lead Intelligence Engine: when pilot-chat threaded a hiring intent, use
+        // its OR-joined role-alias query + role_keywords so the jobs actor searches
+        // the RIGHT role family (Executive Assistant / Chief of Staff / Founder's
+        // Office …), not generic Founder / Head of Growth. The exclude list and
+        // role-family match are enforced post-sourcing by filterHiringCandidates.
+        const leadIntentBody = (tool_input_body?.lead_intent ?? null) as {
+          role_family?: string | null;
+          role_keywords?: string[];
+          exclude_role_keywords?: string[];
+        } | null;
+        if (leadIntentBody?.role_family && Array.isArray(leadIntentBody.role_keywords) && leadIntentBody.role_keywords.length) {
+          normalizedQuery = leadIntentBody.role_keywords.slice(0, 12).join(" OR ");
+          roleKeywords = leadIntentBody.role_keywords;
+        }
+
         const apifyInput = {
           selected_actor_key: planned_actor_key ?? undefined,
           source_type,
@@ -403,12 +418,48 @@ Deno.serve(async (req) => {
         const adaptive = await runAdaptiveSourcing({ criteria, strict, maxAttempts, runAttempt });
         adaptiveAttempts = adaptive.attempts as unknown as Array<Record<string, unknown>>;
 
+        // Lead Intelligence Engine role-family filter: for a threaded hiring
+        // intent, gate the accepted set through filterHiringCandidates — it
+        // REQUIRES a source URL (CSV source proof), rejects wrong-family titles
+        // (Senior AI Engineer, Growth Lead, Product Marketing) and profile/equity
+        // titles (Co-Founder, Founder, CEO, CTO). Same-family broadening is
+        // inherent: role_keywords already is the family alias set.
+        let lieAcceptedItems: typeof adaptive.accepted | null = null;
+        let lieTrace: Array<Record<string, unknown>> | null = null;
+        if (leadIntentBody?.role_family) {
+          try {
+            const { filterHiringCandidates } = await import("../_shared/leadIntent.ts");
+            const candKey = (c: { company?: string | null; job_title?: string | null; source_url?: string | null }) =>
+              `${String(c.company ?? "").toLowerCase()}|${String(c.job_title ?? "").toLowerCase()}|${c.source_url ?? ""}`;
+            const candidates = rawAllItems.map((it: any) => ({
+              company: it?.company ?? it?.name ?? null,
+              job_title: it?.title ?? null,
+              source_url: it?.source_url ?? null,
+              location: it?.location ?? null,
+            }));
+            const lieRes = filterHiringCandidates(candidates as any, { hiring_signal: { role_family: leadIntentBody.role_family } } as any);
+            lieTrace = lieRes.trace as unknown as Array<Record<string, unknown>>;
+            const acceptedKeys = new Set(lieRes.accepted.map(candKey));
+            lieAcceptedItems = adaptive.accepted.filter((a: any) =>
+              acceptedKeys.has(candKey({ company: a.company ?? a.name, job_title: a.title, source_url: a.source_url })),
+            );
+            console.log("[run-agent] LIE hiring filter", {
+              role_family: leadIntentBody.role_family,
+              before: adaptive.accepted.length,
+              after: lieAcceptedItems.length,
+              rejected: lieRes.rejected.length,
+            });
+          } catch (e) { console.warn("[run-agent] LIE hiring filter failed:", e); }
+        }
+        const effectiveAccepted = lieAcceptedItems ?? adaptive.accepted;
+        const effectiveFound = lieAcceptedItems ? lieAcceptedItems.length : adaptive.found;
+
         // Source Quality Engine (Phase 6): honest raw vs accepted vs persisted
         // counts + reject reasons, surfaced in Workbench Insights + narrative.
         // Per-lead quality keyed by normalized company name, reused below to
         // persist fit_score + raw.lead_quality onto each Workbench row.
         const normName = (s: unknown) => String(s ?? "").toLowerCase().replace(/[^a-z0-9]+/g, "").trim();
-        const leadQualityByName = new Map<string, { score: number; tier: string; why: string; matched_icp: string[]; missing_fields: string[]; confidence: string; reasons: string[] }>();
+        const leadQualityByName = new Map<string, { score: number; tier: string; why: string; matched_icp: string[]; missing_fields: string[]; confidence: string; reasons: string[]; exact_hiring_signal: string | null; job_title: string | null; source_url: string | null }>();
         try {
           const { summarizeSourceQuality, classifyResults, topRejectReasons } = await import("../_shared/sourceQuality.ts");
           const { evaluateLeadQuality, buildWhyThisLead } = await import("../_shared/leadQuality.ts");
@@ -434,7 +485,7 @@ Deno.serve(async (req) => {
           const tierCounts: Record<string, number> = { hot: 0, qualified: 0, weak: 0, rejected: 0 };
           const whySamples: string[] = [];
           let scoreSum = 0;
-          for (const it of classified.accepted) {
+          for (const it of (lieAcceptedItems ?? classified.accepted)) {
             const r = (it.raw ?? {}) as Record<string, unknown>;
             const q = evaluateLeadQuality({
               lead: {
@@ -459,26 +510,41 @@ Deno.serve(async (req) => {
               score: q.score, tier: q.tier, why: buildWhyThisLead(q),
               matched_icp: q.matched_icp_fields, missing_fields: q.missing_fields,
               confidence: q.confidence, reasons: q.reasons,
+              // Hiring-signal proof fields for Workbench rows + CSV export.
+              exact_hiring_signal: (r.exact_signal ?? r.jobTitle ?? r.positionName ?? it.title ?? null) as string | null,
+              job_title: (it.title ?? (r.jobTitle as string) ?? null) as string | null,
+              source_url: (it.source_url ?? (r.source_url as string) ?? null) as string | null,
             });
           }
+          const lieEffectiveCount = lieAcceptedItems ? lieAcceptedItems.length : classified.accepted.length;
           const leadQualitySummary = {
             tiers: tierCounts,
-            avg_score: classified.accepted.length ? Math.round(scoreSum / classified.accepted.length) : 0,
+            avg_score: lieEffectiveCount ? Math.round(scoreSum / lieEffectiveCount) : 0,
             why_samples: whySamples,
           };
+          // Merge the Lead-Intelligence role-family rejections into the reject
+          // reason counts so the Workbench "rejected summary" is honest.
+          const mergedRejectReasons: Record<string, number> = { ...classified.reject_reason_counts };
+          if (lieTrace) {
+            for (const t of lieTrace) {
+              const rr = (t.rejected_reasons ?? {}) as Record<string, number>;
+              for (const [k, v] of Object.entries(rr)) mergedRejectReasons[k] = (mergedRejectReasons[k] ?? 0) + (Number(v) || 0);
+            }
+          }
           const counts = summarizeSourceQuality({
             attempts: adaptive.attempts,
-            accepted_count: adaptive.found,
+            accepted_count: effectiveFound,
             requested_count: max_results,
             duplicate_count: classified.duplicates.length,
-            reject_reason_counts: classified.reject_reason_counts,
+            reject_reason_counts: mergedRejectReasons,
           });
           sourceQualityMeta = {
             ...counts,
-            top_reject_reasons: topRejectReasons(classified.reject_reason_counts),
+            top_reject_reasons: topRejectReasons(mergedRejectReasons),
             attempt_labels: adaptive.attempts.map((a) => a.strategy),
             needs_permission_to_broaden: !!adaptive.needs_permission_to_broaden,
             lead_quality: leadQualitySummary,
+            ...(lieTrace ? { filter_trace: lieTrace } : {}),
           };
           // Phase 5 — clean AI-employee activity timeline (no raw logs/provider noise).
           const plannerLabel = (sourcePlanMeta?.planner_mode === "claude") ? "Claude"
@@ -493,8 +559,10 @@ Deno.serve(async (req) => {
         if (toolFailed && isApifySelected) {
           sourcingFailure = { error: adaptive.reason || "apify_failed", message: humanizeApifyError(adaptive.reason) };
         }
-        if (adaptive.accepted.length > 0) {
-          const rawItems = adaptive.accepted.map((a) => a.raw);
+        if (effectiveAccepted.length > 0) {
+          // Persist ONLY the role-family-filtered set (effectiveAccepted) so
+          // wrong-role / no-proof rows never reach Workbench.
+          const rawItems = effectiveAccepted.map((a) => a.raw);
           const attachAccounts = Array.isArray(tool_input_body?.attach_to_accounts) ? tool_input_body.attach_to_accounts : null;
 
           if (attachAccounts && attachAccounts.length > 0) {
@@ -535,7 +603,7 @@ Deno.serve(async (req) => {
                 tool_call_id: null,
                 tool_name: "source_with_apify",
                 selected_actor_key: planned_actor_key ?? null,
-                output: { items: rawItems, total: rawItems.length, summary: `${adaptive.found}/${adaptive.requested} accepted across ${adaptive.attempts.length} attempt(s)` },
+                output: { items: rawItems, total: rawItems.length, summary: `${effectiveFound}/${adaptive.requested} accepted across ${adaptive.attempts.length} attempt(s)` },
               });
             } catch (e) { console.warn("[run-agent] capped persistence failed:", e); }
 
@@ -567,6 +635,10 @@ Deno.serve(async (req) => {
                     why_this_lead: q.why,
                     matched_icp: q.matched_icp,
                     missing_fields: q.missing_fields,
+                    // Hiring-signal proof for Workbench rows + CSV export.
+                    job_title: q.job_title ?? (existingRaw.job_title as string) ?? null,
+                    exact_hiring_signal: q.exact_hiring_signal ?? (existingRaw.exact_hiring_signal as string) ?? null,
+                    source_url: q.source_url ?? (existingRaw.source_url as string) ?? null,
                   },
                 }).eq("id", r.id as string);
               }
@@ -575,7 +647,7 @@ Deno.serve(async (req) => {
 
           const lens = source_type === "jobs" ? "\n\nNOTE: These are companies/jobs hiring for the requested role, not individual people profiles." : "";
           const log = adaptive.attempts.map((a) => `Attempt ${a.n}: ${a.strategy} — ${a.accepted_count} accepted (total ${a.total_accepted})`).join("\n");
-          apifyContext = `APIFY SOURCING (${adaptive.found}/${adaptive.requested} accepted across ${adaptive.attempts.length} attempt(s)):\nATTEMPTS:\n${log}${lens}\n\nITEMS (accepted, capped):\n${JSON.stringify(rawItems, null, 2).slice(0, 8000)}`;
+          apifyContext = `APIFY SOURCING (${effectiveFound}/${adaptive.requested} accepted across ${adaptive.attempts.length} attempt(s)):\nATTEMPTS:\n${log}${lens}\n\nITEMS (accepted, capped):\n${JSON.stringify(rawItems, null, 2).slice(0, 8000)}`;
         } else if (!toolFailed) {
           toolNotices.push(`Sourcing ran ${adaptive.attempts.length} attempt(s) and found 0 matching results.`);
           // Actor ran fine but accepted 0 qualified leads. Mark it so we skip

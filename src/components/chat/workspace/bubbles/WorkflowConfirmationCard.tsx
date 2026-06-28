@@ -30,6 +30,17 @@ interface WorkflowConfirmationPayload {
   blocked?: boolean;
   blocked_reason?: string | null;
   setup_needed?: string | null;
+  // Lead Intelligence Engine: the structured intent (workflow_type, source_type,
+  // role family + aliases/excludes) the backend extracted. Threaded back on Start
+  // so the confirmed request is NOT re-classified (which misrouted hiring→people).
+  lead_intent?: {
+    workflow_type?: string;
+    source_type?: string;
+    role_family?: string | null;
+    role_keywords?: string[];
+    exclude_role_keywords?: string[];
+    [k: string]: unknown;
+  };
 }
 
 interface Props {
@@ -89,6 +100,12 @@ export default function WorkflowConfirmationCard({ payload, conversationId }: Pr
         confirmed: true,
         workflow_id: payload.workflow_id,
         workflow_inputs: inputs,
+        // Preserve the original extracted intent so the confirmed Start honors
+        // it (no re-classification → no hiring→people misroute).
+        lead_intent: payload.lead_intent,
+        workflow_category: payload.lead_intent?.workflow_type,
+        source_type: payload.lead_intent?.source_type,
+        selected_actor_key: payload.lead_intent?.workflow_type === 'company_hiring_sourcing' ? 'apify_jobs' : undefined,
       },
     });
     setSubmitted(true);

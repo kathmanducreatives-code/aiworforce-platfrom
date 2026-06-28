@@ -19,6 +19,8 @@ import { getSourceCapability } from "../_shared/sourceCapabilities.ts";
 import { getActorByKey, isActorRuntimeEnabled } from "../_shared/actorRegistry.ts";
 import { isFindContactsRequest, personaForAccounts, buildContactSearchQueries, contactDiscoveryFallback, resolveCompanyContactTarget, type AccountForContacts } from "../_shared/contactDiscovery.ts";
 import { buildCompanyBrainContext, hasUsableBrain, brainCompetitors } from "../_shared/companyBrainContext.ts";
+import { extractLeadIntent, planJobsActorInput, type LeadIntent } from "../_shared/leadIntent.ts";
+import { roleFamilyAliases, type RoleFamily } from "../_shared/roleFamilies.ts";
 
 
 const cors = {
@@ -151,6 +153,85 @@ Respond with ONLY a JSON object containing the "intent" key. Example: {"intent":
   return "unknown";
 }
 
+// Human-readable label for a Lead Intelligence Engine role family.
+function roleFamilyLabel(fam: RoleFamily): string {
+  switch (fam) {
+    case "assistant_founder_support": return "Assistant / Founder-Support";
+    case "gtm_sales": return "GTM / Sales";
+    case "marketing_growth": return "Marketing / Growth";
+    case "engineering": return "Engineering";
+    case "ops": return "Operations";
+    case "finance": return "Finance";
+    case "customer_success": return "Customer Success";
+    default: return "Hiring";
+  }
+}
+
+// Build the workflow-confirmation card for a HIRING intent from the Lead
+// Intelligence Engine. The card SEPARATES the user's product, the target buyer,
+// and the hiring role/industry — the product never becomes the industry and the
+// persona is never a founder/growth title. `lead_intent` is threaded so run-agent
+// can use planJobsActorInput + filterHiringCandidates without re-parsing.
+function buildHiringConfirmation(prompt: string, intent: LeadIntent, company: any): any {
+  const fam = intent.hiring_signal.role_family;
+  const job = planJobsActorInput(intent);
+  const roleDisplay = (job.role_keywords.length ? job.role_keywords : roleFamilyAliases(fam)).slice(0, 6).join(", ");
+  const buyer = intent.target_buyer.join(", ");
+  const industry = intent.target_industry.join(", ");
+  const location = intent.target_geography[0] ?? company?.location ?? "USA";
+  return {
+    workflow_id: "find_hiring_signal_accounts",
+    workflow_name: `Find ${roleFamilyLabel(fam)} hiring-signal accounts`,
+    goal: prompt,
+    agent_team: ["pilot", "scout", "aria"],
+    inputs: {
+      count: intent.count,
+      source: "hiring signals",
+      hiring_role: roleDisplay,
+      target_buyer: buyer,
+      target_industry: industry, // never the user's product
+      location,
+      user_product: intent.user_product?.category, // shown as product, not industry
+    },
+    output: "Account opportunities in Workbench",
+    safety: "Nothing will be sent. Draft-only by default.",
+    estimated_credits: Math.max(5, intent.count),
+    // Thread to run-agent: the role family + aliases + excludes + geo drive the
+    // jobs actor input and the role-family filter.
+    lead_intent: {
+      workflow_type: intent.workflow_type,
+      source_type: intent.source_type,
+      role_family: fam,
+      role_keywords: job.role_keywords,
+      exclude_role_keywords: job.exclude_keywords,
+      target_geography: intent.target_geography,
+      target_industry: intent.target_industry,
+      count: intent.count,
+      strictness: intent.strictness,
+    },
+  };
+}
+
+// Re-derive the Lead Intelligence Engine hiring intent at delegation time so the
+// scout step (run-agent) receives role_family + aliases + excludes without
+// re-parsing the message. Deterministic — matches the card's lead_intent.
+function leadIntentForToolInput(message: string, brain: any): any {
+  const intent = extractLeadIntent({ message, brain: { icp: brain?.icp, company: brain?.company } });
+  if (!intent.hiring_signal.requested || !intent.hiring_signal.role_family) return null;
+  const job = planJobsActorInput(intent);
+  return {
+    workflow_type: intent.workflow_type,
+    source_type: intent.source_type,
+    role_family: intent.hiring_signal.role_family,
+    role_keywords: job.role_keywords,
+    exclude_role_keywords: job.exclude_keywords,
+    target_geography: intent.target_geography,
+    target_industry: intent.target_industry,
+    count: intent.count,
+    strictness: intent.strictness,
+  };
+}
+
 async function generateWorkflowConfirmation(prompt: string, workspaceId: string, admin: any): Promise<any> {
   const { data: cbRow } = await admin
     .from("company_brain")
@@ -160,6 +241,20 @@ async function generateWorkflowConfirmation(prompt: string, workspaceId: string,
   const profile = cbRow?.profile ?? {};
   const company = profile?.company ?? {};
   const icp = profile?.icp ?? {};
+
+  // Lead Intelligence Engine: for HIRING requests, build the confirmation
+  // deterministically from extractLeadIntent so the card SEPARATES what the user
+  // sells (user_product) from who they target (target_buyer) from the hiring
+  // signal (role family) — and never leaks the product into industry/persona
+  // (e.g. "AI SaaS" stays the product, not the industry; persona is never
+  // "Founder / Head of Growth" for an assistant-role search).
+  const lieIntent = extractLeadIntent({
+    message: prompt,
+    brain: { icp, company: { category: company?.category, industry: company?.industry } },
+  });
+  if (lieIntent.hiring_signal.requested && lieIntent.hiring_signal.role_family) {
+    return buildHiringConfirmation(prompt, lieIntent, company);
+  }
 
   const systemPrompt = `You are a GTM AI workforce coordinator. The user wants to run a business workflow.
 Your goal is to parse their request and generate a structured workflow confirmation object.
@@ -747,6 +842,23 @@ Deno.serve(async (req) => {
   const wf = await classifyWorkflow(message);
   const validated = validateAgainstCapabilities(wf);
   const decision = validated.decision;
+
+  // Lead Intelligence Engine — confirmed-Start honor. When the user clicks Start
+  // on a workflow-confirmation card, the card threads back the ORIGINAL
+  // lead_intent (workflow_type + source_type + role family + aliases/excludes).
+  // Trust it instead of re-classifying the "Run workflow: …" command string,
+  // which would otherwise misroute an assistant-hiring Start to people search.
+  const confirmedLeadIntent = (isPreConfirmed && actionMetadata?.lead_intent && typeof actionMetadata.lead_intent === "object")
+    ? actionMetadata.lead_intent as Record<string, unknown>
+    : null;
+  if (confirmedLeadIntent && typeof confirmedLeadIntent.workflow_type === "string") {
+    decision.workflow_category = confirmedLeadIntent.workflow_type as typeof decision.workflow_category;
+    if (typeof confirmedLeadIntent.source_type === "string") decision.source_type = confirmedLeadIntent.source_type;
+    if (confirmedLeadIntent.workflow_type === "company_hiring_sourcing") decision.selected_actor_key = "apify_jobs";
+    decision.needs_clarification = false;
+    console.log("[pilot-chat] confirmed lead_intent honored:", { category: decision.workflow_category, source_type: decision.source_type, role_family: confirmedLeadIntent.role_family });
+  }
+
   console.log("[pilot-chat] workflow_classifier:", {
     category: decision.workflow_category,
     confidence: decision.confidence,
@@ -1749,16 +1861,24 @@ Deno.serve(async (req) => {
   }
 
   if (decision.workflow_category === "company_hiring_sourcing") {
+    // Lead Intelligence Engine: prefer the lead_intent the confirmation card
+    // threaded back on Start (the ORIGINAL request's role family + aliases +
+    // excludes); only fall back to re-deriving from the command string when the
+    // request didn't come from a confirmed card.
+    const leadIntent = confirmedLeadIntent ?? leadIntentForToolInput(message, brainProfile);
+    const li = leadIntent as Record<string, unknown> | null;
+    const liRoleKeywords = (li && Array.isArray(li.role_keywords) && li.role_keywords.length) ? li.role_keywords as string[] : (decision.role_keywords ?? []);
+    const liQuery = (li && Array.isArray(li.role_keywords) && li.role_keywords.length) ? (li.role_keywords as string[]).slice(0, 12).join(" OR ") : (decision.query ?? message);
     return await delegateToOrchestrate({
       admin, SUPABASE_URL, SUPABASE_ANON_KEY, authHeader, conversationId: conversationId!, workspaceId,
       instruction: message,
       toolInput: {
         intent: "source_companies_hiring",
         tool_name: "source_with_apify",
-        selected_actor_key: decision.selected_actor_key ?? "apify_jobs",
+        selected_actor_key: "apify_jobs",
         source_type: "jobs",
-        query: decision.query ?? message,
-        role_keywords: decision.role_keywords ?? [],
+        query: liQuery,
+        role_keywords: liRoleKeywords,
         location: decision.location ?? null,
         max_results: Math.max(1, Math.min(50, decision.max_results ?? 5)),
         needs_enrichment: false,
@@ -1766,6 +1886,7 @@ Deno.serve(async (req) => {
         execution_mode: decision.needs_outreach ? "outreach" : "fast",
         confidence: decision.confidence,
         missing_fields: [],
+        lead_intent: leadIntent,
         reason: "classifier: company_hiring_sourcing → jobs (deterministic, no legacy round-trip)",
       } as unknown as ToolInput,
       modelUsed: "google/gemini-3-flash-preview", providerUsed: "lovable-ai",

@@ -10,22 +10,40 @@ function esc(v: unknown): string {
 
 export function rowsToCsv(rows: LeadTableRow[]): string {
   const headers = [
-    'company', 'website', 'location', 'signal_type', 'signal_summary',
-    'recommended_persona', 'contact_status',
+    'company', 'website', 'location', 'signal_type',
+    // Lead Intelligence Engine hiring-signal proof + quality columns.
+    'job_title', 'exact_hiring_signal', 'source_url',
+    'fit_score', 'fit_tier', 'why_this_lead', 'matched_icp', 'missing_fields',
+    'decision_maker_status', 'enrichment_status', 'next_action',
+    'signal_summary', 'recommended_persona', 'contact_status',
     'contact_name', 'contact_title', 'contact_email', 'contact_linkedin',
-    'enrichment_summary', 'personalized_message',
-    'fit_score', 'status',
+    'enrichment_summary', 'personalized_message', 'status',
   ];
   const lines = [headers.join(',')];
   for (const r of rows) {
     const contactLocked = r.contact_status === 'needs_contact';
     const enrichLocked = r.enrichment_status !== 'enriched';
     const draftLocked = r.draft_status !== 'drafted' && r.draft_status !== 'approved';
+    const raw = (r.raw && typeof r.raw === 'object' ? r.raw : {}) as Record<string, unknown>;
+    const arr = (v: unknown) => Array.isArray(v) ? (v as unknown[]).join(' · ') : (v ?? '');
+    // No source URL = proof incomplete.
+    const sourceUrl = (raw.source_url as string) || r.website || '';
     lines.push([
       esc(r.company_name),
       esc(r.website),
       esc(r.company_location),
       esc(r.signal_type),
+      esc(raw.job_title),
+      esc(raw.exact_hiring_signal),
+      esc(sourceUrl || 'proof_incomplete'),
+      esc(r.fit_score),
+      esc(raw.fit_tier),
+      esc(raw.why_this_lead),
+      esc(arr(raw.matched_icp)),
+      esc(arr(raw.missing_fields)),
+      esc(r.contact_status === 'needs_contact' ? 'missing' : (r.contact_status ?? 'missing')),
+      esc(r.enrichment_status),
+      esc((raw.next_action as string) ?? ''),
       esc(r.signal_summary),
       esc(r.recommended_persona),
       esc(r.contact_status),
@@ -35,7 +53,6 @@ export function rowsToCsv(rows: LeadTableRow[]): string {
       esc(contactLocked ? LOCKED : r.contact_linkedin_url),
       esc(enrichLocked ? LOCKED : r.enrichment_summary),
       esc(draftLocked ? LOCKED : r.personalized_message),
-      esc(r.fit_score),
       esc(r.status),
     ].join(','));
   }
