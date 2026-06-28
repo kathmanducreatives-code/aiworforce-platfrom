@@ -53,7 +53,6 @@ export interface FeedSignal {
   quality: SignalQuality;
   quality_badge: string;       // "Hiring signal" | "Needs verification" | "Legacy / Needs verification"
   why_text: string | null;     // why_it_matters, or an honest verification note — never blank
-  matched_icp: string[];
   show_by_default: boolean;     // verified signals only
 }
 
