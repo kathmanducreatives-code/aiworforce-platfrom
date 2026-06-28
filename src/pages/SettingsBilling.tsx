@@ -133,13 +133,13 @@ export default function SettingsBilling() {
         </section>
 
         {/* Transactions */}
-        <section>
+        <section id="history">
           <h2 className="text-[16px] font-semibold text-[#F0F6FC] mb-3 flex items-center gap-2">
-            <Sparkles className="h-4 w-4 text-emerald-300" /> Transaction history
+            <Sparkles className="h-4 w-4 text-emerald-300" /> Recent credit activity
           </h2>
           <div className="rounded-xl border border-white/[0.07] bg-white/[0.02] overflow-hidden">
             {txns.length === 0 ? (
-              <div className="p-6 text-[13px] text-neutral-500">No transactions yet.</div>
+              <div className="p-6 text-[13px] text-neutral-500">No credit activity yet. Credits will appear here after workflows run.</div>
             ) : (
               <table className="w-full text-[12.5px]">
                 <thead>
@@ -148,7 +148,7 @@ export default function SettingsBilling() {
                     <th className="px-4 py-2 font-mono">Workflow</th>
                     <th className="px-4 py-2 font-mono">Type</th>
                     <th className="px-4 py-2 font-mono">Status</th>
-                    <th className="px-4 py-2 font-mono text-right">Δ Credits</th>
+                    <th className="px-4 py-2 font-mono text-right">Credits</th>
                   </tr>
                 </thead>
                 <tbody>
