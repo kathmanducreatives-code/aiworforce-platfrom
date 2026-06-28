@@ -63,8 +63,6 @@ interface SidebarProps {
 }
 
 const Sidebar = ({ collapsed, onToggle }: SidebarProps) => {
-  const { signOut, profile } = useAuth();
-
   return (
     <aside
       className={cn(
@@ -72,29 +70,9 @@ const Sidebar = ({ collapsed, onToggle }: SidebarProps) => {
         collapsed ? 'w-[68px]' : 'w-[260px]'
       )}
     >
-      {/* Workspace header */}
-      <div className={cn('flex items-center gap-3 px-4 py-5 border-b border-white/[0.03]', collapsed && 'justify-center px-0')}>
-        <div className="w-8 h-8 rounded-full flex items-center justify-center text-[13px] font-semibold text-white shrink-0 shadow-inner"
-             style={{ background: 'linear-gradient(135deg, hsl(var(--primary-dark)) 0%, hsl(var(--primary)) 100%)' }}>
-          {profile?.full_name?.[0]?.toUpperCase() || 'A'}
-        </div>
-        {!collapsed && (
-          <>
-            <div className="flex-1 min-w-0">
-              <p className="text-[14.5px] font-medium text-foreground truncate leading-tight">{profile?.full_name || 'Agentory'}</p>
-            </div>
-            <span
-              className="text-[10.5px] font-mono font-semibold tracking-[0.1em] text-emerald-300 rounded px-2 py-[3px]"
-              style={{
-                background: 'linear-gradient(135deg, rgba(16,185,129,0.18), rgba(16,185,129,0.06))',
-                border: '1px solid rgba(16,185,129,0.28)',
-                boxShadow: '0 0 12px -4px rgba(16,185,129,0.35), inset 0 1px 0 rgba(255,255,255,0.05)',
-              }}
-            >
-              PRO
-            </span>
-          </>
-        )}
+      {/* Workspace header + profile menu */}
+      <div className={cn('px-2 py-3 border-b border-white/[0.03]', collapsed && 'px-1')}>
+        <ProfileMenu collapsed={collapsed} />
       </div>
 
       {/* Navigation */}
