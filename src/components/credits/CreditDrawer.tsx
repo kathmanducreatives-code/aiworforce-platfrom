@@ -101,14 +101,14 @@ export default function CreditDrawer({ open, onClose }: Props) {
 
         <div className="mt-6">
           <div className="flex items-center justify-between mb-2">
-            <div className="text-[11px] uppercase tracking-[0.14em] font-mono text-neutral-500">Recent activity</div>
+            <div className="text-[11px] uppercase tracking-[0.14em] font-mono text-neutral-500">Recent credit activity</div>
             <button onClick={() => { onClose(); navigate('/settings/billing'); }} className="text-[11px] text-emerald-300 inline-flex items-center gap-1 hover:underline">
               View all <ExternalLink className="h-3 w-3" />
             </button>
           </div>
           {txns.length === 0 ? (
             <div className="rounded-md border border-white/[0.06] bg-white/[0.02] p-4 text-[12.5px] text-neutral-500">
-              No activity yet. Run a workflow from the Workflow Center to get started.
+              No credit activity yet. Credits will appear here after workflows run.
             </div>
           ) : (
             <div className="space-y-1.5">
