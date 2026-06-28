@@ -1,148 +1,86 @@
+# Credits language + Profile billing visibility
 
-# Agentory Credit & Pricing System
+Goal: every user-facing surface says **Credits** consistently, and the sidebar profile/avatar opens a real subscription summary backed by `useCreditBalance` (no fake paid plans, no fake history).
 
-A fair, transparent credit system across product + landing. Single source of truth for plans, workflow costs, and a clean reserve → finalize → (partial-refund) lifecycle. No auto-outreach. No risky migrations.
+## 1. Profile menu (new) — sidebar workspace header
 
-## 1. Source-of-truth config (new)
+Currently the sidebar header (`src/components/Sidebar.tsx` lines 76–98) shows the avatar + name + a static "PRO" chip. Replace the static chip with a clickable avatar button that opens a `DropdownMenu` (shadcn) anchored to it.
 
-Create three pure TS modules so nothing is hardcoded twice:
+New component: `src/components/account/ProfileMenu.tsx`
+- Reads `useAuth()` (name/email) and `useCreditBalance()` (plan, balance, allowance, period end, billing_status).
+- Resolves plan via `getPlan(state?.plan_id ?? 'free_trial')`.
+- Renders a dropdown with three sections:
+  1. **Header**: avatar, full name, email.
+  2. **Subscription summary** (live, honest):
+     - `Current plan: {plan.name}`
+     - `Credits remaining: {balance}`
+     - For paid plans: `Monthly credits: {allowance}` + `Renews: {current_period_end formatted}` + `Billing status: Active/Trial/…`
+     - For `free_trial`: `Trial credits: 30` + `Upgrade to unlock more workflows`
+     - If no `state` or no `plan_id`: `Current plan: Free Trial`, `Credits remaining: {balance ?? 30}`, `Billing setup: Coming soon` (no fake "Active").
+  3. **Actions**:
+     - `Billing & Credits` → opens existing `CreditDrawer` (lifted into context or via callback to Sidebar state).
+     - `Upgrade plan` → `navigate('/settings/billing')`.
+     - `Credit history` → `navigate('/settings/billing#history')` (page already lists txns; empty state already honest).
+     - `Settings` → `navigate('/settings/integrations')` (closest existing settings route).
+     - `Sign out` → existing `signOut()`.
 
-- `src/lib/pricing/plans.ts` — `PRICING_PLANS` (Free Trial, Starter, Founder Pro [highlighted], Growth, Scale) with `priceMonthly`, `credits`, `seats`, `overagePerCredit`, `features[]`, `description`.
-- `src/lib/pricing/workflowCosts.ts` — `WORKFLOW_CREDIT_COSTS` map per spec + helper `getWorkflowCost(id)`. Also exports human-readable metadata: `runs`, `output`, `safetyNote`, `category`.
-- `src/lib/pricing/budgetCaps.ts` — `WORKFLOW_BUDGET_CAPS_USD` (internal/admin only; never rendered to end users).
+Sidebar change: replace the `PRO` chip with `<ProfileMenu />` trigger (chevron + plan short name) and keep the avatar visible. The standalone "Sign Out" bottom button stays for redundancy but can also be removed — keep it for now to avoid behavior regressions.
 
-Mirror the same constants for Deno edge functions in `supabase/functions/_shared/pricing.ts` (re-declared, not imported across runtimes).
+## 2. Standardize wording to "Credits"
 
-## 2. Credit lifecycle helpers
+Renames (UI copy only — no variable / API renames):
 
-### Frontend (`src/lib/credits/`)
-- `estimate.ts` → `estimateWorkflowCredits(workflowId, params)` (uses cost catalog + per-row math like signal radar / lead count / enrichable count).
-- `client.ts` → thin wrappers calling edge functions: `reserveCredits`, `finalizeCharge`, `refundCredits`, `getBalance`.
-- `useCreditBalance.ts` hook (React Query, 30s stale).
-- `format.ts` → `formatCredits(n)`, `creditsToOverageUsd(n, planId)`.
+| File | Before | After |
+| --- | --- | --- |
+| `src/components/credits/CreditPill.tsx` | `{n} credits` (keep), tooltip `credits remaining` (keep) | already correct — no change |
+| `src/components/credits/CreditDrawer.tsx` | `Credits & usage`, `Balance`, `Recent activity` empty copy | `Credits`, `Credits remaining`, "No credit activity yet. Credits will appear here after workflows run." |
+| `src/pages/SettingsBilling.tsx` | `Balance`, `{used} used`, section comment `Plan + usage` | `Credits remaining`, `Credits used this period`, header "Plan & credits". Add labels: `Monthly credits`, `Next reset`. |
+| `src/components/credits/InsufficientCreditsCard.tsx` | `…credits and have …` | `Credits remaining: {balance}. You need {needed} to run this workflow.` |
+| `src/components/credits/WorkflowEstimateRow.tsx` | `Estimated cost`, `~{n} credits` | `Estimated credits`, `~{n}` (unit shown by label). Keep safety note. |
+| `src/components/landing/PricingCard.tsx` | `Approx. usage`, `Approximate usage depends on…` | `Approx. credits`, `Credit usage depends on workflow type and provider availability.` Add a one-line block above the grid: "Every plan includes monthly workflow credits. Credits are used when Agentory runs real work — finding signals, enriching companies, discovering decision-makers, drafting outreach, and creating content." |
+| `src/components/workflows/StatStrip.tsx` | any `usage`/`runs` label that is user-facing | swap to `Credits used` / `Workflow runs` only where it literally counts runs (keep "runs" only when it means count of runs, not credit usage). |
 
-### Backend (`supabase/functions/`)
-New edge functions, all CORS-enabled, JWT-validated:
-- `credits-balance` (GET) — returns `{ balance, plan_id, monthly_allowance, period_end, recent_transactions[] }`.
-- `credits-reserve` (POST) — `{ workflow_id, estimated_credits, conversation_id?, task_plan_id?, metadata }` → returns `{ transaction_id, reserved, balance_after }`. Rejects with `402 INSUFFICIENT_CREDITS` if balance < estimate (unless `DEV_BYPASS_CREDITS=true`).
-- `credits-finalize` (POST) — `{ transaction_id, actual_credits, status: 'charged'|'partial'|'minimum_charge'|'not_charged', result_summary }`. Computes refund delta.
-- `credits-refund` (POST) — admin/internal.
+Scope of audit: only the `credits/`, `landing/PricingCard.tsx`, `SettingsBilling.tsx`, sidebar, workflow confirmation cards, and post-lead action cards. Leave `tokens` in `email-sequence/TokenPicker.tsx` and `MentionPill.tsx` alone (different meaning: email merge tokens, @mentions).
 
-Shared helper `supabase/functions/_shared/creditLedger.ts` with: `reserve()`, `finalize()`, `refund()`, `getBalance()`, and the minimum-charge policy (0 / 10–25% / proportional / full, per spec section 4).
+## 3. Workflow confirmation copy
 
-## 3. Database approach (no migration 145631)
+`WorkflowEstimateRow.tsx` already shows estimate + safety note. Add a one-liner: "Credits are only used after you click Start." After completion, callers that render result rows should display:
+- success: `Credits used: {actual} of estimated {estimated}`
+- blocked: `Credits used: 0 — setup needed before this workflow can run.`
+- partial: `Credits used: {actual} of estimated {estimated} — Scout returned partial results and rejected weak matches.`
 
-Audit first: existing tables include `workspaces`, `workspace_members`, `task_plans`, `tool_calls`, `signals`, `conversations` — but no credits table.
+Implement these as a new tiny component `src/components/credits/CreditsUsedRow.tsx` so any bubble/card can drop it in. Wire it into `PostLeadActionsCard.tsx` result state if a `creditsCharged` field is present; otherwise leave it for follow-up (do not invent fake numbers).
 
-**Proposed new migration** (separate file, NOT the forbidden 145631; will be presented for explicit approval before applying):
+## 4. Sidebar credit pill
 
-```sql
-CREATE TABLE public.workspace_credits (
-  workspace_id uuid PRIMARY KEY REFERENCES public.workspaces(id) ON DELETE CASCADE,
-  plan_id text NOT NULL DEFAULT 'free_trial',
-  credit_balance integer NOT NULL DEFAULT 30,
-  monthly_credit_allowance integer NOT NULL DEFAULT 30,
-  billing_status text NOT NULL DEFAULT 'trial',
-  current_period_start timestamptz DEFAULT now(),
-  current_period_end timestamptz DEFAULT (now() + interval '30 days'),
-  created_at timestamptz DEFAULT now(),
-  updated_at timestamptz DEFAULT now()
-);
+Already exists (`CreditPill.tsx`). Tweaks only:
+- Low-credit threshold copy: when `balance < 20` render `Low · {n} credits left` and keep the amber styling.
+- Tooltip already says "credits remaining" — keep.
 
-CREATE TABLE public.credit_transactions (
-  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  workspace_id uuid NOT NULL REFERENCES public.workspaces(id) ON DELETE CASCADE,
-  conversation_id uuid, task_plan_id uuid, workflow_id text,
-  transaction_type text NOT NULL, status text NOT NULL,
-  estimated_credits integer, reserved_credits integer,
-  actual_credits integer, refunded_credits integer DEFAULT 0,
-  provider_cost_usd numeric, reason text,
-  metadata jsonb DEFAULT '{}', created_at timestamptz DEFAULT now()
-);
+## 5. Billing & Credits page
 
--- GRANTs + RLS scoped to has_workspace_access(auth.uid(), workspace_id).
--- provider_cost_usd hidden from SELECT for non-owners via view.
-```
+`src/pages/SettingsBilling.tsx` — re-label sections:
+- `Plan & credits`
+- `Credits remaining`, `Monthly credits`, `Credits used this period`, `Next reset`
+- Activity section header: `Recent credit activity`; empty state: "No credit activity yet. Credits will appear here after workflows run."
 
-Provisioning: extend `provision_workspace_for_user` to also seed `workspace_credits` (30 trial credits).
+No data shape changes; reads from existing `useCreditBalance`.
 
-**Fallback if user declines migration:** v1 read-only mode — store balance in `company_brain.profile.credits` JSON, derive transactions from `tool_calls`. All TS interfaces stay identical so swap is mechanical.
+## 6. Validation
 
-## 4. Workflow integration points
+- `bunx tsgo --noEmit`
+- `bunx vitest run src/lib/pricing` (existing pricing tests stay green)
+- Manual QA per the user's checklist via the running preview.
 
-Wire estimate → reserve → finalize into existing flows. Logic is unchanged; the credit calls wrap dispatch.
+## Non-goals / safety
 
-- **Signal Feed radar scan** (`useSignalFeed.runRadarScan`, `run-radar-scan/index.ts`): reserve 6 on Start; finalize based on accepted signal count.
-- **Load More signals** (`LoadMoreConfirmDialog`): already has confirm — add explicit `~6 credits` line + reserve on confirm.
-- **Lead workflows** (`buildPostLeadActionsCard`): the existing `credits` field already exists; rename consumers to use the unified estimator + show reservation in confirmation card.
-- **Workflow Center** (`src/pages/Workflows.tsx` + `WorkflowCard.tsx`): every card surfaces `~N credits` chip from cost catalog + safety note for outbound.
-- **Pilot dispatch** (`pilot-chat`, `run-agent`): on plan creation, attach `estimated_credits`; on tool_call completion, finalize.
+- No DB migrations.
+- No changes to `src/lib/credits/ledger.ts` storage shape.
+- No fake "Active" subscription rendering when `plan_id` is missing — fall back to Free Trial / "Coming soon".
+- Do not rename `tokens` in email/mention contexts.
+- Keep existing routes; don't add new ones.
 
-## 5. UI surfaces
+## Files touched
 
-| Surface | Change |
-|---|---|
-| Sidebar header | New `CreditPill` showing `Credits: 742` → opens drawer |
-| `CreditDrawer` (new) | Plan, balance, monthly allowance, next reset, recent 20 transactions, Upgrade CTA, Buy More (disabled "Coming soon" if Stripe not wired) |
-| Workflow confirmation cards | Estimated credits, agents that will run, output preview, safety note |
-| Workbench post-run banner | "Credits used: 11 of 15 estimated — Scout found 3 strong matches; weak rejected" |
-| Awaiting You drafts | Footer line: "Credits already used. Sending is manual and external." |
-| Settings → Billing & Credits (new page `src/pages/SettingsBilling.tsx`) | Plan, usage bar, transaction history table, overage pricing, upgrade/downgrade placeholders |
-| Insufficient balance | Inline blocker with Upgrade CTA, Start disabled |
-
-All copy: "Nothing will be sent automatically." preserved everywhere outbound is touched.
-
-## 6. Landing page pricing section
-
-Rewrite `src/components/landing/PricingCard.tsx`:
-- New headline: *"Pay for workflows, not seats of software you do not use."*
-- Replace current 3 plans with 5 from `PRICING_PLANS` (Founder Pro highlighted).
-- Add **How credits work** 5-step block.
-- Add **Example** block (5 hiring leads ≈ 15 credits).
-- Add **Founder Pro value** approx-usage block with "Approximate usage depends on workflow type and provider availability."
-- Add safety footnote: "Nothing is sent automatically. All outreach is draft-only and approval-gated."
-- No other landing changes.
-
-## 7. Dev/test mode
-
-Read `import.meta.env.VITE_DEV_BYPASS_CREDITS` (client) and `DEV_BYPASS_CREDITS` (edge). When true:
-- Still call estimate + show confirmation.
-- Skip reserve/finalize DB writes.
-- Badge in confirmation: *"Credits estimated locally · not charged in dev"*.
-
-## 8. Tests
-
-- `src/lib/pricing/__tests__/workflowCosts.test.ts` — estimator math, partial/min-charge policy, insufficient-balance guard.
-- `supabase/functions/_shared/creditLedger.test.ts` — reserve→finalize→refund flows, minimum-charge edges, dev bypass.
-- Component smoke: `CreditDrawer` renders balance; `PricingCard` renders 5 plans; confirmation card shows estimated credits.
-
-## 9. Safety guardrails (hard rules)
-
-- ❌ No migration `145631`.
-- ❌ No secrets/env committed.
-- ❌ No auto-send / DM / comment / post / email — outreach stays draft-only.
-- ❌ No production DB writes during implementation.
-- ✅ Provider cost USD never rendered to end users.
-- ✅ Setup-needed workflows charge 0 (early return before reserve).
-
-## 10. Files (new / changed)
-
-**New (~14):**
-`src/lib/pricing/{plans,workflowCosts,budgetCaps}.ts`,
-`src/lib/credits/{estimate,client,format}.ts`, `src/hooks/useCreditBalance.ts`,
-`src/components/credits/{CreditPill,CreditDrawer,InsufficientCreditsCard,WorkflowEstimateRow}.tsx`,
-`src/pages/SettingsBilling.tsx`,
-`supabase/functions/_shared/{pricing,creditLedger}.ts`,
-`supabase/functions/credits-balance/index.ts`, `credits-reserve/index.ts`, `credits-finalize/index.ts`.
-
-**Modified (~10):**
-`src/components/landing/PricingCard.tsx`, `src/components/Sidebar.tsx`, `src/App.tsx` (route), `src/pages/Workflows.tsx`, `src/components/workflows/WorkflowCard.tsx`, `src/components/signals/{SignalFeed,LoadMoreConfirmDialog}.tsx`, `src/hooks/useSignalFeed.ts`, `supabase/functions/run-radar-scan/index.ts`, `supabase/functions/_shared/creditEstimate.ts` (delegate to new catalog).
-
-## 11. Open questions before I build
-
-1. **Migration approval:** Apply the new `workspace_credits` + `credit_transactions` migration now, or start with the JSON-fallback (v1) and migrate later?
-2. **Trial credits on existing workspaces:** backfill 30 credits to all existing workspaces, or only new ones from now on?
-3. **Stripe checkout:** wire the existing built-in Stripe payments tool for upgrades now, or ship as "Contact us" first?
-4. **Dev bypass:** OK to default `DEV_BYPASS_CREDITS=true` in preview/TEST so QA never burns real credits?
-
-Once these are answered I'll execute the build in one pass.
+- new: `src/components/account/ProfileMenu.tsx`, `src/components/credits/CreditsUsedRow.tsx`
+- edit: `src/components/Sidebar.tsx`, `src/components/credits/CreditDrawer.tsx`, `src/components/credits/CreditPill.tsx`, `src/components/credits/InsufficientCreditsCard.tsx`, `src/components/credits/WorkflowEstimateRow.tsx`, `src/pages/SettingsBilling.tsx`, `src/components/landing/PricingCard.tsx`, `src/components/workflows/StatStrip.tsx`, `src/components/chat/workspace/bubbles/PostLeadActionsCard.tsx`
