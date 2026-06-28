@@ -138,3 +138,20 @@ Deno.test("tierFromScore: A/B/C + proof gating", () => {
   assertEquals(tierFromScore(60, true), "B");
   assertEquals(tierFromScore(80, false), "C"); // no source proof caps at C
 });
+
+// ---- Confirmed-Start routing invariant (the lead_intent threaded to the card) ----
+Deno.test("confirmed-route: assistant-hiring lead_intent carries jobs (never people)", () => {
+  const i = extractLeadIntent({ message: "I want founders hiring for assistant roles so I can target them with my AI SaaS product." });
+  // This is the exact object the card threads back on Start.
+  assertEquals(i.workflow_type, "company_hiring_sourcing");
+  assertEquals(i.source_type, "jobs");
+  assert(i.source_type !== "people", "must not route to people search");
+  const job = planJobsActorInput(i);
+  assert(job.role_keywords.some((k) => /assistant|chief of staff/i.test(k)));
+});
+
+Deno.test("confirmed-route: GTM hiring lead_intent also carries jobs", () => {
+  const i = extractLeadIntent({ message: "Find companies hiring SDRs in the US." });
+  assertEquals(i.workflow_type, "company_hiring_sourcing");
+  assertEquals(i.source_type, "jobs");
+});

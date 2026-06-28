@@ -842,6 +842,23 @@ Deno.serve(async (req) => {
   const wf = await classifyWorkflow(message);
   const validated = validateAgainstCapabilities(wf);
   const decision = validated.decision;
+
+  // Lead Intelligence Engine — confirmed-Start honor. When the user clicks Start
+  // on a workflow-confirmation card, the card threads back the ORIGINAL
+  // lead_intent (workflow_type + source_type + role family + aliases/excludes).
+  // Trust it instead of re-classifying the "Run workflow: …" command string,
+  // which would otherwise misroute an assistant-hiring Start to people search.
+  const confirmedLeadIntent = (isPreConfirmed && actionMetadata?.lead_intent && typeof actionMetadata.lead_intent === "object")
+    ? actionMetadata.lead_intent as Record<string, unknown>
+    : null;
+  if (confirmedLeadIntent && typeof confirmedLeadIntent.workflow_type === "string") {
+    decision.workflow_category = confirmedLeadIntent.workflow_type as typeof decision.workflow_category;
+    if (typeof confirmedLeadIntent.source_type === "string") decision.source_type = confirmedLeadIntent.source_type;
+    if (confirmedLeadIntent.workflow_type === "company_hiring_sourcing") decision.selected_actor_key = "apify_jobs";
+    decision.needs_clarification = false;
+    console.log("[pilot-chat] confirmed lead_intent honored:", { category: decision.workflow_category, source_type: decision.source_type, role_family: confirmedLeadIntent.role_family });
+  }
+
   console.log("[pilot-chat] workflow_classifier:", {
     category: decision.workflow_category,
     confidence: decision.confidence,
@@ -1844,20 +1861,24 @@ Deno.serve(async (req) => {
   }
 
   if (decision.workflow_category === "company_hiring_sourcing") {
-    // Lead Intelligence Engine: thread the structured hiring intent (role family
-    // + aliases + excludes) so run-agent uses planJobsActorInput +
-    // filterHiringCandidates instead of re-deriving the role from the message.
-    const leadIntent = leadIntentForToolInput(message, brainProfile);
+    // Lead Intelligence Engine: prefer the lead_intent the confirmation card
+    // threaded back on Start (the ORIGINAL request's role family + aliases +
+    // excludes); only fall back to re-deriving from the command string when the
+    // request didn't come from a confirmed card.
+    const leadIntent = confirmedLeadIntent ?? leadIntentForToolInput(message, brainProfile);
+    const li = leadIntent as Record<string, unknown> | null;
+    const liRoleKeywords = (li && Array.isArray(li.role_keywords) && li.role_keywords.length) ? li.role_keywords as string[] : (decision.role_keywords ?? []);
+    const liQuery = (li && Array.isArray(li.role_keywords) && li.role_keywords.length) ? (li.role_keywords as string[]).slice(0, 12).join(" OR ") : (decision.query ?? message);
     return await delegateToOrchestrate({
       admin, SUPABASE_URL, SUPABASE_ANON_KEY, authHeader, conversationId: conversationId!, workspaceId,
       instruction: message,
       toolInput: {
         intent: "source_companies_hiring",
         tool_name: "source_with_apify",
-        selected_actor_key: decision.selected_actor_key ?? "apify_jobs",
+        selected_actor_key: "apify_jobs",
         source_type: "jobs",
-        query: decision.query ?? message,
-        role_keywords: decision.role_keywords ?? [],
+        query: liQuery,
+        role_keywords: liRoleKeywords,
         location: decision.location ?? null,
         max_results: Math.max(1, Math.min(50, decision.max_results ?? 5)),
         needs_enrichment: false,
