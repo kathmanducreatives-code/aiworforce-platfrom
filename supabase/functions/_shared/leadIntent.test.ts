@@ -200,3 +200,9 @@ Deno.test("Phase7: Amae Health 'Founder Associate, Ops' accepted ONLY with real 
   assertEquals(filterHiringCandidates([withProof("Amae Health", "Founder Associate, Growth & Partnership Operations")], assistantQ).accepted.length, 1);
   assertEquals(filterHiringCandidates([{ company: "Amae Health", job_title: "Founder Associate, Growth & Partnership Operations", source_url: "proof_incomplete" }], assistantQ).accepted.length, 0);
 });
+
+Deno.test("routing: 'competitor conversations around Clay and 11x' → competitor_mentions (not unknown)", () => {
+  const i = extractLeadIntent({ message: "Show competitor conversations around Clay and 11x." });
+  assertEquals(i.source_type, "comments");
+  assertEquals(i.workflow_type, "competitor_signal_sourcing");
+});

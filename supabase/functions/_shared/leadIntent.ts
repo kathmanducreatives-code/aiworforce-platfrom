@@ -198,7 +198,11 @@ function routeSourceType(o: { subject: string; hiringRequested: boolean; selling
   if (o.hiringRequested) {
     return { workflow_type: "company_hiring_sourcing", source_type: "jobs", provider: "apify_jobs", fallback_providers: [], reason: "active hiring signal requested", required_capabilities: ["apify_jobs"] };
   }
-  if (COMMENTS_RE.test(s) || (COMPETITOR_RE.test(s) && /\bcomment|mention/i.test(s))) {
+  if (
+    COMMENTS_RE.test(s) ||
+    /\bcompetitor conversations?\b/i.test(s) ||
+    (COMPETITOR_RE.test(s) && /\b(comment|mention|conversation|talking|discuss|chatter|complain)\b/i.test(s))
+  ) {
     return { workflow_type: "competitor_signal_sourcing", source_type: "comments", provider: "apify_linkedin_post_comments", fallback_providers: ["apify_linkedin_posts"], reason: "comment / competitor-mention intent", required_capabilities: ["apify_comments"] };
   }
   if (POSTS_RE.test(s)) {
