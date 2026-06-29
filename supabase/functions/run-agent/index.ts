@@ -451,8 +451,48 @@ Deno.serve(async (req) => {
             });
           } catch (e) { console.warn("[run-agent] LIE hiring filter failed:", e); }
         }
-        const effectiveAccepted = lieAcceptedItems ?? adaptive.accepted;
-        const effectiveFound = lieAcceptedItems ? lieAcceptedItems.length : adaptive.found;
+
+        // Non-hiring source gates (people / posts / comments) — same trust
+        // standard as hiring: require real SOURCE PROOF (profile/post/comment
+        // URL), a role match for people, dedupe. Only the gated set is persisted.
+        // (Topic/competitor relevance for posts/comments needs intent topic
+        // extraction — proof + dedupe here; relevance is a follow-up.)
+        let gateAcceptedItems: typeof adaptive.accepted | null = null;
+        if (!leadIntentBody?.role_family && adaptive.accepted.length > 0) {
+          try {
+            const sg = await import("../_shared/sourceGates.ts");
+            const u = (x: unknown) => String(x ?? "").toLowerCase();
+            const back = (ok: Set<string>) => adaptive.accepted.filter((a: any) => ok.has(u(a.source_url)));
+            if (source_type === "people_profiles") {
+              const { roleAliases } = await import("../_shared/broaden.ts");
+              const roleKw = criteria.role ? roleAliases(criteria.role) : [];
+              const res = sg.filterPeopleCandidates(
+                adaptive.accepted.map((a: any) => ({ name: a.name, title: a.title, profile_url: a.source_url, company: a.company, location: a.location })),
+                { role_keywords: roleKw },
+              );
+              lieTrace = res.trace as unknown as Array<Record<string, unknown>>;
+              gateAcceptedItems = back(new Set(res.accepted.map((c) => u(c.profile_url))));
+            } else if (source_type === "linkedin_engagement") {
+              const res = sg.filterPostCandidates(
+                adaptive.accepted.map((a: any) => ({ post_url: a.source_url, author_name: a.name, snippet: (a.raw?.text ?? a.raw?.postText ?? a.raw?.content ?? a.title) })),
+                {},
+              );
+              lieTrace = res.trace as unknown as Array<Record<string, unknown>>;
+              gateAcceptedItems = back(new Set(res.accepted.map((c) => u(c.post_url))));
+            } else if (source_type === "linkedin_comments") {
+              const res = sg.filterCommentCandidates(
+                adaptive.accepted.map((a: any) => ({ source_url: a.source_url, comment_text: (a.raw?.text ?? a.raw?.comment ?? a.raw?.commentText), commenter_name: a.name })),
+                {},
+              );
+              lieTrace = res.trace as unknown as Array<Record<string, unknown>>;
+              gateAcceptedItems = back(new Set(res.accepted.map((c) => u(c.source_url))));
+            }
+            if (gateAcceptedItems) console.log("[run-agent] LIE source gate", { source_type, before: adaptive.accepted.length, after: gateAcceptedItems.length });
+          } catch (e) { console.warn("[run-agent] LIE source gate failed:", e); }
+        }
+
+        const effectiveAccepted = lieAcceptedItems ?? gateAcceptedItems ?? adaptive.accepted;
+        const effectiveFound = (lieAcceptedItems ?? gateAcceptedItems) ? (lieAcceptedItems ?? gateAcceptedItems)!.length : adaptive.found;
 
         // Source Quality Engine (Phase 6): honest raw vs accepted vs persisted
         // counts + reject reasons, surfaced in Workbench Insights + narrative.
@@ -485,7 +525,7 @@ Deno.serve(async (req) => {
           const tierCounts: Record<string, number> = { hot: 0, qualified: 0, weak: 0, rejected: 0 };
           const whySamples: string[] = [];
           let scoreSum = 0;
-          for (const it of (lieAcceptedItems ?? classified.accepted)) {
+          for (const it of ((lieAcceptedItems ?? gateAcceptedItems) ?? classified.accepted)) {
             const r = (it.raw ?? {}) as Record<string, unknown>;
             const q = evaluateLeadQuality({
               lead: {
@@ -516,7 +556,7 @@ Deno.serve(async (req) => {
               source_url: (it.source_url ?? (r.source_url as string) ?? null) as string | null,
             });
           }
-          const lieEffectiveCount = lieAcceptedItems ? lieAcceptedItems.length : classified.accepted.length;
+          const lieEffectiveCount = (lieAcceptedItems ?? gateAcceptedItems) ? (lieAcceptedItems ?? gateAcceptedItems)!.length : classified.accepted.length;
           const leadQualitySummary = {
             tiers: tierCounts,
             avg_score: lieEffectiveCount ? Math.round(scoreSum / lieEffectiveCount) : 0,
