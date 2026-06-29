@@ -155,3 +155,48 @@ Deno.test("confirmed-route: GTM hiring lead_intent also carries jobs", () => {
   assertEquals(i.workflow_type, "company_hiring_sourcing");
   assertEquals(i.source_type, "jobs");
 });
+
+// ---- Phase 7: regression from the real bad exported CSV ----
+const assistantQ = extractLeadIntent({ message: "I want founders hiring for assistant roles in USA. Help me find them." });
+const withProof = (company: string, job_title: string): RawCandidate => ({ company, job_title, source_url: `https://www.linkedin.com/jobs/view/${company.replace(/\s/g,'')}` });
+
+Deno.test("Phase7: the exact bad CSV founder/profile rows are all rejected", () => {
+  const bad: RawCandidate[] = [
+    withProof("My Medical Records.ai", "Co-Founder"),
+    withProof("FutureSight", "Entrepreneur in Residence / Technical Co-founder"),
+    withProof("AI House", "Founder / Entrepreneur in Residence"),
+    { company: "EmptyTitleCo", job_title: "", source_url: "https://linkedin.com/jobs/view/x" },
+    { company: "NoProofCo", job_title: "Executive Assistant", source_url: "proof_incomplete" },
+    { company: "NullCo", job_title: "Executive Assistant", source_url: null },
+  ];
+  const r = filterHiringCandidates(bad, assistantQ);
+  assertEquals(r.accepted.length, 0);
+  // reasons cover profile/equity, missing title, no source proof
+  const reasons = r.rejected.map((x) => x.reason).join("|");
+  assert(/profile\/equity/.test(reasons));
+  assert(/missing job_title/.test(reasons));
+  assert(/no source proof/.test(reasons));
+});
+
+Deno.test("Phase7: valid assistant/founder-support rows accepted ONLY with source proof", () => {
+  const good: RawCandidate[] = [
+    withProof("Acme", "Executive Assistant"),
+    withProof("Beta", "Assistant to CEO"),
+    withProof("Gamma", "Chief of Staff to CEO"),
+    withProof("Delta", "Founder's Office"),
+    withProof("Eps", "Operations Assistant"),
+    withProof("Zeta", "Administrative Assistant"),
+    withProof("Eta", "Office Manager"),
+  ];
+  const r = filterHiringCandidates(good, assistantQ);
+  assertEquals(r.accepted.length, good.length);
+  // same titles WITHOUT proof → all rejected
+  const noProof = good.map((g) => ({ ...g, source_url: "proof_incomplete" }));
+  assertEquals(filterHiringCandidates(noProof, assistantQ).accepted.length, 0);
+});
+
+Deno.test("Phase7: Amae Health 'Founder Associate, Ops' accepted ONLY with real job proof", () => {
+  // Founder Associate is a support role (not equity) — accept WITH proof, reject without.
+  assertEquals(filterHiringCandidates([withProof("Amae Health", "Founder Associate, Growth & Partnership Operations")], assistantQ).accepted.length, 1);
+  assertEquals(filterHiringCandidates([{ company: "Amae Health", job_title: "Founder Associate, Growth & Partnership Operations", source_url: "proof_incomplete" }], assistantQ).accepted.length, 0);
+});

@@ -294,15 +294,22 @@ export function filterHiringCandidates(candidates: RawCandidate[], intent: LeadI
 
   let pool = candidates ?? [];
 
-  // 1) source proof
+  // 1) source proof — must be a REAL url (reject empty + the "proof_incomplete"
+  // placeholder, which signals a row that never had a verifiable job/source link).
   let r1: Record<string, number> = {};
-  let kept = pool.filter((c) => { const ok = !!(c.source_url && c.source_url.trim()); if (!ok) { r1["no source proof"] = (r1["no source proof"] ?? 0) + 1; rejected.push({ candidate: c, reason: "no source proof" }); } return ok; });
-  stage("source_proof", "must have a job/source URL", pool.length, kept, r1); pool = kept;
+  let kept = pool.filter((c) => {
+    const u = (c.source_url ?? "").trim().toLowerCase();
+    const ok = !!u && u !== "proof_incomplete" && u !== "null" && u !== "undefined";
+    if (!ok) { r1["no source proof"] = (r1["no source proof"] ?? 0) + 1; rejected.push({ candidate: c, reason: "no source proof" }); }
+    return ok;
+  });
+  stage("source_proof", "must have a real job/source URL (not proof_incomplete)", pool.length, kept, r1); pool = kept;
 
-  // 2) role-family match  3) negative profile/equity title
+  // 2) job_title present  3) role-family match  4) negative profile/equity title
   let r2: Record<string, number> = {};
   kept = pool.filter((c) => {
-    const title = c.job_title ?? c.title ?? "";
+    const title = (c.job_title ?? c.title ?? "").trim();
+    if (!title) { r2["missing job_title"] = (r2["missing job_title"] ?? 0) + 1; rejected.push({ candidate: c, reason: "missing job_title / exact hiring signal" }); return false; }
     if (isProfileOrEquityTitle(title)) { r2["profile/equity title"] = (r2["profile/equity title"] ?? 0) + 1; rejected.push({ candidate: c, reason: "profile/equity title (not a hiring signal)" }); return false; }
     if (fam && !roleMatchesFamily(title, fam)) { r2["wrong role"] = (r2["wrong role"] ?? 0) + 1; rejected.push({ candidate: c, reason: `wrong role (not ${fam})` }); return false; }
     return true;
