@@ -283,12 +283,16 @@ export function resolveGateKind(sig: {
   if (wt === "competitor_signal_sourcing" || wt === "comment_sourcing") return "comments";
   if (rs === "comments" || rs === "linkedin_comments" || ns === "linkedin_comments" || ak.includes("comment")) return "comments";
 
-  // LinkedIn posts / intent. A "workflow/playbook/how-to/stack" query is a
-  // workflow-trend search (steps/tools proof), otherwise a generic post search.
+  // Workflow-trend search — ONLY for a structured source (serp/search) where we
+  // can extract steps/tools. LinkedIn posts have no structured steps, so a
+  // "workflow" post query is gated as a POST (topic match), not a workflow trend
+  // (which would falsely reject every real post for "no workflow steps/tools").
+  if (wt === "workflow_trend_sourcing" || (WORKFLOW_QUERY_RE.test(q) && (rs === "serp" || rs === "search" || rs === "search_fallback" || ns === "serp" || ns === "search_fallback"))) return "workflow";
+
+  // LinkedIn posts / intent.
   if (wt === "linkedin_intent_sourcing" || rs === "linkedin_posts" || rs === "linkedin_engagement" || ns === "linkedin_engagement" || ak.includes("post")) {
-    return WORKFLOW_QUERY_RE.test(q) ? "workflow" : "posts";
+    return "posts";
   }
-  if (wt === "workflow_trend_sourcing" || WORKFLOW_QUERY_RE.test(q) && (rs === "serp" || rs === "search" || ns === "serp" || ns === "search_fallback")) return "workflow";
 
   // People — individual profiles.
   if (wt === "people_sourcing") return "people";

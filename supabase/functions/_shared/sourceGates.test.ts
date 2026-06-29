@@ -119,10 +119,13 @@ Deno.test("resolveGateKind: recruiting agencies / companies selling to founders 
   assertEquals(resolveGateKind({ workflow_type: "company_icp_sourcing", normalized_source_type: "jobs" }), "company");
   assertEquals(resolveGateKind({ raw_source_type: "company_search", normalized_source_type: "jobs" }), "company");
 });
-Deno.test("resolveGateKind: posts about Claude Code workflows → workflow (how-to query)", () => {
-  assertEquals(resolveGateKind({ workflow_type: "linkedin_intent_sourcing", query: "posts about Claude Code workflows" }), "workflow");
-  // a generic post (no workflow/how-to language) → posts
+Deno.test("resolveGateKind: posts about Claude Code workflows → posts (LinkedIn posts have no structured steps)", () => {
+  // LinkedIn post intent always uses the POST gate (topic match), even for a
+  // workflow/how-to query — raw posts can't satisfy the workflow steps/tools gate.
+  assertEquals(resolveGateKind({ workflow_type: "linkedin_intent_sourcing", query: "posts about Claude Code workflows" }), "posts");
   assertEquals(resolveGateKind({ workflow_type: "linkedin_intent_sourcing", query: "posts about GTM pain" }), "posts");
+  // A workflow/how-to query over a STRUCTURED search source (serp) → workflow gate.
+  assertEquals(resolveGateKind({ raw_source_type: "serp", query: "Claude Code workflow playbook" }), "workflow");
 });
 Deno.test("resolveGateKind: Clay alternatives comments / competitor convos → comments", () => {
   assertEquals(resolveGateKind({ workflow_type: "competitor_signal_sourcing", normalized_source_type: "jobs" }), "comments");

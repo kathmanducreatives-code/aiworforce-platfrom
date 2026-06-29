@@ -385,11 +385,22 @@ Deno.serve(async (req) => {
           const locObj = it?.location;
           const locStr = typeof locObj === "string" ? locObj
             : (locObj?.parsed?.text ?? locObj?.linkedinText ?? locObj?.parsed?.city ?? null);
+          // Source-proof URL. HarvestAPI profile search returns it as
+          // linkedinUrl / publicProfileUrl / profileUrl / url (see contactDiscovery)
+          // — earlier we only checked url/linkedinUrl, so real profiles were
+          // rejected as "no profile URL". Fall back to deep-scanning for any
+          // linkedin.com/in|posts|jobs URL anywhere in the item.
+          const deepLinkedinUrl = (() => {
+            try {
+              const m = JSON.stringify(it).match(/https?:\/\/(?:[a-z]{2,3}\.)?linkedin\.com\/(?:in|posts|jobs|feed|company)\/[^\s"'\\]+/i);
+              return m?.[0] ?? null;
+            } catch { return null; }
+          })();
           return {
             name: it?.name ?? it?.fullName ?? (fullName || null) ?? it?.author?.name ?? it?.actor?.name ?? null,
             title: it?.title ?? it?.jobTitle ?? it?.position ?? cp?.position ?? cp?.title ?? it?.headline ?? null,
             company: it?.company ?? it?.companyName ?? cp?.companyName ?? it?.organization ?? it?.actor?.name ?? null,
-            source_url: it?.url ?? it?.link ?? it?.postUrl ?? it?.linkedinUrl ?? it?.jobUrl ?? it?.query?.post ?? null,
+            source_url: it?.url ?? it?.link ?? it?.postUrl ?? it?.linkedinUrl ?? it?.publicProfileUrl ?? it?.profileUrl ?? it?.linkedin_url ?? it?.jobUrl ?? it?.query?.post ?? deepLinkedinUrl ?? null,
             location: locStr ?? it?.companyLocation ?? null,
             raw: it,
           };
@@ -464,12 +475,11 @@ Deno.serve(async (req) => {
         // requested source_type, the actor key, and the query).
         let gateAcceptedItems: typeof adaptive.accepted | null = null;
         let resolvedGateKind: string | null = null;
-        if (!leadIntentBody?.role_family && adaptive.accepted.length > 0) {
+        if (!leadIntentBody?.role_family) {
           try {
             const sg = await import("../_shared/sourceGates.ts");
             const { roleAliases } = await import("../_shared/broaden.ts");
             const u = (x: unknown) => String(x ?? "").toLowerCase();
-            const back = (ok: Set<string>) => adaptive.accepted.filter((a: any) => ok.has(u(a.source_url)));
 
             // Prefer the threaded LIE intent; else re-extract from the instruction so
             // gating still works when the confirmation card didn't thread an intent.
@@ -491,49 +501,82 @@ Deno.serve(async (req) => {
             });
             resolvedGateKind = gateKind;
 
+            // Posts / comments / workflow trends are NOT company/people leads, so the
+            // lead-centric adaptive validator drops them ("missing name/company").
+            // Gate those over the raw sourced items instead; and normalize each via
+            // normalizeLinkedinEngagementItem (the generic mapItem can't extract a
+            // post's author/text/url — they're nested under author/commenter), then
+            // dedupe by post URL. People/company stay on the lead-validated set.
+            const isContentKind = gateKind === "posts" || gateKind === "comments" || gateKind === "workflow";
+            let gatePool: typeof adaptive.accepted = adaptive.accepted;
+            if (isContentKind) {
+              const { normalizeLinkedinEngagementItem } = await import("../_shared/linkedinEngagementOutput.ts");
+              const seenU = new Set<string>();
+              gatePool = rawAllItems.map((a: any) => {
+                const n = normalizeLinkedinEngagementItem(a.raw ?? a, apifyInput.query);
+                return {
+                  ...a,
+                  name: n.post_author_name ?? n.commenter_name ?? a.name,
+                  title: n.post_author_title ?? a.title,
+                  company: n.post_author_company ?? a.company,
+                  source_url: n.post_url ?? a.source_url,
+                  raw: { ...(a.raw ?? {}), _norm: n },
+                };
+              }).filter((a: any) => { const k = u(a.source_url); if (!k || seenU.has(k)) return false; seenU.add(k); return true; }) as typeof adaptive.accepted;
+            }
+            const back = (ok: Set<string>) => gatePool.filter((a: any) => ok.has(u(a.source_url)));
+
             const competitors: string[] = Array.isArray(tool_input_body?.competitors) ? (tool_input_body!.competitors as string[])
               : (threadedIntent?.competitors ?? reIntent?.competitors ?? []);
             const topics = sg.topicTokens(`${apifyInput.query ?? ""} ${criteria.industry ?? ""}`, []);
-            const categoryTerms = [criteria.category, criteria.industry, ...(threadedIntent?.target_company_type ?? reIntent?.target_company_type ?? [])].filter(Boolean) as string[];
+            // Category is a HARD reject only when we have a clean, SPECIFIC term.
+            // extractLeadIntent emits generic placeholders like "Companies" for
+            // target_company_type — using those as a category filter falsely
+            // rejects every real row ("wrong company category"). Drop generics;
+            // when nothing specific remains, rely on proof + role + dedupe (the
+            // actor query already encodes the category, e.g. "recruiting agencies").
+            const GENERIC_CAT = new Set(["companies", "company", "business", "businesses", "org", "orgs", "organization", "organizations", "organisation", "organisations", "people", "person", "leads", "prospects"]);
+            const categoryTerms = [criteria.category, criteria.industry, ...(threadedIntent?.target_company_type ?? reIntent?.target_company_type ?? [])]
+              .filter((c): c is string => !!c && !GENERIC_CAT.has(String(c).toLowerCase().trim()));
 
             if (gateKind === "people") {
               const roleKw = criteria.role ? roleAliases(criteria.role) : [];
               const res = sg.filterPeopleCandidates(
-                adaptive.accepted.map((a: any) => ({ name: a.name, title: a.title, profile_url: a.source_url, company: a.company, company_category: a.raw?.industry, location: a.location })),
+                gatePool.map((a: any) => ({ name: a.name, title: a.title, profile_url: a.source_url, company: a.company, company_category: a.raw?.industry, location: a.location })),
                 { role_keywords: roleKw, company_category: categoryTerms, location: criteria.location, strict_location: strict.location },
               );
               lieTrace = res.trace as unknown as Array<Record<string, unknown>>;
               gateAcceptedItems = back(new Set(res.accepted.map((c) => u(c.profile_url))));
             } else if (gateKind === "company") {
               const res = sg.filterCompanyCandidates(
-                adaptive.accepted.map((a: any) => ({ company: a.company ?? a.name, website: a.raw?.website ?? a.raw?.companyUrl ?? a.raw?.domain, source_url: a.source_url, category: a.raw?.category, industry: a.raw?.industry, location: a.location, profile_url: /linkedin\.com\/in\//i.test(String(a.source_url ?? "")) ? a.source_url : null })),
+                gatePool.map((a: any) => ({ company: a.company ?? a.name, website: a.raw?.website ?? a.raw?.companyUrl ?? a.raw?.domain, source_url: a.source_url, category: a.raw?.category, industry: a.raw?.industry, location: a.location, profile_url: /linkedin\.com\/in\//i.test(String(a.source_url ?? "")) ? a.source_url : null })),
                 { category: categoryTerms, geography: criteria.location, strict_geo: strict.location },
               );
               lieTrace = res.trace as unknown as Array<Record<string, unknown>>;
               gateAcceptedItems = back(new Set(res.accepted.map((c) => u(c.source_url))));
             } else if (gateKind === "posts") {
               const res = sg.filterPostCandidates(
-                adaptive.accepted.map((a: any) => ({ post_url: a.source_url, author_name: a.name, author_profile_url: a.raw?.authorUrl ?? a.raw?.author?.url, snippet: (a.raw?.text ?? a.raw?.postText ?? a.raw?.content ?? a.title) })),
+                gatePool.map((a: any) => ({ post_url: a.source_url, author_name: a.raw?._norm?.post_author_name ?? a.name, author_profile_url: a.raw?._norm?.post_author_profile_url, snippet: (a.raw?._norm?.post_text ?? a.raw?.text ?? a.raw?.postText ?? a.raw?.content ?? a.title) })),
                 { topics, keywords: competitors },
               );
               lieTrace = res.trace as unknown as Array<Record<string, unknown>>;
               gateAcceptedItems = back(new Set(res.accepted.map((c) => u(c.post_url))));
             } else if (gateKind === "comments") {
               const res = sg.filterCommentCandidates(
-                adaptive.accepted.map((a: any) => ({ source_url: a.source_url, comment_text: (a.raw?.text ?? a.raw?.comment ?? a.raw?.commentText), commenter_name: a.name, commenter_profile_url: a.raw?.authorUrl ?? a.raw?.author?.url, competitor_mentioned: (a.raw?.text ?? a.raw?.comment ?? "") })),
+                gatePool.map((a: any) => ({ source_url: a.source_url, comment_text: (a.raw?._norm?.post_text ?? a.raw?.text ?? a.raw?.comment ?? a.raw?.commentText), commenter_name: a.raw?._norm?.commenter_name ?? a.raw?._norm?.post_author_name ?? a.name, commenter_profile_url: a.raw?._norm?.commenter_profile_url ?? a.raw?._norm?.post_author_profile_url, competitor_mentioned: (a.raw?._norm?.competitors?.[0] ?? a.raw?._norm?.post_text ?? "") })),
                 { competitors, topics },
               );
               lieTrace = res.trace as unknown as Array<Record<string, unknown>>;
               gateAcceptedItems = back(new Set(res.accepted.map((c) => u(c.source_url))));
             } else if (gateKind === "workflow") {
               const res = sg.filterWorkflowCandidates(
-                adaptive.accepted.map((a: any) => ({ workflow_title: a.title ?? a.name, source_url: a.source_url, source_author: a.name, tools_mentioned: a.raw?.tools_mentioned ?? a.raw?.tools, workflow_steps: a.raw?.workflow_steps ?? a.raw?.steps, snippet: (a.raw?.text ?? a.raw?.postText ?? a.raw?.content ?? a.title) })),
+                gatePool.map((a: any) => ({ workflow_title: a.title ?? a.name, source_url: a.source_url, source_author: a.name, tools_mentioned: a.raw?.tools_mentioned ?? a.raw?.tools, workflow_steps: a.raw?.workflow_steps ?? a.raw?.steps, snippet: (a.raw?._norm?.post_text ?? a.raw?.text ?? a.raw?.postText ?? a.raw?.content ?? a.title) })),
                 { topics, tools: competitors },
               );
               lieTrace = res.trace as unknown as Array<Record<string, unknown>>;
               gateAcceptedItems = back(new Set(res.accepted.map((c) => u(c.source_url))));
             }
-            if (gateAcceptedItems) console.log("[run-agent] LIE source gate", { gate_kind: gateKind, raw_source_type, source_type, before: adaptive.accepted.length, after: gateAcceptedItems.length });
+            if (gateAcceptedItems) console.log("[run-agent] LIE source gate", { gate_kind: gateKind, raw_source_type, source_type, before: gatePool.length, after: gateAcceptedItems.length });
           } catch (e) { console.warn("[run-agent] LIE source gate failed:", e); }
         }
 
@@ -545,23 +588,30 @@ Deno.serve(async (req) => {
         // Per-lead quality keyed by normalized company name, reused below to
         // persist fit_score + raw.lead_quality onto each Workbench row.
         const normName = (s: unknown) => String(s ?? "").toLowerCase().replace(/[^a-z0-9]+/g, "").trim();
-        const leadQualityByName = new Map<string, { score: number; tier: string; why: string; matched_icp: string[]; missing_fields: string[]; confidence: string; reasons: string[]; exact_hiring_signal: string | null; job_title: string | null; source_url: string | null; source_proof: Record<string, unknown> }>();
+        type LeadQualityEntry = { score: number; tier: string; why: string; matched_icp: string[]; missing_fields: string[]; confidence: string; reasons: string[]; exact_hiring_signal: string | null; job_title: string | null; source_url: string | null; source_proof: Record<string, unknown> };
+        const leadQualityByName = new Map<string, LeadQualityEntry>();
+        // People/posts/comments accounts are keyed by COMPANY name, but the
+        // quality entry is keyed by the PERSON/post name — so also index by the
+        // source URL (unique, present on every gated row) to attach proof reliably.
+        const leadQualityByUrl = new Map<string, LeadQualityEntry>();
+        const normUrl = (s: unknown) => String(s ?? "").toLowerCase().replace(/[?#].*$/, "").replace(/\/+$/, "").trim();
         // Build the normalized, source-specific proof object Workbench + CSV read
         // (people / company / posts / comments / workflow). Only the gated set
         // reaches this, so a row with proof here is a row that passed the gate.
         const buildSourceProof = (kind: string | null, it: any, r: Record<string, unknown>): Record<string, unknown> => {
-          const txt = (r.text ?? r.postText ?? r.content ?? r.comment ?? r.commentText ?? "") as string;
+          const norm = (r._norm ?? {}) as Record<string, any>;
+          const txt = (norm.post_text ?? r.text ?? r.postText ?? r.content ?? r.comment ?? r.commentText ?? "") as string;
           const snippet = typeof txt === "string" ? txt.slice(0, 500) : "";
-          const authorUrl = (r.authorUrl ?? (r.author as any)?.url ?? r.author_profile_url ?? null) as string | null;
+          const authorUrl = (norm.post_author_profile_url ?? r.authorUrl ?? (r.author as any)?.url ?? r.author_profile_url ?? null) as string | null;
           switch (kind) {
             case "people":
               return { signal_source: "people", person_name: it.name ?? null, title: it.title ?? null, profile_url: it.source_url ?? null, company: it.company ?? null, location: it.location ?? null, source_provider: (r.source_provider ?? "linkedin") as string, next_action: "Review profile, then enrich for contact info" };
             case "company":
               return { signal_source: "company", company_name: it.company ?? it.name ?? null, website: (r.website ?? r.companyUrl ?? r.domain ?? null) as string | null, source_url: it.source_url ?? null, category: (r.category ?? r.industry ?? null) as string | null, location: it.location ?? null, next_action: "Review fit, then find decision-makers" };
             case "posts":
-              return { signal_source: "posts", post_url: it.source_url ?? null, author_name: it.name ?? null, author_profile_url: authorUrl, post_snippet: snippet, topic: (r.topic ?? null) as string | null, why_it_matters: "Author is publicly discussing this topic — warm engagement opportunity", next_action: "Engage on the post or send a warm note" };
+              return { signal_source: "posts", post_url: it.source_url ?? null, author_name: (norm.post_author_name ?? it.name ?? null), author_profile_url: authorUrl, post_snippet: snippet, topic: (norm.topic ?? r.topic ?? null) as string | null, why_it_matters: "Author is publicly discussing this topic — warm engagement opportunity", next_action: "Engage on the post or send a warm note" };
             case "comments":
-              return { signal_source: "comments", source_url: it.source_url ?? null, comment_text: snippet, commenter_name: it.name ?? null, commenter_profile_url: authorUrl, competitor_mentioned: (r.competitor_mentioned ?? null) as string | null, intent_signal: "Engaging on competitor/topic thread", why_it_matters: "Commenter is actively evaluating this space", next_action: "Reply or send a warm DM referencing the thread" };
+              return { signal_source: "comments", source_url: it.source_url ?? null, comment_text: snippet, commenter_name: (norm.commenter_name ?? norm.post_author_name ?? it.name ?? null), commenter_profile_url: (norm.commenter_profile_url ?? authorUrl), competitor_mentioned: (norm.competitors?.[0] ?? r.competitor_mentioned ?? null) as string | null, intent_signal: "Engaging on competitor/topic thread", why_it_matters: "Commenter is actively evaluating this space", next_action: "Reply or send a warm DM referencing the thread" };
             case "workflow":
               return { signal_source: "workflow", workflow_title: it.title ?? it.name ?? null, source_url: it.source_url ?? null, tools_mentioned: (r.tools_mentioned ?? r.tools ?? null), workflow_steps: (r.workflow_steps ?? r.steps ?? null), why_it_matters: "Actionable workflow relevant to your use case", matched_use_case: (r.matched_use_case ?? null), next_action: "Review the workflow and adapt it" };
             default:
@@ -613,8 +663,7 @@ Deno.serve(async (req) => {
             tierCounts[q.tier] = (tierCounts[q.tier] ?? 0) + 1;
             scoreSum += q.score;
             if (whySamples.length < 3 && q.accepted) whySamples.push(`${(it.name ?? it.company ?? "Lead")}: ${buildWhyThisLead(q)}`);
-            const nk = normName(it.name ?? it.company);
-            if (nk) leadQualityByName.set(nk, {
+            const entry: LeadQualityEntry = {
               score: q.score, tier: q.tier, why: buildWhyThisLead(q),
               matched_icp: q.matched_icp_fields, missing_fields: q.missing_fields,
               confidence: q.confidence, reasons: q.reasons,
@@ -625,7 +674,11 @@ Deno.serve(async (req) => {
               // Source-specific proof for non-hiring sources (people/company/posts/
               // comments/workflow) — empty for hiring (its proof fields are above).
               source_proof: buildSourceProof(resolvedGateKind, it, r),
-            });
+            };
+            const nk = normName(it.name ?? it.company);
+            if (nk) leadQualityByName.set(nk, entry);
+            const uk = normUrl(it.source_url ?? (r.source_url as string));
+            if (uk) leadQualityByUrl.set(uk, entry);
           }
           const lieEffectiveCount = (lieAcceptedItems ?? gateAcceptedItems) ? (lieAcceptedItems ?? gateAcceptedItems)!.length : classified.accepted.length;
           const leadQualitySummary = {
@@ -734,9 +787,14 @@ Deno.serve(async (req) => {
               }
               for (const row of rows ?? []) {
                 const r = row as Record<string, unknown>;
-                const q = leadQualityByName.get(normName(nameById.get(r.account_id as string) ?? ""));
-                if (!q) continue;
                 const existingRaw = (r.raw ?? {}) as Record<string, unknown>;
+                // Match by source URL first (reliable for people/posts/comments,
+                // whose account is the COMPANY not the person), then account name.
+                let rowUrl = (existingRaw.source_url ?? existingRaw.url ?? existingRaw.linkedinUrl ?? existingRaw.publicProfileUrl ?? existingRaw.profileUrl ?? existingRaw.post_url ?? existingRaw.profile_url) as string | undefined;
+                if (!rowUrl) { try { rowUrl = JSON.stringify(existingRaw).match(/https?:\/\/(?:[a-z]{2,3}\.)?linkedin\.com\/[^\s"'\\]+/i)?.[0]; } catch { /* ignore */ } }
+                const q = (rowUrl ? leadQualityByUrl.get(normUrl(rowUrl)) : undefined)
+                  ?? leadQualityByName.get(normName(nameById.get(r.account_id as string) ?? ""));
+                if (!q) continue;
                 await supabase.from("lead_candidates").update({
                   fit_score: typeof r.fit_score === "number" ? r.fit_score : q.score,
                   raw: {
