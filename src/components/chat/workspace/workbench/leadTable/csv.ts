@@ -13,6 +13,12 @@ export function rowsToCsv(rows: LeadTableRow[]): string {
     'company', 'website', 'location', 'signal_type',
     // Lead Intelligence Engine hiring-signal proof + quality columns.
     'job_title', 'exact_hiring_signal', 'source_url',
+    // Source-specific proof — populated per signal source (people / company /
+    // posts / comments / workflow trends); blank when N/A for the row's source.
+    'person_name', 'profile_url',
+    'post_url', 'author_name', 'post_snippet',
+    'comment_text', 'commenter_name', 'competitor_mentioned',
+    'workflow_title', 'tools_mentioned', 'workflow_steps',
     'fit_score', 'fit_tier', 'why_this_lead', 'matched_icp', 'missing_fields',
     'decision_maker_status', 'enrichment_status', 'next_action',
     'signal_summary', 'recommended_persona', 'contact_status',
@@ -36,6 +42,18 @@ export function rowsToCsv(rows: LeadTableRow[]): string {
       esc(raw.job_title),
       esc(raw.exact_hiring_signal),
       esc(sourceUrl || 'proof_incomplete'),
+      // Source-specific proof (mirrors the gate-accepted raw fields).
+      esc(raw.person_name),
+      esc(raw.profile_url),
+      esc(raw.post_url),
+      esc(raw.author_name),
+      esc(raw.post_snippet),
+      esc(raw.comment_text),
+      esc(raw.commenter_name),
+      esc(raw.competitor_mentioned),
+      esc(raw.workflow_title),
+      esc(arr(raw.tools_mentioned)),
+      esc(arr(raw.workflow_steps)),
       esc(r.fit_score),
       esc(raw.fit_tier),
       esc(raw.why_this_lead),

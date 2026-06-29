@@ -253,6 +253,65 @@ export function filterWorkflowCandidates(cands: WorkflowCandidate[], opts: Workf
   return { accepted: kept, rejected, trace };
 }
 
+// ===================== GATE-KIND ROUTING =====================
+// The runtime's normalizeApifySourceType() collapses "people"/"company"/
+// "comments" all down to "jobs", so it cannot be used to pick the right gate.
+// resolveGateKind looks at the un-collapsed signals (LIE workflow_type, the RAW
+// requested source_type, the selected actor key, and the query) and returns the
+// gate to apply. Pure + order matters: hiring → comments → posts/workflow →
+// people → company, so the most specific intent wins.
+export type GateKind = "hiring" | "people" | "company" | "posts" | "comments" | "workflow";
+const WORKFLOW_QUERY_RE = /\bworkflow|playbook|how (?:i|we|to)\b|step[- ]?by[- ]?step|automation|recipe|tutorial|tech stack\b/i;
+export function resolveGateKind(sig: {
+  workflow_type?: string | null;
+  raw_source_type?: string | null;
+  normalized_source_type?: string | null;
+  selected_actor_key?: string | null;
+  has_role_family?: boolean;
+  query?: string | null;
+}): GateKind | null {
+  const wt = lc(sig.workflow_type);
+  const rs = lc(sig.raw_source_type);
+  const ns = lc(sig.normalized_source_type);
+  const ak = lc(sig.selected_actor_key);
+  const q = String(sig.query ?? "");
+
+  // Hiring — explicit role family (filterHiringCandidates path) or hiring intent.
+  if (sig.has_role_family || wt === "company_hiring_sourcing") return "hiring";
+
+  // Comments / competitor conversations.
+  if (wt === "competitor_signal_sourcing" || wt === "comment_sourcing") return "comments";
+  if (rs === "comments" || rs === "linkedin_comments" || ns === "linkedin_comments" || ak.includes("comment")) return "comments";
+
+  // LinkedIn posts / intent. A "workflow/playbook/how-to/stack" query is a
+  // workflow-trend search (steps/tools proof), otherwise a generic post search.
+  if (wt === "linkedin_intent_sourcing" || rs === "linkedin_posts" || rs === "linkedin_engagement" || ns === "linkedin_engagement" || ak.includes("post")) {
+    return WORKFLOW_QUERY_RE.test(q) ? "workflow" : "posts";
+  }
+  if (wt === "workflow_trend_sourcing" || WORKFLOW_QUERY_RE.test(q) && (rs === "serp" || rs === "search" || ns === "serp" || ns === "search_fallback")) return "workflow";
+
+  // People — individual profiles.
+  if (wt === "people_sourcing") return "people";
+  if (rs === "people" || rs === "people_profiles" || rs === "profiles" || rs === "profile" || ns === "people_profiles") return "people";
+  if (ak.includes("people") || ak.includes("profile") || ak.includes("employee")) return "people";
+
+  // Company / ICP.
+  if (wt === "company_icp_sourcing" || wt === "company_search") return "company";
+  if (rs === "company_search" || rs === "company" || rs === "companies" || rs === "company_icp") return "company";
+
+  return null;
+}
+
+/** Lowercased topic tokens from a free-text query, stopwords dropped (for relevance opts). */
+const TOPIC_STOP = new Set(["the","and","for","with","about","find","show","people","posts","post","comment","comments","commenting","conversations","around","that","this","into","from","who","are","using","use","talk","talking","discussing","alternative","alternatives","competitor","competitors"]);
+export function topicTokens(query: string | null | undefined, extra: string[] = []): string[] {
+  const toks = String(query ?? "").toLowerCase().match(/[a-z0-9][a-z0-9+.\-]{2,}/g) ?? [];
+  const out = new Set<string>();
+  for (const t of toks) if (!TOPIC_STOP.has(t)) out.add(t);
+  for (const e of extra) { const v = lc(e); if (v) out.add(v); }
+  return [...out];
+}
+
 /** Aggregate the top rejection reasons across a gate result's trace (for the honest summary). */
 export function topRejectReasons(trace: GateTrace[], n = 4): Array<{ reason: string; count: number }> {
   const agg: Record<string, number> = {};

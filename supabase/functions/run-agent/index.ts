@@ -452,42 +452,88 @@ Deno.serve(async (req) => {
           } catch (e) { console.warn("[run-agent] LIE hiring filter failed:", e); }
         }
 
-        // Non-hiring source gates (people / posts / comments) — same trust
-        // standard as hiring: require real SOURCE PROOF (profile/post/comment
-        // URL), a role match for people, dedupe. Only the gated set is persisted.
-        // (Topic/competitor relevance for posts/comments needs intent topic
-        // extraction — proof + dedupe here; relevance is a follow-up.)
+        // Non-hiring source gates (people / company / posts / comments / workflow
+        // trends) — the SAME trust standard as hiring: require real SOURCE PROOF
+        // (profile/website/post/comment URL), a RELEVANCE match (role family,
+        // company category, topic, competitor) to what the user asked, dedupe, and
+        // produce a transparent reject trace. Only the gated set is persisted.
+        //
+        // The runtime's normalizeApifySourceType collapses people/company/comments
+        // all to "jobs", so we resolve the gate KIND from the un-collapsed signals
+        // (LIE workflow_type from the threaded intent OR re-extracted here, the raw
+        // requested source_type, the actor key, and the query).
         let gateAcceptedItems: typeof adaptive.accepted | null = null;
+        let resolvedGateKind: string | null = null;
         if (!leadIntentBody?.role_family && adaptive.accepted.length > 0) {
           try {
             const sg = await import("../_shared/sourceGates.ts");
+            const { roleAliases } = await import("../_shared/broaden.ts");
             const u = (x: unknown) => String(x ?? "").toLowerCase();
             const back = (ok: Set<string>) => adaptive.accepted.filter((a: any) => ok.has(u(a.source_url)));
-            if (source_type === "people_profiles") {
-              const { roleAliases } = await import("../_shared/broaden.ts");
+
+            // Prefer the threaded LIE intent; else re-extract from the instruction so
+            // gating still works when the confirmation card didn't thread an intent.
+            const threadedIntent = (tool_input_body?.lead_intent ?? null) as { workflow_type?: string; source_type?: string; competitors?: string[]; target_company_type?: string[] } | null;
+            let reIntent: any = null;
+            if (!threadedIntent?.workflow_type) {
+              try {
+                const { extractLeadIntent } = await import("../_shared/leadIntent.ts");
+                reIntent = extractLeadIntent({ message: instruction ?? "", brain: brain ? { icp: (brain as any).icp, company: (brain as any).company } : null });
+              } catch { /* deterministic gate-kind fallback below */ }
+            }
+            const gateKind = sg.resolveGateKind({
+              workflow_type: threadedIntent?.workflow_type ?? reIntent?.workflow_type ?? null,
+              raw_source_type,
+              normalized_source_type: source_type,
+              selected_actor_key: planned_actor_key,
+              has_role_family: false,
+              query: `${apifyInput.query ?? ""} ${instruction ?? ""}`,
+            });
+            resolvedGateKind = gateKind;
+
+            const competitors: string[] = Array.isArray(tool_input_body?.competitors) ? (tool_input_body!.competitors as string[])
+              : (threadedIntent?.competitors ?? reIntent?.competitors ?? []);
+            const topics = sg.topicTokens(`${apifyInput.query ?? ""} ${criteria.industry ?? ""}`, []);
+            const categoryTerms = [criteria.category, criteria.industry, ...(threadedIntent?.target_company_type ?? reIntent?.target_company_type ?? [])].filter(Boolean) as string[];
+
+            if (gateKind === "people") {
               const roleKw = criteria.role ? roleAliases(criteria.role) : [];
               const res = sg.filterPeopleCandidates(
-                adaptive.accepted.map((a: any) => ({ name: a.name, title: a.title, profile_url: a.source_url, company: a.company, location: a.location })),
-                { role_keywords: roleKw },
+                adaptive.accepted.map((a: any) => ({ name: a.name, title: a.title, profile_url: a.source_url, company: a.company, company_category: a.raw?.industry, location: a.location })),
+                { role_keywords: roleKw, company_category: categoryTerms, location: criteria.location, strict_location: strict.location },
               );
               lieTrace = res.trace as unknown as Array<Record<string, unknown>>;
               gateAcceptedItems = back(new Set(res.accepted.map((c) => u(c.profile_url))));
-            } else if (source_type === "linkedin_engagement") {
+            } else if (gateKind === "company") {
+              const res = sg.filterCompanyCandidates(
+                adaptive.accepted.map((a: any) => ({ company: a.company ?? a.name, website: a.raw?.website ?? a.raw?.companyUrl ?? a.raw?.domain, source_url: a.source_url, category: a.raw?.category, industry: a.raw?.industry, location: a.location, profile_url: /linkedin\.com\/in\//i.test(String(a.source_url ?? "")) ? a.source_url : null })),
+                { category: categoryTerms, geography: criteria.location, strict_geo: strict.location },
+              );
+              lieTrace = res.trace as unknown as Array<Record<string, unknown>>;
+              gateAcceptedItems = back(new Set(res.accepted.map((c) => u(c.source_url))));
+            } else if (gateKind === "posts") {
               const res = sg.filterPostCandidates(
-                adaptive.accepted.map((a: any) => ({ post_url: a.source_url, author_name: a.name, snippet: (a.raw?.text ?? a.raw?.postText ?? a.raw?.content ?? a.title) })),
-                {},
+                adaptive.accepted.map((a: any) => ({ post_url: a.source_url, author_name: a.name, author_profile_url: a.raw?.authorUrl ?? a.raw?.author?.url, snippet: (a.raw?.text ?? a.raw?.postText ?? a.raw?.content ?? a.title) })),
+                { topics, keywords: competitors },
               );
               lieTrace = res.trace as unknown as Array<Record<string, unknown>>;
               gateAcceptedItems = back(new Set(res.accepted.map((c) => u(c.post_url))));
-            } else if (source_type === "linkedin_comments") {
+            } else if (gateKind === "comments") {
               const res = sg.filterCommentCandidates(
-                adaptive.accepted.map((a: any) => ({ source_url: a.source_url, comment_text: (a.raw?.text ?? a.raw?.comment ?? a.raw?.commentText), commenter_name: a.name })),
-                {},
+                adaptive.accepted.map((a: any) => ({ source_url: a.source_url, comment_text: (a.raw?.text ?? a.raw?.comment ?? a.raw?.commentText), commenter_name: a.name, commenter_profile_url: a.raw?.authorUrl ?? a.raw?.author?.url, competitor_mentioned: (a.raw?.text ?? a.raw?.comment ?? "") })),
+                { competitors, topics },
+              );
+              lieTrace = res.trace as unknown as Array<Record<string, unknown>>;
+              gateAcceptedItems = back(new Set(res.accepted.map((c) => u(c.source_url))));
+            } else if (gateKind === "workflow") {
+              const res = sg.filterWorkflowCandidates(
+                adaptive.accepted.map((a: any) => ({ workflow_title: a.title ?? a.name, source_url: a.source_url, source_author: a.name, tools_mentioned: a.raw?.tools_mentioned ?? a.raw?.tools, workflow_steps: a.raw?.workflow_steps ?? a.raw?.steps, snippet: (a.raw?.text ?? a.raw?.postText ?? a.raw?.content ?? a.title) })),
+                { topics, tools: competitors },
               );
               lieTrace = res.trace as unknown as Array<Record<string, unknown>>;
               gateAcceptedItems = back(new Set(res.accepted.map((c) => u(c.source_url))));
             }
-            if (gateAcceptedItems) console.log("[run-agent] LIE source gate", { source_type, before: adaptive.accepted.length, after: gateAcceptedItems.length });
+            if (gateAcceptedItems) console.log("[run-agent] LIE source gate", { gate_kind: gateKind, raw_source_type, source_type, before: adaptive.accepted.length, after: gateAcceptedItems.length });
           } catch (e) { console.warn("[run-agent] LIE source gate failed:", e); }
         }
 
@@ -499,7 +545,29 @@ Deno.serve(async (req) => {
         // Per-lead quality keyed by normalized company name, reused below to
         // persist fit_score + raw.lead_quality onto each Workbench row.
         const normName = (s: unknown) => String(s ?? "").toLowerCase().replace(/[^a-z0-9]+/g, "").trim();
-        const leadQualityByName = new Map<string, { score: number; tier: string; why: string; matched_icp: string[]; missing_fields: string[]; confidence: string; reasons: string[]; exact_hiring_signal: string | null; job_title: string | null; source_url: string | null }>();
+        const leadQualityByName = new Map<string, { score: number; tier: string; why: string; matched_icp: string[]; missing_fields: string[]; confidence: string; reasons: string[]; exact_hiring_signal: string | null; job_title: string | null; source_url: string | null; source_proof: Record<string, unknown> }>();
+        // Build the normalized, source-specific proof object Workbench + CSV read
+        // (people / company / posts / comments / workflow). Only the gated set
+        // reaches this, so a row with proof here is a row that passed the gate.
+        const buildSourceProof = (kind: string | null, it: any, r: Record<string, unknown>): Record<string, unknown> => {
+          const txt = (r.text ?? r.postText ?? r.content ?? r.comment ?? r.commentText ?? "") as string;
+          const snippet = typeof txt === "string" ? txt.slice(0, 500) : "";
+          const authorUrl = (r.authorUrl ?? (r.author as any)?.url ?? r.author_profile_url ?? null) as string | null;
+          switch (kind) {
+            case "people":
+              return { signal_source: "people", person_name: it.name ?? null, title: it.title ?? null, profile_url: it.source_url ?? null, company: it.company ?? null, location: it.location ?? null, source_provider: (r.source_provider ?? "linkedin") as string, next_action: "Review profile, then enrich for contact info" };
+            case "company":
+              return { signal_source: "company", company_name: it.company ?? it.name ?? null, website: (r.website ?? r.companyUrl ?? r.domain ?? null) as string | null, source_url: it.source_url ?? null, category: (r.category ?? r.industry ?? null) as string | null, location: it.location ?? null, next_action: "Review fit, then find decision-makers" };
+            case "posts":
+              return { signal_source: "posts", post_url: it.source_url ?? null, author_name: it.name ?? null, author_profile_url: authorUrl, post_snippet: snippet, topic: (r.topic ?? null) as string | null, why_it_matters: "Author is publicly discussing this topic — warm engagement opportunity", next_action: "Engage on the post or send a warm note" };
+            case "comments":
+              return { signal_source: "comments", source_url: it.source_url ?? null, comment_text: snippet, commenter_name: it.name ?? null, commenter_profile_url: authorUrl, competitor_mentioned: (r.competitor_mentioned ?? null) as string | null, intent_signal: "Engaging on competitor/topic thread", why_it_matters: "Commenter is actively evaluating this space", next_action: "Reply or send a warm DM referencing the thread" };
+            case "workflow":
+              return { signal_source: "workflow", workflow_title: it.title ?? it.name ?? null, source_url: it.source_url ?? null, tools_mentioned: (r.tools_mentioned ?? r.tools ?? null), workflow_steps: (r.workflow_steps ?? r.steps ?? null), why_it_matters: "Actionable workflow relevant to your use case", matched_use_case: (r.matched_use_case ?? null), next_action: "Review the workflow and adapt it" };
+            default:
+              return {};
+          }
+        };
         try {
           const { summarizeSourceQuality, classifyResults, topRejectReasons } = await import("../_shared/sourceQuality.ts");
           const { evaluateLeadQuality, buildWhyThisLead } = await import("../_shared/leadQuality.ts");
@@ -554,6 +622,9 @@ Deno.serve(async (req) => {
               exact_hiring_signal: (r.exact_signal ?? r.jobTitle ?? r.positionName ?? it.title ?? null) as string | null,
               job_title: (it.title ?? (r.jobTitle as string) ?? null) as string | null,
               source_url: (it.source_url ?? (r.source_url as string) ?? null) as string | null,
+              // Source-specific proof for non-hiring sources (people/company/posts/
+              // comments/workflow) — empty for hiring (its proof fields are above).
+              source_proof: buildSourceProof(resolvedGateKind, it, r),
             });
           }
           const lieEffectiveCount = (lieAcceptedItems ?? gateAcceptedItems) ? (lieAcceptedItems ?? gateAcceptedItems)!.length : classified.accepted.length;
@@ -679,6 +750,9 @@ Deno.serve(async (req) => {
                     job_title: q.job_title ?? (existingRaw.job_title as string) ?? null,
                     exact_hiring_signal: q.exact_hiring_signal ?? (existingRaw.exact_hiring_signal as string) ?? null,
                     source_url: q.source_url ?? (existingRaw.source_url as string) ?? null,
+                    // Source-specific proof (people/company/posts/comments/workflow);
+                    // never overwrites existing keys with null/empty.
+                    ...Object.fromEntries(Object.entries(q.source_proof).filter(([, v]) => v != null && v !== "")),
                   },
                 }).eq("id", r.id as string);
               }
@@ -689,7 +763,18 @@ Deno.serve(async (req) => {
           const log = adaptive.attempts.map((a) => `Attempt ${a.n}: ${a.strategy} — ${a.accepted_count} accepted (total ${a.total_accepted})`).join("\n");
           apifyContext = `APIFY SOURCING (${effectiveFound}/${adaptive.requested} accepted across ${adaptive.attempts.length} attempt(s)):\nATTEMPTS:\n${log}${lens}\n\nITEMS (accepted, capped):\n${JSON.stringify(rawItems, null, 2).slice(0, 8000)}`;
         } else if (!toolFailed) {
-          toolNotices.push(`Sourcing ran ${adaptive.attempts.length} attempt(s) and found 0 matching results.`);
+          // Honest zero result — never pad the table with weak rows. Surface the
+          // raw count reviewed + top reject reasons (from the gate trace) so the
+          // user sees WHY nothing qualified.
+          const topReasons = (sourceQualityMeta?.top_reject_reasons as Array<{ reason: string; count: number }> | undefined)
+            ?? (Array.isArray(lieTrace)
+              ? Object.entries(lieTrace.reduce((acc: Record<string, number>, t: any) => {
+                  for (const [k, v] of Object.entries((t.rejected_reasons ?? {}) as Record<string, number>)) acc[k] = (acc[k] ?? 0) + (Number(v) || 0);
+                  return acc;
+                }, {})).sort((a, b) => b[1] - a[1]).slice(0, 4).map(([reason, count]) => ({ reason, count }))
+              : []);
+          const reasonStr = topReasons.length ? ` Main reject reasons: ${topReasons.map((r) => r.reason).join(", ")}.` : "";
+          toolNotices.push(`Scout reviewed ${rawAllItems.length} raw result${rawAllItems.length === 1 ? "" : "s"} but found 0 verified matches. I did not fill the table with weak results.${reasonStr}`);
           // Actor ran fine but accepted 0 qualified leads. Mark it so we skip
           // Aria (nothing to rank) and finalize as no_results below.
           if (isApifySelected) {

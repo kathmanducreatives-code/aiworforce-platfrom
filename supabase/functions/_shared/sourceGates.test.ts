@@ -2,6 +2,7 @@ import { assert, assertEquals } from "https://deno.land/std@0.224.0/assert/mod.t
 import {
   filterPeopleCandidates, filterCompanyCandidates, filterPostCandidates,
   filterCommentCandidates, filterWorkflowCandidates, tierFor, topRejectReasons,
+  resolveGateKind, topicTokens,
 } from "./sourceGates.ts";
 
 // ---- PEOPLE (founders of recruiting agencies) ----
@@ -101,6 +102,39 @@ Deno.test("workflow: generic AI content rejected; concrete workflow accepted", (
   assertEquals(generic.accepted.length, 0);
   const good = filterWorkflowCandidates([{ workflow_title: "Clay → Smartlead outbound", source_url: "https://x.com/2", tools_mentioned: ["Clay", "Smartlead"], workflow_steps: ["enrich in Clay", "send via Smartlead"] }], wfOpts);
   assertEquals(good.accepted.length, 1);
+});
+
+// ---- GATE-KIND ROUTING (the crux: route the 6 QA prompts to the right gate
+//      even though normalizeApifySourceType collapses people/company/comments to "jobs") ----
+Deno.test("resolveGateKind: hiring wins on role family", () => {
+  assertEquals(resolveGateKind({ has_role_family: true, raw_source_type: "people" }), "hiring");
+  assertEquals(resolveGateKind({ workflow_type: "company_hiring_sourcing" }), "hiring");
+});
+Deno.test("resolveGateKind: founders of recruiting agencies → people", () => {
+  assertEquals(resolveGateKind({ workflow_type: "people_sourcing", raw_source_type: "people" }), "people");
+  // even when the runtime collapsed source_type to "jobs"
+  assertEquals(resolveGateKind({ workflow_type: "people_sourcing", normalized_source_type: "jobs" }), "people");
+});
+Deno.test("resolveGateKind: recruiting agencies / companies selling to founders → company", () => {
+  assertEquals(resolveGateKind({ workflow_type: "company_icp_sourcing", normalized_source_type: "jobs" }), "company");
+  assertEquals(resolveGateKind({ raw_source_type: "company_search", normalized_source_type: "jobs" }), "company");
+});
+Deno.test("resolveGateKind: posts about Claude Code workflows → workflow (how-to query)", () => {
+  assertEquals(resolveGateKind({ workflow_type: "linkedin_intent_sourcing", query: "posts about Claude Code workflows" }), "workflow");
+  // a generic post (no workflow/how-to language) → posts
+  assertEquals(resolveGateKind({ workflow_type: "linkedin_intent_sourcing", query: "posts about GTM pain" }), "posts");
+});
+Deno.test("resolveGateKind: Clay alternatives comments / competitor convos → comments", () => {
+  assertEquals(resolveGateKind({ workflow_type: "competitor_signal_sourcing", normalized_source_type: "jobs" }), "comments");
+  assertEquals(resolveGateKind({ raw_source_type: "comments", normalized_source_type: "jobs" }), "comments");
+});
+Deno.test("resolveGateKind: unknown returns null (no false gate)", () => {
+  assertEquals(resolveGateKind({ raw_source_type: "website_content" }), null);
+});
+Deno.test("topicTokens: drops stopwords, keeps real topic terms", () => {
+  const t = topicTokens("Find posts about Claude Code workflows");
+  assert(t.includes("claude") && t.includes("code") && t.includes("workflows"));
+  assert(!t.includes("about") && !t.includes("posts"));
 });
 
 // ---- shared ----
