@@ -14,6 +14,7 @@ export interface LinkedinEngagementItem {
   post_author_title: string | null;
   post_author_company: string | null;
   post_author_profile_url: string | null;
+  post_date: string | null;
   commenter_name: string | null;
   commenter_profile_url: string | null;
   engagement_type: string | null;
@@ -62,8 +63,12 @@ export function normalizeLinkedinEngagementItem(raw: any, topic?: string | null)
 
   const post_text = pick(r, ["postText", "text", "content", "post_text", "description", "snippet"]);
   const post_author_name = pick(author, ["authorName", "name", "fullName", "full_name", "author_name"]);
-  const post_author_title = pick(author, ["authorTitle", "headline", "title", "occupation", "subtitle"]);
+  // HarvestAPI post-search puts the author headline in `author.info`.
+  const post_author_title = pick(author, ["authorTitle", "headline", "title", "occupation", "subtitle", "info"]);
   const post_author_company = pick(author, ["authorCompany", "company", "companyName", "organization", "employer"]);
+  // Post date — HarvestAPI: postedAt.date ; others: date / postedAtISO / postedAt (string).
+  const postedAtObj = (r.postedAt && typeof r.postedAt === "object") ? r.postedAt : null;
+  const post_date = pick(postedAtObj ?? r, ["date", "postedAtISO", "postedAt", "postDate", "post_date", "publishedAt", "time", "timestamp"]);
 
   const engagement_type = pick(r, ["engagementType", "engagement_type", "reactionType", "type", "interaction"])
     ?? (commenter ? "comment" : "post");
@@ -79,14 +84,19 @@ export function normalizeLinkedinEngagementItem(raw: any, topic?: string | null)
     competitor_category: comp?.category ?? null,
     matched_terms: comp?.matched_terms ?? [],
     conversation_type: post_text ? classifyConversationType(post_text) : null,
-    post_url: pick(r, ["postUrl", "url", "link", "post_url", "permalink", "sourceUrl"]),
+    // HarvestAPI post-search returns the post URL as `linkedinUrl` (top level).
+    post_url: pick(r, ["postUrl", "url", "link", "post_url", "permalink", "sourceUrl", "linkedinUrl", "postLink"]),
     post_text,
     post_author_name,
     post_author_title,
     post_author_company,
     post_author_profile_url: pick(author, ["authorProfileUrl", "profileUrl", "profile_url", "authorUrl", "linkedinUrl", "url"]),
-    commenter_name: commenter ? pick(commenter, ["name", "fullName", "full_name"]) : pick(r, ["commenterName", "commenter_name"]),
-    commenter_profile_url: commenter ? pick(commenter, ["profileUrl", "profile_url", "url", "linkedinUrl"]) : pick(r, ["commenterProfileUrl", "commenter_profile_url"]),
+    post_date,
+    // The api-empire comments actor returns each COMMENT as an item whose
+    // `author` is the commenter and `postUrl` is the source post — so fall back
+    // to author.* for the commenter when there's no explicit commenter object.
+    commenter_name: commenter ? pick(commenter, ["name", "fullName", "full_name"]) : (pick(r, ["commenterName", "commenter_name"]) ?? (r.author && typeof r.author === "object" ? pick(r.author, ["name", "fullName", "full_name"]) : null)),
+    commenter_profile_url: commenter ? pick(commenter, ["profileUrl", "profile_url", "url", "linkedinUrl"]) : (pick(r, ["commenterProfileUrl", "commenter_profile_url"]) ?? (r.author && typeof r.author === "object" ? pick(r.author, ["profile_url", "profileUrl", "url", "linkedinUrl"]) : null)),
     engagement_type,
     topic: (typeof topic === "string" && topic.trim()) ? topic.trim() : pick(r, ["topic", "keyword", "matchedTopic"]),
     signal_reason: pick(r, ["signalReason", "signal_reason", "reason"])

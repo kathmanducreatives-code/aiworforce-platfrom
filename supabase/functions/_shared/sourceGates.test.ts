@@ -2,7 +2,7 @@ import { assert, assertEquals } from "https://deno.land/std@0.224.0/assert/mod.t
 import {
   filterPeopleCandidates, filterCompanyCandidates, filterPostCandidates,
   filterCommentCandidates, filterWorkflowCandidates, tierFor, topRejectReasons,
-  resolveGateKind, topicTokens,
+  resolveGateKind, topicTokens, normalizeSerpCompanyItem,
 } from "./sourceGates.ts";
 
 // ---- PEOPLE (founders of recruiting agencies) ----
@@ -138,6 +138,23 @@ Deno.test("topicTokens: drops stopwords, keeps real topic terms", () => {
   const t = topicTokens("Find posts about Claude Code workflows");
   assert(t.includes("claude") && t.includes("code") && t.includes("workflows"));
   assert(!t.includes("about") && !t.includes("posts"));
+});
+
+// ---- SERP → COMPANY normalizer (apify/google-search-scraper output shape) ----
+Deno.test("serp→company: organic result → company_name + website/source_url; feeds company gate", () => {
+  const c = normalizeSerpCompanyItem({ title: "Acme Recruiting | Executive Search Firm", url: "https://acme-recruiting.com/", displayedUrl: "acme-recruiting.com", description: "Top recruiting agency in the USA." });
+  assert(c);
+  assertEquals(c!.company, "Acme Recruiting");
+  assertEquals(c!.website, "https://acme-recruiting.com/");
+  assertEquals(c!.source_url, "https://acme-recruiting.com/");
+  // and it passes the company proof gate (company + website/source)
+  const r = filterCompanyCandidates([c!], { category: [] });
+  assertEquals(r.accepted.length, 1);
+});
+Deno.test("serp→company: directory/aggregator hosts dropped (not a company site)", () => {
+  assertEquals(normalizeSerpCompanyItem({ title: "Best Recruiting Agencies - LinkedIn", url: "https://www.linkedin.com/pulse/best" }), null);
+  assertEquals(normalizeSerpCompanyItem({ title: "List of firms - Wikipedia", url: "https://en.wikipedia.org/wiki/x" }), null);
+  assertEquals(normalizeSerpCompanyItem({ title: "no url" }), null);
 });
 
 // ---- shared ----

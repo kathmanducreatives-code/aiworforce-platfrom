@@ -316,6 +316,27 @@ export function topicTokens(query: string | null | undefined, extra: string[] = 
   return [...out];
 }
 
+// ===================== SERP → COMPANY NORMALIZER =====================
+// Company discovery has no dedicated actor; the pragmatic provider is a Google
+// SERP actor (apify/google-search-scraper: {title,url,displayedUrl,description}).
+// This maps an organic result to a CompanyCandidate. Directory/aggregator hosts
+// (linkedin, wikipedia, job boards, listicles) are dropped so a real company
+// site — not a directory page — becomes the accepted row.
+const SERP_NON_COMPANY_HOSTS = /(?:^|\.)(linkedin\.com|wikipedia\.org|glassdoor\.|indeed\.|ziprecruiter\.|reddit\.com|youtube\.com|facebook\.com|twitter\.com|x\.com|instagram\.com|crunchbase\.com|g2\.com|clutch\.co|yelp\.com|medium\.com|quora\.com)/i;
+export interface SerpResult { title?: string | null; url?: string | null; displayedUrl?: string | null; description?: string | null }
+export function normalizeSerpCompanyItem(r: SerpResult): CompanyCandidate | null {
+  const url = String(r?.url ?? "").trim();
+  if (!url || !/^https?:\/\//i.test(url)) return null;
+  let host = "";
+  try { host = new URL(url).hostname.replace(/^www\./, ""); } catch { return null; }
+  if (SERP_NON_COMPANY_HOSTS.test(host)) return null;
+  // Company name: the first segment of the title before a separator, else host.
+  const rawTitle = String(r?.title ?? "").trim();
+  const seg = rawTitle.split(/\s*[|–—\-:•·]\s*/).map((s) => s.trim()).filter(Boolean)[0] ?? "";
+  const company = seg && seg.length <= 60 ? seg : (host.split(".")[0] || host);
+  return { company, website: url, source_url: url, category: null, industry: null, location: null, profile_url: null };
+}
+
 /** Aggregate the top rejection reasons across a gate result's trace (for the honest summary). */
 export function topRejectReasons(trace: GateTrace[], n = 4): Array<{ reason: string; count: number }> {
   const agg: Record<string, number> = {};

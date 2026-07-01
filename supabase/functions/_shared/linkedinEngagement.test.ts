@@ -92,6 +92,34 @@ Deno.test("normalize: post author + missing fields, preserves raw, no contact in
   assertEquals(item.post_author_profile_url, "https://linkedin.com/in/jane");
   assertEquals(item.raw, raw, "preserves raw");
 
+  // Real HarvestAPI linkedin-post-search output shape: post URL is `linkedinUrl`,
+  // body is `content`, author headline is `author.info`, profile is
+  // `author.linkedinUrl`, date is `postedAt.date`.
+  const harvest = normalizeLinkedinEngagementItem({
+    linkedinUrl: "https://www.linkedin.com/posts/janedoe_activity-123",
+    content: "My Claude Code workflow for shipping features faster.",
+    author: { name: "Jane Doe", info: "Founder & CEO at Acme", linkedinUrl: "https://www.linkedin.com/in/janedoe" },
+    postedAt: { date: "2026-06-20 10:00:00" },
+  }, "Claude Code");
+  assertEquals(harvest.post_url, "https://www.linkedin.com/posts/janedoe_activity-123");
+  assertEquals(harvest.post_author_name, "Jane Doe");
+  assertEquals(harvest.post_author_title, "Founder & CEO at Acme");
+  assertEquals(harvest.post_author_profile_url, "https://www.linkedin.com/in/janedoe");
+  assertEquals(harvest.post_date, "2026-06-20 10:00:00");
+  assert((harvest.post_text ?? "").includes("Claude Code"));
+
+  // Real api-empire post-comments shape: comment `text`, `author.name`,
+  // `author.profile_url`, source `postUrl` — commenter falls back to author.*.
+  const comment = normalizeLinkedinEngagementItem({
+    text: "We switched off Clay to a cheaper alternative last month.",
+    author: { name: "Sam Buyer", profile_url: "https://www.linkedin.com/in/sambuyer" },
+    postUrl: "https://www.linkedin.com/feed/update/urn:li:activity:7289521182721093633/",
+  }, "Clay alternatives");
+  assertEquals(comment.commenter_name, "Sam Buyer");
+  assertEquals(comment.commenter_profile_url, "https://www.linkedin.com/in/sambuyer");
+  assertEquals(comment.post_url, "https://www.linkedin.com/feed/update/urn:li:activity:7289521182721093633/");
+  assert((comment.post_text ?? "").toLowerCase().includes("clay"));
+
   const sparse = normalizeLinkedinEngagementItem({ text: "Just a post." }, null);
   assertEquals(sparse.post_url, null);
   assertEquals(sparse.post_author_name, null);

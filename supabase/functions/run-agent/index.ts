@@ -508,6 +508,9 @@ Deno.serve(async (req) => {
             // post's author/text/url — they're nested under author/commenter), then
             // dedupe by post URL. People/company stay on the lead-validated set.
             const isContentKind = gateKind === "posts" || gateKind === "comments" || gateKind === "workflow";
+            // Company via a Google SERP actor also isn't a lead — normalize the
+            // organic results ({title,url,displayedUrl,description}) into companies.
+            const isSerpCompany = gateKind === "company" && (["serp", "search", "search_fallback"].includes(String(raw_source_type ?? "")) || ["serp", "search_fallback"].includes(String(source_type ?? "")) || /serp|google|search/i.test(String(planned_actor_key ?? "")));
             let gatePool: typeof adaptive.accepted = adaptive.accepted;
             if (isContentKind) {
               const { normalizeLinkedinEngagementItem } = await import("../_shared/linkedinEngagementOutput.ts");
@@ -523,6 +526,13 @@ Deno.serve(async (req) => {
                   raw: { ...(a.raw ?? {}), _norm: n },
                 };
               }).filter((a: any) => { const k = u(a.source_url); if (!k || seenU.has(k)) return false; seenU.add(k); return true; }) as typeof adaptive.accepted;
+            } else if (isSerpCompany) {
+              const seenU = new Set<string>();
+              gatePool = rawAllItems.map((a: any) => {
+                const c = sg.normalizeSerpCompanyItem({ title: a.raw?.title ?? a.title ?? a.name, url: a.raw?.url ?? a.source_url, displayedUrl: a.raw?.displayedUrl, description: a.raw?.description ?? a.raw?.snippet });
+                if (!c) return null;
+                return { ...a, name: c.company, company: c.company, source_url: c.website, raw: { ...(a.raw ?? {}), website: c.website, _serp: c } };
+              }).filter((a: any): a is any => { if (!a) return false; const k = u(a.source_url); if (!k || seenU.has(k)) return false; seenU.add(k); return true; }) as typeof adaptive.accepted;
             }
             const back = (ok: Set<string>) => gatePool.filter((a: any) => ok.has(u(a.source_url)));
 
