@@ -544,18 +544,34 @@ export default function SignalFeed() {
       {/* Signal feed */}
       {!loading && tab !== "drafts" && tab !== "saved" && (
         filtered.length === 0
-          ? (signals.length > 0
-              ? <FilterEmpty onClear={() => { clearFilters(); setReviewFilter("all"); setHideIgnored(true); }} />
-              : <EmptyWithPrompts onRunRadar={handleRunRadar} scanning={scanning} />)
-          : <ul className="space-y-2">{filtered.map((s) => (
-              <SignalCard key={s.id} signal={s}
-                selectable={selectMode}
-                selected={selected.has(s.id)}
-                onToggleSelect={toggleSelect}
-                onSetReview={handleSetReview}
-                onDraftAction={handleDraftAction} />
-            ))}</ul>
+          ? (reviewed.length > 0
+              ? <SmartFilterEmpty
+                  hiddenCount={reviewed.length}
+                  unverifiedCount={unverifiedCount}
+                  showUnverified={showUnverified}
+                  onShowUnverified={() => setShowUnverified(true)}
+                  onClear={() => { clearFilters(); setReviewFilter("all"); setHideIgnored(false); setShowUnverified(true); }}
+                  onRunRadar={handleRunRadar}
+                  scanning={scanning}
+                />
+              : <NoVerifiedEmpty onRunRadar={handleRunRadar} scanning={scanning} onShowUnverified={() => setShowUnverified(true)} />)
+          : <>
+              {showUnverified && (
+                <div className="text-[13px] text-amber-200/80 rounded-md border border-amber-500/20 bg-amber-500/[0.04] px-3 py-2">
+                  Unverified signals may be missing source proof. Review before using them.
+                </div>
+              )}
+              <ul className="space-y-2">{filtered.map((s) => (
+                <SignalCard key={s.id} signal={s}
+                  selectable={selectMode}
+                  selected={selected.has(s.id)}
+                  onToggleSelect={toggleSelect}
+                  onSetReview={handleSetReview}
+                  onDraftAction={handleDraftAction} />
+              ))}</ul>
+            </>
       )}
+
     </div>
   );
 }
