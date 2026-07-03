@@ -1,11 +1,16 @@
 import { useMemo, useState } from "react";
-import { RefreshCw, Inbox, ListOrdered, Sparkles, CheckSquare, Square, X, Bookmark, Check, EyeOff, MessageSquare, Send, FileText, Radar, Settings2, Plus, Loader2 } from "lucide-react";
+import { RefreshCw, Inbox, ListOrdered, Sparkles, CheckSquare, Square, X, Bookmark, Check, EyeOff, MessageSquare, Send, FileText, Radar, Settings2, Plus, Loader2, Filter, AlertCircle } from "lucide-react";
 import { toast } from "sonner";
 import { useWorkspace } from "@/contexts/WorkspaceContext";
 import { useCompanyBrain } from "@/hooks/useCompanyBrain";
 import { useSignalFeed, type RadarCategory } from "@/hooks/useSignalFeed";
 import { useSignalReviews } from "@/hooks/useSignalReviews";
+import { useIntegrationReadiness } from "@/hooks/useIntegrationReadiness";
 import { buildActionCommand, type FeedSignal } from "@/lib/signalFeedModel";
+import ScoutPromptBox, { type ProviderPreview } from "./ScoutPromptBox";
+import TrustSummary from "./TrustSummary";
+import ManualSourceInput from "./ManualSourceInput";
+import { classifyProviderState } from "./ProviderBadge";
 import {
   contentDraftMeta,
   contentSubtypeLabel,
