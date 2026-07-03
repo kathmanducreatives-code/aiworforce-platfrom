@@ -42,12 +42,14 @@ type Tab = "all" | "linkedin" | "competitors" | "people" | "hiring" | "drafts" |
 
 const TABS: { key: Tab; label: string }[] = [
   { key: "all", label: "All" },
+  { key: "hiring", label: "Hiring" },
   { key: "linkedin", label: "LinkedIn" },
   { key: "competitors", label: "Competitors" },
   { key: "people", label: "People" },
-  { key: "hiring", label: "Hiring" },
+  { key: "workflows", label: "Workflows" },
+  { key: "saved", label: "Saved" },
+  { key: "reviewed", label: "Reviewed" },
   { key: "drafts", label: "Drafts" },
-  { key: "saved", label: "Saved outputs" },
 ];
 
 const EMPTY_PROMPTS = [
