@@ -64,6 +64,8 @@ function matchesTab(s: FeedSignal, tab: Tab): boolean {
     case "competitors": return s.signal_type === "competitor_engagement" || s.signal_type === "competitor";
     case "people": return s.signal_type === "people_profile" || s.signal_type === "people";
     case "hiring": return s.signal_type === "hiring_signal" || s.signal_type === "hiring";
+    case "workflows": return s.signal_type === "workflow_trend";
+    case "reviewed": return true; // review-status filter handles the rest
     default: return true;
   }
 }
