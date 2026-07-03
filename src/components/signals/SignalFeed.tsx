@@ -1,11 +1,16 @@
 import { useMemo, useState } from "react";
-import { RefreshCw, Inbox, ListOrdered, Sparkles, CheckSquare, Square, X, Bookmark, Check, EyeOff, MessageSquare, Send, FileText, Radar, Settings2, Plus, Loader2 } from "lucide-react";
+import { RefreshCw, Inbox, ListOrdered, Sparkles, CheckSquare, Square, X, Bookmark, Check, EyeOff, MessageSquare, Send, FileText, Radar, Settings2, Plus, Loader2, Filter, AlertCircle } from "lucide-react";
 import { toast } from "sonner";
 import { useWorkspace } from "@/contexts/WorkspaceContext";
 import { useCompanyBrain } from "@/hooks/useCompanyBrain";
 import { useSignalFeed, type RadarCategory } from "@/hooks/useSignalFeed";
 import { useSignalReviews } from "@/hooks/useSignalReviews";
+import { useIntegrationReadiness } from "@/hooks/useIntegrationReadiness";
 import { buildActionCommand, type FeedSignal } from "@/lib/signalFeedModel";
+import ScoutPromptBox, { type ProviderPreview } from "./ScoutPromptBox";
+import TrustSummary from "./TrustSummary";
+import ManualSourceInput from "./ManualSourceInput";
+import { classifyProviderState } from "./ProviderBadge";
 import {
   contentDraftMeta,
   contentSubtypeLabel,
@@ -33,16 +38,18 @@ import EditRadarDrawer from "./EditRadarDrawer";
 import LoadMoreConfirmDialog from "./LoadMoreConfirmDialog";
 import SetupNeededCard from "./SetupNeededCard";
 
-type Tab = "all" | "linkedin" | "competitors" | "people" | "hiring" | "drafts" | "saved";
+type Tab = "all" | "linkedin" | "competitors" | "people" | "hiring" | "drafts" | "saved" | "workflows" | "reviewed";
 
 const TABS: { key: Tab; label: string }[] = [
   { key: "all", label: "All" },
+  { key: "hiring", label: "Hiring" },
   { key: "linkedin", label: "LinkedIn" },
   { key: "competitors", label: "Competitors" },
   { key: "people", label: "People" },
-  { key: "hiring", label: "Hiring" },
+  { key: "workflows", label: "Workflows" },
+  { key: "saved", label: "Saved" },
+  { key: "reviewed", label: "Reviewed" },
   { key: "drafts", label: "Drafts" },
-  { key: "saved", label: "Saved outputs" },
 ];
 
 const EMPTY_PROMPTS = [
@@ -57,6 +64,8 @@ function matchesTab(s: FeedSignal, tab: Tab): boolean {
     case "competitors": return s.signal_type === "competitor_engagement" || s.signal_type === "competitor";
     case "people": return s.signal_type === "people_profile" || s.signal_type === "people";
     case "hiring": return s.signal_type === "hiring_signal" || s.signal_type === "hiring";
+    case "workflows": return s.signal_type === "workflow_trend";
+    case "reviewed": return true; // review-status filter handles the rest
     default: return true;
   }
 }
@@ -104,6 +113,8 @@ export default function SignalFeed() {
     competitors: signals.filter((s) => s.signal_type === "competitor_engagement" || s.signal_type === "competitor").length,
     people: signals.filter((s) => s.signal_type === "people_profile" || s.signal_type === "people").length,
     hiring: signals.filter((s) => s.signal_type === "hiring_signal" || s.signal_type === "hiring").length,
+    workflows: signals.filter((s) => s.signal_type === "workflow_trend").length,
+    reviewed: signals.length,
     drafts: drafts.length,
     saved: savedOutputs.length,
   } as Record<Tab, number>), [signals, drafts, savedOutputs]);
@@ -235,7 +246,38 @@ export default function SignalFeed() {
     people: signals.filter((s) => s.signal_type === "people" || s.signal_type === "people_profile").length,
   }), [signals]);
 
+  const radarVerifiedCounts: Record<RadarCategory, number> = useMemo(() => ({
+    hiring: reviewed.filter((s) => (s.signal_type === "hiring" || s.signal_type === "hiring_signal") && s.show_by_default).length,
+    linkedin_intent: reviewed.filter((s) => (s.signal_type === "linkedin_intent" || s.signal_type === "linkedin_engagement") && s.show_by_default).length,
+    competitor: reviewed.filter((s) => (s.signal_type === "competitor" || s.signal_type === "competitor_engagement") && s.show_by_default).length,
+    workflow_trend: reviewed.filter((s) => s.signal_type === "workflow_trend" && s.show_by_default).length,
+    people: reviewed.filter((s) => (s.signal_type === "people" || s.signal_type === "people_profile") && s.show_by_default).length,
+  }), [reviewed]);
+
   const radarStatus = lastRun?.per_category ?? null;
+  const verifiedTotal = reviewed.filter((s) => s.show_by_default).length;
+
+  // ----- provider readiness (workspace-level integrations) -----
+  const { providers: integrationProviders } = useIntegrationReadiness();
+  const firecrawlEntry = integrationProviders["firecrawl"];
+  const apifyEntry = integrationProviders["apify"];
+  const firecrawlState = classifyProviderState({
+    ready: firecrawlEntry?.status === "connected",
+    reason: firecrawlEntry?.reason,
+    integrationStatus: firecrawlEntry?.status,
+  });
+  const apifyState = classifyProviderState({
+    ready: apifyEntry?.status === "connected",
+    reason: apifyEntry?.reason,
+    integrationStatus: apifyEntry?.status,
+  });
+
+  const providerPreviews: ProviderPreview[] = [
+    { key: "firecrawl", label: "Firecrawl", state: firecrawlState, reason: firecrawlEntry?.reason },
+    { key: "apify", label: "Apify", state: apifyState, reason: apifyEntry?.reason },
+  ];
+  const anyProviderReady = providerPreviews.some((p) => p.state === "ready");
+  const apifyBlocked = apifyState !== "ready";
 
   const prefs = (brainData?.profile as any)?.signal_preferences ?? {};
   const topKeywords: Partial<Record<RadarCategory, string>> = {
@@ -246,44 +288,81 @@ export default function SignalFeed() {
   };
 
   return (
-    <div className="p-4 pb-[260px] md:pb-[240px] space-y-4 text-[#C9D1D9]">
+    <div className="p-6 pb-[260px] md:pb-[240px] space-y-6 text-[#C9D1D9] max-w-[1400px] mx-auto">
       {/* Premium header */}
-      <div className="flex items-start gap-3 flex-wrap">
-        <div className="min-w-0">
-          <div className="flex items-center gap-2">
-            <Radar className="h-5 w-5 text-emerald-300" />
-            <h1 className="text-xl font-semibold text-[#F0F6FC]">Signal Feed</h1>
-            <span className="text-[11px] px-2 py-0.5 rounded-full border border-emerald-500/30 bg-emerald-500/10 text-emerald-300">Your ICP-aware market radar</span>
+      <div className="flex items-start gap-4 flex-wrap">
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-3 flex-wrap">
+            <Radar className="h-7 w-7 text-emerald-300" />
+            <h1 className="text-[30px] leading-tight font-bold text-[#F0F6FC] tracking-tight">Scout Radar</h1>
+            <span className="text-[12px] font-medium px-2.5 py-0.5 rounded-full border border-emerald-500/30 bg-emerald-500/10 text-emerald-300">
+              ICP-aware market radar
+            </span>
           </div>
-          <p className="text-[12px] text-neutral-400 mt-1">
+          <p className="text-[15px] text-neutral-400 mt-2 max-w-2xl">
             Scout scans hiring, LinkedIn conversations, competitors, and workflow trends using your Company Brain.
-          </p>
-          <p className="text-[11px] text-neutral-600 mt-0.5">
-            Default weekly radar: 10 signals included. Load more uses extra credits.
+            Default weekly radar covers 10 signals — load more uses extra credits.
           </p>
         </div>
-        <div className="ml-auto flex items-center gap-2 flex-wrap">
-          <Button onClick={handleRunRadar} disabled={scanning} size="sm">
-            {scanning ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Radar className="h-3.5 w-3.5" />}
+        <div className="flex items-center gap-2 flex-wrap">
+          <Button onClick={handleRunRadar} disabled={scanning || !anyProviderReady} size="sm" className="text-[14px] font-semibold h-9">
+            {scanning ? <Loader2 className="h-4 w-4 animate-spin" /> : <Radar className="h-4 w-4" />}
             Run radar scan
           </Button>
-          <Button onClick={() => setEditRadarOpen(true)} variant="outline" size="sm">
-            <Settings2 className="h-3.5 w-3.5" /> Edit radar
+          <Button onClick={() => setEditRadarOpen(true)} variant="outline" size="sm" className="text-[14px] h-9">
+            <Settings2 className="h-4 w-4" /> Edit radar
           </Button>
-          <Button onClick={() => setLoadMoreOpen(true)} variant="outline" size="sm" disabled={scanning}>
-            <Plus className="h-3.5 w-3.5" /> Load more
+          <Button onClick={() => setLoadMoreOpen(true)} variant="outline" size="sm" disabled={scanning || !anyProviderReady} className="text-[14px] h-9">
+            <Plus className="h-4 w-4" /> Load more
           </Button>
         </div>
       </div>
 
-      {/* Radar summary */}
-      <RadarSummaryCards
-        counts={radarCounts}
-        status={radarStatus}
-        topKeywords={topKeywords}
-        lastScanAt={lastScanAt}
-        onScanCategory={handleScanCategory}
+      {/* Scout prompt box */}
+      <ScoutPromptBox
+        scanning={scanning}
+        providers={providerPreviews}
+        estimatedCredits={10}
+        onStart={async () => { await handleRunRadar(); }}
       />
+
+      {/* Apify billing / unavailability notice */}
+      {apifyBlocked && (
+        <div className="rounded-xl border border-amber-500/25 bg-amber-500/[0.04] p-4 flex items-start gap-3">
+          <AlertCircle className="h-5 w-5 text-amber-300 mt-0.5" />
+          <div className="text-[14px] text-amber-100">
+            <div className="font-semibold text-[#F0F6FC]">Apify isn't active</div>
+            <div className="text-amber-200/80 mt-0.5">
+              Scout can't scan LinkedIn people, comments, or company profiles yet. You can still review saved signals,
+              scan hiring/workflow trends via Firecrawl, or paste a source manually below.
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Radar summary */}
+      <section className="space-y-3">
+        <h2 className="text-[15px] font-semibold text-neutral-300">Radar sources</h2>
+        <RadarSummaryCards
+          counts={radarCounts}
+          verifiedCounts={radarVerifiedCounts}
+          status={radarStatus}
+          topKeywords={topKeywords}
+          lastScanAt={lastScanAt}
+          onScanCategory={handleScanCategory}
+        />
+      </section>
+
+      {/* Trust summary */}
+      <TrustSummary
+        totalRaw={signals.length}
+        verified={verifiedTotal}
+        needsVerification={Math.max(signals.length - verifiedTotal, 0)}
+        lastRun={lastRun}
+      />
+
+      {/* Manual source */}
+      <ManualSourceInput firecrawlState={firecrawlState} />
 
       {/* Setup-needed banners from last run */}
       {radarStatus && Object.entries(radarStatus).some(([_, v]) => v.status === "setup_needed") && (
@@ -295,6 +374,8 @@ export default function SignalFeed() {
             ))}
         </div>
       )}
+
+
 
       {/* Existing toolbar */}
       <div className="flex items-center gap-2 flex-wrap pt-1 border-t border-white/[0.04]">
@@ -328,19 +409,20 @@ export default function SignalFeed() {
       />
 
       {/* Type tabs */}
-      <div className="flex items-center gap-1 flex-wrap border-b border-white/[0.06] pb-2">
+      <div className="flex items-center gap-1.5 flex-wrap border-b border-white/[0.06] pb-3">
         {TABS.map((t) => {
           const active = tab === t.key;
           const c = counts[t.key];
           return (
-            <button key={t.key} onClick={() => setTab(t.key)}
-              className={`text-[12px] px-2.5 py-1 rounded-md transition-colors ${active ? "bg-emerald-500/10 border border-emerald-500/30 text-emerald-300" : "text-neutral-400 hover:text-neutral-200 hover:bg-white/[0.03] border border-transparent"}`}>
+            <button key={t.key} onClick={() => { setTab(t.key); if (t.key === "reviewed") setReviewFilter("reviewed"); }}
+              className={`text-[14px] font-medium px-3 py-1.5 rounded-md transition-colors ${active ? "bg-emerald-500/10 border border-emerald-500/30 text-emerald-300" : "text-neutral-400 hover:text-neutral-200 hover:bg-white/[0.03] border border-transparent"}`}>
               {t.label}
-              {c > 0 && <span className={`ml-1.5 text-[10px] ${active ? "text-emerald-300/70" : "text-neutral-500"}`}>{c}</span>}
+              {c > 0 && <span className={`ml-1.5 text-[11px] ${active ? "text-emerald-300/70" : "text-neutral-500"}`}>{c}</span>}
             </button>
           );
         })}
       </div>
+
 
       {/* Filters (signal feed tabs only) */}
       {tab !== "drafts" && tab !== "saved" && (
@@ -462,18 +544,34 @@ export default function SignalFeed() {
       {/* Signal feed */}
       {!loading && tab !== "drafts" && tab !== "saved" && (
         filtered.length === 0
-          ? (signals.length > 0
-              ? <FilterEmpty onClear={() => { clearFilters(); setReviewFilter("all"); setHideIgnored(true); }} />
-              : <EmptyWithPrompts onRunRadar={handleRunRadar} scanning={scanning} />)
-          : <ul className="space-y-2">{filtered.map((s) => (
-              <SignalCard key={s.id} signal={s}
-                selectable={selectMode}
-                selected={selected.has(s.id)}
-                onToggleSelect={toggleSelect}
-                onSetReview={handleSetReview}
-                onDraftAction={handleDraftAction} />
-            ))}</ul>
+          ? (reviewed.length > 0
+              ? <SmartFilterEmpty
+                  hiddenCount={reviewed.length}
+                  unverifiedCount={unverifiedCount}
+                  showUnverified={showUnverified}
+                  onShowUnverified={() => setShowUnverified(true)}
+                  onClear={() => { clearFilters(); setReviewFilter("all"); setHideIgnored(false); setShowUnverified(true); }}
+                  onRunRadar={handleRunRadar}
+                  scanning={scanning}
+                />
+              : <NoVerifiedEmpty onRunRadar={handleRunRadar} scanning={scanning} onShowUnverified={() => setShowUnverified(true)} />)
+          : <>
+              {showUnverified && (
+                <div className="text-[13px] text-amber-200/80 rounded-md border border-amber-500/20 bg-amber-500/[0.04] px-3 py-2">
+                  Unverified signals may be missing source proof. Review before using them.
+                </div>
+              )}
+              <ul className="space-y-2">{filtered.map((s) => (
+                <SignalCard key={s.id} signal={s}
+                  selectable={selectMode}
+                  selected={selected.has(s.id)}
+                  onToggleSelect={toggleSelect}
+                  onSetReview={handleSetReview}
+                  onDraftAction={handleDraftAction} />
+              ))}</ul>
+            </>
       )}
+
     </div>
   );
 }
@@ -571,14 +669,73 @@ function EmptyWithPrompts({ onRunRadar, scanning }: { onRunRadar?: () => void; s
   );
 }
 
-function FilterEmpty({ onClear }: { onClear: () => void }) {
+function SmartFilterEmpty({
+  hiddenCount, unverifiedCount, showUnverified,
+  onShowUnverified, onClear, onRunRadar, scanning,
+}: {
+  hiddenCount: number; unverifiedCount: number; showUnverified: boolean;
+  onShowUnverified: () => void; onClear: () => void;
+  onRunRadar?: () => void; scanning?: boolean;
+}) {
   return (
-    <div className="flex flex-col items-center gap-2 py-12 text-center text-neutral-500">
-      <Inbox className="h-6 w-6" />
-      <div className="text-[12px]">No signals match this review filter.</div>
-      <button onClick={onClear} className="text-[11px] px-2.5 py-1 rounded-md border border-white/[0.08] bg-white/[0.02] hover:bg-white/[0.04] text-neutral-300">
-        Clear filters
-      </button>
+    <div className="flex flex-col items-center gap-3 py-16 text-center rounded-xl border border-white/[0.06] bg-white/[0.015]">
+      <div className="p-3 rounded-full bg-white/[0.04] border border-white/[0.08]">
+        <Filter className="h-6 w-6 text-neutral-400" />
+      </div>
+      <div>
+        <div className="text-[16px] font-semibold text-[#F0F6FC]">
+          {hiddenCount} signal{hiddenCount === 1 ? "" : "s"} hidden by your current filters
+        </div>
+        <div className="text-[15px] text-neutral-400 max-w-md mt-1">
+          Most of these signals are unverified or ignored. Turn on "Show unverified" or clear filters to review them.
+        </div>
+      </div>
+      <div className="flex items-center gap-2 flex-wrap justify-center mt-1">
+        {!showUnverified && unverifiedCount > 0 && (
+          <Button onClick={onShowUnverified} size="sm" variant="outline" className="text-[14px]">
+            Show unverified ({unverifiedCount})
+          </Button>
+        )}
+        <Button onClick={onClear} size="sm" variant="outline" className="text-[14px]">
+          Clear filters
+        </Button>
+        {onRunRadar && (
+          <Button onClick={onRunRadar} size="sm" disabled={scanning} className="text-[14px] font-semibold">
+            {scanning ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Radar className="h-3.5 w-3.5" />}
+            Run fresh radar scan
+          </Button>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function NoVerifiedEmpty({ onRunRadar, scanning, onShowUnverified }: { onRunRadar?: () => void; scanning?: boolean; onShowUnverified?: () => void }) {
+  return (
+    <div className="flex flex-col items-center gap-3 py-16 text-center rounded-xl border border-white/[0.06] bg-white/[0.015]">
+      <div className="p-3 rounded-full bg-emerald-500/10 border border-emerald-500/20">
+        <Radar className="h-6 w-6 text-emerald-300" />
+      </div>
+      <div>
+        <div className="text-[16px] font-semibold text-[#F0F6FC]">No verified signals yet.</div>
+        <div className="text-[15px] text-neutral-400 max-w-md mt-1">
+          Scout found signals, but they need source proof before they can be shown as verified.
+          Run a fresh radar scan or review unverified signals.
+        </div>
+      </div>
+      <div className="flex items-center gap-2 flex-wrap justify-center mt-1">
+        {onRunRadar && (
+          <Button onClick={onRunRadar} size="sm" disabled={scanning} className="text-[14px] font-semibold">
+            {scanning ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Radar className="h-3.5 w-3.5" />}
+            Run fresh radar scan
+          </Button>
+        )}
+        {onShowUnverified && (
+          <Button onClick={onShowUnverified} size="sm" variant="outline" className="text-[14px]">
+            Review unverified
+          </Button>
+        )}
+      </div>
     </div>
   );
 }
