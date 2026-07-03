@@ -1,138 +1,57 @@
+## Content Command Center — /content redesign
 
-## Scout Radar redesign for /signals
+Rebuild `src/pages/Content.tsx` from a static drafts list into an operating surface that connects **Signals → Content → Engagement**, mirroring the same honesty + provider-aware pattern used on `/signals`. Frontend-only, draft-only, no auto-publish, no fake data, no migrations, no secret changes.
 
-Goal: keep the current Signal Feed data pipeline intact, but rebuild the page UI so it's more readable, honest about provider status, and useful even when Apify billing is blocked. No new migrations, no fake data, all actions stay confirmation-gated.
+### 1. Typography & layout
+- Title 30px bold / subtitle 15–16px / section titles 18–20px / card titles 16–18px / body 14–15px / metadata 12–13px / buttons 14–15px semi-bold.
+- 2-column grid on lg (`grid-cols-1 lg:grid-cols-12`, left col-span-7, right col-span-5).
+- Bottom padding `pb-40` (~160px) so the global command dock never overlaps the last section.
 
-### Files touched (UI only)
+### 2. New components (all under `src/components/content/`)
+- `ContentPromptBox.tsx` — "What should Scribe write today?" prompt + 8 example chips + confirmation card (estimated credits, sources used, missing context, "Nothing will be sent until you click Start"). Reuses ProviderBadge classification. Mirrors ScoutPromptBox pattern.
+- `CreatePostModal.tsx` — opens on "Create post" with 5 sources: saved signal, product update, founder thought, company brain, pasted URL. Each just dispatches a `chat:send` brief; nothing publishes.
+- `ContentDraftCard.tsx` — richer card: title, type, source, status badge, date, preview, next action. Status enum: `needs_input | draft_ready | review_needed | approved | published | blocked`. Actions: Open draft, Add context, Improve hook, Turn into carousel, Mark reviewed (all dispatch chat intents; no server writes here).
+- `CommentOpportunityCard.tsx` — same card grammar for comment drafts.
+- `SignalToContentCard.tsx` — replaces "Related signals" as **Signals worth turning into content**. Shows title, type, source date, priority, why-it-matters, source proof or "No source proof — use as idea only", "Needs verification" pill for unverified. Actions: Turn into post, Turn into comment, Save idea, Ignore.
+- `ContentLoopPreview.tsx` — weekly plan (Mon–Fri suggestions) with empty state and "Build content loop" CTA that opens a small config panel (frequency, topics, ICP, tone, pillars) → dispatches chat brief only.
+- `ManualContentSource.tsx` — inputs for LinkedIn URL, Signal URL, company site, product update text, founder thought. Actions: Generate post brief, Draft LinkedIn post, Draft comment, Save as idea. When Firecrawl/Apify unavailable, show "Provider setup needed — you can still paste text manually".
+- `ContentEmptyState.tsx` — reusable smart empty states for each section per spec (Comment drafts, Engagement opportunities, Content drafts needing context).
 
-- `src/components/signals/SignalFeed.tsx` — restructure layout, larger typography, smarter empty state, new sections
-- `src/components/signals/RadarSummaryCards.tsx` — provider-aware statuses + bigger numbers
-- `src/components/signals/SetupNeededCard.tsx` — extend to support billing_issue / unavailable / coming_soon states
-- `src/components/signals/SignalCard.tsx` — bump typography, surface source provider + credits-on-action
-- New: `src/components/signals/ScoutPromptBox.tsx` — top prompt input + example chips + confirmation card
-- New: `src/components/signals/TrustSummary.tsx` — reusable "last scan summary" block
-- New: `src/components/signals/ManualSourceInput.tsx` — URL/text paste analyzer (uses existing Firecrawl edge if configured, otherwise setup-needed)
-- New: `src/components/signals/ProviderBadge.tsx` — Ready / Setup needed / Billing issue / Unavailable / Coming soon pill
-- `src/hooks/useIntegrationReadiness.ts` — extend types with `billing_issue` state (frontend-only mapping from existing reason strings such as "insufficient balance" / "402"); no backend change
-- Optional: `src/lib/signalFeedModel.ts` — small helpers for confirmation-card copy (credits estimate, providers needed)
+### 3. Page layout
+```text
+Header (title 30px + subtitle + top CTAs: Create post / Find posts to comment on / Build content loop)
+ContentPromptBox
+ ┌───────── Left (col-span-7) ─────────┐   ┌──────── Right (col-span-5) ────────┐
+ │ Content briefs                      │   │ Comment opportunities              │
+ │ Founder post drafts                 │   │ Signals worth turning into content │
+ │ ManualContentSource                 │   │ Content loop                       │
+ └─────────────────────────────────────┘   └────────────────────────────────────┘
+pb-40 spacer
+```
 
-No changes to: `run-radar-scan`, `integration-readiness`, DB schema, RLS, migrations, secrets.
+### 4. Data sources (unchanged hooks)
+- `useSignalFeed(workspaceId)` for `savedOutputs`, `drafts`, `signals`.
+- Reuse `useIntegrationReadiness` + existing `ProviderBadge` (`src/components/signals/ProviderBadge.tsx`) for LinkedIn/Firecrawl/Apify readiness so "Find posts to comment on" / manual source states are honest.
+- Bucket briefs vs post drafts by `savedOutputs.type` (`brief` → briefs, others → drafts). Comment drafts from `drafts.channel = comment`. Signals filtered to `signal_type` relevant to content (news, funding, hiring, launch, product) with verified-first sort.
 
-### 1. Typography and layout pass
+### 5. Trust & safety rules
+- Never render fake drafts. Empty states never fabricate items.
+- All actions dispatch `chat:send` intents or open modals — no direct DB writes from this page, no external send, no auto-post/comment/DM.
+- Unverified signals labelled `Needs verification` and cannot be "Turn into post" without a confirm step ("This signal is unverified — continue as idea only?").
+- Every content card derived from a signal shows source signal + URL + provider + verified/unverified. Missing proof → `No source proof — use as idea only`.
 
-Global bump on the page container:
-- Page title 30px bold, subtitle 15px
-- Radar card label 14px, number 38px bold, meta 12px
-- Filter labels 14px, tab text 14px
-- Signal card title 19px, body 14–15px
-- Buttons 14px semi-bold
-- More vertical rhythm between sections (`space-y-6`), section dividers with clearer headings
+### 6. Files touched
+- Rewrite `src/pages/Content.tsx` (composition only).
+- Add the 8 new components above.
+- No changes to hooks, edge functions, migrations, secrets, or `SignalFeed`.
 
-Keep Verdant palette + glassmorphism; no color changes.
+### 7. Validation
+- `npx tsc --noEmit`
+- `npm run build`
+- No deno tests (backend untouched).
 
-### 2. Scout prompt box (top of page)
+### 8. Out of scope
+- Real posting/commenting integrations, calendar persistence, content-loop DB schema, migrations, edits to migration 145631.
 
-New component below header, above radar cards:
-- Title: "Ask Scout what to watch"
-- Textarea placeholder as specified
-- Chip row with the 7 example prompts
-- Submit opens a **confirmation card** (inline, not a run):
-  - Estimated credits (derived from category mix, reuse existing estimate helpers)
-  - Providers needed (from `useIntegrationReadiness`)
-  - Providers unavailable / billing issue highlighted
-  - "Nothing will be sent" safety line
-  - Buttons: Start scan (calls `runRadarScan`) / Cancel
-- Nothing runs before Start.
-
-### 3. Smarter empty state
-
-Replace the current "No signals match this review filter" block. Logic:
-- If `reviewed.length > 0` and `filtered.length === 0`:
-  - Show hidden-count line ("N signals are hidden by your current filters")
-  - Explain: unverified or ignored
-  - Buttons: Show unverified (toggles `showUnverified`), Clear filters (resets `reviewFilter`, `hideIgnored=false`, source/priority/query), Run fresh radar scan
-- Else if `reviewed.length === 0`:
-  - "No verified signals yet." + subtext + Run fresh radar scan + Review unverified
-
-### 4. Provider-aware readiness
-
-Combine `useIntegrationReadiness` (existing) with `lastRun.capabilities` (from `run-radar-scan`) to compute a per-category status:
-- `ready` — provider connected AND capability true
-- `setup_needed` — capability false, no reason mentions billing
-- `billing_issue` — reason string contains `billing`, `payment`, `insufficient`, `402`
-- `unavailable` — provider marked unavailable/blocked
-- `coming_soon` — categories with no provider wired (e.g. `people` when nothing configured)
-
-Rules: never show "Ready" without both signals confirming. When Apify is not ready, show the specified notice banner once above the radar grid.
-
-### 5. Radar cards
-
-Rework `RadarSummaryCards` to show for each category:
-- Category name (14px)
-- Big detected count (38px)
-- `X verified · Y need verification` (using `show_by_default` flag already on signals)
-- Last scanned relative time
-- Provider name + `ProviderBadge`
-- Short explanation
-- If blocked: swap CTA to "Open integrations"; if ready: keep "Scan now"
-
-### 6. Trust summary block
-
-New `TrustSummary` component under radar cards. Reads `lastRun` + verified/unverified counts. Renders one of:
-- Post-scan success: "Scout reviewed N raw results. A accepted. R rejected. Main reject reasons: …" (reasons derived from `per_category` statuses)
-- No verified data yet: legacy summary message
-- Provider failure: "Scout could not run this source. No credits were used."
-
-Component is exported for reuse in Workbench later.
-
-### 7. Manual source input
-
-New `ManualSourceInput` section below trust summary:
-- URL input + textarea
-- Source type dropdown (5 options)
-- Actions: Analyze source / Save as signal / Turn into lead
-- If Firecrawl ready → call existing `firecrawl-scrape` edge function (no new backend), persist result via existing `signals` insert path only when a `source_url` is present (verified). No fake output; if no proof, show inline "Needs source proof to save."
-- If Firecrawl not configured → render `SetupNeededCard` with "Open integrations" link. No calls, no credits.
-
-### 8. Filters / tabs
-
-- Add "Workflows" tab (maps to `workflow_trend`) and "Reviewed" tab (maps to `reviewFilter=reviewed`).
-- Enlarge tab buttons (h-9, text-sm).
-- Filter row order: Verified only · Show unverified · Hide ignored · Has source · Priority · Search.
-- Default sort: verified first → priority desc → newest → hide ignored on.
-- When `showUnverified` toggles on, show helper text: "Unverified signals may be missing source proof. Review before using them."
-
-### 9. Signal cards
-
-Bump typography in `SignalCard.tsx`; ensure display of:
-- Title, type badge, priority
-- Source URL (linkified) + source provider label
-- Why it matters (from `raw.why_it_matters`)
-- Matched ICP (from `raw.matched_icp`)
-- Next action + estimated credits
-- Action buttons: Save, Ignore, Mark reviewed, Turn into lead, Find decision-maker, Enrich company, Create content idea
-- Any tool-invoking action opens the existing confirmation flow (reuse `chat:send` command dispatch — already gated).
-
-### 10. Top CTAs
-
-- Keep Run radar scan / Edit radar / Load more.
-- Run radar scan opens a provider-aware panel (reuses the ScoutPromptBox confirmation card) that lists available + blocked sources, estimated credits, and safety note. Disabled state shown when no providers ready ("No signal providers are configured yet. Connect Apify or Firecrawl. Credits used: 0.").
-
-### 11. Tests / validation
-
-- Add unit tests under `src/components/signals/__tests__/` for:
-  - Empty state chooses "hidden by filters" vs "no verified" branches
-  - `ProviderBadge` maps reasons to `billing_issue` correctly
-  - `ManualSourceInput` shows setup-needed when Firecrawl absent
-  - Confirmation card shows credits = 0 when no providers ready
-- Run:
-  - `npx tsc --noEmit`
-  - `npm run build`
-  - `deno test supabase/functions/_shared --allow-all` only if a shared helper is touched (not planned)
-
-### Out of scope
-
-- No changes to `run-radar-scan` scoring, prefs, DB, RLS, or migrations
-- No auto-send/DM/comment/post/email — every action stays behind the existing confirm dispatch
-- No fake signals, no seeded rows, no mock providers
-- Apify billing itself: once resolved upstream, all "billing_issue" cards will flip to "Ready" automatically because status is derived from live capability/readiness output
+### Final report will include
+files changed, UI/typography changes, draft-card improvements, empty-state behavior, signals-to-content behavior, manual source behavior, provider readiness behavior, tsc/build results, remaining gaps.
