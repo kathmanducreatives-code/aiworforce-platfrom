@@ -38,7 +38,7 @@ import EditRadarDrawer from "./EditRadarDrawer";
 import LoadMoreConfirmDialog from "./LoadMoreConfirmDialog";
 import SetupNeededCard from "./SetupNeededCard";
 
-type Tab = "all" | "linkedin" | "competitors" | "people" | "hiring" | "drafts" | "saved";
+type Tab = "all" | "linkedin" | "competitors" | "people" | "hiring" | "drafts" | "saved" | "workflows" | "reviewed";
 
 const TABS: { key: Tab; label: string }[] = [
   { key: "all", label: "All" },
