@@ -1,13 +1,15 @@
-// Per-category radar summary cards. Pure presentation, no data fetching.
-import { Briefcase, MessageSquare, Swords, Sparkles, ChevronRight, AlertCircle, CheckCircle2 } from "lucide-react";
+// Per-category radar summary cards. Larger typography + provider-aware states.
+import { Briefcase, MessageSquare, Swords, Sparkles, ChevronRight, Settings2 } from "lucide-react";
 import type { RadarCategory, CategoryStatus } from "@/hooks/useSignalFeed";
+import ProviderBadge, { classifyProviderState } from "./ProviderBadge";
+import { Link } from "react-router-dom";
 
-const META: Record<RadarCategory, { label: string; icon: any; tint: string }> = {
-  hiring: { label: "Hiring signals", icon: Briefcase, tint: "emerald" },
-  linkedin_intent: { label: "LinkedIn intent", icon: MessageSquare, tint: "sky" },
-  competitor: { label: "Competitor conversations", icon: Swords, tint: "amber" },
-  workflow_trend: { label: "Workflow trends", icon: Sparkles, tint: "violet" },
-  people: { label: "People / profiles", icon: Sparkles, tint: "rose" },
+const META: Record<RadarCategory, { label: string; icon: any; tint: string; provider: string; blurb: string }> = {
+  hiring: { label: "Hiring signals", icon: Briefcase, tint: "emerald", provider: "Firecrawl · Jobs", blurb: "Founder-support and ops hiring." },
+  linkedin_intent: { label: "LinkedIn intent", icon: MessageSquare, tint: "sky", provider: "Firecrawl / Apify · LinkedIn", blurb: "Buyer conversations and pain posts." },
+  competitor: { label: "Competitor conversations", icon: Swords, tint: "amber", provider: "Firecrawl · Comments", blurb: "Alternative / comparison threads." },
+  workflow_trend: { label: "Workflow trends", icon: Sparkles, tint: "violet", provider: "Firecrawl · Web", blurb: "AI-workflow patterns and tutorials." },
+  people: { label: "People / profiles", icon: Sparkles, tint: "rose", provider: "Apify · People", blurb: "Decision-maker profiles." },
 };
 
 const TINTS: Record<string, string> = {
@@ -24,6 +26,7 @@ const ICON_TINT: Record<string, string> = {
 
 export interface RadarSummaryCardsProps {
   counts: Record<RadarCategory, number>;
+  verifiedCounts: Record<RadarCategory, number>;
   status: Record<RadarCategory, CategoryStatus> | null;
   topKeywords: Partial<Record<RadarCategory, string>>;
   lastScanAt: string | null;
@@ -39,51 +42,73 @@ function timeAgo(iso: string | null): string {
   return `${Math.floor(h / 24)}d ago`;
 }
 
-const CATEGORIES: RadarCategory[] = ["hiring", "linkedin_intent", "competitor", "workflow_trend"];
+const CATEGORIES: RadarCategory[] = ["hiring", "linkedin_intent", "competitor", "workflow_trend", "people"];
 
-export default function RadarSummaryCards({ counts, status, topKeywords, lastScanAt, onScanCategory }: RadarSummaryCardsProps) {
+export default function RadarSummaryCards({ counts, verifiedCounts, status, topKeywords, lastScanAt, onScanCategory }: RadarSummaryCardsProps) {
   return (
-    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-3">
       {CATEGORIES.map((cat) => {
         const m = META[cat];
         const Icon = m.icon;
         const s = status?.[cat];
-        const ready = !s || s.status === "ready";
-        const setupNeeded = s?.status === "setup_needed";
+        const providerState = classifyProviderState({ ready: s?.status === "ready", reason: s?.reason });
+        const detected = counts[cat] ?? 0;
+        const verified = verifiedCounts[cat] ?? 0;
+        const unverified = Math.max(detected - verified, 0);
+        const blocked = providerState !== "ready";
+
         return (
-          <button
+          <div
             key={cat}
-            onClick={() => onScanCategory(cat)}
-            className={`group text-left rounded-xl border p-3.5 transition-all ${TINTS[m.tint]} hover:scale-[1.01]`}
+            className={`group text-left rounded-xl border p-4 transition-all ${TINTS[m.tint]}`}
           >
             <div className="flex items-start justify-between gap-2">
               <div className={`p-2 rounded-lg bg-white/[0.04] ${ICON_TINT[m.tint]}`}>
-                <Icon className="h-4 w-4" />
+                <Icon className="h-5 w-5" />
               </div>
-              <ChevronRight className="h-4 w-4 text-neutral-600 group-hover:text-neutral-300 transition-colors" />
+              <ProviderBadge state={providerState} />
             </div>
-            <div className="mt-2.5">
-              <div className="text-[11px] uppercase tracking-wide text-neutral-500">{m.label}</div>
-              <div className="text-2xl font-semibold text-[#F0F6FC] mt-0.5">{counts[cat] ?? 0}</div>
+
+            <div className="mt-3">
+              <div className="text-[13px] font-medium text-neutral-300">{m.label}</div>
+              <div className="text-[34px] leading-none font-bold text-[#F0F6FC] mt-2 tracking-tight">{detected}</div>
+              <div className="text-[12px] text-neutral-500 mt-1">
+                <span className="text-emerald-300">{verified} verified</span>
+                <span className="text-neutral-600"> · </span>
+                <span className="text-amber-300/80">{unverified} need verification</span>
+              </div>
             </div>
-            <div className="mt-2 flex items-center gap-1.5 text-[10px]">
-              {setupNeeded ? (
-                <span className="inline-flex items-center gap-1 text-amber-300/90"><AlertCircle className="h-3 w-3" /> Setup needed</span>
-              ) : (
-                <span className="inline-flex items-center gap-1 text-emerald-300/90"><CheckCircle2 className="h-3 w-3" /> Ready</span>
+
+            <div className="mt-3 text-[12px] text-neutral-500 space-y-0.5">
+              <div>Provider: <span className="text-neutral-300">{m.provider}</span></div>
+              <div>Last scan: <span className="text-neutral-300">{timeAgo(lastScanAt)}</span></div>
+              {topKeywords[cat] && (
+                <div className="truncate">Top: <span className="text-neutral-300">{topKeywords[cat]}</span></div>
               )}
-              <span className="text-neutral-600">·</span>
-              <span className="text-neutral-500">{timeAgo(lastScanAt)}</span>
             </div>
-            {topKeywords[cat] && (
-              <div className="mt-1.5 text-[10px] text-neutral-500 truncate">
-                Top: <span className="text-neutral-300">{topKeywords[cat]}</span>
-              </div>
+
+            {blocked && s?.reason && (
+              <div className="mt-2 text-[12px] text-amber-200/80 line-clamp-2">{s.reason}</div>
             )}
-            {setupNeeded && s?.reason && (
-              <div className="mt-1.5 text-[10px] text-neutral-500 line-clamp-2">{s.reason}</div>
-            )}
-          </button>
+
+            <div className="mt-3">
+              {blocked ? (
+                <Link
+                  to="/settings/integrations"
+                  className="inline-flex items-center gap-1 text-[13px] font-medium text-neutral-300 hover:text-emerald-300 transition-colors"
+                >
+                  <Settings2 className="h-3.5 w-3.5" /> Open integrations
+                </Link>
+              ) : (
+                <button
+                  onClick={() => onScanCategory(cat)}
+                  className="inline-flex items-center gap-1 text-[13px] font-medium text-emerald-300 hover:text-emerald-200 transition-colors"
+                >
+                  Scan now <ChevronRight className="h-3.5 w-3.5" />
+                </button>
+              )}
+            </div>
+          </div>
         );
       })}
     </div>
