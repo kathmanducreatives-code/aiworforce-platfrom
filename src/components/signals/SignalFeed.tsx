@@ -669,14 +669,73 @@ function EmptyWithPrompts({ onRunRadar, scanning }: { onRunRadar?: () => void; s
   );
 }
 
-function FilterEmpty({ onClear }: { onClear: () => void }) {
+function SmartFilterEmpty({
+  hiddenCount, unverifiedCount, showUnverified,
+  onShowUnverified, onClear, onRunRadar, scanning,
+}: {
+  hiddenCount: number; unverifiedCount: number; showUnverified: boolean;
+  onShowUnverified: () => void; onClear: () => void;
+  onRunRadar?: () => void; scanning?: boolean;
+}) {
   return (
-    <div className="flex flex-col items-center gap-2 py-12 text-center text-neutral-500">
-      <Inbox className="h-6 w-6" />
-      <div className="text-[12px]">No signals match this review filter.</div>
-      <button onClick={onClear} className="text-[11px] px-2.5 py-1 rounded-md border border-white/[0.08] bg-white/[0.02] hover:bg-white/[0.04] text-neutral-300">
-        Clear filters
-      </button>
+    <div className="flex flex-col items-center gap-3 py-16 text-center rounded-xl border border-white/[0.06] bg-white/[0.015]">
+      <div className="p-3 rounded-full bg-white/[0.04] border border-white/[0.08]">
+        <Filter className="h-6 w-6 text-neutral-400" />
+      </div>
+      <div>
+        <div className="text-[16px] font-semibold text-[#F0F6FC]">
+          {hiddenCount} signal{hiddenCount === 1 ? "" : "s"} hidden by your current filters
+        </div>
+        <div className="text-[15px] text-neutral-400 max-w-md mt-1">
+          Most of these signals are unverified or ignored. Turn on "Show unverified" or clear filters to review them.
+        </div>
+      </div>
+      <div className="flex items-center gap-2 flex-wrap justify-center mt-1">
+        {!showUnverified && unverifiedCount > 0 && (
+          <Button onClick={onShowUnverified} size="sm" variant="outline" className="text-[14px]">
+            Show unverified ({unverifiedCount})
+          </Button>
+        )}
+        <Button onClick={onClear} size="sm" variant="outline" className="text-[14px]">
+          Clear filters
+        </Button>
+        {onRunRadar && (
+          <Button onClick={onRunRadar} size="sm" disabled={scanning} className="text-[14px] font-semibold">
+            {scanning ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Radar className="h-3.5 w-3.5" />}
+            Run fresh radar scan
+          </Button>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function NoVerifiedEmpty({ onRunRadar, scanning, onShowUnverified }: { onRunRadar?: () => void; scanning?: boolean; onShowUnverified?: () => void }) {
+  return (
+    <div className="flex flex-col items-center gap-3 py-16 text-center rounded-xl border border-white/[0.06] bg-white/[0.015]">
+      <div className="p-3 rounded-full bg-emerald-500/10 border border-emerald-500/20">
+        <Radar className="h-6 w-6 text-emerald-300" />
+      </div>
+      <div>
+        <div className="text-[16px] font-semibold text-[#F0F6FC]">No verified signals yet.</div>
+        <div className="text-[15px] text-neutral-400 max-w-md mt-1">
+          Scout found signals, but they need source proof before they can be shown as verified.
+          Run a fresh radar scan or review unverified signals.
+        </div>
+      </div>
+      <div className="flex items-center gap-2 flex-wrap justify-center mt-1">
+        {onRunRadar && (
+          <Button onClick={onRunRadar} size="sm" disabled={scanning} className="text-[14px] font-semibold">
+            {scanning ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Radar className="h-3.5 w-3.5" />}
+            Run fresh radar scan
+          </Button>
+        )}
+        {onShowUnverified && (
+          <Button onClick={onShowUnverified} size="sm" variant="outline" className="text-[14px]">
+            Review unverified
+          </Button>
+        )}
+      </div>
     </div>
   );
 }
