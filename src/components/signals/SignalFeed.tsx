@@ -409,19 +409,20 @@ export default function SignalFeed() {
       />
 
       {/* Type tabs */}
-      <div className="flex items-center gap-1 flex-wrap border-b border-white/[0.06] pb-2">
+      <div className="flex items-center gap-1.5 flex-wrap border-b border-white/[0.06] pb-3">
         {TABS.map((t) => {
           const active = tab === t.key;
           const c = counts[t.key];
           return (
-            <button key={t.key} onClick={() => setTab(t.key)}
-              className={`text-[12px] px-2.5 py-1 rounded-md transition-colors ${active ? "bg-emerald-500/10 border border-emerald-500/30 text-emerald-300" : "text-neutral-400 hover:text-neutral-200 hover:bg-white/[0.03] border border-transparent"}`}>
+            <button key={t.key} onClick={() => { setTab(t.key); if (t.key === "reviewed") setReviewFilter("reviewed"); }}
+              className={`text-[14px] font-medium px-3 py-1.5 rounded-md transition-colors ${active ? "bg-emerald-500/10 border border-emerald-500/30 text-emerald-300" : "text-neutral-400 hover:text-neutral-200 hover:bg-white/[0.03] border border-transparent"}`}>
               {t.label}
-              {c > 0 && <span className={`ml-1.5 text-[10px] ${active ? "text-emerald-300/70" : "text-neutral-500"}`}>{c}</span>}
+              {c > 0 && <span className={`ml-1.5 text-[11px] ${active ? "text-emerald-300/70" : "text-neutral-500"}`}>{c}</span>}
             </button>
           );
         })}
       </div>
+
 
       {/* Filters (signal feed tabs only) */}
       {tab !== "drafts" && tab !== "saved" && (
