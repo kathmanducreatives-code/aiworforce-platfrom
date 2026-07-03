@@ -1,122 +1,266 @@
-import { useMemo } from "react";
-import { FileEdit, MessageSquare, Sparkles, Repeat } from "lucide-react";
+import { useMemo, useState } from "react";
+import { FileEdit, MessageSquare, Repeat, Search, Lightbulb } from "lucide-react";
 import { useWorkspace } from "@/contexts/WorkspaceContext";
 import { useSignalFeed } from "@/hooks/useSignalFeed";
+import { useIntegrationReadiness } from "@/hooks/useIntegrationReadiness";
+import ContentPromptBox from "@/components/content/ContentPromptBox";
+import CreatePostModal from "@/components/content/CreatePostModal";
+import ContentDraftCard, { type DraftStatus } from "@/components/content/ContentDraftCard";
+import SignalToContentCard from "@/components/content/SignalToContentCard";
+import ContentLoopPreview from "@/components/content/ContentLoopPreview";
+import ManualContentSource from "@/components/content/ManualContentSource";
+import ProviderBadge, { classifyProviderState } from "@/components/signals/ProviderBadge";
 
-const dispatchChat = (text: string) => {
+const dispatchChat = (text: string) =>
   window.dispatchEvent(new CustomEvent("chat:send", { detail: { text } }));
-};
+
+function deriveStatus(status: string | null | undefined): DraftStatus {
+  const s = (status ?? "").toLowerCase();
+  if (s.includes("publish")) return "published";
+  if (s.includes("approve")) return "approved";
+  if (s.includes("review")) return "review_needed";
+  if (s.includes("block")) return "blocked";
+  if (s.includes("draft") || s.includes("ready")) return "draft_ready";
+  return "needs_input";
+}
 
 export default function Content() {
   const { workspaceId } = useWorkspace();
   const { savedOutputs, drafts, signals, loading } = useSignalFeed(workspaceId);
+  const { providers } = useIntegrationReadiness();
+  const [createOpen, setCreateOpen] = useState(false);
 
+  const briefs = useMemo(
+    () => savedOutputs.filter((o) => (o.type ?? "").toLowerCase().includes("brief")),
+    [savedOutputs]
+  );
   const posts = useMemo(
-    () => savedOutputs.filter((o) => (o.type ?? "").includes("content") || (o.type ?? "").includes("post")),
+    () => savedOutputs.filter((o) => {
+      const t = (o.type ?? "").toLowerCase();
+      return t.includes("post") || t.includes("content");
+    }),
     [savedOutputs]
   );
   const commentDrafts = useMemo(
     () => drafts.filter((d) => (d.channel ?? "").toLowerCase().includes("comment")),
     [drafts]
   );
-  const engagementOpps = useMemo(
-    () => signals.filter((s) => (s.signal_type ?? "").toLowerCase().includes("engagement") || (s.signal_type ?? "").toLowerCase().includes("post")),
-    [signals]
-  );
+  const contentSignals = useMemo(() => {
+    const KEEP = ["news", "funding", "hiring", "launch", "product", "post", "engagement", "competitor"];
+    return signals
+      .filter((s) => KEEP.some((k) => (s.signal_type ?? "").toLowerCase().includes(k)))
+      .sort((a, b) => (b.source_url ? 1 : 0) - (a.source_url ? 1 : 0))
+      .slice(0, 8);
+  }, [signals]);
+
+  const linkedin = providers.linkedin;
+  const apify = providers.apify;
+  const linkedinState = classifyProviderState({
+    ready: linkedin?.status === "connected",
+    reason: linkedin?.reason,
+    integrationStatus: linkedin?.status,
+  });
+  const apifyState = classifyProviderState({
+    ready: apify?.status === "connected",
+    reason: apify?.reason,
+    integrationStatus: apify?.status,
+  });
+  const commentDiscoveryReady = apifyState === "ready" || linkedinState === "ready";
 
   return (
     <div className="min-h-screen bg-transparent">
-      <div className="max-w-[1280px] mx-auto px-6 lg:px-8 py-6">
-        <header className="mb-6 flex items-start justify-between gap-4 flex-wrap">
+      <div className="max-w-[1360px] mx-auto px-6 lg:px-8 py-8 pb-40 space-y-6">
+        {/* Header */}
+        <header className="flex items-start justify-between gap-4 flex-wrap">
           <div>
-            <h1 className="text-[22px] font-semibold text-foreground tracking-tight">Content</h1>
-            <p className="text-[13px] text-muted-foreground mt-1">
-              Create founder content and find engagement opportunities.
+            <h1 className="text-[30px] md:text-[32px] font-bold text-foreground tracking-tight">Content Command Center</h1>
+            <p className="text-[15px] md:text-[16px] text-muted-foreground mt-1.5">
+              Turn signals, product updates, and founder thoughts into LinkedIn posts, comments, and content loops.
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
-            <ActionButton icon={<FileEdit className="h-3.5 w-3.5" />} label="Create post"
-              onClick={() => dispatchChat("Scribe, draft a LinkedIn post about what we shipped this week.")} />
-            <ActionButton icon={<MessageSquare className="h-3.5 w-3.5" />} label="Find posts to comment on"
-              onClick={() => dispatchChat("Scout, find 5 LinkedIn posts from ICP accounts we should engage with.")} />
-            <ActionButton icon={<Repeat className="h-3.5 w-3.5" />} label="Build content loop"
-              onClick={() => dispatchChat("Run the content engagement loop: Scribe drafts a post, Scout finds related discussions, Aria ranks them, Scribe drafts comments — drafts only.")} />
+            <TopBtn primary icon={<FileEdit className="h-4 w-4" />} label="Create post" onClick={() => setCreateOpen(true)} />
+            <TopBtn
+              icon={<MessageSquare className="h-4 w-4" />}
+              label="Find posts to comment on"
+              badge={<ProviderBadge state={commentDiscoveryReady ? "ready" : apifyState} />}
+              onClick={() =>
+                dispatchChat(
+                  commentDiscoveryReady
+                    ? "Scout, find 5 LinkedIn posts from ICP accounts to engage with — Penn will draft comments, drafts only."
+                    : "Comment discovery requires LinkedIn or Apify. Open integrations or paste a post URL manually."
+                )
+              }
+            />
+            <TopBtn icon={<Repeat className="h-4 w-4" />} label="Build content loop" onClick={() => dispatchChat("Scribe, help me configure a weekly content loop — draft only.")} />
           </div>
         </header>
 
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-          <Section title="Founder post drafts" count={posts.length} loading={loading}>
-            {posts.length === 0
-              ? <EmptyHint text="No drafts yet. Click Create post to start." />
-              : posts.slice(0, 6).map((p) => (
-                <Row key={p.id} title={p.title ?? "Untitled draft"} body={p.body ?? ""} time={p.created_at} />
-              ))}
-          </Section>
+        {/* Prompt */}
+        <ContentPromptBox />
 
-          <Section title="Comment drafts" count={commentDrafts.length} loading={loading}>
-            {commentDrafts.length === 0
-              ? <EmptyHint text="No comment drafts. Find posts to comment on to get started." />
-              : commentDrafts.slice(0, 6).map((d) => (
-                <Row key={d.id} title={d.subject ?? "Comment"} body={d.body ?? ""} time={d.created_at} />
-              ))}
-          </Section>
+        {/* 2-col grid */}
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+          {/* Left */}
+          <div className="lg:col-span-7 space-y-6">
+            <Section title="Content briefs" count={briefs.length} loading={loading}>
+              {briefs.length === 0 ? (
+                <EmptyState
+                  title="Scribe needs context before drafting."
+                  subtext="Add what shipped, your founder POV, or choose a saved signal."
+                  actions={[{ label: "Add context", onClick: () => dispatchChat("Scribe, ask me for the context needed to draft this week's brief.") }]}
+                />
+              ) : (
+                briefs.slice(0, 5).map((b) => (
+                  <ContentDraftCard
+                    key={b.id}
+                    id={b.id}
+                    title={b.title ?? "Untitled brief"}
+                    contentType="Post brief"
+                    source={(b.raw as any)?.source ?? "Signal"}
+                    sourceUrl={(b.raw as any)?.source_url ?? null}
+                    sourceVerified={Boolean((b.raw as any)?.source_url)}
+                    status={deriveStatus((b.raw as any)?.status)}
+                    date={b.created_at}
+                    preview={b.body ?? undefined}
+                    nextAction="Review brief, then generate draft."
+                  />
+                ))
+              )}
+            </Section>
 
-          <Section title="Engagement opportunities" count={engagementOpps.length} loading={loading}>
-            {engagementOpps.length === 0
-              ? <EmptyHint text="Scout hasn't surfaced engagement opportunities yet." />
-              : engagementOpps.slice(0, 6).map((s) => (
-                <Row key={s.id} title={s.title ?? s.signal_label ?? "Signal"} body={s.description ?? ""} time={s.created_at} />
-              ))}
-          </Section>
+            <Section title="Founder post drafts" count={posts.length} loading={loading}>
+              {posts.length === 0 ? (
+                <EmptyState
+                  title="No founder post drafts yet."
+                  subtext="Create a post from a saved signal, product update, or founder thought."
+                  actions={[{ label: "Create post", primary: true, onClick: () => setCreateOpen(true) }]}
+                />
+              ) : (
+                posts.slice(0, 6).map((p) => (
+                  <ContentDraftCard
+                    key={p.id}
+                    id={p.id}
+                    title={p.title ?? "Untitled draft"}
+                    contentType="LinkedIn post"
+                    source={(p.raw as any)?.source ?? "Founder"}
+                    sourceUrl={(p.raw as any)?.source_url ?? null}
+                    sourceVerified={Boolean((p.raw as any)?.source_url)}
+                    status={deriveStatus((p.raw as any)?.status ?? "draft")}
+                    date={p.created_at}
+                    preview={p.body ?? undefined}
+                    nextAction="Review, refine hook, then approve."
+                  />
+                ))
+              )}
+            </Section>
 
-          <Section title="Related signals" count={signals.length} loading={loading}>
-            {signals.length === 0
-              ? <EmptyHint text="No signals yet." />
-              : signals.slice(0, 6).map((s) => (
-                <Row key={s.id} title={s.title ?? s.signal_label ?? "Signal"} body={s.description ?? ""} time={s.created_at} />
-              ))}
-          </Section>
+            <ManualContentSource />
+          </div>
+
+          {/* Right */}
+          <div className="lg:col-span-5 space-y-6">
+            <Section title="Comment opportunities" count={commentDrafts.length} loading={loading}>
+              {commentDrafts.length === 0 ? (
+                <EmptyState
+                  title={commentDiscoveryReady ? "No comment drafts yet." : "No engagement opportunities yet."}
+                  subtext={
+                    commentDiscoveryReady
+                      ? "Find posts from your ICP, competitors, or saved signals. Penn will draft thoughtful comments for review."
+                      : "Scout can find relevant posts once LinkedIn sources are configured. You can also paste a post manually."
+                  }
+                  actions={[
+                    { label: commentDiscoveryReady ? "Find posts to comment on" : "Find opportunities", primary: true, onClick: () => dispatchChat("Scout, find 5 LinkedIn posts to engage with — draft comments only.") },
+                    { label: "Use saved signals", onClick: () => dispatchChat("Penn, draft comments from my saved signals — draft only.") },
+                    { label: "Paste post URL", onClick: () => dispatchChat("Penn, I'll paste a LinkedIn post URL — draft a comment on it, draft only.") },
+                  ]}
+                />
+              ) : (
+                commentDrafts.slice(0, 6).map((d) => (
+                  <ContentDraftCard
+                    key={d.id}
+                    id={d.id}
+                    title={d.subject ?? "Comment draft"}
+                    contentType="LinkedIn comment"
+                    source="Post engagement"
+                    status={deriveStatus(d.status)}
+                    date={d.created_at}
+                    preview={d.body ?? undefined}
+                    nextAction="Review tone, then approve."
+                  />
+                ))
+              )}
+            </Section>
+
+            <Section title="Signals worth turning into content" count={contentSignals.length} loading={loading} icon={<Lightbulb className="h-4 w-4 text-primary" />}>
+              {contentSignals.length === 0 ? (
+                <EmptyState
+                  title="No content-worthy signals yet."
+                  subtext="Run a Scout radar scan or paste a source below."
+                  actions={[{ label: "Open Signals", onClick: () => (window.location.href = "/signals") }]}
+                />
+              ) : (
+                contentSignals.map((s) => <SignalToContentCard key={s.id} signal={s} />)
+              )}
+            </Section>
+
+            <Section title="Content loop" count={0} loading={false}>
+              <ContentLoopPreview />
+            </Section>
+          </div>
         </div>
       </div>
+
+      <CreatePostModal open={createOpen} onClose={() => setCreateOpen(false)} />
     </div>
   );
 }
 
-function ActionButton({ icon, label, onClick }: { icon: React.ReactNode; label: string; onClick: () => void }) {
+function TopBtn({ icon, label, onClick, primary, badge }: { icon: React.ReactNode; label: string; onClick: () => void; primary?: boolean; badge?: React.ReactNode }) {
+  const cls = primary
+    ? "bg-primary text-primary-foreground hover:opacity-90"
+    : "border border-border bg-card text-foreground hover:bg-muted/40";
   return (
-    <button onClick={onClick}
-      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border border-border bg-card hover:bg-muted/50 text-foreground transition-colors">
+    <button onClick={onClick} className={`inline-flex items-center gap-2 px-3.5 py-2 rounded-lg text-[14px] font-semibold transition ${cls}`}>
       {icon}{label}
+      {badge && <span className="ml-1">{badge}</span>}
     </button>
   );
 }
 
-function Section({ title, count, loading, children }: { title: string; count: number; loading: boolean; children: React.ReactNode }) {
+function Section({ title, count, loading, children, icon }: { title: string; count: number; loading: boolean; children: React.ReactNode; icon?: React.ReactNode }) {
   return (
-    <div className="rounded-2xl border border-border bg-card/50 p-5">
-      <div className="flex items-center justify-between mb-3">
-        <h3 className="text-sm font-semibold text-foreground flex items-center gap-2">
-          <Sparkles className="h-3.5 w-3.5 text-primary" /> {title}
+    <section className="rounded-2xl border border-border bg-card/50 p-5">
+      <div className="flex items-center justify-between mb-4">
+        <h3 className="text-[18px] md:text-[19px] font-semibold text-foreground flex items-center gap-2">
+          {icon ?? <Search className="h-4 w-4 text-primary" />}
+          {title}
         </h3>
-        <span className="text-xs text-muted-foreground tabular-nums">{loading ? "…" : count}</span>
+        <span className="text-[12px] text-muted-foreground tabular-nums">{loading ? "…" : count}</span>
       </div>
-      <div className="space-y-2">{children}</div>
-    </div>
+      <div className="space-y-3">{children}</div>
+    </section>
   );
 }
 
-function Row({ title, body, time }: { title: string; body: string; time: string | null }) {
+function EmptyState({ title, subtext, actions }: { title: string; subtext: string; actions?: { label: string; onClick: () => void; primary?: boolean }[] }) {
   return (
-    <div className="rounded-lg border border-border/60 bg-background/40 p-3">
-      <div className="flex items-start justify-between gap-2">
-        <p className="text-sm font-medium text-foreground line-clamp-1">{title}</p>
-        {time && <span className="text-[10px] text-muted-foreground tabular-nums shrink-0">{new Date(time).toLocaleDateString()}</span>}
-      </div>
-      {body && <p className="text-xs text-muted-foreground line-clamp-2 mt-1">{body}</p>}
+    <div className="text-center py-6 px-3">
+      <p className="text-[15px] font-semibold text-foreground">{title}</p>
+      <p className="text-[14px] text-muted-foreground mt-1.5 max-w-md mx-auto">{subtext}</p>
+      {actions && actions.length > 0 && (
+        <div className="flex items-center justify-center gap-2 mt-4 flex-wrap">
+          {actions.map((a) => (
+            <button
+              key={a.label}
+              onClick={a.onClick}
+              className={`text-[14px] font-semibold px-3 py-1.5 rounded-lg transition ${a.primary ? "bg-primary text-primary-foreground hover:opacity-90" : "border border-border/70 bg-background/50 text-foreground/90 hover:border-primary/40"}`}
+            >
+              {a.label}
+            </button>
+          ))}
+        </div>
+      )}
     </div>
   );
-}
-
-function EmptyHint({ text }: { text: string }) {
-  return <p className="text-xs text-muted-foreground py-4 text-center">{text}</p>;
 }
