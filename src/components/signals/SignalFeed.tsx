@@ -246,7 +246,38 @@ export default function SignalFeed() {
     people: signals.filter((s) => s.signal_type === "people" || s.signal_type === "people_profile").length,
   }), [signals]);
 
+  const radarVerifiedCounts: Record<RadarCategory, number> = useMemo(() => ({
+    hiring: reviewed.filter((s) => (s.signal_type === "hiring" || s.signal_type === "hiring_signal") && s.show_by_default).length,
+    linkedin_intent: reviewed.filter((s) => (s.signal_type === "linkedin_intent" || s.signal_type === "linkedin_engagement") && s.show_by_default).length,
+    competitor: reviewed.filter((s) => (s.signal_type === "competitor" || s.signal_type === "competitor_engagement") && s.show_by_default).length,
+    workflow_trend: reviewed.filter((s) => s.signal_type === "workflow_trend" && s.show_by_default).length,
+    people: reviewed.filter((s) => (s.signal_type === "people" || s.signal_type === "people_profile") && s.show_by_default).length,
+  }), [reviewed]);
+
   const radarStatus = lastRun?.per_category ?? null;
+  const verifiedTotal = reviewed.filter((s) => s.show_by_default).length;
+
+  // ----- provider readiness (workspace-level integrations) -----
+  const { providers: integrationProviders } = useIntegrationReadiness();
+  const firecrawlEntry = integrationProviders["firecrawl"];
+  const apifyEntry = integrationProviders["apify"];
+  const firecrawlState = classifyProviderState({
+    ready: firecrawlEntry?.status === "connected",
+    reason: firecrawlEntry?.reason,
+    integrationStatus: firecrawlEntry?.status,
+  });
+  const apifyState = classifyProviderState({
+    ready: apifyEntry?.status === "connected",
+    reason: apifyEntry?.reason,
+    integrationStatus: apifyEntry?.status,
+  });
+
+  const providerPreviews: ProviderPreview[] = [
+    { key: "firecrawl", label: "Firecrawl", state: firecrawlState, reason: firecrawlEntry?.reason },
+    { key: "apify", label: "Apify", state: apifyState, reason: apifyEntry?.reason },
+  ];
+  const anyProviderReady = providerPreviews.some((p) => p.state === "ready");
+  const apifyBlocked = apifyState !== "ready";
 
   const prefs = (brainData?.profile as any)?.signal_preferences ?? {};
   const topKeywords: Partial<Record<RadarCategory, string>> = {
