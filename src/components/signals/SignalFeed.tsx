@@ -113,6 +113,8 @@ export default function SignalFeed() {
     competitors: signals.filter((s) => s.signal_type === "competitor_engagement" || s.signal_type === "competitor").length,
     people: signals.filter((s) => s.signal_type === "people_profile" || s.signal_type === "people").length,
     hiring: signals.filter((s) => s.signal_type === "hiring_signal" || s.signal_type === "hiring").length,
+    workflows: signals.filter((s) => s.signal_type === "workflow_trend").length,
+    reviewed: signals.length,
     drafts: drafts.length,
     saved: savedOutputs.length,
   } as Record<Tab, number>), [signals, drafts, savedOutputs]);
