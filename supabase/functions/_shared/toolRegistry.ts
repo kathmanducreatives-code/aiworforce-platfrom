@@ -14,6 +14,7 @@ import { buildHarvestApiPeopleInput, buildHarvestApiCompanyEmployeesInput } from
 import { writeMemoryFromToolCall } from "./memoryWriter.ts";
 import { buildLinkedinEngagementInput, buildLinkedinProfilePostsInput } from "./linkedinEngagementInput.ts";
 import { normalizeLinkedinEngagementItem } from "./linkedinEngagementOutput.ts";
+import { normalizeApifyJobRow } from "./apifyJobsNormalizer.ts";
 
 export interface ToolContext {
   admin: SupabaseClient;
@@ -608,17 +609,40 @@ function truncObj(v: unknown, max = 4000): unknown {
 
 function normalizeApifyItem(raw: any, source_type: string) {
   const r = raw && typeof raw === "object" ? raw : {};
+  // Jobs sources: promote the LinkedIn-Jobs scraper's rich company/job fields to
+  // clean top-level names so downstream (memoryWriter / Workbench / CSV / Aria)
+  // stop losing companyWebsite / companyLinkedinUrl / poster / industries, etc.
+  const isJobs = /jobs/i.test(source_type);
+  const nj = isJobs ? normalizeApifyJobRow(r) : null;
   return {
     name:        pickStr(r, ["name", "fullName", "authorName", "personName"]),
-    company:     pickStr(r, ["companyName", "company", "employer", "organization", "org"]),
-    title:       pickStr(r, ["title", "jobTitle", "position", "headline", "postTitle"]),
-    url:         pickStr(r, ["url", "link", "jobUrl", "postUrl", "profileUrl", "sourceUrl"]),
-    location:    pickStr(r, ["location", "city", "jobLocation", "geo", "place"]),
-    description: pickStr(r, ["description", "snippet", "text", "summary", "body"]),
+    company:     nj?.company ?? pickStr(r, ["companyName", "company", "employer", "organization", "org"]),
+    title:       nj?.jobTitle ?? pickStr(r, ["title", "jobTitle", "position", "headline", "postTitle"]),
+    url:         nj?.jobUrl ?? pickStr(r, ["url", "link", "jobUrl", "postUrl", "profileUrl", "sourceUrl"]),
+    location:    nj?.location ?? pickStr(r, ["location", "city", "jobLocation", "geo", "place"]),
+    description: nj?.jobDescription ?? pickStr(r, ["description", "snippet", "text", "summary", "body"]),
     source:      "apify",
     signal_type: signalFromSourceType(source_type),
     confidence:  null,
-    raw:         truncObj(r, 4000),
+    // Preserved, clearly-named source fields (Phase 1). Only for jobs.
+    ...(nj ? {
+      website: nj.website,
+      domain: nj.domain,
+      company_website: nj.website,
+      company_linkedin_url: nj.linkedinUrl,
+      job_url: nj.jobUrl,
+      job_title: nj.jobTitle,
+      job_description: nj.jobDescription,
+      company_description: nj.companyDescription,
+      industries: nj.industries,
+      employee_count: nj.employeeCount,
+      poster_contact_hint: nj.posterContactHint,
+      exact_hiring_signal: nj.exactHiringSignal,
+      signal_summary: nj.signalSummary,
+      source_proof: nj.sourceProof,
+      source_quality: nj.sourceQuality,
+    } : {}),
+    raw:         nj ? { ...nj.raw, provider_payload: truncObj(r, 4000) } : truncObj(r, 4000),
   };
 }
 

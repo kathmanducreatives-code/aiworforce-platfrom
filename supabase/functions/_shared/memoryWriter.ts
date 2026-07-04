@@ -14,6 +14,12 @@ import { classifyConversationType } from "./competitorDiscovery.ts";
 interface ApifyJobItem {
   company?: string; title?: string; location?: string; url?: string;
   companyUrl?: string; description?: string; postedAt?: string; source?: string; raw: any;
+  // Promoted jobs fields (from normalizeApifyItem / apifyJobsNormalizer). Preserve
+  // them so the Workbench stops showing "no website" / "proof_incomplete".
+  website?: string | null; domain?: string | null; companyLinkedinUrl?: string | null;
+  sourceProof?: any[]; sourceQuality?: string | null; posterContactHint?: any;
+  industries?: string[]; employeeCount?: number | null; companyDescription?: string | null;
+  jobDescription?: string | null;
 }
 function normalizeApifyItems(output: any): ApifyJobItem[] {
   if (!output) return [];
@@ -22,17 +28,34 @@ function normalizeApifyItems(output: any): ApifyJobItem[] {
     (Array.isArray(output.results) && output.results) ||
     (Array.isArray(output.data) && output.data) ||
     (Array.isArray(output.normalized_items) && output.normalized_items) || [];
-  return raw.map((it: any) => ({
-    company: it.companyName ?? it.company ?? it.company_name ?? it.organization,
-    title: it.title ?? it.jobTitle ?? it.position ?? it.name,
-    location: it.location ?? it.jobLocation ?? it.formattedLocation ?? it.city,
-    url: it.url ?? it.jobUrl ?? it.link ?? it.applyUrl,
-    companyUrl: it.companyUrl ?? it.companyLink ?? it.company_website,
-    description: it.description ?? it.snippet ?? it.summary,
-    postedAt: it.postedAt ?? it.posted_at ?? it.datePosted,
-    source: it.source ?? it.platform,
-    raw: it,
-  }));
+  return raw.map((it: any) => {
+    const jraw = (it.raw && typeof it.raw === "object") ? it.raw : {};
+    // company website: prefer the promoted field, then raw clean field, then the
+    // provider's own companyWebsite, then legacy fallbacks. FIX: companyWebsite
+    // was missing before → accounts had no domain → "no website".
+    const website = it.website ?? it.company_website ?? jraw.company_website ?? it.companyWebsite ?? it.companyUrl ?? it.companyLink ?? null;
+    return {
+      company: it.company ?? it.companyName ?? it.company_name ?? it.organization,
+      title: it.title ?? it.job_title ?? it.jobTitle ?? it.position ?? it.name,
+      location: it.location ?? it.jobLocation ?? it.formattedLocation ?? it.city,
+      url: it.job_url ?? it.url ?? it.jobUrl ?? it.link ?? it.applyUrl,
+      companyUrl: website,
+      website,
+      domain: it.domain ?? jraw.domain ?? null,
+      companyLinkedinUrl: it.company_linkedin_url ?? jraw.company_linkedin_url ?? it.companyLinkedinUrl ?? null,
+      description: it.job_description ?? it.description ?? it.snippet ?? it.summary,
+      companyDescription: it.company_description ?? jraw.company_description ?? null,
+      jobDescription: it.job_description ?? jraw.job_description ?? it.description ?? null,
+      industries: it.industries ?? jraw.industries ?? [],
+      employeeCount: it.employee_count ?? jraw.employee_count ?? null,
+      posterContactHint: it.poster_contact_hint ?? jraw.poster_contact_hint ?? null,
+      sourceProof: it.source_proof ?? jraw.source_proof ?? [],
+      sourceQuality: it.source_quality ?? jraw.source_quality ?? null,
+      postedAt: it.postedAt ?? it.posted_at ?? it.datePosted,
+      source: it.source ?? it.platform,
+      raw: it,
+    };
+  });
 }
 
 interface ApifyPeopleItem {
@@ -259,9 +282,9 @@ async function writeApifyJobs(ctx: ToolCallCtx, output: any): Promise<void> {
   const seenAccountIds = new Set<string>();
 
   for (const it of items) {
-    // Only treat companyUrl as a company domain source; job listing URLs are
-    // not company domains.
-    let domain = domainFromUrl(it.companyUrl);
+    // Company domain: prefer the safely-parsed domain from the normalizer, then
+    // parse the company website. Job-listing URLs are never company domains.
+    let domain = (it.domain ?? domainFromUrl(it.website ?? it.companyUrl)) || null;
     if (domain && /linkedin\.com$|indeed\.com$|wellfound\.com$|ziprecruiter\.com$|glassdoor\.com$/i.test(domain)) {
       domain = null; // not a real company domain
     }
@@ -272,7 +295,7 @@ async function writeApifyJobs(ctx: ToolCallCtx, output: any): Promise<void> {
       workspace_id: ctx.workspace_id,
       name: name || domain || "Unknown",
       domain: domain ? domain.toLowerCase() : null,
-      website_url: it.companyUrl ?? null,
+      website_url: it.website ?? it.companyUrl ?? null,
       location: it.location ?? null,
       source: it.source ?? "apify_jobs",
       raw: it.raw ?? {},
@@ -323,7 +346,9 @@ async function writeApifyJobs(ctx: ToolCallCtx, output: any): Promise<void> {
       .select("id")
       .maybeSingle();
 
-    // Insert lead_candidate
+    // Insert lead_candidate. Persist the preserved source data at raw TOP LEVEL
+    // (clean names) so Workbench/CSV can read it — not buried under { hiring }.
+    // Real source proof only; never a fake proof_incomplete URL.
     await ctx.admin
       .from("lead_candidates")
       .insert({
@@ -335,7 +360,24 @@ async function writeApifyJobs(ctx: ToolCallCtx, output: any): Promise<void> {
         lead_type: "company",
         status: "new",
         reason: `${it.title ?? "Role"} @ ${it.company ?? domain ?? ""}`.trim(),
-        raw: { hiring: it.raw ?? {} },
+        raw: {
+          hiring: it.raw ?? {},
+          company_website: it.website ?? null,
+          website: it.website ?? null,
+          domain: domain ?? it.domain ?? null,
+          company_linkedin_url: it.companyLinkedinUrl ?? null,
+          job_url: it.url ?? null,
+          source_url: it.url ?? null,
+          job_title: it.title ?? null,
+          exact_hiring_signal: it.title ? `${it.title}${it.company ? ` @ ${it.company}` : ""}` : null,
+          company_description: it.companyDescription ?? null,
+          job_description: it.jobDescription ?? null,
+          industries: it.industries ?? [],
+          employee_count: it.employeeCount ?? null,
+          poster_contact_hint: it.posterContactHint ?? null,
+          source_proof: it.sourceProof ?? [],
+          source_quality: it.sourceQuality ?? (it.url || it.website ? "partial" : "incomplete"),
+        },
       });
   }
 }

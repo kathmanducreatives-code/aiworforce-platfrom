@@ -124,9 +124,15 @@ export function useLeadResults(planId: string | null) {
         // lead-quality metadata persisted by run-agent (fit_tier, why_this_lead,
         // matched_icp, missing_fields) lives on the raw jsonb.
         const rawMeta = (r.raw && typeof r.raw === 'object') ? r.raw as Record<string, any> : {};
-        const domain = r.accounts?.domain as string | undefined;
-        const website = domain ? (domain.startsWith('http') ? domain : `https://${domain}`) : null;
-        const domain_status: DomainStatus = domain ? 'confirmed' : 'missing';
+        // Website: prefer the account domain, then the preserved company website
+        // from the Apify jobs scraper (raw.company_website) so a real website is
+        // shown instead of "no website" when the domain wasn't parsed.
+        const domain = (r.accounts?.domain as string | undefined) || (rawMeta.domain as string | undefined) || undefined;
+        const rawWebsite = (rawMeta.company_website ?? rawMeta.website) as string | undefined;
+        const website = domain
+          ? (domain.startsWith('http') ? domain : `https://${domain}`)
+          : (rawWebsite ?? null);
+        const domain_status: DomainStatus = (domain || rawWebsite) ? 'confirmed' : 'missing';
         const contactEmail = r.contacts?.email ?? null;
         const contactLinkedin = r.contacts?.linkedin_url ?? null;
         const contact_status: ContactStatus =

@@ -12,7 +12,11 @@ export function rowsToCsv(rows: LeadTableRow[]): string {
   const headers = [
     'company', 'website', 'location', 'signal_type',
     // Lead Intelligence Engine hiring-signal proof + quality columns.
-    'job_title', 'exact_hiring_signal', 'source_url',
+    'job_title', 'exact_hiring_signal', 'source_url', 'source_quality',
+    // Preserved Apify LinkedIn-Jobs source data.
+    'domain', 'company_linkedin_url', 'job_url', 'company_description', 'job_description',
+    'industries', 'employee_count',
+    'poster_contact_hint_name', 'poster_contact_hint_profile_url', 'poster_contact_hint_title',
     // Source-specific proof — populated per signal source (people / company /
     // posts / comments / workflow trends); blank when N/A for the row's source.
     'person_name', 'profile_url',
@@ -34,16 +38,29 @@ export function rowsToCsv(rows: LeadTableRow[]): string {
     const draftLocked = r.draft_status !== 'drafted' && r.draft_status !== 'approved';
     const raw = (r.raw && typeof r.raw === 'object' ? r.raw : {}) as Record<string, unknown>;
     const arr = (v: unknown) => Array.isArray(v) ? (v as unknown[]).join(' · ') : (v ?? '');
-    // No source URL = proof incomplete.
-    const sourceUrl = (raw.source_url as string) || r.website || '';
+    // Prefer real source proof (job_url / company website); never emit a fake
+    // proof_incomplete URL — an empty cell + source_quality tells the honest story.
+    const sourceUrl = (raw.source_url as string) || (raw.job_url as string) || (raw.company_website as string) || r.website || '';
+    const poster = (raw.poster_contact_hint && typeof raw.poster_contact_hint === 'object' ? raw.poster_contact_hint : {}) as Record<string, unknown>;
     lines.push([
       esc(r.company_name),
-      esc(r.website),
+      esc(r.website || raw.company_website || raw.website),
       esc(r.company_location),
       esc(r.signal_type),
       esc(raw.job_title),
       esc(raw.exact_hiring_signal),
-      esc(sourceUrl || 'proof_incomplete'),
+      esc(sourceUrl),
+      esc(raw.source_quality),
+      esc(raw.domain),
+      esc(raw.company_linkedin_url),
+      esc(raw.job_url),
+      esc(raw.company_description),
+      esc(raw.job_description),
+      esc(arr(raw.industries)),
+      esc(raw.employee_count),
+      esc(poster.name),
+      esc(poster.profile_url),
+      esc(poster.title),
       // Source-specific proof (mirrors the gate-accepted raw fields).
       esc(raw.person_name),
       esc(raw.profile_url),

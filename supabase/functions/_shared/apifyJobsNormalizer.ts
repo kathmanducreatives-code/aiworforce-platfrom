@@ -1,0 +1,152 @@
+// Apify LinkedIn Jobs scraper → Agentory normalized candidate.
+//
+// The jobs actor (curious_coder/linkedin-jobs-scraper) returns rich company + job
+// data (companyWebsite, companyLinkedinUrl, link, title, descriptionText,
+// companyDescription, industries, companyEmployeesCount, jobPoster*). Earlier
+// normalization layers dropped all of it, producing "no website" /
+// "proof_incomplete" Workbench rows. This pure module preserves the source data
+// into clean normalized fields + a structured raw object + real source proof.
+//
+// Pure / import-free so it is fully unit-testable. Never fabricates URLs or proof.
+
+export interface SourceProofItem {
+  url: string;
+  type: "job_posting" | "company_website" | "linkedin_company";
+  title: string | null;
+  snippet: string | null;
+  confidence: number;
+}
+export interface PosterContactHint {
+  name: string | null;
+  profile_url: string | null;
+  title: string | null;
+}
+export type SourceQuality = "verified" | "partial" | "incomplete";
+
+export interface NormalizedJob {
+  company: string | null;
+  jobTitle: string | null;
+  website: string | null;
+  domain: string | null;
+  linkedinUrl: string | null;   // company LinkedIn URL
+  jobUrl: string | null;
+  location: string | null;
+  industries: string[];
+  employeeCount: number | null;
+  companyDescription: string | null;
+  jobDescription: string | null;
+  posterContactHint: PosterContactHint;
+  exactHiringSignal: string | null;
+  signalSummary: string | null;
+  sourceProof: SourceProofItem[];
+  sourceQuality: SourceQuality;
+  raw: Record<string, unknown>;
+}
+
+function str(v: unknown): string | null {
+  if (typeof v === "number") return String(v);
+  return typeof v === "string" && v.trim() ? v.trim() : null;
+}
+function firstStr(...vs: unknown[]): string | null {
+  for (const v of vs) { const s = str(v); if (s) return s; }
+  return null;
+}
+function toArray(v: unknown): string[] {
+  if (Array.isArray(v)) return v.map((x) => str(x)).filter((x): x is string => !!x);
+  const s = str(v);
+  return s ? s.split(/[,;|]/).map((x) => x.trim()).filter(Boolean) : [];
+}
+function toInt(v: unknown): number | null {
+  if (typeof v === "number" && Number.isFinite(v)) return Math.round(v);
+  const s = String(v ?? "").replace(/[,\s]/g, "");
+  const m = s.match(/(\d+)/);
+  return m ? Number(m[1]) : null;
+}
+
+const JOB_BOARD_HOST = /(?:^|\.)(linkedin\.com|indeed\.com|wellfound\.com|ziprecruiter\.com|glassdoor\.com|lever\.co|greenhouse\.io|ashbyhq\.com|workable\.com)$/i;
+
+/** Parse a safe company domain from a URL. Returns null for job-board hosts or unparseable input. */
+export function parseDomain(url: string | null | undefined): string | null {
+  const u = str(url);
+  if (!u) return null;
+  try {
+    const withProto = /^https?:\/\//i.test(u) ? u : `https://${u}`;
+    const host = new URL(withProto).hostname.replace(/^www\./i, "").toLowerCase();
+    if (!host || !host.includes(".")) return null;
+    if (JOB_BOARD_HOST.test(host)) return null;   // a job board is not a company domain
+    return host;
+  } catch {
+    return null;
+  }
+}
+
+/** Evidence-based one-line signal summary (never claims ICP/SaaS/AI fit). */
+export function buildSignalSummary(n: { jobTitle: string | null; company: string | null }): string {
+  const role = n.jobTitle ?? "a role";
+  return n.company
+    ? `Hiring ${role} at ${n.company} — from a live LinkedIn job post.`
+    : `Hiring ${role} — from a live LinkedIn job post.`;
+}
+
+/** Normalize one Apify jobs row. Accepts the actor's field names + common fallbacks. */
+export function normalizeApifyJobRow(row: unknown): NormalizedJob {
+  const r = (row && typeof row === "object" ? row : {}) as Record<string, unknown>;
+
+  const company = firstStr(r.companyName, r.company, r.company_name, r.organization, r.employer);
+  const jobTitle = firstStr(r.title, r.jobTitle, r.positionName, r.position, r.name);
+  const website = firstStr(r.companyWebsite, r.company_website, r.website, r.companyUrl, r.companyLink);
+  const linkedinUrl = firstStr(r.companyLinkedinUrl, r.company_linkedin_url, r.companyLinkedin, r.companyPageUrl);
+  const jobUrl = firstStr(r.link, r.jobUrl, r.url, r.applyUrl, r.jobPostingUrl);
+  const jobDescription = firstStr(r.descriptionText, r.description, r.jobDescription, r.snippet);
+  const companyDescription = firstStr(r.companyDescription, r.company_description, r.aboutCompany);
+  const industries = toArray(r.industries ?? r.industry ?? r.companyIndustry);
+  const employeeCount = toInt(r.companyEmployeesCount ?? r.employeeCount ?? r.companySize ?? r.employees);
+  const location = firstStr(r.location, r.formattedLocation, r.jobLocation, r.city, r.address, r.companyLocation);
+  const posterContactHint: PosterContactHint = {
+    name: firstStr(r.jobPosterName, r.posterName, r.hiringManagerName),
+    profile_url: firstStr(r.jobPosterProfileUrl, r.posterProfileUrl, r.jobPosterUrl),
+    title: firstStr(r.jobPosterTitle, r.posterTitle, r.hiringManagerTitle),
+  };
+
+  const domain = parseDomain(website);
+
+  // Source proof — only from real URLs the scraper returned. Never fabricated.
+  const sourceProof: SourceProofItem[] = [];
+  if (jobUrl) sourceProof.push({ url: jobUrl, type: "job_posting", title: jobTitle, snippet: jobDescription?.slice(0, 300) ?? null, confidence: 90 });
+  if (website) sourceProof.push({ url: website, type: "company_website", title: company, snippet: companyDescription?.slice(0, 300) ?? null, confidence: 80 });
+  if (linkedinUrl) sourceProof.push({ url: linkedinUrl, type: "linkedin_company", title: company, snippet: null, confidence: 80 });
+
+  const sourceQuality: SourceQuality = sourceProof.length === 0
+    ? "incomplete"
+    : (sourceProof.some((p) => p.type === "job_posting") && (website || linkedinUrl) ? "verified" : "partial");
+
+  const exactHiringSignal = jobTitle ? `${jobTitle}${company ? ` @ ${company}` : ""}` : null;
+  const signalSummary = buildSignalSummary({ jobTitle, company });
+
+  return {
+    company, jobTitle, website, domain, linkedinUrl, jobUrl, location,
+    industries, employeeCount, companyDescription, jobDescription, posterContactHint,
+    exactHiringSignal, signalSummary, sourceProof, sourceQuality,
+    // Clean, clearly-named raw object (spec Phase 1) — preserves the source data.
+    raw: {
+      provider: "apify",
+      source_type: "hiring",
+      company_website: website,
+      domain,
+      company_linkedin_url: linkedinUrl,
+      job_url: jobUrl,
+      job_title: jobTitle,
+      job_description: jobDescription,
+      company_description: companyDescription,
+      industries,
+      employee_count: employeeCount,
+      location,
+      exact_hiring_signal: exactHiringSignal,
+      signal_summary: signalSummary,
+      source_quality: sourceQuality,
+      source_proof: sourceProof,
+      poster_contact_hint: posterContactHint,
+      provider_payload: r,
+    },
+  };
+}
