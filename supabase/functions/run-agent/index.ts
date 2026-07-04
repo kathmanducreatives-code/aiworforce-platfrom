@@ -640,7 +640,26 @@ Deno.serve(async (req) => {
         // Per-lead quality keyed by normalized company name, reused below to
         // persist fit_score + raw.lead_quality onto each Workbench row.
         const normName = (s: unknown) => String(s ?? "").toLowerCase().replace(/[^a-z0-9]+/g, "").trim();
-        type LeadQualityEntry = { score: number; tier: string; why: string; matched_icp: string[]; missing_fields: string[]; confidence: string; reasons: string[]; exact_hiring_signal: string | null; job_title: string | null; source_url: string | null; source_proof: Record<string, unknown> };
+        type LeadQualityEntry = { score: number; tier: string; why: string; matched_icp: string[]; missing_fields: string[]; confidence: string; reasons: string[]; exact_hiring_signal: string | null; job_title: string | null; source_url: string | null; source_proof: Record<string, unknown>; aria?: Record<string, unknown> };
+        // Aria scoring engine — Company-Brain-first explainable ranking. Built once
+        // from the loaded Company Brain + the threaded ICP, applied per accepted row.
+        const ariaMod = await import("../_shared/ariaScoring.ts").catch(() => null);
+        const brainIcp = (brain as any)?.icp ?? {};
+        const ariaBrain = {
+          icp: {
+            industries: (leadIntentBody?.positive_industries ?? leadIntentBody?.target_industry ?? brainIcp.industries) as string[] | undefined,
+            company_size: (leadIntentBody?.target_company_size ?? [])[0] ?? brainIcp.company_size,
+            geography: criteria.location ?? brainIcp.geography,
+            buyer_roles: (leadIntentBody as any)?.buyer_roles ?? brainIcp.buyer_roles,
+            funding_stage: (leadIntentBody as any)?.funding_stage ?? brainIcp.funding_stage,
+            disqualifiers: leadIntentBody?.disqualifiers ?? brainIcp.disqualifiers,
+            negative_industries: leadIntentBody?.negative_industries,
+            allow_enterprise: leadIntentBody?.allow_enterprise ?? false,
+          },
+          positioning: (brain as any)?.positioning ?? undefined,
+          competitors: (leadIntentBody as any)?.competitors ?? (brain as any)?.competitors ?? [],
+        };
+        const ariaWeights = ariaMod?.resolveWeights((tool_input_body?.aria_weights ?? null) as any);
         const leadQualityByName = new Map<string, LeadQualityEntry>();
         // People/posts/comments accounts are keyed by COMPANY name, but the
         // quality entry is keyed by the PERSON/post name — so also index by the
@@ -727,6 +746,28 @@ Deno.serve(async (req) => {
               // comments/workflow) — empty for hiring (its proof fields are above).
               source_proof: buildSourceProof(resolvedGateKind, it, r),
             };
+            // Aria explainable score (Company-Brain-first) for Workbench + ranking.
+            try {
+              if (ariaMod) {
+                const a = ariaMod.scoreCompany({
+                  company: it.company ?? it.name, website: (r.companyUrl ?? r.website ?? r.company_website) as string | null,
+                  linkedin: (r.linkedinUrl ?? r.linkedin) as string | null,
+                  industry: (r.industry ?? r.category) as string | null, company_category: (r.category) as string | null,
+                  team_size: (r.team_size ?? r.companySize ?? r.employees ?? r.employeeCount) as string | null,
+                  location: it.location, founder: (r.founder ?? r.founderName) as string | null,
+                  funding_stage: (r.funding_stage ?? r.fundingStage ?? r.stage) as string | null,
+                  hiring_role: (it.title ?? r.jobTitle) as string | null, exact_signal: (r.exact_signal ?? r.jobTitle ?? it.title) as string | null,
+                  growth_signals: (r.growth_signals ?? r.growth) as string | null, source_url: it.source_url, raw: r,
+                }, ariaBrain as any, ariaWeights);
+                entry.aria = {
+                  overall_fit: a.overall_fit, breakdown: a.breakdown, max_breakdown: a.max_breakdown,
+                  icp_match: a.icp_match, icp_match_count: a.icp_match_count,
+                  confidence: a.confidence, competitor_similarity: a.competitor_similarity,
+                  star_tier: a.star_tier, star_label: a.star_label,
+                  why_accepted: a.why_accepted, missing_context: a.missing_context,
+                };
+              }
+            } catch (e) { console.warn("[run-agent] aria score failed:", e); }
             const nk = normName(it.name ?? it.company);
             if (nk) leadQualityByName.set(nk, entry);
             const uk = normUrl(it.source_url ?? (r.source_url as string));
@@ -847,8 +888,11 @@ Deno.serve(async (req) => {
                 const q = (rowUrl ? leadQualityByUrl.get(normUrl(rowUrl)) : undefined)
                   ?? leadQualityByName.get(normName(nameById.get(r.account_id as string) ?? ""));
                 if (!q) continue;
+                const aria = q.aria as Record<string, unknown> | undefined;
+                // Company-Brain-first: Aria's overall_fit drives fit_score when available.
+                const ariaFit = typeof aria?.overall_fit === "number" ? aria.overall_fit as number : null;
                 await supabase.from("lead_candidates").update({
-                  fit_score: typeof r.fit_score === "number" ? r.fit_score : q.score,
+                  fit_score: ariaFit ?? (typeof r.fit_score === "number" ? r.fit_score : q.score),
                   raw: {
                     ...existingRaw,
                     lead_quality: { score: q.score, confidence: q.confidence, reasons: q.reasons },
@@ -863,6 +907,21 @@ Deno.serve(async (req) => {
                     // Source-specific proof (people/company/posts/comments/workflow);
                     // never overwrites existing keys with null/empty.
                     ...Object.fromEntries(Object.entries(q.source_proof).filter(([, v]) => v != null && v !== "")),
+                    // Aria explainable score for the premium Workbench analyst view.
+                    ...(aria ? {
+                      aria_score: aria,
+                      overall_fit: aria.overall_fit,
+                      icp_breakdown: aria.icp_match,
+                      icp_match_count: aria.icp_match_count,
+                      score_breakdown: aria.breakdown,
+                      confidence_level: (aria.confidence as any)?.level,
+                      confidence_score: (aria.confidence as any)?.score,
+                      competitor_similarity: aria.competitor_similarity,
+                      star_tier: aria.star_tier,
+                      star_label: aria.star_label,
+                      why_accepted: aria.why_accepted,
+                      missing_context: aria.missing_context,
+                    } : {}),
                   },
                 }).eq("id", r.id as string);
               }
