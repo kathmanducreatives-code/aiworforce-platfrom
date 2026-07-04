@@ -640,7 +640,15 @@ Deno.serve(async (req) => {
         // Per-lead quality keyed by normalized company name, reused below to
         // persist fit_score + raw.lead_quality onto each Workbench row.
         const normName = (s: unknown) => String(s ?? "").toLowerCase().replace(/[^a-z0-9]+/g, "").trim();
-        type LeadQualityEntry = { score: number; tier: string; why: string; matched_icp: string[]; missing_fields: string[]; confidence: string; reasons: string[]; exact_hiring_signal: string | null; job_title: string | null; source_url: string | null; source_proof: Record<string, unknown>; aria?: Record<string, unknown> };
+        type LeadQualityEntry = { score: number; tier: string; why: string; matched_icp: string[]; missing_fields: string[]; confidence: string; reasons: string[]; exact_hiring_signal: string | null; job_title: string | null; source_url: string | null; source_proof: Record<string, unknown>; aria?: Record<string, unknown>; gate?: Record<string, unknown>; gate_rejected?: boolean };
+        // Lead-quality proof gate (Phase 3): caps/rejects weak/proofless/off-ICP rows.
+        const gateMod = await import("../_shared/leadQualityGate.ts").catch(() => null);
+        const gateIntent = {
+          isHiring: source_type === "jobs" || !!leadIntentBody?.role_family,
+          roleQuery: `${criteria.role ?? ""} ${apifyInput.query ?? instruction ?? ""}`.trim(),
+          disqualifiers: (leadIntentBody?.disqualifiers ?? ((brain as any)?.icp?.disqualifiers as string[]) ?? []) as string[],
+        };
+        const gateRejectedKeys = new Set<string>();
         // Aria scoring engine — Company-Brain-first explainable ranking. Built once
         // from the loaded Company Brain + the threaded ICP, applied per accepted row.
         const ariaMod = await import("../_shared/ariaScoring.ts").catch(() => null);
@@ -766,8 +774,37 @@ Deno.serve(async (req) => {
                   star_tier: a.star_tier, star_label: a.star_label,
                   why_accepted: a.why_accepted, missing_context: a.missing_context,
                 };
+                // Proof gate: cap Aria fit/confidence; hard reject overrides Aria;
+                // never let proofless/off-ICP rows enter Workbench as strong leads.
+                if (gateMod) {
+                  const nc = gateMod.toNormalizedCandidate(it as any, source_type === "jobs" ? "hiring" : "company_search");
+                  const gate = gateMod.applyLeadQualityGate(nc, gateIntent);
+                  const cappedFit = Math.min(a.overall_fit, gate.scoreCaps.maxOverallFit ?? 100);
+                  let confidence = a.confidence;
+                  if (gate.scoreCaps.maxConfidence === "medium" && confidence.level === "high") confidence = { level: "medium", score: Math.min(confidence.score, 69) };
+                  if (gate.scoreCaps.maxConfidence === "low") confidence = { level: "low", score: Math.min(confidence.score, 44) };
+                  entry.aria = {
+                    ...entry.aria,
+                    overall_fit: cappedFit, confidence,
+                    gate_decision: gate.decision,
+                    gate_reasons: gate.reasons,
+                    missing_evidence: gate.missingEvidence,
+                    disqualifiers_hit: gate.disqualifiersHit,
+                    // Aria explains the gate outcome alongside its own reasoning.
+                    missing_context: [...new Set([...(a.missing_context ?? []), ...gate.missingEvidence])],
+                  };
+                  entry.gate = { decision: gate.decision, reasons: gate.reasons, missing_evidence: gate.missingEvidence, disqualifiers_hit: gate.disqualifiersHit, score_caps: gate.scoreCaps };
+                  // Hard reject → keep OUT of Workbench (recorded for debugging only).
+                  if (gate.decision === "reject") {
+                    entry.gate_rejected = true;
+                    const rk = normUrl(it.source_url ?? (r.source_url as string));
+                    const rn = normName(it.name ?? it.company);
+                    if (rk) gateRejectedKeys.add(`u:${rk}`);
+                    if (rn) gateRejectedKeys.add(`n:${rn}`);
+                  }
+                }
               }
-            } catch (e) { console.warn("[run-agent] aria score failed:", e); }
+            } catch (e) { console.warn("[run-agent] aria/gate score failed:", e); }
             const nk = normName(it.name ?? it.company);
             if (nk) leadQualityByName.set(nk, entry);
             const uk = normUrl(it.source_url ?? (r.source_url as string));
@@ -816,10 +853,18 @@ Deno.serve(async (req) => {
         if (toolFailed && isApifySelected) {
           sourcingFailure = { error: adaptive.reason || "apify_failed", message: humanizeApifyError(adaptive.reason) };
         }
-        if (effectiveAccepted.length > 0) {
-          // Persist ONLY the role-family-filtered set (effectiveAccepted) so
-          // wrong-role / no-proof rows never reach Workbench.
-          const rawItems = effectiveAccepted.map((a) => a.raw);
+        // Proof gate: drop HARD-REJECTED candidates so they never enter Workbench
+        // as opportunities (needs_verification rows are kept but capped/flagged).
+        const gatedAccepted = gateRejectedKeys.size === 0 ? effectiveAccepted : effectiveAccepted.filter((a: any) => {
+          const uk = normUrl(a.source_url ?? a.raw?.source_url);
+          const nn = normName(a.name ?? a.company);
+          return !((uk && gateRejectedKeys.has(`u:${uk}`)) || (nn && gateRejectedKeys.has(`n:${nn}`)));
+        });
+        if (gateRejectedKeys.size) console.log("[run-agent] proof gate dropped", { rejected: effectiveAccepted.length - gatedAccepted.length, kept: gatedAccepted.length });
+        if (gatedAccepted.length > 0) {
+          // Persist ONLY the role-family-filtered + gate-passing set so
+          // wrong-role / no-proof / off-ICP rows never reach Workbench.
+          const rawItems = gatedAccepted.map((a) => a.raw);
           const attachAccounts = Array.isArray(tool_input_body?.attach_to_accounts) ? tool_input_body.attach_to_accounts : null;
 
           if (attachAccounts && attachAccounts.length > 0) {
@@ -921,6 +966,12 @@ Deno.serve(async (req) => {
                       star_label: aria.star_label,
                       why_accepted: aria.why_accepted,
                       missing_context: aria.missing_context,
+                      // Proof-gate outcome (Phase 3) for Workbench/CSV + debugging.
+                      gate_decision: aria.gate_decision,
+                      gate_reasons: aria.gate_reasons,
+                      missing_evidence: aria.missing_evidence,
+                      disqualifiers_hit: aria.disqualifiers_hit,
+                      final_overall_fit: aria.overall_fit,
                     } : {}),
                   },
                 }).eq("id", r.id as string);

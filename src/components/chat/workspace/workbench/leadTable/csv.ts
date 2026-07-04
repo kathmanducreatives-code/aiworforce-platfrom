@@ -26,6 +26,8 @@ export function rowsToCsv(rows: LeadTableRow[]): string {
     'fit_score', 'fit_tier', 'why_this_lead', 'matched_icp', 'missing_fields',
     // Aria explainable score (Company-Brain-first analyst view).
     'overall_fit', 'star_tier', 'confidence_level', 'competitor_similarity', 'why_accepted',
+    // Proof-gate outcome (Phase 3).
+    'gate_decision', 'final_overall_fit', 'gate_reasons', 'missing_evidence', 'disqualifiers_hit',
     'decision_maker_status', 'enrichment_status', 'next_action',
     'signal_summary', 'recommended_persona', 'contact_status',
     'contact_name', 'contact_title', 'contact_email', 'contact_linkedin',
@@ -84,6 +86,12 @@ export function rowsToCsv(rows: LeadTableRow[]): string {
       esc(raw.confidence_level),
       esc(raw.competitor_similarity),
       esc(arr(raw.why_accepted)),
+      // Proof-gate outcome (empty for legacy rows).
+      esc(raw.gate_decision),
+      esc(raw.final_overall_fit ?? raw.overall_fit),
+      esc(arr(raw.gate_reasons)),
+      esc(arr(raw.missing_evidence)),
+      esc(arr(raw.disqualifiers_hit)),
       esc(r.contact_status === 'needs_contact' ? 'missing' : (r.contact_status ?? 'missing')),
       esc(r.enrichment_status),
       esc((raw.next_action as string) ?? ''),
