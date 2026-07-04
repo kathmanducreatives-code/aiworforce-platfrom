@@ -206,3 +206,39 @@ Deno.test("routing: 'competitor conversations around Clay and 11x' → competito
   assertEquals(i.source_type, "comments");
   assertEquals(i.workflow_type, "competitor_signal_sourcing");
 });
+
+// ---- Company-Brain ICP constraints threaded into LeadIntent (Phase 3) ----
+Deno.test("extractLeadIntent: threads extended Brain ICP (industries/size/negatives/types/competitors)", () => {
+  const li = extractLeadIntent({
+    message: "Find founders hiring executive assistants.",
+    brain: {
+      icp: {
+        industries: ["B2B SaaS"], geography: "North America", company_size: "5-150 employees",
+        negative_industries: ["Manufacturing"], excluded_company_types: ["Agency", "Consultancy"],
+        funding_stage: ["Seed", "Series A"], company_model: ["Product-led"], allow_enterprise: false,
+        disqualifiers: ["Recruiting firms"],
+      },
+      competitors: ["Clay", "11x"],
+    },
+  });
+  assertEquals(li.positive_industries, ["B2B SaaS"]);
+  assert((li.negative_industries ?? []).includes("Manufacturing"));
+  assert((li.excluded_company_types ?? []).includes("Agency"));
+  assertEquals(li.target_company_size, ["5-150 employees"]);
+  assert((li.funding_stage ?? []).includes("Seed"));
+  assert((li.competitors ?? []).includes("Clay"));
+  assertEquals(li.allow_enterprise, false);
+  assert((li.disqualifiers ?? []).includes("Recruiting firms"));
+});
+
+Deno.test("icpConstraintsFromIntent: SaaS 5-150 → max 150, not enterprise, SaaS positive", async () => {
+  const { icpConstraintsFromIntent } = await import("./companyIcpFilter.ts");
+  const li = extractLeadIntent({
+    message: "Find founders hiring executive assistants.",
+    brain: { icp: { industries: ["B2B SaaS"], company_size: "5-150 employees" } },
+  });
+  const cons = icpConstraintsFromIntent(li);
+  assertEquals(cons.max_employees, 150);
+  assertEquals(cons.allow_enterprise, false);
+  assert((cons.positive_industries ?? []).includes("B2B SaaS"));
+});

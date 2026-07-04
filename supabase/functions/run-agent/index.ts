@@ -335,6 +335,10 @@ Deno.serve(async (req) => {
           role_family?: string | null;
           role_keywords?: string[];
           exclude_role_keywords?: string[];
+          // Company-Brain ICP constraints (target company definition).
+          positive_industries?: string[]; target_industry?: string[];
+          negative_industries?: string[]; excluded_company_types?: string[]; preferred_company_types?: string[];
+          target_company_size?: string[]; disqualifiers?: string[]; allow_enterprise?: boolean; strictness?: string;
         } | null;
         if (leadIntentBody?.role_family && Array.isArray(leadIntentBody.role_keywords) && leadIntentBody.role_keywords.length) {
           normalizedQuery = leadIntentBody.role_keywords.slice(0, 12).join(" OR ");
@@ -461,6 +465,44 @@ Deno.serve(async (req) => {
               rejected: lieRes.rejected.length,
             });
           } catch (e) { console.warn("[run-agent] LIE hiring filter failed:", e); }
+
+          // Company-Brain ICP filter (Phase 5-8): the prompt gave the SIGNAL, the
+          // Brain gives the TARGET COMPANY. Reject off-ICP giants (oil/gov/hospital/
+          // bank/university/enterprise) unless the Brain targets them, plus wrong
+          // industry / too-large / disqualified types. Records why each row matched.
+          try {
+            const hasIcp = (leadIntentBody?.positive_industries?.length || leadIntentBody?.target_industry?.length
+              || leadIntentBody?.negative_industries?.length || leadIntentBody?.excluded_company_types?.length
+              || leadIntentBody?.target_company_size?.length || leadIntentBody?.disqualifiers?.length);
+            if (hasIcp && lieAcceptedItems && lieAcceptedItems.length > 0) {
+              const { filterByIcp, icpConstraintsFromIntent } = await import("../_shared/companyIcpFilter.ts");
+              const cons = icpConstraintsFromIntent(leadIntentBody);
+              const toCand = (a: any) => ({
+                company: a.company ?? a.name ?? null,
+                industry: (a.raw?.industry ?? a.raw?.companyIndustry ?? a.raw?.category) as string | null,
+                company_category: a.raw?.category as string | null,
+                team_size: (a.raw?.companySize ?? a.raw?.company_size ?? a.raw?.employeeCount ?? a.raw?.team_size ?? a.raw?.employees) as string | null,
+                company_type: a.raw?.companyType as string | null,
+                location: a.location ?? null,
+                title: a.title ?? null,
+                source_url: a.source_url ?? null,
+              });
+              const pairs = lieAcceptedItems.map((a: any) => ({ a, cand: toCand(a) }));
+              const res = filterByIcp(pairs.map((p) => p.cand), cons);
+              const acceptedSet = new Set(res.accepted);
+              const before = lieAcceptedItems.length;
+              lieAcceptedItems = pairs.filter((p) => acceptedSet.has(p.cand)).map((p) => {
+                const why = res.matched.get(p.cand) ?? [];
+                // Attach ICP match reasons onto raw for Workbench "why matched".
+                if (why.length) (p.a.raw ??= {}).icp_matched = why;
+                return p.a;
+              });
+              // Merge ICP reject reasons into the trace so the summary is honest.
+              const icpTraceRows = (res.trace as unknown as Array<Record<string, unknown>>);
+              lieTrace = [...(lieTrace ?? []), ...icpTraceRows];
+              console.log("[run-agent] Company-Brain ICP filter", { before, after: lieAcceptedItems.length, constraints: cons });
+            }
+          } catch (e) { console.warn("[run-agent] ICP filter failed:", e); }
         }
 
         // Non-hiring source gates (people / company / posts / comments / workflow

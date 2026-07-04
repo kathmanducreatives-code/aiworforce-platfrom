@@ -196,8 +196,11 @@ function buildHiringConfirmation(prompt: string, intent: LeadIntent, company: an
     output: "Account opportunities in Workbench",
     safety: "Nothing will be sent. Draft-only by default.",
     estimated_credits: Math.max(5, intent.count),
-    // Thread to run-agent: the role family + aliases + excludes + geo drive the
-    // jobs actor input and the role-family filter.
+    // Company-Brain transparency (Phase 11): what we target vs. exclude.
+    target_company: icpTargetSummary(intent),
+    excluded_company: icpExcludedSummary(intent),
+    // Thread to run-agent: role family drives the jobs query; the full ICP block
+    // drives the Company-Brain post-source filter (industry/size/type/negatives).
     lead_intent: {
       workflow_type: intent.workflow_type,
       source_type: intent.source_type,
@@ -208,15 +211,54 @@ function buildHiringConfirmation(prompt: string, intent: LeadIntent, company: an
       target_industry: intent.target_industry,
       count: intent.count,
       strictness: intent.strictness,
+      ...icpLeadIntentBlock(intent),
     },
   };
+}
+
+// The Company-Brain ICP constraints threaded to run-agent (target company def).
+function icpLeadIntentBlock(intent: LeadIntent): Record<string, unknown> {
+  return {
+    positive_industries: intent.positive_industries ?? intent.target_industry,
+    negative_industries: intent.negative_industries ?? [],
+    excluded_company_types: intent.excluded_company_types ?? [],
+    preferred_company_types: intent.preferred_company_types ?? [],
+    target_company_size: intent.target_company_size,
+    disqualifiers: intent.disqualifiers,
+    negative_keywords: intent.negative_keywords ?? [],
+    positive_keywords: intent.positive_keywords ?? [],
+    competitors: intent.competitors,
+    allow_enterprise: intent.allow_enterprise ?? false,
+  };
+}
+// Human-readable target / excluded chips for the confirmation card.
+function icpTargetSummary(intent: LeadIntent): string[] {
+  return [
+    ...(intent.target_industry ?? []),
+    ...(intent.target_company_size ?? []),
+    ...(intent.target_geography ?? []),
+    ...(intent.company_stage ?? []),
+    ...(intent.preferred_company_types ?? []),
+  ].filter(Boolean).slice(0, 8);
+}
+function icpExcludedSummary(intent: LeadIntent): string[] {
+  const defaults = intent.allow_enterprise ? [] : ["Enterprise / Fortune 500"];
+  const brainDefaults = (intent.positive_industries?.length || intent.target_industry?.length)
+    ? ["Manufacturing", "Oil & Gas", "Banks", "Hospitals", "Government", "Universities"] : [];
+  return [
+    ...(intent.negative_industries ?? []),
+    ...(intent.excluded_company_types ?? []),
+    ...(intent.disqualifiers ?? []),
+    ...defaults,
+    ...brainDefaults,
+  ].filter(Boolean).slice(0, 8);
 }
 
 // Re-derive the Lead Intelligence Engine hiring intent at delegation time so the
 // scout step (run-agent) receives role_family + aliases + excludes without
 // re-parsing the message. Deterministic — matches the card's lead_intent.
 function leadIntentForToolInput(message: string, brain: any): any {
-  const intent = extractLeadIntent({ message, brain: { icp: brain?.icp, company: brain?.company } });
+  const intent = extractLeadIntent({ message, brain: { icp: brain?.icp, company: brain?.company, competitors: brain?.competitors, positioning: brain?.positioning } });
   if (!intent.hiring_signal.requested || !intent.hiring_signal.role_family) return null;
   const job = planJobsActorInput(intent);
   return {
@@ -229,6 +271,7 @@ function leadIntentForToolInput(message: string, brain: any): any {
     target_industry: intent.target_industry,
     count: intent.count,
     strictness: intent.strictness,
+    ...icpLeadIntentBlock(intent),
   };
 }
 
@@ -250,7 +293,12 @@ async function generateWorkflowConfirmation(prompt: string, workspaceId: string,
   // "Founder / Head of Growth" for an assistant-role search).
   const lieIntent = extractLeadIntent({
     message: prompt,
-    brain: { icp, company: { category: company?.category, industry: company?.industry } },
+    brain: {
+      icp,
+      company: { category: company?.category, industry: company?.industry },
+      competitors: profile?.competitors ?? profile?.positioning?.competitors,
+      positioning: profile?.positioning,
+    },
   });
   if (lieIntent.hiring_signal.requested && lieIntent.hiring_signal.role_family) {
     return buildHiringConfirmation(prompt, lieIntent, company);

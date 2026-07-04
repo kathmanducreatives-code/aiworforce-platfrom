@@ -49,10 +49,47 @@ export interface LeadIntent {
   confidence: number;
   clarification_needed: boolean;
   clarification_question?: string;
+  // --- Company-Brain ICP constraints (additive; the prompt sets the SIGNAL, the
+  // Brain sets the TARGET COMPANY). All optional so existing callers are unchanged.
+  positive_industries?: string[];
+  negative_industries?: string[];
+  positive_keywords?: string[];
+  negative_keywords?: string[];
+  excluded_company_sizes?: string[];
+  preferred_company_sizes?: string[];
+  excluded_company_types?: string[];
+  preferred_company_types?: string[];
+  target_regions?: string[];
+  excluded_regions?: string[];
+  funding_stage?: string[];
+  company_stage?: string[];
+  company_model?: string[];
+  remote_preference?: string | null;
+  tech_stack?: string[];
+  growth_signals?: string[];
+  hiring_signals?: string[];
+  intent_signals?: string[];
+  competitor_keywords?: string[];
+  negative_competitors?: string[];
+  buyer_roles?: string[];
+  exclude_roles?: string[];
+  allow_enterprise?: boolean;
 }
 
 export interface BrainLite {
-  icp?: { industries?: string[]; geography?: string; disqualifiers?: string[]; buyer_roles?: string[]; company_size?: string };
+  icp?: {
+    industries?: string[]; geography?: string; disqualifiers?: string[]; buyer_roles?: string[]; company_size?: string;
+    // Extended ICP (all optional).
+    negative_industries?: string[]; avoid_industries?: string[];
+    company_types?: string[]; excluded_company_types?: string[]; avoid_company_types?: string[];
+    regions?: string[]; excluded_regions?: string[];
+    funding_stage?: string[]; company_stage?: string[]; company_model?: string[];
+    remote_preference?: string | null; tech_stack?: string[];
+    keywords?: string[]; negative_keywords?: string[];
+    allow_enterprise?: boolean;
+  };
+  competitors?: string[];
+  positioning?: { competitors?: string[] };
   company?: { category?: string; industry?: string };
 }
 
@@ -168,12 +205,29 @@ export function extractLeadIntent(opts: { message: string; brain?: BrainLite | n
     target_stage,
     hiring_signal: { requested: hiringRequested, role_family, role_keywords, exclude_role_keywords },
     pain_points: [],
-    competitors: [],
+    competitors: uniq([...(brain.competitors ?? []), ...(brain.positioning?.competitors ?? [])]),
     keywords: [],
     disqualifiers: uniq(brain.icp?.disqualifiers ?? []),
     count: extractCount(original),
     strictness,
     confidence,
+    // Company-Brain ICP constraints (target company definition).
+    positive_industries: target_industry,
+    negative_industries: uniq([...(brain.icp?.negative_industries ?? []), ...(brain.icp?.avoid_industries ?? [])]),
+    positive_keywords: uniq(brain.icp?.keywords ?? []),
+    negative_keywords: uniq(brain.icp?.negative_keywords ?? []),
+    excluded_company_types: uniq([...(brain.icp?.excluded_company_types ?? []), ...(brain.icp?.avoid_company_types ?? [])]),
+    preferred_company_types: uniq(brain.icp?.company_types ?? []),
+    target_regions: target_geography,
+    excluded_regions: uniq(brain.icp?.excluded_regions ?? []),
+    funding_stage: uniq(brain.icp?.funding_stage ?? []),
+    company_stage: uniq([...(brain.icp?.company_stage ?? []), ...target_stage]),
+    company_model: uniq(brain.icp?.company_model ?? []),
+    remote_preference: brain.icp?.remote_preference ?? null,
+    tech_stack: uniq(brain.icp?.tech_stack ?? []),
+    competitor_keywords: uniq([...(brain.competitors ?? []), ...(brain.positioning?.competitors ?? [])]),
+    buyer_roles: uniq(brain.icp?.buyer_roles ?? []),
+    allow_enterprise: brain.icp?.allow_enterprise ?? false,
     clarification_needed: route.workflow_type === "unknown",
     clarification_question: route.workflow_type === "unknown"
       ? "What kind of leads — companies hiring a role, companies in an ICP, individual people/founders, or LinkedIn posts/comments?"

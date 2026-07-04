@@ -27,6 +27,9 @@ interface WorkflowConfirmationPayload {
   output: string;
   safety: string;
   estimated_credits: number;
+  // Company-Brain transparency: the target company profile vs. what's excluded.
+  target_company?: string[];
+  excluded_company?: string[];
   blocked?: boolean;
   blocked_reason?: string | null;
   setup_needed?: string | null;
@@ -222,6 +225,32 @@ export default function WorkflowConfirmationCard({ payload, conversationId }: Pr
           )
         )}
       </div>
+
+      {/* Company-Brain target vs. excluded (transparency) */}
+      {(payload.target_company?.length || payload.excluded_company?.length) ? (
+        <div className="mt-3 space-y-1.5">
+          {payload.target_company?.length ? (
+            <div className="flex items-start gap-2">
+              <span className="text-[10px] font-mono uppercase tracking-wider text-emerald-400/80 shrink-0 pt-0.5 w-14">Target</span>
+              <div className="flex flex-wrap gap-1">
+                {payload.target_company.map((t) => (
+                  <span key={t} className="inline-flex items-center rounded-md border border-emerald-500/20 bg-emerald-500/[0.06] px-1.5 py-0.5 text-[11px] text-emerald-200">{t}</span>
+                ))}
+              </div>
+            </div>
+          ) : null}
+          {payload.excluded_company?.length ? (
+            <div className="flex items-start gap-2">
+              <span className="text-[10px] font-mono uppercase tracking-wider text-[#7D8590] shrink-0 pt-0.5 w-14">Excluded</span>
+              <div className="flex flex-wrap gap-1">
+                {payload.excluded_company.map((t) => (
+                  <span key={t} className="inline-flex items-center rounded-md border border-white/[0.06] bg-white/[0.02] px-1.5 py-0.5 text-[11px] text-[#8b949e] line-through decoration-[#8b949e]/40">{t}</span>
+                ))}
+              </div>
+            </div>
+          ) : null}
+        </div>
+      ) : null}
 
       {/* Output */}
       <div className="mt-3 flex items-baseline gap-2 text-[12.5px]">
