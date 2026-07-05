@@ -434,6 +434,19 @@ Deno.serve(async (req) => {
             raw: it,
           };
         };
+        // Company Brain → derived ICP (Part B): the single ICP object Scout
+        // pre-rank, the analyst, gates and Workbench all consume.
+        const brainIcpMod = await import("../_shared/companyBrainIcp.ts").catch(() => null);
+        const preRankMod = await import("../_shared/leadPreRank.ts").catch(() => null);
+        const derivedIcp = brainIcpMod ? brainIcpMod.deriveCompanyIcp((brain as any) ?? null) : null;
+        let scoutWeakPool = false;
+        const scoutRankByUrl = new Map<string, { scoutRank: number; scoutPreRankScore: number; scoutRankReasons: string[]; scoutPenalties: string[] }>();
+        const toPreRank = (a: any) => ({
+          company: a.company ?? a.name, jobTitle: a.title, website: a.raw?.website ?? a.raw?.company_website,
+          domain: a.raw?.domain, linkedinUrl: a.raw?.company_linkedin_url, jobUrl: a.raw?.job_url ?? a.source_url, source_url: a.source_url,
+          industries: a.raw?.industries, companyDescription: a.raw?.company_description, jobDescription: a.raw?.job_description,
+          employeeCount: a.raw?.employee_count ?? a.raw?.companyEmployeesCount, raw: a.raw,
+        });
         const rawAllItems: ReturnType<typeof mapItem>[] = [];
         const runAttempt = async (strategy: { role_keywords: string[]; relax_location: boolean }) => {
           const attemptInput = {
@@ -447,7 +460,23 @@ Deno.serve(async (req) => {
           };
           const rr = await runTool("source_with_apify", attemptInput, baseCtx);
           if (rr.ok && rr.data) {
-            const mapped = ((rr.data as { items?: any[] }).items ?? []).map(mapItem);
+            let mapped = ((rr.data as { items?: any[] }).items ?? []).map(mapItem);
+            // Part D — pre-rank the fetched POOL against the Company Brain ICP and
+            // sort best-first, so the downstream max_results cap keeps the BEST
+            // candidate, not the first returned. Uses already-fetched data only.
+            if (source_type === "jobs" && preRankMod && derivedIcp && mapped.length > 1) {
+              try {
+                const pr = preRankMod.preRankCandidates(mapped.map(toPreRank), derivedIcp);
+                scoutWeakPool = pr.weakPool;
+                const order = new Map<string, number>();
+                pr.ranked.forEach((r: any) => {
+                  const k = String(r.candidate.source_url ?? "").toLowerCase();
+                  order.set(k, r.scoutPreRankScore);
+                  if (k) scoutRankByUrl.set(k, { scoutRank: r.scoutRank, scoutPreRankScore: r.scoutPreRankScore, scoutRankReasons: r.scoutRankReasons, scoutPenalties: r.scoutPenalties });
+                });
+                mapped = [...mapped].sort((a: any, b: any) => (order.get(String(b.source_url ?? "").toLowerCase()) ?? 0) - (order.get(String(a.source_url ?? "").toLowerCase()) ?? 0));
+              } catch (e) { console.warn("[run-agent] pre-rank failed:", e); }
+            }
             rawAllItems.push(...mapped); // accumulate for source-quality reject reasons
             return { items: mapped };
           }
@@ -673,7 +702,7 @@ Deno.serve(async (req) => {
         // Per-lead quality keyed by normalized company name, reused below to
         // persist fit_score + raw.lead_quality onto each Workbench row.
         const normName = (s: unknown) => String(s ?? "").toLowerCase().replace(/[^a-z0-9]+/g, "").trim();
-        type LeadQualityEntry = { score: number; tier: string; why: string; matched_icp: string[]; missing_fields: string[]; confidence: string; reasons: string[]; exact_hiring_signal: string | null; job_title: string | null; source_url: string | null; source_proof: Record<string, unknown>; aria?: Record<string, unknown>; gate?: Record<string, unknown>; gate_rejected?: boolean };
+        type LeadQualityEntry = { score: number; tier: string; why: string; matched_icp: string[]; missing_fields: string[]; confidence: string; reasons: string[]; exact_hiring_signal: string | null; job_title: string | null; source_url: string | null; source_proof: Record<string, unknown>; aria?: Record<string, unknown>; gate?: Record<string, unknown>; gate_rejected?: boolean; analyst?: Record<string, unknown>; scout_rank?: Record<string, unknown> };
         // Lead-quality proof gate (Phase 3): caps/rejects weak/proofless/off-ICP rows.
         const gateMod = await import("../_shared/leadQualityGate.ts").catch(() => null);
         const gateIntent = {
@@ -838,6 +867,31 @@ Deno.serve(async (req) => {
                 }
               }
             } catch (e) { console.warn("[run-agent] aria/gate score failed:", e); }
+            // Part E — analyst-style lead brief (why appeared / why now / evidence /
+            // missing / next action). Uses only available evidence; Company-Brain ICP.
+            try {
+              const analystMod = await import("../_shared/leadAnalyst.ts").catch(() => null);
+              if (analystMod && derivedIcp) {
+                const uk0 = normUrl(it.source_url ?? (r.source_url as string));
+                const pr = uk0 ? scoutRankByUrl.get(uk0) : undefined;
+                const summary = analystMod.buildLeadAnalystSummary({
+                  candidate: {
+                    company: it.company ?? it.name, website: (r.company_website ?? r.website) as string | null, domain: r.domain as string | null,
+                    linkedinUrl: r.company_linkedin_url as string | null, jobTitle: (it.title ?? r.job_title) as string | null,
+                    jobUrl: (r.job_url ?? it.source_url) as string | null, source_url: it.source_url,
+                    industries: (r.industries ?? r.category) as string[] | string | null, companyDescription: r.company_description as string | null,
+                    jobDescription: r.job_description as string | null, employeeCount: (r.employee_count ?? r.companyEmployeesCount) as number | null,
+                  },
+                  icp: derivedIcp as any,
+                  gate: entry.gate ? { decision: (entry.gate as any).decision, disqualifiersHit: (entry.gate as any).disqualifiers_hit, missingEvidence: (entry.gate as any).missing_evidence } : null,
+                  aria: entry.aria ? { overall_fit: (entry.aria as any).overall_fit, confidence: (entry.aria as any).confidence } : null,
+                  preRank: pr ? { scoutPreRankScore: pr.scoutPreRankScore, weakPool: scoutWeakPool, scoutPenalties: pr.scoutPenalties, scoutRankReasons: pr.scoutRankReasons } : { weakPool: scoutWeakPool },
+                  sourceProof: Array.isArray(r.source_proof) ? r.source_proof as any : null,
+                });
+                entry.analyst = summary as unknown as Record<string, unknown>;
+                if (pr) entry.scout_rank = { rank: pr.scoutRank, score: pr.scoutPreRankScore, reasons: pr.scoutRankReasons, penalties: pr.scoutPenalties, weak_pool: scoutWeakPool };
+              }
+            } catch (e) { console.warn("[run-agent] analyst summary failed:", e); }
             const nk = normName(it.name ?? it.company);
             if (nk) leadQualityByName.set(nk, entry);
             const uk = normUrl(it.source_url ?? (r.source_url as string));
@@ -1009,6 +1063,22 @@ Deno.serve(async (req) => {
                       disqualifiers_hit: aria.disqualifiers_hit,
                       final_overall_fit: aria.overall_fit,
                     } : {}),
+                    // Analyst lead brief (Part E) + Scout pre-rank (Part D) for the
+                    // Workbench analyst view. Overrides the generic why with the
+                    // evidence-based, Agentory-ICP-aware narrative.
+                    ...(q.analyst ? {
+                      analyst: q.analyst,
+                      analyst_verdict: (q.analyst as any).analystVerdict,
+                      why_this_lead: (q.analyst as any).whyThisLeadAppeared ?? q.why,
+                      why_now: (q.analyst as any).whyNow,
+                      icp_fit_summary: (q.analyst as any).icpFitSummary,
+                      evidence_summary: (q.analyst as any).evidenceSummary,
+                      risk_flags: (q.analyst as any).riskFlags,
+                      recommended_next_action: (q.analyst as any).recommendedNextAction,
+                      outreach_angle: (q.analyst as any).outreachAngle,
+                      company_snapshot: (q.analyst as any).companySnapshot,
+                    } : {}),
+                    ...(q.scout_rank ? { scout_rank: (q.scout_rank as any).rank, scout_pre_rank_score: (q.scout_rank as any).score, scout_rank_reasons: (q.scout_rank as any).reasons, scout_penalties: (q.scout_rank as any).penalties, weak_pool: (q.scout_rank as any).weak_pool } : {}),
                   },
                 }).eq("id", r.id as string);
               }

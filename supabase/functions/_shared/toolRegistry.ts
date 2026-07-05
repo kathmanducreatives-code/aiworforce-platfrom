@@ -967,8 +967,13 @@ async function execSourceWithApify(input: unknown): Promise<ToolResult> {
     };
   }
 
+  // Jobs: fetch a POOL (up to 25 already-run rows — $0 extra, the dataset exists)
+  // so run-agent can pre-rank against the Company Brain ICP and process the BEST
+  // max_results, not the first returned. Other sources fetch exactly max_results.
+  const isJobsSource = /jobs/i.test(source_type);
+  const fetchLimit = isJobsSource ? Math.min(25, Math.max(max_results, 10)) : max_results;
   const itemsRes = await apifyFetch(
-    `/datasets/${resolvedDatasetId}/items?clean=true&limit=${max_results}&token=${APIFY_API_TOKEN}`,
+    `/datasets/${resolvedDatasetId}/items?clean=true&limit=${fetchLimit}&token=${APIFY_API_TOKEN}`,
     { method: "GET", timeoutMs: 20_000 },
   ).catch((e) => ({ ok: false, status: 0, data: { error: String(e) } }));
 
@@ -982,13 +987,15 @@ async function execSourceWithApify(input: unknown): Promise<ToolResult> {
 
   const rawItems: any[] = Array.isArray(itemsRes.data) ? itemsRes.data : [];
   const topicForNorm = (i.query ?? search_goal ?? null) as string | null;
+  // For jobs, return the whole pool (run-agent pre-ranks + caps to max_results);
+  // other sources stay capped here.
   const items: any[] = source_type === "people_profiles"
     ? rawItems.slice(0, max_results).map((r) => normalizeApifyPeopleItem(r))
     : source_type === "linkedin_engagement"
       ? rawItems.slice(0, max_results).map((r) => normalizeLinkedinEngagementItem(r, topicForNorm))
       : source_type === "linkedin_comments"
         ? rawItems.slice(0, max_results).map((r) => normalizeLinkedinCommenterItem(r))
-        : rawItems.slice(0, max_results).map((r) => normalizeApifyItem(r, source_type));
+        : rawItems.slice(0, fetchLimit).map((r) => normalizeApifyItem(r, source_type));
 
   // Phase 4.2 — competitor discovery context (Hawk's inferred competitors,
   // threaded via user_input). Tag items that have no per-item seed match with
