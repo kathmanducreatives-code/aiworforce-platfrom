@@ -8,6 +8,7 @@
 import type { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { matchCompetitors } from "./competitorRegistry.ts";
 import { classifyConversationType } from "./competitorDiscovery.ts";
+import { buildDecisionMakers } from "./decisionMakers.ts";
 
 // ---------- Inlined normalizers (mirrors src/components/chat/workspace/workbench/normalize.ts) ----------
 
@@ -377,6 +378,21 @@ async function writeApifyJobs(ctx: ToolCallCtx, output: any): Promise<void> {
           poster_contact_hint: it.posterContactHint ?? null,
           source_proof: it.sourceProof ?? [],
           source_quality: it.sourceQuality ?? (it.url || it.website ? "partial" : "incomplete"),
+          // Decision-maker discovery from JOB-POST evidence only (poster hint +
+          // description clues). No live people search here — that runs later,
+          // per company, on the "Find decision-makers" action. Never fabricated.
+          ...(() => {
+            const dm = buildDecisionMakers({
+              poster: it.posterContactHint ?? null,
+              jobTitle: it.title ?? null,
+              descriptionText: it.jobDescription ?? null,
+            });
+            return {
+              decision_makers: dm.decision_makers,
+              decision_maker_status: dm.needs_manual_review ? "needs_manual_review" : "poster_hint",
+              buyer_clues: dm.buyer_clues,
+            };
+          })(),
         },
       });
   }

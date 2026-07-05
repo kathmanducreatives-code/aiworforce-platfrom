@@ -172,7 +172,7 @@ function titleCaseName(s: string): string {
 export function extractFoundersFromText(text: string, evidenceUrl: string): PersonHint[] {
   const out: PersonHint[] = [];
   const seen = new Set<string>();
-  const re = /\b(?:co-?)?founded by\s+([A-Z][a-zA-Z.'-]+(?:\s+[A-Z][a-zA-Z.'-]+){0,2})(?:\s+and\s+([A-Z][a-zA-Z.'-]+(?:\s+[A-Z][a-zA-Z.'-]+){0,2}))?/g;
+  const re = /\b(?:co-?)?founded by\s+([A-Z][a-zA-Z'-]+(?:\s+[A-Z][a-zA-Z'-]+){0,2})(?:\s+and\s+([A-Z][a-zA-Z'-]+(?:\s+[A-Z][a-zA-Z'-]+){0,2}))?/g;
   let m: RegExpExecArray | null;
   while ((m = re.exec(text)) !== null) {
     for (const name of [m[1], m[2]]) {
