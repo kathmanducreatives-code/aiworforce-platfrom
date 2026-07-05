@@ -345,6 +345,23 @@ Deno.serve(async (req) => {
           roleKeywords = leadIntentBody.role_keywords;
         }
 
+        // Phase 4 — Company-Brain-aware Scout query for the jobs actor. Prefers
+        // revenue/growth/RevOps + SaaS context and drops generic operations terms
+        // (the proof gate would cap/reject them anyway). Reports weak ICP context
+        // instead of pretending. Only for jobs; other sources unchanged.
+        let scoutQueryMeta: Record<string, unknown> | null = null;
+        if (source_type === "jobs") {
+          try {
+            const { buildScoutJobsKeywords } = await import("../_shared/scoutStrategy.ts");
+            const sq = buildScoutJobsKeywords({ roleKeywords, query: normalizedQuery, icp: (brain as any)?.icp ?? null });
+            if (sq.keywords && sq.keywords.trim()) {
+              plannedUserInput = { ...(plannedUserInput ?? {}), keywords: sq.keywords };
+            }
+            scoutQueryMeta = { keywords: sq.keywords, used_terms: sq.usedTerms, avoided_terms: sq.avoidedTerms, weak_icp_context: sq.weakIcpContext, saas_context_applied: sq.saasContextApplied };
+            if (sq.weakIcpContext) console.warn("[run-agent] Scout: weak ICP context — Company Brain has no structured ICP; query is role-only.");
+          } catch (e) { console.warn("[run-agent] scout query strategy failed:", e); }
+        }
+
         const apifyInput = {
           selected_actor_key: planned_actor_key ?? undefined,
           source_type,
@@ -358,10 +375,18 @@ Deno.serve(async (req) => {
           input: plannedUserInput,
         };
 
+        // Phase 4 — QA cost transparency: the jobs actor floors count at 10 even
+        // when we request 1-3; surface requested vs actor vs processed so a
+        // $5-capped run is never silently a 10-result run.
+        const actorCount = source_type === "jobs" ? Math.max(10, Math.min(100, max_results)) : max_results;
+
         console.log("[run-agent] apify input", {
           requested_source_type: raw_source_type,
           normalized_source_type: source_type,
           ...apifyInput,
+          scout_query: scoutQueryMeta,
+          requested_max_results: max_results,
+          actor_count: actorCount,
         });
         // Adaptive multi-attempt sourcing: broaden role aliases → industry →
         // relax stage/location and retry until the requested count is met (or
@@ -432,6 +457,14 @@ Deno.serve(async (req) => {
 
         const adaptive = await runAdaptiveSourcing({ criteria, strict, maxAttempts, runAttempt });
         adaptiveAttempts = adaptive.attempts as unknown as Array<Record<string, unknown>>;
+
+        // Phase 4 — QA cost report: requested vs actor floor vs processed.
+        let qaLimitReport: Record<string, unknown> | null = null;
+        try {
+          const { computeQaLimit } = await import("../_shared/scoutStrategy.ts");
+          qaLimitReport = computeQaLimit(max_results, actorCount, rawAllItems.length) as unknown as Record<string, unknown>;
+          console.log("[run-agent] QA limit", qaLimitReport);
+        } catch { /* reporting only */ }
 
         // Lead Intelligence Engine role-family filter: for a threaded hiring
         // intent, gate the accepted set through filterHiringCandidates — it
@@ -839,6 +872,9 @@ Deno.serve(async (req) => {
             needs_permission_to_broaden: !!adaptive.needs_permission_to_broaden,
             lead_quality: leadQualitySummary,
             ...(lieTrace ? { filter_trace: lieTrace } : {}),
+            // Phase 4 — Scout query + QA cost transparency.
+            ...(scoutQueryMeta ? { scout_query: scoutQueryMeta } : {}),
+            ...(qaLimitReport ? { qa_limit: qaLimitReport } : {}),
           };
           // Phase 5 — clean AI-employee activity timeline (no raw logs/provider noise).
           const plannerLabel = (sourcePlanMeta?.planner_mode === "claude") ? "Claude"
