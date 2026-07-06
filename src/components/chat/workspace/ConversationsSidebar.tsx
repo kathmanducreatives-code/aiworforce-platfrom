@@ -263,7 +263,14 @@ export default function ConversationsSidebar({ wide }: { wide?: boolean }) {
           <ul className="space-y-0.5">
             {filtered.map((c) => (
               <li key={c.id}>
-                <ConversationItem conv={c} onRename={setRenameTarget} onDelete={setDeleteTarget} />
+                <ConversationItem
+                  conv={c}
+                  onRename={setRenameTarget}
+                  onDelete={setDeleteTarget}
+                  selectionMode={selectionMode}
+                  selected={selectedIds.has(c.id)}
+                  onToggleSelect={toggleSelect}
+                />
               </li>
             ))}
           </ul>
