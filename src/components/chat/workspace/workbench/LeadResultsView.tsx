@@ -13,8 +13,9 @@ import { Loader2, Filter, Sparkles, X, CheckCircle2, AlertTriangle } from 'lucid
 import { useToolAvailability } from '@/lib/workflows/useToolAvailability';
 import { useChatWorkspace } from '@/contexts/ChatWorkspaceContext';
 import { useWorkspace } from '@/contexts/WorkspaceContext';
-import { runLeadAction, type LeadActionResult } from '@/lib/leadActions';
+import { runLeadAction } from '@/lib/leadActions';
 import { LEAD_ACTION_LOADING, type LeadActionKind } from '@/lib/leadActionRequest';
+import { deriveRowAction, type RowAction } from '@/lib/leadRowAction';
 
 interface Props {
   meta: LeadResultsPanelMeta;
@@ -26,9 +27,11 @@ export default function LeadResultsView({ meta, conversationId }: Props) {
   const { closeWorkbench } = useChatWorkspace();
   const { workspaceId } = useWorkspace();
   const tools = useToolAvailability();
-  // Direct lead-action (research/decision-makers/outreach) run + outcome state.
+  // Direct lead-action state. Per-row (Part E) is the source of truth; a light
+  // global banner is kept for selection/errors only.
   const [directRunning, setDirectRunning] = useState<LeadActionKind | null>(null);
-  const [actionOutcome, setActionOutcome] = useState<(LeadActionResult & { kind: LeadActionKind }) | null>(null);
+  const [rowActions, setRowActions] = useState<Record<string, RowAction>>({});
+  const [actionOutcome, setActionOutcome] = useState<{ kind: LeadActionKind; success: boolean; error?: string; summary?: string } | null>(null);
   const [showHelper, setShowHelper] = useState(true);
   const [onlyWithWebsite, setOnlyWithWebsite] = useState(false);
   const [minFit, setMinFit] = useState(0);
@@ -112,24 +115,34 @@ export default function LeadResultsView({ meta, conversationId }: Props) {
 
   // Direct lead action → run-agent's lead_action branch with the SELECTED lead
   // IDs. Requires an explicit selection; refreshes the Workbench on success.
+  // Runs the action ONE company at a time and writes each row's own lifecycle
+  // (running → success/empty/insufficient_context/error). The row/drawer — not a
+  // chat transcript — is the result surface.
   const runDirectLeadAction = useCallback(async (kind: LeadActionKind) => {
     if (directRunning) return;
-    const ids = selectedRows.map((r) => r.id);
-    if (ids.length === 0) {
+    const rows = selectedRows;
+    if (rows.length === 0) {
       setActionOutcome({ kind, success: false, error: 'Select at least one lead first.' });
       return;
     }
     setActionOutcome(null);
     setDirectRunning(kind);
-    try {
-      const res = await runLeadAction({ leadAction: kind, leadCandidateIds: ids, workspaceId, planId: meta.plan_id });
-      setActionOutcome({ ...res, kind });
-      if (res.success) await refresh();
-    } catch (e) {
-      setActionOutcome({ kind, success: false, error: e instanceof Error ? e.message : 'Action failed.' });
-    } finally {
-      setDirectRunning(null);
+    setRowActions((s) => { const n = { ...s }; for (const r of rows) n[r.id] = { kind, state: 'running' }; return n; });
+    let ok = 0;
+    for (const r of rows) {
+      try {
+        const res = await runLeadAction({ leadAction: kind, leadCandidateIds: [r.id], workspaceId, planId: meta.plan_id });
+        const p = (res.per_lead && res.per_lead[0]) ? res.per_lead[0] as Record<string, unknown> : {};
+        const ra = deriveRowAction(kind, res, p);
+        if (ra.state === 'success') ok++;
+        setRowActions((s) => ({ ...s, [r.id]: ra }));
+      } catch (e) {
+        setRowActions((s) => ({ ...s, [r.id]: { kind, state: 'error', detail: e instanceof Error ? e.message : 'failed' } }));
+      }
     }
+    setDirectRunning(null);
+    setActionOutcome({ kind, success: ok > 0, summary: `${ok}/${rows.length} succeeded — see each row. Nothing sent.` });
+    await refresh();
   }, [directRunning, selectedRows, workspaceId, meta.plan_id, refresh]);
 
   const onBulkAction = useCallback((a: LeadResultPanelAction) => runAction(a, targetRows), [runAction, targetRows]);
@@ -243,6 +256,7 @@ export default function LeadResultsView({ meta, conversationId }: Props) {
         <LeadTable
           rows={filtered}
           selected={selected}
+          rowActions={rowActions}
           onToggle={toggle}
           onToggleAll={toggleAll}
           onOpen={setDrawerRow}
@@ -337,68 +351,20 @@ export default function LeadResultsView({ meta, conversationId }: Props) {
   );
 }
 
-function LeadActionOutcomeCard({ outcome, onClose }: { outcome: LeadActionResult & { kind: LeadActionKind }; onClose: () => void }) {
-  const ok = outcome.success;
+// Lightweight global banner. Per-row status cells are the source of truth; this
+// only reports the selection error or a one-line "N/M succeeded — see each row".
+function LeadActionOutcomeCard({ outcome, onClose }: { outcome: { kind: LeadActionKind; success: boolean; error?: string; summary?: string }; onClose: () => void }) {
+  const ok = outcome.success && !outcome.error;
   const title = outcome.kind === 'research_company' ? 'Company research'
     : outcome.kind === 'find_decision_makers' ? 'Decision-makers' : 'Outreach draft';
-  const perLead = Array.isArray(outcome.per_lead) ? outcome.per_lead : [];
   return (
-    <div className={`mx-4 mt-2 mb-1 rounded-lg border p-3 text-[12px] relative ${ok ? 'border-emerald-500/25 bg-emerald-500/[0.05] text-[#C9D1D9]' : 'border-amber-500/30 bg-amber-500/[0.06] text-amber-200'}`}>
-      <button onClick={onClose} className="absolute top-2.5 right-2.5 text-[#7D8590] hover:text-[#C9D1D9]"><X className="h-3.5 w-3.5" /></button>
+    <div className={`mx-4 mt-2 mb-1 rounded-lg border p-2.5 text-[12px] relative ${ok ? 'border-emerald-500/25 bg-emerald-500/[0.05] text-[#C9D1D9]' : 'border-amber-500/30 bg-amber-500/[0.06] text-amber-200'}`}>
+      <button onClick={onClose} className="absolute top-2 right-2 text-[#7D8590] hover:text-[#C9D1D9]"><X className="h-3.5 w-3.5" /></button>
       <div className="flex items-center gap-1.5 font-semibold pr-6">
         {ok ? <CheckCircle2 className="h-3.5 w-3.5 text-emerald-400" /> : <AlertTriangle className="h-3.5 w-3.5 text-amber-400" />}
         {title}
       </div>
-      {outcome.error && <div className="mt-1 text-amber-200">{outcome.error}</div>}
-      {outcome.summary && <div className="mt-1 text-[#9aa4af]">{outcome.summary}</div>}
-      {perLead.length > 0 && (
-        <div className="mt-2 space-y-2">
-          {perLead.slice(0, 8).map((p, i) => <PerLeadRow key={i} kind={outcome.kind} p={p} />)}
-        </div>
-      )}
-      <div className="mt-2 text-[10px] text-[#7D8590]">Open a lead to see the full evidence. Drafts require approval — nothing is sent.</div>
-    </div>
-  );
-}
-
-function PerLeadRow({ kind, p }: { kind: LeadActionKind; p: Record<string, unknown> }) {
-  const company = (p.company as string) ?? 'Company';
-  if (kind === 'research_company') {
-    const status = p.status as string;
-    const lines = Array.isArray(p.summary_lines) ? p.summary_lines as string[] : [];
-    return (
-      <div className="rounded border border-white/[0.06] bg-white/[0.02] p-2">
-        <div className="flex items-center justify-between"><span className="font-medium text-[#F0F6FC]">{company}</span><span className="text-[10px] uppercase tracking-wide text-[#7D8590]">{status}{p.pages_fetched != null ? ` · ${p.pages_fetched}p` : ''}</span></div>
-        {status === 'blocked' ? <div className="text-[10.5px] text-amber-200/80 mt-0.5">{p.blocked_reason as string}</div>
-          : lines.slice(0, 6).map((l, i) => <div key={i} className="text-[10.5px] text-[#9aa4af] mt-0.5 truncate">{l}</div>)}
-      </div>
-    );
-  }
-  if (kind === 'find_decision_makers') {
-    const dms = Array.isArray(p.decision_makers) ? p.decision_makers as any[] : [];
-    return (
-      <div className="rounded border border-white/[0.06] bg-white/[0.02] p-2">
-        <div className="flex items-center justify-between"><span className="font-medium text-[#F0F6FC]">{company}</span>{p.needs_manual_review ? <span className="text-[10px] text-amber-300">needs manual review</span> : null}</div>
-        {dms.slice(0, 4).map((d, i) => (
-          <div key={i} className="text-[10.5px] mt-0.5">
-            <span className="text-[#F0F6FC]">{d.name}</span>
-            <span className="text-[#7D8590]">{d.title ? ` · ${d.title}` : ''} · {d.source} · {d.confidence}</span>
-            {d.source === 'job_poster' ? <span className="text-amber-300/80"> · poster hint (not a verified buyer)</span> : null}
-          </div>
-        ))}
-        {dms.length === 0 && <div className="text-[10.5px] text-amber-200/80 mt-0.5">No confident decision-maker yet.</div>}
-      </div>
-    );
-  }
-  // generate_outreach
-  const status = p.status as string;
-  const missing = Array.isArray(p.missing_context) ? p.missing_context as string[] : [];
-  return (
-    <div className="rounded border border-white/[0.06] bg-white/[0.02] p-2">
-      <div className="flex items-center justify-between"><span className="font-medium text-[#F0F6FC]">{company}</span><span className="text-[10px] uppercase tracking-wide text-emerald-300">{status === 'draft_needs_approval' ? 'draft · needs approval' : status}</span></div>
-      {status === 'draft_needs_approval'
-        ? <div className="text-[10.5px] text-[#9aa4af] mt-0.5">Recipient: {(p.recipient as string) ?? 'company-level'}. Review it in Awaiting You — nothing sent.</div>
-        : <div className="text-[10.5px] text-amber-200/80 mt-0.5">Insufficient context{missing.length ? `: ${missing.join(', ')}` : ''}. No draft created.</div>}
+      <div className="mt-0.5 text-[#9aa4af]">{outcome.error ?? outcome.summary}</div>
     </div>
   );
 }

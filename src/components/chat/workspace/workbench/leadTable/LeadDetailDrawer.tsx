@@ -1,7 +1,13 @@
 import { useEffect } from 'react';
-import { X, ExternalLink, Building2, User, Sparkles, Mail, FileText, Activity, Code2, Search, Users } from 'lucide-react';
+import { X, ExternalLink, Building2, User, Sparkles, Mail, FileText, Activity, Code2, Search, Users, Briefcase, Target, Linkedin } from 'lucide-react';
 import type { LeadTableRow } from '@/hooks/useLeadResults';
 import { ContactStatusChip, RowStatusChip } from './StatusChip';
+
+function Link({ href, label }: { href?: string | null; label: string }) {
+  if (!href) return null;
+  return <a href={href} target="_blank" rel="noopener noreferrer" className="text-emerald-300 hover:text-emerald-200 inline-flex items-center gap-1">{label}<ExternalLink className="h-2.5 w-2.5" /></a>;
+}
+function excerpt(s?: string | null, n = 320) { return s ? (s.length > n ? s.slice(0, n) + '…' : s) : null; }
 
 interface Props {
   row: LeadTableRow | null;
@@ -63,19 +69,70 @@ export default function LeadDetailDrawer({ row, onClose }: Props) {
           </button>
         </div>
 
+        {/* Part D.1 — Company evidence (from the Apify LinkedIn-Jobs payload) */}
         <Section icon={Building2} title="Company">
-          <Field k="Name" v={row.company_name} />
-          <Field k="Website" v={row.website ? <a href={row.website} target="_blank" rel="noopener noreferrer" className="text-emerald-300 hover:text-emerald-200 inline-flex items-center gap-1">{row.website}<ExternalLink className="h-2.5 w-2.5" /></a> : null} />
+          <div className="flex items-start gap-2 mb-1">
+            {row.company_logo && <img src={row.company_logo} alt="" className="h-8 w-8 rounded object-contain bg-white/[0.04] shrink-0" />}
+            <div className="min-w-0">
+              <div className="text-[12.5px] text-[#F0F6FC]">{row.company_name}</div>
+              {row.company_slogan && <div className="text-[10.5px] text-[#7D8590] italic">{row.company_slogan}</div>}
+            </div>
+          </div>
+          <Field k="Website" v={<Link href={row.website} label={row.website?.replace(/^https?:\/\//, '') ?? ''} />} />
+          <Field k="LinkedIn" v={row.company_linkedin_url ? <a href={row.company_linkedin_url} target="_blank" rel="noopener noreferrer" className="text-sky-300 hover:text-sky-200 inline-flex items-center gap-1"><Linkedin className="h-2.5 w-2.5" /> company page<ExternalLink className="h-2.5 w-2.5" /></a> : null} />
+          <Field k="Employees" v={typeof row.employee_count === 'number' ? `~${row.employee_count}` : null} />
+          <Field k="Industries" v={(row.industries ?? []).join(' · ')} />
           <Field k="Location" v={row.company_location} />
+          <Field k="About" v={excerpt(row.company_description, 400)} />
           <Field k="Status" v={<RowStatusChip value={row.status} />} />
+          {!row.website && !row.company_linkedin_url && <div className="text-[10.5px] text-amber-200/70 italic">No company website/LinkedIn in the source data.</div>}
         </Section>
 
-        <Section icon={Sparkles} title="Signal">
-          <Field k="Type" v={row.signal_type} />
-          <Field k="Why" v={row.signal_summary} />
-          <Field k="Source" v={row.signal_source_url ? <a href={row.signal_source_url} target="_blank" rel="noopener noreferrer" className="text-emerald-300 hover:text-emerald-200 inline-flex items-center gap-1">link<ExternalLink className="h-2.5 w-2.5" /></a> : null} />
-          <Field k="Fit" v={typeof row.fit_score === 'number' ? `${row.fit_score}` : null} />
+        {/* Part D.2 — Hiring signal (the exact job posting + proof) */}
+        <Section icon={Briefcase} title="Hiring signal">
+          <Field k="Role" v={row.job_title ?? row.signal_type} />
+          <Field k="Job post" v={<Link href={row.job_url ?? row.signal_source_url} label="view posting" />} />
+          <Field k="Apply" v={<Link href={row.apply_url} label="apply link" />} />
+          <Field k="Posted" v={row.posted_at} />
+          <Field k="Seniority" v={row.seniority_level} />
+          <Field k="Type" v={row.employment_type} />
+          <Field k="Function" v={row.job_function} />
+          <Field k="Salary" v={row.salary} />
+          <Field k="Applicants" v={typeof row.applicants_count === 'number' ? `${row.applicants_count}` : null} />
+          <Field k="Quality" v={row.source_quality} />
+          {row.job_description && <div className="text-[11.5px] text-[#9aa4af] mt-1">{excerpt(row.job_description, 500)}</div>}
         </Section>
+
+        {/* Part D.3 — Why Agentory selected this lead */}
+        <Section icon={Target} title="Why Agentory selected this lead">
+          <Field k="Verdict" v={row.analyst_verdict} />
+          <Field k="Fit" v={typeof (row.final_overall_fit ?? row.fit_score) === 'number' ? `${row.final_overall_fit ?? row.fit_score}/100` : null} />
+          <Field k="Confidence" v={row.confidence_level} />
+          <Field k="Gate" v={row.gate_decision} />
+          <Field k="Why selected" v={row.why_this_lead ?? row.signal_summary} />
+          <Field k="Why now" v={row.why_now} />
+          <Field k="ICP fit" v={row.icp_fit_summary} />
+          <Field k="Evidence" v={row.evidence_summary} />
+          {(row.missing_evidence ?? []).length > 0 && <Field k="Missing" v={<span className="text-amber-200/80">{(row.missing_evidence ?? []).join('; ')}</span>} />}
+          {(row.risk_flags ?? []).length > 0 && <Field k="Risks" v={<span className="text-amber-200/80">{(row.risk_flags ?? []).join('; ')}</span>} />}
+          {(row.disqualifiers_hit ?? []).length > 0 && <Field k="Disqual." v={<span className="text-rose-300/80">{(row.disqualifiers_hit ?? []).join('; ')}</span>} />}
+          <Field k="Next step" v={row.recommended_next_action} />
+        </Section>
+
+        {/* Poster/contact hint from the job post (not a verified buyer) */}
+        {(row.poster_name || row.poster_profile_url) && (
+          <Section icon={User} title="Contact hint">
+            <div className="flex items-center gap-2">
+              {row.poster_photo && <img src={row.poster_photo} alt="" className="h-7 w-7 rounded-full object-cover" />}
+              <div className="min-w-0">
+                <div className="text-[12px] text-[#F0F6FC] truncate">{row.poster_name ?? '—'}</div>
+                <div className="text-[10.5px] text-[#7D8590] truncate">{row.poster_title ?? 'Job poster'}</div>
+              </div>
+            </div>
+            <Field k="Profile" v={<Link href={row.poster_profile_url} label="LinkedIn" />} />
+            <div className="text-[10px] text-[#7D8590] italic mt-1">Hint from the job post — not a verified decision-maker.</div>
+          </Section>
+        )}
 
         {enrichment && (
           <Section icon={Search} title="Company enrichment">
@@ -159,7 +216,7 @@ export default function LeadDetailDrawer({ row, onClose }: Props) {
 
         <Section icon={Code2} title="Raw source">
           <pre className="whitespace-pre-wrap text-[10.5px] text-[#7D8590] bg-black/40 rounded p-2 border border-white/[0.06] max-h-64 overflow-auto">
-{JSON.stringify(row.raw ?? row, null, 2)}
+{JSON.stringify(meta ?? row, null, 2)}
           </pre>
         </Section>
       </aside>

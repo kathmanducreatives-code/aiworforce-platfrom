@@ -21,6 +21,12 @@ interface ApifyJobItem {
   sourceProof?: any[]; sourceQuality?: string | null; posterContactHint?: any;
   industries?: string[]; employeeCount?: number | null; companyDescription?: string | null;
   jobDescription?: string | null;
+  // Extended Apify evidence (company identity + job context + provider ids).
+  companyLogo?: string | null; companySlogan?: string | null; companyAddress?: any;
+  applyUrl?: string | null; employmentType?: string | null; seniorityLevel?: string | null;
+  jobFunction?: string | null; salary?: string | null; applicantsCount?: number | null;
+  providerJobId?: string | null; providerRefId?: string | null; providerTrackingId?: string | null;
+  inputUrl?: string | null;
 }
 function normalizeApifyItems(output: any): ApifyJobItem[] {
   if (!output) return [];
@@ -52,8 +58,22 @@ function normalizeApifyItems(output: any): ApifyJobItem[] {
       posterContactHint: it.poster_contact_hint ?? jraw.poster_contact_hint ?? null,
       sourceProof: it.source_proof ?? jraw.source_proof ?? [],
       sourceQuality: it.source_quality ?? jraw.source_quality ?? null,
-      postedAt: it.postedAt ?? it.posted_at ?? it.datePosted,
+      postedAt: it.posted_at ?? it.postedAt ?? jraw.posted_at ?? it.datePosted ?? null,
       source: it.source ?? it.platform,
+      // Extended evidence — prefer the promoted clean field, then the clean raw.
+      companyLogo: it.company_logo ?? jraw.company_logo ?? it.companyLogo ?? null,
+      companySlogan: it.company_slogan ?? jraw.company_slogan ?? it.companySlogan ?? null,
+      companyAddress: it.company_address ?? jraw.company_address ?? null,
+      applyUrl: it.apply_url ?? jraw.apply_url ?? it.applyUrl ?? null,
+      employmentType: it.employment_type ?? jraw.employment_type ?? it.employmentType ?? null,
+      seniorityLevel: it.seniority_level ?? jraw.seniority_level ?? it.seniorityLevel ?? null,
+      jobFunction: it.job_function ?? jraw.job_function ?? it.jobFunction ?? null,
+      salary: it.salary ?? jraw.salary ?? null,
+      applicantsCount: it.applicants_count ?? jraw.applicants_count ?? it.applicantsCount ?? null,
+      providerJobId: it.provider_job_id ?? jraw.provider_job_id ?? it.id ?? null,
+      providerRefId: it.provider_ref_id ?? jraw.provider_ref_id ?? it.refId ?? null,
+      providerTrackingId: it.provider_tracking_id ?? jraw.provider_tracking_id ?? it.trackingId ?? null,
+      inputUrl: it.input_url ?? jraw.input_url ?? it.inputUrl ?? null,
       raw: it,
     };
   });
@@ -367,7 +387,11 @@ async function writeApifyJobs(ctx: ToolCallCtx, output: any): Promise<void> {
           website: it.website ?? null,
           domain: domain ?? it.domain ?? null,
           company_linkedin_url: it.companyLinkedinUrl ?? null,
+          company_logo: it.companyLogo ?? null,
+          company_slogan: it.companySlogan ?? null,
+          company_address: it.companyAddress ?? null,
           job_url: it.url ?? null,
+          apply_url: it.applyUrl ?? null,
           source_url: it.url ?? null,
           job_title: it.title ?? null,
           exact_hiring_signal: it.title ? `${it.title}${it.company ? ` @ ${it.company}` : ""}` : null,
@@ -375,7 +399,17 @@ async function writeApifyJobs(ctx: ToolCallCtx, output: any): Promise<void> {
           job_description: it.jobDescription ?? null,
           industries: it.industries ?? [],
           employee_count: it.employeeCount ?? null,
+          employment_type: it.employmentType ?? null,
+          seniority_level: it.seniorityLevel ?? null,
+          job_function: it.jobFunction ?? null,
+          salary: it.salary ?? null,
+          posted_at: it.postedAt ?? null,
+          applicants_count: it.applicantsCount ?? null,
           poster_contact_hint: it.posterContactHint ?? null,
+          provider_job_id: it.providerJobId ?? null,
+          provider_ref_id: it.providerRefId ?? null,
+          provider_tracking_id: it.providerTrackingId ?? null,
+          input_url: it.inputUrl ?? null,
           source_proof: it.sourceProof ?? [],
           source_quality: it.sourceQuality ?? (it.url || it.website ? "partial" : "incomplete"),
           // Decision-maker discovery from JOB-POST evidence only (poster hint +

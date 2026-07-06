@@ -20,6 +20,13 @@ export interface PosterContactHint {
   name: string | null;
   profile_url: string | null;
   title: string | null;
+  photo: string | null;
+}
+export interface CompanyAddress {
+  country: string | null;
+  region: string | null;
+  locality: string | null;
+  street: string | null;
 }
 export type SourceQuality = "verified" | "partial" | "incomplete";
 
@@ -30,12 +37,27 @@ export interface NormalizedJob {
   domain: string | null;
   linkedinUrl: string | null;   // company LinkedIn URL
   jobUrl: string | null;
+  applyUrl: string | null;
   location: string | null;
   industries: string[];
   employeeCount: number | null;
   companyDescription: string | null;
+  companyLogo: string | null;
+  companySlogan: string | null;
+  companyAddress: CompanyAddress;
   jobDescription: string | null;
+  employmentType: string | null;
+  seniorityLevel: string | null;
+  jobFunction: string | null;
+  salary: string | null;
+  postedAt: string | null;
+  applicantsCount: number | null;
   posterContactHint: PosterContactHint;
+  // Provider/debug identifiers (never shown as evidence; useful for dedup + tracing).
+  providerJobId: string | null;
+  providerRefId: string | null;
+  providerTrackingId: string | null;
+  inputUrl: string | null;
   exactHiringSignal: string | null;
   signalSummary: string | null;
   sourceProof: SourceProofItem[];
@@ -102,11 +124,36 @@ export function normalizeApifyJobRow(row: unknown): NormalizedJob {
   const industries = toArray(r.industries ?? r.industry ?? r.companyIndustry);
   const employeeCount = toInt(r.companyEmployeesCount ?? r.employeeCount ?? r.companySize ?? r.employees);
   const location = firstStr(r.location, r.formattedLocation, r.jobLocation, r.city, r.address, r.companyLocation);
+  const applyUrl = firstStr(r.applyUrl, r.apply_url, r.applicationUrl);
+  const companyLogo = firstStr(r.companyLogo, r.company_logo, r.logo);
+  const companySlogan = firstStr(r.companySlogan, r.company_slogan, r.tagline);
+  const employmentType = firstStr(r.employmentType, r.employment_type, r.jobType);
+  const seniorityLevel = firstStr(r.seniorityLevel, r.seniority_level, r.seniority);
+  const jobFunction = firstStr(r.jobFunction, r.job_function, r.function);
+  const salary = firstStr(r.salary, r.salaryRange, r.compensation);
+  const postedAt = firstStr(r.postedAt, r.posted_at, r.datePosted, r.listedAt);
+  const applicantsCount = toInt(r.applicantsCount ?? r.applicants ?? r.numApplicants);
   const posterContactHint: PosterContactHint = {
     name: firstStr(r.jobPosterName, r.posterName, r.hiringManagerName),
     profile_url: firstStr(r.jobPosterProfileUrl, r.posterProfileUrl, r.jobPosterUrl),
     title: firstStr(r.jobPosterTitle, r.posterTitle, r.hiringManagerTitle),
+    photo: firstStr(r.jobPosterPhoto, r.posterPhoto, r.jobPosterImage),
   };
+
+  // companyAddress arrives nested ({ addressCountry, ... }) from the Apify API, or
+  // flattened ("companyAddress/addressCountry") from a CSV round-trip — accept both.
+  const addr = (r.companyAddress && typeof r.companyAddress === "object" ? r.companyAddress : {}) as Record<string, unknown>;
+  const companyAddress: CompanyAddress = {
+    country: firstStr(addr.addressCountry, r["companyAddress/addressCountry"], r.addressCountry),
+    region: firstStr(addr.addressRegion, r["companyAddress/addressRegion"], r.addressRegion),
+    locality: firstStr(addr.addressLocality, r["companyAddress/addressLocality"], r.addressLocality),
+    street: firstStr(addr.streetAddress, r["companyAddress/streetAddress"], r.streetAddress),
+  };
+
+  const providerJobId = firstStr(r.id, r.jobId, r.job_id);
+  const providerRefId = firstStr(r.refId, r.ref_id);
+  const providerTrackingId = firstStr(r.trackingId, r.tracking_id);
+  const inputUrl = firstStr(r.inputUrl, r.input_url);
 
   const domain = parseDomain(website);
 
@@ -124,8 +171,10 @@ export function normalizeApifyJobRow(row: unknown): NormalizedJob {
   const signalSummary = buildSignalSummary({ jobTitle, company });
 
   return {
-    company, jobTitle, website, domain, linkedinUrl, jobUrl, location,
-    industries, employeeCount, companyDescription, jobDescription, posterContactHint,
+    company, jobTitle, website, domain, linkedinUrl, jobUrl, applyUrl, location,
+    industries, employeeCount, companyDescription, companyLogo, companySlogan, companyAddress,
+    jobDescription, employmentType, seniorityLevel, jobFunction, salary, postedAt, applicantsCount,
+    posterContactHint, providerJobId, providerRefId, providerTrackingId, inputUrl,
     exactHiringSignal, signalSummary, sourceProof, sourceQuality,
     // Clean, clearly-named raw object (spec Phase 1) — preserves the source data.
     raw: {
@@ -134,18 +183,32 @@ export function normalizeApifyJobRow(row: unknown): NormalizedJob {
       company_website: website,
       domain,
       company_linkedin_url: linkedinUrl,
+      company_logo: companyLogo,
+      company_slogan: companySlogan,
+      company_address: companyAddress,
       job_url: jobUrl,
+      apply_url: applyUrl,
       job_title: jobTitle,
       job_description: jobDescription,
       company_description: companyDescription,
       industries,
       employee_count: employeeCount,
+      employment_type: employmentType,
+      seniority_level: seniorityLevel,
+      job_function: jobFunction,
+      salary,
+      posted_at: postedAt,
+      applicants_count: applicantsCount,
       location,
       exact_hiring_signal: exactHiringSignal,
       signal_summary: signalSummary,
       source_quality: sourceQuality,
       source_proof: sourceProof,
       poster_contact_hint: posterContactHint,
+      provider_job_id: providerJobId,
+      provider_ref_id: providerRefId,
+      provider_tracking_id: providerTrackingId,
+      input_url: inputUrl,
       provider_payload: r,
     },
   };

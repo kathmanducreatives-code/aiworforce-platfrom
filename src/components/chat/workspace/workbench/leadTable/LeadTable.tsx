@@ -1,22 +1,49 @@
-import { ExternalLink, Linkedin, Globe } from 'lucide-react';
+import { ExternalLink, Linkedin, Globe, Loader2 } from 'lucide-react';
 import type { LeadTableRow } from '@/hooks/useLeadResults';
 import type { LeadResultPanelAction } from '@/lib/chatActions';
+import type { LeadActionKind } from '@/lib/leadActionRequest';
+import type { RowAction } from '@/lib/leadRowAction';
 import LockedCell from './LockedCell';
 import { ContactStatusChip, RowStatusChip } from './StatusChip';
+
+// Per-row action lifecycle (Part E). Written by LeadResultsView, rendered here
+// on the matching unlock cell — the row is the source of truth, not a chat log.
+export type { RowAction } from '@/lib/leadRowAction';
 
 interface Props {
   rows: LeadTableRow[];
   selected: Set<string>;
+  rowActions?: Record<string, RowAction>;
   onToggle: (id: string) => void;
   onToggleAll: () => void;
   onOpen: (row: LeadTableRow) => void;
   onUnlock: (action: LeadResultPanelAction, rowId: string) => void;
 }
 
+// Copy per (kind, state). Empty/insufficient render as honest in-cell states,
+// never "locked forever".
+function RowActionCell({ a, kind }: { a: RowAction; kind: LeadActionKind }) {
+  if (a.state === 'running') {
+    const label = kind === 'research_company' ? 'Researching company…' : kind === 'find_decision_makers' ? 'Finding decision-makers…' : 'Preparing draft…';
+    return <div className="px-2 py-1.5 text-[10.5px] text-sky-300 inline-flex items-center gap-1"><Loader2 className="h-3 w-3 animate-spin" />{label}</div>;
+  }
+  if (a.state === 'error') return <div className="px-2 py-1.5 text-[10.5px] text-rose-300">Error{a.detail ? `: ${a.detail}` : ''}</div>;
+  if (a.state === 'empty') {
+    const label = kind === 'find_decision_makers' ? 'No verified decision-maker found'
+      : kind === 'research_company' ? (a.detail ?? 'Needs verification') : 'No result';
+    return <div className="px-2 py-1.5 text-[10.5px] text-amber-200/80">{label}</div>;
+  }
+  if (a.state === 'insufficient_context') return <div className="px-2 py-1.5 text-[10.5px] text-amber-200/80">Insufficient context{a.detail ? ` — ${a.detail}` : ''}</div>;
+  // success
+  return <div className="px-2 py-1.5 text-[10.5px] text-emerald-300 line-clamp-2">{a.detail ?? 'Done'}</div>;
+}
+
 const COL_W = {
   select: 'w-9',
   company: 'min-w-[200px]',
-  signal: 'min-w-[200px]',
+  signal: 'min-w-[220px]',
+  context: 'min-w-[220px]',
+  analyst: 'min-w-[240px]',
   persona: 'min-w-[140px]',
   contactStatus: 'min-w-[120px]',
   decisionMaker: 'min-w-[180px]',
@@ -28,7 +55,11 @@ const COL_W = {
   status: 'w-[90px]',
 };
 
-export default function LeadTable({ rows, selected, onToggle, onToggleAll, onOpen, onUnlock }: Props) {
+function hostOf(url: string) {
+  return url.replace(/^https?:\/\//, '').replace(/\/.*$/, '');
+}
+
+export default function LeadTable({ rows, selected, rowActions, onToggle, onToggleAll, onOpen, onUnlock }: Props) {
   const allChecked = rows.length > 0 && rows.every((r) => selected.has(r.id));
 
   return (
@@ -47,6 +78,8 @@ export default function LeadTable({ rows, selected, onToggle, onToggleAll, onOpe
             </th>
             <th className={`${COL_W.company} sticky left-9 z-[5] bg-[#0a0d12] border-b border-r border-white/[0.08] px-2 py-2`}>Company / Account</th>
             <th className={`${COL_W.signal} border-b border-white/[0.08] px-2 py-2`}>Signal</th>
+            <th className={`${COL_W.context} border-b border-white/[0.08] px-2 py-2`}>Company Context</th>
+            <th className={`${COL_W.analyst} border-b border-white/[0.08] px-2 py-2`}>Analyst</th>
             <th className={`${COL_W.persona} border-b border-white/[0.08] px-2 py-2`}>Recommended Persona</th>
             <th className={`${COL_W.contactStatus} border-b border-white/[0.08] px-2 py-2`}>Contact Status</th>
             <th className={`${COL_W.decisionMaker} border-b border-white/[0.08] px-2 py-2`}>Decision Maker 🔒</th>
@@ -82,7 +115,9 @@ export default function LeadTable({ rows, selected, onToggle, onToggleAll, onOpe
                     <div className="text-[12.5px] font-medium text-[#F0F6FC] truncate">{r.company_name ?? 'Unknown company'}</div>
                     <div className="text-[10.5px] text-[#7D8590] truncate inline-flex items-center gap-1">
                       {r.website ? (
-                        <><Globe className="h-2.5 w-2.5" /> {r.website.replace(/^https?:\/\//, '')}</>
+                        <><Globe className="h-2.5 w-2.5" /> {hostOf(r.website)}</>
+                      ) : r.company_linkedin_url ? (
+                        <><Linkedin className="h-2.5 w-2.5 text-sky-300/80" /> <span className="text-sky-300/80">LinkedIn</span></>
                       ) : (
                         <span className="text-amber-300/80">no website</span>
                       )}
@@ -90,10 +125,45 @@ export default function LeadTable({ rows, selected, onToggle, onToggleAll, onOpe
                   </button>
                 </td>
                 <td className={`${COL_W.signal} border-b border-white/[0.05] px-2 py-1.5 align-top`}>
-                  <div className="text-[11.5px] text-[#C9D1D9] truncate">{r.signal_type ?? '—'}</div>
-                  <div className="text-[10.5px] text-[#7D8590] line-clamp-2">{r.signal_summary ?? ''}</div>
-                  {r.why_this_lead && (
-                    <div className="text-[10px] text-emerald-300/70 line-clamp-2 mt-0.5">{r.why_this_lead}</div>
+                  <div className="text-[11.5px] text-[#F0F6FC] truncate">{r.job_title ?? r.signal_type ?? '—'}</div>
+                  <div className="text-[10px] text-[#7D8590] truncate">{r.job_title ? (r.signal_type ?? '') : ''}{r.posted_at ? ` · ${r.posted_at}` : ''}</div>
+                  {(r.job_url || r.signal_source_url) && (
+                    <a href={(r.job_url || r.signal_source_url) as string} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()} className="text-[10px] inline-flex items-center gap-1 text-emerald-300/80 hover:text-emerald-200">
+                      view proof <ExternalLink className="h-2.5 w-2.5" />
+                    </a>
+                  )}
+                  {(r.why_now || r.signal_summary) && (
+                    <div className="text-[10px] text-[#7D8590] line-clamp-2 mt-0.5">{r.why_now ?? r.signal_summary}</div>
+                  )}
+                </td>
+                <td className={`${COL_W.context} border-b border-white/[0.05] px-2 py-1.5 align-top`}>
+                  <div className="text-[10.5px] text-[#9aa4af] flex flex-wrap gap-x-2">
+                    {typeof r.employee_count === 'number' && <span>~{r.employee_count} emp</span>}
+                    {(r.industries ?? []).length > 0 && <span className="truncate">{(r.industries ?? []).slice(0, 2).join(', ')}</span>}
+                  </div>
+                  {r.company_description ? (
+                    <div className="text-[10px] text-[#7D8590] line-clamp-3 mt-0.5">{r.company_description}</div>
+                  ) : (
+                    <div className="text-[10px] text-[#7D8590]/60 italic">no company description</div>
+                  )}
+                </td>
+                <td className={`${COL_W.analyst} border-b border-white/[0.05] px-2 py-1.5 align-top`}>
+                  {r.analyst_verdict ? (
+                    <div className="flex items-center gap-1.5">
+                      <span className={`text-[9px] uppercase tracking-wide px-1 py-0.5 rounded ${
+                        r.analyst_verdict === 'strong' ? 'bg-emerald-500/15 text-emerald-300'
+                        : r.analyst_verdict === 'needs_verification' ? 'bg-amber-500/15 text-amber-200'
+                        : 'bg-white/[0.06] text-[#9aa4af]'
+                      }`}>{r.analyst_verdict.replace(/_/g, ' ')}</span>
+                      {typeof (r.final_overall_fit ?? r.fit_score) === 'number' && (
+                        <span className="text-[10px] font-mono text-emerald-200">{r.final_overall_fit ?? r.fit_score}</span>
+                      )}
+                      {r.confidence_level && <span className="text-[9px] text-[#7D8590]">{r.confidence_level}</span>}
+                    </div>
+                  ) : <span className="text-[10px] text-[#7D8590]">—</span>}
+                  {r.icp_fit_summary && <div className="text-[10px] text-[#9aa4af] line-clamp-2 mt-0.5">{r.icp_fit_summary}</div>}
+                  {(r.missing_evidence ?? []).length > 0 && (
+                    <div className="text-[9.5px] text-amber-200/70 line-clamp-1 mt-0.5">missing: {(r.missing_evidence ?? []).join(', ')}</div>
                   )}
                 </td>
                 <td className={`${COL_W.persona} border-b border-white/[0.05] px-2 py-1.5 align-top text-[11.5px] text-[#C9D1D9]`}>
@@ -103,7 +173,9 @@ export default function LeadTable({ rows, selected, onToggle, onToggleAll, onOpe
                   <ContactStatusChip status={r.contact_status} />
                 </td>
                 <td className={`${COL_W.decisionMaker} border-b border-white/[0.05] align-top p-0`}>
-                  {contactLocked ? (
+                  {rowActions?.[r.id]?.kind === 'find_decision_makers' ? (
+                    <RowActionCell a={rowActions[r.id]} kind="find_decision_makers" />
+                  ) : contactLocked ? (
                     <LockedCell label="Find decision-maker" credits={1} onUnlock={() => onUnlock('find_contacts', r.id)} />
                   ) : (
                     <div className="px-2 py-1.5">
@@ -131,7 +203,9 @@ export default function LeadTable({ rows, selected, onToggle, onToggleAll, onOpe
                   )}
                 </td>
                 <td className={`${COL_W.enrichment} border-b border-white/[0.05] align-top p-0`}>
-                  {enrichLocked ? (
+                  {rowActions?.[r.id]?.kind === 'research_company' ? (
+                    <RowActionCell a={rowActions[r.id]} kind="research_company" />
+                  ) : enrichLocked ? (
                     <LockedCell
                       label={r.domain_status === 'missing' ? 'Needs domain' : 'Research company'}
                       credits={r.domain_status === 'missing' ? 0 : 1}
@@ -143,7 +217,9 @@ export default function LeadTable({ rows, selected, onToggle, onToggleAll, onOpe
                   )}
                 </td>
                 <td className={`${COL_W.message} border-b border-white/[0.05] align-top p-0`}>
-                  {draftLocked ? (
+                  {rowActions?.[r.id]?.kind === 'generate_outreach' ? (
+                    <RowActionCell a={rowActions[r.id]} kind="generate_outreach" />
+                  ) : draftLocked ? (
                     <LockedCell
                       label={r.contact_status === 'needs_contact' ? 'Needs contact' : 'Generate outreach'}
                       credits={r.contact_status === 'needs_contact' ? 0 : 2}

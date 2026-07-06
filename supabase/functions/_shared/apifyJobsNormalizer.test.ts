@@ -92,3 +92,107 @@ Deno.test("industries/employees accept strings + numbers; older rows don't crash
 Deno.test("buildSignalSummary is evidence-based", () => {
   assert(buildSignalSummary({ jobTitle: "Growth Ops Lead", company: "Foo" }).includes("Growth Ops Lead"));
 });
+
+// ---- Full 33-field Apify LinkedIn-Jobs row (the uploaded dataset shape) ----
+const fullRow = {
+  applicantsCount: 25,
+  applyUrl: "https://boards.greenhouse.io/acme/jobs/999/apply",
+  companyAddress: {
+    addressCountry: "United States",
+    addressLocality: "San Francisco",
+    addressRegion: "CA",
+    postalCode: "94107",
+    streetAddress: "500 Howard St",
+    type: "PostalAddress",
+  },
+  companyDescription: "Acme Robotics builds warehouse automation.",
+  companyEmployeesCount: 62,
+  companyLinkedinUrl: "https://www.linkedin.com/company/acme-robotics",
+  companyLogo: "https://media.licdn.com/acme-logo.png",
+  companyName: "Acme Robotics",
+  companySlogan: "Automate the warehouse.",
+  companyWebsite: "https://www.acmerobotics.com",
+  descriptionHtml: "<p>We are hiring a RevOps lead.</p>",
+  descriptionText: "We are hiring a Revenue Operations Manager to own our GTM systems.",
+  employmentType: "Full-time",
+  id: "4372091994",
+  industries: ["Robotics", "Automation"],
+  inputUrl: "https://www.linkedin.com/jobs/search?keywords=RevOps",
+  jobFunction: "Sales",
+  jobPosterName: "Jane Doe",
+  jobPosterPhoto: "https://media.licdn.com/jane.png",
+  jobPosterProfileUrl: "https://www.linkedin.com/in/janedoe",
+  link: "https://www.linkedin.com/jobs/view/4372091994",
+  location: "San Francisco, CA",
+  postedAt: "2026-06-30",
+  refId: "xBMEgX7aZ",
+  salary: "$120k–$160k",
+  seniorityLevel: "Mid-Senior level",
+  title: "Revenue Operations Manager",
+  trackingId: "a8KcoXKkq8",
+};
+
+Deno.test("Test 7: extended company identity — logo, slogan, address all mapped", () => {
+  const n = normalizeApifyJobRow(fullRow);
+  assertEquals(n.companyLogo, "https://media.licdn.com/acme-logo.png");
+  assertEquals(n.companySlogan, "Automate the warehouse.");
+  assertEquals(n.companyAddress.country, "United States");
+  assertEquals(n.companyAddress.region, "CA");
+  assertEquals(n.companyAddress.locality, "San Francisco");
+  assertEquals(n.companyAddress.street, "500 Howard St");
+});
+
+Deno.test("Test 8: job context — apply/employment/seniority/function/salary/posted/applicants", () => {
+  const n = normalizeApifyJobRow(fullRow);
+  assertEquals(n.applyUrl, "https://boards.greenhouse.io/acme/jobs/999/apply");
+  assertEquals(n.employmentType, "Full-time");
+  assertEquals(n.seniorityLevel, "Mid-Senior level");
+  assertEquals(n.jobFunction, "Sales");
+  assertEquals(n.salary, "$120k–$160k");
+  assertEquals(n.postedAt, "2026-06-30");
+  assertEquals(n.applicantsCount, 25);
+});
+
+Deno.test("Test 9: poster photo + provider ids preserved", () => {
+  const n = normalizeApifyJobRow(fullRow);
+  assertEquals(n.posterContactHint.photo, "https://media.licdn.com/jane.png");
+  assertEquals(n.providerJobId, "4372091994");
+  assertEquals(n.providerRefId, "xBMEgX7aZ");
+  assertEquals(n.providerTrackingId, "a8KcoXKkq8");
+  assertEquals(n.inputUrl, "https://www.linkedin.com/jobs/search?keywords=RevOps");
+});
+
+Deno.test("Test 10: raw preserves clean names + full provider_payload for debugging", () => {
+  const n = normalizeApifyJobRow(fullRow);
+  assertEquals(n.raw.company_logo, "https://media.licdn.com/acme-logo.png");
+  assertEquals(n.raw.employment_type, "Full-time");
+  assertEquals(n.raw.applicants_count, 25);
+  assertEquals((n.raw.company_address as any).region, "CA");
+  // Full original row is retained under provider_payload.
+  assertEquals((n.raw.provider_payload as any).descriptionHtml, "<p>We are hiring a RevOps lead.</p>");
+});
+
+Deno.test("Test 11: flattened companyAddress/* keys (CSV round-trip) also map", () => {
+  const n = normalizeApifyJobRow({
+    title: "Ops Lead",
+    "companyAddress/addressCountry": "Canada",
+    "companyAddress/addressRegion": "ON",
+    "companyAddress/addressLocality": "Toronto",
+    "companyAddress/streetAddress": "1 King St",
+  });
+  assertEquals(n.companyAddress.country, "Canada");
+  assertEquals(n.companyAddress.region, "ON");
+  assertEquals(n.companyAddress.locality, "Toronto");
+  assertEquals(n.companyAddress.street, "1 King St");
+});
+
+Deno.test("Test 12: legacy row missing all extended fields → nulls, never crashes", () => {
+  const n = normalizeApifyJobRow({ companyName: "Old Co", title: "Ops" });
+  assertEquals(n.companyLogo, null);
+  assertEquals(n.applyUrl, null);
+  assertEquals(n.salary, null);
+  assertEquals(n.applicantsCount, null);
+  assertEquals(n.companyAddress.country, null);
+  assertEquals(n.posterContactHint.photo, null);
+  assertEquals(n.providerJobId, null);
+});

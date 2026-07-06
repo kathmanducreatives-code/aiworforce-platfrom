@@ -41,6 +41,47 @@ export interface LeadTableRow {
   matched_icp?: string[];
   missing_fields?: string[];
 
+  // Company evidence preserved from the Apify LinkedIn-Jobs scraper.
+  company_linkedin_url?: string | null;
+  company_logo?: string | null;
+  company_slogan?: string | null;
+  company_description?: string | null;
+  industries?: string[];
+  employee_count?: number | null;
+
+  // Hiring-signal / job evidence.
+  job_title?: string | null;
+  job_url?: string | null;
+  apply_url?: string | null;
+  job_description?: string | null;
+  employment_type?: string | null;
+  seniority_level?: string | null;
+  job_function?: string | null;
+  salary?: string | null;
+  posted_at?: string | null;
+  applicants_count?: number | null;
+  source_quality?: string | null;
+
+  // Poster contact hint (from the job post — NOT a verified decision-maker).
+  poster_name?: string | null;
+  poster_profile_url?: string | null;
+  poster_title?: string | null;
+  poster_photo?: string | null;
+
+  // Analyst brief (Aria + proof gate + analyst summary).
+  analyst_verdict?: string | null;
+  final_overall_fit?: number | null;
+  confidence_level?: string | null;
+  gate_decision?: string | null;
+  why_now?: string | null;
+  icp_fit_summary?: string | null;
+  evidence_summary?: string | null;
+  missing_evidence?: string[];
+  risk_flags?: string[];
+  disqualifiers_hit?: string[];
+  recommended_next_action?: string | null;
+  outreach_angle?: string | null;
+
   enrichment_status: EnrichmentStatus;
   enrichment_summary?: string | null;
   personalization_angles?: string[];
@@ -148,6 +189,18 @@ export function useLeadResults(planId: string | null) {
           : (contact_status === 'needs_contact' ? 'blocked_missing_contact' : 'ready');
         const persona = inferPersona(r.lead_type);
 
+        // Read helpers for the preserved Apify + analyst jsonb (never fabricate).
+        const s = (v: unknown): string | null => (typeof v === 'string' && v.trim() ? v : null);
+        const n = (v: unknown): number | null => (typeof v === 'number' && Number.isFinite(v) ? v : null);
+        const a = (v: unknown): string[] => (Array.isArray(v) ? v.filter((x) => typeof x === 'string' && x.trim()) : []);
+        const poster = (rawMeta.poster_contact_hint && typeof rawMeta.poster_contact_hint === 'object')
+          ? rawMeta.poster_contact_hint as Record<string, any> : {};
+        const addr = (rawMeta.company_address && typeof rawMeta.company_address === 'object')
+          ? rawMeta.company_address as Record<string, any> : {};
+        const companyLocation = s(rawMeta.location)
+          ?? ([s(addr.locality), s(addr.region), s(addr.country)].filter(Boolean).join(', ') || null);
+        const sourceUrl = s(rawMeta.source_url) ?? s(rawMeta.job_url) ?? s(rawMeta.company_website) ?? null;
+
         return {
           id: r.id,
           lead_candidate_id: r.id,
@@ -155,13 +208,13 @@ export function useLeadResults(planId: string | null) {
           contact_id: r.contact_id ?? null,
           signal_id: null,
           company_name: r.accounts?.name ?? null,
-          company_location: null,
+          company_location: companyLocation,
           website,
           domain_status,
           signal_type: r.lead_type ?? null,
           signal_title: r.lead_type ?? null,
-          signal_summary: r.reason ?? null,
-          signal_source_url: null,
+          signal_summary: s(rawMeta.signal_summary) ?? r.reason ?? null,
+          signal_source_url: sourceUrl,
           found_via: null,
           recommended_persona: persona.persona,
           recommended_persona_reason: persona.reason,
@@ -177,6 +230,43 @@ export function useLeadResults(planId: string | null) {
           why_this_lead: typeof rawMeta.why_this_lead === 'string' ? rawMeta.why_this_lead : null,
           matched_icp: Array.isArray(rawMeta.matched_icp) ? rawMeta.matched_icp : [],
           missing_fields: Array.isArray(rawMeta.missing_fields) ? rawMeta.missing_fields : [],
+          // Company evidence.
+          company_linkedin_url: s(rawMeta.company_linkedin_url),
+          company_logo: s(rawMeta.company_logo),
+          company_slogan: s(rawMeta.company_slogan),
+          company_description: s(rawMeta.company_description),
+          industries: a(rawMeta.industries),
+          employee_count: n(rawMeta.employee_count),
+          // Job evidence.
+          job_title: s(rawMeta.job_title),
+          job_url: s(rawMeta.job_url),
+          apply_url: s(rawMeta.apply_url),
+          job_description: s(rawMeta.job_description),
+          employment_type: s(rawMeta.employment_type),
+          seniority_level: s(rawMeta.seniority_level),
+          job_function: s(rawMeta.job_function),
+          salary: s(rawMeta.salary),
+          posted_at: s(rawMeta.posted_at),
+          applicants_count: n(rawMeta.applicants_count),
+          source_quality: s(rawMeta.source_quality),
+          // Poster hint (job post author — not a verified buyer).
+          poster_name: s(poster.name),
+          poster_profile_url: s(poster.profile_url),
+          poster_title: s(poster.title),
+          poster_photo: s(poster.photo),
+          // Analyst brief.
+          analyst_verdict: s(rawMeta.analyst_verdict),
+          final_overall_fit: n(rawMeta.final_overall_fit) ?? n(rawMeta.overall_fit),
+          confidence_level: s(rawMeta.confidence_level),
+          gate_decision: s(rawMeta.gate_decision),
+          why_now: s(rawMeta.why_now),
+          icp_fit_summary: s(rawMeta.icp_fit_summary),
+          evidence_summary: s(rawMeta.evidence_summary),
+          missing_evidence: a(rawMeta.missing_evidence),
+          risk_flags: a(rawMeta.risk_flags),
+          disqualifiers_hit: a(rawMeta.disqualifiers_hit),
+          recommended_next_action: s(rawMeta.recommended_next_action),
+          outreach_angle: s(rawMeta.outreach_angle),
           enrichment_status,
           enrichment_summary: enr?.summary ?? null,
           personalization_angles: Array.isArray(enr?.personalization_angles) ? enr.personalization_angles : [],
