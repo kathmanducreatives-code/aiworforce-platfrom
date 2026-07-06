@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { cn } from '@/lib/utils';
 import { useWorkspace } from '@/contexts/WorkspaceContext';
 import { useAgents } from '@/hooks/useAgents';
@@ -12,7 +12,11 @@ import AgentAvatar from './agents/AgentAvatar';
 import ConversationRowMenu from './ConversationRowMenu';
 import RenameConversationDialog from './RenameConversationDialog';
 import DeleteConversationDialog from './DeleteConversationDialog';
-import { Search, Plus } from 'lucide-react';
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
+import { Search, Plus, CheckSquare, X, Trash2 } from 'lucide-react';
 
 type Filter = 'all' | 'active' | 'done';
 
@@ -20,10 +24,16 @@ function ConversationItem({
   conv,
   onRename,
   onDelete,
+  selectionMode,
+  selected,
+  onToggleSelect,
 }: {
   conv: ChatConversationRow;
   onRename: (c: ChatConversationRow) => void;
   onDelete: (c: ChatConversationRow) => void;
+  selectionMode: boolean;
+  selected: boolean;
+  onToggleSelect: (id: string) => void;
 }) {
   const { view, setView, closeWorkbench } = useChatWorkspace();
   const rel = useRelativeTime(conv.updated_at);
@@ -34,27 +44,46 @@ function ConversationItem({
     <div
       className={cn(
         'group relative w-full flex items-start gap-2 pl-2.5 pr-1 py-1.5 rounded-md transition-colors cursor-pointer',
-        active
+        active && !selectionMode
           ? 'bg-white/[0.05] text-[#F0F6FC]'
-          : 'text-[#7D8590] hover:text-[#F0F6FC] hover:bg-white/[0.025]',
+          : selected
+            ? 'bg-emerald-500/10 text-[#F0F6FC]'
+            : 'text-[#7D8590] hover:text-[#F0F6FC] hover:bg-white/[0.025]',
       )}
       onClick={() => {
+        if (selectionMode) {
+          onToggleSelect(conv.id);
+          return;
+        }
         if (!active) closeWorkbench();
         setView({ kind: 'chat', conversationId: conv.id, agentSlug: conv.agent_slug });
       }}
     >
-      {active && <span aria-hidden className="absolute left-0 top-1.5 bottom-1.5 w-[2px] rounded-r bg-emerald-400" />}
-      <AgentAvatar slug={conv.agent_slug} size="xs" ring={false} />
+      {active && !selectionMode && <span aria-hidden className="absolute left-0 top-1.5 bottom-1.5 w-[2px] rounded-r bg-emerald-400" />}
+      {selectionMode ? (
+        <input
+          type="checkbox"
+          checked={selected}
+          onChange={() => onToggleSelect(conv.id)}
+          onClick={(e) => e.stopPropagation()}
+          className="mt-1 h-3.5 w-3.5 accent-emerald-500 cursor-pointer"
+          aria-label={`Select ${title}`}
+        />
+      ) : (
+        <AgentAvatar slug={conv.agent_slug} size="xs" ring={false} />
+      )}
       <div className="flex-1 min-w-0">
         <div className="text-xs line-clamp-1">{title}</div>
         <div className="text-[10px] text-[#484F58] mt-0.5">{rel}</div>
       </div>
-      <div className="opacity-60 group-hover:opacity-100 transition-opacity" onClick={(e) => e.stopPropagation()}>
-        <ConversationRowMenu
-          onRename={() => onRename(conv)}
-          onDelete={() => onDelete(conv)}
-        />
-      </div>
+      {!selectionMode && (
+        <div className="opacity-60 group-hover:opacity-100 transition-opacity" onClick={(e) => e.stopPropagation()}>
+          <ConversationRowMenu
+            onRename={() => onRename(conv)}
+            onDelete={() => onDelete(conv)}
+          />
+        </div>
+      )}
     </div>
   );
 }
@@ -64,11 +93,15 @@ export default function ConversationsSidebar({ wide }: { wide?: boolean }) {
   const { agents } = useAgents(workspaceId);
   const { view, setView } = useChatWorkspace();
   const { conversations, state: convState, error: convError, retry } = useUserConversations();
-  const { createConversation } = useConversationActions();
+  const { createConversation, deleteConversations } = useConversationActions();
   const [filter, setFilter] = useState<Filter>('all');
   const [query, setQuery] = useState('');
   const [renameTarget, setRenameTarget] = useState<ChatConversationRow | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<ChatConversationRow | null>(null);
+  const [selectionMode, setSelectionMode] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [bulkConfirmOpen, setBulkConfirmOpen] = useState(false);
+  const [bulkDeleting, setBulkDeleting] = useState(false);
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -76,6 +109,43 @@ export default function ConversationsSidebar({ wide }: { wide?: boolean }) {
       .filter((c) => filter === 'all' ? true : c.status === (filter === 'active' ? 'active' : 'done'))
       .filter((c) => !q || (c.title ?? '').toLowerCase().includes(q));
   }, [conversations, filter, query]);
+
+  const toggleSelect = (id: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  };
+
+  const exitSelection = () => {
+    setSelectionMode(false);
+    setSelectedIds(new Set());
+  };
+
+  const selectAllFiltered = () => {
+    setSelectedIds(new Set(filtered.map((c) => c.id)));
+  };
+
+  useEffect(() => {
+    if (!selectionMode) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') exitSelection();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [selectionMode]);
+
+  const runBulkDelete = async () => {
+    const ids = Array.from(selectedIds);
+    if (ids.length === 0) return;
+    setBulkDeleting(true);
+    const n = await deleteConversations(ids);
+    setBulkDeleting(false);
+    setBulkConfirmOpen(false);
+    if (n > 0) exitSelection();
+  };
+
 
   return (
     <aside
@@ -100,19 +170,68 @@ export default function ConversationsSidebar({ wide }: { wide?: boolean }) {
             className="w-full h-7 pl-7 pr-2 rounded-md bg-white/[0.03] border border-white/[0.06] text-[12px] text-[#F0F6FC] placeholder:text-[#484F58] outline-none focus:border-white/[0.12]"
           />
         </div>
-        <div className="flex items-center gap-3 pt-0.5">
-          {(['all', 'active', 'done'] as Filter[]).map((f) => (
-            <button
-              key={f}
-              onClick={() => setFilter(f)}
-              className={cn(
-                'text-[11px] capitalize transition-colors duration-150',
-                filter === f ? 'text-[#F0F6FC]' : 'text-[#7D8590] hover:text-[#F0F6FC]',
-              )}
-            >{f}</button>
-          ))}
+        <div className="flex items-center justify-between pt-1">
+          <div className="flex items-center gap-3">
+            {(['all', 'active', 'done'] as Filter[]).map((f) => (
+              <button
+                key={f}
+                onClick={() => setFilter(f)}
+                className={cn(
+                  'text-[11px] capitalize transition-colors duration-150',
+                  filter === f ? 'text-[#F0F6FC]' : 'text-[#7D8590] hover:text-[#F0F6FC]',
+                )}
+              >{f}</button>
+            ))}
+          </div>
+          <button
+            onClick={() => (selectionMode ? exitSelection() : setSelectionMode(true))}
+            className={cn(
+              'inline-flex items-center gap-1 text-[11px] px-1.5 py-0.5 rounded transition-colors',
+              selectionMode
+                ? 'text-emerald-300 hover:text-emerald-200'
+                : 'text-[#7D8590] hover:text-[#F0F6FC]',
+            )}
+            aria-label={selectionMode ? 'Cancel selection' : 'Select chats'}
+          >
+            {selectionMode ? <X className="h-3 w-3" /> : <CheckSquare className="h-3 w-3" />}
+            {selectionMode ? 'Cancel' : 'Select'}
+          </button>
         </div>
       </div>
+
+      {selectionMode && (
+        <div className="px-3 py-2 border-y border-white/[0.06] bg-white/[0.02] flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2 text-[11px] text-[#F0F6FC]">
+            <span>{selectedIds.size} selected</span>
+            <button
+              type="button"
+              className="text-[10px] text-[#7D8590] hover:text-[#F0F6FC] underline underline-offset-2"
+              onClick={selectAllFiltered}
+            >Select all</button>
+            {selectedIds.size > 0 && (
+              <button
+                type="button"
+                className="text-[10px] text-[#7D8590] hover:text-[#F0F6FC] underline underline-offset-2"
+                onClick={() => setSelectedIds(new Set())}
+              >Clear</button>
+            )}
+          </div>
+          <button
+            type="button"
+            disabled={selectedIds.size === 0 || bulkDeleting}
+            onClick={() => setBulkConfirmOpen(true)}
+            className={cn(
+              'inline-flex items-center gap-1 text-[11px] px-2 py-1 rounded-md border transition-colors',
+              selectedIds.size === 0 || bulkDeleting
+                ? 'border-white/[0.06] text-[#484F58] cursor-not-allowed'
+                : 'border-red-500/40 bg-red-500/10 text-red-200 hover:bg-red-500/20',
+            )}
+          >
+            <Trash2 className="h-3 w-3" /> Delete
+          </button>
+        </div>
+      )}
+
 
       <div className="flex-1 overflow-y-auto px-1.5">
         {convState === 'loading' ? (
@@ -144,7 +263,14 @@ export default function ConversationsSidebar({ wide }: { wide?: boolean }) {
           <ul className="space-y-0.5">
             {filtered.map((c) => (
               <li key={c.id}>
-                <ConversationItem conv={c} onRename={setRenameTarget} onDelete={setDeleteTarget} />
+                <ConversationItem
+                  conv={c}
+                  onRename={setRenameTarget}
+                  onDelete={setDeleteTarget}
+                  selectionMode={selectionMode}
+                  selected={selectedIds.has(c.id)}
+                  onToggleSelect={toggleSelect}
+                />
               </li>
             ))}
           </ul>
@@ -214,6 +340,26 @@ export default function ConversationsSidebar({ wide }: { wide?: boolean }) {
         conversationId={deleteTarget?.id ?? null}
         title={deleteTarget?.title ?? null}
       />
+      <AlertDialog open={bulkConfirmOpen} onOpenChange={(o) => { if (!bulkDeleting) setBulkConfirmOpen(o); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              Delete {selectedIds.size} conversation{selectedIds.size === 1 ? '' : 's'}?
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              Messages in the selected chats will be permanently removed. This cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={bulkDeleting}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={bulkDeleting}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={(e) => { e.preventDefault(); void runBulkDelete(); }}
+            >{bulkDeleting ? 'Deleting…' : 'Delete'}</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </aside>
   );
 }
