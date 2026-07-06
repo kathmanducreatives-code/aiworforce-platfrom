@@ -170,19 +170,68 @@ export default function ConversationsSidebar({ wide }: { wide?: boolean }) {
             className="w-full h-7 pl-7 pr-2 rounded-md bg-white/[0.03] border border-white/[0.06] text-[12px] text-[#F0F6FC] placeholder:text-[#484F58] outline-none focus:border-white/[0.12]"
           />
         </div>
-        <div className="flex items-center gap-3 pt-0.5">
-          {(['all', 'active', 'done'] as Filter[]).map((f) => (
-            <button
-              key={f}
-              onClick={() => setFilter(f)}
-              className={cn(
-                'text-[11px] capitalize transition-colors duration-150',
-                filter === f ? 'text-[#F0F6FC]' : 'text-[#7D8590] hover:text-[#F0F6FC]',
-              )}
-            >{f}</button>
-          ))}
+        <div className="flex items-center justify-between pt-1">
+          <div className="flex items-center gap-3">
+            {(['all', 'active', 'done'] as Filter[]).map((f) => (
+              <button
+                key={f}
+                onClick={() => setFilter(f)}
+                className={cn(
+                  'text-[11px] capitalize transition-colors duration-150',
+                  filter === f ? 'text-[#F0F6FC]' : 'text-[#7D8590] hover:text-[#F0F6FC]',
+                )}
+              >{f}</button>
+            ))}
+          </div>
+          <button
+            onClick={() => (selectionMode ? exitSelection() : setSelectionMode(true))}
+            className={cn(
+              'inline-flex items-center gap-1 text-[11px] px-1.5 py-0.5 rounded transition-colors',
+              selectionMode
+                ? 'text-emerald-300 hover:text-emerald-200'
+                : 'text-[#7D8590] hover:text-[#F0F6FC]',
+            )}
+            aria-label={selectionMode ? 'Cancel selection' : 'Select chats'}
+          >
+            {selectionMode ? <X className="h-3 w-3" /> : <CheckSquare className="h-3 w-3" />}
+            {selectionMode ? 'Cancel' : 'Select'}
+          </button>
         </div>
       </div>
+
+      {selectionMode && (
+        <div className="px-3 py-2 border-y border-white/[0.06] bg-white/[0.02] flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2 text-[11px] text-[#F0F6FC]">
+            <span>{selectedIds.size} selected</span>
+            <button
+              type="button"
+              className="text-[10px] text-[#7D8590] hover:text-[#F0F6FC] underline underline-offset-2"
+              onClick={selectAllFiltered}
+            >Select all</button>
+            {selectedIds.size > 0 && (
+              <button
+                type="button"
+                className="text-[10px] text-[#7D8590] hover:text-[#F0F6FC] underline underline-offset-2"
+                onClick={() => setSelectedIds(new Set())}
+              >Clear</button>
+            )}
+          </div>
+          <button
+            type="button"
+            disabled={selectedIds.size === 0 || bulkDeleting}
+            onClick={() => setBulkConfirmOpen(true)}
+            className={cn(
+              'inline-flex items-center gap-1 text-[11px] px-2 py-1 rounded-md border transition-colors',
+              selectedIds.size === 0 || bulkDeleting
+                ? 'border-white/[0.06] text-[#484F58] cursor-not-allowed'
+                : 'border-red-500/40 bg-red-500/10 text-red-200 hover:bg-red-500/20',
+            )}
+          >
+            <Trash2 className="h-3 w-3" /> Delete
+          </button>
+        </div>
+      )}
+
 
       <div className="flex-1 overflow-y-auto px-1.5">
         {convState === 'loading' ? (
