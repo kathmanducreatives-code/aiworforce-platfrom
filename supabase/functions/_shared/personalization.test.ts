@@ -12,6 +12,7 @@ const founder: DecisionMaker = {
   name: "Jane Doe", title: "Co-Founder & CEO", linkedinUrl: "https://www.linkedin.com/in/janedoe",
   source: "job_poster", confidence: "high", why_this_person: "founder posting the role",
   evidence_url: "https://www.linkedin.com/in/janedoe", contact_status: "profile_only", email: null, email_source_url: null,
+  company_match: { status: "verified", reason: "job post", matched_on: ["job_post"] },
 };
 
 const enrichment: CompanyEnrichment = {

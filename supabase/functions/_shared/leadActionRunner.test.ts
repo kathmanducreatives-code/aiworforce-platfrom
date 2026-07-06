@@ -158,7 +158,7 @@ Deno.test("Test 10: outreach refuses insufficient context (no fake email)", () =
 Deno.test("Test 11: outreach creates draft_needs_approval when evidence is sufficient", () => {
   const lead: LeadRecord = {
     ...acceptedLead,
-    decision_makers: [{ name: "Jane Doe", title: "CEO", linkedinUrl: "https://www.linkedin.com/in/janedoe", source: "job_poster", confidence: "high", why_this_person: "founder", evidence_url: "https://www.linkedin.com/in/janedoe", contact_status: "profile_only", email: null, email_source_url: null }],
+    decision_makers: [{ name: "Jane Doe", title: "CEO", linkedinUrl: "https://www.linkedin.com/in/janedoe", source: "job_poster", confidence: "high", why_this_person: "founder", evidence_url: "https://www.linkedin.com/in/janedoe", contact_status: "profile_only", email: null, email_source_url: null, company_match: { status: "verified", reason: "job post", matched_on: ["job_post"] } }],
   };
   const r = runGenerateOutreach(lead);
   assertEquals(r.ready, true);

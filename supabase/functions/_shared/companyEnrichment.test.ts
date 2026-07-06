@@ -6,8 +6,42 @@ import {
   extractFoundersFromText,
   extractPeopleFromTeamPage,
   resolveBaseUrl,
+  cleanEvidenceText,
   type CrawledPage,
 } from "./companyEnrichment.ts";
+
+// ---- Bug #3: Firecrawl markdown/text cleaning ----
+Deno.test("Bug3 #13: markdown link text is unwrapped in summary", () => {
+  assertEquals(cleanEvidenceText("[Cekura raised $2.4M](https://cekura.ai/blog)"), "Cekura raised $2.4M");
+});
+
+Deno.test("Bug3 #14: bare URLs are stripped from prose", () => {
+  const out = cleanEvidenceText("Great product see https://cekura.ai/x for more");
+  assert(!/https?:\/\//.test(out));
+  assert(/Great product see/.test(out));
+});
+
+Deno.test("Bug3 #15: duplicated render artifacts collapse (reliablereliable → reliable)", () => {
+  assertEquals(cleanEvidenceText("agents reliablereliable now"), "agents reliable now");
+  assertEquals(cleanEvidenceText("the the team"), "the team");
+});
+
+Deno.test("Bug3 #16: extraction still keeps evidence_urls separate + clean summary", () => {
+  const pages: CrawledPage[] = [
+    { url: "https://acme.com", kind: "homepage", markdown: "[Acme has raised $2.4M to make agents reliablereliable Learn more](https://acme.com/blog) and helps teams scale." },
+    { url: "https://acme.com/contact", kind: "contact", markdown: "Email hello@acme.com" },
+  ];
+  const e = extractCompanyEnrichment(pages);
+  assert(e.company_summary && !/\]\(|https?:\/\//.test(e.company_summary), "summary has no markdown/url");
+  assert(!/reliablereliable/.test(e.company_summary ?? ""));
+  assertEquals(e.evidence_urls.includes("https://acme.com"), true);   // evidence URLs preserved
+  assert(e.growth_signals.every((g) => !/\]\(|https?:\/\//.test(g)));  // growth cleaned
+});
+
+Deno.test("cleanEvidenceText preserves quoted factual content, no fabrication", () => {
+  const out = cleanEvidenceText("**Backed by** Y Combinator");
+  assertEquals(out, "Backed by Y Combinator");
+});
 
 // ---- Eligibility gate ----
 

@@ -15,8 +15,36 @@
 
 import type { Confidence, PersonHint, ContactEvidence } from "./companyEnrichment.ts";
 
+/** Parse a bare host from a URL/domain (lowercased, www-stripped). Local to keep
+ *  this module import-free of provider helpers. */
+function domainOf(url: string | null | undefined): string | null {
+  if (!url || typeof url !== "string") return null;
+  try {
+    const withProto = /^https?:\/\//i.test(url) ? url : `https://${url}`;
+    const host = new URL(withProto).hostname.replace(/^www\./i, "").toLowerCase();
+    return host && host.includes(".") ? host : null;
+  } catch {
+    return null;
+  }
+}
+
 export type DMSource = "job_poster" | "firecrawl_team_page" | "linkedin_people_search" | "website_contact_page";
 export type DMContactStatus = "profile_only" | "public_email_found" | "needs_contact_enrichment";
+
+export type CompanyMatchStatus = "verified" | "likely" | "weak" | "no_match";
+export interface CompanyMatch {
+  status: CompanyMatchStatus;
+  reason: string;
+  matched_on: string[];
+}
+
+/** The selected lead's company identity — the ground truth a candidate must match. */
+export interface CompanyRef {
+  name?: string | null;
+  domain?: string | null;
+  website?: string | null;
+  companyLinkedinUrl?: string | null;
+}
 
 export interface DecisionMaker {
   name: string;
@@ -29,7 +57,63 @@ export interface DecisionMaker {
   contact_status: DMContactStatus;
   email: string | null;
   email_source_url: string | null;
+  // How we know this person belongs to the selected company. Poster/Firecrawl
+  // sources are verified by construction; people-search must earn it.
+  company_match: CompanyMatch;
 }
+
+// ---- Company matching (Bug #1 fix) ----
+
+/** Extract the linkedin.com/company/<slug> identifier, ignoring query/tracking. */
+export function linkedinCompanySlug(url: string | null | undefined): string | null {
+  if (!url || typeof url !== "string") return null;
+  const m = url.toLowerCase().match(/linkedin\.com\/company\/([a-z0-9\-_.%]+)/i);
+  return m ? m[1].replace(/\/+$/, "") : null;
+}
+
+const COMPANY_NOISE_RE = /\b(inc|llc|ltd|limited|corp|corporation|co|company|gmbh|ai|technologies|technology|tech|labs|lab|group|solutions|software|systems|holdings|ventures|partners|llp|plc|sa|bv)\b/g;
+/** Normalize a company name for comparison (drop suffixes/punct/spacing). */
+export function normCompanyName(s: string | null | undefined): string {
+  return (s ?? "").toLowerCase().replace(COMPANY_NOISE_RE, "").replace(/[^a-z0-9]+/g, "").trim();
+}
+
+export interface CandidateCompany {
+  company?: string | null;      // candidate's current company name
+  company_url?: string | null;  // candidate's current company LinkedIn URL
+  headline?: string | null;     // fallback text signal
+}
+
+/**
+ * Verify a people-search candidate actually belongs to the selected company.
+ * Strongest evidence wins: company LinkedIn URL > company domain > company name >
+ * headline mention > no match. Never claims membership without evidence.
+ */
+export function verifyCompanyMatch(lead: CompanyRef | null | undefined, cand: CandidateCompany): CompanyMatch {
+  const L = lead ?? {};
+  const leadSlug = linkedinCompanySlug(L.companyLinkedinUrl);
+  const candSlug = linkedinCompanySlug(cand.company_url);
+  if (leadSlug && candSlug && leadSlug === candSlug) {
+    return { status: "verified", reason: `company LinkedIn matches (${candSlug})`, matched_on: ["company_linkedin"] };
+  }
+  const leadDomain = domainOf(L.website) ?? (L.domain ? String(L.domain).toLowerCase().replace(/^www\./, "") : null);
+  const candDomain = domainOf(cand.company_url);
+  if (leadDomain && candDomain && leadDomain === candDomain) {
+    return { status: "verified", reason: `company domain matches (${candDomain})`, matched_on: ["domain"] };
+  }
+  const leadName = normCompanyName(L.name);
+  const candName = normCompanyName(cand.company);
+  if (leadName && candName && leadName === candName) {
+    return { status: "likely", reason: `current company name matches "${L.name}" (verify before outreach)`, matched_on: ["company_name"] };
+  }
+  const headlineNorm = normCompanyName(cand.headline);
+  if (leadName.length >= 3 && headlineNorm.includes(leadName)) {
+    return { status: "weak", reason: `only the headline mentions ${L.name}; needs verification`, matched_on: ["headline_mention"] };
+  }
+  return { status: "no_match", reason: `current company does not match ${L.name ?? "the selected lead"}`, matched_on: [] };
+}
+
+const VERIFIED_MATCH: CompanyMatch = { status: "verified", reason: "from the company's own job post", matched_on: ["job_post"] };
+const SITE_MATCH: CompanyMatch = { status: "verified", reason: "listed on the company's own website", matched_on: ["company_website"] };
 
 export type RoleTier = "founder" | "revenue_growth" | "recruiter" | "unknown";
 
@@ -96,6 +180,7 @@ export function posterHintToDecisionMaker(poster: PosterHint | null | undefined,
     contact_status: "profile_only",
     email: null,
     email_source_url: null,
+    company_match: VERIFIED_MATCH,   // posted THIS company's job → verified
   };
 }
 
@@ -161,6 +246,7 @@ export function personHintsToDecisionMakers(hints: PersonHint[], opts: { emails?
       contact_status: withEmail ? "public_email_found" : "needs_contact_enrichment",
       email: withEmail?.value ?? null,
       email_source_url: withEmail?.source_url ?? null,
+      company_match: SITE_MATCH,   // from the company's own site → verified
     };
   });
 }
@@ -170,27 +256,72 @@ export interface PeopleSearchContact {
   title: string | null;
   linkedin_url: string | null;
   company?: string | null;
+  company_url?: string | null;   // candidate's CURRENT company LinkedIn URL (for matching)
   headline?: string | null;
 }
 
-/** Verified LinkedIn people-search results → decision-makers (profile evidence). */
-export function peopleContactsToDecisionMakers(contacts: PeopleSearchContact[]): DecisionMaker[] {
-  return (contacts ?? []).filter((c) => c && c.name && c.linkedin_url).map((c) => {
-    const { tier } = classifyRole(c.title);
-    const confidence: Confidence = tier === "founder" ? "high" : tier === "revenue_growth" ? "medium" : "low";
-    return {
+/** A candidate dropped for failing company verification (kept for honest reporting). */
+export interface RejectedCandidate {
+  name: string;
+  title: string | null;
+  linkedin_url: string | null;
+  reason: string;
+}
+
+/**
+ * LinkedIn people-search results → decision-makers, ONLY after verifying each
+ * candidate actually belongs to the selected company. Off-company profiles are
+ * dropped (returned in `rejected`), never persisted or described as "at this
+ * company". Confidence requires company match: high needs verified/likely + a
+ * buyer title; weak match caps at medium ("needs verification").
+ */
+export function peopleContactsToDecisionMakers(
+  contacts: PeopleSearchContact[],
+  lead: CompanyRef | null | undefined,
+): { accepted: DecisionMaker[]; rejected: RejectedCandidate[] } {
+  const accepted: DecisionMaker[] = [];
+  const rejected: RejectedCandidate[] = [];
+  for (const c of contacts ?? []) {
+    if (!c || !c.name || !c.linkedin_url) continue;
+    const match = verifyCompanyMatch(lead, c);
+    const { tier, isBuyer } = classifyRole(c.title);
+
+    if (match.status === "no_match") {
+      rejected.push({ name: c.name, title: c.title, linkedin_url: c.linkedin_url,
+        reason: `Discarded: title "${c.title ?? "unknown"}" but ${match.reason}.` });
+      continue;
+    }
+
+    // Confidence gated on company match. Recruiters/unknown never high.
+    let confidence: Confidence;
+    if (isBuyer && (match.status === "verified" || match.status === "likely")) confidence = "high";
+    else if (isBuyer && match.status === "weak") confidence = "medium";
+    else if (isBuyer && match.status === "likely") confidence = "medium";
+    else confidence = "low";
+    if (tier === "recruiter") confidence = "low";
+
+    const leadName = lead?.name ?? "the selected company";
+    const why = match.status === "verified"
+      ? `Matched: profile shows ${c.title ?? "this person"} and ${match.reason} — belongs to ${leadName}.`
+      : match.status === "likely"
+      ? `Likely match: ${match.reason}. Verify before outreach.`
+      : `Weak match: ${match.reason}.`;
+
+    accepted.push({
       name: c.name,
       title: c.title,
       linkedinUrl: c.linkedin_url,
-      source: "linkedin_people_search" as DMSource,
+      source: "linkedin_people_search",
       confidence,
-      why_this_person: `LinkedIn profile at this company with title "${c.title ?? "unknown"}" — matches the target buyer persona.`,
+      why_this_person: why,
       evidence_url: c.linkedin_url,
       contact_status: "profile_only",
       email: null,
       email_source_url: null,
-    };
-  });
+      company_match: match,
+    });
+  }
+  return { accepted, rejected };
 }
 
 /**
@@ -231,17 +362,20 @@ export interface DecisionMakerResult {
   decision_makers: DecisionMaker[];
   needs_manual_review: boolean;
   buyer_clues: BuyerClue[];
+  rejected: RejectedCandidate[];
 }
 
 /**
  * Merge all evidence sources for ONE company into a ranked decision_makers list.
- * Dedupes by LinkedIn URL then name. Flags needs_manual_review when nothing
- * confident (>= medium, buyer-tier) surfaced.
+ * People-search results are company-verified first; off-company profiles are
+ * dropped into `rejected`, never ranked. Dedupes by name. Flags
+ * needs_manual_review when nothing confident (>= medium, buyer-tier) surfaced.
  */
 export function buildDecisionMakers(input: {
   poster?: PosterHint | null;
   jobTitle?: string | null;
   descriptionText?: string | null;
+  company?: CompanyRef | null;
   enrichment?: { founders?: PersonHint[]; executives?: PersonHint[]; public_contact_emails?: ContactEvidence[] } | null;
   peopleSearch?: PeopleSearchContact[] | null;
 }): DecisionMakerResult {
@@ -253,7 +387,9 @@ export function buildDecisionMakers(input: {
 
   const emails = input.enrichment?.public_contact_emails ?? [];
   candidates.push(...personHintsToDecisionMakers([...(input.enrichment?.founders ?? []), ...(input.enrichment?.executives ?? [])], { emails }));
-  candidates.push(...peopleContactsToDecisionMakers(input.peopleSearch ?? []));
+  const people = peopleContactsToDecisionMakers(input.peopleSearch ?? [], input.company ?? null);
+  candidates.push(...people.accepted);
+  const rejected = people.rejected;
 
   // Dedupe by person (per company, same normalized name = same person). Keep the
   // higher-ranked entry as the base and backfill missing LinkedIn/email/evidence
@@ -282,7 +418,7 @@ export function buildDecisionMakers(input: {
     return CONF_RANK[dm.confidence] >= 2 && (isBuyer || dm.source === "job_poster");
   });
 
-  return { decision_makers, needs_manual_review: !hasConfident, buyer_clues };
+  return { decision_makers, needs_manual_review: !hasConfident, buyer_clues, rejected };
 }
 
 function rankScore(dm: DecisionMaker): number {

@@ -93,7 +93,12 @@ export function normalizePeopleSearchRows(data: unknown): PeopleSearchContact[] 
     const name = str(it?.name) ?? str(it?.full_name) ?? ([str(it?.firstName), str(it?.lastName)].filter(Boolean).join(" ") || null);
     const linkedin = str(it?.linkedin_url) ?? str(it?.linkedinUrl) ?? str(it?.profile_url) ?? str(it?.profileUrl) ?? str(it?.url);
     if (!name || !linkedin) continue;   // never fabricate — require name + profile
-    out.push({ name, title: str(it?.title) ?? str(it?.headline) ?? str(it?.position), linkedin_url: linkedin, company: str(it?.company) ?? str(it?.companyName), headline: str(it?.headline) });
+    // Candidate's CURRENT company (name + LinkedIn URL) — used to verify they
+    // actually belong to the selected lead. Nested (currentPosition) or flat.
+    const cp = Array.isArray(it?.currentPosition) ? (it.currentPosition[0] ?? {}) : (it?.currentPosition ?? {});
+    const company = str(it?.company) ?? str(it?.companyName) ?? str(it?.currentCompany) ?? str(cp?.companyName) ?? str(cp?.company);
+    const companyUrl = str(it?.companyLinkedinUrl) ?? str(it?.companyUrl) ?? str(it?.companyPageUrl) ?? str(cp?.companyLinkedinUrl) ?? str(cp?.companyUrl) ?? str(cp?.companyPageUrl);
+    out.push({ name, title: str(it?.title) ?? str(it?.headline) ?? str(it?.position), linkedin_url: linkedin, company, company_url: companyUrl, headline: str(it?.headline) });
   }
   return out;
 }
@@ -146,6 +151,9 @@ export async function executeLeadAction(action: LeadAction, leadIds: string[], c
           tool_name: "source_with_apify", selected_actor_key: "apify_people_search", source_type: "people_profiles",
           query: peopleSearchQuery(input), company_linkedin_url: input.company_linkedin_url, domain: input.domain,
           role_keywords: input.titles, max_results: input.max_results,
+          // Bug #2: the executor persists ONLY the verified top contact — never let
+          // the tool auto-write all raw people into contacts.
+          defer_persistence: true, attach_to_accounts: false,
         }, ctx.toolCtx);
         return r.ok ? normalizePeopleSearchRows(r.data) : [];
       };
@@ -154,17 +162,22 @@ export async function executeLeadAction(action: LeadAction, leadIds: string[], c
         decision_makers: res.decision_makers,
         decision_maker_status: res.needs_manual_review ? "needs_manual_review" : "resolved",
         buyer_clues: res.buyer_clues,
+        decision_makers_rejected: res.rejected,
       });
-      // Persist the top confident decision-maker as a contact candidate (with proof).
-      const top = res.decision_makers.find((d) => d.linkedinUrl && d.confidence !== "low") ?? null;
-      if (top?.linkedinUrl && !row.contact_id) {
-        const { data: c } = await ctx.admin.from("contacts").insert({
+      // Persist ONLY the top company-verified (verified/likely) decision-maker as a
+      // contact, idempotently (upsert by linkedin_url), and link it. Never persist
+      // weak/no-match or low-confidence people. (Bugs #1 + #2 + #3/C)
+      const top = res.decision_makers.find((d) =>
+        d.linkedinUrl && d.confidence !== "low" &&
+        (d.company_match.status === "verified" || d.company_match.status === "likely")) ?? null;
+      if (top?.linkedinUrl) {
+        const { data: c } = await ctx.admin.from("contacts").upsert({
           workspace_id: ctx.workspace_id, full_name: top.name, title: top.title, linkedin_url: top.linkedinUrl, email: top.email,
-          raw: { source: top.source, via: "decision_maker_discovery", confidence: top.confidence, evidence_url: top.evidence_url, email_source_url: top.email_source_url },
-        }).select("id").maybeSingle();
+          raw: { source: top.source, via: "decision_maker_discovery", confidence: top.confidence, evidence_url: top.evidence_url, email_source_url: top.email_source_url, company_match: top.company_match },
+        }, { onConflict: "workspace_id,linkedin_url" }).select("id").maybeSingle();
         if (c?.id) await ctx.admin.from("lead_candidates").update({ contact_id: c.id }).eq("id", lead.lead_candidate_id);
       }
-      per_lead.push({ lead_candidate_id: lead.lead_candidate_id, company: lead.company_name, needs_manual_review: res.needs_manual_review, used_people_search: res.used_people_search, decision_makers: res.decision_makers });
+      per_lead.push({ lead_candidate_id: lead.lead_candidate_id, company: lead.company_name, needs_manual_review: res.needs_manual_review, used_people_search: res.used_people_search, decision_makers: res.decision_makers, rejected_count: res.rejected.length });
 
     } else if (action === "generate_outreach") {
       const res = runGenerateOutreach(lead);

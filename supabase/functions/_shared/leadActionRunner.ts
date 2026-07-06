@@ -17,7 +17,7 @@ import {
   resolveBaseUrl, type CompanyEnrichment, type CrawledPage,
 } from "./companyEnrichment.ts";
 import {
-  buildDecisionMakers, type DecisionMaker, type PosterHint, type PeopleSearchContact, type BuyerClue,
+  buildDecisionMakers, type DecisionMaker, type PosterHint, type PeopleSearchContact, type BuyerClue, type RejectedCandidate,
 } from "./decisionMakers.ts";
 import {
   checkPersonalizationReadiness, buildOutreachDraft, type OutreachDraft, type PersonalizationInput,
@@ -153,6 +153,7 @@ export interface DiscoveryRunResult {
   decision_makers: DecisionMaker[];
   needs_manual_review: boolean;
   buyer_clues: BuyerClue[];
+  rejected: RejectedCandidate[];
   used_people_search: boolean;
   people_search_input: PeopleSearchInput | null;
 }
@@ -172,6 +173,13 @@ export async function runDecisionMakerDiscovery(
     poster: lead.poster_contact_hint ?? null,
     jobTitle: lead.job_title ?? null,
     descriptionText: lead.job_description ?? null,
+    // Ground-truth company identity people-search candidates must match (Bug #1).
+    company: {
+      name: lead.company_name ?? null,
+      domain: lead.domain ?? null,
+      website: lead.website ?? lead.company_website ?? null,
+      companyLinkedinUrl: lead.company_linkedin_url ?? null,
+    },
     enrichment: enrichment ? { founders: enrichment.founders, executives: enrichment.executives, public_contact_emails: enrichment.public_contact_emails } : null,
   };
   let result = buildDecisionMakers(baseArgs);

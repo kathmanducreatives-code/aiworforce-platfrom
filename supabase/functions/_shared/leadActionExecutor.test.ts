@@ -57,6 +57,7 @@ function fakeAdmin(seedRows: any[]) {
         eq: () => chain,
         update: (patch: any) => { state.updates.push({ table, patch }); return { eq: () => Promise.resolve({ data: null }) }; },
         insert: (vals: any) => { state.inserts.push({ table, vals }); return { select: () => ({ maybeSingle: () => Promise.resolve({ data: { id: `${table}-new` } }) }) }; },
+        upsert: (vals: any) => { state.inserts.push({ table, vals, upsert: true }); return { select: () => ({ maybeSingle: () => Promise.resolve({ data: { id: `${table}-up` } }) }) }; },
         // terminal for select().in()
         then: undefined,
       };
@@ -126,6 +127,71 @@ Deno.test("executeLeadAction find_decision_makers: poster founder resolved, pers
   assertEquals(dmUpdate.patch.raw.decision_makers[0].name, "Jane Doe");
   assert(state.inserts.some((i) => i.table === "contacts" && i.vals.full_name === "Jane Doe"));
   assertEquals((out.per_lead[0] as any).needs_manual_review, false);
+});
+
+// A lead with NO poster hint → forces the per-company people search to run.
+const noPosterLead = {
+  ...seedLead, id: "lead-2",
+  raw: { ...seedLead.raw, poster_contact_hint: { name: null, profile_url: null, title: null }, job_description: "Join us." },
+};
+
+Deno.test("Bug2 #8/#9: people search sets defer_persistence + attach_to_accounts:false; contacts not auto-created", async () => {
+  const { api, state } = fakeAdmin([noPosterLead]);
+  let peopleInput: any = null;
+  const runTool = async (name: string, input: any): Promise<ToolResultLike> => {
+    if (name === "source_with_apify") { peopleInput = input; return { ok: true, data: { items: [
+      { name: "Real Founder", title: "CEO", linkedinUrl: "https://linkedin.com/in/real", companyLinkedinUrl: "https://linkedin.com/company/acme" },
+      { name: "Off Founder", title: "Founder", linkedinUrl: "https://linkedin.com/in/off", company: "Other Co" },
+    ] } }; }
+    return { ok: true, data: {} };
+  };
+  await executeLeadAction("find_decision_makers", ["lead-2"], mkCtx(api, runTool));
+  assertEquals(peopleInput.defer_persistence, true);
+  assertEquals(peopleInput.attach_to_accounts, false);
+  // Only the verified person is written to contacts — NOT all raw people.
+  const contactInserts = state.inserts.filter((i) => i.table === "contacts");
+  assertEquals(contactInserts.length, 1);
+  assertEquals(contactInserts[0].vals.full_name, "Real Founder");
+});
+
+Deno.test("Bug2 #10/#12: only verified DM persisted + linked; off-company rejected", async () => {
+  const { api, state } = fakeAdmin([noPosterLead]);
+  const runTool = async (name: string): Promise<ToolResultLike> => name === "source_with_apify"
+    ? { ok: true, data: { items: [
+        { name: "Real Founder", title: "CEO", linkedinUrl: "https://linkedin.com/in/real", companyLinkedinUrl: "https://linkedin.com/company/acme" },
+        { name: "Off Founder", title: "Founder", linkedinUrl: "https://linkedin.com/in/off", company: "Other Co" },
+      ] } }
+    : { ok: true, data: {} };
+  const out = await executeLeadAction("find_decision_makers", ["lead-2"], mkCtx(api, runTool));
+  const dmUpdate = state.updates.find((u) => u.patch?.raw?.decision_makers);
+  assertEquals(dmUpdate.patch.raw.decision_makers.map((d: any) => d.name), ["Real Founder"]);
+  assertEquals(dmUpdate.patch.raw.decision_makers_rejected.map((r: any) => r.name), ["Off Founder"]);
+  // contact_id linked to the verified contact
+  assert(state.updates.some((u) => u.table === "lead_candidates" && u.patch?.contact_id));
+  assertEquals((out.per_lead[0] as any).rejected_count, 1);
+});
+
+Deno.test("Bug2/C #11: persistence is idempotent (upsert, no duplicate contacts)", async () => {
+  const { api, state } = fakeAdmin([noPosterLead]);
+  const runTool = async (name: string): Promise<ToolResultLike> => name === "source_with_apify"
+    ? { ok: true, data: { items: [{ name: "Real Founder", title: "CEO", linkedinUrl: "https://linkedin.com/in/real", companyLinkedinUrl: "https://linkedin.com/company/acme" }] } }
+    : { ok: true, data: {} };
+  await executeLeadAction("find_decision_makers", ["lead-2"], mkCtx(api, runTool));
+  await executeLeadAction("find_decision_makers", ["lead-2"], mkCtx(api, runTool));
+  const contactWrites = state.inserts.filter((i) => i.table === "contacts");
+  assertEquals(contactWrites.length, 2);
+  assert(contactWrites.every((c) => c.upsert === true)); // upsert, never plain insert → no dupes
+});
+
+Deno.test("Bug1 #12b: all no-match → no contact linked, needs_manual_review", async () => {
+  const { api, state } = fakeAdmin([noPosterLead]);
+  const runTool = async (name: string): Promise<ToolResultLike> => name === "source_with_apify"
+    ? { ok: true, data: { items: [{ name: "Off Founder", title: "Founder", linkedinUrl: "https://linkedin.com/in/off", company: "Other Co" }] } }
+    : { ok: true, data: {} };
+  const out = await executeLeadAction("find_decision_makers", ["lead-2"], mkCtx(api, runTool));
+  assertEquals(state.inserts.filter((i) => i.table === "contacts").length, 0);
+  assert(!state.updates.some((u) => u.table === "lead_candidates" && u.patch?.contact_id));
+  assertEquals((out.per_lead[0] as any).needs_manual_review, true);
 });
 
 Deno.test("executeLeadAction generate_outreach: persists draft_needs_approval, never sends", async () => {

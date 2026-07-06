@@ -7,8 +7,84 @@ import {
   peopleContactsToDecisionMakers,
   matchEmailToPerson,
   buildDecisionMakers,
+  verifyCompanyMatch,
+  type CompanyRef,
 } from "./decisionMakers.ts";
 import type { PersonHint, ContactEvidence } from "./companyEnrichment.ts";
+
+// ---- Bug #1: company verification for people-search results ----
+const cekura: CompanyRef = { name: "Cekura", domain: "cekura.ai", website: "https://www.cekura.ai", companyLinkedinUrl: "https://www.linkedin.com/company/cekuraai?trk=x" };
+
+Deno.test("Bug1 #1: Founder + matching company LinkedIn URL → verified → high", () => {
+  const { accepted } = peopleContactsToDecisionMakers([
+    { name: "Sid Kabra", title: "Co-Founder", linkedin_url: "https://linkedin.com/in/sidkabra", company: "Cekura", company_url: "https://www.linkedin.com/company/cekuraai" },
+  ], cekura);
+  assertEquals(accepted[0].company_match.status, "verified");
+  assertEquals(accepted[0].confidence, "high");
+  assert(!/at this company/i.test(accepted[0].why_this_person));
+});
+
+Deno.test("Bug1 #2: Founder + matching domain → verified → high", () => {
+  const { accepted } = peopleContactsToDecisionMakers([
+    { name: "A B", title: "CEO", linkedin_url: "https://linkedin.com/in/ab", company_url: "https://cekura.ai/team" },
+  ], cekura);
+  assertEquals(accepted[0].company_match.status, "verified");
+  assertEquals(accepted[0].confidence, "high");
+});
+
+Deno.test("Bug1 #3: Founder + only matching company NAME → likely (verify before outreach)", () => {
+  const { accepted } = peopleContactsToDecisionMakers([
+    { name: "C D", title: "Founder", linkedin_url: "https://linkedin.com/in/cd", company: "Cekura Inc" },
+  ], cekura);
+  assertEquals(accepted[0].company_match.status, "likely");
+  assert(/verify/i.test(accepted[0].why_this_person));
+});
+
+Deno.test("Bug1 #4: Founder from unrelated company → rejected, not a decision-maker", () => {
+  const { accepted, rejected } = peopleContactsToDecisionMakers([
+    { name: "Randeep Chopra", title: "Founder", linkedin_url: "https://linkedin.com/in/randeep", company: "Immigration Advisors" },
+  ], cekura);
+  assertEquals(accepted.length, 0);
+  assertEquals(rejected.length, 1);
+  assert(/does not match/i.test(rejected[0].reason));
+});
+
+Deno.test("Bug1 #5: 'Founder, Immigration Specialist' off-company is not a Cekura buyer", () => {
+  const { accepted, rejected } = peopleContactsToDecisionMakers([
+    { name: "X Y", title: "Founder, Immigration Specialist", linkedin_url: "https://linkedin.com/in/xy", company: "Some Law Firm" },
+  ], cekura);
+  assertEquals(accepted.length, 0);
+  assert(rejected.some((r) => r.name === "X Y"));
+});
+
+Deno.test("Bug1 #6: no-match wording is honest — never 'at this company'", () => {
+  const { rejected } = peopleContactsToDecisionMakers([
+    { name: "Mark Anderson", title: "Founder", linkedin_url: "https://linkedin.com/in/mark", company: "MBH Fund II" },
+  ], cekura);
+  assert(!/at this company/i.test(rejected[0].reason));
+  assert(/discarded/i.test(rejected[0].reason));
+});
+
+Deno.test("Bug1 #7: mixed batch — only company-matched people persist", () => {
+  const res = buildDecisionMakers({
+    company: cekura,
+    peopleSearch: [
+      { name: "Real Founder", title: "CEO", linkedin_url: "https://linkedin.com/in/real", company_url: "https://www.linkedin.com/company/cekuraai" },
+      { name: "Fake Founder", title: "Founder", linkedin_url: "https://linkedin.com/in/fake", company: "Other Co" },
+    ],
+  });
+  assertEquals(res.decision_makers.map((d) => d.name), ["Real Founder"]);
+  assertEquals(res.rejected.map((r) => r.name), ["Fake Founder"]);
+});
+
+Deno.test("verifyCompanyMatch: weak headline mention needs verification; recruiter never high", () => {
+  const weak = verifyCompanyMatch(cekura, { company: "Freelance", headline: "Advisor to Cekura and others" });
+  assertEquals(weak.status, "weak");
+  const { accepted } = peopleContactsToDecisionMakers([
+    { name: "R P", title: "Technical Recruiter", linkedin_url: "https://linkedin.com/in/rp", company_url: "https://www.linkedin.com/company/cekuraai" },
+  ], cekura);
+  assertEquals(accepted[0].confidence, "low"); // verified company but recruiter → still low
+});
 
 Deno.test("classifyRole: founder/growth are buyers, recruiter/HR are not", () => {
   assertEquals(classifyRole("Co-Founder & CEO").tier, "founder");
@@ -109,11 +185,15 @@ Deno.test("buildDecisionMakers: only a recruiter poster → needs_manual_review"
   assertEquals(res.decision_makers[0].confidence, "low");
 });
 
-Deno.test("peopleContactsToDecisionMakers requires name + linkedin url (never fabricates)", () => {
-  const dms = peopleContactsToDecisionMakers([
-    { name: "Jane Doe", title: "Head of Growth", linkedin_url: "https://www.linkedin.com/in/janedoe" },
-    { name: "No Url", title: "CEO", linkedin_url: null },
-  ]);
-  assertEquals(dms.length, 1);
-  assertEquals(dms[0].confidence, "medium"); // revenue_growth tier
+Deno.test("peopleContactsToDecisionMakers requires name + linkedin url + company match", () => {
+  const lead = { name: "Acme", companyLinkedinUrl: "https://www.linkedin.com/company/acme" };
+  const { accepted, rejected } = peopleContactsToDecisionMakers([
+    { name: "Jane Doe", title: "Head of Growth", linkedin_url: "https://www.linkedin.com/in/janedoe", company_url: "https://www.linkedin.com/company/acme" },
+    { name: "No Url", title: "CEO", linkedin_url: null, company_url: "https://www.linkedin.com/company/acme" },
+    { name: "Off Company", title: "Founder", linkedin_url: "https://www.linkedin.com/in/off", company: "Other Inc" },
+  ], lead);
+  assertEquals(accepted.length, 1);
+  assertEquals(accepted[0].name, "Jane Doe");
+  assertEquals(accepted[0].confidence, "high");        // revenue_growth + verified company → high
+  assert(rejected.some((r) => r.name === "Off Company"));
 });

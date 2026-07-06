@@ -217,12 +217,31 @@ export function extractPeopleFromTeamPage(text: string, evidenceUrl: string): Pe
 
 const GROWTH_RE = /\b(raised|raising|series [a-e]\b|seed round|funding|backed by|hiring|we're hiring|growing team|new customers|expanding|scaling|record (?:revenue|growth)|doubled)\b/i;
 
+/**
+ * Clean Firecrawl markdown/text for human-readable evidence fields (summary,
+ * growth signals). Strips markdown link/image syntax and bare URLs, collapses
+ * markdown-render artifacts like duplicated words ("reliablereliable"),
+ * normalizes whitespace, and trims stray punctuation. Purely cosmetic — it never
+ * adds, upgrades, or fabricates any claim, and evidence_urls are kept separately.
+ */
+export function cleanEvidenceText(text: string | null | undefined): string {
+  let s = String(text ?? "");
+  s = s.replace(/!?\[([^\]]*?)\]\([^)]*\)/g, "$1");   // [label](url) / ![alt](url) → label
+  s = s.replace(/\bhttps?:\/\/[^\s)]+/gi, "");          // strip bare URLs from prose
+  s = s.replace(/[*_`#>|]+/g, " ");                     // drop markdown marks
+  s = s.replace(/\b(\w{4,}?)\1\b/gi, "$1");             // reliablereliable → reliable
+  s = s.replace(/\b(\w+)(?:\s+\1\b)+/gi, "$1");         // "the the" → "the"
+  s = s.replace(/\s+/g, " ").trim();
+  s = s.replace(/^[\s\-–—•,.:]+/, "").replace(/[\s|]+$/, "").trim();
+  return s;
+}
+
 /** Pull short evidence phrases (never asserted as fact) that hint at growth/funding. */
 export function extractGrowthSignals(text: string): string[] {
   const out: string[] = [];
   const seen = new Set<string>();
   for (const sentence of text.split(/(?<=[.!?])\s+|\n+/)) {
-    const s = sentence.trim();
+    const s = cleanEvidenceText(sentence);
     if (s.length < 8 || s.length > 200) continue;
     if (GROWTH_RE.test(s) && !seen.has(s.toLowerCase())) {
       seen.add(s.toLowerCase());
@@ -255,7 +274,7 @@ export function extractCompanyEnrichment(pages: CrawledPage[], opts: { category?
 
     if (kind === "homepage" && !summary) {
       // First substantial paragraph as a company summary (verbatim, never invented).
-      const para = text.split(/\n{2,}/).map((s) => s.trim()).find((s) => s.length >= 40 && !s.startsWith("#"));
+      const para = text.split(/\n{2,}/).map((s) => cleanEvidenceText(s)).find((s) => s.length >= 40);
       summary = para ? para.slice(0, 300) : null;
     }
 
