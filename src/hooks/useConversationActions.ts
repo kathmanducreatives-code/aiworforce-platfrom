@@ -135,5 +135,5 @@ export function useConversationActions() {
     return true;
   }, []);
 
-  return { createConversation, renameConversation, deleteConversation, setConversationDone };
+  return { createConversation, renameConversation, deleteConversation, deleteConversations, setConversationDone };
 }
