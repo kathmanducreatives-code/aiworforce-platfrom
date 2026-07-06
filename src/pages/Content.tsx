@@ -11,6 +11,7 @@ import ContentLoopPreview from "@/components/content/ContentLoopPreview";
 import ManualContentSource from "@/components/content/ManualContentSource";
 import ProviderBadge, { classifyProviderState } from "@/components/signals/ProviderBadge";
 import { sendAgentCommand } from "@/lib/agentCommand";
+import { postDraftOutputs, workflowSummaryOutputs, commentDraftOutputs, commentDraftRows } from "@/lib/contentBuckets";
 
 const dispatchChat = (text: string) =>
   void sendAgentCommand(text, { success: "Sent to Pilot", action_source: "content_action" });
@@ -31,20 +32,20 @@ export default function Content() {
   const { providers } = useIntegrationReadiness();
   const [createOpen, setCreateOpen] = useState(false);
 
-  const briefs = useMemo(
-    () => savedOutputs.filter((o) => (o.type ?? "").toLowerCase().includes("brief")),
-    [savedOutputs]
-  );
-  const posts = useMemo(
-    () => savedOutputs.filter((o) => {
-      const t = (o.type ?? "").toLowerCase();
-      return t.includes("post") || t.includes("content");
-    }),
-    [savedOutputs]
-  );
+  // Bucket by the saved-output types Scribe/pilot-chat actually write, so counts
+  // reflect real data instead of a "brief" string that never matches.
+  const workflowRecaps = useMemo(() => workflowSummaryOutputs(savedOutputs), [savedOutputs]);
+  const posts = useMemo(() => postDraftOutputs(savedOutputs), [savedOutputs]);
   const commentDrafts = useMemo(
-    () => drafts.filter((d) => (d.channel ?? "").toLowerCase().includes("comment")),
-    [drafts]
+    () => [
+      ...commentDraftRows(drafts).map((d) => ({
+        id: d.id, title: d.subject ?? "Comment draft", status: d.status, date: d.created_at, preview: d.body ?? undefined,
+      })),
+      ...commentDraftOutputs(savedOutputs).map((o) => ({
+        id: o.id, title: o.title ?? "Comment draft", status: (o.raw as any)?.status ?? "draft", date: o.created_at, preview: o.body ?? undefined,
+      })),
+    ],
+    [drafts, savedOutputs]
   );
   const contentSignals = useMemo(() => {
     const KEEP = ["news", "funding", "hiring", "launch", "product", "post", "engagement", "competitor"];
@@ -104,27 +105,27 @@ export default function Content() {
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
           {/* Left */}
           <div className="lg:col-span-7 space-y-6">
-            <Section title="Content briefs" count={briefs.length} loading={loading}>
-              {briefs.length === 0 ? (
+            <Section title="Workflow recaps" count={workflowRecaps.length} loading={loading}>
+              {workflowRecaps.length === 0 ? (
                 <EmptyState
-                  title="Scribe needs context before drafting."
-                  subtext="Add what shipped, your founder POV, or choose a saved signal."
-                  actions={[{ label: "Add context", onClick: () => dispatchChat("Scribe, ask me for the context needed to draft this week's brief.") }]}
+                  title="No workflow recaps yet."
+                  subtext="When Pilot runs a workflow (sourcing, research, drafts), Scribe saves a recap here."
+                  actions={[{ label: "Ask Scribe", onClick: () => dispatchChat("Scribe, summarize what my workforce has done recently.") }]}
                 />
               ) : (
-                briefs.slice(0, 5).map((b) => (
+                workflowRecaps.slice(0, 5).map((b) => (
                   <ContentDraftCard
                     key={b.id}
                     id={b.id}
-                    title={b.title ?? "Untitled brief"}
-                    contentType="Post brief"
-                    source={(b.raw as any)?.source ?? "Signal"}
+                    title={b.title ?? "Workflow recap"}
+                    contentType="Workflow recap"
+                    source={(b.raw as any)?.source ?? "Pilot"}
                     sourceUrl={(b.raw as any)?.source_url ?? null}
                     sourceVerified={Boolean((b.raw as any)?.source_url)}
                     status={deriveStatus((b.raw as any)?.status)}
                     date={b.created_at}
                     preview={b.body ?? undefined}
-                    nextAction="Review brief, then generate draft."
+                    nextAction="Review, then turn into a post if useful."
                   />
                 ))
               )}
@@ -181,12 +182,12 @@ export default function Content() {
                   <ContentDraftCard
                     key={d.id}
                     id={d.id}
-                    title={d.subject ?? "Comment draft"}
+                    title={d.title}
                     contentType="LinkedIn comment"
                     source="Post engagement"
                     status={deriveStatus(d.status)}
-                    date={d.created_at}
-                    preview={d.body ?? undefined}
+                    date={d.date}
+                    preview={d.preview}
                     nextAction="Review tone, then approve."
                   />
                 ))
