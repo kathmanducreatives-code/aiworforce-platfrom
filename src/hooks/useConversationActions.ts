@@ -66,12 +66,20 @@ export function useConversationActions() {
   }, []);
 
   const deleteConversation = useCallback(async (id: string) => {
-    const { error } = await supabase
+    const { data, error } = await supabase
       .from('conversations' as any)
       .delete()
-      .eq('id', id);
+      .eq('id', id)
+      .select('id');
     if (error) {
       toast.error('Delete failed', { description: error.message });
+      return false;
+    }
+    const removed = (data ?? []) as { id: string }[];
+    if (removed.length === 0) {
+      toast.error('Delete failed', {
+        description: 'You may be signed out or lack permission. Try signing in again.',
+      });
       return false;
     }
     if (view.kind === 'chat' && view.conversationId === id) {
@@ -81,6 +89,38 @@ export function useConversationActions() {
     }
     toast.success('Conversation deleted');
     return true;
+  }, [view, setView, closeWorkbench]);
+
+  const deleteConversations = useCallback(async (ids: string[]) => {
+    if (ids.length === 0) return 0;
+    const { data, error } = await supabase
+      .from('conversations' as any)
+      .delete()
+      .in('id', ids)
+      .select('id');
+    if (error) {
+      toast.error('Delete failed', { description: error.message });
+      return 0;
+    }
+    const removed = (data ?? []) as { id: string }[];
+    if (removed.length === 0) {
+      toast.error('Delete failed', {
+        description: 'You may be signed out or lack permission. Try signing in again.',
+      });
+      return 0;
+    }
+    const removedIds = new Set(removed.map((r) => r.id));
+    if (view.kind === 'chat' && view.conversationId && removedIds.has(view.conversationId)) {
+      closeWorkbench();
+      setView({ kind: 'empty' });
+      setLastConversationId(null);
+    }
+    toast.success(
+      removed.length === 1
+        ? 'Conversation deleted'
+        : `${removed.length} conversations deleted`,
+    );
+    return removed.length;
   }, [view, setView, closeWorkbench]);
 
   const setConversationDone = useCallback(async (id: string, done: boolean) => {
