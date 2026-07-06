@@ -145,11 +145,13 @@ Deno.serve(async (req) => {
         result: { output: outcome.summary, lead_action: leadAction, per_lead: outcome.per_lead },
       }).eq("id", task.id);
       if (outcome.needs_approval) {
+        // Create the approval review item ONLY. We intentionally do NOT flip the
+        // (already-complete) sourcing plan's status — a lead action is a
+        // standalone review item, not a re-opening of the sourcing plan.
         await supabase.from("approvals").insert({
           workspace_id, plan_id, task_id: task.id, agent_id: agent.id,
           title: `${agent.name} needs approval`, description: instruction, status: "pending",
         });
-        await supabase.from("task_plans").update({ status: "awaiting_approval" }).eq("id", plan_id);
       }
       await supabase.from("activity_feed").insert({
         workspace_id, plan_id, agent_id: agent.id,

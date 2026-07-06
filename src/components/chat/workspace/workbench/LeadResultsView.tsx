@@ -9,9 +9,12 @@ import BulkActionToolbar from './leadTable/BulkActionToolbar';
 import LeadDetailDrawer from './leadTable/LeadDetailDrawer';
 import { estimateCredits, recommendNextAction, ACTION_LABEL } from './leadTable/credits';
 import { rowsToCsv, downloadCsv } from './leadTable/csv';
-import { Loader2, Filter, Sparkles, X } from 'lucide-react';
+import { Loader2, Filter, Sparkles, X, CheckCircle2, AlertTriangle } from 'lucide-react';
 import { useToolAvailability } from '@/lib/workflows/useToolAvailability';
 import { useChatWorkspace } from '@/contexts/ChatWorkspaceContext';
+import { useWorkspace } from '@/contexts/WorkspaceContext';
+import { runLeadAction, type LeadActionResult } from '@/lib/leadActions';
+import { LEAD_ACTION_LOADING, type LeadActionKind } from '@/lib/leadActionRequest';
 
 interface Props {
   meta: LeadResultsPanelMeta;
@@ -21,7 +24,11 @@ interface Props {
 export default function LeadResultsView({ meta, conversationId }: Props) {
   const { items, loading, error, refresh } = useLeadResults(meta.plan_id);
   const { closeWorkbench } = useChatWorkspace();
+  const { workspaceId } = useWorkspace();
   const tools = useToolAvailability();
+  // Direct lead-action (research/decision-makers/outreach) run + outcome state.
+  const [directRunning, setDirectRunning] = useState<LeadActionKind | null>(null);
+  const [actionOutcome, setActionOutcome] = useState<(LeadActionResult & { kind: LeadActionKind }) | null>(null);
   const [showHelper, setShowHelper] = useState(true);
   const [onlyWithWebsite, setOnlyWithWebsite] = useState(false);
   const [minFit, setMinFit] = useState(0);
@@ -102,6 +109,28 @@ export default function LeadResultsView({ meta, conversationId }: Props) {
       estimatedCredits: credits,
     });
   }, [conversationId, meta.plan_id]);
+
+  // Direct lead action → run-agent's lead_action branch with the SELECTED lead
+  // IDs. Requires an explicit selection; refreshes the Workbench on success.
+  const runDirectLeadAction = useCallback(async (kind: LeadActionKind) => {
+    if (directRunning) return;
+    const ids = selectedRows.map((r) => r.id);
+    if (ids.length === 0) {
+      setActionOutcome({ kind, success: false, error: 'Select at least one lead first.' });
+      return;
+    }
+    setActionOutcome(null);
+    setDirectRunning(kind);
+    try {
+      const res = await runLeadAction({ leadAction: kind, leadCandidateIds: ids, workspaceId, planId: meta.plan_id });
+      setActionOutcome({ ...res, kind });
+      if (res.success) await refresh();
+    } catch (e) {
+      setActionOutcome({ kind, success: false, error: e instanceof Error ? e.message : 'Action failed.' });
+    } finally {
+      setDirectRunning(null);
+    }
+  }, [directRunning, selectedRows, workspaceId, meta.plan_id, refresh]);
 
   const onBulkAction = useCallback((a: LeadResultPanelAction) => runAction(a, targetRows), [runAction, targetRows]);
   const onUnlock = useCallback((a: LeadResultPanelAction, id: string) => {
@@ -195,6 +224,10 @@ export default function LeadResultsView({ meta, conversationId }: Props) {
         credits={bulkCredits}
       />
 
+      {actionOutcome && (
+        <LeadActionOutcomeCard outcome={actionOutcome} onClose={() => setActionOutcome(null)} />
+      )}
+
       {/* Body */}
       {loading && items.length === 0 ? (
         <div className="flex-1 flex items-center justify-center text-[12px] text-[#7D8590]">
@@ -221,56 +254,50 @@ export default function LeadResultsView({ meta, conversationId }: Props) {
       <div className="px-4 py-3 bg-[#0a0d12]/60 border-t border-white/[0.05] flex flex-wrap items-center justify-between gap-3">
         <div className="flex flex-wrap items-center gap-2">
           <button
-            onClick={() => onBulkAction('find_contacts')}
-            disabled={!isApifyPeopleReady || counts.needContact === 0}
+            onClick={() => runDirectLeadAction('find_decision_makers')}
+            disabled={directRunning !== null || selectedRows.length === 0}
             className={`h-8 px-3 rounded text-[11.5px] font-semibold flex items-center gap-1.5 transition-colors ${
-              !isApifyPeopleReady
-                ? 'border border-dashed border-amber-500/30 bg-amber-500/5 text-amber-400 cursor-not-allowed'
-                : counts.needContact === 0
+              directRunning !== null || selectedRows.length === 0
                 ? 'border border-white/5 bg-white/[0.01] text-neutral-500 cursor-not-allowed'
                 : 'bg-emerald-500 hover:bg-emerald-400 text-black shadow-[0_0_12px_rgba(16,185,129,0.15)]'
             }`}
-            title={!isApifyPeopleReady ? 'Setup needed: Apify' : counts.needContact === 0 ? 'All contacts found' : 'Find decision makers for these accounts'}
+            title={selectedRows.length === 0 ? 'Select at least one lead' : isApifyPeopleReady ? 'Find decision-makers for the selected lead(s)' : 'Uses job-poster hints; enable Apify for deeper people search'}
           >
-            Find decision-makers {!isApifyPeopleReady && '(Setup needed)'}
+            {directRunning === 'find_decision_makers'
+              ? <><Loader2 className="h-3 w-3 animate-spin" /> {LEAD_ACTION_LOADING.find_decision_makers}</>
+              : 'Find decision-makers'}
           </button>
 
           <button
-            onClick={() => onBulkAction('research_company')}
-            disabled={!isFirecrawlReady || counts.enrichable === 0 || counts.contactReady === 0}
+            onClick={() => runDirectLeadAction('research_company')}
+            disabled={directRunning !== null || selectedRows.length === 0 || !isFirecrawlReady}
             className={`h-8 px-3 rounded text-[11.5px] font-semibold flex items-center gap-1.5 transition-colors ${
               !isFirecrawlReady
                 ? 'border border-dashed border-amber-500/30 bg-amber-500/5 text-amber-400 cursor-not-allowed'
-                : counts.enrichable === 0
+                : directRunning !== null || selectedRows.length === 0
                 ? 'border border-white/5 bg-white/[0.01] text-neutral-500 cursor-not-allowed'
-                : counts.contactReady === 0
-                ? 'border border-white/10 bg-white/[0.03] text-neutral-400 cursor-not-allowed'
                 : 'border border-emerald-500/30 hover:border-emerald-500/50 bg-emerald-500/10 hover:bg-emerald-500/15 text-emerald-300'
             }`}
-            title={
-              !isFirecrawlReady
-                ? 'Setup needed: Firecrawl'
-                : counts.contactReady === 0
-                ? 'Locked: Find decision-makers first'
-                : counts.enrichable === 0
-                ? 'All companies enriched'
-                : 'Enrich target companies'
-            }
+            title={!isFirecrawlReady ? 'Setup needed: Firecrawl' : selectedRows.length === 0 ? 'Select at least one lead' : 'Research the selected compan(y/ies)'}
           >
-            Enrich companies {!isFirecrawlReady && '(Setup needed)'}
+            {directRunning === 'research_company'
+              ? <><Loader2 className="h-3 w-3 animate-spin" /> {LEAD_ACTION_LOADING.research_company}</>
+              : <>Research company {!isFirecrawlReady && '(Setup needed)'}</>}
           </button>
 
           <button
-            onClick={() => onBulkAction('draft_outreach')}
-            disabled={counts.contactReady === 0}
+            onClick={() => runDirectLeadAction('generate_outreach')}
+            disabled={directRunning !== null || selectedRows.length === 0}
             className={`h-8 px-3 rounded text-[11.5px] font-semibold flex items-center gap-1.5 transition-colors ${
-              counts.contactReady === 0
+              directRunning !== null || selectedRows.length === 0
                 ? 'border border-white/5 bg-white/[0.01] text-neutral-500 cursor-not-allowed'
                 : 'border border-emerald-500/30 hover:border-emerald-500/50 bg-emerald-500/10 hover:bg-emerald-500/15 text-emerald-300'
             }`}
-            title={counts.contactReady === 0 ? 'Locked: Find contacts first' : 'Draft outreach sequences'}
+            title={selectedRows.length === 0 ? 'Select at least one lead' : 'Prepare an approval-only outreach draft'}
           >
-            Draft outreach
+            {directRunning === 'generate_outreach'
+              ? <><Loader2 className="h-3 w-3 animate-spin" /> {LEAD_ACTION_LOADING.generate_outreach}</>
+              : 'Generate outreach'}
           </button>
 
           <button
@@ -295,7 +322,7 @@ export default function LeadResultsView({ meta, conversationId }: Props) {
         <span className="font-mono">Agentory credits estimated locally</span>
       </div>
 
-      <LeadDetailDrawer row={drawerRow} onClose={() => setDrawerRow(null)} />
+      <LeadDetailDrawer row={drawerRow ? (items.find((r) => r.id === drawerRow.id) ?? drawerRow) : null} onClose={() => setDrawerRow(null)} />
 
       {confirmAction && (
         <ConfirmDialog
@@ -306,6 +333,72 @@ export default function LeadResultsView({ meta, conversationId }: Props) {
           onConfirm={confirmAndDispatch}
         />
       )}
+    </div>
+  );
+}
+
+function LeadActionOutcomeCard({ outcome, onClose }: { outcome: LeadActionResult & { kind: LeadActionKind }; onClose: () => void }) {
+  const ok = outcome.success;
+  const title = outcome.kind === 'research_company' ? 'Company research'
+    : outcome.kind === 'find_decision_makers' ? 'Decision-makers' : 'Outreach draft';
+  const perLead = Array.isArray(outcome.per_lead) ? outcome.per_lead : [];
+  return (
+    <div className={`mx-4 mt-2 mb-1 rounded-lg border p-3 text-[12px] relative ${ok ? 'border-emerald-500/25 bg-emerald-500/[0.05] text-[#C9D1D9]' : 'border-amber-500/30 bg-amber-500/[0.06] text-amber-200'}`}>
+      <button onClick={onClose} className="absolute top-2.5 right-2.5 text-[#7D8590] hover:text-[#C9D1D9]"><X className="h-3.5 w-3.5" /></button>
+      <div className="flex items-center gap-1.5 font-semibold pr-6">
+        {ok ? <CheckCircle2 className="h-3.5 w-3.5 text-emerald-400" /> : <AlertTriangle className="h-3.5 w-3.5 text-amber-400" />}
+        {title}
+      </div>
+      {outcome.error && <div className="mt-1 text-amber-200">{outcome.error}</div>}
+      {outcome.summary && <div className="mt-1 text-[#9aa4af]">{outcome.summary}</div>}
+      {perLead.length > 0 && (
+        <div className="mt-2 space-y-2">
+          {perLead.slice(0, 8).map((p, i) => <PerLeadRow key={i} kind={outcome.kind} p={p} />)}
+        </div>
+      )}
+      <div className="mt-2 text-[10px] text-[#7D8590]">Open a lead to see the full evidence. Drafts require approval — nothing is sent.</div>
+    </div>
+  );
+}
+
+function PerLeadRow({ kind, p }: { kind: LeadActionKind; p: Record<string, unknown> }) {
+  const company = (p.company as string) ?? 'Company';
+  if (kind === 'research_company') {
+    const status = p.status as string;
+    const lines = Array.isArray(p.summary_lines) ? p.summary_lines as string[] : [];
+    return (
+      <div className="rounded border border-white/[0.06] bg-white/[0.02] p-2">
+        <div className="flex items-center justify-between"><span className="font-medium text-[#F0F6FC]">{company}</span><span className="text-[10px] uppercase tracking-wide text-[#7D8590]">{status}{p.pages_fetched != null ? ` · ${p.pages_fetched}p` : ''}</span></div>
+        {status === 'blocked' ? <div className="text-[10.5px] text-amber-200/80 mt-0.5">{p.blocked_reason as string}</div>
+          : lines.slice(0, 6).map((l, i) => <div key={i} className="text-[10.5px] text-[#9aa4af] mt-0.5 truncate">{l}</div>)}
+      </div>
+    );
+  }
+  if (kind === 'find_decision_makers') {
+    const dms = Array.isArray(p.decision_makers) ? p.decision_makers as any[] : [];
+    return (
+      <div className="rounded border border-white/[0.06] bg-white/[0.02] p-2">
+        <div className="flex items-center justify-between"><span className="font-medium text-[#F0F6FC]">{company}</span>{p.needs_manual_review ? <span className="text-[10px] text-amber-300">needs manual review</span> : null}</div>
+        {dms.slice(0, 4).map((d, i) => (
+          <div key={i} className="text-[10.5px] mt-0.5">
+            <span className="text-[#F0F6FC]">{d.name}</span>
+            <span className="text-[#7D8590]">{d.title ? ` · ${d.title}` : ''} · {d.source} · {d.confidence}</span>
+            {d.source === 'job_poster' ? <span className="text-amber-300/80"> · poster hint (not a verified buyer)</span> : null}
+          </div>
+        ))}
+        {dms.length === 0 && <div className="text-[10.5px] text-amber-200/80 mt-0.5">No confident decision-maker yet.</div>}
+      </div>
+    );
+  }
+  // generate_outreach
+  const status = p.status as string;
+  const missing = Array.isArray(p.missing_context) ? p.missing_context as string[] : [];
+  return (
+    <div className="rounded border border-white/[0.06] bg-white/[0.02] p-2">
+      <div className="flex items-center justify-between"><span className="font-medium text-[#F0F6FC]">{company}</span><span className="text-[10px] uppercase tracking-wide text-emerald-300">{status === 'draft_needs_approval' ? 'draft · needs approval' : status}</span></div>
+      {status === 'draft_needs_approval'
+        ? <div className="text-[10.5px] text-[#9aa4af] mt-0.5">Recipient: {(p.recipient as string) ?? 'company-level'}. Review it in Awaiting You — nothing sent.</div>
+        : <div className="text-[10.5px] text-amber-200/80 mt-0.5">Insufficient context{missing.length ? `: ${missing.join(', ')}` : ''}. No draft created.</div>}
     </div>
   );
 }

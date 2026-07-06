@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { X, ExternalLink, Building2, User, Sparkles, Mail, FileText, Activity, Code2 } from 'lucide-react';
+import { X, ExternalLink, Building2, User, Sparkles, Mail, FileText, Activity, Code2, Search, Users } from 'lucide-react';
 import type { LeadTableRow } from '@/hooks/useLeadResults';
 import { ContactStatusChip, RowStatusChip } from './StatusChip';
 
@@ -42,6 +42,12 @@ export default function LeadDetailDrawer({ row, onClose }: Props) {
   const contactLocked = row.contact_status === 'needs_contact';
   const enrichLocked = row.enrichment_status !== 'enriched';
   const draftLocked = row.draft_status !== 'drafted' && row.draft_status !== 'approved';
+  // useLeadResults sets row.raw to the DB row; the persisted lead_action results
+  // (company_enrichment, decision_makers) live in the jsonb one level deeper.
+  const dbRow = (row.raw && typeof row.raw === 'object' ? row.raw : {}) as Record<string, any>;
+  const meta = (dbRow.raw && typeof dbRow.raw === 'object' ? dbRow.raw : dbRow) as Record<string, any>;
+  const enrichment = (meta.company_enrichment && typeof meta.company_enrichment === 'object') ? meta.company_enrichment : null;
+  const decisionMakers = Array.isArray(meta.decision_makers) ? meta.decision_makers : [];
 
   return (
     <div className="absolute inset-0 z-30 flex justify-end pointer-events-none">
@@ -70,6 +76,42 @@ export default function LeadDetailDrawer({ row, onClose }: Props) {
           <Field k="Source" v={row.signal_source_url ? <a href={row.signal_source_url} target="_blank" rel="noopener noreferrer" className="text-emerald-300 hover:text-emerald-200 inline-flex items-center gap-1">link<ExternalLink className="h-2.5 w-2.5" /></a> : null} />
           <Field k="Fit" v={typeof row.fit_score === 'number' ? `${row.fit_score}` : null} />
         </Section>
+
+        {enrichment && (
+          <Section icon={Search} title="Company enrichment">
+            <Field k="Status" v={`${enrichment.status ?? 'n/a'} · ${enrichment.confidence ?? '—'} confidence`} />
+            <Field k="Summary" v={enrichment.company_summary} />
+            <Field k="Founders" v={(enrichment.founders ?? []).map((f: any) => f.name).join(', ')} />
+            <Field k="Execs" v={(enrichment.executives ?? []).map((x: any) => `${x.name}${x.title ? ` (${x.title})` : ''}`).join(', ')} />
+            <Field k="Growth" v={(enrichment.growth_signals ?? []).slice(0, 3).join(' · ')} />
+            <Field k="Contact" v={(enrichment.public_contact_emails ?? []).map((c: any) => c.value).join(', ')} />
+            {(enrichment.evidence_urls ?? []).length > 0 && (
+              <Field k="Evidence" v={<span className="flex flex-wrap gap-1">{(enrichment.evidence_urls as string[]).slice(0, 5).map((u, i) => <a key={i} href={u} target="_blank" rel="noopener noreferrer" className="text-emerald-300 hover:text-emerald-200 inline-flex items-center gap-0.5">src{i + 1}<ExternalLink className="h-2.5 w-2.5" /></a>)}</span>} />
+            )}
+            <Field k="Missing" v={(enrichment.missing_evidence ?? []).length ? <span className="text-amber-200/80">{(enrichment.missing_evidence as string[]).join(', ')}</span> : null} />
+          </Section>
+        )}
+
+        {decisionMakers.length > 0 && (
+          <Section icon={Users} title="Decision-makers">
+            {decisionMakers.slice(0, 6).map((d: any, i: number) => (
+              <div key={i} className="rounded border border-white/[0.06] bg-white/[0.02] p-1.5">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-[12px] text-[#F0F6FC] truncate">{d.name}{d.title ? <span className="text-[#7D8590]"> · {d.title}</span> : null}</span>
+                  <span className="text-[9px] uppercase tracking-wide text-[#7D8590] shrink-0">{d.confidence}</span>
+                </div>
+                <div className="text-[10px] text-[#7D8590] mt-0.5">
+                  {d.source}{d.source === 'job_poster' ? <span className="text-amber-300/80"> — poster hint, not a verified buyer</span> : null} · {d.contact_status}
+                </div>
+                {d.why_this_person && <div className="text-[10.5px] text-[#9aa4af] mt-0.5">{d.why_this_person}</div>}
+                {d.linkedinUrl && <a href={d.linkedinUrl} target="_blank" rel="noopener noreferrer" className="text-[10px] text-sky-300 hover:text-sky-200 inline-flex items-center gap-0.5 mt-0.5">LinkedIn<ExternalLink className="h-2.5 w-2.5" /></a>}
+              </div>
+            ))}
+            {meta.decision_maker_status === 'needs_manual_review' && (
+              <div className="text-[10.5px] text-amber-200/80">No confident buyer yet — needs manual review.</div>
+            )}
+          </Section>
+        )}
 
         <Section icon={User} title="Recommended contact">
           <Field k="Persona" v={row.recommended_persona} />
