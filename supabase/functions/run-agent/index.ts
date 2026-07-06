@@ -126,6 +126,45 @@ Deno.serve(async (req) => {
     metadata: { step_index, task_id: task.id, agent_slug },
   });
 
+  // ---- Live Workbench lead actions (Research company / Find decision-makers /
+  // Generate outreach). Additive early-return: only runs when the caller passes
+  // tool_input.lead_action + lead_candidate_ids. Evidence-first + approval-gated;
+  // Firecrawl/Apify are called per-company via runTool; nothing is ever sent.
+  const leadAction = tool_input_body?.lead_action as string | undefined;
+  if (leadAction === "research_company" || leadAction === "find_decision_makers" || leadAction === "generate_outreach") {
+    const leadIds: string[] = Array.isArray(tool_input_body?.lead_candidate_ids) ? tool_input_body.lead_candidate_ids : [];
+    const toolCtx = { admin: supabase, workspace_id, agent_slug, agent_id: agent.id, agent_name: agent.name, plan_id, task_id: task.id, user_id: user_id ?? null };
+    try {
+      const { executeLeadAction } = await import("../_shared/leadActionExecutor.ts");
+      const outcome = await executeLeadAction(leadAction as "research_company" | "find_decision_makers" | "generate_outreach", leadIds, {
+        admin: supabase, workspace_id, plan_id, task_id: task.id, agent_id: agent.id,
+        agent_slug, agent_name: agent.name, user_id: user_id ?? null, runTool, toolCtx,
+      });
+      await supabase.from("tasks").update({
+        status: outcome.needs_approval ? "awaiting_approval" : "complete",
+        result: { output: outcome.summary, lead_action: leadAction, per_lead: outcome.per_lead },
+      }).eq("id", task.id);
+      if (outcome.needs_approval) {
+        await supabase.from("approvals").insert({
+          workspace_id, plan_id, task_id: task.id, agent_id: agent.id,
+          title: `${agent.name} needs approval`, description: instruction, status: "pending",
+        });
+        await supabase.from("task_plans").update({ status: "awaiting_approval" }).eq("id", plan_id);
+      }
+      await supabase.from("activity_feed").insert({
+        workspace_id, plan_id, agent_id: agent.id,
+        event_type: outcome.needs_approval ? "awaiting_approval" : "agent_completed",
+        title: `${agent.name}: ${leadAction.replace(/_/g, " ")}`, body: outcome.summary,
+        metadata: { step_index, task_id: task.id, lead_action: leadAction },
+      });
+      return json({ success: true, task_id: task.id, status: outcome.needs_approval ? "awaiting_approval" : "complete", summary: outcome.summary, per_lead: outcome.per_lead });
+    } catch (e) {
+      console.error("[run-agent] lead_action failed:", e);
+      await supabase.from("tasks").update({ status: "failed", error_message: String(e) }).eq("id", task.id);
+      return json({ success: false, task_id: task.id, status: "failed", error: "lead_action_failed" }, 500);
+    }
+  }
+
   // Load company_brain.
   const { data: brainRow } = await supabase
     .from("company_brain")
