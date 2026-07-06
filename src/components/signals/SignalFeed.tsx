@@ -35,6 +35,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
 import SignalCard from "./SignalCard";
 import RadarSummaryCards from "./RadarSummaryCards";
+import RadarSourceStatus from "./RadarSourceStatus";
 import EditRadarDrawer from "./EditRadarDrawer";
 import LoadMoreConfirmDialog from "./LoadMoreConfirmDialog";
 import SetupNeededCard from "./SetupNeededCard";
@@ -347,7 +348,10 @@ export default function SignalFeed() {
 
       {/* Radar summary */}
       <section className="space-y-3">
-        <h2 className="text-[15px] font-semibold text-neutral-300">Radar sources</h2>
+        <div className="flex items-center justify-between gap-3 flex-wrap">
+          <h2 className="text-[15px] font-semibold text-neutral-300">Radar sources</h2>
+          <RadarSourceStatus firecrawlReady={firecrawlState === "ready"} apifyReady={apifyState === "ready"} />
+        </div>
         <RadarSummaryCards
           counts={radarCounts}
           verifiedCounts={radarVerifiedCounts}
