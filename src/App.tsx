@@ -48,6 +48,7 @@ import ScreeningJobs from "./pages/ScreeningJobs";
 import Leads from "./pages/Leads";
 import Competitors from "./pages/Competitors";
 import Content from "./pages/Content";
+import OAuthConsent from "./pages/OAuthConsent";
 import Agents from "./pages/Agents";
 import SettingsIntegrations from "./pages/SettingsIntegrations";
 import SettingsBilling from "./pages/SettingsBilling";
@@ -104,6 +105,7 @@ const App = () => (
                     <Route path="/features" element={<Features />} />
                     <Route path="/pricing" element={<Pricing />} />
                     <Route path="/get-demo" element={<GetDemo />} />
+                    <Route path="/.lovable/oauth/consent" element={<OAuthConsent />} />
 
                     {/* Protected Routes with MainLayout */}
                     <Route path="/dashboard" element={

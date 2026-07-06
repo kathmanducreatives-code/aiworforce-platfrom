@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -33,18 +33,27 @@ const Auth = () => {
   const [loading, setLoading] = useState(false);
   const [checkEmail, setCheckEmail] = useState(false);
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const { toast } = useToast();
+
+  // Same-origin relative next target (e.g. from /.lovable/oauth/consent).
+  const nextParam = searchParams.get('next');
+  const safeNext = nextParam && nextParam.startsWith('/') && !nextParam.startsWith('//') ? nextParam : null;
 
   useEffect(() => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
       // Only react to a real sign-in; don't auto-redirect during recovery flow.
       if (event === 'SIGNED_IN' && session?.user) {
+        if (safeNext) {
+          window.location.href = safeNext;
+          return;
+        }
         const dest = await destinationForUser(session.user.id);
         navigate(dest, { replace: true });
       }
     });
     return () => subscription.unsubscribe();
-  }, [navigate]);
+  }, [navigate, safeNext]);
 
   const handleAuth = async (e: React.FormEvent) => {
     e.preventDefault();
