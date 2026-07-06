@@ -340,6 +340,26 @@ export default function ConversationsSidebar({ wide }: { wide?: boolean }) {
         conversationId={deleteTarget?.id ?? null}
         title={deleteTarget?.title ?? null}
       />
+      <AlertDialog open={bulkConfirmOpen} onOpenChange={(o) => { if (!bulkDeleting) setBulkConfirmOpen(o); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              Delete {selectedIds.size} conversation{selectedIds.size === 1 ? '' : 's'}?
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              Messages in the selected chats will be permanently removed. This cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={bulkDeleting}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={bulkDeleting}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={(e) => { e.preventDefault(); void runBulkDelete(); }}
+            >{bulkDeleting ? 'Deleting…' : 'Delete'}</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </aside>
   );
 }
