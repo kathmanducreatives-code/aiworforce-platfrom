@@ -24,10 +24,6 @@ function ConversationItem({
   conv,
   onRename,
   onDelete,
-function ConversationItem({
-  conv,
-  onRename,
-  onDelete,
   selectionMode,
   selected,
   onToggleSelect,
