@@ -1,12 +1,7 @@
 import { ExternalLink, MessageSquare, Send, Search, FileText, EyeOff, Check, Bookmark, Zap, Building2, User, MapPin, Briefcase } from "lucide-react";
-import { toast } from "sonner";
 import { buildActionCommand, signalTypeLabel, sourceHost, type SignalAction } from "@/lib/signalFeedModel";
 import { nextStatusAfterDraft, type ReviewStatus, type ReviewedSignal } from "@/lib/signalReviewModel";
-
-function sendToPilot(text: string, label: string) {
-  window.dispatchEvent(new CustomEvent("chat:send", { detail: text }));
-  toast.success(`Sent to Pilot: ${label}`);
-}
+import { sendAgentCommand } from "@/lib/agentCommand";
 
 const TYPE_BADGE: Record<string, string> = {
   competitor_engagement: "border-amber-500/30 bg-amber-500/10 text-amber-300",
@@ -109,9 +104,12 @@ export default function SignalCard({
   const toggleStatus = (target: ReviewStatus) =>
     onSetReview?.(signal.id, status === target ? "new" : target);
 
-  const runAction = (a: ActionDef) => {
-    sendToPilot(buildActionCommand(a.action, signal), a.label);
-    if (a.drafts) onDraftAction?.(signal.id);
+  const runAction = async (a: ActionDef) => {
+    const ok = await sendAgentCommand(buildActionCommand(a.action, signal), {
+      success: `Sent to Pilot: ${a.label}`,
+      action_source: "signal_feed_action",
+    });
+    if (ok && a.drafts) onDraftAction?.(signal.id);
   };
 
   const reviewBtn = (target: ReviewStatus, label: string, Icon: any, activeClass: string) => (

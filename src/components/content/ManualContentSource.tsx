@@ -2,9 +2,10 @@ import { useState } from "react";
 import { Link2 } from "lucide-react";
 import ProviderBadge, { classifyProviderState } from "@/components/signals/ProviderBadge";
 import { useIntegrationReadiness } from "@/hooks/useIntegrationReadiness";
+import { sendAgentCommand } from "@/lib/agentCommand";
 
 const dispatchChat = (text: string) =>
-  window.dispatchEvent(new CustomEvent("chat:send", { detail: { text } }));
+  void sendAgentCommand(text, { success: "Sent to Pilot", action_source: "content_action" });
 
 const SOURCE_TYPES = [
   { value: "linkedin_post", label: "LinkedIn post URL" },

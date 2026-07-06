@@ -1,8 +1,9 @@
 import { AlertTriangle, ExternalLink } from "lucide-react";
 import type { FeedSignal } from "@/lib/signalFeedModel";
+import { sendAgentCommand } from "@/lib/agentCommand";
 
 const dispatchChat = (text: string) =>
-  window.dispatchEvent(new CustomEvent("chat:send", { detail: { text } }));
+  void sendAgentCommand(text, { success: "Sent to Pilot", action_source: "content_action" });
 
 export default function SignalToContentCard({ signal }: { signal: FeedSignal }) {
   const verified = Boolean((signal as any).verified ?? signal.source_url);

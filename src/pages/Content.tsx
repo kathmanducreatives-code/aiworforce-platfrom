@@ -10,9 +10,10 @@ import SignalToContentCard from "@/components/content/SignalToContentCard";
 import ContentLoopPreview from "@/components/content/ContentLoopPreview";
 import ManualContentSource from "@/components/content/ManualContentSource";
 import ProviderBadge, { classifyProviderState } from "@/components/signals/ProviderBadge";
+import { sendAgentCommand } from "@/lib/agentCommand";
 
 const dispatchChat = (text: string) =>
-  window.dispatchEvent(new CustomEvent("chat:send", { detail: { text } }));
+  void sendAgentCommand(text, { success: "Sent to Pilot", action_source: "content_action" });
 
 function deriveStatus(status: string | null | undefined): DraftStatus {
   const s = (status ?? "").toLowerCase();

@@ -9,6 +9,7 @@ import { useWorkspace } from '@/contexts/WorkspaceContext';
 import { useApprovals } from '@/hooks/useApprovals';
 import { useChatWorkspace, CHANNEL_DEFAULT_AGENT } from '@/contexts/ChatWorkspaceContext';
 import { pilotChat } from '@/lib/pilotChat';
+import { subscribeChatCommand } from '@/lib/chatCommandBus';
 import { toast } from 'sonner';
 
 const DEPTS: { id: AgentDept; label: string; description: string }[] = [
@@ -143,9 +144,22 @@ export default function ChatComposerPro({ restrictDepartment, placeholder, autoF
     };
     window.addEventListener('chat:prefill', onPrefill);
     window.addEventListener('chat:send', onSend);
+    // Buffered command bus (Signals/Content card actions). Delivery is deferred
+    // to the next frame so submitRef is assigned even when this fires during the
+    // same mount that flushes buffered commands.
+    const unsubscribe = subscribeChatCommand((cmd) => {
+      requestAnimationFrame(() => {
+        submitRef.current(cmd.text, {
+          conversationIdOverride: cmd.conversation_id ?? null,
+          actionSource: cmd.action_source ?? null,
+          metadata: cmd.metadata,
+        });
+      });
+    });
     return () => {
       window.removeEventListener('chat:prefill', onPrefill);
       window.removeEventListener('chat:send', onSend);
+      unsubscribe();
     };
   }, []);
 

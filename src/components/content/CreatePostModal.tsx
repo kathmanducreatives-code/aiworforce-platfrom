@@ -1,7 +1,8 @@
 import { FileText, Link2, Package, User, Brain, X } from "lucide-react";
+import { sendAgentCommand } from "@/lib/agentCommand";
 
 const dispatchChat = (text: string) =>
-  window.dispatchEvent(new CustomEvent("chat:send", { detail: { text } }));
+  void sendAgentCommand(text, { success: "Sent to Pilot", action_source: "content_action" });
 
 const SOURCES = [
   { key: "signal", icon: FileText, label: "From saved signal", brief: "Scribe, draft a LinkedIn post from a saved signal — draft only." },

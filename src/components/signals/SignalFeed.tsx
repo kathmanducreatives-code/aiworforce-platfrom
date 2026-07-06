@@ -7,6 +7,7 @@ import { useSignalFeed, type RadarCategory } from "@/hooks/useSignalFeed";
 import { useSignalReviews } from "@/hooks/useSignalReviews";
 import { useIntegrationReadiness } from "@/hooks/useIntegrationReadiness";
 import { buildActionCommand, type FeedSignal } from "@/lib/signalFeedModel";
+import { sendAgentCommand } from "@/lib/agentCommand";
 import ScoutPromptBox, { type ProviderPreview } from "./ScoutPromptBox";
 import TrustSummary from "./TrustSummary";
 import ManualSourceInput from "./ManualSourceInput";
@@ -71,8 +72,7 @@ function matchesTab(s: FeedSignal, tab: Tab): boolean {
 }
 
 function sendPrompt(text: string) {
-  window.dispatchEvent(new CustomEvent("chat:send", { detail: text }));
-  toast.success("Sent to Pilot");
+  void sendAgentCommand(text, { success: "Sent to Pilot", action_source: "signal_feed_action" });
 }
 
 export default function SignalFeed() {
@@ -169,17 +169,22 @@ export default function SignalFeed() {
 
   // ----- bulk actions -----
   const rankAll = () => {
-    window.dispatchEvent(new CustomEvent("chat:send", { detail: buildActionCommand("rank") }));
-    toast.success("Asked Pilot to rank your saved signals");
+    void sendAgentCommand(buildActionCommand("rank"), {
+      success: "Asked Pilot to rank your saved signals",
+      action_source: "signal_feed_action",
+    });
   };
 
-  const bulkDraft = (action: BulkDraftAction) => {
+  const bulkDraft = async (action: BulkDraftAction) => {
     if (selectedSignals.length === 0) return;
-    window.dispatchEvent(new CustomEvent("chat:send", { detail: buildBulkCommand(action, selectedSignals) }));
     const verb = action === "rank" ? "Ranking" : "Drafting (no auto-send)";
-    toast.success(`${verb} ${selectedSignals.length} signal${selectedSignals.length > 1 ? "s" : ""} via Pilot`);
-    // Mark drafted signals actioned (preserving explicit saved/ignored).
-    if (action !== "rank") {
+    const ok = await sendAgentCommand(buildBulkCommand(action, selectedSignals), {
+      success: `${verb} ${selectedSignals.length} signal${selectedSignals.length > 1 ? "s" : ""} via Pilot`,
+      action_source: "signal_feed_action",
+    });
+    // Mark drafted signals actioned (preserving explicit saved/ignored) only once
+    // the command actually reached Pilot.
+    if (ok && action !== "rank") {
       const ids = selectedSignals.filter((s) => nextStatusAfterDraft(s.review_status) === "actioned").map((s) => s.id);
       if (ids.length) void bulkSetReview(ids, "actioned").catch(() => {});
     }
@@ -607,11 +612,11 @@ function SavedOutputCard({ output }: { output: SavedOutputRow }) {
       {/* Draft-only actions for content drafts (never posts). */}
       {isContentDraft && meta.subtype !== "comment_draft" && (
         <div className="mt-2 flex items-center gap-1.5 flex-wrap">
-          <button onClick={() => { window.dispatchEvent(new CustomEvent("chat:send", { detail: buildContentDraftCommand("find_engagement", output) })); toast.success("Asked Pilot to find engagement opportunities"); }}
+          <button onClick={() => { void sendAgentCommand(buildContentDraftCommand("find_engagement", output), { success: "Asked Pilot to find engagement opportunities", action_source: "signal_feed_action" }); }}
             className="inline-flex items-center gap-1 text-[11px] px-2 py-1 rounded-md border border-white/[0.08] bg-white/[0.02] text-[#C9D1D9] hover:bg-emerald-500/[0.06] hover:border-emerald-500/30 hover:text-[#F0F6FC] transition-colors">
             <Radar className="h-3 w-3" /> Find engagement opportunities
           </button>
-          <button onClick={() => { window.dispatchEvent(new CustomEvent("chat:send", { detail: buildContentDraftCommand("draft_comments", output) })); toast.success("Asked Pilot to draft comments (draft-only)"); }}
+          <button onClick={() => { void sendAgentCommand(buildContentDraftCommand("draft_comments", output), { success: "Asked Pilot to draft comments (draft-only)", action_source: "signal_feed_action" }); }}
             className="inline-flex items-center gap-1 text-[11px] px-2 py-1 rounded-md border border-white/[0.08] bg-white/[0.02] text-[#C9D1D9] hover:bg-emerald-500/[0.06] hover:border-emerald-500/30 hover:text-[#F0F6FC] transition-colors">
             <MessageSquare className="h-3 w-3" /> Draft comments from this
           </button>
