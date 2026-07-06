@@ -49,7 +49,7 @@ function ConversationItem({
         <div className="text-xs line-clamp-1">{title}</div>
         <div className="text-[10px] text-[#484F58] mt-0.5">{rel}</div>
       </div>
-      <div className="opacity-0 group-hover:opacity-100 transition-opacity" onClick={(e) => e.stopPropagation()}>
+      <div className="opacity-60 group-hover:opacity-100 transition-opacity" onClick={(e) => e.stopPropagation()}>
         <ConversationRowMenu
           onRename={() => onRename(conv)}
           onDelete={() => onDelete(conv)}
