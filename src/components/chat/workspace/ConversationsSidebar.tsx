@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { cn } from '@/lib/utils';
 import { useWorkspace } from '@/contexts/WorkspaceContext';
 import { useAgents } from '@/hooks/useAgents';
@@ -12,7 +12,11 @@ import AgentAvatar from './agents/AgentAvatar';
 import ConversationRowMenu from './ConversationRowMenu';
 import RenameConversationDialog from './RenameConversationDialog';
 import DeleteConversationDialog from './DeleteConversationDialog';
-import { Search, Plus } from 'lucide-react';
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
+import { Search, Plus, CheckSquare, X, Trash2 } from 'lucide-react';
 
 type Filter = 'all' | 'active' | 'done';
 
