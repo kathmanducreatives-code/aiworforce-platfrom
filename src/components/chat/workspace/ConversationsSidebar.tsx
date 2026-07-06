@@ -24,10 +24,20 @@ function ConversationItem({
   conv,
   onRename,
   onDelete,
+function ConversationItem({
+  conv,
+  onRename,
+  onDelete,
+  selectionMode,
+  selected,
+  onToggleSelect,
 }: {
   conv: ChatConversationRow;
   onRename: (c: ChatConversationRow) => void;
   onDelete: (c: ChatConversationRow) => void;
+  selectionMode: boolean;
+  selected: boolean;
+  onToggleSelect: (id: string) => void;
 }) {
   const { view, setView, closeWorkbench } = useChatWorkspace();
   const rel = useRelativeTime(conv.updated_at);
@@ -38,27 +48,46 @@ function ConversationItem({
     <div
       className={cn(
         'group relative w-full flex items-start gap-2 pl-2.5 pr-1 py-1.5 rounded-md transition-colors cursor-pointer',
-        active
+        active && !selectionMode
           ? 'bg-white/[0.05] text-[#F0F6FC]'
-          : 'text-[#7D8590] hover:text-[#F0F6FC] hover:bg-white/[0.025]',
+          : selected
+            ? 'bg-emerald-500/10 text-[#F0F6FC]'
+            : 'text-[#7D8590] hover:text-[#F0F6FC] hover:bg-white/[0.025]',
       )}
       onClick={() => {
+        if (selectionMode) {
+          onToggleSelect(conv.id);
+          return;
+        }
         if (!active) closeWorkbench();
         setView({ kind: 'chat', conversationId: conv.id, agentSlug: conv.agent_slug });
       }}
     >
-      {active && <span aria-hidden className="absolute left-0 top-1.5 bottom-1.5 w-[2px] rounded-r bg-emerald-400" />}
-      <AgentAvatar slug={conv.agent_slug} size="xs" ring={false} />
+      {active && !selectionMode && <span aria-hidden className="absolute left-0 top-1.5 bottom-1.5 w-[2px] rounded-r bg-emerald-400" />}
+      {selectionMode ? (
+        <input
+          type="checkbox"
+          checked={selected}
+          onChange={() => onToggleSelect(conv.id)}
+          onClick={(e) => e.stopPropagation()}
+          className="mt-1 h-3.5 w-3.5 accent-emerald-500 cursor-pointer"
+          aria-label={`Select ${title}`}
+        />
+      ) : (
+        <AgentAvatar slug={conv.agent_slug} size="xs" ring={false} />
+      )}
       <div className="flex-1 min-w-0">
         <div className="text-xs line-clamp-1">{title}</div>
         <div className="text-[10px] text-[#484F58] mt-0.5">{rel}</div>
       </div>
-      <div className="opacity-60 group-hover:opacity-100 transition-opacity" onClick={(e) => e.stopPropagation()}>
-        <ConversationRowMenu
-          onRename={() => onRename(conv)}
-          onDelete={() => onDelete(conv)}
-        />
-      </div>
+      {!selectionMode && (
+        <div className="opacity-60 group-hover:opacity-100 transition-opacity" onClick={(e) => e.stopPropagation()}>
+          <ConversationRowMenu
+            onRename={() => onRename(conv)}
+            onDelete={() => onDelete(conv)}
+          />
+        </div>
+      )}
     </div>
   );
 }
@@ -68,7 +97,7 @@ export default function ConversationsSidebar({ wide }: { wide?: boolean }) {
   const { agents } = useAgents(workspaceId);
   const { view, setView } = useChatWorkspace();
   const { conversations, state: convState, error: convError, retry } = useUserConversations();
-  const { createConversation } = useConversationActions();
+  const { createConversation, deleteConversations } = useConversationActions();
   const [filter, setFilter] = useState<Filter>('all');
   const [query, setQuery] = useState('');
   const [renameTarget, setRenameTarget] = useState<ChatConversationRow | null>(null);
