@@ -1,3 +1,4 @@
+declare const process: { env: Record<string, string | undefined> };
 import { createClient } from "@supabase/supabase-js";
 import { defineTool, type ToolContext } from "@lovable.dev/mcp-js";
 import { z } from "zod";
