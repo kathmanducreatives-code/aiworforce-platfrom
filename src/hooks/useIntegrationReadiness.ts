@@ -1,14 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useWorkspace } from '@/contexts/WorkspaceContext';
+import { withProviderAliases, type IntegrationStatus, type IntegrationEntry } from '@/lib/providerReadiness';
 
-export type IntegrationStatus = 'connected' | 'setup_needed' | 'optional' | 'unavailable';
-
-export interface IntegrationEntry {
-  status: IntegrationStatus;
-  label: string;
-  reason?: string;
-}
+// Re-exported from the pure module so existing importers keep working.
+export type { IntegrationStatus, IntegrationEntry };
 
 export interface ReadinessSummary {
   connected: number;
@@ -48,7 +44,8 @@ export function useIntegrationReadiness() {
           body: { workspace_id: workspaceId },
         });
         if (error) throw error;
-        const p = ((data as any)?.providers ?? {}) as Record<string, IntegrationEntry>;
+        const raw = ((data as any)?.providers ?? {}) as Record<string, IntegrationEntry>;
+        const p = withProviderAliases(raw);
         const s = ((data as any)?.summary ?? { connected: 0, setup_needed: 0, optional: 0 }) as ReadinessSummary;
         cache.set(workspaceId, { providers: p, summary: s, at: Date.now() });
         setProviders(p);
