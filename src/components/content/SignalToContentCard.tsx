@@ -1,27 +1,44 @@
-import { AlertTriangle, ExternalLink } from "lucide-react";
+import { AlertTriangle, Bookmark, Check, ExternalLink, EyeOff } from "lucide-react";
 import type { FeedSignal } from "@/lib/signalFeedModel";
+import type { ReviewStatus } from "@/lib/signalReviewModel";
 import { sendAgentCommand } from "@/lib/agentCommand";
+import { buildTurnIntoCommand, type SignalIdeaAction } from "@/lib/signalIdeaActions";
 
-const dispatchChat = (text: string) =>
-  void sendAgentCommand(text, { success: "Sent to Pilot", action_source: "content_action" });
-
-export default function SignalToContentCard({ signal }: { signal: FeedSignal }) {
+export default function SignalToContentCard({
+  signal,
+  reviewStatus,
+  onReview,
+}: {
+  signal: FeedSignal;
+  reviewStatus?: ReviewStatus | null;
+  /** Persists a saved/ignored review for this signal (no chat involved). */
+  onReview?: (action: SignalIdeaAction) => void | Promise<void>;
+}) {
   const verified = Boolean((signal as any).verified ?? signal.source_url);
   const priority = (signal as any).priority ?? "normal";
   const why = (signal as any).why_it_matters ?? signal.description ?? "";
   const type = signal.signal_type ?? "signal";
   const title = signal.title ?? signal.signal_label ?? "Signal";
+  const saved = reviewStatus === "saved";
+  const ignored = reviewStatus === "ignored";
 
   const turnInto = (kind: "post" | "comment") => {
     if (!verified) {
       const ok = window.confirm("This signal is unverified. Continue as idea only?");
       if (!ok) return;
     }
-    dispatchChat(`Scribe, turn signal "${title}" into a ${kind} — draft only.${signal.source_url ? ` Source: ${signal.source_url}` : ""}`);
+    void sendAgentCommand(buildTurnIntoCommand(kind, { title, sourceUrl: signal.source_url }), {
+      success: "Sent to Pilot",
+      action_source: "content_action",
+    });
   };
 
+  // Save/Ignore persist directly via signal_reviews — they must work with the
+  // chat closed. Clicking the active state toggles it back to `new`.
+  const toggle = (action: SignalIdeaAction) => onReview?.(action);
+
   return (
-    <article className="rounded-xl border border-border/70 bg-background/40 p-4">
+    <article className={`rounded-xl border border-border/70 bg-background/40 p-4 transition-opacity ${ignored ? "opacity-50" : ""}`}>
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0 flex-1">
           <h4 className="text-[16px] font-semibold text-foreground leading-snug">{title}</h4>
@@ -51,18 +68,28 @@ export default function SignalToContentCard({ signal }: { signal: FeedSignal }) 
       <div className="flex flex-wrap gap-2 mt-3">
         <ActionBtn primary onClick={() => turnInto("post")}>Turn into post</ActionBtn>
         <ActionBtn onClick={() => turnInto("comment")}>Turn into comment</ActionBtn>
-        <ActionBtn onClick={() => dispatchChat(`Save idea from signal "${title}".`)}>Save idea</ActionBtn>
-        <ActionBtn onClick={() => dispatchChat(`Ignore signal "${title}".`)}>Ignore</ActionBtn>
+        {onReview && (
+          <>
+            <ActionBtn active={saved} onClick={() => toggle("save")}>
+              <Bookmark className="h-3 w-3" /> {saved ? "Saved" : "Save idea"}
+            </ActionBtn>
+            <ActionBtn active={ignored} onClick={() => toggle("ignore")}>
+              {ignored ? <Check className="h-3 w-3" /> : <EyeOff className="h-3 w-3" />} {ignored ? "Ignored" : "Ignore"}
+            </ActionBtn>
+          </>
+        )}
       </div>
     </article>
   );
 }
 
-function ActionBtn({ children, onClick, primary }: { children: React.ReactNode; onClick: () => void; primary?: boolean }) {
+function ActionBtn({ children, onClick, primary, active }: { children: React.ReactNode; onClick: () => void; primary?: boolean; active?: boolean }) {
   const cls = primary
     ? "bg-primary text-primary-foreground hover:opacity-90"
-    : "border border-border/70 bg-background/50 text-foreground/90 hover:border-primary/40";
+    : active
+      ? "border border-primary/50 bg-primary/10 text-primary"
+      : "border border-border/70 bg-background/50 text-foreground/90 hover:border-primary/40";
   return (
-    <button onClick={onClick} className={`text-[13px] font-medium px-2.5 py-1 rounded-md transition ${cls}`}>{children}</button>
+    <button onClick={onClick} className={`inline-flex items-center gap-1 text-[13px] font-medium px-2.5 py-1 rounded-md transition ${cls}`}>{children}</button>
   );
 }

@@ -1,7 +1,9 @@
 import { useMemo, useState } from "react";
 import { FileEdit, MessageSquare, Repeat, Search, Lightbulb } from "lucide-react";
+import { toast } from "sonner";
 import { useWorkspace } from "@/contexts/WorkspaceContext";
 import { useSignalFeed } from "@/hooks/useSignalFeed";
+import { useSignalReviews } from "@/hooks/useSignalReviews";
 import { useIntegrationReadiness } from "@/hooks/useIntegrationReadiness";
 import ContentPromptBox from "@/components/content/ContentPromptBox";
 import CreatePostModal from "@/components/content/CreatePostModal";
@@ -12,6 +14,7 @@ import ManualContentSource from "@/components/content/ManualContentSource";
 import ProviderBadge, { classifyProviderState } from "@/components/signals/ProviderBadge";
 import { sendAgentCommand } from "@/lib/agentCommand";
 import { postDraftOutputs, workflowSummaryOutputs, commentDraftOutputs, commentDraftRows } from "@/lib/contentBuckets";
+import { ideaReviewStatus, type SignalIdeaAction } from "@/lib/signalIdeaActions";
 
 const dispatchChat = (text: string) =>
   void sendAgentCommand(text, { success: "Sent to Pilot", action_source: "content_action" });
@@ -29,8 +32,22 @@ function deriveStatus(status: string | null | undefined): DraftStatus {
 export default function Content() {
   const { workspaceId } = useWorkspace();
   const { savedOutputs, drafts, signals, loading } = useSignalFeed(workspaceId);
+  const { reviewsBySignal, setReview } = useSignalReviews(workspaceId);
   const { providers } = useIntegrationReadiness();
   const [createOpen, setCreateOpen] = useState(false);
+
+  // Save/Ignore an idea straight to signal_reviews — persists without the chat.
+  // Clicking the active state clears it back to `new`.
+  const handleIdea = async (signalId: string, action: SignalIdeaAction) => {
+    const target = ideaReviewStatus(action);
+    const next = reviewsBySignal[signalId]?.status === target ? "new" : target;
+    try {
+      await setReview(signalId, next);
+      toast.success(next === "new" ? "Cleared" : next === "saved" ? "Saved idea" : "Ignored");
+    } catch {
+      toast.error("Couldn't save — try again");
+    }
+  };
 
   // Bucket by the saved-output types Scribe/pilot-chat actually write, so counts
   // reflect real data instead of a "brief" string that never matches.
@@ -51,9 +68,11 @@ export default function Content() {
     const KEEP = ["news", "funding", "hiring", "launch", "product", "post", "engagement", "competitor"];
     return signals
       .filter((s) => KEEP.some((k) => (s.signal_type ?? "").toLowerCase().includes(k)))
+      // Ignored ideas drop out of the suggestion list so they don't reappear.
+      .filter((s) => reviewsBySignal[s.id]?.status !== "ignored")
       .sort((a, b) => (b.source_url ? 1 : 0) - (a.source_url ? 1 : 0))
       .slice(0, 8);
-  }, [signals]);
+  }, [signals, reviewsBySignal]);
 
   const linkedin = providers.linkedin;
   const apify = providers.apify;
@@ -202,7 +221,14 @@ export default function Content() {
                   actions={[{ label: "Open Signals", onClick: () => (window.location.href = "/signals") }]}
                 />
               ) : (
-                contentSignals.map((s) => <SignalToContentCard key={s.id} signal={s} />)
+                contentSignals.map((s) => (
+                  <SignalToContentCard
+                    key={s.id}
+                    signal={s}
+                    reviewStatus={reviewsBySignal[s.id]?.status ?? null}
+                    onReview={(action) => handleIdea(s.id, action)}
+                  />
+                ))
               )}
             </Section>
 
