@@ -98,6 +98,10 @@ export default function ConversationsSidebar({ wide }: { wide?: boolean }) {
   const [query, setQuery] = useState('');
   const [renameTarget, setRenameTarget] = useState<ChatConversationRow | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<ChatConversationRow | null>(null);
+  const [selectionMode, setSelectionMode] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [bulkConfirmOpen, setBulkConfirmOpen] = useState(false);
+  const [bulkDeleting, setBulkDeleting] = useState(false);
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -105,6 +109,43 @@ export default function ConversationsSidebar({ wide }: { wide?: boolean }) {
       .filter((c) => filter === 'all' ? true : c.status === (filter === 'active' ? 'active' : 'done'))
       .filter((c) => !q || (c.title ?? '').toLowerCase().includes(q));
   }, [conversations, filter, query]);
+
+  const toggleSelect = (id: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  };
+
+  const exitSelection = () => {
+    setSelectionMode(false);
+    setSelectedIds(new Set());
+  };
+
+  const selectAllFiltered = () => {
+    setSelectedIds(new Set(filtered.map((c) => c.id)));
+  };
+
+  useEffect(() => {
+    if (!selectionMode) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') exitSelection();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [selectionMode]);
+
+  const runBulkDelete = async () => {
+    const ids = Array.from(selectedIds);
+    if (ids.length === 0) return;
+    setBulkDeleting(true);
+    const n = await deleteConversations(ids);
+    setBulkDeleting(false);
+    setBulkConfirmOpen(false);
+    if (n > 0) exitSelection();
+  };
+
 
   return (
     <aside
