@@ -75,7 +75,7 @@ export function useConversationActions() {
       toast.error('Delete failed', { description: error.message });
       return false;
     }
-    const removed = (data ?? []) as { id: string }[];
+    const removed = (data ?? []) as unknown as { id: string }[];
     if (removed.length === 0) {
       toast.error('Delete failed', {
         description: 'You may be signed out or lack permission. Try signing in again.',
@@ -102,7 +102,7 @@ export function useConversationActions() {
       toast.error('Delete failed', { description: error.message });
       return 0;
     }
-    const removed = (data ?? []) as { id: string }[];
+    const removed = (data ?? []) as unknown as { id: string }[];
     if (removed.length === 0) {
       toast.error('Delete failed', {
         description: 'You may be signed out or lack permission. Try signing in again.',
