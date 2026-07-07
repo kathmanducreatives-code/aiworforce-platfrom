@@ -8,6 +8,7 @@ import { useSignalReviews } from "@/hooks/useSignalReviews";
 import { useIntegrationReadiness } from "@/hooks/useIntegrationReadiness";
 import { buildActionCommand, type FeedSignal } from "@/lib/signalFeedModel";
 import { sendAgentCommand } from "@/lib/agentCommand";
+import { selectTopSignals } from "@/lib/signalRanking";
 import ScoutPromptBox, { type ProviderPreview } from "./ScoutPromptBox";
 import TrustSummary from "./TrustSummary";
 import ManualSourceInput from "./ManualSourceInput";
@@ -96,6 +97,8 @@ export default function SignalFeed() {
   const [loadMoreOpen, setLoadMoreOpen] = useState(false);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [savedFilter, setSavedFilter] = useState<SavedFilter>("all");
+  // Default radar shows the global top 10 verified signals; user can expand.
+  const [showAll, setShowAll] = useState(false);
 
   const savedFiltered = useMemo(
     () => savedOutputs.filter((o) => matchesSavedFilter(o, savedFilter)),
@@ -143,6 +146,20 @@ export default function SignalFeed() {
 
   const clearFilters = () => { setQuery(""); setPriority(""); setHasSource(false); };
   const hasActiveFilters = !!(query || priority || hasSource);
+
+  // Top-10 default: pristine "All" view ranks the highest-scored verified signals
+  // globally across sources. Any tab/filter/search switches to the full list.
+  const topDefaultActive = tab === "all" && !hasActiveFilters && reviewFilter === "all" && !showUnverified && !selectMode;
+  const topSignals = useMemo(
+    () => selectTopSignals(filtered, {
+      score: (s) => Number((s.raw?.score as number) ?? s.fit_score ?? 0),
+      verified: (s) => s.show_by_default,
+      createdAt: (s) => s.created_at,
+      limit: 10,
+    }),
+    [filtered],
+  );
+  const displaySignals = topDefaultActive && !showAll ? topSignals : filtered;
 
   // ----- selection -----
   const toggleSelect = (id: string) =>
@@ -565,12 +582,26 @@ export default function SignalFeed() {
                 />
               : <NoVerifiedEmpty onRunRadar={handleRunRadar} scanning={scanning} onShowUnverified={() => setShowUnverified(true)} />)
           : <>
+              {topDefaultActive && (
+                <div className="flex items-center justify-between gap-2 flex-wrap text-[13px]">
+                  <span className="text-neutral-300 font-medium">
+                    {showAll ? `All ${filtered.length} verified signals` : `Top ${topSignals.length} signals`}
+                    <span className="text-neutral-500 font-normal"> · ranked by fit &amp; freshness</span>
+                  </span>
+                  {filtered.length > topSignals.length && (
+                    <button onClick={() => setShowAll((v) => !v)}
+                      className="text-[12px] px-2.5 py-1 rounded-md border border-white/[0.08] bg-white/[0.02] text-neutral-300 hover:text-neutral-100">
+                      {showAll ? "Show top 10" : `Show all (${filtered.length})`}
+                    </button>
+                  )}
+                </div>
+              )}
               {showUnverified && (
                 <div className="text-[13px] text-amber-200/80 rounded-md border border-amber-500/20 bg-amber-500/[0.04] px-3 py-2">
                   Unverified signals may be missing source proof. Review before using them.
                 </div>
               )}
-              <ul className="space-y-2">{filtered.map((s) => (
+              <ul className="space-y-2">{displaySignals.map((s) => (
                 <SignalCard key={s.id} signal={s}
                   selectable={selectMode}
                   selected={selected.has(s.id)}
