@@ -232,9 +232,11 @@ const BookInterview = () => {
       <div className="max-w-4xl mx-auto">
         <Card className="border-border">
           <CardHeader className="border-b border-border">
-            <CardTitle className="flex items-center gap-3">
-              <CalendarIcon className="h-6 w-6 text-primary" />
-              Schedule Your Interview
+            <CardTitle asChild className="flex items-center gap-3">
+              <h1>
+                <CalendarIcon className="h-6 w-6 text-primary" />
+                Schedule Your Interview
+              </h1>
             </CardTitle>
             {interviewType && (
               <div className="flex items-center gap-2 mt-2">

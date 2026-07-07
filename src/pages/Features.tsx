@@ -128,9 +128,9 @@ const Features = () => {
                   </div>
                   
                   {/* Title */}
-                  <h3 className="text-2xl font-bold text-foreground mb-4">
+                  <h2 className="text-2xl font-bold text-foreground mb-4">
                     {feature.title}
-                  </h3>
+                  </h2>
                   
                   {/* Description */}
                   <p className="text-muted-foreground mb-4 leading-relaxed">
