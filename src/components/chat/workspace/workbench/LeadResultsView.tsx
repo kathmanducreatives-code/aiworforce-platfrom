@@ -14,7 +14,7 @@ import { useToolAvailability } from '@/lib/workflows/useToolAvailability';
 import { useChatWorkspace } from '@/contexts/ChatWorkspaceContext';
 import { useWorkspace } from '@/contexts/WorkspaceContext';
 import { runLeadAction } from '@/lib/leadActions';
-import { LEAD_ACTION_LOADING, type LeadActionKind } from '@/lib/leadActionRequest';
+import { LEAD_ACTION_LOADING, workbenchActionToLeadKind, type LeadActionKind } from '@/lib/leadActionRequest';
 import { deriveRowAction, type RowAction } from '@/lib/leadRowAction';
 
 interface Props {
@@ -94,35 +94,16 @@ export default function LeadResultsView({ meta, conversationId }: Props) {
     });
   }, [filtered]);
 
-  const runAction = useCallback((action: LeadResultPanelAction, rows: LeadTableRow[]) => {
-    if (action === 'export_csv') {
-      downloadCsv(`leads-${meta.plan_id.slice(0, 8)}.csv`, rowsToCsv(rows));
-      return;
-    }
-    const credits = estimateCredits(action, rows);
-    if (credits > 0) {
-      setConfirmAction({ action, ids: rows.map((r) => r.id), credits });
-      return;
-    }
-    dispatchResultAction({
-      conversationId,
-      planId: meta.plan_id,
-      leadCandidateIds: rows.map((r) => r.id),
-      action,
-      estimatedCredits: credits,
-    });
-  }, [conversationId, meta.plan_id]);
-
-  // Direct lead action → run-agent's lead_action branch with the SELECTED lead
-  // IDs. Requires an explicit selection; refreshes the Workbench on success.
-  // Runs the action ONE company at a time and writes each row's own lifecycle
-  // (running → success/empty/insufficient_context/error). The row/drawer — not a
-  // chat transcript — is the result surface.
-  const runDirectLeadAction = useCallback(async (kind: LeadActionKind) => {
+  // Direct lead action → run-agent's lead_action branch with the given existing
+  // lead_candidate_ids. Runs ONE company at a time and writes each row's own
+  // lifecycle (running → success/empty/insufficient_context/error). The row/
+  // drawer — not a chat transcript — is the result surface. NEVER starts Scout
+  // sourcing.
+  const runDirectLeadAction = useCallback(async (kind: LeadActionKind, rowsArg?: LeadTableRow[]) => {
     if (directRunning) return;
-    const rows = selectedRows;
+    const rows = rowsArg ?? selectedRows;
     if (rows.length === 0) {
-      setActionOutcome({ kind, success: false, error: 'Select at least one lead first.' });
+      setActionOutcome({ kind, success: false, error: 'Select one or more Workbench rows first.' });
       return;
     }
     setActionOutcome(null);
@@ -145,14 +126,39 @@ export default function LeadResultsView({ meta, conversationId }: Props) {
     await refresh();
   }, [directRunning, selectedRows, workspaceId, meta.plan_id, refresh]);
 
-  const onBulkAction = useCallback((a: LeadResultPanelAction) => runAction(a, targetRows), [runAction, targetRows]);
+  const runAction = useCallback((action: LeadResultPanelAction, rows: LeadTableRow[]) => {
+    if (action === 'export_csv') {
+      downloadCsv(`leads-${meta.plan_id.slice(0, 8)}.csv`, rowsToCsv(rows));
+      return;
+    }
+    const kind = workbenchActionToLeadKind(action);
+    if (kind) { void runDirectLeadAction(kind, rows); return; }   // structured, row-scoped
+    // Other actions (rank / save-to-signal-feed / enrich_and_draft) keep the
+    // existing credits-confirm + chat path.
+    const credits = estimateCredits(action, rows);
+    if (credits > 0) {
+      setConfirmAction({ action, ids: rows.map((r) => r.id), credits });
+      return;
+    }
+    dispatchResultAction({
+      conversationId,
+      planId: meta.plan_id,
+      leadCandidateIds: rows.map((r) => r.id),
+      action,
+      estimatedCredits: credits,
+    });
+  }, [conversationId, meta.plan_id, runDirectLeadAction]);
+
+  // Bulk + recommended actions operate on the SELECTION (empty → clear message,
+  // never all rows / a new search). Unlock cells operate on their own row.
+  const onBulkAction = useCallback((a: LeadResultPanelAction) => runAction(a, selectedRows), [runAction, selectedRows]);
   const onUnlock = useCallback((a: LeadResultPanelAction, id: string) => {
     const row = items.find((r) => r.id === id);
     if (!row) return;
     runAction(a, [row]);
   }, [runAction, items]);
 
-  const onRunRecommendation = useCallback(() => runAction(recommendation.action, items), [runAction, recommendation.action, items]);
+  const onRunRecommendation = useCallback(() => runAction(recommendation.action, selectedRows), [runAction, recommendation.action, selectedRows]);
 
   const confirmAndDispatch = useCallback(() => {
     if (!confirmAction) return;

@@ -56,3 +56,16 @@ export function unwrapLeadRaw(rowRaw: unknown): Record<string, unknown> {
   const dbRow = (rowRaw && typeof rowRaw === 'object' ? rowRaw : {}) as Record<string, unknown>;
   return (dbRow.raw && typeof dbRow.raw === 'object' ? dbRow.raw : dbRow) as Record<string, unknown>;
 }
+
+/**
+ * Both company website AND LinkedIn are surfaced (not hidden behind CSV). Returns
+ * the clickable link targets + a display host for the Company/Account cell.
+ */
+export function companyDisplayLinks(row: { website?: string | null; company_linkedin_url?: string | null }): {
+  website: string | null; websiteHost: string | null; linkedinUrl: string | null;
+} {
+  const website = row.website && row.website.trim() ? row.website : null;
+  const linkedinUrl = row.company_linkedin_url && row.company_linkedin_url.trim() ? row.company_linkedin_url : null;
+  const websiteHost = website ? website.replace(/^https?:\/\//, '').replace(/\/.*$/, '') : null;
+  return { website, websiteHost, linkedinUrl };
+}

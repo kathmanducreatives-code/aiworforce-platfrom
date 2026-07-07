@@ -4,6 +4,25 @@
 
 export type LeadActionKind = 'research_company' | 'find_decision_makers' | 'generate_outreach';
 
+// Maps a Workbench panel action → the structured lead_action kind. The three
+// lead actions (+ the `enrich` synonym) ALWAYS run on existing selected rows via
+// run-agent's lead_action branch — never through chat planning (which would
+// start a fresh Scout/Aria sourcing workflow). Other actions (rank / export /
+// save_to_signal_feed / enrich_and_draft) return null and keep their own path.
+export function workbenchActionToLeadKind(action: string): LeadActionKind | null {
+  switch (action) {
+    case 'research_company':
+    case 'enrich':
+      return 'research_company';
+    case 'find_contacts':
+      return 'find_decision_makers';
+    case 'draft_outreach':
+      return 'generate_outreach';
+    default:
+      return null;
+  }
+}
+
 // research/decision-maker → Hawk; outreach drafting → Penn. The lead_action
 // branch runs regardless of agent; we pick the semantically-correct one so the
 // task/activity rows read correctly.

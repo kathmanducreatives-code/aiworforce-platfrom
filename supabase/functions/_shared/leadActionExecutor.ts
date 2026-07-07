@@ -16,6 +16,24 @@ import type { PeopleSearchContact } from "./decisionMakers.ts";
 
 export type LeadAction = "research_company" | "find_decision_makers" | "generate_outreach";
 
+/**
+ * A lead action operates on EXISTING selected Workbench rows. Validate the
+ * request so run-agent can refuse (400) instead of ever falling through to a
+ * Scout sourcing workflow when no lead_candidate_ids are supplied.
+ */
+export function validateLeadActionRequest(
+  leadAction: string | undefined,
+  leadCandidateIds: unknown,
+): { ok: true; ids: string[] } | { ok: false; error: string; message: string } {
+  const ids = Array.isArray(leadCandidateIds)
+    ? [...new Set(leadCandidateIds.filter((x): x is string => typeof x === "string" && !!x))]
+    : [];
+  if (ids.length === 0) {
+    return { ok: false, error: "lead_action_requires_lead_candidate_ids", message: "Select one or more Workbench rows first." };
+  }
+  return { ok: true, ids };
+}
+
 // Minimal shape of the runTool result / callable we depend on.
 export interface ToolResultLike { ok: boolean; data?: unknown; unavailable?: boolean; error?: string }
 // ctx is `any` so run-agent's runTool(…, ctx: ToolContext) is assignable here

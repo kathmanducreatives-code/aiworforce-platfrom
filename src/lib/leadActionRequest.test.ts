@@ -1,5 +1,19 @@
 import { assert, assertEquals } from "https://deno.land/std@0.224.0/assert/mod.ts";
-import { buildLeadActionRequest, LEAD_ACTION_LOADING } from "./leadActionRequest.ts";
+import { buildLeadActionRequest, LEAD_ACTION_LOADING, workbenchActionToLeadKind } from "./leadActionRequest.ts";
+
+// Routing (Issue 2): the 3 lead actions map to the structured lead_action path;
+// sourcing/rank/export do NOT (they must not start a new Scout workflow).
+Deno.test("routing: research/find/draft/enrich → structured lead_action kind", () => {
+  assertEquals(workbenchActionToLeadKind("research_company"), "research_company");
+  assertEquals(workbenchActionToLeadKind("enrich"), "research_company");
+  assertEquals(workbenchActionToLeadKind("find_contacts"), "find_decision_makers");
+  assertEquals(workbenchActionToLeadKind("draft_outreach"), "generate_outreach");
+});
+Deno.test("routing: rank/export/save/enrich_and_draft do NOT route to lead_action", () => {
+  for (const a of ["rank", "export_csv", "save_to_signal_feed", "enrich_and_draft", "find_this_company_new"]) {
+    assertEquals(workbenchActionToLeadKind(a), null, `${a} should not be a lead action`);
+  }
+});
 
 const base = { workspaceId: "ws-1", planId: "plan-1" };
 

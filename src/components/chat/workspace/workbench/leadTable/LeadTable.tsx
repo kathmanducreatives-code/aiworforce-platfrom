@@ -2,7 +2,7 @@ import { ExternalLink, Linkedin, Globe, Loader2 } from 'lucide-react';
 import type { LeadTableRow } from '@/hooks/useLeadResults';
 import type { LeadResultPanelAction } from '@/lib/chatActions';
 import type { LeadActionKind } from '@/lib/leadActionRequest';
-import type { RowAction } from '@/lib/leadRowAction';
+import { companyDisplayLinks, type RowAction } from '@/lib/leadRowAction';
 import LockedCell from './LockedCell';
 import { ContactStatusChip, RowStatusChip } from './StatusChip';
 
@@ -54,10 +54,6 @@ const COL_W = {
   source: 'min-w-[120px]',
   status: 'w-[90px]',
 };
-
-function hostOf(url: string) {
-  return url.replace(/^https?:\/\//, '').replace(/\/.*$/, '');
-}
 
 export default function LeadTable({ rows, selected, rowActions, onToggle, onToggleAll, onOpen, onUnlock }: Props) {
   const allChecked = rows.length > 0 && rows.every((r) => selected.has(r.id));
@@ -111,18 +107,27 @@ export default function LeadTable({ rows, selected, rowActions, onToggle, onTogg
                   />
                 </td>
                 <td className={`${COL_W.company} sticky left-9 z-[1] bg-[#0a0d12] border-b border-r border-white/[0.05] px-2 py-1.5`}>
-                  <button onClick={() => onOpen(r)} className="text-left w-full">
+                  <button onClick={() => onOpen(r)} className="text-left w-full block">
                     <div className="text-[12.5px] font-medium text-[#F0F6FC] truncate">{r.company_name ?? 'Unknown company'}</div>
-                    <div className="text-[10.5px] text-[#7D8590] truncate inline-flex items-center gap-1">
-                      {r.website ? (
-                        <><Globe className="h-2.5 w-2.5" /> {hostOf(r.website)}</>
-                      ) : r.company_linkedin_url ? (
-                        <><Linkedin className="h-2.5 w-2.5 text-sky-300/80" /> <span className="text-sky-300/80">LinkedIn</span></>
-                      ) : (
-                        <span className="text-amber-300/80">no website</span>
-                      )}
-                    </div>
                   </button>
+                  {/* website + company LinkedIn as separate clickable links (stop
+                      propagation so they don't open the drawer) */}
+                  {(() => { const links = companyDisplayLinks(r); return (
+                  <div className="flex items-center gap-2 mt-0.5">
+                    {links.website ? (
+                      <a href={links.website} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()} className="text-[10.5px] text-[#9aa4af] hover:text-emerald-300 inline-flex items-center gap-1 min-w-0">
+                        <Globe className="h-2.5 w-2.5 shrink-0" /><span className="truncate">{links.websiteHost}</span>
+                      </a>
+                    ) : (
+                      <span className="text-[10.5px] text-amber-300/80">no website</span>
+                    )}
+                    {links.linkedinUrl && (
+                      <a href={links.linkedinUrl} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()} className="text-[10.5px] text-sky-300/80 hover:text-sky-200 inline-flex items-center gap-0.5 shrink-0">
+                        <Linkedin className="h-2.5 w-2.5" /> LinkedIn
+                      </a>
+                    )}
+                  </div>
+                  ); })()}
                 </td>
                 <td className={`${COL_W.signal} border-b border-white/[0.05] px-2 py-1.5 align-top`}>
                   <div className="text-[11.5px] text-[#F0F6FC] truncate">{r.job_title ?? r.signal_type ?? '—'}</div>

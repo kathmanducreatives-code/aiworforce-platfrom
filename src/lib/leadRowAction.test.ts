@@ -1,5 +1,21 @@
 import { assert, assertEquals } from "https://deno.land/std@0.224.0/assert/mod.ts";
-import { deriveRowAction, unwrapLeadRaw } from "./leadRowAction.ts";
+import { deriveRowAction, unwrapLeadRaw, companyDisplayLinks } from "./leadRowAction.ts";
+
+// Display mapping (Issue 1): both website AND LinkedIn are exposed as links.
+Deno.test("companyDisplayLinks exposes both website and company LinkedIn", () => {
+  const l = companyDisplayLinks({ website: "https://flatpay.com/", company_linkedin_url: "https://www.linkedin.com/company/flatpay" });
+  assertEquals(l.website, "https://flatpay.com/");
+  assertEquals(l.websiteHost, "flatpay.com");
+  assertEquals(l.linkedinUrl, "https://www.linkedin.com/company/flatpay");
+});
+Deno.test("companyDisplayLinks: LinkedIn shows even when website missing; empties → null", () => {
+  const a = companyDisplayLinks({ website: null, company_linkedin_url: "https://www.linkedin.com/company/x" });
+  assertEquals(a.website, null);
+  assertEquals(a.linkedinUrl, "https://www.linkedin.com/company/x");
+  const b = companyDisplayLinks({ website: "", company_linkedin_url: "" });
+  assertEquals(b.website, null);
+  assertEquals(b.linkedinUrl, null);
+});
 
 // Part J #7 — running → success
 Deno.test("research_company enriched → success with summary detail", () => {

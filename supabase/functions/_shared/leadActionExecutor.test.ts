@@ -1,8 +1,26 @@
 import { assert, assertEquals } from "https://deno.land/std@0.224.0/assert/mod.ts";
 import {
   leadRecordFromRow, mapFirecrawlResult, normalizePeopleSearchRows, peopleSearchQuery,
-  executeLeadAction, type ExecCtx, type ToolResultLike,
+  executeLeadAction, validateLeadActionRequest, type ExecCtx, type ToolResultLike,
 } from "./leadActionExecutor.ts";
+
+// Backend guard (Issue 2): a lead action requires lead_candidate_ids and refuses
+// to fall through to Scout sourcing when none are supplied.
+Deno.test("validateLeadActionRequest: no ids → refuse with clear message", () => {
+  const r = validateLeadActionRequest("research_company", []);
+  assert(!r.ok);
+  if (r.ok) return;
+  assertEquals(r.error, "lead_action_requires_lead_candidate_ids");
+  assert(/Select one or more Workbench rows/i.test(r.message));
+  assert(!validateLeadActionRequest("find_decision_makers", undefined).ok);
+  assert(!validateLeadActionRequest("generate_outreach", [null, "", 5]).ok); // no valid string ids
+});
+Deno.test("validateLeadActionRequest: real ids → ok, deduped", () => {
+  const r = validateLeadActionRequest("research_company", ["a", "a", "b"]);
+  assert(r.ok);
+  if (!r.ok) return;
+  assertEquals(r.ids, ["a", "b"]);
+});
 
 // ---- Pure helpers ----
 

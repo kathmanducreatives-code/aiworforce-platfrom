@@ -132,7 +132,15 @@ Deno.serve(async (req) => {
   // Firecrawl/Apify are called per-company via runTool; nothing is ever sent.
   const leadAction = tool_input_body?.lead_action as string | undefined;
   if (leadAction === "research_company" || leadAction === "find_decision_makers" || leadAction === "generate_outreach") {
-    const leadIds: string[] = Array.isArray(tool_input_body?.lead_candidate_ids) ? tool_input_body.lead_candidate_ids : [];
+    // A lead action operates on EXISTING selected rows. Never fall through to
+    // Scout sourcing: with no ids, refuse explicitly instead of starting a search.
+    const { validateLeadActionRequest } = await import("../_shared/leadActionExecutor.ts");
+    const valid = validateLeadActionRequest(leadAction, tool_input_body?.lead_candidate_ids);
+    if (!valid.ok) {
+      await supabase.from("tasks").update({ status: "failed", error_message: valid.error }).eq("id", task.id);
+      return json({ success: false, task_id: task.id, status: "failed", error: valid.error, message: valid.message }, 400);
+    }
+    const leadIds = valid.ids;
     const toolCtx = { admin: supabase, workspace_id, agent_slug, agent_id: agent.id, agent_name: agent.name, plan_id, task_id: task.id, user_id: user_id ?? null };
     try {
       const { executeLeadAction } = await import("../_shared/leadActionExecutor.ts");
