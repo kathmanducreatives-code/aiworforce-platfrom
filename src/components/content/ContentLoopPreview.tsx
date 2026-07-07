@@ -1,8 +1,9 @@
 import { Calendar } from "lucide-react";
 import { useState } from "react";
+import { sendAgentCommand } from "@/lib/agentCommand";
 
 const dispatchChat = (text: string) =>
-  window.dispatchEvent(new CustomEvent("chat:send", { detail: { text } }));
+  void sendAgentCommand(text, { success: "Sent to Pilot", action_source: "content_action" });
 
 const DEFAULT_PLAN = [
   { day: "Mon", pillar: "Founder POV" },

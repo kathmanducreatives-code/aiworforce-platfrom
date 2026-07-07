@@ -7,6 +7,8 @@ import { useSignalFeed, type RadarCategory } from "@/hooks/useSignalFeed";
 import { useSignalReviews } from "@/hooks/useSignalReviews";
 import { useIntegrationReadiness } from "@/hooks/useIntegrationReadiness";
 import { buildActionCommand, type FeedSignal } from "@/lib/signalFeedModel";
+import { sendAgentCommand } from "@/lib/agentCommand";
+import { selectTopSignals } from "@/lib/signalRanking";
 import ScoutPromptBox, { type ProviderPreview } from "./ScoutPromptBox";
 import TrustSummary from "./TrustSummary";
 import ManualSourceInput from "./ManualSourceInput";
@@ -34,28 +36,37 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
 import SignalCard from "./SignalCard";
 import RadarSummaryCards from "./RadarSummaryCards";
+import RadarBrief from "./RadarBrief";
+import RadarSourceStrip from "./RadarSourceStrip";
+import SignalDetailDrawer from "./SignalDetailDrawer";
+import type { SignalActionHandlers } from "./SignalActionBar";
+import { computeSourceStatuses } from "@/lib/radarSources";
+import { buildTurnIntoCommand } from "@/lib/signalIdeaActions";
 import EditRadarDrawer from "./EditRadarDrawer";
 import LoadMoreConfirmDialog from "./LoadMoreConfirmDialog";
 import SetupNeededCard from "./SetupNeededCard";
 
-type Tab = "all" | "linkedin" | "competitors" | "people" | "hiring" | "drafts" | "saved" | "workflows" | "reviewed";
+type Tab = "all" | "linkedin" | "competitors" | "people" | "hiring" | "funding" | "comments" | "drafts" | "saved" | "workflows" | "reviewed";
 
 const TABS: { key: Tab; label: string }[] = [
   { key: "all", label: "All" },
   { key: "hiring", label: "Hiring" },
-  { key: "linkedin", label: "LinkedIn" },
+  { key: "funding", label: "Funding" },
   { key: "competitors", label: "Competitors" },
+  { key: "workflows", label: "Workflow trends" },
+  { key: "linkedin", label: "LinkedIn posts" },
+  { key: "comments", label: "Comments" },
   { key: "people", label: "People" },
-  { key: "workflows", label: "Workflows" },
   { key: "saved", label: "Saved" },
   { key: "reviewed", label: "Reviewed" },
   { key: "drafts", label: "Drafts" },
 ];
 
 const EMPTY_PROMPTS = [
-  "Find companies hiring GTM roles",
-  "Find LinkedIn posts about AI SDRs",
-  "Find competitor conversations for my company",
+  "Find recently funded B2B SaaS startups hiring sales roles.",
+  "Find companies in our ICP hiring RevOps or Founding AE roles.",
+  "Find competitor movement from Clay, Apollo, Instantly, and Attio.",
+  "Find founders talking about hiring SDRs too early.",
 ];
 
 function matchesTab(s: FeedSignal, tab: Tab): boolean {
@@ -64,6 +75,8 @@ function matchesTab(s: FeedSignal, tab: Tab): boolean {
     case "competitors": return s.signal_type === "competitor_engagement" || s.signal_type === "competitor";
     case "people": return s.signal_type === "people_profile" || s.signal_type === "people";
     case "hiring": return s.signal_type === "hiring_signal" || s.signal_type === "hiring";
+    case "funding": return s.signal_type === "funding";
+    case "comments": return s.signal_type === "linkedin_comment" || s.signal_type === "comments";
     case "workflows": return s.signal_type === "workflow_trend";
     case "reviewed": return true; // review-status filter handles the rest
     default: return true;
@@ -71,8 +84,7 @@ function matchesTab(s: FeedSignal, tab: Tab): boolean {
 }
 
 function sendPrompt(text: string) {
-  window.dispatchEvent(new CustomEvent("chat:send", { detail: text }));
-  toast.success("Sent to Pilot");
+  void sendAgentCommand(text, { success: "Sent to Pilot", action_source: "signal_feed_action" });
 }
 
 export default function SignalFeed() {
@@ -95,6 +107,8 @@ export default function SignalFeed() {
   const [loadMoreOpen, setLoadMoreOpen] = useState(false);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [savedFilter, setSavedFilter] = useState<SavedFilter>("all");
+  // Default radar shows the global top 10 verified signals; user can expand.
+  const [showAll, setShowAll] = useState(false);
 
   const savedFiltered = useMemo(
     () => savedOutputs.filter((o) => matchesSavedFilter(o, savedFilter)),
@@ -113,6 +127,8 @@ export default function SignalFeed() {
     competitors: signals.filter((s) => s.signal_type === "competitor_engagement" || s.signal_type === "competitor").length,
     people: signals.filter((s) => s.signal_type === "people_profile" || s.signal_type === "people").length,
     hiring: signals.filter((s) => s.signal_type === "hiring_signal" || s.signal_type === "hiring").length,
+    funding: signals.filter((s) => s.signal_type === "funding").length,
+    comments: signals.filter((s) => s.signal_type === "linkedin_comment" || s.signal_type === "comments").length,
     workflows: signals.filter((s) => s.signal_type === "workflow_trend").length,
     reviewed: signals.length,
     drafts: drafts.length,
@@ -143,6 +159,20 @@ export default function SignalFeed() {
   const clearFilters = () => { setQuery(""); setPriority(""); setHasSource(false); };
   const hasActiveFilters = !!(query || priority || hasSource);
 
+  // Top-10 default: pristine "All" view ranks the highest-scored verified signals
+  // globally across sources. Any tab/filter/search switches to the full list.
+  const topDefaultActive = tab === "all" && !hasActiveFilters && reviewFilter === "all" && !showUnverified && !selectMode;
+  const topSignals = useMemo(
+    () => selectTopSignals(filtered, {
+      score: (s) => Number((s.raw?.score as number) ?? s.fit_score ?? 0),
+      verified: (s) => s.show_by_default,
+      createdAt: (s) => s.created_at,
+      limit: 10,
+    }),
+    [filtered],
+  );
+  const displaySignals = topDefaultActive && !showAll ? topSignals : filtered;
+
   // ----- selection -----
   const toggleSelect = (id: string) =>
     setSelected((prev) => { const next = new Set(prev); next.has(id) ? next.delete(id) : next.add(id); return next; });
@@ -169,17 +199,22 @@ export default function SignalFeed() {
 
   // ----- bulk actions -----
   const rankAll = () => {
-    window.dispatchEvent(new CustomEvent("chat:send", { detail: buildActionCommand("rank") }));
-    toast.success("Asked Pilot to rank your saved signals");
+    void sendAgentCommand(buildActionCommand("rank"), {
+      success: "Asked Pilot to rank your saved signals",
+      action_source: "signal_feed_action",
+    });
   };
 
-  const bulkDraft = (action: BulkDraftAction) => {
+  const bulkDraft = async (action: BulkDraftAction) => {
     if (selectedSignals.length === 0) return;
-    window.dispatchEvent(new CustomEvent("chat:send", { detail: buildBulkCommand(action, selectedSignals) }));
     const verb = action === "rank" ? "Ranking" : "Drafting (no auto-send)";
-    toast.success(`${verb} ${selectedSignals.length} signal${selectedSignals.length > 1 ? "s" : ""} via Pilot`);
-    // Mark drafted signals actioned (preserving explicit saved/ignored).
-    if (action !== "rank") {
+    const ok = await sendAgentCommand(buildBulkCommand(action, selectedSignals), {
+      success: `${verb} ${selectedSignals.length} signal${selectedSignals.length > 1 ? "s" : ""} via Pilot`,
+      action_source: "signal_feed_action",
+    });
+    // Mark drafted signals actioned (preserving explicit saved/ignored) only once
+    // the command actually reached Pilot.
+    if (ok && action !== "rank") {
       const ids = selectedSignals.filter((s) => nextStatusAfterDraft(s.review_status) === "actioned").map((s) => s.id);
       if (ids.length) void bulkSetReview(ids, "actioned").catch(() => {});
     }
@@ -279,6 +314,24 @@ export default function SignalFeed() {
   const anyProviderReady = providerPreviews.some((p) => p.state === "ready");
   const apifyBlocked = apifyState !== "ready";
 
+  // Honest per-source readiness for the brief + strip.
+  const sourceStatuses = useMemo(
+    () => computeSourceStatuses({ firecrawlReady: firecrawlState === "ready", apifyReady: apifyState === "ready" }),
+    [firecrawlState, apifyState],
+  );
+  const missingSourceLabels = useMemo(() => sourceStatuses.filter((s) => !s.runnable).map((s) => s.label), [sourceStatuses]);
+
+  // Signal detail drawer.
+  const [openSignalId, setOpenSignalId] = useState<string | null>(null);
+  const openSignal = useMemo(() => reviewed.find((s) => s.id === openSignalId) ?? null, [reviewed, openSignalId]);
+  const drawerHandlers: SignalActionHandlers = openSignal ? {
+    onTurnIntoPost: () => { void sendAgentCommand(buildTurnIntoCommand("post", { title: openSignal.title, sourceUrl: openSignal.source_url }), { success: "Sent to Pilot", action_source: "signal_feed_action" }); },
+    onTurnIntoComment: () => { void sendAgentCommand(buildTurnIntoCommand("comment", { title: openSignal.title, sourceUrl: openSignal.source_url }), { success: "Sent to Pilot", action_source: "signal_feed_action" }); },
+    onSaveIdea: () => void handleSetReview(openSignal.id, "saved"),
+    onMarkReviewed: () => void handleSetReview(openSignal.id, "reviewed"),
+    onIgnore: () => void handleSetReview(openSignal.id, "ignored"),
+  } : {};
+
   const prefs = (brainData?.profile as any)?.signal_preferences ?? {};
   const topKeywords: Partial<Record<RadarCategory, string>> = {
     hiring: (prefs.hiring_roles?.[0] ?? (brainData?.profile as any)?.icp?.buyer_roles?.[0]) || undefined,
@@ -318,6 +371,9 @@ export default function SignalFeed() {
         </div>
       </div>
 
+      {/* Today's Radar Brief — real-data summary */}
+      <RadarBrief signals={reviewed} missingSources={missingSourceLabels} onRunRadar={handleRunRadar} scanning={scanning} />
+
       {/* Scout prompt box */}
       <ScoutPromptBox
         scanning={scanning}
@@ -343,6 +399,7 @@ export default function SignalFeed() {
       {/* Radar summary */}
       <section className="space-y-3">
         <h2 className="text-[15px] font-semibold text-neutral-300">Radar sources</h2>
+        <RadarSourceStrip firecrawlReady={firecrawlState === "ready"} apifyReady={apifyState === "ready"} />
         <RadarSummaryCards
           counts={radarCounts}
           verifiedCounts={radarVerifiedCounts}
@@ -556,22 +613,43 @@ export default function SignalFeed() {
                 />
               : <NoVerifiedEmpty onRunRadar={handleRunRadar} scanning={scanning} onShowUnverified={() => setShowUnverified(true)} />)
           : <>
+              {topDefaultActive && (
+                <div className="flex items-center justify-between gap-2 flex-wrap text-[13px]">
+                  <span className="text-neutral-300 font-medium">
+                    {showAll ? `All ${filtered.length} verified signals` : `Top ${topSignals.length} signals`}
+                    <span className="text-neutral-500 font-normal"> · ranked by fit &amp; freshness</span>
+                  </span>
+                  {filtered.length > topSignals.length && (
+                    <button onClick={() => setShowAll((v) => !v)}
+                      className="text-[12px] px-2.5 py-1 rounded-md border border-white/[0.08] bg-white/[0.02] text-neutral-300 hover:text-neutral-100">
+                      {showAll ? "Show top 10" : `Show all (${filtered.length})`}
+                    </button>
+                  )}
+                </div>
+              )}
               {showUnverified && (
                 <div className="text-[13px] text-amber-200/80 rounded-md border border-amber-500/20 bg-amber-500/[0.04] px-3 py-2">
                   Unverified signals may be missing source proof. Review before using them.
                 </div>
               )}
-              <ul className="space-y-2">{filtered.map((s) => (
+              <ul className="space-y-2">{displaySignals.map((s) => (
                 <SignalCard key={s.id} signal={s}
                   selectable={selectMode}
                   selected={selected.has(s.id)}
                   onToggleSelect={toggleSelect}
                   onSetReview={handleSetReview}
+                  onOpenDetail={() => setOpenSignalId(s.id)}
                   onDraftAction={handleDraftAction} />
               ))}</ul>
             </>
       )}
 
+      <SignalDetailDrawer
+        signal={openSignal}
+        reviewStatus={openSignal ? (reviewsBySignal[openSignal.id]?.status ?? openSignal.review_status) : null}
+        handlers={drawerHandlers}
+        onClose={() => setOpenSignalId(null)}
+      />
     </div>
   );
 }
@@ -607,11 +685,11 @@ function SavedOutputCard({ output }: { output: SavedOutputRow }) {
       {/* Draft-only actions for content drafts (never posts). */}
       {isContentDraft && meta.subtype !== "comment_draft" && (
         <div className="mt-2 flex items-center gap-1.5 flex-wrap">
-          <button onClick={() => { window.dispatchEvent(new CustomEvent("chat:send", { detail: buildContentDraftCommand("find_engagement", output) })); toast.success("Asked Pilot to find engagement opportunities"); }}
+          <button onClick={() => { void sendAgentCommand(buildContentDraftCommand("find_engagement", output), { success: "Asked Pilot to find engagement opportunities", action_source: "signal_feed_action" }); }}
             className="inline-flex items-center gap-1 text-[11px] px-2 py-1 rounded-md border border-white/[0.08] bg-white/[0.02] text-[#C9D1D9] hover:bg-emerald-500/[0.06] hover:border-emerald-500/30 hover:text-[#F0F6FC] transition-colors">
             <Radar className="h-3 w-3" /> Find engagement opportunities
           </button>
-          <button onClick={() => { window.dispatchEvent(new CustomEvent("chat:send", { detail: buildContentDraftCommand("draft_comments", output) })); toast.success("Asked Pilot to draft comments (draft-only)"); }}
+          <button onClick={() => { void sendAgentCommand(buildContentDraftCommand("draft_comments", output), { success: "Asked Pilot to draft comments (draft-only)", action_source: "signal_feed_action" }); }}
             className="inline-flex items-center gap-1 text-[11px] px-2 py-1 rounded-md border border-white/[0.08] bg-white/[0.02] text-[#C9D1D9] hover:bg-emerald-500/[0.06] hover:border-emerald-500/30 hover:text-[#F0F6FC] transition-colors">
             <MessageSquare className="h-3 w-3" /> Draft comments from this
           </button>

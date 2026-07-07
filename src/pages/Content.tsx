@@ -2,17 +2,27 @@ import { useMemo, useState } from "react";
 import { FileEdit, MessageSquare, Repeat, Search, Lightbulb } from "lucide-react";
 import { useWorkspace } from "@/contexts/WorkspaceContext";
 import { useSignalFeed } from "@/hooks/useSignalFeed";
+import { useSignalReviews } from "@/hooks/useSignalReviews";
 import { useIntegrationReadiness } from "@/hooks/useIntegrationReadiness";
 import ContentPromptBox from "@/components/content/ContentPromptBox";
 import CreatePostModal from "@/components/content/CreatePostModal";
 import ContentDraftCard, { type DraftStatus } from "@/components/content/ContentDraftCard";
-import SignalToContentCard from "@/components/content/SignalToContentCard";
+import ContentBrief from "@/components/content/ContentBrief";
+import ContentOpportunityCard from "@/components/content/ContentOpportunityCard";
+import DraftApprovalQueue, { type QueueDraft } from "@/components/content/DraftApprovalQueue";
+import CommentOpportunityCard, { type CommentOpportunity } from "@/components/content/CommentOpportunityCard";
+import ContentDetailDrawer, { type ContentDetail } from "@/components/content/ContentDetailDrawer";
 import ContentLoopPreview from "@/components/content/ContentLoopPreview";
 import ManualContentSource from "@/components/content/ManualContentSource";
 import ProviderBadge, { classifyProviderState } from "@/components/signals/ProviderBadge";
+import { sendAgentCommand } from "@/lib/agentCommand";
+import { postDraftOutputs, workflowSummaryOutputs, commentDraftOutputs, commentDraftRows } from "@/lib/contentBuckets";
+import { buildTurnIntoCommand } from "@/lib/signalIdeaActions";
+import { deriveDraftStatus, DRAFT_STATUS_LABELS } from "@/lib/contentOps";
+import type { FeedSignal } from "@/lib/signalFeedModel";
 
 const dispatchChat = (text: string) =>
-  window.dispatchEvent(new CustomEvent("chat:send", { detail: { text } }));
+  void sendAgentCommand(text, { success: "Sent to Pilot", action_source: "content_action" });
 
 function deriveStatus(status: string | null | undefined): DraftStatus {
   const s = (status ?? "").toLowerCase();
@@ -27,31 +37,93 @@ function deriveStatus(status: string | null | undefined): DraftStatus {
 export default function Content() {
   const { workspaceId } = useWorkspace();
   const { savedOutputs, drafts, signals, loading } = useSignalFeed(workspaceId);
+  const { reviewsBySignal } = useSignalReviews(workspaceId);
   const { providers } = useIntegrationReadiness();
   const [createOpen, setCreateOpen] = useState(false);
+  const [openDraftId, setOpenDraftId] = useState<string | null>(null);
 
-  const briefs = useMemo(
-    () => savedOutputs.filter((o) => (o.type ?? "").toLowerCase().includes("brief")),
-    [savedOutputs]
-  );
-  const posts = useMemo(
-    () => savedOutputs.filter((o) => {
-      const t = (o.type ?? "").toLowerCase();
-      return t.includes("post") || t.includes("content");
-    }),
-    [savedOutputs]
-  );
+  // Turn a content-worthy signal into an approval-gated draft (never posts).
+  const turnInto = (kind: "post" | "comment", s: FeedSignal) =>
+    void sendAgentCommand(buildTurnIntoCommand(kind, { title: s.title, sourceUrl: s.source_url }), {
+      success: "Sent to Pilot", action_source: "content_action",
+    });
+
+  // Bucket by the saved-output types Scribe/pilot-chat actually write, so counts
+  // reflect real data instead of a "brief" string that never matches.
+  const workflowRecaps = useMemo(() => workflowSummaryOutputs(savedOutputs), [savedOutputs]);
+  const posts = useMemo(() => postDraftOutputs(savedOutputs), [savedOutputs]);
   const commentDrafts = useMemo(
-    () => drafts.filter((d) => (d.channel ?? "").toLowerCase().includes("comment")),
-    [drafts]
+    () => [
+      ...commentDraftRows(drafts).map((d) => ({
+        id: d.id, title: d.subject ?? "Comment draft", status: d.status, date: d.created_at, preview: d.body ?? undefined,
+      })),
+      ...commentDraftOutputs(savedOutputs).map((o) => ({
+        id: o.id, title: o.title ?? "Comment draft", status: (o.raw as any)?.status ?? "draft", date: o.created_at, preview: o.body ?? undefined,
+      })),
+    ],
+    [drafts, savedOutputs]
   );
   const contentSignals = useMemo(() => {
     const KEEP = ["news", "funding", "hiring", "launch", "product", "post", "engagement", "competitor"];
     return signals
       .filter((s) => KEEP.some((k) => (s.signal_type ?? "").toLowerCase().includes(k)))
+      // Ignored ideas drop out of the suggestion list so they don't reappear.
+      .filter((s) => reviewsBySignal[s.id]?.status !== "ignored")
       .sort((a, b) => (b.source_url ? 1 : 0) - (a.source_url ? 1 : 0))
       .slice(0, 8);
-  }, [signals]);
+  }, [signals, reviewsBySignal]);
+
+  // Drafts awaiting approval (real content_draft saved_outputs).
+  const queueDrafts: QueueDraft[] = useMemo(() => posts.slice(0, 8).map((p) => {
+    const raw = (p.raw ?? {}) as Record<string, any>;
+    const proofUrl = raw.source_url ?? raw.source_details?.funding_source_url ?? null;
+    return {
+      id: p.id,
+      title: p.title ?? "Untitled draft",
+      format: "LinkedIn post",
+      status: deriveDraftStatus(raw.status ?? "draft", Boolean(proofUrl)),
+      date: p.created_at,
+      preview: p.body ?? null,
+      sourceUrl: proofUrl,
+    };
+  }), [posts]);
+
+  // Comment opportunities from real comment drafts.
+  const commentOpportunities: CommentOpportunity[] = useMemo(() => commentDrafts.slice(0, 6).map((d) => ({
+    id: d.id,
+    context: d.title,
+    why: "A relevant conversation worth engaging authentically.",
+    angle: "Add a specific, experience-based perspective — not a pitch.",
+    draft: d.preview ?? null,
+    statusLabel: DRAFT_STATUS_LABELS[deriveDraftStatus(d.status)],
+    sourceUrl: null,
+  })), [commentDrafts]);
+
+  const draftsAwaiting = useMemo(
+    () => queueDrafts.filter((d) => d.status !== "approved" && d.status !== "manually_posted").length + commentOpportunities.length,
+    [queueDrafts, commentOpportunities],
+  );
+
+  const openDetail: ContentDetail | null = useMemo(() => {
+    if (!openDraftId) return null;
+    const p = posts.find((x) => x.id === openDraftId);
+    if (!p) return null;
+    const raw = (p.raw ?? {}) as Record<string, any>;
+    const proofUrl = raw.source_url ?? raw.source_details?.funding_source_url ?? null;
+    return {
+      id: p.id,
+      title: p.title ?? "Untitled draft",
+      format: "LinkedIn post",
+      statusLabel: DRAFT_STATUS_LABELS[deriveDraftStatus(raw.status ?? "draft", Boolean(proofUrl))],
+      sourceSignal: raw.source ?? null,
+      coreArgument: null,
+      hookOptions: [],
+      body: p.body ?? null,
+      cta: null,
+      proofUrl,
+      missingProof: proofUrl ? [] : ["Source proof URL"],
+    };
+  }, [openDraftId, posts]);
 
   const linkedin = providers.linkedin;
   const apify = providers.apify;
@@ -73,9 +145,9 @@ export default function Content() {
         {/* Header */}
         <header className="flex items-start justify-between gap-4 flex-wrap">
           <div>
-            <h1 className="text-[30px] md:text-[32px] font-bold text-foreground tracking-tight">Content Command Center</h1>
+            <h1 className="text-[30px] md:text-[32px] font-bold text-foreground tracking-tight">Scribe Command Center</h1>
             <p className="text-[15px] md:text-[16px] text-muted-foreground mt-1.5">
-              Turn signals, product updates, and founder thoughts into LinkedIn posts, comments, and content loops.
+              Turn signals into founder posts, comments, and approval-ready drafts. You approve everything — nothing publishes on its own.
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
@@ -96,6 +168,9 @@ export default function Content() {
           </div>
         </header>
 
+        {/* Today's Content Brief — real-data summary */}
+        <ContentBrief signals={contentSignals} draftsAwaiting={draftsAwaiting} onStart={(t) => dispatchChat(t)} />
+
         {/* Prompt */}
         <ContentPromptBox />
 
@@ -103,56 +178,34 @@ export default function Content() {
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
           {/* Left */}
           <div className="lg:col-span-7 space-y-6">
-            <Section title="Content briefs" count={briefs.length} loading={loading}>
-              {briefs.length === 0 ? (
+            <Section title="Workflow recaps" count={workflowRecaps.length} loading={loading}>
+              {workflowRecaps.length === 0 ? (
                 <EmptyState
-                  title="Scribe needs context before drafting."
-                  subtext="Add what shipped, your founder POV, or choose a saved signal."
-                  actions={[{ label: "Add context", onClick: () => dispatchChat("Scribe, ask me for the context needed to draft this week's brief.") }]}
+                  title="No workflow recaps yet."
+                  subtext="When Pilot runs a workflow (sourcing, research, drafts), Scribe saves a recap here."
+                  actions={[{ label: "Ask Scribe", onClick: () => dispatchChat("Scribe, summarize what my workforce has done recently.") }]}
                 />
               ) : (
-                briefs.slice(0, 5).map((b) => (
+                workflowRecaps.slice(0, 5).map((b) => (
                   <ContentDraftCard
                     key={b.id}
                     id={b.id}
-                    title={b.title ?? "Untitled brief"}
-                    contentType="Post brief"
-                    source={(b.raw as any)?.source ?? "Signal"}
+                    title={b.title ?? "Workflow recap"}
+                    contentType="Workflow recap"
+                    source={(b.raw as any)?.source ?? "Pilot"}
                     sourceUrl={(b.raw as any)?.source_url ?? null}
                     sourceVerified={Boolean((b.raw as any)?.source_url)}
                     status={deriveStatus((b.raw as any)?.status)}
                     date={b.created_at}
                     preview={b.body ?? undefined}
-                    nextAction="Review brief, then generate draft."
+                    nextAction="Review, then turn into a post if useful."
                   />
                 ))
               )}
             </Section>
 
-            <Section title="Founder post drafts" count={posts.length} loading={loading}>
-              {posts.length === 0 ? (
-                <EmptyState
-                  title="No founder post drafts yet."
-                  subtext="Create a post from a saved signal, product update, or founder thought."
-                  actions={[{ label: "Create post", primary: true, onClick: () => setCreateOpen(true) }]}
-                />
-              ) : (
-                posts.slice(0, 6).map((p) => (
-                  <ContentDraftCard
-                    key={p.id}
-                    id={p.id}
-                    title={p.title ?? "Untitled draft"}
-                    contentType="LinkedIn post"
-                    source={(p.raw as any)?.source ?? "Founder"}
-                    sourceUrl={(p.raw as any)?.source_url ?? null}
-                    sourceVerified={Boolean((p.raw as any)?.source_url)}
-                    status={deriveStatus((p.raw as any)?.status ?? "draft")}
-                    date={p.created_at}
-                    preview={p.body ?? undefined}
-                    nextAction="Review, refine hook, then approve."
-                  />
-                ))
-              )}
+            <Section title="Drafts awaiting approval" count={queueDrafts.length} loading={loading}>
+              <DraftApprovalQueue drafts={queueDrafts} onOpen={setOpenDraftId} />
             </Section>
 
             <ManualContentSource />
@@ -160,8 +213,8 @@ export default function Content() {
 
           {/* Right */}
           <div className="lg:col-span-5 space-y-6">
-            <Section title="Comment opportunities" count={commentDrafts.length} loading={loading}>
-              {commentDrafts.length === 0 ? (
+            <Section title="Comment opportunities" count={commentOpportunities.length} loading={loading}>
+              {commentOpportunities.length === 0 ? (
                 <EmptyState
                   title={commentDiscoveryReady ? "No comment drafts yet." : "No engagement opportunities yet."}
                   subtext={
@@ -176,17 +229,11 @@ export default function Content() {
                   ]}
                 />
               ) : (
-                commentDrafts.slice(0, 6).map((d) => (
-                  <ContentDraftCard
-                    key={d.id}
-                    id={d.id}
-                    title={d.subject ?? "Comment draft"}
-                    contentType="LinkedIn comment"
-                    source="Post engagement"
-                    status={deriveStatus(d.status)}
-                    date={d.created_at}
-                    preview={d.body ?? undefined}
-                    nextAction="Review tone, then approve."
+                commentOpportunities.map((o) => (
+                  <CommentOpportunityCard
+                    key={o.id}
+                    opportunity={o}
+                    onDraft={() => dispatchChat(`Penn, refine this comment draft — draft only: ${o.context}`)}
                   />
                 ))
               )}
@@ -200,7 +247,14 @@ export default function Content() {
                   actions={[{ label: "Open Signals", onClick: () => (window.location.href = "/signals") }]}
                 />
               ) : (
-                contentSignals.map((s) => <SignalToContentCard key={s.id} signal={s} />)
+                contentSignals.map((s) => (
+                  <ContentOpportunityCard
+                    key={s.id}
+                    signal={s}
+                    onTurnIntoPost={() => turnInto("post", s)}
+                    onTurnIntoComment={() => turnInto("comment", s)}
+                  />
+                ))
               )}
             </Section>
 
@@ -211,6 +265,7 @@ export default function Content() {
         </div>
       </div>
 
+      <ContentDetailDrawer detail={openDetail} onClose={() => setOpenDraftId(null)} />
       <CreatePostModal open={createOpen} onClose={() => setCreateOpen(false)} />
     </div>
   );

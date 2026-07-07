@@ -1,12 +1,7 @@
 import { ExternalLink, MessageSquare, Send, Search, FileText, EyeOff, Check, Bookmark, Zap, Building2, User, MapPin, Briefcase } from "lucide-react";
-import { toast } from "sonner";
 import { buildActionCommand, signalTypeLabel, sourceHost, type SignalAction } from "@/lib/signalFeedModel";
 import { nextStatusAfterDraft, type ReviewStatus, type ReviewedSignal } from "@/lib/signalReviewModel";
-
-function sendToPilot(text: string, label: string) {
-  window.dispatchEvent(new CustomEvent("chat:send", { detail: text }));
-  toast.success(`Sent to Pilot: ${label}`);
-}
+import { sendAgentCommand } from "@/lib/agentCommand";
 
 const TYPE_BADGE: Record<string, string> = {
   competitor_engagement: "border-amber-500/30 bg-amber-500/10 text-amber-300",
@@ -90,6 +85,7 @@ export default function SignalCard({
   onToggleSelect,
   onSetReview,
   onDraftAction,
+  onOpenDetail,
 }: {
   signal: ReviewedSignal;
   selectable?: boolean;
@@ -97,6 +93,7 @@ export default function SignalCard({
   onToggleSelect?: (id: string) => void;
   onSetReview?: (id: string, status: ReviewStatus) => void;
   onDraftAction?: (id: string) => void;
+  onOpenDetail?: () => void;
 }) {
   const actions = actionsForSignal(signal);
   const host = sourceHost(signal.source_url);
@@ -109,9 +106,12 @@ export default function SignalCard({
   const toggleStatus = (target: ReviewStatus) =>
     onSetReview?.(signal.id, status === target ? "new" : target);
 
-  const runAction = (a: ActionDef) => {
-    sendToPilot(buildActionCommand(a.action, signal), a.label);
-    if (a.drafts) onDraftAction?.(signal.id);
+  const runAction = async (a: ActionDef) => {
+    const ok = await sendAgentCommand(buildActionCommand(a.action, signal), {
+      success: `Sent to Pilot: ${a.label}`,
+      action_source: "signal_feed_action",
+    });
+    if (ok && a.drafts) onDraftAction?.(signal.id);
   };
 
   const reviewBtn = (target: ReviewStatus, label: string, Icon: any, activeClass: string) => (
@@ -156,7 +156,13 @@ export default function SignalCard({
           </div>
 
           {/* title */}
-          <div className="text-[13px] text-[#F0F6FC] font-medium leading-snug">{signal.title}</div>
+          {onOpenDetail ? (
+            <button onClick={onOpenDetail} className="text-left text-[13px] text-[#F0F6FC] font-medium leading-snug hover:text-emerald-200 hover:underline decoration-emerald-400/40 underline-offset-2 transition-colors">
+              {signal.title}
+            </button>
+          ) : (
+            <div className="text-[13px] text-[#F0F6FC] font-medium leading-snug">{signal.title}</div>
+          )}
           {signal.signal_label && signal.signal_label !== signal.title && (
             <div className="text-[11px] text-neutral-400 mt-0.5">{signal.signal_label}</div>
           )}

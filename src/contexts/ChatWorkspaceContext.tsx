@@ -1,5 +1,6 @@
 import { createContext, useContext, useState, useCallback, useEffect, useRef, type ReactNode } from 'react';
 import type { AgentDept } from '@/data/agentProfiles';
+import { setChatOpener } from '@/lib/chatCommandBus';
 
 export type ChatViewKind =
   | { kind: 'empty' }
@@ -151,6 +152,13 @@ export const ChatWorkspaceProvider = ({ children }: { children: ReactNode }) => 
 
   const open = useCallback(() => setMode((m) => (m === 'closed' ? 'fullscreen' : m)), []);
   const close = useCallback(() => setMode('closed'), []);
+
+  // Let the chat command bus open/mount the workspace when a card action fires
+  // while the chat is closed (otherwise the command would be buffered forever).
+  useEffect(() => {
+    setChatOpener(open);
+    return () => setChatOpener(null);
+  }, [open]);
   const toggleFullscreen = useCallback(() => {
     setMode((m) => (m === 'closed' ? 'fullscreen' : 'closed'));
   }, []);
