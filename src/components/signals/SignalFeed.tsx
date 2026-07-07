@@ -646,7 +646,7 @@ export default function SignalFeed() {
 
       <SignalDetailDrawer
         signal={openSignal}
-        reviewStatus={openSignal ? (reviewsBySignal[openSignal.id]?.status ?? openSignal.review_status) : null}
+        reviewStatus={openSignal ? ((reviewsBySignal[openSignal.id]?.status ?? openSignal.review_status) as ReviewStatus | null) : null}
         handlers={drawerHandlers}
         onClose={() => setOpenSignalId(null)}
       />
