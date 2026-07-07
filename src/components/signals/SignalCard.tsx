@@ -85,6 +85,7 @@ export default function SignalCard({
   onToggleSelect,
   onSetReview,
   onDraftAction,
+  onOpenDetail,
 }: {
   signal: ReviewedSignal;
   selectable?: boolean;
@@ -92,6 +93,7 @@ export default function SignalCard({
   onToggleSelect?: (id: string) => void;
   onSetReview?: (id: string, status: ReviewStatus) => void;
   onDraftAction?: (id: string) => void;
+  onOpenDetail?: () => void;
 }) {
   const actions = actionsForSignal(signal);
   const host = sourceHost(signal.source_url);
@@ -154,7 +156,13 @@ export default function SignalCard({
           </div>
 
           {/* title */}
-          <div className="text-[13px] text-[#F0F6FC] font-medium leading-snug">{signal.title}</div>
+          {onOpenDetail ? (
+            <button onClick={onOpenDetail} className="text-left text-[13px] text-[#F0F6FC] font-medium leading-snug hover:text-emerald-200 hover:underline decoration-emerald-400/40 underline-offset-2 transition-colors">
+              {signal.title}
+            </button>
+          ) : (
+            <div className="text-[13px] text-[#F0F6FC] font-medium leading-snug">{signal.title}</div>
+          )}
           {signal.signal_label && signal.signal_label !== signal.title && (
             <div className="text-[11px] text-neutral-400 mt-0.5">{signal.signal_label}</div>
           )}

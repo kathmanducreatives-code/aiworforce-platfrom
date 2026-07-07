@@ -36,29 +36,37 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
 import SignalCard from "./SignalCard";
 import RadarSummaryCards from "./RadarSummaryCards";
-import RadarSourceStatus from "./RadarSourceStatus";
+import RadarBrief from "./RadarBrief";
+import RadarSourceStrip from "./RadarSourceStrip";
+import SignalDetailDrawer from "./SignalDetailDrawer";
+import type { SignalActionHandlers } from "./SignalActionBar";
+import { computeSourceStatuses } from "@/lib/radarSources";
+import { buildTurnIntoCommand } from "@/lib/signalIdeaActions";
 import EditRadarDrawer from "./EditRadarDrawer";
 import LoadMoreConfirmDialog from "./LoadMoreConfirmDialog";
 import SetupNeededCard from "./SetupNeededCard";
 
-type Tab = "all" | "linkedin" | "competitors" | "people" | "hiring" | "drafts" | "saved" | "workflows" | "reviewed";
+type Tab = "all" | "linkedin" | "competitors" | "people" | "hiring" | "funding" | "comments" | "drafts" | "saved" | "workflows" | "reviewed";
 
 const TABS: { key: Tab; label: string }[] = [
   { key: "all", label: "All" },
   { key: "hiring", label: "Hiring" },
-  { key: "linkedin", label: "LinkedIn" },
+  { key: "funding", label: "Funding" },
   { key: "competitors", label: "Competitors" },
+  { key: "workflows", label: "Workflow trends" },
+  { key: "linkedin", label: "LinkedIn posts" },
+  { key: "comments", label: "Comments" },
   { key: "people", label: "People" },
-  { key: "workflows", label: "Workflows" },
   { key: "saved", label: "Saved" },
   { key: "reviewed", label: "Reviewed" },
   { key: "drafts", label: "Drafts" },
 ];
 
 const EMPTY_PROMPTS = [
-  "Find companies hiring GTM roles",
-  "Find LinkedIn posts about AI SDRs",
-  "Find competitor conversations for my company",
+  "Find recently funded B2B SaaS startups hiring sales roles.",
+  "Find companies in our ICP hiring RevOps or Founding AE roles.",
+  "Find competitor movement from Clay, Apollo, Instantly, and Attio.",
+  "Find founders talking about hiring SDRs too early.",
 ];
 
 function matchesTab(s: FeedSignal, tab: Tab): boolean {
@@ -67,6 +75,8 @@ function matchesTab(s: FeedSignal, tab: Tab): boolean {
     case "competitors": return s.signal_type === "competitor_engagement" || s.signal_type === "competitor";
     case "people": return s.signal_type === "people_profile" || s.signal_type === "people";
     case "hiring": return s.signal_type === "hiring_signal" || s.signal_type === "hiring";
+    case "funding": return s.signal_type === "funding";
+    case "comments": return s.signal_type === "linkedin_comment" || s.signal_type === "comments";
     case "workflows": return s.signal_type === "workflow_trend";
     case "reviewed": return true; // review-status filter handles the rest
     default: return true;
@@ -117,6 +127,8 @@ export default function SignalFeed() {
     competitors: signals.filter((s) => s.signal_type === "competitor_engagement" || s.signal_type === "competitor").length,
     people: signals.filter((s) => s.signal_type === "people_profile" || s.signal_type === "people").length,
     hiring: signals.filter((s) => s.signal_type === "hiring_signal" || s.signal_type === "hiring").length,
+    funding: signals.filter((s) => s.signal_type === "funding").length,
+    comments: signals.filter((s) => s.signal_type === "linkedin_comment" || s.signal_type === "comments").length,
     workflows: signals.filter((s) => s.signal_type === "workflow_trend").length,
     reviewed: signals.length,
     drafts: drafts.length,
@@ -302,6 +314,24 @@ export default function SignalFeed() {
   const anyProviderReady = providerPreviews.some((p) => p.state === "ready");
   const apifyBlocked = apifyState !== "ready";
 
+  // Honest per-source readiness for the brief + strip.
+  const sourceStatuses = useMemo(
+    () => computeSourceStatuses({ firecrawlReady: firecrawlState === "ready", apifyReady: apifyState === "ready" }),
+    [firecrawlState, apifyState],
+  );
+  const missingSourceLabels = useMemo(() => sourceStatuses.filter((s) => !s.runnable).map((s) => s.label), [sourceStatuses]);
+
+  // Signal detail drawer.
+  const [openSignalId, setOpenSignalId] = useState<string | null>(null);
+  const openSignal = useMemo(() => reviewed.find((s) => s.id === openSignalId) ?? null, [reviewed, openSignalId]);
+  const drawerHandlers: SignalActionHandlers = openSignal ? {
+    onTurnIntoPost: () => { void sendAgentCommand(buildTurnIntoCommand("post", { title: openSignal.title, sourceUrl: openSignal.source_url }), { success: "Sent to Pilot", action_source: "signal_feed_action" }); },
+    onTurnIntoComment: () => { void sendAgentCommand(buildTurnIntoCommand("comment", { title: openSignal.title, sourceUrl: openSignal.source_url }), { success: "Sent to Pilot", action_source: "signal_feed_action" }); },
+    onSaveIdea: () => void handleSetReview(openSignal.id, "saved"),
+    onMarkReviewed: () => void handleSetReview(openSignal.id, "reviewed"),
+    onIgnore: () => void handleSetReview(openSignal.id, "ignored"),
+  } : {};
+
   const prefs = (brainData?.profile as any)?.signal_preferences ?? {};
   const topKeywords: Partial<Record<RadarCategory, string>> = {
     hiring: (prefs.hiring_roles?.[0] ?? (brainData?.profile as any)?.icp?.buyer_roles?.[0]) || undefined,
@@ -341,6 +371,9 @@ export default function SignalFeed() {
         </div>
       </div>
 
+      {/* Today's Radar Brief — real-data summary */}
+      <RadarBrief signals={reviewed} missingSources={missingSourceLabels} onRunRadar={handleRunRadar} scanning={scanning} />
+
       {/* Scout prompt box */}
       <ScoutPromptBox
         scanning={scanning}
@@ -365,10 +398,8 @@ export default function SignalFeed() {
 
       {/* Radar summary */}
       <section className="space-y-3">
-        <div className="flex items-center justify-between gap-3 flex-wrap">
-          <h2 className="text-[15px] font-semibold text-neutral-300">Radar sources</h2>
-          <RadarSourceStatus firecrawlReady={firecrawlState === "ready"} apifyReady={apifyState === "ready"} />
-        </div>
+        <h2 className="text-[15px] font-semibold text-neutral-300">Radar sources</h2>
+        <RadarSourceStrip firecrawlReady={firecrawlState === "ready"} apifyReady={apifyState === "ready"} />
         <RadarSummaryCards
           counts={radarCounts}
           verifiedCounts={radarVerifiedCounts}
@@ -607,11 +638,18 @@ export default function SignalFeed() {
                   selected={selected.has(s.id)}
                   onToggleSelect={toggleSelect}
                   onSetReview={handleSetReview}
+                  onOpenDetail={() => setOpenSignalId(s.id)}
                   onDraftAction={handleDraftAction} />
               ))}</ul>
             </>
       )}
 
+      <SignalDetailDrawer
+        signal={openSignal}
+        reviewStatus={openSignal ? (reviewsBySignal[openSignal.id]?.status ?? openSignal.review_status) : null}
+        handlers={drawerHandlers}
+        onClose={() => setOpenSignalId(null)}
+      />
     </div>
   );
 }
