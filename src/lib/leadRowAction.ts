@@ -69,3 +69,12 @@ export function companyDisplayLinks(row: { website?: string | null; company_link
   const websiteHost = website ? website.replace(/^https?:\/\//, '').replace(/\/.*$/, '') : null;
   return { website, websiteHost, linkedinUrl };
 }
+
+/**
+ * CSV export target (Part 7): export the SELECTED rows when there's a selection,
+ * otherwise the VISIBLE (filtered) rows — never an empty/headers-only file when
+ * the Workbench is showing rows.
+ */
+export function rowsForExport<T>(selected: T[], visible: T[]): T[] {
+  return (selected && selected.length > 0) ? selected : (visible ?? []);
+}

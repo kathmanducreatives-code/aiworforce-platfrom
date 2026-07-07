@@ -1,5 +1,13 @@
 import { assert, assertEquals } from "https://deno.land/std@0.224.0/assert/mod.ts";
-import { deriveRowAction, unwrapLeadRaw, companyDisplayLinks } from "./leadRowAction.ts";
+import { deriveRowAction, unwrapLeadRaw, companyDisplayLinks, rowsForExport } from "./leadRowAction.ts";
+
+// Part 7 — CSV export never headers-only when rows are visible.
+Deno.test("rowsForExport: no selection → visible rows; selection → selected rows", () => {
+  const visible = [{ id: "a" }, { id: "b" }];
+  assertEquals(rowsForExport([], visible).length, 2);              // visible when no selection
+  assertEquals(rowsForExport([{ id: "b" }], visible).map((r) => r.id), ["b"]); // selection wins
+  assertEquals(rowsForExport([], []).length, 0);                   // truly empty stays empty
+});
 
 // Display mapping (Issue 1): both website AND LinkedIn are exposed as links.
 Deno.test("companyDisplayLinks exposes both website and company LinkedIn", () => {

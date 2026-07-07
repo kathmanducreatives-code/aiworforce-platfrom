@@ -15,7 +15,7 @@ import { useChatWorkspace } from '@/contexts/ChatWorkspaceContext';
 import { useWorkspace } from '@/contexts/WorkspaceContext';
 import { runLeadAction } from '@/lib/leadActions';
 import { LEAD_ACTION_LOADING, workbenchActionToLeadKind, type LeadActionKind } from '@/lib/leadActionRequest';
-import { deriveRowAction, type RowAction } from '@/lib/leadRowAction';
+import { deriveRowAction, rowsForExport, type RowAction } from '@/lib/leadRowAction';
 
 interface Props {
   meta: LeadResultsPanelMeta;
@@ -321,10 +321,10 @@ export default function LeadResultsView({ meta, conversationId }: Props) {
           </button>
 
           <button
-            onClick={() => onBulkAction('export_csv')}
+            onClick={() => runAction('export_csv', rowsForExport(selectedRows, filtered))}
             className="h-8 px-3 rounded border border-white/10 hover:border-white/20 bg-white/[0.02] hover:bg-white/[0.04] text-[11.5px] font-semibold text-neutral-300 transition-colors"
           >
-            Export CSV
+            Export CSV{selectedRows.length ? ` (${selectedRows.length})` : ''}
           </button>
         </div>
 
