@@ -1,6 +1,5 @@
 import { useMemo, useState } from "react";
 import { FileEdit, MessageSquare, Repeat, Search, Lightbulb } from "lucide-react";
-import { toast } from "sonner";
 import { useWorkspace } from "@/contexts/WorkspaceContext";
 import { useSignalFeed } from "@/hooks/useSignalFeed";
 import { useSignalReviews } from "@/hooks/useSignalReviews";
@@ -8,13 +7,19 @@ import { useIntegrationReadiness } from "@/hooks/useIntegrationReadiness";
 import ContentPromptBox from "@/components/content/ContentPromptBox";
 import CreatePostModal from "@/components/content/CreatePostModal";
 import ContentDraftCard, { type DraftStatus } from "@/components/content/ContentDraftCard";
-import SignalToContentCard from "@/components/content/SignalToContentCard";
+import ContentBrief from "@/components/content/ContentBrief";
+import ContentOpportunityCard from "@/components/content/ContentOpportunityCard";
+import DraftApprovalQueue, { type QueueDraft } from "@/components/content/DraftApprovalQueue";
+import CommentOpportunityCard, { type CommentOpportunity } from "@/components/content/CommentOpportunityCard";
+import ContentDetailDrawer, { type ContentDetail } from "@/components/content/ContentDetailDrawer";
 import ContentLoopPreview from "@/components/content/ContentLoopPreview";
 import ManualContentSource from "@/components/content/ManualContentSource";
 import ProviderBadge, { classifyProviderState } from "@/components/signals/ProviderBadge";
 import { sendAgentCommand } from "@/lib/agentCommand";
 import { postDraftOutputs, workflowSummaryOutputs, commentDraftOutputs, commentDraftRows } from "@/lib/contentBuckets";
-import { ideaReviewStatus, type SignalIdeaAction } from "@/lib/signalIdeaActions";
+import { buildTurnIntoCommand } from "@/lib/signalIdeaActions";
+import { deriveDraftStatus, DRAFT_STATUS_LABELS } from "@/lib/contentOps";
+import type { FeedSignal } from "@/lib/signalFeedModel";
 
 const dispatchChat = (text: string) =>
   void sendAgentCommand(text, { success: "Sent to Pilot", action_source: "content_action" });
@@ -32,22 +37,16 @@ function deriveStatus(status: string | null | undefined): DraftStatus {
 export default function Content() {
   const { workspaceId } = useWorkspace();
   const { savedOutputs, drafts, signals, loading } = useSignalFeed(workspaceId);
-  const { reviewsBySignal, setReview } = useSignalReviews(workspaceId);
+  const { reviewsBySignal } = useSignalReviews(workspaceId);
   const { providers } = useIntegrationReadiness();
   const [createOpen, setCreateOpen] = useState(false);
+  const [openDraftId, setOpenDraftId] = useState<string | null>(null);
 
-  // Save/Ignore an idea straight to signal_reviews — persists without the chat.
-  // Clicking the active state clears it back to `new`.
-  const handleIdea = async (signalId: string, action: SignalIdeaAction) => {
-    const target = ideaReviewStatus(action);
-    const next = reviewsBySignal[signalId]?.status === target ? "new" : target;
-    try {
-      await setReview(signalId, next);
-      toast.success(next === "new" ? "Cleared" : next === "saved" ? "Saved idea" : "Ignored");
-    } catch {
-      toast.error("Couldn't save — try again");
-    }
-  };
+  // Turn a content-worthy signal into an approval-gated draft (never posts).
+  const turnInto = (kind: "post" | "comment", s: FeedSignal) =>
+    void sendAgentCommand(buildTurnIntoCommand(kind, { title: s.title, sourceUrl: s.source_url }), {
+      success: "Sent to Pilot", action_source: "content_action",
+    });
 
   // Bucket by the saved-output types Scribe/pilot-chat actually write, so counts
   // reflect real data instead of a "brief" string that never matches.
@@ -74,6 +73,58 @@ export default function Content() {
       .slice(0, 8);
   }, [signals, reviewsBySignal]);
 
+  // Drafts awaiting approval (real content_draft saved_outputs).
+  const queueDrafts: QueueDraft[] = useMemo(() => posts.slice(0, 8).map((p) => {
+    const raw = (p.raw ?? {}) as Record<string, any>;
+    const proofUrl = raw.source_url ?? raw.source_details?.funding_source_url ?? null;
+    return {
+      id: p.id,
+      title: p.title ?? "Untitled draft",
+      format: "LinkedIn post",
+      status: deriveDraftStatus(raw.status ?? "draft", Boolean(proofUrl)),
+      date: p.created_at,
+      preview: p.body ?? null,
+      sourceUrl: proofUrl,
+    };
+  }), [posts]);
+
+  // Comment opportunities from real comment drafts.
+  const commentOpportunities: CommentOpportunity[] = useMemo(() => commentDrafts.slice(0, 6).map((d) => ({
+    id: d.id,
+    context: d.title,
+    why: "A relevant conversation worth engaging authentically.",
+    angle: "Add a specific, experience-based perspective — not a pitch.",
+    draft: d.preview ?? null,
+    statusLabel: DRAFT_STATUS_LABELS[deriveDraftStatus(d.status)],
+    sourceUrl: null,
+  })), [commentDrafts]);
+
+  const draftsAwaiting = useMemo(
+    () => queueDrafts.filter((d) => d.status !== "approved" && d.status !== "manually_posted").length + commentOpportunities.length,
+    [queueDrafts, commentOpportunities],
+  );
+
+  const openDetail: ContentDetail | null = useMemo(() => {
+    if (!openDraftId) return null;
+    const p = posts.find((x) => x.id === openDraftId);
+    if (!p) return null;
+    const raw = (p.raw ?? {}) as Record<string, any>;
+    const proofUrl = raw.source_url ?? raw.source_details?.funding_source_url ?? null;
+    return {
+      id: p.id,
+      title: p.title ?? "Untitled draft",
+      format: "LinkedIn post",
+      statusLabel: DRAFT_STATUS_LABELS[deriveDraftStatus(raw.status ?? "draft", Boolean(proofUrl))],
+      sourceSignal: raw.source ?? null,
+      coreArgument: null,
+      hookOptions: [],
+      body: p.body ?? null,
+      cta: null,
+      proofUrl,
+      missingProof: proofUrl ? [] : ["Source proof URL"],
+    };
+  }, [openDraftId, posts]);
+
   const linkedin = providers.linkedin;
   const apify = providers.apify;
   const linkedinState = classifyProviderState({
@@ -94,9 +145,9 @@ export default function Content() {
         {/* Header */}
         <header className="flex items-start justify-between gap-4 flex-wrap">
           <div>
-            <h1 className="text-[30px] md:text-[32px] font-bold text-foreground tracking-tight">Content Command Center</h1>
+            <h1 className="text-[30px] md:text-[32px] font-bold text-foreground tracking-tight">Scribe Command Center</h1>
             <p className="text-[15px] md:text-[16px] text-muted-foreground mt-1.5">
-              Turn signals, product updates, and founder thoughts into LinkedIn posts, comments, and content loops.
+              Turn signals into founder posts, comments, and approval-ready drafts. You approve everything — nothing publishes on its own.
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
@@ -116,6 +167,9 @@ export default function Content() {
             <TopBtn icon={<Repeat className="h-4 w-4" />} label="Build content loop" onClick={() => dispatchChat("Scribe, help me configure a weekly content loop — draft only.")} />
           </div>
         </header>
+
+        {/* Today's Content Brief — real-data summary */}
+        <ContentBrief signals={contentSignals} draftsAwaiting={draftsAwaiting} onStart={(t) => dispatchChat(t)} />
 
         {/* Prompt */}
         <ContentPromptBox />
@@ -150,30 +204,8 @@ export default function Content() {
               )}
             </Section>
 
-            <Section title="Founder post drafts" count={posts.length} loading={loading}>
-              {posts.length === 0 ? (
-                <EmptyState
-                  title="No founder post drafts yet."
-                  subtext="Create a post from a saved signal, product update, or founder thought."
-                  actions={[{ label: "Create post", primary: true, onClick: () => setCreateOpen(true) }]}
-                />
-              ) : (
-                posts.slice(0, 6).map((p) => (
-                  <ContentDraftCard
-                    key={p.id}
-                    id={p.id}
-                    title={p.title ?? "Untitled draft"}
-                    contentType="LinkedIn post"
-                    source={(p.raw as any)?.source ?? "Founder"}
-                    sourceUrl={(p.raw as any)?.source_url ?? null}
-                    sourceVerified={Boolean((p.raw as any)?.source_url)}
-                    status={deriveStatus((p.raw as any)?.status ?? "draft")}
-                    date={p.created_at}
-                    preview={p.body ?? undefined}
-                    nextAction="Review, refine hook, then approve."
-                  />
-                ))
-              )}
+            <Section title="Drafts awaiting approval" count={queueDrafts.length} loading={loading}>
+              <DraftApprovalQueue drafts={queueDrafts} onOpen={setOpenDraftId} />
             </Section>
 
             <ManualContentSource />
@@ -181,8 +213,8 @@ export default function Content() {
 
           {/* Right */}
           <div className="lg:col-span-5 space-y-6">
-            <Section title="Comment opportunities" count={commentDrafts.length} loading={loading}>
-              {commentDrafts.length === 0 ? (
+            <Section title="Comment opportunities" count={commentOpportunities.length} loading={loading}>
+              {commentOpportunities.length === 0 ? (
                 <EmptyState
                   title={commentDiscoveryReady ? "No comment drafts yet." : "No engagement opportunities yet."}
                   subtext={
@@ -197,17 +229,11 @@ export default function Content() {
                   ]}
                 />
               ) : (
-                commentDrafts.slice(0, 6).map((d) => (
-                  <ContentDraftCard
-                    key={d.id}
-                    id={d.id}
-                    title={d.title}
-                    contentType="LinkedIn comment"
-                    source="Post engagement"
-                    status={deriveStatus(d.status)}
-                    date={d.date}
-                    preview={d.preview}
-                    nextAction="Review tone, then approve."
+                commentOpportunities.map((o) => (
+                  <CommentOpportunityCard
+                    key={o.id}
+                    opportunity={o}
+                    onDraft={() => dispatchChat(`Penn, refine this comment draft — draft only: ${o.context}`)}
                   />
                 ))
               )}
@@ -222,11 +248,11 @@ export default function Content() {
                 />
               ) : (
                 contentSignals.map((s) => (
-                  <SignalToContentCard
+                  <ContentOpportunityCard
                     key={s.id}
                     signal={s}
-                    reviewStatus={reviewsBySignal[s.id]?.status ?? null}
-                    onReview={(action) => handleIdea(s.id, action)}
+                    onTurnIntoPost={() => turnInto("post", s)}
+                    onTurnIntoComment={() => turnInto("comment", s)}
                   />
                 ))
               )}
@@ -239,6 +265,7 @@ export default function Content() {
         </div>
       </div>
 
+      <ContentDetailDrawer detail={openDetail} onClose={() => setOpenDraftId(null)} />
       <CreatePostModal open={createOpen} onClose={() => setCreateOpen(false)} />
     </div>
   );
