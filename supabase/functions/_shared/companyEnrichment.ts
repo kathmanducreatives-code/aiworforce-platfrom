@@ -164,6 +164,32 @@ const EMAIL_RE = /[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}/gi;
 const ROLE_RE = /\b(founder|co-?founder|ceo|chief executive|cto|coo|cmo|cfo|chief \w+ officer|head of [a-z ]+|vp of [a-z ]+|vice president|president|managing director|owner)\b/i;
 const PERSONAL_EMAIL_HOST = /@(gmail|yahoo|hotmail|outlook|icloud|proton(mail)?|aol)\./i;
 
+// Placeholder/demo domains that appear as sample copy, never a real contact.
+const PLACEHOLDER_EMAIL_DOMAIN = /@(example|test|sample|demo|domain|email|mail|yourcompany|mycompany|company|yourdomain|placeholder|localhost)\.(com|org|net|io|co)$/i;
+// A curated set of plausible TLDs. A "TLD" that starts with a real TLD followed
+// by more letters (comget, comlearn, orgabout) is a markdown-concatenation
+// artifact, not a real address.
+const VALID_TLD = new Set([
+  "com","org","net","io","ai","co","dev","app","xyz","so","us","uk","ca","de","fr","in","au","eu",
+  "tech","cloud","info","biz","me","gg","tv","health","finance","inc","ly","io","edu","gov","nl","es",
+  "it","se","no","fi","dk","pl","br","jp","cn","ie","ch","at","be","pt","cz","sg","hk","nz","za","design","studio","agency","dev",
+]);
+
+/**
+ * Reject placeholder/demo emails (company@mail.com, example@example.com) and
+ * malformed concatenation artifacts (company@mail.comget) so only real,
+ * source-backed business emails persist. Never rewrites/guesses — only rejects.
+ */
+export function isBadContactEmail(email: string): boolean {
+  const e = (email ?? "").toLowerCase().trim();
+  if (!e || PERSONAL_EMAIL_HOST.test(e)) return true;
+  if (PLACEHOLDER_EMAIL_DOMAIN.test(e)) return true;
+  const domain = e.split("@")[1] ?? "";
+  const tld = domain.split(".").pop() ?? "";
+  if (!VALID_TLD.has(tld)) return true;              // unknown TLD → malformed/glued
+  return false;
+}
+
 function titleCaseName(s: string): string {
   return s.trim().replace(/\s+/g, " ");
 }
@@ -295,11 +321,12 @@ export function extractCompanyEnrichment(pages: CrawledPage[], opts: { category?
       if (!growth.includes(g)) { growth.push(g); evidenceUrls.add(p.url); }
     }
 
-    // Public business emails only — skip obvious personal inboxes.
+    // Public business emails only — skip personal inboxes, placeholder/demo
+    // addresses, and malformed concatenation artifacts (company@mail.comget).
     const found = text.match(EMAIL_RE) ?? [];
     for (const raw of found) {
       const email = raw.toLowerCase();
-      if (seenEmail.has(email) || PERSONAL_EMAIL_HOST.test(email)) continue;
+      if (seenEmail.has(email) || isBadContactEmail(email)) continue;
       seenEmail.add(email);
       emails.push({ type: "email", value: email, source_url: p.url, confidence: kind === "contact" ? "high" : "medium" });
       evidenceUrls.add(p.url);

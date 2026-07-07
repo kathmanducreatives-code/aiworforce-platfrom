@@ -7,8 +7,44 @@ import {
   extractPeopleFromTeamPage,
   resolveBaseUrl,
   cleanEvidenceText,
+  isBadContactEmail,
   type CrawledPage,
 } from "./companyEnrichment.ts";
+
+// ---- Email/contact-quality cleanup (placeholder + malformed rejection) ----
+Deno.test("email #1: company@mail.com placeholder is rejected", () => {
+  assert(isBadContactEmail("company@mail.com"));
+});
+Deno.test("email #2: company@mail.comget concatenation artifact is rejected", () => {
+  assert(isBadContactEmail("company@mail.comget"));
+  assert(isBadContactEmail("support@example.comlearn"));
+});
+Deno.test("email #3: example@example.com and demo variants rejected", () => {
+  for (const e of ["example@example.com", "test@test.com", "hello@example.com", "email@example.com", "user@example.com", "demo@demo.io"]) {
+    assert(isBadContactEmail(e), `${e} should be rejected`);
+  }
+});
+Deno.test("email #4: valid public business email is accepted", () => {
+  assert(!isBadContactEmail("support@realcompany.com"));
+  assert(!isBadContactEmail("hello@luzmo.com"));
+  assert(!isBadContactEmail("sales@acme-robotics.ai"));
+});
+Deno.test("email #5: extractCompanyEnrichment drops placeholder + glued emails, keeps real ones", () => {
+  const pages: CrawledPage[] = [
+    { url: "https://acme.com/contact", kind: "contact", markdown: "Reach us at company@mail.comget or the demo example@example.com — real desk: sales@acme.com" },
+  ];
+  const e = extractCompanyEnrichment(pages);
+  assertEquals(e.public_contact_emails.map((c) => c.value), ["sales@acme.com"]);
+  assert(e.public_contact_emails.every((c) => c.source_url));   // still source-backed
+});
+Deno.test("email #6: no email at all → none fabricated (no replacement)", () => {
+  const pages: CrawledPage[] = [
+    { url: "https://acme.com/contact", kind: "contact", markdown: "Only a placeholder here: your@email.com and company@mail.com" },
+  ];
+  const e = extractCompanyEnrichment(pages);
+  assertEquals(e.public_contact_emails.length, 0);
+  assert(e.missing_evidence.includes("public_contact_email"));
+});
 
 // ---- Bug #3: Firecrawl markdown/text cleaning ----
 Deno.test("Bug3 #13: markdown link text is unwrapped in summary", () => {
