@@ -102,11 +102,12 @@ const SAAS_POSITIVE_CATEGORIES = [
   "workflow automation", "data enrichment", "outbound infrastructure", "CRM", "pipeline automation",
 ];
 const SAAS_BUYER_TITLES = [
-  "Founder", "Co-Founder", "CEO", "Head of Growth", "Revenue Leader", "GTM Operator", "RevOps", "Sales Ops",
+  "Founder", "Co-Founder", "CEO", "Head of Growth", "Revenue Leader", "GTM Operator",
+  "RevOps", "Revenue Operations", "Sales Ops", "Sales Operations",
 ];
 const SAAS_HIRING_TRIGGERS = [
   "first sales hire", "Founding Account Executive", "Founding AE", "SDR",
-  "Sales Development", "RevOps", "Sales Operations", "Growth Lead",
+  "Sales Development", "RevOps", "Revenue Operations", "Sales Operations", "Growth Lead",
 ];
 const SAAS_FUNDING_TRIGGERS = ["recently funded", "seed", "Series A", "founder-led sales"];
 const SAAS_TOOL_WATCHLIST = [
