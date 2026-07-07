@@ -1,0 +1,16 @@
+# Agentory
+
+> AI workforce for recruiting agencies — automates passive talent discovery, candidate intelligence, and outreach so recruiters make faster, smarter placements.
+
+Agentory pairs specialized AI agents across sourcing, screening, growth, and intelligence with a single CRM, letting recruiting agencies run their pipeline with a small human team.
+
+## Pages
+
+- [Home](/): Overview of the Agentory AI workforce and product ecosystem.
+- [Features](/features): Precision sourcing, deep profile intelligence, CRM, email nurturing, and analytics.
+- [Pricing](/pricing): Starter, Growth, and Enterprise plans with a 14-day free trial.
+- [Get a demo](/get-demo): Book a walkthrough with the team.
+
+## Optional
+
+- [Sign in](/auth): Account sign-in and sign-up.
