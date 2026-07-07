@@ -178,6 +178,22 @@ export function classifySignalQuality(s: SignalQualityInput): {
   const savedReason = firstStr(raw["why_it_matters"], raw["reason"], raw["why"]) ?? s.reason;
 
   if (!isHiring) {
+    // A persisted verdict (e.g. from the scored hiring/funding radar sources) is
+    // authoritative — so a needs_verification funding signal is honestly hidden.
+    const savedQ = str(raw["signal_quality"]);
+    if (savedQ === "verified" || savedQ === "needs_verification" || savedQ === "legacy") {
+      const rawIcp = Array.isArray(raw["matched_icp"])
+        ? (raw["matched_icp"] as unknown[]).filter((x): x is string => typeof x === "string")
+        : [];
+      return {
+        quality: savedQ,
+        quality_badge: savedQ === "verified" ? signalTypeLabel(s.signal_type)
+          : savedQ === "needs_verification" ? "Needs verification" : "Legacy / Needs verification",
+        why_text: savedReason,
+        matched_icp: savedQ === "verified" ? rawIcp : [],
+        show_by_default: savedQ === "verified",
+      };
+    }
     return {
       quality: "verified",
       quality_badge: signalTypeLabel(s.signal_type),
