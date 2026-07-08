@@ -412,6 +412,19 @@ async function writeApifyJobs(ctx: ToolCallCtx, output: any): Promise<void> {
           input_url: it.inputUrl ?? null,
           source_proof: it.sourceProof ?? [],
           source_quality: it.sourceQuality ?? (it.url || it.website ? "partial" : "incomplete"),
+          // Promote match-tier + funding contract to TOP-LEVEL raw (run-agent's
+          // tierAndCount labels them onto it.raw) so Workbench/CSV read them —
+          // otherwise they'd stay nested under raw.hiring.* and never surface.
+          ...((it.raw && typeof it.raw === "object") ? (() => {
+            const r = it.raw as Record<string, unknown>;
+            const patch: Record<string, unknown> = {};
+            if (r.match_tier != null) patch.match_tier = r.match_tier;
+            if (r.funding_required != null) patch.funding_required = r.funding_required;
+            if (r.funding_proof_found != null) patch.funding_proof_found = r.funding_proof_found;
+            if (r.funding_source_url != null) patch.funding_source_url = r.funding_source_url;
+            if (Array.isArray(r.missing_evidence) && r.missing_evidence.length) patch.missing_evidence = r.missing_evidence;
+            return patch;
+          })() : {}),
           // Decision-maker discovery from JOB-POST evidence only (poster hint +
           // description clues). No live people search here — that runs later,
           // per company, on the "Find decision-makers" action. Never fabricated.

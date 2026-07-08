@@ -119,6 +119,27 @@ Deno.test("writeMemoryFromToolCall: Apify jobs creates accounts + signals + lead
   assert(tables.lead_candidates.every((l) => l.lead_type === "company"));
 });
 
+Deno.test("writeMemoryFromToolCall: match_tier + funding fields promote to TOP-LEVEL raw", async () => {
+  const { tables, admin } = makeFake();
+  await writeMemoryFromToolCall({
+    admin, workspace_id: "ws-1", plan_id: "plan-1", task_id: null, tool_call_id: "tc-1",
+    tool_name: "source_with_apify", selected_actor_key: "apify_jobs",
+    output: {
+      items: [
+        // run-agent's tierAndCount labels these onto the item's raw before persist.
+        { companyName: "Nimbus AI", title: "SDR", url: "https://linkedin.com/jobs/1", companyWebsite: "https://nimbus.ai",
+          match_tier: "secondary", funding_required: true, funding_proof_found: false, funding_source_url: null,
+          missing_evidence: ["recent funding proof"] },
+      ],
+    },
+  });
+  const lead = tables.lead_candidates[0];
+  assertEquals(lead.raw.match_tier, "secondary");         // top-level, not raw.hiring.*
+  assertEquals(lead.raw.funding_required, true);
+  assertEquals(lead.raw.funding_proof_found, false);
+  assert((lead.raw.missing_evidence ?? []).includes("recent funding proof"));
+});
+
 Deno.test("writeMemoryFromToolCall: Apify people creates contacts + signals; never invents email", async () => {
   const { tables, admin } = makeFake();
   await writeMemoryFromToolCall({
