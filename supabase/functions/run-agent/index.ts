@@ -280,6 +280,10 @@ Deno.serve(async (req) => {
 
       if (shouldRun) {
         let location: string | null = tool_input_body?.location ?? null;
+        // Structured Scout query plan (Parts 3/5): precise multi-queries + split
+        // locations + match tiers. Null for vague requests → legacy keyword path.
+        let scoutPlan: any = null;
+        let scoutPlanMod: any = null;
         let roleKeywords: string[] = Array.isArray(tool_input_body?.role_keywords) ? tool_input_body.role_keywords : [];
         let max_results: number = typeof tool_input_body?.max_results === "number"
           ? Math.max(1, Math.min(200, tool_input_body.max_results))
@@ -401,14 +405,31 @@ Deno.serve(async (req) => {
         let scoutQueryMeta: Record<string, unknown> | null = null;
         if (source_type === "jobs") {
           try {
-            const { buildScoutJobsKeywords } = await import("../_shared/scoutStrategy.ts");
-            const sq = buildScoutJobsKeywords({ roleKeywords, query: normalizedQuery, icp: (brain as any)?.icp ?? null });
-            if (sq.keywords && sq.keywords.trim()) {
-              plannedUserInput = { ...(plannedUserInput ?? {}), keywords: sq.keywords };
+            scoutPlanMod = await import("../_shared/scoutSourcingPlan.ts");
+            scoutPlan = scoutPlanMod.planScoutQueries({ instruction: instruction ?? normalizedQuery, brain });
+            if (scoutPlan) {
+              // Structured: PRECISE keywords + ONE concrete LinkedIn location
+              // (split from any "US + EU") — never the mega keyword blob.
+              plannedUserInput = { ...(plannedUserInput ?? {}), keywords: scoutPlan.primary.keywords };
+              normalizedQuery = scoutPlan.primary.keywords;
+              location = scoutPlan.primary.location;
+              scoutQueryMeta = {
+                keywords: scoutPlan.primary.keywords,
+                location: scoutPlan.primary.location,
+                provider_queries: scoutPlan.provider_queries,
+                funding_required: scoutPlan.intent.funding_required,
+                must_have_categories: scoutPlan.intent.must_have_categories,
+                weak_icp_context: scoutPlan.intent.must_have_categories.length === 0,
+              };
+            } else {
+              // Vague request → legacy Company-Brain keyword builder unchanged.
+              const { buildScoutJobsKeywords } = await import("../_shared/scoutStrategy.ts");
+              const sq = buildScoutJobsKeywords({ roleKeywords, query: normalizedQuery, icp: (brain as any)?.icp ?? null });
+              if (sq.keywords && sq.keywords.trim()) plannedUserInput = { ...(plannedUserInput ?? {}), keywords: sq.keywords };
+              scoutQueryMeta = { keywords: sq.keywords, used_terms: sq.usedTerms, avoided_terms: sq.avoidedTerms, weak_icp_context: sq.weakIcpContext, saas_context_applied: sq.saasContextApplied };
+              if (sq.weakIcpContext) console.warn("[run-agent] Scout: weak ICP context — Company Brain has no structured ICP; query is role-only.");
             }
-            scoutQueryMeta = { keywords: sq.keywords, used_terms: sq.usedTerms, avoided_terms: sq.avoidedTerms, weak_icp_context: sq.weakIcpContext, saas_context_applied: sq.saasContextApplied };
-            if (sq.weakIcpContext) console.warn("[run-agent] Scout: weak ICP context — Company Brain has no structured ICP; query is role-only.");
-          } catch (e) { console.warn("[run-agent] scout query strategy failed:", e); }
+          } catch (e) { console.warn("[run-agent] scout query planning failed:", e); }
         }
 
         const apifyInput = {
@@ -497,11 +518,18 @@ Deno.serve(async (req) => {
           employeeCount: a.raw?.employee_count ?? a.raw?.companyEmployeesCount, raw: a.raw,
         });
         const rawAllItems: ReturnType<typeof mapItem>[] = [];
+        let scoutAttemptIdx = 0;
         const runAttempt = async (strategy: { role_keywords: string[]; relax_location: boolean }) => {
+          // When a structured plan exists, rotate through its precise queries +
+          // split locations across attempts (strict → relaxed tiers, US + EU
+          // covered). Otherwise fall back to the existing apifyInput/broaden.
+          const pq = (scoutPlan && scoutPlanMod) ? scoutPlanMod.attemptQuery(scoutPlan, scoutAttemptIdx) : null;
+          scoutAttemptIdx++;
           const attemptInput = {
             ...apifyInput,
+            ...(pq ? { query: pq.keywords, search_goal: pq.keywords, input: { ...(plannedUserInput ?? {}), keywords: pq.keywords } } : {}),
             role_keywords: strategy.role_keywords.length > 0 ? strategy.role_keywords : apifyInput.role_keywords,
-            location: strategy.relax_location ? undefined : apifyInput.location,
+            location: strategy.relax_location ? undefined : (pq ? pq.location : apifyInput.location),
             max_results,
             // Don't persist per attempt — we persist ONCE below with the capped,
             // deduped accepted set so DB lead_candidates == accepted count.
@@ -968,6 +996,29 @@ Deno.serve(async (req) => {
             duplicate_count: classified.duplicates.length,
             reject_reason_counts: mergedRejectReasons,
           });
+          // Parts 3/5 — label the gate-accepted leads with match tiers + the
+          // funding contract, and compute honest shortage counters. Additive: it
+          // never overturns the proof gate's accept/reject decision. The tier +
+          // funding fields are written onto each lead's raw so they persist.
+          let tierMeta: Record<string, unknown> | null = null;
+          if (scoutPlan && scoutPlanMod) {
+            try {
+              const reviewed = Number((counts as any).raw_result_count ?? rawAllItems.length);
+              const tc = scoutPlanMod.tierAndCount(effectiveAccepted as any[], reviewed, scoutPlan.intent);
+              (effectiveAccepted as any[]).forEach((it, i) => {
+                const l = tc.labels[i]; if (!l || !it) return;
+                it.raw = {
+                  ...(it.raw ?? {}),
+                  match_tier: l.match_tier,
+                  funding_required: l.funding_required,
+                  funding_proof_found: l.funding_proof_found,
+                  funding_source_url: l.funding_source_url,
+                  ...(l.missing_evidence?.length ? { missing_evidence: [...new Set([...(it.raw?.missing_evidence ?? []), ...l.missing_evidence])] } : {}),
+                };
+              });
+              tierMeta = { ...tc.counters, tier_summary: tc.summary };
+            } catch (e) { console.warn("[run-agent] tierAndCount failed:", e); }
+          }
           sourceQualityMeta = {
             ...counts,
             top_reject_reasons: topRejectReasons(mergedRejectReasons),
@@ -978,13 +1029,15 @@ Deno.serve(async (req) => {
             // Phase 4 — Scout query + QA cost transparency.
             ...(scoutQueryMeta ? { scout_query: scoutQueryMeta } : {}),
             ...(qaLimitReport ? { qa_limit: qaLimitReport } : {}),
+            // Parts 3/5 — match tiers + shortage counters/reason.
+            ...(tierMeta ? { match_tiers: tierMeta } : {}),
           };
           // Phase 5 — clean AI-employee activity timeline (no raw logs/provider noise).
           const plannerLabel = (sourcePlanMeta?.planner_mode === "claude") ? "Claude"
             : (sourcePlanMeta?.planner_mode === "gemini") ? "Gemini" : "deterministic rules";
           await supabase.from("activity_feed").insert([
             { workspace_id, plan_id, agent_id: agent.id, event_type: "agent_started", title: `Scout created actor input with ${plannerLabel}`, body: String(sourcePlanMeta?.primary_query ?? ""), metadata: { step_index, task_id: task.id, source_planner: true } },
-            { workspace_id, plan_id, agent_id: agent.id, event_type: "agent_started", title: `Scout reviewed ${counts.raw_result_count} raw result${counts.raw_result_count === 1 ? "" : "s"}`, body: `Accepted ${counts.accepted_count} qualified · rejected ${counts.rejected_count}`, metadata: { step_index, task_id: task.id, source_quality: true } },
+            { workspace_id, plan_id, agent_id: agent.id, event_type: "agent_started", title: `Scout reviewed ${counts.raw_result_count} raw result${counts.raw_result_count === 1 ? "" : "s"}`, body: (tierMeta?.tier_summary as string) ?? `Accepted ${counts.accepted_count} qualified · rejected ${counts.rejected_count}`, metadata: { step_index, task_id: task.id, source_quality: true } },
           ]);
         } catch (e) { console.warn("[run-agent] source quality summary failed:", e); }
 
