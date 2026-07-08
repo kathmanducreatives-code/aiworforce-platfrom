@@ -3,13 +3,10 @@
 // Persists accepted signals to public.signals with rich metadata under `raw`.
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import {
-  evaluateSignalQuality,
-  dedupeSignals,
-  signalDedupeKey,
-  type SignalSourceType,
-  type RawSignalInput,
-} from "../_shared/signalQuality.ts";
+import { signalDedupeKey } from "../_shared/signalQuality.ts";
+import { compileCompanyBrainContext } from "../_shared/companyBrainCompiler.ts";
+import { buildRadarScanPlan } from "../_shared/radarScanPlanner.ts";
+import { firecrawlHitToCandidate, scoreCandidates, type RadarPlanSource } from "../_shared/radarCandidatePipeline.ts";
 
 const cors = {
   "Access-Control-Allow-Origin": "*",
@@ -100,23 +97,11 @@ function hiringQueries(prefs: ReturnType<typeof readPrefs>): string[] {
   return roles.slice(0, 3).map((r) => `"${r}" hiring${geo} site:linkedin.com/jobs OR site:wellfound.com`);
 }
 
-interface ScannedSignal extends RawSignalInput {
-  signal_type: Category;
-  source_provider: string;
-}
-
-function hitsToSignals(category: Category, provider: string, hits: FirecrawlSearchHit[]): ScannedSignal[] {
-  return hits.map((h) => ({
-    signal_type: category,
-    source_provider: provider,
-    title: h.title ?? "",
-    description: h.description ?? (h.markdown ? h.markdown.slice(0, 280) : ""),
-    source_url: h.url,
-    source: provider,
-    created_at: new Date().toISOString(),
-    post_snippet: h.description ?? (h.markdown ? h.markdown.slice(0, 280) : undefined),
-  }));
-}
+// Existing Firecrawl categories → radar-plan source (for Brain-scored pipeline).
+const CAT_TO_SOURCE: Record<Category, RadarPlanSource> = {
+  hiring: "hiring", linkedin_intent: "linkedin_posts", competitor: "competitor",
+  workflow_trend: "workflow_trends", people: "linkedin_comments",
+};
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: cors });
@@ -169,6 +154,11 @@ Deno.serve(async (req) => {
   const apifyEnabled = flag("APIFY_ENABLE_PEOPLE_SEARCH", true);
   const firecrawl = present("FIRECRAWL_API_KEY");
 
+  // Company Brain is the source of truth: compile it, then build a scan plan.
+  const brain = compileCompanyBrainContext({ workspace_id, profile, signal_preferences: profile?.signal_preferences });
+  const scanPlan = buildRadarScanPlan(brain, { firecrawlReady: firecrawl, apifyReady: apifyToken && apifyEnabled });
+  const planReasonFor = (source: RadarPlanSource) => scanPlan.source_plan.find((p) => p.source === source)?.reason ?? "";
+
   const caps: Record<Category, { ready: boolean; reason?: string }> = {
     hiring: firecrawl ? { ready: true } : { ready: false, reason: "Firecrawl required for hiring search" },
     linkedin_intent: firecrawl ? { ready: true } : { ready: false, reason: "Firecrawl required for LinkedIn intent search" },
@@ -212,19 +202,18 @@ Deno.serve(async (req) => {
     people: { found: 0, accepted: 0, status: "skipped" },
   };
 
-  async function runCategory(cat: Category, queries: string[], wanted: number) {
-    if (wanted <= 0) return [] as ScannedSignal[];
+  // Existing safe source behaviour: Firecrawl search per category. Returns raw
+  // hits; scoring/normalization now happens in the Company-Brain pipeline below.
+  async function runCategory(cat: Category, queries: string[], wanted: number): Promise<FirecrawlSearchHit[]> {
+    if (wanted <= 0) return [];
     if (!caps[cat].ready) {
       perCategory[cat] = { found: 0, accepted: 0, status: "setup_needed", reason: caps[cat].reason };
       return [];
     }
     perCategory[cat].status = "ready";
     const perQuery = Math.max(3, Math.ceil(wanted * 1.5));
-    const collected: ScannedSignal[] = [];
-    for (const q of queries) {
-      const hits = await firecrawlSearch(q, perQuery);
-      collected.push(...hitsToSignals(cat, "firecrawl_search", hits));
-    }
+    const collected: FirecrawlSearchHit[] = [];
+    for (const q of queries) collected.push(...await firecrawlSearch(q, perQuery));
     perCategory[cat].found = collected.length;
     return collected;
   }
@@ -237,45 +226,29 @@ Deno.serve(async (req) => {
   ]);
   if (mix.people > 0) perCategory.people = { found: 0, accepted: 0, status: "setup_needed", reason: caps.people.reason };
 
-  // Score + dedupe per category, then take top N each
+  // Score every candidate against Company Brain, reject disqualified, dedupe,
+  // rank, cap, and persist rich fields into signals.raw.
   const accepted: any[] = [];
-  for (const [cat, candidates] of [
+  for (const [cat, hits] of [
     ["hiring", hiringHits], ["linkedin_intent", intentHits],
     ["competitor", compHits], ["workflow_trend", workflowHits],
-  ] as [Category, ScannedSignal[]][]) {
+  ] as [Category, FirecrawlSearchHit[]][]) {
     const wanted = mix[cat];
-    if (wanted <= 0) continue;
-    const fresh = dedupeSignals(candidates, existingKeys);
-    const scored = fresh.map((s) => ({ s, e: evaluateSignalQuality({ signal: s, companyBrain: profile, signalPreferences: prefs as any, sourceType: cat }) }))
-      .filter((x) => x.e.accepted)
-      .sort((a, b) => b.e.score - a.e.score)
-      .slice(0, wanted);
-    perCategory[cat].accepted = scored.length;
-    for (const { s, e } of scored) {
-      existingKeys.add(signalDedupeKey(s));
-      accepted.push({
-        workspace_id,
-        source: s.source_provider,
-        signal_type: cat,
-        signal_label: cat.replace(/_/g, " "),
-        title: (s.title ?? "").slice(0, 500) || `${cat} signal`,
-        description: (s.description ?? "").slice(0, 1000),
-        source_url: s.source_url ?? null,
-        confidence: e.score / 100,
-        created_by: userId,
-        raw: {
-          ...(s.raw ?? {}),
-          score: e.score,
-          priority: e.priority === "high" ? "hot" : e.priority === "medium" ? "warm" : "maybe",
-          why_it_matters: e.reason,
-          matched_icp: e.matched_icp,
-          missing_context: e.missing_context,
-          next_action: e.next_action,
-          status: "new",
-          source_provider: s.source_provider,
-          post_snippet: s.post_snippet ?? null,
-        },
-      });
+    if (wanted <= 0 || hits.length === 0) continue;
+    const source = CAT_TO_SOURCE[cat];
+    const reason = planReasonFor(source);
+    const items = hits.map((h) => ({
+      candidate: firecrawlHitToCandidate(source, h),
+      source, scanPlanReason: reason, provider: "firecrawl_search",
+    }));
+    const res = scoreCandidates({ items, brain, workspace_id, userId, cap: wanted, existingKeys });
+    perCategory[cat].accepted = res.accepted;
+    for (const row of res.rows) {
+      existingKeys.add(signalDedupeKey({
+        source_url: row.source_url ?? undefined, title: row.title,
+        account_name: (row.raw.account_name as string) ?? undefined, competitor_name: undefined,
+      }));
+      accepted.push(row);
     }
   }
 
@@ -292,6 +265,8 @@ Deno.serve(async (req) => {
     inserted: accepted.length,
     per_category: perCategory,
     capabilities: caps,
+    brain_confidence: scanPlan.brain_confidence,
+    warnings: scanPlan.warnings,
     mode,
   });
 });
