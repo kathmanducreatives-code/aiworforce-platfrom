@@ -166,6 +166,23 @@ export function fillFromRawResults(rawCandidates: CandidateForTier[], intent: Le
   return result;
 }
 
+/**
+ * Union missing-evidence lists (funding + analyst + gate) into one deduped,
+ * order-preserving list — so the analyst update never drops the funding gap
+ * ("recent funding proof") and vice versa. Ignores non-strings/empties.
+ */
+export function unionMissingEvidence(...lists: unknown[]): string[] {
+  const out: string[] = [];
+  const seen = new Set<string>();
+  for (const list of lists) {
+    if (!Array.isArray(list)) continue;
+    for (const x of list) {
+      if (typeof x === "string" && x.trim() && !seen.has(x)) { seen.add(x); out.push(x); }
+    }
+  }
+  return out;
+}
+
 /** One-line user report (Part 5 copy) from the counters. */
 export function summarizeShortage(r: ShortageResult): string {
   const relaxed = r.relaxation_steps_used.length ? ` Relaxed: ${r.relaxation_steps_used.join(", ")}.` : "";

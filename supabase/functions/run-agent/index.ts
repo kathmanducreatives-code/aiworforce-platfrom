@@ -1115,6 +1115,9 @@ Deno.serve(async (req) => {
                 const { data: accts } = await supabase.from("accounts").select("id, name").in("id", acctIds);
                 for (const a of accts ?? []) nameById.set((a as Record<string, unknown>).id as string, String((a as Record<string, unknown>).name ?? ""));
               }
+              // Union missing-evidence (funding + analyst + gate) so the analyst
+              // update never drops the funding gap ("recent funding proof").
+              const { unionMissingEvidence } = await import("../_shared/leadMatchTier.ts");
               for (const row of rows ?? []) {
                 const r = row as Record<string, unknown>;
                 const existingRaw = (r.raw ?? {}) as Record<string, unknown>;
@@ -1161,7 +1164,9 @@ Deno.serve(async (req) => {
                       // Proof-gate outcome (Phase 3) for Workbench/CSV + debugging.
                       gate_decision: aria.gate_decision,
                       gate_reasons: aria.gate_reasons,
-                      missing_evidence: aria.missing_evidence,
+                      // Union with the funding/tier missing-evidence already on the
+                      // row (never clobber "recent funding proof"); deduped.
+                      missing_evidence: unionMissingEvidence(existingRaw.missing_evidence, aria.missing_evidence),
                       disqualifiers_hit: aria.disqualifiers_hit,
                       final_overall_fit: aria.overall_fit,
                     } : {}),

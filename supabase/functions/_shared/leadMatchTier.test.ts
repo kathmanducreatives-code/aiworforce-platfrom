@@ -1,6 +1,28 @@
 import { assert, assertEquals } from "https://deno.land/std@0.224.0/assert/mod.ts";
-import { classifyLeadTier, fillFromRawResults, type CandidateForTier } from "./leadMatchTier.ts";
+import { classifyLeadTier, fillFromRawResults, unionMissingEvidence, type CandidateForTier } from "./leadMatchTier.ts";
 import { extractLeadSearchIntent } from "./leadSearchIntent.ts";
+
+// Follow-up: analyst update must UNION missing-evidence, not clobber it.
+Deno.test("union: funding missing-evidence survives + is unioned with analyst", () => {
+  assertEquals(
+    unionMissingEvidence(["recent funding proof"], ["company size unclear", "founder-led sales unconfirmed"]),
+    ["recent funding proof", "company size unclear", "founder-led sales unconfirmed"],
+  );
+});
+Deno.test("union: dedupes overlapping entries; ignores non-strings/empties/null lists", () => {
+  assertEquals(unionMissingEvidence(["recent funding proof"], ["recent funding proof", "size"]), ["recent funding proof", "size"]);
+  assertEquals(unionMissingEvidence(null, undefined, ["", "  ", "x", 5 as unknown]), ["x"]);
+});
+Deno.test("union: funding gap alone survives an empty analyst list", () => {
+  assertEquals(unionMissingEvidence(["recent funding proof"], []), ["recent funding proof"]);
+  assertEquals(unionMissingEvidence([], []), []);
+});
+Deno.test("funding proof found → 'recent funding proof' is NOT in missing_evidence", () => {
+  const fi = extractLeadSearchIntent({ message: "Find 3 AI SaaS companies recently funded hiring SDRs for outbound" });
+  const c: CandidateForTier = { company: "X", industries: ["Software Development"], company_description: "AI SaaS", job_title: "SDR", job_description: "outbound", source_url: "https://x/1", funding_proof_url: "https://tc/x" };
+  const t = classifyLeadTier(c, fi);
+  assert(!unionMissingEvidence(t.missing_evidence, []).includes("recent funding proof"));
+});
 
 const intent = extractLeadSearchIntent({ message: "Find 5 AI SaaS companies recently funded hiring SDRs or GTM roles for outbound" });
 
