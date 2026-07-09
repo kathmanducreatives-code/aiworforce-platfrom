@@ -195,3 +195,34 @@ export function mergeProfile(
 export function isOnboardingComplete(brain: { onboarding_completed?: boolean } | null | undefined): boolean {
   return !!brain?.onboarding_completed;
 }
+
+// ---- v2 save helpers ---------------------------------------------------
+// Merge a partial v2 patch into an existing profile without clobbering
+// legacy top-level keys. Callers should re-normalize with
+// normalizeCompanyBrain(...) before rendering.
+import { normalizeCompanyBrain, type CompanyBrainV2 } from './normalizeCompanyBrain';
+
+export type CompanyBrainV2Patch = Partial<Omit<CompanyBrainV2, 'schema_version' | 'legacy' | 'setup_required' | 'brain_confidence'>>;
+
+export function mergeV2Patch(
+  existing: Record<string, any> | null | undefined,
+  patch: CompanyBrainV2Patch,
+): Record<string, any> {
+  const base = existing && typeof existing === 'object' ? { ...existing } : {};
+  base.schema_version = 2;
+  for (const [k, v] of Object.entries(patch)) {
+    if (v == null) continue;
+    if (Array.isArray(v)) { base[k] = v; continue; }
+    if (typeof v === 'object') {
+      const cur = base[k] && typeof base[k] === 'object' && !Array.isArray(base[k]) ? base[k] : {};
+      base[k] = { ...cur, ...v };
+      continue;
+    }
+    base[k] = v;
+  }
+  // Recompute derived flags via the normalizer so writers can't set stale ones.
+  const norm = normalizeCompanyBrain(base);
+  base.setup_status = norm.setup_status;
+  return base;
+}
+

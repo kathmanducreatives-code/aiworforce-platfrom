@@ -10,6 +10,8 @@
 // Reuses parseSizeLabel + DEFAULT_DISQUALIFIERS from companyBrainIcp.ts.
 
 import { parseSizeLabel, DEFAULT_DISQUALIFIERS } from "./companyBrainIcp.ts";
+import { normalizeCompanyBrain } from "./normalizeCompanyBrain.ts";
+
 
 export type BrainConfidence = "strong" | "medium" | "weak";
 
@@ -93,8 +95,12 @@ export interface CompanyBrainContext {
     derivation_sources: string[];
     /** derived term -> which Brain field(s) produced it */
     matched_from: Record<string, string[]>;
+    /** true when the Brain lacks a workable ICP; radar/leads/content must degrade. */
+    setup_required: boolean;
+    schema_version: 1 | 2;
   };
 }
+
 
 // ---- SaaS/sales default expansions (applied ONLY when Brain shows that context) ----
 const SAAS_POSITIVE_CATEGORIES = [
@@ -144,6 +150,11 @@ export function compileCompanyBrainContext(input: CompileInput): CompanyBrainCon
   const profile = (input.profile && typeof input.profile === "object" ? input.profile : {}) as Record<string, unknown>;
   const prefs = (input.signal_preferences ?? profile["signal_preferences"] ?? {}) as Record<string, unknown>;
 
+  // v2 normalization: single canonical shape that prefers v2 fields over legacy.
+  const v2 = normalizeCompanyBrain(profile);
+  const schemaVersion: 1 | 2 = (profile["schema_version"] as unknown) === 2 ? 2 : 1;
+
+
   const company = (profile["company"] ?? {}) as Record<string, unknown>;
   const icpRaw = (profile["icp"] ?? {}) as Record<string, unknown>;
   const positioning = (profile["positioning"] ?? {}) as Record<string, unknown>;
@@ -162,27 +173,33 @@ export function compileCompanyBrainContext(input: CompileInput): CompanyBrainCon
   };
   const markAll = (terms: string[], source: string) => terms.forEach((t) => mark(t, source));
 
-  // ---- structured-first reads ----
+  // ---- structured-first reads (v2 preferred, legacy fallback) ----
   const structuredIndustries = uniq([
+    ...v2.target_customer.industries,
     ...arr(icpRaw["industries"]),
     ...arr(prefs["industries"]),
   ]);
   const structuredBuyers = uniq([
+    ...v2.buyer_personas,
     ...arr(icpRaw["buyer_roles"]),
     ...arr(prefs["hiring_roles"]),
   ]);
   const structuredCompetitors = uniq([
+    ...v2.competitors,
     ...arr(competitors["known"]),
     ...arr(prefs["competitors"]),
   ]);
   const adjacentTools = uniq(arr(competitors["adjacent"]));
-  const integrationTools = uniq(arr(gtm["current_tools"]));
-  const painPoints = uniq([...arr(icpRaw["pain_points"]), ...arr(prefs["pain_points"]), ...(str(gtm["biggest_bottleneck"]) ? [str(gtm["biggest_bottleneck"])!] : [])]);
-  const contentTopics = uniq([...arr(prefs["linkedin_topics"]), ...arr(prefs["workflow_topics"]), ...(str(goals["content"]) ? [str(goals["content"])!] : [])]);
-  const brainDisqualifiers = uniq([...arr(icpRaw["disqualifiers"]), ...arr(prefs["disqualifiers"])]);
-  const sizeLabel = str(icpRaw["company_size"]) ?? str(company["team_size"]);
-  const size = parseSizeLabel(sizeLabel);
-  const geographies = uniq([...(str(icpRaw["geography"]) ? [str(icpRaw["geography"])!] : []), ...arr(prefs["geographies"]), ...(str(company["location"]) ? [str(company["location"])!] : [])]);
+  const integrationTools = uniq([...v2.tools, ...arr(gtm["current_tools"])]);
+  const painPoints = uniq([...v2.pain_points, ...arr(icpRaw["pain_points"]), ...arr(prefs["pain_points"]), ...(str(gtm["biggest_bottleneck"]) ? [str(gtm["biggest_bottleneck"])!] : [])]);
+  const contentTopics = uniq([...v2.content_angles, ...arr(prefs["linkedin_topics"]), ...arr(prefs["workflow_topics"]), ...(str(goals["content"]) ? [str(goals["content"])!] : [])]);
+  // v2 disqualifier buckets take priority over legacy flat list.
+  const v2DisqIndustries = v2.target_customer.disqualifiers.industries;
+  const brainDisqualifiers = uniq([...v2DisqIndustries, ...arr(icpRaw["disqualifiers"]), ...arr(prefs["disqualifiers"])]);
+  const sizeLabel = v2.target_customer.company_size.label || str(icpRaw["company_size"]) || str(company["team_size"]);
+  const size = sizeLabel ? parseSizeLabel(sizeLabel) : { min: v2.target_customer.company_size.min ?? null, max: v2.target_customer.company_size.max ?? null };
+  const geographies = uniq([...v2.target_customer.geography, ...(str(icpRaw["geography"]) ? [str(icpRaw["geography"])!] : []), ...arr(prefs["geographies"]), ...(str(company["location"]) ? [str(company["location"])!] : [])]);
+
 
   markAll(structuredIndustries, "icp.industries");
   markAll(structuredBuyers, "icp.buyer_roles");
@@ -319,10 +336,10 @@ export function compileCompanyBrainContext(input: CompileInput): CompanyBrainCon
     },
     disqualifiers: {
       industries: disqIndustries,
-      company_types: uniq(arr(icpRaw["disqualified_company_types"])),
-      titles: negativeTitleKeywords,
-      keywords: uniq(arr(prefs["negative_keywords"])),
-      domains: uniq(arr(icpRaw["disqualified_domains"])),
+      company_types: uniq([...v2.target_customer.disqualifiers.company_types, ...arr(icpRaw["disqualified_company_types"])]),
+      titles: uniq([...v2.target_customer.disqualifiers.titles, ...negativeTitleKeywords]),
+      keywords: uniq([...v2.target_customer.disqualifiers.keywords, ...arr(prefs["negative_keywords"])]),
+      domains: uniq([...v2.target_customer.disqualifiers.domains, ...arr(icpRaw["disqualified_domains"])]),
     },
     query_strategy: {
       positive_terms: positiveTerms,
@@ -346,9 +363,12 @@ export function compileCompanyBrainContext(input: CompileInput): CompanyBrainCon
       warnings,
       derivation_sources: uniq(derivationSources),
       matched_from,
+      setup_required: v2.setup_required,
+      schema_version: schemaVersion,
     },
   };
 }
+
 
 function seniorityFor(title: string): string[] {
   const t = title.toLowerCase();
