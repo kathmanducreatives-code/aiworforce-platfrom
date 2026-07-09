@@ -108,6 +108,8 @@ export interface BuildRowArgs {
   score: IcpSignalScore;
   scanPlanReason: string;
   provider?: string;
+  /** Source-adapter-specific missing evidence, merged into raw.missing_evidence. */
+  extraMissingEvidence?: string[];
 }
 
 /** Map a scored candidate → a `signals` insert row (rich fields under raw). */
@@ -160,7 +162,7 @@ export function buildRadarSignalRow(a: BuildRowArgs): RadarSignalRow {
       why_now: s.why_now,
       company_brain_relevance: s.company_brain_relevance,
       recommended_action: s.recommended_action,
-      missing_evidence: s.missing_evidence,
+      missing_evidence: [...new Set([...s.missing_evidence, ...(a.extraMissingEvidence ?? [])])],
       risk_flags: s.risk_flags,
       source_details: sourceDetails,
       scan_plan_reason: a.scanPlanReason,
@@ -183,6 +185,7 @@ export interface ScoredCandidate {
   source: RadarPlanSource;
   scanPlanReason: string;
   provider?: string;
+  extraMissingEvidence?: string[];
 }
 
 export interface ScoreResult {
@@ -227,6 +230,7 @@ export function scoreCandidates(args: {
     buildRadarSignalRow({
       workspace_id: args.workspace_id, userId: args.userId,
       candidate: item.candidate, score, scanPlanReason: item.scanPlanReason, provider: item.provider,
+      extraMissingEvidence: item.extraMissingEvidence,
     })
   );
   return { rows, considered: args.items.length, accepted: rows.length, rejected, duplicates };
