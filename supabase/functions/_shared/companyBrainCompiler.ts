@@ -150,6 +150,11 @@ export function compileCompanyBrainContext(input: CompileInput): CompanyBrainCon
   const profile = (input.profile && typeof input.profile === "object" ? input.profile : {}) as Record<string, unknown>;
   const prefs = (input.signal_preferences ?? profile["signal_preferences"] ?? {}) as Record<string, unknown>;
 
+  // v2 normalization: single canonical shape that prefers v2 fields over legacy.
+  const v2 = normalizeCompanyBrain(profile);
+  const schemaVersion: 1 | 2 = (profile["schema_version"] as unknown) === 2 ? 2 : 1;
+
+
   const company = (profile["company"] ?? {}) as Record<string, unknown>;
   const icpRaw = (profile["icp"] ?? {}) as Record<string, unknown>;
   const positioning = (profile["positioning"] ?? {}) as Record<string, unknown>;
