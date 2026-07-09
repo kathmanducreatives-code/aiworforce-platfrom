@@ -1,5 +1,5 @@
 import { assert, assertEquals } from "https://deno.land/std@0.224.0/assert/mod.ts";
-import { classifyLeadTier, fillFromRawResults, unionMissingEvidence, type CandidateForTier } from "./leadMatchTier.ts";
+import { classifyLeadTier, detectRecruiterProxy, fillFromRawResults, unionMissingEvidence, type CandidateForTier } from "./leadMatchTier.ts";
 import { extractLeadSearchIntent } from "./leadSearchIntent.ts";
 
 // Follow-up: analyst update must UNION missing-evidence, not clobber it.
@@ -102,4 +102,53 @@ Deno.test("Part3-logic #1: requested 5, 2 strict + 3 secondary → returns 5 wit
 Deno.test("Part3-logic #6: huge manufacturing company never fills shortage", () => {
   const mfg: CandidateForTier = { company: "MegaManu", industries: ["Manufacturing"], company_description: "Industrial manufacturing conglomerate", job_title: "SDR", source_url: "https://x/m", employee_count: 50000 };
   assertEquals(classifyLeadTier(mfg, intent).match_tier, "reject");
+});
+
+// Part 6 — recruiter/staffing proxy detection (never a target account).
+Deno.test("Part6: detectRecruiterProxy flags 'our client' / 'on behalf of' / staffing industry", () => {
+  assert(detectRecruiterProxy({ company_description: "We're partnering with a leading company to hire on behalf of our client." }).isProxy);
+  assert(detectRecruiterProxy({ job_description: "Our client, a fast-growing SaaS, is hiring an SDR." }).isProxy);
+  assert(detectRecruiterProxy({ industries: ["Staffing and Recruiting"] }).isProxy);
+  assert(!detectRecruiterProxy({ company_description: "AI SaaS platform hiring an SDR for outbound." }).isProxy);
+});
+
+// Part 8 — the latest 5-row fixture end-to-end at the tier level.
+// (Shortener website drop is exercised at the normalizer layer; see
+//  apifyJobsNormalizer.test.ts. CandidateForTier has no website field.)
+Deno.test("Part8 5-row: JustAI accepted(strict), Edra accepted(funding proof), Ajax/Pilot secondary, Stelvio rejected(recruiter proxy)", () => {
+  const justAI: CandidateForTier = { company: "JustAI", industries: ["Software Development"], company_description: "AI SaaS support-automation platform", job_title: "SDR", job_description: "outbound pipeline generation", source_url: "https://linkedin.com/jobs/view/justai", funding_proof_url: "https://techcrunch.com/justai-series-a" };
+  const edra: CandidateForTier = { company: "Edra", industries: ["Software Development"], company_description: "AI SaaS design platform", job_title: "GTM Lead", job_description: "own outbound go-to-market", source_url: "https://linkedin.com/jobs/view/edra", funding_proof_url: "https://techcrunch.com/edra-seed" };
+  const ajax: CandidateForTier = { company: "Ajax", industries: ["Software Development"], company_description: "B2B SaaS security platform", job_title: "SDR", job_description: "outbound pipeline", source_url: "https://linkedin.com/jobs/view/ajax" };
+  const pilot: CandidateForTier = { company: "Pilot.com", industries: ["Software Development", "Financial Services"], company_description: "SaaS accounting platform; outbound revenue team", job_title: "Business Developer", job_description: "outbound revenue", source_url: "https://linkedin.com/jobs/view/pilot" };
+  const stelvio: CandidateForTier = { company: "Stelvio", industries: ["Staffing and Recruiting"], company_description: "We're partnering with a leading AI SaaS company to hire an SDR on behalf of our client", job_title: "SDR", source_url: "https://linkedin.com/jobs/view/stelvio" };
+
+  const tJust = classifyLeadTier(justAI, intent);
+  assertEquals(tJust.match_tier, "strict");
+  assertEquals(tJust.funding_proof_found, true);
+  assertEquals(tJust.recruiter_proxy, false);
+
+  const tEdra = classifyLeadTier(edra, intent);
+  assert(tEdra.match_tier !== "reject");          // accepted
+  assertEquals(tEdra.funding_proof_found, true);  // carried by verified funding proof
+  assert(!tEdra.missing_evidence.includes("recent funding proof"));
+
+  const tAjax = classifyLeadTier(ajax, intent);
+  assertEquals(tAjax.match_tier, "secondary");
+  assert(tAjax.missing_evidence.includes("recent funding proof"));
+
+  const tPilot = classifyLeadTier(pilot, intent);
+  assertEquals(tPilot.match_tier, "secondary");
+
+  const tStelvio = classifyLeadTier(stelvio, intent);
+  assertEquals(tStelvio.match_tier, "reject");
+  assertEquals(tStelvio.recruiter_proxy, true);
+  assert(/recruiter proxy|actual hiring company hidden|staffing/i.test(tStelvio.reasons.join(" ")));
+
+  // Fill: 4 real candidates + 1 recruiter proxy → proxy never fills the count.
+  const r = fillFromRawResults([justAI, edra, ajax, pilot, stelvio], intent);
+  assertEquals(r.raw_results_reviewed, 5);
+  assertEquals(r.rejected_count, 1);            // only Stelvio rejected
+  assertEquals(r.strict_matches, 2);            // JustAI + Edra (exact role + funding proof)
+  assertEquals(r.secondary_matches, 2);         // Ajax + Pilot (no funding proof)
+  assert(r.accepted_count === 4);
 });

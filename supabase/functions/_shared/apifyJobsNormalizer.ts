@@ -86,8 +86,24 @@ function toInt(v: unknown): number | null {
 }
 
 const JOB_BOARD_HOST = /(?:^|\.)(linkedin\.com|indeed\.com|wellfound\.com|ziprecruiter\.com|glassdoor\.com|lever\.co|greenhouse\.io|ashbyhq\.com|workable\.com)$/i;
+// URL shorteners are NEVER a company website/domain (Part 5).
+const SHORTENER_HOST = /(?:^|\.)(bit\.ly|tinyurl\.com|t\.co|lnkd\.in|goo\.gl|ow\.ly|rebrand\.ly|shorturl\.at|cutt\.ly|buff\.ly|is\.gd)$/i;
 
-/** Parse a safe company domain from a URL. Returns null for job-board hosts or unparseable input. */
+/** True if the URL/host is a known link shortener (not a real company site). */
+export function isShortenerUrl(url: string | null | undefined): boolean {
+  const u = str(url);
+  if (!u) return false;
+  try {
+    const withProto = /^https?:\/\//i.test(u) ? u : `https://${u}`;
+    const host = new URL(withProto).hostname.replace(/^www\./i, "").toLowerCase();
+    return SHORTENER_HOST.test(host);
+  } catch {
+    return false;
+  }
+}
+
+/** Parse a safe company domain from a URL. Returns null for job-board hosts,
+ *  link shorteners, or unparseable input. */
 export function parseDomain(url: string | null | undefined): string | null {
   const u = str(url);
   if (!u) return null;
@@ -96,6 +112,7 @@ export function parseDomain(url: string | null | undefined): string | null {
     const host = new URL(withProto).hostname.replace(/^www\./i, "").toLowerCase();
     if (!host || !host.includes(".")) return null;
     if (JOB_BOARD_HOST.test(host)) return null;   // a job board is not a company domain
+    if (SHORTENER_HOST.test(host)) return null;   // a shortener is not a company domain
     return host;
   } catch {
     return null;
@@ -116,7 +133,11 @@ export function normalizeApifyJobRow(row: unknown): NormalizedJob {
 
   const company = firstStr(r.companyName, r.company, r.company_name, r.organization, r.employer);
   const jobTitle = firstStr(r.title, r.jobTitle, r.positionName, r.position, r.name);
-  const website = firstStr(r.companyWebsite, r.company_website, r.website, r.companyUrl, r.companyLink);
+  // A shortener URL is never a real company website — drop it (the job/source URL
+  // is preserved separately); company identity is weaker without a real site.
+  const rawWebsite = firstStr(r.companyWebsite, r.company_website, r.website, r.companyUrl, r.companyLink);
+  const websiteIsShortener = isShortenerUrl(rawWebsite);
+  const website = websiteIsShortener ? null : rawWebsite;
   const linkedinUrl = firstStr(r.companyLinkedinUrl, r.company_linkedin_url, r.companyLinkedin, r.companyPageUrl);
   const jobUrl = firstStr(r.link, r.jobUrl, r.url, r.applyUrl, r.jobPostingUrl);
   const jobDescription = firstStr(r.descriptionText, r.description, r.jobDescription, r.snippet);
@@ -182,6 +203,9 @@ export function normalizeApifyJobRow(row: unknown): NormalizedJob {
       source_type: "hiring",
       company_website: website,
       domain,
+      // Preserve the dropped shortener as source-only + flag missing website.
+      website_shortener_dropped: websiteIsShortener,
+      ...(websiteIsShortener ? { shortener_url: rawWebsite, missing_evidence: ["verified company website"] } : {}),
       company_linkedin_url: linkedinUrl,
       company_logo: companyLogo,
       company_slogan: companySlogan,
