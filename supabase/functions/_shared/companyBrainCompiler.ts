@@ -336,10 +336,10 @@ export function compileCompanyBrainContext(input: CompileInput): CompanyBrainCon
     },
     disqualifiers: {
       industries: disqIndustries,
-      company_types: uniq(arr(icpRaw["disqualified_company_types"])),
-      titles: negativeTitleKeywords,
-      keywords: uniq(arr(prefs["negative_keywords"])),
-      domains: uniq(arr(icpRaw["disqualified_domains"])),
+      company_types: uniq([...v2.target_customer.disqualifiers.company_types, ...arr(icpRaw["disqualified_company_types"])]),
+      titles: uniq([...v2.target_customer.disqualifiers.titles, ...negativeTitleKeywords]),
+      keywords: uniq([...v2.target_customer.disqualifiers.keywords, ...arr(prefs["negative_keywords"])]),
+      domains: uniq([...v2.target_customer.disqualifiers.domains, ...arr(icpRaw["disqualified_domains"])]),
     },
     query_strategy: {
       positive_terms: positiveTerms,
@@ -363,9 +363,12 @@ export function compileCompanyBrainContext(input: CompileInput): CompanyBrainCon
       warnings,
       derivation_sources: uniq(derivationSources),
       matched_from,
+      setup_required: v2.setup_required,
+      schema_version: schemaVersion,
     },
   };
 }
+
 
 function seniorityFor(title: string): string[] {
   const t = title.toLowerCase();
