@@ -6,7 +6,8 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { signalDedupeKey } from "../_shared/signalQuality.ts";
 import { compileCompanyBrainContext } from "../_shared/companyBrainCompiler.ts";
 import { buildRadarScanPlan } from "../_shared/radarScanPlanner.ts";
-import { firecrawlHitToCandidate, scoreCandidates, type RadarPlanSource } from "../_shared/radarCandidatePipeline.ts";
+import { firecrawlHitToCandidate, scoreCandidates, type RadarPlanSource, type ScoredCandidate } from "../_shared/radarCandidatePipeline.ts";
+import { apifyJobsSourceStatus, buildApifyJobsInput, fetchApifyJobs, apifyRowsToScoredItems } from "../_shared/radarSources/apifyJobsHiringSource.ts";
 
 const cors = {
   "Access-Control-Allow-Origin": "*",
@@ -167,6 +168,16 @@ Deno.serve(async (req) => {
     people: apifyToken && apifyEnabled ? { ready: true } : { ready: false, reason: "Apify people search not configured" },
   };
 
+  // Commit 4A — hiring source: Apify LinkedIn Jobs behind RADAR_ENABLE_APIFY_JOBS,
+  // else Firecrawl fallback. Honest status; never crashes when unconfigured.
+  const HIRING_CAP = 10;
+  const apifyJobsFlag = flag("RADAR_ENABLE_APIFY_JOBS", false);
+  const hiringStatus = apifyJobsSourceStatus({ flagEnabled: apifyJobsFlag, apifyReady: !!apifyToken });
+  const useApifyHiring = hiringStatus.enabled;
+  caps.hiring = useApifyHiring
+    ? { ready: true }
+    : (firecrawl ? { ready: true } : { ready: false, reason: hiringStatus.reason });
+
   // Mix
   const mix: Record<Category, number> = {
     hiring: prefs.default_mix.hiring ?? 3,
@@ -218,8 +229,33 @@ Deno.serve(async (req) => {
     return collected;
   }
 
-  const [hiringHits, intentHits, compHits, workflowHits] = await Promise.all([
-    runCategory("hiring", hiringQueries(prefs), mix.hiring),
+  // Hiring source: Apify LinkedIn Jobs (flag) → richer candidates, else Firecrawl fallback.
+  let hiringItems: ScoredCandidate[] = [];
+  let hiringCap = mix.hiring;
+  if (mix.hiring > 0) {
+    const hiringReason = planReasonFor("hiring");
+    if (useApifyHiring) {
+      perCategory.hiring.status = "ready";
+      hiringCap = HIRING_CAP;
+      const input = buildApifyJobsInput(brain, HIRING_CAP);
+      const rows = await fetchApifyJobs(input, Deno.env.get("APIFY_API_TOKEN") ?? "");
+      const norm = apifyRowsToScoredItems(rows, { cap: HIRING_CAP, scanPlanReason: hiringReason });
+      perCategory.hiring.found = norm.considered;
+      hiringItems = norm.items;
+    } else if (caps.hiring.ready) {
+      perCategory.hiring.status = "ready";
+      const perQuery = Math.max(3, Math.ceil(mix.hiring * 1.5));
+      const hits: FirecrawlSearchHit[] = [];
+      for (const q of hiringQueries(prefs)) hits.push(...await firecrawlSearch(q, perQuery));
+      perCategory.hiring.found = hits.length;
+      hiringItems = hits.map((h) => ({ candidate: firecrawlHitToCandidate("hiring", h), source: "hiring" as const, scanPlanReason: hiringReason, provider: "firecrawl_search" }));
+    } else {
+      perCategory.hiring = { found: 0, accepted: 0, status: "setup_needed", reason: caps.hiring.reason };
+    }
+  }
+
+  // Other categories: existing Firecrawl search fan-out (unchanged behaviour).
+  const [intentHits, compHits, workflowHits] = await Promise.all([
     runCategory("linkedin_intent", intentQueries(prefs), mix.linkedin_intent),
     runCategory("competitor", competitorQueries(prefs), mix.competitor),
     runCategory("workflow_trend", workflowQueries(prefs), mix.workflow_trend),
@@ -229,19 +265,7 @@ Deno.serve(async (req) => {
   // Score every candidate against Company Brain, reject disqualified, dedupe,
   // rank, cap, and persist rich fields into signals.raw.
   const accepted: any[] = [];
-  for (const [cat, hits] of [
-    ["hiring", hiringHits], ["linkedin_intent", intentHits],
-    ["competitor", compHits], ["workflow_trend", workflowHits],
-  ] as [Category, FirecrawlSearchHit[]][]) {
-    const wanted = mix[cat];
-    if (wanted <= 0 || hits.length === 0) continue;
-    const source = CAT_TO_SOURCE[cat];
-    const reason = planReasonFor(source);
-    const items = hits.map((h) => ({
-      candidate: firecrawlHitToCandidate(source, h),
-      source, scanPlanReason: reason, provider: "firecrawl_search",
-    }));
-    const res = scoreCandidates({ items, brain, workspace_id, userId, cap: wanted, existingKeys });
+  const addRows = (cat: Category, res: { rows: any[]; accepted: number }) => {
     perCategory[cat].accepted = res.accepted;
     for (const row of res.rows) {
       existingKeys.add(signalDedupeKey({
@@ -250,6 +274,19 @@ Deno.serve(async (req) => {
       }));
       accepted.push(row);
     }
+  };
+
+  if (hiringItems.length) {
+    addRows("hiring", scoreCandidates({ items: hiringItems, brain, workspace_id, userId, cap: hiringCap, existingKeys }));
+  }
+  for (const [cat, hits] of [
+    ["linkedin_intent", intentHits], ["competitor", compHits], ["workflow_trend", workflowHits],
+  ] as [Category, FirecrawlSearchHit[]][]) {
+    const wanted = mix[cat];
+    if (wanted <= 0 || hits.length === 0) continue;
+    const source = CAT_TO_SOURCE[cat];
+    const items = hits.map((h) => ({ candidate: firecrawlHitToCandidate(source, h), source, scanPlanReason: planReasonFor(source), provider: "firecrawl_search" }));
+    addRows(cat, scoreCandidates({ items, brain, workspace_id, userId, cap: wanted, existingKeys }));
   }
 
   if (accepted.length > 0) {
@@ -265,6 +302,7 @@ Deno.serve(async (req) => {
     inserted: accepted.length,
     per_category: perCategory,
     capabilities: caps,
+    hiring_provider: hiringStatus.provider,
     brain_confidence: scanPlan.brain_confidence,
     warnings: scanPlan.warnings,
     mode,
