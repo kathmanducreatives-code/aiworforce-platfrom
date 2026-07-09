@@ -173,27 +173,33 @@ export function compileCompanyBrainContext(input: CompileInput): CompanyBrainCon
   };
   const markAll = (terms: string[], source: string) => terms.forEach((t) => mark(t, source));
 
-  // ---- structured-first reads ----
+  // ---- structured-first reads (v2 preferred, legacy fallback) ----
   const structuredIndustries = uniq([
+    ...v2.target_customer.industries,
     ...arr(icpRaw["industries"]),
     ...arr(prefs["industries"]),
   ]);
   const structuredBuyers = uniq([
+    ...v2.buyer_personas,
     ...arr(icpRaw["buyer_roles"]),
     ...arr(prefs["hiring_roles"]),
   ]);
   const structuredCompetitors = uniq([
+    ...v2.competitors,
     ...arr(competitors["known"]),
     ...arr(prefs["competitors"]),
   ]);
   const adjacentTools = uniq(arr(competitors["adjacent"]));
-  const integrationTools = uniq(arr(gtm["current_tools"]));
-  const painPoints = uniq([...arr(icpRaw["pain_points"]), ...arr(prefs["pain_points"]), ...(str(gtm["biggest_bottleneck"]) ? [str(gtm["biggest_bottleneck"])!] : [])]);
-  const contentTopics = uniq([...arr(prefs["linkedin_topics"]), ...arr(prefs["workflow_topics"]), ...(str(goals["content"]) ? [str(goals["content"])!] : [])]);
-  const brainDisqualifiers = uniq([...arr(icpRaw["disqualifiers"]), ...arr(prefs["disqualifiers"])]);
-  const sizeLabel = str(icpRaw["company_size"]) ?? str(company["team_size"]);
-  const size = parseSizeLabel(sizeLabel);
-  const geographies = uniq([...(str(icpRaw["geography"]) ? [str(icpRaw["geography"])!] : []), ...arr(prefs["geographies"]), ...(str(company["location"]) ? [str(company["location"])!] : [])]);
+  const integrationTools = uniq([...v2.tools, ...arr(gtm["current_tools"])]);
+  const painPoints = uniq([...v2.pain_points, ...arr(icpRaw["pain_points"]), ...arr(prefs["pain_points"]), ...(str(gtm["biggest_bottleneck"]) ? [str(gtm["biggest_bottleneck"])!] : [])]);
+  const contentTopics = uniq([...v2.content_angles, ...arr(prefs["linkedin_topics"]), ...arr(prefs["workflow_topics"]), ...(str(goals["content"]) ? [str(goals["content"])!] : [])]);
+  // v2 disqualifier buckets take priority over legacy flat list.
+  const v2DisqIndustries = v2.target_customer.disqualifiers.industries;
+  const brainDisqualifiers = uniq([...v2DisqIndustries, ...arr(icpRaw["disqualifiers"]), ...arr(prefs["disqualifiers"])]);
+  const sizeLabel = v2.target_customer.company_size.label || str(icpRaw["company_size"]) || str(company["team_size"]);
+  const size = sizeLabel ? parseSizeLabel(sizeLabel) : { min: v2.target_customer.company_size.min ?? null, max: v2.target_customer.company_size.max ?? null };
+  const geographies = uniq([...v2.target_customer.geography, ...(str(icpRaw["geography"]) ? [str(icpRaw["geography"])!] : []), ...arr(prefs["geographies"]), ...(str(company["location"]) ? [str(company["location"])!] : [])]);
+
 
   markAll(structuredIndustries, "icp.industries");
   markAll(structuredBuyers, "icp.buyer_roles");
