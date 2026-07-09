@@ -95,8 +95,12 @@ export interface CompanyBrainContext {
     derivation_sources: string[];
     /** derived term -> which Brain field(s) produced it */
     matched_from: Record<string, string[]>;
+    /** true when the Brain lacks a workable ICP; radar/leads/content must degrade. */
+    setup_required: boolean;
+    schema_version: 1 | 2;
   };
 }
+
 
 // ---- SaaS/sales default expansions (applied ONLY when Brain shows that context) ----
 const SAAS_POSITIVE_CATEGORIES = [
