@@ -9,7 +9,7 @@
 //
 // Reuses parseSizeLabel + DEFAULT_DISQUALIFIERS from companyBrainIcp.ts.
 
-import { parseSizeLabel, DEFAULT_DISQUALIFIERS } from "./companyBrainIcp.ts";
+import { parseSizeLabel, DEFAULT_DISQUALIFIERS, SOFTWARE_ICP_DISQUALIFIERS } from "./companyBrainIcp.ts";
 import { normalizeCompanyBrain } from "./normalizeCompanyBrain.ts";
 
 
@@ -260,9 +260,17 @@ export function compileCompanyBrainContext(input: CompileInput): CompanyBrainCon
 
   // ---- disqualifiers (Brain wins; safe defaults only when Brain has none) ----
   const usedDefaultDisq = brainDisqualifiers.length === 0;
-  const disqIndustries = usedDefaultDisq ? [...DEFAULT_DISQUALIFIERS] : brainDisqualifiers;
+  // When the seller's ICP is software/SaaS, always fold in the structural
+  // software-ICP rejects (lab/analytical/pharma/chemicals/packaging/staffing) so
+  // a bad-fit account hard-rejects even when its buyer title matches. This is
+  // merged ON TOP of the Brain's own list — it never replaces it.
+  const disqIndustries = uniq([
+    ...(usedDefaultDisq ? DEFAULT_DISQUALIFIERS : brainDisqualifiers),
+    ...(hasSaasContext ? SOFTWARE_ICP_DISQUALIFIERS : []),
+  ]);
   markAll(brainDisqualifiers, "icp.disqualifiers");
   if (usedDefaultDisq) markAll(DEFAULT_DISQUALIFIERS, "default:high_risk");
+  if (hasSaasContext) markAll(SOFTWARE_ICP_DISQUALIFIERS, "derived:software_icp_reject");
 
   // ---- content strategy ----
   const bannedClaims = uniq([...arr(positioning["avoid_positioning"]), ...arr(brandVoice["avoid"])]);

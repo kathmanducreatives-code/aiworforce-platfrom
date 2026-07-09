@@ -203,16 +203,30 @@ export function scoreAgainstCompanyBrain(candidate: SignalCandidate, brain: Comp
   score = clamp(score, 0, 100);
 
   // ---- verification status ----
+  // Real ICP fit = a matched industry/category OR an in-band company size. A
+  // buyer/title match ALONE is never enough to verify (e.g. a "Director of
+  // Commercial Analytics" at a lab is not a Top Signal for a B2B-SaaS ICP).
+  const hasRealIcpFit = icpHits.length > 0 || inBand;
   let verification: VerificationStatus;
-  if (hasSourceUrl && hasEvidence && score >= 55 && (industryKnown || buyerKnown)) verification = "verified";
+  if (hasSourceUrl && hasEvidence && score >= 55 && hasRealIcpFit) verification = "verified";
   else if (negTitleHits.length) verification = "low_confidence";
   else if (!hasSourceUrl || !hasEvidence || score < 40) verification = "needs_verification";
   else verification = "needs_verification";
+  if (!hasRealIcpFit) {
+    // No real ICP fit → cannot be a verified Top Signal; flag why.
+    if (buyerHits.length && !icpHits.length) risk_flags.push("Buyer/title match only — no ICP industry or size fit yet");
+    else missing_evidence.push("ICP industry or company-size fit");
+  }
   // Funding verified only with amount OR investor evidence in the article
   if (type === "funding" && verification === "verified" && !(candidate.funding_amount || (candidate.investors ?? []).length || candidate.funding_round)) {
     verification = "needs_verification"; missing_evidence.push("Funding amount / round / investors");
   }
   if (negTitleHits.length) risk_flags.push(`Generic title "${negTitleHits[0]}" — not a confirmed buyer`);
+  // Company Brain not set up → never emit a verified Top Signal; degrade + flag.
+  if (brain.meta.setup_required) {
+    if (verification === "verified") verification = "needs_verification";
+    risk_flags.push("Company Brain incomplete — complete setup for verified Top Signals");
+  }
   if (brain.meta.confidence === "weak") { if (verification === "verified") verification = "needs_verification"; risk_flags.push("Company Brain is weak — scored conservatively"); }
 
   // ---- confidence + priority ----

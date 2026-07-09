@@ -235,13 +235,19 @@ Deno.serve(async (req) => {
   if (mix.hiring > 0) {
     const hiringReason = planReasonFor("hiring");
     if (useApifyHiring) {
-      perCategory.hiring.status = "ready";
       hiringCap = HIRING_CAP;
       const input = buildApifyJobsInput(brain, HIRING_CAP);
-      const rows = await fetchApifyJobs(input, Deno.env.get("APIFY_API_TOKEN") ?? "");
-      const norm = apifyRowsToScoredItems(rows, { cap: HIRING_CAP, scanPlanReason: hiringReason });
-      perCategory.hiring.found = norm.considered;
-      hiringItems = norm.items;
+      if (input.setup_required || input.urls.length === 0) {
+        // Incomplete Brain → never fan out broad provider queries. Ask for setup.
+        perCategory.hiring = { found: 0, accepted: 0, status: "setup_needed", reason: "Company Brain incomplete — complete setup before a high-quality hiring scan." };
+        hiringItems = [];
+      } else {
+        perCategory.hiring.status = "ready";
+        const rows = await fetchApifyJobs(input, Deno.env.get("APIFY_API_TOKEN") ?? "");
+        const norm = apifyRowsToScoredItems(rows, { cap: HIRING_CAP, scanPlanReason: hiringReason });
+        perCategory.hiring.found = norm.considered;
+        hiringItems = norm.items;
+      }
     } else if (caps.hiring.ready) {
       perCategory.hiring.status = "ready";
       const perQuery = Math.max(3, Math.ceil(mix.hiring * 1.5));
@@ -304,6 +310,7 @@ Deno.serve(async (req) => {
     capabilities: caps,
     hiring_provider: hiringStatus.provider,
     brain_confidence: scanPlan.brain_confidence,
+    setup_required: scanPlan.setup_required,
     warnings: scanPlan.warnings,
     mode,
   });

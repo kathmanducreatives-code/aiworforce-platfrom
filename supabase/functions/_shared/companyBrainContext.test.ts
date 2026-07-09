@@ -113,3 +113,19 @@ Deno.test("buildCompanyBrainContext: extended fields render", () => {
   assert(!ctx.includes("{"), "should not dump raw JSON");
 });
 
+Deno.test("compiled-brain fields render for content/agents/outreach", () => {
+  const ctx = buildCompanyBrainContext({
+    company_name: "Agentory", icp: { industries: ["B2B SaaS"], buyer_roles: ["Founder"], pain_points: ["manual outbound"] },
+    triggers: ["recently funded", "hiring first AE"], content_angles: ["pipeline before payroll"],
+  });
+  assert(ctx.includes("Pain points: manual outbound"));
+  assert(ctx.includes("Triggers: recently funded, hiring first AE"));
+  assert(ctx.includes("Content angles: pipeline before payroll"));
+  assert(!ctx.includes("Setup needed:"), "complete ICP → no setup note");
+});
+
+Deno.test("incomplete ICP → setup-needed honesty note for agents/outreach", () => {
+  const ctx = buildCompanyBrainContext({ company_name: "X", what_we_do: "we do things" });
+  assert(ctx.includes("Setup needed:"), "no industries+buyers → ask for setup");
+});
+

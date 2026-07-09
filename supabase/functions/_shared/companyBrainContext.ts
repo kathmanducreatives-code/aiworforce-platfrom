@@ -102,8 +102,26 @@ export function buildCompanyBrainContext(p: Profile): string {
   const icp = brainICP(p);
   if (icp) lines.push(`ICP: ${icp}`);
 
-  const disq = arr(obj(o.icp).disqualifiers);
+  const icpObj = obj(o.icp);
+  const disq = arr(icpObj.disqualifiers);
   if (disq.length) lines.push(`Disqualifiers: ${disq.join(", ")}`);
+
+  // Compiled-brain signals consumed by content, agents and outreach drafting.
+  // v2 fields preferred, legacy fallback; only present fields render (never invented).
+  const painPoints = uniq([...arr(o.pain_points), ...arr(icpObj.pain_points)]);
+  if (painPoints.length) lines.push(`Pain points: ${painPoints.join("; ")}`);
+  const triggers = arr(o.triggers);
+  if (triggers.length) lines.push(`Triggers: ${triggers.join(", ")}`);
+  const contentAngles = arr(o.content_angles);
+  if (contentAngles.length) lines.push(`Content angles: ${contentAngles.join("; ")}`);
+
+  // Honesty layer: when the Brain lacks a workable ICP (no industries+buyers and
+  // no must-have), agents/content/outreach must ask for setup, not fabricate a fit.
+  const icpIndustries = uniq([...arr(icpObj.industries), ...arr(obj(o.target_customer).industries)]);
+  const icpBuyers = uniq([...arr(icpObj.buyer_roles), ...arr(o.buyer_personas)]);
+  const mustHave = arr(obj(o.target_customer).must_have);
+  const setupRequired = !((icpIndustries.length && icpBuyers.length) || mustHave.length);
+  if (setupRequired) lines.push("Setup needed: Company Brain ICP incomplete — ask for target customer + buyer roles before targeting; draft low-confidence only, never claim a strong fit.");
 
   // GTM (new) – falls back to legacy goals if missing
   const gtm = obj(o.gtm);

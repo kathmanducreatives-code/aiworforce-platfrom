@@ -10,7 +10,18 @@ Deno.test("1: structured ICP is used directly", () => {
   assertEquals(icp.targetCompanySize.max, 150);
   assert(!icp.weakIcpContext, "structured ICP → not weak");
   assert(icp.derivationSources.includes("structured_icp"));
-  assertEquals(icp.disqualifiers, ["bank"]);
+  // Brain's own disqualifier is kept; structural software-ICP rejects are merged
+  // on top because the ICP is B2B SaaS (so a lab/pharma/staffing lead rejects).
+  assert(icp.disqualifiers.includes("bank"));
+  assert(icp.disqualifiers.includes("pharma") && icp.disqualifiers.includes("staffing"));
+});
+Deno.test("1b: software ICP folds in structural rejects; non-software ICP does not", () => {
+  const saas = deriveCompanyIcp({ icp: { industries: ["B2B SaaS"], buyer_roles: ["Founder"], company_size: "10-150", disqualifiers: ["bank"] } });
+  for (const bad of ["lab testing", "analytical services", "pharma", "chemical", "packaging", "staffing"]) {
+    assert(saas.disqualifiers.some((d) => d.toLowerCase() === bad), `software ICP should reject ${bad}`);
+  }
+  const nonSaas = deriveCompanyIcp({ icp: { industries: ["consumer goods"], buyer_roles: ["Buyer"], company_size: "10-150", disqualifiers: ["retail"] } });
+  assert(!nonSaas.disqualifiers.some((d) => d.toLowerCase() === "pharma"), "non-software ICP should not add software rejects");
 });
 Deno.test("2: empty ICP + free text 'Founders and small B2B SaaS teams' → useful hints, weak flag", () => {
   const icp = deriveCompanyIcp({ icp: {}, what_we_do: "AI workforce OS for founders", who_we_sell_to: "Founders and small B2B SaaS teams" });

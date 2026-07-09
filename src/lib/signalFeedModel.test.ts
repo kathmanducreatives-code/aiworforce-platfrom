@@ -124,10 +124,22 @@ Deno.test("quality: backfill verdict (raw.signal_quality) is trusted", () => {
   assertEquals(s.quality, "verified");
 });
 
-Deno.test("quality: non-hiring signals pass through as verified/shown", () => {
+Deno.test("quality: legacy non-hiring row without score → legacy, hidden (never inflates Top Signals)", () => {
   const s = normalizeSignalRow({ id: "s", signal_type: "linkedin_engagement", title: "Post about Clay", source_url: "https://linkedin.com/posts/1", raw: {} });
+  assertEquals(s.quality, "legacy");
+  assert(!s.show_by_default);
+});
+
+Deno.test("quality: scored non-hiring row with verification_status verified → verified, shown", () => {
+  const s = normalizeSignalRow({ id: "s", signal_type: "competitor", title: "Clay launched X", source_url: "https://x", raw: { signal_score: 72, verification_status: "verified", matched_icp: ["B2B SaaS"] } });
   assertEquals(s.quality, "verified");
   assert(s.show_by_default);
+});
+
+Deno.test("quality: scored non-hiring row needs_verification → hidden", () => {
+  const s = normalizeSignalRow({ id: "s", signal_type: "funding", title: "SomeCo raised", source_url: "https://x", raw: { signal_score: 38, verification_status: "needs_verification" } });
+  assertEquals(s.quality, "needs_verification");
+  assert(!s.show_by_default);
 });
 
 Deno.test("parseHiringRole: prefers label, else parses 'X hiring <role>'", () => {

@@ -46,6 +46,28 @@ export const DEFAULT_DISQUALIFIERS = [
   "local services", "plant operations", "field operations", "warehouse operations",
 ];
 
+// Industries that are structurally off-ICP for a B2B SaaS / AI SaaS / software
+// seller. Added ON TOP of any Brain-specified disqualifiers whenever the ICP is
+// software (so a lab / analytical-services / pharma / chemicals / packaging /
+// staffing account hard-rejects even when its job title happens to match).
+export const SOFTWARE_ICP_DISQUALIFIERS = [
+  "lab testing", "laboratory testing", "testing laboratory", "clinical laboratory",
+  "analytical services", "analytical laboratory", "laboratory services", "environmental testing",
+  "pharma", "pharmaceutical", "pharmaceuticals", "biopharma", "life sciences testing",
+  "chemical", "chemicals", "specialty chemicals",
+  "packaging", "contract packaging", "packaging solutions",
+  "staffing", "staffing agency", "recruiting agency", "recruitment agency", "staffing and recruiting",
+];
+
+// Detects whether the seller's own ICP is software/SaaS from its industries,
+// categories and free-text context — the trigger for SOFTWARE_ICP_DISQUALIFIERS.
+const SOFTWARE_ICP_RE = /\b(b2b saas|ai saas|saas|software|b2b tech|platform|api|dev ?tool|cloud app|martech|fintech|sales tech|revops|revenue operations)\b/i;
+
+/** True when a seller's ICP targets software/SaaS companies (context-driven, never assumed). */
+export function isSoftwareIcp(terms: Array<string | null | undefined>): boolean {
+  return terms.some((t) => !!t && SOFTWARE_ICP_RE.test(String(t)));
+}
+
 function arr(v: unknown): string[] {
   if (Array.isArray(v)) return v.map((x) => (typeof x === "string" ? x.trim() : (x && typeof x === "object" && "name" in (x as any) ? String((x as any).name) : ""))).filter(Boolean);
   if (typeof v === "string" && v.trim()) return [v.trim()];
@@ -119,6 +141,16 @@ export function deriveCompanyIcp(profile: BrainProfile | null | undefined): Deri
 
   // Default disqualifiers only when the Brain supplies none.
   if (disqualifiers.length === 0) disqualifiers = [...DEFAULT_DISQUALIFIERS];
+
+  // When the ICP targets software/SaaS, always fold in the software-ICP hard
+  // rejects (lab/analytical/pharma/chemicals/packaging/staffing) so a bad-fit
+  // account is rejected even when its job title matches. Never replaces the
+  // Brain's own list — merged on top.
+  const softwareIcp = isSoftwareIcp([...targetIndustries, ...positioningKeywords, freeText]);
+  if (softwareIcp) {
+    const seen = new Set(disqualifiers.map((d) => d.toLowerCase()));
+    for (const d of SOFTWARE_ICP_DISQUALIFIERS) if (!seen.has(d.toLowerCase())) { disqualifiers.push(d); seen.add(d.toLowerCase()); }
+  }
 
   // Weak context: structured ICP absent (only inferred / defaults).
   const weakIcpContext = !hasStructured;

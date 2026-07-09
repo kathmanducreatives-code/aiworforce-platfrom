@@ -43,9 +43,26 @@ Deno.test("2. free-text-only Brain works but confidence is weak", () => {
   assertEquals(c.icp.industries, []); // never invents structured industries
 });
 
-Deno.test("3. Brain-specified disqualifiers are preserved (not replaced by defaults)", () => {
+Deno.test("3. Brain-specified disqualifiers are preserved (not replaced by defaults); software rejects merged for a SaaS ICP", () => {
   const c = compileCompanyBrainContext({ workspace_id: "ws", profile: { icp: { industries: ["B2B SaaS"], buyer_roles: ["Founder"], company_size: "10-150", disqualifiers: ["manufacturing", "hospital", "university"] } } });
-  assertEquals(c.disqualifiers.industries, ["manufacturing", "hospital", "university"]);
+  // Brain's own disqualifiers are kept …
+  assert(has(c.disqualifiers.industries, "manufacturing") && has(c.disqualifiers.industries, "hospital") && has(c.disqualifiers.industries, "university"));
+  // … generic DEFAULT_DISQUALIFIERS are NOT injected on top (Brain supplied its own) …
+  assert(!has(c.disqualifiers.industries, "construction"), "default-only term must not be injected");
+  // … but structural software-ICP rejects ARE merged because the ICP is B2B SaaS.
+  assert(has(c.disqualifiers.industries, "pharma") && has(c.disqualifiers.industries, "analytical services") && has(c.disqualifiers.industries, "staffing"));
+});
+
+Deno.test("3b. software ICP hard-rejects lab/analytical/pharma/chemicals/packaging/staffing", () => {
+  const c = compileCompanyBrainContext({ workspace_id: "ws", profile: { company: { category: "B2B SaaS" }, icp: { industries: ["B2B SaaS", "AI SaaS"], buyer_roles: ["RevOps"], company_size: "10-150" } } });
+  for (const bad of ["lab testing", "analytical services", "pharma", "chemicals", "packaging", "staffing"]) {
+    assert(has(c.disqualifiers.industries, bad), `expected software ICP to disqualify ${bad}`);
+  }
+});
+
+Deno.test("3c. NON-software ICP does not inject software rejects", () => {
+  const c = compileCompanyBrainContext({ workspace_id: "ws", profile: { icp: { industries: ["consumer goods"], buyer_roles: ["Buyer"], company_size: "10-150", disqualifiers: ["retail"] } } });
+  assert(!has(c.disqualifiers.industries, "pharma"), "non-software ICP should not add software rejects");
 });
 
 Deno.test("4. generic Operations Manager is a negative title unless RevOps/GTM context exists", () => {

@@ -39,6 +39,16 @@ Deno.test("3. weak Brain → warning + conservative (low-cap) query set", () => 
   assert(h.cap <= 5, `weak hiring cap ${h.cap}`);
 });
 
+Deno.test("3b. setup_required Brain → setup_required plan, warning, conservative caps", () => {
+  const setupBrain = compileCompanyBrainContext({ workspace_id: "ws", profile: { company: { category: "B2B SaaS" }, icp: { industries: ["B2B SaaS"], company_size: "10-150" } } });
+  assertEquals(setupBrain.meta.setup_required, true);
+  const p = plan(setupBrain);
+  assertEquals(p.setup_required, true);
+  assert(p.warnings.some((w) => /company brain incomplete/i.test(w)));
+  const h = src(p, "hiring");
+  assert(h.cap <= 5, `setup hiring cap ${h.cap}`);
+});
+
 Deno.test("4. competitor watchlist becomes an enabled competitor source plan", () => {
   const c = src(plan(), "competitor");
   assert(c.enabled);

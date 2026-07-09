@@ -194,12 +194,26 @@ export function classifySignalQuality(s: SignalQualityInput): {
         show_by_default: savedQ === "verified",
       };
     }
+    // A scored row without a persisted signal_quality: honor the scorer's
+    // verification_status / signal_score when present.
+    const verStatus = str(raw["verification_status"]);
+    const hasScore = typeof raw["signal_score"] === "number";
+    if (verStatus === "verified") {
+      const rawIcp = Array.isArray(raw["matched_icp"])
+        ? (raw["matched_icp"] as unknown[]).filter((x): x is string => typeof x === "string")
+        : [];
+      return { quality: "verified", quality_badge: signalTypeLabel(s.signal_type), why_text: savedReason, matched_icp: rawIcp, show_by_default: true };
+    }
+    if (verStatus || hasScore) {
+      return { quality: "needs_verification", quality_badge: "Needs verification", why_text: savedReason, matched_icp: [], show_by_default: false };
+    }
+    // Legacy row: no scorer verdict AND no score → never inflate Top Signals.
     return {
-      quality: "verified",
-      quality_badge: signalTypeLabel(s.signal_type),
+      quality: "legacy",
+      quality_badge: "Legacy / Needs verification",
       why_text: savedReason,
       matched_icp: [],
-      show_by_default: true,
+      show_by_default: false,
     };
   }
 

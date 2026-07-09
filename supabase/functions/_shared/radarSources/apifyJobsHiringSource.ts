@@ -129,24 +129,42 @@ function buildLinkedInJobsSearchUrl(keywords: string, location?: string): string
   return `https://www.linkedin.com/jobs/search/?${p.toString()}`;
 }
 
-export interface ApifyJobsInput { urls: string[]; count: number; keywords: string[] }
+export interface ApifyJobsInput { urls: string[]; count: number; keywords: string[]; setup_required: boolean }
 
-/** Company-Brain-driven Apify jobs input: role-keyword LinkedIn searches, capped. */
+const DEFAULT_HIRING_ROLES = ["Founding Account Executive", "RevOps", "SDR"];
+
+/** Strongest SaaS/software-flavored category seed for query context, else null. */
+export function primaryCategorySeed(brain: CompanyBrainContext): string | null {
+  const cats = uniq([...brain.icp.categories, ...brain.icp.industries]);
+  const preferred = cats.find((c) => /\b(saas|software|b2b|ai|revenue|sales|crm|pipeline|platform|gtm)\b/i.test(c));
+  return preferred ?? cats[0] ?? null;
+}
+
+/**
+ * Company-Brain-driven Apify jobs input. Every keyword carries the ICP's
+ * category context ("B2B SaaS Founding Account Executive") instead of a broad
+ * standalone role ("Sales Operations") so a lab/analytics account hiring an
+ * "analytics" role never surfaces. When the Brain is not set up, returns NO
+ * queries (setup_required) — we never fan out broad provider searches blind.
+ */
 export function buildApifyJobsInput(brain: CompanyBrainContext, cap = 10): ApifyJobsInput {
-  const roles = brain.query_strategy.hiring_role_terms.length
-    ? brain.query_strategy.hiring_role_terms
-    : ["Founding Account Executive", "RevOps", "SDR"];
+  if (brain.meta.setup_required) return { urls: [], count: 0, keywords: [], setup_required: true };
+  const category = primaryCategorySeed(brain);
+  const roles = brain.query_strategy.hiring_role_terms.length ? brain.query_strategy.hiring_role_terms : DEFAULT_HIRING_ROLES;
   const location = brain.icp.locations[0];
-  const keywords = uniq(roles).slice(0, 5);
+  const keywords = uniq(
+    roles.slice(0, 6).map((r) => (category ? `${category} ${r}` : r).replace(/\s+/g, " ").trim()),
+  ).slice(0, 5);
   const urls = keywords.map((k) => buildLinkedInJobsSearchUrl(k, location));
   const count = Math.max(10, Math.min(50, cap)); // actor floors to 10
-  return { urls, count, keywords };
+  return { urls, count, keywords, setup_required: false };
 }
 
 /** Human-readable hiring queries for scan_plan_reason / logging (category + role). */
 export function describeApifyJobsQueries(brain: CompanyBrainContext, max = 6): string[] {
-  const cat = (brain.icp.categories[0] ?? brain.icp.industries[0]) ?? "B2B SaaS";
-  const roles = brain.query_strategy.hiring_role_terms.length ? brain.query_strategy.hiring_role_terms : ["Founding Account Executive", "RevOps", "SDR"];
+  if (brain.meta.setup_required) return [];
+  const cat = primaryCategorySeed(brain) ?? "B2B SaaS";
+  const roles = brain.query_strategy.hiring_role_terms.length ? brain.query_strategy.hiring_role_terms : DEFAULT_HIRING_ROLES;
   return uniq(roles.slice(0, max).map((r) => `${cat} hiring ${r}`));
 }
 

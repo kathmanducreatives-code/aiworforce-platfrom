@@ -23,6 +23,8 @@ export interface RadarSourcePlan {
 export interface RadarScanPlan {
   workspace_id: string;
   brain_confidence: "strong" | "medium" | "weak";
+  /** true when the Brain lacks a workable ICP — scan runs degraded, no verified Top Signals. */
+  setup_required: boolean;
   source_plan: RadarSourcePlan[];
   warnings: string[];
 }
@@ -55,7 +57,9 @@ export function buildRadarScanPlan(brain: CompanyBrainContext, options: ScanPlan
   const firecrawlReady = options.firecrawlReady ?? true;
   const apifyReady = options.apifyReady ?? false;
   const flags = options.flags ?? {};
-  const weak = brain.meta.confidence === "weak";
+  const setupRequired = brain.meta.setup_required;
+  // An incomplete Brain runs the same conservative, low-cap path as a weak Brain.
+  const weak = brain.meta.confidence === "weak" || setupRequired;
   const capScale = weak ? 0.5 : options.mode === "load_more" ? 1.6 : 1;
   const capOf = (s: RadarSource) => Math.max(3, Math.round(CAPS[s] * capScale));
 
@@ -67,7 +71,8 @@ export function buildRadarScanPlan(brain: CompanyBrainContext, options: ScanPlan
   const linkedinTerms = uniq([...brain.query_strategy.linkedin_topic_terms, ...brain.buying_triggers.content_topics]);
 
   const warnings = [...brain.meta.warnings];
-  if (weak) warnings.push("Company Brain is weak — running conservative, low-cap queries. Fill ICP for precise radar.");
+  if (setupRequired) warnings.push("Company Brain incomplete — complete setup for a high-quality scan. Running conservative, low-cap queries and no verified Top Signals until then.");
+  else if (weak) warnings.push("Company Brain is weak — running conservative, low-cap queries. Fill ICP for precise radar.");
 
   // ---- query builders (Brain-derived, never disqualifier-violating) ----
   const hiringQueries = dedupeQueries(
@@ -151,6 +156,7 @@ export function buildRadarScanPlan(brain: CompanyBrainContext, options: ScanPlan
   return {
     workspace_id: brain.workspace_id,
     brain_confidence: brain.meta.confidence,
+    setup_required: setupRequired,
     source_plan,
     warnings: uniq(warnings),
   };

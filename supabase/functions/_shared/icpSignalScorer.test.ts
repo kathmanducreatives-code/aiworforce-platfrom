@@ -130,3 +130,70 @@ Deno.test("14. strong content topic but weak proof → content idea, not verifie
   assert(r.verification_status !== "verified");
   assert(["save_idea", "turn_into_post", "needs_manual_review"].includes(r.recommended_action));
 });
+
+// ---- Fix 2: ICP-fit + software-ICP-reject enforcement ----
+
+Deno.test("15. Pace Analytical Services (analytical services / lab) rejected for a B2B SaaS ICP", () => {
+  const r = scoreAgainstCompanyBrain(base({
+    title: "Pace Analytical Services hiring Director of Commercial Analytics", company_name: "Pace Analytical Services",
+    website: "https://pacelabs.com", company_domain: "pacelabs.com",
+    company_description: "environmental analytical services and lab testing", industries: ["analytical services"],
+    job_title: "Director of Commercial Analytics", job_url: "https://linkedin.com/jobs/view/pace", source_url: "https://linkedin.com/jobs/view/pace",
+    job_description: "lead analytics", source_published_at: recent,
+  }), brain);
+  assertEquals(r.verification_status, "rejected");
+  assert(r.disqualifiers_hit.some((d) => /analytical services|lab testing/.test(d.toLowerCase())));
+});
+
+Deno.test("16. each software-ICP-disqualified industry rejected", () => {
+  for (const bad of ["lab testing", "analytical services", "pharma", "chemicals", "packaging", "staffing"]) {
+    const r = scoreAgainstCompanyBrain(base({
+      title: `X hiring RevOps`, company_name: "X", website: "https://x.io", company_domain: "x.io",
+      company_description: `a ${bad} company`, job_title: "RevOps", source_url: "https://x.io/j", job_description: "ops",
+    }), brain);
+    assertEquals(r.verification_status, "rejected", bad);
+  }
+});
+
+Deno.test("17. buyer/title match ALONE (no ICP industry or size fit) cannot verify", () => {
+  const r = scoreAgainstCompanyBrain(base({
+    title: "NeutralCo hiring RevOps", company_name: "NeutralCo", website: "https://neutralco.io", company_domain: "neutralco.io",
+    industries: ["consumer goods"], job_title: "RevOps", job_url: "https://linkedin.com/jobs/view/n", source_url: "https://linkedin.com/jobs/view/n",
+    job_description: "own revenue operations", source_published_at: recent,
+  }), brain);
+  assert(r.matched_buyer_personas.length > 0, "buyer title matched");
+  assert(r.matched_icp.length === 0, "no ICP industry match");
+  assertEquals(r.verification_status !== "verified", true);
+  assert(r.risk_flags.some((f) => /buyer\/title match only/i.test(f)));
+});
+
+Deno.test("18. B2B SaaS hiring SDR accepted (verified, real ICP fit)", () => {
+  const r = scoreAgainstCompanyBrain(base({
+    title: "Beta hiring SDR", company_name: "Beta", website: "https://beta.io", company_domain: "beta.io",
+    industries: ["B2B SaaS"], employee_count: 40, job_title: "SDR", job_url: "https://linkedin.com/jobs/view/beta",
+    source_url: "https://linkedin.com/jobs/view/beta", job_description: "outbound SDR at a B2B SaaS", source_published_at: recent,
+  }), brain);
+  assertEquals(r.verification_status, "verified");
+});
+
+Deno.test("19. software startup hiring RevOps accepted (verified)", () => {
+  const r = scoreAgainstCompanyBrain(base({
+    title: "Gamma hiring Revenue Operations", company_name: "Gamma", website: "https://gamma.io", company_domain: "gamma.io",
+    company_description: "an AI SaaS startup", industries: ["AI SaaS"], employee_count: 55, job_title: "Revenue Operations",
+    job_url: "https://linkedin.com/jobs/view/gamma", source_url: "https://linkedin.com/jobs/view/gamma", job_description: "own RevOps", source_published_at: recent,
+  }), brain);
+  assertEquals(r.verification_status, "verified");
+});
+
+Deno.test("20. setup_required Brain never produces a verified Top Signal, even with full ICP-fit proof", () => {
+  // industries + size present, but NO buyer roles and no must-have → setup_required.
+  const setupBrain = compileCompanyBrainContext({ workspace_id: "ws", profile: { company: { category: "B2B SaaS" }, icp: { industries: ["B2B SaaS"], company_size: "10-150" } } });
+  assertEquals(setupBrain.meta.setup_required, true);
+  const r = scoreAgainstCompanyBrain(base({
+    title: "Delta hiring Account Executive", company_name: "Delta", website: "https://delta.io", company_domain: "delta.io",
+    industries: ["B2B SaaS"], employee_count: 40, job_title: "Account Executive", job_url: "https://linkedin.com/jobs/view/d",
+    source_url: "https://linkedin.com/jobs/view/d", job_description: "sell", source_published_at: recent,
+  }), setupBrain);
+  assert(r.verification_status !== "verified");
+  assert(r.risk_flags.some((f) => /company brain incomplete/i.test(f)));
+});

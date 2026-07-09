@@ -140,3 +140,21 @@ Deno.test("bonus: Apify input is Company-Brain-driven and capped", () => {
   assertEquals(input.count, 10);
   assert(describeApifyJobsQueries(brain).some((q) => /saas/i.test(q)));
 });
+
+Deno.test("Fix 2: every keyword carries SaaS/software context — no broad standalone role", () => {
+  const input = buildApifyJobsInput(brain, 10);
+  assertEquals(input.setup_required, false);
+  // Each keyword is category-prefixed ("AI SaaS SDR"), never a bare role.
+  assert(input.keywords.every((k) => /\b(saas|software|b2b|ai)\b/i.test(k)), JSON.stringify(input.keywords));
+  assert(!input.keywords.some((k) => /^(sdr|revops|sales operations|commercial analytics)$/i.test(k.trim())), "no bare role query");
+});
+
+Deno.test("Fix 2: incomplete Brain → no broad provider queries (setup_required)", () => {
+  const setupBrain = compileCompanyBrainContext({ workspace_id: "ws", profile: { company: { category: "B2B SaaS" }, icp: { industries: ["B2B SaaS"], company_size: "10-150" } } });
+  assertEquals(setupBrain.meta.setup_required, true);
+  const input = buildApifyJobsInput(setupBrain, 10);
+  assertEquals(input.setup_required, true);
+  assertEquals(input.urls.length, 0);
+  assertEquals(input.keywords.length, 0);
+  assertEquals(describeApifyJobsQueries(setupBrain).length, 0);
+});
