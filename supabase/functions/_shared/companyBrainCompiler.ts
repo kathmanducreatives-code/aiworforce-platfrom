@@ -10,6 +10,8 @@
 // Reuses parseSizeLabel + DEFAULT_DISQUALIFIERS from companyBrainIcp.ts.
 
 import { parseSizeLabel, DEFAULT_DISQUALIFIERS } from "./companyBrainIcp.ts";
+import { normalizeCompanyBrain } from "./normalizeCompanyBrain.ts";
+
 
 export type BrainConfidence = "strong" | "medium" | "weak";
 
