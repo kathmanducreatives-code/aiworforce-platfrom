@@ -21,10 +21,11 @@ import { Textarea } from '@/components/ui/textarea';
 import { Switch } from '@/components/ui/switch';
 import {
   ArrowLeft, ArrowRight, Building2, ChevronDown, Cpu, Globe, Loader2, Lock,
-  MessageSquare, Radar, Rocket, Search, Shield, Sparkles, Target, User,
+  MessageSquare, Radar, Search, Shield, Sparkles, Target, User,
 } from 'lucide-react';
 
 import { AmbientBackground } from '@/components/onboarding/AmbientBackground';
+import { BrainBoardTabs, type BrainBoardTab } from '@/components/onboarding/BrainBoardTabs';
 import { BrainPreviewPanel } from '@/components/onboarding/BrainPreviewPanel';
 import { BrainReviewCard, FieldList } from '@/components/onboarding/BrainReviewCard';
 import { BrainSection } from '@/components/onboarding/BrainSection';
@@ -194,12 +195,12 @@ export default function OnboardingCompanyBrain() {
   // ---------------------------------------------------------------- render --
 
   return (
-    <div className="relative min-h-screen text-foreground">
+    <div className="relative flex min-h-screen flex-col text-foreground lg:h-dvh lg:min-h-0 lg:overflow-hidden">
       <AmbientBackground />
 
       {/* Top bar */}
-      <header className="sticky top-0 z-20 border-b border-border/40 bg-background/60 backdrop-blur-xl">
-        <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-3 sm:px-6">
+      <header className="z-20 shrink-0 border-b border-border/40 bg-background/60 backdrop-blur-xl">
+        <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-2.5 sm:px-6">
           <div className="flex items-center gap-2.5">
             <div className="flex h-8 w-8 items-center justify-center rounded-lg border border-primary/40 bg-primary/10 text-primary shadow-[0_0_16px_hsl(var(--primary)/0.25)]">
               <Cpu className="h-4 w-4" />
@@ -221,88 +222,100 @@ export default function OnboardingCompanyBrain() {
         </div>
       </header>
 
-      <div className="mx-auto max-w-6xl px-4 py-8 sm:px-6 lg:py-12">
-        {/* Stepper */}
-        <div className="mx-auto max-w-3xl">
-          <StepProgress index={stepIndex} steps={STEPS} />
-        </div>
+      {/* Stepper */}
+      <div className="mx-auto w-full max-w-3xl shrink-0 px-4 pt-4 sm:px-6 lg:pt-5">
+        <StepProgress index={stepIndex} steps={STEPS} />
+      </div>
 
-        {/* Grid */}
-        <div className="mt-10 grid gap-8 lg:grid-cols-[minmax(0,1fr)_360px]">
-          <main className="min-w-0">
-            <div className="mb-8">
-              <p className="mb-2 text-[10px] font-medium uppercase tracking-[0.22em] text-primary">
+      {/* Content grid — owns the remaining height on desktop */}
+      <div className="mx-auto flex w-full max-w-6xl flex-1 flex-col px-4 pb-4 pt-5 sm:px-6 lg:min-h-0 lg:pt-6">
+        <div className="grid flex-1 gap-6 lg:min-h-0 lg:grid-cols-[minmax(0,1fr)_340px]">
+          <main className="flex min-w-0 flex-col lg:min-h-0">
+            {/* Compact step header */}
+            <div className="mb-4 shrink-0">
+              <p className="mb-1 text-[10px] font-medium uppercase tracking-[0.22em] text-primary">
                 Step {stepIndex + 1} of {STEPS.length} · {stepAt(stepIndex).label}
               </p>
-              <h1 className="text-4xl font-semibold tracking-tight text-foreground sm:text-5xl">
+              <h1 className="text-2xl font-semibold tracking-tight text-foreground sm:text-3xl">
                 {stepTitle(step)}
               </h1>
-              <p className="mt-3 max-w-xl text-sm leading-relaxed text-muted-foreground">
+              <p className="mt-1.5 max-w-xl text-xs leading-relaxed text-muted-foreground sm:text-sm">
                 {stepSubtitle(step)}
               </p>
             </div>
 
-            <AnimatePresence mode="wait" initial={false}>
-              <motion.div
-                key={step}
-                initial={{ opacity: 0, y: 12 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -8 }}
-                transition={{ duration: 0.25, ease: 'easeOut' }}
-                className="space-y-5"
-              >
-                {error && (
-                  <ErrorState
-                    title={error.title}
-                    body={error.body}
-                    onRetry={
-                      step === 'founder' ? analyzeFounder :
-                      step === 'company' ? analyzeCompany :
-                      step === 'research' ? draftBrain :
-                      undefined
-                    }
-                    onContinue={
-                      step === 'founder' || step === 'company' || step === 'research'
-                        ? () => { setError(null); setStepIndex((i) => Math.min(STEPS.length - 1, i + 1)); }
-                        : undefined
-                    }
-                  />
-                )}
+            {/* Step body — internal scroll on desktop, page never scrolls */}
+            <div className="lg:-mr-2 lg:min-h-0 lg:flex-1 lg:overflow-y-auto lg:pr-2">
+              <AnimatePresence mode="wait" initial={false}>
+                <motion.div
+                  key={step}
+                  initial={{ opacity: 0, y: 12, scale: 0.995 }}
+                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                  exit={{ opacity: 0, y: -8, scale: 0.995 }}
+                  transition={{ duration: 0.25, ease: 'easeOut' }}
+                  className="space-y-5"
+                >
+                  {error && (
+                    <ErrorState
+                      title={error.title}
+                      body={error.body}
+                      onRetry={
+                        step === 'founder' ? analyzeFounder :
+                        step === 'company' ? analyzeCompany :
+                        step === 'research' ? draftBrain :
+                        undefined
+                      }
+                      onContinue={
+                        step === 'founder' || step === 'company' || step === 'research'
+                          ? () => { setError(null); setStepIndex((i) => Math.min(STEPS.length - 1, i + 1)); }
+                          : undefined
+                      }
+                    />
+                  )}
 
-                {step === 'founder' && (
-                  <FounderStep
-                    value={founder} onChange={setFounder} busy={busy === 'founder'} research={founderResearch}
-                    onAnalyze={analyzeFounder}
-                  />
-                )}
-                {step === 'company' && (
-                  <CompanyStep
-                    value={company} onChange={setCompany} busy={busy === 'company'}
-                    research={companyResearch} linkedin={companyLinkedIn} onAnalyze={analyzeCompany}
-                  />
-                )}
-                {step === 'research' && (
-                  <ResearchStep
-                    busy={busy === 'draft'}
-                    founder={founder} company={company}
-                    founderResearch={founderResearch}
-                    companyResearch={companyResearch}
-                    companyLinkedIn={companyLinkedIn}
-                    onDraft={draftBrain}
-                  />
-                )}
-                {step === 'review' && (
-                  <ReviewStep
-                    brain={brain} draft={draft} missingByStep={completeness.missing_by_step}
-                    onQuickAction={onQuickAction} onEditBrain={setEdited}
-                  />
-                )}
-                {step === 'activate' && <ActivationHero completeness={completeness} />}
-              </motion.div>
-            </AnimatePresence>
+                  {step === 'founder' && (
+                    <FounderStep
+                      value={founder} onChange={setFounder} busy={busy === 'founder'} research={founderResearch}
+                      onAnalyze={analyzeFounder}
+                    />
+                  )}
+                  {step === 'company' && (
+                    <CompanyStep
+                      value={company} onChange={setCompany} busy={busy === 'company'}
+                      research={companyResearch} linkedin={companyLinkedIn} onAnalyze={analyzeCompany}
+                    />
+                  )}
+                  {step === 'research' && (
+                    <ResearchStep
+                      busy={busy === 'draft'}
+                      founder={founder} company={company}
+                      founderResearch={founderResearch}
+                      companyResearch={companyResearch}
+                      companyLinkedIn={companyLinkedIn}
+                      onDraft={draftBrain}
+                    />
+                  )}
+                  {step === 'review' && (
+                    <ReviewStep
+                      brain={brain} draft={draft} missingByStep={completeness.missing_by_step}
+                      onQuickAction={onQuickAction} onEditBrain={setEdited}
+                    />
+                  )}
+                  {step === 'activate' && (
+                    <ActivationHero
+                      completeness={completeness}
+                      busy={busy === 'activate' ? 'activate' : busy === 'save' ? 'save' : null}
+                      canActivate={!busy && completeness.complete && !!workspaceId}
+                      onActivate={() => persist(true)}
+                      onSaveDraft={() => persist(false)}
+                    />
+                  )}
+                </motion.div>
+              </AnimatePresence>
+            </div>
 
             {/* Footer nav */}
-            <nav className="mt-10 flex items-center justify-between gap-3 border-t border-border/40 pt-6">
+            <nav className="mt-4 flex shrink-0 items-center justify-between gap-3 border-t border-border/40 pt-4">
               <Button
                 variant="ghost" size="sm"
                 onClick={() => setStepIndex((i) => Math.max(0, i - 1))}
@@ -311,17 +324,7 @@ export default function OnboardingCompanyBrain() {
                 <ArrowLeft className="mr-1.5 h-4 w-4" /> Back
               </Button>
 
-              {step === 'activate' ? (
-                <Button
-                  size="lg"
-                  onClick={() => persist(true)}
-                  disabled={!!busy || !completeness.complete || !workspaceId}
-                  className="min-w-[240px] gap-2 bg-primary text-primary-foreground shadow-[0_0_28px_hsl(var(--primary)/0.4)] hover:bg-primary/90"
-                >
-                  {busy === 'activate' ? <Loader2 className="h-4 w-4 animate-spin" /> : <Rocket className="h-4 w-4" />}
-                  Activate Company Brain
-                </Button>
-              ) : (
+              {step !== 'activate' && (
                 <Button
                   size="lg"
                   onClick={() => setStepIndex((i) => Math.min(STEPS.length - 1, i + 1))}
@@ -335,11 +338,9 @@ export default function OnboardingCompanyBrain() {
           </main>
 
           {/* Right rail — desktop */}
-          <div className="hidden lg:block">
-            <div className="sticky top-24">
-              <BrainPreviewPanel brain={brain} completeness={completeness} evidenceCount={evidenceCount} />
-            </div>
-          </div>
+          <aside className="hidden lg:block lg:min-h-0 lg:overflow-y-auto">
+            <BrainPreviewPanel brain={brain} completeness={completeness} evidenceCount={evidenceCount} />
+          </aside>
 
           {/* Right rail — mobile */}
           <div className="lg:hidden">
@@ -765,9 +766,35 @@ function ReviewStep({
     onEditBrain(nb);
   };
 
+  const [board, setBoard] = useState<'targeting' | 'signals' | 'messaging' | 'safety'>('targeting');
+
+  const attention = {
+    targeting: (missingByStep.company?.length ? 1 : 0) + (missingByStep.customers?.length ? 1 : 0),
+    signals: (missingByStep.buyers?.length ? 1 : 0) + (missingByStep.triggers?.length ? 1 : 0),
+    messaging: missingByStep.content?.length ? 1 : 0,
+    safety: missingByStep.disqualifiers?.length ? 1 : 0,
+  };
+
+  const tabs: BrainBoardTab[] = [
+    { id: 'targeting', label: 'Targeting', icon: <Target className="h-3.5 w-3.5" />, attention: attention.targeting },
+    { id: 'signals',   label: 'Signals',   icon: <Radar className="h-3.5 w-3.5" />,  attention: attention.signals },
+    { id: 'messaging', label: 'Messaging', icon: <MessageSquare className="h-3.5 w-3.5" />, attention: attention.messaging },
+    { id: 'safety',    label: 'Safety',    icon: <Shield className="h-3.5 w-3.5" />, attention: attention.safety },
+  ];
+
   return (
-    <div className="space-y-10">
-      {/* TARGETING */}
+    <div className="space-y-4">
+      <BrainBoardTabs tabs={tabs} active={board} onChange={(id) => setBoard(id as typeof board)} />
+
+      <AnimatePresence mode="wait" initial={false}>
+        <motion.div
+          key={board}
+          initial={{ opacity: 0, y: 8 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0, y: -6 }}
+          transition={{ duration: 0.2, ease: 'easeOut' }}
+        >
+      {board === 'targeting' && (
       <BrainSection
         icon={<Target className="h-4 w-4" />}
         eyebrow="Targeting"
@@ -800,8 +827,9 @@ function ReviewStep({
           <ChipInput label="Must-have traits" values={tc.must_have} onChange={setList((b, v) => { b.target_customer.must_have = v; })} emptyHelper="Add non-negotiable traits" />
         </BrainReviewCard>
       </BrainSection>
+      )}
 
-      {/* SIGNALS */}
+      {board === 'signals' && (
       <BrainSection
         icon={<Radar className="h-4 w-4" />}
         eyebrow="Signals"
@@ -831,8 +859,9 @@ function ReviewStep({
           <FieldList label="Competitor activity" values={brain.competitors} />
         </BrainReviewCard>
       </BrainSection>
+      )}
 
-      {/* MESSAGING */}
+      {board === 'messaging' && (
       <BrainSection
         icon={<MessageSquare className="h-4 w-4" />}
         eyebrow="Messaging"
@@ -856,8 +885,9 @@ function ReviewStep({
           <ChipInput label="Bad-fit companies" values={brain.negative_examples} onChange={setList((b, v) => { b.negative_examples = v; })} emptyHelper="Add companies to avoid" />
         </BrainReviewCard>
       </BrainSection>
+      )}
 
-      {/* SAFETY */}
+      {board === 'safety' && (
       <BrainSection
         icon={<Shield className="h-4 w-4" />}
         eyebrow="Safety"
@@ -883,6 +913,9 @@ function ReviewStep({
           <FieldList label="Banned claims" values={[...brain.positioning.avoid_positioning, ...brain.brand_voice.avoid]} empty="None set" />
         </BrainReviewCard>
       </BrainSection>
+      )}
+        </motion.div>
+      </AnimatePresence>
     </div>
   );
 }
