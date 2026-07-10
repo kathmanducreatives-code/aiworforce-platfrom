@@ -164,8 +164,10 @@ export function mapDraftToV2(aiJson: unknown, input: DraftInput): BrainDraft {
     name: firstStr(input.company_input?.name, web?.company_name, aiCompany.name),
     website_url: firstStr(input.company_input?.website_url, web?.website, aiCompany.website_url),
     description: firstStr(input.company_input?.description, web?.description, li?.company_description, aiCompany.description),
-    category: firstStr(aiCompany.category, li?.industry),
-    business_model: firstStr(web?.business_model, aiCompany.business_model),
+    // Thread the derived product category/model through so the Brain never
+    // shows a blank category when the understanding pass actually found one.
+    category: firstStr(aiCompany.category, web?.understanding?.product_category, web?.product_category, li?.industry),
+    business_model: firstStr(web?.business_model, web?.understanding?.business_model, aiCompany.business_model),
     stage: firstStr(input.company_input?.stage, aiCompany.stage),
     team_size: firstStr(input.company_input?.team_size, li?.employee_count, aiCompany.team_size),
     location: firstStr(li?.locations?.[0], aiCompany.location),

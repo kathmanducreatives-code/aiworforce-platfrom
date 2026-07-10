@@ -13,22 +13,36 @@ import {
 } from "./types.ts";
 
 export const FOUNDER_ACTOR_ENV = "APIFY_ACTOR_LINKEDIN_PROFILE_SCRAPER";
-export const FOUNDER_ACTOR_FALLBACK = "parseforge/linkedin-profile-scraper";
+// Default points at a profile-detail actor that exists in the current Apify
+// store and takes a profile URL/username (verified 2026-07). ALWAYS override via
+// env with the actor your Apify account can actually run — a non-existent actor
+// id makes every run 404, which reads as "enrichment not working".
+export const FOUNDER_ACTOR_FALLBACK = "apimaestro/linkedin-profile-detail";
 /** Secondary actor tried when the primary returns nothing or sparse data. */
 export const FOUNDER_ACTOR_FALLBACK_ENV = "APIFY_ACTOR_LINKEDIN_PROFILE_SCRAPER_FALLBACK";
-export const FOUNDER_ACTOR_FALLBACK_DEFAULT = "automation-lab/linkedin-profile-scraper";
+export const FOUNDER_ACTOR_FALLBACK_DEFAULT = "curious_coder/linkedin-profile-scraper";
+
+/** The `/in/<username>` handle from a profile URL (some actors key on it). */
+export function profileUsername(profileUrl: string): string {
+  const m = asString(profileUrl).match(/\/in\/([^/?#]+)/i);
+  return m ? decodeURIComponent(m[1]) : "";
+}
 
 /**
  * Actor input that the common profile scrapers all understand: each reads its
- * own key and ignores the rest. Always URL-driven — NEVER a people search.
+ * own key and ignores the rest. Always URL/username-driven — NEVER a people
+ * search. Sends both URL variants AND the bare username so URL-keyed actors
+ * (parseforge-style) and username-keyed actors (apimaestro-style) both work.
  */
 export function buildProfileActorInput(profileUrl: string): Record<string, unknown> {
+  const username = profileUsername(profileUrl);
   return {
     profileUrls: [profileUrl],
     urls: [profileUrl],
     startUrls: [{ url: profileUrl }],
     profileUrl,
     url: profileUrl,
+    ...(username ? { username, usernames: [username], identifier: username } : {}),
     maxItems: 1,
   };
 }

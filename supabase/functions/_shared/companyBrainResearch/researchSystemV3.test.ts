@@ -43,7 +43,7 @@ function actorDeps(byActor: Record<string, unknown[]>, env: Record<string, strin
 
 Deno.test("v3-1. a profile URL drives a profile scraper — never a people search", async () => {
   const { deps, calls } = actorDeps(
-    { "parseforge/linkedin-profile-scraper": [ACTOR_SHAPE_PARSEFORGE] },
+    { "apimaestro/linkedin-profile-detail": [ACTOR_SHAPE_PARSEFORGE] },
   );
   const r = await enrichFounderFromLinkedIn({ profileUrl: PROFILE_URL, consent: true }, deps);
   assert(r.ok);
@@ -72,8 +72,8 @@ Deno.test("v3-1b. actor ids resolve from env, with a separate fallback env", asy
 
 Deno.test("v3-2. sparse actor output is a failure with low confidence, not a success", async () => {
   const { deps } = actorDeps({
-    "parseforge/linkedin-profile-scraper": [ACTOR_SHAPE_SPARSE],
-    "automation-lab/linkedin-profile-scraper": [ACTOR_SHAPE_SPARSE],
+    "apimaestro/linkedin-profile-detail": [ACTOR_SHAPE_SPARSE],
+    "curious_coder/linkedin-profile-scraper": [ACTOR_SHAPE_SPARSE],
   });
   const r = await enrichFounderFromLinkedIn({ profileUrl: PROFILE_URL, consent: true }, deps);
   assertEquals(r.ok, false);
@@ -130,13 +130,13 @@ Deno.test("v3-5. company actor shapes normalize with name/HQ/founded", async () 
 
   // Fallback actor engages when the primary returns junk.
   const { deps, calls } = actorDeps({
-    "automation-lab/linkedin-company-scraper": [{ id: "junk" }],
-    "curious_coder/linkedin-company-scraper": [ACTOR_COMPANY_SHAPE_A],
+    "curious_coder/linkedin-company-scraper": [{ id: "junk" }],
+    "apimaestro/linkedin-company-detail": [ACTOR_COMPANY_SHAPE_A],
   });
   const r = await enrichCompanyFromLinkedIn({ companyUrl: COMPANY_URL }, deps);
   assert(r.ok);
   assertEquals(calls.length, 2);
-  assertEquals(r.actor_used, "curious_coder/linkedin-company-scraper");
+  assertEquals(r.actor_used, "apimaestro/linkedin-company-detail");
 });
 
 // ------------------------------------------------ 6-7. page selection rules --
@@ -305,8 +305,14 @@ Deno.test("v3-18. adapters refuse to run without injected deps (no real provider
 });
 
 // Input builders stay URL-driven (guards the "no people search" invariant).
-Deno.test("v3-18b. profile actor input carries only URL variants", () => {
+Deno.test("v3-18b. profile actor input carries only URL/username variants — never a people search", () => {
   const input = buildProfileActorInput(PROFILE_URL);
-  const urlish = ["profileUrls", "urls", "startUrls", "profileUrl", "url", "maxItems"];
-  assertEquals(Object.keys(input).sort(), [...urlish].sort());
+  // URL forms for URL-keyed actors + the bare handle for username-keyed actors.
+  for (const k of ["profileUrls", "urls", "startUrls", "profileUrl", "url", "username", "maxItems"]) {
+    assert(k in input, `expected input key ${k}`);
+  }
+  // NEVER any free-text search keys.
+  for (const k of ["keywords", "searchQuery", "query", "search", "title", "titles"]) {
+    assertEquals(k in input, false, `people-search key "${k}" must not appear`);
+  }
 });

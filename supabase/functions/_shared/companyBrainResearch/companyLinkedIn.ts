@@ -14,19 +14,30 @@ import {
 import { stripContactFields, unwrapActorRow } from "./founderLinkedIn.ts";
 
 export const COMPANY_ACTOR_ENV = "APIFY_ACTOR_LINKEDIN_COMPANY_SCRAPER";
-export const COMPANY_ACTOR_FALLBACK = "automation-lab/linkedin-company-scraper";
+// Default points at a company scraper from a vendor that exists in the current
+// Apify store (verified 2026-07). ALWAYS override via env with the actor your
+// Apify account can run — a non-existent id 404s every run.
+export const COMPANY_ACTOR_FALLBACK = "curious_coder/linkedin-company-scraper";
 /** Secondary actor tried when the primary returns nothing or sparse data. */
 export const COMPANY_ACTOR_FALLBACK_ENV = "APIFY_ACTOR_LINKEDIN_COMPANY_SCRAPER_FALLBACK";
-export const COMPANY_ACTOR_FALLBACK_DEFAULT = "curious_coder/linkedin-company-scraper";
+export const COMPANY_ACTOR_FALLBACK_DEFAULT = "apimaestro/linkedin-company-detail";
+
+/** The `/company/<slug>` handle from a company URL (some actors key on it). */
+export function companySlug(companyUrl: string): string {
+  const m = asString(companyUrl).match(/\/company\/([^/?#]+)/i);
+  return m ? decodeURIComponent(m[1]) : "";
+}
 
 /** Input the common company scrapers all understand — URL/slug driven only. */
 export function buildCompanyActorInput(companyUrl: string): Record<string, unknown> {
+  const slug = companySlug(companyUrl);
   return {
     companyUrls: [companyUrl],
     urls: [companyUrl],
     startUrls: [{ url: companyUrl }],
     companyUrl,
     url: companyUrl,
+    ...(slug ? { username: slug, identifier: slug, companyName: slug } : {}),
     maxItems: 1,
   };
 }
