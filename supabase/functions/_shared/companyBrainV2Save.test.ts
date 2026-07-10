@@ -127,3 +127,88 @@ Deno.test("12. signal_preferences derive from the Brain, only for fields it can 
   assertEquals(prefs.disqualifiers, ["pharma"]);
   assertEquals("competitors" in prefs, false, "no competitors in Brain → no key invented");
 });
+
+// ---- P0-1: signal_preferences must live INSIDE profile, never as a column ----
+
+Deno.test("13. activate persists signal_preferences under profile.signal_preferences", () => {
+  const r = applyBrainSave({}, completePatch() as any, { activate: true });
+  assertEquals(r.onboarding_completed, true);
+  const prefs = r.profile.signal_preferences as Record<string, unknown>;
+  assert(prefs, "profile.signal_preferences must exist after activation");
+  assertEquals(prefs.industries, ["B2B SaaS"]);
+  assertEquals(prefs.disqualifiers, ["pharma"]);
+});
+
+Deno.test("14. Radar reads profile.signal_preferences — the round-trip works", () => {
+  const r = applyBrainSave({}, completePatch() as any, { activate: true });
+  // run-radar-scan does exactly this: profile?.signal_preferences
+  const asRadarSeesIt = (r.profile as any)?.signal_preferences;
+  assertEquals(asRadarSeesIt.hiring_roles, ["Founder"]);
+});
+
+Deno.test("15. save_draft does NOT write signal_preferences (only activation does)", () => {
+  const r = applyBrainSave({}, completePatch() as any, { activate: false });
+  assertEquals(r.profile.signal_preferences, undefined);
+});
+
+Deno.test("16. blocked activation does not write signal_preferences and does not throw", () => {
+  const r = applyBrainSave({}, { company: { name: "Cekura" } } as any, { activate: true });
+  assertEquals(r.onboarding_completed, false);
+  assertEquals(r.profile.signal_preferences, undefined);
+  assert(r.blocked_reasons.length > 0);
+});
+
+// ---- P0-2: v2 → legacy icp projection (visible to un-migrated readers) ----
+
+Deno.test("17. v3 target_customer projects into legacy icp.industries", () => {
+  const r = applyBrainSave({}, completePatch() as any, { activate: true });
+  const icp = r.profile.icp as Record<string, unknown>;
+  assert(icp, "profile.icp compatibility block must exist");
+  assertEquals(icp.industries, ["B2B SaaS"]);
+  assertEquals(icp.company_size, "10-150");
+  assertEquals(icp.geography, "US");
+});
+
+Deno.test("18. v3 buyer_personas project into legacy icp.buyer_roles", () => {
+  const r = applyBrainSave({}, completePatch() as any, { activate: true });
+  assertEquals((r.profile.icp as any).buyer_roles, ["Founder"]);
+});
+
+Deno.test("19. v3 disqualifier buckets flatten into legacy icp.disqualifiers", () => {
+  const patch = structuredClone(completePatch()) as any;
+  patch.target_customer.disqualifiers = {
+    industries: ["pharma", "lab testing"], company_types: ["agency"],
+    keywords: ["staffing"], titles: ["Plant Manager"], domains: ["bad.com"],
+  };
+  const r = applyBrainSave({}, patch, { activate: true });
+  const disq = (r.profile.icp as any).disqualifiers as string[];
+  for (const d of ["pharma", "lab testing", "agency", "staffing", "Plant Manager", "bad.com"]) {
+    assert(disq.includes(d), `expected flattened disqualifier ${d}`);
+  }
+});
+
+Deno.test("20. v3 pain_points project into legacy icp.pain_points", () => {
+  const r = applyBrainSave({}, completePatch() as any, { activate: true });
+  assertEquals((r.profile.icp as any).pain_points, ["manual outbound"]);
+});
+
+Deno.test("21. projection never discards legacy icp keys it has nothing to say about", () => {
+  const existing = { icp: { target_signals: ["hiring RevOps"], industries: ["stale"] } };
+  const r = applyBrainSave(existing, completePatch() as any, { activate: true });
+  const icp = r.profile.icp as any;
+  assertEquals(icp.target_signals, ["hiring RevOps"], "unrelated legacy key preserved");
+  assertEquals(icp.industries, ["B2B SaaS"], "v2 truth wins over stale legacy value");
+});
+
+Deno.test("22. a v3 brain is visible to a legacy reader that only knows brain.icp.*", () => {
+  // Simulates run-agent's gateIntent: (brain as any)?.icp?.disqualifiers ?? []
+  const r = applyBrainSave({}, completePatch() as any, { activate: true });
+  const gateDisqualifiers = ((r.profile as any)?.icp?.disqualifiers ?? []) as string[];
+  assert(gateDisqualifiers.length > 0, "legacy gate must now receive disqualifiers");
+  assert(gateDisqualifiers.includes("pharma"));
+
+  const ariaIndustries = (r.profile as any)?.icp?.industries;
+  const ariaBuyers = (r.profile as any)?.icp?.buyer_roles;
+  assertEquals(ariaIndustries, ["B2B SaaS"]);
+  assertEquals(ariaBuyers, ["Founder"]);
+});

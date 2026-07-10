@@ -11,7 +11,7 @@
 //
 // Pure (no DB, no network) → fully unit-testable.
 
-import { normalizeCompanyBrain, type CompanyBrainV2 } from "./normalizeCompanyBrain.ts";
+import { normalizeCompanyBrain, mergeLegacyIcpProjection, type CompanyBrainV2 } from "./normalizeCompanyBrain.ts";
 import { computeCompanyBrainCompleteness, type CompletenessResult } from "./companyBrainCompleteness.ts";
 
 /** Fields a caller may write. Derived flags are never accepted from the client. */
@@ -97,6 +97,17 @@ export function applyBrainSave(
   merged.missing_fields = completeness.missing_keys;
   // Once activated the Brain is no longer a draft.
   merged.is_draft = onboarding_completed ? false : (merged.is_draft === true);
+
+  // Compatibility bridge: legacy readers (run-agent's lead path) still read
+  // `profile.icp.*`. Project the v2 truth back so a v3 Brain is visible to them
+  // without editing those readers. v2 always wins; legacy extras are preserved.
+  merged.icp = mergeLegacyIcpProjection(merged.icp, normalized);
+
+  // Radar reads `profile.signal_preferences` (inside the JSONB). It is NOT a
+  // column on `company_brain` — writing it as one makes the upsert fail.
+  if (onboarding_completed) {
+    merged.signal_preferences = deriveSignalPreferences(normalized);
+  }
 
   return {
     profile: merged,

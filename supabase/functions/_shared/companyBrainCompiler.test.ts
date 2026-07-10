@@ -86,6 +86,41 @@ Deno.test("5. empty Brain → conservative context with warnings, no fake ICP", 
   assert(has(c.disqualifiers.industries, "manufacturing"));
 });
 
+Deno.test("5b. compiler exposes the additive v3 canonical fields", () => {
+  const c = compileCompanyBrainContext({
+    workspace_id: "ws",
+    profile: {
+      company: { name: "Cekura", business_model: "B2B SaaS" },
+      target_customer: { industries: ["B2B SaaS"], disqualifiers: { industries: ["pharma"] } },
+      buyer_personas: ["Founder"],
+      jobs_to_watch: ["Founding Account Executive"],
+      positive_examples: ["Acme"],
+      negative_examples: ["Pace Analytical"],
+      pain_points: ["manual outbound"],
+      qualification_rules: { required_evidence: ["job_url"], reject_if: ["lab testing"], manual_review_if: ["no website"] },
+    },
+  });
+  assertEquals(c.positive_examples, ["Acme"]);
+  assertEquals(c.negative_examples, ["Pace Analytical"]);
+  assertEquals(c.jobs_to_watch, ["Founding Account Executive"]);
+  assertEquals(c.qualification_rules.required_evidence, ["job_url"]);
+  assertEquals(c.qualification_rules.reject_if, ["lab testing"]);
+  assertEquals(c.qualification_rules.manual_review_if, ["no website"]);
+  assert(["weak", "partial", "strong"].includes(c.meta.brain_confidence));
+  assert(Array.isArray(c.meta.missing_fields));
+});
+
+Deno.test("5c. empty Brain → empty examples, setup_required, missing_fields populated", () => {
+  const c = compileCompanyBrainContext({ workspace_id: "ws", profile: {} });
+  assertEquals(c.positive_examples, []);
+  assertEquals(c.negative_examples, []);
+  assertEquals(c.jobs_to_watch, []);
+  assertEquals(c.qualification_rules.required_evidence, []);
+  assertEquals(c.meta.setup_required, true);
+  assertEquals(c.meta.brain_confidence, "weak");
+  assert(c.meta.missing_fields.length > 0, "an empty Brain must report what it's missing");
+});
+
 Deno.test("6. Agentory-style Brain compiles into SaaS/revenue target terms", () => {
   const c = compileCompanyBrainContext({ workspace_id: "ws", profile: agentoryProfile, signal_preferences: agentoryPrefs });
   assert(has(c.icp.categories, "B2B SaaS") && has(c.icp.categories, "revenue operations software"));

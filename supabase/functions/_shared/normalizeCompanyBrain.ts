@@ -271,3 +271,70 @@ export function normalizeCompanyBrain(profile: Record<string, unknown> | null | 
 }
 
 export function emptyCompanyBrainV2(): CompanyBrainV2 { return normalizeCompanyBrain({}); }
+
+// ---------------------------------------------------------------------------
+// v2 → legacy compatibility projection
+// ---------------------------------------------------------------------------
+// Onboarding v3 writes `target_customer` / `buyer_personas` / `qualification_rules`,
+// but several long-lived readers (notably run-agent's lead path) still read the
+// legacy `profile.icp.*` block. Rather than rewrite those readers here, we
+// project the v2 truth back into an `icp` shape and persist it alongside, so a
+// v3 Brain is visible to every legacy consumer unchanged.
+//
+// This is a COMPATIBILITY BRIDGE, not a second source of truth: v2 always wins,
+// and we only fill a legacy slot when v2 actually has a value for it.
+
+export interface LegacyIcpProjection {
+  industries: string[];
+  buyer_roles: string[];
+  disqualifiers: string[];
+  company_size: string;
+  geography: string;
+  pain_points: string[];
+}
+
+/** Flatten every disqualifier bucket into the legacy flat string list. */
+export function flattenDisqualifiers(d: DisqualifierBuckets): string[] {
+  const all = [...d.industries, ...d.company_types, ...d.keywords, ...d.titles, ...d.domains];
+  const seen = new Set<string>();
+  return all.filter((x) => {
+    const k = x.toLowerCase();
+    if (!x || seen.has(k)) return false;
+    seen.add(k);
+    return true;
+  });
+}
+
+/** Project a normalized v2 Brain into the legacy `icp` block. Pure. */
+export function projectV2ToLegacyIcp(v2: CompanyBrainV2): LegacyIcpProjection {
+  const tc = v2.target_customer;
+  return {
+    industries: tc.industries,
+    buyer_roles: v2.buyer_personas,
+    disqualifiers: flattenDisqualifiers(tc.disqualifiers),
+    company_size: tc.company_size.label,
+    geography: tc.geography[0] ?? "",
+    pain_points: v2.pain_points,
+  };
+}
+
+/**
+ * Merge the projection into an existing raw profile's `icp` block without
+ * discarding legacy values the projection has nothing to say about.
+ * Returns the `icp` object to persist.
+ */
+export function mergeLegacyIcpProjection(
+  existingIcp: unknown,
+  v2: CompanyBrainV2,
+): Record<string, unknown> {
+  const base = asObject(existingIcp);
+  const p = projectV2ToLegacyIcp(v2);
+  const out: Record<string, unknown> = { ...base };
+  if (p.industries.length) out.industries = p.industries;
+  if (p.buyer_roles.length) out.buyer_roles = p.buyer_roles;
+  if (p.disqualifiers.length) out.disqualifiers = p.disqualifiers;
+  if (p.company_size) out.company_size = p.company_size;
+  if (p.geography) out.geography = p.geography;
+  if (p.pain_points.length) out.pain_points = p.pain_points;
+  return out;
+}

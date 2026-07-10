@@ -17,7 +17,7 @@ import { enrichCompanyFromWebsite, MAX_PAGES } from "../_shared/companyBrainRese
 import { enrichCompanyFromLinkedIn } from "../_shared/companyBrainResearch/companyLinkedIn.ts";
 import { generateBrainDraft, type DraftInput } from "../_shared/companyBrainResearch/generateBrainDraft.ts";
 import type { FirecrawlPage, ResearchDeps, ResearchSourceType, ResearchProvider } from "../_shared/companyBrainResearch/types.ts";
-import { applyBrainSave, deriveSignalPreferences, type CompanyBrainV2Patch } from "../_shared/companyBrainV2Save.ts";
+import { applyBrainSave, type CompanyBrainV2Patch } from "../_shared/companyBrainV2Save.ts";
 import { normalizeCompanyBrain } from "../_shared/normalizeCompanyBrain.ts";
 import { computeCompanyBrainCompleteness } from "../_shared/companyBrainCompleteness.ts";
 
@@ -270,12 +270,13 @@ Deno.serve(async (req) => {
         }, 200);
       }
 
+      // NOTE: `signal_preferences` is NOT a column on `company_brain` — it lives
+      // inside `profile` (applyBrainSave puts it there on activation, which is
+      // where Radar reads it). Only real columns may appear on this row.
       const row: AnyObj = { workspace_id, profile: result.profile, updated_at: new Date().toISOString() };
       if (result.onboarding_completed) {
         row.onboarding_completed = true;
         row.onboarding_completed_at = new Date().toISOString();
-        // Give Radar usable defaults derived from the Brain (no scan is triggered).
-        row.signal_preferences = deriveSignalPreferences(result.normalized);
       }
       const { error } = await admin.from("company_brain").upsert(row, { onConflict: "workspace_id" });
       if (error) throw error;

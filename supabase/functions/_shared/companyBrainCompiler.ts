@@ -10,7 +10,8 @@
 // Reuses parseSizeLabel + DEFAULT_DISQUALIFIERS from companyBrainIcp.ts.
 
 import { parseSizeLabel, DEFAULT_DISQUALIFIERS, SOFTWARE_ICP_DISQUALIFIERS } from "./companyBrainIcp.ts";
-import { normalizeCompanyBrain } from "./normalizeCompanyBrain.ts";
+import { normalizeCompanyBrain, type BrainConfidence as V2Confidence } from "./normalizeCompanyBrain.ts";
+import { computeCompanyBrainCompleteness } from "./companyBrainCompleteness.ts";
 
 
 export type BrainConfidence = "strong" | "medium" | "weak";
@@ -88,6 +89,20 @@ export interface CompanyBrainContext {
     voice_notes: string[];
   };
 
+  // ---- Onboarding v3 additions (additive; existing consumers may ignore) ----
+  /** Concrete good-fit companies — teach the scorer faster than rules. */
+  positive_examples: string[];
+  /** Concrete bad-fit companies. First-class, not an afterthought. */
+  negative_examples: string[];
+  /** Roles whose hiring is a buying trigger. */
+  jobs_to_watch: string[];
+  /** Evidence a lead must carry before it is trusted. */
+  qualification_rules: {
+    required_evidence: string[];
+    reject_if: string[];
+    manual_review_if: string[];
+  };
+
   // Meta — honesty layer (not fabricated ICP).
   meta: {
     confidence: BrainConfidence;
@@ -98,6 +113,10 @@ export interface CompanyBrainContext {
     /** true when the Brain lacks a workable ICP; radar/leads/content must degrade. */
     setup_required: boolean;
     schema_version: 1 | 2;
+    /** Normalizer's confidence grade ("weak" | "partial" | "strong"). */
+    brain_confidence: V2Confidence;
+    /** Required slots still unsatisfied (stable keys, from the completeness rules). */
+    missing_fields: string[];
   };
 }
 
@@ -366,6 +385,15 @@ export function compileCompanyBrainContext(input: CompileInput): CompanyBrainCon
       banned_claims: bannedClaims,
       voice_notes: voiceNotes,
     },
+    // Additive v3 fields — read straight from the normalized v2 truth.
+    positive_examples: v2.positive_examples,
+    negative_examples: v2.negative_examples,
+    jobs_to_watch: v2.jobs_to_watch,
+    qualification_rules: {
+      required_evidence: v2.qualification_rules.required_evidence,
+      reject_if: v2.qualification_rules.reject_if,
+      manual_review_if: v2.qualification_rules.manual_review_if,
+    },
     meta: {
       confidence,
       warnings,
@@ -373,6 +401,8 @@ export function compileCompanyBrainContext(input: CompileInput): CompanyBrainCon
       matched_from,
       setup_required: v2.setup_required,
       schema_version: schemaVersion,
+      brain_confidence: v2.brain_confidence,
+      missing_fields: computeCompanyBrainCompleteness(v2).missing_keys,
     },
   };
 }
