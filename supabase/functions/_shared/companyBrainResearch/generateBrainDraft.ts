@@ -15,7 +15,8 @@ import {
 } from "./types.ts";
 import {
   toCleanArray, cleanPersona, suggestBuyerPersonas, suggestDisqualifiers,
-  suggestQualificationRules, stripUnsupportedClaims, countDisqualifiers, draftConfidenceCeiling,
+  suggestQualificationRules, suggestTargetCustomer, suggestTriggers, suggestVoiceAndAngles,
+  stripUnsupportedClaims, countDisqualifiers, draftConfidenceCeiling,
 } from "./draftQuality.ts";
 
 export interface DraftInput {
@@ -45,7 +46,14 @@ const SYSTEM_PROMPT = [
   "4. Do not overfit to one page. A single article about a topic does NOT make that",
   "   topic the company's product category. Categories need repeated support.",
   "5. Do not produce broad, generic targeting ('all SaaS companies', 'any business').",
-  "   A vague ICP is worse than an empty one. If evidence is thin, return empty arrays.",
+  "   A vague ICP is worse than a specific hypothesis. When evidence is thin, still",
+  "   return your best SPECIFIC strategic hypothesis for targeting, personas, triggers",
+  "   and disqualifiers — derived from the product and the user's words — and list",
+  "   every such field in `needs_confirmation`. Only return empty arrays when there is",
+  "   no company context at all. Never leave the founder to invent obvious fields.",
+  "5b. Example workflows and demo signals on the site illustrate the product; they do",
+  "   NOT define the ICP or count as customer proof. Claims tagged `signal_example`",
+  "   or `workflow_example` in the understanding pass must not become proof points.",
   "6. Disqualifiers and bad-fit examples are first-class. Think hard about who should",
   "   NEVER be targeted, and why. Derive them from THIS company's product, not clichés.",
   "7. Buyer personas must be concrete: title, role keywords, department, seniority,",
@@ -194,12 +202,12 @@ export function mapDraftToV2(aiJson: unknown, input: DraftInput): BrainDraft {
   };
 
   // ---- sanitize every model array (glued chips, dupes, empties) ----
-  const triggers = toCleanArray(ai.triggers);
-  const jobs_to_watch = toCleanArray(ai.jobs_to_watch);
-  const tools = toCleanArray(ai.tools);
-  const pain_points = toCleanArray(ai.pain_points);
+  let triggers = toCleanArray(ai.triggers);
+  let jobs_to_watch = toCleanArray(ai.jobs_to_watch);
+  let tools = toCleanArray(ai.tools);
+  let pain_points = toCleanArray(ai.pain_points);
   const negative_examples = toCleanArray(ai.negative_examples);
-  const content_angles = toCleanArray(ai.content_angles);
+  let content_angles = toCleanArray(ai.content_angles);
 
   // ---- confidence ceiling: what the evidence can actually support ----
   const understanding = web?.understanding ?? null;
@@ -232,6 +240,52 @@ export function mapDraftToV2(aiJson: unknown, input: DraftInput): BrainDraft {
     user_description: asString(input.company_input?.description),
   };
   const hasCompanyContext = !!(personaCtx.product_category || personaCtx.one_line_summary);
+  const suggested_fields: string[] = [];
+
+  // ---- ICP fallbacks: thin model output still yields a useful, confirmed draft --
+  // (Research System v3 — the founder should confirm suggestions, not invent
+  // obvious fields from scratch.)
+  if (hasCompanyContext) {
+    if (!target_customer.industries.length && !target_customer.business_models.length) {
+      const t = suggestTargetCustomer(personaCtx);
+      target_customer.industries = t.industries;
+      target_customer.business_models = t.business_models;
+      if (t.company_size_label && !asString(obj(target_customer.company_size).label)) {
+        target_customer.company_size = { ...target_customer.company_size, label: t.company_size_label };
+      }
+      target_customer.must_have = uniq([...target_customer.must_have, ...t.must_have]);
+      if (t.industries.length || t.business_models.length) suggested_fields.push("target_customer");
+    }
+    if (!triggers.length && !jobs_to_watch.length) {
+      const t = suggestTriggers(personaCtx);
+      triggers = t.triggers;
+      jobs_to_watch = t.jobs_to_watch;
+      if (triggers.length || jobs_to_watch.length) suggested_fields.push("triggers");
+    }
+    if (!pain_points.length && !content_angles.length) {
+      const v = suggestVoiceAndAngles(personaCtx);
+      content_angles = v.content_angles;
+      pain_points = v.pain_points;
+      if (content_angles.length || pain_points.length) suggested_fields.push("content_angles");
+    }
+  }
+
+  // Tools the site itself mentions are source-backed hypotheses worth keeping.
+  const mentionedTools = understanding?.competitors_or_tools_mentioned ?? [];
+  if (mentionedTools.length) {
+    tools = uniq([...tools, ...mentionedTools]).slice(0, 10);
+    suggested_fields.push("tools:mentioned_on_site");
+  }
+
+  // Brand voice: never leave it blank when we know who this is for.
+  let brand_voice = obj(ai.brand_voice);
+  if (hasCompanyContext && !asString(brand_voice.tone)) {
+    const v = suggestVoiceAndAngles(personaCtx);
+    if (v.brand_voice.tone) {
+      brand_voice = { ...brand_voice, ...v.brand_voice };
+      suggested_fields.push("brand_voice");
+    }
+  }
   if (persona_profiles.length < 3 && hasCompanyContext) {
     const suggested = suggestBuyerPersonas(personaCtx, ceiling);
     for (const s of suggested) {
@@ -246,10 +300,10 @@ export function mapDraftToV2(aiJson: unknown, input: DraftInput): BrainDraft {
     ...persona_profiles.map((p) => p.title),
   ]);
 
-  // ---- disqualifiers: mandatory when we know who we target ----
+  // ---- disqualifiers: mandatory when we know who we target OR what we sell ----
   const disq = target_customer.disqualifiers;
   const hasTarget = target_customer.industries.length > 0 || target_customer.business_models.length > 0;
-  if (countDisqualifiers(disq) < 5 && hasTarget) {
+  if (countDisqualifiers(disq) < 5 && (hasTarget || hasCompanyContext)) {
     const s = suggestDisqualifiers({
       product_category: personaCtx.product_category,
       business_model: company.business_model,
@@ -280,6 +334,7 @@ export function mapDraftToV2(aiJson: unknown, input: DraftInput): BrainDraft {
   const needs_confirmation = uniq([
     ...toCleanArray(ai.needs_confirmation),
     ...guard.needs_confirmation,
+    ...suggested_fields.map((f) => `${f}:ai_suggested`),
     ...(persona_profiles.length ? ["buyer_personas"] : []),
     ...(countDisqualifiers(disq) ? ["target_customer.disqualifiers"] : []),
     ...(!hasEvidence && target_customer.industries.length ? ["target_customer.industries"] : []),
@@ -322,7 +377,7 @@ export function mapDraftToV2(aiJson: unknown, input: DraftInput): BrainDraft {
     triggers, jobs_to_watch, competitors, tools,
     pain_points, positive_examples, negative_examples, content_angles,
     qualification_rules,
-    brand_voice: obj(ai.brand_voice),
+    brand_voice,
     positioning,
     evidence: { source_pages, linkedin_sources, confidence_notes },
     missing_fields,

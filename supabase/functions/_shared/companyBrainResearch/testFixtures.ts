@@ -70,3 +70,76 @@ export const FIXTURE_E_USER_DESCRIPTION =
 export const FIXTURE_F_SPARSE: FirecrawlPage[] = [
   page(HOME, "Cekura", "Cekura."),
 ];
+
+// ---- G. Agentory-like: AI workforce product whose site shows RECRUITING ------
+// examples and DEMO signals. The examples must not define the category and the
+// demo numbers must not become customer proof (Research System v3 live-QA case).
+export const AGENTORY_HOME = "https://agentory.example";
+export const FIXTURE_G_AGENTORY_LIKE: FirecrawlPage[] = [
+  page(AGENTORY_HOME, "Agentory — Your AI workforce",
+    "Agentory gives founders an AI workforce that finds leads, watches buying signals, and drafts outreach so your pipeline grows while you build. For example, imagine a Series A fintech hiring SDRs — Agentory surfaces it as a signal. 52 signals found this week in the demo workspace. One customer story: a recruiting agency used Agentory to fill roles faster.",
+    "AI workforce for founders: leads, signals, outreach and pipeline."),
+  page(`${AGENTORY_HOME}/how-it-works`, "How it works",
+    "Step 1: Agentory automatically finds companies matching your ICP. Then it automatically scores buying signals like new funding or GTM hires, and drafts outreach you review before anything sends. Works for any B2B founder building pipeline. Agentory integrates with HubSpot for CRM sync."),
+  page(`${AGENTORY_HOME}/blog/recruiting-example`, "Example: recruiting agencies",
+    "Recruiting software and applicant tracking systems can use signals too. A recruiting platform with candidate sourcing benefits from talent acquisition signals. This is one example workflow of many."),
+];
+export const FIXTURE_G_USER_DESCRIPTION =
+  "Agentory is an AI workforce OS for B2B founders: it finds leads, scores signals and prepares outreach for founder-led GTM.";
+
+// ---- Apify actor output shapes (fixtures only; never sent anywhere) ----------
+/** parseforge-style: flat row with snake_case keys. */
+export const ACTOR_SHAPE_PARSEFORGE = {
+  full_name: "Jane Doe",
+  headline: "Co-Founder & CEO at Cekura",
+  about: "Building Cekura. Previously led growth at Globex.",
+  location: "San Francisco",
+  current_company: "Cekura",
+  current_role: "Co-Founder & CEO",
+  experience: [{ title: "Co-Founder & CEO", company: "Cekura" }, { title: "Head of Growth", company: "Globex" }],
+  education: [{ school: "Stanford", degree: "BS" }],
+  skills: ["GTM", "Sales", "Growth"],
+  email: "jane@example.com",          // must be stripped
+  contact_info: { phone: "+1 555" },  // must be stripped
+};
+
+/** automation-lab-style: camelCase under a nested container. */
+export const ACTOR_SHAPE_NESTED = {
+  basic_info: {
+    fullName: "Jane Doe",
+    subTitle: "Co-Founder & CEO at Cekura",
+    geoLocationName: "San Francisco Bay Area",
+  },
+  positions: [{ title: "Co-Founder & CEO", companyName: "Cekura" }],
+  schools: [{ schoolName: "Stanford" }],
+  skills: ["GTM", "Outbound"],
+};
+
+/** Sparse junk a broken actor returns. */
+export const ACTOR_SHAPE_SPARSE = { someOtherField: "x", id: "123" };
+
+/** automation-lab company shape. */
+export const ACTOR_COMPANY_SHAPE_A = {
+  companyName: "Cekura",
+  website: "https://cekura.ai",
+  industry: "Software Development",
+  employeeCount: "51-200",
+  followerCount: "1,204",
+  headquarters: "San Francisco, CA",
+  foundedYear: "2024",
+  specialties: ["Sales automation", "AI"],
+  description: "Cekura is a sales engagement platform.",
+};
+
+/** curious_coder-style nested company shape. */
+export const ACTOR_COMPANY_SHAPE_B = {
+  data: {
+    name: "Cekura",
+    website_url: "https://cekura.ai",
+    industry_name: "Software",
+    staff_count: 87,
+    hq: "San Francisco",
+    founded: 2024,
+    overview: "Sales engagement platform for revenue teams.",
+  },
+};
