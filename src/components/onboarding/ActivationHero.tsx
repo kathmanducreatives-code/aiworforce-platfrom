@@ -1,48 +1,81 @@
-// Step 5 — Activation hero. Cinematic launch moment.
-// Presentational only; caller provides the completeness object + press handler on the parent.
+// Step 5 — Activation. Cinematic one-screen launch moment.
+//
+// Presentational: the caller owns the activate/save handlers and wiring.
+// Copy rules enforced here: real product surfaces only, nothing claims to
+// send automatically, Scout Radar does not auto-start.
 
 import { motion } from 'framer-motion';
-import { ShieldCheck } from 'lucide-react';
+import {
+  AlertTriangle, Cpu, Loader2, PenLine, Radar, Rocket, Send, ShieldCheck, Target,
+} from 'lucide-react';
+import { Button } from '@/components/ui/button';
 import { BRAIN_POWERS, type CompletenessResult } from '@/lib/companyBrainCompleteness';
 import { CompletenessRing } from './CompletenessRing';
 
-export function ActivationHero({ completeness }: { completeness: CompletenessResult }) {
+const POWER_ICONS: Record<string, React.ReactNode> = {
+  leads: <Target className="h-4 w-4" />,
+  radar: <Radar className="h-4 w-4" />,
+  content: <PenLine className="h-4 w-4" />,
+  agents: <Cpu className="h-4 w-4" />,
+  outreach: <Send className="h-4 w-4" />,
+};
+
+export function ActivationHero({
+  completeness, busy, canActivate, onActivate, onSaveDraft,
+}: {
+  completeness: CompletenessResult;
+  busy?: 'activate' | 'save' | null;
+  canActivate?: boolean;
+  onActivate?: () => void;
+  onSaveDraft?: () => void;
+}) {
   const complete = completeness.complete;
 
   return (
-    <div className="space-y-6">
-      {/* Orb + readiness */}
-      <div className="relative overflow-hidden rounded-3xl border border-border/50 bg-gradient-to-b from-primary/[0.08] via-card/40 to-card/40 p-10 text-center backdrop-blur-xl">
+    <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_300px]">
+      {/* Orb + readiness + CTA */}
+      <div className="relative flex flex-col items-center justify-center overflow-hidden rounded-3xl border border-border/50 bg-gradient-to-b from-primary/[0.08] via-card/40 to-card/40 p-6 text-center backdrop-blur-xl lg:p-8">
         <div
           aria-hidden
           className="pointer-events-none absolute inset-0 opacity-70"
-          style={{ background: 'radial-gradient(500px 260px at 50% 0%, hsl(var(--primary) / 0.22), transparent 70%)' }}
+          style={{ background: 'radial-gradient(480px 260px at 50% 0%, hsl(var(--primary) / 0.22), transparent 70%)' }}
         />
+
         <div className="relative">
-          <div className="mb-6 flex justify-center">
-            <div className="relative">
-              <motion.div
-                aria-hidden
-                className="absolute inset-0 rounded-full"
-                style={{ boxShadow: '0 0 60px 20px hsl(var(--primary) / 0.25)' }}
-                animate={{ opacity: [0.4, 0.8, 0.4] }}
-                transition={{ duration: 3, repeat: Infinity, ease: 'easeInOut' }}
-              />
-              <CompletenessRing value={completeness.percent} size={200} stroke={12} caption="Ready" />
-            </div>
+          {/* Readiness orb */}
+          <div className="relative mx-auto mb-4 w-fit">
+            <motion.div
+              aria-hidden
+              className="absolute inset-0 rounded-full"
+              style={{ boxShadow: '0 0 70px 24px hsl(var(--primary) / 0.22)' }}
+              animate={{ opacity: complete ? [0.5, 0.95, 0.5] : [0.25, 0.5, 0.25] }}
+              transition={{ duration: 3, repeat: Infinity, ease: 'easeInOut' }}
+            />
+            <motion.div
+              aria-hidden
+              className="absolute -inset-3 rounded-full border border-primary/20"
+              animate={{ rotate: 360 }}
+              transition={{ duration: 18, repeat: Infinity, ease: 'linear' }}
+              style={{
+                background:
+                  'conic-gradient(from 0deg, transparent 0%, hsl(var(--primary) / 0.18) 12%, transparent 26%)',
+              }}
+            />
+            <CompletenessRing value={completeness.percent} size={136} stroke={10} caption="Ready" />
           </div>
-          <p className="mb-2 text-[11px] uppercase tracking-[0.22em] text-primary/80">
+
+          <p className="mb-1.5 text-[11px] uppercase tracking-[0.22em] text-primary/80">
             {complete ? 'Ready to launch' : 'Almost there'}
           </p>
-          <h2 className="text-3xl font-semibold tracking-tight text-foreground sm:text-4xl">
+          <h2 className="text-xl font-semibold tracking-tight text-foreground sm:text-2xl">
             {complete ? 'Your Company Brain is ready.' : 'A few pieces still to confirm.'}
           </h2>
-          <p className="mx-auto mt-3 max-w-lg text-sm text-muted-foreground">
-            {complete
-              ? 'Activate to power Leads, Scout Radar, Content, Agents and Outreach with this context.'
-              : 'Complete the required fields to activate. You can save a draft and finish later.'}
+          <p className="mx-auto mt-2 max-w-md text-xs leading-relaxed text-muted-foreground sm:text-sm">
+            Agentory will use this to qualify leads, score signals, draft content, and prepare
+            outreach. Nothing sends automatically.
           </p>
-          <div className="mt-5 inline-flex items-center gap-2">
+
+          <div className="mt-3 inline-flex flex-wrap items-center justify-center gap-2">
             <span className="rounded-full border border-primary/40 bg-primary/10 px-2.5 py-0.5 text-[10px] uppercase tracking-[0.18em] text-primary">
               {completeness.confidence} confidence
             </span>
@@ -50,56 +83,94 @@ export function ActivationHero({ completeness }: { completeness: CompletenessRes
               {completeness.required_met}/{completeness.required_total} required · {completeness.bonus_met}/{completeness.bonus_total} bonus
             </span>
           </div>
-        </div>
-      </div>
 
-      {/* Powers grid */}
-      <div className="rounded-2xl border border-border/50 bg-card/40 p-6 backdrop-blur-xl">
-        <div className="mb-4 flex items-center justify-between">
-          <h3 className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground">What Agentory will use this for</h3>
-          <span className="text-[10px] uppercase tracking-[0.14em] text-primary/70">Real product surfaces</span>
-        </div>
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          {BRAIN_POWERS.map((p, i) => (
-            <motion.div
-              key={p.key}
-              initial={{ opacity: 0, y: 6 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.05 * i }}
-              className={[
-                'rounded-xl border p-4 transition-colors',
-                complete ? 'border-primary/30 bg-primary/[0.04]' : 'border-border/40 bg-background/30',
-              ].join(' ')}
+          {/* Launch CTA */}
+          <div className="mt-4 flex flex-col items-center gap-2">
+            <Button
+              size="lg"
+              onClick={onActivate}
+              disabled={!canActivate || busy === 'activate'}
+              className="min-w-[250px] gap-2 bg-primary text-primary-foreground shadow-[0_0_32px_hsl(var(--primary)/0.45)] transition-shadow hover:bg-primary/90 hover:shadow-[0_0_44px_hsl(var(--primary)/0.6)]"
             >
-              <p className="text-sm font-semibold tracking-tight text-foreground">{p.label}</p>
-              <p className="mt-1 text-[11px] leading-relaxed text-muted-foreground">{p.blurb}</p>
-            </motion.div>
-          ))}
+              {busy === 'activate' ? <Loader2 className="h-4 w-4 animate-spin" /> : <Rocket className="h-4 w-4" />}
+              Activate Company Brain
+            </Button>
+            {!complete && onSaveDraft && (
+              <Button variant="ghost" size="sm" onClick={onSaveDraft} disabled={busy === 'save'} className="h-8 text-xs text-muted-foreground">
+                {busy === 'save' && <Loader2 className="mr-1.5 h-3 w-3 animate-spin" />}
+                Save draft and finish later
+              </Button>
+            )}
+          </div>
+
+          {/* Safety strip */}
+          <div className="mt-4 flex flex-wrap items-center justify-center gap-2">
+            <Pill text="No outreach sent" />
+            <Divider />
+            <Pill text="No Scout Radar scan started" />
+            <Divider />
+            <Pill text="You stay in control" />
+          </div>
         </div>
       </div>
 
-      {/* Still to review */}
-      {completeness.missing.length > 0 && (
-        <div className="rounded-2xl border border-amber-500/30 bg-amber-500/[0.04] p-5 backdrop-blur-sm">
-          <h3 className="mb-2 text-[10px] uppercase tracking-[0.18em] text-amber-300">Still to confirm</h3>
-          <ul className="grid gap-1.5 sm:grid-cols-2">
-            {completeness.missing.map((m) => (
-              <li key={m} className="flex items-start gap-2 text-xs text-amber-100/90">
-                <span className="mt-1.5 h-1 w-1 shrink-0 rounded-full bg-amber-400/80" />
-                {m}
-              </li>
+      {/* Right column — powers + missing */}
+      <div className="flex min-w-0 flex-col gap-4">
+        <div className="rounded-2xl border border-border/50 bg-card/40 p-4 backdrop-blur-xl">
+          <h3 className="mb-3 px-1 text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
+            What this powers
+          </h3>
+          <div className="space-y-1.5">
+            {BRAIN_POWERS.map((p, i) => (
+              <motion.div
+                key={p.key}
+                initial={{ opacity: 0, x: 10 }}
+                animate={{ opacity: 1, x: 0 }}
+                transition={{ delay: 0.06 * i, duration: 0.3 }}
+                className={[
+                  'flex items-start gap-3 rounded-xl border p-2.5 transition-colors',
+                  complete ? 'border-primary/25 bg-primary/[0.05]' : 'border-border/40 bg-background/30',
+                ].join(' ')}
+              >
+                <span
+                  className={[
+                    'mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border',
+                    complete
+                      ? 'border-primary/30 bg-primary/10 text-primary shadow-[0_0_12px_hsl(var(--primary)/0.2)]'
+                      : 'border-border/40 bg-background/40 text-muted-foreground',
+                  ].join(' ')}
+                >
+                  {POWER_ICONS[p.key]}
+                </span>
+                <div className="min-w-0">
+                  <p className="text-xs font-semibold tracking-tight text-foreground">{p.label}</p>
+                  <p className="mt-0.5 text-[10px] leading-relaxed text-muted-foreground">{p.blurb}</p>
+                </div>
+              </motion.div>
             ))}
-          </ul>
+          </div>
         </div>
-      )}
 
-      {/* Safety strip */}
-      <div className="flex flex-wrap items-center justify-center gap-2 rounded-full border border-border/40 bg-background/40 px-4 py-2.5 backdrop-blur-sm">
-        <Pill text="No outreach sent" />
-        <Divider />
-        <Pill text="No Scout Radar scan started" />
-        <Divider />
-        <Pill text="You stay in control" />
+        {completeness.missing.length > 0 && (
+          <div className="rounded-2xl border border-amber-500/30 bg-amber-500/[0.04] p-4 backdrop-blur-sm">
+            <h3 className="mb-2 flex items-center gap-1.5 text-[10px] uppercase tracking-[0.18em] text-amber-300">
+              <AlertTriangle className="h-3 w-3" /> Still to confirm
+            </h3>
+            <ul className="space-y-1.5">
+              {completeness.missing.slice(0, 6).map((m) => (
+                <li key={m} className="flex items-start gap-2 text-xs text-amber-100/90">
+                  <span className="mt-1.5 h-1 w-1 shrink-0 rounded-full bg-amber-400/80" />
+                  {m}
+                </li>
+              ))}
+              {completeness.missing.length > 6 && (
+                <li className="text-[11px] text-amber-200/60">
+                  +{completeness.missing.length - 6} more in the Brain panel
+                </li>
+              )}
+            </ul>
+          </div>
+        )}
       </div>
     </div>
   );

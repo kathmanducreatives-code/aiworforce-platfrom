@@ -84,7 +84,7 @@ export function BrainPreviewPanel({
           </div>
 
           <div className="flex flex-col items-center gap-3">
-            <CompletenessRing value={completeness.percent} size={132} caption="Ready" />
+            <CompletenessRing value={completeness.percent} size={112} stroke={9} caption="Ready" />
             <div className="flex flex-wrap items-center justify-center gap-1.5">
               <span
                 className={[
