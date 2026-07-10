@@ -45,14 +45,14 @@ export function SourceEvidenceCard({ label, path, status, confidence, bullets = 
           style={{ background: 'linear-gradient(to right, transparent, hsl(var(--primary) / 0.6), transparent)' }}
         />
       )}
-      <header className="mb-2.5 flex items-start justify-between gap-2">
-        <div className="min-w-0">
-          <p className="truncate text-sm font-medium text-foreground">{label}</p>
-          {path && <p className="mt-0.5 truncate text-[10px] uppercase tracking-[0.12em] text-muted-foreground">{path}</p>}
-        </div>
-        <span className={`inline-flex shrink-0 items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] uppercase tracking-[0.14em] ${meta.className}`}>
+      <header className="mb-2.5 space-y-1.5">
+        <span className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[9px] uppercase tracking-[0.14em] ${meta.className}`}>
           {meta.icon} {meta.label}
         </span>
+        <div className="min-w-0">
+          <p className="text-sm font-medium text-foreground">{label}</p>
+          {path && <p className="mt-0.5 truncate text-[10px] uppercase tracking-[0.12em] text-muted-foreground">{path}</p>}
+        </div>
       </header>
 
       {bullets.length > 0 ? (
