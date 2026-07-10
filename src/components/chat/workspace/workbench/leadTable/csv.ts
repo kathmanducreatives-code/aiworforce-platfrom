@@ -44,6 +44,13 @@ export function rowsToCsv(rows: LeadTableRow[]): string {
     // Provider/debug identifiers.
     'provider_job_id', 'provider_ref_id', 'tracking_id', 'input_url',
     'outreach_status',
+    // Query trace + explainability (Parts 1/3/7) — trace every row back to the
+    // exact run + query that produced it, and why it was accepted/downgraded/flagged.
+    'run_id', 'original_user_query', 'parsed_intent_summary',
+    'provider_query_keywords', 'provider_query_location',
+    'intent_tier', 'relaxation_step_used', 'match_tier',
+    'funding_required', 'funding_proof_found', 'funding_source_url',
+    'recruiter_proxy', 'rejected_or_risk_reason',
   ];
   const lines = [headers.join(',')];
   for (const r of rows) {
@@ -72,6 +79,15 @@ export function rowsToCsv(rows: LeadTableRow[]): string {
     // proof_incomplete URL — an empty cell + source_quality tells the honest story.
     const sourceUrl = r.signal_source_url || r.job_url || (raw.source_url as string) || r.website || '';
     const jobExcerpt = r.job_description ? String(r.job_description).slice(0, 300) : '';
+    // Parts 1/3/6/7 — one honest "why not / why risky" cell: first available of
+    // an explicit recorded reason → recruiter proxy → risk flags → gate rejects.
+    const gateRejected = !!r.gate_decision && /reject/i.test(String(r.gate_decision));
+    const rejectedOrRiskReason = [
+      (raw.rejected_or_risk_reason as string) || '',
+      raw.recruiter_proxy ? ((raw.recruiter_proxy_reason as string) || 'Recruiter/staffing proxy; actual hiring company hidden.') : '',
+      Array.isArray(r.risk_flags) && r.risk_flags.length ? (r.risk_flags as unknown[]).join(' · ') : '',
+      gateRejected && Array.isArray(raw.gate_reasons) && (raw.gate_reasons as unknown[]).length ? (raw.gate_reasons as unknown[]).join(' · ') : '',
+    ].find((x) => x) ?? '';
     lines.push([
       esc(r.company_name),
       esc(r.website),
@@ -164,6 +180,20 @@ export function rowsToCsv(rows: LeadTableRow[]): string {
       esc(raw.provider_tracking_id),
       esc(raw.input_url),
       esc(outreachState),
+      // Query trace + explainability (Parts 1/3/7).
+      esc(raw.run_id),
+      esc(raw.original_user_query),
+      esc(raw.parsed_intent_summary),
+      esc(raw.provider_query_keywords),
+      esc(raw.provider_query_location),
+      esc(raw.intent_tier),
+      esc(raw.relaxation_step_used),
+      esc(raw.match_tier),
+      esc(raw.funding_required),
+      esc(raw.funding_proof_found),
+      esc(raw.funding_source_url),
+      esc(raw.recruiter_proxy ? 'yes' : ''),
+      esc(rejectedOrRiskReason),
     ].join(','));
   }
   return lines.join('\n');

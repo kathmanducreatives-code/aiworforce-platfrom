@@ -1,5 +1,5 @@
 import { assert, assertEquals } from "https://deno.land/std@0.224.0/assert/mod.ts";
-import { normalizeApifyJobRow, parseDomain, buildSignalSummary } from "./apifyJobsNormalizer.ts";
+import { normalizeApifyJobRow, parseDomain, buildSignalSummary, isShortenerUrl } from "./apifyJobsNormalizer.ts";
 
 // Representative Apify LinkedIn Jobs row.
 const row = {
@@ -195,4 +195,43 @@ Deno.test("Test 12: legacy row missing all extended fields → nulls, never cras
   assertEquals(n.companyAddress.country, null);
   assertEquals(n.posterContactHint.photo, null);
   assertEquals(n.providerJobId, null);
+});
+
+// Part 5 — link shorteners are never a real company website/domain.
+Deno.test("Part5: isShortenerUrl detects known shorteners, ignores real sites", () => {
+  for (const u of ["https://bit.ly/abc", "lnkd.in/xyz", "http://t.co/q", "tinyurl.com/z", "https://ow.ly/aa"]) {
+    assert(isShortenerUrl(u), `${u} should be a shortener`);
+  }
+  for (const u of ["https://ajax.com", "https://pilot.com/careers", "acme.io", "", null, undefined]) {
+    assert(!isShortenerUrl(u as string), `${u} should NOT be a shortener`);
+  }
+});
+
+Deno.test("Part5: parseDomain rejects shortener hosts", () => {
+  assertEquals(parseDomain("https://bit.ly/xyz"), null);
+  assertEquals(parseDomain("lnkd.in/abc"), null);
+  assertEquals(parseDomain("https://ajax.com/careers"), "ajax.com");
+});
+
+Deno.test("Part5: Ajax/Pilot shortener website is dropped + missing-evidence flagged", () => {
+  const ajax = normalizeApifyJobRow({ companyName: "Ajax", title: "SDR", link: "https://linkedin.com/jobs/view/ajax", companyWebsite: "https://bit.ly/ajax-co" });
+  assertEquals(ajax.website, null);                       // shortener never kept as website
+  assertEquals(ajax.domain, null);
+  assertEquals(ajax.raw.website_shortener_dropped, true);
+  assertEquals(ajax.raw.shortener_url, "https://bit.ly/ajax-co");
+  assert((ajax.raw.missing_evidence as string[]).includes("verified company website"));
+  // real source proof (the job posting) still survives.
+  assert(ajax.sourceProof.some((p) => p.type === "job_posting"));
+
+  const pilot = normalizeApifyJobRow({ companyName: "Pilot.com", title: "Business Developer", link: "https://linkedin.com/jobs/view/pilot", companyWebsite: "lnkd.in/pilot" });
+  assertEquals(pilot.website, null);
+  assertEquals(pilot.raw.website_shortener_dropped, true);
+  assert((pilot.raw.missing_evidence as string[]).includes("verified company website"));
+});
+
+Deno.test("Part5: a real company website is preserved (not treated as shortener)", () => {
+  const n = normalizeApifyJobRow({ companyName: "JustAI", title: "SDR", link: "https://linkedin.com/jobs/view/justai", companyWebsite: "https://justai.com" });
+  assertEquals(n.website, "https://justai.com");
+  assertEquals(n.domain, "justai.com");
+  assertEquals(n.raw.website_shortener_dropped, false);
 });

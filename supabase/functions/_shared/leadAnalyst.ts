@@ -35,6 +35,9 @@ export interface AnalystInput {
     jobTitle?: string | null; jobUrl?: string | null; source_url?: string | null;
     industries?: string[] | string | null; companyDescription?: string | null; jobDescription?: string | null;
     employeeCount?: number | null;
+    // A SEPARATE, verifiable funding source (e.g. TechCrunch/press). A funding
+    // keyword appearing in the job/company text is NOT proof (Part 4).
+    funding_proof_url?: string | null;
   };
   icp: DerivedCompanyIcp;
   gate?: { decision?: string; disqualifiersHit?: string[]; missingEvidence?: string[] } | null;
@@ -67,7 +70,11 @@ export function buildLeadAnalystSummary(input: AnalystInput): LeadAnalystSummary
   const isRevenueRole = has(lc(role ?? ""), REVENUE_ROLE_RE);
   const isBizDev = has(lc(role ?? ""), BIZDEV_RE) && !isRevenueRole;
   const isGenericOps = has(lc(role ?? ""), GENERIC_OPS_RE);
-  const hasFunding = has(combined, FUNDING_RE);
+  // A funding keyword in the text is only a *mention*; recent-funding CLAIMS
+  // require a separate funding_proof_url (Part 4). Never say "recently funded"
+  // / "funding momentum" on the strength of a text match alone.
+  const fundingMentioned = has(combined, FUNDING_RE);
+  const hasFundingProof = !!(c.funding_proof_url && String(c.funding_proof_url).trim());
   const { max } = icp.targetCompanySize;
   const tooLarge = emp != null && max != null && emp > max;
   const disqHit = input.gate?.disqualifiersHit ?? [];
@@ -82,7 +89,7 @@ export function buildLeadAnalystSummary(input: AnalystInput): LeadAnalystSummary
     : "No verifiable source proof yet.";
 
   const missingEvidence: string[] = [];
-  if (!hasFunding) missingEvidence.push("recent funding / growth momentum");
+  if (!hasFundingProof) missingEvidence.push("recent funding proof");
   if (emp == null) missingEvidence.push("employee count");
   if (!isSaas) missingEvidence.push("clear B2B SaaS / software evidence");
   if (!isRevenueRole) missingEvidence.push("a revenue/RevOps/first-sales/founder-led growth signal");
@@ -129,11 +136,13 @@ export function buildLeadAnalystSummary(input: AnalystInput): LeadAnalystSummary
       ? `Scout found a verified ${role} hiring signal at what appears to be a small B2B SaaS company — a strong match for Agentory's ICP of founders building revenue before adding sales headcount.`
       : `Scout found real proof for ${company} (${evidence.join(", ") || "limited proof"}). It is safe to review, but it is a ${analystVerdict === "weak" ? "weak" : "borderline"} Agentory lead${tooLarge ? ` because the company appears larger than the ${icp.targetCompanySize.label ?? "10–150 employee"} ICP` : ""}${isBizDev ? " and the role is BizDev rather than RevOps, first sales, or founder-led growth" : ""}${isGenericOps ? " and the role is generic operations, not a revenue signal" : ""}.`;
 
-  const whyNow = hasFunding
-    ? `${company} shows recent funding / growth momentum in the source text — a likely moment to build a customer-acquisition motion before adding sales payroll.`
+  // Only claim recent funding when there is a SEPARATE funding source URL.
+  // A funding word in the post text is not proof — say the proof is missing.
+  const whyNow = hasFundingProof
+    ? `${company} has recent funding confirmed by a separate source (${c.funding_proof_url}) — a likely moment to build a customer-acquisition motion before adding sales payroll.`
     : isRevenueRole
-      ? `The company is actively hiring for ${role}, suggesting it is building its revenue motion now — before scaling sales headcount.`
-      : "No clear 'why now' signal (no recent funding or early pipeline-building evidence in the current evidence).";
+      ? `The company is actively hiring for ${role}. Shows a GTM hiring signal, but recent funding proof is missing${fundingMentioned ? " (the post mentions funding, but there is no separate funding source to verify it)" : ""} — treat "why now" as the hiring signal, not funding.`
+      : `No clear 'why now' signal. Shows a GTM hiring signal, but recent funding proof is missing${fundingMentioned ? " (funding is mentioned in the text but not separately verified)" : ""}.`;
 
   const sizePart = emp != null ? (tooLarge ? `larger than the ${icp.targetCompanySize.label ?? "target"} range` : "within the target size range") : "size unknown";
   const rolePart = isRevenueRole ? "a revenue/growth-building role" : isBizDev ? "a BizDev role (weaker than RevOps/first-sales)" : isGenericOps ? "a generic operations role (not a revenue signal)" : "an unclear role fit";

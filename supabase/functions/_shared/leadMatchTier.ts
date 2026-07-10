@@ -28,11 +28,24 @@ export interface TierResult {
   funding_source_url: string | null;
   disqualified: boolean;
   relaxations: string[];   // which relaxations this row relied on (funding_relaxed / role_adjacent / …)
+  recruiter_proxy: boolean;
 }
 
 const SAAS_RE = /\b(saas|software|b2b software|platform|api|cloud|app|application|ai\b|artificial intelligence|analytics|fintech|payments? (platform|software)|developer tools?|data (platform|infrastructure))\b/i;
 const GENERIC_ROLE_RE = /\b(operations manager|office manager|business developer|sales manager|account manager)\b/i;
 const OUTBOUND_EVIDENCE_RE = /\b(outbound|pipeline|prospect|cold (call|email|outreach)|revenue|gtm|go-to-market|new business|founder-led)\b/i;
+// Recruiter/staffing proxy posts — the real employer is hidden (Part 6).
+const RECRUITER_PROXY_RE = /\b(our client|on behalf of|we(?:'re| are) partnering with|partnering with (?:an?|our)|recruitment agency|staffing (?:agency|firm)|talent (?:agency|partner)|search firm|recruiting firm|headhunt|confidential (?:client|company)|unnamed (?:client|company)|a leading (?:client|company))\b/i;
+const RECRUITER_INDUSTRY_RE = /\b(staffing|recruit(?:ing|ment)|talent acquisition|executive search|employment agency)\b/i;
+
+/** Detect a recruiter/staffing proxy post where the actual employer is hidden. */
+export function detectRecruiterProxy(c: CandidateForTier): { isProxy: boolean; reason: string | null } {
+  const desc = [c.company_description, c.job_description].filter(Boolean).join(" ");
+  const inds = (c.industries ?? []).join(" ");
+  if (RECRUITER_PROXY_RE.test(desc)) return { isProxy: true, reason: "Recruiter proxy post; actual hiring company hidden." };
+  if (RECRUITER_INDUSTRY_RE.test(inds)) return { isProxy: true, reason: "Company is a staffing/recruiting agency; not the target buyer." };
+  return { isProxy: false, reason: null };
+}
 
 function text(c: CandidateForTier): string {
   return [c.company, (c.industries ?? []).join(" "), c.company_description, c.job_title, c.job_description].filter(Boolean).join(" ").toLowerCase();
@@ -66,17 +79,21 @@ export function classifyLeadTier(c: CandidateForTier, intent: LeadSearchIntent):
   const funding_required = intent.funding_required;
   const funding_proof_found = !!(c.funding_proof_url && c.funding_proof_url.trim());
   const funding_source_url = funding_proof_found ? (c.funding_proof_url as string) : null;
+  const proxy = detectRecruiterProxy(c);
 
   const reject = (reason: string, disq = false): TierResult => {
     reasons.push(reason);
-    return { match_tier: "reject", reasons, missing_evidence, funding_required, funding_proof_found, funding_source_url, disqualified: disq, relaxations };
+    return { match_tier: "reject", reasons, missing_evidence, funding_required, funding_proof_found, funding_source_url, disqualified: disq, relaxations, recruiter_proxy: proxy.isProxy };
   };
 
   // 1. Never fill without source proof.
   if (!c.source_url || !String(c.source_url).trim() || /proof_incomplete/i.test(String(c.source_url))) {
     return reject("no source proof (never accepted)");
   }
-  // 2. Hard disqualifier → reject, never used to fill count.
+  // 2. Recruiter/staffing proxy → the real employer is hidden; never a target
+  //    account (do not invent the actual company).
+  if (proxy.isProxy) return reject(proxy.reason ?? "recruiter proxy post", true);
+  // 3. Hard disqualifier → reject, never used to fill count.
   const disq = hitsDisqualifier(c, intent.hard_disqualifiers);
   if (disq) return reject(`hard-disqualified: ${disq}`, true);
 
@@ -112,7 +129,7 @@ export function classifyLeadTier(c: CandidateForTier, intent: LeadSearchIntent):
     }
   }
 
-  return { match_tier: tier, reasons, missing_evidence, funding_required, funding_proof_found, funding_source_url, disqualified: false, relaxations };
+  return { match_tier: tier, reasons, missing_evidence, funding_required, funding_proof_found, funding_source_url, disqualified: false, relaxations, recruiter_proxy: false };
 }
 
 export interface ShortageResult {

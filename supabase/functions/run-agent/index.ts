@@ -311,6 +311,14 @@ Deno.serve(async (req) => {
         roleKeywords = roleKeywords.map((r) => normalizeTerm(r)).filter(Boolean);
         if (location) location = normalizeTerm(location);
 
+        // Part 1/7 — every sourcing run gets a fresh run_id + the ORIGINAL user
+        // query, so the trace is self-contained and a new query can never be
+        // confused with a previous run's cached keywords/state. Built here, before
+        // any provider input, and threaded through the trace + each lead's raw.
+        const run_id = (globalThis.crypto?.randomUUID?.() ?? `run_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`);
+        const original_user_query = (instruction ?? rawQuery ?? normalizedQuery ?? "").toString();
+        const run_started_at = new Date().toISOString();
+
         let plannedUserInput: Record<string, unknown> | undefined =
           (tool_input_body?.user_input && typeof tool_input_body.user_input === "object")
             ? tool_input_body.user_input as Record<string, unknown> : undefined;
@@ -414,6 +422,8 @@ Deno.serve(async (req) => {
               normalizedQuery = scoutPlan.primary.keywords;
               location = scoutPlan.primary.location;
               scoutQueryMeta = {
+                run_id,
+                original_user_query,
                 keywords: scoutPlan.primary.keywords,
                 location: scoutPlan.primary.location,
                 provider_queries: scoutPlan.provider_queries,
@@ -958,6 +968,8 @@ Deno.serve(async (req) => {
                     jobUrl: (r.job_url ?? it.source_url) as string | null, source_url: it.source_url,
                     industries: (r.industries ?? r.category) as string[] | string | null, companyDescription: r.company_description as string | null,
                     jobDescription: r.job_description as string | null, employeeCount: (r.employee_count ?? r.companyEmployeesCount) as number | null,
+                    // Separate funding source only — never claim funding from post text (Part 4).
+                    funding_proof_url: (r.funding_source_url ?? r.funding_proof_url) as string | null,
                   },
                   icp: derivedIcp as any,
                   gate: entry.gate ? { decision: (entry.gate as any).decision, disqualifiersHit: (entry.gate as any).disqualifiers_hit, missingEvidence: (entry.gate as any).missing_evidence } : null,
@@ -1009,10 +1021,19 @@ Deno.serve(async (req) => {
                 const l = tc.labels[i]; if (!l || !it) return;
                 it.raw = {
                   ...(it.raw ?? {}),
+                  // Part 1/7 — stamp the run trace onto every lead so a row can
+                  // always be traced back to the exact query that produced it.
+                  run_id,
+                  original_user_query,
+                  provider_query_keywords: scoutPlan.primary.keywords,
+                  provider_query_location: scoutPlan.primary.location,
+                  intent_tier: l.match_tier === "reject" ? (it.raw?.intent_tier ?? null) : l.match_tier,
+                  relaxation_step_used: (l.relaxations ?? []).join(", ") || null,
                   match_tier: l.match_tier,
                   funding_required: l.funding_required,
                   funding_proof_found: l.funding_proof_found,
                   funding_source_url: l.funding_source_url,
+                  recruiter_proxy: (l as any).recruiter_proxy ?? false,
                   ...(l.missing_evidence?.length ? { missing_evidence: [...new Set([...(it.raw?.missing_evidence ?? []), ...l.missing_evidence])] } : {}),
                 };
               });
@@ -1021,6 +1042,10 @@ Deno.serve(async (req) => {
           }
           sourceQualityMeta = {
             ...counts,
+            // Part 1/7 — self-contained run trace (never reused across queries).
+            run_id,
+            original_user_query,
+            run_started_at,
             top_reject_reasons: topRejectReasons(mergedRejectReasons),
             attempt_labels: adaptive.attempts.map((a) => a.strategy),
             needs_permission_to_broaden: !!adaptive.needs_permission_to_broaden,
