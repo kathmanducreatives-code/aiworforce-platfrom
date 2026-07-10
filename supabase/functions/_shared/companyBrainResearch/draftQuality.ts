@@ -45,9 +45,9 @@ const PERSONA_LIBRARY: Array<{
     },
   },
   {
-    match: /\b(sales|outbound|prospect|pipeline|crm|account executive|sdr)/i,
+    match: /\b(sales|outbound|prospect|pipeline|crm|account executive|sdr|gtm|go-to-market|revenue)/i,
     persona: {
-      title: "Head of Sales / Revenue", role_keywords: ["Head of Sales", "VP Sales", "CRO", "Head of Revenue"],
+      title: "Head of Sales / GTM", role_keywords: ["Head of Sales", "VP Sales", "CRO", "Head of GTM", "Head of Revenue"],
       department: "Sales", seniority: "Leadership",
       pains: ["Reps spend time on research, not selling", "Inconsistent pipeline coverage"],
       cares_about: ["Quota attainment", "Rep productivity", "Forecast accuracy"],
@@ -186,34 +186,42 @@ export interface DisqualifierContext {
  * the product category, business model and stated target.
  */
 export function suggestDisqualifiers(ctx: DisqualifierContext): DisqualifierBucketsDraft {
-  const blob = [ctx.product_category, ctx.business_model, ctx.user_description ?? "", ...ctx.target_industries].join(" ").toLowerCase();
+  const blob = [ctx.product_category, ctx.business_model, ctx.user_description ?? "", ...(ctx.primary_users ?? []), ...ctx.target_industries].join(" ").toLowerCase();
 
   const out: DisqualifierBucketsDraft = { industries: [], company_types: [], keywords: [], titles: [], domains: [] };
 
-  const sellsSoftware = /saas|software|platform|api|developer|analytics|crm|ai\b/.test(blob);
-  const sellsToInHouseTeams = /in-house|internal team|your team|revops|sales team/.test(blob);
-  const targetsSmb = /smb|startup|small team|founder|early[- ]stage/.test(blob);
-  const sellsRecruiting = /recruit|talent|ats|hiring/.test(blob);
+  const domain = detectProductDomain({
+    product_category: ctx.product_category, one_line_summary: ctx.user_description ?? "",
+    primary_users: ctx.primary_users ?? [], key_features: [], user_description: ctx.user_description,
+  });
+  const targetsSmb = /smb|startup|small team|founder|early[- ]stage|scale[- ]?up/.test(blob);
 
-  if (sellsSoftware) {
-    // A software seller's structural non-buyers.
-    out.industries.push("non-software services", "local services", "manufacturing");
-    out.company_types.push("agencies", "consultancies");
-    out.keywords.push("staffing agency", "recruiting agency");
+  if (domain === 'recruiting') {
+    // A recruiter's structural non-buyers: companies that don't need to hire,
+    // can't pay, or already staff internally. NEVER "non-software services".
+    out.industries.push("companies not actively hiring", "non-tech / traditional industries outside our niche");
+    out.company_types.push("other recruiting or staffing agencies", "companies with a fully-staffed in-house talent team", "solo founders with no hiring budget");
+    out.keywords.push("hiring freeze", "no open roles");
+  } else if (domain === 'agency_services') {
+    out.company_types.push("companies that keep this function fully in-house", "no budget for outside help");
+    out.industries.push("industries outside our specialism");
+  } else {
+    // Software / gtm / generic — a software seller's structural non-buyers.
+    const sellsSoftware = /saas|software|platform|\bapi\b|developer|analytics|crm|\bai\b/.test(blob);
+    if (sellsSoftware) {
+      out.industries.push("non-software services", "local services", "manufacturing");
+      out.company_types.push("agencies", "consultancies");
+    }
+    // Only exclude recruiting when recruiting is NOT what we sell/serve.
+    if (sellsSoftware) out.industries.push("staffing and recruiting");
+    if (/marketplace/.test(blob)) out.company_types.push("marketplaces");
+    out.titles.push("Plant Manager", "Facilities Manager", "Warehouse Manager");
   }
-  if (sellsSoftware && !sellsRecruiting) {
-    // Only exclude recruiting when recruiting is NOT what we sell.
-    out.industries.push("staffing and recruiting");
-  }
-  if (sellsToInHouseTeams) out.company_types.push("outsourced service providers");
+
   if (targetsSmb) out.company_types.push("enterprise-only organisations");
-  if (/marketplace/.test(blob)) out.company_types.push("marketplaces");
-
-  // Titles that never buy software regardless of category.
-  out.titles.push("Plant Manager", "Facilities Manager", "Warehouse Manager");
 
   // Generic non-buyer categories, appended so we always reach a useful floor.
-  const FLOOR = ["government", "education", "non-profit", "generic consultants", "franchises"];
+  const FLOOR = ["government", "education", "non-profit", "franchises"];
   for (const f of FLOOR) {
     if (totalCount(out) >= 6) break;
     if (!out.industries.includes(f)) out.industries.push(f);
@@ -238,6 +246,48 @@ export function countDisqualifiers(d: Partial<DisqualifierBucketsDraft> | undefi
     + (d.titles?.length ?? 0) + (d.domains?.length ?? 0);
 }
 
+// ---------------------------------------------------------- product domain ---
+
+/**
+ * What kind of product/service this is. Drives domain-appropriate ICP
+ * suggestions instead of assuming every company is a GTM/leads tool — the exact
+ * failure that gave a recruitment AGENCY lead-gen pains and content angles.
+ */
+export type ProductDomain = 'recruiting' | 'gtm_sales' | 'marketing' | 'agency_services' | 'generic';
+
+function ctxBlob(ctx: PersonaContext): string {
+  return [ctx.product_category, ctx.one_line_summary, ctx.user_description ?? "", ...ctx.primary_users, ...ctx.key_features]
+    .filter(Boolean).join(" ").toLowerCase();
+}
+
+/**
+ * Classify the product domain. Trust the VETTED product_category first, then the
+ * user's own description — NOT the noisy key_features blob (which can carry
+ * example-customer mentions like "a recruiting agency used us" and wrongly flip
+ * the domain). Recruiting/staffing wins over GTM only when the company itself is
+ * a recruiter, not when it merely hires GTM talent or names a recruiting example.
+ */
+export function detectProductDomain(ctx: PersonaContext): ProductDomain {
+  const cat = (ctx.product_category ?? "").toLowerCase();
+  const desc = `${ctx.one_line_summary ?? ""} ${ctx.user_description ?? ""}`.toLowerCase();
+
+  // 1) The category earned repeated support in the understanding pass — trust it.
+  if (/agenc|staffing|recruit/.test(cat)) return 'recruiting';
+  if (/market/.test(cat)) return 'marketing';
+  if (/lead|sales|gtm|go[- ]to[- ]market|workforce|pipeline|outbound|prospect|revenue|crm/.test(cat)) return 'gtm_sales';
+
+  // 2) Then the user's own description / one-liner (high-trust, not scraped chrome).
+  const strongRecruit = /\b(recruit\w*|staffing|talent acquisition|headhunt\w*|placement (?:agency|firm)|time[- ]to[- ]hire|we (?:hire|place|source) (?:talent|candidates|people)|talent (?:partner|agency)|hiring (?:agency|partner))\b/;
+  const strongLead = /\b(lead (?:intelligence|scoring|generation|gen)|pipeline (?:generation|intelligence)|ai workforce|sales (?:engagement|intelligence)|prospect\w*|outbound (?:platform|automation)|signal[- ]based|buying signal|gtm (?:engine|platform)|finds? leads?)\b/;
+  if (strongRecruit.test(desc) && !strongLead.test(desc)) return 'recruiting';
+  if (strongLead.test(desc)) return 'gtm_sales';
+  if (/\b(marketing|demand gen\w*|campaign)\b/.test(desc)) return 'marketing';
+
+  // 3) Generic services / agency fallback.
+  if (/\b(agency|consultanc\w*|consulting|done[- ]for[- ]you|services firm|professional services)\b/.test(`${cat} ${desc}`)) return 'agency_services';
+  return 'generic';
+}
+
 // ------------------------------------------------------- target customer -----
 
 export interface TargetCustomerSuggestion {
@@ -249,44 +299,42 @@ export interface TargetCustomerSuggestion {
 
 /**
  * Suggest a target-customer hypothesis when the model returned nothing but we
- * DO understand the product. Derived from the category/users/description —
- * never a generic "all SaaS companies". Everything here is confirmed by the
- * user before it targets anyone.
+ * DO understand the product. Domain-aware: a recruiting agency targets the
+ * companies it hires FOR, not "B2B SaaS subscription software". Everything here
+ * is confirmed by the user before it targets anyone.
  */
 export function suggestTargetCustomer(ctx: PersonaContext): TargetCustomerSuggestion {
-  const blob = [
-    ctx.product_category, ctx.one_line_summary, ctx.user_description ?? "",
-    ...ctx.primary_users, ...ctx.key_features,
-  ].filter(Boolean).join(" ").toLowerCase();
+  const blob = ctxBlob(ctx);
   if (!blob.trim()) return { industries: [], business_models: [], company_size_label: "", must_have: [] };
 
+  const domain = detectProductDomain(ctx);
+  const foundersFocus = /founder|early[- ]stage|startup|scale[- ]?up|smb|small team/.test(blob);
   const industries: string[] = [];
   const business_models: string[] = [];
   const must_have: string[] = [];
   let company_size_label = "";
 
-  const b2b = /\bb2b\b|sales|leads?|pipeline|gtm|outbound|revops/.test(blob);
-  const foundersFocus = /founder|early[- ]stage|startup|smb|small team/.test(blob);
-  const sellsSoftware = /saas|software|platform|ai\b|api|tool/.test(blob);
-  const recruiting = /recruit|talent|ats|hiring platform|staffing/.test(blob);
-
-  if (b2b && sellsSoftware) {
-    industries.push("B2B SaaS", "technology");
-    business_models.push("B2B SaaS", "subscription software");
-    must_have.push("sells to other businesses", "has an active website");
-  }
-  if (foundersFocus) {
-    industries.push("early-stage startups");
-    company_size_label = "1-50 employees";
-    must_have.push("founder-led or small GTM team");
-  }
-  if (recruiting) {
-    industries.push("staffing and recruiting");
-    must_have.push("actively hiring or placing candidates");
-  }
-  if (!industries.length && sellsSoftware) {
-    industries.push("software companies");
-    business_models.push("SaaS");
+  if (domain === 'recruiting') {
+    // Buyers are the companies that need to hire, not the recruiting market.
+    const techFocus = /\b(tech|software|saas|engineering|product|startup|scale[- ]?up)\b/.test(blob);
+    industries.push(...(techFocus ? ["high-growth tech startups", "venture-backed SaaS companies", "scale-ups"] : ["high-growth companies", "scale-ups"]));
+    company_size_label = "11-500 employees";
+    must_have.push("actively hiring or scaling headcount", "funded or revenue-generating");
+    if (foundersFocus) must_have.push("founder-led or without a full in-house talent team");
+  } else if (domain === 'agency_services') {
+    industries.push("businesses that outsource this function", "growing companies");
+    must_have.push("has budget for outside help", "an active website");
+  } else {
+    // gtm_sales / marketing / generic — software-style targeting.
+    const b2b = /\bb2b\b|sales|leads?|pipeline|gtm|outbound|revops/.test(blob);
+    const sellsSoftware = /saas|software|platform|\bapi\b|\bai\b|analytics|crm/.test(blob);
+    if (b2b || sellsSoftware) {
+      industries.push("B2B SaaS", "technology");
+      business_models.push("B2B SaaS");
+      must_have.push("sells to other businesses", "has an active website");
+    }
+    if (foundersFocus) { industries.push("early-stage startups"); company_size_label ||= "1-50 employees"; must_have.push("founder-led or small GTM team"); }
+    if (!industries.length && sellsSoftware) { industries.push("software companies"); business_models.push("SaaS"); }
   }
 
   return {
@@ -304,18 +352,26 @@ export interface TriggerSuggestion {
   jobs_to_watch: string[];
 }
 
-/** Suggest buying triggers + jobs to watch from what the product does. */
+/** Suggest buying triggers + jobs to watch — domain-appropriate. */
 export function suggestTriggers(ctx: PersonaContext): TriggerSuggestion {
-  const blob = [
-    ctx.product_category, ctx.one_line_summary, ctx.user_description ?? "",
-    ...ctx.primary_users, ...ctx.key_features,
-  ].filter(Boolean).join(" ").toLowerCase();
+  const blob = ctxBlob(ctx);
   if (!blob.trim()) return { triggers: [], jobs_to_watch: [] };
 
+  const domain = detectProductDomain(ctx);
   const triggers: string[] = [];
   const jobs_to_watch: string[] = [];
 
-  if (/lead|pipeline|sales|gtm|outbound|signal|prospect/.test(blob)) {
+  if (domain === 'recruiting') {
+    // For a recruiter, the trigger is a company that suddenly needs to hire.
+    triggers.push(
+      "raised a new funding round",
+      "opened multiple senior or hard-to-fill roles",
+      "expanding into a new market or region",
+      "new VP/Head hire signaling a team build-out",
+      "announced plans to scale the team",
+    );
+    jobs_to_watch.push("VP Engineering", "Head of Sales / GTM", "Founding Account Executive", "Head of Talent");
+  } else if (domain === 'gtm_sales') {
     triggers.push(
       "raised a funding round",
       "hiring first sales or growth roles",
@@ -323,19 +379,12 @@ export function suggestTriggers(ctx: PersonaContext): TriggerSuggestion {
       "new Head of Growth or Sales joined",
     );
     jobs_to_watch.push("Founding Account Executive", "SDR / BDR", "Head of Growth", "GTM Lead");
-  }
-  if (/recruit|talent|hiring|staffing/.test(blob)) {
-    triggers.push("opened multiple new roles", "expanding into a new market");
-    jobs_to_watch.push("Recruiter", "Head of Talent");
-  }
-  if (/marketing|content|demand/.test(blob)) {
-    triggers.push("launched a new product or rebrand");
+  } else if (domain === 'marketing') {
+    triggers.push("launched a new product or rebrand", "raised a funding round");
     jobs_to_watch.push("Head of Marketing", "Demand Generation Manager");
-  }
-  if (!triggers.length) {
-    // Generic-but-defensible B2B triggers; still confirmed by the user.
-    triggers.push("raised a funding round", "leadership hire in the buying department");
-    jobs_to_watch.push("Operations Lead");
+  } else {
+    triggers.push("raised a funding round", "leadership hire in the buying department", "expanding into a new market");
+    jobs_to_watch.push("Head of Operations", "relevant department lead");
   }
 
   return { triggers: cleanChips(triggers).slice(0, 6), jobs_to_watch: cleanChips(jobs_to_watch).slice(0, 6) };
@@ -349,44 +398,51 @@ export interface VoiceSuggestion {
   brand_voice: { tone: string; tags: string[]; avoid: string[] };
 }
 
-/** Suggest content angles, pain points and a brand voice from product context. */
+/** Suggest content angles, pain points and a brand voice — domain-appropriate. */
 export function suggestVoiceAndAngles(ctx: PersonaContext): VoiceSuggestion {
-  const blob = [
-    ctx.product_category, ctx.one_line_summary, ctx.user_description ?? "",
-    ...ctx.primary_users, ...ctx.key_features,
-  ].filter(Boolean).join(" ").toLowerCase();
+  const blob = ctxBlob(ctx);
   if (!blob.trim()) return { content_angles: [], pain_points: [], brand_voice: { tone: "", tags: [], avoid: [] } };
 
+  const domain = detectProductDomain(ctx);
+  const foundersFocus = /founder|early[- ]stage|startup|scale[- ]?up|smb/.test(blob);
+  const aiProduct = /\bai\b|agent|workforce|automat/.test(blob);
   const content_angles: string[] = [];
   const pain_points: string[] = [];
 
-  const gtmProduct = /lead|pipeline|sales|gtm|outbound|signal|prospect/.test(blob);
-  const foundersFocus = /founder|early[- ]stage|startup|smb/.test(blob);
-  const aiProduct = /\bai\b|agent|workforce|automat/.test(blob);
-
-  if (gtmProduct) {
+  if (domain === 'recruiting') {
+    content_angles.push(
+      "how to hire your founding GTM or engineering team",
+      "why time-to-hire kills startup momentum",
+      "building high-impact teams before you scale",
+      "hiring elite talent in a competitive market",
+    );
+    pain_points.push(
+      "can't find elite talent fast enough",
+      "time-to-hire is too slow while the team needs to ship",
+      "in-house recruiting can't keep up with scaling",
+      "hard-to-find senior or strategic hires",
+    );
+  } else if (domain === 'gtm_sales') {
     content_angles.push(
       "why static lead lists fail",
       "signal-based lead finding beats cold lists",
       "review before outreach: quality over volume",
     );
     pain_points.push("pipeline is inconsistent", "lead lists are stale and generic");
-  }
-  if (gtmProduct && foundersFocus) {
-    content_angles.push("pipeline before payroll: sell before you hire SDRs", "founder-led acquisition that scales");
-    pain_points.push("no time to prospect while building the product");
-  }
-  if (aiProduct) {
-    content_angles.push("AI-assisted GTM without spam");
-    pain_points.push("automation tools spray and pray");
-  }
-  if (!content_angles.length) {
-    content_angles.push("what buyers get wrong about this category", "how to evaluate tools like ours");
+    if (foundersFocus) { content_angles.push("pipeline before payroll: sell before you hire SDRs"); pain_points.push("no time to prospect while building the product"); }
+    if (aiProduct) { content_angles.push("AI-assisted GTM without spam"); pain_points.push("automation tools spray and pray"); }
+  } else if (domain === 'marketing') {
+    content_angles.push("turn market signals into campaigns that convert", "what buyers get wrong about this category");
+    pain_points.push("pipeline attribution is unclear", "content doesn't convert");
+  } else {
+    content_angles.push("what buyers get wrong about this category", "how to evaluate options like ours");
+    pain_points.push("the current approach is manual and slow");
   }
 
   const tags = uniq([
     ...(foundersFocus ? ["founder-focused"] : []),
-    ...(gtmProduct ? ["outcome-driven", "anti-spam"] : []),
+    ...(domain === 'recruiting' ? ["human", "outcome-driven"] : []),
+    ...(domain === 'gtm_sales' ? ["outcome-driven", "anti-spam"] : []),
     ...(aiProduct ? ["strategic"] : []),
     "direct", "premium",
   ]);
@@ -397,7 +453,7 @@ export function suggestVoiceAndAngles(ctx: PersonaContext): VoiceSuggestion {
     brand_voice: {
       tone: foundersFocus ? "direct, premium, founder-to-founder" : "direct, credible, specific",
       tags,
-      avoid: ["hype without proof", "spammy claims", "generic AI buzzwords"],
+      avoid: ["hype without proof", "spammy claims", "generic buzzwords"],
     },
   };
 }

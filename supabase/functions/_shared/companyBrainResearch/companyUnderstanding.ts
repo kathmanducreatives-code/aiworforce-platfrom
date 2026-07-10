@@ -60,7 +60,18 @@ const PROOF_RE = /\b\d+(?:[.,]\d+)?\s?(?:x\b|%|hours?|days?|weeks?|customers?|us
 const INTEGRATION_RE = /\bintegrat(?:es|ion)s?\s+with\s+([A-Z][\w .-]{1,40})/i;
 const PRICING_RE = /\$\s?\d|\b\d+\s?(?:usd|eur)\b|\bper (?:month|seat|user)\b|\/mo\b|\bstarts at\b|\bfree trial\b/i;
 const HIRING_RE = /\b(we'?re hiring|open roles?|join (?:the|our) team)\b/i;
-const USER_RE = /\bfor\s+(founders?|sales teams?|revops|marketers?|recruiters?|developers?|startups?|agencies)\b/i;
+const USER_RE = /\b(?:for|help|helping|serve|hire[s]? (?:for)?)\s+((?:early[- ]stage |high[- ]growth |b2b |venture[- ]backed )?(?:founders?|sales teams?|revops|marketers?|recruiters?|developers?|engineers?|startups?(?: and scale[- ]?ups)?|scale[- ]?ups?|tech companies|software companies|agencies|smbs?|businesses))\b/i;
+
+// Nav / chrome lines that leak into scraped markdown — never product facts.
+const NAV_LABELS = /\b(home|about|solutions?|services?|testimonials?|pricing|features?|blog|contact|log ?in|sign ?up|sign ?in|register|book a demo|get started|let'?s chat|menu|careers?)\b/gi;
+/** True when a "sentence" is really the nav menu / boilerplate chrome. */
+function isNavOrChrome(s: string): boolean {
+  const hits = (s.match(NAV_LABELS) ?? []).length;
+  // 3+ nav labels in a short line = a menu bar, not a product statement.
+  if (hits >= 3 && s.length < 160) return true;
+  if (/^(home|about|solutions?|services?|testimonials?|contact|menu)\b/i.test(s) && hits >= 2) return true;
+  return false;
+}
 
 // An "example" sentence illustrates the product; it is never proof about a
 // customer. Demo signals ("52 signals found", "e.g. Series A fintech hiring
@@ -81,14 +92,22 @@ export function isExampleSentence(s: string): boolean {
   return EXAMPLE_RE.test(s) || SIGNAL_EXAMPLE_RE.test(s);
 }
 
+/** Collapse runs of 2+ consecutive nav/menu labels (a menu bar) out of text. */
+function stripNav(s: string): string {
+  return s.replace(
+    /(?:\b(?:home|about|solutions?|services?|testimonials?|pricing|features?|blog|contact|log ?in|sign ?up|sign ?in|register|book a demo|get started|let'?s chat|menu|careers?)\b[\s|·,–—-]*){2,}/gi,
+    " ",
+  );
+}
+
 function sentences(md: string): string[] {
-  return asString(md)
+  return stripNav(asString(md))
     .replace(/```[\s\S]*?```/g, " ")           // drop code blocks
     .replace(/!\[[^\]]*\]\([^)]*\)/g, " ")     // drop images
     .replace(/[#*>`|]/g, " ")
     .split(/(?<=[.!?])\s+|\n{2,}/)
     .map((s) => s.replace(/\s+/g, " ").trim())
-    .filter((s) => s.length >= 25 && s.length <= 260);
+    .filter((s) => s.length >= 25 && s.length <= 260 && !isNavOrChrome(s));
 }
 
 /** Count how many product-defining pages support each category label. */
@@ -162,8 +181,17 @@ export function buildCompanyUnderstanding(
   }
 
   // ---- business model ------------------------------------------------------
+  // Services / agency / staffing categories are a SERVICE model, not SaaS. This
+  // guards the "SaaS <thing> agency" false positive where SaaS describes the
+  // CLIENT (e.g. "SaaS recruitment agency" — the company is the agency).
   const bmSource = `${productText} ${userDesc}`;
-  const business_model = BUSINESS_MODEL_PATTERNS.find((b) => b.re.test(bmSource))?.label ?? "";
+  const servicesCategory =
+    /agenc|staffing|recruit|consult|talent partner|done[- ]for[- ]you/i.test(product_category) ||
+    /\b(our agency|we are (?:a|an)[\w\s]{0,24}agency|recruitment (?:agency|business)|staffing (?:agency|firm|services)|consulting (?:firm|services)|talent partner|fully[- ]retained|done[- ]for[- ]you)\b/i.test(bmSource);
+  const patternModel = BUSINESS_MODEL_PATTERNS.find((b) => b.re.test(bmSource))?.label ?? "";
+  const business_model = servicesCategory && (!patternModel || patternModel === "SaaS")
+    ? "agency / services"
+    : patternModel;
 
   // ---- summary / promise: product-defining pages + the user's description ----
   const homePage = classified.find((c) => c.type === "homepage");
