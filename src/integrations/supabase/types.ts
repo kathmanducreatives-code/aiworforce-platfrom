@@ -872,6 +872,62 @@ export type Database = {
           },
         ]
       }
+      company_brain_research_runs: {
+        Row: {
+          created_at: string
+          error_message: string | null
+          evidence: Json
+          id: string
+          input: Json
+          output: Json
+          provider: string
+          source_type: string
+          source_url: string | null
+          status: string
+          updated_at: string
+          user_id: string | null
+          workspace_id: string
+        }
+        Insert: {
+          created_at?: string
+          error_message?: string | null
+          evidence?: Json
+          id?: string
+          input?: Json
+          output?: Json
+          provider: string
+          source_type: string
+          source_url?: string | null
+          status?: string
+          updated_at?: string
+          user_id?: string | null
+          workspace_id: string
+        }
+        Update: {
+          created_at?: string
+          error_message?: string | null
+          evidence?: Json
+          id?: string
+          input?: Json
+          output?: Json
+          provider?: string
+          source_type?: string
+          source_url?: string | null
+          status?: string
+          updated_at?: string
+          user_id?: string | null
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "company_brain_research_runs_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       competitor_companies: {
         Row: {
           created_at: string | null
