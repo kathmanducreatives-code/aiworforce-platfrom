@@ -238,6 +238,170 @@ export function countDisqualifiers(d: Partial<DisqualifierBucketsDraft> | undefi
     + (d.titles?.length ?? 0) + (d.domains?.length ?? 0);
 }
 
+// ------------------------------------------------------- target customer -----
+
+export interface TargetCustomerSuggestion {
+  industries: string[];
+  business_models: string[];
+  company_size_label: string;
+  must_have: string[];
+}
+
+/**
+ * Suggest a target-customer hypothesis when the model returned nothing but we
+ * DO understand the product. Derived from the category/users/description —
+ * never a generic "all SaaS companies". Everything here is confirmed by the
+ * user before it targets anyone.
+ */
+export function suggestTargetCustomer(ctx: PersonaContext): TargetCustomerSuggestion {
+  const blob = [
+    ctx.product_category, ctx.one_line_summary, ctx.user_description ?? "",
+    ...ctx.primary_users, ...ctx.key_features,
+  ].filter(Boolean).join(" ").toLowerCase();
+  if (!blob.trim()) return { industries: [], business_models: [], company_size_label: "", must_have: [] };
+
+  const industries: string[] = [];
+  const business_models: string[] = [];
+  const must_have: string[] = [];
+  let company_size_label = "";
+
+  const b2b = /\bb2b\b|sales|leads?|pipeline|gtm|outbound|revops/.test(blob);
+  const foundersFocus = /founder|early[- ]stage|startup|smb|small team/.test(blob);
+  const sellsSoftware = /saas|software|platform|ai\b|api|tool/.test(blob);
+  const recruiting = /recruit|talent|ats|hiring platform|staffing/.test(blob);
+
+  if (b2b && sellsSoftware) {
+    industries.push("B2B SaaS", "technology");
+    business_models.push("B2B SaaS", "subscription software");
+    must_have.push("sells to other businesses", "has an active website");
+  }
+  if (foundersFocus) {
+    industries.push("early-stage startups");
+    company_size_label = "1-50 employees";
+    must_have.push("founder-led or small GTM team");
+  }
+  if (recruiting) {
+    industries.push("staffing and recruiting");
+    must_have.push("actively hiring or placing candidates");
+  }
+  if (!industries.length && sellsSoftware) {
+    industries.push("software companies");
+    business_models.push("SaaS");
+  }
+
+  return {
+    industries: cleanChips(industries),
+    business_models: cleanChips(business_models),
+    company_size_label,
+    must_have: cleanChips(must_have),
+  };
+}
+
+// -------------------------------------------------------------- triggers -----
+
+export interface TriggerSuggestion {
+  triggers: string[];
+  jobs_to_watch: string[];
+}
+
+/** Suggest buying triggers + jobs to watch from what the product does. */
+export function suggestTriggers(ctx: PersonaContext): TriggerSuggestion {
+  const blob = [
+    ctx.product_category, ctx.one_line_summary, ctx.user_description ?? "",
+    ...ctx.primary_users, ...ctx.key_features,
+  ].filter(Boolean).join(" ").toLowerCase();
+  if (!blob.trim()) return { triggers: [], jobs_to_watch: [] };
+
+  const triggers: string[] = [];
+  const jobs_to_watch: string[] = [];
+
+  if (/lead|pipeline|sales|gtm|outbound|signal|prospect/.test(blob)) {
+    triggers.push(
+      "raised a funding round",
+      "hiring first sales or growth roles",
+      "launching an outbound motion",
+      "new Head of Growth or Sales joined",
+    );
+    jobs_to_watch.push("Founding Account Executive", "SDR / BDR", "Head of Growth", "GTM Lead");
+  }
+  if (/recruit|talent|hiring|staffing/.test(blob)) {
+    triggers.push("opened multiple new roles", "expanding into a new market");
+    jobs_to_watch.push("Recruiter", "Head of Talent");
+  }
+  if (/marketing|content|demand/.test(blob)) {
+    triggers.push("launched a new product or rebrand");
+    jobs_to_watch.push("Head of Marketing", "Demand Generation Manager");
+  }
+  if (!triggers.length) {
+    // Generic-but-defensible B2B triggers; still confirmed by the user.
+    triggers.push("raised a funding round", "leadership hire in the buying department");
+    jobs_to_watch.push("Operations Lead");
+  }
+
+  return { triggers: cleanChips(triggers).slice(0, 6), jobs_to_watch: cleanChips(jobs_to_watch).slice(0, 6) };
+}
+
+// -------------------------------------------------- content + brand voice ----
+
+export interface VoiceSuggestion {
+  content_angles: string[];
+  pain_points: string[];
+  brand_voice: { tone: string; tags: string[]; avoid: string[] };
+}
+
+/** Suggest content angles, pain points and a brand voice from product context. */
+export function suggestVoiceAndAngles(ctx: PersonaContext): VoiceSuggestion {
+  const blob = [
+    ctx.product_category, ctx.one_line_summary, ctx.user_description ?? "",
+    ...ctx.primary_users, ...ctx.key_features,
+  ].filter(Boolean).join(" ").toLowerCase();
+  if (!blob.trim()) return { content_angles: [], pain_points: [], brand_voice: { tone: "", tags: [], avoid: [] } };
+
+  const content_angles: string[] = [];
+  const pain_points: string[] = [];
+
+  const gtmProduct = /lead|pipeline|sales|gtm|outbound|signal|prospect/.test(blob);
+  const foundersFocus = /founder|early[- ]stage|startup|smb/.test(blob);
+  const aiProduct = /\bai\b|agent|workforce|automat/.test(blob);
+
+  if (gtmProduct) {
+    content_angles.push(
+      "why static lead lists fail",
+      "signal-based lead finding beats cold lists",
+      "review before outreach: quality over volume",
+    );
+    pain_points.push("pipeline is inconsistent", "lead lists are stale and generic");
+  }
+  if (gtmProduct && foundersFocus) {
+    content_angles.push("pipeline before payroll: sell before you hire SDRs", "founder-led acquisition that scales");
+    pain_points.push("no time to prospect while building the product");
+  }
+  if (aiProduct) {
+    content_angles.push("AI-assisted GTM without spam");
+    pain_points.push("automation tools spray and pray");
+  }
+  if (!content_angles.length) {
+    content_angles.push("what buyers get wrong about this category", "how to evaluate tools like ours");
+  }
+
+  const tags = uniq([
+    ...(foundersFocus ? ["founder-focused"] : []),
+    ...(gtmProduct ? ["outcome-driven", "anti-spam"] : []),
+    ...(aiProduct ? ["strategic"] : []),
+    "direct", "premium",
+  ]);
+
+  return {
+    content_angles: cleanChips(content_angles).slice(0, 6),
+    pain_points: cleanChips(pain_points).slice(0, 5),
+    brand_voice: {
+      tone: foundersFocus ? "direct, premium, founder-to-founder" : "direct, credible, specific",
+      tags,
+      avoid: ["hype without proof", "spammy claims", "generic AI buzzwords"],
+    },
+  };
+}
+
 // ------------------------------------------------------ qualification rules --
 
 export interface QualificationRulesDraft {

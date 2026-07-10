@@ -18,6 +18,7 @@ import { enrichCompanyFromLinkedIn } from "../_shared/companyBrainResearch/compa
 import { generateBrainDraft, type DraftInput } from "../_shared/companyBrainResearch/generateBrainDraft.ts";
 import type { FirecrawlPage, ResearchDeps, ResearchSourceType, ResearchProvider } from "../_shared/companyBrainResearch/types.ts";
 import { applyBrainSave, type CompanyBrainV2Patch } from "../_shared/companyBrainV2Save.ts";
+import { buildActivationSuggestions } from "../_shared/companyBrainResearch/activationSuggestions.ts";
 import { normalizeCompanyBrain } from "../_shared/normalizeCompanyBrain.ts";
 import { computeCompanyBrainCompleteness } from "../_shared/companyBrainCompleteness.ts";
 
@@ -260,13 +261,16 @@ Deno.serve(async (req) => {
       const result = applyBrainSave(existing, patch, { activate: action === "activate" });
 
       if (action === "activate" && !result.onboarding_completed) {
-        // Refuse to mark a half-built Brain as ready — but keep the draft saved.
+        // Refuse to mark a half-built Brain as ready — but keep the draft saved,
+        // and hand back editable ai_inference suggestions for every missing slot
+        // so the user confirms instead of inventing fields from scratch.
         await admin.from("company_brain").upsert({
           workspace_id, profile: result.profile, updated_at: new Date().toISOString(),
         }, { onConflict: "workspace_id" });
         return json({
           ok: false, activated: false, blocked_reasons: result.blocked_reasons,
           completeness: result.completeness, profile: result.profile,
+          suggested_fixes: buildActivationSuggestions(result.normalized, result.completeness),
         }, 200);
       }
 

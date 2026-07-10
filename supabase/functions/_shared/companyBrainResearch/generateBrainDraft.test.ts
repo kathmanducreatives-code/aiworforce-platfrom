@@ -124,10 +124,24 @@ Deno.test("7. at least 5 disqualifiers drafted when a target customer exists", (
   assert(d.needs_confirmation.includes("target_customer.disqualifiers"));
 });
 
-Deno.test("8. no target customer → disqualifiers are not fabricated", () => {
+Deno.test("8. empty model targeting + real company context → SUGGESTED targeting, flagged for confirmation", () => {
+  // v3: the founder confirms suggestions instead of inventing obvious fields.
   const noTarget = { ...aiJson, target_customer: { industries: [], business_models: [], disqualifiers: {} } };
   const d = mapDraftToV2(noTarget, inputFor());
+  const tc = d.target_customer as Record<string, string[]>;
+  assert(tc.industries.length > 0 || tc.business_models.length > 0, "targeting suggested from context");
+  assert(countDisqualifiers(d.target_customer.disqualifiers as never) >= 5, "disqualifiers follow the suggested target");
+  assert(d.needs_confirmation.some((n) => n.startsWith("target_customer")), "suggestions are flagged");
+});
+
+Deno.test("8b. no company context at all → nothing fabricated", () => {
+  const empty: DraftInput = { founder_input: {}, company_input: {}, company_research: null, founder_research: null };
+  const noTarget = { target_customer: { industries: [], business_models: [], disqualifiers: {} } };
+  const d = mapDraftToV2(noTarget, empty);
+  const tc = d.target_customer as Record<string, string[]>;
+  assertEquals(tc.industries.length, 0);
   assertEquals(countDisqualifiers(d.target_customer.disqualifiers as never), 0);
+  assertEquals((d.triggers as string[]).length, 0);
 });
 
 // ------------------------------------------------------ qualification rules --

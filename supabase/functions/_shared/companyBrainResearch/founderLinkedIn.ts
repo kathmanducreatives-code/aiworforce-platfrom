@@ -13,7 +13,40 @@ import {
 } from "./types.ts";
 
 export const FOUNDER_ACTOR_ENV = "APIFY_ACTOR_LINKEDIN_PROFILE_SCRAPER";
-export const FOUNDER_ACTOR_FALLBACK = "atomus/linkedin-profile-scraper";
+export const FOUNDER_ACTOR_FALLBACK = "parseforge/linkedin-profile-scraper";
+/** Secondary actor tried when the primary returns nothing or sparse data. */
+export const FOUNDER_ACTOR_FALLBACK_ENV = "APIFY_ACTOR_LINKEDIN_PROFILE_SCRAPER_FALLBACK";
+export const FOUNDER_ACTOR_FALLBACK_DEFAULT = "automation-lab/linkedin-profile-scraper";
+
+/**
+ * Actor input that the common profile scrapers all understand: each reads its
+ * own key and ignores the rest. Always URL-driven — NEVER a people search.
+ */
+export function buildProfileActorInput(profileUrl: string): Record<string, unknown> {
+  return {
+    profileUrls: [profileUrl],
+    urls: [profileUrl],
+    startUrls: [{ url: profileUrl }],
+    profileUrl,
+    url: profileUrl,
+    maxItems: 1,
+  };
+}
+
+/**
+ * Actors disagree about nesting: some return the profile at the top level,
+ * others under `profile` / `data` / `basic_info` / `element`. Unwrap once.
+ */
+export function unwrapActorRow(raw: unknown): Record<string, unknown> {
+  const row = (raw && typeof raw === "object" ? raw : {}) as Record<string, unknown>;
+  for (const key of ["profile", "data", "basic_info", "basicInfo", "element", "result"]) {
+    const inner = row[key];
+    if (inner && typeof inner === "object" && !Array.isArray(inner)) {
+      return { ...(inner as Record<string, unknown>), ...row, [key]: undefined } as Record<string, unknown>;
+    }
+  }
+  return row;
+}
 
 /** Only linkedin.com/in/<slug> profile URLs are accepted. */
 export function isLinkedInProfileUrl(url: unknown): boolean {
@@ -26,12 +59,25 @@ export function isLinkedInProfileUrl(url: unknown): boolean {
 }
 
 // Contact-shaped keys we refuse to carry out of the provider payload.
-const CONTACT_KEY_RE = /email|phone|mobile|contact_info|address/i;
+const CONTACT_KEY_RE = /email|phone|mobile|contact_?info|address|whatsapp|telegram|birthday|birth_?date/i;
 
-/** Strip any contact-shaped fields; onboarding never does contact enrichment. */
+/**
+ * Strip any contact-shaped fields, RECURSIVELY — actors nest contact blocks
+ * under `profile.contact_info` and similar. Onboarding never stores contacts.
+ */
 export function stripContactFields<T extends Record<string, unknown>>(row: T): T {
   const out: Record<string, unknown> = {};
-  for (const [k, v] of Object.entries(row)) if (!CONTACT_KEY_RE.test(k)) out[k] = v;
+  for (const [k, v] of Object.entries(row)) {
+    if (CONTACT_KEY_RE.test(k)) continue;
+    if (v && typeof v === "object" && !Array.isArray(v)) {
+      out[k] = stripContactFields(v as Record<string, unknown>);
+    } else if (Array.isArray(v)) {
+      out[k] = v.map((x) => (x && typeof x === "object" && !Array.isArray(x))
+        ? stripContactFields(x as Record<string, unknown>) : x);
+    } else {
+      out[k] = v;
+    }
+  }
   return out as T;
 }
 
@@ -85,21 +131,28 @@ export function deriveGtmRelevance(r: { headline: string; summary: string; skill
   return uniq(out).slice(0, 6);
 }
 
-/** Normalize one Apify LinkedIn-profile row → FounderResearch. Pure. */
+/** Normalize one Apify LinkedIn-profile row → FounderResearch. Pure.
+ * Handles the output shapes of the common profile actors (parseforge,
+ * automation-lab, atomus, …) via alias lookup + container unwrapping. */
 export function normalizeFounderProfile(raw: unknown, sourceUrl: string): FounderResearch {
-  const row = stripContactFields((raw && typeof raw === "object" ? raw : {}) as Record<string, unknown>);
+  const row = stripContactFields(unwrapActorRow(raw));
 
-  const name = asString(row.fullName ?? row.name ?? [asString(row.firstName), asString(row.lastName)].filter(Boolean).join(" "));
-  const headline = asString(row.headline ?? row.occupation);
-  const location = asString(row.location ?? row.locationName ?? row.geoLocationName);
-  const summary = asString(row.summary ?? row.about ?? row.bio);
-  const skills = uniq(asStringArray(row.skills));
-  const experience = experiences(row.experience ?? row.experiences ?? row.positions);
-  const education = educations(row.education ?? row.educations ?? row.schools);
+  const name = asString(
+    row.fullName ?? row.full_name ?? row.name
+    ?? [asString(row.firstName ?? row.first_name), asString(row.lastName ?? row.last_name)].filter(Boolean).join(" "),
+  );
+  const headline = asString(row.headline ?? row.occupation ?? row.subTitle ?? row.sub_title ?? row.title);
+  const location = asString(row.location ?? row.locationName ?? row.geoLocationName ?? row.city ?? row.geo_location);
+  const summary = asString(row.summary ?? row.about ?? row.bio ?? row.description);
+  const skills = uniq(asStringArray(row.skills ?? row.topSkills ?? row.skill_list));
+  const experience = experiences(
+    row.experience ?? row.experiences ?? row.positions ?? row.position_history ?? row.positionHistory ?? row.work_experience,
+  );
+  const education = educations(row.education ?? row.educations ?? row.schools ?? row.education_history);
 
   const current = experience[0];
-  const current_role = asString(row.currentRole ?? row.jobTitle) || (current?.title ?? "");
-  const current_company = asString(row.currentCompany ?? row.companyName) || (current?.company ?? "");
+  const current_role = asString(row.currentRole ?? row.current_role ?? row.jobTitle ?? row.job_title) || (current?.title ?? "");
+  const current_company = asString(row.currentCompany ?? row.current_company ?? row.companyName ?? row.company) || (current?.company ?? "");
 
   const missing_evidence: string[] = [];
   if (!name) missing_evidence.push("founder name");
@@ -121,6 +174,20 @@ export function normalizeFounderProfile(raw: unknown, sourceUrl: string): Founde
   };
 }
 
+/**
+ * A profile is sparse when it carries fewer than two of the fields a Brain can
+ * actually use. Sparse output is a failure to enrich, never a "success".
+ */
+export function isSparseFounderResearch(r: FounderResearch): boolean {
+  const core = [
+    r.name,
+    r.headline || r.summary,
+    r.experience.length ? "x" : "",
+    r.current_company || r.current_role,
+  ].filter(Boolean).length;
+  return core < 2;
+}
+
 export interface FounderEnrichResult {
   ok: boolean;
   research: FounderResearch | null;
@@ -128,12 +195,17 @@ export interface FounderEnrichResult {
   /** true when we deliberately did not call a provider. */
   skipped?: boolean;
   reason?: string;
+  /** Which actor produced the result (primary or fallback). */
+  actor_used?: string;
 }
 
 /**
  * Enrich a founder from their LinkedIn profile URL.
  * Hard rules: consent required, valid /in/ URL required, ONE profile max,
  * contact fields stripped. No provider call happens without `deps.runApifyActor`.
+ * If the primary actor returns nothing or sparse data, ONE fallback actor is
+ * tried; sparse-after-fallback returns ok:false with the (low-confidence)
+ * research attached so the caller can be honest about what was read.
  */
 export async function enrichFounderFromLinkedIn(
   input: { profileUrl: string; consent: boolean },
@@ -149,13 +221,35 @@ export async function enrichFounderFromLinkedIn(
     return { ok: false, research: null, skipped: true, reason: "apify_not_configured" };
   }
 
-  const actor = deps.actorId?.(FOUNDER_ACTOR_ENV, FOUNDER_ACTOR_FALLBACK) ?? FOUNDER_ACTOR_FALLBACK;
-  try {
+  const primary = deps.actorId?.(FOUNDER_ACTOR_ENV, FOUNDER_ACTOR_FALLBACK) ?? FOUNDER_ACTOR_FALLBACK;
+  const fallback = deps.actorId?.(FOUNDER_ACTOR_FALLBACK_ENV, FOUNDER_ACTOR_FALLBACK_DEFAULT) ?? FOUNDER_ACTOR_FALLBACK_DEFAULT;
+  const actorInput = buildProfileActorInput(input.profileUrl);
+
+  const runOne = async (actor: string): Promise<FounderResearch | null> => {
     // Cap: exactly one profile during onboarding. No people search, no bulk.
-    const items = await deps.runApifyActor(actor, { profileUrls: [input.profileUrl], maxItems: 1 });
+    const items = await deps.runApifyActor!(actor, actorInput);
     const first = Array.isArray(items) ? items[0] : null;
-    if (!first) return { ok: false, research: null, error: "no_profile_returned" };
-    return { ok: true, research: normalizeFounderProfile(first, input.profileUrl) };
+    return first ? normalizeFounderProfile(first, input.profileUrl) : null;
+  };
+
+  try {
+    let actor_used = primary;
+    let research = await runOne(primary).catch(() => null);
+
+    // Primary empty/sparse → one shot at the fallback actor (if distinct).
+    if ((!research || isSparseFounderResearch(research)) && fallback && fallback !== primary) {
+      const second = await runOne(fallback).catch(() => null);
+      if (second && (!research || !isSparseFounderResearch(second))) {
+        research = second;
+        actor_used = fallback;
+      }
+    }
+
+    if (!research) return { ok: false, research: null, error: "no_profile_returned" };
+    if (isSparseFounderResearch(research)) {
+      return { ok: false, research, error: "sparse_profile_data", actor_used };
+    }
+    return { ok: true, research, actor_used };
   } catch (e) {
     return { ok: false, research: null, error: e instanceof Error ? e.message : String(e) };
   }

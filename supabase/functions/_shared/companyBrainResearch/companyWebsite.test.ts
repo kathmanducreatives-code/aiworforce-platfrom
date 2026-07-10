@@ -17,11 +17,14 @@ const mapped = [
 const research = (pages: typeof FIXTURE_A_CLEAN_SAAS, desc?: string) =>
   extractFromPages(pages, { websiteUrl: HOME, nameHint: "Cekura", descriptionHint: desc });
 
-Deno.test("1. selectPages: homepage first, priority order, off-host dropped", () => {
+Deno.test("1. selectPages: homepage first, product-defining priority, off-host dropped", () => {
   const urls = selectPages(HOME, mapped, MAX_PAGES);
   assertEquals(urls[0], HOME);
-  assertEquals(urls[1], `${HOME}/about`);
-  assertEquals(urls[2], `${HOME}/pricing`);
+  // v3 order: product pages define the company, so pricing outranks about,
+  // about outranks customers, and blog earns no budget at all.
+  assert(urls.indexOf(`${HOME}/pricing`) < urls.indexOf(`${HOME}/about`), "pricing before about");
+  assert(urls.indexOf(`${HOME}/about`) < urls.indexOf(`${HOME}/customers`), "about before customers");
+  assert(!urls.includes(`${HOME}/blog`), "blog never spends crawl budget");
   assert(!urls.some((u) => u.includes("twitter.com")), "no off-host crawl");
   assert(!urls.some((u) => u.includes("other.com")), "no broad web crawl");
 });

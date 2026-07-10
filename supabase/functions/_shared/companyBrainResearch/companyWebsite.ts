@@ -17,18 +17,38 @@ import { buildCompanyUnderstanding } from "./companyUnderstanding.ts";
 /** Hard ceiling on pages fetched during onboarding (spec: 8–12). */
 export const MAX_PAGES = 10;
 
-/** Highest-signal paths first — the crawl budget is spent in this order. */
+/**
+ * Highest-signal paths first — the crawl budget is spent in this order.
+ * Product-defining pages outrank proof pages; blog is deliberately absent
+ * (an unrelated post must never spend budget a pricing page needed).
+ */
 export const PRIORITY_PATHS: Array<{ re: RegExp; label: string }> = [
-  { re: /\/about/i, label: "about" },
-  { re: /\/pricing/i, label: "pricing" },
-  { re: /\/customers?/i, label: "customers" },
-  { re: /\/case-stud(y|ies)/i, label: "case-studies" },
-  { re: /\/features?/i, label: "features" },
-  { re: /\/solutions?/i, label: "solutions" },
-  { re: /\/integrations?/i, label: "integrations" },
-  { re: /\/blog/i, label: "blog" },
-  { re: /\/careers?|\/jobs/i, label: "careers" },
+  { re: /\/(product|platform|how-it-works)(\/|$)/i, label: "product" },
+  { re: /\/features?(\/|$)/i, label: "features" },
+  { re: /\/solutions?(\/|$)/i, label: "solutions" },
+  { re: /\/use-cases?(\/|$)/i, label: "use-cases" },
+  { re: /\/(pricing|plans)(\/|$)/i, label: "pricing" },
+  { re: /\/(about|company)(\/|$)/i, label: "about" },
+  { re: /\/customers?(\/|$)/i, label: "customers" },
+  { re: /\/case-stud(y|ies)(\/|$)/i, label: "case-studies" },
+  { re: /\/integrations?(\/|$)/i, label: "integrations" },
+  { re: /\/(careers?|jobs)(\/|$)/i, label: "careers" },
 ];
+
+/**
+ * Paths that never earn crawl budget: auth surfaces, the logged-in app, and
+ * legal boilerplate say nothing about what the company sells.
+ */
+export const EXCLUDED_PATHS: RegExp[] = [
+  /\/(log-?in|sign-?in|sign-?up|register|auth)(\/|$)/i,
+  /\/(app|dashboard|portal|console|account)(\/|$)/i,
+  /\/(privacy|terms|cookies?|legal|gdpr|dpa|security-policy)(\/|$)/i,
+];
+
+export function isExcludedPath(url: string): boolean {
+  const path = (() => { try { return new URL(url).pathname; } catch { return url; } })();
+  return EXCLUDED_PATHS.some((re) => re.test(path));
+}
 
 function sameHost(a: string, b: string): boolean {
   try {
@@ -40,13 +60,14 @@ function sameHost(a: string, b: string): boolean {
 
 /**
  * Choose which URLs to crawl: homepage first, then priority paths in order,
- * then nothing else. Off-host links are dropped (no broad web crawl).
+ * then nothing else. Off-host links are dropped (no broad web crawl) and
+ * excluded paths (login/app/legal) never spend budget.
  */
 export function selectPages(homepage: string, mapped: string[], max = MAX_PAGES): string[] {
   const out: string[] = [];
   const push = (u: string) => { if (u && !out.includes(u) && out.length < max) out.push(u); };
   push(homepage);
-  const onHost = mapped.filter((u) => isHttpUrl(u) && sameHost(u, homepage));
+  const onHost = mapped.filter((u) => isHttpUrl(u) && sameHost(u, homepage) && !isExcludedPath(u));
   for (const { re } of PRIORITY_PATHS) {
     for (const u of onHost) {
       if (out.length >= max) return out;

@@ -16,13 +16,17 @@
 // Pure. No network.
 
 import {
-  type CompanyUnderstanding, type FirecrawlPage, type SourceEvidence, type PageType,
+  type ClaimTag, type CompanyUnderstanding, type FirecrawlPage, type SourceEvidence,
+  type PageType, type TaggedClaim,
   asString, uniq, gradeConfidence, capConfidence, cleanChips, cleanChip,
 } from "./types.ts";
 import { classifyPage, isProductDefining, ALLOWED_USES, ignoredUses, rankPages, strongPageCount } from "./pageClassifier.ts";
 
 // A category is only claimed when its terms recur across product-defining pages.
+// Most specific first: "lead intelligence" must win over the generic "AI SaaS".
 const CATEGORY_PATTERNS: Array<{ label: string; re: RegExp }> = [
+  { label: "lead intelligence software", re: /\b(lead (?:intelligence|scoring|qualification|sourcing|research)|signal[- ]based (?:selling|prospecting|leads?)|buying signals?|intent (?:data|signals?)|gtm (?:intelligence|engine)|pipeline (?:intelligence|generation))\b/i },
+  { label: "AI workforce platform", re: /\b(ai (?:workforce|employees?|teammates?)|digital (?:workforce|employees?)|autonomous (?:agents?|workforce)|agentic (?:workforce|platform))\b/i },
   { label: "recruiting software", re: /\b(applicant tracking|ats\b|recruiting (?:software|platform|crm)|hiring platform|candidate sourcing|talent acquisition software)\b/i },
   { label: "staffing services", re: /\b(staffing (?:agency|firm|services)|recruitment agency|we place candidates|contract placement)\b/i },
   { label: "sales software", re: /\b(sales (?:engagement|automation|platform)|outbound (?:platform|automation)|prospecting (?:tool|platform))\b/i },
@@ -32,8 +36,15 @@ const CATEGORY_PATTERNS: Array<{ label: string; re: RegExp }> = [
   { label: "marketing software", re: /\b(marketing (?:automation|platform)|email marketing|campaign management)\b/i },
   { label: "analytics software", re: /\b(analytics (?:platform|software)|business intelligence|dashboards? for)\b/i },
   { label: "developer tools", re: /\b(developer (?:tool|platform)|sdk\b|ci\/cd|api platform)\b/i },
-  { label: "AI SaaS", re: /\b(ai (?:platform|agent|assistant|workforce)|llm|machine learning platform)\b/i },
+  { label: "AI SaaS", re: /\b(ai (?:platform|agent|assistant)|llm|machine learning platform)\b/i },
 ];
+
+// Rule 7 heuristic: user says "AI workforce OS / for founders" AND the site
+// talks GTM (leads/signals/outreach/pipeline/founders) → the category lives in
+// lead-intelligence territory, tagged as an inference to confirm — NOT
+// recruiting, even when recruiting examples appear on the site.
+const GTM_SITE_RE = /\b(leads?|signals?|outreach|pipeline|founders?|gtm|go-?to-?market|prospect)\b/i;
+const WORKFORCE_DESC_RE = /\b(ai (?:workforce|employees?|teammates?)|workforce os|ai (?:for|built for) (?:b2b )?founders?|founder-?led)\b/i;
 
 const BUSINESS_MODEL_PATTERNS: Array<{ label: string; re: RegExp }> = [
   { label: "B2B SaaS", re: /\b(b2b saas|saas for (?:teams|companies|businesses)|per seat|per user\/month)\b/i },
@@ -50,6 +61,25 @@ const INTEGRATION_RE = /\bintegrat(?:es|ion)s?\s+with\s+([A-Z][\w .-]{1,40})/i;
 const PRICING_RE = /\$\s?\d|\b\d+\s?(?:usd|eur)\b|\bper (?:month|seat|user)\b|\/mo\b|\bstarts at\b|\bfree trial\b/i;
 const HIRING_RE = /\b(we'?re hiring|open roles?|join (?:the|our) team)\b/i;
 const USER_RE = /\bfor\s+(founders?|sales teams?|revops|marketers?|recruiters?|developers?|startups?|agencies)\b/i;
+
+// An "example" sentence illustrates the product; it is never proof about a
+// customer. Demo signals ("52 signals found", "e.g. Series A fintech hiring
+// SDRs") were the exact live-QA failure this quarantines.
+const EXAMPLE_RE = /\b(for example|for instance|e\.?g\.?|imagine|suppose|let'?s say|say you|sample|demo|such as|like a)\b/i;
+const SIGNAL_EXAMPLE_RE = /\b(signals? (?:found|detected|like|such as)|example (?:signals?|leads?)|sample (?:signals?|leads?)|leads? (?:found|surfaced) (?:this week|today))\b/i;
+// Real customer proof names an outcome for someone: helped/saved/booked/closed…
+const PROOF_VERB_RE = /\b(trusted by|helped|saved?|booked|closed|grew|increased|reduced|cut|generated|serving)\b/i;
+
+// Workflows the site walks through — informative, but never the ICP alone.
+const WORKFLOW_RE = /\b(step \d|first[, ]+then|workflow|automatically (?:finds?|drafts?|scores?|watches?|surfaces?)|from [\w\s]{3,30} to )\b/i;
+
+// Tools/competitors commonly named on GTM sites. Mentions are hypotheses.
+const KNOWN_TOOLS_RE = /\b(hubspot|salesforce|apollo|clay|zoominfo|outreach|salesloft|instantly|smartlead|lemlist|sales navigator|pipedrive|attio|lusha)\b/gi;
+
+/** True when a sentence is an illustrative example rather than a claim. */
+export function isExampleSentence(s: string): boolean {
+  return EXAMPLE_RE.test(s) || SIGNAL_EXAMPLE_RE.test(s);
+}
 
 function sentences(md: string): string[] {
   return asString(md)
@@ -118,7 +148,18 @@ export function buildCompanyUnderstanding(
   // the user's description). This is the guard that stops a single recruiting
   // article from defining a B2B SaaS company as "Recruiting".
   const categorySupported = !!topVote && (topVote[1] >= 2 || (topVote[1] >= 1 && hasUserInput));
-  const product_category = !conflicts && categorySupported ? topVote[0] : "";
+  let product_category = !conflicts && categorySupported ? topVote[0] : "";
+
+  // Rule-7 fallback: when the votes could not commit but the user describes an
+  // AI-workforce/founder product and the site speaks GTM, hypothesise a
+  // lead-intelligence category instead of leaving the Brain empty. This is an
+  // INFERENCE — it is tagged, confirmed by the user, and never "high" confidence.
+  let categoryInferred = false;
+  const allText = classified.map((c) => c.text).join("\n");
+  if (!product_category && hasUserInput && WORKFORCE_DESC_RE.test(userDesc) && GTM_SITE_RE.test(allText)) {
+    product_category = "AI-powered lead intelligence";
+    categoryInferred = true;
+  }
 
   // ---- business model ------------------------------------------------------
   const bmSource = `${productText} ${userDesc}`;
@@ -153,12 +194,44 @@ export function buildCompanyUnderstanding(
     ? (sentences(pricingPage.text).find((s) => PRICING_RE.test(s)) ?? "pricing page present")
     : "";
 
-  // ---- proof: ONLY numeric claims, ONLY from homepage/customers/case studies -
-  // A blog post saying "companies grow 3x" is not proof about this company.
+  // ---- proof vs examples ----------------------------------------------------
+  // A blog post saying "companies grow 3x" is not proof about this company, and
+  // neither is a demo signal ("52 signals found this week"). Numeric sentences
+  // that read as examples are quarantined into `examples_detected`; homepage
+  // numbers additionally need a proof verb (helped/saved/trusted by/…) because
+  // homepages are full of illustrative product UI copy.
   const proofPages = classified.filter((c) => c.type === "homepage" || c.type === "customers" || c.type === "case_study");
+  const numericSentences = proofPages.flatMap((c) =>
+    sentences(c.text).filter((s) => PROOF_RE.test(s)).map((s) => ({ s, type: c.type })));
+
   const proof_points = cleanChips(
-    proofPages.flatMap((c) => sentences(c.text).filter((s) => PROOF_RE.test(s))),
+    numericSentences
+      .filter(({ s, type }) => !isExampleSentence(s) && (type !== "homepage" || PROOF_VERB_RE.test(s)))
+      .map(({ s }) => s),
   ).slice(0, 6);
+
+  const examples_detected = cleanChips([
+    ...numericSentences.filter(({ s, type }) => isExampleSentence(s) || (type === "homepage" && !PROOF_VERB_RE.test(s))).map(({ s }) => s),
+    ...classified.filter((c) => isProductDefining(c.type))
+      .flatMap((c) => sentences(c.text).filter((s) => SIGNAL_EXAMPLE_RE.test(s))),
+  ]).slice(0, 6);
+
+  // ---- workflows: illustrative, never the ICP alone ---------------------------
+  const workflows = cleanChips(
+    classified.filter((c) => c.type === "use_cases" || c.type === "features" || c.type === "homepage")
+      .flatMap((c) => sentences(c.text).filter((s) => WORKFLOW_RE.test(s))),
+  ).slice(0, 5);
+
+  // ---- targeting hints + tool mentions (hypotheses, not facts) ----------------
+  const target_customer_hints = uniq([
+    ...primary_users,
+    ...(hasUserInput ? [...userDesc.matchAll(/\bfor\s+((?:b2b\s+)?[a-z][\w\s-]{2,30}?)(?=[,.]|$)/gi)].map((m) => cleanChip(m[1])) : []),
+    ...cleanChips(asString(input.linkedinDescription)).slice(0, 2),
+  ]).filter(Boolean).slice(0, 8);
+
+  const competitors_or_tools_mentioned = uniq(
+    [...allText.matchAll(KNOWN_TOOLS_RE)].map((m) => cleanChip(m[0])),
+  ).slice(0, 8);
 
   // ---- integrations: must be an explicit "integrates with X" statement -------
   const integrations = cleanChips(
@@ -192,10 +265,17 @@ export function buildCompanyUnderstanding(
   if (!business_model) missing_evidence.push("business model");
   if (!one_line_summary) missing_evidence.push("company description");
 
-  const ambiguous = conflicts || !product_category || strongPages < 2;
+  const ambiguous = conflicts || !product_category || categoryInferred || strongPages < 2;
+
+  const ambiguity_reasons: string[] = [];
+  if (conflicts && topVote && runnerUp) ambiguity_reasons.push(`Conflicting category signals: "${topVote[0]}" vs "${runnerUp[0]}".`);
+  if (!product_category) ambiguity_reasons.push("No product category earned repeated support from product-defining pages.");
+  if (categoryInferred) ambiguity_reasons.push("Product category was inferred from the founder's description plus GTM language on the site — confirm it.");
+  if (strongPages < 2) ambiguity_reasons.push(onlyHomepage ? "Only the homepage was readable." : "Fewer than two product-defining pages were readable.");
 
   const needs_confirmation: string[] = [];
   if (!product_category) needs_confirmation.push("product_category");
+  if (categoryInferred) needs_confirmation.push("product_category:inferred_from_user_description");
   if (!business_model) needs_confirmation.push("business_model");
   if (conflicts) needs_confirmation.push("product_category:conflicting_signals");
   if (!proof_points.length) needs_confirmation.push("proof_points");
@@ -206,9 +286,29 @@ export function buildCompanyUnderstanding(
     onlyHomepage,
     noSourceProof: rawPages.length === 0,
   });
-  // An ambiguous read can never be "high", regardless of page count.
+  // An ambiguous read can never be "high", regardless of page count; an
+  // inferred category can never carry more than "medium".
   if (ambiguous) confidence = capConfidence(confidence, "medium");
   if (!product_category) confidence = capConfidence(confidence, "low");
+
+  // ---- tagged claims: every extracted string carries its origin --------------
+  const claims: TaggedClaim[] = [
+    ...(hasUserInput ? [{ text: userDesc, tag: "user_input" as ClaimTag, confidence: "high" as const }] : []),
+    ...(product_category ? [{
+      text: `Product category: ${product_category}`,
+      tag: (categoryInferred ? "ai_inference" : "source_fact") as ClaimTag,
+      confidence: categoryInferred ? "low" as const : confidence,
+    }] : []),
+    ...(main_promise ? [{ text: main_promise, tag: "product_claim" as ClaimTag, source_url: homePage?.page.url, confidence }] : []),
+    ...key_features.map((text) => ({ text, tag: "feature" as ClaimTag, confidence })),
+    ...primary_use_cases.map((text) => ({ text, tag: "use_case" as ClaimTag, confidence })),
+    ...workflows.map((text) => ({ text, tag: "workflow_example" as ClaimTag, confidence: "low" as const })),
+    ...examples_detected.map((text) => ({ text, tag: "signal_example" as ClaimTag, confidence: "low" as const })),
+    ...proof_points.map((text) => ({ text, tag: "customer_proof" as ClaimTag, confidence })),
+    ...(pricing_signal ? [{ text: pricing_signal, tag: "pricing" as ClaimTag, source_url: pricingPage?.page.url, confidence }] : []),
+    ...integrations.map((text) => ({ text, tag: "integration" as ClaimTag, confidence })),
+    ...competitors_or_tools_mentioned.map((text) => ({ text, tag: "ai_inference" as ClaimTag, confidence: "low" as const })),
+  ];
 
   return {
     company_name: cleanChip(input.nameHint) || cleanChip(asString(homePage?.page.title).split(/[|\-–—]/)[0]),
@@ -228,6 +328,12 @@ export function buildCompanyUnderstanding(
     missing_evidence,
     ambiguous,
     needs_confirmation,
+    workflows,
+    examples_detected,
+    target_customer_hints,
+    competitors_or_tools_mentioned,
+    ambiguity_reasons,
+    claims,
   };
 }
 

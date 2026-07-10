@@ -10,6 +10,34 @@
 
 export type ResearchConfidence = "low" | "medium" | "high";
 
+/**
+ * Where a claim came from and what it is allowed to mean (Research System v3).
+ * Examples and signal demos are first-class tags so they can never be
+ * mistaken for customer proof or the product category.
+ */
+export type ClaimTag =
+  | "source_fact"        // read verbatim from a product-defining page
+  | "user_input"         // the founder's own words
+  | "product_claim"      // what the company says it does
+  | "feature"
+  | "use_case"
+  | "workflow_example"   // an illustrative workflow, not the ICP
+  | "signal_example"     // a demo/sample signal, not customer proof
+  | "customer_proof"     // numeric result tied to a real customer page
+  | "pricing"
+  | "integration"
+  | "ai_inference"       // we inferred it; must be confirmed
+  | "noisy_or_irrelevant"
+  | "needs_confirmation";
+
+/** One classified claim with its origin. */
+export interface TaggedClaim {
+  text: string;
+  tag: ClaimTag;
+  source_url?: string;
+  confidence: ResearchConfidence;
+}
+
 /** How a fetched page was classified. Drives what it is allowed to inform. */
 export type PageType =
   | "homepage" | "pricing" | "features" | "use_cases" | "customers"
@@ -60,6 +88,19 @@ export interface CompanyUnderstanding {
   ambiguous: boolean;
   /** Fields the user must confirm before we treat them as fact. */
   needs_confirmation: string[];
+  // ---- Research System v3 (additive) ----
+  /** Illustrative workflows the site walks through — never the ICP by themselves. */
+  workflows: string[];
+  /** Demo/sample signals and "for example" content, quarantined from proof. */
+  examples_detected: string[];
+  /** Phrases that hint at who the product targets (never asserted as the ICP). */
+  target_customer_hints: string[];
+  /** Tools/competitors the site names — hypotheses, not facts. */
+  competitors_or_tools_mentioned: string[];
+  /** Plain-English reasons the read is ambiguous (empty when it is not). */
+  ambiguity_reasons: string[];
+  /** Every extracted claim with its origin tag. */
+  claims: TaggedClaim[];
 }
 
 /** A buyer persona hypothesis. Never asserted as fact without confirmation. */
@@ -180,6 +221,11 @@ export interface CompanyLinkedInResearch {
   followers: string;
   confidence: ResearchConfidence;
   missing_evidence: string[];
+  // ---- Research System v3 (additive) ----
+  company_name: string;
+  headquarters: string;
+  company_size: string;
+  founded: string;
 }
 
 // ------------------------------------------------------- user-typed input ---
