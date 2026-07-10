@@ -142,19 +142,21 @@ export function BrainReviewCard({
     <div className="group relative overflow-hidden rounded-2xl border border-border/50 bg-card/40 backdrop-blur-sm transition-colors hover:border-border">
       <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent opacity-0 transition-opacity group-hover:opacity-100" />
 
-      <header className="flex items-start justify-between gap-3 border-b border-border/40 p-5">
-        <div className="min-w-0">
-          <h3 className="text-base font-semibold tracking-tight text-foreground">{title}</h3>
-          {subtitle && <p className="mt-0.5 text-xs text-muted-foreground">{subtitle}</p>}
-        </div>
-        <div className="flex shrink-0 flex-wrap items-center justify-end gap-1.5">
-          <AiDraftedBadge />
-          {confidence && <ConfidenceBadge confidence={confidence} />}
+      <header className="space-y-2.5 border-b border-border/40 p-5">
+        <div className="flex items-start justify-between gap-2">
+          <div className="min-w-0">
+            <h3 className="text-base font-semibold tracking-tight text-foreground">{title}</h3>
+            {subtitle && <p className="mt-0.5 text-xs text-muted-foreground">{subtitle}</p>}
+          </div>
           {onEdit && (
-            <Button size="icon" variant="ghost" className="h-7 w-7" onClick={onEdit} aria-label={`Edit ${title}`}>
+            <Button size="icon" variant="ghost" className="h-7 w-7 shrink-0" onClick={onEdit} aria-label={`Edit ${title}`}>
               <Pencil className="h-3.5 w-3.5" />
             </Button>
           )}
+        </div>
+        <div className="flex flex-wrap items-center gap-1.5">
+          <AiDraftedBadge />
+          {confidence && <ConfidenceBadge confidence={confidence} />}
         </div>
       </header>
 
