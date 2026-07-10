@@ -1,30 +1,37 @@
-// Company Brain Onboarding v3 — AI-assisted founder + company research.
+// Company Brain Onboarding v3 — premium 5-step setup surface.
 //
-// Five steps: Founder → Company → AI Research → Review Brain → Activate.
-// Providers run ONLY on an explicit click (founder enrichment additionally
-// requires consent). Nothing is auto-sent and no Scout Radar scan is triggered.
-// Activation is refused unless the Brain meets the minimum requirements — the
-// server is authoritative; this UI mirrors the same rules for the live preview.
+// Presentation makeover only. Backend contract is byte-identical:
+//   invoke('generate-company-brain-draft', { action, workspace_id, ... })
+// with actions: research_founder | research_company | draft | save_draft | activate.
+//
+// Providers run ONLY on an explicit click; founder enrichment also requires
+// consent. Nothing sends automatically and no Scout Radar scan is triggered.
+// Activation is server-authoritative; this UI mirrors the same rules for the
+// live preview panel.
 
 import { useCallback, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { AnimatePresence, motion } from 'framer-motion';
 import { supabase } from '@/integrations/supabase/client';
 import { useWorkspace } from '@/contexts/WorkspaceContext';
 import { toast } from 'sonner';
 
 import { Button } from '@/components/ui/button';
-import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { Checkbox } from '@/components/ui/checkbox';
-import { Progress } from '@/components/ui/progress';
+import { Switch } from '@/components/ui/switch';
 import { Badge } from '@/components/ui/badge';
-import { Separator } from '@/components/ui/separator';
-import { ArrowLeft, ArrowRight, Building2, Check, Loader2, Rocket, Search, Sparkles, User } from 'lucide-react';
+import {
+  ArrowLeft, ArrowRight, Building2, Check, ChevronDown, Cpu, Globe, Info, Loader2, Lock,
+  Rocket, Search, ShieldCheck, Sparkles, User,
+} from 'lucide-react';
 
 import { BrainPreviewPanel } from '@/components/onboarding/BrainPreviewPanel';
 import { BrainReviewCard, FieldList } from '@/components/onboarding/BrainReviewCard';
+import { StepProgress } from '@/components/onboarding/StepProgress';
+import { ChipInput } from '@/components/onboarding/ChipInput';
+import { CompletenessRing } from '@/components/onboarding/CompletenessRing';
 import {
   STEPS, stepAt, stepIndexOf, type StepId,
   emptyCompanyForm, emptyFounderForm, type CompanyForm, type FounderForm,
@@ -54,11 +61,10 @@ export default function OnboardingCompanyBrain() {
 
   const [busy, setBusy] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const [previewOpen, setPreviewOpen] = useState(false);
 
-  /** Local edits to the reviewed Brain, held as a full normalized overlay. */
   const [edited, setEdited] = useState<CompanyBrainV2 | null>(null);
 
-  // The preview always reflects the draft-so-far merged with what the user typed.
   const rawProfile = useMemo(() => ({
     ...(draft ?? {}),
     ...(edited ? toRaw(edited) : {}),
@@ -89,12 +95,15 @@ export default function OnboardingCompanyBrain() {
     return data as any;
   }, [workspaceId]);
 
-  // ---------------------------------------------------------- step actions --
+  // -------------------------------------------------------- step handlers ---
 
   async function analyzeFounder() {
     setBusy('founder'); setNotice(null);
     try {
-      const r = await call('research_founder', { linkedin_url: founder.linkedin_url, consent: founder.enrichment_consent });
+      const r = await call('research_founder', {
+        linkedin_url: founder.linkedin_url,
+        consent: founder.enrichment_consent,
+      });
       if (r?.ok && r.research) {
         setFounderResearch(r.research);
         toast.success('Founder profile analyzed', { description: `Confidence: ${r.research.confidence}` });
@@ -130,7 +139,9 @@ export default function OnboardingCompanyBrain() {
   async function draftBrain() {
     setBusy('draft'); setNotice(null);
     try {
-      const r = await call('draft', buildDraftInput({ founder, company, founderResearch, companyResearch, companyLinkedIn }));
+      const r = await call('draft', buildDraftInput({
+        founder, company, founderResearch, companyResearch, companyLinkedIn,
+      }));
       if (r?.ok && r.draft) {
         setDraft(r.draft);
         setEdited(null);
@@ -155,124 +166,197 @@ export default function OnboardingCompanyBrain() {
       }
       toast.success(activate ? 'Company Brain activated' : 'Draft saved', {
         description: activate
-          ? 'Leads, Radar, Content, Agents and Outreach now use it.'
+          ? 'Leads, Scout Radar, Content, Agents and Outreach now use it.'
           : 'You can finish later.',
       });
-      if (activate) navigate('/');
+      if (activate) navigate('/dashboard');
     } catch {
       setNotice('Save failed. Nothing was lost — try again.');
     } finally { setBusy(null); }
   }
 
-  const onQuickAction = (action: QuickAction, value?: string) => setEdited(applyQuickAction(brain, action, value));
+  const onQuickAction = (action: QuickAction, value?: string) =>
+    setEdited(applyQuickAction(brain, action, value));
 
   const canNext = canContinue(step, { founder, company });
 
+  // ---------------------------------------------------------------- render --
+
   return (
-    <div className="min-h-screen bg-background">
-      <div className="mx-auto max-w-6xl px-4 py-8">
-        <StepProgress index={stepIndex} />
+    <div className="relative min-h-screen bg-background text-foreground">
+      {/* Ambient background wash */}
+      <div
+        aria-hidden
+        className="pointer-events-none absolute inset-0 -z-10"
+        style={{
+          background:
+            'radial-gradient(1200px 600px at 50% -10%, hsl(var(--primary) / 0.08), transparent 60%), radial-gradient(800px 400px at 90% 20%, hsl(var(--primary) / 0.05), transparent 60%)',
+        }}
+      />
 
-        <div className="mt-8 grid gap-6 lg:grid-cols-[minmax(0,1fr)_320px]">
+      {/* Top bar */}
+      <header className="sticky top-0 z-20 border-b border-border/40 bg-background/70 backdrop-blur-md">
+        <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-3 sm:px-6">
+          <div className="flex items-center gap-2">
+            <div className="flex h-7 w-7 items-center justify-center rounded-md border border-primary/40 bg-primary/10 text-primary">
+              <Cpu className="h-3.5 w-3.5" />
+            </div>
+            <div className="leading-tight">
+              <p className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground">Agentory</p>
+              <p className="text-xs font-semibold">Company Brain setup</p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <Button
+              size="sm" variant="ghost"
+              onClick={() => persist(false)}
+              disabled={!!busy || !workspaceId}
+              className="h-8 text-xs"
+            >
+              {busy === 'save' && <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />}
+              Save draft
+            </Button>
+          </div>
+        </div>
+      </header>
+
+      <div className="mx-auto max-w-6xl px-4 py-8 sm:px-6 lg:py-12">
+        {/* Stepper */}
+        <div className="mx-auto max-w-3xl">
+          <StepProgress index={stepIndex} steps={STEPS} />
+        </div>
+
+        {/* Grid */}
+        <div className="mt-10 grid gap-8 lg:grid-cols-[minmax(0,1fr)_360px]">
           <main className="min-w-0">
-            <header className="mb-5">
-              <h1 className="text-2xl font-semibold tracking-tight">{stepAt(stepIndex).label}</h1>
-              <p className="mt-1 text-sm text-muted-foreground">{stepAt(stepIndex).powers}</p>
-            </header>
+            <div className="mb-6">
+              <p className="mb-2 text-[10px] font-medium uppercase tracking-[0.18em] text-primary">
+                Step {stepIndex + 1} of {STEPS.length}
+              </p>
+              <h1 className="text-3xl font-semibold tracking-tight text-foreground sm:text-4xl">
+                {stepTitle(step)}
+              </h1>
+              <p className="mt-2 max-w-xl text-sm text-muted-foreground">{stepAt(stepIndex).powers}</p>
+            </div>
 
-            {notice && <Card className="mb-4 border-amber-500/30 bg-amber-500/5 p-3 text-xs text-amber-200">{notice}</Card>}
+            <AnimatePresence mode="wait" initial={false}>
+              <motion.div
+                key={step}
+                initial={{ opacity: 0, y: 8 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -8 }}
+                transition={{ duration: 0.2, ease: 'easeOut' }}
+              >
+                {notice && (
+                  <div className="mb-5 flex items-start gap-2 rounded-xl border border-amber-500/30 bg-amber-500/[0.06] p-3.5 text-xs text-amber-100">
+                    <Info className="mt-0.5 h-3.5 w-3.5 shrink-0 text-amber-300" />
+                    <span>{notice}</span>
+                  </div>
+                )}
 
-            {step === 'founder' && (
-              <FounderStep
-                value={founder} onChange={setFounder} busy={busy === 'founder'} research={founderResearch}
-                onAnalyze={analyzeFounder} onSkip={() => setStepIndex(stepIndexOf('company'))}
-              />
-            )}
-            {step === 'company' && (
-              <CompanyStep
-                value={company} onChange={setCompany} busy={busy === 'company'}
-                research={companyResearch} linkedin={companyLinkedIn} onAnalyze={analyzeCompany}
-              />
-            )}
-            {step === 'research' && (
-              <ResearchStep
-                busy={busy === 'draft'} founderResearch={founderResearch}
-                companyResearch={companyResearch} onDraft={draftBrain}
-              />
-            )}
-            {step === 'review' && (
-              <ReviewStep
-                brain={brain} draft={draft} missingByStep={completeness.missing_by_step}
-                onQuickAction={onQuickAction} onEditBrain={setEdited}
-              />
-            )}
-            {step === 'activate' && <ActivateStep completeness={completeness} />}
+                {step === 'founder' && (
+                  <FounderStep
+                    value={founder} onChange={setFounder} busy={busy === 'founder'} research={founderResearch}
+                    onAnalyze={analyzeFounder} onSkip={() => setStepIndex(stepIndexOf('company'))}
+                  />
+                )}
+                {step === 'company' && (
+                  <CompanyStep
+                    value={company} onChange={setCompany} busy={busy === 'company'}
+                    research={companyResearch} linkedin={companyLinkedIn} onAnalyze={analyzeCompany}
+                  />
+                )}
+                {step === 'research' && (
+                  <ResearchStep
+                    busy={busy === 'draft'} founderResearch={founderResearch}
+                    companyResearch={companyResearch} onDraft={draftBrain}
+                  />
+                )}
+                {step === 'review' && (
+                  <ReviewStep
+                    brain={brain} draft={draft} missingByStep={completeness.missing_by_step}
+                    onQuickAction={onQuickAction} onEditBrain={setEdited}
+                  />
+                )}
+                {step === 'activate' && <ActivateStep completeness={completeness} />}
+              </motion.div>
+            </AnimatePresence>
 
-            <nav className="mt-8 flex items-center justify-between gap-3 border-t border-border/50 pt-5">
-              <Button variant="ghost" size="sm" onClick={() => setStepIndex((i) => Math.max(0, i - 1))} disabled={stepIndex === 0 || !!busy}>
+            {/* Sticky footer nav */}
+            <nav className="mt-10 flex items-center justify-between gap-3 border-t border-border/40 pt-6">
+              <Button
+                variant="ghost" size="sm"
+                onClick={() => setStepIndex((i) => Math.max(0, i - 1))}
+                disabled={stepIndex === 0 || !!busy}
+              >
                 <ArrowLeft className="mr-1.5 h-4 w-4" /> Back
               </Button>
 
-              <div className="flex items-center gap-2">
-                <Button variant="outline" size="sm" onClick={() => persist(false)} disabled={!!busy || !workspaceId}>
-                  {busy === 'save' && <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />}
-                  Save draft
+              {step === 'activate' ? (
+                <Button
+                  size="lg"
+                  onClick={() => persist(true)}
+                  disabled={!!busy || !completeness.complete || !workspaceId}
+                  className="min-w-[220px] gap-2 bg-primary text-primary-foreground shadow-[0_0_24px_hsl(var(--primary)/0.35)] hover:bg-primary/90"
+                >
+                  {busy === 'activate' ? <Loader2 className="h-4 w-4 animate-spin" /> : <Rocket className="h-4 w-4" />}
+                  Activate Company Brain
                 </Button>
-
-                {step === 'activate' ? (
-                  <Button size="sm" onClick={() => persist(true)} disabled={!!busy || !completeness.complete || !workspaceId}>
-                    {busy === 'activate' ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> : <Rocket className="mr-1.5 h-4 w-4" />}
-                    Activate Company Brain
-                  </Button>
-                ) : (
-                  <Button size="sm" onClick={() => setStepIndex((i) => Math.min(STEPS.length - 1, i + 1))} disabled={!canNext || !!busy}>
-                    Continue <ArrowRight className="ml-1.5 h-4 w-4" />
-                  </Button>
-                )}
-              </div>
+              ) : (
+                <Button
+                  size="lg"
+                  onClick={() => setStepIndex((i) => Math.min(STEPS.length - 1, i + 1))}
+                  disabled={!canNext || !!busy}
+                  className="gap-2"
+                >
+                  Continue <ArrowRight className="h-4 w-4" />
+                </Button>
+              )}
             </nav>
           </main>
 
-          <BrainPreviewPanel brain={brain} completeness={completeness} />
+          {/* Right rail — desktop */}
+          <div className="hidden lg:block">
+            <div className="sticky top-24">
+              <BrainPreviewPanel brain={brain} completeness={completeness} />
+            </div>
+          </div>
+
+          {/* Right rail — mobile accordion */}
+          <div className="lg:hidden">
+            <button
+              type="button"
+              onClick={() => setPreviewOpen((o) => !o)}
+              className="mb-3 flex w-full items-center justify-between rounded-xl border border-border/50 bg-card/40 px-4 py-3 text-left"
+              aria-expanded={previewOpen}
+            >
+              <span className="flex items-center gap-2 text-sm font-medium">
+                <Cpu className="h-3.5 w-3.5 text-primary" />
+                Your Company Brain — {completeness.percent}%
+              </span>
+              <ChevronDown className={`h-4 w-4 transition-transform ${previewOpen ? 'rotate-180' : ''}`} />
+            </button>
+            {previewOpen && <BrainPreviewPanel brain={brain} completeness={completeness} />}
+          </div>
         </div>
       </div>
     </div>
   );
 }
 
-// --------------------------------------------------------------- progress ---
-
-function StepProgress({ index }: { index: number }) {
-  const pct = Math.round(((index + 1) / STEPS.length) * 100);
-  return (
-    <div>
-      <div className="mb-3 flex items-center justify-between">
-        {STEPS.map((s, i) => {
-          const done = i < index;
-          const active = i === index;
-          return (
-            <div key={s.id} className="flex min-w-0 flex-1 items-center gap-2">
-              <div
-                className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-medium transition-colors ${
-                  done ? 'bg-primary text-primary-foreground'
-                    : active ? 'border-2 border-primary bg-primary/10 text-primary'
-                      : 'border border-border bg-muted/30 text-muted-foreground'
-                }`}
-              >
-                {done ? <Check className="h-3.5 w-3.5" /> : i + 1}
-              </div>
-              <span className={`hidden truncate text-xs sm:block ${active ? 'text-foreground' : 'text-muted-foreground'}`}>{s.label}</span>
-              {i < STEPS.length - 1 && <div className="mx-2 hidden h-px flex-1 bg-border md:block" />}
-            </div>
-          );
-        })}
-      </div>
-      <Progress value={pct} className="h-1" />
-    </div>
-  );
+function stepTitle(step: StepId): string {
+  switch (step) {
+    case 'founder':  return 'Tell us who you are';
+    case 'company':  return 'What does your company do?';
+    case 'research': return 'Let Agentory draft your Brain';
+    case 'review':   return 'Review what Agentory learned';
+    case 'activate': return 'Activate your Company Brain';
+  }
 }
 
-// ------------------------------------------------------------------ step 1 --
+// ============================================================================
+// Step 1 — Founder
+// ============================================================================
 
 function FounderStep({
   value, onChange, busy, research, onAnalyze, onSkip,
@@ -282,12 +366,8 @@ function FounderStep({
 }) {
   const set = <K extends keyof FounderForm>(k: K, v: FounderForm[K]) => onChange({ ...value, [k]: v });
   return (
-    <div className="space-y-4">
-      <Card className="border-border/60 bg-card/60 p-5">
-        <div className="mb-4 flex items-center gap-2">
-          <User className="h-4 w-4 text-primary" />
-          <h2 className="text-sm font-semibold">About you</h2>
-        </div>
+    <div className="space-y-5">
+      <PanelCard icon={<User className="h-3.5 w-3.5" />} title="About you" hint="Shapes voice, credibility and outreach tone.">
         <div className="grid gap-4 sm:grid-cols-2">
           <Field label="Your name" required>
             <Input value={value.name} onChange={(e) => set('name', e.target.value)} placeholder="Jane Doe" />
@@ -298,59 +378,90 @@ function FounderStep({
           <Field label="Timezone" hint="Optional">
             <Input value={value.timezone} onChange={(e) => set('timezone', e.target.value)} placeholder="UTC+5:45" />
           </Field>
-          <Field label="What should Agentory help with first?">
+          <Field label="First thing Agentory should help with">
             <Input value={value.first_help_goal} onChange={(e) => set('first_help_goal', e.target.value)} placeholder="Find warm leads" />
           </Field>
         </div>
-      </Card>
+      </PanelCard>
 
-      <Card className="border-border/60 bg-card/60 p-5">
-        <h2 className="mb-1 text-sm font-semibold">Enrich from LinkedIn</h2>
-        <p className="mb-4 text-xs text-muted-foreground">
-          We read only the profile URL you give us. We never collect emails, phone numbers or contacts.
-        </p>
+      <PanelCard
+        icon={<Sparkles className="h-3.5 w-3.5" />}
+        title="Enrich from LinkedIn"
+        hint="Optional. We read only the profile URL you give us — never emails, phones or contacts."
+      >
         <Field label="LinkedIn profile URL">
-          <Input value={value.linkedin_url} onChange={(e) => set('linkedin_url', e.target.value)} placeholder="https://linkedin.com/in/your-handle" />
+          <Input
+            value={value.linkedin_url}
+            onChange={(e) => set('linkedin_url', e.target.value)}
+            placeholder="https://linkedin.com/in/your-handle"
+          />
         </Field>
-        <label className="mt-3 flex cursor-pointer items-start gap-2 text-xs text-muted-foreground">
-          <Checkbox checked={value.enrichment_consent} onCheckedChange={(c) => set('enrichment_consent', c === true)} className="mt-0.5" />
-          <span>Use this LinkedIn URL to enrich my Company Brain.</span>
-        </label>
 
-        <div className="mt-4 flex items-center gap-2">
+        <div className="mt-4 flex items-start justify-between gap-3 rounded-lg border border-border/50 bg-background/40 p-3">
+          <div className="flex min-w-0 items-start gap-2.5">
+            <Lock className="mt-0.5 h-3.5 w-3.5 shrink-0 text-primary" />
+            <div className="min-w-0">
+              <p className="text-xs font-medium text-foreground">Use this URL to enrich my Company Brain</p>
+              <p className="mt-0.5 text-[11px] text-muted-foreground">Consent-based. You can revoke this anytime.</p>
+            </div>
+          </div>
+          <Switch
+            checked={value.enrichment_consent}
+            onCheckedChange={(c) => set('enrichment_consent', c === true)}
+          />
+        </div>
+
+        <div className="mt-4 flex flex-wrap items-center gap-2">
           <Button size="sm" onClick={onAnalyze} disabled={!canEnrichFounder(value) || busy}>
             {busy ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> : <Search className="mr-1.5 h-4 w-4" />}
             Analyze founder profile
           </Button>
           <Button size="sm" variant="ghost" onClick={onSkip} disabled={busy}>Skip enrichment</Button>
         </div>
-      </Card>
+      </PanelCard>
 
-      {research && (
-        <Card className="border-emerald-500/25 bg-emerald-500/5 p-5">
-          <h3 className="mb-3 flex items-center gap-1.5 text-sm font-semibold text-emerald-200">
-            <Sparkles className="h-3.5 w-3.5" /> What Agentory found
-          </h3>
-          <div className="space-y-3">
-            <p className="text-sm text-foreground/90">
-              <span className="font-medium">{research.name}</span>
-              {research.current_role ? ` — ${research.current_role}` : ''}
-              {research.current_company ? ` at ${research.current_company}` : ''}
-            </p>
-            {research.headline && <p className="text-xs text-muted-foreground">{research.headline}</p>}
-            <FieldList label="Credibility signals" values={research.credibility_signals ?? []} empty="None detected" />
-            <FieldList label="Why this matters for GTM" values={research.gtm_relevance ?? []} empty="No GTM signal detected" />
-            {(research.missing_evidence ?? []).length > 0 && (
-              <p className="text-xs text-amber-200">Could not read: {research.missing_evidence.join(', ')}</p>
-            )}
-          </div>
-        </Card>
-      )}
+      {research && <FounderFoundCard research={research} />}
     </div>
   );
 }
 
-// ------------------------------------------------------------------ step 2 --
+function FounderFoundCard({ research }: { research: any }) {
+  const initials = (research.name ?? '?').split(/\s+/).filter(Boolean).slice(0, 2).map((s: string) => s[0]).join('').toUpperCase();
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.25 }}
+      className="overflow-hidden rounded-2xl border border-primary/25 bg-gradient-to-b from-primary/[0.06] to-transparent p-5"
+    >
+      <div className="mb-3 flex items-center gap-2 text-[10px] uppercase tracking-[0.18em] text-primary">
+        <Sparkles className="h-3 w-3" /> Found on LinkedIn
+      </div>
+      <div className="flex items-start gap-3">
+        <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-primary/30 bg-primary/10 text-sm font-semibold text-primary">
+          {initials || '·'}
+        </div>
+        <div className="min-w-0">
+          <p className="text-sm font-medium text-foreground">
+            {research.name}
+            {research.current_role ? ` — ${research.current_role}` : ''}
+            {research.current_company ? ` at ${research.current_company}` : ''}
+          </p>
+          {research.headline && <p className="mt-0.5 text-xs text-muted-foreground">{research.headline}</p>}
+        </div>
+      </div>
+      <div className="mt-4 space-y-3">
+        <FieldList label="Credibility signals" values={research.credibility_signals ?? []} empty="None detected" />
+        <FieldList label="Why this matters for GTM" values={research.gtm_relevance ?? []} empty="No GTM signal detected" />
+        {(research.missing_evidence ?? []).length > 0 && (
+          <p className="text-xs text-amber-200">Could not read: {research.missing_evidence.join(', ')}</p>
+        )}
+      </div>
+    </motion.div>
+  );
+}
+
+// ============================================================================
+// Step 2 — Company
+// ============================================================================
 
 function CompanyStep({
   value, onChange, busy, research, linkedin, onAnalyze,
@@ -360,20 +471,20 @@ function CompanyStep({
 }) {
   const set = <K extends keyof CompanyForm>(k: K, v: CompanyForm[K]) => onChange({ ...value, [k]: v });
   return (
-    <div className="space-y-4">
-      <Card className="border-border/60 bg-card/60 p-5">
-        <div className="mb-4 flex items-center gap-2">
-          <Building2 className="h-4 w-4 text-primary" />
-          <h2 className="text-sm font-semibold">Your company</h2>
-        </div>
+    <div className="space-y-5">
+      <PanelCard
+        icon={<Building2 className="h-3.5 w-3.5" />}
+        title="Your company"
+        hint="Agentory reads your homepage plus up to 10 key pages — no broad web crawl."
+      >
         <div className="grid gap-4 sm:grid-cols-2">
           <Field label="Company name" required>
             <Input value={value.name} onChange={(e) => set('name', e.target.value)} placeholder="Agentory" />
           </Field>
           <Field label="Website URL" required>
-            <Input value={value.website_url} onChange={(e) => set('website_url', e.target.value)} placeholder="https://agentory.ai" />
+            <Input value={value.website_url} onChange={(e) => set('website_url', e.target.value)} placeholder="https://agentory.space" />
           </Field>
-          <Field label="LinkedIn company URL" hint="Optional — the website is enough">
+          <Field label="LinkedIn company URL" hint="Optional">
             <Input value={value.linkedin_url} onChange={(e) => set('linkedin_url', e.target.value)} placeholder="https://linkedin.com/company/agentory" />
           </Field>
           <Field label="Stage" hint="Optional">
@@ -389,40 +500,61 @@ function CompanyStep({
           </Field>
         </div>
 
-        <div className="mt-4">
+        <div className="mt-5 flex items-center gap-3">
           <Button size="sm" onClick={onAnalyze} disabled={!canAnalyzeCompany(value) || busy}>
             {busy ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> : <Search className="mr-1.5 h-4 w-4" />}
             Analyze company
           </Button>
-          <p className="mt-2 text-[11px] text-muted-foreground">
-            Reads your homepage plus up to 10 key pages (about, pricing, customers…). No broad web crawl.
-          </p>
+          <span className="text-[11px] text-muted-foreground">Reads homepage + about, pricing, customers…</span>
         </div>
-      </Card>
+      </PanelCard>
 
-      {research && (
-        <Card className="border-emerald-500/25 bg-emerald-500/5 p-5">
-          <h3 className="mb-3 flex items-center gap-1.5 text-sm font-semibold text-emerald-200">
-            <Sparkles className="h-3.5 w-3.5" /> What Agentory found
-          </h3>
-          <div className="space-y-3">
-            {research.description && <p className="text-sm text-foreground/90">{research.description}</p>}
-            <FieldList label="Business model" values={research.business_model ? [research.business_model] : []} />
-            <FieldList label="Proof points" values={research.proof_points ?? []} empty="No verifiable proof found" />
-            <FieldList label="Integrations" values={research.integrations ?? []} empty="None found" />
-            {linkedin && <FieldList label="LinkedIn" values={[linkedin.industry, linkedin.employee_count].filter(Boolean)} />}
-            <FieldList label="Pages read" values={(research.source_pages ?? []).map(shortPath)} empty="None" />
-            {(research.missing_evidence ?? []).length > 0 && (
-              <p className="text-xs text-amber-200">Missing evidence: {research.missing_evidence.join(', ')}</p>
-            )}
-          </div>
-        </Card>
-      )}
+      {research && <CompanyFoundCard research={research} linkedin={linkedin} website={value.website_url} />}
     </div>
   );
 }
 
-// ------------------------------------------------------------------ step 3 --
+function CompanyFoundCard({ research, linkedin, website }: { research: any; linkedin: any; website: string }) {
+  const host = (() => { try { return new URL(website).hostname; } catch { return ''; } })();
+  const favicon = host ? `https://www.google.com/s2/favicons?domain=${host}&sz=64` : '';
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.25 }}
+      className="overflow-hidden rounded-2xl border border-primary/25 bg-gradient-to-b from-primary/[0.06] to-transparent p-5"
+    >
+      <div className="mb-3 flex items-center gap-2 text-[10px] uppercase tracking-[0.18em] text-primary">
+        <Sparkles className="h-3 w-3" /> Read from your site
+      </div>
+      <div className="flex items-start gap-3">
+        <div className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-lg border border-border/40 bg-muted/40">
+          {favicon ? <img src={favicon} alt="" className="h-6 w-6" /> : <Globe className="h-4 w-4 text-muted-foreground" />}
+        </div>
+        <div className="min-w-0">
+          {research.description && <p className="text-sm text-foreground/90">{research.description}</p>}
+          {host && <p className="mt-0.5 text-[11px] text-muted-foreground">{host}</p>}
+        </div>
+      </div>
+      <div className="mt-4 grid gap-3 sm:grid-cols-2">
+        <FieldList label="Business model" values={research.business_model ? [research.business_model] : []} />
+        <FieldList label="Integrations" values={research.integrations ?? []} empty="None found" />
+        <FieldList label="Proof points" values={research.proof_points ?? []} empty="No verifiable proof found" />
+        {linkedin && (
+          <FieldList label="LinkedIn" values={[linkedin.industry, linkedin.employee_count].filter(Boolean)} />
+        )}
+      </div>
+      <div className="mt-4">
+        <FieldList label="Pages read" values={(research.source_pages ?? []).map(shortPath)} empty="None" />
+      </div>
+      {(research.missing_evidence ?? []).length > 0 && (
+        <p className="mt-3 text-xs text-amber-200">Missing evidence: {research.missing_evidence.join(', ')}</p>
+      )}
+    </motion.div>
+  );
+}
+
+// ============================================================================
+// Step 3 — AI Research / Draft
+// ============================================================================
 
 function ResearchStep({
   busy, founderResearch, companyResearch, onDraft,
@@ -431,44 +563,74 @@ function ResearchStep({
 }) {
   const pages = companyResearch?.source_pages?.length ?? 0;
   return (
-    <Card className="border-border/60 bg-card/60 p-5">
-      <h2 className="mb-1 text-sm font-semibold">Draft your Company Brain</h2>
-      <p className="mb-4 text-xs text-muted-foreground">
-        Agentory turns the evidence it read into a draft ICP, buyers, triggers and disqualifiers.
-        It never invents proof — anything it infers is flagged for your confirmation.
-      </p>
+    <div className="space-y-5">
+      <PanelCard
+        icon={<Sparkles className="h-3.5 w-3.5" />}
+        title="Draft your Company Brain"
+        hint="Agentory turns the evidence it read into a draft ICP, buyers, triggers and disqualifiers. It never invents proof — anything it infers is flagged for confirmation."
+      >
+        <div className="grid gap-3 sm:grid-cols-2">
+          <SourceTile
+            label="Founder LinkedIn"
+            ok={!!founderResearch}
+            detail={founderResearch ? `${founderResearch.confidence} confidence` : 'Skipped'}
+          />
+          <SourceTile
+            label="Company website"
+            ok={!!companyResearch}
+            detail={companyResearch ? `${pages} page(s) read` : 'Not analyzed'}
+          />
+        </div>
 
-      <div className="grid gap-3 sm:grid-cols-2">
-        <SourceTile label="Founder LinkedIn" ok={!!founderResearch} detail={founderResearch ? `${founderResearch.confidence} confidence` : 'Skipped'} />
-        <SourceTile label="Company website" ok={!!companyResearch} detail={companyResearch ? `${pages} page(s) read` : 'Not analyzed'} />
-      </div>
-
-      <Button className="mt-5" size="sm" onClick={onDraft} disabled={busy}>
-        {busy ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> : <Sparkles className="mr-1.5 h-4 w-4" />}
-        {busy ? 'Reading evidence and drafting…' : 'Draft my Company Brain'}
-      </Button>
-      {!companyResearch && !founderResearch && (
-        <p className="mt-2 text-[11px] text-muted-foreground">
-          No research yet — the draft will be thin and mostly need your confirmation.
-        </p>
-      )}
-    </Card>
+        <div className="mt-6 flex flex-col items-start gap-3 sm:flex-row sm:items-center">
+          <Button
+            size="lg"
+            onClick={onDraft}
+            disabled={busy}
+            className="min-w-[240px] gap-2 bg-primary text-primary-foreground shadow-[0_0_28px_hsl(var(--primary)/0.4)] hover:bg-primary/90"
+          >
+            {busy
+              ? <><Loader2 className="h-4 w-4 animate-spin" /> Reading evidence… drafting Brain…</>
+              : <><Sparkles className="h-4 w-4" /> Draft my Company Brain</>}
+          </Button>
+          {!companyResearch && !founderResearch && (
+            <p className="text-[11px] text-muted-foreground">
+              No research yet — the draft will be thin and mostly need your confirmation.
+            </p>
+          )}
+        </div>
+      </PanelCard>
+    </div>
   );
 }
 
 function SourceTile({ label, ok, detail }: { label: string; ok: boolean; detail: string }) {
   return (
-    <div className={`rounded-lg border p-3 ${ok ? 'border-emerald-500/30 bg-emerald-500/5' : 'border-border/60 bg-muted/20'}`}>
+    <div
+      className={[
+        'rounded-xl border p-4 transition-colors',
+        ok ? 'border-primary/40 bg-primary/[0.06]' : 'border-border/50 bg-background/30',
+      ].join(' ')}
+    >
       <div className="flex items-center justify-between">
         <span className="text-xs font-medium text-foreground">{label}</span>
-        {ok && <Check className="h-3.5 w-3.5 text-emerald-400" />}
+        <span
+          className={[
+            'flex h-5 w-5 items-center justify-center rounded-full border text-primary',
+            ok ? 'border-primary/50 bg-primary/15' : 'border-border/60 bg-muted/30 text-muted-foreground/40',
+          ].join(' ')}
+        >
+          <Check className="h-3 w-3" />
+        </span>
       </div>
-      <p className="mt-1 text-[11px] text-muted-foreground">{detail}</p>
+      <p className="mt-1.5 text-[11px] text-muted-foreground">{detail}</p>
     </div>
   );
 }
 
-// ------------------------------------------------------------------ step 4 --
+// ============================================================================
+// Step 4 — Review
+// ============================================================================
 
 function ReviewStep({
   brain, draft, missingByStep, onQuickAction, onEditBrain,
@@ -485,16 +647,16 @@ function ReviewStep({
   const tc = brain.target_customer;
   const disq = tc.disqualifiers;
 
-  const setList = (mutate: (b: CompanyBrainV2, v: string[]) => void) => (raw: string) => {
-    const next: CompanyBrainV2 = structuredClone(brain);
-    mutate(next, raw.split(',').map((s) => s.trim()).filter(Boolean));
-    onEditBrain(next);
+  const setList = (mutate: (b: CompanyBrainV2, v: string[]) => void) => (next: string[]) => {
+    const nb: CompanyBrainV2 = structuredClone(brain);
+    mutate(nb, next);
+    onEditBrain(nb);
   };
 
   return (
-    <div className="grid gap-4">
+    <div className="grid gap-5 md:grid-cols-2">
       <BrainReviewCard
-        title="Company summary" subtitle="What we think you sell"
+        title="Company summary" subtitle="What Agentory thinks you sell"
         confidence={brain.brain_confidence} sources={sources}
         needsConfirmation={needs.filter((n) => n.startsWith('company')).length}
         missing={missingByStep.company?.length ? ['company fields'] : []}
@@ -505,19 +667,19 @@ function ReviewStep({
       </BrainReviewCard>
 
       <BrainReviewCard
-        title="Ideal customers" subtitle="Who Leads and Radar will target"
+        title="Ideal customers" subtitle="Who Leads and Scout Radar will target"
         confidence={brain.brain_confidence} sources={sources}
         needsConfirmation={needs.filter((n) => n.startsWith('target_customer')).length}
         missing={missingByStep.customers?.length ? ['industries or business models'] : []}
         quickActions={QUICK_ACTIONS.filter((a) => ['correct', 'too_broad', 'too_narrow'].includes(a.id))}
         onQuickAction={onQuickAction}
       >
-        <EditableList label="Industries" values={tc.industries} onSave={setList((b, v) => { b.target_customer.industries = v; })} />
-        <EditableList label="Business models" values={tc.business_models} onSave={setList((b, v) => { b.target_customer.business_models = v; })} />
+        <ChipInput label="Industries" values={tc.industries} onChange={setList((b, v) => { b.target_customer.industries = v; })} />
+        <ChipInput label="Business models" values={tc.business_models} onChange={setList((b, v) => { b.target_customer.business_models = v; })} />
         <FieldList label="Company size" values={tc.company_size.label ? [tc.company_size.label] : []} />
         <FieldList label="Geography" values={tc.geography} />
         <FieldList label="Funding stage" values={tc.funding_stage} />
-        <EditableList label="Must-have traits" values={tc.must_have} onSave={setList((b, v) => { b.target_customer.must_have = v; })} />
+        <ChipInput label="Must-have traits" values={tc.must_have} onChange={setList((b, v) => { b.target_customer.must_have = v; })} />
         <FieldList label="Nice-to-have" values={tc.nice_to_have} />
       </BrainReviewCard>
 
@@ -527,8 +689,8 @@ function ReviewStep({
         needsConfirmation={needs.filter((n) => n.startsWith('buyer')).length}
         missing={missingByStep.buyers?.length ? ['buyer personas'] : []}
       >
-        <EditableList label="Buyer personas" values={brain.buyer_personas} onSave={setList((b, v) => { b.buyer_personas = v; })} />
-        <EditableList label="Pain points" values={brain.pain_points} onSave={setList((b, v) => { b.pain_points = v; })} />
+        <ChipInput label="Buyer personas" values={brain.buyer_personas} onChange={setList((b, v) => { b.buyer_personas = v; })} />
+        <ChipInput label="Pain points" values={brain.pain_points} onChange={setList((b, v) => { b.pain_points = v; })} />
       </BrainReviewCard>
 
       <BrainReviewCard
@@ -538,29 +700,29 @@ function ReviewStep({
         quickActions={QUICK_ACTIONS.filter((a) => a.id === 'require_proof')}
         onQuickAction={onQuickAction}
       >
-        <EditableList label="Triggers" values={brain.triggers} onSave={setList((b, v) => { b.triggers = v; })} />
-        <EditableList label="Jobs to watch" values={brain.jobs_to_watch} onSave={setList((b, v) => { b.jobs_to_watch = v; })} />
+        <ChipInput label="Triggers" values={brain.triggers} onChange={setList((b, v) => { b.triggers = v; })} />
+        <ChipInput label="Jobs to watch" values={brain.jobs_to_watch} onChange={setList((b, v) => { b.jobs_to_watch = v; })} />
         <FieldList label="Tools to watch" values={brain.tools} />
         <FieldList label="Competitor activity" values={brain.competitors} />
       </BrainReviewCard>
 
       <BrainReviewCard
-        title="Never target these companies" subtitle="Disqualifiers are enforced before anything reaches you"
+        title="Never target these" subtitle="Disqualifiers are enforced before anything reaches you"
         confidence={brain.brain_confidence} sources={[]}
         missing={missingByStep.disqualifiers?.length ? ['at least one disqualifier'] : []}
         quickActions={QUICK_ACTIONS.filter((a) => ['never_target', 'add_bad_fit'].includes(a.id))}
         onQuickAction={onQuickAction}
       >
-        <EditableList label="Industries to avoid" values={disq.industries} onSave={setList((b, v) => { b.target_customer.disqualifiers.industries = v; })} />
-        <EditableList label="Company types to avoid" values={disq.company_types} onSave={setList((b, v) => { b.target_customer.disqualifiers.company_types = v; })} />
-        <EditableList label="Keywords to avoid" values={disq.keywords} onSave={setList((b, v) => { b.target_customer.disqualifiers.keywords = v; })} />
+        <ChipInput label="Industries to avoid" values={disq.industries} onChange={setList((b, v) => { b.target_customer.disqualifiers.industries = v; })} />
+        <ChipInput label="Company types to avoid" values={disq.company_types} onChange={setList((b, v) => { b.target_customer.disqualifiers.company_types = v; })} />
+        <ChipInput label="Keywords to avoid" values={disq.keywords} onChange={setList((b, v) => { b.target_customer.disqualifiers.keywords = v; })} />
         <FieldList label="Titles to avoid" values={disq.titles} />
         <FieldList label="Domains to avoid" values={disq.domains} />
       </BrainReviewCard>
 
       <BrainReviewCard title="Good fit / bad fit examples" subtitle="Concrete companies teach the scorer faster than rules" sources={[]}>
-        <EditableList label="Good-fit companies" values={brain.positive_examples} onSave={setList((b, v) => { b.positive_examples = v; })} />
-        <EditableList label="Bad-fit companies" values={brain.negative_examples} onSave={setList((b, v) => { b.negative_examples = v; })} />
+        <ChipInput label="Good-fit companies" values={brain.positive_examples} onChange={setList((b, v) => { b.positive_examples = v; })} />
+        <ChipInput label="Bad-fit companies" values={brain.negative_examples} onChange={setList((b, v) => { b.negative_examples = v; })} />
       </BrainReviewCard>
 
       <BrainReviewCard
@@ -571,111 +733,129 @@ function ReviewStep({
       >
         <FieldList label="Promise" values={brain.positioning.promise ? [brain.positioning.promise] : []} />
         <FieldList label="Differentiators" values={brain.positioning.differentiators} />
-        <EditableList label="Content angles" values={brain.content_angles} onSave={setList((b, v) => { b.content_angles = v; })} />
+        <ChipInput label="Content angles" values={brain.content_angles} onChange={setList((b, v) => { b.content_angles = v; })} />
         <FieldList label="Tone" values={brain.brand_voice.tone ? [brain.brand_voice.tone] : []} />
         <FieldList label="Banned claims" values={[...brain.positioning.avoid_positioning, ...brain.brand_voice.avoid]} empty="None set" />
       </BrainReviewCard>
 
       <BrainReviewCard title="Qualification rules" subtitle="Evidence required before a lead is trusted" sources={[]}>
-        <EditableList label="Required evidence" values={brain.qualification_rules.required_evidence} onSave={setList((b, v) => { b.qualification_rules.required_evidence = v; })} />
-        <EditableList label="Reject if" values={brain.qualification_rules.reject_if} onSave={setList((b, v) => { b.qualification_rules.reject_if = v; })} />
+        <ChipInput label="Required evidence" values={brain.qualification_rules.required_evidence} onChange={setList((b, v) => { b.qualification_rules.required_evidence = v; })} />
+        <ChipInput label="Reject if" values={brain.qualification_rules.reject_if} onChange={setList((b, v) => { b.qualification_rules.reject_if = v; })} />
         <FieldList label="Manual review if" values={brain.qualification_rules.manual_review_if} />
       </BrainReviewCard>
     </div>
   );
 }
 
-/** Comma-separated inline editor for a list field. */
-function EditableList({ label, values, onSave }: { label: string; values: string[]; onSave: (raw: string) => void }) {
-  const [editing, setEditing] = useState(false);
-  const [raw, setRaw] = useState('');
-
-  if (!editing) {
-    return (
-      <div>
-        <div className="mb-1 flex items-center justify-between">
-          <p className="text-[11px] uppercase tracking-wide text-muted-foreground">{label}</p>
-          <button type="button" className="text-[11px] text-primary hover:underline" onClick={() => { setRaw(values.join(', ')); setEditing(true); }}>
-            Edit
-          </button>
-        </div>
-        {values.length === 0
-          ? <p className="text-xs text-muted-foreground/70">Not set</p>
-          : <div className="flex flex-wrap gap-1">{values.map((v) => <span key={v} className="rounded bg-muted/50 px-1.5 py-0.5 text-xs">{v}</span>)}</div>}
-      </div>
-    );
-  }
-  return (
-    <div>
-      <p className="mb-1 text-[11px] uppercase tracking-wide text-muted-foreground">{label}</p>
-      <Textarea rows={2} value={raw} onChange={(e) => setRaw(e.target.value)} placeholder="Comma-separated" />
-      <div className="mt-1.5 flex gap-1.5">
-        <Button size="sm" className="h-7 text-xs" onClick={() => { onSave(raw); setEditing(false); }}>Save</Button>
-        <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => setEditing(false)}>Cancel</Button>
-      </div>
-    </div>
-  );
-}
-
-// ------------------------------------------------------------------ step 5 --
+// ============================================================================
+// Step 5 — Activate
+// ============================================================================
 
 function ActivateStep({ completeness }: { completeness: CompletenessResult }) {
   return (
-    <div className="space-y-4">
-      <Card className="border-border/60 bg-card/60 p-6 text-center">
-        <Rocket className="mx-auto mb-3 h-8 w-8 text-primary" />
-        <h2 className="text-lg font-semibold">{completeness.complete ? 'Your Company Brain is ready.' : 'Almost there.'}</h2>
-        <p className="mx-auto mt-1 max-w-md text-sm text-muted-foreground">
-          {completeness.complete
-            ? 'Activate to let Leads, Radar, Content, Agents and Outreach use it. Nothing sends automatically.'
-            : 'Fill the remaining required fields to activate. You can save a draft and finish later.'}
-        </p>
-
-        <div className="mx-auto mt-5 max-w-sm">
-          <div className="mb-1.5 flex items-center justify-between text-xs">
-            <span className="text-muted-foreground">Completeness</span>
-            <span className="font-medium">{completeness.percent}%</span>
+    <div className="space-y-6">
+      <div
+        className="relative overflow-hidden rounded-2xl border border-border/50 bg-gradient-to-b from-primary/[0.08] via-card/40 to-card/40 p-8 text-center backdrop-blur-md"
+      >
+        <div
+          aria-hidden
+          className="pointer-events-none absolute inset-0 opacity-60"
+          style={{ background: 'radial-gradient(400px 200px at 50% 0%, hsl(var(--primary) / 0.18), transparent 60%)' }}
+        />
+        <div className="relative">
+          <div className="mb-5 flex justify-center">
+            <CompletenessRing value={completeness.percent} size={168} caption="Complete" />
           </div>
-          <Progress value={completeness.percent} className="h-1.5" />
-          <Badge variant="outline" className="mt-3">{completeness.confidence} confidence</Badge>
+          <h2 className="text-2xl font-semibold tracking-tight">
+            {completeness.complete ? 'Your Company Brain is ready.' : 'Almost there.'}
+          </h2>
+          <p className="mx-auto mt-2 max-w-md text-sm text-muted-foreground">
+            {completeness.complete
+              ? 'Activate to let Leads, Scout Radar, Content, Agents and Outreach use it.'
+              : 'Fill the remaining required fields to activate. You can save a draft and finish later.'}
+          </p>
+          <div className="mt-4 inline-flex items-center gap-2">
+            <Badge
+              variant="outline"
+              className="gap-1 rounded-full border-primary/40 bg-primary/10 px-2.5 py-0.5 text-[10px] uppercase tracking-[0.16em] text-primary"
+            >
+              {completeness.confidence} confidence
+            </Badge>
+            <span className="text-[11px] text-muted-foreground">
+              {completeness.required_met}/{completeness.required_total} required
+            </span>
+          </div>
         </div>
-      </Card>
+      </div>
 
       {completeness.missing.length > 0 && (
-        <Card className="border-amber-500/30 bg-amber-500/5 p-4">
-          <h3 className="mb-2 text-xs font-semibold text-amber-200">Still missing</h3>
-          <ul className="space-y-1 text-xs text-amber-100/90">
-            {completeness.missing.map((m) => <li key={m}>• {m}</li>)}
+        <div className="rounded-2xl border border-amber-500/30 bg-amber-500/[0.04] p-5">
+          <h3 className="mb-2 text-[10px] font-semibold uppercase tracking-[0.18em] text-amber-300">Still missing</h3>
+          <ul className="grid gap-1.5 sm:grid-cols-2">
+            {completeness.missing.map((m) => (
+              <li key={m} className="text-xs text-amber-100/90">• {m}</li>
+            ))}
           </ul>
-        </Card>
+        </div>
       )}
 
-      <Card className="border-border/60 bg-card/40 p-4">
-        <h3 className="mb-3 text-xs font-semibold">What this powers</h3>
-        <div className="grid gap-2 sm:grid-cols-2">
+      <div className="rounded-2xl border border-border/50 bg-card/40 p-5 backdrop-blur-sm">
+        <h3 className="mb-3 text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">What this powers</h3>
+        <div className="grid gap-3 sm:grid-cols-2">
           {BRAIN_POWERS.map((p) => (
-            <div key={p.key} className="rounded-md border border-border/50 bg-muted/20 p-2.5">
-              <p className="text-xs font-medium text-foreground">{p.label}</p>
-              <p className="text-[11px] text-muted-foreground">{p.blurb}</p>
+            <div key={p.key} className="rounded-xl border border-border/40 bg-background/30 p-3">
+              <p className="text-sm font-medium text-foreground">{p.label}</p>
+              <p className="mt-0.5 text-[11px] text-muted-foreground">{p.blurb}</p>
             </div>
           ))}
         </div>
-        <Separator className="my-3" />
-        <p className="text-[11px] text-muted-foreground">
-          Activation never sends an email, post, comment or DM, and never starts a Scout Radar scan.
-          You can run your first scan manually from Signals afterwards.
-        </p>
-      </Card>
+      </div>
+
+      <div className="flex flex-wrap items-center gap-2">
+        <ReassurancePill icon={<ShieldCheck className="h-3 w-3" />} text="No outreach sent" />
+        <ReassurancePill icon={<ShieldCheck className="h-3 w-3" />} text="No Scout Radar scan started" />
+        <ReassurancePill icon={<ShieldCheck className="h-3 w-3" />} text="You stay in control" />
+      </div>
     </div>
   );
 }
 
-// ---------------------------------------------------------------- helpers ---
+function ReassurancePill({ icon, text }: { icon: React.ReactNode; text: string }) {
+  return (
+    <span className="inline-flex items-center gap-1.5 rounded-full border border-border/50 bg-background/40 px-2.5 py-1 text-[11px] text-muted-foreground">
+      <span className="text-primary">{icon}</span>
+      {text}
+    </span>
+  );
+}
+
+// ============================================================================
+// Shared primitives
+// ============================================================================
+
+function PanelCard({
+  icon, title, hint, children,
+}: { icon: React.ReactNode; title: string; hint?: string; children: React.ReactNode }) {
+  return (
+    <section className="rounded-2xl border border-border/50 bg-card/40 p-6 backdrop-blur-sm shadow-[0_1px_0_hsl(var(--border))_inset]">
+      <header className="mb-5 flex items-start gap-3">
+        <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-primary/30 bg-primary/10 text-primary">
+          {icon}
+        </div>
+        <div className="min-w-0">
+          <h2 className="text-sm font-semibold tracking-tight text-foreground">{title}</h2>
+          {hint && <p className="mt-0.5 text-xs text-muted-foreground">{hint}</p>}
+        </div>
+      </header>
+      {children}
+    </section>
+  );
+}
 
 function Field({ label, hint, required, children }: { label: string; hint?: string; required?: boolean; children: React.ReactNode }) {
   return (
     <div className="space-y-1.5">
-      <Label className="text-xs">
+      <Label className="text-xs text-foreground/90">
         {label}
         {required && <span className="ml-0.5 text-destructive">*</span>}
         {hint && <span className="ml-1.5 font-normal text-muted-foreground">{hint}</span>}
@@ -703,7 +883,7 @@ function toRaw(b: CompanyBrainV2): Record<string, unknown> {
 
 function explain(reason: string | undefined, ctx: 'founder' | 'company' | 'draft'): string {
   switch (reason) {
-    case 'consent_not_given': return 'Tick the consent box to enrich from LinkedIn.';
+    case 'consent_not_given': return 'Turn on the consent toggle to enrich from LinkedIn.';
     case 'invalid_linkedin_profile_url': return 'That does not look like a linkedin.com/in/… profile URL.';
     case 'invalid_linkedin_company_url': return 'That does not look like a linkedin.com/company/… URL.';
     case 'apify_not_configured': return 'LinkedIn enrichment is not configured yet. Continue and fill this in by hand.';
