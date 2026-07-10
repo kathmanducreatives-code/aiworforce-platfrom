@@ -20,11 +20,26 @@ export interface PositioningV2 {
 }
 export interface BrandVoiceV2 { tone: string; tags: string[]; style_rules: string[]; avoid: string[]; example_message: string; }
 
+// ---- Onboarding v3 additions (additive; older consumers ignore these) ----
+export interface FounderV2 {
+  name: string; role: string; background: string;
+  gtm_relevance: string[]; credibility_signals: string[]; linkedin_url: string;
+}
+export interface BrainEvidence {
+  source_pages: string[]; linkedin_sources: string[]; confidence_notes: string[];
+}
+
 export interface CompanyBrainV2 {
   schema_version: 2;
   setup_status: SetupStatus;
   brain_confidence: BrainConfidence;
   setup_required: boolean;
+  /** true while an AI draft is under review and has not been activated yet. */
+  is_draft: boolean;
+  founder: FounderV2;
+  evidence: BrainEvidence;
+  /** Required slots the Brain still cannot satisfy (recomputed on save). */
+  missing_fields: string[];
   company: {
     name: string; website_url: string; description: string; category: string;
     business_model: string; stage: string; team_size: string; location: string;
@@ -83,6 +98,29 @@ function normalizeBrandVoice(v: unknown): BrandVoiceV2 {
     avoid: asStringArray(o.avoid), example_message: asString(o.example_message),
   };
 }
+// The legacy structured brain already stored `founder: { name, role, linkedin_url }`,
+// so v2 reads the same slot and simply adds the research-derived fields.
+function normalizeFounder(v: unknown): FounderV2 {
+  const o = asObject(v);
+  return {
+    name: asString(o.name),
+    role: asString(o.role),
+    background: asString(o.background),
+    gtm_relevance: asStringArray(o.gtm_relevance),
+    credibility_signals: asStringArray(o.credibility_signals),
+    linkedin_url: asString(o.linkedin_url),
+  };
+}
+
+function normalizeEvidence(v: unknown): BrainEvidence {
+  const o = asObject(v);
+  return {
+    source_pages: asStringArray(o.source_pages),
+    linkedin_sources: asStringArray(o.linkedin_sources),
+    confidence_notes: asStringArray(o.confidence_notes),
+  };
+}
+
 function normalizeDisqualifiers(v: unknown, legacyIcpDisq: unknown): DisqualifierBuckets {
   const o = asObject(v);
   const industries = asStringArray(o.industries);
@@ -195,6 +233,10 @@ export function normalizeCompanyBrain(profile: Record<string, unknown> | null | 
     setup_status: "incomplete",
     brain_confidence: "weak",
     setup_required: true,
+    is_draft: raw.is_draft === true,
+    founder: normalizeFounder(raw.founder),
+    evidence: normalizeEvidence(raw.evidence),
+    missing_fields: asStringArray(raw.missing_fields),
     company: {
       name: asString(co.name), website_url: asString(co.website_url), description: asString(co.description),
       category: asString(co.category), business_model: asString(co.business_model) || asString(legacyGtm.motion),

@@ -1,1320 +1,718 @@
-import { useEffect, useMemo, useState } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
-import { AnimatePresence, motion } from 'framer-motion';
+// Company Brain Onboarding v3 — AI-assisted founder + company research.
+//
+// Five steps: Founder → Company → AI Research → Review Brain → Activate.
+// Providers run ONLY on an explicit click (founder enrichment additionally
+// requires consent). Nothing is auto-sent and no Scout Radar scan is triggered.
+// Activation is refused unless the Brain meets the minimum requirements — the
+// server is authoritative; this UI mirrors the same rules for the live preview.
+
+import { useCallback, useMemo, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { useWorkspace } from '@/contexts/WorkspaceContext';
-import { useCompanyBrain } from '@/hooks/useCompanyBrain';
-import { useIntegrationReadiness } from '@/hooks/useIntegrationReadiness';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Textarea } from '@/components/ui/textarea';
-import { Label } from '@/components/ui/label';
-import { Switch } from '@/components/ui/switch';
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { toast } from 'sonner';
+
+import { Button } from '@/components/ui/button';
+import { Card } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Progress } from '@/components/ui/progress';
+import { Badge } from '@/components/ui/badge';
+import { Separator } from '@/components/ui/separator';
+import { ArrowLeft, ArrowRight, Building2, Check, Loader2, Rocket, Search, Sparkles, User } from 'lucide-react';
+
+import { BrainPreviewPanel } from '@/components/onboarding/BrainPreviewPanel';
+import { BrainReviewCard, FieldList } from '@/components/onboarding/BrainReviewCard';
 import {
-  ArrowRight, ArrowLeft, Loader2, Sparkles, CheckCircle2, AlertTriangle,
-  Globe, ShieldCheck, Target, Eye, Mail, Building2, Compass, Megaphone, Lock,
-  ChevronDown, ChevronRight, X, User, Workflow, Plug, Rocket, RefreshCw,
-} from 'lucide-react';
-import {
-  getBrainDefaults, BRAND_VOICE_TAGS, GTM_MOTIONS, PRIMARY_CHANNELS,
-  COMPANY_STAGES, TEAM_SIZES, FIRST_HELP_GOALS, type StructuredBrain,
-} from '@/lib/companyBrainSchema';
-import { mapDraftToStructured, mapDraftToBasics } from '@/lib/onboardingDraftMap';
-import { computeCompleteness } from '@/lib/brainCompleteness';
-import { recommendWorkflows } from '@/lib/workflows/recommend';
-import { WORKFLOWS } from '@/lib/workflows/registry';
-import { pilotChat } from '@/lib/pilotChat';
-import BrainOrb from '@/components/onboarding/BrainOrb';
-import { markTourPending } from '@/hooks/useProductTour';
+  STEPS, stepAt, stepIndexOf, type StepId,
+  emptyCompanyForm, emptyFounderForm, type CompanyForm, type FounderForm,
+  canAnalyzeCompany, canContinue, canEnrichFounder, isLinkedInCompanyUrl,
+  buildDraftInput, buildSavePatch, previewBrain, applyQuickAction, QUICK_ACTIONS,
+  type QuickAction,
+} from '@/lib/onboardingV3';
+import { BRAIN_POWERS, type CompletenessResult } from '@/lib/companyBrainCompleteness';
+import type { CompanyBrainV2 } from '@/lib/normalizeCompanyBrain';
 
-// ---------- helpers ----------
-async function call(action: string, workspace_id: string, payload: Record<string, any> = {}) {
-  const { data, error } = await supabase.functions.invoke('setup-company-brain', {
-    body: { action, workspace_id, ...payload },
-  });
-  if (error) throw error;
-  if ((data as any)?.error) throw new Error((data as any).error);
-  return data;
-}
+const FN = 'generate-company-brain-draft';
 
-const AGENTS = [
-  { slug: 'pilot',  name: 'Pilot' },
-  { slug: 'scout',  name: 'Scout' },
-  { slug: 'hawk',   name: 'Hawk' },
-  { slug: 'aria',   name: 'Aria' },
-  { slug: 'penn',   name: 'Penn' },
-  { slug: 'scribe', name: 'Scribe' },
-];
+export default function OnboardingCompanyBrain() {
+  const { workspaceId } = useWorkspace();
+  const navigate = useNavigate();
 
-type AnalysisPhase = { agent: string; label: string; status: 'ok' | 'skipped' | 'failed' | 'running' };
-const DEFAULT_PHASES: AnalysisPhase[] = [
-  { agent: 'hawk',  label: 'Hawk is reading your website',          status: 'running' },
-  { agent: 'pilot', label: 'Pilot is mapping your business model',  status: 'running' },
-];
+  const [stepIndex, setStepIndex] = useState(0);
+  const step: StepId = stepAt(stepIndex).id;
 
-const TONE_CHIPS = [...BRAND_VOICE_TAGS, 'concise', 'bold'] as const;
+  const [founder, setFounder] = useState<FounderForm>(emptyFounderForm());
+  const [company, setCompany] = useState<CompanyForm>(emptyCompanyForm());
 
-const FIRST_HELP_LABEL: Record<string, string> = {
-  find_leads: 'Find leads',
-  research_companies: 'Research companies',
-  draft_outreach: 'Draft outreach',
-  create_content: 'Create content',
-  audit_website: 'Audit a website',
-  track_competitors: 'Track competitors',
-  organize_founder_ops: 'Organize founder ops',
-  not_sure: "I'm not sure yet",
-};
+  const [founderResearch, setFounderResearch] = useState<any>(null);
+  const [companyResearch, setCompanyResearch] = useState<any>(null);
+  const [companyLinkedIn, setCompanyLinkedIn] = useState<any>(null);
+  const [draft, setDraft] = useState<Record<string, unknown> | null>(null);
 
-// ---------- step model (12 steps) ----------
-type StepId =
-  | 'welcome'
-  | 'founder'
-  | 'company'
-  | 'analyzing'
-  | 'icp'
-  | 'gtm'
-  | 'positioning'
-  | 'voice'
-  | 'workflow_prefs'
-  | 'integrations'
-  | 'approval'
-  | 'review';
+  const [busy, setBusy] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
 
-interface StepDef { id: StepId; label: string; icon: any; skippable?: boolean }
+  /** Local edits to the reviewed Brain, held as a full normalized overlay. */
+  const [edited, setEdited] = useState<CompanyBrainV2 | null>(null);
 
-const STEPS: StepDef[] = [
-  { id: 'welcome',        label: 'Welcome',         icon: Sparkles },
-  { id: 'founder',        label: 'Founder',         icon: User },
-  { id: 'company',        label: 'Company',         icon: Building2 },
-  { id: 'analyzing',      label: 'AI analysis',     icon: Loader2 },
-  { id: 'icp',            label: 'ICP',             icon: Target },
-  { id: 'gtm',            label: 'GTM',             icon: Compass, skippable: true },
-  { id: 'positioning',    label: 'Positioning',     icon: Eye,     skippable: true },
-  { id: 'voice',          label: 'Voice',           icon: Megaphone, skippable: true },
-  { id: 'workflow_prefs', label: 'Workflows',       icon: Workflow, skippable: true },
-  { id: 'integrations',   label: 'Integrations',    icon: Plug,    skippable: true },
-  { id: 'approval',       label: 'Safety',          icon: Lock },
-  { id: 'review',         label: 'Review',          icon: Rocket },
-];
+  // The preview always reflects the draft-so-far merged with what the user typed.
+  const rawProfile = useMemo(() => ({
+    ...(draft ?? {}),
+    ...(edited ? toRaw(edited) : {}),
+    company: {
+      ...((draft?.company as object) ?? {}),
+      ...(edited ? edited.company : {}),
+      ...(company.name ? { name: company.name } : {}),
+      ...(company.website_url ? { website_url: company.website_url } : {}),
+      ...(company.description ? { description: company.description } : {}),
+    },
+    founder: {
+      ...((draft?.founder as object) ?? {}),
+      ...(edited ? edited.founder : {}),
+      ...(founder.name ? { name: founder.name } : {}),
+      ...(founder.role ? { role: founder.role } : {}),
+      ...(founder.linkedin_url ? { linkedin_url: founder.linkedin_url } : {}),
+    },
+  }), [draft, edited, company, founder]);
 
-const stepIdOf = (id: StepId) => STEPS.findIndex((s) => s.id === id);
+  const { brain, completeness } = useMemo(() => previewBrain(rawProfile), [rawProfile]);
 
-// ---------- chrome ----------
-function BackgroundGrid() {
+  const call = useCallback(async (action: string, payload: Record<string, unknown> = {}) => {
+    if (!workspaceId) throw new Error('No workspace');
+    const { data, error } = await supabase.functions.invoke(FN, {
+      body: { action, workspace_id: workspaceId, ...payload },
+    });
+    if (error) throw error;
+    return data as any;
+  }, [workspaceId]);
+
+  // ---------------------------------------------------------- step actions --
+
+  async function analyzeFounder() {
+    setBusy('founder'); setNotice(null);
+    try {
+      const r = await call('research_founder', { linkedin_url: founder.linkedin_url, consent: founder.enrichment_consent });
+      if (r?.ok && r.research) {
+        setFounderResearch(r.research);
+        toast.success('Founder profile analyzed', { description: `Confidence: ${r.research.confidence}` });
+      } else {
+        setNotice(explain(r?.reason ?? r?.error, 'founder'));
+      }
+    } catch {
+      setNotice('Founder analysis failed. You can continue and fill this in by hand.');
+    } finally { setBusy(null); }
+  }
+
+  async function analyzeCompany() {
+    setBusy('company'); setNotice(null);
+    try {
+      const r = await call('research_company', {
+        website_url: company.website_url,
+        linkedin_url: isLinkedInCompanyUrl(company.linkedin_url) ? company.linkedin_url : '',
+        name: company.name,
+        description: company.description,
+      });
+      if (r?.ok && r.company_research) {
+        setCompanyResearch(r.company_research);
+        setCompanyLinkedIn(r.company_linkedin ?? null);
+        toast.success('Company analyzed', { description: `${r.pages_fetched} page(s) read` });
+      } else {
+        setNotice(explain(r?.reason ?? r?.error, 'company'));
+      }
+    } catch {
+      setNotice('Company analysis failed. You can continue and fill this in by hand.');
+    } finally { setBusy(null); }
+  }
+
+  async function draftBrain() {
+    setBusy('draft'); setNotice(null);
+    try {
+      const r = await call('draft', buildDraftInput({ founder, company, founderResearch, companyResearch, companyLinkedIn }));
+      if (r?.ok && r.draft) {
+        setDraft(r.draft);
+        setEdited(null);
+        setStepIndex(stepIndexOf('review'));
+        toast.success('Draft Company Brain ready', { description: 'Review each card before activating.' });
+      } else {
+        setNotice(explain(r?.reason ?? r?.error, 'draft'));
+      }
+    } catch {
+      setNotice('Could not draft the Brain. You can still fill it in by hand.');
+    } finally { setBusy(null); }
+  }
+
+  async function persist(activate: boolean) {
+    setBusy(activate ? 'activate' : 'save'); setNotice(null);
+    try {
+      const patch = buildSavePatch({ founder, company, brain });
+      const r = await call(activate ? 'activate' : 'save_draft', { patch });
+      if (activate && !r?.activated) {
+        setNotice(`Can't activate yet — ${(r?.blocked_reasons ?? []).join('; ') || 'requirements not met'}. Your draft is saved.`);
+        return;
+      }
+      toast.success(activate ? 'Company Brain activated' : 'Draft saved', {
+        description: activate
+          ? 'Leads, Radar, Content, Agents and Outreach now use it.'
+          : 'You can finish later.',
+      });
+      if (activate) navigate('/');
+    } catch {
+      setNotice('Save failed. Nothing was lost — try again.');
+    } finally { setBusy(null); }
+  }
+
+  const onQuickAction = (action: QuickAction, value?: string) => setEdited(applyQuickAction(brain, action, value));
+
+  const canNext = canContinue(step, { founder, company });
+
   return (
-    <div className="pointer-events-none fixed inset-0 -z-10 overflow-hidden">
-      <div className="absolute inset-0 bg-background" />
-      <div
-        className="absolute inset-0 opacity-[0.18]"
-        style={{
-          backgroundImage:
-            'linear-gradient(rgba(16,185,129,0.08) 1px, transparent 1px), linear-gradient(90deg, rgba(16,185,129,0.08) 1px, transparent 1px)',
-          backgroundSize: '64px 64px',
-          maskImage: 'radial-gradient(ellipse at top, black 30%, transparent 75%)',
-          WebkitMaskImage: 'radial-gradient(ellipse at top, black 30%, transparent 75%)',
-        }}
-      />
-      <div className="absolute -top-40 left-1/2 -translate-x-1/2 h-[420px] w-[820px] rounded-full bg-primary/15 blur-3xl" />
-    </div>
-  );
-}
+    <div className="min-h-screen bg-background">
+      <div className="mx-auto max-w-6xl px-4 py-8">
+        <StepProgress index={stepIndex} />
 
-function AgentChipsRow({ activeCount = 0, pulse = false }: { activeCount?: number; pulse?: boolean }) {
-  return (
-    <div className="flex flex-wrap items-center gap-1.5">
-      {AGENTS.map((a, i) => {
-        const on = i < activeCount;
-        return (
-          <span
-            key={a.slug}
-            className={
-              'inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] border transition-colors ' +
-              (on
-                ? 'border-primary/40 bg-primary/10 text-primary'
-                : 'border-border/60 bg-card/40 text-muted-foreground')
-            }
-          >
-            <span className={'h-1.5 w-1.5 rounded-full ' + (on ? `bg-primary ${pulse ? 'animate-pulse' : ''}` : 'bg-muted-foreground/40')} />
-            {a.name}
-          </span>
-        );
-      })}
-    </div>
-  );
-}
+        <div className="mt-8 grid gap-6 lg:grid-cols-[minmax(0,1fr)_320px]">
+          <main className="min-w-0">
+            <header className="mb-5">
+              <h1 className="text-2xl font-semibold tracking-tight">{stepAt(stepIndex).label}</h1>
+              <p className="mt-1 text-sm text-muted-foreground">{stepAt(stepIndex).powers}</p>
+            </header>
 
-function ProgressRail({ currentIndex }: { currentIndex: number }) {
-  const pct = Math.round(((currentIndex + 1) / STEPS.length) * 100);
-  return (
-    <div className="space-y-3">
-      <div className="hidden md:flex items-stretch gap-1.5">
-        {STEPS.map((s, i) => {
-          const done = i < currentIndex;
-          const active = i === currentIndex;
-          return (
-            <div
-              key={s.id}
-              className="group relative flex-1 flex flex-col items-center"
-              title={`${i + 1}. ${s.label}`}
-            >
-              <div
-                className={
-                  'h-1.5 w-full rounded-full transition-all duration-500 ' +
-                  (done
-                    ? 'bg-primary shadow-[0_0_10px_rgba(16,185,129,0.55)]'
-                    : active
-                    ? 'bg-gradient-to-r from-primary to-primary/40 shadow-[0_0_14px_rgba(16,185,129,0.65)]'
-                    : 'bg-border/40')
-                }
-              >
-                {active && (
-                  <div className="h-full w-full rounded-full bg-primary/60 animate-pulse" />
+            {notice && <Card className="mb-4 border-amber-500/30 bg-amber-500/5 p-3 text-xs text-amber-200">{notice}</Card>}
+
+            {step === 'founder' && (
+              <FounderStep
+                value={founder} onChange={setFounder} busy={busy === 'founder'} research={founderResearch}
+                onAnalyze={analyzeFounder} onSkip={() => setStepIndex(stepIndexOf('company'))}
+              />
+            )}
+            {step === 'company' && (
+              <CompanyStep
+                value={company} onChange={setCompany} busy={busy === 'company'}
+                research={companyResearch} linkedin={companyLinkedIn} onAnalyze={analyzeCompany}
+              />
+            )}
+            {step === 'research' && (
+              <ResearchStep
+                busy={busy === 'draft'} founderResearch={founderResearch}
+                companyResearch={companyResearch} onDraft={draftBrain}
+              />
+            )}
+            {step === 'review' && (
+              <ReviewStep
+                brain={brain} draft={draft} missingByStep={completeness.missing_by_step}
+                onQuickAction={onQuickAction} onEditBrain={setEdited}
+              />
+            )}
+            {step === 'activate' && <ActivateStep completeness={completeness} />}
+
+            <nav className="mt-8 flex items-center justify-between gap-3 border-t border-border/50 pt-5">
+              <Button variant="ghost" size="sm" onClick={() => setStepIndex((i) => Math.max(0, i - 1))} disabled={stepIndex === 0 || !!busy}>
+                <ArrowLeft className="mr-1.5 h-4 w-4" /> Back
+              </Button>
+
+              <div className="flex items-center gap-2">
+                <Button variant="outline" size="sm" onClick={() => persist(false)} disabled={!!busy || !workspaceId}>
+                  {busy === 'save' && <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />}
+                  Save draft
+                </Button>
+
+                {step === 'activate' ? (
+                  <Button size="sm" onClick={() => persist(true)} disabled={!!busy || !completeness.complete || !workspaceId}>
+                    {busy === 'activate' ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> : <Rocket className="mr-1.5 h-4 w-4" />}
+                    Activate Company Brain
+                  </Button>
+                ) : (
+                  <Button size="sm" onClick={() => setStepIndex((i) => Math.min(STEPS.length - 1, i + 1))} disabled={!canNext || !!busy}>
+                    Continue <ArrowRight className="ml-1.5 h-4 w-4" />
+                  </Button>
                 )}
               </div>
-              <span
-                className={
-                  'mt-2 text-[10px] tracking-[0.14em] uppercase truncate transition-colors ' +
-                  (done || active ? 'text-foreground/80' : 'text-muted-foreground/60')
-                }
+            </nav>
+          </main>
+
+          <BrainPreviewPanel brain={brain} completeness={completeness} />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// --------------------------------------------------------------- progress ---
+
+function StepProgress({ index }: { index: number }) {
+  const pct = Math.round(((index + 1) / STEPS.length) * 100);
+  return (
+    <div>
+      <div className="mb-3 flex items-center justify-between">
+        {STEPS.map((s, i) => {
+          const done = i < index;
+          const active = i === index;
+          return (
+            <div key={s.id} className="flex min-w-0 flex-1 items-center gap-2">
+              <div
+                className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-medium transition-colors ${
+                  done ? 'bg-primary text-primary-foreground'
+                    : active ? 'border-2 border-primary bg-primary/10 text-primary'
+                      : 'border border-border bg-muted/30 text-muted-foreground'
+                }`}
               >
-                {s.label}
-              </span>
+                {done ? <Check className="h-3.5 w-3.5" /> : i + 1}
+              </div>
+              <span className={`hidden truncate text-xs sm:block ${active ? 'text-foreground' : 'text-muted-foreground'}`}>{s.label}</span>
+              {i < STEPS.length - 1 && <div className="mx-2 hidden h-px flex-1 bg-border md:block" />}
             </div>
           );
         })}
       </div>
-      <div className="md:hidden flex items-center justify-between text-xs">
-        <span className="text-muted-foreground">
-          Step {currentIndex + 1} of {STEPS.length} — <span className="text-foreground">{STEPS[currentIndex].label}</span>
-        </span>
-        <span className="text-primary font-medium">{pct}%</span>
-      </div>
-      <div className="md:hidden h-1 w-full rounded-full bg-border/40 overflow-hidden">
-        <div
-          className="h-full bg-primary shadow-[0_0_12px_rgba(16,185,129,0.5)] transition-all duration-500 ease-out"
-          style={{ width: `${pct}%` }}
-        />
-      </div>
+      <Progress value={pct} className="h-1" />
     </div>
   );
 }
 
-function StepShell({ children }: { children: React.ReactNode }) {
+// ------------------------------------------------------------------ step 1 --
+
+function FounderStep({
+  value, onChange, busy, research, onAnalyze, onSkip,
+}: {
+  value: FounderForm; onChange: (f: FounderForm) => void;
+  busy: boolean; research: any; onAnalyze: () => void; onSkip: () => void;
+}) {
+  const set = <K extends keyof FounderForm>(k: K, v: FounderForm[K]) => onChange({ ...value, [k]: v });
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 8 }}
-      animate={{ opacity: 1, y: 0 }}
-      exit={{ opacity: 0, y: -8 }}
-      transition={{ duration: 0.18, ease: 'easeOut' }}
-    >
-      {children}
-    </motion.div>
-  );
-}
-
-function Card({ children, className = '' }: { children: React.ReactNode; className?: string }) {
-  return (
-    <div
-      className={
-        'rounded-2xl border border-border/60 bg-card/70 backdrop-blur-xl ' +
-        'shadow-[0_30px_80px_-40px_rgba(16,185,129,0.25)] ' + className
-      }
-    >
-      {children}
-    </div>
-  );
-}
-
-function ChipInput({
-  value, onChange, placeholder,
-}: { value: string[]; onChange: (v: string[]) => void; placeholder?: string }) {
-  const [text, setText] = useState('');
-  function commit(v?: string) {
-    const raw = (v ?? text).trim().replace(/,$/, '');
-    if (!raw) return;
-    if (!value.includes(raw)) onChange([...value, raw]);
-    setText('');
-  }
-  return (
-    <div className="rounded-md border border-input bg-background px-2 py-1.5 flex flex-wrap gap-1.5 focus-within:border-emerald-500 focus-within:shadow-[0_0_0_4px_rgba(16,185,129,0.08)] transition-all">
-      {value.map((v) => (
-        <span key={v} className="inline-flex items-center gap-1 rounded-full bg-primary/10 border border-primary/30 text-primary px-2 py-0.5 text-xs">
-          {v}
-          <button type="button" onClick={() => onChange(value.filter((x) => x !== v))} className="hover:text-foreground">×</button>
-        </span>
-      ))}
-      <input
-        value={text}
-        onChange={(e) => {
-          const v = e.target.value;
-          if (v.endsWith(',')) commit(v.slice(0, -1));
-          else setText(v);
-        }}
-        onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); commit(); } }}
-        onBlur={() => commit()}
-        placeholder={value.length === 0 ? placeholder : ''}
-        className="flex-1 min-w-[140px] bg-transparent text-sm outline-none placeholder:text-muted-foreground py-1"
-      />
-    </div>
-  );
-}
-
-function Field({ label, hint, className = '', children }: { label: string; hint?: string; className?: string; children: React.ReactNode }) {
-  return (
-    <div className={className}>
-      <Label className="text-[11px] uppercase tracking-wider text-muted-foreground">{label}</Label>
-      <div className="mt-1.5">{children}</div>
-      {hint && <p className="text-[11px] text-muted-foreground/70 mt-1">{hint}</p>}
-    </div>
-  );
-}
-
-function StepHeader({ eyebrow, title, subtitle }: { eyebrow: string; title: string; subtitle?: string }) {
-  return (
-    <div className="mb-8">
-      <div className="text-[12px] font-semibold tracking-[0.22em] text-emerald-400 uppercase mb-3">{eyebrow}</div>
-      <h2 className="text-[32px] sm:text-[40px] font-semibold tracking-tight text-foreground leading-[1.08]">{title}</h2>
-      {subtitle && <p className="text-[17px] text-muted-foreground mt-3 max-w-2xl leading-[1.55]">{subtitle}</p>}
-    </div>
-  );
-}
-
-function ChoiceChips<T extends string>({ value, options, onChange }: { value: T; options: readonly T[]; onChange: (v: T) => void }) {
-  return (
-    <div className="flex flex-wrap gap-1.5">
-      {options.map((opt) => {
-        const active = opt === value;
-        return (
-          <button
-            key={opt}
-            type="button"
-            onClick={() => onChange(opt)}
-            className={'text-xs rounded-full border px-3 py-1.5 transition-all ' + (active
-              ? 'border-primary bg-primary/10 text-primary shadow-[0_0_0_1px_rgba(16,185,129,0.3)]'
-              : 'border-border text-muted-foreground hover:text-foreground')}
-          >
-            {opt}
-          </button>
-        );
-      })}
-    </div>
-  );
-}
-
-// ---------- main ----------
-export default function OnboardingCompanyBrain() {
-  const navigate = useNavigate();
-  const [searchParams] = useSearchParams();
-  const restart = searchParams.get('restart') === '1';
-  const { workspaceId, loading: wsLoading } = useWorkspace();
-  const { data: brain, refresh } = useCompanyBrain();
-  const readiness = useIntegrationReadiness();
-
-  const [stepIndex, setStepIndex] = useState(0);
-  const [saving, setSaving] = useState(false);
-  const [warnings, setWarnings] = useState<string[]>([]);
-  const [hydrated, setHydrated] = useState(false);
-
-  const [basics, setBasics] = useState({
-    company_name: '',
-    website_url: '',
-    linkedin_company_url: '',
-    founder_linkedin_url: '',
-    short_description: '',
-    category: '',
-  });
-  const [structured, setStructured] = useState<StructuredBrain>(getBrainDefaults());
-  const [analysisPhases, setAnalysisPhases] = useState<AnalysisPhase[]>(DEFAULT_PHASES);
-  const [mappedSummary, setMappedSummary] = useState<string[]>([]);
-  const [launchVisible, setLaunchVisible] = useState(false);
-
-  const step = STEPS[stepIndex].id;
-
-  // Hydrate from existing brain
-  useEffect(() => {
-    if (!brain?.profile || hydrated) return;
-    const p = brain.profile as Record<string, any>;
-    const hasAny =
-      p.company_name || p.website_url || p.short_description ||
-      (p.icp && Object.values(p.icp).some(Boolean)) ||
-      brain.onboarding_completed;
-    setBasics((b) => ({
-      ...b,
-      company_name: p.company_name ?? p.company?.name ?? b.company_name,
-      website_url: p.website_url ?? p.company?.website_url ?? b.website_url,
-      linkedin_company_url: p.linkedin_company_url ?? p.company?.linkedin_url ?? b.linkedin_company_url,
-      founder_linkedin_url: p.founder_linkedin_url ?? p.founder?.linkedin_url ?? b.founder_linkedin_url,
-      short_description: p.short_description ?? p.company?.description ?? p.company_summary ?? b.short_description,
-      category: p.category ?? p.company?.category ?? b.category,
-    }));
-    const defaults = getBrainDefaults();
-    setStructured({
-      ...defaults,
-      founder:        { ...defaults.founder,        ...(p.founder ?? {}) },
-      company:        { ...defaults.company,        ...(p.company ?? {}) },
-      icp:            { ...defaults.icp,            ...(p.icp ?? {}) },
-      goals:          { ...defaults.goals,          ...(p.goals ?? {}) },
-      gtm:            { ...defaults.gtm,            ...(p.gtm ?? {}) },
-      positioning:    { ...defaults.positioning,    ...(p.positioning ?? {}) },
-      brand_voice:    { ...defaults.brand_voice,    ...(p.brand_voice ?? {}) },
-      competitors:    { ...defaults.competitors,    ...(p.competitors ?? {}) },
-      approval_rules: { ...defaults.approval_rules, ...(p.approval_rules ?? {}) },
-      workflow_preferences: { ...defaults.workflow_preferences, ...(p.workflow_preferences ?? {}) },
-      integration_status:   { ...defaults.integration_status, ...(p.integration_status ?? {}) },
-      onboarding_meta:      { ...defaults.onboarding_meta,    ...(p.onboarding_meta ?? {}) },
-    });
-    const resumeStep = (p.onboarding_meta?.current_step as StepId | undefined);
-    if (hasAny && !restart && brain.onboarding_completed) setStepIndex(stepIdOf('review'));
-    else if (resumeStep && !restart && stepIdOf(resumeStep) > 0) setStepIndex(stepIdOf(resumeStep));
-    setHydrated(true);
-  }, [brain, hydrated, restart]);
-
-  // Reset analyzer phases when entering analyzing step (actual statuses come from server)
-  useEffect(() => {
-    if (step === 'analyzing') setAnalysisPhases(DEFAULT_PHASES);
-  }, [step]);
-
-
-  const recommendedWorkflows = useMemo(
-    () => recommendWorkflows({
-      founder: structured.founder, gtm: structured.gtm,
-      workflow_preferences: structured.workflow_preferences,
-    }, WORKFLOWS, 6),
-    [structured.founder, structured.gtm, structured.workflow_preferences],
-  );
-
-  const completeness = useMemo(
-    () => computeCompleteness({ ...basics, ...structured } as any),
-    [basics, structured]
-  );
-
-  if (wsLoading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-background">
-        <Loader2 className="h-6 w-6 animate-spin text-primary" />
-      </div>
-    );
-  }
-  if (!workspaceId) {
-    return (
-      <div className="min-h-screen flex items-center justify-center text-muted-foreground bg-background">
-        No workspace available.
-      </div>
-    );
-  }
-
-  // ---------- actions ----------
-  function goto(id: StepId) { setStepIndex(stepIdOf(id)); }
-
-  async function persistStep(nextId: StepId) {
-    // Persist current step group + onboarding_meta, then advance.
-    const meta = {
-      current_step: nextId,
-      completed_steps: Array.from(new Set([...(structured.onboarding_meta.completed_steps ?? []), step])),
-      updated_at: new Date().toISOString(),
-    };
-    setStructured((s) => ({ ...s, onboarding_meta: meta }));
-    try {
-      // Always persist any basics/structured group changes; server merges.
-      if (step === 'company' || step === 'welcome') {
-        await call('save_basics', workspaceId!, {
-          company_name: basics.company_name,
-          website_url: basics.website_url,
-          linkedin_company_url: basics.linkedin_company_url,
-          founder_linkedin_url: basics.founder_linkedin_url,
-          short_description: basics.short_description,
-        });
-      }
-      await call('save_structured', workspaceId!, {
-        founder: structured.founder,
-        company: { ...structured.company, name: basics.company_name, website_url: basics.website_url, linkedin_url: basics.linkedin_company_url, description: basics.short_description, category: basics.category },
-        icp: structured.icp,
-        gtm: structured.gtm,
-        positioning: structured.positioning,
-        brand_voice: structured.brand_voice,
-        approval_rules: structured.approval_rules,
-        workflow_preferences: structured.workflow_preferences,
-        onboarding_meta: meta,
-      });
-    } catch (e: any) {
-      // Non-blocking; show toast but allow advancing
-      toast.error(e?.message ?? 'Could not save step');
-    }
-    goto(nextId);
-  }
-
-  function back() {
-    const i = Math.max(stepIndex - 1, 0);
-    setStepIndex(i);
-  }
-
-  async function next() {
-    const i = Math.min(stepIndex + 1, STEPS.length - 1);
-    await persistStep(STEPS[i].id);
-  }
-
-  async function skip() {
-    const i = Math.min(stepIndex + 1, STEPS.length - 1);
-    goto(STEPS[i].id);
-  }
-
-  async function startWebsiteAnalysis() {
-    if (!basics.company_name.trim()) {
-      toast.error('Add your company name first.');
-      return;
-    }
-    setSaving(true);
-    goto('analyzing');
-    try {
-      await call('save_basics', workspaceId!, {
-        company_name: basics.company_name,
-        website_url: basics.website_url,
-        linkedin_company_url: basics.linkedin_company_url,
-        founder_linkedin_url: basics.founder_linkedin_url,
-      });
-      if (basics.website_url.trim()) {
-        await call('save_sources', workspaceId!, {
-          sources: [{ source_type: 'website', url: basics.website_url.trim() }],
-        });
-      }
-      const res: any = await call('analyze', workspaceId!);
-      const w: string[] = res?.warnings ?? [];
-      setWarnings(w);
-      if (Array.isArray(res?.phases) && res.phases.length) {
-        setAnalysisPhases(res.phases as AnalysisPhase[]);
-      } else {
-        setAnalysisPhases((prev) => prev.map((p) => ({ ...p, status: 'ok' as const })));
-      }
-      const draft = { ...(res?.profile ?? {}), ...(res?.draft ?? {}) };
-      const mappedBasics = mapDraftToBasics(draft);
-      setBasics((b) => ({
-        ...b,
-        short_description: b.short_description || mappedBasics.short_description,
-        category: b.category || mappedBasics.category,
-      }));
-      const mapped = mapDraftToStructured(draft);
-      // Build human summary of what was mapped (for the "What we found" banner on next step)
-      const summary: string[] = [];
-      if (mappedBasics.short_description) summary.push(`Description: ${mappedBasics.short_description}`);
-      if (mappedBasics.category) summary.push(`Category: ${mappedBasics.category}`);
-      if (mapped.icp.buyer_roles.length) summary.push(`Buyer roles: ${mapped.icp.buyer_roles.join(', ')}`);
-      if (mapped.icp.industries.length) summary.push(`Industries: ${mapped.icp.industries.join(', ')}`);
-      if (mapped.icp.pain_points.length) summary.push(`Pain points: ${mapped.icp.pain_points.slice(0, 3).join(' · ')}`);
-      if (mapped.positioning.promise) summary.push(`Positioning: ${mapped.positioning.promise}`);
-      if (mapped.competitors.known.length) summary.push(`Competitors: ${mapped.competitors.known.join(', ')}`);
-      if (mapped.brand_voice.tone) summary.push(`Voice: ${mapped.brand_voice.tone}`);
-      setMappedSummary(summary);
-      setStructured((s) => ({
-        ...s,
-        icp:            { ...mapped.icp,            ...nonEmpty(s.icp) },
-        positioning:    { ...mapped.positioning,    ...nonEmpty(s.positioning) },
-        brand_voice:    { ...mapped.brand_voice,    ...nonEmpty(s.brand_voice) },
-        competitors:    { ...mapped.competitors,    ...nonEmpty(s.competitors) },
-      }));
-      await new Promise((r) => setTimeout(r, 1200));
-      goto('icp');
-    } catch (e: any) {
-      setWarnings(["We couldn't analyze the website automatically. You can still build your Company Brain manually."]);
-      goto('icp');
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  async function dispatchFirstSafeWorkflow() {
-    // Find a safe, ready workflow that aligns with the user's selections.
-    const priorityIds = structured.workflow_preferences.priority_workflows;
-    const candidates = priorityIds
-      .map((id) => WORKFLOWS.find((w) => w.id === id))
-      .filter(Boolean) as typeof WORKFLOWS;
-    const pool = candidates.length > 0
-      ? candidates
-      : recommendedWorkflows.map((r) => r.workflow);
-    const chosen = pool.find((w) => w.status === 'ready') ?? pool[0];
-    if (!chosen) return;
-
-    // Build inputs from field defaults, force count=5 and safety flags.
-    const values: Record<string, string | number | string[]> = {};
-    for (const f of chosen.fields) {
-      if (f.id === 'count') { values.count = '5'; continue; }
-      if (f.defaultValue !== undefined) values[f.id] = f.defaultValue as any;
-    }
-    const prompt = chosen.buildPrompt(values);
-    const baseMeta = chosen.buildMetadata?.(values) ?? { workflow_id: chosen.id, workflow_inputs: values };
-    const metadata = { ...baseMeta, draft_only: true, first_run: true, workflow_title: chosen.title, agents_used: chosen.agents, confirmed: true };
-
-    try {
-      await pilotChat({
-        message: prompt,
-        workspace_id: workspaceId!,
-        action_source: 'onboarding_first_run',
-        metadata,
-      });
-      toast.success('Your first workflow is drafting 5 results.', { description: 'Nothing will be sent.' });
-    } catch {
-      // Non-blocking; user still lands on dashboard.
-    }
-  }
-
-  async function activateBrain() {
-    setSaving(true);
-    try {
-      const firstHelp = structured.founder.first_help_goal || 'not_sure';
-      await call('save_basics', workspaceId!, {
-        company_name: basics.company_name,
-        website_url: basics.website_url,
-        linkedin_company_url: basics.linkedin_company_url,
-        founder_linkedin_url: basics.founder_linkedin_url,
-        short_description: basics.short_description,
-        category: basics.category,
-        current_primary_goal: firstHelp,
-      });
-      await call('save_structured', workspaceId!, {
-        founder: structured.founder,
-        company: { ...structured.company, name: basics.company_name, website_url: basics.website_url, linkedin_url: basics.linkedin_company_url, description: basics.short_description, category: basics.category },
-        icp: structured.icp,
-        gtm: structured.gtm,
-        positioning: structured.positioning,
-        brand_voice: structured.brand_voice,
-        approval_rules: structured.approval_rules,
-        workflow_preferences: structured.workflow_preferences,
-        onboarding_meta: {
-          ...structured.onboarding_meta,
-          current_step: 'review',
-          completed_steps: STEPS.map((s) => s.id),
-          updated_at: new Date().toISOString(),
-        },
-      });
-      await call('finalize', workspaceId!, { current_primary_goal: firstHelp });
-      refresh();
-
-      // Show launch screen — dispatch first safe workflow non-blocking, navigate on user action.
-      setLaunchVisible(true);
-      void dispatchFirstSafeWorkflow();
-    } catch (e: any) {
-      toast.error(e.message ?? 'Failed to activate');
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  // ---------- renderers ----------
-  function renderWelcome() {
-    return (
-      <Card className="p-8 sm:p-12 overflow-hidden relative">
-        <div className="absolute inset-0 -z-10 opacity-60 pointer-events-none">
-          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 h-[420px] w-[420px] rounded-full bg-emerald-500/10 blur-3xl" />
+    <div className="space-y-4">
+      <Card className="border-border/60 bg-card/60 p-5">
+        <div className="mb-4 flex items-center gap-2">
+          <User className="h-4 w-4 text-primary" />
+          <h2 className="text-sm font-semibold">About you</h2>
         </div>
-        <div className="grid grid-cols-1 md:grid-cols-[1.1fr,1fr] gap-10 items-center">
-          <div>
-            <div className="text-[12px] font-semibold tracking-[0.22em] text-emerald-400 uppercase mb-3">Step 1 of 12 · Welcome</div>
-            <h1 className="text-[40px] sm:text-[52px] font-semibold tracking-tight leading-[1.02]">
-              Build your <span className="bg-gradient-to-r from-emerald-300 to-emerald-500 bg-clip-text text-transparent">Company Brain</span>.
-            </h1>
-            <p className="text-[18px] text-muted-foreground mt-5 leading-[1.55] max-w-xl">
-              Agentory uses this to help your AI workforce find signals, research companies, write content,
-              and draft outreach with the right context.
+        <div className="grid gap-4 sm:grid-cols-2">
+          <Field label="Your name" required>
+            <Input value={value.name} onChange={(e) => set('name', e.target.value)} placeholder="Jane Doe" />
+          </Field>
+          <Field label="Role / title">
+            <Input value={value.role} onChange={(e) => set('role', e.target.value)} placeholder="Founder & CEO" />
+          </Field>
+          <Field label="Timezone" hint="Optional">
+            <Input value={value.timezone} onChange={(e) => set('timezone', e.target.value)} placeholder="UTC+5:45" />
+          </Field>
+          <Field label="What should Agentory help with first?">
+            <Input value={value.first_help_goal} onChange={(e) => set('first_help_goal', e.target.value)} placeholder="Find warm leads" />
+          </Field>
+        </div>
+      </Card>
+
+      <Card className="border-border/60 bg-card/60 p-5">
+        <h2 className="mb-1 text-sm font-semibold">Enrich from LinkedIn</h2>
+        <p className="mb-4 text-xs text-muted-foreground">
+          We read only the profile URL you give us. We never collect emails, phone numbers or contacts.
+        </p>
+        <Field label="LinkedIn profile URL">
+          <Input value={value.linkedin_url} onChange={(e) => set('linkedin_url', e.target.value)} placeholder="https://linkedin.com/in/your-handle" />
+        </Field>
+        <label className="mt-3 flex cursor-pointer items-start gap-2 text-xs text-muted-foreground">
+          <Checkbox checked={value.enrichment_consent} onCheckedChange={(c) => set('enrichment_consent', c === true)} className="mt-0.5" />
+          <span>Use this LinkedIn URL to enrich my Company Brain.</span>
+        </label>
+
+        <div className="mt-4 flex items-center gap-2">
+          <Button size="sm" onClick={onAnalyze} disabled={!canEnrichFounder(value) || busy}>
+            {busy ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> : <Search className="mr-1.5 h-4 w-4" />}
+            Analyze founder profile
+          </Button>
+          <Button size="sm" variant="ghost" onClick={onSkip} disabled={busy}>Skip enrichment</Button>
+        </div>
+      </Card>
+
+      {research && (
+        <Card className="border-emerald-500/25 bg-emerald-500/5 p-5">
+          <h3 className="mb-3 flex items-center gap-1.5 text-sm font-semibold text-emerald-200">
+            <Sparkles className="h-3.5 w-3.5" /> What Agentory found
+          </h3>
+          <div className="space-y-3">
+            <p className="text-sm text-foreground/90">
+              <span className="font-medium">{research.name}</span>
+              {research.current_role ? ` — ${research.current_role}` : ''}
+              {research.current_company ? ` at ${research.current_company}` : ''}
             </p>
-            <div className="mt-7 inline-flex items-center gap-2 rounded-full border border-primary/30 bg-primary/10 text-primary px-3 py-1.5 text-[13px]">
-              <ShieldCheck className="h-3.5 w-3.5" />
-              Draft-only by default. Nothing is sent without approval.
-            </div>
-            <div className="mt-8 flex flex-col sm:flex-row gap-3">
-              <Button size="lg" onClick={() => persistStep('founder')} className="h-12 px-7 text-[15px] font-semibold">
-                Build Company Brain <ArrowRight className="h-4 w-4 ml-2" />
-              </Button>
-              <div className="text-[13px] text-muted-foreground self-center">12 steps · ~3 minutes</div>
-            </div>
-          </div>
-          <div className="hidden md:flex items-center justify-center">
-            <BrainOrb size={300} active />
-          </div>
-        </div>
-      </Card>
-    );
-  }
-
-  function renderFounder() {
-    return (
-      <Card className="p-6 sm:p-8">
-        <StepHeader eyebrow="Founder" title="Who's driving this?" subtitle="Pilot uses this to address you correctly and to choose the right agents." />
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <Field label="Your name">
-            <Input value={structured.founder.name} onChange={(e) => setStructured({ ...structured, founder: { ...structured.founder, name: e.target.value } })} placeholder="Alex Founder" />
-          </Field>
-          <Field label="Your role">
-            <Input value={structured.founder.role} onChange={(e) => setStructured({ ...structured, founder: { ...structured.founder, role: e.target.value } })} placeholder="Founder / CEO" />
-          </Field>
-          <Field label="LinkedIn profile">
-            <Input value={structured.founder.linkedin_url} onChange={(e) => setStructured({ ...structured, founder: { ...structured.founder, linkedin_url: e.target.value } })} placeholder="https://linkedin.com/in/…" />
-          </Field>
-          <Field label="Timezone">
-            <Input value={structured.founder.timezone} onChange={(e) => setStructured({ ...structured, founder: { ...structured.founder, timezone: e.target.value } })} placeholder="Europe/Amsterdam" />
-          </Field>
-          <Field label="What should Agentory help with first?" className="sm:col-span-2">
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5">
-              {FIRST_HELP_GOALS.map((g) => {
-                const active = structured.founder.first_help_goal === g;
-                return (
-                  <button
-                    key={g}
-                    type="button"
-                    onClick={() => setStructured({ ...structured, founder: { ...structured.founder, first_help_goal: g } })}
-                    className={'text-left rounded-md border px-2.5 py-2 text-xs transition-all ' + (active
-                      ? 'border-primary bg-primary/10 text-primary'
-                      : 'border-border/60 bg-card/40 text-muted-foreground hover:text-foreground')}
-                  >
-                    {FIRST_HELP_LABEL[g] ?? g}
-                  </button>
-                );
-              })}
-            </div>
-          </Field>
-        </div>
-      </Card>
-    );
-  }
-
-  function renderCompany() {
-    return (
-      <Card className="p-6 sm:p-8">
-        <StepHeader eyebrow="Company" title="Tell us about your company." subtitle="One quick pass. Your website lets us pre-fill the rest." />
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <Field label="Company name"><Input value={basics.company_name} onChange={(e) => setBasics({ ...basics, company_name: e.target.value })} /></Field>
-          <Field label="Website">
-            <div className="relative">
-              <Globe className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
-              <Input className="pl-9" placeholder="https://…" value={basics.website_url} onChange={(e) => setBasics({ ...basics, website_url: e.target.value })} />
-            </div>
-          </Field>
-          <Field label="LinkedIn company"><Input placeholder="https://linkedin.com/company/…" value={basics.linkedin_company_url} onChange={(e) => setBasics({ ...basics, linkedin_company_url: e.target.value })} /></Field>
-          <Field label="Product category"><Input placeholder="e.g. AI workforce OS" value={basics.category} onChange={(e) => setBasics({ ...basics, category: e.target.value })} /></Field>
-          <Field label="Stage" className="">
-            <ChoiceChips value={structured.company.stage as any} options={COMPANY_STAGES} onChange={(v) => setStructured({ ...structured, company: { ...structured.company, stage: v } })} />
-          </Field>
-          <Field label="Team size">
-            <ChoiceChips value={structured.company.team_size as any} options={TEAM_SIZES} onChange={(v) => setStructured({ ...structured, company: { ...structured.company, team_size: v } })} />
-          </Field>
-          <Field label="Location"><Input placeholder="Amsterdam, NL" value={structured.company.location} onChange={(e) => setStructured({ ...structured, company: { ...structured.company, location: e.target.value } })} /></Field>
-          <Field label="One-line description" className="sm:col-span-2">
-            <Textarea rows={2} placeholder="What does your company do, in one sentence?" value={basics.short_description} onChange={(e) => setBasics({ ...basics, short_description: e.target.value })} />
-          </Field>
-        </div>
-        <div className="mt-6 flex justify-end">
-          <Button size="lg" onClick={startWebsiteAnalysis} disabled={saving || !basics.company_name.trim()}>
-            {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : (<>Analyze with Hawk + Pilot <ArrowRight className="h-4 w-4 ml-1.5" /></>)}
-          </Button>
-        </div>
-      </Card>
-    );
-  }
-
-  function renderAnalyzing() {
-    return (
-      <Card className="p-8 sm:p-10">
-        <div className="flex items-start gap-4">
-          <div className="relative shrink-0">
-            <div className="h-14 w-14 rounded-2xl bg-primary/10 border border-primary/30 flex items-center justify-center">
-              <Sparkles className="h-6 w-6 text-primary animate-pulse" />
-            </div>
-            <div className="absolute -inset-2 rounded-3xl bg-primary/10 blur-2xl -z-10" />
-          </div>
-          <div>
-            <div className="text-[12px] font-semibold tracking-[0.22em] text-emerald-400 uppercase mb-2">Analyzing</div>
-            <h2 className="text-[28px] sm:text-[34px] font-semibold tracking-tight leading-[1.1]">Hawk and Pilot are studying your business.</h2>
-            <p className="text-[16px] text-muted-foreground mt-2 leading-[1.55]">We'll show exactly what we found — you can edit anything before saving.</p>
-          </div>
-        </div>
-        <div className="mt-8 space-y-2">
-          {analysisPhases.map((phase, i) => {
-            const ok = phase.status === 'ok';
-            const failed = phase.status === 'failed';
-            const skipped = phase.status === 'skipped';
-            const running = phase.status === 'running';
-            return (
-              <div
-                key={`${phase.agent}-${i}`}
-                className={
-                  'flex items-center gap-3 rounded-xl border px-4 py-3 transition-all ' +
-                  (ok
-                    ? 'border-primary/30 bg-primary/[0.06] text-foreground'
-                    : failed
-                    ? 'border-rose-500/30 bg-rose-500/[0.06] text-foreground'
-                    : skipped
-                    ? 'border-border/60 bg-card/40 text-muted-foreground'
-                    : 'border-primary/40 bg-primary/[0.08] text-foreground')
-                }
-              >
-                {ok ? <CheckCircle2 className="h-4 w-4 text-primary" />
-                  : failed ? <AlertTriangle className="h-4 w-4 text-rose-400" />
-                  : running ? <Loader2 className="h-4 w-4 text-primary animate-spin" />
-                  : <span className="h-1.5 w-1.5 rounded-full bg-muted-foreground/40" />}
-                <span className="text-[15px] flex-1">{phase.label}</span>
-                {skipped && <span className="text-[10px] tracking-widest uppercase text-muted-foreground/70">not configured</span>}
-              </div>
-            );
-          })}
-        </div>
-        <div className="mt-8"><AgentChipsRow activeCount={2} pulse /></div>
-      </Card>
-    );
-  }
-
-  function renderIcp() {
-    return (
-      <div className="space-y-4">
-        {mappedSummary.length > 0 && (
-          <div className="rounded-2xl border border-primary/30 bg-primary/[0.06] p-4 sm:p-5">
-            <div className="flex items-start justify-between gap-3">
-              <div className="min-w-0">
-                <div className="text-[11px] font-semibold tracking-[0.22em] text-emerald-400 uppercase mb-1.5">What Agentory found</div>
-                <div className="text-[14px] text-foreground/90">Here's what we extracted from your website. Edit anything below before saving.</div>
-              </div>
-              <button
-                type="button"
-                onClick={() => setMappedSummary([])}
-                className="text-[12px] text-muted-foreground hover:text-foreground"
-              >
-                Dismiss
-              </button>
-            </div>
-            <ul className="mt-3 grid gap-1.5 sm:grid-cols-2">
-              {mappedSummary.map((line, i) => (
-                <li key={i} className="text-[13px] text-muted-foreground flex gap-2">
-                  <ChevronRight className="h-3.5 w-3.5 mt-0.5 text-primary/70 shrink-0" />
-                  <span className="truncate">{line}</span>
-                </li>
-              ))}
-            </ul>
-          </div>
-        )}
-        <Card className="p-6 sm:p-8">
-        <StepHeader eyebrow="ICP" title="Who do you sell to?" subtitle="Scout uses this to find better accounts. Aria uses this to reject bad-fit results." />
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <Field label="Buyer roles" hint="e.g. Founder, Head of Growth, RevOps">
-            <ChipInput value={structured.icp.buyer_roles} placeholder="Founder, Head of Growth…" onChange={(v) => setStructured({ ...structured, icp: { ...structured.icp, buyer_roles: v } })} />
-          </Field>
-          <Field label="Company size"><Input placeholder="e.g. 10–200" value={structured.icp.company_size} onChange={(e) => setStructured({ ...structured, icp: { ...structured.icp, company_size: e.target.value } })} /></Field>
-          <Field label="Industries">
-            <ChipInput value={structured.icp.industries} placeholder="B2B SaaS, AI tools…" onChange={(v) => setStructured({ ...structured, icp: { ...structured.icp, industries: v } })} />
-          </Field>
-          <Field label="Geography"><Input placeholder="US + EU" value={structured.icp.geography} onChange={(e) => setStructured({ ...structured, icp: { ...structured.icp, geography: e.target.value } })} /></Field>
-          <Field label="Pain points" className="sm:col-span-2" hint="What problem are buyers trying to solve?">
-            <ChipInput value={structured.icp.pain_points} placeholder="Slow outbound, missed signals…" onChange={(v) => setStructured({ ...structured, icp: { ...structured.icp, pain_points: v } })} />
-          </Field>
-          <Field label="Disqualifiers" className="sm:col-span-2" hint="Who should we never target? (e.g. agencies, sub-1M revenue)">
-            <ChipInput value={structured.icp.disqualifiers} placeholder="Agencies, sub-1M revenue…" onChange={(v) => setStructured({ ...structured, icp: { ...structured.icp, disqualifiers: v } })} />
-          </Field>
-        </div>
-      </Card>
-      </div>
-    );
-  }
-
-  function renderGtm() {
-    return (
-      <Card className="p-6 sm:p-8">
-        <StepHeader eyebrow="GTM" title="How do you go to market?" subtitle="Determines which agents Pilot leans on and which workflows we recommend." />
-        <div className="grid gap-4">
-          <Field label="Primary motion">
-            <ChoiceChips value={structured.gtm.motion as any} options={GTM_MOTIONS} onChange={(v) => setStructured({ ...structured, gtm: { ...structured.gtm, motion: v } })} />
-          </Field>
-          <Field label="Primary channel">
-            <ChoiceChips value={structured.gtm.primary_channel as any} options={PRIMARY_CHANNELS} onChange={(v) => setStructured({ ...structured, gtm: { ...structured.gtm, primary_channel: v } })} />
-          </Field>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <Field label="Biggest bottleneck right now">
-              <Textarea rows={2} placeholder="e.g. Can't find enough qualified leads" value={structured.gtm.biggest_bottleneck} onChange={(e) => setStructured({ ...structured, gtm: { ...structured.gtm, biggest_bottleneck: e.target.value } })} />
-            </Field>
-            <Field label="30-day goal">
-              <Textarea rows={2} placeholder="e.g. Book 10 qualified demos" value={structured.gtm.thirty_day_goal} onChange={(e) => setStructured({ ...structured, gtm: { ...structured.gtm, thirty_day_goal: e.target.value } })} />
-            </Field>
-            <Field label="Current tools" hint="The stack you already use">
-              <ChipInput value={structured.gtm.current_tools} placeholder="HubSpot, Apollo…" onChange={(v) => setStructured({ ...structured, gtm: { ...structured.gtm, current_tools: v } })} />
-            </Field>
-            <Field label="Other channels you use">
-              <ChipInput value={structured.gtm.preferred_channels} placeholder="webinars, podcast…" onChange={(v) => setStructured({ ...structured, gtm: { ...structured.gtm, preferred_channels: v } })} />
-            </Field>
-          </div>
-        </div>
-      </Card>
-    );
-  }
-
-  function renderPositioning() {
-    return (
-      <Card className="p-6 sm:p-8">
-        <StepHeader eyebrow="Positioning" title="What's your edge?" subtitle="Used by Scribe and Penn when writing anything. Be specific." />
-        <div className="grid gap-4">
-          <Field label="Core promise" hint="One sentence — what you do for the customer">
-            <Input value={structured.positioning.promise} onChange={(e) => setStructured({ ...structured, positioning: { ...structured.positioning, promise: e.target.value } })} placeholder="We turn signals into ready-to-send outreach." />
-          </Field>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <Field label="Differentiators"><ChipInput value={structured.positioning.differentiators} placeholder="Founder-led, no agency markup…" onChange={(v) => setStructured({ ...structured, positioning: { ...structured.positioning, differentiators: v } })} /></Field>
-            <Field label="Top use cases"><ChipInput value={structured.positioning.use_cases} placeholder="Outbound, content, signal mining…" onChange={(v) => setStructured({ ...structured, positioning: { ...structured.positioning, use_cases: v } })} /></Field>
-            <Field label="Proof points"><ChipInput value={structured.positioning.proof_points} placeholder="3x reply rate, 200 demos…" onChange={(v) => setStructured({ ...structured, positioning: { ...structured.positioning, proof_points: v } })} /></Field>
-            <Field label="Offer / pricing">
-              <Input value={structured.positioning.offer} onChange={(e) => setStructured({ ...structured, positioning: { ...structured.positioning, offer: e.target.value } })} placeholder="Starts at $X/mo" />
-            </Field>
-            <Field label="Avoid positioning as" className="sm:col-span-2" hint="Frames we should never use">
-              <ChipInput value={structured.positioning.avoid_positioning} placeholder="Just another AI tool…" onChange={(v) => setStructured({ ...structured, positioning: { ...structured.positioning, avoid_positioning: v } })} />
-            </Field>
-          </div>
-        </div>
-      </Card>
-    );
-  }
-
-  function renderVoice() {
-    return (
-      <Card className="p-6 sm:p-8">
-        <StepHeader eyebrow="Brand voice" title="How should Agentory sound when it writes?" subtitle="Pick the tone chips that fit. Scribe and Penn will use this for content and outreach." />
-        <Field label="Tone summary"><Input placeholder="founder-led, direct, no hype" value={structured.brand_voice.tone} onChange={(e) => setStructured({ ...structured, brand_voice: { ...structured.brand_voice, tone: e.target.value } })} /></Field>
-        <div className="mt-4 flex flex-wrap gap-1.5">
-          {TONE_CHIPS.map((tag) => {
-            const active = structured.brand_voice.tags.includes(tag);
-            return (
-              <button
-                key={tag}
-                type="button"
-                onClick={() => setStructured({ ...structured, brand_voice: { ...structured.brand_voice, tags: toggle(structured.brand_voice.tags, tag) } })}
-                className={'text-xs rounded-full border px-3 py-1.5 transition-all ' + (active ? 'border-primary bg-primary/10 text-primary shadow-[0_0_0_1px_rgba(16,185,129,0.3)]' : 'border-border text-muted-foreground hover:text-foreground hover:border-border/80')}
-              >
-                {tag}
-              </button>
-            );
-          })}
-        </div>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-5">
-          <Field label="Style rules (one per line)">
-            <Textarea rows={3} placeholder="Short sentences&#10;No corporate speak" value={structured.brand_voice.style_rules.join('\n')} onChange={(e) => setStructured({ ...structured, brand_voice: { ...structured.brand_voice, style_rules: parseLines(e.target.value) } })} />
-          </Field>
-          <Field label="Things to avoid (one per line)">
-            <Textarea rows={3} placeholder="Hype words&#10;Emojis" value={structured.brand_voice.avoid.join('\n')} onChange={(e) => setStructured({ ...structured, brand_voice: { ...structured.brand_voice, avoid: parseLines(e.target.value) } })} />
-          </Field>
-          <Field label="Example message that sounds like you" className="sm:col-span-2">
-            <Textarea rows={3} placeholder="Paste a recent post or email so Scribe learns your rhythm." value={structured.brand_voice.example_message} onChange={(e) => setStructured({ ...structured, brand_voice: { ...structured.brand_voice, example_message: e.target.value } })} />
-          </Field>
-        </div>
-      </Card>
-    );
-  }
-
-  function renderWorkflowPrefs() {
-    const selected = new Set(structured.workflow_preferences.priority_workflows);
-    const list = recommendedWorkflows.length > 0
-      ? recommendedWorkflows.map((r) => ({ w: r.workflow, reason: r.reasons[0] }))
-      : WORKFLOWS.filter((w) => w.recommended).slice(0, 6).map((w) => ({ w, reason: undefined as string | undefined }));
-    return (
-      <Card className="p-6 sm:p-8">
-        <StepHeader eyebrow="Workflows" title="Pick 1–3 to run first." subtitle="We'll prioritize these on your dashboard. You can run any workflow later." />
-        <div className="grid gap-3 sm:grid-cols-2">
-          {list.map(({ w, reason }) => {
-            const active = selected.has(w.id);
-            return (
-              <button
-                key={w.id}
-                type="button"
-                onClick={() => {
-                  const next = new Set(selected);
-                  if (next.has(w.id)) next.delete(w.id); else next.add(w.id);
-                  setStructured({ ...structured, workflow_preferences: { priority_workflows: Array.from(next) } });
-                }}
-                className={'text-left rounded-2xl border p-4 transition-all ' + (active
-                  ? 'border-primary bg-primary/[0.07] shadow-[0_0_0_1px_rgba(16,185,129,0.35)]'
-                  : 'border-border/60 bg-card/60 hover:border-border')}
-              >
-                <div className="flex items-start justify-between gap-2">
-                  <div className="min-w-0">
-                    <div className="text-sm font-semibold text-foreground truncate">{w.title}</div>
-                    <div className="text-[12px] text-muted-foreground line-clamp-2 mt-0.5">{w.description}</div>
-                  </div>
-                  {active ? <CheckCircle2 className="h-4 w-4 text-primary shrink-0" /> : <span className="text-[10px] uppercase tracking-widest text-muted-foreground">{w.primaryAgent}</span>}
-                </div>
-                {reason && <div className="text-[11px] text-emerald-300/80 mt-2">{reason}</div>}
-              </button>
-            );
-          })}
-        </div>
-      </Card>
-    );
-  }
-
-  function renderIntegrations() {
-    const entries = Object.entries(readiness.providers);
-    return (
-      <Card className="p-6 sm:p-8">
-        <StepHeader eyebrow="Integrations" title="Check what's ready." subtitle="Agentory will use these capabilities to find leads, research, and draft outreach. Setup needed items don't block onboarding." />
-        <div className="space-y-2">
-          {entries.length === 0 && (
-            <div className="text-sm text-muted-foreground">Checking capabilities…</div>
-          )}
-          {entries.map(([key, p]) => {
-            const color = p.status === 'connected' ? 'text-emerald-400 border-emerald-500/30 bg-emerald-500/[0.06]'
-              : p.status === 'setup_needed' ? 'text-amber-300 border-amber-500/30 bg-amber-500/[0.06]'
-              : 'text-muted-foreground border-border/60 bg-card/40';
-            return (
-              <div key={key} className={'flex items-start gap-3 rounded-xl border p-3.5 ' + color}>
-                <div className="mt-0.5">
-                  {p.status === 'connected' ? <CheckCircle2 className="h-4 w-4" />
-                    : p.status === 'setup_needed' ? <AlertTriangle className="h-4 w-4" />
-                    : <Plug className="h-4 w-4" />}
-                </div>
-                <div className="min-w-0 flex-1">
-                  <div className="text-sm font-medium text-foreground">{p.label}</div>
-                  <div className="text-[12px] text-muted-foreground mt-0.5">
-                    {p.status === 'connected' ? 'Connected and ready.' : p.reason ?? 'Optional.'}
-                  </div>
-                </div>
-                <span className="text-[10px] uppercase tracking-wider opacity-80 shrink-0">{p.status.replace('_', ' ')}</span>
-              </div>
-            );
-          })}
-        </div>
-        <div className="mt-4 flex items-center justify-between">
-          <Button variant="outline" size="sm" onClick={() => readiness.refresh()} disabled={readiness.loading}>
-            {readiness.loading ? <Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" /> : <RefreshCw className="h-3.5 w-3.5 mr-1.5" />}
-            Recheck
-          </Button>
-          <div className="text-[11px] text-muted-foreground">
-            {readiness.summary.connected} connected · {readiness.summary.setup_needed} setup needed
-          </div>
-        </div>
-      </Card>
-    );
-  }
-
-  function renderApproval() {
-    const items: Array<[keyof StructuredBrain['approval_rules'], string, string]> = [
-      ['draft_only',               'Draft-only by default',           'Agents prepare work but never publish or send.'],
-      ['email_requires_approval',  'Email requires my approval',      'No email goes out until you review it.'],
-      ['linkedin_manual_only',     'LinkedIn comments & DMs are manual', 'You stay in control of every LinkedIn touch.'],
-    ];
-    return (
-      <Card className="p-6 sm:p-8">
-        <StepHeader eyebrow="Approval & safety" title="Agentory prepares work. You stay in control." subtitle="These defaults keep everything human-in-the-loop." />
-        <div className="space-y-3">
-          {items.map(([key, label, hint]) => (
-            <div key={key} className="flex items-center justify-between rounded-xl border border-border/60 bg-card/40 p-4">
-              <div>
-                <div className="text-sm font-medium text-foreground">{label}</div>
-                <div className="text-xs text-muted-foreground">{hint}</div>
-              </div>
-              <Switch
-                checked={!!structured.approval_rules[key as keyof typeof structured.approval_rules]}
-                onCheckedChange={(v) => setStructured({ ...structured, approval_rules: { ...structured.approval_rules, [key]: v } })}
-              />
-            </div>
-          ))}
-          <div className="flex items-center justify-between rounded-xl border border-border/60 bg-card/40 p-4">
-            <div>
-              <div className="text-sm font-medium text-foreground">Daily credit limit</div>
-              <div className="text-xs text-muted-foreground">Max credits Agentory may spend per day without asking.</div>
-            </div>
-            <Input
-              type="number"
-              className="w-28 text-right"
-              value={structured.approval_rules.daily_credit_limit}
-              onChange={(e) => setStructured({ ...structured, approval_rules: { ...structured.approval_rules, daily_credit_limit: Number(e.target.value) || 0 } })}
-            />
-          </div>
-        </div>
-        <div className="mt-5 inline-flex items-center gap-2 rounded-full border border-primary/30 bg-primary/10 text-primary px-3 py-1 text-xs">
-          <ShieldCheck className="h-3.5 w-3.5" /> Safe by default — nothing is sent without approval.
-        </div>
-      </Card>
-    );
-  }
-
-  function renderReview() {
-    const sections = [
-      { id: 'founder' as StepId, title: 'Founder', icon: User, summary: [structured.founder.name, structured.founder.role, FIRST_HELP_LABEL[structured.founder.first_help_goal] ?? structured.founder.first_help_goal].filter(Boolean) },
-      { id: 'company' as StepId, title: 'Company', icon: Building2, summary: [basics.company_name, basics.category, basics.website_url, structured.company.stage, structured.company.team_size, basics.short_description].filter(Boolean) },
-      { id: 'icp' as StepId, title: 'ICP', icon: Target, summary: [
-        structured.icp.buyer_roles.join(', '), structured.icp.company_size, structured.icp.industries.join(', '),
-        structured.icp.geography, structured.icp.pain_points.join(' · '),
-        structured.icp.disqualifiers.length ? `Avoid: ${structured.icp.disqualifiers.join(', ')}` : ''
-      ].filter(Boolean) },
-      { id: 'gtm' as StepId, title: 'GTM', icon: Compass, summary: [structured.gtm.motion, structured.gtm.primary_channel, structured.gtm.thirty_day_goal].filter(Boolean) },
-      { id: 'positioning' as StepId, title: 'Positioning', icon: Eye, summary: [structured.positioning.promise, structured.positioning.differentiators.join(', ')].filter(Boolean) },
-      { id: 'voice' as StepId, title: 'Brand voice', icon: Megaphone, summary: [structured.brand_voice.tone, structured.brand_voice.tags.join(', ')].filter(Boolean) },
-      { id: 'workflow_prefs' as StepId, title: 'Priority workflows', icon: Workflow, summary: structured.workflow_preferences.priority_workflows.map((id) => WORKFLOWS.find((w) => w.id === id)?.title ?? id) },
-      { id: 'integrations' as StepId, title: 'Integrations', icon: Plug, summary: [`${readiness.summary.connected} connected · ${readiness.summary.setup_needed} setup needed`] },
-      { id: 'approval' as StepId, title: 'Approval rules', icon: Lock, summary: [
-        structured.approval_rules.draft_only ? 'Draft-only' : null,
-        structured.approval_rules.email_requires_approval ? 'Email needs approval' : null,
-        structured.approval_rules.linkedin_manual_only ? 'LinkedIn manual' : null,
-        `Daily limit: ${structured.approval_rules.daily_credit_limit}`,
-      ].filter(Boolean) as string[] },
-    ];
-    return (
-      <div className="space-y-5">
-        {warnings.length > 0 && (
-          <div className="flex gap-2 items-start rounded-2xl border border-amber-500/30 bg-amber-500/10 p-3.5 text-sm">
-            <AlertTriangle className="h-4 w-4 text-amber-500 shrink-0 mt-0.5" />
-            <div>{warnings[0]}</div>
-          </div>
-        )}
-        <Card className="p-6 sm:p-8">
-          <div className="flex items-start justify-between gap-6 flex-col sm:flex-row">
-            <div>
-              <div className="text-[11px] font-semibold tracking-[0.18em] text-primary uppercase mb-2">Review</div>
-              <h2 className="text-2xl sm:text-3xl font-semibold tracking-tight">Your Company Brain</h2>
-              <p className="text-sm text-muted-foreground mt-2">Tap any section to expand and edit. When you activate, we'll draft your first workflow safely (5 items, nothing sent).</p>
-            </div>
-            <CompletenessRing percent={completeness.percent} missing={completeness.missing} />
+            {research.headline && <p className="text-xs text-muted-foreground">{research.headline}</p>}
+            <FieldList label="Credibility signals" values={research.credibility_signals ?? []} empty="None detected" />
+            <FieldList label="Why this matters for GTM" values={research.gtm_relevance ?? []} empty="No GTM signal detected" />
+            {(research.missing_evidence ?? []).length > 0 && (
+              <p className="text-xs text-amber-200">Could not read: {research.missing_evidence.join(', ')}</p>
+            )}
           </div>
         </Card>
+      )}
+    </div>
+  );
+}
 
-        <div className="grid gap-3">
-          {sections.map((s) => {
-            const Icon = s.icon;
-            return (
-              <Collapsible key={s.id} defaultOpen={false}>
-                <div className="rounded-2xl border border-border/60 bg-card/60 backdrop-blur-xl overflow-hidden">
-                  <CollapsibleTrigger className="w-full flex items-center justify-between p-4 hover:bg-card/80 transition-colors group">
-                    <div className="flex items-center gap-3 min-w-0">
-                      <div className="h-9 w-9 rounded-xl bg-primary/10 border border-primary/30 flex items-center justify-center text-primary shrink-0">
-                        <Icon className="h-4 w-4" />
-                      </div>
-                      <div className="text-left min-w-0">
-                        <div className="text-sm font-semibold text-foreground">{s.title}</div>
-                        <div className="text-xs text-muted-foreground truncate">
-                          {s.summary.length ? s.summary.slice(0, 2).join(' · ') : 'Not set'}
-                        </div>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-2 shrink-0">
-                      <span
-                        role="button"
-                        tabIndex={0}
-                        onClick={(e) => { e.stopPropagation(); goto(s.id); }}
-                        onKeyDown={(e) => { if (e.key === 'Enter') { e.stopPropagation(); goto(s.id); } }}
-                        className="text-xs text-primary hover:underline px-2 py-1 cursor-pointer"
-                      >
-                        Edit
-                      </span>
-                      <ChevronDown className="h-4 w-4 text-muted-foreground group-data-[state=open]:rotate-180 transition-transform" />
-                    </div>
-                  </CollapsibleTrigger>
-                  <CollapsibleContent>
-                    <div className="px-4 pb-4 pt-1 text-sm text-muted-foreground space-y-1.5 border-t border-border/40">
-                      {s.summary.length === 0 && <div className="text-muted-foreground/70 italic">Nothing set yet.</div>}
-                      {s.summary.map((line, i) => (
-                        <div key={i} className="flex gap-2"><ChevronRight className="h-3.5 w-3.5 mt-0.5 text-primary/60 shrink-0" /><span>{line}</span></div>
-                      ))}
-                    </div>
-                  </CollapsibleContent>
-                </div>
-              </Collapsible>
-            );
-          })}
+// ------------------------------------------------------------------ step 2 --
+
+function CompanyStep({
+  value, onChange, busy, research, linkedin, onAnalyze,
+}: {
+  value: CompanyForm; onChange: (c: CompanyForm) => void;
+  busy: boolean; research: any; linkedin: any; onAnalyze: () => void;
+}) {
+  const set = <K extends keyof CompanyForm>(k: K, v: CompanyForm[K]) => onChange({ ...value, [k]: v });
+  return (
+    <div className="space-y-4">
+      <Card className="border-border/60 bg-card/60 p-5">
+        <div className="mb-4 flex items-center gap-2">
+          <Building2 className="h-4 w-4 text-primary" />
+          <h2 className="text-sm font-semibold">Your company</h2>
+        </div>
+        <div className="grid gap-4 sm:grid-cols-2">
+          <Field label="Company name" required>
+            <Input value={value.name} onChange={(e) => set('name', e.target.value)} placeholder="Agentory" />
+          </Field>
+          <Field label="Website URL" required>
+            <Input value={value.website_url} onChange={(e) => set('website_url', e.target.value)} placeholder="https://agentory.ai" />
+          </Field>
+          <Field label="LinkedIn company URL" hint="Optional — the website is enough">
+            <Input value={value.linkedin_url} onChange={(e) => set('linkedin_url', e.target.value)} placeholder="https://linkedin.com/company/agentory" />
+          </Field>
+          <Field label="Stage" hint="Optional">
+            <Input value={value.stage} onChange={(e) => set('stage', e.target.value)} placeholder="seed" />
+          </Field>
+          <Field label="Team size" hint="Optional">
+            <Input value={value.team_size} onChange={(e) => set('team_size', e.target.value)} placeholder="2-5" />
+          </Field>
+        </div>
+        <div className="mt-4">
+          <Field label="One-line description" hint="If you already know it">
+            <Textarea rows={2} value={value.description} onChange={(e) => set('description', e.target.value)} placeholder="AI workforce OS for founders building B2B pipeline" />
+          </Field>
         </div>
 
-        <div className="flex flex-col sm:flex-row gap-3 pt-2">
-          <Button onClick={activateBrain} disabled={saving} size="lg" className="h-12 px-6">
-            {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : (<>Activate & run first workflow <ArrowRight className="h-4 w-4 ml-1.5" /></>)}
+        <div className="mt-4">
+          <Button size="sm" onClick={onAnalyze} disabled={!canAnalyzeCompany(value) || busy}>
+            {busy ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> : <Search className="mr-1.5 h-4 w-4" />}
+            Analyze company
           </Button>
-          <Button variant="outline" size="lg" onClick={() => goto('founder')}>Edit details</Button>
-          <Button
-            variant="ghost"
-            size="lg"
-            onClick={() => { goto('welcome'); navigate('/onboarding/company-brain?restart=1', { replace: true }); }}
-            className="text-muted-foreground hover:text-foreground sm:ml-auto"
-          >
-            Start from beginning
-          </Button>
-        </div>
-      </div>
-    );
-  }
-
-  function renderLaunch() {
-    // Pick the recommended first workflow honoring readiness.
-    const priorityIds = structured.workflow_preferences.priority_workflows;
-    const pool = (priorityIds
-      .map((id) => WORKFLOWS.find((w) => w.id === id))
-      .filter(Boolean) as typeof WORKFLOWS);
-    const recPool = pool.length ? pool : recommendedWorkflows.map((r) => r.workflow);
-    const chosen = recPool.find((w) => w.status === 'ready') ?? recPool[0] ?? WORKFLOWS.find((w) => w.id === 'daily_workforce_briefing');
-    const ready = chosen?.status === 'ready';
-    return (
-      <Card className="p-8 sm:p-12 relative overflow-hidden">
-        <div className="absolute inset-0 -z-10 pointer-events-none">
-          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 h-[460px] w-[460px] rounded-full bg-emerald-500/15 blur-3xl animate-pulse" />
-        </div>
-        <div className="grid md:grid-cols-[1.1fr,1fr] gap-10 items-center">
-          <div>
-            <div className="text-[12px] font-semibold tracking-[0.22em] text-emerald-400 uppercase mb-3">Activated</div>
-            <h1 className="text-[36px] sm:text-[46px] font-semibold tracking-tight leading-[1.05]">
-              Your Company Brain is <span className="bg-gradient-to-r from-emerald-300 to-emerald-500 bg-clip-text text-transparent">ready</span>.
-            </h1>
-            <p className="text-[17px] text-muted-foreground mt-4 leading-[1.55] max-w-xl">
-              Run one safe workflow to see Agentory work with your context. Nothing will be sent.
-            </p>
-            {chosen && (
-              <div className="mt-6 rounded-2xl border border-primary/30 bg-primary/[0.06] p-5">
-                <div className="text-[11px] font-semibold tracking-[0.2em] text-emerald-400 uppercase mb-1.5">Recommended first workflow</div>
-                <div className="text-[18px] font-semibold text-foreground">{chosen.title}</div>
-                <div className="text-[14px] text-muted-foreground mt-1.5 leading-[1.5]">{chosen.description}</div>
-                <div className="mt-3 flex items-center gap-2">
-                  <span className="text-[11px] uppercase tracking-wider text-muted-foreground">{chosen.primaryAgent}</span>
-                  <span className="text-muted-foreground/40">·</span>
-                  <span className={'text-[11px] uppercase tracking-wider ' + (ready ? 'text-emerald-400' : 'text-amber-300')}>
-                    {ready ? 'Ready' : 'Setup needed'}
-                  </span>
-                </div>
-              </div>
-            )}
-            <div className="mt-7 flex flex-col sm:flex-row gap-3">
-              <Button
-                size="lg"
-                className="h-12 px-7 text-[15px] font-semibold"
-                onClick={() => { markTourPending(); navigate('/workflows', { state: { firstRun: true } }); }}
-              >
-                Run first workflow <ArrowRight className="h-4 w-4 ml-2" />
-              </Button>
-              <Button
-                size="lg"
-                variant="outline"
-                className="h-12 px-6"
-                onClick={() => { markTourPending(); navigate('/dashboard', { state: { firstRun: true }, replace: true }); }}
-              >
-                Go to dashboard
-              </Button>
-            </div>
-            <div className="mt-5 inline-flex items-center gap-2 rounded-full border border-primary/30 bg-primary/10 text-primary px-3 py-1.5 text-[12px]">
-              <ShieldCheck className="h-3.5 w-3.5" /> Draft-only · 5 results · nothing is sent
-            </div>
-          </div>
-          <div className="hidden md:flex items-center justify-center">
-            <BrainOrb size={300} active />
-          </div>
+          <p className="mt-2 text-[11px] text-muted-foreground">
+            Reads your homepage plus up to 10 key pages (about, pricing, customers…). No broad web crawl.
+          </p>
         </div>
       </Card>
-    );
-  }
 
-  // ---------- footer nav ----------
-  function renderFooter() {
-    if (launchVisible) return null;
-    if (step === 'welcome' || step === 'analyzing' || step === 'company' || step === 'review') return null;
-    const stepDef = STEPS[stepIndex];
-    const canContinue = true;
-    return (
-      <div className="flex items-center justify-between pt-2">
-        <Button variant="ghost" onClick={back}>
-          <ArrowLeft className="h-4 w-4 mr-1" /> Back
-        </Button>
-        <div className="flex items-center gap-2">
-          {stepDef.skippable && (
-            <Button variant="ghost" onClick={skip} className="text-muted-foreground">Skip</Button>
-          )}
-          <Button onClick={next} disabled={!canContinue || saving} size="lg">
-            {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : (<>Continue <ArrowRight className="h-4 w-4 ml-1.5" /></>)}
-          </Button>
-        </div>
-      </div>
-    );
-  }
-
-  return (
-    <div data-tour="company-brain-main" className="min-h-screen w-full text-foreground py-8 sm:py-10 px-4">
-      <BackgroundGrid />
-      <div className="max-w-5xl mx-auto">
-        <div className="flex items-center justify-between mb-5">
-          <div className="flex items-center gap-2">
-            <Sparkles className="h-4 w-4 text-primary" />
-            <span className="text-[11px] font-semibold tracking-[0.18em] text-primary uppercase">
-              Company Brain Setup
-            </span>
-          </div>
-          <div className="flex items-center gap-3">
-            <span className="hidden md:inline text-xs text-muted-foreground">
-              Step {stepIndex + 1} of {STEPS.length} — {STEPS[stepIndex].label}
-            </span>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => navigate('/dashboard')}
-              className="h-9 gap-1.5 border-border/60 bg-card/40 hover:border-primary/40 hover:bg-primary/10"
-              aria-label="Exit"
-              title="Exit"
-            >
-              <X className="h-3.5 w-3.5" />
-              <span className="hidden sm:inline">Exit</span>
-            </Button>
-          </div>
-        </div>
-        <div className="mb-8"><ProgressRail currentIndex={launchVisible ? STEPS.length - 1 : stepIndex} /></div>
-
-        <AnimatePresence mode="wait">
-          <StepShell key={launchVisible ? 'launch' : step}>
-            {launchVisible ? renderLaunch() : (
-              <>
-                {step === 'welcome'         && renderWelcome()}
-                {step === 'founder'         && renderFounder()}
-                {step === 'company'         && renderCompany()}
-                {step === 'analyzing'       && renderAnalyzing()}
-                {step === 'icp'             && renderIcp()}
-                {step === 'gtm'             && renderGtm()}
-                {step === 'positioning'     && renderPositioning()}
-                {step === 'voice'           && renderVoice()}
-                {step === 'workflow_prefs'  && renderWorkflowPrefs()}
-                {step === 'integrations'    && renderIntegrations()}
-                {step === 'approval'        && renderApproval()}
-                {step === 'review'          && renderReview()}
-              </>
+      {research && (
+        <Card className="border-emerald-500/25 bg-emerald-500/5 p-5">
+          <h3 className="mb-3 flex items-center gap-1.5 text-sm font-semibold text-emerald-200">
+            <Sparkles className="h-3.5 w-3.5" /> What Agentory found
+          </h3>
+          <div className="space-y-3">
+            {research.description && <p className="text-sm text-foreground/90">{research.description}</p>}
+            <FieldList label="Business model" values={research.business_model ? [research.business_model] : []} />
+            <FieldList label="Proof points" values={research.proof_points ?? []} empty="No verifiable proof found" />
+            <FieldList label="Integrations" values={research.integrations ?? []} empty="None found" />
+            {linkedin && <FieldList label="LinkedIn" values={[linkedin.industry, linkedin.employee_count].filter(Boolean)} />}
+            <FieldList label="Pages read" values={(research.source_pages ?? []).map(shortPath)} empty="None" />
+            {(research.missing_evidence ?? []).length > 0 && (
+              <p className="text-xs text-amber-200">Missing evidence: {research.missing_evidence.join(', ')}</p>
             )}
-          </StepShell>
-        </AnimatePresence>
-
-        <div className="mt-6">{renderFooter()}</div>
-      </div>
+          </div>
+        </Card>
+      )}
     </div>
   );
 }
 
-// ---------- small helpers ----------
-function CompletenessRing({ percent, missing }: { percent: number; missing: string[] }) {
-  const r = 26, c = 2 * Math.PI * r, off = c - (percent / 100) * c;
+// ------------------------------------------------------------------ step 3 --
+
+function ResearchStep({
+  busy, founderResearch, companyResearch, onDraft,
+}: {
+  busy: boolean; founderResearch: any; companyResearch: any; onDraft: () => void;
+}) {
+  const pages = companyResearch?.source_pages?.length ?? 0;
   return (
-    <div className="flex items-center gap-4">
-      <div className="relative h-16 w-16">
-        <svg viewBox="0 0 64 64" className="h-16 w-16 -rotate-90">
-          <circle cx="32" cy="32" r={r} stroke="currentColor" strokeWidth="5" className="text-border/60" fill="none" />
-          <circle cx="32" cy="32" r={r} stroke="currentColor" strokeWidth="5" className="text-primary transition-all duration-500" fill="none"
-            strokeDasharray={c} strokeDashoffset={off} strokeLinecap="round" />
-        </svg>
-        <div className="absolute inset-0 flex items-center justify-center text-sm font-semibold text-foreground">{percent}%</div>
+    <Card className="border-border/60 bg-card/60 p-5">
+      <h2 className="mb-1 text-sm font-semibold">Draft your Company Brain</h2>
+      <p className="mb-4 text-xs text-muted-foreground">
+        Agentory turns the evidence it read into a draft ICP, buyers, triggers and disqualifiers.
+        It never invents proof — anything it infers is flagged for your confirmation.
+      </p>
+
+      <div className="grid gap-3 sm:grid-cols-2">
+        <SourceTile label="Founder LinkedIn" ok={!!founderResearch} detail={founderResearch ? `${founderResearch.confidence} confidence` : 'Skipped'} />
+        <SourceTile label="Company website" ok={!!companyResearch} detail={companyResearch ? `${pages} page(s) read` : 'Not analyzed'} />
       </div>
-      <div className="text-xs">
-        <div className="text-foreground font-medium">Company Brain {percent}% ready</div>
-        {missing.length > 0 ? (
-          <div className="text-muted-foreground mt-0.5 max-w-[220px]">Missing: {missing.slice(0, 3).join(', ')}{missing.length > 3 ? '…' : ''}</div>
-        ) : (
-          <div className="text-primary mt-0.5">All set.</div>
-        )}
+
+      <Button className="mt-5" size="sm" onClick={onDraft} disabled={busy}>
+        {busy ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> : <Sparkles className="mr-1.5 h-4 w-4" />}
+        {busy ? 'Reading evidence and drafting…' : 'Draft my Company Brain'}
+      </Button>
+      {!companyResearch && !founderResearch && (
+        <p className="mt-2 text-[11px] text-muted-foreground">
+          No research yet — the draft will be thin and mostly need your confirmation.
+        </p>
+      )}
+    </Card>
+  );
+}
+
+function SourceTile({ label, ok, detail }: { label: string; ok: boolean; detail: string }) {
+  return (
+    <div className={`rounded-lg border p-3 ${ok ? 'border-emerald-500/30 bg-emerald-500/5' : 'border-border/60 bg-muted/20'}`}>
+      <div className="flex items-center justify-between">
+        <span className="text-xs font-medium text-foreground">{label}</span>
+        {ok && <Check className="h-3.5 w-3.5 text-emerald-400" />}
+      </div>
+      <p className="mt-1 text-[11px] text-muted-foreground">{detail}</p>
+    </div>
+  );
+}
+
+// ------------------------------------------------------------------ step 4 --
+
+function ReviewStep({
+  brain, draft, missingByStep, onQuickAction, onEditBrain,
+}: {
+  brain: CompanyBrainV2;
+  draft: Record<string, unknown> | null;
+  missingByStep: Record<string, string[]>;
+  onQuickAction: (a: QuickAction, v?: string) => void;
+  onEditBrain: (b: CompanyBrainV2) => void;
+}) {
+  const needs = (draft?.needs_confirmation as string[]) ?? [];
+  const sources = brain.evidence.source_pages;
+  const liSources = brain.evidence.linkedin_sources;
+  const tc = brain.target_customer;
+  const disq = tc.disqualifiers;
+
+  const setList = (mutate: (b: CompanyBrainV2, v: string[]) => void) => (raw: string) => {
+    const next: CompanyBrainV2 = structuredClone(brain);
+    mutate(next, raw.split(',').map((s) => s.trim()).filter(Boolean));
+    onEditBrain(next);
+  };
+
+  return (
+    <div className="grid gap-4">
+      <BrainReviewCard
+        title="Company summary" subtitle="What we think you sell"
+        confidence={brain.brain_confidence} sources={sources}
+        needsConfirmation={needs.filter((n) => n.startsWith('company')).length}
+        missing={missingByStep.company?.length ? ['company fields'] : []}
+      >
+        <p className="text-sm text-foreground/90">{brain.company.description || 'No description yet.'}</p>
+        <FieldList label="Category" values={brain.company.category ? [brain.company.category] : []} />
+        <FieldList label="Business model" values={brain.company.business_model ? [brain.company.business_model] : []} />
+      </BrainReviewCard>
+
+      <BrainReviewCard
+        title="Ideal customers" subtitle="Who Leads and Radar will target"
+        confidence={brain.brain_confidence} sources={sources}
+        needsConfirmation={needs.filter((n) => n.startsWith('target_customer')).length}
+        missing={missingByStep.customers?.length ? ['industries or business models'] : []}
+        quickActions={QUICK_ACTIONS.filter((a) => ['correct', 'too_broad', 'too_narrow'].includes(a.id))}
+        onQuickAction={onQuickAction}
+      >
+        <EditableList label="Industries" values={tc.industries} onSave={setList((b, v) => { b.target_customer.industries = v; })} />
+        <EditableList label="Business models" values={tc.business_models} onSave={setList((b, v) => { b.target_customer.business_models = v; })} />
+        <FieldList label="Company size" values={tc.company_size.label ? [tc.company_size.label] : []} />
+        <FieldList label="Geography" values={tc.geography} />
+        <FieldList label="Funding stage" values={tc.funding_stage} />
+        <EditableList label="Must-have traits" values={tc.must_have} onSave={setList((b, v) => { b.target_customer.must_have = v; })} />
+        <FieldList label="Nice-to-have" values={tc.nice_to_have} />
+      </BrainReviewCard>
+
+      <BrainReviewCard
+        title="Buyers" subtitle="Who actually signs"
+        confidence={brain.brain_confidence} sources={liSources}
+        needsConfirmation={needs.filter((n) => n.startsWith('buyer')).length}
+        missing={missingByStep.buyers?.length ? ['buyer personas'] : []}
+      >
+        <EditableList label="Buyer personas" values={brain.buyer_personas} onSave={setList((b, v) => { b.buyer_personas = v; })} />
+        <EditableList label="Pain points" values={brain.pain_points} onSave={setList((b, v) => { b.pain_points = v; })} />
+      </BrainReviewCard>
+
+      <BrainReviewCard
+        title="Buying triggers" subtitle="What makes now the right moment"
+        confidence={brain.brain_confidence} sources={sources}
+        missing={missingByStep.triggers?.length ? ['a trigger or job to watch'] : []}
+        quickActions={QUICK_ACTIONS.filter((a) => a.id === 'require_proof')}
+        onQuickAction={onQuickAction}
+      >
+        <EditableList label="Triggers" values={brain.triggers} onSave={setList((b, v) => { b.triggers = v; })} />
+        <EditableList label="Jobs to watch" values={brain.jobs_to_watch} onSave={setList((b, v) => { b.jobs_to_watch = v; })} />
+        <FieldList label="Tools to watch" values={brain.tools} />
+        <FieldList label="Competitor activity" values={brain.competitors} />
+      </BrainReviewCard>
+
+      <BrainReviewCard
+        title="Never target these companies" subtitle="Disqualifiers are enforced before anything reaches you"
+        confidence={brain.brain_confidence} sources={[]}
+        missing={missingByStep.disqualifiers?.length ? ['at least one disqualifier'] : []}
+        quickActions={QUICK_ACTIONS.filter((a) => ['never_target', 'add_bad_fit'].includes(a.id))}
+        onQuickAction={onQuickAction}
+      >
+        <EditableList label="Industries to avoid" values={disq.industries} onSave={setList((b, v) => { b.target_customer.disqualifiers.industries = v; })} />
+        <EditableList label="Company types to avoid" values={disq.company_types} onSave={setList((b, v) => { b.target_customer.disqualifiers.company_types = v; })} />
+        <EditableList label="Keywords to avoid" values={disq.keywords} onSave={setList((b, v) => { b.target_customer.disqualifiers.keywords = v; })} />
+        <FieldList label="Titles to avoid" values={disq.titles} />
+        <FieldList label="Domains to avoid" values={disq.domains} />
+      </BrainReviewCard>
+
+      <BrainReviewCard title="Good fit / bad fit examples" subtitle="Concrete companies teach the scorer faster than rules" sources={[]}>
+        <EditableList label="Good-fit companies" values={brain.positive_examples} onSave={setList((b, v) => { b.positive_examples = v; })} />
+        <EditableList label="Bad-fit companies" values={brain.negative_examples} onSave={setList((b, v) => { b.negative_examples = v; })} />
+      </BrainReviewCard>
+
+      <BrainReviewCard
+        title="Content & positioning" subtitle="Voice for Content and Outreach"
+        confidence={brain.brain_confidence} sources={sources}
+        needsConfirmation={needs.filter((n) => n.startsWith('positioning')).length}
+        missing={missingByStep.content?.length ? ['a pain point or content angle'] : []}
+      >
+        <FieldList label="Promise" values={brain.positioning.promise ? [brain.positioning.promise] : []} />
+        <FieldList label="Differentiators" values={brain.positioning.differentiators} />
+        <EditableList label="Content angles" values={brain.content_angles} onSave={setList((b, v) => { b.content_angles = v; })} />
+        <FieldList label="Tone" values={brain.brand_voice.tone ? [brain.brand_voice.tone] : []} />
+        <FieldList label="Banned claims" values={[...brain.positioning.avoid_positioning, ...brain.brand_voice.avoid]} empty="None set" />
+      </BrainReviewCard>
+
+      <BrainReviewCard title="Qualification rules" subtitle="Evidence required before a lead is trusted" sources={[]}>
+        <EditableList label="Required evidence" values={brain.qualification_rules.required_evidence} onSave={setList((b, v) => { b.qualification_rules.required_evidence = v; })} />
+        <EditableList label="Reject if" values={brain.qualification_rules.reject_if} onSave={setList((b, v) => { b.qualification_rules.reject_if = v; })} />
+        <FieldList label="Manual review if" values={brain.qualification_rules.manual_review_if} />
+      </BrainReviewCard>
+    </div>
+  );
+}
+
+/** Comma-separated inline editor for a list field. */
+function EditableList({ label, values, onSave }: { label: string; values: string[]; onSave: (raw: string) => void }) {
+  const [editing, setEditing] = useState(false);
+  const [raw, setRaw] = useState('');
+
+  if (!editing) {
+    return (
+      <div>
+        <div className="mb-1 flex items-center justify-between">
+          <p className="text-[11px] uppercase tracking-wide text-muted-foreground">{label}</p>
+          <button type="button" className="text-[11px] text-primary hover:underline" onClick={() => { setRaw(values.join(', ')); setEditing(true); }}>
+            Edit
+          </button>
+        </div>
+        {values.length === 0
+          ? <p className="text-xs text-muted-foreground/70">Not set</p>
+          : <div className="flex flex-wrap gap-1">{values.map((v) => <span key={v} className="rounded bg-muted/50 px-1.5 py-0.5 text-xs">{v}</span>)}</div>}
+      </div>
+    );
+  }
+  return (
+    <div>
+      <p className="mb-1 text-[11px] uppercase tracking-wide text-muted-foreground">{label}</p>
+      <Textarea rows={2} value={raw} onChange={(e) => setRaw(e.target.value)} placeholder="Comma-separated" />
+      <div className="mt-1.5 flex gap-1.5">
+        <Button size="sm" className="h-7 text-xs" onClick={() => { onSave(raw); setEditing(false); }}>Save</Button>
+        <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => setEditing(false)}>Cancel</Button>
       </div>
     </div>
   );
 }
 
-function parseLines(v: string): string[] {
-  return v.split('\n').map((s) => s.trim()).filter(Boolean);
+// ------------------------------------------------------------------ step 5 --
+
+function ActivateStep({ completeness }: { completeness: CompletenessResult }) {
+  return (
+    <div className="space-y-4">
+      <Card className="border-border/60 bg-card/60 p-6 text-center">
+        <Rocket className="mx-auto mb-3 h-8 w-8 text-primary" />
+        <h2 className="text-lg font-semibold">{completeness.complete ? 'Your Company Brain is ready.' : 'Almost there.'}</h2>
+        <p className="mx-auto mt-1 max-w-md text-sm text-muted-foreground">
+          {completeness.complete
+            ? 'Activate to let Leads, Radar, Content, Agents and Outreach use it. Nothing sends automatically.'
+            : 'Fill the remaining required fields to activate. You can save a draft and finish later.'}
+        </p>
+
+        <div className="mx-auto mt-5 max-w-sm">
+          <div className="mb-1.5 flex items-center justify-between text-xs">
+            <span className="text-muted-foreground">Completeness</span>
+            <span className="font-medium">{completeness.percent}%</span>
+          </div>
+          <Progress value={completeness.percent} className="h-1.5" />
+          <Badge variant="outline" className="mt-3">{completeness.confidence} confidence</Badge>
+        </div>
+      </Card>
+
+      {completeness.missing.length > 0 && (
+        <Card className="border-amber-500/30 bg-amber-500/5 p-4">
+          <h3 className="mb-2 text-xs font-semibold text-amber-200">Still missing</h3>
+          <ul className="space-y-1 text-xs text-amber-100/90">
+            {completeness.missing.map((m) => <li key={m}>• {m}</li>)}
+          </ul>
+        </Card>
+      )}
+
+      <Card className="border-border/60 bg-card/40 p-4">
+        <h3 className="mb-3 text-xs font-semibold">What this powers</h3>
+        <div className="grid gap-2 sm:grid-cols-2">
+          {BRAIN_POWERS.map((p) => (
+            <div key={p.key} className="rounded-md border border-border/50 bg-muted/20 p-2.5">
+              <p className="text-xs font-medium text-foreground">{p.label}</p>
+              <p className="text-[11px] text-muted-foreground">{p.blurb}</p>
+            </div>
+          ))}
+        </div>
+        <Separator className="my-3" />
+        <p className="text-[11px] text-muted-foreground">
+          Activation never sends an email, post, comment or DM, and never starts a Scout Radar scan.
+          You can run your first scan manually from Signals afterwards.
+        </p>
+      </Card>
+    </div>
+  );
 }
-function toggle<T>(arr: T[], v: T): T[] {
-  return arr.includes(v) ? arr.filter((x) => x !== v) : [...arr, v];
+
+// ---------------------------------------------------------------- helpers ---
+
+function Field({ label, hint, required, children }: { label: string; hint?: string; required?: boolean; children: React.ReactNode }) {
+  return (
+    <div className="space-y-1.5">
+      <Label className="text-xs">
+        {label}
+        {required && <span className="ml-0.5 text-destructive">*</span>}
+        {hint && <span className="ml-1.5 font-normal text-muted-foreground">{hint}</span>}
+      </Label>
+      {children}
+    </div>
+  );
 }
-function nonEmpty<T extends Record<string, any>>(obj: T): Partial<T> {
-  const out: Partial<T> = {};
-  for (const k of Object.keys(obj) as (keyof T)[]) {
-    const v = obj[k];
-    if (Array.isArray(v) ? v.length > 0 : v !== '' && v != null && v !== false) {
-      out[k] = v;
-    }
+
+function shortPath(u: string): string {
+  try { return new URL(u).pathname || '/'; } catch { return u; }
+}
+
+/** Project a normalized Brain back onto a raw profile patch for previewing. */
+function toRaw(b: CompanyBrainV2): Record<string, unknown> {
+  return {
+    target_customer: b.target_customer,
+    buyer_personas: b.buyer_personas, triggers: b.triggers, jobs_to_watch: b.jobs_to_watch,
+    competitors: b.competitors, tools: b.tools, pain_points: b.pain_points,
+    positive_examples: b.positive_examples, negative_examples: b.negative_examples,
+    content_angles: b.content_angles, positioning: b.positioning, brand_voice: b.brand_voice,
+    qualification_rules: b.qualification_rules, evidence: b.evidence,
+  };
+}
+
+function explain(reason: string | undefined, ctx: 'founder' | 'company' | 'draft'): string {
+  switch (reason) {
+    case 'consent_not_given': return 'Tick the consent box to enrich from LinkedIn.';
+    case 'invalid_linkedin_profile_url': return 'That does not look like a linkedin.com/in/… profile URL.';
+    case 'invalid_linkedin_company_url': return 'That does not look like a linkedin.com/company/… URL.';
+    case 'apify_not_configured': return 'LinkedIn enrichment is not configured yet. Continue and fill this in by hand.';
+    case 'firecrawl_not_configured': return 'Website research is not configured yet. Continue and fill this in by hand.';
+    case 'llm_not_configured': return 'AI drafting is not configured yet. You can still fill the Brain in by hand.';
+    case 'invalid_website_url': return 'Enter a full website URL starting with https://';
+    default:
+      return ctx === 'draft'
+        ? 'Could not draft the Brain from the available evidence.'
+        : 'Nothing could be read from that source. You can continue by hand.';
   }
-  return out;
 }
