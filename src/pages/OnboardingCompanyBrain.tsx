@@ -1,4 +1,4 @@
-// Company Brain Onboarding v3 — premium 5-step setup surface.
+// Company Brain Onboarding v3 — premium "Brain Lab" 5-step setup.
 //
 // Presentation makeover only. Backend contract is byte-identical:
 //   invoke('generate-company-brain-draft', { action, workspace_id, ... })
@@ -6,8 +6,6 @@
 //
 // Providers run ONLY on an explicit click; founder enrichment also requires
 // consent. Nothing sends automatically and no Scout Radar scan is triggered.
-// Activation is server-authoritative; this UI mirrors the same rules for the
-// live preview panel.
 
 import { useCallback, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
@@ -21,17 +19,22 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Switch } from '@/components/ui/switch';
-import { Badge } from '@/components/ui/badge';
 import {
-  ArrowLeft, ArrowRight, Building2, Check, ChevronDown, Cpu, Globe, Info, Loader2, Lock,
-  Rocket, Search, ShieldCheck, Sparkles, User,
+  ArrowLeft, ArrowRight, Building2, ChevronDown, Cpu, Globe, Loader2, Lock,
+  MessageSquare, Radar, Rocket, Search, Shield, Sparkles, Target, User,
 } from 'lucide-react';
 
+import { AmbientBackground } from '@/components/onboarding/AmbientBackground';
 import { BrainPreviewPanel } from '@/components/onboarding/BrainPreviewPanel';
 import { BrainReviewCard, FieldList } from '@/components/onboarding/BrainReviewCard';
+import { BrainSection } from '@/components/onboarding/BrainSection';
 import { StepProgress } from '@/components/onboarding/StepProgress';
 import { ChipInput } from '@/components/onboarding/ChipInput';
-import { CompletenessRing } from '@/components/onboarding/CompletenessRing';
+import { ErrorState } from '@/components/onboarding/ErrorState';
+import { PagePreviewChips } from '@/components/onboarding/PagePreviewChips';
+import { ResearchTimeline, type TimelineStage } from '@/components/onboarding/ResearchTimeline';
+import { SourceEvidenceCard, type EvidenceStatus } from '@/components/onboarding/SourceEvidenceCard';
+import { ActivationHero } from '@/components/onboarding/ActivationHero';
 import {
   STEPS, stepAt, stepIndexOf, type StepId,
   emptyCompanyForm, emptyFounderForm, type CompanyForm, type FounderForm,
@@ -39,7 +42,7 @@ import {
   buildDraftInput, buildSavePatch, previewBrain, applyQuickAction, QUICK_ACTIONS,
   type QuickAction,
 } from '@/lib/onboardingV3';
-import { BRAIN_POWERS, type CompletenessResult } from '@/lib/companyBrainCompleteness';
+import type { CompletenessResult } from '@/lib/companyBrainCompleteness';
 import type { CompanyBrainV2 } from '@/lib/normalizeCompanyBrain';
 
 const FN = 'generate-company-brain-draft';
@@ -60,9 +63,8 @@ export default function OnboardingCompanyBrain() {
   const [draft, setDraft] = useState<Record<string, unknown> | null>(null);
 
   const [busy, setBusy] = useState<string | null>(null);
-  const [notice, setNotice] = useState<string | null>(null);
+  const [error, setError] = useState<{ title: string; body: string } | null>(null);
   const [previewOpen, setPreviewOpen] = useState(false);
-
   const [edited, setEdited] = useState<CompanyBrainV2 | null>(null);
 
   const rawProfile = useMemo(() => ({
@@ -86,6 +88,12 @@ export default function OnboardingCompanyBrain() {
 
   const { brain, completeness } = useMemo(() => previewBrain(rawProfile), [rawProfile]);
 
+  const evidenceCount = useMemo(() => {
+    const pages = companyResearch?.source_pages?.length ?? 0;
+    const sources = (founderResearch ? 1 : 0) + (companyResearch ? 1 : 0) + (companyLinkedIn ? 1 : 0);
+    return { sources, pages };
+  }, [founderResearch, companyResearch, companyLinkedIn]);
+
   const call = useCallback(async (action: string, payload: Record<string, unknown> = {}) => {
     if (!workspaceId) throw new Error('No workspace');
     const { data, error } = await supabase.functions.invoke(FN, {
@@ -98,7 +106,7 @@ export default function OnboardingCompanyBrain() {
   // -------------------------------------------------------- step handlers ---
 
   async function analyzeFounder() {
-    setBusy('founder'); setNotice(null);
+    setBusy('founder'); setError(null);
     try {
       const r = await call('research_founder', {
         linkedin_url: founder.linkedin_url,
@@ -108,15 +116,15 @@ export default function OnboardingCompanyBrain() {
         setFounderResearch(r.research);
         toast.success('Founder profile analyzed', { description: `Confidence: ${r.research.confidence}` });
       } else {
-        setNotice(explain(r?.reason ?? r?.error, 'founder'));
+        setError({ title: 'Founder analysis unavailable', body: explain(r?.reason ?? r?.error, 'founder') });
       }
     } catch {
-      setNotice('Founder analysis failed. You can continue and fill this in by hand.');
+      setError({ title: 'Founder analysis failed', body: 'You can continue and fill this in by hand.' });
     } finally { setBusy(null); }
   }
 
   async function analyzeCompany() {
-    setBusy('company'); setNotice(null);
+    setBusy('company'); setError(null);
     try {
       const r = await call('research_company', {
         website_url: company.website_url,
@@ -129,15 +137,15 @@ export default function OnboardingCompanyBrain() {
         setCompanyLinkedIn(r.company_linkedin ?? null);
         toast.success('Company analyzed', { description: `${r.pages_fetched} page(s) read` });
       } else {
-        setNotice(explain(r?.reason ?? r?.error, 'company'));
+        setError({ title: 'Company analysis unavailable', body: explain(r?.reason ?? r?.error, 'company') });
       }
     } catch {
-      setNotice('Company analysis failed. You can continue and fill this in by hand.');
+      setError({ title: 'Company analysis failed', body: 'You can continue and fill this in by hand.' });
     } finally { setBusy(null); }
   }
 
   async function draftBrain() {
-    setBusy('draft'); setNotice(null);
+    setBusy('draft'); setError(null);
     try {
       const r = await call('draft', buildDraftInput({
         founder, company, founderResearch, companyResearch, companyLinkedIn,
@@ -148,20 +156,23 @@ export default function OnboardingCompanyBrain() {
         setStepIndex(stepIndexOf('review'));
         toast.success('Draft Company Brain ready', { description: 'Review each card before activating.' });
       } else {
-        setNotice(explain(r?.reason ?? r?.error, 'draft'));
+        setError({ title: 'Could not draft the Brain', body: explain(r?.reason ?? r?.error, 'draft') });
       }
     } catch {
-      setNotice('Could not draft the Brain. You can still fill it in by hand.');
+      setError({ title: 'Draft failed', body: 'You can still fill the Brain in by hand.' });
     } finally { setBusy(null); }
   }
 
   async function persist(activate: boolean) {
-    setBusy(activate ? 'activate' : 'save'); setNotice(null);
+    setBusy(activate ? 'activate' : 'save'); setError(null);
     try {
       const patch = buildSavePatch({ founder, company, brain });
       const r = await call(activate ? 'activate' : 'save_draft', { patch });
       if (activate && !r?.activated) {
-        setNotice(`Can't activate yet — ${(r?.blocked_reasons ?? []).join('; ') || 'requirements not met'}. Your draft is saved.`);
+        setError({
+          title: "Can't activate yet",
+          body: (r?.blocked_reasons ?? []).join('; ') || 'Requirements not met. Your draft is saved.',
+        });
         return;
       }
       toast.success(activate ? 'Company Brain activated' : 'Draft saved', {
@@ -171,7 +182,7 @@ export default function OnboardingCompanyBrain() {
       });
       if (activate) navigate('/dashboard');
     } catch {
-      setNotice('Save failed. Nothing was lost — try again.');
+      setError({ title: 'Save failed', body: 'Nothing was lost — try again.' });
     } finally { setBusy(null); }
   }
 
@@ -183,40 +194,30 @@ export default function OnboardingCompanyBrain() {
   // ---------------------------------------------------------------- render --
 
   return (
-    <div className="relative min-h-screen bg-background text-foreground">
-      {/* Ambient background wash */}
-      <div
-        aria-hidden
-        className="pointer-events-none absolute inset-0 -z-10"
-        style={{
-          background:
-            'radial-gradient(1200px 600px at 50% -10%, hsl(var(--primary) / 0.08), transparent 60%), radial-gradient(800px 400px at 90% 20%, hsl(var(--primary) / 0.05), transparent 60%)',
-        }}
-      />
+    <div className="relative min-h-screen text-foreground">
+      <AmbientBackground />
 
       {/* Top bar */}
-      <header className="sticky top-0 z-20 border-b border-border/40 bg-background/70 backdrop-blur-md">
+      <header className="sticky top-0 z-20 border-b border-border/40 bg-background/60 backdrop-blur-xl">
         <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-3 sm:px-6">
-          <div className="flex items-center gap-2">
-            <div className="flex h-7 w-7 items-center justify-center rounded-md border border-primary/40 bg-primary/10 text-primary">
-              <Cpu className="h-3.5 w-3.5" />
+          <div className="flex items-center gap-2.5">
+            <div className="flex h-8 w-8 items-center justify-center rounded-lg border border-primary/40 bg-primary/10 text-primary shadow-[0_0_16px_hsl(var(--primary)/0.25)]">
+              <Cpu className="h-4 w-4" />
             </div>
             <div className="leading-tight">
-              <p className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground">Agentory</p>
+              <p className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground">Agentory · Brain Lab</p>
               <p className="text-xs font-semibold">Company Brain setup</p>
             </div>
           </div>
-          <div className="flex items-center gap-2">
-            <Button
-              size="sm" variant="ghost"
-              onClick={() => persist(false)}
-              disabled={!!busy || !workspaceId}
-              className="h-8 text-xs"
-            >
-              {busy === 'save' && <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />}
-              Save draft
-            </Button>
-          </div>
+          <Button
+            size="sm" variant="ghost"
+            onClick={() => persist(false)}
+            disabled={!!busy || !workspaceId}
+            className="h-8 text-xs"
+          >
+            {busy === 'save' && <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />}
+            Save draft
+          </Button>
         </div>
       </header>
 
@@ -229,35 +230,49 @@ export default function OnboardingCompanyBrain() {
         {/* Grid */}
         <div className="mt-10 grid gap-8 lg:grid-cols-[minmax(0,1fr)_360px]">
           <main className="min-w-0">
-            <div className="mb-6">
-              <p className="mb-2 text-[10px] font-medium uppercase tracking-[0.18em] text-primary">
-                Step {stepIndex + 1} of {STEPS.length}
+            <div className="mb-8">
+              <p className="mb-2 text-[10px] font-medium uppercase tracking-[0.22em] text-primary">
+                Step {stepIndex + 1} of {STEPS.length} · {stepAt(stepIndex).label}
               </p>
-              <h1 className="text-3xl font-semibold tracking-tight text-foreground sm:text-4xl">
+              <h1 className="text-4xl font-semibold tracking-tight text-foreground sm:text-5xl">
                 {stepTitle(step)}
               </h1>
-              <p className="mt-2 max-w-xl text-sm text-muted-foreground">{stepAt(stepIndex).powers}</p>
+              <p className="mt-3 max-w-xl text-sm leading-relaxed text-muted-foreground">
+                {stepSubtitle(step)}
+              </p>
             </div>
 
             <AnimatePresence mode="wait" initial={false}>
               <motion.div
                 key={step}
-                initial={{ opacity: 0, y: 8 }}
+                initial={{ opacity: 0, y: 12 }}
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: -8 }}
-                transition={{ duration: 0.2, ease: 'easeOut' }}
+                transition={{ duration: 0.25, ease: 'easeOut' }}
+                className="space-y-5"
               >
-                {notice && (
-                  <div className="mb-5 flex items-start gap-2 rounded-xl border border-amber-500/30 bg-amber-500/[0.06] p-3.5 text-xs text-amber-100">
-                    <Info className="mt-0.5 h-3.5 w-3.5 shrink-0 text-amber-300" />
-                    <span>{notice}</span>
-                  </div>
+                {error && (
+                  <ErrorState
+                    title={error.title}
+                    body={error.body}
+                    onRetry={
+                      step === 'founder' ? analyzeFounder :
+                      step === 'company' ? analyzeCompany :
+                      step === 'research' ? draftBrain :
+                      undefined
+                    }
+                    onContinue={
+                      step === 'founder' || step === 'company' || step === 'research'
+                        ? () => { setError(null); setStepIndex((i) => Math.min(STEPS.length - 1, i + 1)); }
+                        : undefined
+                    }
+                  />
                 )}
 
                 {step === 'founder' && (
                   <FounderStep
                     value={founder} onChange={setFounder} busy={busy === 'founder'} research={founderResearch}
-                    onAnalyze={analyzeFounder} onSkip={() => setStepIndex(stepIndexOf('company'))}
+                    onAnalyze={analyzeFounder}
                   />
                 )}
                 {step === 'company' && (
@@ -268,8 +283,12 @@ export default function OnboardingCompanyBrain() {
                 )}
                 {step === 'research' && (
                   <ResearchStep
-                    busy={busy === 'draft'} founderResearch={founderResearch}
-                    companyResearch={companyResearch} onDraft={draftBrain}
+                    busy={busy === 'draft'}
+                    founder={founder} company={company}
+                    founderResearch={founderResearch}
+                    companyResearch={companyResearch}
+                    companyLinkedIn={companyLinkedIn}
+                    onDraft={draftBrain}
                   />
                 )}
                 {step === 'review' && (
@@ -278,11 +297,11 @@ export default function OnboardingCompanyBrain() {
                     onQuickAction={onQuickAction} onEditBrain={setEdited}
                   />
                 )}
-                {step === 'activate' && <ActivateStep completeness={completeness} />}
+                {step === 'activate' && <ActivationHero completeness={completeness} />}
               </motion.div>
             </AnimatePresence>
 
-            {/* Sticky footer nav */}
+            {/* Footer nav */}
             <nav className="mt-10 flex items-center justify-between gap-3 border-t border-border/40 pt-6">
               <Button
                 variant="ghost" size="sm"
@@ -297,7 +316,7 @@ export default function OnboardingCompanyBrain() {
                   size="lg"
                   onClick={() => persist(true)}
                   disabled={!!busy || !completeness.complete || !workspaceId}
-                  className="min-w-[220px] gap-2 bg-primary text-primary-foreground shadow-[0_0_24px_hsl(var(--primary)/0.35)] hover:bg-primary/90"
+                  className="min-w-[240px] gap-2 bg-primary text-primary-foreground shadow-[0_0_28px_hsl(var(--primary)/0.4)] hover:bg-primary/90"
                 >
                   {busy === 'activate' ? <Loader2 className="h-4 w-4 animate-spin" /> : <Rocket className="h-4 w-4" />}
                   Activate Company Brain
@@ -318,16 +337,16 @@ export default function OnboardingCompanyBrain() {
           {/* Right rail — desktop */}
           <div className="hidden lg:block">
             <div className="sticky top-24">
-              <BrainPreviewPanel brain={brain} completeness={completeness} />
+              <BrainPreviewPanel brain={brain} completeness={completeness} evidenceCount={evidenceCount} />
             </div>
           </div>
 
-          {/* Right rail — mobile accordion */}
+          {/* Right rail — mobile */}
           <div className="lg:hidden">
             <button
               type="button"
               onClick={() => setPreviewOpen((o) => !o)}
-              className="mb-3 flex w-full items-center justify-between rounded-xl border border-border/50 bg-card/40 px-4 py-3 text-left"
+              className="mb-3 flex w-full items-center justify-between rounded-xl border border-border/50 bg-card/40 px-4 py-3 text-left backdrop-blur-md"
               aria-expanded={previewOpen}
             >
               <span className="flex items-center gap-2 text-sm font-medium">
@@ -336,7 +355,7 @@ export default function OnboardingCompanyBrain() {
               </span>
               <ChevronDown className={`h-4 w-4 transition-transform ${previewOpen ? 'rotate-180' : ''}`} />
             </button>
-            {previewOpen && <BrainPreviewPanel brain={brain} completeness={completeness} />}
+            {previewOpen && <BrainPreviewPanel brain={brain} completeness={completeness} evidenceCount={evidenceCount} />}
           </div>
         </div>
       </div>
@@ -348,9 +367,19 @@ function stepTitle(step: StepId): string {
   switch (step) {
     case 'founder':  return 'Tell us who you are';
     case 'company':  return 'What does your company do?';
-    case 'research': return 'Let Agentory draft your Brain';
-    case 'review':   return 'Review what Agentory learned';
-    case 'activate': return 'Activate your Company Brain';
+    case 'research': return 'Let Agentory read your world';
+    case 'review':   return 'Review your Brain';
+    case 'activate': return 'Activate Company Brain';
+  }
+}
+
+function stepSubtitle(step: StepId): string {
+  switch (step) {
+    case 'founder':  return 'We use this to understand your background, credibility, and how Agentory should communicate on your behalf.';
+    case 'company':  return 'Agentory will read a few key pages of your site — no broad crawl — and use it to shape your ICP.';
+    case 'research': return 'AI turns the evidence it just read into a first draft of your Brain. Nothing sends automatically.';
+    case 'review':   return 'You confirm what is true before anything targets a real company. Edit any card — chips, personas, disqualifiers — as you go.';
+    case 'activate': return 'This flips the switch for Leads, Scout Radar, Content, Agents and Outreach to start using your context.';
   }
 }
 
@@ -359,68 +388,71 @@ function stepTitle(step: StepId): string {
 // ============================================================================
 
 function FounderStep({
-  value, onChange, busy, research, onAnalyze, onSkip,
+  value, onChange, busy, research, onAnalyze,
 }: {
   value: FounderForm; onChange: (f: FounderForm) => void;
-  busy: boolean; research: any; onAnalyze: () => void; onSkip: () => void;
+  busy: boolean; research: any; onAnalyze: () => void;
 }) {
   const set = <K extends keyof FounderForm>(k: K, v: FounderForm[K]) => onChange({ ...value, [k]: v });
   return (
-    <div className="space-y-5">
-      <PanelCard icon={<User className="h-3.5 w-3.5" />} title="About you" hint="Shapes voice, credibility and outreach tone.">
-        <div className="grid gap-4 sm:grid-cols-2">
+    <div className="grid gap-5 md:grid-cols-2">
+      <PanelCard icon={<User className="h-4 w-4" />} title="About you" hint="Shapes voice, credibility and outreach tone.">
+        <div className="space-y-4">
           <Field label="Your name" required>
             <Input value={value.name} onChange={(e) => set('name', e.target.value)} placeholder="Jane Doe" />
           </Field>
           <Field label="Role / title">
             <Input value={value.role} onChange={(e) => set('role', e.target.value)} placeholder="Founder & CEO" />
           </Field>
-          <Field label="Timezone" hint="Optional">
-            <Input value={value.timezone} onChange={(e) => set('timezone', e.target.value)} placeholder="UTC+5:45" />
-          </Field>
-          <Field label="First thing Agentory should help with">
-            <Input value={value.first_help_goal} onChange={(e) => set('first_help_goal', e.target.value)} placeholder="Find warm leads" />
-          </Field>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <Field label="Timezone" hint="Optional">
+              <Input value={value.timezone} onChange={(e) => set('timezone', e.target.value)} placeholder="UTC+5:45" />
+            </Field>
+            <Field label="First goal" hint="Optional">
+              <Input value={value.first_help_goal} onChange={(e) => set('first_help_goal', e.target.value)} placeholder="Find warm leads" />
+            </Field>
+          </div>
         </div>
       </PanelCard>
 
       <PanelCard
-        icon={<Sparkles className="h-3.5 w-3.5" />}
+        icon={<Sparkles className="h-4 w-4" />}
         title="Enrich from LinkedIn"
-        hint="Optional. We read only the profile URL you give us — never emails, phones or contacts."
+        hint="Optional. We read only the profile URL you provide — never emails, phones or contacts."
       >
-        <Field label="LinkedIn profile URL">
-          <Input
-            value={value.linkedin_url}
-            onChange={(e) => set('linkedin_url', e.target.value)}
-            placeholder="https://linkedin.com/in/your-handle"
-          />
-        </Field>
+        {research ? (
+          <FounderFoundCard research={research} />
+        ) : (
+          <div className="space-y-4">
+            <Field label="LinkedIn profile URL">
+              <Input
+                value={value.linkedin_url}
+                onChange={(e) => set('linkedin_url', e.target.value)}
+                placeholder="https://linkedin.com/in/your-handle"
+              />
+            </Field>
 
-        <div className="mt-4 flex items-start justify-between gap-3 rounded-lg border border-border/50 bg-background/40 p-3">
-          <div className="flex min-w-0 items-start gap-2.5">
-            <Lock className="mt-0.5 h-3.5 w-3.5 shrink-0 text-primary" />
-            <div className="min-w-0">
-              <p className="text-xs font-medium text-foreground">Use this URL to enrich my Company Brain</p>
-              <p className="mt-0.5 text-[11px] text-muted-foreground">Consent-based. You can revoke this anytime.</p>
+            <div className="flex items-start justify-between gap-3 rounded-xl border border-primary/25 bg-primary/[0.04] p-3.5">
+              <div className="flex min-w-0 items-start gap-2.5">
+                <Lock className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
+                <div className="min-w-0">
+                  <p className="text-xs font-medium text-foreground">Use this URL to enrich my Brain</p>
+                  <p className="mt-0.5 text-[11px] leading-relaxed text-muted-foreground">Consent-based. Nothing runs unless you toggle this on and click analyze.</p>
+                </div>
+              </div>
+              <Switch
+                checked={value.enrichment_consent}
+                onCheckedChange={(c) => set('enrichment_consent', c === true)}
+              />
             </div>
+
+            <Button size="sm" onClick={onAnalyze} disabled={!canEnrichFounder(value) || busy} className="w-full sm:w-auto">
+              {busy ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> : <Search className="mr-1.5 h-4 w-4" />}
+              Analyze founder profile
+            </Button>
           </div>
-          <Switch
-            checked={value.enrichment_consent}
-            onCheckedChange={(c) => set('enrichment_consent', c === true)}
-          />
-        </div>
-
-        <div className="mt-4 flex flex-wrap items-center gap-2">
-          <Button size="sm" onClick={onAnalyze} disabled={!canEnrichFounder(value) || busy}>
-            {busy ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> : <Search className="mr-1.5 h-4 w-4" />}
-            Analyze founder profile
-          </Button>
-          <Button size="sm" variant="ghost" onClick={onSkip} disabled={busy}>Skip enrichment</Button>
-        </div>
+        )}
       </PanelCard>
-
-      {research && <FounderFoundCard research={research} />}
     </div>
   );
 }
@@ -429,31 +461,27 @@ function FounderFoundCard({ research }: { research: any }) {
   const initials = (research.name ?? '?').split(/\s+/).filter(Boolean).slice(0, 2).map((s: string) => s[0]).join('').toUpperCase();
   return (
     <motion.div
-      initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.25 }}
-      className="overflow-hidden rounded-2xl border border-primary/25 bg-gradient-to-b from-primary/[0.06] to-transparent p-5"
+      initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.25 }}
     >
       <div className="mb-3 flex items-center gap-2 text-[10px] uppercase tracking-[0.18em] text-primary">
         <Sparkles className="h-3 w-3" /> Found on LinkedIn
       </div>
       <div className="flex items-start gap-3">
-        <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-primary/30 bg-primary/10 text-sm font-semibold text-primary">
+        <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full border border-primary/30 bg-primary/10 text-sm font-semibold text-primary shadow-[0_0_20px_hsl(var(--primary)/0.2)]">
           {initials || '·'}
         </div>
         <div className="min-w-0">
           <p className="text-sm font-medium text-foreground">
             {research.name}
             {research.current_role ? ` — ${research.current_role}` : ''}
-            {research.current_company ? ` at ${research.current_company}` : ''}
           </p>
-          {research.headline && <p className="mt-0.5 text-xs text-muted-foreground">{research.headline}</p>}
+          {research.current_company && <p className="mt-0.5 text-xs text-muted-foreground">at {research.current_company}</p>}
+          {research.headline && <p className="mt-1 text-[11px] italic text-foreground/70">"{research.headline}"</p>}
         </div>
       </div>
       <div className="mt-4 space-y-3">
         <FieldList label="Credibility signals" values={research.credibility_signals ?? []} empty="None detected" />
-        <FieldList label="Why this matters for GTM" values={research.gtm_relevance ?? []} empty="No GTM signal detected" />
-        {(research.missing_evidence ?? []).length > 0 && (
-          <p className="text-xs text-amber-200">Could not read: {research.missing_evidence.join(', ')}</p>
-        )}
+        <FieldList label="GTM relevance" values={research.gtm_relevance ?? []} empty="No GTM signal detected" />
       </div>
     </motion.div>
   );
@@ -472,42 +500,43 @@ function CompanyStep({
   const set = <K extends keyof CompanyForm>(k: K, v: CompanyForm[K]) => onChange({ ...value, [k]: v });
   return (
     <div className="space-y-5">
-      <PanelCard
-        icon={<Building2 className="h-3.5 w-3.5" />}
-        title="Your company"
-        hint="Agentory reads your homepage plus up to 10 key pages — no broad web crawl."
-      >
-        <div className="grid gap-4 sm:grid-cols-2">
-          <Field label="Company name" required>
-            <Input value={value.name} onChange={(e) => set('name', e.target.value)} placeholder="Agentory" />
-          </Field>
-          <Field label="Website URL" required>
-            <Input value={value.website_url} onChange={(e) => set('website_url', e.target.value)} placeholder="https://agentory.space" />
-          </Field>
-          <Field label="LinkedIn company URL" hint="Optional">
-            <Input value={value.linkedin_url} onChange={(e) => set('linkedin_url', e.target.value)} placeholder="https://linkedin.com/company/agentory" />
-          </Field>
-          <Field label="Stage" hint="Optional">
-            <Input value={value.stage} onChange={(e) => set('stage', e.target.value)} placeholder="seed" />
-          </Field>
-          <Field label="Team size" hint="Optional">
-            <Input value={value.team_size} onChange={(e) => set('team_size', e.target.value)} placeholder="2-5" />
-          </Field>
-        </div>
-        <div className="mt-4">
-          <Field label="One-line description" hint="If you already know it">
-            <Textarea rows={2} value={value.description} onChange={(e) => set('description', e.target.value)} placeholder="AI workforce OS for founders building B2B pipeline" />
-          </Field>
-        </div>
+      <div className="grid gap-5 md:grid-cols-2">
+        <PanelCard icon={<Building2 className="h-4 w-4" />} title="Company identity">
+          <div className="space-y-4">
+            <Field label="Company name" required>
+              <Input value={value.name} onChange={(e) => set('name', e.target.value)} placeholder="Agentory" />
+            </Field>
+            <Field label="One-line description">
+              <Textarea rows={2} value={value.description} onChange={(e) => set('description', e.target.value)} placeholder="AI workforce OS for founders building B2B pipeline" />
+            </Field>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <Field label="Stage" hint="Optional">
+                <Input value={value.stage} onChange={(e) => set('stage', e.target.value)} placeholder="seed" />
+              </Field>
+              <Field label="Team size" hint="Optional">
+                <Input value={value.team_size} onChange={(e) => set('team_size', e.target.value)} placeholder="2-5" />
+              </Field>
+            </div>
+          </div>
+        </PanelCard>
 
-        <div className="mt-5 flex items-center gap-3">
-          <Button size="sm" onClick={onAnalyze} disabled={!canAnalyzeCompany(value) || busy}>
-            {busy ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> : <Search className="mr-1.5 h-4 w-4" />}
-            Analyze company
-          </Button>
-          <span className="text-[11px] text-muted-foreground">Reads homepage + about, pricing, customers…</span>
-        </div>
-      </PanelCard>
+        <PanelCard icon={<Globe className="h-4 w-4" />} title="Web presence" hint="Website is required. LinkedIn is optional.">
+          <div className="space-y-4">
+            <Field label="Website URL" required>
+              <Input value={value.website_url} onChange={(e) => set('website_url', e.target.value)} placeholder="https://agentory.space" />
+            </Field>
+            <Field label="LinkedIn company URL" hint="Optional">
+              <Input value={value.linkedin_url} onChange={(e) => set('linkedin_url', e.target.value)} placeholder="https://linkedin.com/company/agentory" />
+            </Field>
+            <Button size="sm" onClick={onAnalyze} disabled={!canAnalyzeCompany(value) || busy} className="w-full sm:w-auto">
+              {busy ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> : <Search className="mr-1.5 h-4 w-4" />}
+              Analyze company
+            </Button>
+          </div>
+        </PanelCard>
+      </div>
+
+      <PagePreviewChips />
 
       {research && <CompanyFoundCard research={research} linkedin={linkedin} website={value.website_url} />}
     </div>
@@ -519,22 +548,22 @@ function CompanyFoundCard({ research, linkedin, website }: { research: any; link
   const favicon = host ? `https://www.google.com/s2/favicons?domain=${host}&sz=64` : '';
   return (
     <motion.div
-      initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.25 }}
-      className="overflow-hidden rounded-2xl border border-primary/25 bg-gradient-to-b from-primary/[0.06] to-transparent p-5"
+      initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3 }}
+      className="overflow-hidden rounded-2xl border border-primary/25 bg-gradient-to-b from-primary/[0.06] to-transparent p-6 backdrop-blur-sm"
     >
-      <div className="mb-3 flex items-center gap-2 text-[10px] uppercase tracking-[0.18em] text-primary">
-        <Sparkles className="h-3 w-3" /> Read from your site
+      <div className="mb-4 flex items-center gap-2 text-[10px] uppercase tracking-[0.18em] text-primary">
+        <Sparkles className="h-3 w-3" /> Extracted from your site
       </div>
       <div className="flex items-start gap-3">
-        <div className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-lg border border-border/40 bg-muted/40">
+        <div className="flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-xl border border-border/40 bg-muted/40">
           {favicon ? <img src={favicon} alt="" className="h-6 w-6" /> : <Globe className="h-4 w-4 text-muted-foreground" />}
         </div>
         <div className="min-w-0">
-          {research.description && <p className="text-sm text-foreground/90">{research.description}</p>}
+          {research.description && <p className="text-sm text-foreground/95">{research.description}</p>}
           {host && <p className="mt-0.5 text-[11px] text-muted-foreground">{host}</p>}
         </div>
       </div>
-      <div className="mt-4 grid gap-3 sm:grid-cols-2">
+      <div className="mt-5 grid gap-4 sm:grid-cols-2">
         <FieldList label="Business model" values={research.business_model ? [research.business_model] : []} />
         <FieldList label="Integrations" values={research.integrations ?? []} empty="None found" />
         <FieldList label="Proof points" values={research.proof_points ?? []} empty="No verifiable proof found" />
@@ -542,12 +571,6 @@ function CompanyFoundCard({ research, linkedin, website }: { research: any; link
           <FieldList label="LinkedIn" values={[linkedin.industry, linkedin.employee_count].filter(Boolean)} />
         )}
       </div>
-      <div className="mt-4">
-        <FieldList label="Pages read" values={(research.source_pages ?? []).map(shortPath)} empty="None" />
-      </div>
-      {(research.missing_evidence ?? []).length > 0 && (
-        <p className="mt-3 text-xs text-amber-200">Missing evidence: {research.missing_evidence.join(', ')}</p>
-      )}
     </motion.div>
   );
 }
@@ -557,79 +580,168 @@ function CompanyFoundCard({ research, linkedin, website }: { research: any; link
 // ============================================================================
 
 function ResearchStep({
-  busy, founderResearch, companyResearch, onDraft,
+  busy, founder, company, founderResearch, companyResearch, companyLinkedIn, onDraft,
 }: {
-  busy: boolean; founderResearch: any; companyResearch: any; onDraft: () => void;
+  busy: boolean;
+  founder: FounderForm; company: CompanyForm;
+  founderResearch: any; companyResearch: any; companyLinkedIn: any;
+  onDraft: () => void;
 }) {
-  const pages = companyResearch?.source_pages?.length ?? 0;
+  const stages: TimelineStage[] = [
+    {
+      id: 'founder', label: 'Founder research',
+      detail: founderResearch ? `${founderResearch.confidence} confidence` : founder.linkedin_url ? 'Skipped — no consent' : 'Skipped',
+      status: founderResearch ? 'done' : 'skipped',
+    },
+    {
+      id: 'website', label: 'Website research',
+      detail: companyResearch ? `${companyResearch.source_pages?.length ?? 0} page(s) read` : 'Not analyzed',
+      status: companyResearch ? 'done' : company.website_url ? 'pending' : 'skipped',
+    },
+    {
+      id: 'linkedin-co', label: 'LinkedIn company',
+      detail: companyLinkedIn ? `${companyLinkedIn.industry ?? 'read'}` : company.linkedin_url ? 'Not read' : 'Skipped',
+      status: companyLinkedIn ? 'done' : 'skipped',
+    },
+    { id: 'evidence',  label: 'Evidence extraction', detail: 'Pulls category, promise, buyers, proof', status: busy ? 'active' : (founderResearch || companyResearch) ? 'pending' : 'pending' },
+    { id: 'icp',       label: 'ICP hypothesis',      detail: 'Industries, buyers, triggers, disqualifiers', status: busy ? 'active' : 'pending' },
+    { id: 'draft',     label: 'Draft generation',    detail: 'On-voice, evidence-grounded', status: busy ? 'active' : 'pending' },
+  ];
+
+  // Build clean evidence cards from research state
+  const cards: Array<React.ComponentProps<typeof SourceEvidenceCard>> = [];
+
+  if (founderResearch) {
+    cards.push({
+      label: 'Founder profile',
+      path: 'linkedin.com/in/…',
+      status: 'extracted',
+      confidence: (founderResearch.confidence as any) ?? 'medium',
+      bullets: [
+        founderResearch.current_role && `Role: ${founderResearch.current_role}`,
+        founderResearch.current_company && `Company: ${founderResearch.current_company}`,
+        ...(founderResearch.credibility_signals ?? []).slice(0, 2),
+      ].filter(Boolean) as string[],
+    });
+  }
+
+  if (companyResearch) {
+    const pages: string[] = companyResearch.source_pages ?? [];
+    pages.slice(0, 5).forEach((p) => {
+      let path = p; try { path = new URL(p).pathname || '/'; } catch {}
+      const label = pageLabel(path);
+      cards.push({
+        label, path,
+        status: 'extracted' as EvidenceStatus,
+        confidence: 'medium',
+        bullets: pageBullets(companyResearch, label),
+      });
+    });
+    if (pages.length === 0) {
+      cards.push({
+        label: 'Website', status: 'weak', confidence: 'low',
+        bullets: ['Homepage returned no usable content.'],
+      });
+    }
+  } else if (company.website_url) {
+    cards.push({ label: 'Website', path: company.website_url, status: 'skipped', bullets: [] });
+  }
+
+  if (companyLinkedIn) {
+    cards.push({
+      label: 'LinkedIn company', path: 'linkedin.com/company/…',
+      status: 'extracted', confidence: 'medium',
+      bullets: [
+        companyLinkedIn.industry && `Industry: ${companyLinkedIn.industry}`,
+        companyLinkedIn.employee_count && `Employees: ${companyLinkedIn.employee_count}`,
+      ].filter(Boolean) as string[],
+    });
+  }
+
+  if (cards.length === 0) {
+    cards.push(
+      { label: 'Website', status: 'skipped', bullets: [] },
+      { label: 'Founder', status: 'skipped', bullets: [] },
+    );
+  }
+
   return (
-    <div className="space-y-5">
-      <PanelCard
-        icon={<Sparkles className="h-3.5 w-3.5" />}
-        title="Draft your Company Brain"
-        hint="Agentory turns the evidence it read into a draft ICP, buyers, triggers and disqualifiers. It never invents proof — anything it infers is flagged for confirmation."
-      >
+    <div className="grid gap-5 lg:grid-cols-[260px_minmax(0,1fr)]">
+      <ResearchTimeline stages={stages} running={busy} />
+
+      <div className="space-y-4">
         <div className="grid gap-3 sm:grid-cols-2">
-          <SourceTile
-            label="Founder LinkedIn"
-            ok={!!founderResearch}
-            detail={founderResearch ? `${founderResearch.confidence} confidence` : 'Skipped'}
-          />
-          <SourceTile
-            label="Company website"
-            ok={!!companyResearch}
-            detail={companyResearch ? `${pages} page(s) read` : 'Not analyzed'}
-          />
+          {cards.map((c, i) => <SourceEvidenceCard key={`${c.label}-${i}`} {...c} index={i} />)}
         </div>
 
-        <div className="mt-6 flex flex-col items-start gap-3 sm:flex-row sm:items-center">
-          <Button
-            size="lg"
-            onClick={onDraft}
-            disabled={busy}
-            className="min-w-[240px] gap-2 bg-primary text-primary-foreground shadow-[0_0_28px_hsl(var(--primary)/0.4)] hover:bg-primary/90"
-          >
-            {busy
-              ? <><Loader2 className="h-4 w-4 animate-spin" /> Reading evidence… drafting Brain…</>
-              : <><Sparkles className="h-4 w-4" /> Draft my Company Brain</>}
-          </Button>
-          {!companyResearch && !founderResearch && (
-            <p className="text-[11px] text-muted-foreground">
-              No research yet — the draft will be thin and mostly need your confirmation.
-            </p>
+        <motion.div
+          initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.2 }}
+          className="relative overflow-hidden rounded-2xl border border-primary/30 bg-gradient-to-r from-primary/[0.08] via-primary/[0.04] to-transparent p-6 backdrop-blur-sm"
+        >
+          {busy && (
+            <motion.div
+              aria-hidden
+              className="absolute inset-0 opacity-40"
+              style={{ background: 'linear-gradient(90deg, transparent, hsl(var(--primary) / 0.25), transparent)' }}
+              animate={{ x: ['-100%', '100%'] }}
+              transition={{ duration: 1.6, repeat: Infinity, ease: 'linear' }}
+            />
           )}
-        </div>
-      </PanelCard>
+          <div className="relative flex flex-col items-start gap-4 sm:flex-row sm:items-center sm:justify-between">
+            <div className="min-w-0">
+              <p className="text-[10px] uppercase tracking-[0.18em] text-primary">Ready to draft</p>
+              <p className="mt-1 text-lg font-semibold tracking-tight text-foreground">
+                Agentory will turn this evidence into your Brain
+              </p>
+              <p className="mt-1 text-xs text-muted-foreground">
+                Anything inferred without proof is flagged for your confirmation. Never invented.
+              </p>
+            </div>
+            <Button
+              size="lg" onClick={onDraft} disabled={busy}
+              className="min-w-[220px] gap-2 bg-primary text-primary-foreground shadow-[0_0_28px_hsl(var(--primary)/0.4)] hover:bg-primary/90"
+            >
+              {busy
+                ? <><Loader2 className="h-4 w-4 animate-spin" /> Reading evidence…</>
+                : <><Sparkles className="h-4 w-4" /> Draft my Company Brain</>}
+            </Button>
+          </div>
+        </motion.div>
+      </div>
     </div>
   );
 }
 
-function SourceTile({ label, ok, detail }: { label: string; ok: boolean; detail: string }) {
-  return (
-    <div
-      className={[
-        'rounded-xl border p-4 transition-colors',
-        ok ? 'border-primary/40 bg-primary/[0.06]' : 'border-border/50 bg-background/30',
-      ].join(' ')}
-    >
-      <div className="flex items-center justify-between">
-        <span className="text-xs font-medium text-foreground">{label}</span>
-        <span
-          className={[
-            'flex h-5 w-5 items-center justify-center rounded-full border text-primary',
-            ok ? 'border-primary/50 bg-primary/15' : 'border-border/60 bg-muted/30 text-muted-foreground/40',
-          ].join(' ')}
-        >
-          <Check className="h-3 w-3" />
-        </span>
-      </div>
-      <p className="mt-1.5 text-[11px] text-muted-foreground">{detail}</p>
-    </div>
-  );
+function pageLabel(path: string): string {
+  const p = path.toLowerCase();
+  if (p === '/' || p === '') return 'Homepage';
+  if (p.includes('pricing')) return 'Pricing';
+  if (p.includes('feature')) return 'Features';
+  if (p.includes('about')) return 'About';
+  if (p.includes('customer') || p.includes('case')) return 'Customers';
+  if (p.includes('career') || p.includes('job')) return 'Careers';
+  if (p.includes('blog')) return 'Blog';
+  return 'Page';
+}
+function pageBullets(research: any, label: string): string[] {
+  const b: string[] = [];
+  if (label === 'Homepage') {
+    if (research.category) b.push(`Category: ${research.category}`);
+    if (research.description) b.push(research.description);
+  } else if (label === 'Pricing') {
+    (research.pricing_signals ?? []).slice(0, 2).forEach((s: string) => b.push(s));
+  } else if (label === 'Customers') {
+    (research.proof_points ?? []).slice(0, 2).forEach((s: string) => b.push(s));
+  } else if (label === 'Careers') {
+    (research.hiring_signals ?? []).slice(0, 2).forEach((s: string) => b.push(s));
+  }
+  if (b.length === 0 && research.business_model) b.push(`Business model: ${research.business_model}`);
+  if (b.length === 0) b.push('Read successfully — no structured findings surfaced.');
+  return b.slice(0, 4);
 }
 
 // ============================================================================
-// Step 4 — Review
+// Step 4 — Review "Brain Board"
 // ============================================================================
 
 function ReviewStep({
@@ -654,178 +766,124 @@ function ReviewStep({
   };
 
   return (
-    <div className="grid gap-5 md:grid-cols-2">
-      <BrainReviewCard
-        title="Company summary" subtitle="What Agentory thinks you sell"
-        confidence={brain.brain_confidence} sources={sources}
-        needsConfirmation={needs.filter((n) => n.startsWith('company')).length}
-        missing={missingByStep.company?.length ? ['company fields'] : []}
+    <div className="space-y-10">
+      {/* TARGETING */}
+      <BrainSection
+        icon={<Target className="h-4 w-4" />}
+        eyebrow="Targeting"
+        title="Who Agentory will target"
+        subtitle="Powers Leads, Scout Radar and every scoring surface."
       >
-        <p className="text-sm text-foreground/90">{brain.company.description || 'No description yet.'}</p>
-        <FieldList label="Category" values={brain.company.category ? [brain.company.category] : []} />
-        <FieldList label="Business model" values={brain.company.business_model ? [brain.company.business_model] : []} />
-      </BrainReviewCard>
+        <BrainReviewCard
+          title="Company summary" subtitle="What Agentory thinks you sell"
+          confidence={brain.brain_confidence} sources={sources}
+          needsConfirmation={needs.filter((n) => n.startsWith('company')).length}
+          missing={missingByStep.company?.length ? ['company fields'] : []}
+        >
+          <p className="text-sm text-foreground/90">{brain.company.description || 'No description yet.'}</p>
+          <FieldList label="Category" values={brain.company.category ? [brain.company.category] : []} />
+          <FieldList label="Business model" values={brain.company.business_model ? [brain.company.business_model] : []} />
+        </BrainReviewCard>
 
-      <BrainReviewCard
-        title="Ideal customers" subtitle="Who Leads and Scout Radar will target"
-        confidence={brain.brain_confidence} sources={sources}
-        needsConfirmation={needs.filter((n) => n.startsWith('target_customer')).length}
-        missing={missingByStep.customers?.length ? ['industries or business models'] : []}
-        quickActions={QUICK_ACTIONS.filter((a) => ['correct', 'too_broad', 'too_narrow'].includes(a.id))}
-        onQuickAction={onQuickAction}
+        <BrainReviewCard
+          title="Ideal customers" subtitle="Who Leads and Radar will hunt for"
+          confidence={brain.brain_confidence} sources={sources}
+          needsConfirmation={needs.filter((n) => n.startsWith('target_customer')).length}
+          missing={missingByStep.customers?.length ? ['industries or business models'] : []}
+          quickActions={QUICK_ACTIONS.filter((a) => ['correct', 'too_broad', 'too_narrow'].includes(a.id))}
+          onQuickAction={onQuickAction}
+        >
+          <ChipInput label="Industries" values={tc.industries} onChange={setList((b, v) => { b.target_customer.industries = v; })} emptyHelper="Add industries you sell into" />
+          <ChipInput label="Business models" values={tc.business_models} onChange={setList((b, v) => { b.target_customer.business_models = v; })} emptyHelper="Add business models" />
+          <FieldList label="Company size" values={tc.company_size.label ? [tc.company_size.label] : []} />
+          <FieldList label="Geography" values={tc.geography} />
+          <ChipInput label="Must-have traits" values={tc.must_have} onChange={setList((b, v) => { b.target_customer.must_have = v; })} emptyHelper="Add non-negotiable traits" />
+        </BrainReviewCard>
+      </BrainSection>
+
+      {/* SIGNALS */}
+      <BrainSection
+        icon={<Radar className="h-4 w-4" />}
+        eyebrow="Signals"
+        title="When to act"
+        subtitle="Triggers, jobs and tools Scout Radar watches on your behalf."
       >
-        <ChipInput label="Industries" values={tc.industries} onChange={setList((b, v) => { b.target_customer.industries = v; })} />
-        <ChipInput label="Business models" values={tc.business_models} onChange={setList((b, v) => { b.target_customer.business_models = v; })} />
-        <FieldList label="Company size" values={tc.company_size.label ? [tc.company_size.label] : []} />
-        <FieldList label="Geography" values={tc.geography} />
-        <FieldList label="Funding stage" values={tc.funding_stage} />
-        <ChipInput label="Must-have traits" values={tc.must_have} onChange={setList((b, v) => { b.target_customer.must_have = v; })} />
-        <FieldList label="Nice-to-have" values={tc.nice_to_have} />
-      </BrainReviewCard>
+        <BrainReviewCard
+          title="Buyers" subtitle="Who actually signs"
+          confidence={brain.brain_confidence} sources={liSources}
+          needsConfirmation={needs.filter((n) => n.startsWith('buyer')).length}
+          missing={missingByStep.buyers?.length ? ['buyer personas'] : []}
+        >
+          <ChipInput label="Buyer personas" values={brain.buyer_personas} onChange={setList((b, v) => { b.buyer_personas = v; })} emptyHelper="Add roles that hold the budget" />
+          <ChipInput label="Pain points" values={brain.pain_points} onChange={setList((b, v) => { b.pain_points = v; })} emptyHelper="Add the pain your product solves" />
+        </BrainReviewCard>
 
-      <BrainReviewCard
-        title="Buyers" subtitle="Who actually signs"
-        confidence={brain.brain_confidence} sources={liSources}
-        needsConfirmation={needs.filter((n) => n.startsWith('buyer')).length}
-        missing={missingByStep.buyers?.length ? ['buyer personas'] : []}
+        <BrainReviewCard
+          title="Buying triggers" subtitle="What makes now the right moment"
+          confidence={brain.brain_confidence} sources={sources}
+          missing={missingByStep.triggers?.length ? ['a trigger or job to watch'] : []}
+          quickActions={QUICK_ACTIONS.filter((a) => a.id === 'require_proof')}
+          onQuickAction={onQuickAction}
+        >
+          <ChipInput label="Triggers" values={brain.triggers} onChange={setList((b, v) => { b.triggers = v; })} emptyHelper="e.g. new funding, exec hire" />
+          <ChipInput label="Jobs to watch" values={brain.jobs_to_watch} onChange={setList((b, v) => { b.jobs_to_watch = v; })} emptyHelper="Job titles that signal intent" />
+          <FieldList label="Tools to watch" values={brain.tools} />
+          <FieldList label="Competitor activity" values={brain.competitors} />
+        </BrainReviewCard>
+      </BrainSection>
+
+      {/* MESSAGING */}
+      <BrainSection
+        icon={<MessageSquare className="h-4 w-4" />}
+        eyebrow="Messaging"
+        title="How Agentory should speak"
+        subtitle="Voice, angles and positioning for Content and Outreach."
       >
-        <ChipInput label="Buyer personas" values={brain.buyer_personas} onChange={setList((b, v) => { b.buyer_personas = v; })} />
-        <ChipInput label="Pain points" values={brain.pain_points} onChange={setList((b, v) => { b.pain_points = v; })} />
-      </BrainReviewCard>
+        <BrainReviewCard
+          title="Positioning & voice"
+          confidence={brain.brain_confidence} sources={sources}
+          needsConfirmation={needs.filter((n) => n.startsWith('positioning')).length}
+          missing={missingByStep.content?.length ? ['a pain point or content angle'] : []}
+        >
+          <FieldList label="Promise" values={brain.positioning.promise ? [brain.positioning.promise] : []} />
+          <FieldList label="Differentiators" values={brain.positioning.differentiators} />
+          <ChipInput label="Content angles" values={brain.content_angles} onChange={setList((b, v) => { b.content_angles = v; })} emptyHelper="Add narrative angles" />
+          <FieldList label="Tone" values={brain.brand_voice.tone ? [brain.brand_voice.tone] : []} />
+        </BrainReviewCard>
 
-      <BrainReviewCard
-        title="Buying triggers" subtitle="What makes now the right moment"
-        confidence={brain.brain_confidence} sources={sources}
-        missing={missingByStep.triggers?.length ? ['a trigger or job to watch'] : []}
-        quickActions={QUICK_ACTIONS.filter((a) => a.id === 'require_proof')}
-        onQuickAction={onQuickAction}
+        <BrainReviewCard title="Good & bad fit examples" subtitle="Concrete companies train the scorer faster than rules" sources={[]}>
+          <ChipInput label="Good-fit companies" values={brain.positive_examples} onChange={setList((b, v) => { b.positive_examples = v; })} emptyHelper="Add companies that would love you" />
+          <ChipInput label="Bad-fit companies" values={brain.negative_examples} onChange={setList((b, v) => { b.negative_examples = v; })} emptyHelper="Add companies to avoid" />
+        </BrainReviewCard>
+      </BrainSection>
+
+      {/* SAFETY */}
+      <BrainSection
+        icon={<Shield className="h-4 w-4" />}
+        eyebrow="Safety"
+        title="What Agentory will never do"
+        subtitle="Disqualifiers are enforced before anything reaches you or a prospect."
       >
-        <ChipInput label="Triggers" values={brain.triggers} onChange={setList((b, v) => { b.triggers = v; })} />
-        <ChipInput label="Jobs to watch" values={brain.jobs_to_watch} onChange={setList((b, v) => { b.jobs_to_watch = v; })} />
-        <FieldList label="Tools to watch" values={brain.tools} />
-        <FieldList label="Competitor activity" values={brain.competitors} />
-      </BrainReviewCard>
+        <BrainReviewCard
+          title="Never target these"
+          confidence={brain.brain_confidence} sources={[]}
+          missing={missingByStep.disqualifiers?.length ? ['at least one disqualifier'] : []}
+          quickActions={QUICK_ACTIONS.filter((a) => ['never_target', 'add_bad_fit'].includes(a.id))}
+          onQuickAction={onQuickAction}
+        >
+          <ChipInput label="Industries to avoid" values={disq.industries} onChange={setList((b, v) => { b.target_customer.disqualifiers.industries = v; })} emptyHelper="Add industries Agentory should skip" />
+          <ChipInput label="Company types to avoid" values={disq.company_types} onChange={setList((b, v) => { b.target_customer.disqualifiers.company_types = v; })} emptyHelper="e.g. agencies, freelancers" />
+          <ChipInput label="Keywords to avoid" values={disq.keywords} onChange={setList((b, v) => { b.target_customer.disqualifiers.keywords = v; })} emptyHelper="Words that mean 'not a fit'" />
+        </BrainReviewCard>
 
-      <BrainReviewCard
-        title="Never target these" subtitle="Disqualifiers are enforced before anything reaches you"
-        confidence={brain.brain_confidence} sources={[]}
-        missing={missingByStep.disqualifiers?.length ? ['at least one disqualifier'] : []}
-        quickActions={QUICK_ACTIONS.filter((a) => ['never_target', 'add_bad_fit'].includes(a.id))}
-        onQuickAction={onQuickAction}
-      >
-        <ChipInput label="Industries to avoid" values={disq.industries} onChange={setList((b, v) => { b.target_customer.disqualifiers.industries = v; })} />
-        <ChipInput label="Company types to avoid" values={disq.company_types} onChange={setList((b, v) => { b.target_customer.disqualifiers.company_types = v; })} />
-        <ChipInput label="Keywords to avoid" values={disq.keywords} onChange={setList((b, v) => { b.target_customer.disqualifiers.keywords = v; })} />
-        <FieldList label="Titles to avoid" values={disq.titles} />
-        <FieldList label="Domains to avoid" values={disq.domains} />
-      </BrainReviewCard>
-
-      <BrainReviewCard title="Good fit / bad fit examples" subtitle="Concrete companies teach the scorer faster than rules" sources={[]}>
-        <ChipInput label="Good-fit companies" values={brain.positive_examples} onChange={setList((b, v) => { b.positive_examples = v; })} />
-        <ChipInput label="Bad-fit companies" values={brain.negative_examples} onChange={setList((b, v) => { b.negative_examples = v; })} />
-      </BrainReviewCard>
-
-      <BrainReviewCard
-        title="Content & positioning" subtitle="Voice for Content and Outreach"
-        confidence={brain.brain_confidence} sources={sources}
-        needsConfirmation={needs.filter((n) => n.startsWith('positioning')).length}
-        missing={missingByStep.content?.length ? ['a pain point or content angle'] : []}
-      >
-        <FieldList label="Promise" values={brain.positioning.promise ? [brain.positioning.promise] : []} />
-        <FieldList label="Differentiators" values={brain.positioning.differentiators} />
-        <ChipInput label="Content angles" values={brain.content_angles} onChange={setList((b, v) => { b.content_angles = v; })} />
-        <FieldList label="Tone" values={brain.brand_voice.tone ? [brain.brand_voice.tone] : []} />
-        <FieldList label="Banned claims" values={[...brain.positioning.avoid_positioning, ...brain.brand_voice.avoid]} empty="None set" />
-      </BrainReviewCard>
-
-      <BrainReviewCard title="Qualification rules" subtitle="Evidence required before a lead is trusted" sources={[]}>
-        <ChipInput label="Required evidence" values={brain.qualification_rules.required_evidence} onChange={setList((b, v) => { b.qualification_rules.required_evidence = v; })} />
-        <ChipInput label="Reject if" values={brain.qualification_rules.reject_if} onChange={setList((b, v) => { b.qualification_rules.reject_if = v; })} />
-        <FieldList label="Manual review if" values={brain.qualification_rules.manual_review_if} />
-      </BrainReviewCard>
+        <BrainReviewCard title="Qualification rules" subtitle="Evidence required before a lead is trusted" sources={[]}>
+          <ChipInput label="Required evidence" values={brain.qualification_rules.required_evidence} onChange={setList((b, v) => { b.qualification_rules.required_evidence = v; })} emptyHelper="Add proof Agentory must verify" />
+          <ChipInput label="Reject if" values={brain.qualification_rules.reject_if} onChange={setList((b, v) => { b.qualification_rules.reject_if = v; })} emptyHelper="Auto-reject conditions" />
+          <FieldList label="Manual review if" values={brain.qualification_rules.manual_review_if} />
+          <FieldList label="Banned claims" values={[...brain.positioning.avoid_positioning, ...brain.brand_voice.avoid]} empty="None set" />
+        </BrainReviewCard>
+      </BrainSection>
     </div>
-  );
-}
-
-// ============================================================================
-// Step 5 — Activate
-// ============================================================================
-
-function ActivateStep({ completeness }: { completeness: CompletenessResult }) {
-  return (
-    <div className="space-y-6">
-      <div
-        className="relative overflow-hidden rounded-2xl border border-border/50 bg-gradient-to-b from-primary/[0.08] via-card/40 to-card/40 p-8 text-center backdrop-blur-md"
-      >
-        <div
-          aria-hidden
-          className="pointer-events-none absolute inset-0 opacity-60"
-          style={{ background: 'radial-gradient(400px 200px at 50% 0%, hsl(var(--primary) / 0.18), transparent 60%)' }}
-        />
-        <div className="relative">
-          <div className="mb-5 flex justify-center">
-            <CompletenessRing value={completeness.percent} size={168} caption="Complete" />
-          </div>
-          <h2 className="text-2xl font-semibold tracking-tight">
-            {completeness.complete ? 'Your Company Brain is ready.' : 'Almost there.'}
-          </h2>
-          <p className="mx-auto mt-2 max-w-md text-sm text-muted-foreground">
-            {completeness.complete
-              ? 'Activate to let Leads, Scout Radar, Content, Agents and Outreach use it.'
-              : 'Fill the remaining required fields to activate. You can save a draft and finish later.'}
-          </p>
-          <div className="mt-4 inline-flex items-center gap-2">
-            <Badge
-              variant="outline"
-              className="gap-1 rounded-full border-primary/40 bg-primary/10 px-2.5 py-0.5 text-[10px] uppercase tracking-[0.16em] text-primary"
-            >
-              {completeness.confidence} confidence
-            </Badge>
-            <span className="text-[11px] text-muted-foreground">
-              {completeness.required_met}/{completeness.required_total} required
-            </span>
-          </div>
-        </div>
-      </div>
-
-      {completeness.missing.length > 0 && (
-        <div className="rounded-2xl border border-amber-500/30 bg-amber-500/[0.04] p-5">
-          <h3 className="mb-2 text-[10px] font-semibold uppercase tracking-[0.18em] text-amber-300">Still missing</h3>
-          <ul className="grid gap-1.5 sm:grid-cols-2">
-            {completeness.missing.map((m) => (
-              <li key={m} className="text-xs text-amber-100/90">• {m}</li>
-            ))}
-          </ul>
-        </div>
-      )}
-
-      <div className="rounded-2xl border border-border/50 bg-card/40 p-5 backdrop-blur-sm">
-        <h3 className="mb-3 text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">What this powers</h3>
-        <div className="grid gap-3 sm:grid-cols-2">
-          {BRAIN_POWERS.map((p) => (
-            <div key={p.key} className="rounded-xl border border-border/40 bg-background/30 p-3">
-              <p className="text-sm font-medium text-foreground">{p.label}</p>
-              <p className="mt-0.5 text-[11px] text-muted-foreground">{p.blurb}</p>
-            </div>
-          ))}
-        </div>
-      </div>
-
-      <div className="flex flex-wrap items-center gap-2">
-        <ReassurancePill icon={<ShieldCheck className="h-3 w-3" />} text="No outreach sent" />
-        <ReassurancePill icon={<ShieldCheck className="h-3 w-3" />} text="No Scout Radar scan started" />
-        <ReassurancePill icon={<ShieldCheck className="h-3 w-3" />} text="You stay in control" />
-      </div>
-    </div>
-  );
-}
-
-function ReassurancePill({ icon, text }: { icon: React.ReactNode; text: string }) {
-  return (
-    <span className="inline-flex items-center gap-1.5 rounded-full border border-border/50 bg-background/40 px-2.5 py-1 text-[11px] text-muted-foreground">
-      <span className="text-primary">{icon}</span>
-      {text}
-    </span>
   );
 }
 
@@ -837,14 +895,19 @@ function PanelCard({
   icon, title, hint, children,
 }: { icon: React.ReactNode; title: string; hint?: string; children: React.ReactNode }) {
   return (
-    <section className="rounded-2xl border border-border/50 bg-card/40 p-6 backdrop-blur-sm shadow-[0_1px_0_hsl(var(--border))_inset]">
+    <section className="group relative overflow-hidden rounded-2xl border border-border/50 bg-card/40 p-6 shadow-[0_20px_60px_-30px_hsl(var(--primary)/0.2)] backdrop-blur-xl transition-colors hover:border-border">
+      <div
+        aria-hidden
+        className="pointer-events-none absolute inset-x-0 top-0 h-px opacity-0 transition-opacity group-hover:opacity-100"
+        style={{ background: 'linear-gradient(to right, transparent, hsl(var(--primary) / 0.6), transparent)' }}
+      />
       <header className="mb-5 flex items-start gap-3">
-        <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-primary/30 bg-primary/10 text-primary">
+        <div className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-primary/30 bg-primary/10 text-primary shadow-[0_0_16px_hsl(var(--primary)/0.15)]">
           {icon}
         </div>
         <div className="min-w-0">
-          <h2 className="text-sm font-semibold tracking-tight text-foreground">{title}</h2>
-          {hint && <p className="mt-0.5 text-xs text-muted-foreground">{hint}</p>}
+          <h2 className="text-base font-semibold tracking-tight text-foreground">{title}</h2>
+          {hint && <p className="mt-0.5 text-xs leading-relaxed text-muted-foreground">{hint}</p>}
         </div>
       </header>
       {children}
@@ -855,18 +918,14 @@ function PanelCard({
 function Field({ label, hint, required, children }: { label: string; hint?: string; required?: boolean; children: React.ReactNode }) {
   return (
     <div className="space-y-1.5">
-      <Label className="text-xs text-foreground/90">
+      <Label className="text-[11px] uppercase tracking-[0.12em] text-muted-foreground">
         {label}
         {required && <span className="ml-0.5 text-destructive">*</span>}
-        {hint && <span className="ml-1.5 font-normal text-muted-foreground">{hint}</span>}
+        {hint && <span className="ml-1.5 normal-case tracking-normal text-muted-foreground/60">{hint}</span>}
       </Label>
       {children}
     </div>
   );
-}
-
-function shortPath(u: string): string {
-  try { return new URL(u).pathname || '/'; } catch { return u; }
 }
 
 /** Project a normalized Brain back onto a raw profile patch for previewing. */
