@@ -9,9 +9,10 @@
 // `selectPages` + `extractFromPages` are pure → fixture-tested, no network.
 
 import {
-  type CompanyWebsiteResearch, type FirecrawlPage, type ResearchDeps,
-  asString, uniq, confidenceFrom, isHttpUrl,
+  type CompanyWebsiteResearch, type CompanyUnderstanding, type FirecrawlPage, type ResearchDeps,
+  isHttpUrl,
 } from "./types.ts";
+import { buildCompanyUnderstanding } from "./companyUnderstanding.ts";
 
 /** Hard ceiling on pages fetched during onboarding (spec: 8–12). */
 export const MAX_PAGES = 10;
@@ -55,74 +56,55 @@ export function selectPages(homepage: string, mapped: string[], max = MAX_PAGES)
   return out;
 }
 
-function pathLabel(url: string): string {
-  for (const { re, label } of PRIORITY_PATHS) if (re.test(url)) return label;
-  return "homepage";
-}
-
-const BUSINESS_MODEL_RE = /\b(b2b saas|saas|b2b|b2c|marketplace|api|open source|self-serve|enterprise|subscription|usage-based)\b/i;
-const PRICING_RE = /\$\s?\d|\bper (?:month|seat|user)\b|\/mo\b|\bfree trial\b|\bpricing\b|\bstarts at\b/i;
-const INTEGRATION_RE = /\bintegrat(?:es|ion)s? with\b|\bconnects? to\b/i;
-const PROOF_RE = /\b\d+(?:\.\d+)?\s?(?:x|%|hours?|customers?|users?|teams?)\b/i;
-const HIRING_RE = /\b(we'?re hiring|open roles?|join (?:the|our) team|careers)\b/i;
-
-function sentences(md: string): string[] {
-  return md.replace(/[#*>`\-]/g, " ").split(/(?<=[.!?])\s+|\n+/).map((s) => s.trim()).filter((s) => s.length > 20 && s.length < 240);
-}
-
-/** Extract structured company facts from already-fetched pages. Pure. */
+/**
+ * Extract structured company facts from already-fetched pages.
+ *
+ * Delegates the hard part to `buildCompanyUnderstanding`, which classifies each
+ * page and only lets the right page types inform the right fields. This is what
+ * stops a blog post or a customer story from defining the product.
+ *
+ * Pure — no network.
+ */
 export function extractFromPages(
   pages: FirecrawlPage[],
   input: { websiteUrl: string; nameHint?: string; descriptionHint?: string },
 ): CompanyWebsiteResearch {
-  const source_pages = uniq(pages.map((p) => p.url).filter(Boolean));
-  const home = pages[0];
-  const allText = pages.map((p) => asString(p.markdown)).join("\n");
-  const byLabel = (label: string) => pages.filter((p) => pathLabel(p.url) === label);
+  const u = buildCompanyUnderstanding(pages, input);
 
-  const company_name = asString(input.nameHint) || asString(home?.title).split(/[|\-–—]/)[0].trim();
-  const description = asString(input.descriptionHint) || asString(home?.description) || sentences(asString(home?.markdown))[0] || "";
+  // Careers pages contribute hiring signals ONLY — never ICP or product.
+  const careers_signal = u.evidence
+    .filter((e) => e.page_type === "careers")
+    .flatMap((e) => e.extracted_facts)
+    .slice(0, 4);
 
-  const bmMatch = allText.match(BUSINESS_MODEL_RE);
-  const business_model = bmMatch ? bmMatch[0] : "";
-
-  const pricingPages = byLabel("pricing");
-  const pricing_signal = pricingPages.length
-    ? (sentences(asString(pricingPages[0].markdown)).find((s) => PRICING_RE.test(s)) ?? "pricing page present")
-    : "";
-
-  const features = uniq(byLabel("features").concat(byLabel("solutions")).flatMap((p) => sentences(asString(p.markdown)).slice(0, 6)));
-  const use_cases = uniq(byLabel("solutions").concat(byLabel("case-studies")).flatMap((p) => sentences(asString(p.markdown)).slice(0, 4)));
-  const customers_or_segments = uniq(byLabel("customers").concat(byLabel("case-studies")).flatMap((p) => sentences(asString(p.markdown)).slice(0, 4)));
-  const integrations = uniq(sentences(allText).filter((s) => INTEGRATION_RE.test(s)).slice(0, 6));
-  const positioning_claims = uniq(sentences(asString(home?.markdown)).slice(0, 4));
-  const proof_points = uniq(sentences(allText).filter((s) => PROOF_RE.test(s)).slice(0, 6));
-  const careers_signal = uniq(byLabel("careers").flatMap((p) => sentences(asString(p.markdown)).filter((s) => HIRING_RE.test(s)).slice(0, 4)));
-
-  const missing_evidence: string[] = [];
-  if (!pricingPages.length) missing_evidence.push("pricing page");
-  if (!byLabel("customers").length && !byLabel("case-studies").length) missing_evidence.push("customer / case-study proof");
-  if (!byLabel("about").length) missing_evidence.push("about page");
-  if (!business_model) missing_evidence.push("business model");
-  if (!description) missing_evidence.push("company description");
-
-  const signals = [company_name, description, business_model, pricing_signal].filter(Boolean).length
-    + (features.length ? 1 : 0) + (customers_or_segments.length ? 1 : 0)
-    + (proof_points.length ? 1 : 0) + (integrations.length ? 1 : 0);
+  // Customer/case-study pages may name segments, but never the category.
+  const customers_or_segments = u.evidence
+    .filter((e) => e.page_type === "customers" || e.page_type === "case_study")
+    .flatMap((e) => e.extracted_facts)
+    .slice(0, 6);
 
   return {
-    company_name,
-    website: input.websiteUrl,
-    description,
-    // Category is an inference, not a read fact — left to the AI draft step with evidence.
-    product_category: "",
-    business_model,
-    target_users_guess: [],
-    features, use_cases, pricing_signal, customers_or_segments, integrations,
-    positioning_claims, proof_points, careers_signal,
-    source_pages,
-    confidence: confidenceFrom(signals, missing_evidence.length),
-    missing_evidence,
+    company_name: u.company_name,
+    website: u.website,
+    description: u.one_line_summary,
+    product_category: u.product_category,
+    business_model: u.business_model,
+    target_users_guess: u.primary_users,
+    features: u.key_features,
+    use_cases: u.primary_use_cases,
+    pricing_signal: u.pricing_signal,
+    customers_or_segments,
+    integrations: u.integrations,
+    positioning_claims: u.main_promise ? [u.main_promise] : [],
+    proof_points: u.proof_points,
+    careers_signal,
+    source_pages: u.evidence.map((e) => e.source_url),
+    confidence: u.confidence,
+    missing_evidence: u.missing_evidence,
+    evidence: u.evidence,
+    understanding: u,
+    ambiguous: u.ambiguous,
+    needs_confirmation: u.needs_confirmation,
   };
 }
 

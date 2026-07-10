@@ -10,6 +10,72 @@
 
 export type ResearchConfidence = "low" | "medium" | "high";
 
+/** How a fetched page was classified. Drives what it is allowed to inform. */
+export type PageType =
+  | "homepage" | "pricing" | "features" | "use_cases" | "customers"
+  | "case_study" | "about" | "blog" | "careers" | "docs" | "unrelated";
+
+/**
+ * Display-ready evidence for one page. The review UI renders these as cards
+ * instead of a soup of chips, and the user can see *why* a page was trusted
+ * for one field and ignored for another.
+ */
+export interface SourceEvidence {
+  source_url: string;
+  page_type: PageType;
+  title: string;
+  /** Concrete strings we actually read off this page. */
+  extracted_facts: string[];
+  /** Brain fields this page was allowed to inform. */
+  used_for: string[];
+  /** Brain fields this page was deliberately NOT allowed to inform. */
+  ignored_for: string[];
+  confidence: ResearchConfidence;
+  /** Plain-English justification, shown under the card. */
+  reason: string;
+}
+
+/**
+ * A clean "what is this company" pass that runs BEFORE any ICP inference.
+ * Getting the product wrong poisons every downstream field, so this stage is
+ * conservative and reports ambiguity rather than guessing.
+ */
+export interface CompanyUnderstanding {
+  company_name: string;
+  website: string;
+  one_line_summary: string;
+  product_category: string;
+  business_model: string;
+  primary_users: string[];
+  primary_use_cases: string[];
+  key_features: string[];
+  main_promise: string;
+  pricing_signal: string;
+  proof_points: string[];
+  integrations: string[];
+  evidence: SourceEvidence[];
+  confidence: ResearchConfidence;
+  missing_evidence: string[];
+  /** True when the site's signals conflict or are too thin to commit. */
+  ambiguous: boolean;
+  /** Fields the user must confirm before we treat them as fact. */
+  needs_confirmation: string[];
+}
+
+/** A buyer persona hypothesis. Never asserted as fact without confirmation. */
+export interface BuyerPersona {
+  title: string;
+  role_keywords: string[];
+  department: string;
+  seniority: string;
+  pains: string[];
+  cares_about: string[];
+  likely_objection: string;
+  outreach_angle: string;
+  confidence: ResearchConfidence;
+  needs_confirmation: boolean;
+}
+
 export type ResearchSourceType =
   | "founder_linkedin"
   | "company_website"
@@ -94,6 +160,13 @@ export interface CompanyWebsiteResearch {
   source_pages: string[];
   confidence: ResearchConfidence;
   missing_evidence: string[];
+  /** Display-ready, per-page evidence cards (Research Quality v2). */
+  evidence: SourceEvidence[];
+  /** The clean "what is this company" pass that ran before ICP inference. */
+  understanding: CompanyUnderstanding;
+  /** True when the site's signals conflict or are too thin to commit. */
+  ambiguous: boolean;
+  needs_confirmation: string[];
 }
 
 export interface CompanyLinkedInResearch {
@@ -147,7 +220,10 @@ export interface BrainDraft {
   company: Record<string, unknown>;
   founder: Record<string, unknown>;
   target_customer: Record<string, unknown>;
+  /** Persona titles — the shape CompanyBrainV2 stores. */
   buyer_personas: string[];
+  /** Rich persona hypotheses (Research Quality v2). Additive. */
+  buyer_persona_profiles: BuyerPersona[];
   triggers: string[];
   jobs_to_watch: string[];
   competitors: string[];
@@ -163,6 +239,10 @@ export interface BrainDraft {
   missing_fields: string[];
   /** Fields the model inferred with weak support — UI must ask the user. */
   needs_confirmation: string[];
+  /** Per-page evidence cards, so the UI can separate facts from guesses. */
+  source_evidence: SourceEvidence[];
+  /** Claims the repair pass removed because no source supported them. */
+  dropped_claims: string[];
 }
 
 // ---------------------------------------------------------------- helpers ---
@@ -197,6 +277,95 @@ export function confidenceFrom(signals: number, missing: number): ResearchConfid
   if (signals >= 5 && missing === 0) return "high";
   if (signals >= 3 && missing <= 2) return "medium";
   return "low";
+}
+
+// -------------------------------------------------------- strict confidence --
+
+export interface ConfidenceInputs {
+  /** Distinct PRODUCT-DEFINING pages read (homepage/features/pricing/use_cases/about). */
+  strongPages: number;
+  /** The user typed a company description we can corroborate against. */
+  hasUserInput: boolean;
+  /** Extracted facts disagree (e.g. two different product categories). */
+  conflicts: boolean;
+  /** Count of evidence gaps. */
+  missingEvidence: number;
+  /** Only the homepage was read — never enough for "high". */
+  onlyHomepage: boolean;
+  /** No source page at all — the field is pure inference. */
+  noSourceProof?: boolean;
+}
+
+/**
+ * The single place confidence is graded. Deliberately hard to reach "high":
+ * it requires MULTIPLE strong pages agreeing, no conflicts, nothing missing,
+ * and more than just a homepage. Everything else is medium or low.
+ */
+export function gradeConfidence(i: ConfidenceInputs): ResearchConfidence {
+  if (i.noSourceProof || i.strongPages === 0) return "low";
+  if (i.conflicts) return "low";
+
+  const canBeHigh =
+    i.strongPages >= 2 &&
+    !i.onlyHomepage &&
+    i.missingEvidence === 0 &&
+    !i.conflicts;
+  if (canBeHigh) return "high";
+
+  // One strong page corroborated by the user's own description, or two strong
+  // pages with some gaps → medium.
+  if ((i.strongPages >= 1 && i.hasUserInput) || i.strongPages >= 2) return "medium";
+  return "low";
+}
+
+/** Never let a caller claim more confidence than the evidence supports. */
+export function capConfidence(claimed: ResearchConfidence, ceiling: ResearchConfidence): ResearchConfidence {
+  const rank: Record<ResearchConfidence, number> = { low: 0, medium: 1, high: 2 };
+  return rank[claimed] <= rank[ceiling] ? claimed : ceiling;
+}
+
+// ------------------------------------------------------------- sanitizing ---
+
+// Model output routinely contains glued chips ("FoundersSales leaders"),
+// bullet residue, quotes and stray punctuation. Clean before anything is shown.
+//
+// Splitting camelCase is dangerous: "RevOps" and "HubSpot" are real words, not
+// two glued ones. So we protect known compounds and only split a boundary whose
+// left-hand segment is long enough to be a word in its own right.
+const PROTECTED_COMPOUNDS = new Set([
+  "revops", "salesops", "marketingops", "devops", "devrel", "bizops",
+  "github", "gitlab", "hubspot", "linkedin", "youtube", "paypal", "shopify",
+  "saas", "iaas", "paas", "openai", "postgresql", "mysql", "javascript", "typescript",
+]);
+
+const MIN_SPLIT_LEFT = 5; // "Founders" splits; "Rev" (in RevOps) never does.
+
+function splitGlued(s: string): string {
+  if (PROTECTED_COMPOUNDS.has(s.toLowerCase())) return s;
+  return s.replace(/([a-z])([A-Z])/g, (m, a: string, b: string, offset: number) => {
+    const leftLen = offset + 1; // chars before the boundary within this token
+    return leftLen >= MIN_SPLIT_LEFT ? `${a} ${b}` : m;
+  });
+}
+
+/** Clean one chip: trim bullets/quotes, split glued words, collapse spaces. */
+export function cleanChip(v: unknown): string {
+  const s = asString(v)
+    .replace(/^[\s"'`•\-–—*·]+|[\s"'`•\-–—*·]+$/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+  if (!s) return "";
+  // Split token-by-token so offsets are local to each word.
+  return s.split(" ").map(splitGlued).join(" ").replace(/\s+/g, " ").trim();
+}
+
+/**
+ * Clean + drop empties + dedupe (case-insensitive), preserving order.
+ * Only arrays and strings are chip sources — a bare number or object is not.
+ */
+export function cleanChips(v: unknown): string[] {
+  const raw: unknown[] = Array.isArray(v) ? v : (typeof v === "string" && v.trim() ? [v] : []);
+  return uniq(raw.map(cleanChip).filter((s) => s.length > 1));
 }
 
 export function isHttpUrl(u: unknown): boolean {
