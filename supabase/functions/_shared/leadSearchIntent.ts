@@ -26,6 +26,9 @@ export interface LeadSearchIntent {
 
   locations: string[];
   location_groups: string[];   // e.g. "US", "EU" — expanded by the query builder
+  /** True when the user explicitly named a geography — it is a HARD filter and
+   *  must NOT be silently relaxed to a wider region. */
+  location_explicit: boolean;
 
   company_size_preference?: CompanySizePreference;
 
@@ -59,11 +62,19 @@ const DEFAULT_DISQUALIFIERS = [
   "staffing agency", "oil", "mining", "logistics", "construction",
 ];
 
-// Category detection (most-specific first).
+// Category detection (most-specific first). Not SaaS-only: an ecommerce brand or
+// a recruitment agency is a valid target and must resolve to a real category
+// instead of falling through to a generic keyword search.
 const CATEGORY_PATTERNS: Array<{ re: RegExp; canonical: string; adds: string[] }> = [
   { re: /\bai\s*saas\b|\bai\s+software\b/i, canonical: "AI SaaS", adds: ["B2B SaaS", "software"] },
   { re: /\bai\s+(startups?|compan)/i, canonical: "AI SaaS", adds: ["B2B SaaS", "software"] },
   { re: /\bb2b\s*saas\b/i, canonical: "B2B SaaS", adds: ["software"] },
+  { re: /\bfintech\b/i, canonical: "fintech", adds: ["financial software"] },
+  { re: /\bhealth\s*tech\b|\bhealthtech\b/i, canonical: "healthtech", adds: ["healthcare software"] },
+  { re: /\b(recruit(ing|ment)|staffing)\s+(agenc|firm|business)/i, canonical: "recruitment agency", adds: ["staffing"] },
+  { re: /\bmarketing\s+agenc/i, canonical: "marketing agency", adds: ["agency"] },
+  { re: /\becommerce\b|\be-commerce\b|\bonline\s+(store|retail|brand)|\bdtc\b|\bd2c\b/i, canonical: "ecommerce", adds: ["retail", "consumer brand"] },
+  { re: /\bmarketplace\b/i, canonical: "marketplace", adds: [] },
   { re: /\bsaas\b/i, canonical: "SaaS", adds: ["software"] },
   { re: /\bsoftware\b/i, canonical: "software", adds: [] },
 ];
@@ -74,12 +85,17 @@ const ROLE_PATTERNS: Array<{ re: RegExp; terms: string[] }> = [
   { re: /\bfounding\s+sdr\b/i, terms: ["Founding SDR", "Sales Development Representative"] },
   { re: /\bsdr'?s?\b|\bsales development\b/i, terms: ["SDR", "Sales Development Representative"] },
   { re: /\bbdr'?s?\b|\bbusiness development rep/i, terms: ["BDR", "Business Development Representative"] },
-  { re: /\baccount executive'?s?\b|\bae'?s?\b/i, terms: ["Account Executive"] },
-  { re: /\brev\s*ops\b|\brevenue operations\b/i, terms: ["Revenue Operations", "RevOps"] },
-  { re: /\bsales ops\b|\bsales operations\b/i, terms: ["Sales Operations"] },
+  { re: /\baccount executive'?s?\b|\bae'?s?\b/i, terms: ["Account Executive", "Sales Executive"] },
+  { re: /\brev\s*ops\b|\brevenue operations\b/i, terms: ["Revenue Operations", "RevOps", "GTM Operations"] },
+  // Sales Operations expands to the adjacent GTM-ops family (recall without drift).
+  { re: /\bsales ops\b|\bsales operations\b/i, terms: ["Sales Operations", "RevOps", "Revenue Operations", "GTM Operations"] },
   { re: /\bhead of (sales|revenue|growth)\b/i, terms: ["Head of Sales", "Head of Revenue", "Head of Growth"] },
   { re: /\bvp (of )?(sales|revenue|growth)\b/i, terms: ["VP Sales", "VP Revenue", "VP Growth"] },
   { re: /\bgtm\b|\bgo-?to-?market\b/i, terms: ["GTM Lead", "Go-to-Market"] },
+  // Non-sales roles so recruitment/ecommerce ICPs resolve real hiring signals.
+  { re: /\b(engineering|technical|tech)\s+recruiters?\b/i, terms: ["Engineering Recruiter", "Technical Recruiter"] },
+  { re: /\brecruiters?\b|\btalent acquisition\b/i, terms: ["Recruiter", "Talent Acquisition"] },
+  { re: /\blifecycle\s+(marketer|marketing)\b/i, terms: ["Lifecycle Marketing", "CRM Marketing", "Retention Marketing"] },
   { re: /\bgrowth\b/i, terms: ["Growth Lead"] },
 ];
 
@@ -167,6 +183,10 @@ export function extractLeadSearchIntent(opts: { message: string; brain?: BrainFo
   const funding_preferred = !funding_required && /\bideally funded\b|\bpreferably funded\b|\bbonus if funded\b/i.test(message);
 
   const loc = detectLocations(message);
+  // A geography named in THIS prompt is explicit (a hard filter). Brain-backfilled
+  // geography is not — it may be relaxed. "anywhere/global/worldwide" opts out.
+  const globalOptOut = /\b(anywhere|global(ly)?|worldwide|any (location|region|geo)|location[- ]agnostic)\b/i.test(message);
+  const location_explicit = !globalOptOut && (loc.groups.length > 0 || loc.locations.length > 0);
   // Brain geography backfill.
   if (loc.groups.length === 0 && loc.locations.length === 0 && brain?.geography) {
     const g = Array.isArray(brain.geography) ? brain.geography : [brain.geography];
@@ -175,11 +195,24 @@ export function extractLeadSearchIntent(opts: { message: string; brain?: BrainFo
 
   const company_size_preference = sizeFromText(message, brain?.company_size);
 
+  // The user may EXPLICITLY target a category that is normally excluded (e.g.
+  // "find recruitment agencies"). In that case the matching disqualifiers must
+  // be dropped — never sabotage the exact search the user asked for. This
+  // honours the priority order: explicit user prompt > brain/default safety.
+  const targetsRecruiting = /\b(recruit(ing|ment)|staffing)\s+(agenc|firm|business|compan)|\b(recruit(ing|ment)|staffing)\s+(agenc|firm)|\bstaffing\b.*\bagenc/i.test(message);
+  const targetsAgency = /\b(agenc(y|ies))\b/i.test(message);
+  const dropForTarget = (term: string): boolean => {
+    const t = term.toLowerCase();
+    if (targetsRecruiting && /(recruit|staffing)/.test(t)) return true;
+    if (targetsAgency && /\bagenc/.test(t)) return true;
+    return false;
+  };
+
   const hard_disqualifiers = [...new Set([
     ...(brain?.disqualifiers ?? []),
     ...(brain?.excluded_industries ?? []),
     ...((brain?.disqualifiers?.length || brain?.excluded_industries?.length) ? [] : DEFAULT_DISQUALIFIERS),
-  ])];
+  ])].filter((d) => !dropForTarget(d));
 
   const soft_preferences: string[] = [];
   if (/\bearly-?stage\b|\bstartup\b|\bseed\b/i.test(message)) soft_preferences.push("early-stage");
@@ -198,11 +231,13 @@ export function extractLeadSearchIntent(opts: { message: string; brain?: BrainFo
     funding_preferred,
     locations: loc.locations,
     location_groups: loc.groups,
+    location_explicit,
     company_size_preference,
     hard_disqualifiers,
     soft_preferences,
     relaxation_allowed: {
-      location: true,
+      // An explicitly-named geography is a hard filter — never relax it silently.
+      location: !location_explicit,
       exact_role: true,
       funding: !funding_required ? true : true, // funding can relax to 'secondary' (never claim funded)
       size: !(company_size_preference?.strict),

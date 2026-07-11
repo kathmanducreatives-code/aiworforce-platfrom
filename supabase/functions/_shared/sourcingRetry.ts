@@ -75,8 +75,13 @@ export function parseStrictConstraints(message: string): StrictConstraints {
   // "do not broaden" / "strictly" with no named field → lock location + industry + stage.
   const genericStrict = noBroaden && !locationOnly && !industryOnly && !LOCATION_TOKENS.test(m);
 
+  // A geography NAMED in the prompt is a hard filter — relaxing it to a "wider
+  // region" silently returns out-of-geo garbage (the exact failure this guards).
+  // The user can opt out with "anywhere / global / worldwide / any location".
+  const namedGeo = LOCATION_TOKENS.test(m) && !/\b(anywhere|global(ly)?|worldwide|any (location|region|geo)|location[- ]agnostic|no location)\b/.test(m);
+
   return {
-    location: locationOnly || (noBroaden && LOCATION_TOKENS.test(m)) || genericStrict,
+    location: locationOnly || (noBroaden && LOCATION_TOKENS.test(m)) || genericStrict || namedGeo,
     industry: industryOnly || genericStrict,
     stage: genericStrict,
     count_exact,
