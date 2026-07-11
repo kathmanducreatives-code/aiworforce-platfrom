@@ -36,7 +36,7 @@ export default function CompanyBrainStatusCard() {
   const isComplete = !!data.onboarding_completed;
 
   const restart = () => navigate('/onboarding/company-brain?restart=1');
-  const open = () => navigate('/onboarding/company-brain');
+  const open = () => navigate(isComplete ? '/company-brain' : '/onboarding/company-brain');
 
   if (!isComplete) {
     return (
