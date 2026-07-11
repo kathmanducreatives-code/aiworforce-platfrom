@@ -36,7 +36,7 @@ const navGroups: NavGroup[] = [
     label: 'AI Team',
     items: [
       { path: '/agents', icon: Sparkles, label: 'Agents' },
-      { path: '/onboarding/company-brain', icon: Brain, label: 'Company Brain' },
+      { path: '/company-brain', icon: Brain, label: 'Company Brain' },
     ],
   },
   {

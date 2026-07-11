@@ -29,7 +29,7 @@ const drawerItems = [
   { to: "/competitors", icon: Eye, label: "Competitors" },
   { to: "/content", icon: BookOpen, label: "Content" },
   { to: "/agents", icon: Sparkles, label: "Agents" },
-  { to: "/onboarding/company-brain", icon: Brain, label: "Company Brain" },
+  { to: "/company-brain", icon: Brain, label: "Company Brain" },
   { to: "/settings/integrations", icon: Plug, label: "Integrations" },
   { to: "/email-sequences", icon: Mail, label: "Email Sequences" },
 ];
