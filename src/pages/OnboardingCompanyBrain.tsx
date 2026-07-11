@@ -204,23 +204,26 @@ export default function OnboardingCompanyBrain() {
   // --------------------------------------------------------------- render ---
 
   return (
-    <div className="relative flex min-h-screen flex-col text-foreground">
+    <div className="relative flex min-h-screen flex-col overflow-x-clip text-foreground">
       <ProgressiveBackground />
 
       {/* Top bar */}
       <header className="z-20 shrink-0">
-        <div className="mx-auto flex max-w-4xl items-center justify-between px-4 py-3 sm:px-6">
+        <div className="mx-auto flex max-w-5xl items-center justify-between px-4 py-3.5 sm:px-6">
           <div className="flex items-center gap-2.5">
             <div className="flex h-8 w-8 items-center justify-center rounded-lg border border-primary/40 bg-primary/10 text-primary shadow-[0_0_16px_hsl(var(--primary)/0.25)]">
               <Cpu className="h-4 w-4" />
             </div>
-            <p className="text-xs font-semibold tracking-tight">Agentory · Company Brain</p>
+            <p className="text-xs font-semibold tracking-tight">
+              Agentory <span className="mx-1 text-muted-foreground/50">·</span>
+              <span className="text-muted-foreground/90">Company Brain</span>
+            </p>
           </div>
           <Button
             size="sm" variant="ghost"
             onClick={() => persist(false)}
             disabled={!!busy || !workspaceId}
-            className="h-8 text-xs text-muted-foreground"
+            className="h-8 text-xs text-muted-foreground transition-colors hover:text-foreground"
           >
             {busy === 'save' && <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />}
             Save draft
@@ -228,13 +231,13 @@ export default function OnboardingCompanyBrain() {
         </div>
       </header>
 
-      {/* 5-phase progress */}
-      <div className="mx-auto w-full max-w-2xl shrink-0 px-4 pt-2 sm:px-6">
+      {/* 5-phase progress — compact, it guides without dominating */}
+      <div className="mx-auto w-full max-w-lg shrink-0 px-4 pt-1.5 sm:px-6">
         <StepProgress index={phaseIndex} steps={STEPS} />
       </div>
 
-      {/* Scene stage — centered, floating Brain + one scene card */}
-      <main className="flex flex-1 flex-col items-center justify-start gap-6 px-4 py-8 sm:py-10">
+      {/* Scene stage — orb and card composed as one hero object */}
+      <main className="flex flex-1 flex-col items-center justify-start gap-4 px-4 py-6 sm:py-8">
         <FloatingBrainCard
           label={brainState.label}
           mode={brainState.mode}
@@ -244,7 +247,7 @@ export default function OnboardingCompanyBrain() {
 
         <div className="w-full">
           {error && (
-            <div className="mx-auto mb-4 w-full max-w-xl">
+            <div className="mx-auto mb-4 w-full max-w-[760px]">
               <ErrorState
                 title={error.title}
                 body={error.body}

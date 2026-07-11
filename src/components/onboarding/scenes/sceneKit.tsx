@@ -22,7 +22,9 @@ export function SceneInput({
 }) {
   return (
     <div>
-      {label && <p className="mb-2 text-[11px] uppercase tracking-[0.14em] text-muted-foreground">{label}</p>}
+      {label && (
+        <p className="mb-2.5 text-[10px] font-medium uppercase tracking-[0.22em] text-muted-foreground/90">{label}</p>
+      )}
       <Input
         type={type}
         value={value}
@@ -30,7 +32,15 @@ export function SceneInput({
         onChange={(e) => onChange(e.target.value)}
         onKeyDown={(e) => { if (e.key === 'Enter' && onEnter) { e.preventDefault(); onEnter(); } }}
         placeholder={placeholder}
-        className="h-12 rounded-xl border-border/60 bg-background/50 px-4 text-base transition-shadow focus-visible:border-primary/50 focus-visible:shadow-[0_0_0_3px_hsl(var(--primary)/0.12)]"
+        className={[
+          'h-[54px] rounded-xl border-border/50 px-4 text-[15px]',
+          'bg-[hsl(var(--background)/0.55)] shadow-[inset_0_1px_0_hsl(var(--foreground)/0.04)]',
+          'placeholder:text-muted-foreground/45',
+          'transition-[box-shadow,border-color,background-color] duration-300',
+          'hover:border-border/80',
+          'focus-visible:border-primary/60 focus-visible:bg-[hsl(var(--background)/0.7)]',
+          'focus-visible:shadow-[0_0_0_3px_hsl(var(--primary)/0.14),0_0_28px_-8px_hsl(var(--primary)/0.5),inset_0_1px_0_hsl(var(--foreground)/0.05)]',
+        ].join(' ')}
       />
     </div>
   );
@@ -54,16 +64,30 @@ export function SceneFooter({
         size="lg"
         onClick={onPrimary}
         disabled={primaryDisabled || primaryBusy}
-        className="h-12 w-full gap-2 bg-primary text-primary-foreground shadow-[0_0_28px_hsl(var(--primary)/0.35)] hover:bg-primary/90"
+        className={[
+          'group h-[52px] w-full gap-2 rounded-xl text-[15px] font-medium tracking-tight text-primary-foreground',
+          'bg-gradient-to-b from-primary to-[hsl(var(--primary)/0.82)]',
+          'shadow-[0_1px_0_hsl(var(--foreground)/0.12)_inset,0_10px_30px_-12px_hsl(var(--primary)/0.55)]',
+          'transition-all duration-300',
+          'hover:-translate-y-px hover:from-primary hover:to-primary',
+          'hover:shadow-[0_1px_0_hsl(var(--foreground)/0.15)_inset,0_14px_40px_-12px_hsl(var(--primary)/0.7),0_0_30px_hsl(var(--primary)/0.25)]',
+          'active:translate-y-0',
+          'disabled:translate-y-0 disabled:opacity-45 disabled:saturate-[0.75] disabled:shadow-none',
+        ].join(' ')}
       >
         {primaryBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
         {primaryLabel}
-        {!primaryBusy && <ArrowRight className="h-4 w-4" />}
+        {!primaryBusy && (
+          <ArrowRight className="h-4 w-4 transition-transform duration-300 group-hover:translate-x-1" />
+        )}
       </Button>
       <div className="flex items-center justify-between">
         {onBack ? (
-          <Button variant="ghost" size="sm" onClick={onBack} disabled={backDisabled} className="text-muted-foreground">
-            <ArrowLeft className="mr-1.5 h-4 w-4" /> Back
+          <Button
+            variant="ghost" size="sm" onClick={onBack} disabled={backDisabled}
+            className="text-muted-foreground/80 transition-colors hover:text-foreground"
+          >
+            <ArrowLeft className="mr-1.5 h-4 w-4 transition-transform duration-300 group-hover:-translate-x-0.5" /> Back
           </Button>
         ) : <span />}
         {secondary}
