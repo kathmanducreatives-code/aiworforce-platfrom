@@ -10,7 +10,8 @@ import { generateText, logProviderCall } from "../_shared/aiProvider.ts";
 import { preferredProviderForAgent } from "../_shared/providerRouting.ts";
 import { getAgentorySystemPrompt, AGENTORY_SYSTEM_PROMPT_VERSION } from "../_shared/agentorySystemPrompt.ts";
 import { summarizeRegistryForPrompt } from "../_shared/actorRegistry.ts";
-import { buildCompanyBrainContext, hasUsableBrain } from "../_shared/companyBrainContext.ts";
+import { renderCompanyBrainBlock } from "../_shared/companyBrainContext.ts";
+import { decideWorkspaceAccess } from "../_shared/workspaceAccessGuard.ts";
 
 
 const cors = {
@@ -44,13 +45,14 @@ type CompanyBrain = Record<string, unknown> | null;
 
 // Compact, labeled Company Brain summary for agent prompts — name, one-line
 // description, ICP, target roles, industries, geography, goals, competitors,
-// plus an explicit note when context is missing. Never dumps the full raw JSON
-// profile (avoids verbosity + hallucination from stray fields).
-function renderBrainForAgent(brain: CompanyBrain): string {
-  if (!hasUsableBrain(brain, null)) {
-    return `<company_brain>\n(no company brain yet — workspace hasn't completed onboarding. Do not invent company details, ICP, or competitors.)\n</company_brain>`;
-  }
-  return `<company_brain>\n${buildCompanyBrainContext(brain as Record<string, unknown>)}\n</company_brain>`;
+// plus an explicit note when context is missing. Delegates to the shared
+// renderer so the block is identical across features and unit-testable.
+//
+// NOTE: `onboardingCompleted` MUST be the workspace's real flag. Passing a
+// hardcoded null here silently suppressed the entire brain block for every
+// agent (Scout/Aria/Penn/Hawk/Scribe) — the active brain never reached them.
+function renderBrainForAgent(brain: CompanyBrain, onboardingCompleted?: boolean | null): string {
+  return renderCompanyBrainBlock(brain as Record<string, unknown>, onboardingCompleted);
 }
 
 
@@ -84,6 +86,38 @@ Deno.serve(async (req) => {
 
   if (!plan_id || step_index === undefined || (!agent_slug && !agent_id_in) || !workspace_id || !instruction) {
     return json({ error: "missing_required_fields" }, 400);
+  }
+
+  // ---- Workspace access guard ------------------------------------------------
+  // orchestrate calls with the SERVICE_ROLE bearer (already gated the user). A
+  // direct browser call carries a user JWT and MUST be a member of workspace_id,
+  // so a frontend-supplied workspace_id cannot reach another workspace's brain.
+  {
+    const authHeader = req.headers.get("Authorization") ?? "";
+    const bearer = authHeader.startsWith("Bearer ") ? authHeader.slice(7) : "";
+    const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+    const bearerIsServiceRole = !!bearer && bearer === serviceRoleKey;
+
+    let authenticatedUserId: string | null = null;
+    let isMember = false;
+    if (!bearerIsServiceRole) {
+      try {
+        const userClient = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_ANON_KEY")!, {
+          global: { headers: { Authorization: authHeader } },
+        });
+        const { data: userData } = await userClient.auth.getUser(bearer);
+        authenticatedUserId = userData?.user?.id ?? null;
+        if (authenticatedUserId) {
+          const { data: member } = await supabase
+            .from("workspace_members").select("workspace_id")
+            .eq("workspace_id", workspace_id).eq("user_id", authenticatedUserId).maybeSingle();
+          isMember = !!member;
+        }
+      } catch (_e) { /* treated as unauthenticated below */ }
+    }
+
+    const access = decideWorkspaceAccess({ bearerIsServiceRole, authenticatedUserId, isMember });
+    if (!access.ok) return json({ error: access.error }, access.status);
   }
 
   // Resolve agent (by slug, falling back to id).
@@ -175,18 +209,20 @@ Deno.serve(async (req) => {
     }
   }
 
-  // Load company_brain.
+  // Load company_brain. `onboarding_completed` gates whether the ACTIVE brain
+  // is injected into the agent prompt (see renderBrainForAgent).
   const { data: brainRow } = await supabase
     .from("company_brain")
-    .select("profile")
+    .select("profile, onboarding_completed")
     .eq("workspace_id", workspace_id)
     .maybeSingle();
   const brain = (brainRow?.profile ?? null) as CompanyBrain;
+  const brainOnboardingCompleted = (brainRow as { onboarding_completed?: boolean } | null)?.onboarding_completed === true;
 
   // Inject a compact, labeled brain summary (not the raw JSON). We omit
   // companyBrain from getAgentorySystemPrompt so it doesn't add its own
   // JSON-trimmed block, then append the labeled summary once.
-  const brainBlock = renderBrainForAgent(brain);
+  const brainBlock = renderBrainForAgent(brain, brainOnboardingCompleted);
   const systemPrompt = `${agent.role_prompt ?? `You are ${agent.name}.`}\n\n${getAgentorySystemPrompt({
     taskType: "agent_execution",
     currentAgent: agent_slug ?? agent.slug ?? undefined,

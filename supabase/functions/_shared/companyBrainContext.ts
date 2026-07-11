@@ -192,6 +192,23 @@ export function buildCompanyBrainContext(p: Profile): string {
   return lines.join("\n");
 }
 
+/**
+ * The `<company_brain>` block injected into agent prompts (Scout, Aria, Penn,
+ * Hawk, Scribe). Extracted here so it is unit-testable and used identically by
+ * every caller.
+ *
+ * `onboardingCompleted` gates the block: a workspace that has ACTIVATED its
+ * Company Brain gets the full compiled context; otherwise agents are told the
+ * brain is not ready and must not invent an ICP. Passing the real flag (rather
+ * than a hardcoded null) is what makes the active brain reach the agents.
+ */
+export function renderCompanyBrainBlock(p: Profile, onboardingCompleted?: boolean | null): string {
+  if (!hasUsableBrain(p, onboardingCompleted)) {
+    return "<company_brain>\n(no active company brain yet — workspace hasn't completed onboarding. Do not invent company details, ICP, or competitors.)\n</company_brain>";
+  }
+  return `<company_brain>\n${buildCompanyBrainContext(p)}\n</company_brain>`;
+}
+
 /** Field-presence map so callers can honestly say "I don't have X yet." */
 export function brainMissingFields(p: Profile): string[] {
   const missing: string[] = [];
