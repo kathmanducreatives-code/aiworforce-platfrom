@@ -4,7 +4,9 @@
 // profile, so we never overwrite fields we don't render (evidence, claims,
 // signal_preferences, legacy top-level keys, etc.).
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type ComponentType } from 'react';
+import { motion, useReducedMotion } from 'framer-motion';
+import { Brain, Check, Crosshair, Loader2, Megaphone, Radar, ShieldAlert, Users } from 'lucide-react';
 import { Sheet, SheetContent, SheetDescription, SheetFooter, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -23,22 +25,25 @@ interface Props {
   onSave: (patch: BrainProfile) => Promise<void> | void;
 }
 
-const TITLES: Record<SectionKey, { title: string; description: string }> = {
-  company:       { title: 'Company understanding', description: 'What Agentory tells other agents about your company.' },
-  targeting:     { title: 'ICP / targeting',       description: 'Who counts as a fit worth researching.' },
-  buyers:        { title: 'Buyer personas',        description: 'The roles you sell to.' },
-  signals:       { title: 'Buying signals',        description: 'What Scout Radar should watch for.' },
-  disqualifiers: { title: 'Disqualifiers & safety', description: 'Who and what to never target.' },
-  messaging:     { title: 'Messaging & positioning', description: 'How Agentory should sound on your behalf.' },
+const TITLES: Record<SectionKey, { title: string; description: string; influences: string; icon: ComponentType<{ className?: string }> }> = {
+  company:       { title: 'Company understanding', description: 'What Agentory tells other agents about your company.', influences: 'Grounds every agent in what you do and who you sell to.', icon: Brain },
+  targeting:     { title: 'ICP / targeting',       description: 'Who counts as a fit worth researching.', influences: 'Filters and ranks every lead Scout and Find Leads return.', icon: Crosshair },
+  buyers:        { title: 'Buyer personas',        description: 'The roles you sell to and the pains you solve.', influences: 'Focuses outreach on the right decision-makers.', icon: Users },
+  signals:       { title: 'Buying signals',        description: 'What Scout Radar should watch for.', influences: 'Decides which timing signals are worth surfacing.', icon: Radar },
+  disqualifiers: { title: 'Disqualifiers & safety', description: 'Who and what to never target.', influences: 'Stops bad-fit leads and banned claims before anything sends.', icon: ShieldAlert },
+  messaging:     { title: 'Messaging & positioning', description: 'How Agentory should sound on your behalf.', influences: 'Shapes outreach drafts, content, and brand voice.', icon: Megaphone },
 };
 
 export default function CompanyBrainEditDrawer({ open, section, brain, onOpenChange, onSave }: Props) {
+  const reduce = useReducedMotion();
   const [busy, setBusy] = useState(false);
+  const [saved, setSaved] = useState(false);
   const [state, setState] = useState<any>(null);
 
   useEffect(() => {
     if (!open || !section) return;
     setState(initialFor(section, brain));
+    setSaved(false);
   }, [open, section, brain]);
 
   if (!section || !state) {
@@ -50,12 +55,15 @@ export default function CompanyBrainEditDrawer({ open, section, brain, onOpenCha
   }
 
   const meta = TITLES[section];
+  const Icon = meta.icon;
 
   async function handleSave() {
     setBusy(true);
     try {
       await onSave(buildPatch(section!, state, brain));
-      onOpenChange(false);
+      setSaved(true);
+      // Brief confirmation glow before closing.
+      setTimeout(() => onOpenChange(false), reduce ? 0 : 600);
     } finally {
       setBusy(false);
     }
@@ -63,13 +71,40 @@ export default function CompanyBrainEditDrawer({ open, section, brain, onOpenCha
 
   return (
     <Sheet open={open} onOpenChange={(v) => { if (!busy) onOpenChange(v); }}>
-      <SheetContent side="right" className="flex w-full flex-col gap-0 border-border/50 bg-card/80 backdrop-blur-2xl sm:max-w-lg">
-        <SheetHeader className="text-left">
-          <SheetTitle className="text-lg tracking-tight">{meta.title}</SheetTitle>
-          <SheetDescription className="text-xs">{meta.description}</SheetDescription>
+      <SheetContent
+        side="right"
+        className="flex w-full flex-col gap-0 overflow-hidden border-border/50 bg-card/80 backdrop-blur-2xl sm:max-w-lg"
+        style={saved ? { boxShadow: 'inset 0 0 0 1px hsl(var(--primary) / 0.5), 0 0 60px -10px hsl(var(--primary) / 0.4)' } : undefined}
+      >
+        {saved && (
+          <motion.div
+            initial={reduce ? false : { opacity: 0 }}
+            animate={{ opacity: 1 }}
+            className="flex items-center gap-2 border-b border-primary/30 bg-primary/10 px-5 py-2.5 text-[12.5px] text-primary"
+          >
+            <Check className="h-4 w-4" /> Saved — your Company Brain is updated.
+          </motion.div>
+        )}
+
+        <SheetHeader className="gap-0 border-b border-border/40 px-5 pb-4 pt-5 text-left">
+          <div className="flex items-start gap-3">
+            <div
+              className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-primary/30 bg-primary/10"
+              style={{ boxShadow: '0 0 16px -6px hsl(var(--primary) / 0.5)' }}
+            >
+              <Icon className="h-4 w-4 text-primary" />
+            </div>
+            <div className="min-w-0">
+              <SheetTitle className="text-[17px] tracking-tight">{meta.title}</SheetTitle>
+              <SheetDescription className="mt-0.5 text-[12.5px]">{meta.description}</SheetDescription>
+            </div>
+          </div>
+          <p className="mt-3 rounded-lg border border-border/40 bg-background/30 px-3 py-2 text-[11.5px] leading-snug text-muted-foreground/80">
+            <span className="font-medium text-foreground/80">Influences: </span>{meta.influences}
+          </p>
         </SheetHeader>
 
-        <div className="-mr-2 mt-4 flex-1 space-y-5 overflow-y-auto pr-2">
+        <div className="-mr-1 mt-4 flex-1 space-y-5 overflow-y-auto px-5 pr-6">
           {section === 'company' && <CompanyEditor state={state} setState={setState} />}
           {section === 'targeting' && <TargetingEditor state={state} setState={setState} />}
           {section === 'buyers' && <BuyersEditor state={state} setState={setState} />}
@@ -78,9 +113,12 @@ export default function CompanyBrainEditDrawer({ open, section, brain, onOpenCha
           {section === 'messaging' && <MessagingEditor state={state} setState={setState} />}
         </div>
 
-        <SheetFooter className="mt-4 gap-2 sm:justify-end">
-          <Button variant="ghost" onClick={() => onOpenChange(false)} disabled={busy}>Cancel</Button>
-          <Button onClick={handleSave} disabled={busy}>{busy ? 'Saving…' : 'Save changes'}</Button>
+        <SheetFooter className="mt-4 gap-2 border-t border-border/40 px-5 py-4 sm:justify-end">
+          <Button variant="ghost" onClick={() => onOpenChange(false)} disabled={busy} className="text-muted-foreground hover:text-foreground">Cancel</Button>
+          <Button onClick={handleSave} disabled={busy} className="gap-2">
+            {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+            {busy ? 'Saving…' : 'Save changes'}
+          </Button>
         </SheetFooter>
       </SheetContent>
     </Sheet>
