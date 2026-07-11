@@ -432,6 +432,20 @@ export default function SignalFeed() {
         </div>
       )}
 
+      {/* Company-Brain honesty banner: degraded scan / draft-not-activated warnings. */}
+      {lastRun?.warnings && lastRun.warnings.length > 0 && (
+        <div className="rounded-lg border border-amber-500/20 bg-amber-500/[0.06] px-3 py-2">
+          <div className="text-[12px] font-semibold text-amber-300">
+            {lastRun.setup_required ? "Company Brain needs setup" : `Company Brain confidence: ${lastRun.brain_confidence ?? "medium"}`}
+          </div>
+          <ul className="mt-0.5 space-y-0.5">
+            {lastRun.warnings.slice(0, 3).map((w, i) => (
+              <li key={i} className="text-[11px] text-amber-200/80">{w}</li>
+            ))}
+          </ul>
+        </div>
+      )}
+
 
 
       {/* Existing toolbar */}

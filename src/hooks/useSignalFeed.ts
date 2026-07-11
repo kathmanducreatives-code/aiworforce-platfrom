@@ -21,6 +21,10 @@ export interface RadarRunResult {
   per_category: Record<RadarCategory, CategoryStatus>;
   capabilities: Record<RadarCategory, { ready: boolean; reason?: string }>;
   mode: RadarMode;
+  /** Company-Brain honesty layer surfaced by run-radar-scan. */
+  setup_required?: boolean;
+  brain_confidence?: "strong" | "medium" | "weak";
+  warnings?: string[];
 }
 
 export function useSignalFeed(workspaceId: string | null, limit = 100) {
