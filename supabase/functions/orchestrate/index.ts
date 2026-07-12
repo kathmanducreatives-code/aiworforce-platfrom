@@ -11,6 +11,7 @@ import { summarizeRegistryForPrompt } from "../_shared/actorRegistry.ts";
 import { buildDraftOutreachPlan } from "../_shared/draftOutreachPlan.ts";
 import { buildCompetitorDiscoveryPlan } from "../_shared/competitorDiscovery.ts";
 import { extractContentLoopInput, buildContentLoopPlan } from "../_shared/contentEngagementLoop.ts";
+import { separateIntent } from "../_shared/leadIntentModel.ts";
 
 const cors = {
   "Access-Control-Allow-Origin": "*",
@@ -1138,6 +1139,24 @@ Return ONLY valid JSON, no prose, no markdown:
       return json({ error: "task_plan_insert_failed", details: planError?.message }, 500);
     }
 
+    // Phase A routing — for sourcing/lead intents, separate the request into
+    // persona / company profile / signal / role family and decide account_first vs
+    // profile_first. Threaded to run-agent as `lead_routing` (authoritative), and
+    // recorded on the plan for traceability. Pure / no provider call.
+    const leadRouting = (intent === "sourcing" || intent === "extraction")
+      ? (() => {
+          const si = separateIntent({ message: user_instruction, hardExclusions: (tool_input as { disqualifiers?: string[] } | null)?.disqualifiers ?? undefined });
+          return {
+            source_strategy: si.source_strategy,
+            decision_maker_strategy: si.decision_maker_strategy,
+            requested_role_family: si.requested_role_family,
+            requested_signal: si.requested_signal,
+            target_personas: si.target_personas,
+            relaxation_policy: si.relaxation_policy,
+          };
+        })()
+      : null;
+
     await admin.from("activity_feed").insert({
       workspace_id,
       plan_id: taskPlan.id,
@@ -1156,6 +1175,7 @@ Return ONLY valid JSON, no prose, no markdown:
         tools_required: parsed!.steps.map((s) => s.tool_needed).filter(Boolean),
         connectors_missing: connectorsMissing,
         tool_input: tool_input ?? null,
+        lead_routing: leadRouting,
       },
     });
 
@@ -1181,6 +1201,7 @@ Return ONLY valid JSON, no prose, no markdown:
         // plan default, e.g. discovery's Hawk-scrape step 0 before Scout-apify).
         tool_input: (firstStep as Step & { metadata?: { tool_input?: unknown } }).metadata?.tool_input ?? tool_input ?? null,
         execution_mode: executionMode,
+        lead_routing: leadRouting,
       }),
     }).catch((e) => console.error("[orchestrate] run-agent kickoff failed:", e));
 
