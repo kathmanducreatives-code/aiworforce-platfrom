@@ -12,6 +12,9 @@ import { getAgentorySystemPrompt, AGENTORY_SYSTEM_PROMPT_VERSION } from "../_sha
 import { summarizeRegistryForPrompt } from "../_shared/actorRegistry.ts";
 import { renderCompanyBrainBlock } from "../_shared/companyBrainContext.ts";
 import { decideWorkspaceAccess } from "../_shared/workspaceAccessGuard.ts";
+import { separateIntent } from "../_shared/leadIntentModel.ts";
+import { classifyRoleFamily, type RoleFamily } from "../_shared/roleFamilyMatcher.ts";
+import { buildCanonicalStamp } from "../_shared/leadCanonicalStamp.ts";
 
 
 const cors = {
@@ -442,6 +445,32 @@ Deno.serve(async (req) => {
           roleKeywords = leadIntentBody.role_keywords;
         }
 
+        // Phase A wiring — separate the request into persona / company profile /
+        // signal / role family and route it (account_first vs profile_first). Used
+        // to stamp per-lead run-trace + role exactness below; NEVER a provider call.
+        // orchestrate may thread an authoritative routing decision (lead_routing);
+        // otherwise we derive it here so gating still works without upstream wiring.
+        const threadedRouting = (body as { lead_routing?: { source_strategy?: string; requested_role_family?: string | null } }).lead_routing ?? null;
+        const separatedIntent = separateIntent({
+          message: instruction ?? normalizedQuery ?? "",
+          brain: (brain as any)?.icp
+            ? { industries: (brain as any).icp.industries, disqualifiers: (brain as any).icp.disqualifiers, geography: (brain as any).icp.geography, buyer_roles: (brain as any).icp.buyer_roles }
+            : null,
+          hardExclusions: leadIntentBody?.disqualifiers ?? undefined,
+        });
+        // Requested hiring role family: prefer the threaded lead_intent (explicit),
+        // else the separated intent's detection. Drives per-lead role exactness.
+        const threadedFamily: RoleFamily | null = (() => {
+          if (!leadIntentBody?.role_family) return null;
+          const f = classifyRoleFamily(leadIntentBody.role_family);
+          return f === "other" ? null : f;
+        })();
+        const requestedRoleFamily: RoleFamily | null = threadedFamily ?? separatedIntent.requested_role_family;
+        const sourceStrategy: "account_first" | "profile_first" =
+          (threadedRouting?.source_strategy === "profile_first" || threadedRouting?.source_strategy === "account_first")
+            ? threadedRouting.source_strategy
+            : separatedIntent.source_strategy;
+
         // Phase 4 — Company-Brain-aware Scout query for the jobs actor. Prefers
         // revenue/growth/RevOps + SaaS context and drops generic operations terms
         // (the proof gate would cap/reject them anyway). Reports weak ICP context
@@ -825,7 +854,12 @@ Deno.serve(async (req) => {
         // Per-lead quality keyed by normalized company name, reused below to
         // persist fit_score + raw.lead_quality onto each Workbench row.
         const normName = (s: unknown) => String(s ?? "").toLowerCase().replace(/[^a-z0-9]+/g, "").trim();
-        type LeadQualityEntry = { score: number; tier: string; why: string; matched_icp: string[]; missing_fields: string[]; confidence: string; reasons: string[]; exact_hiring_signal: string | null; job_title: string | null; source_url: string | null; source_proof: Record<string, unknown>; aria?: Record<string, unknown>; gate?: Record<string, unknown>; gate_rejected?: boolean; analyst?: Record<string, unknown>; scout_rank?: Record<string, unknown> };
+        type LeadQualityEntry = { score: number; tier: string; why: string; matched_icp: string[]; missing_fields: string[]; confidence: string; reasons: string[]; exact_hiring_signal: string | null; job_title: string | null; source_url: string | null; source_proof: Record<string, unknown>; aria?: Record<string, unknown>; gate?: Record<string, unknown>; gate_rejected?: boolean; analyst?: Record<string, unknown>; scout_rank?: Record<string, unknown>; canonical?: Record<string, unknown> };
+        // Run-level search provenance for the per-lead run-trace (search_stage /
+        // relaxed_filters), derived from the adaptive attempt that produced the set.
+        const runRelaxedFilters: string[] = [];
+        if (adaptive.attempts.some((a) => /relax|broad|loosen/i.test(String(a.strategy)))) runRelaxedFilters.push("location");
+        const runSearchStage = runRelaxedFilters.length ? "relaxed" : "strict";
         // Lead-quality proof gate (Phase 3): caps/rejects weak/proofless/off-ICP rows.
         const gateMod = await import("../_shared/leadQualityGate.ts").catch(() => null);
         const gateIntent = {
@@ -1017,6 +1051,44 @@ Deno.serve(async (req) => {
                 if (pr) entry.scout_rank = { rank: pr.scoutRank, score: pr.scoutPreRankScore, reasons: pr.scoutRankReasons, penalties: pr.scoutPenalties, weak_pool: scoutWeakPool };
               }
             } catch (e) { console.warn("[run-agent] analyst summary failed:", e); }
+            // Phase A canonical stamp — derive the ONE canonical decision, the
+            // contact-ready contract, an explainable score and a run-trace from the
+            // facts computed above. Additive: never a provider call, never mutates
+            // other fields; the persistence step writes it under new `raw` keys.
+            try {
+              const aria = entry.aria as Record<string, any> | undefined;
+              const gate = entry.gate as Record<string, any> | undefined;
+              const analyst = entry.analyst as Record<string, any> | undefined;
+              const isPersonProfile = /linkedin\.com\/in\//i.test(String(it.source_url ?? ""));
+              entry.canonical = buildCanonicalStamp({
+                company: it.company ?? it.name ?? null,
+                website: (r.company_website ?? r.website ?? r.companyUrl ?? r.domain ?? null) as string | null,
+                source_url: it.source_url ?? (r.source_url as string) ?? null,
+                job_title: (it.title ?? (r.jobTitle as string) ?? (r.job_title as string) ?? null) as string | null,
+                requested_role_family: requestedRoleFamily,
+                requested_signal: separatedIntent.requested_signal,
+                source_strategy: sourceStrategy,
+                exact_hiring_signal: entry.exact_hiring_signal,
+                signal_type: source_type === "jobs" ? "hiring" : (resolvedGateKind ?? null),
+                evidence_url: (r.job_url ?? r.funding_source_url ?? r.funding_proof_url ?? it.source_url ?? null) as string | null,
+                evidence_recent: (r.evidence_recent === true) || (r.funding_recent === true),
+                aria_overall_fit: typeof aria?.overall_fit === "number" ? aria.overall_fit : null,
+                aria_confidence_score: typeof aria?.confidence?.score === "number" ? aria.confidence.score : null,
+                matched_icp: q.matched_icp_fields ?? entry.matched_icp,
+                missing_fields: entry.missing_fields,
+                missing_evidence: (aria?.missing_evidence ?? gate?.missing_evidence) as string[] | undefined,
+                gate_decision: (gate?.decision ?? aria?.gate_decision ?? null) as string | null,
+                disqualifiers_hit: (aria?.disqualifiers_hit ?? gate?.disqualifiers_hit ?? null),
+                decision_maker_profile_url: (r.decision_maker_profile_url ?? (isPersonProfile ? it.source_url : null)) as string | null,
+                why_this_company: (analyst?.whyThisLeadAppeared ?? entry.why) as string | null,
+                why_now: (analyst?.whyNow ?? null) as string | null,
+                match_tier: (r.match_tier as string) ?? null,
+                fit_tier: entry.tier,
+                analyst_verdict: (analyst?.analystVerdict ?? null) as string | null,
+                search_stage: runSearchStage,
+                relaxed_filters: runRelaxedFilters,
+              }) as unknown as Record<string, unknown>;
+            } catch (e) { console.warn("[run-agent] canonical stamp failed:", e); }
             const nk = normName(it.name ?? it.company);
             if (nk) leadQualityByName.set(nk, entry);
             const uk = normUrl(it.source_url ?? (r.source_url as string));
@@ -1247,6 +1319,25 @@ Deno.serve(async (req) => {
                       company_snapshot: (q.analyst as any).companySnapshot,
                     } : {}),
                     ...(q.scout_rank ? { scout_rank: (q.scout_rank as any).rank, scout_pre_rank_score: (q.scout_rank as any).score, scout_rank_reasons: (q.scout_rank as any).reasons, scout_penalties: (q.scout_rank as any).penalties, weak_pool: (q.scout_rank as any).weak_pool } : {}),
+                    // Phase A canonical stamp — the ONE decision + contact-ready
+                    // contract + explainable breakdown + run-trace the Workbench,
+                    // counters, outreach eligibility and CSV export read. Additive;
+                    // does not overwrite the Aria `score_breakdown` above.
+                    ...(q.canonical ? {
+                      canonical_final_decision: (q.canonical as any).canonical_final_decision,
+                      contact_ready: (q.canonical as any).contact_ready,
+                      contact_ready_missing: (q.canonical as any).contact_ready_missing,
+                      role_exactness: (q.canonical as any).role_exactness,
+                      canonical_score_breakdown: (q.canonical as any).score_breakdown,
+                      canonical_final_score: (q.canonical as any).final_score,
+                      canonical_confidence: (q.canonical as any).confidence,
+                      canonical_score_explanation: (q.canonical as any).score_explanation,
+                      canonical: q.canonical,
+                      run_trace: (q.canonical as any).run_trace,
+                      // Flat CSV columns for the Workbench export (item #2).
+                      search_stage: (q.canonical as any).run_trace?.search_stage,
+                      relaxed_filters: (q.canonical as any).run_trace?.relaxed_filters,
+                    } : {}),
                   },
                 }).eq("id", r.id as string);
               }
