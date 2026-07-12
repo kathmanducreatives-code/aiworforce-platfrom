@@ -320,6 +320,13 @@ export function compileCompanyBrainContext(input: CompileInput): CompanyBrainCon
     if (!sizeLabel) warnings.push("No target company size in Company Brain.");
   }
   if (usedDefaultDisq) warnings.push("Using default high-risk disqualifiers (Brain supplied none).");
+  // An onboarding draft that has never been activated must NOT drive verified Top
+  // Signals — the workspace's *active* Brain stays in charge until activation. We
+  // surface this as setup_required so the planner degrades and the scorer refuses
+  // to mark anything `verified` (see meta.setup_required below). Editing an already
+  // active Brain keeps is_draft=false, so "saved edits affect the next scan" still holds.
+  const isUnactivatedDraft = v2.is_draft === true;
+  if (isUnactivatedDraft) warnings.push("Company Brain draft not activated — running conservative and emitting no verified Top Signals until you activate it.");
 
   return {
     workspace_id: input.workspace_id,
@@ -399,7 +406,7 @@ export function compileCompanyBrainContext(input: CompileInput): CompanyBrainCon
       warnings,
       derivation_sources: uniq(derivationSources),
       matched_from,
-      setup_required: v2.setup_required,
+      setup_required: v2.setup_required || isUnactivatedDraft,
       schema_version: schemaVersion,
       brain_confidence: v2.brain_confidence,
       missing_fields: computeCompanyBrainCompleteness(v2).missing_keys,
