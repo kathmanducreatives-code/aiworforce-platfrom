@@ -12,7 +12,8 @@ import type { RadarSource } from "../_shared/radarScanPlanner.ts";
 import { apifyJobsSourceStatus, buildApifyJobsInput, fetchApifyJobs, apifyRowsToScoredItems } from "../_shared/radarSources/apifyJobsHiringSource.ts";
 import { buildRadarIntelligenceProfile } from "../_shared/radarIntel/radarIntelligenceProfile.ts";
 import { enrichAndGateRows, type EnrichableRow } from "../_shared/radarIntel/radarSignalEnrichment.ts";
-import { postsAdapterStatus, commentsAdapterStatus, peopleAdapterStatus } from "../_shared/radarIntel/radarProviderAdapters.ts";
+import { postsAdapterStatus, commentsAdapterStatus, peopleAdapterStatus, normalizePostRow, normalizeCommentRow, runApifyActor } from "../_shared/radarIntel/radarProviderAdapters.ts";
+import { postsToSignalRows, commentsToSignalRows, type BuildResult } from "../_shared/radarIntel/linkedInSourceExecution.ts";
 import { buildSourceDiagnostics, type SourceDiagnostics } from "../_shared/radarIntel/radarDiagnostics.ts";
 
 const cors = {
@@ -292,6 +293,31 @@ Deno.serve(async (req) => {
     addRows(cat, scoreCandidates({ items, brain, workspace_id, userId, cap: wanted, existingKeys }));
   }
 
+  // Structured LinkedIn sources (posts → comments) — ENV-GATED. Runs only when the
+  // actor env var is set; otherwise zero provider calls (diagnostics = not_configured).
+  const apifyTokenValue = Deno.env.get("APIFY_API_TOKEN") ?? "";
+  let postsBuilt: BuildResult | null = null; let postsErr: string | null = null;
+  let commentsBuilt: BuildResult | null = null; let commentsErr: string | null = null;
+  if (postsAdapter.configured && postsAdapter.actor && !scanPlan.setup_required) {
+    try {
+      const terms = [...intel.topics, ...intel.competitors.seeds].slice(0, 3);
+      const rawRows = await runApifyActor(postsAdapter.actor, apifyTokenValue, { searchTerms: terms, maxItems: 25 }, 25);
+      postsBuilt = postsToSignalRows(rawRows.map(normalizePostRow), intel, userId);
+      for (const r of postsBuilt.rows) accepted.push({ ...r, workspace_id, created_by: userId, source: "apify_posts", confidence: 0.5, description: r.title });
+    } catch (e) { postsErr = e instanceof Error ? e.message : "posts fetch failed"; }
+  }
+  if (commentsAdapter.configured && commentsAdapter.actor && !scanPlan.setup_required) {
+    try {
+      // Comments run only from parent post URLs surfaced by the posts source.
+      const postUrls = (postsBuilt?.rows ?? []).map((r) => String((r.raw["source_details"] as Record<string, unknown>)?.["post_url"] ?? "")).filter(Boolean).slice(0, 5);
+      if (postUrls.length) {
+        const rawRows = await runApifyActor(commentsAdapter.actor, apifyTokenValue, { postUrls, maxComments: 30 }, 30);
+        commentsBuilt = commentsToSignalRows(rawRows.map(normalizeCommentRow), intel, userId);
+        for (const r of commentsBuilt.rows) accepted.push({ ...r, workspace_id, created_by: userId, source: "apify_comments", confidence: 0.5, description: r.title });
+      }
+    } catch (e) { commentsErr = e instanceof Error ? e.message : "comments fetch failed"; }
+  }
+
   // Enrich + gate against the intelligence profile before persistence: drops
   // unrelated/excluded hiring rows, sets the canonical decision + outreach gate,
   // cleans duplicate tags and stamps scan_run_id. This is where the tested
@@ -315,8 +341,8 @@ Deno.serve(async (req) => {
     buildSourceDiagnostics({ source: "hiring", configured: caps.hiring.ready, execution_status: perCategory.hiring.status === "setup_needed" ? "skipped_setup_required" : "ran", queries_attempted: planFor("hiring")?.queries ?? [], raw_count: perCategory.hiring.found, accepted_count: keptByType("hiring"), verified_count: verifiedByType("hiring"), rejected_count: hiringRejected, rejection_reasons: enrich.rejection_reasons }),
     buildSourceDiagnostics({ source: "competitor", configured: caps.competitor.ready, queries_attempted: planFor("competitor")?.queries ?? [], raw_count: perCategory.competitor.found, accepted_count: keptByType("competitor"), verified_count: verifiedByType("competitor") }),
     buildSourceDiagnostics({ source: "workflow_trend", configured: caps.workflow_trend.ready, queries_attempted: planFor("workflow_trends")?.queries ?? [], raw_count: perCategory.workflow_trend.found, accepted_count: keptByType("workflow_trend"), verified_count: verifiedByType("workflow_trend") }),
-    buildSourceDiagnostics({ source: "linkedin_post", configured: postsAdapter.configured, execution_status: postsAdapter.configured ? "ran" : "skipped_not_configured", provider_error: postsAdapter.configured ? null : postsAdapter.reason }),
-    buildSourceDiagnostics({ source: "linkedin_comment", configured: commentsAdapter.configured, execution_status: commentsAdapter.configured ? "ran" : "skipped_not_configured", provider_error: commentsAdapter.configured ? null : commentsAdapter.reason }),
+    buildSourceDiagnostics({ source: "linkedin_post", configured: postsAdapter.configured, execution_status: postsAdapter.configured ? "ran" : "skipped_not_configured", provider_error: postsErr ?? (postsAdapter.configured ? null : postsAdapter.reason), auth_failed: /401|403|auth/i.test(postsErr ?? ""), raw_count: postsBuilt?.considered ?? 0, accepted_count: keptByType("linkedin_post"), rejected_count: postsBuilt?.rejected ?? 0, rejection_reasons: postsBuilt?.rejection_reasons ?? {} }),
+    buildSourceDiagnostics({ source: "linkedin_comment", configured: commentsAdapter.configured, execution_status: commentsAdapter.configured ? "ran" : "skipped_not_configured", provider_error: commentsErr ?? (commentsAdapter.configured ? null : commentsAdapter.reason), auth_failed: /401|403|auth/i.test(commentsErr ?? ""), raw_count: commentsBuilt?.considered ?? 0, accepted_count: keptByType("linkedin_comment"), rejected_count: commentsBuilt?.rejected ?? 0, rejection_reasons: commentsBuilt?.rejection_reasons ?? {} }),
     buildSourceDiagnostics({ source: "funding", configured: false, execution_status: "skipped_not_configured" }),
     buildSourceDiagnostics({ source: "decision_maker", configured: peopleAdapter.configured, execution_status: peopleAdapter.configured ? "ran" : "skipped_not_configured", provider_error: peopleAdapter.configured ? null : peopleAdapter.reason }),
   ];
