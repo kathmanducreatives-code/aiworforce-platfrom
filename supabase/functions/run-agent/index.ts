@@ -16,6 +16,7 @@ import { separateIntent } from "../_shared/leadIntentModel.ts";
 import { classifyRoleFamily, type RoleFamily } from "../_shared/roleFamilyMatcher.ts";
 import { buildCanonicalStamp } from "../_shared/leadCanonicalStamp.ts";
 import { stepAllowedInMode, isSourceAndQualifyOnly } from "../_shared/executionMode.ts";
+import { buildProviderIndexFromItems, parseScoutCandidates, guardScoutToAria, buildProvenanceRecord, assertPersistenceProvenance, type NormalizedProviderIndex, type ProvenanceCtx } from "../_shared/leadHandoffGuard.ts";
 
 
 const cors = {
@@ -248,6 +249,11 @@ Deno.serve(async (req) => {
   // leads (not a tool failure). We then skip Aria — there is nothing to rank.
   let zeroAcceptedSourcing = false;
   let sourcingAttemptsCount = 0;
+  // Provider-provenance: the immutable index of accepted provider items + run
+  // context, built during sourcing and read at the Scout→Aria hand-off so an
+  // LLM-invented company/person/URL can never reach Aria or persistence.
+  let providerIndexForHandoff: NormalizedProviderIndex | null = null;
+  let providerProvenanceCtx: ProvenanceCtx | null = null;
   // AI Source Planner artifacts (carried into the Scout task result so the final
   // step can render Workbench Insights + a definitive process narrative).
   let sourcePlanMeta: Record<string, unknown> | null = null;
@@ -942,6 +948,22 @@ Deno.serve(async (req) => {
           const tierCounts: Record<string, number> = { hot: 0, qualified: 0, weak: 0, rejected: 0 };
           const whySamples: string[] = [];
           let scoreSum = 0;
+          // Provenance: build the immutable provider index from the ACCEPTED
+          // (normalized) provider items only, plus this run's provider context.
+          // Read at the Scout→Aria hand-off + stamped onto each persisted lead.
+          try {
+            const acceptedForIndex = (((lieAcceptedItems ?? gateAcceptedItems) ?? classified.accepted) ?? []) as any[];
+            providerIndexForHandoff = buildProviderIndexFromItems(acceptedForIndex.map((a: any) => ({
+              company: a.company ?? a.name, name: a.name, person: a.name,
+              source_url: a.source_url, url: a.source_url,
+              company_linkedin_url: (a.raw?.company_linkedin_url ?? a.raw?.companyLinkedinUrl) as string | null,
+              person_linkedin_url: /linkedin\.com\/in\//i.test(String(a.source_url ?? "")) ? a.source_url : ((a.raw?.profile_url ?? a.raw?.profileUrl) as string | null),
+              website: (a.raw?.website ?? a.raw?.companyUrl) as string | null,
+              domain: (a.raw?.domain) as string | null,
+              job_url: (a.raw?.job_url ?? a.source_url) as string | null,
+            })));
+            providerProvenanceCtx = { provider: "apify", actor_id: planned_actor_key ?? "apify", provider_run_id: run_id, workflow_run_id: run_id, plan_id: String(plan_id ?? ""), trace_id: run_id, query_id: null };
+          } catch (e) { console.warn("[run-agent] provider index build failed:", e); }
           for (const it of ((lieAcceptedItems ?? gateAcceptedItems) ?? classified.accepted)) {
             const r = (it.raw ?? {}) as Record<string, unknown>;
             const q = evaluateLeadQuality({
@@ -1340,6 +1362,24 @@ Deno.serve(async (req) => {
                       search_stage: (q.canonical as any).run_trace?.search_stage,
                       relaxed_filters: (q.canonical as any).run_trace?.relaxed_filters,
                     } : {}),
+                    // Provider-provenance (immutable, from provider data only).
+                    // This row IS provider-sourced (memoryWriter created it from an
+                    // accepted provider item); stamp the traceable record + verified
+                    // flag that draftGate/downstream actions read. verified=false
+                    // means required provenance is missing → downstream actions block.
+                    provider_provenance: (() => {
+                      const prov = buildProvenanceRecord({
+                        company: (existingRaw.company ?? existingRaw.company_name ?? nameById.get(r.account_id as string)) as string | null,
+                        source_url: (existingRaw.source_url ?? existingRaw.url ?? rowUrl) as string | null,
+                        domain: (existingRaw.domain ?? existingRaw.company_domain) as string | null,
+                        company_linkedin_url: (existingRaw.company_linkedin_url) as string | null,
+                        person_linkedin_url: (existingRaw.decision_maker_profile_url ?? existingRaw.person_linkedin_url ?? existingRaw.profile_url) as string | null,
+                        evidence_url: (existingRaw.job_url ?? existingRaw.evidence_url ?? existingRaw.source_url) as string | null,
+                        provider_item_id: (existingRaw.provider_job_id ?? existingRaw.provider_item_id) as string | null,
+                        normalized_candidate_id: (existingRaw.normalized_candidate_id) as string | null,
+                      }, providerProvenanceCtx ?? { plan_id: String(plan_id ?? "") });
+                      return prov;
+                    })(),
                   },
                 }).eq("id", r.id as string);
               }
@@ -1672,6 +1712,31 @@ Deno.serve(async (req) => {
     nextStep = null;
   }
 
+  // Provenance hand-off guard: Scout → Aria. Only provider-backed candidates may
+  // reach Aria. Fabricated identities (absent from the accepted provider index)
+  // are dropped; if NONE survive, Aria is not invoked with fallback/invented
+  // candidates — the chain stops (no Aria → no downstream Penn → no drafts).
+  let handoffInput: string | null = apiText ?? null;
+  if (nextStep && agent_slug === "scout" && nextStep.agent_slug === "aria" && providerIndexForHandoff) {
+    try {
+      const guard = guardScoutToAria(parseScoutCandidates(apiText, null), providerIndexForHandoff);
+      await supabase.from("activity_feed").insert({
+        workspace_id, plan_id, agent_id: agent.id,
+        event_type: "provenance_handoff_guard",
+        title: "Scout→Aria provenance guard",
+        body: guard.summary,
+        metadata: { step_index, verified: guard.verified.length, rejected: guard.rejected.length, stop: guard.shouldStop },
+      });
+      if (guard.shouldStop) {
+        zeroAcceptedSourcing = true;
+        nextStep = null; // never invoke Aria with unsupported/invented candidates
+      } else {
+        // Aria receives ONLY the provider-backed candidates, never Scout's prose.
+        handoffInput = JSON.stringify({ candidates: guard.verified });
+      }
+    } catch (e) { console.warn("[run-agent] provenance handoff guard failed:", e); }
+  }
+
   if (needs_approval) {
     await supabase.from("approvals").insert({
       workspace_id,
@@ -1751,7 +1816,7 @@ Deno.serve(async (req) => {
       task_id: task.id,
       from_agent_slug: agent_slug ?? null,
       to_agent_slug: nextStep.agent_slug ?? null,
-      payload: { instruction: nextStep.instruction, input: apiText },
+      payload: { instruction: nextStep.instruction, input: handoffInput },
     });
     await supabase.from("activity_feed").insert({
       workspace_id,
@@ -1776,7 +1841,7 @@ Deno.serve(async (req) => {
         workspace_id,
         user_id,
         instruction: nextStep.instruction,
-        input: apiText,
+        input: handoffInput,
         needs_approval: nextStep.needs_approval === true,
         // Per-step tool_input (set on the step's metadata) wins, so a plan can
         // mix tools across steps (e.g. Hawk scrape → Scout apify). Steps without

@@ -396,6 +396,7 @@ Deno.test("writeMemoryFromAgentResult: Penn links drafts to explicit remembered 
     canonical_final_decision: "contact", contact_ready: true, company: co,
     source_url: `https://${co}.example.com`, evidence_url: `https://${co}.example.com/careers/1`,
     decision_maker_profile_url: "https://linkedin.com/in/decision-maker",
+    provider_provenance: { verified: true, level: "person" },
   });
   tables.lead_candidates.push(
     { id: "lead-1", workspace_id: "ws-1", account_id: "acc-1", contact_id: "con-1", plan_id: "prior-plan", raw: contactReadyRaw("acme") },
@@ -441,7 +442,7 @@ Deno.test("writeMemoryFromAgentResult: draft gate blocks non-contact-ready remem
 Deno.test("writeMemoryFromAgentResult: source_and_qualify_only persists zero drafts", async () => {
   const { tables, admin } = makeFake();
   tables.lead_candidates.push(
-    { id: "lead-1", workspace_id: "ws-1", account_id: "acc-1", contact_id: "con-1", plan_id: "p", raw: { canonical_final_decision: "contact", contact_ready: true, company: "acme", source_url: "https://acme.example.com", evidence_url: "https://acme.example.com/1", decision_maker_profile_url: "https://linkedin.com/in/x" } },
+    { id: "lead-1", workspace_id: "ws-1", account_id: "acc-1", contact_id: "con-1", plan_id: "p", raw: { canonical_final_decision: "contact", contact_ready: true, company: "acme", source_url: "https://acme.example.com", evidence_url: "https://acme.example.com/1", decision_maker_profile_url: "https://linkedin.com/in/x", provider_provenance: { verified: true, level: "person" } } },
   );
   await writeMemoryFromAgentResult({
     admin, workspace_id: "ws-1", plan_id: "p", task_id: "task-1", agent_slug: "penn",
@@ -450,4 +451,18 @@ Deno.test("writeMemoryFromAgentResult: source_and_qualify_only persists zero dra
     lead_candidate_ids: ["lead-1"],
   });
   assertEquals(tables.outreach_drafts.length, 0, "sourcing-only mode never drafts, even for a contact-ready lead");
+});
+
+Deno.test("writeMemoryFromAgentResult: draft gate requires verified provider_provenance (level=person)", async () => {
+  const { tables, admin } = makeFake();
+  // Contact-ready in every way EXCEPT provenance is not verified → blocked.
+  tables.lead_candidates.push(
+    { id: "lead-1", workspace_id: "ws-1", account_id: "acc-1", contact_id: "con-1", plan_id: "p", raw: { canonical_final_decision: "contact", contact_ready: true, company: "acme", source_url: "https://acme.example.com", evidence_url: "https://acme.example.com/1", decision_maker_profile_url: "https://linkedin.com/in/x", provider_provenance: { verified: false, level: "person" } } },
+  );
+  await writeMemoryFromAgentResult({
+    admin, workspace_id: "ws-1", plan_id: "p", task_id: "task-1", agent_slug: "penn",
+    output_text: JSON.stringify([{ subject: "Hi", body: "Body." }]),
+    lead_candidate_ids: ["lead-1"],
+  });
+  assertEquals(tables.outreach_drafts.length, 0, "unverified provenance → no draft, even when otherwise contact-ready");
 });

@@ -968,14 +968,19 @@ async function writePennDrafts(ctx: AgentResultCtx): Promise<void> {
     // to LLM-fabricated recipients and drafts with 0 qualified leads (the Q1 bug),
     // in every execution mode.
     const raw = (link?.raw ?? {}) as Record<string, unknown>;
+    // Provider-backed identity MUST come from the persisted provenance record
+    // (verified=true), never from raw-field presence or an LLM boolean. A
+    // person-level draft additionally requires provenance.level === "person".
+    const prov = (raw.provider_provenance ?? null) as { verified?: boolean; level?: string } | null;
+    const provVerified = prov?.verified === true;
     const evidenceUrl = (raw.evidence_url ?? raw.source_url ?? (raw.run_trace as Record<string, unknown> | undefined)?.evidence_type) as unknown;
     const gate = evaluateDraftGate({
       execution_mode: ctx.execution_mode,
       canonical_final_decision: (raw.canonical_final_decision as string) ?? null,
       contact_ready: raw.contact_ready === true,
-      provider_company_identity: !!(raw.company || raw.company_name || raw.website || raw.source_url),
-      provider_or_verified_person_identity: !!(raw.decision_maker_profile_url || raw.person_linkedin_url || raw.profile_url),
-      person_company_association: !!(raw.decision_maker_profile_url || raw.person_linkedin_url) && !!(raw.company || raw.company_name),
+      provider_company_identity: provVerified,
+      provider_or_verified_person_identity: provVerified && prov?.level === "person",
+      person_company_association: provVerified && prov?.level === "person" && !!(raw.company || raw.company_name),
       evidence_url_supported: typeof evidenceUrl === "string" && /^https?:\/\//i.test(evidenceUrl),
       hard_disqualifier_hit: (raw.canonical_final_decision as string) === "skip",
       persisted_lead_candidate_id: link?.id ?? null,
