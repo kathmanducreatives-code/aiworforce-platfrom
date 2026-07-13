@@ -49,6 +49,37 @@ export function evaluateDraftGate(input: DraftGateInput): DraftGateResult {
   return { allowed: reasons.length === 0, blocked_reasons: reasons };
 }
 
+/**
+ * Build a DraftGateInput from a persisted lead_candidates.raw jsonb. This is the
+ * SINGLE source of truth for how provenance/decision/evidence map to the gate, so
+ * every draft path (memoryWriter Penn drafts AND leadActionExecutor.generate_outreach)
+ * gates identically. Provider-backed identity comes ONLY from
+ * provider_provenance.verified — never from raw-field presence or an LLM boolean.
+ */
+export function buildDraftGateInputFromRaw(
+  raw: Record<string, unknown> | null | undefined,
+  opts: { execution_mode?: string | null; persisted_lead_candidate_id?: string | null },
+): DraftGateInput {
+  const r = (raw ?? {}) as Record<string, unknown>;
+  const prov = (r.provider_provenance ?? null) as { verified?: boolean; level?: string } | null;
+  const provVerified = prov?.verified === true;
+  const isPerson = provVerified && prov?.level === "person";
+  const evidence = (r.evidence_url ?? r.source_url) as unknown;
+  const evidenceOk = typeof evidence === "string" && /^https?:\/\//i.test(evidence);
+  const decision = (r.canonical_final_decision as string) ?? null;
+  return {
+    execution_mode: opts.execution_mode ?? null,
+    canonical_final_decision: decision,
+    contact_ready: r.contact_ready === true,
+    provider_company_identity: provVerified,
+    provider_or_verified_person_identity: isPerson,
+    person_company_association: isPerson && !!(r.company || r.company_name),
+    evidence_url_supported: evidenceOk,
+    hard_disqualifier_hit: decision === "skip",
+    persisted_lead_candidate_id: opts.persisted_lead_candidate_id ?? null,
+  };
+}
+
 /** Convenience: a batch summary — how many drafts are allowed, and why the rest are blocked. */
 export function gateDraftBatch(inputs: DraftGateInput[]): { allowed: DraftGateInput[]; blocked: Array<{ input: DraftGateInput; reasons: string[] }> } {
   const allowed: DraftGateInput[] = [];

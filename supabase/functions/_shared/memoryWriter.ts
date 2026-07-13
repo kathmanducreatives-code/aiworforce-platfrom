@@ -11,6 +11,8 @@ import { classifyConversationType } from "./competitorDiscovery.ts";
 import { buildDecisionMakers } from "./decisionMakers.ts";
 import { evaluateDraftGate } from "./draftGate.ts";
 import { isSourceAndQualifyOnly } from "./executionMode.ts";
+import { guardProviderLeadInsert, type LeadOrigin, type RejectionCounter } from "./leadPersistenceGuard.ts";
+import type { NormalizedProviderItem, ProvenanceCtx } from "./leadHandoffGuard.ts";
 
 // ---------- Inlined normalizers (mirrors src/components/chat/workspace/workbench/normalize.ts) ----------
 
@@ -166,6 +168,48 @@ interface BaseCtx {
   task_id?: string | null;
   /** Requested execution mode; source_and_qualify_only forbids draft writes. */
   execution_mode?: string | null;
+  // ---- provider provenance context (Find Leads sourcing) ----
+  /** Provider name (e.g. "apify"). */
+  provider?: string | null;
+  /** Actor id / selected_actor_key. */
+  actor_id?: string | null;
+  provider_run_id?: string | null;
+  workflow_run_id?: string | null;
+  trace_id?: string | null;
+  /** When true, an INVALID provider provenance BLOCKS the lead insert (no verified=false ride-along). */
+  enforce_provenance?: boolean;
+  /** Origin for leads written in this ctx (default provider_sourced for provider writers). */
+  lead_origin?: LeadOrigin;
+  /** Accumulates rejected-provenance count/reasons for the terminal no_results payload. */
+  provenance_rejections?: RejectionCounter;
+}
+
+/**
+ * Centralized pre-insert provenance decision for a provider-sourced lead. Returns
+ * the raw patch to stamp (lead_origin + provider_provenance) when allowed, or null
+ * when the insert must be blocked. When ctx.enforce_provenance is not set, invalid
+ * provenance is stamped (verified=false) but not hard-blocked (legacy callers);
+ * the draft gate still refuses drafts for verified=false leads.
+ */
+function leadPersistenceDecision(
+  ctx: BaseCtx,
+  item: NormalizedProviderItem,
+  level: "account" | "person",
+): { blocked: boolean; patch: Record<string, unknown> } {
+  const origin: LeadOrigin = ctx.lead_origin ?? "provider_sourced";
+  const provCtx: ProvenanceCtx = {
+    provider: ctx.provider ?? "apify",
+    actor_id: ctx.actor_id ?? null,
+    provider_run_id: ctx.provider_run_id ?? null,
+    workflow_run_id: ctx.workflow_run_id ?? null,
+    plan_id: ctx.plan_id ?? null,
+    trace_id: ctx.trace_id ?? null,
+  };
+  const g = guardProviderLeadInsert({ origin, level, item: { ...item, ...(level === "person" ? { person_linkedin_url: item.person_linkedin_url ?? item.profile_url ?? null } : {}) }, ctx: provCtx, counter: ctx.provenance_rejections });
+  if (!g.allow && ctx.enforce_provenance === true) {
+    return { blocked: true, patch: {} };
+  }
+  return { blocked: false, patch: { lead_origin: origin, provider_provenance: g.provenance ?? null } };
 }
 
 interface ToolCallCtx extends BaseCtx {
@@ -371,6 +415,16 @@ async function writeApifyJobs(ctx: ToolCallCtx, output: any): Promise<void> {
       .select("id")
       .maybeSingle();
 
+    // Provenance guard — an invalid provider provenance BLOCKS this insert when
+    // enforcement is on (Find Leads sourcing). No verified=false ride-along.
+    const jobDecision = leadPersistenceDecision(ctx, {
+      company: name, source_url: it.url ?? null, url: it.url ?? null, job_url: it.url ?? null,
+      website: it.website ?? it.companyUrl ?? null, domain: domain ?? null,
+      company_linkedin_url: it.companyLinkedinUrl ?? null, evidence_url: it.url ?? null,
+      provider_item_id: it.providerJobId ?? it.providerRefId ?? null,
+    }, "account");
+    if (jobDecision.blocked) continue;
+
     // Insert lead_candidate. Persist the preserved source data at raw TOP LEVEL
     // (clean names) so Workbench/CSV can read it — not buried under { hiring }.
     // Real source proof only; never a fake proof_incomplete URL.
@@ -386,6 +440,7 @@ async function writeApifyJobs(ctx: ToolCallCtx, output: any): Promise<void> {
         status: "new",
         reason: `${it.title ?? "Role"} @ ${it.company ?? domain ?? ""}`.trim(),
         raw: {
+          ...jobDecision.patch,
           hiring: it.raw ?? {},
           company_website: it.website ?? null,
           website: it.website ?? null,
@@ -511,6 +566,13 @@ async function writeApifyPeople(ctx: ToolCallCtx, output: any): Promise<void> {
       .select("id")
       .maybeSingle();
 
+    const peopleDecision = leadPersistenceDecision(ctx, {
+      person: fullName || null, name: fullName || null, company: p.company ?? null,
+      source_url: linkedin, url: linkedin, person_linkedin_url: linkedin, profile_url: linkedin,
+      evidence_url: linkedin,
+    }, "person");
+    if (peopleDecision.blocked) continue;
+
     await ctx.admin
       .from("lead_candidates")
       .insert({
@@ -522,7 +584,7 @@ async function writeApifyPeople(ctx: ToolCallCtx, output: any): Promise<void> {
         lead_type: "person",
         status: "new",
         reason: [p.title, p.company].filter(Boolean).join(" @ ") || null,
-        raw: { profile: p.raw ?? {} },
+        raw: { ...peopleDecision.patch, profile: p.raw ?? {} },
       });
   }
 }
@@ -659,6 +721,13 @@ async function writeLinkedinEngagement(ctx: ToolCallCtx, output: any): Promise<v
     }
 
     // Lead candidate (person engaging on a relevant post).
+    const engDecision = leadPersistenceDecision(ctx, {
+      person: fullName || null, name: fullName || null, company: company || null,
+      source_url: postUrl ?? profileUrl, url: postUrl ?? profileUrl,
+      person_linkedin_url: profileUrl, profile_url: profileUrl, evidence_url: postUrl ?? profileUrl,
+    }, "person");
+    if (engDecision.blocked) continue;
+
     await ctx.admin.from("lead_candidates").insert({
       workspace_id: ctx.workspace_id,
       conversation_id: ctx.conversation_id ?? null,
@@ -671,8 +740,8 @@ async function writeLinkedinEngagement(ctx: ToolCallCtx, output: any): Promise<v
       reason: reason
         ?? (isCompetitor ? `Competitor signal: ${competitorName ?? "category"}` : (topic ? `Engaging with content about ${topic}` : null)),
       raw: isCompetitor
-        ? { competitor_engagement: it.raw ?? it, competitor_key: seed?.key ?? null, competitor_name: competitorName, competitor_source: competitorRaw?.competitor_source }
-        : { linkedin_engagement: it.raw ?? it },
+        ? { ...engDecision.patch, competitor_engagement: it.raw ?? it, competitor_key: seed?.key ?? null, competitor_name: competitorName, competitor_source: competitorRaw?.competitor_source }
+        : { ...engDecision.patch, linkedin_engagement: it.raw ?? it },
     });
   }
 }
@@ -739,6 +808,13 @@ async function writeLinkedinCommenters(ctx: ToolCallCtx, output: any): Promise<v
       }
     }
 
+    const commenterDecision = leadPersistenceDecision(ctx, {
+      person: fullName || null, name: fullName || null,
+      source_url: postUrl ?? profileUrl, url: postUrl ?? profileUrl,
+      person_linkedin_url: profileUrl, profile_url: profileUrl, evidence_url: postUrl ?? profileUrl,
+    }, "person");
+    if (commenterDecision.blocked) continue;
+
     await ctx.admin.from("lead_candidates").insert({
       workspace_id: ctx.workspace_id,
       conversation_id: ctx.conversation_id ?? null,
@@ -748,7 +824,7 @@ async function writeLinkedinCommenters(ctx: ToolCallCtx, output: any): Promise<v
       lead_type: "person",
       status: "new",
       reason: "Commented on competitor/category post",
-      raw: { linkedin_post_commenter: it.raw ?? it },
+      raw: { ...commenterDecision.patch, linkedin_post_commenter: it.raw ?? it },
     });
   }
 }

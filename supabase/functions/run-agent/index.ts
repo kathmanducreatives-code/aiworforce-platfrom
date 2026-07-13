@@ -17,6 +17,7 @@ import { classifyRoleFamily, type RoleFamily } from "../_shared/roleFamilyMatche
 import { buildCanonicalStamp } from "../_shared/leadCanonicalStamp.ts";
 import { stepAllowedInMode, isSourceAndQualifyOnly } from "../_shared/executionMode.ts";
 import { buildProviderIndexFromItems, parseScoutCandidates, guardScoutToAria, buildProvenanceRecord, assertPersistenceProvenance, type NormalizedProviderIndex, type ProvenanceCtx } from "../_shared/leadHandoffGuard.ts";
+import { newRejectionCounter, sealProvenance, buildNoResults, type RejectionCounter } from "../_shared/leadPersistenceGuard.ts";
 
 
 const cors = {
@@ -249,6 +250,9 @@ Deno.serve(async (req) => {
   // leads (not a tool failure). We then skip Aria — there is nothing to rank.
   let zeroAcceptedSourcing = false;
   let sourcingAttemptsCount = 0;
+  // Provider-provenance rejections accumulated during persistence; surfaced in the
+  // no_results terminal payload. Broad scope so the finalizer can read it.
+  const provenanceRejections: RejectionCounter = newRejectionCounter();
   // Provider-provenance: the immutable index of accepted provider items + run
   // context, built during sourcing and read at the Scout→Aria hand-off so an
   // LLM-invented company/person/URL can never reach Aria or persistence.
@@ -1254,8 +1258,21 @@ Deno.serve(async (req) => {
                 tool_call_id: null,
                 tool_name: "source_with_apify",
                 selected_actor_key: planned_actor_key ?? null,
+                // Provider provenance context — invalid provenance now BLOCKS the
+                // lead_candidates insert (no verified=false ride-along).
+                provider: "apify",
+                actor_id: planned_actor_key ?? "apify",
+                provider_run_id: run_id,
+                workflow_run_id: run_id,
+                trace_id: run_id,
+                enforce_provenance: true,
+                lead_origin: "provider_sourced",
+                provenance_rejections: provenanceRejections,
                 output: { items: rawItems, total: rawItems.length, summary: `${effectiveFound}/${adaptive.requested} accepted across ${adaptive.attempts.length} attempt(s)` },
               });
+              if (provenanceRejections.count > 0) {
+                console.warn(`[run-agent] provenance guard blocked ${provenanceRejections.count} unproven lead insert(s):`, provenanceRejections.reasons);
+              }
             } catch (e) { console.warn("[run-agent] capped persistence failed:", e); }
 
             // Phase 3 — persist per-row lead quality onto each Workbench row
@@ -1367,8 +1384,12 @@ Deno.serve(async (req) => {
                     // accepted provider item); stamp the traceable record + verified
                     // flag that draftGate/downstream actions read. verified=false
                     // means required provenance is missing → downstream actions block.
-                    provider_provenance: (() => {
-                      const prov = buildProvenanceRecord({
+                    // Provenance immutability: a trusted block was stamped at
+                    // insert time by memoryWriter. Aria/scoring/LLM output can NOT
+                    // overwrite it — sealProvenance keeps the trusted block and
+                    // flags any overwrite attempt. Score/confidence never override.
+                    ...(() => {
+                      const incoming = buildProvenanceRecord({
                         company: (existingRaw.company ?? existingRaw.company_name ?? nameById.get(r.account_id as string)) as string | null,
                         source_url: (existingRaw.source_url ?? existingRaw.url ?? rowUrl) as string | null,
                         domain: (existingRaw.domain ?? existingRaw.company_domain) as string | null,
@@ -1378,7 +1399,9 @@ Deno.serve(async (req) => {
                         provider_item_id: (existingRaw.provider_job_id ?? existingRaw.provider_item_id) as string | null,
                         normalized_candidate_id: (existingRaw.normalized_candidate_id) as string | null,
                       }, providerProvenanceCtx ?? { plan_id: String(plan_id ?? "") });
-                      return prov;
+                      const trusted = (existingRaw.provider_provenance ?? null) as Parameters<typeof sealProvenance>[0];
+                      const sealed = sealProvenance(trusted, incoming);
+                      return { provider_provenance: sealed.provenance, provenance_overwrite_attempt: sealed.provenance_overwrite_attempt };
                     })(),
                   },
                 }).eq("id", r.id as string);
@@ -1509,9 +1532,24 @@ Deno.serve(async (req) => {
       ? "Try a broader persona, draft an account-level template, or export the accounts. No contacts attached, no credits charged, nothing sent."
       : "Try broadening the role, industry, or location — or pick another lead source. No leads were saved, no credits charged, nothing sent.";
 
+    // Canonical no_results terminal (Section 4). Uses the existing `complete`
+    // status enum and records result_status + counts in the result JSON (no
+    // migration). Aria/Penn are not invoked; nothing persists.
+    const noResults = buildNoResults(provenanceRejections.count);
     await supabase.from("tasks").update({
       status: "complete",
-      result: { output: scoutMsg, no_qualified_matches: true, attempt_log: adaptiveAttempts.length ? adaptiveAttempts : undefined },
+      result: {
+        output: scoutMsg,
+        no_qualified_matches: true,
+        result_status: "no_results",
+        qualified_count: 0,
+        contact_ready_count: 0,
+        persisted_lead_count: 0,
+        rejected_provenance_count: noResults.rejected_provenance_count,
+        rejected_provenance_reasons: provenanceRejections.reasons,
+        next_step: null,
+        attempt_log: adaptiveAttempts.length ? adaptiveAttempts : undefined,
+      },
     }).eq("id", task.id);
     await supabase.from("task_plans").update({ status: "failed", completed_at: new Date().toISOString() }).eq("id", plan_id);
 
