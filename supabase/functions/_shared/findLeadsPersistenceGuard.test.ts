@@ -152,6 +152,34 @@ Deno.test("13b. writeMemoryFromToolCall persists a lead when provenance is valid
   assertEquals((inserted.lead_candidates[0].raw as any).provider_provenance.verified, true);
 });
 
+// toolRegistry path — a provider-backed tool output routed through the SAME
+// writeMemoryFromToolCall call toolRegistry now makes (enforce_provenance=true +
+// provider run context from the actor result). Must fail closed without a run id.
+Deno.test("toolRegistry path: source_with_apify WITHOUT a provider run_id fails closed (no insert)", async () => {
+  const { admin, inserted } = fakeAdmin();
+  await writeMemoryFromToolCall({
+    admin, workspace_id: "ws", plan_id: "plan-1", tool_name: "source_with_apify", selected_actor_key: "apify_jobs",
+    // toolRegistry builds this from result.data.run_id — here the actor returned none.
+    provider: "apify", actor_id: "apify_jobs", provider_run_id: null, workflow_run_id: null, trace_id: null,
+    enforce_provenance: true, lead_origin: "provider_sourced",
+    output: { items: [{ type: "job", company: "Acme", url: "https://linkedin.com/jobs/view/1", title: "RevOps", website: "https://acme.com" }] },
+  });
+  assertEquals(inserted.lead_candidates.length, 0, "no run id ⇒ provider lead must not persist via toolRegistry");
+});
+
+Deno.test("toolRegistry path: source_with_apify WITH a provider run_id persists verified provider_sourced", async () => {
+  const { admin, inserted } = fakeAdmin();
+  await writeMemoryFromToolCall({
+    admin, workspace_id: "ws", plan_id: "plan-1", tool_name: "source_with_apify", selected_actor_key: "apify_jobs",
+    provider: "apify", actor_id: "apify_jobs", provider_run_id: RUN, workflow_run_id: RUN, trace_id: RUN,
+    enforce_provenance: true, lead_origin: "provider_sourced",
+    output: { items: [{ type: "job", company: "Acme", url: "https://linkedin.com/jobs/view/1", title: "RevOps", website: "https://acme.com" }] },
+  });
+  assertEquals(inserted.lead_candidates.length, 1);
+  assertEquals((inserted.lead_candidates[0].raw as any).lead_origin, "provider_sourced");
+  assertEquals((inserted.lead_candidates[0].raw as any).provider_provenance.verified, true);
+});
+
 // 19. sanitized Q1 replay — 22 raw items, 0 provider-backed founders ---------
 Deno.test("19. Q1 replay: raw=22, valid founder candidates=0 ⇒ 0 persisted, no_results", async () => {
   const { admin, inserted } = fakeAdmin();
@@ -165,7 +193,14 @@ Deno.test("19. Q1 replay: raw=22, valid founder candidates=0 ⇒ 0 persisted, no
     output: { items },
   });
   assertEquals(inserted.lead_candidates.length, 0, "0 fabricated founders persist");
+  // Nothing downstream can run: no leads ⇒ no drafts, no approvals.
+  assertEquals((inserted.outreach_drafts ?? []).length, 0, "0 drafts");
+  assertEquals((inserted.approvals ?? []).length, 0, "0 approvals");
+  assert(counter.count >= 22, `all 22 fabricated candidates rejected (got ${counter.count})`);
   const nr = buildNoResults(counter.count);
   assertEquals(nr.status, "no_results");
+  assertEquals(nr.qualified_count, 0);
+  assertEquals(nr.contact_ready_count, 0);
   assertEquals(nr.persisted_lead_count, 0);
+  assertEquals(nr.next_step, null);
 });
