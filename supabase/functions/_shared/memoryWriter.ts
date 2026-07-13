@@ -9,6 +9,8 @@ import type { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { matchCompetitors } from "./competitorRegistry.ts";
 import { classifyConversationType } from "./competitorDiscovery.ts";
 import { buildDecisionMakers } from "./decisionMakers.ts";
+import { evaluateDraftGate } from "./draftGate.ts";
+import { isSourceAndQualifyOnly } from "./executionMode.ts";
 
 // ---------- Inlined normalizers (mirrors src/components/chat/workspace/workbench/normalize.ts) ----------
 
@@ -162,6 +164,8 @@ interface BaseCtx {
   conversation_id?: string | null;
   plan_id?: string | null;
   task_id?: string | null;
+  /** Requested execution mode; source_and_qualify_only forbids draft writes. */
+  execution_mode?: string | null;
 }
 
 interface ToolCallCtx extends BaseCtx {
@@ -894,6 +898,11 @@ function safeParseRankings(text: string): unknown {
 // ---------- Penn outreach drafts ----------
 
 async function writePennDrafts(ctx: AgentResultCtx): Promise<void> {
+  // Global safety: never write an outreach draft in source_and_qualify_only.
+  if (isSourceAndQualifyOnly(ctx.execution_mode)) {
+    console.warn("[memoryWriter] draft persistence blocked: source_and_qualify_only mode");
+    return;
+  }
   const drafts = normalizePennDrafts(ctx.structured ?? safeParseRankings(ctx.output_text) ?? { body: ctx.output_text });
   if (drafts.length === 0) return;
 
@@ -915,13 +924,13 @@ async function writePennDrafts(ctx: AgentResultCtx): Promise<void> {
   //      those leads live in a PRIOR plan, so plan_id lookup wouldn't find them;
   //   2) lead_candidates created in this plan (sourcing → outreach in one plan);
   //   3) most recent leads in this conversation (memory follow-up, no ids given).
-  type LeadRef = { id: string; account_id: string | null; contact_id: string | null };
+  type LeadRef = { id: string; account_id: string | null; contact_id: string | null; raw?: Record<string, unknown> | null };
   let leadIds: LeadRef[] = [];
   if (Array.isArray(ctx.lead_candidate_ids) && ctx.lead_candidate_ids.length > 0) {
     const wanted = ctx.lead_candidate_ids.slice(0, drafts.length);
     const { data: ls } = await ctx.admin
       .from("lead_candidates")
-      .select("id, account_id, contact_id")
+      .select("id, account_id, contact_id, raw")
       .eq("workspace_id", ctx.workspace_id)
       .in("id", wanted);
     const byId = new Map((ls ?? []).map((l: any) => [l.id, l as LeadRef]));
@@ -930,7 +939,7 @@ async function writePennDrafts(ctx: AgentResultCtx): Promise<void> {
   if (leadIds.length === 0 && ctx.plan_id) {
     const { data: ls } = await ctx.admin
       .from("lead_candidates")
-      .select("id, account_id, contact_id")
+      .select("id, account_id, contact_id, raw")
       .eq("workspace_id", ctx.workspace_id)
       .eq("plan_id", ctx.plan_id)
       .order("fit_score", { ascending: false, nullsFirst: false })
@@ -940,7 +949,7 @@ async function writePennDrafts(ctx: AgentResultCtx): Promise<void> {
   if (leadIds.length === 0 && ctx.conversation_id) {
     const { data: ls } = await ctx.admin
       .from("lead_candidates")
-      .select("id, account_id, contact_id")
+      .select("id, account_id, contact_id, raw")
       .eq("workspace_id", ctx.workspace_id)
       .eq("conversation_id", ctx.conversation_id)
       .order("fit_score", { ascending: false, nullsFirst: false })
@@ -948,13 +957,37 @@ async function writePennDrafts(ctx: AgentResultCtx): Promise<void> {
     leadIds = (ls ?? []) as LeadRef[];
   }
 
+  let blocked = 0;
   for (let i = 0; i < drafts.length; i++) {
     const d = drafts[i];
     if (!d.body || !d.body.trim()) continue;
     const link = leadIds[i] ?? null;
+
+    // Global draft gate: a draft may be persisted ONLY for a real persisted lead
+    // that is contact-ready with canonical decision `contact`. This blocks drafts
+    // to LLM-fabricated recipients and drafts with 0 qualified leads (the Q1 bug),
+    // in every execution mode.
+    const raw = (link?.raw ?? {}) as Record<string, unknown>;
+    const evidenceUrl = (raw.evidence_url ?? raw.source_url ?? (raw.run_trace as Record<string, unknown> | undefined)?.evidence_type) as unknown;
+    const gate = evaluateDraftGate({
+      execution_mode: ctx.execution_mode,
+      canonical_final_decision: (raw.canonical_final_decision as string) ?? null,
+      contact_ready: raw.contact_ready === true,
+      provider_company_identity: !!(raw.company || raw.company_name || raw.website || raw.source_url),
+      provider_or_verified_person_identity: !!(raw.decision_maker_profile_url || raw.person_linkedin_url || raw.profile_url),
+      person_company_association: !!(raw.decision_maker_profile_url || raw.person_linkedin_url) && !!(raw.company || raw.company_name),
+      evidence_url_supported: typeof evidenceUrl === "string" && /^https?:\/\//i.test(evidenceUrl),
+      hard_disqualifier_hit: (raw.canonical_final_decision as string) === "skip",
+      persisted_lead_candidate_id: link?.id ?? null,
+    });
+    if (!gate.allowed) {
+      blocked++;
+      continue; // never persist an ungated draft
+    }
+
     await ctx.admin.from("outreach_drafts").insert({
       workspace_id: ctx.workspace_id,
-      lead_candidate_id: link?.id ?? null,
+      lead_candidate_id: link!.id,
       account_id: link?.account_id ?? null,
       contact_id: link?.contact_id ?? null,
       approval_id: approvalId,
@@ -966,6 +999,7 @@ async function writePennDrafts(ctx: AgentResultCtx): Promise<void> {
       raw: d,
     });
   }
+  if (blocked > 0) console.warn(`[memoryWriter] draft gate blocked ${blocked}/${drafts.length} draft(s): not contact-ready / no persisted lead`);
 }
 
 // ---------- Scribe content/reports ----------

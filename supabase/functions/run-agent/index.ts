@@ -15,6 +15,7 @@ import { decideWorkspaceAccess } from "../_shared/workspaceAccessGuard.ts";
 import { separateIntent } from "../_shared/leadIntentModel.ts";
 import { classifyRoleFamily, type RoleFamily } from "../_shared/roleFamilyMatcher.ts";
 import { buildCanonicalStamp } from "../_shared/leadCanonicalStamp.ts";
+import { stepAllowedInMode, isSourceAndQualifyOnly } from "../_shared/executionMode.ts";
 
 
 const cors = {
@@ -1227,6 +1228,7 @@ Deno.serve(async (req) => {
                 workspace_id,
                 plan_id,
                 task_id: task.id,
+                execution_mode: execution_mode_body,
                 tool_call_id: null,
                 tool_name: "source_with_apify",
                 selected_actor_key: planned_actor_key ?? null,
@@ -1628,6 +1630,7 @@ Deno.serve(async (req) => {
         plan_id,
         task_id: task.id,
         agent_slug,
+        execution_mode: execution_mode_body,
         output_text: apiText,
         // Memory-driven draft_outreach carries the target lead ids so Penn
         // drafts link to the remembered leads (which live in a prior plan).
@@ -1652,7 +1655,22 @@ Deno.serve(async (req) => {
     .eq("id", plan_id)
     .maybeSingle();
   const steps: any[] = Array.isArray(plan?.steps) ? (plan!.steps as any[]) : [];
-  const nextStep = steps[(step_index as number) + 1] ?? null;
+  let nextStep = steps[(step_index as number) + 1] ?? null;
+
+  // Safety (defense-in-depth): in source_and_qualify_only never hand off to a
+  // forbidden step (Penn / draft_outreach / send / publish). orchestrate already
+  // strips these from the plan; this guarantees it even if a stale plan carries
+  // one, so no outreach can be generated in this mode.
+  if (nextStep && !stepAllowedInMode({ agent_slug: nextStep.agent_slug, tool_needed: nextStep.tool_needed }, execution_mode_body)) {
+    await supabase.from("activity_feed").insert({
+      workspace_id, plan_id, agent_id: agent.id,
+      event_type: "mode_blocked_step",
+      title: "Outreach step blocked (source_and_qualify_only)",
+      body: `Skipped ${nextStep.agent_slug}/${nextStep.tool_needed}: outreach drafting is forbidden in source_and_qualify_only.`,
+      metadata: { step_index, blocked_agent: nextStep.agent_slug, blocked_tool: nextStep.tool_needed },
+    });
+    nextStep = null;
+  }
 
   if (needs_approval) {
     await supabase.from("approvals").insert({
