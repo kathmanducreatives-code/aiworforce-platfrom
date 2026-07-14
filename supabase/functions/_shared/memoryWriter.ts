@@ -9,6 +9,10 @@ import type { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { matchCompetitors } from "./competitorRegistry.ts";
 import { classifyConversationType } from "./competitorDiscovery.ts";
 import { buildDecisionMakers } from "./decisionMakers.ts";
+import { evaluateDraftGate } from "./draftGate.ts";
+import { isSourceAndQualifyOnly } from "./executionMode.ts";
+import { guardProviderLeadInsert, type LeadOrigin, type RejectionCounter } from "./leadPersistenceGuard.ts";
+import type { NormalizedProviderItem, ProvenanceCtx } from "./leadHandoffGuard.ts";
 
 // ---------- Inlined normalizers (mirrors src/components/chat/workspace/workbench/normalize.ts) ----------
 
@@ -162,6 +166,50 @@ interface BaseCtx {
   conversation_id?: string | null;
   plan_id?: string | null;
   task_id?: string | null;
+  /** Requested execution mode; source_and_qualify_only forbids draft writes. */
+  execution_mode?: string | null;
+  // ---- provider provenance context (Find Leads sourcing) ----
+  /** Provider name (e.g. "apify"). */
+  provider?: string | null;
+  /** Actor id / selected_actor_key. */
+  actor_id?: string | null;
+  provider_run_id?: string | null;
+  workflow_run_id?: string | null;
+  trace_id?: string | null;
+  /** When true, an INVALID provider provenance BLOCKS the lead insert (no verified=false ride-along). */
+  enforce_provenance?: boolean;
+  /** Origin for leads written in this ctx (default provider_sourced for provider writers). */
+  lead_origin?: LeadOrigin;
+  /** Accumulates rejected-provenance count/reasons for the terminal no_results payload. */
+  provenance_rejections?: RejectionCounter;
+}
+
+/**
+ * Centralized pre-insert provenance decision for a provider-sourced lead. Returns
+ * the raw patch to stamp (lead_origin + provider_provenance) when allowed, or null
+ * when the insert must be blocked. When ctx.enforce_provenance is not set, invalid
+ * provenance is stamped (verified=false) but not hard-blocked (legacy callers);
+ * the draft gate still refuses drafts for verified=false leads.
+ */
+function leadPersistenceDecision(
+  ctx: BaseCtx,
+  item: NormalizedProviderItem,
+  level: "account" | "person",
+): { blocked: boolean; patch: Record<string, unknown> } {
+  const origin: LeadOrigin = ctx.lead_origin ?? "provider_sourced";
+  const provCtx: ProvenanceCtx = {
+    provider: ctx.provider ?? "apify",
+    actor_id: ctx.actor_id ?? null,
+    provider_run_id: ctx.provider_run_id ?? null,
+    workflow_run_id: ctx.workflow_run_id ?? null,
+    plan_id: ctx.plan_id ?? null,
+    trace_id: ctx.trace_id ?? null,
+  };
+  const g = guardProviderLeadInsert({ origin, level, item: { ...item, ...(level === "person" ? { person_linkedin_url: item.person_linkedin_url ?? item.profile_url ?? null } : {}) }, ctx: provCtx, counter: ctx.provenance_rejections });
+  if (!g.allow && ctx.enforce_provenance === true) {
+    return { blocked: true, patch: {} };
+  }
+  return { blocked: false, patch: { lead_origin: origin, provider_provenance: g.provenance ?? null } };
 }
 
 interface ToolCallCtx extends BaseCtx {
@@ -367,6 +415,16 @@ async function writeApifyJobs(ctx: ToolCallCtx, output: any): Promise<void> {
       .select("id")
       .maybeSingle();
 
+    // Provenance guard — an invalid provider provenance BLOCKS this insert when
+    // enforcement is on (Find Leads sourcing). No verified=false ride-along.
+    const jobDecision = leadPersistenceDecision(ctx, {
+      company: name, source_url: it.url ?? null, url: it.url ?? null, job_url: it.url ?? null,
+      website: it.website ?? it.companyUrl ?? null, domain: domain ?? null,
+      company_linkedin_url: it.companyLinkedinUrl ?? null, evidence_url: it.url ?? null,
+      provider_item_id: it.providerJobId ?? it.providerRefId ?? null,
+    }, "account");
+    if (jobDecision.blocked) continue;
+
     // Insert lead_candidate. Persist the preserved source data at raw TOP LEVEL
     // (clean names) so Workbench/CSV can read it — not buried under { hiring }.
     // Real source proof only; never a fake proof_incomplete URL.
@@ -382,6 +440,7 @@ async function writeApifyJobs(ctx: ToolCallCtx, output: any): Promise<void> {
         status: "new",
         reason: `${it.title ?? "Role"} @ ${it.company ?? domain ?? ""}`.trim(),
         raw: {
+          ...jobDecision.patch,
           hiring: it.raw ?? {},
           company_website: it.website ?? null,
           website: it.website ?? null,
@@ -507,6 +566,13 @@ async function writeApifyPeople(ctx: ToolCallCtx, output: any): Promise<void> {
       .select("id")
       .maybeSingle();
 
+    const peopleDecision = leadPersistenceDecision(ctx, {
+      person: fullName || null, name: fullName || null, company: p.company ?? null,
+      source_url: linkedin, url: linkedin, person_linkedin_url: linkedin, profile_url: linkedin,
+      evidence_url: linkedin,
+    }, "person");
+    if (peopleDecision.blocked) continue;
+
     await ctx.admin
       .from("lead_candidates")
       .insert({
@@ -518,7 +584,7 @@ async function writeApifyPeople(ctx: ToolCallCtx, output: any): Promise<void> {
         lead_type: "person",
         status: "new",
         reason: [p.title, p.company].filter(Boolean).join(" @ ") || null,
-        raw: { profile: p.raw ?? {} },
+        raw: { ...peopleDecision.patch, profile: p.raw ?? {} },
       });
   }
 }
@@ -655,6 +721,13 @@ async function writeLinkedinEngagement(ctx: ToolCallCtx, output: any): Promise<v
     }
 
     // Lead candidate (person engaging on a relevant post).
+    const engDecision = leadPersistenceDecision(ctx, {
+      person: fullName || null, name: fullName || null, company: company || null,
+      source_url: postUrl ?? profileUrl, url: postUrl ?? profileUrl,
+      person_linkedin_url: profileUrl, profile_url: profileUrl, evidence_url: postUrl ?? profileUrl,
+    }, "person");
+    if (engDecision.blocked) continue;
+
     await ctx.admin.from("lead_candidates").insert({
       workspace_id: ctx.workspace_id,
       conversation_id: ctx.conversation_id ?? null,
@@ -667,8 +740,8 @@ async function writeLinkedinEngagement(ctx: ToolCallCtx, output: any): Promise<v
       reason: reason
         ?? (isCompetitor ? `Competitor signal: ${competitorName ?? "category"}` : (topic ? `Engaging with content about ${topic}` : null)),
       raw: isCompetitor
-        ? { competitor_engagement: it.raw ?? it, competitor_key: seed?.key ?? null, competitor_name: competitorName, competitor_source: competitorRaw?.competitor_source }
-        : { linkedin_engagement: it.raw ?? it },
+        ? { ...engDecision.patch, competitor_engagement: it.raw ?? it, competitor_key: seed?.key ?? null, competitor_name: competitorName, competitor_source: competitorRaw?.competitor_source }
+        : { ...engDecision.patch, linkedin_engagement: it.raw ?? it },
     });
   }
 }
@@ -735,6 +808,13 @@ async function writeLinkedinCommenters(ctx: ToolCallCtx, output: any): Promise<v
       }
     }
 
+    const commenterDecision = leadPersistenceDecision(ctx, {
+      person: fullName || null, name: fullName || null,
+      source_url: postUrl ?? profileUrl, url: postUrl ?? profileUrl,
+      person_linkedin_url: profileUrl, profile_url: profileUrl, evidence_url: postUrl ?? profileUrl,
+    }, "person");
+    if (commenterDecision.blocked) continue;
+
     await ctx.admin.from("lead_candidates").insert({
       workspace_id: ctx.workspace_id,
       conversation_id: ctx.conversation_id ?? null,
@@ -744,7 +824,7 @@ async function writeLinkedinCommenters(ctx: ToolCallCtx, output: any): Promise<v
       lead_type: "person",
       status: "new",
       reason: "Commented on competitor/category post",
-      raw: { linkedin_post_commenter: it.raw ?? it },
+      raw: { ...commenterDecision.patch, linkedin_post_commenter: it.raw ?? it },
     });
   }
 }
@@ -894,6 +974,11 @@ function safeParseRankings(text: string): unknown {
 // ---------- Penn outreach drafts ----------
 
 async function writePennDrafts(ctx: AgentResultCtx): Promise<void> {
+  // Global safety: never write an outreach draft in source_and_qualify_only.
+  if (isSourceAndQualifyOnly(ctx.execution_mode)) {
+    console.warn("[memoryWriter] draft persistence blocked: source_and_qualify_only mode");
+    return;
+  }
   const drafts = normalizePennDrafts(ctx.structured ?? safeParseRankings(ctx.output_text) ?? { body: ctx.output_text });
   if (drafts.length === 0) return;
 
@@ -915,13 +1000,13 @@ async function writePennDrafts(ctx: AgentResultCtx): Promise<void> {
   //      those leads live in a PRIOR plan, so plan_id lookup wouldn't find them;
   //   2) lead_candidates created in this plan (sourcing → outreach in one plan);
   //   3) most recent leads in this conversation (memory follow-up, no ids given).
-  type LeadRef = { id: string; account_id: string | null; contact_id: string | null };
+  type LeadRef = { id: string; account_id: string | null; contact_id: string | null; raw?: Record<string, unknown> | null };
   let leadIds: LeadRef[] = [];
   if (Array.isArray(ctx.lead_candidate_ids) && ctx.lead_candidate_ids.length > 0) {
     const wanted = ctx.lead_candidate_ids.slice(0, drafts.length);
     const { data: ls } = await ctx.admin
       .from("lead_candidates")
-      .select("id, account_id, contact_id")
+      .select("id, account_id, contact_id, raw")
       .eq("workspace_id", ctx.workspace_id)
       .in("id", wanted);
     const byId = new Map((ls ?? []).map((l: any) => [l.id, l as LeadRef]));
@@ -930,7 +1015,7 @@ async function writePennDrafts(ctx: AgentResultCtx): Promise<void> {
   if (leadIds.length === 0 && ctx.plan_id) {
     const { data: ls } = await ctx.admin
       .from("lead_candidates")
-      .select("id, account_id, contact_id")
+      .select("id, account_id, contact_id, raw")
       .eq("workspace_id", ctx.workspace_id)
       .eq("plan_id", ctx.plan_id)
       .order("fit_score", { ascending: false, nullsFirst: false })
@@ -940,7 +1025,7 @@ async function writePennDrafts(ctx: AgentResultCtx): Promise<void> {
   if (leadIds.length === 0 && ctx.conversation_id) {
     const { data: ls } = await ctx.admin
       .from("lead_candidates")
-      .select("id, account_id, contact_id")
+      .select("id, account_id, contact_id, raw")
       .eq("workspace_id", ctx.workspace_id)
       .eq("conversation_id", ctx.conversation_id)
       .order("fit_score", { ascending: false, nullsFirst: false })
@@ -948,13 +1033,42 @@ async function writePennDrafts(ctx: AgentResultCtx): Promise<void> {
     leadIds = (ls ?? []) as LeadRef[];
   }
 
+  let blocked = 0;
   for (let i = 0; i < drafts.length; i++) {
     const d = drafts[i];
     if (!d.body || !d.body.trim()) continue;
     const link = leadIds[i] ?? null;
+
+    // Global draft gate: a draft may be persisted ONLY for a real persisted lead
+    // that is contact-ready with canonical decision `contact`. This blocks drafts
+    // to LLM-fabricated recipients and drafts with 0 qualified leads (the Q1 bug),
+    // in every execution mode.
+    const raw = (link?.raw ?? {}) as Record<string, unknown>;
+    // Provider-backed identity MUST come from the persisted provenance record
+    // (verified=true), never from raw-field presence or an LLM boolean. A
+    // person-level draft additionally requires provenance.level === "person".
+    const prov = (raw.provider_provenance ?? null) as { verified?: boolean; level?: string } | null;
+    const provVerified = prov?.verified === true;
+    const evidenceUrl = (raw.evidence_url ?? raw.source_url ?? (raw.run_trace as Record<string, unknown> | undefined)?.evidence_type) as unknown;
+    const gate = evaluateDraftGate({
+      execution_mode: ctx.execution_mode,
+      canonical_final_decision: (raw.canonical_final_decision as string) ?? null,
+      contact_ready: raw.contact_ready === true,
+      provider_company_identity: provVerified,
+      provider_or_verified_person_identity: provVerified && prov?.level === "person",
+      person_company_association: provVerified && prov?.level === "person" && !!(raw.company || raw.company_name),
+      evidence_url_supported: typeof evidenceUrl === "string" && /^https?:\/\//i.test(evidenceUrl),
+      hard_disqualifier_hit: (raw.canonical_final_decision as string) === "skip",
+      persisted_lead_candidate_id: link?.id ?? null,
+    });
+    if (!gate.allowed) {
+      blocked++;
+      continue; // never persist an ungated draft
+    }
+
     await ctx.admin.from("outreach_drafts").insert({
       workspace_id: ctx.workspace_id,
-      lead_candidate_id: link?.id ?? null,
+      lead_candidate_id: link!.id,
       account_id: link?.account_id ?? null,
       contact_id: link?.contact_id ?? null,
       approval_id: approvalId,
@@ -966,6 +1080,7 @@ async function writePennDrafts(ctx: AgentResultCtx): Promise<void> {
       raw: d,
     });
   }
+  if (blocked > 0) console.warn(`[memoryWriter] draft gate blocked ${blocked}/${drafts.length} draft(s): not contact-ready / no persisted lead`);
 }
 
 // ---------- Scribe content/reports ----------

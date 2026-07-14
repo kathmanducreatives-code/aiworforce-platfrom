@@ -6,8 +6,15 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { signalDedupeKey } from "../_shared/signalQuality.ts";
 import { compileCompanyBrainContext } from "../_shared/companyBrainCompiler.ts";
 import { buildRadarScanPlan } from "../_shared/radarScanPlanner.ts";
-import { firecrawlHitToCandidate, scoreCandidates, type RadarPlanSource, type ScoredCandidate } from "../_shared/radarCandidatePipeline.ts";
+import { scoreCandidates, type RadarPlanSource, type ScoredCandidate } from "../_shared/radarCandidatePipeline.ts";
+import { runFirecrawlSource } from "../_shared/radarSourceExecution.ts";
+import type { RadarSource } from "../_shared/radarScanPlanner.ts";
 import { apifyJobsSourceStatus, buildApifyJobsInput, fetchApifyJobs, apifyRowsToScoredItems } from "../_shared/radarSources/apifyJobsHiringSource.ts";
+import { buildRadarIntelligenceProfile } from "../_shared/radarIntel/radarIntelligenceProfile.ts";
+import { enrichAndGateRows, type EnrichableRow } from "../_shared/radarIntel/radarSignalEnrichment.ts";
+import { postsAdapterStatus, commentsAdapterStatus, peopleAdapterStatus, normalizePostRow, normalizeCommentRow, runApifyActor } from "../_shared/radarIntel/radarProviderAdapters.ts";
+import { postsToSignalRows, commentsToSignalRows, type BuildResult } from "../_shared/radarIntel/linkedInSourceExecution.ts";
+import { buildSourceDiagnostics, type SourceDiagnostics } from "../_shared/radarIntel/radarDiagnostics.ts";
 
 const cors = {
   "Access-Control-Allow-Origin": "*",
@@ -76,33 +83,11 @@ async function firecrawlSearch(query: string, limit: number): Promise<FirecrawlS
   }
 }
 
-function intentQueries(prefs: ReturnType<typeof readPrefs>): string[] {
-  const topics = prefs.linkedin_topics.length ? prefs.linkedin_topics : ["AI SDR", "lead generation", "outbound automation"];
-  const out: string[] = [];
-  for (const t of topics.slice(0, 3)) {
-    out.push(`site:linkedin.com/posts "${t}" 2026`);
-  }
-  return out;
-}
-function competitorQueries(prefs: ReturnType<typeof readPrefs>): string[] {
-  if (!prefs.competitors.length) return [];
-  return prefs.competitors.slice(0, 3).map((c) => `"${c}" alternative OR comparison OR vs site:linkedin.com OR site:reddit.com`);
-}
-function workflowQueries(prefs: ReturnType<typeof readPrefs>): string[] {
-  const topics = prefs.workflow_topics.length ? prefs.workflow_topics : ["Claude Code workflow", "AI agent automation"];
-  return topics.slice(0, 3).map((t) => `"${t}" tutorial OR example 2026`);
-}
-function hiringQueries(prefs: ReturnType<typeof readPrefs>): string[] {
-  const roles = prefs.hiring_roles.length ? prefs.hiring_roles : ["Founder's Associate", "SDR", "GTM"];
-  const geo = prefs.geographies[0] ? ` ${prefs.geographies[0]}` : "";
-  return roles.slice(0, 3).map((r) => `"${r}" hiring${geo} site:linkedin.com/jobs OR site:wellfound.com`);
-}
-
-// Existing Firecrawl categories → radar-plan source (for Brain-scored pipeline).
-const CAT_TO_SOURCE: Record<Category, RadarPlanSource> = {
-  hiring: "hiring", linkedin_intent: "linkedin_posts", competitor: "competitor",
-  workflow_trend: "workflow_trends", people: "linkedin_comments",
-};
+// NOTE: the legacy generic query builders (intentQueries/competitorQueries/
+// workflowQueries/hiringQueries) were removed. Firecrawl queries now come from the
+// compiled Company Brain's scan plan via runFirecrawlSource (radarSourceExecution).
+// This kills the generic-search leak (hard-coded "AI SDR"/"SDR"/"Claude Code"
+// fallbacks) and lets the Brain actually drive execution.
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: cors });
@@ -160,6 +145,20 @@ Deno.serve(async (req) => {
   const scanPlan = buildRadarScanPlan(brain, { firecrawlReady: firecrawl, apifyReady: apifyToken && apifyEnabled });
   const planReasonFor = (source: RadarPlanSource) => scanPlan.source_plan.find((p) => p.source === source)?.reason ?? "";
 
+  // Canonical, workspace-specific intelligence profile — drives role families,
+  // exclusions and the canonical decision at persistence time.
+  const intel = buildRadarIntelligenceProfile(brain);
+  // Per-scan id so this run's signals/diagnostics never mix with previous runs.
+  // Stored in signals.raw (no migration).
+  const scan_run_id = crypto.randomUUID();
+
+  // Env-gated LinkedIn adapters. Actor IDs come from env — never invented. When
+  // unset, the source is not_configured: no provider call, honest diagnostics.
+  const getEnv = (n: string) => Deno.env.get(n);
+  const postsAdapter = postsAdapterStatus(getEnv, apifyToken);
+  const commentsAdapter = commentsAdapterStatus(getEnv, apifyToken);
+  const peopleAdapter = peopleAdapterStatus(getEnv, apifyToken);
+
   const caps: Record<Category, { ready: boolean; reason?: string }> = {
     hiring: firecrawl ? { ready: true } : { ready: false, reason: "Firecrawl required for hiring search" },
     linkedin_intent: firecrawl ? { ready: true } : { ready: false, reason: "Firecrawl required for LinkedIn intent search" },
@@ -213,27 +212,34 @@ Deno.serve(async (req) => {
     people: { found: 0, accepted: 0, status: "skipped" },
   };
 
-  // Existing safe source behaviour: Firecrawl search per category. Returns raw
-  // hits; scoring/normalization now happens in the Company-Brain pipeline below.
-  async function runCategory(cat: Category, queries: string[], wanted: number): Promise<FirecrawlSearchHit[]> {
-    if (wanted <= 0) return [];
-    if (!caps[cat].ready) {
-      perCategory[cat] = { found: 0, accepted: 0, status: "setup_needed", reason: caps[cat].reason };
-      return [];
-    }
-    perCategory[cat].status = "ready";
-    const perQuery = Math.max(3, Math.ceil(wanted * 1.5));
-    const collected: FirecrawlSearchHit[] = [];
-    for (const q of queries) collected.push(...await firecrawlSearch(q, perQuery));
-    perCategory[cat].found = collected.length;
-    return collected;
+  // Category → scan-plan source. The compiled Company Brain drives every query.
+  const CAT_TO_PLAN_SOURCE: Record<Exclude<Category, "people">, RadarSource> = {
+    hiring: "hiring", linkedin_intent: "linkedin_posts", competitor: "competitor", workflow_trend: "workflow_trends",
+  };
+  const planFor = (s: RadarSource) => scanPlan.source_plan.find((p) => p.source === s);
+
+  // Brain-driven Firecrawl execution: staged queries (exact→synonym→adjacent) with
+  // disqualifier exclusions applied, and a hard setup_required short-circuit — an
+  // unusable Brain makes ZERO provider calls instead of running generic searches.
+  async function runFirecrawlCategory(cat: Exclude<Category, "people">, wanted: number): Promise<ScoredCandidate[]> {
+    const plan = planFor(CAT_TO_PLAN_SOURCE[cat]);
+    if (!plan || wanted <= 0) { perCategory[cat] = { found: 0, accepted: 0, status: "skipped" }; return []; }
+    if (!caps[cat].ready) { perCategory[cat] = { found: 0, accepted: 0, status: "setup_needed", reason: caps[cat].reason }; return []; }
+    const res = await runFirecrawlSource({
+      plan, wanted, search: firecrawlSearch, scanPlanReason: plan.reason, setupRequired: scanPlan.setup_required,
+    });
+    perCategory[cat] = {
+      found: res.found, accepted: 0,
+      status: res.status === "setup_needed" ? "setup_needed" : res.status === "ready" ? "ready" : "skipped",
+      reason: res.reason,
+    };
+    return res.items;
   }
 
-  // Hiring source: Apify LinkedIn Jobs (flag) → richer candidates, else Firecrawl fallback.
+  // Hiring source: Apify LinkedIn Jobs (flag) → richer candidates, else Brain-driven Firecrawl.
   let hiringItems: ScoredCandidate[] = [];
   let hiringCap = mix.hiring;
   if (mix.hiring > 0) {
-    const hiringReason = planReasonFor("hiring");
     if (useApifyHiring) {
       hiringCap = HIRING_CAP;
       const input = buildApifyJobsInput(brain, HIRING_CAP);
@@ -244,27 +250,21 @@ Deno.serve(async (req) => {
       } else {
         perCategory.hiring.status = "ready";
         const rows = await fetchApifyJobs(input, Deno.env.get("APIFY_API_TOKEN") ?? "");
-        const norm = apifyRowsToScoredItems(rows, { cap: HIRING_CAP, scanPlanReason: hiringReason });
+        const norm = apifyRowsToScoredItems(rows, { cap: HIRING_CAP, scanPlanReason: planReasonFor("hiring") });
         perCategory.hiring.found = norm.considered;
         hiringItems = norm.items;
       }
-    } else if (caps.hiring.ready) {
-      perCategory.hiring.status = "ready";
-      const perQuery = Math.max(3, Math.ceil(mix.hiring * 1.5));
-      const hits: FirecrawlSearchHit[] = [];
-      for (const q of hiringQueries(prefs)) hits.push(...await firecrawlSearch(q, perQuery));
-      perCategory.hiring.found = hits.length;
-      hiringItems = hits.map((h) => ({ candidate: firecrawlHitToCandidate("hiring", h), source: "hiring" as const, scanPlanReason: hiringReason, provider: "firecrawl_search" }));
     } else {
-      perCategory.hiring = { found: 0, accepted: 0, status: "setup_needed", reason: caps.hiring.reason };
+      // Firecrawl fallback — now Brain-driven (staged plan), not legacy generic queries.
+      hiringItems = await runFirecrawlCategory("hiring", mix.hiring);
     }
   }
 
-  // Other categories: existing Firecrawl search fan-out (unchanged behaviour).
-  const [intentHits, compHits, workflowHits] = await Promise.all([
-    runCategory("linkedin_intent", intentQueries(prefs), mix.linkedin_intent),
-    runCategory("competitor", competitorQueries(prefs), mix.competitor),
-    runCategory("workflow_trend", workflowQueries(prefs), mix.workflow_trend),
+  // Other categories via Brain-driven Firecrawl execution.
+  const [intentItems, compItems, workflowItems] = await Promise.all([
+    runFirecrawlCategory("linkedin_intent", mix.linkedin_intent),
+    runFirecrawlCategory("competitor", mix.competitor),
+    runFirecrawlCategory("workflow_trend", mix.workflow_trend),
   ]);
   if (mix.people > 0) perCategory.people = { found: 0, accepted: 0, status: "setup_needed", reason: caps.people.reason };
 
@@ -285,27 +285,77 @@ Deno.serve(async (req) => {
   if (hiringItems.length) {
     addRows("hiring", scoreCandidates({ items: hiringItems, brain, workspace_id, userId, cap: hiringCap, existingKeys }));
   }
-  for (const [cat, hits] of [
-    ["linkedin_intent", intentHits], ["competitor", compHits], ["workflow_trend", workflowHits],
-  ] as [Category, FirecrawlSearchHit[]][]) {
+  for (const [cat, items] of [
+    ["linkedin_intent", intentItems], ["competitor", compItems], ["workflow_trend", workflowItems],
+  ] as [Category, ScoredCandidate[]][]) {
     const wanted = mix[cat];
-    if (wanted <= 0 || hits.length === 0) continue;
-    const source = CAT_TO_SOURCE[cat];
-    const items = hits.map((h) => ({ candidate: firecrawlHitToCandidate(source, h), source, scanPlanReason: planReasonFor(source), provider: "firecrawl_search" }));
+    if (wanted <= 0 || items.length === 0) continue;
     addRows(cat, scoreCandidates({ items, brain, workspace_id, userId, cap: wanted, existingKeys }));
   }
 
-  if (accepted.length > 0) {
-    const { error: insErr } = await admin.from("signals").insert(accepted);
+  // Structured LinkedIn sources (posts → comments) — ENV-GATED. Runs only when the
+  // actor env var is set; otherwise zero provider calls (diagnostics = not_configured).
+  const apifyTokenValue = Deno.env.get("APIFY_API_TOKEN") ?? "";
+  let postsBuilt: BuildResult | null = null; let postsErr: string | null = null;
+  let commentsBuilt: BuildResult | null = null; let commentsErr: string | null = null;
+  if (postsAdapter.configured && postsAdapter.actor && !scanPlan.setup_required) {
+    try {
+      const terms = [...intel.topics, ...intel.competitors.seeds].slice(0, 3);
+      const rawRows = await runApifyActor(postsAdapter.actor, apifyTokenValue, { searchTerms: terms, maxItems: 25 }, 25);
+      postsBuilt = postsToSignalRows(rawRows.map(normalizePostRow), intel, userId);
+      for (const r of postsBuilt.rows) accepted.push({ ...r, workspace_id, created_by: userId, source: "apify_posts", confidence: 0.5, description: r.title });
+    } catch (e) { postsErr = e instanceof Error ? e.message : "posts fetch failed"; }
+  }
+  if (commentsAdapter.configured && commentsAdapter.actor && !scanPlan.setup_required) {
+    try {
+      // Comments run only from parent post URLs surfaced by the posts source.
+      const postUrls = (postsBuilt?.rows ?? []).map((r) => String((r.raw["source_details"] as Record<string, unknown>)?.["post_url"] ?? "")).filter(Boolean).slice(0, 5);
+      if (postUrls.length) {
+        const rawRows = await runApifyActor(commentsAdapter.actor, apifyTokenValue, { postUrls, maxComments: 30 }, 30);
+        commentsBuilt = commentsToSignalRows(rawRows.map(normalizeCommentRow), intel, userId);
+        for (const r of commentsBuilt.rows) accepted.push({ ...r, workspace_id, created_by: userId, source: "apify_comments", confidence: 0.5, description: r.title });
+      }
+    } catch (e) { commentsErr = e instanceof Error ? e.message : "comments fetch failed"; }
+  }
+
+  // Enrich + gate against the intelligence profile before persistence: drops
+  // unrelated/excluded hiring rows, sets the canonical decision + outreach gate,
+  // cleans duplicate tags and stamps scan_run_id. This is where the tested
+  // intelligence contracts become part of the real persisted workflow.
+  const enrich = enrichAndGateRows(accepted as EnrichableRow[], intel, scan_run_id);
+  const kept = enrich.kept;
+
+  if (kept.length > 0) {
+    const { error: insErr } = await admin.from("signals").insert(kept);
     if (insErr) {
       console.error("signals insert failed", insErr);
       return json({ error: "Failed to save signals", detail: insErr.message }, 500);
     }
   }
 
+  // Per-source diagnostics — honest readiness; every zero is explained.
+  const keptByType = (t: string) => kept.filter((r) => r.signal_type === t).length;
+  const verifiedByType = (t: string) => kept.filter((r) => r.signal_type === t && String((r.raw as Record<string, unknown>)["verification_status"]) === "verified").length;
+  const hiringRejected = (enrich.rejection_reasons["unrelated_role"] ?? 0) + (enrich.rejection_reasons["excluded_company"] ?? 0);
+  const diagnostics: SourceDiagnostics[] = [
+    buildSourceDiagnostics({ source: "hiring", configured: caps.hiring.ready, execution_status: perCategory.hiring.status === "setup_needed" ? "skipped_setup_required" : "ran", queries_attempted: planFor("hiring")?.queries ?? [], raw_count: perCategory.hiring.found, accepted_count: keptByType("hiring"), verified_count: verifiedByType("hiring"), rejected_count: hiringRejected, rejection_reasons: enrich.rejection_reasons }),
+    buildSourceDiagnostics({ source: "competitor", configured: caps.competitor.ready, queries_attempted: planFor("competitor")?.queries ?? [], raw_count: perCategory.competitor.found, accepted_count: keptByType("competitor"), verified_count: verifiedByType("competitor") }),
+    buildSourceDiagnostics({ source: "workflow_trend", configured: caps.workflow_trend.ready, queries_attempted: planFor("workflow_trends")?.queries ?? [], raw_count: perCategory.workflow_trend.found, accepted_count: keptByType("workflow_trend"), verified_count: verifiedByType("workflow_trend") }),
+    buildSourceDiagnostics({ source: "linkedin_post", configured: postsAdapter.configured, execution_status: postsAdapter.configured ? "ran" : "skipped_not_configured", provider_error: postsErr ?? (postsAdapter.configured ? null : postsAdapter.reason), auth_failed: /401|403|auth/i.test(postsErr ?? ""), raw_count: postsBuilt?.considered ?? 0, accepted_count: keptByType("linkedin_post"), rejected_count: postsBuilt?.rejected ?? 0, rejection_reasons: postsBuilt?.rejection_reasons ?? {} }),
+    buildSourceDiagnostics({ source: "linkedin_comment", configured: commentsAdapter.configured, execution_status: commentsAdapter.configured ? "ran" : "skipped_not_configured", provider_error: commentsErr ?? (commentsAdapter.configured ? null : commentsAdapter.reason), auth_failed: /401|403|auth/i.test(commentsErr ?? ""), raw_count: commentsBuilt?.considered ?? 0, accepted_count: keptByType("linkedin_comment"), rejected_count: commentsBuilt?.rejected ?? 0, rejection_reasons: commentsBuilt?.rejection_reasons ?? {} }),
+    buildSourceDiagnostics({ source: "funding", configured: false, execution_status: "skipped_not_configured" }),
+    buildSourceDiagnostics({ source: "decision_maker", configured: peopleAdapter.configured, execution_status: peopleAdapter.configured ? "ran" : "skipped_not_configured", provider_error: peopleAdapter.configured ? null : peopleAdapter.reason }),
+  ];
+
   return json({
     ok: true,
-    inserted: accepted.length,
+    inserted: kept.length,
+    dropped: enrich.dropped.length,
+    dropped_reasons: enrich.rejection_reasons,
+    decision_counts: enrich.decision_counts,
+    scan_run_id,
+    diagnostics,
+    adapters: { linkedin_posts: postsAdapter, linkedin_comments: commentsAdapter, decision_makers: peopleAdapter },
     per_category: perCategory,
     capabilities: caps,
     hiring_provider: hiringStatus.provider,

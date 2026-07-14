@@ -1270,6 +1270,25 @@ export async function runTool(
   // writes and persist ONCE with the capped/deduped accepted set instead.
   if (result.ok && (tool.name === "source_with_apify" || tool.name === "scrape_url") && (input as any)?.defer_persistence !== true) {
     const actorKey = (input as any)?.selected_actor_key ?? null;
+    const data = (result.data ?? {}) as Record<string, unknown>;
+    // source_with_apify is a PROVIDER-backed lead source. Even though the live
+    // Find Leads flow defers persistence to run-agent, a non-deferred call MUST NOT
+    // bypass provenance: thread the real provider run context from the actor result
+    // and enforce — an invalid/missing provenance now FAILS CLOSED (no insert), it
+    // never falls back to user_entered. scrape_url is Firecrawl (attaches to existing
+    // leads, no provider lead insert) so it is not provider-enforced.
+    const isProviderSource = tool.name === "source_with_apify";
+    const providerCtx = isProviderSource
+      ? {
+          provider: "apify",
+          actor_id: (data["actor_id"] as string) ?? actorKey ?? "apify",
+          provider_run_id: (data["run_id"] as string) ?? null,
+          workflow_run_id: (data["run_id"] as string) ?? null,
+          trace_id: (data["run_id"] as string) ?? null,
+          enforce_provenance: true,
+          lead_origin: "provider_sourced" as const,
+        }
+      : {};
     await writeMemoryFromToolCall({
       admin: ctx.admin,
       workspace_id: ctx.workspace_id,
@@ -1278,6 +1297,7 @@ export async function runTool(
       tool_call_id: row?.id ?? null,
       tool_name: tool.name,
       selected_actor_key: actorKey,
+      ...providerCtx,
       output: result.data ?? null,
     });
   }

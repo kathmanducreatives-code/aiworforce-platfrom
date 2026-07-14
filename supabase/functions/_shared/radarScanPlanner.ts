@@ -9,6 +9,23 @@ import type { CompanyBrainContext } from "./companyBrainCompiler.ts";
 export type RadarSource =
   | "hiring" | "funding" | "linkedin_posts" | "linkedin_comments" | "competitor" | "workflow_trends";
 
+/**
+ * Staged query tiers for a source. Execution tries `exact` first and only widens
+ * to `synonym`/`adjacent` when it needs more high-quality candidates. Every tier
+ * is Brain-seeded and preserves the same hard filters (geography is baked into the
+ * query text; disqualifiers ride along in `negative_terms`; the required evidence
+ * and company-identity gates live in the scorer). No tier is ever a bare generic
+ * search — `adjacent` still carries an ICP category seed.
+ */
+export interface StagedQueries {
+  /** Stage 1 — exact ICP category + exact signal/role. */
+  exact: string[];
+  /** Stage 2 — synonym / expanded Brain terms, same hard filters. */
+  synonym: string[];
+  /** Stage 3 — adjacent relevant signal, ICP category preserved. */
+  adjacent: string[];
+}
+
 export interface RadarSourcePlan {
   source: RadarSource;
   provider_preference: "apify" | "firecrawl" | "manual";
@@ -16,6 +33,7 @@ export interface RadarSourcePlan {
   reason: string;
   cap: number;
   queries: string[];
+  staged_queries: StagedQueries;
   negative_terms: string[];
   required_proof: string[];
 }
@@ -69,26 +87,56 @@ export function buildRadarScanPlan(brain: CompanyBrainContext, options: ScanPlan
   const watchlist = brain.competitors_and_tools.watchlist;
   const workflowTerms = uniq([...brain.query_strategy.workflow_terms, ...brain.buying_triggers.content_topics]);
   const linkedinTerms = uniq([...brain.query_strategy.linkedin_topic_terms, ...brain.buying_triggers.content_topics]);
+  // Explicit geography is a HARD filter — bake it into the query text so no stage
+  // (exact/synonym/adjacent) can silently drop it. Empty when the Brain has none.
+  const geo = (brain.icp.locations[0] ?? "").trim();
+  const geoSuffix = geo ? ` ${geo}` : "";
+  const primaryRoles = roles.slice(0, 3);
+  const expandedRoles = roles.slice(3, 8); // wider Brain-derived role terms (synonym tier)
 
   const warnings = [...brain.meta.warnings];
   if (setupRequired) warnings.push("Company Brain incomplete — complete setup for a high-quality scan. Running conservative, low-cap queries and no verified Top Signals until then.");
   else if (weak) warnings.push("Company Brain is weak — running conservative, low-cap queries. Fill ICP for precise radar.");
 
   // ---- query builders (Brain-derived, never disqualifier-violating) ----
-  const hiringQueries = dedupeQueries(
-    roles.slice(0, 3).flatMap((role) => seeds.slice(0, 2).map((cat) => `${cat} hiring "${role}"`)),
-    weak ? 3 : 5,
-  );
-  const fundingQueries = dedupeQueries(
-    seeds.slice(0, 3).flatMap((cat) => ["raised seed funding", "raised Series A funding"].map((f) => `${cat} ${f} 2026`)),
-    weak ? 3 : 5,
-  );
-  const competitorQueries = dedupeQueries(
-    watchlist.slice(0, 5).flatMap((c) => [`${c} product launch`, `${c} pricing update`, `${c} changelog`]),
-    weak ? 3 : 6,
-  );
-  const workflowQueries = dedupeQueries(workflowTerms.slice(0, 6).map((t) => `"${t}" 2026`), weak ? 3 : 6);
-  const postQueries = dedupeQueries(linkedinTerms.slice(0, 6), weak ? 3 : 6);
+  // Every tier bakes in `geoSuffix`, so explicit geography is never dropped when
+  // execution widens from exact → synonym → adjacent.
+  const exactCap = weak ? 3 : 5;
+  const wideCap = weak ? 2 : 4;
+
+  const hiringStaged: StagedQueries = {
+    exact: dedupeQueries(primaryRoles.flatMap((role) => seeds.slice(0, 2).map((cat) => `${cat} hiring "${role}"${geoSuffix}`)), exactCap),
+    synonym: dedupeQueries(expandedRoles.flatMap((role) => seeds.slice(0, 2).map((cat) => `${cat} hiring "${role}"${geoSuffix}`)), wideCap),
+    // Adjacent still carries an ICP category seed — never a bare "hiring" search.
+    adjacent: dedupeQueries(seeds.slice(0, 3).map((cat) => `${cat} startup hiring${geoSuffix}`), wideCap),
+  };
+  const fundingStaged: StagedQueries = {
+    exact: dedupeQueries(seeds.slice(0, 3).flatMap((cat) => ["raised seed funding", "raised Series A funding"].map((f) => `${cat} ${f} 2026${geoSuffix}`)), exactCap),
+    synonym: dedupeQueries(seeds.slice(0, 3).map((cat) => `${cat} announces funding round 2026${geoSuffix}`), wideCap),
+    adjacent: dedupeQueries(seeds.slice(0, 2).map((cat) => `${cat} rapid growth 2026${geoSuffix}`), wideCap),
+  };
+  const competitorStaged: StagedQueries = {
+    exact: dedupeQueries(watchlist.slice(0, 5).map((c) => `${c} product launch`), exactCap),
+    synonym: dedupeQueries(watchlist.slice(0, 5).flatMap((c) => [`${c} pricing update`, `${c} changelog`]), weak ? 3 : 6),
+    adjacent: dedupeQueries(watchlist.slice(0, 3).map((c) => `${c} alternative OR comparison`), wideCap),
+  };
+  const workflowStaged: StagedQueries = {
+    exact: dedupeQueries(workflowTerms.slice(0, 6).map((t) => `"${t}" 2026`), weak ? 3 : 6),
+    synonym: dedupeQueries(workflowTerms.slice(0, 6).map((t) => `"${t}" guide OR trend`), wideCap),
+    adjacent: dedupeQueries(seeds.slice(0, 2).map((cat) => `${cat} workflow trends 2026`), wideCap),
+  };
+  const postStaged: StagedQueries = {
+    exact: dedupeQueries(linkedinTerms.slice(0, 6), weak ? 3 : 6),
+    synonym: dedupeQueries(linkedinTerms.slice(0, 4).map((t) => `${t} lessons`), wideCap),
+    adjacent: dedupeQueries(seeds.slice(0, 2).map((cat) => `${cat} founder insights`), wideCap),
+  };
+
+  // Backward-compatible flat `queries` = the exact tier (existing consumers/tests).
+  const hiringQueries = hiringStaged.exact;
+  const fundingQueries = fundingStaged.exact;
+  const competitorQueries = competitorStaged.exact;
+  const workflowQueries = workflowStaged.exact;
+  const postQueries = postStaged.exact;
 
   const source_plan: RadarSourcePlan[] = [
     {
@@ -98,6 +146,7 @@ export function buildRadarScanPlan(brain: CompanyBrainContext, options: ScanPlan
       reason: `Your ICP targets ${seeds[0]} companies hiring ${roles[0]} and similar buyer roles (Company Brain).`,
       cap: capOf("hiring"),
       queries: hiringQueries,
+      staged_queries: hiringStaged,
       negative_terms: negatives,
       required_proof: ["job_url", "company_domain_or_website"],
     },
@@ -108,6 +157,7 @@ export function buildRadarScanPlan(brain: CompanyBrainContext, options: ScanPlan
       reason: `Recently funded ${seeds[0]} companies are building revenue — timely for outreach (Company Brain).`,
       cap: capOf("funding"),
       queries: fundingQueries,
+      staged_queries: fundingStaged,
       negative_terms: negatives,
       required_proof: ["funding_source_url"],
     },
@@ -118,6 +168,7 @@ export function buildRadarScanPlan(brain: CompanyBrainContext, options: ScanPlan
       reason: `Posts about ${linkedinTerms[0] ?? "your category"} reveal buyer pain and content angles (Company Brain).`,
       cap: capOf("linkedin_posts"),
       queries: postQueries,
+      staged_queries: postStaged,
       negative_terms: negatives,
       required_proof: ["post_url"],
     },
@@ -128,6 +179,7 @@ export function buildRadarScanPlan(brain: CompanyBrainContext, options: ScanPlan
       reason: "Comments under relevant posts surface active buyer pain — runs only from known post URLs.",
       cap: capOf("linkedin_comments"),
       queries: [],
+      staged_queries: { exact: [], synonym: [], adjacent: [] },
       negative_terms: negatives,
       required_proof: ["parent_post_url"],
     },
@@ -138,6 +190,7 @@ export function buildRadarScanPlan(brain: CompanyBrainContext, options: ScanPlan
       reason: watchlist.length ? `Track movement from your watchlist: ${watchlist.slice(0, 3).join(", ")} (Company Brain).` : "No competitors in Company Brain — add some to enable competitor tracking.",
       cap: capOf("competitor"),
       queries: competitorQueries,
+      staged_queries: competitorStaged,
       negative_terms: negatives,
       required_proof: ["source_url"],
     },
@@ -148,6 +201,7 @@ export function buildRadarScanPlan(brain: CompanyBrainContext, options: ScanPlan
       reason: workflowTerms.length ? `Category trends around ${workflowTerms[0]} inform content and timing (Company Brain).` : "No workflow/content topics in Company Brain — add pain points to enable trend tracking.",
       cap: capOf("workflow_trends"),
       queries: workflowQueries,
+      staged_queries: workflowStaged,
       negative_terms: negatives,
       required_proof: ["source_url"],
     },

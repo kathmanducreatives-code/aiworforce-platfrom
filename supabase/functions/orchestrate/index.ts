@@ -11,6 +11,8 @@ import { summarizeRegistryForPrompt } from "../_shared/actorRegistry.ts";
 import { buildDraftOutreachPlan } from "../_shared/draftOutreachPlan.ts";
 import { buildCompetitorDiscoveryPlan } from "../_shared/competitorDiscovery.ts";
 import { extractContentLoopInput, buildContentLoopPlan } from "../_shared/contentEngagementLoop.ts";
+import { separateIntent } from "../_shared/leadIntentModel.ts";
+import { filterPlanForMode, isSourceAndQualifyOnly } from "../_shared/executionMode.ts";
 
 const cors = {
   "Access-Control-Allow-Origin": "*",
@@ -540,7 +542,7 @@ Deno.serve(async (req) => {
       max_results?: number;
       needs_enrichment?: boolean;
       needs_outreach?: boolean;
-      execution_mode?: "fast" | "deep" | "outreach";
+      execution_mode?: "fast" | "deep" | "outreach" | "source_and_qualify_only";
       confidence?: number;
     };
 
@@ -1104,6 +1106,15 @@ Return ONLY valid JSON, no prose, no markdown:
 
     } // end AI planner branch
 
+    // Safety: source_and_qualify_only strips every Penn / outreach / drafting /
+    // publishing step from the plan (whatever added it — AI planner, fallback, or
+    // staged), so the runtime cannot generate outreach. Applied to ALL plan paths.
+    const modeStripped = filterPlanForMode(parsed!.steps as Step[], executionMode);
+    parsed!.steps = modeStripped.steps;
+    if (modeStripped.removed.length) {
+      console.log("[orchestrate] source_and_qualify_only removed steps", modeStripped.removed);
+    }
+
     // Tool availability annotation.
     const connectorsMissing = annotateTools(parsed!.steps);
 
@@ -1138,6 +1149,24 @@ Return ONLY valid JSON, no prose, no markdown:
       return json({ error: "task_plan_insert_failed", details: planError?.message }, 500);
     }
 
+    // Phase A routing — for sourcing/lead intents, separate the request into
+    // persona / company profile / signal / role family and decide account_first vs
+    // profile_first. Threaded to run-agent as `lead_routing` (authoritative), and
+    // recorded on the plan for traceability. Pure / no provider call.
+    const leadRouting = (intent === "sourcing" || intent === "extraction")
+      ? (() => {
+          const si = separateIntent({ message: user_instruction, hardExclusions: (tool_input as { disqualifiers?: string[] } | null)?.disqualifiers ?? undefined });
+          return {
+            source_strategy: si.source_strategy,
+            decision_maker_strategy: si.decision_maker_strategy,
+            requested_role_family: si.requested_role_family,
+            requested_signal: si.requested_signal,
+            target_personas: si.target_personas,
+            relaxation_policy: si.relaxation_policy,
+          };
+        })()
+      : null;
+
     await admin.from("activity_feed").insert({
       workspace_id,
       plan_id: taskPlan.id,
@@ -1156,6 +1185,9 @@ Return ONLY valid JSON, no prose, no markdown:
         tools_required: parsed!.steps.map((s) => s.tool_needed).filter(Boolean),
         connectors_missing: connectorsMissing,
         tool_input: tool_input ?? null,
+        lead_routing: leadRouting,
+        source_and_qualify_only: isSourceAndQualifyOnly(executionMode),
+        mode_removed_steps: modeStripped.removed,
       },
     });
 
@@ -1181,6 +1213,7 @@ Return ONLY valid JSON, no prose, no markdown:
         // plan default, e.g. discovery's Hawk-scrape step 0 before Scout-apify).
         tool_input: (firstStep as Step & { metadata?: { tool_input?: unknown } }).metadata?.tool_input ?? tool_input ?? null,
         execution_mode: executionMode,
+        lead_routing: leadRouting,
       }),
     }).catch((e) => console.error("[orchestrate] run-agent kickoff failed:", e));
 

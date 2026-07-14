@@ -15,12 +15,41 @@ export interface CategoryStatus {
   reason?: string;
 }
 
+export interface SourceDiagnostic {
+  source: string;
+  readiness: string;
+  execution_status?: string;
+  queries_attempted?: string[];
+  raw_count?: number;
+  normalized_count?: number;
+  duplicate_count?: number;
+  rejected_count?: number;
+  accepted_count?: number;
+  verified_count?: number;
+  needs_review_count?: number;
+  rejection_reasons?: Record<string, number>;
+  provider_error?: string | null;
+  elapsed_ms?: number;
+  provider_items_consumed?: number;
+  estimated_cost_usd?: number;
+}
+
 export interface RadarRunResult {
   ok: boolean;
   inserted: number;
   per_category: Record<RadarCategory, CategoryStatus>;
   capabilities: Record<RadarCategory, { ready: boolean; reason?: string }>;
   mode: RadarMode;
+  /** Company-Brain honesty layer surfaced by run-radar-scan. */
+  setup_required?: boolean;
+  brain_confidence?: "strong" | "medium" | "weak";
+  warnings?: string[];
+  /** Per-source diagnostics + run id (radarDiagnostics / scan_run_id). */
+  diagnostics?: SourceDiagnostic[];
+  scan_run_id?: string;
+  dropped?: number;
+  decision_counts?: Record<string, number>;
+  adapters?: Record<string, { configured: boolean; actor: string | null; env_var: string; reason: string }>;
 }
 
 export function useSignalFeed(workspaceId: string | null, limit = 100) {

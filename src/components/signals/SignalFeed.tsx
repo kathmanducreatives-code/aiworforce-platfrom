@@ -35,6 +35,10 @@ import {
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
 import SignalCard from "./SignalCard";
+import SignalCardRouter from "./SignalCardRouter";
+import ScanDetailsPanel from "./ScanDetailsPanel";
+import { currentScanRunId, signalsForRun, listScanRuns } from "@/lib/radarScanHistory";
+import { categoryEmptyState } from "@/lib/radarCategoryModel";
 import RadarSummaryCards from "./RadarSummaryCards";
 import RadarBrief from "./RadarBrief";
 import RadarSourceStrip from "./RadarSourceStrip";
@@ -56,7 +60,7 @@ const TABS: { key: Tab; label: string }[] = [
   { key: "workflows", label: "Workflow trends" },
   { key: "linkedin", label: "LinkedIn posts" },
   { key: "comments", label: "Comments" },
-  { key: "people", label: "People" },
+  { key: "people", label: "Decision makers" },
   { key: "saved", label: "Saved" },
   { key: "reviewed", label: "Reviewed" },
   { key: "drafts", label: "Drafts" },
@@ -87,6 +91,13 @@ function sendPrompt(text: string) {
   void sendAgentCommand(text, { success: "Sent to Pilot", action_source: "signal_feed_action" });
 }
 
+// Tab → radarCategoryModel category for honest per-category empty states.
+const TAB_TO_CATEGORY: Record<Tab, Parameters<typeof categoryEmptyState>[0]["category"]> = {
+  all: "all", hiring: "hiring", funding: "funding", competitors: "competitor",
+  workflows: "workflow_trend", linkedin: "linkedin_post", comments: "linkedin_comment",
+  people: "decision_maker", saved: "saved", reviewed: "reviewed", drafts: "all",
+};
+
 export default function SignalFeed() {
   const { workspaceId } = useWorkspace();
   const { data: brainData, refresh: refreshBrain } = useCompanyBrain();
@@ -109,31 +120,48 @@ export default function SignalFeed() {
   const [savedFilter, setSavedFilter] = useState<SavedFilter>("all");
   // Default radar shows the global top 10 verified signals; user can expand.
   const [showAll, setShowAll] = useState(false);
+  // Current scan vs. all history — counters default to the current (newest) run
+  // so previous scans never inflate them (scan_run_id in signals.raw; no migration).
+  const [scanScope, setScanScope] = useState<"current" | "all">("current");
 
   const savedFiltered = useMemo(
     () => savedOutputs.filter((o) => matchesSavedFilter(o, savedFilter)),
     [savedOutputs, savedFilter],
   );
 
+  // Current scan run + scope. Saved/Reviewed/Drafts always use full history;
+  // signal categories default to the current run.
+  const scanRuns = useMemo(() => listScanRuns(signals), [signals]);
+  const activeRunId = useMemo(() => currentScanRunId(signals), [signals]);
+  const usingHistory = scanScope === "all" || tab === "saved" || tab === "reviewed" || tab === "drafts";
+  const scopedSignals = useMemo(
+    () => (usingHistory || !activeRunId ? signals : signalsForRun(signals, activeRunId)),
+    [signals, usingHistory, activeRunId],
+  );
+  // Person-only / legacy rows must not count as verified market signals.
+  const personOnly = (s: FeedSignal) => !!(s.raw?.["is_person_only"] || s.raw?.["excluded_from_verified"]);
+
   // Merge each signal with its persisted review row (default status `new`).
   const reviewed: ReviewedSignal[] = useMemo(
-    () => signals.map((s) => mergeReviewState(s, reviewsBySignal[s.id])),
-    [signals, reviewsBySignal],
+    () => scopedSignals.map((s) => mergeReviewState(s, reviewsBySignal[s.id])),
+    [scopedSignals, reviewsBySignal],
   );
 
+  // Category counts use the CURRENT scan (or full history in "reviewed") and
+  // exclude person-only rows from the All counter.
   const counts = useMemo(() => ({
-    all: signals.length,
-    linkedin: signals.filter((s) => s.signal_type === "linkedin_engagement" || s.signal_type === "linkedin_intent").length,
-    competitors: signals.filter((s) => s.signal_type === "competitor_engagement" || s.signal_type === "competitor").length,
-    people: signals.filter((s) => s.signal_type === "people_profile" || s.signal_type === "people").length,
-    hiring: signals.filter((s) => s.signal_type === "hiring_signal" || s.signal_type === "hiring").length,
-    funding: signals.filter((s) => s.signal_type === "funding").length,
-    comments: signals.filter((s) => s.signal_type === "linkedin_comment" || s.signal_type === "comments").length,
-    workflows: signals.filter((s) => s.signal_type === "workflow_trend").length,
+    all: scopedSignals.filter((s) => !personOnly(s)).length,
+    linkedin: scopedSignals.filter((s) => s.signal_type === "linkedin_engagement" || s.signal_type === "linkedin_intent" || s.signal_type === "linkedin_post").length,
+    competitors: scopedSignals.filter((s) => s.signal_type === "competitor_engagement" || s.signal_type === "competitor").length,
+    people: scopedSignals.filter((s) => s.signal_type === "people_profile" || s.signal_type === "people" || s.signal_type === "decision_maker").length,
+    hiring: scopedSignals.filter((s) => s.signal_type === "hiring_signal" || s.signal_type === "hiring").length,
+    funding: scopedSignals.filter((s) => s.signal_type === "funding").length,
+    comments: scopedSignals.filter((s) => s.signal_type === "linkedin_comment" || s.signal_type === "comments").length,
+    workflows: scopedSignals.filter((s) => s.signal_type === "workflow_trend").length,
     reviewed: signals.length,
     drafts: drafts.length,
     saved: savedOutputs.length,
-  } as Record<Tab, number>), [signals, drafts, savedOutputs]);
+  } as Record<Tab, number>), [scopedSignals, signals, drafts, savedOutputs]);
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -158,6 +186,15 @@ export default function SignalFeed() {
 
   const clearFilters = () => { setQuery(""); setPriority(""); setHasSource(false); };
   const hasActiveFilters = !!(query || priority || hasSource);
+  const activeFilterCount = [query, priority, hasSource ? "src" : "", reviewFilter !== "all" ? "rev" : ""].filter(Boolean).length;
+
+  // Category-aware empty state: distinguish "this category is genuinely empty"
+  // from "filters hid the rows" — never show a global "N hidden" in a zero category.
+  const categoryTotal = useMemo(() => reviewed.filter((s) => matchesTab(s, tab)).length, [reviewed, tab]);
+  const catEmpty = useMemo(
+    () => categoryEmptyState({ category: TAB_TO_CATEGORY[tab], categoryTotal, visibleInCategory: filtered.length, activeFilterCount }),
+    [tab, categoryTotal, filtered.length, activeFilterCount],
+  );
 
   // Top-10 default: pristine "All" view ranks the highest-scored verified signals
   // globally across sources. Any tab/filter/search switches to the full list.
@@ -274,12 +311,12 @@ export default function SignalFeed() {
 
   // ----- counts/status per radar category -----
   const radarCounts: Record<RadarCategory, number> = useMemo(() => ({
-    hiring: signals.filter((s) => s.signal_type === "hiring" || s.signal_type === "hiring_signal").length,
-    linkedin_intent: signals.filter((s) => s.signal_type === "linkedin_intent" || s.signal_type === "linkedin_engagement").length,
-    competitor: signals.filter((s) => s.signal_type === "competitor" || s.signal_type === "competitor_engagement").length,
-    workflow_trend: signals.filter((s) => s.signal_type === "workflow_trend").length,
-    people: signals.filter((s) => s.signal_type === "people" || s.signal_type === "people_profile").length,
-  }), [signals]);
+    hiring: scopedSignals.filter((s) => s.signal_type === "hiring" || s.signal_type === "hiring_signal").length,
+    linkedin_intent: scopedSignals.filter((s) => s.signal_type === "linkedin_intent" || s.signal_type === "linkedin_engagement" || s.signal_type === "linkedin_post").length,
+    competitor: scopedSignals.filter((s) => s.signal_type === "competitor" || s.signal_type === "competitor_engagement").length,
+    workflow_trend: scopedSignals.filter((s) => s.signal_type === "workflow_trend").length,
+    people: scopedSignals.filter((s) => s.signal_type === "people" || s.signal_type === "people_profile").length,
+  }), [scopedSignals]);
 
   const radarVerifiedCounts: Record<RadarCategory, number> = useMemo(() => ({
     hiring: reviewed.filter((s) => (s.signal_type === "hiring" || s.signal_type === "hiring_signal") && s.show_by_default).length,
@@ -290,7 +327,7 @@ export default function SignalFeed() {
   }), [reviewed]);
 
   const radarStatus = lastRun?.per_category ?? null;
-  const verifiedTotal = reviewed.filter((s) => s.show_by_default).length;
+  const verifiedTotal = reviewed.filter((s) => s.show_by_default && !personOnly(s)).length;
 
   // ----- provider readiness (workspace-level integrations) -----
   const { providers: integrationProviders } = useIntegrationReadiness();
@@ -418,6 +455,18 @@ export default function SignalFeed() {
         lastRun={lastRun}
       />
 
+      {/* Scan details diagnostics (per-source readiness; explains every zero) */}
+      <ScanDetailsPanel diagnostics={lastRun?.diagnostics} scanRunId={lastRun?.scan_run_id} ranAt={lastScanAt} />
+
+      {/* Current scan vs. history — counters default to the current run */}
+      {scanRuns.filter((r) => r.scan_run_id !== "legacy").length > 1 && (
+        <div className="flex items-center gap-2 text-[12px]">
+          <span className="text-neutral-500">Showing:</span>
+          <button onClick={() => setScanScope("current")} className={`px-2 py-1 rounded-md border ${scanScope === "current" ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-300" : "border-white/[0.08] text-neutral-400 hover:text-neutral-200"}`}>Current scan</button>
+          <button onClick={() => setScanScope("all")} className={`px-2 py-1 rounded-md border ${scanScope === "all" ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-300" : "border-white/[0.08] text-neutral-400 hover:text-neutral-200"}`}>All scans ({scanRuns.filter((r) => r.scan_run_id !== "legacy").length})</button>
+        </div>
+      )}
+
       {/* Manual source */}
       <ManualSourceInput firecrawlState={firecrawlState} />
 
@@ -429,6 +478,20 @@ export default function SignalFeed() {
             .map(([cat, v]) => (
               <SetupNeededCard key={cat} label={cat.replace(/_/g, " ")} reason={v.reason} />
             ))}
+        </div>
+      )}
+
+      {/* Company-Brain honesty banner: degraded scan / draft-not-activated warnings. */}
+      {lastRun?.warnings && lastRun.warnings.length > 0 && (
+        <div className="rounded-lg border border-amber-500/20 bg-amber-500/[0.06] px-3 py-2">
+          <div className="text-[12px] font-semibold text-amber-300">
+            {lastRun.setup_required ? "Company Brain needs setup" : `Company Brain confidence: ${lastRun.brain_confidence ?? "medium"}`}
+          </div>
+          <ul className="mt-0.5 space-y-0.5">
+            {lastRun.warnings.slice(0, 3).map((w, i) => (
+              <li key={i} className="text-[11px] text-amber-200/80">{w}</li>
+            ))}
+          </ul>
         </div>
       )}
 
@@ -471,7 +534,7 @@ export default function SignalFeed() {
           const active = tab === t.key;
           const c = counts[t.key];
           return (
-            <button key={t.key} onClick={() => { setTab(t.key); if (t.key === "reviewed") setReviewFilter("reviewed"); }}
+            <button key={t.key} onClick={() => { setTab(t.key); clearFilters(); setReviewFilter(t.key === "reviewed" ? "reviewed" : "all"); }}
               className={`text-[14px] font-medium px-3 py-1.5 rounded-md transition-colors ${active ? "bg-emerald-500/10 border border-emerald-500/30 text-emerald-300" : "text-neutral-400 hover:text-neutral-200 hover:bg-white/[0.03] border border-transparent"}`}>
               {t.label}
               {c > 0 && <span className={`ml-1.5 text-[11px] ${active ? "text-emerald-300/70" : "text-neutral-500"}`}>{c}</span>}
@@ -497,6 +560,12 @@ export default function SignalFeed() {
             <label className="h-8 text-[12px] inline-flex items-center gap-1.5 text-neutral-400 px-2 rounded-md border border-white/[0.08] bg-white/[0.02]">
               <input type="checkbox" checked={hideIgnored} onChange={(e) => setHideIgnored(e.target.checked)} /> Hide ignored
             </label>
+          )}
+          {activeFilterCount > 0 && (
+            <button onClick={() => { clearFilters(); setReviewFilter("all"); }}
+              className="h-8 text-[12px] inline-flex items-center gap-1.5 text-emerald-300 px-2 rounded-md border border-emerald-500/30 bg-emerald-500/10">
+              <X className="h-3 w-3" /> Reset filters ({activeFilterCount})
+            </button>
           )}
           <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search signals…"
             className="h-8 text-[12px] px-2.5 rounded-md border border-white/[0.08] bg-white/[0.02] text-[#C9D1D9] placeholder:text-neutral-500 w-44 focus:outline-none focus:border-emerald-500/30" />
@@ -601,9 +670,9 @@ export default function SignalFeed() {
       {/* Signal feed */}
       {!loading && tab !== "drafts" && tab !== "saved" && (
         filtered.length === 0
-          ? (reviewed.length > 0
+          ? (catEmpty.kind === "hidden_by_filters"
               ? <SmartFilterEmpty
-                  hiddenCount={reviewed.length}
+                  hiddenCount={categoryTotal}
                   unverifiedCount={unverifiedCount}
                   showUnverified={showUnverified}
                   onShowUnverified={() => setShowUnverified(true)}
@@ -611,7 +680,9 @@ export default function SignalFeed() {
                   onRunRadar={handleRunRadar}
                   scanning={scanning}
                 />
-              : <NoVerifiedEmpty onRunRadar={handleRunRadar} scanning={scanning} onShowUnverified={() => setShowUnverified(true)} />)
+              : tab !== "all"
+                ? <div className="text-center py-10 px-4"><p className="text-[15px] font-semibold text-foreground">{catEmpty.message}</p><Button className="mt-3" size="sm" onClick={handleRunRadar} disabled={scanning}>{scanning ? <Loader2 className="h-4 w-4 animate-spin" /> : <Radar className="h-4 w-4" />} Run radar</Button></div>
+                : <NoVerifiedEmpty onRunRadar={handleRunRadar} scanning={scanning} onShowUnverified={() => setShowUnverified(true)} />)
           : <>
               {topDefaultActive && (
                 <div className="flex items-center justify-between gap-2 flex-wrap text-[13px]">
@@ -633,13 +704,17 @@ export default function SignalFeed() {
                 </div>
               )}
               <ul className="space-y-2">{displaySignals.map((s) => (
-                <SignalCard key={s.id} signal={s}
-                  selectable={selectMode}
-                  selected={selected.has(s.id)}
-                  onToggleSelect={toggleSelect}
-                  onSetReview={handleSetReview}
-                  onOpenDetail={() => setOpenSignalId(s.id)}
-                  onDraftAction={handleDraftAction} />
+                <li key={s.id}>
+                  <SignalCardRouter signal={s} fallback={
+                    <SignalCard signal={s}
+                      selectable={selectMode}
+                      selected={selected.has(s.id)}
+                      onToggleSelect={toggleSelect}
+                      onSetReview={handleSetReview}
+                      onOpenDetail={() => setOpenSignalId(s.id)}
+                      onDraftAction={handleDraftAction} />
+                  } />
+                </li>
               ))}</ul>
             </>
       )}
