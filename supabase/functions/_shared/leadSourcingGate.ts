@@ -76,13 +76,15 @@ export interface ProviderSourceState {
  * Ordered most-specific first so the reason reflects the earliest failure.
  */
 export function classifyProviderSourceOutcome(state: ProviderSourceState): ProviderSourceReason | null {
-  const raw = Math.max(0, state.rawItemCount ?? 0);
   const accepted = Math.max(0, state.acceptedItemCount ?? 0);
   const backed = Math.max(0, state.providerBackedCandidateCount ?? 0);
   if (state.configured === false) return "provider_source_unconfigured";
   if (state.unavailable === true) return "provider_source_unavailable";
   if (state.errored === true) return "provider_source_failed";
-  if (raw === 0 && accepted === 0) return "provider_source_empty";
+  // Zero accepted normalized items (whether or not raw items came back) ⇒ there is
+  // no provider index to build ⇒ empty. Accepted>0 but zero survived the Scout→Aria
+  // provider match ⇒ no provider-backed candidates.
+  if (accepted === 0) return "provider_source_empty";
   if (backed === 0) return "no_provider_backed_candidates";
   return null;
 }
