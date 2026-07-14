@@ -130,3 +130,61 @@ export const HEALTH_TONE: Record<SectionHealth, 'emerald' | 'amber' | 'neutral'>
   'needs-confirmation': 'amber',
   'needs-detail': 'neutral',
 };
+
+// ---- Vertical intelligence flow ---------------------------------------------------
+//
+// The saved page renders five narrative sections in the sequence Agentory uses
+// the Brain: target → buyer → moment → qualify → message. Each maps 1:1 to an
+// existing drawer SectionKey so edit/save stays unchanged.
+
+export interface FlowSectionMeta {
+  number: string;
+  drawerKey: SectionKey;
+  eyebrow: string;
+  title: string;
+  question: string;
+  explanation: string;
+}
+
+export const FLOW_SECTIONS: FlowSectionMeta[] = [
+  {
+    number: '01',
+    drawerKey: 'targeting',
+    eyebrow: 'Target Market',
+    title: 'Target Market',
+    question: 'Which companies are worth researching?',
+    explanation: 'The account profile Agentory researches and prioritizes.',
+  },
+  {
+    number: '02',
+    drawerKey: 'buyers',
+    eyebrow: 'Buyer Profile',
+    title: 'Buyer Profile',
+    question: 'Who feels the problem and can approve a purchase?',
+    explanation: 'The people inside target accounts worth speaking to.',
+  },
+  {
+    number: '03',
+    drawerKey: 'signals',
+    eyebrow: 'Buying Moments',
+    title: 'Buying Moments',
+    question: 'What makes an account worth contacting now?',
+    explanation: 'Timing signals that make outreach relevant.',
+  },
+  {
+    number: '04',
+    drawerKey: 'disqualifiers',
+    eyebrow: 'Qualification & Safety',
+    title: 'Qualification & Safety',
+    question: 'What must be true — and what should immediately disqualify?',
+    explanation: 'Guardrails that protect lead quality and brand.',
+  },
+  {
+    number: '05',
+    drawerKey: 'messaging',
+    eyebrow: 'Messaging Fit',
+    title: 'Messaging Fit',
+    question: 'How should Agentory explain the value?',
+    explanation: 'Voice, positioning, and boundaries for generated content.',
+  },
+];

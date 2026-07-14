@@ -7,7 +7,7 @@
 import { useEffect, useState, type ComponentType } from 'react';
 import { motion, useReducedMotion } from 'framer-motion';
 import { Brain, Check, Crosshair, Loader2, Megaphone, Radar, ShieldAlert, Users } from 'lucide-react';
-import { Sheet, SheetContent, SheetDescription, SheetFooter, SheetHeader, SheetTitle } from '@/components/ui/sheet';
+import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -49,7 +49,7 @@ export default function CompanyBrainEditDrawer({ open, section, brain, onOpenCha
   if (!section || !state) {
     return (
       <Sheet open={open} onOpenChange={onOpenChange}>
-        <SheetContent side="right" className="w-full sm:max-w-md border-border/50 bg-card/80 backdrop-blur-2xl" />
+        <SheetContent side="right" className="w-full border-border/30 bg-card/40 backdrop-blur-3xl sm:max-w-md" />
       </Sheet>
     );
   }
@@ -71,36 +71,54 @@ export default function CompanyBrainEditDrawer({ open, section, brain, onOpenCha
 
   return (
     <Sheet open={open} onOpenChange={(v) => { if (!busy) onOpenChange(v); }}>
+      {/* Premium glassmorphic drawer surface */}
       <SheetContent
         side="right"
-        className="flex w-full flex-col gap-0 overflow-hidden border-border/50 bg-card/80 backdrop-blur-2xl sm:max-w-lg"
-        style={saved ? { boxShadow: 'inset 0 0 0 1px hsl(var(--primary) / 0.5), 0 0 60px -10px hsl(var(--primary) / 0.4)' } : undefined}
+        className="flex w-full flex-col gap-0 overflow-hidden border-border/25 bg-card/38 backdrop-blur-3xl backdrop-saturate-[1.4] sm:max-w-lg"
+        style={{
+          boxShadow: saved
+            ? 'inset 0 0 0 1px hsl(160 84% 52% / 0.5), 0 0 60px -10px hsl(160 84% 52% / 0.4)'
+            : 'inset 0 0 0 1px hsl(160 84% 52% / 0.14), 0 -30px 80px -20px rgba(0,0,0,0.6)',
+        }}
       >
+        {/* emerald gradient border accent on the left edge */}
+        <div
+          aria-hidden
+          className="pointer-events-none absolute inset-y-0 left-0 w-px"
+          style={{ background: 'linear-gradient(to bottom, transparent, hsl(160 84% 52% / 0.40), transparent)' }}
+        />
+        {/* top hairline */}
+        <div
+          aria-hidden
+          className="pointer-events-none absolute inset-x-6 top-0 h-px"
+          style={{ background: 'linear-gradient(to right, transparent, hsl(160 84% 52% / 0.50), transparent)' }}
+        />
+
         {saved && (
           <motion.div
             initial={reduce ? false : { opacity: 0 }}
             animate={{ opacity: 1 }}
-            className="flex items-center gap-2 border-b border-primary/30 bg-primary/10 px-5 py-2.5 text-[12.5px] text-primary"
+            className="flex items-center gap-2 border-b border-emerald-400/25 bg-emerald-400/[0.08] px-5 py-2.5 text-[12.5px] text-emerald-300"
           >
             <Check className="h-4 w-4" /> Saved — your Company Brain is updated.
           </motion.div>
         )}
 
-        <SheetHeader className="gap-0 border-b border-border/40 px-5 pb-4 pt-5 text-left">
+        <SheetHeader className="gap-0 border-b border-border/25 px-5 pb-4 pt-5 text-left">
           <div className="flex items-start gap-3">
             <div
-              className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-primary/30 bg-primary/10"
-              style={{ boxShadow: '0 0 16px -6px hsl(var(--primary) / 0.5)' }}
+              className="mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-emerald-400/30 bg-emerald-400/[0.08]"
+              style={{ boxShadow: '0 0 18px -6px hsl(160 84% 52% / 0.5), inset 0 1px 0 hsl(var(--foreground) / 0.06)' }}
             >
-              <Icon className="h-4 w-4 text-primary" />
+              <Icon className="h-[18px] w-[18px] text-emerald-300" />
             </div>
             <div className="min-w-0">
               <SheetTitle className="text-[17px] tracking-tight">{meta.title}</SheetTitle>
               <SheetDescription className="mt-0.5 text-[12.5px]">{meta.description}</SheetDescription>
             </div>
           </div>
-          <p className="mt-3 rounded-lg border border-border/40 bg-background/30 px-3 py-2 text-[11.5px] leading-snug text-muted-foreground/80">
-            <span className="font-medium text-foreground/80">Influences: </span>{meta.influences}
+          <p className="mt-3 rounded-lg border border-border/25 bg-background/20 px-3 py-2 text-[11.5px] leading-snug text-muted-foreground/80">
+            <span className="font-medium text-foreground/75">Influences: </span>{meta.influences}
           </p>
         </SheetHeader>
 
@@ -113,13 +131,32 @@ export default function CompanyBrainEditDrawer({ open, section, brain, onOpenCha
           {section === 'messaging' && <MessagingEditor state={state} setState={setState} />}
         </div>
 
-        <SheetFooter className="mt-4 gap-2 border-t border-border/40 px-5 py-4 sm:justify-end">
-          <Button variant="ghost" onClick={() => onOpenChange(false)} disabled={busy} className="text-muted-foreground hover:text-foreground">Cancel</Button>
-          <Button onClick={handleSave} disabled={busy} className="gap-2">
-            {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
-            {busy ? 'Saving…' : 'Save changes'}
-          </Button>
-        </SheetFooter>
+        {/* Floating dock-style save area */}
+        <div className="relative border-t border-border/20 px-5 py-4">
+          <div
+            aria-hidden
+            className="pointer-events-none absolute inset-x-0 top-0 h-px"
+            style={{ background: 'linear-gradient(to right, transparent, hsl(var(--border) / 0.30), transparent)' }}
+          />
+          <div className="flex items-center justify-end gap-2">
+            <Button
+              variant="ghost"
+              onClick={() => onOpenChange(false)}
+              disabled={busy}
+              className="text-muted-foreground hover:text-foreground"
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={handleSave}
+              disabled={busy}
+              className="gap-2 bg-gradient-to-b from-primary to-[hsl(var(--primary)/0.82)] shadow-[0_1px_0_hsl(var(--foreground)/0.12)_inset,0_8px_24px_-10px_hsl(var(--primary)/0.5)] transition-all hover:shadow-[0_1px_0_hsl(var(--foreground)/0.15)_inset,0_12px_32px_-10px_hsl(var(--primary)/0.65),0_0_24px_hsl(var(--primary)/0.2)]"
+            >
+              {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+              {busy ? 'Saving…' : 'Save changes'}
+            </Button>
+          </div>
+        </div>
       </SheetContent>
     </Sheet>
   );

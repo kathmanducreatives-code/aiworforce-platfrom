@@ -238,12 +238,16 @@ export default function OnboardingCompanyBrain() {
 
       {/* Scene stage — orb and card composed as one hero object */}
       <main className="flex flex-1 flex-col items-center justify-start gap-4 px-4 py-6 sm:py-8">
-        <FloatingBrainCard
-          label={brainState.label}
-          mode={brainState.mode}
-          size={orbSize}
-          subtext={draft ? `${completeness.percent}% ready` : undefined}
-        />
+        {/* The draft_brain (busy) and draft_summary scenes own their own orb +
+            workforce animation, so the shell orb is hidden there to avoid
+            duplication. */}
+        {!(scene === 'draft_brain' && busy === 'draft') && scene !== 'draft_summary' && (
+          <FloatingBrainCard
+            label={brainState.label}
+            mode={brainState.mode}
+            size={orbSize}
+          />
+        )}
 
         <div className="w-full">
           {error && (

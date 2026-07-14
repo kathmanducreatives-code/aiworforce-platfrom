@@ -18,19 +18,19 @@ export type PillTone = 'emerald' | 'neutral' | 'signal' | 'warning' | 'danger' |
 
 const TONE_CLS: Record<PillTone, string> = {
   emerald: [
-    'border-primary/35 bg-primary/[0.10] text-foreground/90',
+    'border-emerald-400/30 bg-emerald-500/[0.10] text-foreground/90',
     'shadow-[inset_0_1px_0_0_hsl(var(--foreground)/0.06)]',
-    'hover:border-primary/55 hover:bg-primary/[0.16]',
+    'hover:border-emerald-400/50 hover:bg-emerald-500/[0.16]',
   ].join(' '),
   neutral: [
-    'border-border/50 bg-background/45 text-foreground/85',
+    'border-border/45 bg-background/40 text-foreground/85',
     'shadow-[inset_0_1px_0_0_hsl(var(--foreground)/0.05)]',
-    'hover:border-primary/35 hover:bg-background/60',
+    'hover:border-emerald-400/30 hover:bg-background/55',
   ].join(' '),
   signal: [
-    'border-emerald-400/25 bg-emerald-400/[0.08] text-foreground/88',
+    'border-teal-400/25 bg-teal-400/[0.08] text-foreground/88',
     'shadow-[inset_0_1px_0_0_hsl(var(--foreground)/0.05)]',
-    'hover:border-emerald-400/45 hover:bg-emerald-400/[0.14]',
+    'hover:border-teal-400/45 hover:bg-teal-400/[0.14]',
   ].join(' '),
   warning: [
     'border-amber-400/35 bg-amber-400/[0.10] text-amber-100/90',
@@ -43,9 +43,9 @@ const TONE_CLS: Record<PillTone, string> = {
     'hover:border-red-500/50 hover:bg-red-500/[0.15]',
   ].join(' '),
   default: [
-    'border-border/45 bg-background/40 text-foreground/80',
+    'border-border/40 bg-background/35 text-foreground/80',
     'shadow-[inset_0_1px_0_0_hsl(var(--foreground)/0.04)]',
-    'hover:border-border/70 hover:bg-background/55',
+    'hover:border-border/65 hover:bg-background/50',
   ].join(' '),
 };
 

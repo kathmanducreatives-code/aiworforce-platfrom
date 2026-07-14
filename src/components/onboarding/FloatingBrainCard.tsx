@@ -9,7 +9,7 @@
 // background presence or a centered hero.
 
 import { motion } from 'framer-motion';
-import { Cpu } from 'lucide-react';
+import { Brain } from 'lucide-react';
 import type { BrainMode } from '@/lib/onboardingScenes';
 
 const OUTER_PARTICLES = [0, 1, 2, 3, 4, 5];
@@ -135,7 +135,7 @@ export function FloatingBrainCard({
               className="text-primary"
               style={{ filter: 'drop-shadow(0 0 6px hsl(var(--primary) / 0.55))' }}
             >
-              <Cpu style={{ width: size * 0.21, height: size * 0.21 }} />
+              <Brain style={{ width: size * 0.21, height: size * 0.21 }} />
             </motion.div>
           </div>
         </div>
