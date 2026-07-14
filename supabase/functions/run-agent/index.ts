@@ -18,7 +18,8 @@ import { buildCanonicalStamp } from "../_shared/leadCanonicalStamp.ts";
 import { stepAllowedInMode, isSourceAndQualifyOnly } from "../_shared/executionMode.ts";
 import { buildProviderIndexFromItems, parseScoutCandidates, guardScoutToAria, buildProvenanceRecord, assertPersistenceProvenance, type NormalizedProviderIndex, type ProvenanceCtx } from "../_shared/leadHandoffGuard.ts";
 import { newRejectionCounter, sealProvenance, buildNoResults, type RejectionCounter } from "../_shared/leadPersistenceGuard.ts";
-import { isFindLeadsProviderSourcingStep, classifyProviderSourceOutcome, type ProviderSourceReason } from "../_shared/leadSourcingGate.ts";
+import { classifyProviderSourceOutcome, type ProviderSourceReason } from "../_shared/leadSourcingGate.ts";
+import { resolvePlannedTool, isProviderSourcingTool, resolveProviderSource } from "../_shared/plannedToolResolver.ts";
 
 
 const cors = {
@@ -271,8 +272,7 @@ Deno.serve(async (req) => {
   // Find Leads provider *identity* sourcing recognition (from the authoritative
   // tool markers, incl. body.tool_needed). Used to (a) route the step into the
   // provider path and (b) fail closed — never let the generic LLM be a lead source.
-  const isProviderSourcingStep = isFindLeadsProviderSourcingStep({
-    agent_slug,
+  const isProviderSourcingStep = isProviderSourcingTool({
     tool_needed: tool_needed_body,
     tool_name: tool_input_body?.tool_name ?? null,
     selected_actor_key: tool_input_body?.selected_actor_key ?? null,
@@ -321,17 +321,17 @@ Deno.serve(async (req) => {
     const sourcingRe = /\b(find|source|sourcing|discover|prospects?|leads?|founders?|companies|hiring|job openings|roles|recruit(?:ers?|ing)|candidates?|engineers?|marketers?|linkedin posts?|comments?)\b/i;
     const planned_actor_key: string | null = tool_input_body?.selected_actor_key ?? null;
     const planned_tool_name: string | null = tool_input_body?.tool_name ?? null;
-    const isFirecrawlSelected =
-      planned_tool_name === "scrape_url"
-      || planned_actor_key === "firecrawl_scrape_url";
-    const isApifySelected =
-      planned_tool_name === "source_with_apify"
-      || (typeof planned_actor_key === "string" && planned_actor_key.startsWith("apify_"))
-      // Root-cause fix: also honour the plan step's required tool threaded by
-      // orchestrate as body.tool_needed. Previously a source_with_apify step whose
-      // AI-planned tool_input lacked tool_name was NOT recognized as Apify sourcing,
-      // so it fell through to the generic LLM and fabricated leads.
-      || isProviderSourcingStep;
+    // Canonical tool resolution — precedence: body.tool_needed > plan-step tool_needed
+    // > tool_input.tool_name > tool_input.selected_actor_key. Honours the plan step's
+    // tool even when the AI-planned tool_input omits tool_name (the live root cause:
+    // a source_with_apify step fell through to the generic LLM and fabricated leads).
+    const plannedTool = resolvePlannedTool({
+      tool_needed: tool_needed_body,
+      tool_name: planned_tool_name,
+      selected_actor_key: planned_actor_key,
+    });
+    const isFirecrawlSelected = plannedTool.tool === "scrape_url";
+    const isApifySelected = plannedTool.tool === "source_with_apify";
     const shouldUseApify = !isFirecrawlSelected && (
       isApifySelected
       || (!tool_input_body && sourcingRe.test(`${instruction ?? ""} ${input ?? ""}`))
@@ -340,12 +340,18 @@ Deno.serve(async (req) => {
     if (shouldUseApify) {
       const raw_source_type: string | null = tool_input_body?.source_type ?? null;
       let source_type = normalizeApifySourceType(raw_source_type);
+      // Deterministic intent → source/actor selection when the planner did not pin an
+      // explicit source_type/actor. A founder/person/decision-maker ask MUST run the
+      // people actor, never a jobs scraper (the live mis-route). resolveProviderSource
+      // never consults the Company Brain, so buying signals cannot silently convert a
+      // person-search request into a jobs-search request. Ambiguous asks keep the
+      // normalized default (jobs) — behavior unchanged, never fabricated.
+      let derivedActorKey: string | null = null;
       if (!raw_source_type && !planned_actor_key) {
-        const text = `${instruction ?? ""} ${input ?? ""}`.toLowerCase();
-        if (/\b(hiring|job openings?|jobs?|roles?|engineers?|marketers?|developers?|candidates?|people|companies|founders?|prospects?|startups?|orgs?)\b/.test(text)) {
-          source_type = "jobs";
-        } else if (/\blinkedin\b|\bposts?\b|\bcomments?\b/.test(text)) {
-          source_type = "jobs";
+        const resolvedSource = resolveProviderSource(instruction ?? input ?? "");
+        if (resolvedSource) {
+          source_type = resolvedSource.source_type;
+          derivedActorKey = resolvedSource.actor_key;
         }
       }
 
@@ -542,7 +548,9 @@ Deno.serve(async (req) => {
         }
 
         const apifyInput = {
-          selected_actor_key: planned_actor_key ?? undefined,
+          // Derived people/company/engagement actor (from resolveProviderSource) is
+          // threaded through the registry+enable path so it fails closed if disabled.
+          selected_actor_key: planned_actor_key ?? derivedActorKey ?? undefined,
           source_type,
           search_goal: normalizedQuery,
           query: normalizedQuery,
