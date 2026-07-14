@@ -21,7 +21,7 @@ Deno.test("people input: founder role aliases become SEPARATE title filters", ()
   assert(titles.length === 3);
 });
 
-Deno.test("people input: searchQuery carries industry + location (not just title)", () => {
+Deno.test("people input: searchQuery carries industry (not title); location lives in locations[]", () => {
   const out = buildHarvestApiPeopleInput({
     query: "Founder Healthcare", location: "London",
     role_keywords: ["Founder", "Co-Founder", "CEO"], max_results: 5,
@@ -29,7 +29,9 @@ Deno.test("people input: searchQuery carries industry + location (not just title
   });
   const sq = String(out.searchQuery).toLowerCase();
   assert(sq.includes("healthcare"), `searchQuery should include industry: ${out.searchQuery}`);
-  assert(sq.includes("london"), `searchQuery should include location: ${out.searchQuery}`);
+  // Location is a structured filter, not fuzzy searchQuery text.
+  assert(!sq.includes("london"), `searchQuery must not carry location: ${out.searchQuery}`);
+  assertEquals(out.locations, ["London"]);
 });
 
 Deno.test("people input: strict London preserved in locations", () => {

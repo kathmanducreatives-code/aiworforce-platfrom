@@ -20,6 +20,7 @@ import { buildProviderIndexFromItems, parseScoutCandidates, guardScoutToAria, bu
 import { newRejectionCounter, sealProvenance, buildNoResults, type RejectionCounter } from "../_shared/leadPersistenceGuard.ts";
 import { classifyProviderSourceOutcome, type ProviderSourceReason } from "../_shared/leadSourcingGate.ts";
 import { resolvePlannedTool, isProviderSourcingTool, resolveProviderSource } from "../_shared/plannedToolResolver.ts";
+import { parsePeopleSearchIntent, buildPeopleSearchAttempts } from "../_shared/peopleSearchQueryBuilder.ts";
 
 
 const cors = {
@@ -562,6 +563,21 @@ Deno.serve(async (req) => {
           input: plannedUserInput,
         };
 
+        // People-search input quality: build three MATERIALLY-DISTINCT, structured
+        // attempts (exact → broadened → minimal_safe) from parsed lead intent, so
+        // the actor filters on real currentJobTitles + locations + a concise market
+        // searchQuery instead of the natural-language Scout instruction. Fixes the
+        // live "3 identical actor runs → 0 items" failure. Deterministic; no LLM.
+        const peopleAttempts = source_type === "people_profiles"
+          ? buildPeopleSearchAttempts(
+              parsePeopleSearchIntent(`${instruction ?? ""} ${input ?? ""} ${normalizedQuery ?? ""}`),
+              { maxItems: max_results, takePages: 1, startPage: 1 },
+            )
+          : null;
+        if (peopleAttempts) {
+          console.log("[run-agent] people-search attempts", peopleAttempts.map((a) => ({ label: a.label, fingerprint: a.fingerprint })));
+        }
+
         // Phase 4 — QA cost transparency: the jobs actor floors count at 10 even
         // when we request 1-3; surface requested vs actor vs processed so a
         // $5-capped run is never silently a 10-result run.
@@ -652,6 +668,22 @@ Deno.serve(async (req) => {
             // deduped accepted set so DB lead_candidates == accepted count.
             defer_persistence: true,
           };
+          // People-search: drive each attempt with the structured, DISTINCT payload
+          // (exact → broadened → minimal_safe) so retries materially broaden instead
+          // of re-sending an identical natural-language query. searchQuery="" tells
+          // the adapter to omit the market phrase (minimal_safe fallback).
+          if (peopleAttempts) {
+            const pa = peopleAttempts[Math.min(Math.max(0, scoutAttemptIdx - 1), peopleAttempts.length - 1)];
+            const pp = pa.payload as Record<string, unknown>;
+            attemptInput.input = {
+              ...((attemptInput.input as Record<string, unknown> | undefined) ?? plannedUserInput ?? {}),
+              currentJobTitles: pp.currentJobTitles,
+              searchQuery: typeof pp.searchQuery === "string" ? pp.searchQuery : "",
+              takePages: pp.takePages ?? 1,
+              profileScraperMode: pp.profileScraperMode ?? "Full",
+              ...(Array.isArray(pp.locations) && pp.locations.length ? { locations: pp.locations } : {}),
+            };
+          }
           const rr = await runTool("source_with_apify", attemptInput, baseCtx);
           if (rr.ok && rr.data) {
             let mapped = ((rr.data as { items?: any[] }).items ?? []).map(mapItem);
