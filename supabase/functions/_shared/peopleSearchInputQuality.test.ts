@@ -189,3 +189,23 @@ Deno.test("24: corrected payload has no meta-instruction prose", () => {
   assert(!/apify_people_search|use\s|find\s+\d|using my icp|10-15|employees/i.test(q), `prose leaked: ${q}`);
   assertEquals(out.currentJobTitles, ["Founder", "Co-Founder"]);
 });
+
+// 25) searchQuery never contains repeated whitespace (normalization guard).
+Deno.test("25: generated searchQuery has no repeated whitespace", () => {
+  // Direct builder + several realistic queries, exact/broadened attempts, adapter.
+  assertEquals(buildMarketQuery(["B2B SaaS", "AI SaaS"]), "B2B SaaS OR AI SaaS");
+  assertEquals(buildMarketQuery(["B2B  SaaS ", "  AI SaaS"]), "B2B SaaS OR AI SaaS"); // messy input collapsed
+  const queries = [
+    Q1,
+    "Find me 5 fintech founders and cybersecurity CEOs in London",
+    "healthcare AI founders in the US, developer tools too",
+  ];
+  for (const src of queries) {
+    for (const a of buildPeopleSearchAttempts(parsePeopleSearchIntent(src), { maxItems: CAP, takePages: 1, startPage: 1 })) {
+      const q = String(a.payload.searchQuery ?? "");
+      assert(!/\s{2,}/.test(q), `repeated whitespace in attempt: ${JSON.stringify(q)}`);
+    }
+    const aq = String(buildHarvestApiPeopleInput({ query: src, location: null, role_keywords: [], max_results: CAP }).searchQuery ?? "");
+    assert(!/\s{2,}/.test(aq), `repeated whitespace in adapter: ${JSON.stringify(aq)}`);
+  }
+});

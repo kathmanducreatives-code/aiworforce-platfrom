@@ -87,9 +87,16 @@ function broadenMarketTerms(terms: string[]): string[] {
   return out;
 }
 
-/** A concise fuzzy searchQuery from market terms ("B2B SaaS OR AI SaaS"). */
+/** A concise fuzzy searchQuery from market terms ("B2B SaaS OR AI SaaS").
+ *  Collapses any repeated whitespace so the actor never receives "B2B SaaS  OR
+ *  AI SaaS" (defensive: canonical terms are already single-spaced). */
 export function buildMarketQuery(terms: string[]): string {
-  return terms.filter(Boolean).join(" OR ");
+  return terms
+    .map((t) => String(t).replace(/\s+/g, " ").trim())
+    .filter(Boolean)
+    .join(" OR ")
+    .replace(/\s+/g, " ")
+    .trim();
 }
 
 // ------------------------------------------------------------ query sanitizer --
