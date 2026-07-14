@@ -12,6 +12,7 @@ import { buildDraftOutreachPlan } from "../_shared/draftOutreachPlan.ts";
 import { buildCompetitorDiscoveryPlan } from "../_shared/competitorDiscovery.ts";
 import { extractContentLoopInput, buildContentLoopPlan } from "../_shared/contentEngagementLoop.ts";
 import { separateIntent } from "../_shared/leadIntentModel.ts";
+import { filterPlanForMode, isSourceAndQualifyOnly } from "../_shared/executionMode.ts";
 
 const cors = {
   "Access-Control-Allow-Origin": "*",
@@ -541,7 +542,7 @@ Deno.serve(async (req) => {
       max_results?: number;
       needs_enrichment?: boolean;
       needs_outreach?: boolean;
-      execution_mode?: "fast" | "deep" | "outreach";
+      execution_mode?: "fast" | "deep" | "outreach" | "source_and_qualify_only";
       confidence?: number;
     };
 
@@ -1105,6 +1106,15 @@ Return ONLY valid JSON, no prose, no markdown:
 
     } // end AI planner branch
 
+    // Safety: source_and_qualify_only strips every Penn / outreach / drafting /
+    // publishing step from the plan (whatever added it — AI planner, fallback, or
+    // staged), so the runtime cannot generate outreach. Applied to ALL plan paths.
+    const modeStripped = filterPlanForMode(parsed!.steps as Step[], executionMode);
+    parsed!.steps = modeStripped.steps;
+    if (modeStripped.removed.length) {
+      console.log("[orchestrate] source_and_qualify_only removed steps", modeStripped.removed);
+    }
+
     // Tool availability annotation.
     const connectorsMissing = annotateTools(parsed!.steps);
 
@@ -1176,6 +1186,8 @@ Return ONLY valid JSON, no prose, no markdown:
         connectors_missing: connectorsMissing,
         tool_input: tool_input ?? null,
         lead_routing: leadRouting,
+        source_and_qualify_only: isSourceAndQualifyOnly(executionMode),
+        mode_removed_steps: modeStripped.removed,
       },
     });
 

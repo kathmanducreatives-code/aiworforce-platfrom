@@ -212,16 +212,47 @@ Deno.test("Bug1 #12b: all no-match → no contact linked, needs_manual_review", 
   assertEquals((out.per_lead[0] as any).needs_manual_review, true);
 });
 
-Deno.test("executeLeadAction generate_outreach: persists draft_needs_approval, never sends", async () => {
-  const { api, state } = fakeAdmin([seedLead]);
+// A gate-eligible lead: provider-verified (person-level), contact-ready, canonical
+// decision `contact`, with a supported evidence URL — the ONLY state that may draft.
+const draftEligibleLead = {
+  ...seedLead, id: "lead-1",
+  raw: {
+    ...seedLead.raw,
+    provider_provenance: { verified: true, level: "person" },
+    contact_ready: true,
+    canonical_final_decision: "contact",
+    company: "Acme Robotics",
+    evidence_url: "https://linkedin.com/jobs/view/1",
+  },
+};
+
+Deno.test("generate_outreach (#16): verified contact-ready lead persists draft_needs_approval, never sends", async () => {
+  const { api, state } = fakeAdmin([draftEligibleLead]);
   const runTool = async (): Promise<ToolResultLike> => ({ ok: true, data: {} });
   const out = await executeLeadAction("generate_outreach", ["lead-1"], mkCtx(api, runTool));
   const draft = state.inserts.find((i) => i.table === "outreach_drafts");
-  assert(draft, "draft persisted");
+  assert(draft, "draft persisted for a gate-eligible lead");
   assertEquals(draft.vals.status, "draft");
   assert(draft.vals.raw.status === "draft_needs_approval");
   assertEquals(out.needs_approval, true);
-  // Draft is only ever "draft" status — never a sent/delivered state.
-  assertEquals(draft.vals.status, "draft");
   assert(!state.inserts.some((i) => i.table === "messages" || /sent|delivered/i.test(String(i.vals?.status ?? ""))));
+});
+
+Deno.test("generate_outreach (#15): unverified provider lead is blocked by the draft gate", async () => {
+  // seedLead has no provider_provenance / contact_ready / canonical decision.
+  const { api, state } = fakeAdmin([seedLead]);
+  const runTool = async (): Promise<ToolResultLike> => ({ ok: true, data: {} });
+  const out = await executeLeadAction("generate_outreach", ["lead-1"], mkCtx(api, runTool));
+  assert(!state.inserts.some((i) => i.table === "outreach_drafts"), "no draft may persist for an unverified lead");
+  assertEquals((out.per_lead[0] as any).status, "blocked_draft_gate");
+  assert(Array.isArray((out.per_lead[0] as any).blocked_reasons));
+});
+
+Deno.test("generate_outreach (#18): source_and_qualify_only blocks outreach even for an eligible lead", async () => {
+  const { api, state } = fakeAdmin([draftEligibleLead]);
+  const runTool = async (): Promise<ToolResultLike> => ({ ok: true, data: {} });
+  const ctx = { ...mkCtx(api, runTool), execution_mode: "source_and_qualify_only" };
+  const out = await executeLeadAction("generate_outreach", ["lead-1"], ctx);
+  assert(!state.inserts.some((i) => i.table === "outreach_drafts"), "mode forbids drafting");
+  assertEquals((out.per_lead[0] as any).status, "blocked_draft_gate");
 });

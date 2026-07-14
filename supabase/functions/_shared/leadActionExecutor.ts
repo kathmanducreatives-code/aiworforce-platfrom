@@ -13,6 +13,7 @@ import {
   buildPeopleSearchInput, type LeadRecord, type FirecrawlFn, type PeopleSearchFn, type PeopleSearchInput,
 } from "./leadActionRunner.ts";
 import type { PeopleSearchContact } from "./decisionMakers.ts";
+import { evaluateDraftGate, buildDraftGateInputFromRaw } from "./draftGate.ts";
 
 export type LeadAction = "research_company" | "find_decision_makers" | "generate_outreach";
 
@@ -49,6 +50,8 @@ export interface ExecCtx {
   agent_slug?: string | null;
   agent_name?: string | null;
   user_id?: string | null;
+  /** Requested execution mode; source_and_qualify_only forbids draft writes. */
+  execution_mode?: string | null;
   runTool: RunToolFn;
   toolCtx: unknown;           // ToolContext passed straight through to runTool
 }
@@ -198,6 +201,17 @@ export async function executeLeadAction(action: LeadAction, leadIds: string[], c
       per_lead.push({ lead_candidate_id: lead.lead_candidate_id, company: lead.company_name, needs_manual_review: res.needs_manual_review, used_people_search: res.used_people_search, decision_makers: res.decision_makers, rejected_count: res.rejected.length });
 
     } else if (action === "generate_outreach") {
+      // Centralized draft gate — no outreach_drafts insert may bypass it. A draft
+      // is allowed ONLY for a persisted, provider-verified, contact-ready lead whose
+      // canonical decision is `contact`, and never when the mode forbids drafting.
+      const gate = evaluateDraftGate(buildDraftGateInputFromRaw(
+        (row.raw ?? {}) as Record<string, unknown>,
+        { execution_mode: ctx.execution_mode, persisted_lead_candidate_id: lead.lead_candidate_id },
+      ));
+      if (!gate.allowed) {
+        per_lead.push({ lead_candidate_id: lead.lead_candidate_id, company: lead.company_name, status: "blocked_draft_gate", blocked_reasons: gate.blocked_reasons });
+        continue;
+      }
       const res = runGenerateOutreach(lead);
       if (res.ready && res.draft.status === "draft_needs_approval") {
         const { data: d } = await ctx.admin.from("outreach_drafts").insert({

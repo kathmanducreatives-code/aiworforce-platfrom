@@ -15,6 +15,9 @@ import { decideWorkspaceAccess } from "../_shared/workspaceAccessGuard.ts";
 import { separateIntent } from "../_shared/leadIntentModel.ts";
 import { classifyRoleFamily, type RoleFamily } from "../_shared/roleFamilyMatcher.ts";
 import { buildCanonicalStamp } from "../_shared/leadCanonicalStamp.ts";
+import { stepAllowedInMode, isSourceAndQualifyOnly } from "../_shared/executionMode.ts";
+import { buildProviderIndexFromItems, parseScoutCandidates, guardScoutToAria, buildProvenanceRecord, assertPersistenceProvenance, type NormalizedProviderIndex, type ProvenanceCtx } from "../_shared/leadHandoffGuard.ts";
+import { newRejectionCounter, sealProvenance, buildNoResults, type RejectionCounter } from "../_shared/leadPersistenceGuard.ts";
 
 
 const cors = {
@@ -247,6 +250,14 @@ Deno.serve(async (req) => {
   // leads (not a tool failure). We then skip Aria — there is nothing to rank.
   let zeroAcceptedSourcing = false;
   let sourcingAttemptsCount = 0;
+  // Provider-provenance rejections accumulated during persistence; surfaced in the
+  // no_results terminal payload. Broad scope so the finalizer can read it.
+  const provenanceRejections: RejectionCounter = newRejectionCounter();
+  // Provider-provenance: the immutable index of accepted provider items + run
+  // context, built during sourcing and read at the Scout→Aria hand-off so an
+  // LLM-invented company/person/URL can never reach Aria or persistence.
+  let providerIndexForHandoff: NormalizedProviderIndex | null = null;
+  let providerProvenanceCtx: ProvenanceCtx | null = null;
   // AI Source Planner artifacts (carried into the Scout task result so the final
   // step can render Workbench Insights + a definitive process narrative).
   let sourcePlanMeta: Record<string, unknown> | null = null;
@@ -941,6 +952,22 @@ Deno.serve(async (req) => {
           const tierCounts: Record<string, number> = { hot: 0, qualified: 0, weak: 0, rejected: 0 };
           const whySamples: string[] = [];
           let scoreSum = 0;
+          // Provenance: build the immutable provider index from the ACCEPTED
+          // (normalized) provider items only, plus this run's provider context.
+          // Read at the Scout→Aria hand-off + stamped onto each persisted lead.
+          try {
+            const acceptedForIndex = (((lieAcceptedItems ?? gateAcceptedItems) ?? classified.accepted) ?? []) as any[];
+            providerIndexForHandoff = buildProviderIndexFromItems(acceptedForIndex.map((a: any) => ({
+              company: a.company ?? a.name, name: a.name, person: a.name,
+              source_url: a.source_url, url: a.source_url,
+              company_linkedin_url: (a.raw?.company_linkedin_url ?? a.raw?.companyLinkedinUrl) as string | null,
+              person_linkedin_url: /linkedin\.com\/in\//i.test(String(a.source_url ?? "")) ? a.source_url : ((a.raw?.profile_url ?? a.raw?.profileUrl) as string | null),
+              website: (a.raw?.website ?? a.raw?.companyUrl) as string | null,
+              domain: (a.raw?.domain) as string | null,
+              job_url: (a.raw?.job_url ?? a.source_url) as string | null,
+            })));
+            providerProvenanceCtx = { provider: "apify", actor_id: planned_actor_key ?? "apify", provider_run_id: run_id, workflow_run_id: run_id, plan_id: String(plan_id ?? ""), trace_id: run_id, query_id: null };
+          } catch (e) { console.warn("[run-agent] provider index build failed:", e); }
           for (const it of ((lieAcceptedItems ?? gateAcceptedItems) ?? classified.accepted)) {
             const r = (it.raw ?? {}) as Record<string, unknown>;
             const q = evaluateLeadQuality({
@@ -1227,11 +1254,25 @@ Deno.serve(async (req) => {
                 workspace_id,
                 plan_id,
                 task_id: task.id,
+                execution_mode: execution_mode_body,
                 tool_call_id: null,
                 tool_name: "source_with_apify",
                 selected_actor_key: planned_actor_key ?? null,
+                // Provider provenance context — invalid provenance now BLOCKS the
+                // lead_candidates insert (no verified=false ride-along).
+                provider: "apify",
+                actor_id: planned_actor_key ?? "apify",
+                provider_run_id: run_id,
+                workflow_run_id: run_id,
+                trace_id: run_id,
+                enforce_provenance: true,
+                lead_origin: "provider_sourced",
+                provenance_rejections: provenanceRejections,
                 output: { items: rawItems, total: rawItems.length, summary: `${effectiveFound}/${adaptive.requested} accepted across ${adaptive.attempts.length} attempt(s)` },
               });
+              if (provenanceRejections.count > 0) {
+                console.warn(`[run-agent] provenance guard blocked ${provenanceRejections.count} unproven lead insert(s):`, provenanceRejections.reasons);
+              }
             } catch (e) { console.warn("[run-agent] capped persistence failed:", e); }
 
             // Phase 3 — persist per-row lead quality onto each Workbench row
@@ -1338,6 +1379,30 @@ Deno.serve(async (req) => {
                       search_stage: (q.canonical as any).run_trace?.search_stage,
                       relaxed_filters: (q.canonical as any).run_trace?.relaxed_filters,
                     } : {}),
+                    // Provider-provenance (immutable, from provider data only).
+                    // This row IS provider-sourced (memoryWriter created it from an
+                    // accepted provider item); stamp the traceable record + verified
+                    // flag that draftGate/downstream actions read. verified=false
+                    // means required provenance is missing → downstream actions block.
+                    // Provenance immutability: a trusted block was stamped at
+                    // insert time by memoryWriter. Aria/scoring/LLM output can NOT
+                    // overwrite it — sealProvenance keeps the trusted block and
+                    // flags any overwrite attempt. Score/confidence never override.
+                    ...(() => {
+                      const incoming = buildProvenanceRecord({
+                        company: (existingRaw.company ?? existingRaw.company_name ?? nameById.get(r.account_id as string)) as string | null,
+                        source_url: (existingRaw.source_url ?? existingRaw.url ?? rowUrl) as string | null,
+                        domain: (existingRaw.domain ?? existingRaw.company_domain) as string | null,
+                        company_linkedin_url: (existingRaw.company_linkedin_url) as string | null,
+                        person_linkedin_url: (existingRaw.decision_maker_profile_url ?? existingRaw.person_linkedin_url ?? existingRaw.profile_url) as string | null,
+                        evidence_url: (existingRaw.job_url ?? existingRaw.evidence_url ?? existingRaw.source_url) as string | null,
+                        provider_item_id: (existingRaw.provider_job_id ?? existingRaw.provider_item_id) as string | null,
+                        normalized_candidate_id: (existingRaw.normalized_candidate_id) as string | null,
+                      }, providerProvenanceCtx ?? { plan_id: String(plan_id ?? "") });
+                      const trusted = (existingRaw.provider_provenance ?? null) as Parameters<typeof sealProvenance>[0];
+                      const sealed = sealProvenance(trusted, incoming);
+                      return { provider_provenance: sealed.provenance, provenance_overwrite_attempt: sealed.provenance_overwrite_attempt };
+                    })(),
                   },
                 }).eq("id", r.id as string);
               }
@@ -1467,9 +1532,24 @@ Deno.serve(async (req) => {
       ? "Try a broader persona, draft an account-level template, or export the accounts. No contacts attached, no credits charged, nothing sent."
       : "Try broadening the role, industry, or location — or pick another lead source. No leads were saved, no credits charged, nothing sent.";
 
+    // Canonical no_results terminal (Section 4). Uses the existing `complete`
+    // status enum and records result_status + counts in the result JSON (no
+    // migration). Aria/Penn are not invoked; nothing persists.
+    const noResults = buildNoResults(provenanceRejections.count);
     await supabase.from("tasks").update({
       status: "complete",
-      result: { output: scoutMsg, no_qualified_matches: true, attempt_log: adaptiveAttempts.length ? adaptiveAttempts : undefined },
+      result: {
+        output: scoutMsg,
+        no_qualified_matches: true,
+        result_status: "no_results",
+        qualified_count: 0,
+        contact_ready_count: 0,
+        persisted_lead_count: 0,
+        rejected_provenance_count: noResults.rejected_provenance_count,
+        rejected_provenance_reasons: provenanceRejections.reasons,
+        next_step: null,
+        attempt_log: adaptiveAttempts.length ? adaptiveAttempts : undefined,
+      },
     }).eq("id", task.id);
     await supabase.from("task_plans").update({ status: "failed", completed_at: new Date().toISOString() }).eq("id", plan_id);
 
@@ -1628,6 +1708,7 @@ Deno.serve(async (req) => {
         plan_id,
         task_id: task.id,
         agent_slug,
+        execution_mode: execution_mode_body,
         output_text: apiText,
         // Memory-driven draft_outreach carries the target lead ids so Penn
         // drafts link to the remembered leads (which live in a prior plan).
@@ -1652,7 +1733,47 @@ Deno.serve(async (req) => {
     .eq("id", plan_id)
     .maybeSingle();
   const steps: any[] = Array.isArray(plan?.steps) ? (plan!.steps as any[]) : [];
-  const nextStep = steps[(step_index as number) + 1] ?? null;
+  let nextStep = steps[(step_index as number) + 1] ?? null;
+
+  // Safety (defense-in-depth): in source_and_qualify_only never hand off to a
+  // forbidden step (Penn / draft_outreach / send / publish). orchestrate already
+  // strips these from the plan; this guarantees it even if a stale plan carries
+  // one, so no outreach can be generated in this mode.
+  if (nextStep && !stepAllowedInMode({ agent_slug: nextStep.agent_slug, tool_needed: nextStep.tool_needed }, execution_mode_body)) {
+    await supabase.from("activity_feed").insert({
+      workspace_id, plan_id, agent_id: agent.id,
+      event_type: "mode_blocked_step",
+      title: "Outreach step blocked (source_and_qualify_only)",
+      body: `Skipped ${nextStep.agent_slug}/${nextStep.tool_needed}: outreach drafting is forbidden in source_and_qualify_only.`,
+      metadata: { step_index, blocked_agent: nextStep.agent_slug, blocked_tool: nextStep.tool_needed },
+    });
+    nextStep = null;
+  }
+
+  // Provenance hand-off guard: Scout → Aria. Only provider-backed candidates may
+  // reach Aria. Fabricated identities (absent from the accepted provider index)
+  // are dropped; if NONE survive, Aria is not invoked with fallback/invented
+  // candidates — the chain stops (no Aria → no downstream Penn → no drafts).
+  let handoffInput: string | null = apiText ?? null;
+  if (nextStep && agent_slug === "scout" && nextStep.agent_slug === "aria" && providerIndexForHandoff) {
+    try {
+      const guard = guardScoutToAria(parseScoutCandidates(apiText, null), providerIndexForHandoff);
+      await supabase.from("activity_feed").insert({
+        workspace_id, plan_id, agent_id: agent.id,
+        event_type: "provenance_handoff_guard",
+        title: "Scout→Aria provenance guard",
+        body: guard.summary,
+        metadata: { step_index, verified: guard.verified.length, rejected: guard.rejected.length, stop: guard.shouldStop },
+      });
+      if (guard.shouldStop) {
+        zeroAcceptedSourcing = true;
+        nextStep = null; // never invoke Aria with unsupported/invented candidates
+      } else {
+        // Aria receives ONLY the provider-backed candidates, never Scout's prose.
+        handoffInput = JSON.stringify({ candidates: guard.verified });
+      }
+    } catch (e) { console.warn("[run-agent] provenance handoff guard failed:", e); }
+  }
 
   if (needs_approval) {
     await supabase.from("approvals").insert({
@@ -1733,7 +1854,7 @@ Deno.serve(async (req) => {
       task_id: task.id,
       from_agent_slug: agent_slug ?? null,
       to_agent_slug: nextStep.agent_slug ?? null,
-      payload: { instruction: nextStep.instruction, input: apiText },
+      payload: { instruction: nextStep.instruction, input: handoffInput },
     });
     await supabase.from("activity_feed").insert({
       workspace_id,
@@ -1758,7 +1879,7 @@ Deno.serve(async (req) => {
         workspace_id,
         user_id,
         instruction: nextStep.instruction,
-        input: apiText,
+        input: handoffInput,
         needs_approval: nextStep.needs_approval === true,
         // Per-step tool_input (set on the step's metadata) wins, so a plan can
         // mix tools across steps (e.g. Hawk scrape → Scout apify). Steps without
