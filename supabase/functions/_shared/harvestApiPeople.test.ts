@@ -34,8 +34,9 @@ test("T1 react developer London — core mapping", () => {
   assert.equal(out.startPage, 1);
   assert.deepEqual(out.locations, ["London"]);
   assert.deepEqual(out.currentJobTitles, ["React Developer"]);
-  // searchQuery is composed from the (industry-aware) query + location.
-  assert.equal(out.searchQuery, "react developer London");
+  // searchQuery is a concise market/category query only; location lives in
+  // locations[] and the title in currentJobTitles[] (not duplicated into searchQuery).
+  assert.equal(out.searchQuery, "react developer");
   // No raw Agentory fields leaked.
   assert.equal("location" in out, false);
   assert.equal("max_results" in out, false);

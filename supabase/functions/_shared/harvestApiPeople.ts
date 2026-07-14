@@ -1,8 +1,7 @@
-// HarvestAPI LinkedIn Profile Search — input adapter (pure, no imports).
-// Actor: harvestapi/linkedin-profile-search
+// HarvestAPI LinkedIn Profile Search — input adapter (pure; imports only the
+// deterministic people-search query builder). Actor: harvestapi/linkedin-profile-search
 //
 // Maps Agentory's generic sourcing input to the actor's official input schema.
-// Kept import-free so it is unit-testable in isolation (Deno edge + Node tests).
 //
 // Hard rules enforced here:
 //  - Never forward raw Agentory fields (location, max_results, role_keywords)
@@ -11,6 +10,17 @@
 //  - Company filters must be FULL LinkedIn company/school URLs; names are dropped.
 //  - Locations use full names ("United States", not "us").
 //  - profileScraperMode defaults to "Full"; "Full + email search" is never the default.
+//  - searchQuery is a CONCISE market/category query only — never a tool name,
+//    requested count, execution-mode phrase, title, location, or the serialized
+//    user/agent instruction. Titles go to currentJobTitles, geography to locations.
+
+import {
+  parsePersonRoles,
+  parseMarketTerms,
+  buildMarketQuery,
+  sanitizeSearchQuery,
+  parsePeopleSearchIntent,
+} from "./peopleSearchQueryBuilder.ts";
 
 export interface GenericPeopleInput {
   query?: string | null;
@@ -138,42 +148,44 @@ export function buildHarvestApiPeopleInput(generic: GenericPeopleInput): Record<
     mode = f.profileScraperMode;
   }
 
-  // currentJobTitles — explicit filter wins, else derive from role_keywords.
-  const currentJobTitles = strArray(f.currentJobTitles) ?? deriveJobTitles(generic.role_keywords);
+  // currentJobTitles — explicit filter wins, else derive from role_keywords, else
+  // parse person titles from the query text (fixes empty titles when role_keywords
+  // is empty, e.g. plural "founders" that the caller's role regex missed).
+  const derivedTitles = deriveJobTitles(generic.role_keywords);
+  const currentJobTitles = strArray(f.currentJobTitles)
+    ?? (derivedTitles.length ? derivedTitles : parsePersonRoles(generic.query));
 
-  // locations — explicit filter wins (each normalized), else single location.
+  // locations — explicit filter wins (normalized), else the single generic
+  // location, else parse geography from the query text.
   const explicitLocations = strArray(f.locations);
   const normLoc = normalizeLocationName(generic.location);
+  const parsedLocations = parsePeopleSearchIntent(generic.query).locations;
   const locations = explicitLocations
     ? explicitLocations.map((l) => normalizeLocationName(l) ?? l)
     : normLoc
       ? [normLoc]
-      : null;
+      : (parsedLocations.length ? parsedLocations : null);
 
-  // searchQuery — must carry INDUSTRY/CATEGORY context, not just title+location,
-  // or the actor returns any "Founder in London". Compose: one representative
-  // title + industry keywords (user_input.keywords) + location. Explicit
-  // f.searchQuery wins; generic.query is the final fallback. Cap 300.
+  // searchQuery — a CONCISE fuzzy market/category query ONLY. Never a tool name,
+  // requested count, execution-mode phrase, title, location, or the serialized
+  // instruction. Explicit user_input.searchQuery (sanitized) wins; "" ⇒ omit.
+  // Otherwise: parsed market/category terms → "A OR B"; else keyword terms; else a
+  // sanitized remnant of the query (junk-stripped). Cap 300.
   const keywordTerms = strArray(f.keywords) ?? [];
-  const repTitle = currentJobTitles[0] ?? (generic.role_keywords ?? [])[0] ?? "";
-  const loc = normLoc ?? (generic.location ?? "");
-  // Base on generic.query (planner fills it with role + industry/category), then
-  // fold in any extra keyword terms + location if not already present.
-  const baseTerms = String(generic.query ?? "").trim() || repTitle;
-  const composedQuery = [
-    baseTerms,
-    keywordTerms.filter((k) => !baseTerms.toLowerCase().includes(k.toLowerCase())).join(" "),
-    loc && !baseTerms.toLowerCase().includes(loc.toLowerCase()) ? loc : "",
-  ]
-    .map((p) => String(p).trim())
-    .filter(Boolean)
-    .join(" ")
-    .trim();
-  const rawQuery =
-    typeof f.searchQuery === "string" && f.searchQuery.trim()
-      ? f.searchQuery.trim()
-      : composedQuery || repTitle;
-  const searchQuery = rawQuery.slice(0, 300);
+  let searchQuery: string | undefined;
+  if (typeof f.searchQuery === "string") {
+    const sq = sanitizeSearchQuery(f.searchQuery);
+    searchQuery = sq || undefined;
+  } else {
+    const marketSource = [String(generic.query ?? ""), keywordTerms.join(" ")].join(" ");
+    const market = buildMarketQuery(parseMarketTerms(marketSource));
+    searchQuery =
+      market
+      || sanitizeSearchQuery(keywordTerms.join(" "))
+      || sanitizeSearchQuery(String(generic.query ?? ""))
+      || undefined;
+  }
+  if (searchQuery) searchQuery = searchQuery.slice(0, 300);
 
   const maxItems = Math.max(1, Math.min(100, Number(generic.max_results) || 10));
   const startPage =
@@ -181,10 +193,10 @@ export function buildHarvestApiPeopleInput(generic: GenericPeopleInput): Record<
 
   const out: Record<string, unknown> = {
     profileScraperMode: mode,
-    searchQuery,
     maxItems,
     startPage,
   };
+  if (searchQuery) out.searchQuery = searchQuery;
   if (currentJobTitles.length) out.currentJobTitles = currentJobTitles;
   if (locations) out.locations = locations;
 
