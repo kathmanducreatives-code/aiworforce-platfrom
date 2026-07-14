@@ -14,6 +14,14 @@ export interface TimelineStage {
 }
 
 export function ResearchTimeline({ stages, running }: { stages: TimelineStage[]; running: boolean }) {
+  // Only one stage should appear active at a time. If multiple are marked
+  // 'active', only the first one gets the spinner — the rest render as pending
+  // so the timeline never shows several simultaneous loaders (which looks fake).
+  const firstActiveIdx = stages.findIndex((s) => s.status === 'active');
+  const normalized = stages.map((s, i) =>
+    s.status === 'active' && i !== firstActiveIdx ? { ...s, status: 'pending' as TimelineStatus } : s
+  );
+
   return (
     <div className="relative rounded-2xl border border-border/50 bg-card/40 p-5 backdrop-blur-xl">
       <div className="mb-4 flex items-center gap-2">
@@ -33,7 +41,7 @@ export function ResearchTimeline({ stages, running }: { stages: TimelineStage[];
           />
         )}
 
-        {stages.map((s) => (
+        {normalized.map((s) => (
           <li key={s.id} className="relative">
             <span
               className={[

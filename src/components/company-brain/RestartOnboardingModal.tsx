@@ -11,9 +11,10 @@ export default function RestartOnboardingModal({ open, onOpenChange, onConfirm }
     <AlertDialog open={open} onOpenChange={onOpenChange}>
       <AlertDialogContent className="border-border/60 bg-card/95 backdrop-blur-2xl">
         <AlertDialogHeader>
-          <AlertDialogTitle>Run Company Brain onboarding again?</AlertDialogTitle>
+          <AlertDialogTitle>Refresh your Company Brain?</AlertDialogTitle>
           <AlertDialogDescription>
-            This will create a new draft using your latest founder and company context. Your current active Company Brain will stay in place until you activate the new one.
+            Agentory will create a new draft from your latest founder and company context. Your current active Company
+            Brain will remain active until you approve and activate the new version.
           </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>

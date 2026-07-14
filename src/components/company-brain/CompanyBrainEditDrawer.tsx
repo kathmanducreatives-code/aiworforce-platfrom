@@ -4,8 +4,10 @@
 // profile, so we never overwrite fields we don't render (evidence, claims,
 // signal_preferences, legacy top-level keys, etc.).
 
-import { useEffect, useState } from 'react';
-import { Sheet, SheetContent, SheetDescription, SheetFooter, SheetHeader, SheetTitle } from '@/components/ui/sheet';
+import { useEffect, useState, type ComponentType } from 'react';
+import { motion, useReducedMotion } from 'framer-motion';
+import { Brain, Check, Crosshair, Loader2, Megaphone, Radar, ShieldAlert, Users } from 'lucide-react';
+import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -23,39 +25,45 @@ interface Props {
   onSave: (patch: BrainProfile) => Promise<void> | void;
 }
 
-const TITLES: Record<SectionKey, { title: string; description: string }> = {
-  company:       { title: 'Company understanding', description: 'What Agentory tells other agents about your company.' },
-  targeting:     { title: 'ICP / targeting',       description: 'Who counts as a fit worth researching.' },
-  buyers:        { title: 'Buyer personas',        description: 'The roles you sell to.' },
-  signals:       { title: 'Buying signals',        description: 'What Scout Radar should watch for.' },
-  disqualifiers: { title: 'Disqualifiers & safety', description: 'Who and what to never target.' },
-  messaging:     { title: 'Messaging & positioning', description: 'How Agentory should sound on your behalf.' },
+const TITLES: Record<SectionKey, { title: string; description: string; influences: string; icon: ComponentType<{ className?: string }> }> = {
+  company:       { title: 'Company understanding', description: 'What Agentory tells other agents about your company.', influences: 'Grounds every agent in what you do and who you sell to.', icon: Brain },
+  targeting:     { title: 'ICP / targeting',       description: 'Who counts as a fit worth researching.', influences: 'Filters and ranks every lead Scout and Find Leads return.', icon: Crosshair },
+  buyers:        { title: 'Buyer personas',        description: 'The roles you sell to and the pains you solve.', influences: 'Focuses outreach on the right decision-makers.', icon: Users },
+  signals:       { title: 'Buying signals',        description: 'What Scout Radar should watch for.', influences: 'Decides which timing signals are worth surfacing.', icon: Radar },
+  disqualifiers: { title: 'Disqualifiers & safety', description: 'Who and what to never target.', influences: 'Stops bad-fit leads and banned claims before anything sends.', icon: ShieldAlert },
+  messaging:     { title: 'Messaging & positioning', description: 'How Agentory should sound on your behalf.', influences: 'Shapes outreach drafts, content, and brand voice.', icon: Megaphone },
 };
 
 export default function CompanyBrainEditDrawer({ open, section, brain, onOpenChange, onSave }: Props) {
+  const reduce = useReducedMotion();
   const [busy, setBusy] = useState(false);
+  const [saved, setSaved] = useState(false);
   const [state, setState] = useState<any>(null);
 
   useEffect(() => {
     if (!open || !section) return;
     setState(initialFor(section, brain));
+    setSaved(false);
   }, [open, section, brain]);
 
   if (!section || !state) {
     return (
       <Sheet open={open} onOpenChange={onOpenChange}>
-        <SheetContent side="right" className="w-full sm:max-w-md border-border/50 bg-card/80 backdrop-blur-2xl" />
+        <SheetContent side="right" className="w-full border-border/30 bg-card/40 backdrop-blur-3xl sm:max-w-md" />
       </Sheet>
     );
   }
 
   const meta = TITLES[section];
+  const Icon = meta.icon;
 
   async function handleSave() {
     setBusy(true);
     try {
       await onSave(buildPatch(section!, state, brain));
-      onOpenChange(false);
+      setSaved(true);
+      // Brief confirmation glow before closing.
+      setTimeout(() => onOpenChange(false), reduce ? 0 : 600);
     } finally {
       setBusy(false);
     }
@@ -63,13 +71,58 @@ export default function CompanyBrainEditDrawer({ open, section, brain, onOpenCha
 
   return (
     <Sheet open={open} onOpenChange={(v) => { if (!busy) onOpenChange(v); }}>
-      <SheetContent side="right" className="flex w-full flex-col gap-0 border-border/50 bg-card/80 backdrop-blur-2xl sm:max-w-lg">
-        <SheetHeader className="text-left">
-          <SheetTitle className="text-lg tracking-tight">{meta.title}</SheetTitle>
-          <SheetDescription className="text-xs">{meta.description}</SheetDescription>
+      {/* Premium glassmorphic drawer surface */}
+      <SheetContent
+        side="right"
+        className="flex w-full flex-col gap-0 overflow-hidden border-border/25 bg-card/38 backdrop-blur-3xl backdrop-saturate-[1.4] sm:max-w-lg"
+        style={{
+          boxShadow: saved
+            ? 'inset 0 0 0 1px hsl(160 84% 52% / 0.5), 0 0 60px -10px hsl(160 84% 52% / 0.4)'
+            : 'inset 0 0 0 1px hsl(160 84% 52% / 0.14), 0 -30px 80px -20px rgba(0,0,0,0.6)',
+        }}
+      >
+        {/* emerald gradient border accent on the left edge */}
+        <div
+          aria-hidden
+          className="pointer-events-none absolute inset-y-0 left-0 w-px"
+          style={{ background: 'linear-gradient(to bottom, transparent, hsl(160 84% 52% / 0.40), transparent)' }}
+        />
+        {/* top hairline */}
+        <div
+          aria-hidden
+          className="pointer-events-none absolute inset-x-6 top-0 h-px"
+          style={{ background: 'linear-gradient(to right, transparent, hsl(160 84% 52% / 0.50), transparent)' }}
+        />
+
+        {saved && (
+          <motion.div
+            initial={reduce ? false : { opacity: 0 }}
+            animate={{ opacity: 1 }}
+            className="flex items-center gap-2 border-b border-emerald-400/25 bg-emerald-400/[0.08] px-5 py-2.5 text-[12.5px] text-emerald-300"
+          >
+            <Check className="h-4 w-4" /> Saved — your Company Brain is updated.
+          </motion.div>
+        )}
+
+        <SheetHeader className="gap-0 border-b border-border/25 px-5 pb-4 pt-5 text-left">
+          <div className="flex items-start gap-3">
+            <div
+              className="mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-emerald-400/30 bg-emerald-400/[0.08]"
+              style={{ boxShadow: '0 0 18px -6px hsl(160 84% 52% / 0.5), inset 0 1px 0 hsl(var(--foreground) / 0.06)' }}
+            >
+              <Icon className="h-[18px] w-[18px] text-emerald-300" />
+            </div>
+            <div className="min-w-0">
+              <SheetTitle className="text-[17px] tracking-tight">{meta.title}</SheetTitle>
+              <SheetDescription className="mt-0.5 text-[12.5px]">{meta.description}</SheetDescription>
+            </div>
+          </div>
+          <p className="mt-3 rounded-lg border border-border/25 bg-background/20 px-3 py-2 text-[11.5px] leading-snug text-muted-foreground/80">
+            <span className="font-medium text-foreground/75">Influences: </span>{meta.influences}
+          </p>
         </SheetHeader>
 
-        <div className="-mr-2 mt-4 flex-1 space-y-5 overflow-y-auto pr-2">
+        <div className="-mr-1 mt-4 flex-1 space-y-5 overflow-y-auto px-5 pr-6">
           {section === 'company' && <CompanyEditor state={state} setState={setState} />}
           {section === 'targeting' && <TargetingEditor state={state} setState={setState} />}
           {section === 'buyers' && <BuyersEditor state={state} setState={setState} />}
@@ -78,10 +131,32 @@ export default function CompanyBrainEditDrawer({ open, section, brain, onOpenCha
           {section === 'messaging' && <MessagingEditor state={state} setState={setState} />}
         </div>
 
-        <SheetFooter className="mt-4 gap-2 sm:justify-end">
-          <Button variant="ghost" onClick={() => onOpenChange(false)} disabled={busy}>Cancel</Button>
-          <Button onClick={handleSave} disabled={busy}>{busy ? 'Saving…' : 'Save changes'}</Button>
-        </SheetFooter>
+        {/* Floating dock-style save area */}
+        <div className="relative border-t border-border/20 px-5 py-4">
+          <div
+            aria-hidden
+            className="pointer-events-none absolute inset-x-0 top-0 h-px"
+            style={{ background: 'linear-gradient(to right, transparent, hsl(var(--border) / 0.30), transparent)' }}
+          />
+          <div className="flex items-center justify-end gap-2">
+            <Button
+              variant="ghost"
+              onClick={() => onOpenChange(false)}
+              disabled={busy}
+              className="text-muted-foreground hover:text-foreground"
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={handleSave}
+              disabled={busy}
+              className="gap-2 bg-gradient-to-b from-primary to-[hsl(var(--primary)/0.82)] shadow-[0_1px_0_hsl(var(--foreground)/0.12)_inset,0_8px_24px_-10px_hsl(var(--primary)/0.5)] transition-all hover:shadow-[0_1px_0_hsl(var(--foreground)/0.15)_inset,0_12px_32px_-10px_hsl(var(--primary)/0.65),0_0_24px_hsl(var(--primary)/0.2)]"
+            >
+              {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+              {busy ? 'Saving…' : 'Save changes'}
+            </Button>
+          </div>
+        </div>
       </SheetContent>
     </Sheet>
   );

@@ -1,43 +1,51 @@
-// Saved Company Brain dashboard — the destination for users who already
-// finished onboarding. Reads the workspace's `company_brain.profile` via
-// `useCompanyBrain` (RLS + WorkspaceContext scoped), renders section cards,
-// and lets the user edit one section at a time. Never restarts onboarding on
-// its own: "Run onboarding again" opens a confirm modal that navigates to
-// /onboarding/company-brain?restart=1 without touching the active Brain.
+// Saved Company Brain — premium vertical intelligence flow.
+//
+// The user scrolls through their ICP in the same sequence Agentory uses it:
+//   01 Target Market → 02 Buyer Profile → 03 Buying Moments
+//   → 04 Qualification & Safety → 05 Messaging Fit
+//
+// Reads `company_brain.profile` via `useCompanyBrain` (RLS + WorkspaceContext
+// scoped). Edit/save contract is unchanged: same table, same profile shape,
+// same mergeProfilePatch shallow-merge, same drawer SectionKey mapping.
+// Onboarding, backend functions, schema, auth, and RLS are untouched.
 
 import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Brain, CheckCircle2, Loader2, Pencil, RotateCcw, ShieldCheck } from 'lucide-react';
+import { motion, useReducedMotion } from 'framer-motion';
+import { Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 
 import { supabase } from '@/integrations/supabase/client';
 import { useCompanyBrain } from '@/hooks/useCompanyBrain';
 import { useWorkspace } from '@/contexts/WorkspaceContext';
-import { Button } from '@/components/ui/button';
 
 import { ProgressiveBackground } from '@/components/onboarding/ProgressiveBackground';
-import CompanyBrainSectionCard, { ChipList, LabelValue } from '@/components/company-brain/CompanyBrainSectionCard';
-import CompanyBrainEditDrawer, { type SectionKey } from '@/components/company-brain/CompanyBrainEditDrawer';
+import { IcpHero } from '@/components/company-brain/IcpHero';
+import { IcpSection, PillGroup, TextRows, StatementField, InlineAdd } from '@/components/company-brain/IcpSection';
+import { SystemImpactFooter } from '@/components/company-brain/SystemImpactFooter';
+import CompanyBrainEditDrawer, { type SectionKey as DrawerSectionKey } from '@/components/company-brain/CompanyBrainEditDrawer';
 import RestartOnboardingModal from '@/components/company-brain/RestartOnboardingModal';
-import SystemUsageStrip from '@/components/company-brain/SystemUsageStrip';
 
 import { mergeProfilePatch, toSavedBrainView, type BrainProfile } from '@/lib/companyBrainView';
+import { deriveHealth, FLOW_SECTIONS, type SectionKey } from '@/lib/companyBrainSections';
 
 export default function CompanyBrainDashboard() {
   const navigate = useNavigate();
   const { workspaceId } = useWorkspace();
   const { data, loading, refresh } = useCompanyBrain();
-  const [openSection, setOpenSection] = useState<SectionKey | null>(null);
+  const [openSection, setOpenSection] = useState<DrawerSectionKey | null>(null);
   const [restartOpen, setRestartOpen] = useState(false);
+  const [savedFlash, setSavedFlash] = useState<SectionKey | null>(null);
 
   const view = useMemo(() => toSavedBrainView(data?.profile as BrainProfile | undefined), [data?.profile]);
   const { brain, raw } = view;
+  const health = useMemo(() => deriveHealth(brain), [brain]);
 
   const lastUpdated = data?.onboarding_completed_at
     ? new Date(data.onboarding_completed_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })
     : null;
 
-  async function saveSection(patch: BrainProfile) {
+  async function saveSection(section: SectionKey, patch: BrainProfile) {
     if (!workspaceId) { toast.error('No workspace'); return; }
     const merged = mergeProfilePatch(raw, patch);
     const { error } = await supabase
@@ -46,124 +54,146 @@ export default function CompanyBrainDashboard() {
       .eq('workspace_id', workspaceId);
     if (error) { toast.error('Save failed', { description: error.message }); return; }
     toast.success('Section saved');
+    setSavedFlash(section);
+    setTimeout(() => setSavedFlash((s) => (s === section ? null : s)), 1600);
     refresh();
   }
 
   if (loading) {
     return (
-      <div className="relative flex min-h-[60vh] items-center justify-center text-sm text-muted-foreground">
-        <Loader2 className="h-4 w-4 animate-spin mr-2" /> Loading Company Brain…
+      <div className="relative min-h-screen text-foreground">
+        <ProgressiveBackground />
+        <div className="relative z-10 flex min-h-[60vh] items-center justify-center text-sm text-muted-foreground">
+          <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Loading Company Brain…
+        </div>
       </div>
     );
   }
 
-  const targeting = brain.target_customer;
-  const sizeLabel = targeting.company_size.label
-    || (targeting.company_size.min && targeting.company_size.max
-      ? `${targeting.company_size.min}–${targeting.company_size.max}`
+  const t = brain.target_customer;
+  const sizeLabel = t.company_size.label
+    || (t.company_size.min && t.company_size.max
+      ? `${t.company_size.min}–${t.company_size.max}`
       : '');
+  const edit = (k: SectionKey) => () => setOpenSection(k);
+
+  // Section 02 — split primary buyer from the rest of the roles.
+  const [primaryBuyer, ...otherRoles] = brain.buyer_personas;
 
   return (
-    <div className="relative min-h-screen text-foreground">
+    <div className="relative min-h-screen overflow-x-clip text-foreground">
       <ProgressiveBackground />
 
-      <div className="relative z-10 mx-auto max-w-6xl px-4 py-6 sm:px-6 sm:py-10 space-y-6">
-        {/* Header */}
-        <header className="rounded-2xl border border-border/60 bg-card/40 backdrop-blur-xl p-5 sm:p-6">
-          <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-            <div className="flex items-start gap-3 min-w-0">
-              <div className="h-11 w-11 rounded-xl border border-primary/40 bg-primary/10 flex items-center justify-center shrink-0 shadow-[0_0_18px_hsl(var(--primary)/0.25)]">
-                <Brain className="h-5 w-5 text-primary" />
-              </div>
-              <div className="min-w-0">
-                <div className="flex items-center gap-2 flex-wrap">
-                  <h1 className="text-xl sm:text-2xl font-semibold tracking-tight">Company Brain</h1>
-                  <span className="inline-flex items-center gap-1 rounded-full border border-primary/40 bg-primary/10 px-2 py-0.5 text-[11px] font-medium text-primary">
-                    <CheckCircle2 className="h-3 w-3" /> Active
-                  </span>
-                  <span className="inline-flex items-center gap-1 text-[11px] text-muted-foreground">
-                    <ShieldCheck className="h-3 w-3 text-primary/70" /> Approval-first
-                  </span>
-                </div>
-                <p className="text-sm text-muted-foreground mt-1">
-                  {brain.company.name || 'Your company'}
-                  {brain.company.category ? <span> · {brain.company.category}</span> : null}
-                  {lastUpdated ? <span className="text-muted-foreground/70"> · updated {lastUpdated}</span> : null}
-                </p>
-              </div>
-            </div>
-            <div className="flex flex-col sm:flex-row gap-2 shrink-0">
-              <Button onClick={() => setOpenSection('company')} className="gap-2">
-                <Pencil className="h-3.5 w-3.5" /> Edit Company Brain
-              </Button>
-              <Button variant="outline" onClick={() => setRestartOpen(true)} className="gap-2">
-                <RotateCcw className="h-3.5 w-3.5" /> Run onboarding again
-              </Button>
-            </div>
-          </div>
-        </header>
+      {/* scroll container; pb-36 reserves clearance for the floating command dock */}
+      <div className="relative z-10 mx-auto max-w-5xl px-4 py-6 pb-36 sm:px-6 sm:py-8 lg:py-10">
+        {/* compact ICP hero */}
+        <IcpHero
+          companyName={brain.company.name}
+          category={brain.company.category}
+          stage={brain.company.stage}
+          lastUpdated={lastUpdated}
+          onEditSection={(k) => setOpenSection(k)}
+          onRestart={() => setRestartOpen(true)}
+        />
 
-        {/* Sections */}
-        <div className="grid gap-4 md:grid-cols-2">
-          <CompanyBrainSectionCard title="Company understanding" subtitle="Who you are and what you do." onEdit={() => setOpenSection('company')}>
-            <div className="space-y-3">
-              <LabelValue label="Description" value={brain.company.description} />
-              <div className="grid grid-cols-2 gap-3">
-                <LabelValue label="Category" value={brain.company.category} />
-                <LabelValue label="Business model" value={brain.company.business_model} />
-                <LabelValue label="Stage" value={brain.company.stage} />
-                <LabelValue label="Team size" value={brain.company.team_size} />
+        {/* vertical intelligence flow */}
+        <div className="mt-6 space-y-4 lg:mt-7 lg:space-y-5">
+          {/* 01 — Target Market */}
+          <IcpSection
+            {...FLOW_SECTIONS[0]}
+            health={health.targeting}
+            index={0}
+            justSaved={savedFlash === 'targeting'}
+            onEdit={edit('targeting')}
+          >
+            <div className="space-y-4">
+              <PillGroup label="Industries" values={t.industries} tone="emerald" emptyHint="Add target industries so Agentory knows who fits." onAdd={edit('targeting')} />
+              <PillGroup label="Business models" values={t.business_models} tone="emerald" emptyHint="Add business models to tighten targeting." onAdd={edit('targeting')} />
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <PillGroup label="Company stage" values={t.funding_stage} tone="emerald" emptyHint="+ Add stage" onAdd={edit('targeting')} />
+                <StatementField label="Company size" value={sizeLabel} emptyHint="+ Add company size" onAdd={edit('targeting')} />
               </div>
-              {brain.company.website_url && (
-                <LabelValue label="Website" value={brain.company.website_url} />
+              <PillGroup label="Geography" values={t.geography} tone="emerald" emptyHint="+ Add geography" onAdd={edit('targeting')} />
+              <TextRows label="Must-have company traits" values={t.must_have} emptyHint="Add must-have traits to improve lead qualification." onAdd={edit('targeting')} />
+            </div>
+          </IcpSection>
+
+          <FlowConnector />
+
+          {/* 02 — Buyer Profile */}
+          <IcpSection
+            {...FLOW_SECTIONS[1]}
+            health={health.buyers}
+            index={1}
+            justSaved={savedFlash === 'buyers'}
+            onEdit={edit('buyers')}
+          >
+            <div className="space-y-4">
+              <StatementField label="Primary buyer" value={primaryBuyer || ''} emptyHint="Add the primary buyer role you sell to." onAdd={edit('buyers')} />
+              {otherRoles.length > 0 && (
+                <PillGroup label="Other buyer roles" values={otherRoles} tone="neutral" />
               )}
+              <TextRows label="Pain points" values={brain.pain_points} emptyHint="Add pain points so drafts speak to real problems." onAdd={edit('buyers')} />
             </div>
-          </CompanyBrainSectionCard>
+          </IcpSection>
 
-          <CompanyBrainSectionCard title="ICP / targeting" subtitle="Who counts as a fit worth researching." onEdit={() => setOpenSection('targeting')}>
-            <div className="space-y-3">
-              <Row label="Industries"><ChipList values={targeting.industries} /></Row>
-              <Row label="Business models"><ChipList values={targeting.business_models} /></Row>
-              <Row label="Geography"><ChipList values={targeting.geography} /></Row>
-              <Row label="Company size"><span className="text-sm">{sizeLabel || <span className="text-muted-foreground italic">Not set</span>}</span></Row>
-              <Row label="Must-have traits"><ChipList values={targeting.must_have} /></Row>
-            </div>
-          </CompanyBrainSectionCard>
+          <FlowConnector />
 
-          <CompanyBrainSectionCard title="Buyer personas" subtitle="The roles you sell to." onEdit={() => setOpenSection('buyers')}>
-            <div className="space-y-3">
-              <Row label="Buyer roles"><ChipList values={brain.buyer_personas} /></Row>
-              <Row label="Pain points"><ChipList values={brain.pain_points} /></Row>
+          {/* 03 — Buying Moments */}
+          <IcpSection
+            {...FLOW_SECTIONS[2]}
+            health={health.signals}
+            index={2}
+            justSaved={savedFlash === 'signals'}
+            onEdit={edit('signals')}
+          >
+            <div className="space-y-4">
+              <PillGroup label="Buying signals & triggers" values={brain.triggers} tone="signal" emptyHint="Add buying signals so Scout Radar knows what to watch." onAdd={edit('signals')} />
+              <PillGroup label="Jobs or roles to watch" values={brain.jobs_to_watch} tone="signal" emptyHint="+ Add jobs to watch" onAdd={edit('signals')} />
             </div>
-          </CompanyBrainSectionCard>
+          </IcpSection>
 
-          <CompanyBrainSectionCard title="Buying signals" subtitle="What Scout Radar should watch for." onEdit={() => setOpenSection('signals')}>
-            <div className="space-y-3">
-              <Row label="Triggers"><ChipList values={brain.triggers} /></Row>
-              <Row label="Jobs to watch"><ChipList values={brain.jobs_to_watch} /></Row>
-            </div>
-          </CompanyBrainSectionCard>
+          <FlowConnector />
 
-          <CompanyBrainSectionCard title="Disqualifiers & safety" subtitle="Who and what to never target." onEdit={() => setOpenSection('disqualifiers')}>
-            <div className="space-y-3">
-              <Row label="Industries to avoid"><ChipList values={targeting.disqualifiers.industries} /></Row>
-              <Row label="Keywords to avoid"><ChipList values={targeting.disqualifiers.keywords} /></Row>
-              <Row label="Required evidence"><ChipList values={brain.qualification_rules.required_evidence} /></Row>
-              <Row label="Reject if"><ChipList values={brain.qualification_rules.reject_if} /></Row>
+          {/* 04 — Qualification & Safety */}
+          <IcpSection
+            {...FLOW_SECTIONS[3]}
+            health={health.disqualifiers}
+            index={3}
+            justSaved={savedFlash === 'disqualifiers'}
+            onEdit={edit('disqualifiers')}
+          >
+            <div className="space-y-4">
+              <TextRows label="Required evidence" values={brain.qualification_rules.required_evidence} emptyHint="Add required evidence so leads are validated before outreach." onAdd={edit('disqualifiers')} />
+              <PillGroup label="Industries to avoid" values={t.disqualifiers.industries} tone="danger" emptyHint="+ Add industries to avoid" onAdd={edit('disqualifiers')} />
+              <PillGroup label="Keywords to avoid" values={t.disqualifiers.keywords} tone="danger" emptyHint="+ Add keywords to avoid" onAdd={edit('disqualifiers')} />
+              <TextRows label="Reject-if rules" values={brain.qualification_rules.reject_if} emptyHint="Add reject-if rules to auto-disqualify bad fits." onAdd={edit('disqualifiers')} />
             </div>
-          </CompanyBrainSectionCard>
+          </IcpSection>
 
-          <CompanyBrainSectionCard title="Messaging & positioning" subtitle="How Agentory should sound on your behalf." onEdit={() => setOpenSection('messaging')}>
-            <div className="space-y-3">
-              <LabelValue label="Positioning promise" value={brain.positioning.promise} />
-              <Row label="Content angles"><ChipList values={brain.content_angles} /></Row>
-              <Row label="Voice tone"><span className="text-sm">{brain.brand_voice.tone || <span className="text-muted-foreground italic">Not set</span>}</span></Row>
-              <Row label="Banned claims"><ChipList values={brain.brand_voice.avoid} /></Row>
+          <FlowConnector />
+
+          {/* 05 — Messaging Fit */}
+          <IcpSection
+            {...FLOW_SECTIONS[4]}
+            health={health.messaging}
+            index={4}
+            justSaved={savedFlash === 'messaging'}
+            onEdit={edit('messaging')}
+          >
+            <div className="space-y-4">
+              <StatementField label="Positioning promise" value={brain.positioning.promise} emptyHint="Add a positioning promise to anchor every message." onAdd={edit('messaging')} quote />
+              <PillGroup label="Content angles" values={brain.content_angles} tone="neutral" emptyHint="+ Add content angles" onAdd={edit('messaging')} />
+              <StatementField label="Voice tone" value={brain.brand_voice.tone} emptyHint="+ Add voice tone" onAdd={edit('messaging')} />
+              <PillGroup label="Banned claims" values={brain.brand_voice.avoid} tone="warning" emptyHint="Add banned claims to keep generated content on-brand." onAdd={edit('messaging')} />
             </div>
-          </CompanyBrainSectionCard>
+          </IcpSection>
         </div>
 
-        <SystemUsageStrip />
+        {/* quiet system impact footer */}
+        <div className="mt-5 lg:mt-6">
+          <SystemImpactFooter />
+        </div>
       </div>
 
       <CompanyBrainEditDrawer
@@ -171,7 +201,7 @@ export default function CompanyBrainDashboard() {
         section={openSection}
         brain={brain}
         onOpenChange={(v) => { if (!v) setOpenSection(null); }}
-        onSave={saveSection}
+        onSave={(patch) => saveSection(openSection as SectionKey, patch)}
       />
 
       <RestartOnboardingModal
@@ -183,11 +213,63 @@ export default function CompanyBrainDashboard() {
   );
 }
 
-function Row({ label, children }: { label: string; children: React.ReactNode }) {
+/** Premium signal connector between sections — visible emerald rail with travelling light pulse. */
+function FlowConnector() {
+  const reduce = useReducedMotion();
   return (
-    <div>
-      <p className="mb-1 text-[10px] font-medium uppercase tracking-[0.14em] text-muted-foreground">{label}</p>
-      {children}
+    <div aria-hidden className="flex justify-center py-1" style={{ minHeight: '40px' }}>
+      <div className="relative flex h-10 flex-col items-center">
+        {/* base guide line — wider, more visible */}
+        <div
+          className="absolute top-0 h-full"
+          style={{
+            width: '2px',
+            background: 'linear-gradient(to bottom, transparent, hsl(160 84% 52% / 0.30), transparent)',
+            borderRadius: '1px',
+          }}
+        />
+        {/* outer soft glow around the line */}
+        <div
+          className="absolute top-0 h-full"
+          style={{
+            width: '12px',
+            background: 'linear-gradient(to bottom, transparent, hsl(160 84% 52% / 0.10), transparent)',
+            filter: 'blur(4px)',
+          }}
+        />
+        {/* scroll-reactive travelling light pulse */}
+        {!reduce && (
+          <motion.div
+            className="absolute top-0"
+            style={{
+              width: '3px',
+              background: 'linear-gradient(to bottom, transparent, hsl(160 84% 60% / 0.85), transparent)',
+              filter: 'blur(0.5px)',
+              borderRadius: '2px',
+            }}
+            initial={{ opacity: 0, height: '0%', y: '0%' }}
+            whileInView={{ opacity: [0, 1, 1, 0], height: ['0%', '100%', '100%', '0%'], y: ['0%', '0%', '0%', '100%'] }}
+            viewport={{ once: false, margin: '-30px' }}
+            transition={{ duration: 1.8, ease: 'easeInOut', times: [0, 0.3, 0.7, 1] }}
+          />
+        )}
+        {/* glowing diamond node */}
+        <motion.div
+          className="absolute top-1/2 -translate-y-1/2"
+          initial={reduce ? false : { scale: 0.5, opacity: 0.3 }}
+          whileInView={{ scale: 1, opacity: 1 }}
+          viewport={{ once: true, margin: '-30px' }}
+          transition={{ duration: 0.5, ease: 'easeOut' }}
+        >
+          <div
+            className="h-2 w-2 rotate-45 rounded-[2px] border border-emerald-400/50"
+            style={{
+              background: 'linear-gradient(135deg, hsl(160 84% 52% / 0.7), hsl(160 84% 40% / 0.4))',
+              boxShadow: '0 0 10px hsl(160 84% 52% / 0.6), inset 0 0 4px hsl(160 84% 60% / 0.4)',
+            }}
+          />
+        </motion.div>
+      </div>
     </div>
   );
 }
