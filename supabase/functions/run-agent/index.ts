@@ -18,6 +18,7 @@ import { buildCanonicalStamp } from "../_shared/leadCanonicalStamp.ts";
 import { stepAllowedInMode, isSourceAndQualifyOnly } from "../_shared/executionMode.ts";
 import { buildProviderIndexFromItems, parseScoutCandidates, guardScoutToAria, buildProvenanceRecord, assertPersistenceProvenance, type NormalizedProviderIndex, type ProvenanceCtx } from "../_shared/leadHandoffGuard.ts";
 import { newRejectionCounter, sealProvenance, buildNoResults, type RejectionCounter } from "../_shared/leadPersistenceGuard.ts";
+import { isFindLeadsProviderSourcingStep, classifyProviderSourceOutcome, type ProviderSourceReason } from "../_shared/leadSourcingGate.ts";
 
 
 const cors = {
@@ -89,6 +90,11 @@ Deno.serve(async (req) => {
   const needs_approval: boolean = body.needs_approval === true;
   const tool_input_body: any = body.tool_input ?? null;
   const execution_mode_body: string | undefined = body.execution_mode;
+  // orchestrate threads the plan step's required tool here (index.ts kickoff). It
+  // was previously never read — the root cause of the Scout-fallback failure, where
+  // a source_with_apify step whose tool_input carried no tool_name fell through to
+  // the generic LLM. Read it now so provider-sourcing steps are routed + gated.
+  const tool_needed_body: string | null = body.tool_needed ?? null;
 
   if (!plan_id || step_index === undefined || (!agent_slug && !agent_id_in) || !workspace_id || !instruction) {
     return json({ error: "missing_required_fields" }, 400);
@@ -262,6 +268,18 @@ Deno.serve(async (req) => {
   // step can render Workbench Insights + a definitive process narrative).
   let sourcePlanMeta: Record<string, unknown> | null = null;
   let sourceQualityMeta: Record<string, unknown> | null = null;
+  // Find Leads provider *identity* sourcing recognition (from the authoritative
+  // tool markers, incl. body.tool_needed). Used to (a) route the step into the
+  // provider path and (b) fail closed — never let the generic LLM be a lead source.
+  const isProviderSourcingStep = isFindLeadsProviderSourcingStep({
+    agent_slug,
+    tool_needed: tool_needed_body,
+    tool_name: tool_input_body?.tool_name ?? null,
+    selected_actor_key: tool_input_body?.selected_actor_key ?? null,
+  });
+  // Structured reason when a provider-sourcing step yields zero provider-backed
+  // candidates; surfaced in the no_results terminal.
+  let providerSourceReason: ProviderSourceReason | null = null;
 
   if (agent_slug === "hawk" || agent_slug === "scout") {
     const baseCtx = {
@@ -308,7 +326,12 @@ Deno.serve(async (req) => {
       || planned_actor_key === "firecrawl_scrape_url";
     const isApifySelected =
       planned_tool_name === "source_with_apify"
-      || (typeof planned_actor_key === "string" && planned_actor_key.startsWith("apify_"));
+      || (typeof planned_actor_key === "string" && planned_actor_key.startsWith("apify_"))
+      // Root-cause fix: also honour the plan step's required tool threaded by
+      // orchestrate as body.tool_needed. Previously a source_with_apify step whose
+      // AI-planned tool_input lacked tool_name was NOT recognized as Apify sourcing,
+      // so it fell through to the generic LLM and fabricated leads.
+      || isProviderSourcingStep;
     const shouldUseApify = !isFirecrawlSelected && (
       isApifySelected
       || (!tool_input_body && sourcingRe.test(`${instruction ?? ""} ${input ?? ""}`))
@@ -1463,12 +1486,37 @@ Deno.serve(async (req) => {
   }
 
 
+  // GLOBAL fail-closed gate for Find Leads provider *identity* sourcing. If this is
+  // a provider-sourcing step (source_with_apify / apify actor) but no provider-backed
+  // context was produced — and no hard failure / zero-accepted terminal was already
+  // recorded — then the required provider source did not run/yield. The generic LLM
+  // below MUST NEVER become a lead source (that fabricated 10 founders live). Force
+  // the honest no_results terminal (reused just below) with a structured reason.
+  if (isProviderSourcingStep && !apifyContext && !sourcingFailure && !zeroAcceptedSourcing) {
+    providerSourceReason = classifyProviderSourceOutcome({
+      unavailable: true, // reached with no provider context and no recorded failure
+      rawItemCount: 0,
+      acceptedItemCount: 0,
+      providerBackedCandidateCount: 0,
+    });
+    zeroAcceptedSourcing = true;
+    await supabase.from("activity_feed").insert({
+      workspace_id, plan_id, agent_id: agent.id, event_type: "provenance_handoff_guard",
+      title: "Provider sourcing unavailable — failing closed",
+      body: "The required provider lead source did not run or returned nothing; the generic model is not allowed to invent leads.",
+      metadata: { step_index, task_id: task.id, reason: providerSourceReason, fail_closed: true },
+    });
+  }
+
   // Hard sourcing failure (Apify auth/config/credits) with no results → fail the
   // plan cleanly and surface an in-chat error card. Never let the LLM fabricate a
   // "complete" plan with zero leads, and never chain to Aria with nothing to rank.
   if (sourcingFailure && !apifyContext) {
     const failMsg = `Scout could not run because ${sourcingFailure.message}.`;
-    await supabase.from("tasks").update({ status: "failed", error_message: sourcingFailure.error, result: { error: sourcingFailure.error, message: failMsg } }).eq("id", task.id);
+    // Structured reason so a hard provider failure is machine-classifiable (and can
+    // never be mistaken for a successful/"complete" run). No fabrication, no leads.
+    const failReason: ProviderSourceReason = classifyProviderSourceOutcome({ errored: true }) ?? "provider_source_failed";
+    await supabase.from("tasks").update({ status: "failed", error_message: sourcingFailure.error, result: { error: sourcingFailure.error, message: failMsg, result_status: "no_results", reason: failReason, qualified_count: 0, contact_ready_count: 0, persisted_lead_count: 0, provider_calls: 0, next_step: null } }).eq("id", task.id);
     await supabase.from("task_plans").update({ status: "failed" }).eq("id", plan_id);
     await supabase.from("activity_feed").insert({
       workspace_id, plan_id, agent_id: agent.id, event_type: "agent_started",
@@ -1522,7 +1570,9 @@ Deno.serve(async (req) => {
       ? (sourceQualityMeta as { top_reject_reasons: string[] }).top_reject_reasons.map((r) => r.replace(/\s*\(\d+\)$/, "")).join(", ")
       : "";
     const reasonTail = rejReasons ? ` Main reject reasons: ${rejReasons}.` : "";
-    const scoutMsg = isContactDiscovery
+    const scoutMsg = providerSourceReason
+      ? `The lead source needed for this search isn't available right now, so I did not run it. I will never invent founders or companies, so no leads were saved, no credits charged, and nothing was sent.`
+      : isContactDiscovery
       ? `I searched for decision-makers at ${acctN} account${acctN === 1 ? "" : "s"} but no verified contacts matched the account names closely enough. No contacts were attached.`
       : rawReviewed > 0
         ? `I reviewed ${rawReviewed} profile${rawReviewed === 1 ? "" : "s"}; 0 matched the requested persona and location closely enough.${reasonTail}`
@@ -1548,6 +1598,8 @@ Deno.serve(async (req) => {
         rejected_provenance_count: noResults.rejected_provenance_count,
         rejected_provenance_reasons: provenanceRejections.reasons,
         next_step: null,
+        provider_calls: providerSourceReason ? 0 : undefined,
+        reason: providerSourceReason ?? undefined,
         attempt_log: adaptiveAttempts.length ? adaptiveAttempts : undefined,
       },
     }).eq("id", task.id);
@@ -1755,7 +1807,10 @@ Deno.serve(async (req) => {
   // are dropped; if NONE survive, Aria is not invoked with fallback/invented
   // candidates — the chain stops (no Aria → no downstream Penn → no drafts).
   let handoffInput: string | null = apiText ?? null;
-  if (nextStep && agent_slug === "scout" && nextStep.agent_slug === "aria" && providerIndexForHandoff) {
+  // Global gate: for EVERY Find Leads sourcing Scout→Aria hand-off (not only when an
+  // Apify index was built), gate candidates against the provider index. A null/empty
+  // index ⇒ guardScoutToAria stops, so raw Scout prose can never reach Aria.
+  if (nextStep && agent_slug === "scout" && nextStep.agent_slug === "aria" && (providerIndexForHandoff || isProviderSourcingStep)) {
     try {
       const guard = guardScoutToAria(parseScoutCandidates(apiText, null), providerIndexForHandoff);
       await supabase.from("activity_feed").insert({
