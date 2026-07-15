@@ -1007,6 +1007,17 @@ Deno.serve(async (req) => {
           }
         }
 
+        // Run-level artifact type + person-target signal (Section 6/9): all accepted
+        // items in one run come from one actor, so the artifact type is uniform.
+        // Threaded into evidence scoring (person vs job semantics), the qualification
+        // decision, and final provenance/artifact metadata.
+        const runArtifactType: "person_candidate" | "company_candidate" | "job_signal" =
+          (artifactTypeForActor(planned_actor_key ?? derivedActorKey)
+            ?? (source_type === "people_profiles" ? "person_candidate"
+              : (source_type === "jobs" || source_type === "hiring_signal") ? "job_signal"
+              : "company_candidate")) as "person_candidate" | "company_candidate" | "job_signal";
+        const runTargetIsPerson = runArtifactType === "person_candidate";
+
         // Source Quality Engine (Phase 6): honest raw vs accepted vs persisted
         // counts + reject reasons, surfaced in Workbench Insights + narrative.
         // Per-lead quality keyed by normalized company name, reused below to
@@ -1210,6 +1221,7 @@ Deno.serve(async (req) => {
                 const uk0 = normUrl(it.source_url ?? (r.source_url as string));
                 const pr = uk0 ? scoutRankByUrl.get(uk0) : undefined;
                 const summary = analystMod.buildLeadAnalystSummary({
+                  artifactType: runArtifactType,
                   candidate: {
                     company: it.company ?? it.name, website: (r.company_website ?? r.website) as string | null, domain: r.domain as string | null,
                     linkedinUrl: r.company_linkedin_url as string | null, jobTitle: (it.title ?? r.job_title) as string | null,
@@ -1239,6 +1251,7 @@ Deno.serve(async (req) => {
               const analyst = entry.analyst as Record<string, any> | undefined;
               const isPersonProfile = /linkedin\.com\/in\//i.test(String(it.source_url ?? ""));
               entry.canonical = buildCanonicalStamp({
+                target_is_person: runTargetIsPerson,
                 company: it.company ?? it.name ?? null,
                 website: (r.company_website ?? r.website ?? r.companyUrl ?? r.domain ?? null) as string | null,
                 source_url: it.source_url ?? (r.source_url as string) ?? null,

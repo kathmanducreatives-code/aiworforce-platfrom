@@ -61,6 +61,29 @@ export function isIdentityOnly(type: EvidenceType): boolean {
   return type === "person_profile";
 }
 
+/** High-level evidence category, so person identity, company fit, buying signals
+ * and job postings are never conflated. */
+export type EvidenceCategory =
+  | "person_identity"
+  | "person_company_association"
+  | "company_fit"
+  | "buying_signal"
+  | "job_signal"
+  | "other";
+
+export function evidenceCategory(type: EvidenceType): EvidenceCategory {
+  switch (type) {
+    case "person_profile": return "person_identity";
+    case "company_page": return "company_fit";
+    case "job_post":
+    case "hiring_page": return "job_signal";
+    case "funding_announcement":
+    case "product_launch":
+    case "intent_post": return "buying_signal";
+    default: return "other";
+  }
+}
+
 export interface EvidenceViolation { code: string; message: string }
 
 /**
@@ -75,18 +98,29 @@ export function checkEvidenceInvariants(args: {
   signal_label?: string | null;         // e.g. "live job posting", "hiring"
   is_signal_from_person_title?: boolean; // founder title used as the signal?
   job_post?: { employer?: string | null; role_title?: string | null } | null;
+  /** When the REQUESTED artifact is a person (target_entity=person), a person
+   * profile is the desired identity evidence — not a job/hiring contradiction.
+   * Job-specific violations then do not apply; `identity_only_signal` remains as
+   * an honest, auditable limitation (a profile alone is not a company signal). */
+  requested_artifact_is_person?: boolean;
 }): EvidenceViolation[] {
   const out: EvidenceViolation[] = [];
   const label = lc(args.signal_label);
+  const personRequested = args.requested_artifact_is_person === true;
 
-  if (args.signal_evidence_type === "person_profile" && /(job|hiring|posting|opening|role open)/.test(label)) {
+  // `profile_as_job`/`title_as_signal` are JOB-SPECIFIC contradictions: they only
+  // apply when a person profile is being MISPRESENTED as job/hiring evidence in a
+  // company/role-family search. When the person IS the requested artifact, the
+  // profile is identity evidence and neither fabricated contradiction applies.
+  if (!personRequested && args.signal_evidence_type === "person_profile" && /(job|hiring|posting|opening|role open)/.test(label)) {
     out.push({ code: "profile_as_job", message: "A person_profile URL cannot be described as a job posting." });
   }
-  if (args.is_signal_from_person_title) {
+  if (!personRequested && args.is_signal_from_person_title) {
     out.push({ code: "title_as_signal", message: "A founder/exec title is identity, not a hiring or buying signal." });
   }
   if (args.signal_evidence_type === "person_profile") {
-    // Identity alone is never a company-level signal.
+    // Identity alone is never a company-level buying/hiring signal — recorded as an
+    // honest limitation whether or not a person was requested.
     out.push({ code: "identity_only_signal", message: "A person_profile alone is not a company-level signal." });
   }
   if (args.job_post) {
