@@ -20,7 +20,7 @@ import { buildProviderIndexFromItems, parseScoutCandidates, guardScoutToAria, bu
 import { newRejectionCounter, sealProvenance, buildNoResults, type RejectionCounter } from "../_shared/leadPersistenceGuard.ts";
 import { classifyProviderSourceOutcome, type ProviderSourceReason } from "../_shared/leadSourcingGate.ts";
 import { resolvePlannedTool, isProviderSourcingTool, resolveProviderSource } from "../_shared/plannedToolResolver.ts";
-import { parsePeopleSearchIntent, buildPeopleSearchAttempts } from "../_shared/peopleSearchQueryBuilder.ts";
+import { parsePeopleSearchIntent, buildPeopleSearchAttempts, buildSourcingAttemptAudit } from "../_shared/peopleSearchQueryBuilder.ts";
 import { extractCandidateLocationEvidence } from "../_shared/locationMatch.ts";
 
 
@@ -255,6 +255,9 @@ Deno.serve(async (req) => {
   let sourcingFailure: { error: string; message: string } | null = null;
   // Attempt log from the adaptive multi-attempt sourcing loop (Scout step).
   let adaptiveAttempts: Array<Record<string, unknown>> = [];
+  // Sanitized per-attempt audit (label, fingerprint, official actor input, actor
+  // key/impl, raw/accepted counts). Provider-safe: NEVER contains tokens/keys.
+  let sourcingAttemptAudit: Array<Record<string, unknown>> | null = null;
   // Set when an Apify sourcing actor RAN successfully but accepted 0 qualified
   // leads (not a tool failure). We then skip Aria — there is nothing to rank.
   let zeroAcceptedSourcing = false;
@@ -717,6 +720,28 @@ Deno.serve(async (req) => {
 
         const adaptive = await runAdaptiveSourcing({ criteria, strict, maxAttempts, runAttempt });
         adaptiveAttempts = adaptive.attempts as unknown as Array<Record<string, unknown>>;
+
+        // Sanitized attempt audit — records the ACTUAL people-search strategy label
+        // (exact/broadened/minimal_safe), fingerprint, official actor input, actor
+        // key/implementation, and raw/accepted counts per attempt. Provider-safe:
+        // pa.payload is built through the schema allowlist (no tokens/keys/headers).
+        if (peopleAttempts && peopleAttempts.length) {
+          try {
+            const { ACTOR_REGISTRY } = await import("../_shared/actorRegistry.ts");
+            const auditActorKey = (apifyInput.selected_actor_key as string | undefined) ?? derivedActorKey ?? "apify_people_search";
+            const auditActorImpl = ACTOR_REGISTRY[auditActorKey]?.actor_id ?? null;
+            sourcingAttemptAudit = buildSourcingAttemptAudit(
+              peopleAttempts,
+              (adaptive.attempts as any[]).map((at: any) => ({ result_count: at.result_count, accepted_count: at.accepted_count })),
+              { actor_key: auditActorKey, actor_implementation: auditActorImpl },
+            ) as unknown as Array<Record<string, unknown>>;
+            // Correct the misleading generic strategy label in the attempt log too.
+            (adaptive.attempts as any[]).forEach((_at, i) => {
+              if (adaptiveAttempts[i]) (adaptiveAttempts[i] as Record<string, unknown>).people_strategy = peopleAttempts[Math.min(i, peopleAttempts.length - 1)].label;
+            });
+            console.log("[run-agent] sourcing attempt audit", sourcingAttemptAudit);
+          } catch (e) { console.warn("[run-agent] attempt audit build failed:", e); }
+        }
 
         // Phase 4 — QA cost report: requested vs actor floor vs processed.
         let qaLimitReport: Record<string, unknown> | null = null;
@@ -1646,6 +1671,7 @@ Deno.serve(async (req) => {
         provider_calls: providerSourceReason ? 0 : undefined,
         reason: providerSourceReason ?? undefined,
         attempt_log: adaptiveAttempts.length ? adaptiveAttempts : undefined,
+        sourcing_attempts: sourcingAttemptAudit ?? undefined,
       },
     }).eq("id", task.id);
     await supabase.from("task_plans").update({ status: "failed", completed_at: new Date().toISOString() }).eq("id", plan_id);
@@ -1792,7 +1818,7 @@ Deno.serve(async (req) => {
   const finalStatus = needs_approval ? "awaiting_approval" : "complete";
   await supabase.from("tasks").update({
     status: finalStatus,
-    result: { output: apiText, tokens_in: tokensIn, tokens_out: tokensOut, attempt_log: adaptiveAttempts.length ? adaptiveAttempts : undefined, source_plan: sourcePlanMeta ?? undefined, source_quality: sourceQualityMeta ?? undefined },
+    result: { output: apiText, tokens_in: tokensIn, tokens_out: tokensOut, attempt_log: adaptiveAttempts.length ? adaptiveAttempts : undefined, sourcing_attempts: sourcingAttemptAudit ?? undefined, source_plan: sourcePlanMeta ?? undefined, source_quality: sourceQualityMeta ?? undefined },
   }).eq("id", task.id);
 
   // Phase 2: persist agent outputs into structured GTM memory. Fire-and-forget.

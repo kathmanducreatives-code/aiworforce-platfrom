@@ -271,3 +271,60 @@ export function buildPeopleSearchAttempts(intent: PeopleSearchIntent, opts: Atte
 export function buildPeopleSearchPayload(text: string | null | undefined, opts: AttemptOptions): Record<string, unknown> {
   return buildPeopleSearchAttempts(parsePeopleSearchIntent(text), opts)[0].payload;
 }
+
+// ------------------------------------------------------- attempt audit metadata --
+
+// Only official actor-input fields may appear in persisted audit data — this
+// allowlist guarantees no token / Authorization header / API key / secret can be
+// recorded even if a caller passes an enriched object.
+const AUDIT_ALLOWED_FIELDS = new Set([
+  "profileScraperMode", "searchQuery", "currentJobTitles", "locations",
+  "maxItems", "takePages", "startPage", "currentCompanies", "industryIds",
+  "seniorityLevelIds", "pastJobTitles", "companyHeadquarterLocations",
+]);
+
+/** Strip a payload down to the official schema fields for safe persistence. */
+export function sanitizeActorInputForAudit(payload: Record<string, unknown> | null | undefined): Record<string, unknown> {
+  const out: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(payload ?? {})) {
+    if (AUDIT_ALLOWED_FIELDS.has(k) && v !== undefined && v !== null && v !== "") out[k] = v;
+  }
+  return out;
+}
+
+export interface SourcingAttemptAuditEntry {
+  index: number;
+  label: PeopleAttemptLabel;
+  fingerprint: string;
+  actor_key: string | null;
+  actor_implementation: string | null;
+  sanitized_input: Record<string, unknown>;
+  raw_item_count: number;
+  accepted_count: number;
+}
+
+/**
+ * Build provider-safe per-attempt audit metadata. One entry per attempt actually
+ * run (counts). label/fingerprint refer to the exact payload sent; sanitized_input
+ * passes through the schema allowlist so secrets can never be persisted.
+ */
+export function buildSourcingAttemptAudit(
+  attempts: PeopleAttempt[],
+  counts: Array<{ result_count?: number; accepted_count?: number }>,
+  actor: { actor_key?: string | null; actor_implementation?: string | null },
+): SourcingAttemptAuditEntry[] {
+  if (!attempts.length) return [];
+  return (counts ?? []).map((c, i) => {
+    const pa = attempts[Math.min(i, attempts.length - 1)];
+    return {
+      index: i + 1,
+      label: pa.label,
+      fingerprint: pa.fingerprint,
+      actor_key: actor.actor_key ?? null,
+      actor_implementation: actor.actor_implementation ?? null,
+      sanitized_input: sanitizeActorInputForAudit(pa.payload as Record<string, unknown>),
+      raw_item_count: Number(c?.result_count) || 0,
+      accepted_count: Number(c?.accepted_count) || 0,
+    };
+  });
+}
