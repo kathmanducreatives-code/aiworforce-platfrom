@@ -23,6 +23,7 @@ import { resolvePlannedTool, isProviderSourcingTool, resolveProviderSource } fro
 import { parsePeopleSearchIntent, buildPeopleSearchAttempts, buildSourcingAttemptAudit } from "../_shared/peopleSearchQueryBuilder.ts";
 import { extractCandidateLocationEvidence } from "../_shared/locationMatch.ts";
 import { compileLeadEntityIntent, compileActorPlan, detectRoutingConflict, artifactTypeForActor, expectedArtifactType, ACTOR_IMPL, type LeadEntityIntent, type ProviderActorPlan, type RoutingConflictResult } from "../_shared/leadEntityIntent.ts";
+import { qualificationPersistenceDecision, mapAriaToDecision, type AriaLike } from "../_shared/qualificationPersistence.ts";
 
 
 const cors = {
@@ -1381,10 +1382,65 @@ Deno.serve(async (req) => {
           return !((uk && gateRejectedKeys.has(`u:${uk}`)) || (nn && gateRejectedKeys.has(`n:${nn}`)));
         });
         if (gateRejectedKeys.size) console.log("[run-agent] proof gate dropped", { rejected: effectiveAccepted.length - gatedAccepted.length, kept: gatedAccepted.length });
-        if (gatedAccepted.length > 0) {
-          // Persist ONLY the role-family-filtered + gate-passing set so
-          // wrong-role / no-proof / off-ICP rows never reach Workbench.
-          const rawItems = gatedAccepted.map((a) => a.raw);
+
+        // QUALIFICATION PERSISTENCE GATE (Section 4/5): for a PERSON target, a
+        // provider-backed profile must NOT become a final lead before it is
+        // qualified. Persist ONLY candidates the canonical qualification decision
+        // accepts (Aria-accepted + qualified tier + matching artifact, no hard
+        // evidence violation); STAGE the rest in task metadata for review. Provider
+        // provenance is necessary but never sufficient. Company/job flows keep
+        // their existing behavior (this gate is scoped to the audited person path).
+        const stagedForReview: Array<{ name: string | null; company: string | null; source_url: string | null; reason: string; tier: string | null; star_label: string | null }> = [];
+        let finalPersistSet = gatedAccepted;
+        if (runTargetIsPerson) {
+          const lookupEntry = (a: any): LeadQualityEntry | undefined => {
+            const uk = normUrl(a.source_url ?? a.raw?.source_url ?? a.raw?.profile_url);
+            const nn = normName(a.name ?? a.company);
+            return (uk ? leadQualityByUrl.get(uk) : undefined) ?? (nn ? leadQualityByName.get(nn) : undefined);
+          };
+          finalPersistSet = gatedAccepted.filter((a: any) => {
+            const entry = lookupEntry(a);
+            const aria = (entry?.aria ?? null) as AriaLike | null;
+            const m = mapAriaToDecision(aria);
+            const violations = (((entry?.canonical as any)?.run_trace?.evidence_violations)
+              ?? ((entry?.canonical as any)?.evidence_violations) ?? []) as string[];
+            const decision = qualificationPersistenceDecision({
+              targetEntity: routingEntityIntent?.target_entity ?? "person",
+              candidateArtifactType: runArtifactType,
+              // Provenance is separately ENFORCED at insert (enforce_provenance);
+              // a genuine provider profile carries a person URL.
+              providerVerified: !!(a.source_url ?? a.raw?.source_url ?? a.raw?.profile_url),
+              ariaEvaluated: m.evaluated,
+              ariaDecision: m.decision,
+              tier: entry?.tier ?? null,
+              evidenceViolations: violations,
+            });
+            if (!decision.persist) {
+              stagedForReview.push({
+                name: (a.name ?? null) as string | null,
+                company: (a.company ?? null) as string | null,
+                source_url: (a.source_url ?? a.raw?.source_url ?? a.raw?.profile_url ?? null) as string | null,
+                reason: decision.reason,
+                tier: entry?.tier ?? null,
+                star_label: (aria?.star_label ?? null) as string | null,
+              });
+            }
+            return decision.persist;
+          });
+          console.log("[run-agent] qualification gate", { accepted: gatedAccepted.length, persisted: finalPersistSet.length, staged: stagedForReview.length });
+          // Reflect honest persisted vs staged counts in the source-quality meta.
+          if (sourceQualityMeta) {
+            (sourceQualityMeta as Record<string, unknown>).persisted_count = finalPersistSet.length;
+            (sourceQualityMeta as Record<string, unknown>).staged_count = stagedForReview.length;
+            (sourceQualityMeta as Record<string, unknown>).staged_candidates = stagedForReview;
+          }
+        }
+
+        if (finalPersistSet.length > 0) {
+          // Persist ONLY the qualification-accepted set (person) or the role-family-
+          // filtered + gate-passing set (company/job) so wrong-role / no-proof /
+          // off-ICP / unqualified rows never reach Workbench.
+          const rawItems = finalPersistSet.map((a) => a.raw);
           const attachAccounts = Array.isArray(tool_input_body?.attach_to_accounts) ? tool_input_body.attach_to_accounts : null;
 
           if (attachAccounts && attachAccounts.length > 0) {
@@ -1597,7 +1653,12 @@ Deno.serve(async (req) => {
                 }, {})).sort((a, b) => b[1] - a[1]).slice(0, 4).map(([reason, count]) => ({ reason, count }))
               : []);
           const reasonStr = topReasons.length ? ` Main reject reasons: ${topReasons.map((r) => r.reason).join(", ")}.` : "";
-          toolNotices.push(`Scout reviewed ${rawAllItems.length} raw result${rawAllItems.length === 1 ? "" : "s"} but found 0 verified matches. I did not fill the table with weak results.${reasonStr}`);
+          // When provider people were sourced but held back by the qualification
+          // gate, say so honestly (they are staged for review, not discarded).
+          const stagedStr = stagedForReview.length
+            ? ` ${stagedForReview.length} provider-backed profile${stagedForReview.length === 1 ? " was" : "s were"} sourced but staged for review (not qualified for persistence).`
+            : "";
+          toolNotices.push(`Scout reviewed ${rawAllItems.length} raw result${rawAllItems.length === 1 ? "" : "s"} but found 0 qualified matches. I did not fill the table with weak results.${stagedStr}${reasonStr}`);
           // Actor ran fine but accepted 0 qualified leads. Mark it so we skip
           // Aria (nothing to rank) and finalize as no_results below.
           if (isApifySelected) {
