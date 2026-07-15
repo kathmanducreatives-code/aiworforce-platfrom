@@ -278,6 +278,11 @@ Deno.serve(async (req) => {
   // LLM-invented company/person/URL can never reach Aria or persistence.
   let providerIndexForHandoff: NormalizedProviderIndex | null = null;
   let providerProvenanceCtx: ProvenanceCtx | null = null;
+  // Section 10: the ACCEPTED normalized provider PEOPLE, carried as Aria candidates
+  // so a person target hands the provider PersonCandidates to Aria DIRECTLY — the
+  // LLM narrative may annotate but can never invent a parallel identity pool nor
+  // shrink the pool by under-listing sourced people.
+  let personProviderCandidates: Array<{ name: string | null; company: string | null; title: string | null; source_url: string | null }> | null = null;
   // AI Source Planner artifacts (carried into the Scout task result so the final
   // step can render Workbench Insights + a definitive process narrative).
   let sourcePlanMeta: Record<string, unknown> | null = null;
@@ -1134,6 +1139,15 @@ Deno.serve(async (req) => {
             // Provenance actor_id is the SPECIFIC actor implementation, not the
             // literal "apify" (Section 13): resolve from the actor key.
             providerProvenanceCtx = { provider: "apify", actor_key: runActorKey ?? undefined, actor_id: runActorImpl, artifact_type: runArtifactType, provider_run_id: run_id, workflow_run_id: run_id, plan_id: String(plan_id ?? ""), trace_id: run_id, query_id: null };
+            // Section 10: hand the accepted provider PEOPLE to Aria directly.
+            if (runTargetIsPerson) {
+              personProviderCandidates = acceptedForIndex.map((a: any) => ({
+                name: (a.name ?? null) as string | null,
+                company: (a.company ?? null) as string | null,
+                title: (a.title ?? a.raw?.title ?? null) as string | null,
+                source_url: (a.source_url ?? a.raw?.profile_url ?? null) as string | null,
+              }));
+            }
           } catch (e) { console.warn("[run-agent] provider index build failed:", e); }
           for (const it of ((lieAcceptedItems ?? gateAcceptedItems) ?? classified.accepted)) {
             const r = (it.raw ?? {}) as Record<string, unknown>;
@@ -2035,7 +2049,13 @@ Deno.serve(async (req) => {
         body: guard.summary,
         metadata: { step_index, verified: guard.verified.length, rejected: guard.rejected.length, stop: guard.shouldStop },
       });
-      if (guard.shouldStop) {
+      // Section 10 — Scout↔Aria pool alignment. For a PERSON target, feed Aria the
+      // ACCEPTED provider PersonCandidates directly (all of them), never the subset
+      // the LLM narrative happened to re-list. The narrative may annotate but can
+      // neither invent a parallel identity pool nor shrink the sourced pool.
+      if (personProviderCandidates && personProviderCandidates.length > 0) {
+        handoffInput = JSON.stringify({ candidates: personProviderCandidates });
+      } else if (guard.shouldStop) {
         zeroAcceptedSourcing = true;
         nextStep = null; // never invoke Aria with unsupported/invented candidates
       } else {
