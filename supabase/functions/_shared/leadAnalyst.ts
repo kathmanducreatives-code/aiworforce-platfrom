@@ -30,6 +30,10 @@ export interface LeadAnalystSummary {
 }
 
 export interface AnalystInput {
+  // What entity was REQUESTED. `person_candidate` means the person profile is the
+  // desired artifact — its source_url is LinkedIn person-profile evidence, never a
+  // job posting. Defaults (undefined) to the legacy company/job semantics.
+  artifactType?: "person_candidate" | "company_candidate" | "job_signal" | null;
   candidate: {
     company?: string | null; website?: string | null; domain?: string | null; linkedinUrl?: string | null;
     jobTitle?: string | null; jobUrl?: string | null; source_url?: string | null;
@@ -79,11 +83,20 @@ export function buildLeadAnalystSummary(input: AnalystInput): LeadAnalystSummary
   const tooLarge = emp != null && max != null && emp > max;
   const disqHit = input.gate?.disqualifiersHit ?? [];
 
+  const isPerson = input.artifactType === "person_candidate";
+
   // --- evidence + missing ---
   const evidence: string[] = [];
-  if (c.jobUrl ?? c.source_url) evidence.push("a live job posting URL");
-  if (c.website ?? c.domain) evidence.push("a company website");
-  if (c.linkedinUrl) evidence.push("a LinkedIn company page");
+  if (isPerson) {
+    // For a person target the source_url is the LinkedIn PERSON profile — identity
+    // evidence, never a job posting. jobUrl is not used for person evidence.
+    if (c.source_url ?? c.linkedinUrl) evidence.push("a LinkedIn person profile");
+    if (c.website ?? c.domain) evidence.push("a company website");
+  } else {
+    if (c.jobUrl ?? c.source_url) evidence.push("a live job posting URL");
+    if (c.website ?? c.domain) evidence.push("a company website");
+    if (c.linkedinUrl) evidence.push("a LinkedIn company page");
+  }
   const evidenceSummary = evidence.length
     ? `Verified source proof: ${evidence.join(", ")}.`
     : "No verifiable source proof yet.";
@@ -92,7 +105,14 @@ export function buildLeadAnalystSummary(input: AnalystInput): LeadAnalystSummary
   if (!hasFundingProof) missingEvidence.push("recent funding proof");
   if (emp == null) missingEvidence.push("employee count");
   if (!isSaas) missingEvidence.push("clear B2B SaaS / software evidence");
-  if (!isRevenueRole) missingEvidence.push("a revenue/RevOps/first-sales/founder-led growth signal");
+  if (isPerson) {
+    // For a person, a company-level buying signal (funding/hiring/expansion) is
+    // OPTIONAL — mark it as deferred, not as a fabricated "hiring signal" that is
+    // missing. Person-company association + Company Brain fit are assessed above.
+    missingEvidence.push("a company-level buying signal (funding/hiring/expansion) — optional/deferred");
+  } else if (!isRevenueRole) {
+    missingEvidence.push("a revenue/RevOps/first-sales/founder-led growth signal");
+  }
   for (const m of (input.gate?.missingEvidence ?? [])) if (!missingEvidence.includes(m)) missingEvidence.push(m);
 
   // --- risk flags ---
@@ -126,12 +146,18 @@ export function buildLeadAnalystSummary(input: AnalystInput): LeadAnalystSummary
     industries ? `(${industries})` : "",
   ].filter(Boolean).join(" · ");
 
-  const signalSummary = role
-    ? `Scout found a hiring signal: ${role}${company !== "This company" ? ` at ${company}` : ""}.`
-    : "No clear hiring signal in the current evidence.";
+  const signalSummary = isPerson
+    ? (role
+        ? `Provider-verified person profile: ${role}${company !== "This company" ? ` at ${company}` : ""} (identity, not a hiring signal).`
+        : "Provider-verified person profile located.")
+    : role
+      ? `Scout found a hiring signal: ${role}${company !== "This company" ? ` at ${company}` : ""}.`
+      : "No clear hiring signal in the current evidence.";
 
   const whyThisLeadAppeared = gateReject
     ? disqualifierExplanation!
+    : isPerson
+      ? `Scout sourced a verified LinkedIn person profile for ${role ?? "this person"}${company !== "This company" ? ` at ${company}` : ""}. Identity/provenance is confirmed; assess Company Brain fit and any buying signal separately before prioritizing.`
     : isRevenueRole && isSaas && !tooLarge
       ? `Scout found a verified ${role} hiring signal at what appears to be a small B2B SaaS company — a strong match for Agentory's ICP of founders building revenue before adding sales headcount.`
       : `Scout found real proof for ${company} (${evidence.join(", ") || "limited proof"}). It is safe to review, but it is a ${analystVerdict === "weak" ? "weak" : "borderline"} Agentory lead${tooLarge ? ` because the company appears larger than the ${icp.targetCompanySize.label ?? "10–150 employee"} ICP` : ""}${isBizDev ? " and the role is BizDev rather than RevOps, first sales, or founder-led growth" : ""}${isGenericOps ? " and the role is generic operations, not a revenue signal" : ""}.`;
@@ -140,6 +166,8 @@ export function buildLeadAnalystSummary(input: AnalystInput): LeadAnalystSummary
   // A funding word in the post text is not proof — say the proof is missing.
   const whyNow = hasFundingProof
     ? `${company} has recent funding confirmed by a separate source (${c.funding_proof_url}) — a likely moment to build a customer-acquisition motion before adding sales payroll.`
+    : isPerson
+      ? `No company-level 'why now' signal is attached to this person yet — a buying signal (funding/hiring/expansion) is optional and currently deferred${fundingMentioned ? " (funding is mentioned in the profile text but not separately verified)" : ""}. The 'why now' is the verified identity, not a company signal.`
     : isRevenueRole
       ? `The company is actively hiring for ${role}. Shows a GTM hiring signal, but recent funding proof is missing${fundingMentioned ? " (the post mentions funding, but there is no separate funding source to verify it)" : ""} — treat "why now" as the hiring signal, not funding.`
       : `No clear 'why now' signal. Shows a GTM hiring signal, but recent funding proof is missing${fundingMentioned ? " (funding is mentioned in the text but not separately verified)" : ""}.`;

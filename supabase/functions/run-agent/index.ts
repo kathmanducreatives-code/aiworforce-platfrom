@@ -23,6 +23,7 @@ import { resolvePlannedTool, isProviderSourcingTool, resolveProviderSource } fro
 import { parsePeopleSearchIntent, buildPeopleSearchAttempts, buildSourcingAttemptAudit } from "../_shared/peopleSearchQueryBuilder.ts";
 import { extractCandidateLocationEvidence } from "../_shared/locationMatch.ts";
 import { compileLeadEntityIntent, compileActorPlan, detectRoutingConflict, artifactTypeForActor, expectedArtifactType, ACTOR_IMPL, type LeadEntityIntent, type ProviderActorPlan, type RoutingConflictResult } from "../_shared/leadEntityIntent.ts";
+import { qualificationPersistenceDecision, mapAriaToDecision, type AriaLike } from "../_shared/qualificationPersistence.ts";
 
 
 const cors = {
@@ -277,6 +278,11 @@ Deno.serve(async (req) => {
   // LLM-invented company/person/URL can never reach Aria or persistence.
   let providerIndexForHandoff: NormalizedProviderIndex | null = null;
   let providerProvenanceCtx: ProvenanceCtx | null = null;
+  // Section 10: the ACCEPTED normalized provider PEOPLE, carried as Aria candidates
+  // so a person target hands the provider PersonCandidates to Aria DIRECTLY — the
+  // LLM narrative may annotate but can never invent a parallel identity pool nor
+  // shrink the pool by under-listing sourced people.
+  let personProviderCandidates: Array<{ name: string | null; company: string | null; title: string | null; source_url: string | null }> | null = null;
   // AI Source Planner artifacts (carried into the Scout task result so the final
   // step can render Workbench Insights + a definitive process narrative).
   let sourcePlanMeta: Record<string, unknown> | null = null;
@@ -1007,6 +1013,23 @@ Deno.serve(async (req) => {
           }
         }
 
+        // Run-level artifact type + person-target signal (Section 6/9): all accepted
+        // items in one run come from one actor, so the artifact type is uniform.
+        // Threaded into evidence scoring (person vs job semantics), the qualification
+        // decision, and final provenance/artifact metadata.
+        const runArtifactType: "person_candidate" | "company_candidate" | "job_signal" =
+          (artifactTypeForActor(planned_actor_key ?? derivedActorKey)
+            ?? (source_type === "people_profiles" ? "person_candidate"
+              : (source_type === "jobs" || source_type === "hiring_signal") ? "job_signal"
+              : "company_candidate")) as "person_candidate" | "company_candidate" | "job_signal";
+        const runTargetIsPerson = runArtifactType === "person_candidate";
+        // Resolve the SPECIFIC actor implementation once (Section 8). The initial
+        // trusted provenance write must stamp the specific actor_id (e.g.
+        // harvestapi/linkedin-profile-search), not the generic "apify" — otherwise
+        // sealProvenance later rejects the correct value as an overwrite attempt.
+        const runActorKey: string | null = planned_actor_key ?? derivedActorKey ?? null;
+        const runActorImpl: string = (runActorKey && ACTOR_IMPL[runActorKey]) ? ACTOR_IMPL[runActorKey] : (runActorKey ?? "apify");
+
         // Source Quality Engine (Phase 6): honest raw vs accepted vs persisted
         // counts + reject reasons, surfaced in Workbench Insights + narrative.
         // Per-lead quality keyed by normalized company name, reused below to
@@ -1115,9 +1138,16 @@ Deno.serve(async (req) => {
             })));
             // Provenance actor_id is the SPECIFIC actor implementation, not the
             // literal "apify" (Section 13): resolve from the actor key.
-            const provActorKey = planned_actor_key ?? derivedActorKey ?? null;
-            const provActorId = (provActorKey && ACTOR_IMPL[provActorKey]) ? ACTOR_IMPL[provActorKey] : (provActorKey ?? "apify");
-            providerProvenanceCtx = { provider: "apify", actor_id: provActorId, provider_run_id: run_id, workflow_run_id: run_id, plan_id: String(plan_id ?? ""), trace_id: run_id, query_id: null };
+            providerProvenanceCtx = { provider: "apify", actor_key: runActorKey ?? undefined, actor_id: runActorImpl, artifact_type: runArtifactType, provider_run_id: run_id, workflow_run_id: run_id, plan_id: String(plan_id ?? ""), trace_id: run_id, query_id: null };
+            // Section 10: hand the accepted provider PEOPLE to Aria directly.
+            if (runTargetIsPerson) {
+              personProviderCandidates = acceptedForIndex.map((a: any) => ({
+                name: (a.name ?? null) as string | null,
+                company: (a.company ?? null) as string | null,
+                title: (a.title ?? a.raw?.title ?? null) as string | null,
+                source_url: (a.source_url ?? a.raw?.profile_url ?? null) as string | null,
+              }));
+            }
           } catch (e) { console.warn("[run-agent] provider index build failed:", e); }
           for (const it of ((lieAcceptedItems ?? gateAcceptedItems) ?? classified.accepted)) {
             const r = (it.raw ?? {}) as Record<string, unknown>;
@@ -1210,6 +1240,7 @@ Deno.serve(async (req) => {
                 const uk0 = normUrl(it.source_url ?? (r.source_url as string));
                 const pr = uk0 ? scoutRankByUrl.get(uk0) : undefined;
                 const summary = analystMod.buildLeadAnalystSummary({
+                  artifactType: runArtifactType,
                   candidate: {
                     company: it.company ?? it.name, website: (r.company_website ?? r.website) as string | null, domain: r.domain as string | null,
                     linkedinUrl: r.company_linkedin_url as string | null, jobTitle: (it.title ?? r.job_title) as string | null,
@@ -1239,6 +1270,7 @@ Deno.serve(async (req) => {
               const analyst = entry.analyst as Record<string, any> | undefined;
               const isPersonProfile = /linkedin\.com\/in\//i.test(String(it.source_url ?? ""));
               entry.canonical = buildCanonicalStamp({
+                target_is_person: runTargetIsPerson,
                 company: it.company ?? it.name ?? null,
                 website: (r.company_website ?? r.website ?? r.companyUrl ?? r.domain ?? null) as string | null,
                 source_url: it.source_url ?? (r.source_url as string) ?? null,
@@ -1364,10 +1396,65 @@ Deno.serve(async (req) => {
           return !((uk && gateRejectedKeys.has(`u:${uk}`)) || (nn && gateRejectedKeys.has(`n:${nn}`)));
         });
         if (gateRejectedKeys.size) console.log("[run-agent] proof gate dropped", { rejected: effectiveAccepted.length - gatedAccepted.length, kept: gatedAccepted.length });
-        if (gatedAccepted.length > 0) {
-          // Persist ONLY the role-family-filtered + gate-passing set so
-          // wrong-role / no-proof / off-ICP rows never reach Workbench.
-          const rawItems = gatedAccepted.map((a) => a.raw);
+
+        // QUALIFICATION PERSISTENCE GATE (Section 4/5): for a PERSON target, a
+        // provider-backed profile must NOT become a final lead before it is
+        // qualified. Persist ONLY candidates the canonical qualification decision
+        // accepts (Aria-accepted + qualified tier + matching artifact, no hard
+        // evidence violation); STAGE the rest in task metadata for review. Provider
+        // provenance is necessary but never sufficient. Company/job flows keep
+        // their existing behavior (this gate is scoped to the audited person path).
+        const stagedForReview: Array<{ name: string | null; company: string | null; source_url: string | null; reason: string; tier: string | null; star_label: string | null }> = [];
+        let finalPersistSet = gatedAccepted;
+        if (runTargetIsPerson) {
+          const lookupEntry = (a: any): LeadQualityEntry | undefined => {
+            const uk = normUrl(a.source_url ?? a.raw?.source_url ?? a.raw?.profile_url);
+            const nn = normName(a.name ?? a.company);
+            return (uk ? leadQualityByUrl.get(uk) : undefined) ?? (nn ? leadQualityByName.get(nn) : undefined);
+          };
+          finalPersistSet = gatedAccepted.filter((a: any) => {
+            const entry = lookupEntry(a);
+            const aria = (entry?.aria ?? null) as AriaLike | null;
+            const m = mapAriaToDecision(aria);
+            const violations = (((entry?.canonical as any)?.run_trace?.evidence_violations)
+              ?? ((entry?.canonical as any)?.evidence_violations) ?? []) as string[];
+            const decision = qualificationPersistenceDecision({
+              targetEntity: routingEntityIntent?.target_entity ?? "person",
+              candidateArtifactType: runArtifactType,
+              // Provenance is separately ENFORCED at insert (enforce_provenance);
+              // a genuine provider profile carries a person URL.
+              providerVerified: !!(a.source_url ?? a.raw?.source_url ?? a.raw?.profile_url),
+              ariaEvaluated: m.evaluated,
+              ariaDecision: m.decision,
+              tier: entry?.tier ?? null,
+              evidenceViolations: violations,
+            });
+            if (!decision.persist) {
+              stagedForReview.push({
+                name: (a.name ?? null) as string | null,
+                company: (a.company ?? null) as string | null,
+                source_url: (a.source_url ?? a.raw?.source_url ?? a.raw?.profile_url ?? null) as string | null,
+                reason: decision.reason,
+                tier: entry?.tier ?? null,
+                star_label: (aria?.star_label ?? null) as string | null,
+              });
+            }
+            return decision.persist;
+          });
+          console.log("[run-agent] qualification gate", { accepted: gatedAccepted.length, persisted: finalPersistSet.length, staged: stagedForReview.length });
+          // Reflect honest persisted vs staged counts in the source-quality meta.
+          if (sourceQualityMeta) {
+            (sourceQualityMeta as Record<string, unknown>).persisted_count = finalPersistSet.length;
+            (sourceQualityMeta as Record<string, unknown>).staged_count = stagedForReview.length;
+            (sourceQualityMeta as Record<string, unknown>).staged_candidates = stagedForReview;
+          }
+        }
+
+        if (finalPersistSet.length > 0) {
+          // Persist ONLY the qualification-accepted set (person) or the role-family-
+          // filtered + gate-passing set (company/job) so wrong-role / no-proof /
+          // off-ICP / unqualified rows never reach Workbench.
+          const rawItems = finalPersistSet.map((a) => a.raw);
           const attachAccounts = Array.isArray(tool_input_body?.attach_to_accounts) ? tool_input_body.attach_to_accounts : null;
 
           if (attachAccounts && attachAccounts.length > 0) {
@@ -1408,11 +1495,16 @@ Deno.serve(async (req) => {
                 execution_mode: execution_mode_body,
                 tool_call_id: null,
                 tool_name: "source_with_apify",
-                selected_actor_key: planned_actor_key ?? null,
+                // Section 8/9: stamp the SPECIFIC actor + artifact type at the first
+                // trusted provenance write so sealProvenance never later rejects the
+                // correct actor_id as an overwrite, and artifact_type is preserved.
+                selected_actor_key: runActorKey,
                 // Provider provenance context — invalid provenance now BLOCKS the
                 // lead_candidates insert (no verified=false ride-along).
                 provider: "apify",
-                actor_id: planned_actor_key ?? "apify",
+                actor_id: runActorImpl,
+                actor_key: runActorKey,
+                artifact_type: runArtifactType,
                 provider_run_id: run_id,
                 workflow_run_id: run_id,
                 trace_id: run_id,
@@ -1575,7 +1667,12 @@ Deno.serve(async (req) => {
                 }, {})).sort((a, b) => b[1] - a[1]).slice(0, 4).map(([reason, count]) => ({ reason, count }))
               : []);
           const reasonStr = topReasons.length ? ` Main reject reasons: ${topReasons.map((r) => r.reason).join(", ")}.` : "";
-          toolNotices.push(`Scout reviewed ${rawAllItems.length} raw result${rawAllItems.length === 1 ? "" : "s"} but found 0 verified matches. I did not fill the table with weak results.${reasonStr}`);
+          // When provider people were sourced but held back by the qualification
+          // gate, say so honestly (they are staged for review, not discarded).
+          const stagedStr = stagedForReview.length
+            ? ` ${stagedForReview.length} provider-backed profile${stagedForReview.length === 1 ? " was" : "s were"} sourced but staged for review (not qualified for persistence).`
+            : "";
+          toolNotices.push(`Scout reviewed ${rawAllItems.length} raw result${rawAllItems.length === 1 ? "" : "s"} but found 0 qualified matches. I did not fill the table with weak results.${stagedStr}${reasonStr}`);
           // Actor ran fine but accepted 0 qualified leads. Mark it so we skip
           // Aria (nothing to rank) and finalize as no_results below.
           if (isApifySelected) {
@@ -1952,7 +2049,13 @@ Deno.serve(async (req) => {
         body: guard.summary,
         metadata: { step_index, verified: guard.verified.length, rejected: guard.rejected.length, stop: guard.shouldStop },
       });
-      if (guard.shouldStop) {
+      // Section 10 — Scout↔Aria pool alignment. For a PERSON target, feed Aria the
+      // ACCEPTED provider PersonCandidates directly (all of them), never the subset
+      // the LLM narrative happened to re-list. The narrative may annotate but can
+      // neither invent a parallel identity pool nor shrink the sourced pool.
+      if (personProviderCandidates && personProviderCandidates.length > 0) {
+        handoffInput = JSON.stringify({ candidates: personProviderCandidates });
+      } else if (guard.shouldStop) {
         zeroAcceptedSourcing = true;
         nextStep = null; // never invoke Aria with unsupported/invented candidates
       } else {

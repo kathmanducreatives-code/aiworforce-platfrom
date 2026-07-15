@@ -145,6 +145,12 @@ export function guardScoutToAria(scoutCandidates: CandidateIdentity[], index: No
 export interface ProviderProvenanceRecord {
   provider: string;
   actor_id: string;
+  /** The logical actor key (e.g. "apify_people_search"). Complements the specific
+   * actor_id implementation (e.g. "harvestapi/linkedin-profile-search"). */
+  actor_key?: string | null;
+  /** The normalized artifact type this candidate represents (person_candidate /
+   * company_candidate / job_signal). Preserved through final persistence. */
+  artifact_type?: string | null;
   provider_run_id: string;
   provider_item_id: string | null;
   normalized_candidate_id: string;
@@ -165,6 +171,8 @@ export interface ProviderProvenanceRecord {
 export interface ProvenanceCtx {
   provider?: string | null;
   actor_id?: string | null;
+  actor_key?: string | null;
+  artifact_type?: string | null;
   provider_run_id?: string | null;
   workflow_run_id?: string | null;
   plan_id?: string | null;
@@ -183,6 +191,8 @@ export function buildProvenanceRecord(item: NormalizedProviderItem, ctx: Provena
   const rec: ProviderProvenanceRecord = {
     provider: s(ctx.provider) || "apify",
     actor_id: s(ctx.actor_id),
+    actor_key: s(ctx.actor_key) || null,
+    artifact_type: s(ctx.artifact_type) || null,
     provider_run_id: s(ctx.provider_run_id || ctx.workflow_run_id),
     provider_item_id: s(item.provider_item_id) || null,
     normalized_candidate_id: s(item.normalized_candidate_id) || (source_url ? "nc_" + nrm(source_url) : ""),

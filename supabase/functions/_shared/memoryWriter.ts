@@ -171,8 +171,12 @@ interface BaseCtx {
   // ---- provider provenance context (Find Leads sourcing) ----
   /** Provider name (e.g. "apify"). */
   provider?: string | null;
-  /** Actor id / selected_actor_key. */
+  /** Specific actor implementation (e.g. harvestapi/linkedin-profile-search). */
   actor_id?: string | null;
+  /** Logical actor key (e.g. apify_people_search). */
+  actor_key?: string | null;
+  /** Normalized artifact type (person_candidate / company_candidate / job_signal). */
+  artifact_type?: string | null;
   provider_run_id?: string | null;
   workflow_run_id?: string | null;
   trace_id?: string | null;
@@ -200,6 +204,8 @@ function leadPersistenceDecision(
   const provCtx: ProvenanceCtx = {
     provider: ctx.provider ?? "apify",
     actor_id: ctx.actor_id ?? null,
+    actor_key: ctx.actor_key ?? null,
+    artifact_type: ctx.artifact_type ?? null,
     provider_run_id: ctx.provider_run_id ?? null,
     workflow_run_id: ctx.workflow_run_id ?? null,
     plan_id: ctx.plan_id ?? null,
@@ -584,7 +590,8 @@ async function writeApifyPeople(ctx: ToolCallCtx, output: any): Promise<void> {
         lead_type: "person",
         status: "new",
         reason: [p.title, p.company].filter(Boolean).join(" @ ") || null,
-        raw: { ...peopleDecision.patch, profile: p.raw ?? {} },
+        // artifact_type is preserved in raw (no dedicated column / no migration).
+        raw: { ...peopleDecision.patch, artifact_type: ctx.artifact_type ?? "person_candidate", profile: p.raw ?? {} },
       });
   }
 }

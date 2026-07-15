@@ -39,6 +39,11 @@ export interface CanonicalStampInput {
   requested_role_family?: RoleFamily | null;
   requested_signal?: "required" | "preferred" | "none";
   source_strategy?: "account_first" | "profile_first" | null;
+  // When the REQUESTED entity is a person (target_entity=person), a person
+  // profile is the desired identity artifact, not a company-signal proxy — so
+  // job-shaped evidence contradictions (profile_as_job/title_as_signal) do not
+  // apply. Defaults to false → existing company/role-family behavior unchanged.
+  target_is_person?: boolean;
 
   // --- hiring / company signal facts ---
   exact_hiring_signal?: string | null;
@@ -210,13 +215,18 @@ export function buildCanonicalStamp(input: CanonicalStampInput): CanonicalStamp 
     profile_only: evidence_type === "person_profile" && !company_signal_verified,
   });
 
+  const personRequested = input.target_is_person === true;
   const evidence_violations = checkEvidenceInvariants({
     signal_evidence_type: evidence_type,
-    signal_label: input.signal_type ?? (input.exact_hiring_signal ? "hiring" : null),
-    is_signal_from_person_title: !!input.requested_role_family && candidate_role_family === "founder_exec" && String(input.signal_type ?? "").toLowerCase() === "hiring",
-    job_post: input.requested_role_family
+    // For a person target, the profile is identity evidence — never synthesize a
+    // "hiring" label from the person's own title.
+    signal_label: personRequested ? "person_profile" : (input.signal_type ?? (input.exact_hiring_signal ? "hiring" : null)),
+    is_signal_from_person_title: !personRequested && !!input.requested_role_family && candidate_role_family === "founder_exec" && String(input.signal_type ?? "").toLowerCase() === "hiring",
+    // A person target has no job-posting requirement to satisfy.
+    job_post: (!personRequested && input.requested_role_family)
       ? { employer: input.company ?? null, role_title: input.job_title ?? null }
       : null,
+    requested_artifact_is_person: personRequested,
   }).map((v) => v.code);
 
   const run_trace: CanonicalRunTrace = {
