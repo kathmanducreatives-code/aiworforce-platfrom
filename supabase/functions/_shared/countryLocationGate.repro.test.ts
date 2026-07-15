@@ -1,15 +1,16 @@
-// Reproduction: the CURRENT source gates reject a genuine US profile whose
-// location string is a US city/region ("Greater Philadelphia") against a
-// "United States" requirement — the country-blind rejection behind the failed
-// Q1 success-path probe. Uses the real production classifier + validator.
-// Deterministic; no provider. Later commits make Cases A/B accept, C still reject.
+// Before/after regression for the country-blind location gate (live Q1
+// q1-success-path-20260714T155551Z). BEFORE: a genuine US profile whose location
+// text is a US city ("Greater Philadelphia") was rejected vs "United States".
+// AFTER: with the provider's structured country evidence threaded through, the
+// gate accepts it; a genuinely UK profile is rejected as wrong country; a US city
+// string WITHOUT structured country is honestly "missing location evidence"
+// (never falsely "wrong location"). Uses the production classifier + validator.
 
 import { assertEquals } from "https://deno.land/std@0.224.0/assert/mod.ts";
 import { classifyResults } from "./sourceQuality.ts";
 import { validateSourcingResults } from "./sourcingRetry.ts";
 import {
   MAPPED_LOCATION_A,
-  MAPPED_LOCATION_B,
   MAPPED_LOCATION_C,
   REQUIRED_US,
   FROZEN_Q1_LOCATION_FACTS,
@@ -17,31 +18,36 @@ import {
 
 const crit = (location: string) => ({ requested: 5, role: null, location, source_type: "people_profiles" });
 const STRICT = { location: true, industry: false, stage: false, count_exact: false };
-const person = (name: string, location: string) => ({ name, location, source_url: `https://linkedin.com/in/${name.replace(/\s+/g, "").toLowerCase()}` });
+// A SourcedItem as mapItem now produces it: human-readable string + structured country.
+const personStructured = (name: string, location: string, country: string, code: string) => ({
+  name, location, location_country: country, location_country_code: code,
+  source_url: `https://linkedin.com/in/${name.replace(/\s+/g, "").toLowerCase()}`,
+});
 
-Deno.test("repro: classifyResults rejects US 'Greater Philadelphia' vs 'United States' (country-blind)", () => {
-  const res = classifyResults([person("Alex Founder", MAPPED_LOCATION_A)], crit(REQUIRED_US), STRICT);
+Deno.test("fix: US 'Greater Philadelphia' + parsed country United States is ACCEPTED vs 'United States'", () => {
+  const res = classifyResults([personStructured("Alex Founder", MAPPED_LOCATION_A, "United States", "US")], crit(REQUIRED_US), STRICT);
+  assertEquals(res.accepted.length, 1);
+  assertEquals(res.rejected.length, 0);
+});
+
+Deno.test("fix: the actual accept path (validateSourcingResults) keeps the US city profile", () => {
+  const kept = validateSourcingResults([personStructured("Sam Bay", "San Francisco Bay Area", "United States", "US")], crit(REQUIRED_US), STRICT);
+  assertEquals(kept.length, 1);
+});
+
+Deno.test("fix: a genuinely UK profile ('Greater London' + United Kingdom) is rejected as wrong country", () => {
+  const res = classifyResults([personStructured("Liam London", MAPPED_LOCATION_C, "United Kingdom", "GB")], crit(REQUIRED_US), STRICT);
   assertEquals(res.accepted.length, 0);
-  assertEquals(res.rejected[0]?.reason, "wrong location (strict)");
+  assertEquals(res.rejected[0]?.reason, "wrong country (strict)");
 });
 
-Deno.test("repro: classifyResults rejects US 'San Francisco Bay Area' vs 'United States'", () => {
-  const res = classifyResults([person("Sam Bay", MAPPED_LOCATION_B)], crit(REQUIRED_US), STRICT);
+Deno.test("fix: a US city string WITHOUT structured country is honest 'missing location evidence', not 'wrong location'", () => {
+  const res = classifyResults([{ name: "No Country", location: MAPPED_LOCATION_A, source_url: "https://linkedin.com/in/nc" }], crit(REQUIRED_US), STRICT);
   assertEquals(res.accepted.length, 0);
-  assertEquals(res.rejected[0]?.reason, "wrong location (strict)");
+  assertEquals(res.rejected[0]?.reason, "missing location evidence (strict)");
 });
 
-Deno.test("repro: validateSourcingResults (actual accept path) also drops the US city profile", () => {
-  const kept = validateSourcingResults([person("Alex Founder", MAPPED_LOCATION_A)], crit(REQUIRED_US), STRICT);
-  assertEquals(kept.length, 0);
-});
-
-Deno.test("repro: a genuinely UK profile ('Greater London') is correctly rejected vs US", () => {
-  const res = classifyResults([person("Liam London", MAPPED_LOCATION_C)], crit(REQUIRED_US), STRICT);
-  assertEquals(res.accepted.length, 0); // correct — but for the same country-blind reason
-});
-
-Deno.test("repro: frozen Q1 facts (22 US profiles, all rejected wrong location)", () => {
+Deno.test("repro: frozen Q1 facts (22 US profiles were all rejected pre-fix)", () => {
   assertEquals(FROZEN_Q1_LOCATION_FACTS.raw_profiles, 22);
   assertEquals(FROZEN_Q1_LOCATION_FACTS.accepted, 0);
   assertEquals(FROZEN_Q1_LOCATION_FACTS.reject_reason, "wrong location (strict)");
