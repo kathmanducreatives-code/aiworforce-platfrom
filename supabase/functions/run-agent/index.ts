@@ -22,6 +22,7 @@ import { classifyProviderSourceOutcome, type ProviderSourceReason } from "../_sh
 import { resolvePlannedTool, isProviderSourcingTool, resolveProviderSource } from "../_shared/plannedToolResolver.ts";
 import { parsePeopleSearchIntent, buildPeopleSearchAttempts, buildSourcingAttemptAudit } from "../_shared/peopleSearchQueryBuilder.ts";
 import { extractCandidateLocationEvidence } from "../_shared/locationMatch.ts";
+import { compileLeadEntityIntent, compileActorPlan, detectRoutingConflict, artifactTypeForActor, expectedArtifactType, ACTOR_IMPL, type LeadEntityIntent, type ProviderActorPlan, type RoutingConflictResult } from "../_shared/leadEntityIntent.ts";
 
 
 const cors = {
@@ -258,6 +259,12 @@ Deno.serve(async (req) => {
   // Sanitized per-attempt audit (label, fingerprint, official actor input, actor
   // key/impl, raw/accepted counts). Provider-safe: NEVER contains tokens/keys.
   let sourcingAttemptAudit: Array<Record<string, unknown>> | null = null;
+  // Immutable ENTITY intent (compiled from the ORIGINAL user instruction) + its
+  // actor plan + any routing conflict. The authoritative "what entity did the user
+  // request?" — planner-rewritten Scout prose can never change it.
+  let routingEntityIntent: LeadEntityIntent | null = null;
+  let routingActorPlan: ProviderActorPlan | null = null;
+  let routingConflict: RoutingConflictResult | null = null;
   // Set when an Apify sourcing actor RAN successfully but accepted 0 qualified
   // leads (not a tool failure). We then skip Aria — there is nothing to rank.
   let zeroAcceptedSourcing = false;
@@ -353,14 +360,38 @@ Deno.serve(async (req) => {
       // normalized default (jobs) — behavior unchanged, never fabricated.
       let derivedActorKey: string | null = null;
       if (!raw_source_type && !planned_actor_key) {
-        const resolvedSource = resolveProviderSource(instruction ?? input ?? "");
-        if (resolvedSource) {
-          source_type = resolvedSource.source_type;
-          derivedActorKey = resolvedSource.actor_key;
+        // ROUTE FROM THE ORIGINAL USER INSTRUCTION, not the planner-rewritten Scout
+        // prose. Compile the immutable entity intent (person/company/job) and select
+        // the primary identity actor from it — "hiring signals" the planner injects
+        // can never flip a founder (person) request to the jobs actor (plan da79cba3).
+        // `input` carries the original user_instruction (orchestrate threads it);
+        // fall back to `instruction` only for a direct run-agent call.
+        const entityIntent = compileLeadEntityIntent(input ?? instruction ?? "");
+        routingEntityIntent = entityIntent;
+        const ENTITY_SOURCE: Record<string, { source_type: string; actor_key: string }> = {
+          person: { source_type: "people_profiles", actor_key: "apify_people_search" },
+          job: { source_type: "hiring_signal", actor_key: "apify_jobs" },
+          company: { source_type: "company_search", actor_key: "apify_jobs" },
+        };
+        const byEntity = ENTITY_SOURCE[entityIntent.target_entity];
+        if (byEntity && !entityIntent.clarification_required) {
+          source_type = byEntity.source_type;
+          derivedActorKey = byEntity.actor_key;
+        } else {
+          // Ambiguous entity — best-effort resolver on the ORIGINAL instruction.
+          const resolvedSource = resolveProviderSource(input ?? instruction ?? "");
+          if (resolvedSource) { source_type = resolvedSource.source_type; derivedActorKey = resolvedSource.actor_key; }
         }
+        routingActorPlan = compileActorPlan(entityIntent, "original_user_instruction");
+        // Routing-conflict guard (defense in depth): the selected actor must be able
+        // to yield the intent's expected final artifact.
+        routingConflict = detectRoutingConflict(entityIntent, planned_actor_key ?? derivedActorKey);
+        console.log("[run-agent] entity routing", { target_entity: entityIntent.target_entity, output_type: entityIntent.output_type, actor_key: planned_actor_key ?? derivedActorKey, clarification_required: entityIntent.clarification_required, conflict: !!routingConflict });
       }
 
-      const shouldRun = agent_slug === "scout" || agent_slug === "hawk";
+      // Do not call any provider when a routing conflict was detected (the selected
+      // actor cannot yield the intent's expected artifact) — fail closed, 0 calls.
+      const shouldRun = (agent_slug === "scout" || agent_slug === "hawk") && !routingConflict;
 
       if (shouldRun) {
         let location: string | null = tool_input_body?.location ?? null;
@@ -950,8 +981,31 @@ Deno.serve(async (req) => {
           } catch (e) { console.warn("[run-agent] LIE source gate failed:", e); }
         }
 
-        const effectiveAccepted = lieAcceptedItems ?? gateAcceptedItems ?? adaptive.accepted;
-        const effectiveFound = (lieAcceptedItems ?? gateAcceptedItems) ? (lieAcceptedItems ?? gateAcceptedItems)!.length : adaptive.found;
+        let effectiveAccepted = lieAcceptedItems ?? gateAcceptedItems ?? adaptive.accepted;
+        let effectiveFound = (lieAcceptedItems ?? gateAcceptedItems) ? (lieAcceptedItems ?? gateAcceptedItems)!.length : adaptive.found;
+
+        // ARTIFACT-TYPE PERSISTENCE GUARD (Section 10/11): the accepted artifact type
+        // must match the requested entity's expected final artifact. A JobSignal can
+        // NEVER become a person lead. If the selected actor's output type conflicts
+        // with the immutable intent (e.g. a founder request that still landed on the
+        // jobs actor), drop the accepted set so nothing mismatched persists.
+        if (routingEntityIntent && !routingEntityIntent.clarification_required) {
+          const acceptedArtifact = artifactTypeForActor(planned_actor_key ?? derivedActorKey)
+            ?? (source_type === "people_profiles" ? "person_candidate"
+              : (source_type === "jobs" || source_type === "hiring_signal") ? "job_signal"
+              : "company_candidate");
+          const wantArtifact = expectedArtifactType(routingEntityIntent.target_entity);
+          if (acceptedArtifact !== wantArtifact) {
+            console.warn("[run-agent] artifact-type mismatch — blocking persistence", { target_entity: routingEntityIntent.target_entity, want: wantArtifact, got: acceptedArtifact, source_type });
+            routingConflict = routingConflict ?? { result_status: "routing_conflict", target_entity: routingEntityIntent.target_entity, selected_actor: String(planned_actor_key ?? derivedActorKey ?? ""), selected_actor_output_type: acceptedArtifact, expected_output_type: wantArtifact };
+            // Clear EVERY accepted source so nothing mismatched reaches the provider
+            // index, Aria hand-off, or persistence.
+            lieAcceptedItems = [] as typeof lieAcceptedItems;
+            gateAcceptedItems = [] as typeof gateAcceptedItems;
+            effectiveAccepted = [] as typeof effectiveAccepted;
+            effectiveFound = 0;
+          }
+        }
 
         // Source Quality Engine (Phase 6): honest raw vs accepted vs persisted
         // counts + reject reasons, surfaced in Workbench Insights + narrative.
@@ -1059,7 +1113,11 @@ Deno.serve(async (req) => {
               domain: (a.raw?.domain) as string | null,
               job_url: (a.raw?.job_url ?? a.source_url) as string | null,
             })));
-            providerProvenanceCtx = { provider: "apify", actor_id: planned_actor_key ?? "apify", provider_run_id: run_id, workflow_run_id: run_id, plan_id: String(plan_id ?? ""), trace_id: run_id, query_id: null };
+            // Provenance actor_id is the SPECIFIC actor implementation, not the
+            // literal "apify" (Section 13): resolve from the actor key.
+            const provActorKey = planned_actor_key ?? derivedActorKey ?? null;
+            const provActorId = (provActorKey && ACTOR_IMPL[provActorKey]) ? ACTOR_IMPL[provActorKey] : (provActorKey ?? "apify");
+            providerProvenanceCtx = { provider: "apify", actor_id: provActorId, provider_run_id: run_id, workflow_run_id: run_id, plan_id: String(plan_id ?? ""), trace_id: run_id, query_id: null };
           } catch (e) { console.warn("[run-agent] provider index build failed:", e); }
           for (const it of ((lieAcceptedItems ?? gateAcceptedItems) ?? classified.accepted)) {
             const r = (it.raw ?? {}) as Record<string, unknown>;
@@ -1661,7 +1719,7 @@ Deno.serve(async (req) => {
       result: {
         output: scoutMsg,
         no_qualified_matches: true,
-        result_status: "no_results",
+        result_status: routingConflict ? "routing_conflict" : "no_results",
         qualified_count: 0,
         contact_ready_count: 0,
         persisted_lead_count: 0,
@@ -1672,6 +1730,9 @@ Deno.serve(async (req) => {
         reason: providerSourceReason ?? undefined,
         attempt_log: adaptiveAttempts.length ? adaptiveAttempts : undefined,
         sourcing_attempts: sourcingAttemptAudit ?? undefined,
+        lead_entity_intent: routingEntityIntent ?? undefined,
+        routing: routingActorPlan ? { target_entity: routingActorPlan.target_entity, output_type: routingEntityIntent?.output_type, primary_actor: routingActorPlan.primary_identity_actor, routing_source: routingActorPlan.routing_source } : undefined,
+        routing_conflict: routingConflict ?? undefined,
       },
     }).eq("id", task.id);
     await supabase.from("task_plans").update({ status: "failed", completed_at: new Date().toISOString() }).eq("id", plan_id);
@@ -1818,7 +1879,7 @@ Deno.serve(async (req) => {
   const finalStatus = needs_approval ? "awaiting_approval" : "complete";
   await supabase.from("tasks").update({
     status: finalStatus,
-    result: { output: apiText, tokens_in: tokensIn, tokens_out: tokensOut, attempt_log: adaptiveAttempts.length ? adaptiveAttempts : undefined, sourcing_attempts: sourcingAttemptAudit ?? undefined, source_plan: sourcePlanMeta ?? undefined, source_quality: sourceQualityMeta ?? undefined },
+    result: { output: apiText, tokens_in: tokensIn, tokens_out: tokensOut, attempt_log: adaptiveAttempts.length ? adaptiveAttempts : undefined, sourcing_attempts: sourcingAttemptAudit ?? undefined, lead_entity_intent: routingEntityIntent ?? undefined, routing: routingActorPlan ? { target_entity: routingActorPlan.target_entity, output_type: routingEntityIntent?.output_type, primary_actor: routingActorPlan.primary_identity_actor, routing_source: routingActorPlan.routing_source } : undefined, source_plan: sourcePlanMeta ?? undefined, source_quality: sourceQualityMeta ?? undefined },
   }).eq("id", task.id);
 
   // Phase 2: persist agent outputs into structured GTM memory. Fire-and-forget.
