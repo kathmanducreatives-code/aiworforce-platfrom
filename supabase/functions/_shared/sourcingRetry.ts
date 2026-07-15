@@ -5,6 +5,7 @@
 
 import { roleAliases, industrySynonyms, dedupeByKey } from "./broaden.ts";
 import { evaluateWorkflowStatus, type WorkflowStatus, type WorkflowAttempt } from "./adaptiveWorkflow.ts";
+import { matchesRequiredLocationFromFields } from "./locationMatch.ts";
 
 export interface SourcingCriteria {
   requested: number;
@@ -29,6 +30,10 @@ export interface SourcedItem {
   company?: string | null;
   source_url?: string | null;
   location?: string | null;
+  // Structured geography evidence from the provider (country-aware gating). The
+  // human-readable `location` string is preserved for UI/ranking.
+  location_country?: string | null;
+  location_country_code?: string | null;
   raw?: unknown;
 }
 
@@ -133,9 +138,12 @@ export function validateSourcingResults(items: SourcedItem[], c: SourcingCriteri
   for (const it of items ?? []) {
     const name = (it.name ?? it.company ?? "").toString().trim();
     if (!name) continue;
-    // Strict location filter (only when we have item location data).
-    if (strict.location && c.location && it.location) {
-      if (!new RegExp(c.location.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i").test(String(it.location))) continue;
+    // Strict location filter — country-aware (uses structured provider geography,
+    // not a substring of the human-readable location string). Only applies when we
+    // have item location data (string or structured), so location-less rows aren't
+    // over-filtered.
+    if (strict.location && c.location && (it.location || it.location_country || it.location_country_code)) {
+      if (!matchesRequiredLocationFromFields(it, c.location).ok) continue;
     }
     // Role relevance — accept if title matches a role word or the requested role; if
     // no title data is present, don't over-filter (actor results vary).

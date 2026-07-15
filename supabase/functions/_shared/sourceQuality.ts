@@ -7,6 +7,7 @@
 import { evaluateWorkflowStatus } from "./adaptiveWorkflow.ts";
 import { keyForItem, type SourcedItem, type SourcingCriteria, type StrictConstraints, type AttemptRecord } from "./sourcingRetry.ts";
 import { SUPPORT_ROLE_RE, isSupportRoleText } from "./broaden.ts";
+import { matchesRequiredLocationFromFields } from "./locationMatch.ts";
 
 export type SourceQualityCounts = {
   raw_result_count: number;
@@ -57,9 +58,11 @@ export function classifyResults(items: SourcedItem[], c: SourcingCriteria, stric
     const name = (it.name ?? it.company ?? "").toString().trim();
     if (!name) { rejected.push({ item: it, reason: "missing name/company" }); bump("missing name/company"); continue; }
 
-    if (strict.location && c.location && it.location) {
-      const re = new RegExp(c.location.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i");
-      if (!re.test(String(it.location))) { rejected.push({ item: it, reason: "wrong location (strict)" }); bump("wrong location (strict)"); continue; }
+    if (strict.location && c.location && (it.location || it.location_country || it.location_country_code)) {
+      // Country-aware: uses structured provider geography (country/countryCode),
+      // not a substring of the human-readable location string. Distinct reasons.
+      const m = matchesRequiredLocationFromFields(it, c.location);
+      if (!m.ok) { const reason = `${m.reason ?? "wrong location"} (strict)`; rejected.push({ item: it, reason }); bump(reason); continue; }
     }
 
     const title = (it.title ?? "").toString();

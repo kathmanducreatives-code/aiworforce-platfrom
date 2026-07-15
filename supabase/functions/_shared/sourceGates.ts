@@ -6,7 +6,10 @@
 // applies the same standard to every other source: people, company, LinkedIn
 // posts, comments/competitor mentions, and workflow trends.
 //
-// Pure / import-free so it is fully unit-testable. Never fabricates data.
+// Pure (imports only the country-aware location matcher) so it stays fully
+// unit-testable. Never fabricates data.
+
+import { matchesRequiredLocationFromFields } from "./locationMatch.ts";
 
 export interface GateTrace {
   stage: string; rule: string; before_count: number; after_count: number;
@@ -56,6 +59,8 @@ export function tierFor(score: number, hasProof: boolean): Tier {
 export interface PeopleCandidate {
   name?: string | null; title?: string | null; profile_url?: string | null;
   company?: string | null; company_category?: string | null; location?: string | null;
+  // Structured provider geography (country-aware gating); `location` stays human-readable.
+  location_country?: string | null; location_country_code?: string | null;
 }
 export interface PeopleGateOpts {
   role_keywords?: string[]; company_category?: string[]; location?: string | null;
@@ -85,7 +90,12 @@ export function filterPeopleCandidates(cands: PeopleCandidate[], opts: PeopleGat
     if (roles.length && !hasAny(t, roles)) { r2["wrong role"] = (r2["wrong role"] ?? 0) + 1; rejected.push({ item: c, reason: "wrong role" }); return false; }
     if (opts.requireCompany && !present(c.company)) { r2["no current company"] = (r2["no current company"] ?? 0) + 1; rejected.push({ item: c, reason: "no current company" }); return false; }
     if (cats.length && !hasAny(`${c.company ?? ""} ${c.company_category ?? ""}`, cats)) { r2["wrong company category"] = (r2["wrong company category"] ?? 0) + 1; rejected.push({ item: c, reason: "wrong company category" }); return false; }
-    if (opts.strict_location && opts.location && present(c.location) && !hasAny(`${c.location}`, [opts.location])) { r2["wrong location"] = (r2["wrong location"] ?? 0) + 1; rejected.push({ item: c, reason: "wrong location" }); return false; }
+    if (opts.strict_location && opts.location && (present(c.location) || present(c.location_country) || present(c.location_country_code))) {
+      // Country-aware: match structured provider geography (country/countryCode),
+      // not a substring of the human-readable location string.
+      const m = matchesRequiredLocationFromFields(c, opts.location);
+      if (!m.ok) { const reason = m.reason ?? "wrong location"; r2[reason] = (r2[reason] ?? 0) + 1; rejected.push({ item: c, reason }); return false; }
+    }
     return true;
   });
   stage("relevance", "role + company-category match", pool.length, kept, r2); pool = kept;
