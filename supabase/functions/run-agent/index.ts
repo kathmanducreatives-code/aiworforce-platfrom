@@ -25,6 +25,7 @@ import { extractCandidateLocationEvidence } from "../_shared/locationMatch.ts";
 import { compileLeadEntityIntent, compileActorPlan, detectRoutingConflict, artifactTypeForActor, expectedArtifactType, ACTOR_IMPL, type LeadEntityIntent, type ProviderActorPlan, type RoutingConflictResult } from "../_shared/leadEntityIntent.ts";
 import { qualificationPersistenceDecision, mapAriaToDecision, type AriaLike } from "../_shared/qualificationPersistence.ts";
 import { buildQualificationObservability, type CandidateDiagnosticInput, type QualificationObservability } from "../_shared/qualificationObservability.ts";
+import { resolveGeographyConstraint, classifyGeography, type GeographyConstraint } from "../_shared/geographyConstraint.ts";
 
 
 const cors = {
@@ -292,6 +293,10 @@ Deno.serve(async (req) => {
   // Broad scope so success / partial_results / no_results terminals can all surface
   // it. Reports the source→qualification→persistence path; never changes policy.
   let qualificationObservability: QualificationObservability | null = null;
+  // Source-gate funnel evidence (Section 3/4): normalized candidate count + the
+  // sanitized diagnostics for candidates rejected BEFORE qualification.
+  let runNormalizedCount = 0;
+  let runSourceGateRejectedDiag: Array<Record<string, unknown>> = [];
   // Find Leads provider *identity* sourcing recognition (from the authoritative
   // tool markers, incl. body.tool_needed). Used to (a) route the step into the
   // provider path and (b) fail closed — never let the generic LLM be a lead source.
@@ -653,6 +658,22 @@ Deno.serve(async (req) => {
           category: (tool_input_body?.company_category as string) ?? null,
           source_type: (tool_input_body?.source_type as string) ?? source_type ?? null,
         };
+        // Section 5 (v81 fix) — resolve the AUTHORITATIVE source-gate geography for
+        // the PERSON path so a COUNTRY intent (Company Brain ICP geography / the
+        // actor's country filter) governs the strict gate. A diverged planner/
+        // instruction locality can never silently strengthen a country constraint
+        // into a strict city/region one; an EXPLICIT user locality still wins. The
+        // actor input already ran (uses peopleAttempts), so this only aligns the
+        // gate — it never changes what the actor filtered on. Jobs/company unchanged.
+        let sourceGateGeography: GeographyConstraint = classifyGeography(criteria.location);
+        if (source_type === "people_profiles") {
+          sourceGateGeography = resolveGeographyConstraint([
+            { value: (tool_input_body?.location as string) ?? null, source: "user_explicit" },
+            { value: location, source: "planner" },
+            { value: (brain as any)?.icp?.geography ?? null, source: "brain" },
+          ]);
+          if (sourceGateGeography.value) criteria.location = sourceGateGeography.value;
+        }
         const mapItem = (it: any) => {
           // HarvestAPI people profiles nest the useful fields: name = firstName+
           // lastName, title/company live in currentPosition[0], location is an
@@ -1106,6 +1127,39 @@ Deno.serve(async (req) => {
           const { summarizeSourceQuality, classifyResults, topRejectReasons } = await import("../_shared/sourceQuality.ts");
           const { evaluateLeadQuality, buildWhyThisLead } = await import("../_shared/leadQuality.ts");
           const classified = classifyResults(rawAllItems, criteria, strict);
+          // Section 3: normalized_count = every provider item converted into a
+          // normalized candidate record the source gate evaluated (accepted +
+          // rejected + duplicates). Section 4: build sanitized source-gate reject
+          // diagnostics so a country-vs-locality decision is explainable per profile.
+          runNormalizedCount = classified.accepted.length + classified.rejected.length + classified.duplicates.length;
+          runSourceGateRejectedDiag = (classified.rejected ?? []).map((rj: any) => {
+            const it = rj.item ?? {};
+            const ev = extractCandidateLocationEvidence(it.raw ?? it);
+            const reason = String(rj.reason ?? "");
+            const isGeo = /country|city\/region|location/i.test(reason);
+            return {
+              normalized_candidate_id: it.raw?.normalized_candidate_id ?? null,
+              name: it.name ?? it.company ?? null,
+              title: it.title ?? null,
+              company: it.company ?? null,
+              source_url: it.source_url ?? it.raw?.profile_url ?? null,
+              provider_verified: !!(it.source_url ?? it.raw?.profile_url),
+              actor_key: runActorKey,
+              actor_id: runActorImpl,
+              artifact_type: runArtifactType,
+              requested_geography_value: isGeo ? (sourceGateGeography.value || criteria.location || null) : null,
+              requested_geography_type: isGeo ? sourceGateGeography.type : null,
+              requested_country_code: isGeo ? (sourceGateGeography.country_code ?? null) : null,
+              candidate_location_text: ev.text ?? it.location ?? null,
+              candidate_country: ev.country ?? it.location_country ?? null,
+              candidate_country_code: ev.country_code ?? it.location_country_code ?? null,
+              candidate_region: ev.region ?? null,
+              candidate_city: ev.city ?? null,
+              matcher_mode: isGeo ? (sourceGateGeography.type === "region" ? "region" : sourceGateGeography.type === "city" ? "city" : sourceGateGeography.type === "country" ? "country" : "text_fallback") : null,
+              source_gate_reason: reason,
+              source_gate_reason_code: reason.toLowerCase().replace(/\s*\(strict\)\s*$/, "").replace(/[^a-z]+/g, "_").replace(/^_|_$/g, ""),
+            };
+          });
 
           // Claude-Code-level quality scoring of the accepted set, against
           // Company Brain + the user's request. Surfaced in Workbench Insights
@@ -1514,11 +1568,19 @@ Deno.serve(async (req) => {
           });
           const hardRejected = (effectiveAccepted as any[]).length - (gatedAccepted as any[]).length;
           const qualRejected = (gatedAccepted as any[]).length - finalPersistSet.length;
+          // Section 3: normalized_count is the count of provider items converted to
+          // normalized candidate records (accepted + rejected + duplicates at the
+          // source gate); source_gate_rejected is everything normalized but not
+          // source-accepted (rejected + duplicates + role-family filtered), so
+          // normalized == source_gate_accepted + source_gate_rejected reconciles.
+          const normalizedCount = Math.max(runNormalizedCount, (effectiveAccepted as any[]).length);
+          const sourceGateRejected = Math.max(0, normalizedCount - (effectiveAccepted as any[]).length);
           qualificationObservability = buildQualificationObservability({
             funnel: {
               raw_count: rawAllItems.length,
-              normalized_count: (effectiveAccepted as any[]).length,
+              normalized_count: normalizedCount,
               source_gate_accepted: (effectiveAccepted as any[]).length,
+              source_gate_rejected: sourceGateRejected,
               hard_gate_rejected: hardRejected,
               qualification_accepted: finalPersistSet.length,
               qualification_rejected: qualRejected,
@@ -1526,6 +1588,7 @@ Deno.serve(async (req) => {
               downstream_aria_count: willRunAria ? (personProviderCandidates?.length ?? 0) : 0,
             },
             candidates: diagnostics,
+            source_gate_rejected: runSourceGateRejectedDiag as any,
             requested_limit: max_results,
             target_entity: routingEntityIntent?.target_entity,
             expected_artifact_type: runArtifactType,

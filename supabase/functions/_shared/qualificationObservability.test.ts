@@ -105,10 +105,10 @@ Deno.test("classify: accept → accepted", () => {
 
 // (15) Funnel reconciliation.
 Deno.test("funnel reconciles when source_gate == hard + accepted + rejected", () => {
-  const f = buildQualificationFunnel({ raw_count: 5, normalized_count: 5, source_gate_accepted: 5, hard_gate_rejected: 0, qualification_accepted: 0, qualification_rejected: 5, persisted_count: 0, downstream_aria_count: 0 });
+  const f = buildQualificationFunnel({ raw_count: 5, normalized_count: 5, source_gate_accepted: 5, source_gate_rejected: 0, hard_gate_rejected: 0, qualification_accepted: 0, qualification_rejected: 5, persisted_count: 0, downstream_aria_count: 0 });
   assertEquals(f.staged_count, 5);
   assertEquals(f.reconciles, true);
-  const bad = buildQualificationFunnel({ raw_count: 5, normalized_count: 5, source_gate_accepted: 5, hard_gate_rejected: 1, qualification_accepted: 0, qualification_rejected: 5, persisted_count: 0, downstream_aria_count: 0 });
+  const bad = buildQualificationFunnel({ raw_count: 5, normalized_count: 5, source_gate_accepted: 5, source_gate_rejected: 0, hard_gate_rejected: 1, qualification_accepted: 0, qualification_rejected: 5, persisted_count: 0, downstream_aria_count: 0 });
   assertEquals(bad.reconciles, false);
 });
 
@@ -124,7 +124,7 @@ Deno.test("v80 scenario: five staged provider people surface in observability", 
     persisted: false, sent_to_downstream_aria: false,
   }));
   const obs = buildQualificationObservability({
-    funnel: { raw_count: 5, normalized_count: 5, source_gate_accepted: 5, hard_gate_rejected: 0, qualification_accepted: 0, qualification_rejected: 5, persisted_count: 0, downstream_aria_count: 0 },
+    funnel: { raw_count: 5, normalized_count: 5, source_gate_accepted: 5, source_gate_rejected: 0, hard_gate_rejected: 0, qualification_accepted: 0, qualification_rejected: 5, persisted_count: 0, downstream_aria_count: 0 },
     candidates, requested_limit: 5, target_entity: "person", expected_artifact_type: "person_candidate",
   });
   assertEquals(obs.funnel.staged_count, 5);
@@ -149,7 +149,7 @@ Deno.test("mixed scenario: accepted diagnostics persisted, staged not", () => {
     { name: "E", company: "Agency", source_url: "https://www.linkedin.com/in/e", provider_verified: true, artifact_type: "person_candidate", source_gate_decision: "needs_verification", tier: "weak", qualification_decision: "reject", qualification_reason: "tier_rejected", matched_icp: ["SaaS"], persisted: false, sent_to_downstream_aria: true },
   ];
   const obs = buildQualificationObservability({
-    funnel: { raw_count: 5, normalized_count: 5, source_gate_accepted: 5, hard_gate_rejected: 0, qualification_accepted: 2, qualification_rejected: 3, persisted_count: 2, downstream_aria_count: 5 },
+    funnel: { raw_count: 5, normalized_count: 5, source_gate_accepted: 5, source_gate_rejected: 0, hard_gate_rejected: 0, qualification_accepted: 2, qualification_rejected: 3, persisted_count: 2, downstream_aria_count: 5 },
     candidates, requested_limit: 5, target_entity: "person", expected_artifact_type: "person_candidate",
   });
   assertEquals(obs.funnel.qualification_accepted, 2);
@@ -166,10 +166,10 @@ Deno.test("observability caps diagnostics to requested limit and MAX_DIAGNOSTICS
     name: `P${i}`, source_url: `https://www.linkedin.com/in/p${i}`, provider_verified: true, artifact_type: "person_candidate",
     source_gate_decision: "needs_verification", tier: "rejected", qualification_decision: "reject", qualification_reason: "tier_rejected", persisted: false, sent_to_downstream_aria: false,
   }));
-  const capped = buildQualificationObservability({ funnel: { raw_count: 60, normalized_count: 60, source_gate_accepted: 60, hard_gate_rejected: 0, qualification_accepted: 0, qualification_rejected: 60, persisted_count: 0, downstream_aria_count: 0 }, candidates: many, requested_limit: 5 });
+  const capped = buildQualificationObservability({ funnel: { raw_count: 60, normalized_count: 60, source_gate_accepted: 60, source_gate_rejected: 0, hard_gate_rejected: 0, qualification_accepted: 0, qualification_rejected: 60, persisted_count: 0, downstream_aria_count: 0 }, candidates: many, requested_limit: 5 });
   assertEquals(capped.candidates.length, 5);
   assertEquals(capped.truncated, 55);
-  const noLimit = buildQualificationObservability({ funnel: { raw_count: 60, normalized_count: 60, source_gate_accepted: 60, hard_gate_rejected: 0, qualification_accepted: 0, qualification_rejected: 60, persisted_count: 0, downstream_aria_count: 0 }, candidates: many });
+  const noLimit = buildQualificationObservability({ funnel: { raw_count: 60, normalized_count: 60, source_gate_accepted: 60, source_gate_rejected: 0, hard_gate_rejected: 0, qualification_accepted: 0, qualification_rejected: 60, persisted_count: 0, downstream_aria_count: 0 }, candidates: many });
   assertEquals(noLimit.candidates.length, MAX_DIAGNOSTICS);
 });
 
