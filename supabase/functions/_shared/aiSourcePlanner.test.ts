@@ -197,7 +197,9 @@ Deno.test("quality: classifyResults rejects junk, removes duplicates, records re
   assertEquals(c.duplicates.length, 1);
   assert(c.reject_reason_counts["missing name/company"] >= 1);
   assert(c.reject_reason_counts["wrong role"] >= 1);
-  assert(c.reject_reason_counts["wrong location (strict)"] >= 1);
+  // "London" is a city requirement; a "Paris" candidate is rejected with the
+  // country-aware gate's distinct, more accurate reason.
+  assert(c.reject_reason_counts["wrong city/region (strict)"] >= 1);
   assert(topRejectReasons(c.reject_reason_counts).length > 0);
 });
 
