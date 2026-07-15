@@ -98,13 +98,24 @@ export interface QualificationObservability {
 const CONTROL_CHARS = /[\u0000-\u001F\u007F]/g;
 const EMAIL_RE = /[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/g;
 const PHONE_RE = /(?:(?:\+?\d[\d\s().-]{7,}\d))/g;
+// Defense-in-depth: redact anything token/secret-shaped that could ride along in
+// a free-text field (JWTs, provider keys, bearer/authorization values).
+const SECRET_RES: RegExp[] = [
+  // Phrase patterns first, so the keyword + value are redacted together.
+  /\bBearer\s+[A-Za-z0-9._~+/=-]{6,}/gi,                        // bearer tokens
+  /\b(?:authorization|api[_-]?key|token|secret|password)\s*[:=]\s*\S+/gi, // key: value
+  /\beyJ[A-Za-z0-9_-]{6,}(?:\.[A-Za-z0-9_-]+){1,2}/g,            // JWT
+  /\b(?:sk|pk|rk)_(?:live|test)_[A-Za-z0-9]{6,}/gi,             // stripe-style keys
+  /\b[A-Fa-f0-9]{32,}\b/g,                                      // long hex blobs
+];
 
-/** Strip control chars, collapse whitespace, redact emails/phones, cap length. */
+/** Strip control chars, collapse whitespace, redact emails/phones/secrets, cap. */
 export function sanitizeText(v: unknown, maxLen = MAX_FIELD_LEN): string | undefined {
   if (v == null) return undefined;
   let s = String(v).replace(CONTROL_CHARS, " ").replace(/\s+/g, " ").trim();
   if (!s) return undefined;
   s = s.replace(EMAIL_RE, "[redacted-email]").replace(PHONE_RE, (m) => (m.replace(/\D/g, "").length >= 8 ? "[redacted-phone]" : m));
+  for (const re of SECRET_RES) s = s.replace(re, "[redacted-token]");
   if (s.length > maxLen) s = s.slice(0, maxLen - 1).trimEnd() + "…";
   return s || undefined;
 }
