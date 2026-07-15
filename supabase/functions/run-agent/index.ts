@@ -1017,6 +1017,12 @@ Deno.serve(async (req) => {
               : (source_type === "jobs" || source_type === "hiring_signal") ? "job_signal"
               : "company_candidate")) as "person_candidate" | "company_candidate" | "job_signal";
         const runTargetIsPerson = runArtifactType === "person_candidate";
+        // Resolve the SPECIFIC actor implementation once (Section 8). The initial
+        // trusted provenance write must stamp the specific actor_id (e.g.
+        // harvestapi/linkedin-profile-search), not the generic "apify" — otherwise
+        // sealProvenance later rejects the correct value as an overwrite attempt.
+        const runActorKey: string | null = planned_actor_key ?? derivedActorKey ?? null;
+        const runActorImpl: string = (runActorKey && ACTOR_IMPL[runActorKey]) ? ACTOR_IMPL[runActorKey] : (runActorKey ?? "apify");
 
         // Source Quality Engine (Phase 6): honest raw vs accepted vs persisted
         // counts + reject reasons, surfaced in Workbench Insights + narrative.
@@ -1126,9 +1132,7 @@ Deno.serve(async (req) => {
             })));
             // Provenance actor_id is the SPECIFIC actor implementation, not the
             // literal "apify" (Section 13): resolve from the actor key.
-            const provActorKey = planned_actor_key ?? derivedActorKey ?? null;
-            const provActorId = (provActorKey && ACTOR_IMPL[provActorKey]) ? ACTOR_IMPL[provActorKey] : (provActorKey ?? "apify");
-            providerProvenanceCtx = { provider: "apify", actor_id: provActorId, provider_run_id: run_id, workflow_run_id: run_id, plan_id: String(plan_id ?? ""), trace_id: run_id, query_id: null };
+            providerProvenanceCtx = { provider: "apify", actor_key: runActorKey ?? undefined, actor_id: runActorImpl, artifact_type: runArtifactType, provider_run_id: run_id, workflow_run_id: run_id, plan_id: String(plan_id ?? ""), trace_id: run_id, query_id: null };
           } catch (e) { console.warn("[run-agent] provider index build failed:", e); }
           for (const it of ((lieAcceptedItems ?? gateAcceptedItems) ?? classified.accepted)) {
             const r = (it.raw ?? {}) as Record<string, unknown>;
@@ -1421,11 +1425,16 @@ Deno.serve(async (req) => {
                 execution_mode: execution_mode_body,
                 tool_call_id: null,
                 tool_name: "source_with_apify",
-                selected_actor_key: planned_actor_key ?? null,
+                // Section 8/9: stamp the SPECIFIC actor + artifact type at the first
+                // trusted provenance write so sealProvenance never later rejects the
+                // correct actor_id as an overwrite, and artifact_type is preserved.
+                selected_actor_key: runActorKey,
                 // Provider provenance context — invalid provenance now BLOCKS the
                 // lead_candidates insert (no verified=false ride-along).
                 provider: "apify",
-                actor_id: planned_actor_key ?? "apify",
+                actor_id: runActorImpl,
+                actor_key: runActorKey,
+                artifact_type: runArtifactType,
                 provider_run_id: run_id,
                 workflow_run_id: run_id,
                 trace_id: run_id,
