@@ -24,6 +24,7 @@ import { parsePeopleSearchIntent, buildPeopleSearchAttempts, buildSourcingAttemp
 import { extractCandidateLocationEvidence } from "../_shared/locationMatch.ts";
 import { compileLeadEntityIntent, compileActorPlan, detectRoutingConflict, artifactTypeForActor, expectedArtifactType, ACTOR_IMPL, type LeadEntityIntent, type ProviderActorPlan, type RoutingConflictResult } from "../_shared/leadEntityIntent.ts";
 import { qualificationPersistenceDecision, mapAriaToDecision, type AriaLike } from "../_shared/qualificationPersistence.ts";
+import { buildQualificationObservability, type CandidateDiagnosticInput, type QualificationObservability } from "../_shared/qualificationObservability.ts";
 
 
 const cors = {
@@ -287,6 +288,10 @@ Deno.serve(async (req) => {
   // step can render Workbench Insights + a definitive process narrative).
   let sourcePlanMeta: Record<string, unknown> | null = null;
   let sourceQualityMeta: Record<string, unknown> | null = null;
+  // Candidate-decision observability (funnel + sanitized per-candidate diagnostics).
+  // Broad scope so success / partial_results / no_results terminals can all surface
+  // it. Reports the source→qualification→persistence path; never changes policy.
+  let qualificationObservability: QualificationObservability | null = null;
   // Find Leads provider *identity* sourcing recognition (from the authoritative
   // tool markers, incl. body.tool_needed). Used to (a) route the step into the
   // provider path and (b) fail closed — never let the generic LLM be a lead source.
@@ -1405,13 +1410,17 @@ Deno.serve(async (req) => {
         // provenance is necessary but never sufficient. Company/job flows keep
         // their existing behavior (this gate is scoped to the audited person path).
         const stagedForReview: Array<{ name: string | null; company: string | null; source_url: string | null; reason: string; tier: string | null; star_label: string | null }> = [];
+        const lookupEntry = (a: any): LeadQualityEntry | undefined => {
+          const uk = normUrl(a.source_url ?? a.raw?.source_url ?? a.raw?.profile_url);
+          const nn = normName(a.name ?? a.company);
+          return (uk ? leadQualityByUrl.get(uk) : undefined) ?? (nn ? leadQualityByName.get(nn) : undefined);
+        };
+        // Records the qualification decision per candidate so both the persistence
+        // filter and the observability diagnostics use the SAME verdict.
+        const qualDecisionByKey = new Map<string, { persist: boolean; reason: string; evaluated: boolean }>();
+        const candKey = (a: any): string => normUrl(a.source_url ?? a.raw?.source_url ?? a.raw?.profile_url) || normName(a.name ?? a.company) || "";
         let finalPersistSet = gatedAccepted;
         if (runTargetIsPerson) {
-          const lookupEntry = (a: any): LeadQualityEntry | undefined => {
-            const uk = normUrl(a.source_url ?? a.raw?.source_url ?? a.raw?.profile_url);
-            const nn = normName(a.name ?? a.company);
-            return (uk ? leadQualityByUrl.get(uk) : undefined) ?? (nn ? leadQualityByName.get(nn) : undefined);
-          };
           finalPersistSet = gatedAccepted.filter((a: any) => {
             const entry = lookupEntry(a);
             const aria = (entry?.aria ?? null) as AriaLike | null;
@@ -1429,6 +1438,7 @@ Deno.serve(async (req) => {
               tier: entry?.tier ?? null,
               evidenceViolations: violations,
             });
+            qualDecisionByKey.set(candKey(a), { persist: decision.persist, reason: decision.reason, evaluated: m.evaluated });
             if (!decision.persist) {
               stagedForReview.push({
                 name: (a.name ?? null) as string | null,
@@ -1449,6 +1459,79 @@ Deno.serve(async (req) => {
             (sourceQualityMeta as Record<string, unknown>).staged_candidates = stagedForReview;
           }
         }
+
+        // Candidate-decision observability (Sections 2-6): a reconciling funnel +
+        // sanitized per-candidate diagnostics over the FULL source-gate-accepted set.
+        // Additive only; the persistence decision above is unchanged. Aria receives
+        // the accepted provider people only when the workflow proceeds (some persist).
+        try {
+          const persistedKeys = new Set(finalPersistSet.map((a: any) => candKey(a)));
+          const willRunAria = finalPersistSet.length > 0;
+          const diagnostics: CandidateDiagnosticInput[] = (effectiveAccepted as any[]).map((a: any) => {
+            const key = candKey(a);
+            const entry = lookupEntry(a);
+            const sourceUrl = (a.source_url ?? a.raw?.source_url ?? a.raw?.profile_url ?? null) as string | null;
+            const isHardRejected = gateRejectedKeys.size > 0 && (() => {
+              const uk = normUrl(a.source_url ?? a.raw?.source_url);
+              const nn = normName(a.name ?? a.company);
+              return (uk && gateRejectedKeys.has(`u:${uk}`)) || (nn && gateRejectedKeys.has(`n:${nn}`));
+            })();
+            const violations = (((entry?.canonical as any)?.run_trace?.evidence_violations)
+              ?? ((entry?.canonical as any)?.evidence_violations) ?? []) as string[];
+            const evPresent: string[] = [];
+            if (sourceUrl && /linkedin\.com\/in\//i.test(String(sourceUrl))) evPresent.push("linkedin person profile");
+            else if (sourceUrl) evPresent.push("provider source url");
+            if (a.raw?.website ?? a.raw?.companyUrl ?? a.raw?.domain) evPresent.push("company website");
+            const decision = qualDecisionByKey.get(key);
+            const persisted = persistedKeys.has(key);
+            const gateDecision = isHardRejected ? "reject" : ((entry?.gate as any)?.decision ?? "needs_verification");
+            const qualification_decision = persisted ? "accept"
+              : isHardRejected ? "missing"
+              : runTargetIsPerson ? (decision ? (decision.evaluated ? "reject" : "missing") : "missing")
+              : "accept"; // company/job: gate-accepted persist under existing policy
+            return {
+              normalized_candidate_id: a.raw?.normalized_candidate_id ?? (entry?.canonical as any)?.normalized_candidate_id ?? null,
+              name: a.name ?? a.company ?? null,
+              title: a.title ?? a.raw?.title ?? (entry as any)?.job_title ?? null,
+              company: a.company ?? null,
+              source_url: sourceUrl,
+              provider_verified: !!sourceUrl,
+              actor_key: runActorKey,
+              actor_id: runActorImpl,
+              artifact_type: runArtifactType,
+              source_gate_decision: gateDecision,
+              deterministic_score: typeof entry?.score === "number" ? entry!.score : ((entry?.aria as any)?.overall_fit ?? null),
+              tier: entry?.tier ?? null,
+              qualification_decision,
+              qualification_reason: persisted ? "aria_accepted" : (isHardRejected ? "source_gate_reject" : (decision?.reason ?? (runTargetIsPerson ? "no_qualification" : "source_gate_accepted"))),
+              matched_icp: entry?.matched_icp ?? null,
+              evidence_present: evPresent,
+              evidence_missing: (entry?.missing_fields ?? []) as string[],
+              evidence_violations: violations,
+              persisted,
+              sent_to_downstream_aria: willRunAria && !isHardRejected,
+            } as CandidateDiagnosticInput;
+          });
+          const hardRejected = (effectiveAccepted as any[]).length - (gatedAccepted as any[]).length;
+          const qualRejected = (gatedAccepted as any[]).length - finalPersistSet.length;
+          qualificationObservability = buildQualificationObservability({
+            funnel: {
+              raw_count: rawAllItems.length,
+              normalized_count: (effectiveAccepted as any[]).length,
+              source_gate_accepted: (effectiveAccepted as any[]).length,
+              hard_gate_rejected: hardRejected,
+              qualification_accepted: finalPersistSet.length,
+              qualification_rejected: qualRejected,
+              persisted_count: finalPersistSet.length,
+              downstream_aria_count: willRunAria ? (personProviderCandidates?.length ?? 0) : 0,
+            },
+            candidates: diagnostics,
+            requested_limit: max_results,
+            target_entity: routingEntityIntent?.target_entity,
+            expected_artifact_type: runArtifactType,
+          });
+          if (sourceQualityMeta) (sourceQualityMeta as Record<string, unknown>).qualification_observability = qualificationObservability;
+        } catch (e) { console.warn("[run-agent] observability build failed:", e); }
 
         if (finalPersistSet.length > 0) {
           // Persist ONLY the qualification-accepted set (person) or the role-family-
@@ -1741,7 +1824,7 @@ Deno.serve(async (req) => {
     // Structured reason so a hard provider failure is machine-classifiable (and can
     // never be mistaken for a successful/"complete" run). No fabrication, no leads.
     const failReason: ProviderSourceReason = classifyProviderSourceOutcome({ errored: true }) ?? "provider_source_failed";
-    await supabase.from("tasks").update({ status: "failed", error_message: sourcingFailure.error, result: { error: sourcingFailure.error, message: failMsg, result_status: "no_results", reason: failReason, qualified_count: 0, contact_ready_count: 0, persisted_lead_count: 0, provider_calls: 0, next_step: null } }).eq("id", task.id);
+    await supabase.from("tasks").update({ status: "failed", error_message: sourcingFailure.error, result: { error: sourcingFailure.error, message: failMsg, result_status: "no_results", reason: failReason, qualified_count: 0, contact_ready_count: 0, persisted_lead_count: 0, provider_calls: 0, next_step: null, qualification_observability: qualificationObservability ?? undefined } }).eq("id", task.id);
     await supabase.from("task_plans").update({ status: "failed" }).eq("id", plan_id);
     await supabase.from("activity_feed").insert({
       workspace_id, plan_id, agent_id: agent.id, event_type: "agent_started",
@@ -1830,6 +1913,9 @@ Deno.serve(async (req) => {
         lead_entity_intent: routingEntityIntent ?? undefined,
         routing: routingActorPlan ? { target_entity: routingActorPlan.target_entity, output_type: routingEntityIntent?.output_type, primary_actor: routingActorPlan.primary_identity_actor, routing_source: routingActorPlan.routing_source } : undefined,
         routing_conflict: routingConflict ?? undefined,
+        // Section 5: surface the funnel + sanitized staged-candidate diagnostics so
+        // an honest no_results explains WHY each provider candidate was held back.
+        qualification_observability: qualificationObservability ?? undefined,
       },
     }).eq("id", task.id);
     await supabase.from("task_plans").update({ status: "failed", completed_at: new Date().toISOString() }).eq("id", plan_id);
@@ -1976,7 +2062,7 @@ Deno.serve(async (req) => {
   const finalStatus = needs_approval ? "awaiting_approval" : "complete";
   await supabase.from("tasks").update({
     status: finalStatus,
-    result: { output: apiText, tokens_in: tokensIn, tokens_out: tokensOut, attempt_log: adaptiveAttempts.length ? adaptiveAttempts : undefined, sourcing_attempts: sourcingAttemptAudit ?? undefined, lead_entity_intent: routingEntityIntent ?? undefined, routing: routingActorPlan ? { target_entity: routingActorPlan.target_entity, output_type: routingEntityIntent?.output_type, primary_actor: routingActorPlan.primary_identity_actor, routing_source: routingActorPlan.routing_source } : undefined, source_plan: sourcePlanMeta ?? undefined, source_quality: sourceQualityMeta ?? undefined },
+    result: { output: apiText, tokens_in: tokensIn, tokens_out: tokensOut, attempt_log: adaptiveAttempts.length ? adaptiveAttempts : undefined, sourcing_attempts: sourcingAttemptAudit ?? undefined, lead_entity_intent: routingEntityIntent ?? undefined, routing: routingActorPlan ? { target_entity: routingActorPlan.target_entity, output_type: routingEntityIntent?.output_type, primary_actor: routingActorPlan.primary_identity_actor, routing_source: routingActorPlan.routing_source } : undefined, source_plan: sourcePlanMeta ?? undefined, source_quality: sourceQualityMeta ?? undefined, qualification_observability: qualificationObservability ?? undefined },
   }).eq("id", task.id);
 
   // Phase 2: persist agent outputs into structured GTM memory. Fire-and-forget.
