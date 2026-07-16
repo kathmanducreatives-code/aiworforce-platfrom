@@ -18,6 +18,7 @@
 
 import type { ArtifactType, TargetEntity } from "./leadEntityIntent.ts";
 import { isHardEvidenceBlocker } from "./qualificationPersistence.ts";
+import type { NextAction, StageReason } from "./finalCandidateState.ts";
 
 /** Max diagnostics ever emitted, regardless of requested limit (safety cap). */
 export const MAX_DIAGNOSTICS = 25;
@@ -35,7 +36,28 @@ export type RejectionClass =
   | "missing_qualification"   // E: deterministic qualification produced no decision
   | "accepted";               // not rejected
 
-export type QualificationDecisionKind = "accept" | "reject" | "missing";
+/**
+ * Canonical per-candidate decision. `stage_missing_evidence` is a FIRST-CLASS
+ * terminal state, not a flavour of reject: a candidate whose evidence is merely
+ * incomplete (no timing signal, company actor timed out, …) is unproven, never
+ * contradicted. `missing` means qualification never evaluated the candidate.
+ *
+ * The historical vocabulary was `accept | reject | missing`, which forced every
+ * staged candidate to be reported as a reject — the v84 defect this fixes.
+ * `accept` remains an accepted alias for `qualify_now` so existing callers and
+ * fixtures keep working.
+ */
+export type QualificationDecisionKind =
+  | "qualify_now"
+  | "accept"
+  | "stage_missing_evidence"
+  | "reject"
+  | "missing";
+
+/** True when the decision means "persist-worthy accepted". */
+export function isAcceptedDecision(d: QualificationDecisionKind): boolean {
+  return d === "accept" || d === "qualify_now";
+}
 
 export interface CandidateDecisionDiagnostic {
   candidate_id: string;
@@ -57,7 +79,8 @@ export interface CandidateDecisionDiagnostic {
 
   qualification_decision: QualificationDecisionKind;
   qualification_reason?: string;     // canonical reason code from qualificationPersistenceDecision
-  rejection_class: RejectionClass;
+  /** Only set when the decision is a genuine reject; absent for staged candidates. */
+  rejection_class?: RejectionClass;
   reason_code: string;               // stable machine-readable code
 
   evidence_present: string[];
@@ -65,6 +88,8 @@ export interface CandidateDecisionDiagnostic {
   evidence_violations: string[];
 
   staged_reason?: string;
+  /** Cheapest stage that could close the gap (staged candidates only). */
+  next_action?: NextAction;
 
   persisted: boolean;
   sent_to_downstream_aria: boolean;
@@ -77,13 +102,18 @@ export interface QualificationFunnel {
   source_gate_rejected: number;
   hard_gate_rejected: number;
   qualification_accepted: number;
+  /** Unproven candidates held for more evidence. Disjoint from qualification_rejected. */
+  qualification_staged: number;
+  /** Genuine contradictions only. Never a container for missing evidence. */
   qualification_rejected: number;
+  /** Alias of qualification_staged, kept for existing payload readers. */
   staged_count: number;
   persisted_count: number;
   downstream_aria_count: number;
-  /** True when BOTH invariants hold:
-   *  normalized_count == source_gate_accepted + source_gate_rejected, AND
-   *  source_gate_accepted == hard_gate_rejected + qualification_accepted + qualification_rejected. */
+  /** True when ALL invariants hold:
+   *  normalized_count == source_gate_accepted + source_gate_rejected,
+   *  source_gate_accepted == hard_gate_rejected + accepted + staged + rejected, AND
+   *  every final candidate lands in exactly one of accepted / staged / rejected. */
   reconciles: boolean;
 }
 
@@ -130,6 +160,9 @@ export interface QualificationObservability {
   truncated: number;
   target_entity?: TargetEntity;
   expected_artifact_type?: ArtifactType;
+  /** Candidate ids that resolved to more than one final state. Always empty in a
+   * correct run; non-empty makes the v84 staged-AND-rejected defect self-reporting. */
+  duplicate_state_candidate_ids: string[];
 }
 
 // ------------------------------------------------------------- sanitization --
@@ -211,7 +244,7 @@ export function classifyRejection(input: {
   const violations = input.evidence_violations ?? [];
   const missing = (input.evidence_missing ?? []).map((m) => m.toLowerCase());
 
-  if (input.qualification_decision === "accept") {
+  if (isAcceptedDecision(input.qualification_decision)) {
     return { rejection_class: "accepted", reason_code: reason || "aria_accepted" };
   }
   // Hard source-gate rejection (dropped before qualification).
@@ -276,6 +309,11 @@ export interface CandidateDiagnosticInput {
   evidence_missing?: unknown;
   evidence_violations?: unknown;
 
+  /** Stage reason resolved by the canonical reducer (staged candidates only). */
+  stage_reason?: StageReason | null;
+  /** Cheapest stage that could close the gap (staged candidates only). */
+  next_action?: NextAction;
+
   persisted: boolean;
   sent_to_downstream_aria: boolean;
 }
@@ -283,17 +321,22 @@ export interface CandidateDiagnosticInput {
 export function buildCandidateDiagnostic(input: CandidateDiagnosticInput): CandidateDecisionDiagnostic {
   const evidence_missing = arr(input.evidence_missing);
   const evidence_violations = arr(input.evidence_violations);
-  const { rejection_class, reason_code } = classifyRejection({
-    qualification_decision: input.qualification_decision,
-    qualification_reason: input.qualification_reason,
-    source_gate_decision: input.source_gate_decision,
-    tier: input.tier,
-    deterministic_score: input.deterministic_score,
-    matched_icp_count: Array.isArray(input.matched_icp) ? input.matched_icp.length : 0,
-    evidence_missing,
-    evidence_violations,
-  });
-  const staged = !input.persisted && input.qualification_decision !== "accept";
+  const isStaged = input.qualification_decision === "stage_missing_evidence";
+  // A staged candidate is unproven, not contradicted: it carries a stage_reason +
+  // next_action and NO rejection class. Only genuine rejects are classified.
+  const { rejection_class, reason_code } = isStaged
+    ? { rejection_class: undefined, reason_code: input.stage_reason ?? input.qualification_reason ?? "stage_missing_evidence" }
+    : classifyRejection({
+      qualification_decision: input.qualification_decision,
+      qualification_reason: input.qualification_reason,
+      source_gate_decision: input.source_gate_decision,
+      tier: input.tier,
+      deterministic_score: input.deterministic_score,
+      matched_icp_count: Array.isArray(input.matched_icp) ? input.matched_icp.length : 0,
+      evidence_missing,
+      evidence_violations,
+    });
+  const staged = isStaged || (!input.persisted && !isAcceptedDecision(input.qualification_decision));
   return {
     candidate_id: candidateIdFor(input),
     person: sanitizeText(input.name),
@@ -316,6 +359,7 @@ export function buildCandidateDiagnostic(input: CandidateDiagnosticInput): Candi
     evidence_missing,
     evidence_violations,
     staged_reason: staged ? (reason_code || "staged") : undefined,
+    next_action: isStaged ? (input.next_action ?? null) : undefined,
     persisted: input.persisted === true,
     sent_to_downstream_aria: input.sent_to_downstream_aria === true,
   };
@@ -328,6 +372,8 @@ export interface FunnelInput {
   source_gate_rejected: number;
   hard_gate_rejected: number;
   qualification_accepted: number;
+  /** Unproven candidates held for more evidence (disjoint from rejected). */
+  qualification_staged: number;
   qualification_rejected: number;
   persisted_count: number;
   downstream_aria_count: number;
@@ -340,10 +386,14 @@ export function buildQualificationFunnel(input: FunnelInput): QualificationFunne
   const source_gate_rejected = n(input.source_gate_rejected);
   const hard_gate_rejected = n(input.hard_gate_rejected);
   const qualification_accepted = n(input.qualification_accepted);
+  const qualification_staged = n(input.qualification_staged);
   const qualification_rejected = n(input.qualification_rejected);
+  // Staged and rejected are now DISJOINT terminal buckets, so the source-gate
+  // identity must account for all three final states (the v84 funnel reported the
+  // same five candidates as both staged and rejected).
   const reconciles =
     normalized_count === source_gate_accepted + source_gate_rejected &&
-    source_gate_accepted === hard_gate_rejected + qualification_accepted + qualification_rejected;
+    source_gate_accepted === hard_gate_rejected + qualification_accepted + qualification_staged + qualification_rejected;
   return {
     raw_count: n(input.raw_count),
     normalized_count,
@@ -351,8 +401,9 @@ export function buildQualificationFunnel(input: FunnelInput): QualificationFunne
     source_gate_rejected,
     hard_gate_rejected,
     qualification_accepted,
+    qualification_staged,
     qualification_rejected,
-    staged_count: qualification_rejected,
+    staged_count: qualification_staged,
     persisted_count: n(input.persisted_count),
     downstream_aria_count: n(input.downstream_aria_count),
     reconciles,
@@ -427,6 +478,17 @@ export function buildQualificationObservability(input: {
   const kept = all.slice(0, cap);
   const allSg = (input.source_gate_rejected ?? []).map(buildSourceGateDiagnostic);
   const keptSg = allSg.slice(0, cap);
+  // One candidate id must resolve to exactly one final state. Any id appearing with
+  // two different states is the double-count defect and is surfaced, not hidden.
+  const stateById = new Map<string, Set<string>>();
+  for (const d of all) {
+    const state = isAcceptedDecision(d.qualification_decision) ? "qualify_now"
+      : d.qualification_decision === "stage_missing_evidence" ? "stage_missing_evidence"
+      : d.qualification_decision === "missing" ? "stage_missing_evidence"
+      : "reject";
+    (stateById.get(d.candidate_id) ?? stateById.set(d.candidate_id, new Set()).get(d.candidate_id)!).add(state);
+  }
+  const duplicate_state_candidate_ids = [...stateById.entries()].filter(([, s]) => s.size > 1).map(([id]) => id);
   return {
     funnel: buildQualificationFunnel(input.funnel),
     candidates: kept,
@@ -434,5 +496,6 @@ export function buildQualificationObservability(input: {
     truncated: Math.max(0, all.length - kept.length) + Math.max(0, allSg.length - keptSg.length),
     target_entity: input.target_entity,
     expected_artifact_type: input.expected_artifact_type,
+    duplicate_state_candidate_ids,
   };
 }
