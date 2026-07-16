@@ -16,6 +16,16 @@ export type OutputType = "qualified_people" | "qualified_companies" | "job_posti
 export type ArtifactType = "person_candidate" | "company_candidate" | "job_signal";
 export type LeadSignalType = "hiring" | "funding" | "product_launch" | "expansion" | "new_executive" | "recent_post";
 
+/**
+ * How FRESH must the supporting evidence be for the requested output?
+ *   identity_only    — "decision-makers at Acme": prove who they are.
+ *   current_fit      — "founders of B2B SaaS companies": prove current ICP fit.
+ *   recent_signal    — "companies hiring engineers": prove a recent signal.
+ *   hot_opportunity  — "hot founders to contact right now": fit AND current timing.
+ * Freshness qualifies the evidence contract; it NEVER changes target_entity.
+ */
+export type FreshnessRequirement = "identity_only" | "current_fit" | "recent_signal" | "hot_opportunity";
+
 export interface IntentEvidenceSpan { field: string; value: string; evidence: string[] }
 export interface LeadSignalIntent { type: LeadSignalType; evidence: string[] }
 
@@ -29,6 +39,9 @@ export interface LeadEntityIntent {
   company_categories: string[];
   geographies: string[];
   signals: LeadSignalIntent[];
+  /** Evidence freshness the request demands. Derived from the ORIGINAL instruction;
+   * qualifies the evidence contract, never the target entity. */
+  freshness: FreshnessRequirement;
   hard_constraints: string[];
   soft_constraints: string[];
   confidence: number;               // 0..1
@@ -69,6 +82,28 @@ const GEO_PATTERNS: Array<[RegExp, string]> = [
 function firstMatch(re: RegExp, text: string): string | null {
   const m = text.match(re);
   return m ? m[0] : null;
+}
+
+// --- freshness (qualifies the evidence contract; never the entity) -------------
+// "hot"/"right now"/"ready to buy" ⇒ fit AND current timing must be proven.
+const HOT_RE = /\bhot\b|\bright now\b|\bthis week\b|\bready to (?:buy|talk)\b|\bwarm(?:est)?\b|\burgent(?:ly)?\b|\bhigh[-\s]?intent\b/i;
+// A named-account lookup with no fit/signal terms only needs identity.
+const AT_NAMED_ACCOUNT_RE = /\b(?:at|from|inside|within)\s+(?:these\s+|the\s+)?(?:accounts?|companies|orgs?)\b|\b(?:at|from)\s+[A-Z][A-Za-z0-9&.\- ]{1,40}\b/;
+
+/** Derive the evidence-freshness requirement from the ORIGINAL instruction.
+ * Precedence: hot_opportunity → recent_signal (explicit signal) → identity_only
+ * (named-account lookup, no fit/signal terms) → current_fit (default). */
+export function deriveFreshnessRequirement(args: {
+  text: string;
+  signals: LeadSignalIntent[];
+  company_categories: string[];
+}): FreshnessRequirement {
+  const t = args.text ?? "";
+  if (HOT_RE.test(t)) return "hot_opportunity";
+  if (args.signals.length > 0) return "recent_signal";
+  const namedAccountLookup = AT_NAMED_ACCOUNT_RE.test(t) && args.company_categories.length === 0;
+  if (namedAccountLookup) return "identity_only";
+  return "current_fit";
 }
 
 /**
@@ -142,6 +177,7 @@ export function compileLeadEntityIntent(
     company_categories,
     geographies,
     signals,
+    freshness: deriveFreshnessRequirement({ text, signals, company_categories }),
     hard_constraints: [],
     soft_constraints: signals.map((s) => `signal:${s.type}`),
     confidence,
