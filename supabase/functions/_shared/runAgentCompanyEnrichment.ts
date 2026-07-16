@@ -152,11 +152,12 @@ export interface RunToolResultLike {
 export type RunToolFn = (tool: string, input: unknown, ctx: any) => Promise<RunToolResultLike>;
 
 /**
- * The canonical `source_with_apify` helper normalizes actor output; the raw
- * provider item is preserved under `raw.provider_payload` (falling back to
- * `raw`). Recover it so the structured normalizer sees the real company shape.
- * Never fabricates — an unrecoverable item passes through and the normalizer
- * will honestly return `invalid_result`.
+ * LEGACY recovery only. Before the dedicated company_items path existed, the
+ * generic `source_with_apify` helper job-normalized company output and buried the
+ * raw item under `raw.provider_payload` (falling back to `raw`). Recover it so the
+ * structured normalizer sees the real company shape. Never fabricates — an
+ * unrecoverable item passes through and the normalizer honestly returns
+ * `invalid_result`. Prefer {@link extractCompanyItemsFromResult}.
  */
 export function extractRawCompanyItems(items: unknown): unknown[] {
   if (!Array.isArray(items)) return [];
@@ -171,6 +172,56 @@ export function extractRawCompanyItems(items: unknown): unknown[] {
     }
     return it;
   });
+}
+
+/** True when a legacy provider_payload is the {@link truncObj} truncation marker
+ * `{ _truncated: true, preview }`. Such a payload is INCOMPLETE and must never be
+ * trusted as a company record. */
+function isTruncatedPayload(v: unknown): boolean {
+  return !!v && typeof v === "object" && (v as Record<string, unknown>)._truncated === true;
+}
+
+/**
+ * Recover company items from a LEGACY (job-normalized) source_with_apify result,
+ * REJECTING any truncated provider_payload rather than partially trusting it.
+ * Returns `truncated: true` when at least one recovered payload was truncated —
+ * the caller must fail closed (never continue with partial JSON).
+ */
+export function recoverLegacyCompanyItems(items: unknown): { items: unknown[]; truncated: boolean } {
+  if (!Array.isArray(items)) return { items: [], truncated: false };
+  const out: unknown[] = [];
+  let truncated = false;
+  for (const it of items) {
+    if (it && typeof it === "object") {
+      const raw = (it as Record<string, unknown>).raw;
+      if (raw && typeof raw === "object") {
+        const pp = (raw as Record<string, unknown>).provider_payload;
+        if (pp !== undefined) {
+          if (isTruncatedPayload(pp)) { truncated = true; continue; }   // reject, do not trust
+          if (pp && typeof pp === "object") { out.push(pp); continue; }
+        }
+        if (isTruncatedPayload(raw)) { truncated = true; continue; }
+        out.push(raw);
+        continue;
+      }
+    }
+    out.push(it);
+  }
+  return { items: out, truncated };
+}
+
+/**
+ * Extract complete company items from a source_with_apify result, in priority:
+ *   1. the typed `company_items` field (complete, untruncated — preferred);
+ *   2. a legacy job-normalized `items` array, recovering the raw payload but
+ *      REJECTING truncation.
+ * Returns `truncated: true` only when the legacy fallback hit a truncated payload
+ * and no complete item was available — the caller stages the candidate honestly.
+ */
+export function extractCompanyItemsFromResult(data: unknown): { items: unknown[]; truncated: boolean } {
+  const d = (data ?? {}) as Record<string, unknown>;
+  if (Array.isArray(d.company_items)) return { items: d.company_items, truncated: false };
+  return recoverLegacyCompanyItems(d.items);
 }
 
 /**
@@ -207,8 +258,15 @@ export function makeCompanyEnrichmentExecutor(
       return { error: e };
     }
     if (rr && rr.ok && rr.data) {
+      const { items, truncated } = extractCompanyItemsFromResult(rr.data);
+      // A truncated legacy payload is INCOMPLETE — reject it rather than trust
+      // partial JSON. The company is isolated as a provider failure and its
+      // candidate stages honestly (no fabricated evidence, no persistence).
+      if (truncated && items.length === 0) {
+        return { error: "company_result_truncated" };
+      }
       return {
-        items: extractRawCompanyItems(rr.data.items),
+        items,
         providerRunId: str(rr.data.run_id) ?? undefined,
       };
     }

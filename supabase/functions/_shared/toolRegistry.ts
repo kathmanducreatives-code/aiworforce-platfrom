@@ -10,6 +10,7 @@
 
 import type { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { ACTOR_REGISTRY, getActorByKey, isActorRuntimeEnabled } from "./actorRegistry.ts";
+import { COMPANY_DETAILS_ACTOR_KEY, COMPANY_DETAILS_ACTOR_ID } from "./structuredCompanyEnrichment.ts";
 import { buildHarvestApiPeopleInput, buildHarvestApiCompanyEmployeesInput } from "./harvestApiPeople.ts";
 import { writeMemoryFromToolCall } from "./memoryWriter.ts";
 import { buildLinkedinEngagementInput, buildLinkedinProfilePostsInput } from "./linkedinEngagementInput.ts";
@@ -830,6 +831,12 @@ async function execSourceWithApify(input: unknown): Promise<ToolResult> {
 
   const source_type = actorCfg?.source_type ?? normalizeApifySourceType(requested_source_type ?? "jobs");
 
+  // The canonical structured company-details actor is identified by its RESOLVED
+  // registry key / actor id — NEVER by the normalized source_type (which falls
+  // through to "jobs"). Its dataset items must reach the company normalizer
+  // COMPLETE: no job normalization, no provider_payload, no truncation.
+  const isCompanyDetails = registry_actor_key === COMPANY_DETAILS_ACTOR_KEY || actor_id === COMPANY_DETAILS_ACTOR_ID;
+
   // If the registry explicitly approved this actor (it passed isActorRuntimeEnabled
   // via env flags + required_env), treat it as opted in.
   const registryApproved = !!registry_actor_key;
@@ -984,7 +991,9 @@ async function execSourceWithApify(input: unknown): Promise<ToolResult> {
   // Jobs: fetch a POOL (up to 25 already-run rows — $0 extra, the dataset exists)
   // so run-agent can pre-rank against the Company Brain ICP and process the BEST
   // max_results, not the first returned. Other sources fetch exactly max_results.
-  const isJobsSource = /jobs/i.test(source_type);
+  // Company details are never a "jobs" pool even though the alias resolves to
+  // "jobs" — fetch exactly max_results, never the 25-row pre-rank pool.
+  const isJobsSource = /jobs/i.test(source_type) && !isCompanyDetails;
   const fetchLimit = isJobsSource ? Math.min(25, Math.max(max_results, 10)) : max_results;
   const itemsRes = await apifyFetch(
     `/datasets/${resolvedDatasetId}/items?clean=true&limit=${fetchLimit}&token=${APIFY_API_TOKEN}`,
@@ -1000,6 +1009,39 @@ async function execSourceWithApify(input: unknown): Promise<ToolResult> {
   }
 
   const rawItems: any[] = Array.isArray(itemsRes.data) ? itemsRes.data : [];
+
+  // ── Structured company-details result path ──────────────────────────────────
+  // Return the COMPLETE dataset items untouched via a dedicated `company_items`
+  // field so the company normalizer sees every firmographic field. No job/people
+  // normalization, no provider_payload, no 4,000-char truncation, and no fake job
+  // records fabricated in `items`. Respects max_results (fetchLimit == max_results
+  // above). Provider run provenance is preserved; sanitization happens downstream
+  // in the normalizer — the raw items never enter observability from here.
+  if (isCompanyDetails) {
+    const company_items = rawItems.slice(0, max_results);
+    return {
+      ok: true,
+      data: {
+        actor_id,
+        selected_actor_key: registry_actor_key,
+        actor_output_type: "company_details",
+        requested_source_type,
+        normalized_source_type: "company_details",
+        run_id,
+        dataset_id: resolvedDatasetId,
+        // Complete, untruncated structured company records.
+        company_items,
+        // Never fabricate job/people rows for a company-enrichment call.
+        items: [],
+        count: company_items.length,
+        total: company_items.length,
+        no_results: company_items.length === 0,
+        summary: `Company details actor returned ${company_items.length} company record(s)`,
+        citations: [],
+      },
+    };
+  }
+
   const topicForNorm = (i.query ?? search_goal ?? null) as string | null;
   // For jobs, return the whole pool (run-agent pre-ranks + caps to max_results);
   // other sources stay capped here.
