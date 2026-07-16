@@ -10,7 +10,7 @@
 
 import type { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { ACTOR_REGISTRY, getActorByKey, isActorRuntimeEnabled } from "./actorRegistry.ts";
-import { COMPANY_DETAILS_ACTOR_KEY, COMPANY_DETAILS_ACTOR_ID } from "./structuredCompanyEnrichment.ts";
+import { COMPANY_DETAILS_ACTOR_KEY, COMPANY_DETAILS_ACTOR_ID, extractProviderCompanyLinkedInUrl } from "./structuredCompanyEnrichment.ts";
 import { buildHarvestApiPeopleInput, buildHarvestApiCompanyEmployeesInput } from "./harvestApiPeople.ts";
 import { writeMemoryFromToolCall } from "./memoryWriter.ts";
 import { buildLinkedinEngagementInput, buildLinkedinProfilePostsInput } from "./linkedinEngagementInput.ts";
@@ -697,6 +697,10 @@ function normalizeApifyPeopleItem(raw: any) {
     ?? pickStr(cp, ["companyName", "company"]) ?? pickStr(exp, ["companyName", "company"]) ?? null;
   const title = pickStr(r, ["currentJobTitle", "jobTitle", "title", "position"])
     ?? pickStr(cp, ["position", "title"]) ?? pickStr(exp, ["position", "title"]) ?? null;
+  // GROUNDED company LinkedIn URL from documented provider fields only (see
+  // extractProviderCompanyLinkedInUrl). When absent, downstream enrichment keeps
+  // the company-name search fallback — a URL is NEVER invented/derived.
+  const company_linkedin_url = extractProviderCompanyLinkedInUrl(r);
   return {
     name:        full_name, // generic consumers (run-agent mapItem) read `name`
     full_name,
@@ -704,6 +708,7 @@ function normalizeApifyPeopleItem(raw: any) {
     title,
     location,
     company,
+    ...(company_linkedin_url ? { company_linkedin_url } : {}),
     profile_url: pickStr(r, ["profileUrl", "profile_url", "linkedinUrl", "linkedin_url", "url", "publicProfileUrl"]),
     summary:     pickStr(r, ["summary", "about", "description"]),
     source:      "apify",

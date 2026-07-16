@@ -45,6 +45,32 @@ export function normalizeCompanyLinkedInUrl(v: unknown): string | null {
   return `https://www.linkedin.com/company/${m[1].toLowerCase()}`;
 }
 
+/**
+ * GROUNDED company LinkedIn URL from a provider-backed person record. Reads ONLY
+ * documented provider fields (top-level, currentPosition[0], and nested company
+ * objects), then canonicalizes. Because normalizeCompanyLinkedInUrl accepts only
+ * real `/company/` URLs, a person `/in/` URL can never be mis-mapped. Returns
+ * null when no provider-backed company URL exists — callers then keep the
+ * company-name search fallback; a URL is NEVER invented or derived from a name.
+ */
+export function extractProviderCompanyLinkedInUrl(person: unknown): string | null {
+  if (!person || typeof person !== "object") return null;
+  // deno-lint-ignore no-explicit-any
+  const r = person as any;
+  const cp = Array.isArray(r.currentPosition) ? (r.currentPosition[0] ?? {}) : (r.currentPosition ?? {});
+  const s = (obj: unknown, keys: string[]): string | null => {
+    for (const k of keys) { const v = (obj as Record<string, unknown> | null)?.[k]; if (typeof v === "string" && v.trim()) return v.trim(); }
+    return null;
+  };
+  const cpCompanyObj = (cp?.company && typeof cp.company === "object") ? cp.company : null;
+  const rCompanyObj = (r.company && typeof r.company === "object") ? r.company : null;
+  const rawUrl = s(r, ["companyLinkedinUrl", "companyLinkedInUrl", "company_linkedin_url"])
+    ?? s(cp, ["companyLinkedinUrl", "companyLinkedInUrl", "company_linkedin_url", "companyUrl"])
+    ?? (cpCompanyObj ? s(cpCompanyObj, ["linkedinUrl", "url", "link"]) : null)
+    ?? (rCompanyObj ? s(rCompanyObj, ["linkedinUrl", "url", "link"]) : null);
+  return normalizeCompanyLinkedInUrl(rawUrl);
+}
+
 /** Official website URL (query/fragment stripped, http(s) only). */
 export function normalizeWebsite(v: unknown): string | null {
   const clean = sanitizeUrl(v);
@@ -294,7 +320,10 @@ export function normalizeCompanyActorItem(
 
 export type CompanyEnrichmentOutcome =
   | "enriched" | "no_result" | "invalid_result" | "provider_error"
-  | "timeout" | "budget_skipped" | "cached" | "not_needed";
+  | "timeout" | "budget_skipped" | "cached" | "not_needed"
+  // The run-level deadline was reached before this company's call was launched.
+  // It is a documented subset of "skipped" (no provider call was made).
+  | "skipped_due_deadline";
 
 export interface CompanyEnrichmentResult {
   companyKey: string;
