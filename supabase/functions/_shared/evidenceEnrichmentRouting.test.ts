@@ -159,17 +159,21 @@ Deno.test("12: Firecrawl is not chosen when structured evidence suffices", () =>
   assertEquals(p.action, "skip");
 });
 
-Deno.test("20/34: missing evidence stages when the capability has no verified binding", () => {
-  // structured_company_enrichment has NO verified actor in this repo.
-  assertEquals(isCallable(getActorCapability("structured_company_enrichment")), false);
+Deno.test("20/34: verified binding routes to the canonical company actor (no invented id)", () => {
+  const cap = getActorCapability("apify_linkedin_company_details");
+  assertEquals(isCallable(cap), true);
+  assertEquals(cap!.implementationId, "harvestapi/linkedin-company");
   const contract = compileEvidenceContract(compileLeadEntityIntent("Find founders of B2B SaaS companies"), BRAIN);
   const env = personEnvelope([ev("person_identity", { confidence: "high" }), ev("person_company_association"), ev("company_geography")]);
   const s = evaluateEvidenceSufficiency({ contract, envelope: env, now: NOW });
   const p = planCandidateEnrichment({ envelope: env, sufficiency: s, budget: DEFAULT_EVIDENCE_BUDGET, ledger: emptyLedger(), now: NOW });
-  assertEquals(p.action, "stage");
-  assertEquals(p.reasonCode, "no_verified_actor_binding");
-  assertEquals(p.estimatedCostClass, "none");
-  assert(unverifiedCapabilities().some((c) => c.actorKey === "structured_company_enrichment"));
+  assertEquals(p.action, "structured_company_enrichment");
+  assertEquals(p.actorKey, "apify_linkedin_company_details");
+  assertEquals(p.actorId, "harvestapi/linkedin-company");
+  assertEquals(p.reasonCode, "missing_firmographics");
+  assertEquals(p.estimatedCostClass, "low");
+  // Any capability still lacking a verified binding remains uncallable.
+  for (const c of unverifiedCapabilities()) assertEquals(isCallable(c), false);
 });
 
 // ============ (18)(19) hard rejects before enrichment ============

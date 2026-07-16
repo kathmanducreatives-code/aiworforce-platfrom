@@ -9,16 +9,26 @@ import { satisfiedCategories, appendEvidence, type CandidateEnvelope } from "./c
 
 const B = DEFAULT_EVIDENCE_BUDGET;
 
-// ---- Phase 2: structured company enrichment (UNVERIFIED binding in this repo) ----
-Deno.test("Phase 2: structured enrichment is BLOCKED — no verified actor binding, no invented id", () => {
+// ---- Phase 2: structured company enrichment (VERIFIED binding: harvestapi/linkedin-company) ----
+Deno.test("Phase 2: structured enrichment is READY on the verified binding (real actor id)", () => {
   const p = planStructuredCompanyEnrichment({
     companyKey: "dom:acme.com", companyName: "Acme SaaS", officialDomain: "acme.com",
     requiredEvidence: ["company_website", "company_industry"], budget: B,
   });
+  assertEquals(p.status, "ready");
+  assertEquals(p.actorKey, "apify_linkedin_company_details");
+  assertEquals(p.actorId, "harvestapi/linkedin-company");   // canonical, never invented
+  assertEquals(p.estimatedCostClass, "low");
+});
+
+Deno.test("Phase 2: an UNVERIFIED capability still refuses to emit a call plan", () => {
+  const unverified = { ...getActorCapability("apify_linkedin_company_details")!, verifiedBinding: false, implementationId: undefined, missingBindingNote: "no binding" };
+  const p = planStructuredCompanyEnrichment({
+    companyKey: "dom:acme.com", requiredEvidence: ["company_website"], budget: B, actorCapability: unverified as any,
+  });
   assertEquals(p.status, "blocked_no_binding");
-  assertEquals(p.actorId, undefined);        // no fabricated implementation id
+  assertEquals(p.actorId, undefined);
   assertEquals(p.estimatedCostClass, "none");
-  assert(/no structured company-details actor/i.test(p.reason ?? ""), p.reason);
 });
 
 Deno.test("Phase 2: no firmographic gap ⇒ not_needed (never calls)", () => {
@@ -26,16 +36,14 @@ Deno.test("Phase 2: no firmographic gap ⇒ not_needed (never calls)", () => {
   assertEquals(p.status, "not_needed");
 });
 
-Deno.test("Phase 2: a VERIFIED capability would produce a ready plan with the real id", () => {
-  // Simulate a future verified binding — the contract shape is exercised without
-  // inventing anything in the registry itself.
-  const fake = { ...getActorCapability("structured_company_enrichment")!, verifiedBinding: true, implementationId: "vendor/company-details" };
+Deno.test("Phase 2: request prefers the LinkedIn company URL identifier", () => {
+  const fake = { ...getActorCapability("apify_linkedin_company_details")! };
   const p = planStructuredCompanyEnrichment({
     companyKey: "li:linkedin.com/company/acme", companyLinkedInUrl: "https://www.linkedin.com/company/acme",
     requiredEvidence: ["company_website", "company_industry", "company_size"], budget: B, actorCapability: fake,
   });
   assertEquals(p.status, "ready");
-  assertEquals(p.actorId, "vendor/company-details");
+  assertEquals(p.actorId, "harvestapi/linkedin-company");
   assertEquals((p.request as any).maxItems, 1);
   assertEquals((p.request as any).companyLinkedInUrl, "https://www.linkedin.com/company/acme");
 });
@@ -49,7 +57,7 @@ Deno.test("Phase 2: adapter output maps to append-only verified evidence items",
     headquarters: { value: "Austin, Texas, United States", confidence: "medium" },
     companyLinkedInUrl: { value: "https://www.linkedin.com/company/acme", confidence: "high" },
     observedAt: "2026-07-16T06:00:00.000Z",
-    sourceProvenance: { provider: "apify", actorKey: "structured_company_enrichment", actorId: "vendor/company-details", verified: true },
+    sourceProvenance: { provider: "apify", actorKey: "apify_linkedin_company_details", actorId: "harvestapi/linkedin-company", verified: true },
   });
   const cats = items.map((i) => i.category).sort();
   assertEquals(cats, ["company_geography", "company_identity", "company_industry", "company_size", "company_website"]);

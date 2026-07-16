@@ -131,13 +131,15 @@ export const ACTOR_CAPABILITIES: Record<string, ActorCapability> = {
     verifiedBinding: true,
   },
 
-  // ---- UNVERIFIED: structured company firmographics ---------------------------
-  // The repo has NO company details/search actor: the only company-input actors are
-  // linkedin-company-employees (people) and linkedin-company-posts (signals).
-  // Neither yields website/industry/employee-count/HQ. Registered so the planner can
-  // reason about the gap and stage honestly — never called.
-  structured_company_enrichment: {
-    actorKey: "structured_company_enrichment",
+  // ---- VERIFIED (Phase 2): structured company firmographics --------------------
+  // Bound to the real Apify actor `harvestapi/linkedin-company` (LinkedIn Company
+  // Details Scraper), registered canonically in _shared/actorRegistry.ts as
+  // apify_linkedin_company_details. Enriches an ALREADY-KNOWN company; it is not a
+  // discovery/search actor. Verified input: { companies: string[] (LinkedIn company
+  // URLs), searches: string[] (company names) }.
+  apify_linkedin_company_details: {
+    actorKey: "apify_linkedin_company_details",
+    implementationId: "harvestapi/linkedin-company",
     inputEntities: ["company", "domain"],
     outputArtifactTypes: ["company_candidate"],
     evidenceProduced: ["company_identity", "company_website", "company_industry", "company_size", "company_geography", "company_business_model"],
@@ -147,15 +149,20 @@ export const ACTOR_CAPABILITIES: Record<string, ActorCapability> = {
     costClass: "low",
     defaultMaxItems: 8,
     defaultMaxAttempts: 1,
-    verifiedBinding: false,
-    missingBindingNote:
-      "No structured company-details actor exists in _shared/actorRegistry.ts. " +
-      "Required: an Apify (or equivalent) company-profile actor returning website, " +
-      "industry, description, employee count/range, headquarters and company LinkedIn " +
-      "URL from a company name / LinkedIn URL / domain. Bind a real actor_id + " +
-      "registry entry (e.g. APIFY_ACTOR_COMPANY_DETAILS) before enabling this route.",
+    verifiedBinding: true,
   },
 };
+
+/**
+ * The capability that fulfils the STRUCTURED COMPANY ENRICHMENT role. One identity,
+ * referenced everywhere (planner, adapter, run-agent) so the actor can never drift.
+ */
+export const STRUCTURED_COMPANY_ENRICHMENT_ACTOR_KEY = "apify_linkedin_company_details";
+
+/** Resolve the capability fulfilling the structured-company-enrichment role. */
+export function getStructuredCompanyEnrichmentCapability(): ActorCapability | null {
+  return ACTOR_CAPABILITIES[STRUCTURED_COMPANY_ENRICHMENT_ACTOR_KEY] ?? null;
+}
 
 export function getActorCapability(actorKey: string | null | undefined): ActorCapability | null {
   if (!actorKey) return null;

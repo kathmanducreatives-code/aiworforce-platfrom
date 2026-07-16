@@ -9,7 +9,7 @@
 
 import type { EvidenceCategory, EvidenceConfidence } from "./evidenceContract.ts";
 import type { EvidenceItem } from "./candidateEnvelope.ts";
-import { getActorCapability, isCallable, findCapabilityFor, type ActorCapability } from "./actorCapabilityRegistry.ts";
+import { getActorCapability, isCallable, findCapabilityFor, getStructuredCompanyEnrichmentCapability, type ActorCapability } from "./actorCapabilityRegistry.ts";
 import type { WorkflowEvidenceBudget } from "./conditionalEnrichmentPlanner.ts";
 
 export type AdapterPlanStatus = "ready" | "blocked_no_binding" | "blocked_budget" | "not_needed";
@@ -59,7 +59,7 @@ export interface StructuredCompanyEvidence {
  * the executor must never guess an actor id.
  */
 export function planStructuredCompanyEnrichment(input: StructuredCompanyEnrichmentInput): AdapterCallPlan {
-  const cap = input.actorCapability ?? getActorCapability("structured_company_enrichment");
+  const cap = input.actorCapability ?? getStructuredCompanyEnrichmentCapability();
   if (!input.requiredEvidence.length) {
     return { status: "not_needed", requiredEvidence: [], estimatedCostClass: "none", reason: "no_firmographic_gap" };
   }
