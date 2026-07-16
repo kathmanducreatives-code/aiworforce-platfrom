@@ -2,7 +2,7 @@ import { assert, assertEquals } from "https://deno.land/std@0.224.0/assert/mod.t
 import {
   buildCompanyEnrichmentInput, normalizeCompanyActorItem, interpretCompanyActorResponse,
   normalizeCompanyLinkedInUrl, normalizeWebsite, normalizeCompanyNameFallback,
-  normalizeIndustries, selectHeadquarters,
+  normalizeIndustries, selectHeadquarters, extractProviderCompanyLinkedInUrl,
   COMPANY_DETAILS_ACTOR_KEY, COMPANY_DETAILS_ACTOR_ID,
 } from "./structuredCompanyEnrichment.ts";
 import {
@@ -242,4 +242,33 @@ Deno.test("duplicate company records collapse to one bundle per company key", ()
   assertEquals(r.outcome, "enriched");
   assertEquals(r.bundle!.companyKey, "k");
   assertEquals(r.bundle!.company.linkedinUrl, "https://www.linkedin.com/company/dupe");
+});
+
+// ---- (27)(28) grounded company-URL extraction from provider people ----
+Deno.test("27: extract company LinkedIn URL from a documented provider field, canonicalized", () => {
+  // top-level field
+  assertEquals(
+    extractProviderCompanyLinkedInUrl({ companyLinkedinUrl: "https://www.linkedin.com/company/acme-saas/?trk=x" }),
+    "https://www.linkedin.com/company/acme-saas",
+  );
+  // nested currentPosition[0].company object
+  assertEquals(
+    extractProviderCompanyLinkedInUrl({ currentPosition: [{ company: { linkedinUrl: "https://linkedin.com/company/nested-co" } }] }),
+    "https://www.linkedin.com/company/nested-co",
+  );
+});
+
+Deno.test("28: never invent/derive a URL; a person /in/ URL is rejected; absent ⇒ null (name fallback)", () => {
+  // A person profile URL in a company field is REJECTED (never mis-mapped).
+  assertEquals(extractProviderCompanyLinkedInUrl({ companyLinkedinUrl: "https://www.linkedin.com/in/some-person" }), null);
+  // No provider-backed URL at all ⇒ null ⇒ caller keeps the company-name search fallback.
+  assertEquals(extractProviderCompanyLinkedInUrl({ company: "Acme SaaS", currentPosition: [{ companyName: "Acme SaaS" }] }), null);
+  assertEquals(extractProviderCompanyLinkedInUrl(null), null);
+  // And the input builder prefers the URL (companies) over name (searches) when present.
+  const withUrl = buildCompanyEnrichmentInput([{ companyKey: "k1", companyLinkedInUrl: "https://www.linkedin.com/company/acme-saas", companyName: "Acme SaaS" }], B);
+  assertEquals(withUrl.input.companies, ["https://www.linkedin.com/company/acme-saas"]);
+  assertEquals(withUrl.input.searches, undefined);
+  const noUrl = buildCompanyEnrichmentInput([{ companyKey: "k2", companyLinkedInUrl: null, companyName: "Acme SaaS" }], B);
+  assertEquals(noUrl.input.searches, ["Acme SaaS"]);
+  assertEquals(noUrl.input.companies, undefined);
 });

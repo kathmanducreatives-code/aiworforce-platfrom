@@ -529,3 +529,18 @@ Deno.test("recoverLegacyCompanyItems recovers a complete provider_payload untouc
 Deno.test("extractRawCompanyItems (legacy helper) still recovers payload → raw → item", () => {
   assertEquals(extractRawCompanyItems([{ raw: { provider_payload: { name: "A" } } }]), [{ name: "A" }]);
 });
+
+// ---- deadline pass-through (bounded enrichment) ----
+Deno.test("H-deadline: a past deadline skips all company calls; nothing requalified; observability reconciles", async () => {
+  const { exec, calls } = recordingExecutor([FIXTURE_COMPLETE]);
+  // deadlineMs 0 with the real clock (now = Date.now() ≫ 0) ⇒ every company is
+  // reached with clock ≥ deadline ⇒ skipped_due_deadline, no provider call.
+  const r = await runFindLeadsCompanyEnrichment({ items: [item()], intent: FIT, brain: BRAIN, now: NOW, execute: exec, deadlineMs: 0 });
+  assertEquals(calls.length, 0);
+  assertEquals(r.enrichment.companyResults[0].outcome, "skipped_due_deadline");
+  assertEquals(r.requalifyCandidateIds.size, 0);
+  assertEquals(r.companyEvidenceById.size, 0);
+  assertEquals(r.observability.summary.companies_skipped_deadline, 1);
+  assertEquals(r.observability.summary.companies_skipped, 1);
+  assertEquals(r.observability.summary.reconciles, true);
+});
