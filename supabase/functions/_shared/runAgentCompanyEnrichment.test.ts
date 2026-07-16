@@ -6,6 +6,7 @@
 import { assert, assertEquals } from "https://deno.land/std@0.224.0/assert/mod.ts";
 import {
   mapAcceptedPeople, makeCompanyEnrichmentExecutor, extractRawCompanyItems,
+  recoverLegacyCompanyItems, extractCompanyItemsFromResult,
   runFindLeadsCompanyEnrichment, companyPatchFromEvidence, companyEvidenceFor,
   computeFinalAcceptedPersonIds, emptyCompanyEnrichmentObservability,
   PEOPLE_ACTOR_ID, type RunAgentAcceptedItem, type RunToolResultLike,
@@ -353,4 +354,178 @@ Deno.test("30/31: with NO executor injected nothing is called (no Firecrawl, no 
 // =================================== patch derives only from mapped evidence ===
 Deno.test("companyPatchFromEvidence returns null when there is no company evidence", () => {
   assertEquals(companyPatchFromEvidence([]), null);
+});
+
+// ==============================================================================
+// COMPLETE-COMPANY-RESULT HARDENING (session 2). Proves the dedicated
+// company_items path defeats the legacy job-normalization + 4,000-char
+// provider_payload truncation. All executors are injected fakes — no network.
+// ==============================================================================
+
+/** A source_with_apify result carrying the typed complete company items. */
+const companyResult = (company_items: unknown[], run_id = "prov-run"): RunToolResultLike =>
+  ({ ok: true, data: { actor_id: COMPANY_DETAILS_ACTOR_ID, selected_actor_key: COMPANY_DETAILS_ACTOR_KEY, company_items, items: [], run_id, count: company_items.length } });
+
+/** A LEGACY job-normalized result burying the raw item under provider_payload. */
+const legacyResult = (provider_payload: unknown, run_id = "legacy-run"): RunToolResultLike =>
+  ({ ok: true, data: { items: [{ signal_type: "company", company: "X", raw: { provider_payload } }], run_id } });
+
+/** A company object whose JSON serialization pushes real fields PAST char 4,000,
+ * so the old truncObj(JSON.stringify(item), 4000) path would have dropped them. */
+function oversizedCompany(): Record<string, unknown> {
+  const big: Record<string, unknown> = {};
+  big._padding = "x".repeat(5000);                       // serialized FIRST → pushes the rest past 4,000
+  big.universalName = "bigco";
+  big.linkedinUrl = "https://www.linkedin.com/company/bigco";
+  big.name = "BigCo";
+  big.website = "https://bigco.example.com";
+  big.industries = ["B2B SaaS"];
+  big.employeeCountRange = { start: 51, end: 200 };
+  big.description = "BigCo builds revenue software.";
+  big.locations = [{ city: "Austin", geographicArea: "Texas", country: "US", countryCode: "US", headquarter: true, parsed: { text: "Austin, Texas, United States", city: "Austin", countryCode: "US" } }];
+  big.phone = "+1 415 555 0199";                          // MUST NOT reach evidence
+  big.email = "founder@bigco.example.com";                // MUST NOT reach evidence
+  return big;
+}
+
+// ---- (1) bypasses job normalization ----
+Deno.test("H1: company_items bypass job normalization (executor returns the raw company object)", async () => {
+  const exec = makeCompanyEnrichmentExecutor(async () => companyResult([FIXTURE_COMPLETE]), {});
+  const res = await exec({ actorKey: "x", actorId: "y", input: { companies: ["https://www.linkedin.com/company/acme-saas"] }, maxItems: 1 } as any);
+  assertEquals(res.items!.length, 1);
+  const it = res.items![0] as any;
+  assertEquals(it.name, "Acme SaaS");            // real company shape, not job-normalized
+  assertEquals(it.signal_type, undefined);        // NOT a fabricated job record
+  assert(Array.isArray(it.industries));
+  assertEquals(res.providerRunId, "prov-run");
+});
+
+// ---- (2)(3)(4)(5)(6) complete oversized object reaches the normalizer ----
+Deno.test("H2-6: an oversized company object is normalized COMPLETE (industry/website/HQ past char 4,000)", async () => {
+  const big = oversizedCompany();
+  const serialized = JSON.stringify(big);
+  // Precondition: the real fields genuinely sit beyond the old 4,000-char cut.
+  assert(serialized.length > 4000, "fixture must exceed 4,000 chars");
+  assert(serialized.indexOf('"website"') > 4000, "website must sit past char 4,000");
+  assert(serialized.indexOf('"industries"') > 4000, "industries must sit past char 4,000");
+  assert(serialized.indexOf('"locations"') > 4000, "locations must sit past char 4,000");
+
+  const exec = makeCompanyEnrichmentExecutor(async () => companyResult([big]), {});
+  const r = await runFindLeadsCompanyEnrichment({
+    items: [item({ rawOver: { normalized_candidate_id: "bigc", company_linkedin_url: "https://www.linkedin.com/company/bigco" } })],
+    intent: FIT, brain: BRAIN, now: NOW, execute: exec,
+  });
+  const patch = r.companyPatchById.get("bigc")!;
+  assertEquals(patch.company_website, "https://bigco.example.com");   // (5) survived
+  assert(patch.company_industries!.includes("B2B SaaS"));             // (4) survived
+  assertEquals(patch.company_country_code, "US");                     // (6) HQ survived
+  assertEquals(patch.company_employee_range!.start, 51);
+});
+
+// ---- (7)(8)(9) sanitization: no raw object / phone / email leaks ----
+Deno.test("H7-9: oversized result never leaks raw object / phone / email into evidence or observability", async () => {
+  const big = oversizedCompany();
+  const exec = makeCompanyEnrichmentExecutor(async () => companyResult([big]), {});
+  const r = await runFindLeadsCompanyEnrichment({
+    items: [item({ rawOver: { normalized_candidate_id: "bigc", company_linkedin_url: "https://www.linkedin.com/company/bigco" } })],
+    intent: FIT, brain: BRAIN, now: NOW, execute: exec,
+  });
+  const evJson = JSON.stringify(companyEvidenceFor(r.enrichment.envelopes[0].evidence));
+  const obsJson = JSON.stringify(r.observability);
+  const patchJson = JSON.stringify(r.companyPatchById.get("bigc"));
+  for (const [label, blob] of [["evidence", evJson], ["observability", obsJson], ["patch", patchJson]] as const) {
+    assert(!/415 555 0199|"phone"/.test(blob), `phone leaked into ${label}`);
+    assert(!/founder@bigco|"email"/.test(blob), `email leaked into ${label}`);
+    assert(!/_padding|xxxxx/.test(blob), `raw padding leaked into ${label}`);
+    assert(!/provider_payload/.test(blob), `raw payload leaked into ${label}`);
+  }
+});
+
+// ---- (12)(13)(14) canonical actor id immutable through the executor ----
+Deno.test("H12-14: executor forces the canonical company actor key; caller/tool/planner cannot override", async () => {
+  const seen: any[] = [];
+  const exec = makeCompanyEnrichmentExecutor(async (_t, input) => { seen.push(input); return companyResult([FIXTURE_COMPLETE]); }, {});
+  await exec({ actorKey: "planner_evil", actorId: "attacker/malware", input: { companies: ["https://www.linkedin.com/company/acme-saas"] }, maxItems: 3 } as any);
+  assertEquals(seen[0].selected_actor_key, COMPANY_DETAILS_ACTOR_KEY);
+  assertEquals(seen[0].actor_id, undefined);
+  assert(!JSON.stringify(seen[0]).includes("attacker/malware"));
+  // (20) max-items forwarded to the provider path.
+  assertEquals(seen[0].max_results, 3);
+});
+
+// ---- (15) empty typed result stages safely ----
+Deno.test("H15: empty company_items stages safely (no_result, no requalification)", async () => {
+  const exec = makeCompanyEnrichmentExecutor(async () => companyResult([]), {});
+  const r = await runFindLeadsCompanyEnrichment({ items: [item()], intent: FIT, brain: BRAIN, now: NOW, execute: exec });
+  assertEquals(r.enrichment.companyResults[0].outcome, "no_result");
+  assertEquals(r.requalifyCandidateIds.size, 0);
+});
+
+// ---- (16) invalid typed result stages safely ----
+Deno.test("H16: an identity-less company item is invalid_result, never fabricated", async () => {
+  const exec = makeCompanyEnrichmentExecutor(async () => companyResult([{ website: "https://x.example.com" }]), {});
+  const r = await runFindLeadsCompanyEnrichment({ items: [item()], intent: FIT, brain: BRAIN, now: NOW, execute: exec });
+  assertEquals(r.enrichment.companyResults[0].outcome, "invalid_result");
+  assertEquals(r.requalifyCandidateIds.size, 0);
+});
+
+// ---- (17) legacy complete payload fallback still supported ----
+Deno.test("H17: legacy complete provider_payload is still recovered and normalized", async () => {
+  const exec = makeCompanyEnrichmentExecutor(async () => legacyResult(FIXTURE_COMPLETE), {});
+  const r = await runFindLeadsCompanyEnrichment({ items: [item()], intent: FIT, brain: BRAIN, now: NOW, execute: exec });
+  assertEquals(r.enrichment.companyResults[0].outcome, "enriched");
+  assert(r.companyPatchById.get("cand-acme-1")!.company_website === "https://www.acmesaas.com");
+});
+
+// ---- (18) truncated legacy payload is rejected, not partially trusted ----
+Deno.test("H18: a truncated legacy provider_payload is rejected (provider failure), never partially trusted", async () => {
+  const truncated = { _truncated: true, preview: '{"name":"Acme","phone":"+1 415 555 0199"' };
+  const exec = makeCompanyEnrichmentExecutor(async () => legacyResult(truncated), {});
+  const r = await runFindLeadsCompanyEnrichment({ items: [item()], intent: FIT, brain: BRAIN, now: NOW, execute: exec });
+  const res = r.enrichment.companyResults[0];
+  assertEquals(res.outcome, "provider_error");
+  assertEquals(res.failureReason, "company_result_truncated");
+  assertEquals(r.requalifyCandidateIds.size, 0);           // nothing enriched
+  // The truncated preview (incl. its phone) never reaches evidence/observability.
+  const blob = JSON.stringify(companyEvidenceFor(r.enrichment.envelopes[0].evidence)) + JSON.stringify(r.observability);
+  assert(!/415 555 0199/.test(blob), "truncated preview leaked");
+});
+
+// ---- (19) provider error isolated by company ----
+Deno.test("H19: a truncated company is isolated — a healthy company at the same run still enriches", async () => {
+  const exec = makeCompanyEnrichmentExecutor(async (_t, input: any) => {
+    const url = (input.input?.companies ?? [])[0] ?? "";
+    if (url.includes("/bad")) return legacyResult({ _truncated: true, preview: "{" });
+    return companyResult([FIXTURE_COMPLETE]);
+  }, {});
+  const r = await runFindLeadsCompanyEnrichment({
+    items: [
+      item({ rawOver: { normalized_candidate_id: "good", company_linkedin_url: "https://www.linkedin.com/company/good" } }),
+      item({ rawOver: { normalized_candidate_id: "bad", company_linkedin_url: "https://www.linkedin.com/company/bad" } }),
+    ],
+    intent: FIT, brain: BRAIN, now: NOW, execute: exec,
+  });
+  assert(r.requalifyCandidateIds.has("good"));
+  assertEquals(r.requalifyCandidateIds.has("bad"), false);
+});
+
+// ---- extraction-unit coverage ----
+Deno.test("extractCompanyItemsFromResult prefers company_items over legacy items", () => {
+  const r = extractCompanyItemsFromResult({ company_items: [{ name: "A" }], items: [{ raw: { provider_payload: { name: "B" } } }] });
+  assertEquals(r, { items: [{ name: "A" }], truncated: false });
+});
+
+Deno.test("recoverLegacyCompanyItems flags truncation and drops the partial payload", () => {
+  const r = recoverLegacyCompanyItems([{ raw: { provider_payload: { _truncated: true, preview: "{" } } }]);
+  assertEquals(r.truncated, true);
+  assertEquals(r.items.length, 0);
+});
+
+Deno.test("recoverLegacyCompanyItems recovers a complete provider_payload untouched", () => {
+  const r = recoverLegacyCompanyItems([{ raw: { provider_payload: { name: "Acme" } } }]);
+  assertEquals(r, { items: [{ name: "Acme" }], truncated: false });
+});
+
+Deno.test("extractRawCompanyItems (legacy helper) still recovers payload → raw → item", () => {
+  assertEquals(extractRawCompanyItems([{ raw: { provider_payload: { name: "A" } } }]), [{ name: "A" }]);
 });
