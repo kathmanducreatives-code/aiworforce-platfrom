@@ -73,21 +73,59 @@ export interface QualificationFunnel {
   raw_count: number;
   normalized_count: number;
   source_gate_accepted: number;
+  source_gate_rejected: number;
   hard_gate_rejected: number;
   qualification_accepted: number;
   qualification_rejected: number;
   staged_count: number;
   persisted_count: number;
   downstream_aria_count: number;
-  /** True when the lower funnel reconciles: source_gate_accepted ==
-   * hard_gate_rejected + qualification_accepted + qualification_rejected. */
+  /** True when BOTH invariants hold:
+   *  normalized_count == source_gate_accepted + source_gate_rejected, AND
+   *  source_gate_accepted == hard_gate_rejected + qualification_accepted + qualification_rejected. */
   reconciles: boolean;
+}
+
+/** Sanitized diagnostic for a candidate rejected at the SOURCE gate (before
+ * qualification) — e.g. wrong geography, malformed profile, missing evidence. */
+export interface SourceGateDiagnostic {
+  candidate_id: string;
+  person?: string;
+  title?: string;
+  company?: string;
+  source_url?: string;
+  provider_verified: boolean;
+  actor_key?: string;
+  actor_id?: string;
+  artifact_type?: string;
+
+  requested_geography_value?: string;
+  requested_geography_type?: string;   // country | region | city | text
+  requested_country_code?: string;
+
+  candidate_location_text?: string;
+  candidate_country?: string;
+  candidate_country_code?: string;
+  candidate_region?: string;
+  candidate_city?: string;
+
+  matcher_mode?: string;               // country | region | city | text_fallback
+
+  source_gate_decision: string;        // always "reject" here
+  source_gate_reason?: string;
+  source_gate_reason_code?: string;
+
+  normalized: boolean;
+  reached_qualification: boolean;      // always false
+  persisted: boolean;                  // always false
 }
 
 export interface QualificationObservability {
   funnel: QualificationFunnel;
   candidates: CandidateDecisionDiagnostic[];
-  /** Number of diagnostics omitted by the cap. */
+  /** Source-gate rejected candidates (wrong geography / malformed / etc.). */
+  source_gate_rejected: SourceGateDiagnostic[];
+  /** Number of diagnostics omitted by the cap (qualification + source-gate). */
   truncated: number;
   target_entity?: TargetEntity;
   expected_artifact_type?: ArtifactType;
@@ -282,6 +320,7 @@ export interface FunnelInput {
   raw_count: number;
   normalized_count: number;
   source_gate_accepted: number;
+  source_gate_rejected: number;
   hard_gate_rejected: number;
   qualification_accepted: number;
   qualification_rejected: number;
@@ -291,15 +330,20 @@ export interface FunnelInput {
 
 export function buildQualificationFunnel(input: FunnelInput): QualificationFunnel {
   const n = (x: number) => (Number.isFinite(x) && x >= 0 ? Math.floor(x) : 0);
+  const normalized_count = n(input.normalized_count);
   const source_gate_accepted = n(input.source_gate_accepted);
+  const source_gate_rejected = n(input.source_gate_rejected);
   const hard_gate_rejected = n(input.hard_gate_rejected);
   const qualification_accepted = n(input.qualification_accepted);
   const qualification_rejected = n(input.qualification_rejected);
-  const reconciles = source_gate_accepted === hard_gate_rejected + qualification_accepted + qualification_rejected;
+  const reconciles =
+    normalized_count === source_gate_accepted + source_gate_rejected &&
+    source_gate_accepted === hard_gate_rejected + qualification_accepted + qualification_rejected;
   return {
     raw_count: n(input.raw_count),
-    normalized_count: n(input.normalized_count),
+    normalized_count,
     source_gate_accepted,
+    source_gate_rejected,
     hard_gate_rejected,
     qualification_accepted,
     qualification_rejected,
@@ -310,9 +354,65 @@ export function buildQualificationFunnel(input: FunnelInput): QualificationFunne
   };
 }
 
+export interface SourceGateDiagnosticInput {
+  normalized_candidate_id?: unknown;
+  name?: unknown;
+  title?: unknown;
+  company?: unknown;
+  source_url?: unknown;
+  provider_verified?: boolean;
+  actor_key?: string | null;
+  actor_id?: string | null;
+  artifact_type?: string | null;
+
+  requested_geography_value?: string | null;
+  requested_geography_type?: string | null;
+  requested_country_code?: string | null;
+
+  candidate_location_text?: unknown;
+  candidate_country?: unknown;
+  candidate_country_code?: unknown;
+  candidate_region?: unknown;
+  candidate_city?: unknown;
+  matcher_mode?: string | null;
+
+  source_gate_reason?: string | null;
+  source_gate_reason_code?: string | null;
+}
+
+export function buildSourceGateDiagnostic(input: SourceGateDiagnosticInput): SourceGateDiagnostic {
+  return {
+    candidate_id: candidateIdFor(input),
+    person: sanitizeText(input.name),
+    title: sanitizeText(input.title),
+    company: sanitizeText(input.company),
+    source_url: sanitizePublicUrl(input.source_url),
+    provider_verified: input.provider_verified === true,
+    actor_key: input.actor_key ? sanitizeText(input.actor_key, 80) : undefined,
+    actor_id: input.actor_id ? sanitizeText(input.actor_id, 120) : undefined,
+    artifact_type: input.artifact_type ? sanitizeText(input.artifact_type, 40) : undefined,
+    requested_geography_value: sanitizeText(input.requested_geography_value, 120),
+    requested_geography_type: sanitizeText(input.requested_geography_type, 20),
+    requested_country_code: sanitizeText(input.requested_country_code, 8),
+    candidate_location_text: sanitizeText(input.candidate_location_text, 120),
+    candidate_country: sanitizeText(input.candidate_country, 80),
+    candidate_country_code: sanitizeText(input.candidate_country_code, 8),
+    candidate_region: sanitizeText(input.candidate_region, 80),
+    candidate_city: sanitizeText(input.candidate_city, 80),
+    matcher_mode: sanitizeText(input.matcher_mode, 20),
+    source_gate_decision: "reject",
+    source_gate_reason: sanitizeText(input.source_gate_reason, 120),
+    source_gate_reason_code: sanitizeText(input.source_gate_reason_code, 60),
+    normalized: true,
+    reached_qualification: false,
+    persisted: false,
+  };
+}
+
 export function buildQualificationObservability(input: {
   funnel: FunnelInput;
   candidates: CandidateDiagnosticInput[];
+  source_gate_rejected?: SourceGateDiagnosticInput[];
   requested_limit?: number | null;
   target_entity?: TargetEntity;
   expected_artifact_type?: ArtifactType;
@@ -320,10 +420,13 @@ export function buildQualificationObservability(input: {
   const cap = Math.max(1, Math.min(MAX_DIAGNOSTICS, input.requested_limit && input.requested_limit > 0 ? input.requested_limit : MAX_DIAGNOSTICS));
   const all = input.candidates.map(buildCandidateDiagnostic);
   const kept = all.slice(0, cap);
+  const allSg = (input.source_gate_rejected ?? []).map(buildSourceGateDiagnostic);
+  const keptSg = allSg.slice(0, cap);
   return {
     funnel: buildQualificationFunnel(input.funnel),
     candidates: kept,
-    truncated: Math.max(0, all.length - kept.length),
+    source_gate_rejected: keptSg,
+    truncated: Math.max(0, all.length - kept.length) + Math.max(0, allSg.length - keptSg.length),
     target_entity: input.target_entity,
     expected_artifact_type: input.expected_artifact_type,
   };
