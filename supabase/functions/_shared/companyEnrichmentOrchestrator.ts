@@ -131,15 +131,25 @@ export async function mapWithConcurrency<T, R>(
 async function callWithTimeout(
   exec: () => Promise<CompanyActorExecuteResult>,
   timeoutMs: number, clock: EnrichmentClock,
+  onAbandoned?: (late: CompanyActorExecuteResult) => void,
 ): Promise<CompanyActorExecuteResult> {
   if (timeoutMs <= 0) return { timedOut: true };
   const ac = new AbortController();
+  let settled = false;
   const timeout = clock.sleep(timeoutMs, ac.signal).then((): CompanyActorExecuteResult =>
     ac.signal.aborted ? { timedOut: false } : { timedOut: true });
   // When the call settles first, abort the pending timeout so no timer lingers
   // (production: no wall-clock keepalive; tests: no polluting virtual timer).
-  const call = exec().then((v) => { ac.abort(); return v; }, (e): CompanyActorExecuteResult => { ac.abort(); return { error: e }; });
-  return await Promise.race([call, timeout]);
+  const call = exec().then((v) => { settled = true; ac.abort(); return v; },
+    (e): CompanyActorExecuteResult => { settled = true; ac.abort(); return { error: e }; });
+  const winner = await Promise.race([call, timeout]);
+  // The provider may still answer AFTER we gave up. Promise.race already discards
+  // that value, so it can never add evidence or change the decision — but it must
+  // remain visible as an ABANDONED result rather than look like a success.
+  if (winner.timedOut === true && !settled) {
+    call.then((late) => onAbandoned?.(late)).catch(() => {});
+  }
+  return winner;
 }
 
 // --------------------------------------------------- person → envelope --------
@@ -202,6 +212,20 @@ export function buildPersonEnvelope(p: SourceAcceptedPerson, observedAt: string)
 
 // ---------------------------------------------------------- orchestration -----
 
+/**
+ * A provider call that answered AFTER the orchestrator had already classified it as
+ * `timeout` and finalized the workflow. Audit-only telemetry: it is never evidence,
+ * never a funnel outcome, and never rewrites finalized observability. It exists so a
+ * late "apify responded successfully" log line is distinguishable from an accepted
+ * company enrichment (the v84 run produced two of these).
+ */
+export interface LateProviderCompletion {
+  companyKey: string;
+  status: "ignored_after_timeout";
+  itemCount: number;
+  providerRunId: string | null;
+}
+
 export interface CompanyEnrichmentRunResult {
   contract: EvidenceContract;
   envelopes: CandidateEnvelope[];
@@ -212,6 +236,8 @@ export interface CompanyEnrichmentRunResult {
   companyResults: CompanyEnrichmentResult[];
   observability: CompanyEnrichmentObservability;
   ledger: BudgetLedger;
+  /** Abandoned late provider answers (audit only; excluded from the funnel). */
+  lateProviderCompletions: LateProviderCompletion[];
 }
 
 /** Deterministic competitive pre-rank: identity/fit completeness first, then the
@@ -330,6 +356,7 @@ export async function runCompanyEnrichment(args: {
   //    launched (remaining companies → skipped_due_deadline). Results keep target
   //    order for deterministic observability.
   const bundles = new Map<string, StructuredCompanyEvidenceBundle>();
+  const lateProviderCompletions: LateProviderCompletion[] = [];
   const perTarget = await mapWithConcurrency(inputPlan.targets, concurrency, async (t): Promise<{
     result: CompanyEnrichmentResult; diag: CompanyDiagnosticInput;
   }> => {
@@ -362,7 +389,17 @@ export async function runCompanyEnrichment(args: {
       input: t.via === "companies" ? { companies: [t.identifier] } : { searches: [t.identifier] },
       workflowRunId: args.workflowRunId, taskId: args.taskId, workspaceId: args.workspaceId,
       maxItems: 1, timeoutMs,
-    }), timeoutMs, clock);
+    }), timeoutMs, clock, (late) => {
+      // The workflow already finalized this company as `timeout`. Record the late
+      // answer as ABANDONED telemetry only: never evidence, never a requalification,
+      // never a funnel outcome.
+      lateProviderCompletions.push({
+        companyKey: t.companyKey,
+        status: "ignored_after_timeout",
+        itemCount: Array.isArray(late.items) ? late.items.length : 0,
+        providerRunId: late.providerRunId ?? null,
+      });
+    });
     ledger.structuredUsed += 1;   // a real call was launched
 
     const interpreted: CompanyEnrichmentResult = res.timedOut
@@ -430,5 +467,8 @@ export async function runCompanyEnrichment(args: {
     companies: diagnostics,
   });
 
-  return { contract, envelopes: enriched, sufficiencyBefore, sufficiencyAfter, requalifyCandidateIds, companyResults, observability, ledger };
+  return {
+    contract, envelopes: enriched, sufficiencyBefore, sufficiencyAfter, requalifyCandidateIds,
+    companyResults, observability, ledger, lateProviderCompletions,
+  };
 }
