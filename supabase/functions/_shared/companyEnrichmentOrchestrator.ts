@@ -61,6 +61,87 @@ export interface CompanyActorExecuteResult {
 /** run-agent injects the existing Apify path; tests inject fixtures. */
 export type CompanyActorExecutor = (args: CompanyActorExecuteArgs) => Promise<CompanyActorExecuteResult>;
 
+// ----------------------------------------------------- latency policy ---------
+// Structured company enrichment must be LATENCY-BOUNDED so the run-agent Edge
+// Function invocation always reserves enough wall-clock to finish qualification,
+// staging, accepted-only persistence, observability and task finalization. These
+// are repository-consistent constants (no scattered magic numbers).
+
+/** Max company actor calls in flight at once (2 waves for 5 companies). */
+export const COMPANY_ENRICHMENT_CONCURRENCY = 3;
+/** Hard per-company provider timeout — a slow company never blocks the run. */
+export const COMPANY_ACTOR_TIMEOUT_MS = 45_000;
+/** Wall-clock reserved for qualification + persistence + observability + finalize. */
+export const FINALIZATION_RESERVE_MS = 25_000;
+/** Conservative Edge Function wall-clock budget (observed hard kill ~150s). The
+ * caller derives an enrichment deadline = start + this − FINALIZATION_RESERVE_MS,
+ * so enrichment always stops with time left to finalize truthfully. */
+export const EDGE_FUNCTION_WALL_CLOCK_MS = 135_000;
+
+/** Compute the absolute enrichment deadline from an invocation start time. */
+export function enrichmentDeadlineFrom(
+  invocationStartMs: number,
+  budgetMs: number = EDGE_FUNCTION_WALL_CLOCK_MS,
+  reserveMs: number = FINALIZATION_RESERVE_MS,
+): number {
+  return invocationStartMs + Math.max(0, budgetMs - reserveMs);
+}
+
+/** Injectable time source + sleep so deadlines/timeouts are deterministically
+ * testable with a virtual clock (no real timers, no flakiness). `sleep` accepts
+ * an AbortSignal so a completed call CANCELS its pending timeout — otherwise a
+ * dangling timer would keep the Edge invocation alive for the full timeout. */
+export interface EnrichmentClock {
+  /** current epoch ms. */
+  now(): number;
+  /** resolve after `ms` of (virtual or real) time, or early if aborted. */
+  sleep(ms: number, signal?: AbortSignal): Promise<void>;
+}
+export const REAL_CLOCK: EnrichmentClock = {
+  now: () => Date.now(),
+  sleep: (ms, signal) => new Promise<void>((resolve) => {
+    if (signal?.aborted) return resolve();
+    const t = setTimeout(resolve, Math.max(0, ms));
+    signal?.addEventListener("abort", () => { clearTimeout(t); resolve(); }, { once: true });
+  }),
+};
+
+/** Run each item with at most `limit` in flight; results keep INPUT order
+ * (deterministic association + observability), never an unbounded Promise.all. */
+export async function mapWithConcurrency<T, R>(
+  items: T[], limit: number, worker: (item: T, index: number) => Promise<R>,
+): Promise<R[]> {
+  const results = new Array<R>(items.length);
+  let next = 0;
+  const runner = async (): Promise<void> => {
+    for (;;) {
+      const i = next++;
+      if (i >= items.length) return;
+      results[i] = await worker(items[i], i);
+    }
+  };
+  const n = Math.max(1, Math.min(limit, items.length));
+  await Promise.all(Array.from({ length: n }, () => runner()));
+  return results;
+}
+
+/** Race a company call against a bounded timeout using the injected clock. On
+ * timeout the caller moves on immediately (the underlying call is abandoned, so
+ * run-agent can finalize without waiting for the Edge wall-clock limit). */
+async function callWithTimeout(
+  exec: () => Promise<CompanyActorExecuteResult>,
+  timeoutMs: number, clock: EnrichmentClock,
+): Promise<CompanyActorExecuteResult> {
+  if (timeoutMs <= 0) return { timedOut: true };
+  const ac = new AbortController();
+  const timeout = clock.sleep(timeoutMs, ac.signal).then((): CompanyActorExecuteResult =>
+    ac.signal.aborted ? { timedOut: false } : { timedOut: true });
+  // When the call settles first, abort the pending timeout so no timer lingers
+  // (production: no wall-clock keepalive; tests: no polluting virtual timer).
+  const call = exec().then((v) => { ac.abort(); return v; }, (e): CompanyActorExecuteResult => { ac.abort(); return { error: e }; });
+  return await Promise.race([call, timeout]);
+}
+
 // --------------------------------------------------- person → envelope --------
 
 /** A source-accepted person candidate as run-agent already has it. */
@@ -166,7 +247,22 @@ export async function runCompanyEnrichment(args: {
   workflowRunId?: string;
   taskId?: string;
   workspaceId?: string;
+  // --- latency policy (all optional; safe production defaults) ---
+  /** Injected clock/sleep; defaults to real time. */
+  clock?: EnrichmentClock;
+  /** Max company calls in flight (default COMPANY_ENRICHMENT_CONCURRENCY). */
+  concurrency?: number;
+  /** Per-company provider timeout ms (default COMPANY_ACTOR_TIMEOUT_MS). */
+  companyTimeoutMs?: number;
+  /** Absolute epoch-ms deadline. Once reached, NO new company call is launched;
+   * remaining companies are classified `skipped_due_deadline` and their
+   * candidates stage honestly, leaving wall-clock for finalization. */
+  deadlineMs?: number | null;
 }): Promise<CompanyEnrichmentRunResult> {
+  const clock = args.clock ?? REAL_CLOCK;
+  const concurrency = Math.max(1, args.concurrency ?? COMPANY_ENRICHMENT_CONCURRENCY);
+  const companyTimeoutMs = Math.max(0, args.companyTimeoutMs ?? COMPANY_ACTOR_TIMEOUT_MS);
+  const deadlineMs = args.deadlineMs ?? null;
   const contract = compileEvidenceContract(args.intent, args.brain);   // compiled ONCE
   const ledger: BudgetLedger = { ...emptyLedger(), acceptedSoFar: args.acceptedSoFar ?? 0 };
 
@@ -228,14 +324,16 @@ export async function runCompanyEnrichment(args: {
     args.budget,
   );
 
-  // 7) execute per company (isolated failures)
-  const companyResults: CompanyEnrichmentResult[] = [];
+  // 7) execute per company — BOUNDED CONCURRENCY + per-company timeout +
+  //    run-level deadline. One actor call per deduplicated company; failures and
+  //    timeouts are isolated; when the deadline is reached no NEW call is
+  //    launched (remaining companies → skipped_due_deadline). Results keep target
+  //    order for deterministic observability.
   const bundles = new Map<string, StructuredCompanyEvidenceBundle>();
-  const diagnostics: CompanyDiagnosticInput[] = [];
-
-  for (const t of inputPlan.targets) {
+  const perTarget = await mapWithConcurrency(inputPlan.targets, concurrency, async (t): Promise<{
+    result: CompanyEnrichmentResult; diag: CompanyDiagnosticInput;
+  }> => {
     const related = fanOut.get(t.companyKey) ?? [];
-    const firstEnv = byId.get(related[0] ?? "");
     const p = personById.get(related[0] ?? "");
     const missingBefore = sufficiencyBefore.get(related[0] ?? "")?.missingCriticalRequirements ?? [];
     const baseDiag = {
@@ -245,39 +343,47 @@ export async function runCompanyEnrichment(args: {
       actorKey: COMPANY_DETAILS_ACTOR_KEY, actorId: COMPANY_DETAILS_ACTOR_ID,
       verifiedBinding: isCallable(cap), sufficiencyBefore: false,
     };
-    if (!callable) {
-      const r: CompanyEnrichmentResult = { companyKey: t.companyKey, outcome: "budget_skipped", bundle: null, failureReason: "no_verified_actor_binding_or_executor" };
-      companyResults.push(r);
-      diagnostics.push({ ...baseDiag, action: "stage", outcome: "budget_skipped", sufficiencyAfter: false, qualificationRerun: false, failureReason: r.failureReason, missingAfter: missingBefore });
-      continue;
-    }
-    let res: CompanyActorExecuteResult;
-    try {
-      res = await args.execute!({
-        actorKey: COMPANY_DETAILS_ACTOR_KEY, actorId: COMPANY_DETAILS_ACTOR_ID,
-        input: t.via === "companies" ? { companies: [t.identifier] } : { searches: [t.identifier] },
-        workflowRunId: args.workflowRunId, taskId: args.taskId, workspaceId: args.workspaceId,
-        maxItems: 1,
-      });
-    } catch (e) {
-      res = { error: e };
-    }
-    ledger.structuredUsed += 1;
-    const interpreted = res.timedOut
-      ? { companyKey: t.companyKey, outcome: "timeout" as const, bundle: null, failureReason: "actor_timeout" }
-      : interpretCompanyActorResponse({ companyKey: t.companyKey, items: res.items, error: res.error, observedAt: args.now, providerRunId: res.providerRunId });
-    companyResults.push(interpreted);
-    if (interpreted.bundle) bundles.set(t.companyKey, interpreted.bundle);
-    diagnostics.push({
-      ...baseDiag,
-      officialWebsite: interpreted.bundle?.company.officialWebsite,
-      providerRunId: res.providerRunId ?? null,
-      fieldsReturned: interpreted.bundle ? Object.keys(interpreted.bundle.company) : [],
-      evidenceAdded: interpreted.bundle?.evidence.map((e) => e.category) ?? [],
-      outcome: interpreted.outcome, failureReason: interpreted.failureReason ?? null,
-      sufficiencyAfter: false, qualificationRerun: !!interpreted.bundle, missingAfter: [],
+    const stageResult = (outcome: CompanyEnrichmentResult["outcome"], failureReason: string): {
+      result: CompanyEnrichmentResult; diag: CompanyDiagnosticInput;
+    } => ({
+      result: { companyKey: t.companyKey, outcome, bundle: null, failureReason },
+      diag: { ...baseDiag, action: "stage", outcome, sufficiencyAfter: false, qualificationRerun: false, failureReason, missingAfter: missingBefore },
     });
-  }
+
+    if (!callable) return stageResult("budget_skipped", "no_verified_actor_binding_or_executor");
+    // Run-level deadline: stop LAUNCHING new company calls; stage honestly.
+    if (deadlineMs != null && clock.now() >= deadlineMs) return stageResult("skipped_due_deadline", "run_deadline_reached");
+
+    // Per-company timeout, never longer than the time left before the deadline.
+    const remaining = deadlineMs != null ? deadlineMs - clock.now() : companyTimeoutMs;
+    const timeoutMs = Math.max(0, Math.min(companyTimeoutMs, remaining));
+    const res = await callWithTimeout(() => args.execute!({
+      actorKey: COMPANY_DETAILS_ACTOR_KEY, actorId: COMPANY_DETAILS_ACTOR_ID,
+      input: t.via === "companies" ? { companies: [t.identifier] } : { searches: [t.identifier] },
+      workflowRunId: args.workflowRunId, taskId: args.taskId, workspaceId: args.workspaceId,
+      maxItems: 1, timeoutMs,
+    }), timeoutMs, clock);
+    ledger.structuredUsed += 1;   // a real call was launched
+
+    const interpreted: CompanyEnrichmentResult = res.timedOut
+      ? { companyKey: t.companyKey, outcome: "timeout", bundle: null, failureReason: "actor_timeout" }
+      : interpretCompanyActorResponse({ companyKey: t.companyKey, items: res.items, error: res.error, observedAt: args.now, providerRunId: res.providerRunId });
+    if (interpreted.bundle) bundles.set(t.companyKey, interpreted.bundle);
+    return {
+      result: interpreted,
+      diag: {
+        ...baseDiag,
+        officialWebsite: interpreted.bundle?.company.officialWebsite,
+        providerRunId: res.providerRunId ?? null,
+        fieldsReturned: interpreted.bundle ? Object.keys(interpreted.bundle.company) : [],
+        evidenceAdded: interpreted.bundle?.evidence.map((e) => e.category) ?? [],
+        outcome: interpreted.outcome, failureReason: interpreted.failureReason ?? null,
+        sufficiencyAfter: false, qualificationRerun: !!interpreted.bundle, missingAfter: [],
+      },
+    };
+  });
+  const companyResults: CompanyEnrichmentResult[] = perTarget.map((x) => x.result);
+  const diagnostics: CompanyDiagnosticInput[] = perTarget.map((x) => x.diag);
 
   // 8) fan evidence out (append-only; person provenance untouched)
   const requalifyCandidateIds = new Set<string>();
@@ -309,7 +415,9 @@ export async function runCompanyEnrichment(args: {
     d.finalCandidateDecisions = related.map((id) => sufficiencyAfter.get(id)?.nextDecision ?? "stage_missing_evidence");
   }
 
-  const stopReason = ledger.acceptedSoFar >= args.budget.finalAcceptedTarget ? "requested_count_satisfied"
+  const deadlineSkipped = companyResults.some((c) => c.outcome === "skipped_due_deadline");
+  const stopReason = deadlineSkipped ? "deadline_reached"
+    : ledger.acceptedSoFar >= args.budget.finalAcceptedTarget ? "requested_count_satisfied"
     : ledger.structuredUsed >= args.budget.companyStructuredEnrichments ? "budget_exhausted"
       : "completed";
 

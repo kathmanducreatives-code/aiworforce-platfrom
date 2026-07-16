@@ -27,6 +27,8 @@ import { qualificationPersistenceDecision, mapAriaToDecision, type AriaLike } fr
 import { buildQualificationObservability, type CandidateDiagnosticInput, type QualificationObservability } from "../_shared/qualificationObservability.ts";
 import { resolveGeographyConstraint, classifyGeography, type GeographyConstraint } from "../_shared/geographyConstraint.ts";
 import { runFindLeadsCompanyEnrichment, mapAcceptedPeople, makeCompanyEnrichmentExecutor, emptyCompanyEnrichmentObservability, type CompanyRawPatch } from "../_shared/runAgentCompanyEnrichment.ts";
+import { enrichmentDeadlineFrom } from "../_shared/companyEnrichmentOrchestrator.ts";
+import { shouldSkipBroadResearch } from "../_shared/broadResearchPolicy.ts";
 import { DEFAULT_EVIDENCE_BUDGET } from "../_shared/conditionalEnrichmentPlanner.ts";
 import type { CompanyEnrichmentObservability } from "../_shared/companyEnrichmentObservability.ts";
 
@@ -76,6 +78,10 @@ function renderBrainForAgent(brain: CompanyBrain, onboardingCompleted?: boolean 
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: cors });
+  // Invocation start — anchors the LATENCY-BOUNDED company-enrichment deadline so
+  // the workflow always reserves wall-clock to finish qualification/persistence/
+  // observability/finalization within the Edge Function limit (never a 504).
+  const invocationStartMs = Date.now();
 
   const supabase = createClient(
     Deno.env.get("SUPABASE_URL")!,
@@ -1522,6 +1528,9 @@ Deno.serve(async (req) => {
               // honestly — it never fabricates evidence and never calls Firecrawl.
               execute: makeCompanyEnrichmentExecutor(runTool, baseCtx),
               workflowRunId: run_id, taskId: task.id, workspaceId: workspace_id,
+              // Latency bound: stop launching new company calls once the deadline
+              // is reached so qualification/persistence/observability still run.
+              deadlineMs: enrichmentDeadlineFrom(invocationStartMs),
             });
             companyEnrichmentObservability = enrichment.observability;
             companyEnrichmentStaged = enrichment.stagedByEnrichment;
@@ -1929,10 +1938,19 @@ Deno.serve(async (req) => {
     // for fast mode, explicit Apify steps, and ALL competitor-discovery steps —
     // competitor inference is done by Gemini (this step's own output), parsed
     // downstream. This removes the hard Perplexity dependency.
-    const skipBroadResearch = execution_mode_body === "fast"
-      || tool_input_body?.tool_name === "source_with_apify"
-      || tool_input_body?.competitor_discovery === true
-      || !!tool_input_body?.discovery_mode;
+    // Broad research (Perplexity) is optional and never a lead source. Skip it for
+    // fast/source_and_qualify_only modes, explicit Apify steps, discovery, and —
+    // the v83 Q1 fix — whenever a provider-sourcing step ran (even if every
+    // candidate was staged, so apifyContext is null). See broadResearchPolicy.ts.
+    const skipBroadResearch = shouldSkipBroadResearch({
+      executionMode: execution_mode_body ?? null,
+      plannedToolName: (tool_input_body?.tool_name as string | undefined) ?? null,
+      competitorDiscovery: tool_input_body?.competitor_discovery === true,
+      discoveryMode: tool_input_body?.discovery_mode,
+      isProviderSourcingStep,
+      hasProviderContext: !!apifyContext,
+      hasScrapedContext: !!scrapedContext,
+    });
     if (!apifyContext && !scrapedContext && !skipBroadResearch) {
       const toolRes = await runTool("research_web", { query: instruction }, baseCtx);
       if (toolRes.ok && toolRes.data) {
