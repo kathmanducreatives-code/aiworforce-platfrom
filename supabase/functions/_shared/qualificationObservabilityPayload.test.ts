@@ -23,7 +23,7 @@ const hostile: CandidateDiagnosticInput[] = [
 // (14) Credentials/tokens/headers/PII/raw never appear in the serialized payload.
 Deno.test("payload sweep: no email/phone/token/authorization/raw leaks", () => {
   const obs = buildQualificationObservability({
-    funnel: { raw_count: 1, normalized_count: 1, source_gate_accepted: 1, source_gate_rejected: 0, hard_gate_rejected: 0, qualification_accepted: 0, qualification_rejected: 1, persisted_count: 0, downstream_aria_count: 0 },
+    funnel: { raw_count: 1, normalized_count: 1, source_gate_accepted: 1, source_gate_rejected: 0, hard_gate_rejected: 0, qualification_accepted: 0, qualification_staged: 1, qualification_rejected: 0, persisted_count: 0, downstream_aria_count: 0 },
     candidates: hostile, requested_limit: 5,
   });
   const json = JSON.stringify(obs);
@@ -41,7 +41,7 @@ Deno.test("payload sweep: no email/phone/token/authorization/raw leaks", () => {
 // would drive a lead insert), and flags are truthful.
 Deno.test("payload: rejected diagnostics are never persisted", () => {
   const obs = buildQualificationObservability({
-    funnel: { raw_count: 1, normalized_count: 1, source_gate_accepted: 1, source_gate_rejected: 0, hard_gate_rejected: 0, qualification_accepted: 0, qualification_rejected: 1, persisted_count: 0, downstream_aria_count: 0 },
+    funnel: { raw_count: 1, normalized_count: 1, source_gate_accepted: 1, source_gate_rejected: 0, hard_gate_rejected: 0, qualification_accepted: 0, qualification_staged: 1, qualification_rejected: 0, persisted_count: 0, downstream_aria_count: 0 },
     candidates: hostile, requested_limit: 5,
   });
   assertEquals(obs.funnel.persisted_count, 0);
@@ -53,13 +53,13 @@ Deno.test("payload: rejected diagnostics are never persisted", () => {
 // (16)/(17) Funnel status semantics: 0 persisted ↔ no_results; >0 persisted ↔ partial/success.
 Deno.test("payload: persisted_count distinguishes no_results from partial", () => {
   const zero = buildQualificationObservability({
-    funnel: { raw_count: 5, normalized_count: 5, source_gate_accepted: 5, source_gate_rejected: 0, hard_gate_rejected: 0, qualification_accepted: 0, qualification_rejected: 5, persisted_count: 0, downstream_aria_count: 0 },
+    funnel: { raw_count: 5, normalized_count: 5, source_gate_accepted: 5, source_gate_rejected: 0, hard_gate_rejected: 0, qualification_accepted: 0, qualification_staged: 5, qualification_rejected: 0, persisted_count: 0, downstream_aria_count: 0 },
     candidates: [], requested_limit: 5,
   });
   assertEquals(zero.funnel.persisted_count, 0);          // → no_results
   assert(zero.funnel.staged_count > 0);
   const partial = buildQualificationObservability({
-    funnel: { raw_count: 5, normalized_count: 5, source_gate_accepted: 5, source_gate_rejected: 0, hard_gate_rejected: 0, qualification_accepted: 2, qualification_rejected: 3, persisted_count: 2, downstream_aria_count: 5 },
+    funnel: { raw_count: 5, normalized_count: 5, source_gate_accepted: 5, source_gate_rejected: 0, hard_gate_rejected: 0, qualification_accepted: 2, qualification_staged: 3, qualification_rejected: 0, persisted_count: 2, downstream_aria_count: 2 },
     candidates: [], requested_limit: 5,
   });
   assert(partial.funnel.persisted_count > 0);            // → partial_results
