@@ -33,6 +33,7 @@ import {
   runCompanyEnrichment,
   type SourceAcceptedPerson, type CompanyActorExecutor,
   type CompanyActorExecuteArgs, type CompanyActorExecuteResult, type CompanyEnrichmentRunResult,
+  type EnrichmentClock,
 } from "./companyEnrichmentOrchestrator.ts";
 import { COMPANY_DETAILS_ACTOR_KEY, COMPANY_DETAILS_ACTOR_ID } from "./structuredCompanyEnrichment.ts";
 import {
@@ -355,6 +356,12 @@ export interface FindLeadsEnrichmentArgs {
   taskId?: string;
   workspaceId?: string;
   mapOptions?: MapPeopleOptions;
+  // --- latency policy (forwarded to the orchestrator) ---
+  clock?: EnrichmentClock;
+  concurrency?: number;
+  companyTimeoutMs?: number;
+  /** Absolute epoch-ms deadline; enrichment stops launching new calls past it. */
+  deadlineMs?: number | null;
 }
 
 export interface FindLeadsEnrichmentResult {
@@ -395,6 +402,10 @@ export async function runFindLeadsCompanyEnrichment(
     workflowRunId: args.workflowRunId,
     taskId: args.taskId,
     workspaceId: args.workspaceId,
+    clock: args.clock,
+    concurrency: args.concurrency,
+    companyTimeoutMs: args.companyTimeoutMs,
+    deadlineMs: args.deadlineMs ?? null,
   });
 
   const companyEvidenceById = new Map<string, EvidenceItem[]>();

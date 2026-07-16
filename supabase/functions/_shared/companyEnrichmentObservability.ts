@@ -84,8 +84,12 @@ export interface CompanyEnrichmentSummary {
   companies_enriched: number;
   companies_no_result: number;
   companies_failed: number;
+  /** Documented SUBSET of companies_failed (a call was launched but timed out). */
+  companies_timed_out: number;
   companies_cached: number;
   companies_skipped: number;
+  /** Documented SUBSET of companies_skipped (no call launched — deadline reached). */
+  companies_skipped_deadline: number;
   budget_limit: number;
   budget_consumed: number;
   stop_reason: string;
@@ -163,9 +167,11 @@ export function buildCompanyEnrichmentObservability(input: {
   const planned = input.companies.length;
   const enriched = input.companies.filter((c) => c.outcome === "enriched").length;
   const noResult = input.companies.filter((c) => c.outcome === "no_result").length;
+  const timedOut = input.companies.filter((c) => c.outcome === "timeout").length;              // ⊆ failed
   const failed = input.companies.filter((c) => c.outcome === "provider_error" || c.outcome === "invalid_result" || c.outcome === "timeout").length;
   const cached = input.companies.filter((c) => c.outcome === "cached").length;
-  const skipped = input.companies.filter((c) => c.outcome === "budget_skipped" || c.outcome === "not_needed").length;
+  const skippedDeadline = input.companies.filter((c) => c.outcome === "skipped_due_deadline").length; // ⊆ skipped
+  const skipped = input.companies.filter((c) => c.outcome === "budget_skipped" || c.outcome === "not_needed" || c.outcome === "skipped_due_deadline").length;
   const called = enriched + noResult + failed;
 
   const summary: CompanyEnrichmentSummary = {
@@ -176,8 +182,10 @@ export function buildCompanyEnrichmentObservability(input: {
     companies_enriched: enriched,
     companies_no_result: noResult,
     companies_failed: failed,
+    companies_timed_out: timedOut,
     companies_cached: cached,
     companies_skipped: skipped,
+    companies_skipped_deadline: skippedDeadline,
     budget_limit: input.budgetLimit,
     budget_consumed: input.budgetConsumed,
     stop_reason: clean(input.stopReason, 60) ?? "completed",
