@@ -17,6 +17,7 @@
 // Pure / import-light so it is fully unit-testable with no provider calls.
 
 import type { ArtifactType, TargetEntity } from "./leadEntityIntent.ts";
+import { isHardEvidenceBlocker } from "./qualificationPersistence.ts";
 
 /** Max diagnostics ever emitted, regardless of requested limit (safety cap). */
 export const MAX_DIAGNOSTICS = 25;
@@ -217,9 +218,13 @@ export function classifyRejection(input: {
   if ((input.source_gate_decision ?? "").toString().toLowerCase() === "reject") {
     return { rejection_class: "hard_source", reason_code: "source_gate_reject" };
   }
-  // Evidence-invariant violations + provenance/artifact failures are hard-source.
-  if (violations.length > 0) {
-    return { rejection_class: "hard_source", reason_code: `evidence_violation:${violations[0]}` };
+  // Only HARD evidence blockers are hard-source — the same set the persistence
+  // decision applies (Phase 0). A non-hard violation such as identity_only_signal
+  // is an auditable limitation, NOT a rejection cause, so it must not mask the
+  // real reason (tier/aria/ICP/timing) that persistence actually used.
+  const hardViolation = violations.find((v) => isHardEvidenceBlocker(v));
+  if (hardViolation) {
+    return { rejection_class: "hard_source", reason_code: `evidence_violation:${hardViolation}` };
   }
   if (HARD_SOURCE_REASONS.has(reason)) {
     return { rejection_class: "hard_source", reason_code: reason };

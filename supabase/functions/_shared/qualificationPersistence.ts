@@ -55,13 +55,27 @@ export interface QualificationPersistenceDecision {
 
 /** Tiers that represent a positive qualification outcome. */
 export const ACCEPTED_TIERS: ReadonlySet<string> = new Set(["hot", "qualified"]);
-/** Evidence violations that are hard blockers regardless of tier/decision. */
-const HARD_EVIDENCE_BLOCKERS: ReadonlySet<string> = new Set([
+/**
+ * Evidence violations that are hard blockers regardless of tier/decision.
+ *
+ * THE SINGLE AUTHORITY (Phase 0): both the persistence decision and the
+ * observability rejection classifier must consult this set, so a diagnostic can
+ * never report a rejection class the persistence policy did not actually apply.
+ * `identity_only_signal` is deliberately ABSENT — a bare person profile not
+ * proving a company-level signal is an honest, auditable limitation, not a
+ * hard-source violation.
+ */
+export const HARD_EVIDENCE_BLOCKERS: ReadonlySet<string> = new Set([
   "profile_as_job",
   "title_as_signal",
   "jobpost_no_employer",
   "jobpost_no_role",
 ]);
+
+/** True when an evidence violation hard-blocks persistence (see above). */
+export function isHardEvidenceBlocker(violation: string | null | undefined): boolean {
+  return !!violation && HARD_EVIDENCE_BLOCKERS.has(violation);
+}
 
 /**
  * The one acceptance policy. A candidate persists as a FINAL lead ONLY when every
