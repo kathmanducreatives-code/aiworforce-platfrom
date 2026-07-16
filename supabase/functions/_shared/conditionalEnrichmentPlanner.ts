@@ -14,7 +14,7 @@ import type { EvidenceCategory } from "./evidenceContract.ts";
 import type { CandidateEnvelope, EvidenceItem } from "./candidateEnvelope.ts";
 import { isEvidenceFresh } from "./candidateEnvelope.ts";
 import type { EvidenceSufficiencyResult } from "./evidenceSufficiency.ts";
-import { getActorCapability, findCapabilityFor, isCallable, type ActorCapability } from "./actorCapabilityRegistry.ts";
+import { getActorCapability, findCapabilityFor, isCallable, getStructuredCompanyEnrichmentCapability, type ActorCapability } from "./actorCapabilityRegistry.ts";
 
 export type EnrichmentAction =
   | "skip"
@@ -175,7 +175,7 @@ export function planCandidateEnrichment(args: {
 
   // 5) Route the gap to the cheapest VERIFIED capability.
   if (sufficiency.nextDecision === "structured_company_enrichment") {
-    const cap = getActorCapability("structured_company_enrichment");
+    const cap = getStructuredCompanyEnrichmentCapability();
     if (!isCallable(cap)) {
       // No verified binding — stage honestly rather than guessing an actor.
       return { ...base, action: "stage", requiredEvidence: missing, reasonCode: "no_verified_actor_binding", estimatedCostClass: "none" };

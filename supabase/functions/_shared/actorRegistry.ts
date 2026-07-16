@@ -198,6 +198,35 @@ export const ACTOR_REGISTRY: Record<string, ActorEntry> = {
       "Individual people/profile sourcing is not configured yet. I can find companies hiring those roles using the jobs actor.",
   },
 
+  // Structured company FIRMOGRAPHICS for an already-known company (Phase 2).
+  // Enriches company evidence (website/industry/size/HQ/description) for companies
+  // already attached to person candidates — it is NOT a discovery/search actor.
+  // Verified schema (harvestapi/linkedin-company): input { companies: string[] (
+  // LinkedIn company URLs), searches: string[] (company names) }.
+  apify_linkedin_company_details: {
+    key: "apify_linkedin_company_details",
+    tool_name: "source_with_apify",
+    provider: "apify",
+    actor_id: actorId("APIFY_ACTOR_LINKEDIN_COMPANY_DETAILS", "harvestapi/linkedin-company"),
+    source_type: "company_details",
+    label: "LinkedIn Company Details Scraper",
+    enabled: true,
+    requires_explicit_opt_in: true,
+    best_for: [
+      "enriching a KNOWN company with website/industry/size/HQ evidence",
+      "filling company firmographic gaps for person candidates",
+    ],
+    not_for: [
+      "company discovery or filtered company search (use a company search actor)",
+      "people search",
+      "job search",
+    ],
+    output_type: "company_details",
+    default_max_results: 8,
+    max_safe_results: 25,
+    compliance_level: "public_company_data",
+    required_env: "APIFY_API_TOKEN",
+  },
   apify_linkedin_company_employees: {
     key: "apify_linkedin_company_employees",
     tool_name: "source_with_apify",

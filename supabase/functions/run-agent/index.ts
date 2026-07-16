@@ -26,6 +26,9 @@ import { compileLeadEntityIntent, compileActorPlan, detectRoutingConflict, artif
 import { qualificationPersistenceDecision, mapAriaToDecision, type AriaLike } from "../_shared/qualificationPersistence.ts";
 import { buildQualificationObservability, type CandidateDiagnosticInput, type QualificationObservability } from "../_shared/qualificationObservability.ts";
 import { resolveGeographyConstraint, classifyGeography, type GeographyConstraint } from "../_shared/geographyConstraint.ts";
+import { runFindLeadsCompanyEnrichment, mapAcceptedPeople, makeCompanyEnrichmentExecutor, emptyCompanyEnrichmentObservability, type CompanyRawPatch } from "../_shared/runAgentCompanyEnrichment.ts";
+import { DEFAULT_EVIDENCE_BUDGET } from "../_shared/conditionalEnrichmentPlanner.ts";
+import type { CompanyEnrichmentObservability } from "../_shared/companyEnrichmentObservability.ts";
 
 
 const cors = {
@@ -293,6 +296,14 @@ Deno.serve(async (req) => {
   // Broad scope so success / partial_results / no_results terminals can all surface
   // it. Reports the source→qualification→persistence path; never changes policy.
   let qualificationObservability: QualificationObservability | null = null;
+  // Company enrichment observability (Phase 2, Section 8). Initialized to an
+  // empty reconciling object so EVERY terminal (success / partial / no_results /
+  // tool_failed) carries it even when enrichment never ran.
+  let companyEnrichmentObservability: CompanyEnrichmentObservability = emptyCompanyEnrichmentObservability(0);
+  // Candidate ids that gained verified company evidence but whose fit/timing is
+  // STILL insufficient (e.g. a Hot founder proven on firmographics with no timing
+  // signal). These are force-staged at the persistence gate — never accepted.
+  let companyEnrichmentStaged = new Set<string>();
   // Source-gate funnel evidence (Section 3/4): normalized candidate count + the
   // sanitized diagnostics for candidates rejected BEFORE qualification.
   let runNormalizedCount = 0;
@@ -1473,6 +1484,78 @@ Deno.serve(async (req) => {
         // filter and the observability diagnostics use the SAME verdict.
         const qualDecisionByKey = new Map<string, { persist: boolean; reason: string; evaluated: boolean }>();
         const candKey = (a: any): string => normUrl(a.source_url ?? a.raw?.source_url ?? a.raw?.profile_url) || normName(a.name ?? a.company) || "";
+
+        // ── Company enrichment (Phase 2, Section 10) ────────────────────────────
+        // Sits BETWEEN deterministic scoring and the canonical persistence gate.
+        // Enriches the ALREADY source-accepted people with VERIFIED firmographics
+        // from the canonical company actor (apify_linkedin_company_details), then
+        // lets the existing gate rerun its decision. Invoked ONCE per workflow.
+        // Person provenance is preserved; company evidence is appended separately;
+        // enrichment can only TIGHTEN (force-stage) — it never forces an accept.
+        if (runTargetIsPerson && routingEntityIntent && !routingEntityIntent.clarification_required) {
+          try {
+            const enrichPeople = mapAcceptedPeople(effectiveAccepted as any[], {
+              candidateId: (a) => candKey(a),
+              preRankScore: (a) => { const e = lookupEntry(a); return typeof e?.score === "number" ? e.score : null; },
+              isHardRejected: (a) => {
+                if (gateRejectedKeys.size === 0) return false;
+                const uk = normUrl(a.source_url ?? a.raw?.source_url);
+                const nn = normName(a.name ?? a.company);
+                return !!((uk && gateRejectedKeys.has(`u:${uk}`)) || (nn && gateRejectedKeys.has(`n:${nn}`)));
+              },
+            });
+            const brainConstraints = {
+              industries: (brainIcp.industries ?? null) as string[] | null,
+              geography: (criteria.location ?? brainIcp.geography ?? null) as string | null,
+              company_size: (brainIcp.company_size ?? null) as string | null,
+            };
+            const enrichment = await runFindLeadsCompanyEnrichment({
+              people: enrichPeople,
+              intent: routingEntityIntent,
+              brain: brainConstraints,
+              now: run_started_at ?? new Date().toISOString(),
+              budget: { ...DEFAULT_EVIDENCE_BUDGET, finalAcceptedTarget: Math.max(1, Number(max_results) || DEFAULT_EVIDENCE_BUDGET.finalAcceptedTarget) },
+              acceptedSoFar: 0,
+              // Canonical Apify path; the actor identity is fixed INSIDE the adapter
+              // (never from user/tool/planner/model). If the company actor env is
+              // not configured this returns provider_error and candidates stage
+              // honestly — it never fabricates evidence and never calls Firecrawl.
+              execute: makeCompanyEnrichmentExecutor(runTool, baseCtx),
+              workflowRunId: run_id, taskId: task.id, workspaceId: workspace_id,
+            });
+            companyEnrichmentObservability = enrichment.observability;
+            companyEnrichmentStaged = enrichment.stagedByEnrichment;
+            // Merge sanitized company firmographics onto each enriched candidate's
+            // raw (append-only; never overwrites an existing value, never carries
+            // phone/email/raw payload) so qualification + Workbench + CSV can read
+            // website / industry / size / geography. Person provenance stays primary.
+            for (const a of effectiveAccepted as any[]) {
+              const patch = enrichment.companyPatchById.get(candKey(a)) as CompanyRawPatch | undefined;
+              if (!patch) continue;
+              const raw = (a.raw ?? (a.raw = {})) as Record<string, unknown>;
+              const put = (k: string, v: unknown) => { if (v != null && (raw[k] == null || raw[k] === "")) raw[k] = v; };
+              put("company_website", patch.company_website);
+              put("company_industries", patch.company_industries);
+              put("company_employee_count", patch.company_employee_count);
+              put("company_employee_range", patch.company_employee_range);
+              put("company_country", patch.company_country);
+              put("company_country_code", patch.company_country_code);
+              put("company_linkedin_url", patch.company_linkedin_url);
+              // SEPARATE, verified company-evidence provenance — never replaces the
+              // primary person provenance stamped elsewhere.
+              raw.company_evidence_provenance = patch.company_evidence_provenance;
+            }
+            console.log("[run-agent] company enrichment", {
+              considered: companyEnrichmentObservability.summary.candidates_considered,
+              planned: companyEnrichmentObservability.summary.companies_planned,
+              called: companyEnrichmentObservability.summary.companies_called,
+              enriched: companyEnrichmentObservability.summary.companies_enriched,
+              requalified: enrichment.requalifyCandidateIds.size,
+              staged: companyEnrichmentStaged.size,
+            });
+          } catch (e) { console.warn("[run-agent] company enrichment failed (non-fatal):", e); }
+        }
+
         let finalPersistSet = gatedAccepted;
         if (runTargetIsPerson) {
           finalPersistSet = gatedAccepted.filter((a: any) => {
@@ -1492,18 +1575,25 @@ Deno.serve(async (req) => {
               tier: entry?.tier ?? null,
               evidenceViolations: violations,
             });
-            qualDecisionByKey.set(candKey(a), { persist: decision.persist, reason: decision.reason, evaluated: m.evaluated });
-            if (!decision.persist) {
+            // Company enrichment can only TIGHTEN: a candidate proven on fit but
+            // still missing required evidence (e.g. a Hot founder with no timing
+            // signal after firmographic enrichment) is force-staged for signal
+            // enrichment — firmographics alone never make it Hot. Never loosens.
+            const enrichmentStaged = companyEnrichmentStaged.has(candKey(a));
+            const persist = decision.persist && !enrichmentStaged;
+            const reason = decision.persist && enrichmentStaged ? "stage_missing_evidence:signal_enrichment" : decision.reason;
+            qualDecisionByKey.set(candKey(a), { persist, reason, evaluated: m.evaluated });
+            if (!persist) {
               stagedForReview.push({
                 name: (a.name ?? null) as string | null,
                 company: (a.company ?? null) as string | null,
                 source_url: (a.source_url ?? a.raw?.source_url ?? a.raw?.profile_url ?? null) as string | null,
-                reason: decision.reason,
+                reason,
                 tier: entry?.tier ?? null,
                 star_label: (aria?.star_label ?? null) as string | null,
               });
             }
-            return decision.persist;
+            return persist;
           });
           console.log("[run-agent] qualification gate", { accepted: gatedAccepted.length, persisted: finalPersistSet.length, staged: stagedForReview.length });
           // Reflect honest persisted vs staged counts in the source-quality meta.
@@ -1593,7 +1683,10 @@ Deno.serve(async (req) => {
             target_entity: routingEntityIntent?.target_entity,
             expected_artifact_type: runArtifactType,
           });
-          if (sourceQualityMeta) (sourceQualityMeta as Record<string, unknown>).qualification_observability = qualificationObservability;
+          if (sourceQualityMeta) {
+            (sourceQualityMeta as Record<string, unknown>).qualification_observability = qualificationObservability;
+            (sourceQualityMeta as Record<string, unknown>).company_enrichment_observability = companyEnrichmentObservability;
+          }
         } catch (e) { console.warn("[run-agent] observability build failed:", e); }
 
         if (finalPersistSet.length > 0) {
@@ -1887,7 +1980,7 @@ Deno.serve(async (req) => {
     // Structured reason so a hard provider failure is machine-classifiable (and can
     // never be mistaken for a successful/"complete" run). No fabrication, no leads.
     const failReason: ProviderSourceReason = classifyProviderSourceOutcome({ errored: true }) ?? "provider_source_failed";
-    await supabase.from("tasks").update({ status: "failed", error_message: sourcingFailure.error, result: { error: sourcingFailure.error, message: failMsg, result_status: "no_results", reason: failReason, qualified_count: 0, contact_ready_count: 0, persisted_lead_count: 0, provider_calls: 0, next_step: null, qualification_observability: qualificationObservability ?? undefined } }).eq("id", task.id);
+    await supabase.from("tasks").update({ status: "failed", error_message: sourcingFailure.error, result: { error: sourcingFailure.error, message: failMsg, result_status: "no_results", reason: failReason, qualified_count: 0, contact_ready_count: 0, persisted_lead_count: 0, provider_calls: 0, next_step: null, qualification_observability: qualificationObservability ?? undefined, company_enrichment_observability: companyEnrichmentObservability } }).eq("id", task.id);
     await supabase.from("task_plans").update({ status: "failed" }).eq("id", plan_id);
     await supabase.from("activity_feed").insert({
       workspace_id, plan_id, agent_id: agent.id, event_type: "agent_started",
@@ -1979,6 +2072,7 @@ Deno.serve(async (req) => {
         // Section 5: surface the funnel + sanitized staged-candidate diagnostics so
         // an honest no_results explains WHY each provider candidate was held back.
         qualification_observability: qualificationObservability ?? undefined,
+        company_enrichment_observability: companyEnrichmentObservability,
       },
     }).eq("id", task.id);
     await supabase.from("task_plans").update({ status: "failed", completed_at: new Date().toISOString() }).eq("id", plan_id);
@@ -2125,7 +2219,7 @@ Deno.serve(async (req) => {
   const finalStatus = needs_approval ? "awaiting_approval" : "complete";
   await supabase.from("tasks").update({
     status: finalStatus,
-    result: { output: apiText, tokens_in: tokensIn, tokens_out: tokensOut, attempt_log: adaptiveAttempts.length ? adaptiveAttempts : undefined, sourcing_attempts: sourcingAttemptAudit ?? undefined, lead_entity_intent: routingEntityIntent ?? undefined, routing: routingActorPlan ? { target_entity: routingActorPlan.target_entity, output_type: routingEntityIntent?.output_type, primary_actor: routingActorPlan.primary_identity_actor, routing_source: routingActorPlan.routing_source } : undefined, source_plan: sourcePlanMeta ?? undefined, source_quality: sourceQualityMeta ?? undefined, qualification_observability: qualificationObservability ?? undefined },
+    result: { output: apiText, tokens_in: tokensIn, tokens_out: tokensOut, attempt_log: adaptiveAttempts.length ? adaptiveAttempts : undefined, sourcing_attempts: sourcingAttemptAudit ?? undefined, lead_entity_intent: routingEntityIntent ?? undefined, routing: routingActorPlan ? { target_entity: routingActorPlan.target_entity, output_type: routingEntityIntent?.output_type, primary_actor: routingActorPlan.primary_identity_actor, routing_source: routingActorPlan.routing_source } : undefined, source_plan: sourcePlanMeta ?? undefined, source_quality: sourceQualityMeta ?? undefined, qualification_observability: qualificationObservability ?? undefined, company_enrichment_observability: companyEnrichmentObservability },
   }).eq("id", task.id);
 
   // Phase 2: persist agent outputs into structured GTM memory. Fire-and-forget.
