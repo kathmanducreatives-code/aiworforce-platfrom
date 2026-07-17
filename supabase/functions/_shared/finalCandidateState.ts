@@ -25,6 +25,7 @@
 
 import type { EvidenceCategory } from "./evidenceContract.ts";
 import type { SufficiencyDecision } from "./evidenceSufficiency.ts";
+import type { TimingDecision } from "./timingAssessment.ts";
 
 /** The only three final states a candidate may end in. Mutually exclusive. */
 export type FinalCandidateState = "qualify_now" | "stage_missing_evidence" | "reject";
@@ -56,6 +57,9 @@ export type FinalRejectionClass =
   | "hard_source"
   | "icp_mismatch"
   | "qualification_threshold"
+  /** A verified, current signal CONTRADICTS the reason to reach out — e.g. the
+   * person has left the company. Distinct from merely-absent timing, which stages. */
+  | "timing_contradiction"
   | null;
 
 /** Company-enrichment outcome as the orchestrator classified it, per candidate. */
@@ -113,6 +117,15 @@ export interface FinalCandidateStateInput {
   persistDecision: { persist: boolean; reason: string };
   /** Enrichment force-staged this candidate (fit proven, timing still missing). */
   stagedByEnrichment?: boolean;
+  /**
+   * Optional timing verdict from evaluateTimingSufficiency (Phase A).
+   *
+   * `timing_sufficient` NEVER means accept — it only clears the timing gap so the
+   * candidate can be judged by the persistence authority below, exactly as before.
+   * `missing_timing_evidence` stages; `timing_contradicted` is a genuine reject.
+   * Omit it entirely and this reducer behaves exactly as it did in v85.
+   */
+  timingDecision?: TimingDecision | null;
 }
 
 /** Timing/buying-signal categories — a missing one of these is never a reject. */
@@ -163,6 +176,21 @@ export function resolveFinalCandidateState(input: FinalCandidateStateInput): Fin
 
   // 2) The candidate's own verified evidence contradicts the ICP.
   if (input.icpContradiction === true) return reject("icp_mismatch", "icp_contradiction");
+
+  // 2b) A verified, current signal contradicts the reason to reach out (e.g. the
+  //     person has left the company). Truthful reject — never fabricate urgency, and
+  //     never confuse this with merely-absent timing, which stages below.
+  if (input.timingDecision === "timing_contradicted") {
+    return reject("timing_contradiction", "timing_contradicted");
+  }
+
+  // 2c) Timing is required and still unproven. This outranks an upstream accept for
+  //     the same reason enrichment may only TIGHTEN: firmographics alone never make a
+  //     candidate hot. `timing_sufficient` deliberately does NOT short-circuit to
+  //     accept — it simply falls through to the persistence authority below.
+  if (input.timingDecision === "missing_timing_evidence") {
+    return stage("missing_timing_signal", "signal_enrichment", "missing_timing_signal");
+  }
 
   // 3) The canonical persistence authority already accepted it. Enrichment may only
   //    TIGHTEN, so a force-staged candidate never reaches qualify_now here.
