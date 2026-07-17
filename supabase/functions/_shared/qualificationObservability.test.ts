@@ -153,13 +153,14 @@ Deno.test("mixed scenario: accepted diagnostics persisted, staged not", () => {
     { name: "A", company: "SaaSCo", source_url: "https://www.linkedin.com/in/a", provider_verified: true, artifact_type: "person_candidate", source_gate_decision: "accept", tier: "qualified", qualification_decision: "accept", qualification_reason: "aria_accepted", matched_icp: ["B2B SaaS"], persisted: true, sent_to_downstream_aria: true },
     { name: "B", company: "SaaSCo2", source_url: "https://www.linkedin.com/in/b", provider_verified: true, artifact_type: "person_candidate", source_gate_decision: "accept", tier: "qualified", qualification_decision: "accept", qualification_reason: "aria_accepted", matched_icp: ["B2B SaaS"], persisted: true, sent_to_downstream_aria: true },
     // C: verified ICP contradiction ⇒ a genuine reject. D/E: merely unproven ⇒ staged.
-    // Only accepted people reach Aria, so the staged/rejected three do not.
-    { name: "C", company: "ITServices", source_url: "https://www.linkedin.com/in/c", provider_verified: true, artifact_type: "person_candidate", source_gate_decision: "needs_verification", tier: "rejected", qualification_decision: "reject", qualification_reason: "icp_contradiction", matched_icp: [], persisted: false, sent_to_downstream_aria: false },
-    { name: "D", company: "Consulting", source_url: "https://www.linkedin.com/in/d", provider_verified: true, artifact_type: "person_candidate", source_gate_decision: "needs_verification", tier: "weak", qualification_decision: "stage_missing_evidence", stage_reason: "missing_timing_signal", next_action: "signal_enrichment", qualification_reason: "missing_timing_signal", matched_icp: ["SaaS"], evidence_missing: ["funding_signal"], persisted: false, sent_to_downstream_aria: false },
-    { name: "E", company: "Agency", source_url: "https://www.linkedin.com/in/e", provider_verified: true, artifact_type: "person_candidate", source_gate_decision: "needs_verification", tier: "weak", qualification_decision: "stage_missing_evidence", stage_reason: "company_timeout", next_action: "company_enrichment", qualification_reason: "company_timeout", matched_icp: ["SaaS"], persisted: false, sent_to_downstream_aria: false },
+    // ALL FIVE were screened by Aria — the runtime hands over the whole
+    // source-gate-accepted provider pool. Screening is not qualification approval.
+    { name: "C", company: "ITServices", source_url: "https://www.linkedin.com/in/c", provider_verified: true, artifact_type: "person_candidate", source_gate_decision: "needs_verification", tier: "rejected", qualification_decision: "reject", qualification_reason: "icp_contradiction", matched_icp: [], persisted: false, sent_to_downstream_aria: true },
+    { name: "D", company: "Consulting", source_url: "https://www.linkedin.com/in/d", provider_verified: true, artifact_type: "person_candidate", source_gate_decision: "needs_verification", tier: "weak", qualification_decision: "stage_missing_evidence", stage_reason: "missing_timing_signal", next_action: "signal_enrichment", qualification_reason: "missing_timing_signal", matched_icp: ["SaaS"], evidence_missing: ["funding_signal"], persisted: false, sent_to_downstream_aria: true },
+    { name: "E", company: "Agency", source_url: "https://www.linkedin.com/in/e", provider_verified: true, artifact_type: "person_candidate", source_gate_decision: "needs_verification", tier: "weak", qualification_decision: "stage_missing_evidence", stage_reason: "company_timeout", next_action: "company_enrichment", qualification_reason: "company_timeout", matched_icp: ["SaaS"], persisted: false, sent_to_downstream_aria: true },
   ];
   const obs = buildQualificationObservability({
-    funnel: { raw_count: 5, normalized_count: 5, source_gate_accepted: 5, source_gate_rejected: 0, hard_gate_rejected: 0, qualification_accepted: 2, qualification_staged: 2, qualification_rejected: 1, persisted_count: 2, downstream_aria_count: 2 },
+    funnel: { raw_count: 5, normalized_count: 5, source_gate_accepted: 5, source_gate_rejected: 0, hard_gate_rejected: 0, qualification_accepted: 2, qualification_staged: 2, qualification_rejected: 1, persisted_count: 2, downstream_aria_count: 5 },
     candidates, requested_limit: 5, target_entity: "person", expected_artifact_type: "person_candidate",
   });
   assertEquals(obs.funnel.qualification_accepted, 2);
@@ -169,8 +170,11 @@ Deno.test("mixed scenario: accepted diagnostics persisted, staged not", () => {
   assertEquals(obs.funnel.persisted_count, 2);
   assertEquals(obs.candidates.filter((c) => c.persisted).length, 2);
   assertEquals(obs.candidates.filter((c) => c.qualification_decision === "stage_missing_evidence").length, 2);
-  // Only the two accepted people reach Aria; staged and rejected never do.
-  assertEquals(obs.candidates.filter((c) => c.sent_to_downstream_aria).length, 2);
+  // All five were SCREENED; only the two qualify_now persisted. Screening (wide
+  // input) and persistence (narrow output) are separate facts.
+  assertEquals(obs.candidates.filter((c) => c.sent_to_downstream_aria).length, 5);
+  assertEquals(obs.funnel.downstream_aria_count, 5);
+  assertEquals(obs.candidates.filter((c) => c.persistence_eligible).length, 2);
   assertEquals(obs.funnel.reconciles, true);
 });
 

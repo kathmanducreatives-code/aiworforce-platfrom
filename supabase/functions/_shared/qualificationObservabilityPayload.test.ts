@@ -59,7 +59,7 @@ Deno.test("payload: persisted_count distinguishes no_results from partial", () =
   assertEquals(zero.funnel.persisted_count, 0);          // → no_results
   assert(zero.funnel.staged_count > 0);
   const partial = buildQualificationObservability({
-    funnel: { raw_count: 5, normalized_count: 5, source_gate_accepted: 5, source_gate_rejected: 0, hard_gate_rejected: 0, qualification_accepted: 2, qualification_staged: 3, qualification_rejected: 0, persisted_count: 2, downstream_aria_count: 2 },
+    funnel: { raw_count: 5, normalized_count: 5, source_gate_accepted: 5, source_gate_rejected: 0, hard_gate_rejected: 0, qualification_accepted: 2, qualification_staged: 3, qualification_rejected: 0, persisted_count: 2, downstream_aria_count: 5 },
     candidates: [], requested_limit: 5,
   });
   assert(partial.funnel.persisted_count > 0);            // → partial_results

@@ -1632,6 +1632,23 @@ Deno.serve(async (req) => {
         try {
           const persistedKeys = new Set(finalPersistSet.map((a: any) => candKey(a)));
           const willRunAria = finalPersistSet.length > 0;
+          // ARIA SCREENING ≠ FINAL QUALIFICATION. Aria is handed the WHOLE
+          // source-gate-accepted provider-backed person pool to screen/rank
+          // (Section 10 pool alignment, see the handoff below) — not the subset that
+          // ultimately qualifies. Telemetry must report the set the runtime actually
+          // handed over, so it is derived from `personProviderCandidates` (the real
+          // handoff set) and NEVER from `qualification_decision === qualify_now`.
+          const ariaHandoffKeys = new Set<string>();
+          for (const c of personProviderCandidates ?? []) {
+            const u = normUrl(c.source_url); if (u) ariaHandoffKeys.add(`u:${u}`);
+            const n = normName(c.name); if (n) ariaHandoffKeys.add(`n:${n}`);
+          }
+          const inAriaHandoff = (a: any): boolean => {
+            if (!ariaHandoffKeys.size) return false;
+            const u = normUrl(a.source_url ?? a.raw?.source_url ?? a.raw?.profile_url);
+            const n = normName(a.name);
+            return (!!u && ariaHandoffKeys.has(`u:${u}`)) || (!!n && ariaHandoffKeys.has(`n:${n}`));
+          };
           const diagnostics: CandidateDiagnosticInput[] = (effectiveAccepted as any[]).map((a: any) => {
             const key = candKey(a);
             const entry = lookupEntry(a);
@@ -1706,9 +1723,13 @@ Deno.serve(async (req) => {
               evidence_missing: refreshedMissing,
               evidence_violations: violations,
               persisted,
-              // Only accepted, provider-backed people reach Aria. A staged or
-              // rejected candidate never does, whatever the workflow did overall.
-              sent_to_downstream_aria: willRunAria && finalState.sent_to_downstream_aria,
+              // OBSERVED screening handoff — true when Aria runs for this workflow and
+              // this candidate was in the pool actually handed over. A staged or
+              // rejected candidate CAN be screened; being screened is not qualification
+              // approval and never implies persistence.
+              sent_to_downstream_aria: willRunAria && inAriaHandoff(a),
+              // Persistence eligibility is a SEPARATE fact: only qualify_now may persist.
+              persistence_eligible: finalState.persist === true,
             } as CandidateDiagnosticInput;
           });
           // Counters are DERIVED from the per-candidate final states, so the funnel and
@@ -1737,7 +1758,10 @@ Deno.serve(async (req) => {
               qualification_staged: qualStaged,
               qualification_rejected: Math.max(0, qualRejected),
               persisted_count: finalPersistSet.length,
-              downstream_aria_count: diagnostics.filter((d) => d.sent_to_downstream_aria).length,
+              // The ACTUAL Aria screening input size (the whole provider-backed pool),
+              // never the qualify_now count: 5 screened / 2 qualified reports 5 here
+              // and 2 in qualification_accepted + persisted_count.
+              downstream_aria_count: willRunAria ? (personProviderCandidates?.length ?? 0) : 0,
             },
             candidates: diagnostics,
             source_gate_rejected: runSourceGateRejectedDiag as any,

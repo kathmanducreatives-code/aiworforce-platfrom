@@ -14,6 +14,24 @@
 // public profile URLs only. Never emails, phones, raw provider payloads,
 // credentials, tokens, headers, or prompts.
 //
+// TERMINOLOGY — these are THREE separate facts and must never collapse into one
+// field (conflating them is what produced the v84 reporting defects):
+//
+//   "source-gate accepted"      a provider-backed candidate eligible for Aria
+//                               SCREENING. This is the pool the runtime hands Aria.
+//   "sent_to_downstream_aria"   the OBSERVED screening handoff — was this candidate
+//   / "aria_screening_handoff"  in the pool Aria actually received? NOT approval.
+//                               A staged or rejected candidate may be `true`.
+//   "qualify_now"               the FINAL state eligible for persistence.
+//   "stage_missing_evidence"    not persistable yet; needs another evidence action
+//                               (company_enrichment / signal_enrichment / …).
+//   "reject"                    a verified contradiction or hard disqualification.
+//   "persistence_eligible"      only `qualify_now`. Independent of screening.
+//
+// Screening is a WIDE input (rank everything sourced); persistence is a NARROW
+// output (only what qualified). `downstream_aria_count` therefore reports the real
+// handoff size and is expected to exceed `qualification_accepted`.
+//
 // Pure / import-light so it is fully unit-testable with no provider calls.
 
 import type { ArtifactType, TargetEntity } from "./leadEntityIntent.ts";
@@ -92,7 +110,17 @@ export interface CandidateDecisionDiagnostic {
   next_action?: NextAction;
 
   persisted: boolean;
+  /**
+   * OBSERVED Aria SCREENING handoff — was this candidate in the provider-backed pool
+   * the runtime actually handed Aria to screen/rank? This is NOT qualification
+   * approval and NOT persistence: a `stage_missing_evidence` or `reject` candidate
+   * may legitimately be `true` here. See `persistence_eligible` for the final say.
+   */
   sent_to_downstream_aria: boolean;
+  /** Clearer alias of `sent_to_downstream_aria` (same observed screening fact). */
+  aria_screening_handoff: boolean;
+  /** Only a `qualify_now` candidate may persist. Independent of screening. */
+  persistence_eligible: boolean;
 }
 
 export interface QualificationFunnel {
@@ -108,8 +136,18 @@ export interface QualificationFunnel {
   qualification_rejected: number;
   /** Alias of qualification_staged, kept for existing payload readers. */
   staged_count: number;
+  /** Only qualify_now candidates persist. */
   persisted_count: number;
+  /**
+   * The ACTUAL number of candidates handed to Aria for SCREENING — the whole
+   * provider-backed pool, not the qualified subset. Expected to be >= accepted:
+   * 5 screened / 2 qualified reports 5 here and 2 in qualification_accepted.
+   * Deliberately OUTSIDE the final-state identity below (screening is an input,
+   * the three final states are outputs).
+   */
   downstream_aria_count: number;
+  /** Clearer alias of downstream_aria_count (same observed screening fact). */
+  aria_screening_count: number;
   /** True when ALL invariants hold:
    *  normalized_count == source_gate_accepted + source_gate_rejected,
    *  source_gate_accepted == hard_gate_rejected + accepted + staged + rejected, AND
@@ -315,7 +353,10 @@ export interface CandidateDiagnosticInput {
   next_action?: NextAction;
 
   persisted: boolean;
+  /** OBSERVED screening handoff (was this candidate in the pool Aria received?). */
   sent_to_downstream_aria: boolean;
+  /** Only qualify_now may persist. Defaults to `persisted` when the caller omits it. */
+  persistence_eligible?: boolean;
 }
 
 export function buildCandidateDiagnostic(input: CandidateDiagnosticInput): CandidateDecisionDiagnostic {
@@ -361,7 +402,11 @@ export function buildCandidateDiagnostic(input: CandidateDiagnosticInput): Candi
     staged_reason: staged ? (reason_code || "staged") : undefined,
     next_action: isStaged ? (input.next_action ?? null) : undefined,
     persisted: input.persisted === true,
+    // Screening (wide input) and persistence eligibility (narrow output) are
+    // reported separately and must never be derived from one another.
     sent_to_downstream_aria: input.sent_to_downstream_aria === true,
+    aria_screening_handoff: input.sent_to_downstream_aria === true,
+    persistence_eligible: input.persistence_eligible ?? (isAcceptedDecision(input.qualification_decision) && input.persisted === true),
   };
 }
 
@@ -406,6 +451,7 @@ export function buildQualificationFunnel(input: FunnelInput): QualificationFunne
     staged_count: qualification_staged,
     persisted_count: n(input.persisted_count),
     downstream_aria_count: n(input.downstream_aria_count),
+    aria_screening_count: n(input.downstream_aria_count),
     reconciles,
   };
 }

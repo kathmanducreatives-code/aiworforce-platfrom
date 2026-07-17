@@ -76,7 +76,17 @@ export interface FinalCandidateStateResult {
   rejection_class: FinalRejectionClass;
   next_action: NextAction;
   reason_code: string;
+  /** POLICY: may this candidate become a final persisted lead? Only qualify_now. */
   persist: boolean;
+  /**
+   * POLICY: may this candidate be treated as an ACCEPTED lead downstream?
+   *
+   * This is NOT the Aria SCREENING handoff. Aria screens/ranks the whole
+   * source-gate-accepted provider pool, so a staged or rejected candidate is still
+   * legitimately handed to Aria. Observed screening membership belongs to
+   * run-agent's telemetry (`sent_to_downstream_aria` / `aria_screening_handoff`) and
+   * must be derived from the real handoff set — never from this field.
+   */
   sent_to_downstream_aria: boolean;
 }
 
