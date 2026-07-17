@@ -23,10 +23,11 @@ import { resolvePlannedTool, isProviderSourcingTool, resolveProviderSource } fro
 import { parsePeopleSearchIntent, buildPeopleSearchAttempts, buildSourcingAttemptAudit } from "../_shared/peopleSearchQueryBuilder.ts";
 import { extractCandidateLocationEvidence } from "../_shared/locationMatch.ts";
 import { compileLeadEntityIntent, compileActorPlan, detectRoutingConflict, artifactTypeForActor, expectedArtifactType, ACTOR_IMPL, type LeadEntityIntent, type ProviderActorPlan, type RoutingConflictResult } from "../_shared/leadEntityIntent.ts";
-import { qualificationPersistenceDecision, mapAriaToDecision, type AriaLike } from "../_shared/qualificationPersistence.ts";
+import { qualificationPersistenceDecision, mapAriaToDecision, isHardEvidenceBlocker, type AriaLike } from "../_shared/qualificationPersistence.ts";
+import { resolveFinalCandidateState, refreshEvidenceMissing } from "../_shared/finalCandidateState.ts";
 import { buildQualificationObservability, type CandidateDiagnosticInput, type QualificationObservability } from "../_shared/qualificationObservability.ts";
 import { resolveGeographyConstraint, classifyGeography, type GeographyConstraint } from "../_shared/geographyConstraint.ts";
-import { runFindLeadsCompanyEnrichment, mapAcceptedPeople, makeCompanyEnrichmentExecutor, emptyCompanyEnrichmentObservability, type CompanyRawPatch } from "../_shared/runAgentCompanyEnrichment.ts";
+import { runFindLeadsCompanyEnrichment, mapAcceptedPeople, makeCompanyEnrichmentExecutor, emptyCompanyEnrichmentObservability, type CompanyRawPatch, type CandidateEnrichmentOutcome } from "../_shared/runAgentCompanyEnrichment.ts";
 import { enrichmentDeadlineFrom } from "../_shared/companyEnrichmentOrchestrator.ts";
 import { shouldSkipBroadResearch } from "../_shared/broadResearchPolicy.ts";
 import { DEFAULT_EVIDENCE_BUDGET } from "../_shared/conditionalEnrichmentPlanner.ts";
@@ -310,6 +311,10 @@ Deno.serve(async (req) => {
   // STILL insufficient (e.g. a Hot founder proven on firmographics with no timing
   // signal). These are force-staged at the persistence gate — never accepted.
   let companyEnrichmentStaged = new Set<string>();
+  // Post-enrichment truth per candidate (sufficiency verdict + real remaining gaps +
+  // company outcome). Feeds the canonical final-state reducer so the qualification
+  // diagnostics agree with the company observability.
+  let enrichmentByCandidate = new Map<string, CandidateEnrichmentOutcome>();
   // Source-gate funnel evidence (Section 3/4): normalized candidate count + the
   // sanitized diagnostics for candidates rejected BEFORE qualification.
   let runNormalizedCount = 0;
@@ -1534,6 +1539,13 @@ Deno.serve(async (req) => {
             });
             companyEnrichmentObservability = enrichment.observability;
             companyEnrichmentStaged = enrichment.stagedByEnrichment;
+            enrichmentByCandidate = enrichment.perCandidate;
+            if (enrichment.lateProviderCompletions.length) {
+              // Audit only: the workflow already finalized these companies as timeouts.
+              console.log("[run-agent] late provider completions ignored", {
+                count: enrichment.lateProviderCompletions.length, status: "ignored_after_timeout",
+              });
+            }
             // Merge sanitized company firmographics onto each enriched candidate's
             // raw (append-only; never overwrites an existing value, never carries
             // phone/email/raw payload) so qualification + Workbench + CSV can read
@@ -1620,6 +1632,23 @@ Deno.serve(async (req) => {
         try {
           const persistedKeys = new Set(finalPersistSet.map((a: any) => candKey(a)));
           const willRunAria = finalPersistSet.length > 0;
+          // ARIA SCREENING ≠ FINAL QUALIFICATION. Aria is handed the WHOLE
+          // source-gate-accepted provider-backed person pool to screen/rank
+          // (Section 10 pool alignment, see the handoff below) — not the subset that
+          // ultimately qualifies. Telemetry must report the set the runtime actually
+          // handed over, so it is derived from `personProviderCandidates` (the real
+          // handoff set) and NEVER from `qualification_decision === qualify_now`.
+          const ariaHandoffKeys = new Set<string>();
+          for (const c of personProviderCandidates ?? []) {
+            const u = normUrl(c.source_url); if (u) ariaHandoffKeys.add(`u:${u}`);
+            const n = normName(c.name); if (n) ariaHandoffKeys.add(`n:${n}`);
+          }
+          const inAriaHandoff = (a: any): boolean => {
+            if (!ariaHandoffKeys.size) return false;
+            const u = normUrl(a.source_url ?? a.raw?.source_url ?? a.raw?.profile_url);
+            const n = normName(a.name);
+            return (!!u && ariaHandoffKeys.has(`u:${u}`)) || (!!n && ariaHandoffKeys.has(`n:${n}`));
+          };
           const diagnostics: CandidateDiagnosticInput[] = (effectiveAccepted as any[]).map((a: any) => {
             const key = candKey(a);
             const entry = lookupEntry(a);
@@ -1638,10 +1667,40 @@ Deno.serve(async (req) => {
             const decision = qualDecisionByKey.get(key);
             const persisted = persistedKeys.has(key);
             const gateDecision = isHardRejected ? "reject" : ((entry?.gate as any)?.decision ?? "needs_verification");
-            const qualification_decision = persisted ? "accept"
-              : isHardRejected ? "missing"
-              : runTargetIsPerson ? (decision ? (decision.evaluated ? "reject" : "missing") : "missing")
-              : "accept"; // company/job: gate-accepted persist under existing policy
+            // ONE canonical final state per candidate. Previously this collapsed every
+            // non-persisted candidate to "reject", which double-counted staged people and
+            // labelled company-fit-verified founders `qualification_threshold` while the
+            // company observability recommended `signal_enrichment` for the same person.
+            const post = enrichmentByCandidate.get(key);
+            const finalState = runTargetIsPerson
+              ? resolveFinalCandidateState({
+                sourceGateDecision: gateDecision,
+                providerVerified: !!sourceUrl,
+                artifactMatches: !isHardRejected,
+                hardEvidenceViolation: violations.find((v) => isHardEvidenceBlocker(v)) ?? null,
+                sufficiencyDecision: post?.decisionAfter === "unknown" ? null : (post?.decisionAfter ?? null),
+                missingCritical: post?.missingAfter ?? null,
+                companyOutcome: post?.companyOutcome ?? null,
+                ariaEvaluated: decision?.evaluated === true,
+                persistDecision: { persist: persisted, reason: decision?.reason ?? "no_qualification" },
+                stagedByEnrichment: companyEnrichmentStaged.has(key),
+              })
+              // company/job targets: gate-accepted persist under the existing policy.
+              : {
+                state: "qualify_now" as const, stage_reason: null, rejection_class: null,
+                next_action: null, reason_code: "source_gate_accepted",
+                persist: true, sent_to_downstream_aria: true,
+              };
+            const qualification_decision = finalState.state === "qualify_now" ? "qualify_now"
+              : finalState.state === "reject" ? "reject"
+              : "stage_missing_evidence";
+            // Authoritative post-enrichment gaps: a candidate that gained a verified
+            // website/industry must no longer report them missing.
+            const refreshedMissing = refreshEvidenceMissing({
+              staleMissingFields: (entry?.missing_fields ?? []) as string[],
+              patch: (a.raw ?? null) as any,
+              sufficiencyMissingAfter: post?.missingAfter ?? null,
+            });
             return {
               normalized_candidate_id: a.raw?.normalized_candidate_id ?? (entry?.canonical as any)?.normalized_candidate_id ?? null,
               name: a.name ?? a.company ?? null,
@@ -1656,17 +1715,31 @@ Deno.serve(async (req) => {
               deterministic_score: typeof entry?.score === "number" ? entry!.score : ((entry?.aria as any)?.overall_fit ?? null),
               tier: entry?.tier ?? null,
               qualification_decision,
-              qualification_reason: persisted ? "aria_accepted" : (isHardRejected ? "source_gate_reject" : (decision?.reason ?? (runTargetIsPerson ? "no_qualification" : "source_gate_accepted"))),
+              qualification_reason: finalState.reason_code,
+              stage_reason: finalState.stage_reason,
+              next_action: finalState.next_action,
               matched_icp: entry?.matched_icp ?? null,
               evidence_present: evPresent,
-              evidence_missing: (entry?.missing_fields ?? []) as string[],
+              evidence_missing: refreshedMissing,
               evidence_violations: violations,
               persisted,
-              sent_to_downstream_aria: willRunAria && !isHardRejected,
+              // OBSERVED screening handoff — true when Aria runs for this workflow and
+              // this candidate was in the pool actually handed over. A staged or
+              // rejected candidate CAN be screened; being screened is not qualification
+              // approval and never implies persistence.
+              sent_to_downstream_aria: willRunAria && inAriaHandoff(a),
+              // Persistence eligibility is a SEPARATE fact: only qualify_now may persist.
+              persistence_eligible: finalState.persist === true,
             } as CandidateDiagnosticInput;
           });
-          const hardRejected = (effectiveAccepted as any[]).length - (gatedAccepted as any[]).length;
-          const qualRejected = (gatedAccepted as any[]).length - finalPersistSet.length;
+          // Counters are DERIVED from the per-candidate final states, so the funnel and
+          // the diagnostics can never disagree (they were computed independently before,
+          // which is how staged and rejected both reported 5 for the same five people).
+          const hardRejected = diagnostics.filter((d) => d.qualification_decision === "reject"
+            && (d.source_gate_decision ?? "").toString().toLowerCase() === "reject").length;
+          const qualAccepted = diagnostics.filter((d) => d.qualification_decision === "qualify_now").length;
+          const qualStaged = diagnostics.filter((d) => d.qualification_decision === "stage_missing_evidence").length;
+          const qualRejected = diagnostics.filter((d) => d.qualification_decision === "reject").length - hardRejected;
           // Section 3: normalized_count is the count of provider items converted to
           // normalized candidate records (accepted + rejected + duplicates at the
           // source gate); source_gate_rejected is everything normalized but not
@@ -1681,9 +1754,13 @@ Deno.serve(async (req) => {
               source_gate_accepted: (effectiveAccepted as any[]).length,
               source_gate_rejected: sourceGateRejected,
               hard_gate_rejected: hardRejected,
-              qualification_accepted: finalPersistSet.length,
-              qualification_rejected: qualRejected,
+              qualification_accepted: qualAccepted,
+              qualification_staged: qualStaged,
+              qualification_rejected: Math.max(0, qualRejected),
               persisted_count: finalPersistSet.length,
+              // The ACTUAL Aria screening input size (the whole provider-backed pool),
+              // never the qualify_now count: 5 screened / 2 qualified reports 5 here
+              // and 2 in qualification_accepted + persisted_count.
               downstream_aria_count: willRunAria ? (personProviderCandidates?.length ?? 0) : 0,
             },
             candidates: diagnostics,

@@ -33,9 +33,13 @@ import {
   runCompanyEnrichment,
   type SourceAcceptedPerson, type CompanyActorExecutor,
   type CompanyActorExecuteArgs, type CompanyActorExecuteResult, type CompanyEnrichmentRunResult,
-  type EnrichmentClock,
+  type EnrichmentClock, type LateProviderCompletion,
 } from "./companyEnrichmentOrchestrator.ts";
-import { COMPANY_DETAILS_ACTOR_KEY, COMPANY_DETAILS_ACTOR_ID } from "./structuredCompanyEnrichment.ts";
+import {
+  COMPANY_DETAILS_ACTOR_KEY, COMPANY_DETAILS_ACTOR_ID, type CompanyEnrichmentOutcome,
+} from "./structuredCompanyEnrichment.ts";
+import type { SufficiencyDecision } from "./evidenceSufficiency.ts";
+import type { CompanyEnrichmentOutcomeForCandidate } from "./finalCandidateState.ts";
 import {
   buildCompanyEnrichmentObservability, type CompanyEnrichmentObservability,
 } from "./companyEnrichmentObservability.ts";
@@ -376,8 +380,43 @@ export interface FindLeadsEnrichmentResult {
   companyPatchById: Map<string, CompanyRawPatch>;
   /** Requalified candidates whose fit/timing is STILL insufficient ⇒ force-stage. */
   stagedByEnrichment: Set<string>;
-  /** Before/after honest outcomes per requalified candidate (audit only). */
-  perCandidate: Map<string, { decisionBefore: string; decisionAfter: string; sufficientAfter: boolean }>;
+  /**
+   * Post-enrichment truth per candidate. `decisionAfter` and `missingAfter` are the
+   * SAME values the company observability reports, so run-agent's qualification
+   * diagnostics and the company diagnostics cannot disagree (the v84 defect where
+   * one said `signal_enrichment` and the other said `reject`).
+   *
+   * Covers EVERY candidate the enrichment stage considered — not just requalified
+   * ones — so candidates whose company timed out / returned nothing still carry an
+   * honest post-state instead of falling back to stale pre-enrichment fields.
+   */
+  perCandidate: Map<string, CandidateEnrichmentOutcome>;
+  /** Abandoned late provider answers (audit only; never evidence). */
+  lateProviderCompletions: LateProviderCompletion[];
+}
+
+/** Collapse the orchestrator's company outcome to the candidate-facing vocabulary
+ * the final-state reducer consumes. `invalid_result`/`provider_error` are provider
+ * failures; `budget_skipped`/`not_needed` mean no call was made for this candidate. */
+export function normalizeCompanyOutcome(o: CompanyEnrichmentOutcome): CompanyEnrichmentOutcomeForCandidate {
+  switch (o) {
+    case "enriched": case "cached": return "enriched";
+    case "no_result": return "no_result";
+    case "timeout": return "timeout";
+    case "invalid_result": case "provider_error": return "failed";
+    case "skipped_due_deadline": return "skipped_due_deadline";
+    default: return "not_attempted";
+  }
+}
+
+export interface CandidateEnrichmentOutcome {
+  decisionBefore: string;
+  decisionAfter: SufficiencyDecision | "unknown";
+  sufficientAfter: boolean;
+  /** Authoritative post-enrichment critical gaps (canonical EvidenceCategory names). */
+  missingAfter: EvidenceCategory[];
+  /** How this candidate's company enrichment actually ended. */
+  companyOutcome: CompanyEnrichmentOutcomeForCandidate;
 }
 
 /**
@@ -411,7 +450,20 @@ export async function runFindLeadsCompanyEnrichment(
   const companyEvidenceById = new Map<string, EvidenceItem[]>();
   const companyPatchById = new Map<string, CompanyRawPatch>();
   const stagedByEnrichment = new Set<string>();
-  const perCandidate = new Map<string, { decisionBefore: string; decisionAfter: string; sufficientAfter: boolean }>();
+  const perCandidate = new Map<string, CandidateEnrichmentOutcome>();
+
+  // How each deduplicated company ended, fanned back to its candidates via the
+  // envelope's companyKey (the sanitized observability deliberately exposes only a
+  // candidate COUNT, never ids, so the raw results are the correct source here).
+  const outcomeByCompanyKey = new Map<string, CompanyEnrichmentOutcomeForCandidate>();
+  for (const r of enrichment.companyResults) {
+    outcomeByCompanyKey.set(r.companyKey, normalizeCompanyOutcome(r.outcome));
+  }
+  const outcomeByCandidate = new Map<string, CompanyEnrichmentOutcomeForCandidate>();
+  for (const e of enrichment.envelopes) {
+    const o = e.companyKey ? outcomeByCompanyKey.get(e.companyKey) : undefined;
+    if (o) outcomeByCandidate.set(e.candidateId, o);
+  }
 
   for (const id of enrichment.requalifyCandidateIds) {
     const env = enrichment.envelopes.find((e) => e.candidateId === id);
@@ -420,18 +472,26 @@ export async function runFindLeadsCompanyEnrichment(
     if (evidence.length) companyEvidenceById.set(id, evidence);
     const patch = companyPatchFromEvidence(env.evidence);
     if (patch) companyPatchById.set(id, patch);
+  }
 
+  // Record an honest post-state for EVERY considered candidate. `sufficiencyAfter`
+  // is recomputed from the updated envelope by the orchestrator, so a candidate that
+  // gained a verified website/industry no longer reports those as missing.
+  for (const p of people) {
+    const id = p.candidateId;
     const before = enrichment.sufficiencyBefore.get(id);
     const after = enrichment.sufficiencyAfter.get(id);
     const sufficientAfter = after?.sufficient === true && after?.nextDecision === "qualify_now";
-    // Enrichment can only tighten: a candidate whose fit/timing is still
-    // incomplete (e.g. a Hot founder proven on firmographics but with no timing
-    // signal) is force-staged — never accepted on firmographics alone.
-    if (!sufficientAfter) stagedByEnrichment.add(id);
+    // Enrichment can only tighten: a candidate whose fit/timing is still incomplete
+    // (e.g. a Hot founder proven on firmographics but with no timing signal) is
+    // force-staged — never accepted on firmographics alone.
+    if (enrichment.requalifyCandidateIds.has(id) && !sufficientAfter) stagedByEnrichment.add(id);
     perCandidate.set(id, {
       decisionBefore: before?.nextDecision ?? "unknown",
       decisionAfter: after?.nextDecision ?? "unknown",
       sufficientAfter,
+      missingAfter: (after?.missingCriticalRequirements ?? before?.missingCriticalRequirements ?? []) as EvidenceCategory[],
+      companyOutcome: outcomeByCandidate.get(id) ?? "not_attempted",
     });
   }
 
@@ -444,6 +504,7 @@ export async function runFindLeadsCompanyEnrichment(
     companyPatchById,
     stagedByEnrichment,
     perCandidate,
+    lateProviderCompletions: enrichment.lateProviderCompletions,
   };
 }
 

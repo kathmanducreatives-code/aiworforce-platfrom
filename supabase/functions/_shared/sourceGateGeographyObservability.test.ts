@@ -35,7 +35,7 @@ Deno.test("15: normalized_count reflects all normalized candidates, not source-a
   // v81 shape: 5 normalized, 0 source-accepted, 5 source-rejected.
   const f = buildQualificationFunnel({
     raw_count: 5, normalized_count: 5, source_gate_accepted: 0, source_gate_rejected: 5,
-    hard_gate_rejected: 0, qualification_accepted: 0, qualification_rejected: 0,
+    hard_gate_rejected: 0, qualification_accepted: 0, qualification_staged: 0, qualification_rejected: 0,
     persisted_count: 0, downstream_aria_count: 0,
   });
   assertEquals(f.normalized_count, 5);
@@ -48,7 +48,7 @@ Deno.test("15: normalized_count reflects all normalized candidates, not source-a
 Deno.test("16: funnel reconciles with source-gate rejections; mismatch flagged", () => {
   const bad = buildQualificationFunnel({
     raw_count: 5, normalized_count: 5, source_gate_accepted: 0, source_gate_rejected: 4, // 5 != 0+4
-    hard_gate_rejected: 0, qualification_accepted: 0, qualification_rejected: 0,
+    hard_gate_rejected: 0, qualification_accepted: 0, qualification_staged: 0, qualification_rejected: 0,
     persisted_count: 0, downstream_aria_count: 0,
   });
   assertEquals(bad.reconciles, false);
@@ -57,7 +57,7 @@ Deno.test("16: funnel reconciles with source-gate rejections; mismatch flagged",
 // ---- (17) source-rejected candidate diagnostics are included ----
 Deno.test("17: source-gate rejected diagnostics surface in observability", () => {
   const obs = buildQualificationObservability({
-    funnel: { raw_count: 5, normalized_count: 5, source_gate_accepted: 0, source_gate_rejected: 5, hard_gate_rejected: 0, qualification_accepted: 0, qualification_rejected: 0, persisted_count: 0, downstream_aria_count: 0 },
+    funnel: { raw_count: 5, normalized_count: 5, source_gate_accepted: 0, source_gate_rejected: 5, hard_gate_rejected: 0, qualification_accepted: 0, qualification_staged: 0, qualification_rejected: 0, persisted_count: 0, downstream_aria_count: 0 },
     candidates: [],
     source_gate_rejected: US_PEOPLE.map((p) => ({
       name: p.name, company: "Co", source_url: `https://www.linkedin.com/in/${p.name}`,
@@ -96,13 +96,15 @@ Deno.test("18: source-gate diagnostic strips PII/secrets and public-URL only", (
 Deno.test("19: source-gate and qualification rejections are separate funnel stages", () => {
   const f = buildQualificationFunnel({
     raw_count: 10, normalized_count: 10, source_gate_accepted: 5, source_gate_rejected: 5,
-    hard_gate_rejected: 0, qualification_accepted: 2, qualification_rejected: 3,
+    hard_gate_rejected: 0, qualification_accepted: 2, qualification_staged: 3, qualification_rejected: 0,
     persisted_count: 2, downstream_aria_count: 5,
   });
   assertEquals(f.source_gate_rejected, 5);
-  assertEquals(f.qualification_rejected, 3);
-  assertEquals(f.staged_count, 3); // staged == qualification_rejected, NOT source-rejected
-  assertEquals(f.reconciles, true); // 10==5+5 and 5==0+2+3
+  // Staged is its OWN bucket now: a source-gate rejection, a qualification rejection
+  // and a staged candidate are three different things.
+  assertEquals(f.qualification_rejected, 0);
+  assertEquals(f.staged_count, 3);
+  assertEquals(f.reconciles, true); // 10==5+5 and 5==0+2+3+0
 });
 
 // ---- (22) explicit city/region request keeps strict locality behavior ----

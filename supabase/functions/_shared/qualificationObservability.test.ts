@@ -103,12 +103,13 @@ Deno.test("classify: accept → accepted", () => {
   assertEquals(classifyRejection({ qualification_decision: "accept", qualification_reason: "aria_accepted" }).rejection_class, "accepted");
 });
 
-// (15) Funnel reconciliation.
-Deno.test("funnel reconciles when source_gate == hard + accepted + rejected", () => {
-  const f = buildQualificationFunnel({ raw_count: 5, normalized_count: 5, source_gate_accepted: 5, source_gate_rejected: 0, hard_gate_rejected: 0, qualification_accepted: 0, qualification_rejected: 5, persisted_count: 0, downstream_aria_count: 0 });
+// (15) Funnel reconciliation. Staged and rejected are DISJOINT terminal buckets, so
+// the identity is source_gate == hard + accepted + staged + rejected.
+Deno.test("funnel reconciles when source_gate == hard + accepted + staged + rejected", () => {
+  const f = buildQualificationFunnel({ raw_count: 5, normalized_count: 5, source_gate_accepted: 5, source_gate_rejected: 0, hard_gate_rejected: 0, qualification_accepted: 0, qualification_staged: 5, qualification_rejected: 0, persisted_count: 0, downstream_aria_count: 0 });
   assertEquals(f.staged_count, 5);
   assertEquals(f.reconciles, true);
-  const bad = buildQualificationFunnel({ raw_count: 5, normalized_count: 5, source_gate_accepted: 5, source_gate_rejected: 0, hard_gate_rejected: 1, qualification_accepted: 0, qualification_rejected: 5, persisted_count: 0, downstream_aria_count: 0 });
+  const bad = buildQualificationFunnel({ raw_count: 5, normalized_count: 5, source_gate_accepted: 5, source_gate_rejected: 0, hard_gate_rejected: 1, qualification_accepted: 0, qualification_staged: 5, qualification_rejected: 0, persisted_count: 0, downstream_aria_count: 0 });
   assertEquals(bad.reconciles, false);
 });
 
@@ -118,16 +119,23 @@ Deno.test("v80 scenario: five staged provider people surface in observability", 
     name: p.full_name, title: p.title, company: p.company, source_url: p.profile_url,
     provider_verified: true, actor_key: Q1_ACTOR_KEY, actor_id: Q1_ACTOR_IMPL, artifact_type: "person_candidate",
     source_gate_decision: "needs_verification", tier: p.tier, deterministic_score: p.aria.overall_fit,
-    qualification_decision: "reject", qualification_reason: "tier_rejected",
+    // Identity proven, no company-level buying signal ⇒ STAGED for signal enrichment.
+    // These five were previously reported as hard rejects, which is what made the
+    // funnel count them as staged AND rejected simultaneously.
+    qualification_decision: "stage_missing_evidence", stage_reason: "missing_timing_signal",
+    next_action: "signal_enrichment", qualification_reason: "missing_timing_signal",
     matched_icp: [], evidence_present: ["linkedin person profile"], evidence_missing: ["a company-level buying signal (funding/hiring/expansion)"],
     evidence_violations: p.evidence_violations.filter((v) => v !== "profile_as_job"),
     persisted: false, sent_to_downstream_aria: false,
   }));
   const obs = buildQualificationObservability({
-    funnel: { raw_count: 5, normalized_count: 5, source_gate_accepted: 5, source_gate_rejected: 0, hard_gate_rejected: 0, qualification_accepted: 0, qualification_rejected: 5, persisted_count: 0, downstream_aria_count: 0 },
+    funnel: { raw_count: 5, normalized_count: 5, source_gate_accepted: 5, source_gate_rejected: 0, hard_gate_rejected: 0, qualification_accepted: 0, qualification_staged: 5, qualification_rejected: 0, persisted_count: 0, downstream_aria_count: 0 },
     candidates, requested_limit: 5, target_entity: "person", expected_artifact_type: "person_candidate",
   });
   assertEquals(obs.funnel.staged_count, 5);
+  assertEquals(obs.funnel.qualification_rejected, 0);
+  assertEquals(obs.funnel.reconciles, true);
+  assertEquals(obs.duplicate_state_candidate_ids, []);
   assertEquals(obs.funnel.persisted_count, 0);
   assertEquals(obs.candidates.length, 5);
   assertEquals(obs.truncated, 0);
@@ -144,19 +152,29 @@ Deno.test("mixed scenario: accepted diagnostics persisted, staged not", () => {
   const candidates: CandidateDiagnosticInput[] = [
     { name: "A", company: "SaaSCo", source_url: "https://www.linkedin.com/in/a", provider_verified: true, artifact_type: "person_candidate", source_gate_decision: "accept", tier: "qualified", qualification_decision: "accept", qualification_reason: "aria_accepted", matched_icp: ["B2B SaaS"], persisted: true, sent_to_downstream_aria: true },
     { name: "B", company: "SaaSCo2", source_url: "https://www.linkedin.com/in/b", provider_verified: true, artifact_type: "person_candidate", source_gate_decision: "accept", tier: "qualified", qualification_decision: "accept", qualification_reason: "aria_accepted", matched_icp: ["B2B SaaS"], persisted: true, sent_to_downstream_aria: true },
-    { name: "C", company: "ITServices", source_url: "https://www.linkedin.com/in/c", provider_verified: true, artifact_type: "person_candidate", source_gate_decision: "needs_verification", tier: "rejected", qualification_decision: "reject", qualification_reason: "tier_rejected", matched_icp: [], persisted: false, sent_to_downstream_aria: true },
-    { name: "D", company: "Consulting", source_url: "https://www.linkedin.com/in/d", provider_verified: true, artifact_type: "person_candidate", source_gate_decision: "needs_verification", tier: "weak", qualification_decision: "reject", qualification_reason: "not_accepted", matched_icp: ["SaaS"], evidence_missing: ["funding"], persisted: false, sent_to_downstream_aria: true },
-    { name: "E", company: "Agency", source_url: "https://www.linkedin.com/in/e", provider_verified: true, artifact_type: "person_candidate", source_gate_decision: "needs_verification", tier: "weak", qualification_decision: "reject", qualification_reason: "tier_rejected", matched_icp: ["SaaS"], persisted: false, sent_to_downstream_aria: true },
+    // C: verified ICP contradiction ⇒ a genuine reject. D/E: merely unproven ⇒ staged.
+    // ALL FIVE were screened by Aria — the runtime hands over the whole
+    // source-gate-accepted provider pool. Screening is not qualification approval.
+    { name: "C", company: "ITServices", source_url: "https://www.linkedin.com/in/c", provider_verified: true, artifact_type: "person_candidate", source_gate_decision: "needs_verification", tier: "rejected", qualification_decision: "reject", qualification_reason: "icp_contradiction", matched_icp: [], persisted: false, sent_to_downstream_aria: true },
+    { name: "D", company: "Consulting", source_url: "https://www.linkedin.com/in/d", provider_verified: true, artifact_type: "person_candidate", source_gate_decision: "needs_verification", tier: "weak", qualification_decision: "stage_missing_evidence", stage_reason: "missing_timing_signal", next_action: "signal_enrichment", qualification_reason: "missing_timing_signal", matched_icp: ["SaaS"], evidence_missing: ["funding_signal"], persisted: false, sent_to_downstream_aria: true },
+    { name: "E", company: "Agency", source_url: "https://www.linkedin.com/in/e", provider_verified: true, artifact_type: "person_candidate", source_gate_decision: "needs_verification", tier: "weak", qualification_decision: "stage_missing_evidence", stage_reason: "company_timeout", next_action: "company_enrichment", qualification_reason: "company_timeout", matched_icp: ["SaaS"], persisted: false, sent_to_downstream_aria: true },
   ];
   const obs = buildQualificationObservability({
-    funnel: { raw_count: 5, normalized_count: 5, source_gate_accepted: 5, source_gate_rejected: 0, hard_gate_rejected: 0, qualification_accepted: 2, qualification_rejected: 3, persisted_count: 2, downstream_aria_count: 5 },
+    funnel: { raw_count: 5, normalized_count: 5, source_gate_accepted: 5, source_gate_rejected: 0, hard_gate_rejected: 0, qualification_accepted: 2, qualification_staged: 2, qualification_rejected: 1, persisted_count: 2, downstream_aria_count: 5 },
     candidates, requested_limit: 5, target_entity: "person", expected_artifact_type: "person_candidate",
   });
   assertEquals(obs.funnel.qualification_accepted, 2);
-  assertEquals(obs.funnel.staged_count, 3);
+  assertEquals(obs.funnel.staged_count, 2);
+  assertEquals(obs.funnel.qualification_rejected, 1);
+  assertEquals(obs.duplicate_state_candidate_ids, []);
   assertEquals(obs.funnel.persisted_count, 2);
   assertEquals(obs.candidates.filter((c) => c.persisted).length, 2);
-  assertEquals(obs.candidates.filter((c) => !c.persisted && !!c.staged_reason).length, 3);
+  assertEquals(obs.candidates.filter((c) => c.qualification_decision === "stage_missing_evidence").length, 2);
+  // All five were SCREENED; only the two qualify_now persisted. Screening (wide
+  // input) and persistence (narrow output) are separate facts.
+  assertEquals(obs.candidates.filter((c) => c.sent_to_downstream_aria).length, 5);
+  assertEquals(obs.funnel.downstream_aria_count, 5);
+  assertEquals(obs.candidates.filter((c) => c.persistence_eligible).length, 2);
   assertEquals(obs.funnel.reconciles, true);
 });
 
@@ -166,10 +184,10 @@ Deno.test("observability caps diagnostics to requested limit and MAX_DIAGNOSTICS
     name: `P${i}`, source_url: `https://www.linkedin.com/in/p${i}`, provider_verified: true, artifact_type: "person_candidate",
     source_gate_decision: "needs_verification", tier: "rejected", qualification_decision: "reject", qualification_reason: "tier_rejected", persisted: false, sent_to_downstream_aria: false,
   }));
-  const capped = buildQualificationObservability({ funnel: { raw_count: 60, normalized_count: 60, source_gate_accepted: 60, source_gate_rejected: 0, hard_gate_rejected: 0, qualification_accepted: 0, qualification_rejected: 60, persisted_count: 0, downstream_aria_count: 0 }, candidates: many, requested_limit: 5 });
+  const capped = buildQualificationObservability({ funnel: { raw_count: 60, normalized_count: 60, source_gate_accepted: 60, source_gate_rejected: 0, hard_gate_rejected: 0, qualification_accepted: 0, qualification_staged: 60, qualification_rejected: 0, persisted_count: 0, downstream_aria_count: 0 }, candidates: many, requested_limit: 5 });
   assertEquals(capped.candidates.length, 5);
   assertEquals(capped.truncated, 55);
-  const noLimit = buildQualificationObservability({ funnel: { raw_count: 60, normalized_count: 60, source_gate_accepted: 60, source_gate_rejected: 0, hard_gate_rejected: 0, qualification_accepted: 0, qualification_rejected: 60, persisted_count: 0, downstream_aria_count: 0 }, candidates: many });
+  const noLimit = buildQualificationObservability({ funnel: { raw_count: 60, normalized_count: 60, source_gate_accepted: 60, source_gate_rejected: 0, hard_gate_rejected: 0, qualification_accepted: 0, qualification_staged: 60, qualification_rejected: 0, persisted_count: 0, downstream_aria_count: 0 }, candidates: many });
   assertEquals(noLimit.candidates.length, MAX_DIAGNOSTICS);
 });
 
