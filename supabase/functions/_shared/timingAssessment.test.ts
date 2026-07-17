@@ -72,21 +72,25 @@ Deno.test("12: 'recently funded' requires a relevant fresh funding signal", () =
   assertEquals(ok.decision, "timing_sufficient");
 });
 
-Deno.test("the CONTRACT window is the stricter authority over the signal policy", () => {
-  // The signal freshness policy calls funding fresh for 180d, but the evidence
-  // contract's funding_signal window is 168h (7d). The stricter one must win, so a
-  // 20-day-old round is NOT sufficient for an explicit "recently funded" request.
-  // Documented deliberately: widening the contract window is a PRODUCT decision, not
-  // something this foundation changes silently.
+Deno.test("the explicit user window is the stricter authority over the general policy", () => {
+  // "recently funded" now compiles a 90-day window (the approved policy), so a
+  // 20-day-old round IS sufficient — the old 168h contract window made this a 7-day
+  // question, which was far too restrictive. See fundingFreshnessPolicy.test.ts.
   const r = compileTimingRequirement(contractFor("Find B2B SaaS founders whose companies recently raised funding"));
-  assertEquals(r.maxAgeHoursByCategory.funding_signal, 168);
+  assertEquals(r.maxAgeHoursByCategory.funding_signal, 24 * 90);
   const twentyDays = sig({
     signal_type: "recent_funding", signal_category: "growth", occurred_at: hoursAgo(24 * 20),
     evidence_refs: [{ category: "funding_signal", sourceType: "public_web", confidence: "high" }],
   });
-  const a = evaluateTimingSufficiency({ candidateId: "c1", requirement: r, signals: [twentyDays], now: NOW });
+  const ok = evaluateTimingSufficiency({ candidateId: "c1", requirement: r, signals: [twentyDays], now: NOW });
+  assertEquals(ok.decision, "timing_sufficient");
+
+  // …but an explicit "this week" still wins over the general 90-day policy.
+  const strict = compileTimingRequirement(contractFor("Find B2B SaaS founders funded this week"));
+  assertEquals(strict.maxAgeHoursByCategory.funding_signal, 24 * 7);
+  const a = evaluateTimingSufficiency({ candidateId: "c1", requirement: strict, signals: [twentyDays], now: NOW });
   assertEquals(a.decision, "missing_timing_evidence");
-  assertEquals(a.stale_signal_ids, ["s1"], "the contract window makes it stale");
+  assertEquals(a.stale_signal_ids, ["s1"], "the explicit 7-day window makes it stale");
 });
 
 Deno.test("each category keeps its OWN window in an any-of request", () => {
@@ -94,13 +98,13 @@ Deno.test("each category keeps its OWN window in an any-of request", () => {
   // would wrongly age out a 5-day-old funding signal in a "hot" request.
   const r = compileTimingRequirement(contractFor("find me hot founders right now"));
   assertEquals(r.maxAgeHoursByCategory.job_signal, 72);
-  assertEquals(r.maxAgeHoursByCategory.funding_signal, 168);
+  assertEquals(r.maxAgeHoursByCategory.funding_signal, 24 * 180);
   const fiveDayFunding = sig({
     signal_type: "recent_funding", signal_category: "growth", occurred_at: hoursAgo(120),
     evidence_refs: [{ category: "funding_signal", sourceType: "public_web", confidence: "high" }],
   });
   const a = evaluateTimingSufficiency({ candidateId: "c1", requirement: r, signals: [fiveDayFunding], now: NOW });
-  assertEquals(a.decision, "timing_sufficient", "funding must use its own 168h window, not job_signal's 72h");
+  assertEquals(a.decision, "timing_sufficient", "funding must use its own window, not job_signal's 72h");
 });
 
 Deno.test("13: 'currently hiring sales' requires a fresh hiring signal", () => {

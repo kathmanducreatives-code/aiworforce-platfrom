@@ -24,6 +24,9 @@ import {
   type SignalEvent, type SignalType, type SignalCategory,
   isRiskSignal, isTimingCapableSignal, signalCategoryOf,
 } from "./signalEvent.ts";
+import {
+  type FundingFreshnessBand, FUNDING_MAX_AGE_DAYS, fundingBandForAgeDays, DAYS as POLICY_DAYS,
+} from "./timingFreshnessPolicy.ts";
 
 /** Strength bands — deliberately coarse and explainable, never a bare float. */
 export type SignalStrength = "none" | "weak" | "moderate" | "strong";
@@ -62,8 +65,9 @@ const DAYS = (d: number) => d * 24;
 export const SIGNAL_FRESHNESS_POLICY: SignalFreshnessPolicy = {
   defaultWindowHours: DAYS(30),
   windowHours: {
-    // growth
-    recent_funding: DAYS(180),
+    // growth — funding's ceiling comes from THE canonical authority so this table and
+    // the evidence contract cannot drift apart. Decay bands govern strength within it.
+    recent_funding: POLICY_DAYS(FUNDING_MAX_AGE_DAYS),
     employee_growth: DAYS(90),
     market_expansion: DAYS(90),
     geographic_expansion: DAYS(90),
@@ -145,6 +149,16 @@ export interface SignalStrengthResult {
   /** Machine-readable explanation of the deciding factor. */
   reason: string;
   fresh: boolean;
+  /** Age of the EVENT in days (occurred_at → now). Reported, never hidden. */
+  age_days: number | null;
+  /** The window actually applied, in hours. */
+  applied_window_hours: number;
+  /**
+   * Funding only: the explicit decay band (strong · medium · weak_supporting · stale).
+   * Surfaced alongside `strength` so a reviewer can see WHY funding was downgraded
+   * rather than inferring it from a bare band name.
+   */
+  funding_band?: FundingFreshnessBand;
 }
 
 /** Categories that directly evidence a buying/GTM motion for a B2B ICP. */
@@ -196,29 +210,48 @@ export function assessSignalStrength(
     relationship_strength: relationshipOf(s.signal_type),
     provider_verified,
   };
+  const age_days = age == null ? null : Number((age / 24).toFixed(3));
+  const isFunding = s.signal_type === "recent_funding";
+  const funding_band: FundingFreshnessBand | undefined = isFunding
+    ? fundingBandForAgeDays(age_days ?? Number.POSITIVE_INFINITY)
+    : undefined;
+  const meta = { age_days, applied_window_hours: win, ...(funding_band ? { funding_band } : {}) };
 
   if (isRiskSignal(s.signal_type)) {
-    return { strength: "none", components, reason: "risk_signal_never_proves_timing", fresh };
+    return { strength: "none", components, reason: "risk_signal_never_proves_timing", fresh, ...meta };
   }
   if (!isTimingCapableSignal(s)) {
-    return { strength: "none", components, reason: "not_timing_capable", fresh };
+    return { strength: "none", components, reason: "not_timing_capable", fresh, ...meta };
   }
   if (!fresh) {
-    return { strength: "none", components, reason: "signal_stale", fresh };
+    return { strength: "none", components, reason: "signal_stale", fresh, ...meta };
   }
   if (!provider_verified) {
     // Self-reported (e.g. the founder's own post) is real but weaker than provider proof.
-    return { strength: "weak", components, reason: "not_provider_verified", fresh };
+    return { strength: "weak", components, reason: "not_provider_verified", fresh, ...meta };
+  }
+
+  // Funding decays by EVENT age rather than cliff-edging: a round closed last week is
+  // a strong reason to reach out; one closed four months ago is real context but must
+  // never make someone "hot right now" on its own.
+  if (funding_band) {
+    switch (funding_band) {
+      case "strong": return { strength: "strong", components, reason: "funding_band_strong", fresh, ...meta };
+      case "medium": return { strength: "moderate", components, reason: "funding_band_medium", fresh, ...meta };
+      // `weak` is precisely the repository's "supports but never satisfies alone" band.
+      case "weak_supporting": return { strength: "weak", components, reason: "funding_band_weak_supporting", fresh, ...meta };
+      case "stale": return { strength: "none", components, reason: "funding_band_stale", fresh: false, ...meta };
+    }
   }
 
   // Provider-verified + fresh: relevance and evidence confidence decide the band.
   const relevance = STRENGTH_RANK[components.icp_relevance];
   const conf = CONF_RANK[s.confidence];
   if (relevance >= STRENGTH_RANK.strong && conf >= CONF_RANK.medium && freshness_ratio >= 0.25) {
-    return { strength: "strong", components, reason: "fresh_verified_high_relevance", fresh };
+    return { strength: "strong", components, reason: "fresh_verified_high_relevance", fresh, ...meta };
   }
   if (relevance >= STRENGTH_RANK.moderate && conf >= CONF_RANK.medium) {
-    return { strength: "moderate", components, reason: "fresh_verified_moderate_relevance", fresh };
+    return { strength: "moderate", components, reason: "fresh_verified_moderate_relevance", fresh, ...meta };
   }
-  return { strength: "weak", components, reason: "low_confidence_or_relevance", fresh };
+  return { strength: "weak", components, reason: "low_confidence_or_relevance", fresh, ...meta };
 }

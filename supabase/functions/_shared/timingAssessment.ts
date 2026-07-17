@@ -25,6 +25,7 @@ import {
   type SignalFreshnessPolicy, type SignalStrength, SIGNAL_FRESHNESS_POLICY,
   assessSignalStrength, strengthAtLeast, isSignalFresh,
 } from "./signalFreshness.ts";
+import type { FundingFreshnessBand } from "./timingFreshnessPolicy.ts";
 
 export type TimingDecision =
   | "timing_sufficient"
@@ -59,6 +60,29 @@ export interface TimingRequirement {
   required: boolean;
 }
 
+/**
+ * Per-signal reasoning, so an assessment never reduces to an unexplained verdict.
+ * Shows the age, the window that was actually applied, the resulting strength, and
+ * whether the signal satisfied the requirement or merely supported another.
+ */
+export interface TimingSignalBreakdown {
+  signal_id: string;
+  signal_type: string;
+  category: EvidenceCategory | null;
+  /** Age of the EVENT (occurred_at → now), in days. */
+  age_days: number | null;
+  /** The window applied after resolving contract vs signal policy, in hours. */
+  applied_window_hours: number;
+  strength: SignalStrength;
+  /** Funding only: strong · medium · weak_supporting · stale. */
+  funding_band?: FundingFreshnessBand;
+  /** It met the minimum strength and satisfied its category on its own merit. */
+  satisfied: boolean;
+  /** It was real and fresh but too weak to satisfy alone — counted as support only. */
+  supporting_only: boolean;
+  stale: boolean;
+}
+
 export interface TimingAssessment {
   candidate_id: string;
   evaluated_signal_ids: string[];
@@ -73,6 +97,8 @@ export interface TimingAssessment {
   observed_at: string;
   /** Strongest band any qualifying signal reached. */
   strongest: SignalStrength;
+  /** Per-signal age/window/strength reasoning. */
+  signal_breakdown: TimingSignalBreakdown[];
 }
 
 /**
@@ -145,6 +171,7 @@ export function evaluateTimingSufficiency(args: {
       ...base, satisfied_categories: [], missing_categories: [], stale_signal_ids: [],
       contradictory_signal_ids: [], decision: "timing_not_required", next_action: "none",
       explanation: "The request did not ask for current timing evidence.", strongest: "none",
+      signal_breakdown: [],
     };
   }
 
@@ -158,13 +185,14 @@ export function evaluateTimingSufficiency(args: {
       stale_signal_ids: [], contradictory_signal_ids: contradictions.map((s) => s.signal_id),
       decision: "timing_contradicted", next_action: "manual_review",
       explanation: `A verified contradicting signal is present (${contradictions.map((s) => s.signal_type).join(", ")}).`,
-      strongest: "none",
+      strongest: "none", signal_breakdown: [],
     };
   }
 
   const wanted = new Set(requirement.requiredCategories);
   const stale: string[] = [];
   const satisfied = new Set<EvidenceCategory>();
+  const breakdown: TimingSignalBreakdown[] = [];
   let strongest: SignalStrength = "none";
   let supporting = 0;
 
@@ -179,26 +207,40 @@ export function evaluateTimingSufficiency(args: {
     if (requirement.requireProviderVerified && s.verification === "unverified") continue;
 
     const r = assessSignalStrength(s, now, { policy });
-    if (!r.fresh) { stale.push(s.signal_id); continue; }
-
-    // The contract's own per-category window applies on top of the signal policy.
+    // The contract's own per-category window applies ON TOP of the signal policy —
+    // the stricter of the two wins, so "funded this week" is never widened to 90 days.
     const contractWindow = requirement.maxAgeHoursByCategory[cat];
-    if (contractWindow != null) {
-      const t = Date.parse(s.occurred_at); const n = Date.parse(now);
-      if (isFinite(t) && isFinite(n) && (n - t) / 3600_000 > contractWindow) {
-        stale.push(s.signal_id); continue;
-      }
-    }
+    const appliedWindow = contractWindow != null
+      ? Math.min(contractWindow, r.applied_window_hours)
+      : r.applied_window_hours;
+    const ageHours = r.age_days == null ? null : r.age_days * 24;
+    const outsideContractWindow = contractWindow != null && ageHours != null && ageHours > contractWindow;
+    const isStale = !r.fresh || outsideContractWindow;
+
+    const row: TimingSignalBreakdown = {
+      signal_id: s.signal_id, signal_type: s.signal_type, category: cat,
+      age_days: r.age_days, applied_window_hours: appliedWindow,
+      strength: isStale ? "none" : r.strength,
+      ...(r.funding_band ? { funding_band: outsideContractWindow ? "stale" : r.funding_band } : {}),
+      satisfied: false, supporting_only: false, stale: isStale,
+    };
+
+    if (isStale) { stale.push(s.signal_id); breakdown.push(row); continue; }
 
     if (strengthAtLeast(r.strength, requirement.minimumStrength)) {
       satisfied.add(cat);
+      row.satisfied = true;
       if (strengthAtLeast(r.strength, "strong")) strongest = "strong";
       else if (strongest !== "strong") strongest = "moderate";
     } else if (r.strength === "weak") {
-      // A weak signal alone never satisfies, but several may combine.
+      // A weak signal (e.g. funding 91–180d) never satisfies alone, but it may support
+      // another fresh, verified signal. Every combined signal is source-backed and
+      // fresh under its own policy — combination strength is never fabricated.
       supporting += 1;
+      row.supporting_only = true;
       if (strongest === "none") strongest = "weak";
     }
+    breakdown.push(row);
   }
 
   const satisfiedList = [...satisfied];
@@ -223,6 +265,7 @@ export function evaluateTimingSufficiency(args: {
         ? `${supporting} supporting signals combine to evidence current timing.`
         : `Current verified timing evidence: ${satisfiedList.join(", ")}.`,
       strongest: combined && strongest === "none" ? "weak" : strongest,
+      signal_breakdown: breakdown,
     };
   }
 
@@ -233,6 +276,6 @@ export function evaluateTimingSufficiency(args: {
     explanation: stale.length
       ? "Timing evidence exists but is stale; a current signal is needed."
       : "No current timing signal is proven for this candidate.",
-    strongest,
+    strongest, signal_breakdown: breakdown,
   };
 }

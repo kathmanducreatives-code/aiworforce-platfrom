@@ -14,6 +14,7 @@
 // the Brain, and the requested freshness shape this contract.
 
 import type { LeadEntityIntent, TargetEntity, FreshnessRequirement } from "./leadEntityIntent.ts";
+import { CANONICAL_TIMING_WINDOW_HOURS, resolveWindowHours } from "./timingFreshnessPolicy.ts";
 
 export type EvidenceCategory =
   | "person_identity"
@@ -67,15 +68,15 @@ export interface BrainConstraints {
   company_size?: string | null;
 }
 
-// Freshness windows (hours) per signal class — deliberately explicit + tunable.
-const SIGNAL_WINDOW_HOURS: Record<string, number> = {
-  job_signal: 72,
-  funding_signal: 168,        // 7d
-  launch_signal: 168,
-  expansion_signal: 168,
-  founder_activity_signal: 168,
-  gtm_signal: 168,
-};
+/**
+ * Freshness windows (hours) per signal class.
+ *
+ * Sourced from the CANONICAL authority (timingFreshnessPolicy.ts) so this table and
+ * the SignalEvent freshness policy can never silently disagree again — they did, and
+ * the 168h funding window meant "recently funded" only matched the last 7 days.
+ * Funding is now 180d here, with decay bands governing strength inside that window.
+ */
+const SIGNAL_WINDOW_HOURS: Readonly<Record<string, number>> = CANONICAL_TIMING_WINDOW_HOURS;
 
 const PROVIDER_SOURCES: EvidenceSourceType[] = ["apify_actor", "official_website", "public_web"];
 
@@ -155,20 +156,26 @@ export function compileEvidenceContract(
   const explicitSignalCats = (intent.signals ?? [])
     .map((s) => signalToEvidenceCategory(s.type))
     .filter((c): c is EvidenceCategory => !!c);
+  // The window the user stated explicitly ("funded this week"), carried on the typed
+  // intent. resolveWindowHours applies the STRICTER of (explicit, general policy).
+  const statedWindow = (intent.signals ?? []).find((s) => !!s.window)?.window ?? null;
+  const windowFor = (c: EvidenceCategory) =>
+    resolveWindowHours({ category: c, explicitWindow: statedWindow }) ?? SIGNAL_WINDOW_HOURS[c] ?? 168;
 
   if (freshness === "recent_signal") {
     // The user named the signal — that exact signal must be proven and fresh.
     for (const c of explicitSignalCats) {
-      timingRequirements.push(req(c, true, "medium", PROVIDER_SOURCES, SIGNAL_WINDOW_HOURS[c] ?? 168));
+      timingRequirements.push(req(c, true, "medium", PROVIDER_SOURCES, windowFor(c)));
     }
   } else if (freshness === "hot_opportunity") {
     // "Hot right now" — at least ONE recent verified signal. Each is individually
     // optional; the sufficiency gate requires >=1 satisfied (any-of semantics).
+    // Each category keeps its OWN window — never job_signal's 72h applied to funding.
     const anyOf: EvidenceCategory[] = explicitSignalCats.length
       ? explicitSignalCats
       : ["job_signal", "funding_signal", "launch_signal", "expansion_signal", "founder_activity_signal", "gtm_signal"];
     for (const c of anyOf) {
-      timingRequirements.push(req(c, false, "medium", PROVIDER_SOURCES, SIGNAL_WINDOW_HOURS[c] ?? 168));
+      timingRequirements.push(req(c, false, "medium", PROVIDER_SOURCES, windowFor(c)));
     }
   }
 

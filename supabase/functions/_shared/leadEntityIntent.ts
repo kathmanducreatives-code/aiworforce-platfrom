@@ -10,6 +10,7 @@
 // people/companies but NEVER set the entity.
 
 import { parsePersonRoles, parseMarketTerms } from "./peopleSearchQueryBuilder.ts";
+import type { ExplicitTimingWindow } from "./timingFreshnessPolicy.ts";
 
 export type TargetEntity = "person" | "company" | "job";
 export type OutputType = "qualified_people" | "qualified_companies" | "job_postings";
@@ -27,7 +28,16 @@ export type LeadSignalType = "hiring" | "funding" | "product_launch" | "expansio
 export type FreshnessRequirement = "identity_only" | "current_fit" | "recent_signal" | "hot_opportunity";
 
 export interface IntentEvidenceSpan { field: string; value: string; evidence: string[] }
-export interface LeadSignalIntent { type: LeadSignalType; evidence: string[] }
+export interface LeadSignalIntent {
+  type: LeadSignalType;
+  evidence: string[];
+  /**
+   * A window the user stated EXPLICITLY ("funded this week"). Typed and compiled
+   * here from the immutable instruction so downstream layers never re-guess it from
+   * loose keywords. Absent ⇒ the general per-category policy applies.
+   */
+  window?: ExplicitTimingWindow;
+}
 
 export interface LeadEntityIntent {
   version: 1;
@@ -65,6 +75,20 @@ const SIGNAL_PATTERNS: Array<[LeadSignalType, RegExp]> = [
   ["expansion", /\bexpanding\b|\bexpansion\b|\bscaling (?:up|out|fast|sales|gtm)?\b|\bgrowing (?:their|the) (?:team|sales)\b/i],
   ["new_executive", /\bnew (?:ceo|cto|cfo|coo|cmo|vp|head|exec|executive)\b|\bjust hired a\b/i],
   ["recent_post", /\brecently posted\b|\brecent posts?\b|\bposted (?:on|about)\b|\bengaging with\b/i],
+];
+
+/**
+ * Explicit timing windows the user can state. Ordered STRICTEST FIRST so
+ * "funded this week" never matches the looser "recently" pattern first.
+ *
+ * These are typed intent, not downstream keyword guessing: the compiled window
+ * travels with the signal and the stricter of (explicit, general policy) wins.
+ */
+const WINDOW_PATTERNS: Array<[ExplicitTimingWindow, RegExp]> = [
+  ["this_week", /\b(?:this|the past|the last)\s+week\b|\bin the last 7 days\b|\bpast 7 days\b/i],
+  ["this_month", /\b(?:this|the past|the last)\s+month\b|\bin the last 30 days\b|\bpast 30 days\b/i],
+  ["last_6_months", /\b(?:in |over )?(?:the )?(?:last|past)\s+(?:6|six)\s+months\b|\bin the last 180 days\b/i],
+  ["recently", /\brecent(?:ly)?\b|\bjust\b|\bnewly\b/i],
 ];
 
 const COUNT_RE = /\b(\d{1,3})\b/;
@@ -121,10 +145,22 @@ export function compileLeadEntityIntent(
   const text = original;
   const evidence_spans: IntentEvidenceSpan[] = [];
 
+  // An explicit window qualifies whichever signals the request names ("funded this
+  // week"). Strictest pattern wins; absent ⇒ the general per-category policy applies.
+  let explicitWindow: ExplicitTimingWindow | undefined;
+  let windowEvidence: string | undefined;
+  for (const [w, re] of WINDOW_PATTERNS) {
+    const ev = firstMatch(re, text);
+    if (ev) { explicitWindow = w; windowEvidence = ev; break; }
+  }
+
   const signals: LeadSignalIntent[] = [];
   for (const [type, re] of SIGNAL_PATTERNS) {
     const ev = firstMatch(re, text);
-    if (ev) signals.push({ type, evidence: [ev] });
+    if (ev) signals.push({ type, evidence: [ev], ...(explicitWindow ? { window: explicitWindow } : {}) });
+  }
+  if (explicitWindow && windowEvidence && signals.length) {
+    evidence_spans.push({ field: "signal_window", value: explicitWindow, evidence: [windowEvidence] });
   }
 
   const jobEv = firstMatch(JOB_OUTPUT_RE, text);
