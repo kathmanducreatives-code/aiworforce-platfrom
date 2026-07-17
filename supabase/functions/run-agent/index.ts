@@ -27,7 +27,7 @@ import { qualificationPersistenceDecision, mapAriaToDecision, isHardEvidenceBloc
 import { resolveFinalCandidateState, refreshEvidenceMissing, type FinalCandidateStateResult } from "../_shared/finalCandidateState.ts";
 import { buildQualificationObservability, type CandidateDiagnosticInput, type QualificationObservability } from "../_shared/qualificationObservability.ts";
 import { resolveGeographyConstraint, classifyGeography, type GeographyConstraint } from "../_shared/geographyConstraint.ts";
-import { runFindLeadsCompanyEnrichment, mapAcceptedPeople, makeCompanyEnrichmentExecutor, emptyCompanyEnrichmentObservability, type CompanyRawPatch, type CandidateEnrichmentOutcome } from "../_shared/runAgentCompanyEnrichment.ts";
+import { runFindLeadsCompanyEnrichment, mapAcceptedPeople, makeCompanyEnrichmentExecutor, emptyCompanyEnrichmentObservability, stillStagedByEnrichmentAfterTiming, type CompanyRawPatch, type CandidateEnrichmentOutcome } from "../_shared/runAgentCompanyEnrichment.ts";
 import { enrichmentDeadlineFrom } from "../_shared/companyEnrichmentOrchestrator.ts";
 import { shouldSkipBroadResearch } from "../_shared/broadResearchPolicy.ts";
 import { DEFAULT_EVIDENCE_BUDGET } from "../_shared/conditionalEnrichmentPlanner.ts";
@@ -1633,6 +1633,30 @@ Deno.serve(async (req) => {
           } catch (e) { console.warn("[run-agent] company enrichment failed (non-fatal):", e); }
         }
 
+        // RECONCILE the company-enrichment staging flag against the LATER signal stage.
+        //
+        // Company enrichment runs BEFORE jobs/signal enrichment and force-stages a
+        // candidate whenever its post-company sufficiency is not yet `qualify_now` —
+        // which includes a fit-COMPLETE founder whose only remaining gap is timing.
+        // Signal enrichment then closes exactly that gap (`timing_sufficient`), but the
+        // `companyEnrichmentStaged` set captured the pre-signal state, so passing it raw
+        // left the reducer's timing-aware qualify_now permanently blocked (the v87
+        // defect: 3 candidates timing_sufficient, 0 qualify_now).
+        //
+        // A candidate REMAINS staged-by-enrichment only when a genuine unresolved
+        // enrichment requirement still exists after ALL enrichment stages. Timing being
+        // resolved clears the flag ONLY when timing was the sole remaining gap — i.e.
+        // fit is settled (post sufficiency is qualify_now / signal_enrichment). A
+        // fit-incomplete candidate (structured_company_enrichment / targeted_web_
+        // verification / incomplete identity) keeps a real gap and stays staged. The
+        // reducer's own `fitVerified` guard enforces the same invariant independently.
+        const remainsStagedByEnrichment = (key: string): boolean =>
+          stillStagedByEnrichmentAfterTiming({
+            companyStaged: companyEnrichmentStaged.has(key),
+            sufficiencyDecisionAfter: enrichmentByCandidate.get(key)?.decisionAfter ?? null,
+            timingDecision: timingByCandidate.get(key)?.decision ?? null,
+          });
+
         let finalPersistSet = gatedAccepted;
         if (runTargetIsPerson) {
           finalPersistSet = gatedAccepted.filter((a: any) => {
@@ -1671,7 +1695,8 @@ Deno.serve(async (req) => {
               companyOutcome: post?.companyOutcome ?? null,
               ariaEvaluated: m.evaluated,
               persistDecision: { persist: ariaDecision.persist, reason: ariaDecision.reason },
-              stagedByEnrichment: companyEnrichmentStaged.has(key),
+              // Reconciled: a stage caused only by the now-satisfied timing gap no longer blocks.
+              stagedByEnrichment: remainsStagedByEnrichment(key),
               timingDecision: timingByCandidate.get(key)?.decision ?? null,
             });
             finalStateByKey.set(key, finalState);
@@ -1758,7 +1783,8 @@ Deno.serve(async (req) => {
                 companyOutcome: post?.companyOutcome ?? null,
                 ariaEvaluated: decision?.evaluated === true,
                 persistDecision: { persist: persisted, reason: decision?.reason ?? "no_qualification" },
-                stagedByEnrichment: companyEnrichmentStaged.has(key),
+                // Same reconciliation as the persistence gate (single authority).
+                stagedByEnrichment: remainsStagedByEnrichment(key),
                 timingDecision: timingByCandidate.get(key)?.decision ?? null,
               }))
               // company/job targets: gate-accepted persist under the existing policy.
