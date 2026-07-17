@@ -202,6 +202,28 @@ export function resolveFinalCandidateState(input: FinalCandidateStateInput): Fin
     };
   }
 
+  // 3b) DETERMINISTIC timing-aware acceptance. The v86 milestone proved that a
+  //     fit-verified founder can be `timing_sufficient` yet never reach qualify_now,
+  //     because acceptance keyed only on an Aria score computed BEFORE company +
+  //     signal enrichment (so every candidate was staged `missing_timing_signal`
+  //     even though the timing gap was closed). When timing is REQUIRED and now
+  //     VERIFIED sufficient, and company FIT is source-verified (identity + fit
+  //     settled — only timing was pending), and no hard contradiction exists (all
+  //     rejected above), the required evidence is COMPLETE ⇒ qualify_now. This
+  //     never bypasses fit: an unverified-fit candidate (sufficiency still needs
+  //     company enrichment) is NOT `fitVerified` and falls through to stage below.
+  //     A stale Aria score is a missing-evidence artifact here, never a verified
+  //     contradiction (which would have rejected at step 2), so it must not block.
+  const fitVerified = input.sufficiencyDecision === "qualify_now"
+    || input.sufficiencyDecision === "signal_enrichment";   // identity+fit done, timing was the only gap
+  if (input.timingDecision === "timing_sufficient" && input.stagedByEnrichment !== true && fitVerified) {
+    return {
+      state: "qualify_now", stage_reason: null, rejection_class: null, next_action: null,
+      reason_code: "all_required_evidence_verified",
+      persist: true, sent_to_downstream_aria: true,
+    };
+  }
+
   // 4) Company enrichment could not answer "does the company fit?" — the candidate
   //    is unproven, not contradicted. Stage it truthfully with the honest cause.
   switch (input.companyOutcome) {
