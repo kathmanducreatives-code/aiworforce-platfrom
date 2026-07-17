@@ -14,7 +14,7 @@
 // the Brain, and the requested freshness shape this contract.
 
 import type { LeadEntityIntent, TargetEntity, FreshnessRequirement } from "./leadEntityIntent.ts";
-import { CANONICAL_TIMING_WINDOW_HOURS, resolveWindowHours } from "./timingFreshnessPolicy.ts";
+import { CANONICAL_TIMING_WINDOW_HOURS, resolveWindowHours, type ExplicitTimingWindow } from "./timingFreshnessPolicy.ts";
 
 export type EvidenceCategory =
   | "person_identity"
@@ -58,6 +58,12 @@ export interface EvidenceContract {
   timingRequirements: EvidenceRequirement[];
   optionalRequirements: EvidenceRequirement[];
   acceptancePolicy: AcceptancePolicy;
+  /**
+   * The window the USER stated explicitly ("hiring in the last 60 days"), carried
+   * from the typed intent. Null when they stated none. Downstream layers read this
+   * rather than re-parsing the instruction.
+   */
+  explicitTimingWindow: ExplicitTimingWindow | null;
 }
 
 /** Company Brain constraints that make a fit requirement mandatory. Brain fields
@@ -191,7 +197,10 @@ export function compileEvidenceContract(
       : (freshness === "recent_signal" || freshness === "hot_opportunity") ? "fit_and_timing_confirmed"
         : "fit_confirmed";
 
-  return { targetEntity: target, freshness, identityRequirements, fitRequirements, timingRequirements, optionalRequirements, acceptancePolicy };
+  return {
+    targetEntity: target, freshness, identityRequirements, fitRequirements, timingRequirements,
+    optionalRequirements, acceptancePolicy, explicitTimingWindow: statedWindow,
+  };
 }
 
 /** True when the contract demands at least one (any-of) timing signal rather than

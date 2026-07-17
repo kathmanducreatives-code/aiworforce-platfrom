@@ -25,7 +25,9 @@ import {
   type SignalFreshnessPolicy, type SignalStrength, SIGNAL_FRESHNESS_POLICY,
   assessSignalStrength, strengthAtLeast, isSignalFresh,
 } from "./signalFreshness.ts";
-import type { FundingFreshnessBand } from "./timingFreshnessPolicy.ts";
+import type {
+  FundingFreshnessBand, TimingFreshnessBand, ListingStatus, ExplicitTimingWindow,
+} from "./timingFreshnessPolicy.ts";
 
 export type TimingDecision =
   | "timing_sufficient"
@@ -54,10 +56,19 @@ export interface TimingRequirement {
   minimumStrength: SignalStrength;
   /** True ⇒ ONE qualifying signal is enough (hot_opportunity any-of semantics). */
   anyOfSufficient: boolean;
-  /** How many `moderate` signals may combine to stand in for one `strong`. */
+  /** How many CURRENT weak signals may combine to stand in for one qualifying signal. */
   supportingSignalsRequired: number;
   /** False ⇒ the request never asked for timing at all. */
   required: boolean;
+  /**
+   * The window the user stated explicitly, carried from the typed intent.
+   *
+   * When the user names a window ("hiring in the last 60 days") they have declared
+   * that age acceptable, so a weak_supporting signal INSIDE that window satisfies on
+   * its own. This never applies to a bare "hot right now" request, which states no
+   * window and must still be carried by a genuinely current signal.
+   */
+  explicitWindow: ExplicitTimingWindow | null;
 }
 
 /**
@@ -69,6 +80,8 @@ export interface TimingSignalBreakdown {
   signal_id: string;
   signal_type: string;
   category: EvidenceCategory | null;
+  /** When the event actually happened — the basis of every freshness judgment. */
+  occurred_at: string;
   /** Age of the EVENT (occurred_at → now), in days. */
   age_days: number | null;
   /** The window applied after resolving contract vs signal policy, in hours. */
@@ -76,6 +89,10 @@ export interface TimingSignalBreakdown {
   strength: SignalStrength;
   /** Funding only: strong · medium · weak_supporting · stale. */
   funding_band?: FundingFreshnessBand;
+  /** Any decaying category (funding, hiring): the explicit policy band. */
+  freshness_band?: TimingFreshnessBand;
+  /** Job listings only: the source-backed listing status that was applied. */
+  listing_status?: ListingStatus;
   /** It met the minimum strength and satisfied its category on its own merit. */
   satisfied: boolean;
   /** It was real and fresh but too weak to satisfy alone — counted as support only. */
@@ -99,6 +116,8 @@ export interface TimingAssessment {
   strongest: SignalStrength;
   /** Per-signal age/window/strength reasoning. */
   signal_breakdown: TimingSignalBreakdown[];
+  /** Signals that contributed as SUPPORT rather than satisfying on their own. */
+  supporting_signal_ids: string[];
 }
 
 /**
@@ -132,6 +151,7 @@ export function compileTimingRequirement(
     anyOfSufficient: anyOf,
     supportingSignalsRequired: 2,
     required,
+    explicitWindow: contract.explicitTimingWindow ?? null,
     ...overrides,
   };
 }
@@ -171,7 +191,7 @@ export function evaluateTimingSufficiency(args: {
       ...base, satisfied_categories: [], missing_categories: [], stale_signal_ids: [],
       contradictory_signal_ids: [], decision: "timing_not_required", next_action: "none",
       explanation: "The request did not ask for current timing evidence.", strongest: "none",
-      signal_breakdown: [],
+      signal_breakdown: [], supporting_signal_ids: [],
     };
   }
 
@@ -185,7 +205,7 @@ export function evaluateTimingSufficiency(args: {
       stale_signal_ids: [], contradictory_signal_ids: contradictions.map((s) => s.signal_id),
       decision: "timing_contradicted", next_action: "manual_review",
       explanation: `A verified contradicting signal is present (${contradictions.map((s) => s.signal_type).join(", ")}).`,
-      strongest: "none", signal_breakdown: [],
+      strongest: "none", signal_breakdown: [], supporting_signal_ids: [],
     };
   }
 
@@ -219,30 +239,44 @@ export function evaluateTimingSufficiency(args: {
 
     const row: TimingSignalBreakdown = {
       signal_id: s.signal_id, signal_type: s.signal_type, category: cat,
+      occurred_at: s.occurred_at,
       age_days: r.age_days, applied_window_hours: appliedWindow,
       strength: isStale ? "none" : r.strength,
       ...(r.funding_band ? { funding_band: outsideContractWindow ? "stale" : r.funding_band } : {}),
+      ...(r.freshness_band ? { freshness_band: outsideContractWindow ? "stale" : r.freshness_band } : {}),
+      ...(r.listing_status ? { listing_status: r.listing_status } : {}),
       satisfied: false, supporting_only: false, stale: isStale,
     };
 
     if (isStale) { stale.push(s.signal_id); breakdown.push(row); continue; }
 
-    if (strengthAtLeast(r.strength, requirement.minimumStrength)) {
+    // A weak_supporting signal INSIDE a window the user explicitly named satisfies on
+    // its own: they declared that age acceptable ("hiring in the last 60 days"). This
+    // never applies to a bare "hot right now" (any-of) request, which names no window
+    // and must still be carried by a genuinely current signal.
+    const explicitlyAuthorized = !!requirement.explicitWindow && !requirement.anyOfSufficient
+      && r.strength === "weak" && r.freshness_band === "weak_supporting";
+
+    if (strengthAtLeast(r.strength, requirement.minimumStrength) || explicitlyAuthorized) {
       satisfied.add(cat);
       row.satisfied = true;
       if (strengthAtLeast(r.strength, "strong")) strongest = "strong";
-      else if (strongest !== "strong") strongest = "moderate";
+      else if (strongest !== "strong" && strengthAtLeast(r.strength, "moderate")) strongest = "moderate";
+      else if (strongest === "none") strongest = "weak";
     } else if (r.strength === "weak") {
-      // A weak signal (e.g. funding 91–180d) never satisfies alone, but it may support
-      // another fresh, verified signal. Every combined signal is source-backed and
-      // fresh under its own policy — combination strength is never fabricated.
-      supporting += 1;
+      // Weak signals only ever SUPPORT. An AGE-DEGRADED signal (funding 91–180d,
+      // hiring 31–60d) cannot even stack: two stale-ish events must never combine into
+      // fabricated urgency. Only signals that are weak for another reason — e.g. a
+      // fresh but self-reported founder post — may reach the supporting threshold.
+      const ageDegraded = r.freshness_band === "weak_supporting";
       row.supporting_only = true;
+      if (!ageDegraded) supporting += 1;
       if (strongest === "none") strongest = "weak";
     }
     breakdown.push(row);
   }
 
+  const supportingIds = breakdown.filter((b) => b.supporting_only).map((b) => b.signal_id);
   const satisfiedList = [...satisfied];
   const missing = requirement.requiredCategories.filter((c) => !satisfied.has(c));
 
@@ -265,7 +299,7 @@ export function evaluateTimingSufficiency(args: {
         ? `${supporting} supporting signals combine to evidence current timing.`
         : `Current verified timing evidence: ${satisfiedList.join(", ")}.`,
       strongest: combined && strongest === "none" ? "weak" : strongest,
-      signal_breakdown: breakdown,
+      signal_breakdown: breakdown, supporting_signal_ids: supportingIds,
     };
   }
 
@@ -276,6 +310,6 @@ export function evaluateTimingSufficiency(args: {
     explanation: stale.length
       ? "Timing evidence exists but is stale; a current signal is needed."
       : "No current timing signal is proven for this candidate.",
-    strongest, signal_breakdown: breakdown,
+    strongest, signal_breakdown: breakdown, supporting_signal_ids: supportingIds,
   };
 }

@@ -34,6 +34,9 @@
 // raw provider payloads, credentials, private messages, emails or phone numbers.
 
 import type { EvidenceCategory, EvidenceConfidence, EvidenceSourceType } from "./evidenceContract.ts";
+import type { ListingStatus } from "./timingFreshnessPolicy.ts";
+
+export type { ListingStatus };
 
 // ------------------------------------------------------------- taxonomy -------
 
@@ -217,6 +220,16 @@ export interface SignalEvent {
 
   /** Sanitized, structured value (e.g. {role: "AE", count: 3}). Never raw payload. */
   normalized_value?: Record<string, unknown> | null;
+
+  /**
+   * Job listings only — the normalized, SOURCE-BACKED status of the posting.
+   *
+   * A closed or expired listing is stale immediately: a role filled last week is not
+   * a reason to reach out, however recently it was posted. `unknown` is the honest
+   * default — the ABSENCE of a closing date is not evidence that a listing is open,
+   * so `active` must be positively verified, never inferred.
+   */
+  listing_status?: ListingStatus | null;
 
   /** Deterministic identity for reconciling the same event from many sources. */
   dedupe_key: string;

@@ -147,23 +147,20 @@ Deno.test("8: funding 120 days ago + fresh sales hiring satisfies combined timin
   assert(a.satisfied_categories.includes("job_signal"));
 });
 
-Deno.test("KNOWN DIVERGENCE (job_signal): the 72h contract window excludes a 10-day-old role", () => {
-  // The approved combination example is "funding 120 days ago + current sales hiring
-  // 10 days ago". It does NOT currently combine, because job_signal's contract window
-  // is 72h while the SignalEvent policy allows sales_hiring for 60 days — the SAME
-  // class of contract-vs-policy conflict that funding just had.
-  //
-  // The approved decision covered FUNDING ONLY, and other categories must retain
-  // their shipped behaviour, so this is pinned and surfaced rather than widened
-  // silently. Widening job_signal is a PRODUCT decision.
+Deno.test("RESOLVED (job_signal): the approved 120d-funding + 10d-hiring combination now works", () => {
+  // This previously failed: job_signal's 72h contract window treated a 10-day-old role
+  // as stale, so the approved combination could not fire. The job policy now gives
+  // hiring a 30-day default requirement window (with 60d retention).
+  // See hiringFreshnessPolicy.test.ts for the full matrix.
   const r = reqFor("find me hot founders right now");
-  assertEquals(r.maxAgeHoursByCategory.job_signal, 72);
+  assertEquals(r.maxAgeHoursByCategory.job_signal, DAYS(30));
 
   const a = assess("find me hot founders right now", [funding(120), salesHiring(10)]);
-  assertEquals(a.decision, "missing_timing_evidence");
+  assertEquals(a.decision, "timing_sufficient");
   const h = a.signal_breakdown.find((b) => b.signal_id === "h1")!;
-  assertEquals(h.stale, true, "10 days > the 72h job_signal contract window");
-  assertEquals(h.applied_window_hours, 72);
+  assertEquals(h.stale, false, "10 days is well inside the 30d hiring window");
+  assertEquals(h.satisfied, true);
+  assertEquals(h.applied_window_hours, DAYS(30));
 });
 
 // ---- (10)(11)(12) stale + occurred_at authority ----
@@ -196,12 +193,23 @@ Deno.test("11/12: funding observed today but occurred 8 months ago is stale — 
 Deno.test("14: 'funded in the last 6 months' allows evidence up to that stated limit", () => {
   const r = reqFor("Find B2B SaaS founders funded in the last 6 months");
   assertEquals(r.maxAgeHoursByCategory.funding_signal, DAYS(180));
-  // 150 days is inside the stated window but only weak_supporting by band, so it
-  // cannot satisfy a funding-specific requirement alone — truthful, not fabricated.
+  assertEquals(r.explicitWindow, "last_6_months");
+
+  // 150 days is weak_supporting by BAND, but the user explicitly declared six months
+  // acceptable — so inside their stated window it satisfies. This mirrors the approved
+  // hiring rule ("31–60d ... may satisfy an explicit 'last 60 days' requirement") and
+  // is why the two categories now behave consistently.
   const alone = assess("Find B2B SaaS founders funded in the last 6 months", [funding(150)]);
-  assertEquals(alone.decision, "missing_timing_evidence");
+  assertEquals(alone.decision, "timing_sufficient");
   assertEquals(alone.signal_breakdown[0].stale, false, "within the stated window");
-  assertEquals(alone.signal_breakdown[0].supporting_only, true);
+  assertEquals(alone.signal_breakdown[0].freshness_band, "weak_supporting");
+  assertEquals(alone.signal_breakdown[0].satisfied, true);
+
+  // A bare "hot right now" states NO window, so the same 150-day round cannot carry it.
+  const hot = assess("find me hot founders right now", [funding(150)]);
+  assertEquals(hot.decision, "missing_timing_evidence");
+  assertEquals(hot.signal_breakdown[0].supporting_only, true);
+
   // Beyond the stated limit ⇒ stale.
   const beyond = assess("Find B2B SaaS founders funded in the last 6 months", [funding(200)]);
   assertEquals(beyond.stale_signal_ids, ["f1"]);
@@ -210,7 +218,7 @@ Deno.test("14: 'funded in the last 6 months' allows evidence up to that stated l
 // ---- (15)(16) window isolation ----
 Deno.test("15/16: job_signal's window is never applied to funding; each any-of category keeps its own", () => {
   const r = reqFor("find me hot founders right now");
-  assertEquals(r.maxAgeHoursByCategory.job_signal, 72, "hiring stays at 72h");
+  assertEquals(r.maxAgeHoursByCategory.job_signal, DAYS(30), "hiring keeps its own 30d default window");
   assertEquals(r.maxAgeHoursByCategory.funding_signal, DAYS(FUNDING_MAX_AGE_DAYS), "funding keeps 180d");
   assertEquals(r.maxAgeHoursByCategory.launch_signal, 168);
   assertEquals(r.maxAgeHoursByCategory.founder_activity_signal, 168);
@@ -234,13 +242,13 @@ Deno.test("17: generic ICP discovery requires neither funding nor timing", () =>
 // ---- canonical authority: no conflicting tables ----
 Deno.test("the contract and the signal policy share ONE canonical funding window", () => {
   assertEquals(CANONICAL_TIMING_WINDOW_HOURS.funding_signal, DAYS(180));
-  assertEquals(CANONICAL_TIMING_WINDOW_HOURS.job_signal, 72);
+  assertEquals(CANONICAL_TIMING_WINDOW_HOURS.job_signal, DAYS(30));
   // The explicit user constraint is applied by the same resolver both sides use.
   assertEquals(resolveWindowHours({ category: "funding_signal", explicitWindow: "this_week" }), DAYS(7));
   assertEquals(resolveWindowHours({ category: "funding_signal", explicitWindow: "recently" }), DAYS(90));
   assertEquals(resolveWindowHours({ category: "funding_signal", explicitWindow: null }), DAYS(180));
-  // A looser explicit window can never widen a stricter category ceiling.
-  assertEquals(resolveWindowHours({ category: "job_signal", explicitWindow: "last_6_months" }), 72);
+  // A looser explicit window can never widen a category beyond its RETENTION ceiling.
+  assertEquals(resolveWindowHours({ category: "job_signal", explicitWindow: "last_6_months" }), DAYS(60));
   assertEquals(EXPLICIT_WINDOW_DAYS.recently, 90);
 });
 

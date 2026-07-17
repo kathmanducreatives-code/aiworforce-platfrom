@@ -97,7 +97,7 @@ Deno.test("each category keeps its OWN window in an any-of request", () => {
   // Regression: applying the tightest window (job_signal 72h) across every category
   // would wrongly age out a 5-day-old funding signal in a "hot" request.
   const r = compileTimingRequirement(contractFor("find me hot founders right now"));
-  assertEquals(r.maxAgeHoursByCategory.job_signal, 72);
+  assertEquals(r.maxAgeHoursByCategory.job_signal, 24 * 30);
   assertEquals(r.maxAgeHoursByCategory.funding_signal, 24 * 180);
   const fiveDayFunding = sig({
     signal_type: "recent_funding", signal_category: "growth", occurred_at: hoursAgo(120),

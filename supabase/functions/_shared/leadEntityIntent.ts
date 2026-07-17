@@ -87,7 +87,9 @@ const SIGNAL_PATTERNS: Array<[LeadSignalType, RegExp]> = [
 const WINDOW_PATTERNS: Array<[ExplicitTimingWindow, RegExp]> = [
   ["this_week", /\b(?:this|the past|the last)\s+week\b|\bin the last 7 days\b|\bpast 7 days\b/i],
   ["this_month", /\b(?:this|the past|the last)\s+month\b|\bin the last 30 days\b|\bpast 30 days\b/i],
+  ["last_60_days", /\b(?:in |over )?(?:the )?(?:last|past)\s+(?:60|sixty)\s+days\b/i],
   ["last_6_months", /\b(?:in |over )?(?:the )?(?:last|past)\s+(?:6|six)\s+months\b|\bin the last 180 days\b/i],
+  // "recently" is resolved PER CATEGORY: 90d for funding, 30d for hiring.
   ["recently", /\brecent(?:ly)?\b|\bjust\b|\bnewly\b/i],
 ];
 

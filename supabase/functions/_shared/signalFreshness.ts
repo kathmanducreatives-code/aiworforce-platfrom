@@ -21,11 +21,14 @@
 
 import type { EvidenceConfidence } from "./evidenceContract.ts";
 import {
-  type SignalEvent, type SignalType, type SignalCategory,
+  type SignalEvent, type SignalType, type SignalCategory, type ListingStatus,
   isRiskSignal, isTimingCapableSignal, signalCategoryOf,
 } from "./signalEvent.ts";
 import {
-  type FundingFreshnessBand, FUNDING_MAX_AGE_DAYS, fundingBandForAgeDays, DAYS as POLICY_DAYS,
+  type FundingFreshnessBand, type TimingFreshnessBand,
+  FUNDING_MAX_AGE_DAYS, JOB_MAX_AGE_DAYS,
+  fundingBandForAgeDays, jobBandForAgeDays, listingStatusIsDead,
+  DAYS as POLICY_DAYS,
 } from "./timingFreshnessPolicy.ts";
 
 /** Strength bands — deliberately coarse and explainable, never a bare float. */
@@ -71,10 +74,12 @@ export const SIGNAL_FRESHNESS_POLICY: SignalFreshnessPolicy = {
     employee_growth: DAYS(90),
     market_expansion: DAYS(90),
     geographic_expansion: DAYS(90),
-    // gtm — hiring intent outlives the posting date
-    sales_hiring: DAYS(60),
-    revops_hiring: DAYS(60),
-    growth_hiring: DAYS(60),
+    // gtm — hiring retention comes from THE canonical authority (60d). The 30d
+    // DEFAULT requirement window lives in the contract; 31-60d is supporting-only
+    // unless the user explicitly asked for the last 60 days.
+    sales_hiring: POLICY_DAYS(JOB_MAX_AGE_DAYS),
+    revops_hiring: POLICY_DAYS(JOB_MAX_AGE_DAYS),
+    growth_hiring: POLICY_DAYS(JOB_MAX_AGE_DAYS),
     new_revenue_leader: DAYS(90),
     outbound_initiative: DAYS(60),
     positioning_change: DAYS(90),
@@ -159,7 +164,20 @@ export interface SignalStrengthResult {
    * rather than inferring it from a bare band name.
    */
   funding_band?: FundingFreshnessBand;
+  /**
+   * The explicit policy band for any DECAYING category (funding, hiring). Kept
+   * separate from `strength` so the repository's strength vocabulary stays canonical
+   * while the policy's own band language remains inspectable.
+   */
+  freshness_band?: TimingFreshnessBand;
+  /** Job listings only: the source-backed status that was applied, if any. */
+  listing_status?: ListingStatus | null;
 }
+
+/** Hiring signal types — these decay through the JOB bands (7/30/60 days). */
+const HIRING_TYPES: ReadonlySet<SignalType> = new Set<SignalType>([
+  "sales_hiring", "revops_hiring", "growth_hiring",
+]);
 
 /** Categories that directly evidence a buying/GTM motion for a B2B ICP. */
 const HIGH_RELEVANCE: ReadonlySet<SignalCategory> = new Set<SignalCategory>(["growth", "gtm"]);
@@ -212,10 +230,30 @@ export function assessSignalStrength(
   };
   const age_days = age == null ? null : Number((age / 24).toFixed(3));
   const isFunding = s.signal_type === "recent_funding";
+  const isHiring = HIRING_TYPES.has(s.signal_type);
+  const ageForBand = age_days ?? Number.POSITIVE_INFINITY;
   const funding_band: FundingFreshnessBand | undefined = isFunding
-    ? fundingBandForAgeDays(age_days ?? Number.POSITIVE_INFINITY)
+    ? fundingBandForAgeDays(ageForBand)
     : undefined;
-  const meta = { age_days, applied_window_hours: win, ...(funding_band ? { funding_band } : {}) };
+  const freshness_band: TimingFreshnessBand | undefined = isFunding
+    ? funding_band
+    : isHiring ? jobBandForAgeDays(ageForBand) : undefined;
+  const listing_status = s.listing_status ?? null;
+  const meta = {
+    age_days, applied_window_hours: win,
+    ...(funding_band ? { funding_band } : {}),
+    ...(freshness_band ? { freshness_band } : {}),
+    ...(listing_status ? { listing_status } : {}),
+  };
+
+  // A verified CLOSED/EXPIRED listing is stale immediately — occurred_at age never
+  // overrides it. A role filled last week is not a reason to reach out.
+  if (listingStatusIsDead(listing_status)) {
+    return {
+      strength: "none", components, reason: "listing_closed", fresh: false,
+      ...meta, ...(freshness_band ? { freshness_band: "stale" as const } : {}),
+    };
+  }
 
   if (isRiskSignal(s.signal_type)) {
     return { strength: "none", components, reason: "risk_signal_never_proves_timing", fresh, ...meta };
@@ -231,16 +269,18 @@ export function assessSignalStrength(
     return { strength: "weak", components, reason: "not_provider_verified", fresh, ...meta };
   }
 
-  // Funding decays by EVENT age rather than cliff-edging: a round closed last week is
-  // a strong reason to reach out; one closed four months ago is real context but must
-  // never make someone "hot right now" on its own.
-  if (funding_band) {
-    switch (funding_band) {
-      case "strong": return { strength: "strong", components, reason: "funding_band_strong", fresh, ...meta };
-      case "medium": return { strength: "moderate", components, reason: "funding_band_medium", fresh, ...meta };
+  // Decaying categories (funding, hiring) map their explicit policy band onto the
+  // repository's strength vocabulary. Neither cliff-edges: a round closed — or a role
+  // posted — last week is a strong reason to reach out; the same event months later is
+  // real context but must never make someone "hot right now" on its own.
+  if (freshness_band) {
+    const label = isFunding ? "funding" : "job";
+    switch (freshness_band) {
+      case "strong": return { strength: "strong", components, reason: `${label}_band_strong`, fresh, ...meta };
+      case "medium": return { strength: "moderate", components, reason: `${label}_band_medium`, fresh, ...meta };
       // `weak` is precisely the repository's "supports but never satisfies alone" band.
-      case "weak_supporting": return { strength: "weak", components, reason: "funding_band_weak_supporting", fresh, ...meta };
-      case "stale": return { strength: "none", components, reason: "funding_band_stale", fresh: false, ...meta };
+      case "weak_supporting": return { strength: "weak", components, reason: `${label}_band_weak_supporting`, fresh, ...meta };
+      case "stale": return { strength: "none", components, reason: `${label}_band_stale`, fresh: false, ...meta };
     }
   }
 
