@@ -32,6 +32,10 @@ import { enrichmentDeadlineFrom } from "../_shared/companyEnrichmentOrchestrator
 import { shouldSkipBroadResearch } from "../_shared/broadResearchPolicy.ts";
 import { DEFAULT_EVIDENCE_BUDGET } from "../_shared/conditionalEnrichmentPlanner.ts";
 import type { CompanyEnrichmentObservability } from "../_shared/companyEnrichmentObservability.ts";
+import { runJobsSignalEnrichment, makeJobsSignalExecutor, buildSignalCandidates, timingStagesCandidate } from "../_shared/runAgentJobsSignal.ts";
+import { compileEvidenceContract } from "../_shared/evidenceContract.ts";
+import { emptySignalEnrichmentObservability, type SignalEnrichmentObservability } from "../_shared/signalEnrichmentObservability.ts";
+import type { TimingAssessment } from "../_shared/timingAssessment.ts";
 
 
 const cors = {
@@ -311,6 +315,12 @@ Deno.serve(async (req) => {
   // STILL insufficient (e.g. a Hot founder proven on firmographics with no timing
   // signal). These are force-staged at the persistence gate — never accepted.
   let companyEnrichmentStaged = new Set<string>();
+  // Phase B — structured hiring-signal timing. Populated after company enrichment;
+  // read by the persistence gate and the canonical final-state reducer. Timing
+  // sufficient NEVER means qualify_now; missing stages; contradicted rejects.
+  let signalEnrichmentObservability: SignalEnrichmentObservability = emptySignalEnrichmentObservability(0);
+  let timingByCandidate = new Map<string, TimingAssessment>();
+  let signalTimingStaged = new Set<string>();
   // Post-enrichment truth per candidate (sufficiency verdict + real remaining gaps +
   // company outcome). Feeds the canonical final-state reducer so the qualification
   // diagnostics agree with the company observability.
@@ -1574,6 +1584,48 @@ Deno.serve(async (req) => {
               requalified: enrichment.requalifyCandidateIds.size,
               staged: companyEnrichmentStaged.size,
             });
+
+            // ── Structured hiring-signal timing (Phase B) ──────────────────────
+            // AFTER company enrichment: for candidates whose fit is settled but the
+            // typed intent still requires timing, look up the canonical jobs source
+            // ONCE per company, normalize verified GTM-hiring SignalEvents, and
+            // assess timing. Shares the SAME finalization-reserve deadline. Timing
+            // is fed to the EXISTING reducer/gate — it never force-accepts.
+            try {
+              const timingContract = compileEvidenceContract(routingEntityIntent, brainConstraints);
+              const signalCandidates = buildSignalCandidates({
+                items: effectiveAccepted as any[],
+                candidateIdOf: (a) => candKey(a),
+                sufficiencyByCandidate: enrichment.enrichment.sufficiencyAfter,
+                hardBlockedIds: new Set(
+                  (effectiveAccepted as any[]).filter((a) => {
+                    if (gateRejectedKeys.size === 0) return false;
+                    const uk = normUrl(a.source_url ?? a.raw?.source_url);
+                    const nn = normName(a.name ?? a.company);
+                    return !!((uk && gateRejectedKeys.has(`u:${uk}`)) || (nn && gateRejectedKeys.has(`n:${nn}`)));
+                  }).map((a) => candKey(a)),
+                ),
+              });
+              const signalRun = await runJobsSignalEnrichment({
+                candidates: signalCandidates,
+                contract: timingContract,
+                workspace_id,
+                now: run_started_at ?? new Date().toISOString(),
+                execute: makeJobsSignalExecutor(runTool, baseCtx),
+                deadlineMs: enrichmentDeadlineFrom(invocationStartMs),
+                workflowRunId: run_id, taskId: task.id,
+              });
+              signalEnrichmentObservability = signalRun.observability;
+              timingByCandidate = signalRun.timingByCandidate;
+              for (const [id, t] of timingByCandidate) if (timingStagesCandidate(t)) signalTimingStaged.add(id);
+              console.log("[run-agent] signal enrichment", {
+                considered: signalEnrichmentObservability.summary.candidates_considered,
+                called: signalEnrichmentObservability.summary.companies_called,
+                enriched: signalEnrichmentObservability.summary.companies_enriched,
+                timing_sufficient: signalEnrichmentObservability.summary.candidates_timing_sufficient,
+                staged_timing: signalTimingStaged.size,
+              });
+            } catch (e) { console.warn("[run-agent] signal enrichment failed (non-fatal):", e); }
           } catch (e) { console.warn("[run-agent] company enrichment failed (non-fatal):", e); }
         }
 
@@ -1601,8 +1653,13 @@ Deno.serve(async (req) => {
             // signal after firmographic enrichment) is force-staged for signal
             // enrichment — firmographics alone never make it Hot. Never loosens.
             const enrichmentStaged = companyEnrichmentStaged.has(candKey(a));
-            const persist = decision.persist && !enrichmentStaged;
-            const reason = decision.persist && enrichmentStaged ? "stage_missing_evidence:signal_enrichment" : decision.reason;
+            // Phase B: required timing that is missing/contradicted also TIGHTENS —
+            // a fit-proven founder with no current hiring signal is not "hot now".
+            const timingStaged = signalTimingStaged.has(candKey(a));
+            const persist = decision.persist && !enrichmentStaged && !timingStaged;
+            const reason = decision.persist && timingStaged ? "stage_missing_evidence:timing"
+              : decision.persist && enrichmentStaged ? "stage_missing_evidence:signal_enrichment"
+              : decision.reason;
             qualDecisionByKey.set(candKey(a), { persist, reason, evaluated: m.evaluated });
             if (!persist) {
               stagedForReview.push({
@@ -1684,6 +1741,9 @@ Deno.serve(async (req) => {
                 ariaEvaluated: decision?.evaluated === true,
                 persistDecision: { persist: persisted, reason: decision?.reason ?? "no_qualification" },
                 stagedByEnrichment: companyEnrichmentStaged.has(key),
+                // Phase B: verified timing verdict — contradicted rejects, missing
+                // stages, sufficient falls through to the persistence authority.
+                timingDecision: timingByCandidate.get(key)?.decision ?? null,
               })
               // company/job targets: gate-accepted persist under the existing policy.
               : {
@@ -1772,6 +1832,7 @@ Deno.serve(async (req) => {
           if (sourceQualityMeta) {
             (sourceQualityMeta as Record<string, unknown>).qualification_observability = qualificationObservability;
             (sourceQualityMeta as Record<string, unknown>).company_enrichment_observability = companyEnrichmentObservability;
+            (sourceQualityMeta as Record<string, unknown>).signal_enrichment_observability = signalEnrichmentObservability;
           }
         } catch (e) { console.warn("[run-agent] observability build failed:", e); }
 
@@ -2075,7 +2136,7 @@ Deno.serve(async (req) => {
     // Structured reason so a hard provider failure is machine-classifiable (and can
     // never be mistaken for a successful/"complete" run). No fabrication, no leads.
     const failReason: ProviderSourceReason = classifyProviderSourceOutcome({ errored: true }) ?? "provider_source_failed";
-    await supabase.from("tasks").update({ status: "failed", error_message: sourcingFailure.error, result: { error: sourcingFailure.error, message: failMsg, result_status: "no_results", reason: failReason, qualified_count: 0, contact_ready_count: 0, persisted_lead_count: 0, provider_calls: 0, next_step: null, qualification_observability: qualificationObservability ?? undefined, company_enrichment_observability: companyEnrichmentObservability } }).eq("id", task.id);
+    await supabase.from("tasks").update({ status: "failed", error_message: sourcingFailure.error, result: { error: sourcingFailure.error, message: failMsg, result_status: "no_results", reason: failReason, qualified_count: 0, contact_ready_count: 0, persisted_lead_count: 0, provider_calls: 0, next_step: null, qualification_observability: qualificationObservability ?? undefined, company_enrichment_observability: companyEnrichmentObservability, signal_enrichment_observability: signalEnrichmentObservability } }).eq("id", task.id);
     await supabase.from("task_plans").update({ status: "failed" }).eq("id", plan_id);
     await supabase.from("activity_feed").insert({
       workspace_id, plan_id, agent_id: agent.id, event_type: "agent_started",
@@ -2168,6 +2229,7 @@ Deno.serve(async (req) => {
         // an honest no_results explains WHY each provider candidate was held back.
         qualification_observability: qualificationObservability ?? undefined,
         company_enrichment_observability: companyEnrichmentObservability,
+        signal_enrichment_observability: signalEnrichmentObservability,
       },
     }).eq("id", task.id);
     await supabase.from("task_plans").update({ status: "failed", completed_at: new Date().toISOString() }).eq("id", plan_id);
@@ -2314,7 +2376,7 @@ Deno.serve(async (req) => {
   const finalStatus = needs_approval ? "awaiting_approval" : "complete";
   await supabase.from("tasks").update({
     status: finalStatus,
-    result: { output: apiText, tokens_in: tokensIn, tokens_out: tokensOut, attempt_log: adaptiveAttempts.length ? adaptiveAttempts : undefined, sourcing_attempts: sourcingAttemptAudit ?? undefined, lead_entity_intent: routingEntityIntent ?? undefined, routing: routingActorPlan ? { target_entity: routingActorPlan.target_entity, output_type: routingEntityIntent?.output_type, primary_actor: routingActorPlan.primary_identity_actor, routing_source: routingActorPlan.routing_source } : undefined, source_plan: sourcePlanMeta ?? undefined, source_quality: sourceQualityMeta ?? undefined, qualification_observability: qualificationObservability ?? undefined, company_enrichment_observability: companyEnrichmentObservability },
+    result: { output: apiText, tokens_in: tokensIn, tokens_out: tokensOut, attempt_log: adaptiveAttempts.length ? adaptiveAttempts : undefined, sourcing_attempts: sourcingAttemptAudit ?? undefined, lead_entity_intent: routingEntityIntent ?? undefined, routing: routingActorPlan ? { target_entity: routingActorPlan.target_entity, output_type: routingEntityIntent?.output_type, primary_actor: routingActorPlan.primary_identity_actor, routing_source: routingActorPlan.routing_source } : undefined, source_plan: sourcePlanMeta ?? undefined, source_quality: sourceQualityMeta ?? undefined, qualification_observability: qualificationObservability ?? undefined, company_enrichment_observability: companyEnrichmentObservability, signal_enrichment_observability: signalEnrichmentObservability },
   }).eq("id", task.id);
 
   // Phase 2: persist agent outputs into structured GTM memory. Fire-and-forget.
