@@ -24,7 +24,7 @@ import { parsePeopleSearchIntent, buildPeopleSearchAttempts, buildSourcingAttemp
 import { extractCandidateLocationEvidence } from "../_shared/locationMatch.ts";
 import { compileLeadEntityIntent, compileActorPlan, detectRoutingConflict, artifactTypeForActor, expectedArtifactType, ACTOR_IMPL, type LeadEntityIntent, type ProviderActorPlan, type RoutingConflictResult } from "../_shared/leadEntityIntent.ts";
 import { qualificationPersistenceDecision, mapAriaToDecision, isHardEvidenceBlocker, type AriaLike } from "../_shared/qualificationPersistence.ts";
-import { resolveFinalCandidateState, refreshEvidenceMissing } from "../_shared/finalCandidateState.ts";
+import { resolveFinalCandidateState, refreshEvidenceMissing, type FinalCandidateStateResult } from "../_shared/finalCandidateState.ts";
 import { buildQualificationObservability, type CandidateDiagnosticInput, type QualificationObservability } from "../_shared/qualificationObservability.ts";
 import { resolveGeographyConstraint, classifyGeography, type GeographyConstraint } from "../_shared/geographyConstraint.ts";
 import { runFindLeadsCompanyEnrichment, mapAcceptedPeople, makeCompanyEnrichmentExecutor, emptyCompanyEnrichmentObservability, type CompanyRawPatch, type CandidateEnrichmentOutcome } from "../_shared/runAgentCompanyEnrichment.ts";
@@ -1504,6 +1504,10 @@ Deno.serve(async (req) => {
         // Records the qualification decision per candidate so both the persistence
         // filter and the observability diagnostics use the SAME verdict.
         const qualDecisionByKey = new Map<string, { persist: boolean; reason: string; evaluated: boolean }>();
+        // SINGLE final-state authority: resolveFinalCandidateState decides persistence
+        // AND the observability final state, so the two can never disagree. Computed
+        // once at the persistence gate and reused in the diagnostics below.
+        const finalStateByKey = new Map<string, FinalCandidateStateResult>();
         const candKey = (a: any): string => normUrl(a.source_url ?? a.raw?.source_url ?? a.raw?.profile_url) || normName(a.name ?? a.company) || "";
 
         // ── Company enrichment (Phase 2, Section 10) ────────────────────────────
@@ -1632,12 +1636,16 @@ Deno.serve(async (req) => {
         let finalPersistSet = gatedAccepted;
         if (runTargetIsPerson) {
           finalPersistSet = gatedAccepted.filter((a: any) => {
+            const key = candKey(a);
             const entry = lookupEntry(a);
             const aria = (entry?.aria ?? null) as AriaLike | null;
             const m = mapAriaToDecision(aria);
             const violations = (((entry?.canonical as any)?.run_trace?.evidence_violations)
               ?? ((entry?.canonical as any)?.evidence_violations) ?? []) as string[];
-            const decision = qualificationPersistenceDecision({
+            // The Aria-accept path (provenance necessary, Aria accept + qualified
+            // tier sufficient). This is ONE of two routes to qualify_now — the other
+            // is the deterministic timing-aware path inside resolveFinalCandidateState.
+            const ariaDecision = qualificationPersistenceDecision({
               targetEntity: routingEntityIntent?.target_entity ?? "person",
               candidateArtifactType: runArtifactType,
               // Provenance is separately ENFORCED at insert (enforce_provenance);
@@ -1648,30 +1656,37 @@ Deno.serve(async (req) => {
               tier: entry?.tier ?? null,
               evidenceViolations: violations,
             });
-            // Company enrichment can only TIGHTEN: a candidate proven on fit but
-            // still missing required evidence (e.g. a Hot founder with no timing
-            // signal after firmographic enrichment) is force-staged for signal
-            // enrichment — firmographics alone never make it Hot. Never loosens.
-            const enrichmentStaged = companyEnrichmentStaged.has(candKey(a));
-            // Phase B: required timing that is missing/contradicted also TIGHTENS —
-            // a fit-proven founder with no current hiring signal is not "hot now".
-            const timingStaged = signalTimingStaged.has(candKey(a));
-            const persist = decision.persist && !enrichmentStaged && !timingStaged;
-            const reason = decision.persist && timingStaged ? "stage_missing_evidence:timing"
-              : decision.persist && enrichmentStaged ? "stage_missing_evidence:signal_enrichment"
-              : decision.reason;
-            qualDecisionByKey.set(candKey(a), { persist, reason, evaluated: m.evaluated });
-            if (!persist) {
+            const post = enrichmentByCandidate.get(key);
+            // ONE authority for persistence AND observability. Enrichment/timing
+            // tightening + the deterministic timing-aware acceptance all live in the
+            // reducer, so a fit-verified, timing_sufficient founder now reaches
+            // qualify_now while a missing/contradicted one stages/rejects truthfully.
+            const finalState = resolveFinalCandidateState({
+              sourceGateDecision: (entry?.gate as any)?.decision ?? "needs_verification",
+              providerVerified: !!(a.source_url ?? a.raw?.source_url ?? a.raw?.profile_url),
+              artifactMatches: true,   // gatedAccepted already dropped hard-rejected candidates
+              hardEvidenceViolation: violations.find((v) => isHardEvidenceBlocker(v)) ?? null,
+              sufficiencyDecision: post?.decisionAfter === "unknown" ? null : (post?.decisionAfter ?? null),
+              missingCritical: post?.missingAfter ?? null,
+              companyOutcome: post?.companyOutcome ?? null,
+              ariaEvaluated: m.evaluated,
+              persistDecision: { persist: ariaDecision.persist, reason: ariaDecision.reason },
+              stagedByEnrichment: companyEnrichmentStaged.has(key),
+              timingDecision: timingByCandidate.get(key)?.decision ?? null,
+            });
+            finalStateByKey.set(key, finalState);
+            qualDecisionByKey.set(key, { persist: finalState.persist, reason: finalState.reason_code, evaluated: m.evaluated });
+            if (!finalState.persist) {
               stagedForReview.push({
                 name: (a.name ?? null) as string | null,
                 company: (a.company ?? null) as string | null,
                 source_url: (a.source_url ?? a.raw?.source_url ?? a.raw?.profile_url ?? null) as string | null,
-                reason,
+                reason: finalState.reason_code,
                 tier: entry?.tier ?? null,
                 star_label: (aria?.star_label ?? null) as string | null,
               });
             }
-            return persist;
+            return finalState.persist;
           });
           console.log("[run-agent] qualification gate", { accepted: gatedAccepted.length, persisted: finalPersistSet.length, staged: stagedForReview.length });
           // Reflect honest persisted vs staged counts in the source-quality meta.
@@ -1729,8 +1744,11 @@ Deno.serve(async (req) => {
             // labelled company-fit-verified founders `qualification_threshold` while the
             // company observability recommended `signal_enrichment` for the same person.
             const post = enrichmentByCandidate.get(key);
+            // Reuse the SAME final state the persistence gate computed (single
+            // authority), so observability and finalPersistSet never diverge.
+            // Hard-rejected candidates were never in the gate, so compute theirs.
             const finalState = runTargetIsPerson
-              ? resolveFinalCandidateState({
+              ? (finalStateByKey.get(key) ?? resolveFinalCandidateState({
                 sourceGateDecision: gateDecision,
                 providerVerified: !!sourceUrl,
                 artifactMatches: !isHardRejected,
@@ -1741,10 +1759,8 @@ Deno.serve(async (req) => {
                 ariaEvaluated: decision?.evaluated === true,
                 persistDecision: { persist: persisted, reason: decision?.reason ?? "no_qualification" },
                 stagedByEnrichment: companyEnrichmentStaged.has(key),
-                // Phase B: verified timing verdict — contradicted rejects, missing
-                // stages, sufficient falls through to the persistence authority.
                 timingDecision: timingByCandidate.get(key)?.decision ?? null,
-              })
+              }))
               // company/job targets: gate-accepted persist under the existing policy.
               : {
                 state: "qualify_now" as const, stage_reason: null, rejection_class: null,
@@ -1756,11 +1772,19 @@ Deno.serve(async (req) => {
               : "stage_missing_evidence";
             // Authoritative post-enrichment gaps: a candidate that gained a verified
             // website/industry must no longer report them missing.
-            const refreshedMissing = refreshEvidenceMissing({
+            const refreshedMissingRaw = refreshEvidenceMissing({
               staleMissingFields: (entry?.missing_fields ?? []) as string[],
               patch: (a.raw ?? null) as any,
               sufficiencyMissingAfter: post?.missingAfter ?? null,
             });
+            // Verified sufficient timing CLOSES the timing gap: a timing_sufficient
+            // candidate must not still report a signal category (e.g. job_signal) as
+            // missing (the v86 `missing_timing_signal` artifact).
+            const timingSufficient = timingByCandidate.get(key)?.decision === "timing_sufficient";
+            const SIGNAL_MISSING = new Set(["job_signal", "funding_signal", "launch_signal", "expansion_signal", "founder_activity_signal", "gtm_signal"]);
+            const refreshedMissing = timingSufficient
+              ? refreshedMissingRaw.filter((c) => !SIGNAL_MISSING.has(c))
+              : refreshedMissingRaw;
             return {
               normalized_candidate_id: a.raw?.normalized_candidate_id ?? (entry?.canonical as any)?.normalized_candidate_id ?? null,
               name: a.name ?? a.company ?? null,
