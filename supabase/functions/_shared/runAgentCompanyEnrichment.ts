@@ -40,6 +40,7 @@ import {
 } from "./structuredCompanyEnrichment.ts";
 import type { SufficiencyDecision } from "./evidenceSufficiency.ts";
 import type { CompanyEnrichmentOutcomeForCandidate } from "./finalCandidateState.ts";
+import type { TimingDecision } from "./timingAssessment.ts";
 import {
   buildCompanyEnrichmentObservability, type CompanyEnrichmentObservability,
 } from "./companyEnrichmentObservability.ts";
@@ -393,6 +394,36 @@ export interface FindLeadsEnrichmentResult {
   perCandidate: Map<string, CandidateEnrichmentOutcome>;
   /** Abandoned late provider answers (audit only; never evidence). */
   lateProviderCompletions: LateProviderCompletion[];
+}
+
+/**
+ * Reconcile the COMPANY-enrichment staging flag against the LATER signal stage.
+ *
+ * Company enrichment runs before jobs/signal enrichment and force-stages a candidate
+ * whenever its post-company sufficiency is not yet `qualify_now` — which includes a
+ * fit-COMPLETE founder whose only remaining gap is timing (post sufficiency
+ * `signal_enrichment`). Signal enrichment then closes exactly that gap
+ * (`timing_sufficient`), so the pre-signal `companyEnrichmentStaged` membership is
+ * stale and must not keep blocking the reducer's timing-aware `qualify_now` (the v87
+ * defect: 3 candidates `timing_sufficient`, 0 `qualify_now`).
+ *
+ * The flag is CLEARED only when timing is now sufficient AND timing was the sole
+ * remaining gap (fit settled: post sufficiency `qualify_now`/`signal_enrichment`). A
+ * candidate with a genuine unresolved company/person requirement
+ * (`structured_company_enrichment`, `targeted_web_verification`, incomplete identity)
+ * keeps a real gap and stays staged. This never accepts on its own — it only supplies
+ * the correct `stagedByEnrichment` input to `resolveFinalCandidateState`, whose own
+ * `fitVerified` guard enforces the same invariant independently.
+ */
+export function stillStagedByEnrichmentAfterTiming(args: {
+  companyStaged: boolean;
+  sufficiencyDecisionAfter?: SufficiencyDecision | "unknown" | null;
+  timingDecision?: TimingDecision | null;
+}): boolean {
+  if (!args.companyStaged) return false;
+  const timingWasTheOnlyGap = args.sufficiencyDecisionAfter === "qualify_now"
+    || args.sufficiencyDecisionAfter === "signal_enrichment";
+  return !(args.timingDecision === "timing_sufficient" && timingWasTheOnlyGap);
 }
 
 /** Collapse the orchestrator's company outcome to the candidate-facing vocabulary
