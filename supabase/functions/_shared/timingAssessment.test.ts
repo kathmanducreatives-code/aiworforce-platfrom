@@ -188,16 +188,20 @@ Deno.test("14: company fit complete + timing missing stages for signal enrichmen
   assertEquals(s.persist, false);         // (29) missing timing ⇒ persist=false
 });
 
-Deno.test("15: timing_sufficient allows progress but does NOT bypass final qualification", () => {
-  // Timing proven, but the persistence authority still refused ⇒ never accepted.
+Deno.test("15: timing_sufficient does NOT bypass a verified contradiction (still rejects)", () => {
+  // Timing proven, but a VERIFIED contradiction (ICP mismatch) outranks it ⇒ reject.
+  // A verified contradiction is the deterministic reason a complete candidate is
+  // refused — never a stale heuristic score.
   const refused = resolveFinalCandidateState({
     sourceGateDecision: "needs_verification", providerVerified: true, artifactMatches: true,
+    icpContradiction: true,
     sufficiencyDecision: "qualify_now", missingCritical: [], companyOutcome: "enriched",
     ariaEvaluated: true, persistDecision: { persist: false, reason: "aria_rejected" },
     timingDecision: "timing_sufficient",
   });
   assertEquals(refused.state, "reject");
-  assertEquals(refused.persist, false, "timing_sufficient must never force an accept");
+  assertEquals(refused.rejection_class, "icp_mismatch");
+  assertEquals(refused.persist, false, "timing_sufficient must never override a verified contradiction");
 
   // Timing proven AND the persistence authority accepted ⇒ qualify_now.
   const accepted = resolveFinalCandidateState({
@@ -208,6 +212,22 @@ Deno.test("15: timing_sufficient allows progress but does NOT bypass final quali
   });
   assertEquals(accepted.state, "qualify_now");
   assertEquals(accepted.persist, true);
+});
+
+Deno.test("15b: DETERMINISTIC path — fit-verified + timing_sufficient reaches qualify_now despite a stale Aria under-score", () => {
+  // The v86 milestone bug: Aria scored these founders BEFORE company + signal
+  // enrichment (tier under-scored), so acceptance keyed on Aria never fired even
+  // though fit + timing became complete. Deterministic evidence gates now win.
+  const s = resolveFinalCandidateState({
+    sourceGateDecision: "accept", providerVerified: true, artifactMatches: true,
+    sufficiencyDecision: "signal_enrichment", // identity + company fit complete; timing was the only gap
+    missingCritical: ["job_signal"], companyOutcome: "enriched",
+    ariaEvaluated: true, persistDecision: { persist: false, reason: "tier_rejected" }, // stale under-score
+    timingDecision: "timing_sufficient",
+  });
+  assertEquals(s.state, "qualify_now");
+  assertEquals(s.reason_code, "all_required_evidence_verified");
+  assertEquals(s.persist, true);
 });
 
 Deno.test("a verified timing contradiction is a truthful reject, not a stage", () => {
