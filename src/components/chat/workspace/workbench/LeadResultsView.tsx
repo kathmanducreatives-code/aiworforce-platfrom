@@ -16,6 +16,7 @@ import { useWorkspace } from '@/contexts/WorkspaceContext';
 import { runLeadAction } from '@/lib/leadActions';
 import { LEAD_ACTION_LOADING, workbenchActionToLeadKind, type LeadActionKind } from '@/lib/leadActionRequest';
 import { deriveRowAction, rowsForExport, type RowAction } from '@/lib/leadRowAction';
+import { emptyBatchTally, formatBatchSummary } from '@/lib/leadActionOutcome';
 
 interface Props {
   meta: LeadResultsPanelMeta;
@@ -108,21 +109,30 @@ export default function LeadResultsView({ meta, conversationId }: Props) {
     }
     setActionOutcome(null);
     setDirectRunning(kind);
-    setRowActions((s) => { const n = { ...s }; for (const r of rows) n[r.id] = { kind, state: 'running' }; return n; });
-    let ok = 0;
+    setRowActions((s) => { const n = { ...s }; for (const r of rows) n[r.id] = { kind, status: 'running' }; return n; });
+
+    // Tally by CATEGORY. A batch of pre-execution rejections must report
+    // "4 request errors", not "0/4 succeeded" — the latter falsely implies four
+    // leads were examined and none qualified.
+    const tally = emptyBatchTally(rows.length);
     for (const r of rows) {
       try {
         const res = await runLeadAction({ leadAction: kind, leadCandidateIds: [r.id], workspaceId, planId: meta.plan_id });
         const p = (res.per_lead && res.per_lead[0]) ? res.per_lead[0] as Record<string, unknown> : {};
         const ra = deriveRowAction(kind, res, p);
-        if (ra.state === 'success') ok++;
+        if (ra.status !== 'running') tally[ra.status] += 1;
         setRowActions((s) => ({ ...s, [r.id]: ra }));
       } catch (e) {
-        setRowActions((s) => ({ ...s, [r.id]: { kind, state: 'error', detail: e instanceof Error ? e.message : 'failed' } }));
+        // A thrown invoke never reached execution either.
+        tally.request_error += 1;
+        setRowActions((s) => ({
+          ...s,
+          [r.id]: { kind, status: 'request_error', detail: e instanceof Error ? e.message : undefined },
+        }));
       }
     }
     setDirectRunning(null);
-    setActionOutcome({ kind, success: ok > 0, summary: `${ok}/${rows.length} succeeded — see each row. Nothing sent.` });
+    setActionOutcome({ kind, success: tally.succeeded > 0, summary: formatBatchSummary(tally) });
     await refresh();
   }, [directRunning, selectedRows, workspaceId, meta.plan_id, refresh]);
 

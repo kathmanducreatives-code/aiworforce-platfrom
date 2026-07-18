@@ -44,7 +44,8 @@ export type RunToolFn = (toolName: string, input: unknown, ctx: any) => Promise<
 export interface ExecCtx {
   admin: any;                 // supabase service client (same one run-agent holds)
   workspace_id: string;
-  plan_id: string;
+  /** Null for a direct Workbench action, which has no orchestrated plan. */
+  plan_id: string | null;
   task_id: string;
   agent_id?: string | null;
   agent_slug?: string | null;

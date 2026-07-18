@@ -1,0 +1,162 @@
+// Direct Workbench lead-action request contract. Pure + dependency-free so it is
+// unit-testable under Deno and shared by run-agent's routing gate.
+//
+// Two request modes reach run-agent:
+//
+//   A. ORCHESTRATED PLAN STEP — orchestrate threads a full plan step and calls
+//      with the SERVICE_ROLE bearer. Requires plan_id + step_index + agent +
+//      workspace_id + instruction. Unchanged by this module.
+//
+//   B. DIRECT LEAD ACTION — the Workbench invokes run-agent straight from the
+//      browser for selected rows. It carries tool_input.lead_action and a user
+//      JWT, and must NOT be forced to synthesise plan-step fields it has no
+//      business inventing.
+//
+// Mode B is detected BEFORE the plan-step required-field gate so a direct action
+// can never be rejected for missing orchestration metadata.
+
+export type LeadActionKind = "research_company" | "find_decision_makers" | "generate_outreach";
+
+export const LEAD_ACTION_KINDS: readonly LeadActionKind[] = [
+  "research_company",
+  "find_decision_makers",
+  "generate_outreach",
+] as const;
+
+/** research/decision-maker → Hawk (Intelligence); outreach drafting → Penn. */
+export const DIRECT_ACTION_AGENT: Record<LeadActionKind, string> = {
+  research_company: "hawk",
+  find_decision_makers: "hawk",
+  generate_outreach: "penn",
+};
+
+/**
+ * Instruction is derived INTERNALLY, never taken from the client. A direct action
+ * is a fixed, structured operation on existing rows — free-text from the browser
+ * would be an injection surface into the agent prompt for no benefit.
+ */
+export const DIRECT_ACTION_INSTRUCTION: Record<LeadActionKind, string> = {
+  research_company: "Research company context for the selected lead(s).",
+  find_decision_makers: "Find decision-makers for the selected lead(s).",
+  generate_outreach: "Prepare an approval-ready outreach draft for the selected lead(s).",
+};
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+export function isUuid(value: unknown): value is string {
+  return typeof value === "string" && UUID_RE.test(value);
+}
+
+export function isLeadActionKind(value: unknown): value is LeadActionKind {
+  return typeof value === "string" && (LEAD_ACTION_KINDS as readonly string[]).includes(value);
+}
+
+/**
+ * True when the caller is attempting a direct lead action AT ALL — including an
+ * unknown action name. Detecting the *attempt* (not just the valid kinds) is what
+ * keeps a typo'd action from silently falling through to the plan-step gate and
+ * being misreported as `missing_required_fields`, or worse, reaching Scout
+ * sourcing and starting an unwanted provider search.
+ */
+export function isDirectLeadActionAttempt(toolInput: unknown): boolean {
+  if (!toolInput || typeof toolInput !== "object") return false;
+  return "lead_action" in (toolInput as Record<string, unknown>);
+}
+
+export interface DirectLeadActionRequest {
+  action: LeadActionKind;
+  lead_candidate_ids: string[];
+  agent_slug: string;
+  instruction: string;
+}
+
+export type DirectLeadActionValidation =
+  | { ok: true; request: DirectLeadActionRequest }
+  | { ok: false; status: number; error_code: string; message: string };
+
+/**
+ * Validate a direct-action request. Deliberately does NOT require plan_id,
+ * step_index, or a client-supplied instruction — those belong to mode A only.
+ */
+export function validateDirectLeadActionRequest(body: {
+  workspace_id?: unknown;
+  tool_input?: unknown;
+}): DirectLeadActionValidation {
+  const toolInput = (body.tool_input ?? {}) as Record<string, unknown>;
+  const action = toolInput.lead_action;
+
+  if (!isLeadActionKind(action)) {
+    return {
+      ok: false,
+      status: 400,
+      error_code: "unsupported_lead_action",
+      message: "That lead action isn't supported.",
+    };
+  }
+
+  if (!isUuid(body.workspace_id)) {
+    return {
+      ok: false,
+      status: 400,
+      error_code: "invalid_workspace_id",
+      message: "No active workspace — reload and try again.",
+    };
+  }
+
+  const rawIds = toolInput.lead_candidate_ids;
+  if (!Array.isArray(rawIds) || rawIds.length === 0) {
+    return {
+      ok: false,
+      status: 400,
+      error_code: "lead_action_requires_lead_candidate_ids",
+      message: "Select one or more Workbench rows first.",
+    };
+  }
+
+  // Reject the whole batch on a malformed id rather than silently dropping it —
+  // a partially-applied action the caller didn't ask for is worse than a refusal.
+  const ids = [...new Set(rawIds)];
+  if (!ids.every(isUuid)) {
+    return {
+      ok: false,
+      status: 400,
+      error_code: "invalid_lead_candidate_id",
+      message: "One or more selected rows are invalid — refresh the Workbench.",
+    };
+  }
+
+  return {
+    ok: true,
+    request: {
+      action,
+      lead_candidate_ids: ids as string[],
+      agent_slug: DIRECT_ACTION_AGENT[action],
+      instruction: DIRECT_ACTION_INSTRUCTION[action],
+    },
+  };
+}
+
+/**
+ * ROOT CAUSE of the production "0/4 succeeded" incident.
+ *
+ * `tasks.user_id` is NOT NULL with no default. orchestrate always threads an
+ * explicit body.user_id, so mode A was fine — but the Workbench direct-action
+ * body never carried one, so run-agent inserted `user_id: null`, the insert hit
+ * the not-null constraint, and the function returned 500 task_insert_failed.
+ * That produced zero tasks, zero tool_calls, zero activity rows and zero
+ * provider runs, which the frontend flattened to "Edge Function returned a
+ * non-2xx status code".
+ *
+ * The authenticated user is already resolved by the workspace guard; reuse it
+ * instead of discarding it. Returns null only when there is genuinely no user
+ * (service-role calls that also omitted user_id), so the caller can refuse
+ * rather than attempt a doomed insert.
+ */
+export function resolveTaskUserId(args: {
+  bodyUserId?: unknown;
+  authenticatedUserId?: string | null;
+}): string | null {
+  if (isUuid(args.bodyUserId)) return args.bodyUserId;
+  if (isUuid(args.authenticatedUserId)) return args.authenticatedUserId;
+  return null;
+}

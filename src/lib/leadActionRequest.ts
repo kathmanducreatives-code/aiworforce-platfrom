@@ -49,44 +49,45 @@ export interface BuildLeadActionArgs {
   leadAction: LeadActionKind;
   leadCandidateIds: string[];
   workspaceId: string | null;
-  planId: string;
-  stepIndex?: number;
+  /**
+   * The REAL sourcing plan these rows came from, when there is one. Optional and
+   * purely for trace linkage — run-agent no longer requires it for a direct
+   * action, and we never invent one to satisfy validation.
+   */
+  planId?: string | null;
 }
 
+/**
+ * Canonical direct-action request. Deliberately carries NO step_index, agent_slug
+ * or instruction: those are orchestration metadata the Workbench has no basis to
+ * invent, and the backend derives the agent + instruction itself so browser-
+ * supplied free text can never reach an agent prompt.
+ */
 export interface LeadActionRequestBody {
-  plan_id: string;
-  step_index: number;
-  agent_slug: string;
   workspace_id: string;
-  instruction: string;
+  plan_id?: string;
   tool_input: { lead_action: LeadActionKind; lead_candidate_ids: string[] };
 }
 
 export type BuildLeadActionResult =
   | { valid: true; body: LeadActionRequestBody }
-  | { valid: false; error: 'no_lead_selected' | 'no_workspace' | 'no_plan' };
+  | { valid: false; error: 'no_lead_selected' | 'no_workspace' };
 
 /**
  * Build the run-agent request body from a selection. Sends the real selected lead
  * candidate IDs (deduped) — never company names, never a multi-company query (the
- * backend loops one company at a time). Returns a typed error when the selection,
- * workspace, or plan is missing so the caller can show a clear message and do
- * nothing.
+ * backend loops one company at a time). Returns a typed error when the selection
+ * or workspace is missing so the caller can show a clear message and do nothing.
  */
 export function buildLeadActionRequest(args: BuildLeadActionArgs): BuildLeadActionResult {
   const ids = Array.from(new Set((args.leadCandidateIds ?? []).filter((x) => typeof x === 'string' && x)));
   if (ids.length === 0) return { valid: false, error: 'no_lead_selected' };
   if (!args.workspaceId) return { valid: false, error: 'no_workspace' };
-  if (!args.planId) return { valid: false, error: 'no_plan' };
-  return {
-    valid: true,
-    body: {
-      plan_id: args.planId,
-      step_index: args.stepIndex ?? 0,
-      agent_slug: AGENT_FOR[args.leadAction],
-      workspace_id: args.workspaceId,
-      instruction: INSTRUCTION_FOR[args.leadAction],
-      tool_input: { lead_action: args.leadAction, lead_candidate_ids: ids },
-    },
+
+  const body: LeadActionRequestBody = {
+    workspace_id: args.workspaceId,
+    tool_input: { lead_action: args.leadAction, lead_candidate_ids: ids },
   };
+  if (args.planId) body.plan_id = args.planId;
+  return { valid: true, body };
 }

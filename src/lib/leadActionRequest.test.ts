@@ -23,9 +23,21 @@ Deno.test("Test 1: research_company sends lead_action + selected id", () => {
   if (!r.valid) return;
   assertEquals(r.body.tool_input.lead_action, "research_company");
   assertEquals(r.body.tool_input.lead_candidate_ids, ["lead-1"]);
-  assertEquals(r.body.agent_slug, "hawk");
   assertEquals(r.body.workspace_id, "ws-1");
   assertEquals(r.body.plan_id, "plan-1");
+});
+
+// The direct contract carries NO orchestration metadata: the backend derives the
+// agent and instruction itself, so the browser never supplies prompt text and
+// never fabricates a step_index to satisfy validation.
+Deno.test("direct request omits step_index / agent_slug / instruction", () => {
+  const r = buildLeadActionRequest({ ...base, leadAction: "research_company", leadCandidateIds: ["lead-1"] });
+  assert(r.valid);
+  if (!r.valid) return;
+  const body = r.body as unknown as Record<string, unknown>;
+  assertEquals(body.step_index, undefined);
+  assertEquals(body.agent_slug, undefined);
+  assertEquals(body.instruction, undefined);
 });
 
 Deno.test("Test 2: find_decision_makers sends lead_action + selected id", () => {
@@ -36,12 +48,11 @@ Deno.test("Test 2: find_decision_makers sends lead_action + selected id", () => 
   assertEquals(r.body.tool_input.lead_candidate_ids, ["lead-2"]);
 });
 
-Deno.test("Test 3: generate_outreach sends lead_action + selected id, on Penn", () => {
+Deno.test("Test 3: generate_outreach sends lead_action + selected id", () => {
   const r = buildLeadActionRequest({ ...base, leadAction: "generate_outreach", leadCandidateIds: ["lead-3"] });
   assert(r.valid);
   if (!r.valid) return;
   assertEquals(r.body.tool_input.lead_action, "generate_outreach");
-  assertEquals(r.body.agent_slug, "penn");
 });
 
 Deno.test("Test 4: no selected lead → safe error, nothing built", () => {
@@ -51,11 +62,23 @@ Deno.test("Test 4: no selected lead → safe error, nothing built", () => {
   assertEquals(r.error, "no_lead_selected");
 });
 
-Deno.test("no workspace / no plan → typed guards", () => {
+Deno.test("no workspace → typed guard", () => {
   const noWs = buildLeadActionRequest({ workspaceId: null, planId: "p", leadAction: "research_company", leadCandidateIds: ["a"] });
   assert(!noWs.valid && noWs.error === "no_workspace");
-  const noPlan = buildLeadActionRequest({ workspaceId: "ws", planId: "", leadAction: "research_company", leadCandidateIds: ["a"] });
-  assert(!noPlan.valid && noPlan.error === "no_plan");
+});
+
+// A direct action is valid WITHOUT a plan — it operates on rows that already
+// exist. Previously this returned `no_plan` and the button did nothing.
+Deno.test("missing plan is valid; plan_id is omitted rather than faked", () => {
+  for (const planId of [undefined, null, ""]) {
+    const r = buildLeadActionRequest({
+      workspaceId: "ws", planId, leadAction: "research_company", leadCandidateIds: ["a"],
+    });
+    assert(r.valid, `planId=${String(planId)} should still build a valid request`);
+    if (!r.valid) return;
+    assertEquals(r.body.plan_id, undefined);
+    assertEquals(r.body.tool_input.lead_candidate_ids, ["a"]);
+  }
 });
 
 Deno.test("dedupes selected ids; never a multi-company blob", () => {

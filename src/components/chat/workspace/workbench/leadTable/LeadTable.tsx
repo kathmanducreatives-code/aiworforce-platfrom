@@ -2,7 +2,7 @@ import { ExternalLink, Linkedin, Globe, Loader2 } from 'lucide-react';
 import type { LeadTableRow } from '@/hooks/useLeadResults';
 import type { LeadResultPanelAction } from '@/lib/chatActions';
 import type { LeadActionKind } from '@/lib/leadActionRequest';
-import { companyDisplayLinks, type RowAction } from '@/lib/leadRowAction';
+import { companyDisplayLinks, rowActionCopy, type RowAction } from '@/lib/leadRowAction';
 import LockedCell from './LockedCell';
 import { ContactStatusChip, RowStatusChip } from './StatusChip';
 
@@ -20,22 +20,37 @@ interface Props {
   onUnlock: (action: LeadResultPanelAction, rowId: string) => void;
 }
 
-// Copy per (kind, state). Empty/insufficient render as honest in-cell states,
-// never "locked forever".
+// Tone per canonical status. A rejected request and a genuinely empty provider
+// result are visually distinct: only the former is a fault to act on.
+const STATUS_TONE: Record<string, string> = {
+  succeeded: 'text-emerald-300',
+  no_match: 'text-slate-300/80',
+  unavailable: 'text-slate-300/80',
+  missing_company_identity: 'text-amber-200/80',
+  needs_manual_review: 'text-amber-200/80',
+  blocked: 'text-amber-200/80',
+  timed_out: 'text-rose-300',
+  failed: 'text-rose-300',
+  request_error: 'text-rose-300',
+};
+
+// Copy comes from the canonical status the backend assigned — the cell never
+// re-derives an outcome from provider-shaped fields.
 function RowActionCell({ a, kind }: { a: RowAction; kind: LeadActionKind }) {
-  if (a.state === 'running') {
+  if (a.status === 'running') {
     const label = kind === 'research_company' ? 'Researching company…' : kind === 'find_decision_makers' ? 'Finding decision-makers…' : 'Preparing draft…';
     return <div className="px-2 py-1.5 text-[10.5px] text-sky-300 inline-flex items-center gap-1"><Loader2 className="h-3 w-3 animate-spin" />{label}</div>;
   }
-  if (a.state === 'error') return <div className="px-2 py-1.5 text-[10.5px] text-rose-300">Error{a.detail ? `: ${a.detail}` : ''}</div>;
-  if (a.state === 'empty') {
-    const label = kind === 'find_decision_makers' ? 'No verified decision-maker found'
-      : kind === 'research_company' ? (a.detail ?? 'Needs verification') : 'No result';
-    return <div className="px-2 py-1.5 text-[10.5px] text-amber-200/80">{label}</div>;
-  }
-  if (a.state === 'insufficient_context') return <div className="px-2 py-1.5 text-[10.5px] text-amber-200/80">Insufficient context{a.detail ? ` — ${a.detail}` : ''}</div>;
-  // success
-  return <div className="px-2 py-1.5 text-[10.5px] text-emerald-300 line-clamp-2">{a.detail ?? 'Done'}</div>;
+
+  const tone = STATUS_TONE[a.status] ?? 'text-slate-300/80';
+  const copy = rowActionCopy(a);
+  const suffix = a.status === 'succeeded' && a.detail ? `: ${a.detail}` : '';
+
+  return (
+    <div className={`px-2 py-1.5 text-[10.5px] ${tone} line-clamp-2`} title={a.reason_code ?? undefined}>
+      {copy}{suffix}
+    </div>
+  );
 }
 
 const COL_W = {
