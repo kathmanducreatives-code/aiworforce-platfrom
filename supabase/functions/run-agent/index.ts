@@ -12,6 +12,13 @@ import { getAgentorySystemPrompt, AGENTORY_SYSTEM_PROMPT_VERSION } from "../_sha
 import { summarizeRegistryForPrompt } from "../_shared/actorRegistry.ts";
 import { renderCompanyBrainBlock } from "../_shared/companyBrainContext.ts";
 import { decideWorkspaceAccess } from "../_shared/workspaceAccessGuard.ts";
+import {
+  isDirectLeadActionAttempt,
+  validateDirectLeadActionRequest,
+  resolveTaskUserId,
+  type DirectLeadActionRequest,
+} from "../_shared/leadActionRequestContract.ts";
+import { classifyLeadOutcome, summarizeDirectAction } from "../_shared/leadActionOutcome.ts";
 import { separateIntent } from "../_shared/leadIntentModel.ts";
 import { classifyRoleFamily, type RoleFamily } from "../_shared/roleFamilyMatcher.ts";
 import { buildCanonicalStamp } from "../_shared/leadCanonicalStamp.ts";
@@ -117,21 +124,44 @@ Deno.serve(async (req) => {
   // the generic LLM. Read it now so provider-sourcing steps are routed + gated.
   const tool_needed_body: string | null = body.tool_needed ?? null;
 
-  if (!plan_id || step_index === undefined || (!agent_slug && !agent_id_in) || !workspace_id || !instruction) {
+  // ---- Request-mode routing --------------------------------------------------
+  // A DIRECT Workbench lead action must be recognised BEFORE the plan-step gate:
+  // it legitimately has no plan_id / step_index / caller instruction, and forcing
+  // it to invent them would either reject a valid action or push fabricated
+  // orchestration metadata into the task trace.
+  const isDirectLeadAction = isDirectLeadActionAttempt(tool_input_body);
+  let directRequest: DirectLeadActionRequest | null = null;
+
+  if (isDirectLeadAction) {
+    const validated = validateDirectLeadActionRequest({ workspace_id, tool_input: tool_input_body });
+    if (!validated.ok) {
+      return json({ success: false, error: validated.error_code, message: validated.message }, validated.status);
+    }
+    directRequest = validated.request;
+    // Derived internally — never trusted from the browser.
+    agent_slug = directRequest.agent_slug;
+  } else if (!plan_id || step_index === undefined || (!agent_slug && !agent_id_in) || !workspace_id || !instruction) {
+    // Orchestrated plan steps keep their existing contract, unchanged.
     return json({ error: "missing_required_fields" }, 400);
   }
+
+  // Both modes require a workspace by this point (direct validated it as a UUID,
+  // orchestrated required it above); restated so it narrows for the code below.
+  if (!workspace_id) return json({ error: "missing_required_fields" }, 400);
+
+  const effectiveInstruction: string = directRequest ? directRequest.instruction : instruction!;
 
   // ---- Workspace access guard ------------------------------------------------
   // orchestrate calls with the SERVICE_ROLE bearer (already gated the user). A
   // direct browser call carries a user JWT and MUST be a member of workspace_id,
   // so a frontend-supplied workspace_id cannot reach another workspace's brain.
+  let authenticatedUserId: string | null = null;
   {
     const authHeader = req.headers.get("Authorization") ?? "";
     const bearer = authHeader.startsWith("Bearer ") ? authHeader.slice(7) : "";
     const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const bearerIsServiceRole = !!bearer && bearer === serviceRoleKey;
 
-    let authenticatedUserId: string | null = null;
     let isMember = false;
     if (!bearerIsServiceRole) {
       try {
@@ -165,15 +195,24 @@ Deno.serve(async (req) => {
   }
   agent_slug = agent.slug ?? agent_slug;
 
-  // Insert task row with real columns.
+  // Insert task row with real columns. `tasks.user_id` is NOT NULL: orchestrate
+  // threads body.user_id, but the direct Workbench action only carries a JWT, so
+  // fall back to the user the workspace guard already authenticated. Passing null
+  // here is what produced the 500 task_insert_failed / "0/4 succeeded" incident.
+  const taskUserId = resolveTaskUserId({ bodyUserId: user_id, authenticatedUserId });
+  if (!taskUserId) {
+    return json({ success: false, error: "unidentified_user", message: "Sign in again to run this action." }, 401);
+  }
+
   const { data: task, error: taskErr } = await supabase
     .from("tasks")
     .insert({
-      plan_id,
+      plan_id: plan_id ?? null,
       agent_slug,
-      user_id: user_id ?? null,
+      user_id: taskUserId,
+      workspace_id,
       status: "running",
-      payload: { instruction, input, step_index },
+      payload: { instruction: effectiveInstruction, input, step_index: step_index ?? null, lead_action: directRequest?.action ?? null },
     })
     .select("id")
     .single();
@@ -189,7 +228,7 @@ Deno.serve(async (req) => {
     agent_id: agent.id,
     event_type: "agent_started",
     title: `${agent.name} started`,
-    body: instruction,
+    body: effectiveInstruction,
     metadata: { step_index, task_id: task.id, agent_slug },
   });
 
@@ -197,23 +236,37 @@ Deno.serve(async (req) => {
   // Generate outreach). Additive early-return: only runs when the caller passes
   // tool_input.lead_action + lead_candidate_ids. Evidence-first + approval-gated;
   // Firecrawl/Apify are called per-company via runTool; nothing is ever sent.
-  const leadAction = tool_input_body?.lead_action as string | undefined;
-  if (leadAction === "research_company" || leadAction === "find_decision_makers" || leadAction === "generate_outreach") {
-    // A lead action operates on EXISTING selected rows. Never fall through to
-    // Scout sourcing: with no ids, refuse explicitly instead of starting a search.
-    const { validateLeadActionRequest } = await import("../_shared/leadActionExecutor.ts");
-    const valid = validateLeadActionRequest(leadAction, tool_input_body?.lead_candidate_ids);
-    if (!valid.ok) {
-      await supabase.from("tasks").update({ status: "failed", error_message: valid.error }).eq("id", task.id);
-      return json({ success: false, task_id: task.id, status: "failed", error: valid.error, message: valid.message }, 400);
+  if (directRequest) {
+    const leadAction = directRequest.action;
+    // Already validated above (before the plan gate) — ids are known-good UUIDs
+    // scoped to this workspace, so a lead action can never fall through to Scout
+    // sourcing and start an unrequested provider search.
+    const leadIds = directRequest.lead_candidate_ids;
+
+    // Ownership guard: workspace membership alone is not enough — the caller must
+    // also own every row it named. Without this, a member of workspace A could
+    // pass workspace B's lead ids and have the service-role client happily
+    // enrich/draft against them.
+    const { data: ownedRows, error: ownErr } = await supabase
+      .from("lead_candidates").select("id").eq("workspace_id", workspace_id).in("id", leadIds);
+    if (ownErr) {
+      await supabase.from("tasks").update({ status: "failed", error_message: "lead_ownership_check_failed" }).eq("id", task.id);
+      return json({ success: false, task_id: task.id, error: "lead_ownership_check_failed", message: "Could not verify the selected rows." }, 500);
     }
-    const leadIds = valid.ids;
-    const toolCtx = { admin: supabase, workspace_id, agent_slug, agent_id: agent.id, agent_name: agent.name, plan_id, task_id: task.id, user_id: user_id ?? null };
+    const ownedIds = new Set((ownedRows ?? []).map((r: { id: string }) => r.id));
+    if (leadIds.some((id) => !ownedIds.has(id))) {
+      await supabase.from("tasks").update({ status: "failed", error_message: "lead_not_in_workspace" }).eq("id", task.id);
+      return json({ success: false, task_id: task.id, error: "lead_not_in_workspace", message: "Those rows aren't in this workspace." }, 403);
+    }
+
+    // Resolved agent always wins; the contract-derived slug is the floor.
+    const execAgentSlug: string = agent_slug ?? directRequest.agent_slug;
+    const toolCtx = { admin: supabase, workspace_id, agent_slug: execAgentSlug, agent_id: agent.id, agent_name: agent.name, plan_id: plan_id ?? null, task_id: task.id, user_id: taskUserId };
     try {
       const { executeLeadAction } = await import("../_shared/leadActionExecutor.ts");
-      const outcome = await executeLeadAction(leadAction as "research_company" | "find_decision_makers" | "generate_outreach", leadIds, {
-        admin: supabase, workspace_id, plan_id, task_id: task.id, agent_id: agent.id,
-        agent_slug, agent_name: agent.name, user_id: user_id ?? null, runTool, toolCtx,
+      const outcome = await executeLeadAction(leadAction, leadIds, {
+        admin: supabase, workspace_id, plan_id: plan_id ?? null, task_id: task.id, agent_id: agent.id,
+        agent_slug: execAgentSlug, agent_name: agent.name, user_id: taskUserId, runTool, toolCtx,
       });
       await supabase.from("tasks").update({
         status: outcome.needs_approval ? "awaiting_approval" : "complete",
@@ -225,7 +278,7 @@ Deno.serve(async (req) => {
         // standalone review item, not a re-opening of the sourcing plan.
         await supabase.from("approvals").insert({
           workspace_id, plan_id, task_id: task.id, agent_id: agent.id,
-          title: `${agent.name} needs approval`, description: instruction, status: "pending",
+          title: `${agent.name} needs approval`, description: effectiveInstruction, status: "pending",
         });
       }
       await supabase.from("activity_feed").insert({
@@ -234,13 +287,45 @@ Deno.serve(async (req) => {
         title: `${agent.name}: ${leadAction.replace(/_/g, " ")}`, body: outcome.summary,
         metadata: { step_index, task_id: task.id, lead_action: leadAction },
       });
-      return json({ success: true, task_id: task.id, status: outcome.needs_approval ? "awaiting_approval" : "complete", summary: outcome.summary, per_lead: outcome.per_lead });
+      // Classify once here so the Workbench renders a status it was handed rather
+      // than re-deriving one from provider-shaped fields.
+      const classified = outcome.per_lead.map((row) => classifyLeadOutcome(leadAction, row));
+      const perLead = outcome.per_lead.map((row, i) => ({ ...row, ...classified[i] }));
+
+      return json({
+        success: true,
+        action: leadAction,
+        task_id: task.id,
+        status: outcome.needs_approval ? "awaiting_approval" : "complete",
+        summary: summarizeDirectAction(classified, leadIds.length),
+        summary_text: outcome.summary,
+        per_lead: perLead,
+      });
     } catch (e) {
+      // An executor throw is an infrastructure failure, not a business outcome —
+      // but every requested row still gets an honest, retryable per-lead entry so
+      // the batch never silently reports "0 succeeded" with no explanation.
       console.error("[run-agent] lead_action failed:", e);
       await supabase.from("tasks").update({ status: "failed", error_message: String(e) }).eq("id", task.id);
-      return json({ success: false, task_id: task.id, status: "failed", error: "lead_action_failed" }, 500);
+      const failed = leadIds.map((id) => ({
+        lead_candidate_id: id, status: "failed" as const, reason_code: "provider_failed", retryable: true,
+      }));
+      return json({
+        success: false,
+        action: leadAction,
+        task_id: task.id,
+        status: "failed",
+        error: "lead_action_failed",
+        summary: summarizeDirectAction(failed, leadIds.length),
+        per_lead: failed,
+      }, 500);
     }
   }
+
+  // Past the direct-action early return, this is the ORCHESTRATED path only, where
+  // the plan-step gate above already guaranteed an instruction. Restated so it
+  // narrows for the rest of the function.
+  if (instruction === undefined) return json({ error: "missing_required_fields" }, 400);
 
   // Load company_brain. `onboarding_completed` gates whether the ACTIVE brain
   // is injected into the agent prompt (see renderBrainForAgent).
