@@ -326,6 +326,7 @@ export async function findDecisionMakers(
 
   const evaluated: Evaluated[] = [];
   let lastStatus: ProviderStatus | null = null;
+  let lastFailure: { status: ProviderStatus; error_code: string | null } | null = null;
   // Dedupe ACROSS stages, not just within one. The fallback stages routinely
   // return the same person, and per-stage dedupe would count them twice —
   // inflating manual_review_count and the rejection tallies.
@@ -347,9 +348,14 @@ export async function findDecisionMakers(
     obs.provider_status = res.status;
     obs.provider_run_id = res.run_id ?? null;
 
-    if (res.status === "unavailable") return finish("unavailable", "people_search_disabled", false);
-    if (res.status === "timed_out") return finish("timed_out", "provider_timed_out", true);
-    if (res.status === "failed") return finish("failed", res.error_code ?? "provider_failed", true);
+    // A single unavailable/failed ACTOR must not mask a working later stage: an
+    // unconfigured company-page actor would otherwise report "people search is
+    // disabled" even though the domain actor is configured and would have found
+    // the person. Only give up when every stage has been tried.
+    if (res.status !== "ok") {
+      lastFailure = { status: res.status, error_code: res.error_code ?? null };
+      continue;
+    }
 
     const raw = Array.isArray(res.profiles) ? res.profiles : [];
     obs.raw_returned_count += raw.length;
@@ -402,6 +408,15 @@ export async function findDecisionMakers(
   if (probable.length > 0) {
     // Probable people are surfaced for a human, never auto-persisted.
     return finish("needs_manual_review", "employment_unverified", false, [], probable.length);
+  }
+
+  // Every stage failed at the provider boundary — report the real reason.
+  if (evaluated.length === 0 && lastFailure) {
+    if (lastFailure.status === "unavailable") {
+      return finish("unavailable", lastFailure.error_code ?? "people_search_disabled", false);
+    }
+    if (lastFailure.status === "timed_out") return finish("timed_out", "provider_timed_out", true);
+    return finish("failed", lastFailure.error_code ?? "provider_failed", true);
   }
 
   if (lastStatus === null) {

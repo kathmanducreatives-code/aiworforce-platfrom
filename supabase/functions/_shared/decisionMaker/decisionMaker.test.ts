@@ -235,7 +235,7 @@ Deno.test("11. the plan prefers the company LinkedIn URL", () => {
   assert(p.ok);
   if (!p.ok) return;
   assertEquals(p.plan.company_filters.company_linkedin_url, "https://www.linkedin.com/company/nimbus-forge");
-  assertEquals(p.plan.actor_key, "apify_company_employees");
+  assertEquals(p.plan.actor_key, "apify_linkedin_company_employees");
 });
 
 Deno.test("12-13. domain fallback is bounded and the cap is enforced", () => {
@@ -465,7 +465,7 @@ Deno.test("11b. the result envelope is complete and reconciles", async () => {
   assertEquals(r.verified_profile_count, r.decision_makers.filter((d) => d.verification_status === "verified").length);
   assertEquals(r.observability.final_outcome, r.status);
   assertEquals(r.observability.identity_strength, "strong");
-  assertEquals(r.observability.actor_selected, "apify_company_employees");
+  assertEquals(r.observability.actor_selected, "apify_linkedin_company_employees");
 });
 
 Deno.test("at most three decision-makers are returned", async () => {
@@ -495,7 +495,7 @@ Deno.test("59-60. no raw provider payload or secret-bearing field is returned", 
 // PERSISTENCE GUARD
 // ===========================================================================
 
-const provenance = { provider: "apify", actor: "apify_company_employees", stage: "company_employee_search", verification_methods: ["company_linkedin_url"] };
+const provenance = { provider: "apify", actor: "apify_linkedin_company_employees", stage: "company_employee_search", verification_methods: ["company_linkedin_url"] };
 const ctx = { workspace_id: WS, lead_workspace_id: WS, existing_contact_urls: [] as string[] };
 
 Deno.test("49. a verified candidate may persist", () => {

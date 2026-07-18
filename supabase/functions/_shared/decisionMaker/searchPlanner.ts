@@ -89,7 +89,7 @@ export function planPeopleSearch(
       ok: true,
       plan: {
         provider: "apify",
-        actor_key: "apify_company_employees",
+        actor_key: "apify_linkedin_company_employees",
         stage,
         company_filters: { company_linkedin_url: identity.company_linkedin_url },
         title_filters: [...TITLE_FILTERS],

@@ -398,3 +398,62 @@ Deno.test("3. research_company and generate_outreach paths are untouched", () =>
   assert(/runGenerateOutreach\(/.test(EXECUTOR_SRC), "generate_outreach still uses runGenerateOutreach");
   assert(/evaluateDraftGate\(/.test(EXECUTOR_SRC), "the outreach draft gate is still enforced");
 });
+
+// ===========================================================================
+// PRODUCTION HOTFIX REGRESSIONS
+// ===========================================================================
+
+const REGISTRY_SRC = await Deno.readTextFile(new URL("../actorRegistry.ts", import.meta.url));
+
+Deno.test("HOTFIX: every planned actor_key actually exists in the actor registry", () => {
+  // The planner emitted "apify_company_employees", which is NOT a registry key
+  // (the real one is apify_linkedin_company_employees). Stage 1 therefore always
+  // failed as unconfigured, and — because unavailable short-circuited — masked
+  // the working apify_people_search stage. Result: every strong-identity lead
+  // reported "people search is disabled" without ever searching.
+  const identity = resolveCompanyIdentity(F.TARGET_COMPANY);
+  for (const stage of ["company_employee_search", "domain_people_search"] as const) {
+    const planned = planPeopleSearch(identity, stage);
+    assert(planned.ok, `${stage} should plan for a strong identity`);
+    if (!planned.ok) return;
+    assert(
+      REGISTRY_SRC.includes(`"${planned.plan.actor_key}"`),
+      `actor_key "${planned.plan.actor_key}" is not registered in actorRegistry.ts`,
+    );
+  }
+});
+
+Deno.test("HOTFIX: an unavailable first stage falls through to a working second stage", async () => {
+  let call = 0;
+  const { p, calls } = ports({
+    provider: async () => {
+      call += 1;
+      // Stage 1 actor unconfigured; stage 2 works.
+      return call === 1
+        ? { status: "unavailable" as const, error_code: "provider_not_configured" }
+        : { status: "ok" as const, profiles: [F.VERIFIED_FOUNDER] as Record<string, unknown>[] };
+    },
+  });
+  const r = await runDecisionMakerAction(LEAD_RECORD, { workspace_id: WS }, p);
+  assertEquals(calls.provider, 2, "must try the second stage");
+  assertEquals(r.status, "succeeded", "a working stage must not be masked by an unconfigured one");
+  assertEquals(r.decision_makers[0].full_name, "Ada Kestrel");
+});
+
+Deno.test("HOTFIX: when EVERY stage is unavailable the honest outcome is still unavailable", async () => {
+  const { p, calls } = ports({
+    provider: async () => ({ status: "unavailable" as const, error_code: "people_search_disabled" }),
+  });
+  const r = await runDecisionMakerAction(LEAD_RECORD, { workspace_id: WS }, p);
+  assertEquals(calls.provider, 2, "both stages attempted");
+  assertEquals(r.status, "unavailable");
+  assertEquals(r.reason_code, "people_search_disabled");
+  assertEquals(r.decision_makers.length, 0);
+});
+
+Deno.test("HOTFIX: a failing first stage still surfaces failed when nothing is found", async () => {
+  const { p } = ports({ provider: async () => ({ status: "failed" as const, error_code: "provider_failed" }) });
+  const r = await runDecisionMakerAction(LEAD_RECORD, { workspace_id: WS }, p);
+  assertEquals(r.status, "failed");
+  assertEquals(r.retryable, true);
+});
