@@ -13,6 +13,12 @@ import { evaluateDraftGate } from "./draftGate.ts";
 import { isSourceAndQualifyOnly } from "./executionMode.ts";
 import { guardProviderLeadInsert, type LeadOrigin, type RejectionCounter } from "./leadPersistenceGuard.ts";
 import type { NormalizedProviderItem, ProvenanceCtx } from "./leadHandoffGuard.ts";
+// Signals Storage V2 (Phase 2) — flagged, best-effort dual-write. These are pure,
+// provider-free modules; importing them has no side effects and no DB access until
+// a writer is explicitly called under an enabled flag.
+import { isSignalsV2Enabled } from "./signalsV2Flag.ts";
+import { dualWritePeopleProfileV2, dualWriteHiringSignalV2 } from "./signalsV2DualWrite.ts";
+import { jobRecordToSignalEvent, type NormalizedJobLike } from "./jobsSignalAdapter.ts";
 
 // ---------- Inlined normalizers (mirrors src/components/chat/workspace/workbench/normalize.ts) ----------
 
@@ -356,6 +362,9 @@ async function writeApifyJobs(ctx: ToolCallCtx, output: any): Promise<void> {
   if (items.length === 0) return;
   const seenAccountIds = new Set<string>();
 
+  // Resolve the V2 flag ONCE per call (see writeApifyPeople for the OFF guarantee).
+  const v2Enabled = isSignalsV2Enabled();
+
   for (const it of items) {
     // Company domain: prefer the safely-parsed domain from the normalizer, then
     // parse the company website. Job-listing URLs are never company domains.
@@ -507,7 +516,76 @@ async function writeApifyJobs(ctx: ToolCallCtx, output: any): Promise<void> {
           })(),
         },
       });
+
+    // Signals V2 (Phase 2) — flagged, best-effort dual-write of the canonical hiring
+    // event into signal_events (+ signal_event_evidence). The canonical, VALIDATED
+    // SignalEvent is built by the shared jobsSignalAdapter: only GTM hiring roles
+    // (sales/revops/growth) with a source-backed posting date and a grounded company
+    // pass — everything else is rejected there and never persisted. Runs only after
+    // the authoritative legacy account + signals + lead_candidate writes above; never
+    // affects legacy state. `accountId` is a real grounded entity; `sig.id` is a real
+    // legacy hiring row (created above, not fabricated for this).
+    if (v2Enabled) {
+      try {
+        const company_ref = normalizeJobCompanyRef(it.companyLinkedinUrl, domain, name);
+        if (company_ref) {
+          const normalizedJob: NormalizedJobLike = {
+            company: it.company ?? null,
+            jobTitle: it.title ?? null,
+            linkedinUrl: it.companyLinkedinUrl ?? null,
+            website: it.website ?? null,
+            domain: domain ?? null,
+            jobUrl: it.url ?? null,
+            postedAt: it.postedAt ?? null,
+            seniorityLevel: it.seniorityLevel ?? null,
+            jobFunction: it.jobFunction ?? null,
+            raw: (it.raw && typeof it.raw === "object") ? it.raw : {},
+          };
+          const { signal, rejected } = jobRecordToSignalEvent({
+            job: normalizedJob,
+            workspace_id: ctx.workspace_id,
+            company_ref,
+            observedAt: new Date().toISOString(),
+            provider: ctx.provider ?? "apify",
+            actorKey: ctx.actor_key ?? ctx.selected_actor_key ?? undefined,
+            actorId: ctx.actor_id ?? undefined,
+          });
+          if (!rejected && signal) {
+            await dualWriteHiringSignalV2({ admin: ctx.admin, enabled: v2Enabled }, signal, {
+              workspace_id: ctx.workspace_id,
+              account_id: accountId,
+              legacy_signal_id: sig?.id ?? null,
+              source_record_id: it.providerJobId ?? it.providerRefId ?? null,
+            });
+          }
+        }
+      } catch (e) {
+        console.warn("[memoryWriter] signals-v2 hiring dual-write skipped:", (e as Error)?.message);
+      }
+    }
   }
+}
+
+/** Canonical company key for a job's SignalEvent: prefer the company LinkedIn URL,
+ * then the real company domain, then the lowercased name. Returns "" when nothing
+ * usable is present (the dual-write is then skipped, never fabricated). */
+function normalizeJobCompanyRef(
+  companyLinkedinUrl: string | null | undefined,
+  domain: string | null | undefined,
+  name: string | null | undefined,
+): string {
+  const li = typeof companyLinkedinUrl === "string" ? companyLinkedinUrl.trim() : "";
+  if (li) {
+    try {
+      const u = new URL(li);
+      if (u.protocol === "http:" || u.protocol === "https:") {
+        return `${u.host.replace(/^www\./i, "")}${u.pathname.replace(/\/+$/, "")}`.toLowerCase();
+      }
+    } catch { /* fall through */ }
+  }
+  if (domain && domain.trim()) return domain.trim().toLowerCase();
+  if (name && name.trim()) return name.trim().toLowerCase();
+  return "";
 }
 
 // ---------- Apify people profiles ----------
@@ -515,6 +593,10 @@ async function writeApifyJobs(ctx: ToolCallCtx, output: any): Promise<void> {
 async function writeApifyPeople(ctx: ToolCallCtx, output: any): Promise<void> {
   const people = normalizeApifyPeople(output);
   if (people.length === 0) return;
+
+  // Resolve the V2 flag ONCE per call. When OFF this stays false and no V2 code
+  // path below runs — zero extra DB work, legacy behaviour byte-for-byte identical.
+  const v2Enabled = isSignalsV2Enabled();
 
   for (const p of people) {
     const linkedin = p.profile_url ?? null;
@@ -593,6 +675,36 @@ async function writeApifyPeople(ctx: ToolCallCtx, output: any): Promise<void> {
         // artifact_type is preserved in raw (no dedicated column / no migration).
         raw: { ...peopleDecision.patch, artifact_type: ctx.artifact_type ?? "person_candidate", profile: p.raw ?? {} },
       });
+
+    // Signals V2 (Phase 2) — flagged, best-effort dual-write of this ACCEPTED
+    // identity into lead_evidence. Reaches here ONLY after the authoritative legacy
+    // contact + signals + lead_candidate writes above succeeded and the provenance
+    // gate passed (blocked people already `continue`d). Never affects legacy state.
+    if (v2Enabled) {
+      try {
+        const rid = (p.raw && typeof p.raw === "object")
+          ? ((p.raw as any).id ?? (p.raw as any).public_identifier ?? (p.raw as any).publicIdentifier ?? null)
+          : null;
+        await dualWritePeopleProfileV2({ admin: ctx.admin, enabled: v2Enabled }, {
+          workspace_id: ctx.workspace_id,
+          contact_id: contactId,
+          legacy_signal_id: sig?.id ?? null,
+          provider: ctx.provider ?? "apify",
+          actor_key: ctx.actor_key ?? ctx.selected_actor_key ?? null,
+          actor_id: ctx.actor_id ?? null,
+          profile_url: linkedin,
+          source_record_id: typeof rid === "string" ? rid : null,
+          observed_at: new Date().toISOString(),
+          full_name: fullName || null,
+          title: p.title ?? null,
+          company: p.company ?? null,
+          location: p.location ?? null,
+          headline: p.headline ?? null,
+        });
+      } catch (e) {
+        console.warn("[memoryWriter] signals-v2 people dual-write skipped:", (e as Error)?.message);
+      }
+    }
   }
 }
 
