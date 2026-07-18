@@ -156,11 +156,15 @@ Deno.serve(async (req) => {
   // direct browser call carries a user JWT and MUST be a member of workspace_id,
   // so a frontend-supplied workspace_id cannot reach another workspace's brain.
   let authenticatedUserId: string | null = null;
+  // Derived ONLY from the actual Authorization bearer — never from the body — and
+  // hoisted because task attribution below must know whether this is a system
+  // call. See resolveTaskUserId's trust-boundary note.
+  let bearerIsServiceRole = false;
   {
     const authHeader = req.headers.get("Authorization") ?? "";
     const bearer = authHeader.startsWith("Bearer ") ? authHeader.slice(7) : "";
     const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-    const bearerIsServiceRole = !!bearer && bearer === serviceRoleKey;
+    bearerIsServiceRole = !!bearer && bearer === serviceRoleKey;
 
     let isMember = false;
     if (!bearerIsServiceRole) {
@@ -199,7 +203,10 @@ Deno.serve(async (req) => {
   // threads body.user_id, but the direct Workbench action only carries a JWT, so
   // fall back to the user the workspace guard already authenticated. Passing null
   // here is what produced the 500 task_insert_failed / "0/4 succeeded" incident.
-  const taskUserId = resolveTaskUserId({ bodyUserId: user_id, authenticatedUserId });
+  // body.user_id is honoured ONLY for verified service-role callers; a browser
+  // request is always attributed to its JWT user, so a spoofed body.user_id has
+  // no effect.
+  const taskUserId = resolveTaskUserId({ bearerIsServiceRole, bodyUserId: user_id, authenticatedUserId });
   if (!taskUserId) {
     return json({ success: false, error: "unidentified_user", message: "Sign in again to run this action." }, 401);
   }
@@ -435,7 +442,9 @@ Deno.serve(async (req) => {
       agent_name: agent.name,
       plan_id,
       task_id: task.id,
-      user_id: user_id ?? null,
+      // Resolved attribution, not the raw body value: the orchestrated path is
+      // reachable from a browser too, so it must honour the same trust boundary.
+      user_id: taskUserId,
     };
 
     // 1) Firecrawl scrape — if instruction/input contains URLs.
@@ -2702,7 +2711,9 @@ Deno.serve(async (req) => {
         step_index: (step_index as number) + 1,
         agent_slug: nextStep.agent_slug,
         workspace_id,
-        user_id,
+        // Carry the RESOLVED user into the chained step so attribution can't be
+        // laundered through a hand-crafted first step.
+        user_id: taskUserId,
         instruction: nextStep.instruction,
         input: handoffInput,
         needs_approval: nextStep.needs_approval === true,

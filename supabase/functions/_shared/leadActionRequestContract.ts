@@ -151,12 +151,33 @@ export function validateDirectLeadActionRequest(body: {
  * instead of discarding it. Returns null only when there is genuinely no user
  * (service-role calls that also omitted user_id), so the caller can refuse
  * rather than attempt a doomed insert.
+ *
+ * ATTRIBUTION TRUST BOUNDARY
+ *
+ * `body.user_id` is caller-controlled. It may only be honoured when the request
+ * arrives on the SERVICE_ROLE bearer — i.e. from orchestrate, which has already
+ * gated the user and is acting on their behalf. A browser request carries a user
+ * JWT, so its attribution must come from that verified token and nothing else;
+ * otherwise any workspace member could file tasks, activity rows and approvals
+ * under another person's id.
+ *
+ * `bearerIsServiceRole` MUST be derived by comparing the actual Authorization
+ * bearer against the service-role key. Never pass a value taken from the request
+ * body — a caller claiming to be a system caller is just a caller.
  */
 export function resolveTaskUserId(args: {
+  bearerIsServiceRole: boolean;
   bodyUserId?: unknown;
   authenticatedUserId?: string | null;
 }): string | null {
-  if (isUuid(args.bodyUserId)) return args.bodyUserId;
-  if (isUuid(args.authenticatedUserId)) return args.authenticatedUserId;
-  return null;
+  if (args.bearerIsServiceRole) {
+    // System/orchestrated work: explicit attribution wins, falling back to any
+    // user the bearer itself resolved to.
+    if (isUuid(args.bodyUserId)) return args.bodyUserId;
+    return isUuid(args.authenticatedUserId) ? args.authenticatedUserId : null;
+  }
+
+  // Browser request: the verified JWT user is the ONLY acceptable attribution.
+  // body.user_id is ignored entirely rather than merely deprioritised.
+  return isUuid(args.authenticatedUserId) ? args.authenticatedUserId : null;
 }
