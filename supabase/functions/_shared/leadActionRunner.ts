@@ -164,6 +164,13 @@ export interface DiscoveryRunResult {
  * per-company Apify people search ONLY when nothing confident surfaced AND the
  * company identity is verified. Never batches companies.
  */
+/**
+ * @deprecated Superseded by _shared/decisionMaker/pipeline.ts. The live
+ * find_decision_makers action now uses runDecisionMakerAction; this remains only
+ * because its own tests still cover it. It accepts name-only and headline company
+ * matches and cannot distinguish a provider failure from an empty result — do not
+ * wire it into a runtime path again.
+ */
 export async function runDecisionMakerDiscovery(
   lead: LeadRecord,
   opts: { peopleSearch?: PeopleSearchFn; maxResults?: number } = {},
