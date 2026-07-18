@@ -9,11 +9,13 @@
 // peopleSearchQuery) are exported for unit testing without a DB.
 
 import {
-  runCompanyEnrichment, runDecisionMakerDiscovery, runGenerateOutreach,
-  buildPeopleSearchInput, type LeadRecord, type FirecrawlFn, type PeopleSearchFn, type PeopleSearchInput,
+  runCompanyEnrichment, runGenerateOutreach,
+  type LeadRecord, type FirecrawlFn, type PeopleSearchInput,
 } from "./leadActionRunner.ts";
 import type { PeopleSearchContact } from "./decisionMakers.ts";
 import { evaluateDraftGate, buildDraftGateInputFromRaw } from "./draftGate.ts";
+import { runDecisionMakerAction, type LeadRecordLike } from "./decisionMaker/integration.ts";
+import { makePeopleSearchProvider } from "./decisionMaker/providerAdapter.ts";
 
 export type LeadAction = "research_company" | "find_decision_makers" | "generate_outreach";
 
@@ -128,7 +130,7 @@ export function normalizePeopleSearchRows(data: unknown): PeopleSearchContact[] 
 async function loadLeads(ctx: ExecCtx, leadIds: string[]): Promise<any[]> {
   const { data } = await ctx.admin
     .from("lead_candidates")
-    .select("id, raw, account_id, accounts(name, domain, website_url, linkedin_url)")
+    .select("id, raw, workspace_id, account_id, accounts(name, domain, website_url, linkedin_url)")
     .in("id", leadIds);
   return Array.isArray(data) ? data : [];
 }
@@ -168,38 +170,98 @@ export async function executeLeadAction(action: LeadAction, leadIds: string[], c
       per_lead.push({ lead_candidate_id: lead.lead_candidate_id, company: lead.company_name, status: res.status, blocked_reason: res.blocked_reason, pages_fetched: res.pages_fetched, summary_lines: res.summary_lines });
 
     } else if (action === "find_decision_makers") {
-      const peopleSearch: PeopleSearchFn = async (input) => {
-        const r = await ctx.runTool("source_with_apify", {
-          tool_name: "source_with_apify", selected_actor_key: "apify_people_search", source_type: "people_profiles",
-          query: peopleSearchQuery(input), company_linkedin_url: input.company_linkedin_url, domain: input.domain,
-          role_keywords: input.titles, max_results: input.max_results,
-          // Bug #2: the executor persists ONLY the verified top contact — never let
-          // the tool auto-write all raw people into contacts.
-          defer_persistence: true, attach_to_accounts: false,
-        }, ctx.toolCtx);
-        return r.ok ? normalizePeopleSearchRows(r.data) : [];
-      };
-      const res = await runDecisionMakerDiscovery(lead, { peopleSearch });
+      // Reliable pipeline (identity → bounded search → normalize → verify current
+      // employer → classify role → dedupe → rank → verified-only persistence).
+      // It replaces the legacy peopleContactsToDecisionMakers path, which accepted
+      // name-only and headline matches and collapsed every provider failure into
+      // an empty array.
+      const res = await runDecisionMakerAction(
+        lead as unknown as LeadRecordLike,
+        { workspace_id: ctx.workspace_id },
+        {
+          provider: makePeopleSearchProvider(ctx.runTool, ctx.toolCtx),
+          lookupContacts: async (workspaceId) => {
+            const { data } = await ctx.admin.from("contacts").select("id, linkedin_url").eq("workspace_id", workspaceId);
+            return (data ?? []) as Array<{ id: string; linkedin_url: string | null }>;
+          },
+          persistContact: async (c) => {
+            const { data, error } = await ctx.admin.from("contacts").upsert({
+              workspace_id: c.workspace_id, full_name: c.full_name, title: c.title,
+              linkedin_url: c.linkedin_url,
+              raw: { via: "decision_maker_discovery", ...c.provenance },
+            }, { onConflict: "workspace_id,linkedin_url" }).select("id").maybeSingle();
+            if (error || !data?.id) throw new Error("contact_write_failed");
+            await ctx.admin.from("lead_candidates").update({ contact_id: data.id }).eq("id", c.lead_candidate_id);
+            return data.id as string;
+          },
+          // Ownership comes from the row we already loaded — no extra round-trip,
+          // and it is the same record the action operates on.
+          resolveLeadWorkspace: async () => (row?.workspace_id as string | undefined) ?? null,
+        },
+      );
+
+      // raw.decision_makers is ALSO read by runGenerateOutreach, which expects the
+      // legacy DecisionMaker shape (name / title / linkedinUrl / company_match).
+      // Persist a superset: legacy keys keep outreach personalization working,
+      // new keys carry the verification detail.
+      const rawDecisionMakers = res.decision_makers.map((d) => ({
+        name: d.full_name,
+        title: d.current_title,
+        linkedinUrl: d.linkedin_url,
+        source: "linkedin_people_search",
+        confidence: d.confidence,
+        evidence_url: d.linkedin_url,
+        contact_status: "profile_only",
+        email: null,
+        email_source_url: null,
+        company_match: {
+          status: d.verification_status === "verified" ? "verified" : "likely",
+          reason: d.verification_methods.join(", ") || "verified current employer",
+          matched_on: d.verification_methods,
+        },
+        // New-engine detail, additive.
+        full_name: d.full_name,
+        linkedin_url: d.linkedin_url,
+        current_title: d.current_title,
+        current_company_name: d.current_company_name,
+        role_family: d.role_family,
+        verification_status: d.verification_status,
+        verification_methods: d.verification_methods,
+        rank: d.rank,
+        rank_reasons: d.rank_reasons,
+        persisted: d.persisted,
+      }));
+
       await patchLeadRaw(ctx, lead.lead_candidate_id, row.raw, {
-        decision_makers: res.decision_makers,
-        decision_maker_status: res.needs_manual_review ? "needs_manual_review" : "resolved",
-        buyer_clues: res.buyer_clues,
-        decision_makers_rejected: res.rejected,
+        decision_makers: rawDecisionMakers,
+        decision_maker_status: res.status,
+        decision_maker_reason_code: res.reason_code,
+        // Array (not just counts) so the UI can still say who was dropped and why.
+        decision_makers_rejected: (res.rejected_profiles as Array<Record<string, unknown>>).map((r) => ({
+          name: r.full_name, title: r.current_title, linkedin_url: r.linkedin_url, reason: r.reason_code,
+        })),
+        decision_makers_rejection_summary: res.rejection_summary,
       });
-      // Persist ONLY the top company-verified (verified/likely) decision-maker as a
-      // contact, idempotently (upsert by linkedin_url), and link it. Never persist
-      // weak/no-match or low-confidence people. (Bugs #1 + #2 + #3/C)
-      const top = res.decision_makers.find((d) =>
-        d.linkedinUrl && d.confidence !== "low" &&
-        (d.company_match.status === "verified" || d.company_match.status === "likely")) ?? null;
-      if (top?.linkedinUrl) {
-        const { data: c } = await ctx.admin.from("contacts").upsert({
-          workspace_id: ctx.workspace_id, full_name: top.name, title: top.title, linkedin_url: top.linkedinUrl, email: top.email,
-          raw: { source: top.source, via: "decision_maker_discovery", confidence: top.confidence, evidence_url: top.evidence_url, email_source_url: top.email_source_url, company_match: top.company_match },
-        }, { onConflict: "workspace_id,linkedin_url" }).select("id").maybeSingle();
-        if (c?.id) await ctx.admin.from("lead_candidates").update({ contact_id: c.id }).eq("id", lead.lead_candidate_id);
-      }
-      per_lead.push({ lead_candidate_id: lead.lead_candidate_id, company: lead.company_name, needs_manual_review: res.needs_manual_review, used_people_search: res.used_people_search, decision_makers: res.decision_makers, rejected_count: res.rejected.length });
+
+      // The pipeline's canonical status is carried through verbatim — downstream
+      // must never re-infer it from decision_makers.length.
+      per_lead.push({
+        lead_candidate_id: res.lead_candidate_id,
+        company: lead.company_name,
+        status: res.status,
+        reason_code: res.reason_code,
+        retryable: res.retryable,
+        decision_makers: res.decision_makers,
+        provider_run_id: res.provider_run_id,
+        returned_profile_count: res.returned_profile_count,
+        verified_profile_count: res.verified_profile_count,
+        rejected_count: res.rejected_profile_count,
+        manual_review_count: res.manual_review_count,
+        persisted_count: res.persisted_count,
+        existing_contact_count: res.existing_contact_count,
+        needs_manual_review: res.status === "needs_manual_review",
+        observability: res.observability,
+      });
 
     } else if (action === "generate_outreach") {
       // Centralized draft gate — no outreach_drafts insert may bypass it. A draft

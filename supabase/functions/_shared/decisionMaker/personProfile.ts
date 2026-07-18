@@ -91,9 +91,11 @@ export function normalizeProviderProfile(
 ): NormalizedPersonProfile {
   const rejection_reasons: string[] = [];
 
-  const full_name = str(raw.full_name) ?? str(raw.fullName) ?? str(raw.name);
+  const full_name = str(raw.full_name) ?? str(raw.fullName) ?? str(raw.name) ??
+    ([str(raw.firstName), str(raw.lastName)].filter(Boolean).join(" ") || null);
+  // Casing varies per actor: linkedinUrl AND linkedInUrl both occur in the wild.
   const linkedin_url = normalizePersonLinkedInUrl(
-    raw.linkedin_url ?? raw.linkedInUrl ?? raw.profile_url ?? raw.profileUrl ?? raw.url,
+    raw.linkedin_url ?? raw.linkedinUrl ?? raw.linkedInUrl ?? raw.profile_url ?? raw.profileUrl ?? raw.url,
   );
   if (!linkedin_url) rejection_reasons.push("invalid_profile_url");
   if (!full_name) rejection_reasons.push("missing_name");
@@ -114,6 +116,27 @@ export function normalizeProviderProfile(
 
   const currentFromExperience = experience.find((e) => e.is_current) ?? null;
 
+  // Real Apify people-search rows put the current employer either flat
+  // (companyLinkedinUrl / companyUrl / companyPageUrl) or nested under
+  // currentPosition[]. Missing these was silently fatal: without a company
+  // identifier nothing can verify, so every live result would have become
+  // no_match. Field names mirror the legacy normalizePeopleSearchRows.
+  const cp = (Array.isArray(raw.currentPosition)
+    ? (raw.currentPosition[0] ?? {})
+    : (raw.currentPosition ?? {})) as Record<string, unknown>;
+
+  const flatCompanyUrl =
+    str(raw.current_company_linkedin_url) ?? str(raw.currentCompanyLinkedInUrl) ?? str(raw.company_url) ??
+    str(raw.companyLinkedinUrl) ?? str(raw.companyLinkedInUrl) ?? str(raw.companyUrl) ?? str(raw.companyPageUrl) ??
+    str(cp.companyLinkedinUrl) ?? str(cp.companyLinkedInUrl) ?? str(cp.companyUrl) ?? str(cp.companyPageUrl);
+
+  const flatCompanyName =
+    str(raw.current_company_name) ?? str(raw.currentCompanyName) ?? str(raw.company) ??
+    str(raw.companyName) ?? str(raw.currentCompany) ?? str(cp.companyName) ?? str(cp.company);
+
+  const flatTitle =
+    str(raw.current_title) ?? str(raw.currentTitle) ?? str(raw.title) ?? str(raw.position) ?? str(cp.title);
+
   const { first, last } = splitName(full_name);
 
   return {
@@ -122,12 +145,9 @@ export function normalizeProviderProfile(
     last_name: last,
     linkedin_url,
     headline: str(raw.headline),
-    current_title: str(raw.current_title) ?? str(raw.currentTitle) ?? str(raw.title) ?? currentFromExperience?.title ?? null,
-    current_company_name:
-      str(raw.current_company_name) ?? str(raw.currentCompanyName) ?? str(raw.company) ?? currentFromExperience?.company_name ?? null,
-    current_company_linkedin_url:
-      str(raw.current_company_linkedin_url) ?? str(raw.currentCompanyLinkedInUrl) ?? str(raw.company_url) ??
-      currentFromExperience?.company_linkedin_url ?? null,
+    current_title: flatTitle ?? currentFromExperience?.title ?? null,
+    current_company_name: flatCompanyName ?? currentFromExperience?.company_name ?? null,
+    current_company_linkedin_url: flatCompanyUrl ?? currentFromExperience?.company_linkedin_url ?? null,
     current_company_domain:
       str(raw.current_company_domain) ?? str(raw.currentCompanyDomain) ?? currentFromExperience?.company_domain ?? null,
     current_employment_start: currentFromExperience?.start_date ?? str(raw.current_employment_start) ?? null,

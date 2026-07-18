@@ -49,8 +49,40 @@ function classifyResearch(p: Record<string, unknown>): { status: LeadOutcomeStat
   return { status: "failed", reason_code: "provider_failed" };
 }
 
+function defaultReasonFor(status: string): string {
+  switch (status) {
+    case "succeeded": return "decision_maker_found";
+    case "no_match": return "provider_no_results";
+    case "unavailable": return "people_search_disabled";
+    case "missing_company_identity": return "company_domain_missing";
+    case "needs_manual_review": return "employment_unverified";
+    case "timed_out": return "provider_timed_out";
+    default: return "provider_failed";
+  }
+}
+
+/** The canonical vocabulary the decision-maker pipeline already emits. */
+const CANONICAL_STATUSES = new Set<string>([
+  "succeeded", "no_match", "unavailable", "missing_company_identity",
+  "needs_manual_review", "timed_out", "failed",
+]);
+
 function classifyDecisionMakers(p: Record<string, unknown>): { status: LeadOutcomeStatus; reason_code: string } {
   const explicit = str(p.status);
+
+  // The pipeline is authoritative: when it has already classified the row, carry
+  // its status and reason_code through verbatim. Re-deriving status from
+  // decision_makers.length here is what turned "provider disabled" and
+  // "missing_company_identity" into a generic no_match.
+  if (CANONICAL_STATUSES.has(explicit)) {
+    const reason = str(p.reason_code);
+    return {
+      status: explicit as LeadOutcomeStatus,
+      reason_code: reason || defaultReasonFor(explicit),
+    };
+  }
+
+  // ---- Legacy rows (pre-integration shape) --------------------------------
   if (explicit === "unavailable" || p.people_search_disabled === true) {
     return { status: "unavailable", reason_code: "people_search_disabled" };
   }
