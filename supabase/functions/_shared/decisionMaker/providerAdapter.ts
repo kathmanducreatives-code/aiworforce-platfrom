@@ -83,11 +83,26 @@ export function extractProfiles(data: unknown): unknown[] {
  * persistence is decided per candidate by decidePersistence after verification.
  */
 export function planToToolInput(plan: PeopleSearchPlan): Record<string, unknown> {
+  const companyUrl = plan.company_filters.company_linkedin_url ?? null;
+
+  // The company-employees actor (harvestapi/linkedin-company-employees) reads its
+  // target from `companies[]` / `user_input.companyUrl` / a `query` containing a
+  // company URL — NOT from `company_linkedin_url`. Sending only the latter left
+  // companies empty, so the actor scraped nothing and returned 0 rows on every
+  // call while still reporting success. Supply all three shapes it accepts.
+  const companyTargeting = companyUrl
+    ? {
+      companies: [companyUrl],
+      query: companyUrl,
+      user_input: { companyUrl, jobTitles: plan.title_filters, maxItems: plan.maximum_results },
+    }
+    : {};
+
   return {
     tool_name: "source_with_apify",
     selected_actor_key: plan.actor_key,
     source_type: "people_profiles",
-    company_linkedin_url: plan.company_filters.company_linkedin_url ?? null,
+    company_linkedin_url: companyUrl,
     domain: plan.company_filters.company_domain ?? null,
     company_name: plan.company_filters.company_name ?? null,
     role_keywords: plan.title_filters,
@@ -96,6 +111,7 @@ export function planToToolInput(plan: PeopleSearchPlan): Record<string, unknown>
     max_results: plan.maximum_results,
     defer_persistence: true,
     attach_to_accounts: false,
+    ...companyTargeting,
   };
 }
 
