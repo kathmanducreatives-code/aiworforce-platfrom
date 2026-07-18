@@ -1,50 +1,91 @@
 // Pure Workbench row-action helpers (Part E/F). No React / no `@/` imports, so
 // this is unit-testable under Deno like the other src/lib models.
 import type { LeadActionKind } from './leadActionRequest';
+import {
+  LEAD_OUTCOME_STATUSES,
+  ROW_STATUS_COPY,
+  type LeadOutcomeStatus,
+  type RowDisplayStatus,
+} from './leadActionOutcome';
 
-export type RowActionState = 'running' | 'success' | 'empty' | 'insufficient_context' | 'error';
-export interface RowAction { kind: LeadActionKind; state: RowActionState; detail?: string }
+export interface RowAction {
+  kind: LeadActionKind;
+  status: RowDisplayStatus;
+  /** Canonical backend reason, for the drawer / retry logic. */
+  reason_code?: string;
+  /** Row-specific extra context (e.g. the person found), appended to the copy. */
+  detail?: string;
+}
 
 /** Minimal shape of a run-agent lead_action response we depend on. */
 export interface LeadActionResultLike {
   success: boolean;
   error?: string;
+  message?: string;
+  requestError?: boolean;
   per_lead?: Array<Record<string, unknown>>;
 }
 
-/**
- * Map a single per-lead run-agent result into a row lifecycle state. Honest:
- * no verified decision-maker → empty; blocked/failed enrichment → empty with a
- * reason; insufficient outreach evidence → insufficient_context. Never "success"
- * without a real result.
- */
-export function deriveRowAction(kind: LeadActionKind, res: LeadActionResultLike, p: Record<string, unknown>): RowAction {
-  if (!res.success && !(res.per_lead && res.per_lead.length)) return { kind, state: 'error', detail: res.error };
+function isOutcomeStatus(v: unknown): v is LeadOutcomeStatus {
+  return typeof v === 'string' && (LEAD_OUTCOME_STATUSES as readonly string[]).includes(v);
+}
 
-  if (kind === 'research_company') {
-    const st = p.status as string;
-    if (st === 'enriched') {
-      const lines = Array.isArray(p.summary_lines) ? p.summary_lines as string[] : [];
-      const summary = lines.find((l) => /^Summary/.test(l));
-      return { kind, state: 'success', detail: summary ? summary.replace(/^Summary:\s*/, '') : 'Enriched' };
-    }
-    if (st === 'blocked') return { kind, state: 'empty', detail: /website/i.test(String(p.blocked_reason)) ? 'Blocked: no website' : 'Blocked' };
-    if (st === 'needs_verification') return { kind, state: 'empty', detail: 'Needs verification' };
-    if (st === 'failed') return { kind, state: 'empty', detail: 'No useful evidence' };
-    return { kind, state: 'error', detail: res.error };
+/**
+ * Map a single per-lead run-agent result into a row state.
+ *
+ * The backend already classified each row into the canonical vocabulary, so this
+ * reads that status rather than re-deriving one. Crucially, a request that was
+ * rejected BEFORE execution becomes `request_error` — not `failed` — so the row
+ * says "rejected before execution" instead of implying the lead was examined.
+ */
+export function deriveRowAction(
+  kind: LeadActionKind,
+  res: LeadActionResultLike,
+  p: Record<string, unknown>,
+): RowAction {
+  // Nothing was executed: a contract/auth rejection, not a business outcome.
+  if (res.requestError || (!res.success && !(res.per_lead && res.per_lead.length))) {
+    return { kind, status: 'request_error', reason_code: res.error, detail: res.message };
   }
+
+  const status = isOutcomeStatus(p.status) ? p.status : 'failed';
+  const reason_code = typeof p.reason_code === 'string' ? p.reason_code : undefined;
+
+  return { kind, status, reason_code, detail: rowDetail(kind, status, p) };
+}
+
+/** Optional extra context appended after the canonical copy. */
+function rowDetail(kind: LeadActionKind, status: LeadOutcomeStatus, p: Record<string, unknown>): string | undefined {
+  if (status !== 'succeeded') return undefined;
 
   if (kind === 'find_decision_makers') {
-    if (p.needs_manual_review) return { kind, state: 'empty' };
-    const dms = Array.isArray(p.decision_makers) ? p.decision_makers as Array<Record<string, unknown>> : [];
+    const dms = Array.isArray(p.decision_makers) ? (p.decision_makers as Array<Record<string, unknown>>) : [];
     const top = dms[0];
-    return { kind, state: dms.length ? 'success' : 'empty', detail: top ? `${top.name}${top.title ? ` · ${top.title}` : ''}` : undefined };
+    return top ? `${top.name}${top.title ? ` · ${top.title}` : ''}` : undefined;
   }
+  if (kind === 'research_company') {
+    const lines = Array.isArray(p.summary_lines) ? (p.summary_lines as string[]) : [];
+    const summary = lines.find((l) => /^Summary/.test(l));
+    return summary ? summary.replace(/^Summary:\s*/, '') : undefined;
+  }
+  return 'Draft ready for approval';
+}
 
-  // generate_outreach
-  const st = p.status as string;
-  if (st === 'draft_needs_approval') return { kind, state: 'success', detail: 'Draft ready for approval' };
-  return { kind, state: 'insufficient_context', detail: Array.isArray(p.missing_context) ? (p.missing_context as string[]).join(', ') : undefined };
+/**
+ * Row copy. `find_decision_makers` owns the canonical phrasing; the other two
+ * actions reuse the same statuses but need action-appropriate wording for the
+ * cases where "decision-maker" would be nonsense.
+ */
+export function rowActionCopy(a: RowAction): string {
+  if (a.kind !== 'find_decision_makers') {
+    if (a.status === 'succeeded') {
+      return a.kind === 'research_company' ? 'Company enriched' : 'Draft ready for approval';
+    }
+    if (a.status === 'no_match') return 'No useful evidence found';
+    if (a.status === 'unavailable') return 'This provider is disabled in this environment';
+    if (a.status === 'timed_out') return 'The request timed out';
+  }
+  return ROW_STATUS_COPY[a.status];
 }
 
 /**
