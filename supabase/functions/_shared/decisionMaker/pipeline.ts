@@ -41,6 +41,15 @@ export interface AcceptedDecisionMaker {
   score: RankComponents;
 }
 
+/** A dropped candidate, kept for honest reporting in the UI. */
+export interface RejectedProfile {
+  full_name: string | null;
+  linkedin_url: string | null;
+  current_title: string | null;
+  current_company_name: string | null;
+  reason_code: string;
+}
+
 export interface RejectionSummary {
   off_company: number;
   former_employee: number;
@@ -82,6 +91,7 @@ export interface DecisionMakerResult {
   rejected_profile_count: number;
   manual_review_count: number;
   decision_makers: AcceptedDecisionMaker[];
+  rejected_profiles: RejectedProfile[];
   rejection_summary: RejectionSummary;
   observability: DecisionMakerObservability;
 }
@@ -138,10 +148,22 @@ function evaluate(
   identity: CompanyIdentity,
   fromDirect: boolean,
   rejections: RejectionSummary,
+  rejected: RejectedProfile[],
 ): Evaluated | null {
+  const drop = (reason_code: string) => {
+    rejected.push({
+      full_name: profile.full_name,
+      linkedin_url: profile.linkedin_url,
+      current_title: profile.current_title,
+      current_company_name: profile.current_company_name,
+      reason_code,
+    });
+    return null;
+  };
+
   if (profile.rejection_reasons.includes("invalid_profile_url") || !profile.linkedin_url) {
     rejections.malformed_profile += 1;
-    return null;
+    return drop("invalid_profile_url");
   }
 
   const verification = verifyCurrentEmployer(profile, identity);
@@ -151,17 +173,17 @@ function evaluate(
     } else {
       rejections.off_company += 1;
     }
-    return null;
+    return drop(verification.rejection_reasons[0] ?? "off_company");
   }
   if (verification.status === "unverified") {
     rejections.unverified += 1;
-    return null;
+    return drop(verification.rejection_reasons[0] ?? "employer_unverified");
   }
 
   const role = classifyDecisionMakerRole(profile.current_title ?? profile.headline);
   if (!isTargetRoleFamily(role.role_family)) {
     rejections.role_not_target += 1;
-    return null;
+    return drop(role.disqualified_by ?? "role_not_target");
   }
 
   return {
@@ -202,6 +224,7 @@ export async function findDecisionMakers(
   const identity = resolveCompanyIdentity(input.identity_input);
   const band: CompanySizeBand = companySizeBand(input.employee_count);
   const rejections = emptyRejections();
+  const rejected_profiles: RejectedProfile[] = [];
 
   const obs: DecisionMakerObservability = {
     request_mode: "direct_lead_action",
@@ -250,6 +273,7 @@ export async function findDecisionMakers(
         rejections.malformed_profile + rejections.unverified,
       manual_review_count: manualReview,
       decision_makers: accepted,
+      rejected_profiles,
       rejection_summary: rejections,
       observability: obs,
     };
@@ -262,7 +286,7 @@ export async function findDecisionMakers(
     obs.stage_run = "direct_known_person";
     const normalized = normalizeProviderProfile(input.known_person, { provider: "lead_record", actor: "known_person" });
     obs.normalized_count = 1;
-    const evaluated = evaluate(normalized, identity, true, rejections);
+    const evaluated = evaluate(normalized, identity, true, rejections, rejected_profiles);
     if (evaluated && evaluated.verification.status === "verified") {
       const ranked = rankCandidates(
         [{
@@ -343,7 +367,7 @@ export async function findDecisionMakers(
         seenSlugs.add(slug);
       }
       obs.normalized_count += 1;
-      const ev = evaluate(p, identity, false, rejections);
+      const ev = evaluate(p, identity, false, rejections, rejected_profiles);
       if (ev) evaluated.push(ev);
     }
 
