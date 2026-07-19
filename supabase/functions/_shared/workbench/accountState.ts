@@ -64,10 +64,25 @@ export interface DecisionMakerState {
 }
 
 export interface OutreachState {
-  eligibility: string | null;
-  personalization_depth: string | null;
+  eligibility?: string | null;
+  personalization_depth?: string | null;
   approval_required: boolean;
   approval_status: string | null;
+  /**
+   * Personalized-opener fields. Present when the stage was produced in
+   * `output_mode: "personalized_opener"`; absent for the legacy full-draft path.
+   */
+  output_mode?: "personalized_opener";
+  status?: string;
+  reason_code?: string;
+  opener?: string | null;
+  alternative_opener?: string | null;
+  used_evidence_ids?: string[];
+  omitted_claims?: string[];
+  validation?: unknown;
+  /** Nothing is ever sent from this state. */
+  sent?: false;
+  generated_at?: string;
 }
 
 export interface WorkbenchAccountState {
