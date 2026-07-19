@@ -47,7 +47,7 @@ export interface LeadActionResult {
  */
 export async function runLeadAction(args: RunLeadActionArgs): Promise<LeadActionResult> {
   const req = buildLeadActionRequest(args);
-  if (!req.valid) {
+  if (req.valid === false) {
     const code = req.error;
     return { success: false, error: code, message: ERROR_COPY[code] ?? code, requestError: true };
   }
