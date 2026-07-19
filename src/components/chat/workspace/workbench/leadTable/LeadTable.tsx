@@ -85,7 +85,11 @@ function RowActionCell({ a, kind }: { a: RowAction; kind: LeadActionKind }) {
   const detail = a.decisionMakers ? ROW_STATUS_DETAIL[a.decisionMakers.status] : '';
 
   return (
-    <div className={`px-2 py-1.5 text-[10.5px] ${tone} space-y-0.5`} title={a.reason_code ?? undefined}>
+    // The hover title repeats the human copy, never the raw reason code —
+    // `blocked_missing_company_brain` is an internal identifier and reads as a
+    // system error to the user. The code stays on the RowAction for
+    // observability and retry logic; it just isn't rendered.
+    <div className={`px-2 py-1.5 text-[10.5px] ${tone} space-y-0.5`} title={copy}>
       <div className="line-clamp-2">{copy}</div>
       {kind === 'find_decision_makers' && detail && (
         <div className="text-[10px] text-[#7D8590] line-clamp-2">{detail}</div>

@@ -111,26 +111,83 @@ function strArray(v: unknown): string[] {
   return Array.isArray(v) ? v.filter((x): x is string => typeof x === "string" && !!x.trim()).map((x) => x.trim()) : [];
 }
 
+/** Read a nested object off the profile, tolerating a non-object value. */
+function obj(v: unknown): Record<string, unknown> {
+  return v && typeof v === "object" && !Array.isArray(v) ? v as Record<string, unknown> : {};
+}
+
+/** First non-empty string from a list of candidates. */
+function firstStr(...vals: unknown[]): string | null {
+  for (const v of vals) {
+    const s = str(v);
+    if (s) return s;
+  }
+  return null;
+}
+
+/** First non-empty string array from a list of candidates. */
+function firstArr(...vals: unknown[]): string[] {
+  for (const v of vals) {
+    const a = strArray(v);
+    if (a.length > 0) return a;
+  }
+  return [];
+}
+
 /**
  * Read the workspace's saved Company Brain. Workspace isolation is the caller's
  * responsibility (the row must already be scoped); this only shapes it.
+ *
+ * SCHEMA COMPATIBILITY
+ *   This originally expected a FLAT profile — `positioning` and
+ *   `product_summary` as plain strings, `target_outcomes` as an array. The
+ *   Company Brain that onboarding actually persists is nested and uses
+ *   different names: `positioning` is an OBJECT (`promise` / `offer` /
+ *   `differentiators` / `proof_points` / `use_cases` / `avoid_positioning`),
+ *   the summary lives in `company_summary` / `offer_summary` /
+ *   `short_description`, and voice lives under `brand_voice`.
+ *
+ *   Result: a complete, onboarded Company Brain read as entirely absent, and
+ *   the opener blocked with `blocked_missing_company_brain`. This reads BOTH
+ *   shapes. The flat names still win when present, so nothing regresses.
+ *
+ *   Note `positioning` may also carry char-indexed keys ("0", "1", …) from a
+ *   historical string-spread. Only NAMED keys are read, so that noise is
+ *   ignored rather than concatenated back into prose.
  */
 export function brainContextFromProfile(profile: unknown): BrainContext {
   const p = (profile ?? {}) as Record<string, unknown>;
-  const positioning = str(p.positioning) ?? str(p.value_proposition);
-  const product_summary = str(p.product_summary) ?? str(p.product);
-  const outcomes = strArray(p.target_outcomes ?? p.outcomes);
+  const pos = obj(p.positioning);
+  const voice = obj(p.brand_voice);
+
+  const positioning = firstStr(p.positioning, p.value_proposition, pos.promise, pos.offer);
+  const product_summary = firstStr(
+    p.product_summary,
+    p.product,
+    p.company_summary,
+    p.offer_summary,
+    p.short_description,
+  );
+  const outcomes = firstArr(p.target_outcomes, p.outcomes, pos.use_cases, p.pain_points);
   const available = !!(positioning || product_summary || outcomes.length > 0);
 
   return {
     positioning,
     product_summary,
     outcomes,
-    differentiators: strArray(p.differentiators),
-    proof: strArray(p.proof),
-    prohibited_claims: strArray(p.prohibited_claims),
-    tone: str(p.voice) ?? str(p.tone),
-    approved_ctas: strArray(p.approved_ctas ?? p.ctas),
+    differentiators: firstArr(p.differentiators, pos.differentiators),
+    proof: firstArr(p.proof, pos.proof_points),
+    // UNION, not first-wins. A prohibition recorded in any location must be
+    // enforced — silently dropping one because another list was non-empty would
+    // let a forbidden claim through.
+    prohibited_claims: [...new Set([
+      ...strArray(p.prohibited_claims),
+      ...strArray(pos.avoid_positioning),
+      ...strArray(voice.avoid),
+      ...strArray(p.negative_examples),
+    ])],
+    tone: firstStr(p.voice, p.tone, voice.tone, p.outreach_style),
+    approved_ctas: firstArr(p.approved_ctas, p.ctas),
     available,
   };
 }
