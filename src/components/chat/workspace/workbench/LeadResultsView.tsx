@@ -17,6 +17,11 @@ import { runLeadAction } from '@/lib/leadActions';
 import { LEAD_ACTION_LOADING, workbenchActionToLeadKind, type LeadActionKind } from '@/lib/leadActionRequest';
 import { deriveRowAction, rowsForExport, type RowAction } from '@/lib/leadRowAction';
 import { emptyBatchTally, formatBatchSummary } from '@/lib/leadActionOutcome';
+import {
+  emptyAccountView, mergeWorkbenchStage, STAGE_FOR_ACTION,
+  type WorkbenchAccountView,
+} from '@/lib/workbenchAccountView';
+import { buildCompanyResearchView } from '@/lib/companyResearchDisplay';
 
 interface Props {
   meta: LeadResultsPanelMeta;
@@ -32,6 +37,10 @@ export default function LeadResultsView({ meta, conversationId }: Props) {
   // global banner is kept for selection/errors only.
   const [directRunning, setDirectRunning] = useState<LeadActionKind | null>(null);
   const [rowActions, setRowActions] = useState<Record<string, RowAction>>({});
+  // Account-centric state: one slot PER STAGE per lead. rowActions holds only the
+  // latest attempt for progress/banner purposes and must never decide which
+  // completed stages still exist.
+  const [accountViews, setAccountViews] = useState<Record<string, WorkbenchAccountView>>({});
   const [actionOutcome, setActionOutcome] = useState<{ kind: LeadActionKind; success: boolean; error?: string; summary?: string } | null>(null);
   const [showHelper, setShowHelper] = useState(true);
   const [onlyWithWebsite, setOnlyWithWebsite] = useState(false);
@@ -122,12 +131,43 @@ export default function LeadResultsView({ meta, conversationId }: Props) {
         const ra = deriveRowAction(kind, res, p);
         if (ra.status !== 'running') tally[ra.status] += 1;
         setRowActions((s) => ({ ...s, [r.id]: ra }));
+
+        // Stage-aware merge: this updates ONE stage and carries every other
+        // completed stage forward. Running Generate outreach can no longer
+        // erase the research column.
+        const stage = STAGE_FOR_ACTION[kind];
+        setAccountViews((prev) => ({
+          ...prev,
+          [r.id]: mergeWorkbenchStage(prev[r.id] ?? emptyAccountView(r.id), {
+            stage,
+            lead_candidate_id: r.id,
+            status: ra.status,
+            reason_code: ra.reason_code,
+            message: ra.detail,
+            payload: stage === 'company_research'
+              ? buildCompanyResearchView(p as never, ra.status === 'succeeded' ? 'succeeded' : 'partial')
+              : stage === 'decision_makers'
+                ? ra.decisionMakers ?? null
+                : { status: ra.status },
+            now: new Date().toISOString(),
+          }),
+        }));
       } catch (e) {
         // A thrown invoke never reached execution either.
         tally.request_error += 1;
         setRowActions((s) => ({
           ...s,
           [r.id]: { kind, status: 'request_error', detail: e instanceof Error ? e.message : undefined },
+        }));
+        // A thrown request is an attempt, not a reason to discard prior stages.
+        setAccountViews((prev) => ({
+          ...prev,
+          [r.id]: mergeWorkbenchStage(prev[r.id] ?? emptyAccountView(r.id), {
+            stage: STAGE_FOR_ACTION[kind],
+            lead_candidate_id: r.id,
+            status: 'request_error',
+            now: new Date().toISOString(),
+          }),
         }));
       }
     }
@@ -273,6 +313,7 @@ export default function LeadResultsView({ meta, conversationId }: Props) {
           rows={filtered}
           selected={selected}
           rowActions={rowActions}
+          accountViews={accountViews}
           onToggle={toggle}
           onToggleAll={toggleAll}
           onOpen={setDrawerRow}

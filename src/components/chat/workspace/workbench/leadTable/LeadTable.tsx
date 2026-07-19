@@ -7,6 +7,9 @@ import {
   personaLabel, titleCompanyLine, verificationLine, emailStatusCopy,
   ROW_STATUS_HEADLINE, ROW_STATUS_DETAIL,
 } from '@/lib/decisionMakerDisplay';
+import { evidenceLine, missingLine, RESEARCH_STATUS_COPY } from '@/lib/companyResearchDisplay';
+import { icpFitLine, topFitReasons, topMissing, NO_TRIGGER_COPY } from '@/lib/icpSnapshot';
+import type { WorkbenchAccountView } from '@/lib/workbenchAccountView';
 import LockedCell from './LockedCell';
 import { ContactStatusChip, RowStatusChip } from './StatusChip';
 
@@ -18,6 +21,8 @@ interface Props {
   rows: LeadTableRow[];
   selected: Set<string>;
   rowActions?: Record<string, RowAction>;
+  /** Persistent per-stage account state. Completed stages render from HERE. */
+  accountViews?: Record<string, WorkbenchAccountView>;
   onToggle: (id: string) => void;
   onToggleAll: () => void;
   onOpen: (row: LeadTableRow) => void;
@@ -103,7 +108,7 @@ const COL_W = {
   status: 'w-[90px]',
 };
 
-export default function LeadTable({ rows, selected, rowActions, onToggle, onToggleAll, onOpen, onUnlock }: Props) {
+export default function LeadTable({ rows, selected, rowActions, accountViews, onToggle, onToggleAll, onOpen, onUnlock }: Props) {
   const allChecked = rows.length > 0 && rows.every((r) => selected.has(r.id));
 
   return (
@@ -278,9 +283,54 @@ export default function LeadTable({ rows, selected, rowActions, onToggle, onTogg
                   )}
                 </td>
                 <td className={`${COL_W.enrichment} border-b border-white/[0.05] align-top p-0`}>
-                  {rowActions?.[r.id]?.kind === 'research_company' ? (
-                    <RowActionCell a={rowActions[r.id]} kind="research_company" />
-                  ) : enrichLocked ? (
+                  {(() => {
+                    const view = accountViews?.[r.id];
+                    const research = view?.company_research.last_success ?? null;
+                    const running = rowActions?.[r.id]?.kind === 'research_company'
+                      && rowActions[r.id].status === 'running';
+                    if (running) return <RowActionCell a={rowActions[r.id]} kind="research_company" />;
+                    // Completed research renders from PERSISTENT stage state, so a
+                    // later action (outreach, decision-makers) cannot hide it.
+                    if (research) {
+                      const icp = view?.icp_snapshot ?? null;
+                      const missing = missingLine(research);
+                      return (
+                        <div className="px-2 py-1.5 space-y-1 min-w-0">
+                          <div className="text-[10px] uppercase tracking-wide text-[#7D8590]">
+                            {RESEARCH_STATUS_COPY[research.status]}
+                            {research.confidence ? ` · ${research.confidence} confidence` : ''}
+                          </div>
+                          {research.summary && (
+                            <div className="text-[11px] text-[#C9D1D9] line-clamp-2">{research.summary}</div>
+                          )}
+                          {icp && (
+                            <div className="text-[10.5px] text-sky-300/90">
+                              {icpFitLine(icp)}
+                              {topFitReasons(icp).length > 0 && (
+                                <span className="text-[#8B949E]"> · {topFitReasons(icp).join(' · ')}</span>
+                              )}
+                            </div>
+                          )}
+                          {icp && icp.buying_moment_fit.status !== 'supported' && (
+                            <div className="text-[10px] text-[#7D8590]">{NO_TRIGGER_COPY}</div>
+                          )}
+                          <div className="text-[10px] text-[#7D8590]">
+                            <span aria-label={`${research.evidence_count} evidence sources`}>{evidenceLine(research)}</span>
+                            {missing && <span> · Missing: {missing}</span>}
+                          </div>
+                          <button
+                            type="button"
+                            onClick={(e) => { e.stopPropagation(); onOpen(r); }}
+                            className="text-[10.5px] text-sky-300 hover:text-sky-200 focus:outline-none focus:ring-1 focus:ring-sky-400/60 rounded"
+                            aria-label={`View research for ${r.company ?? 'this company'}`}
+                          >
+                            View research →
+                          </button>
+                        </div>
+                      );
+                    }
+                    return null;
+                  })() ?? (enrichLocked ? (
                     <LockedCell
                       label={r.domain_status === 'missing' ? 'Needs domain' : 'Research company'}
                       credits={r.domain_status === 'missing' ? 0 : 1}
@@ -289,7 +339,7 @@ export default function LeadTable({ rows, selected, rowActions, onToggle, onTogg
                     />
                   ) : (
                     <div className="px-2 py-1.5 text-[11px] text-[#C9D1D9] line-clamp-2">{r.enrichment_summary ?? '—'}</div>
-                  )}
+                  ))}
                 </td>
                 <td className={`${COL_W.message} border-b border-white/[0.05] align-top p-0`}>
                   {rowActions?.[r.id]?.kind === 'generate_outreach' ? (
