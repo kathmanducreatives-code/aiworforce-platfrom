@@ -22,7 +22,12 @@ import {
   type WorkbenchAccountView,
 } from '@/lib/workbenchAccountView';
 import { buildCompanyResearchView } from '@/lib/companyResearchDisplay';
-import { hydrateAccountView, applyHydrationFloor, savedIcpFromBrain } from '@/lib/accountResearchHydration';
+import { hydrateAccountView, applyHydrationFloor, savedIcpFromBrain, hydrateAccountResearchSnapshot } from '@/lib/accountResearchHydration';
+import { buildWhyRelevant } from '@/lib/icpSnapshot';
+import {
+  buildPersonalizationContext, assessOpenerEligibility, brainContextFromProfile,
+  buildOutreachRowHint, type OutreachRowHint,
+} from '@/lib/outreachOpener';
 import { useCompanyBrain } from '@/hooks/useCompanyBrain';
 
 interface Props {
@@ -75,6 +80,30 @@ export default function LeadResultsView({ meta, conversationId }: Props) {
       return next;
     });
   }, [items, savedIcp]);
+
+  // Per-row personalized-opener hint (pure, zero-credit). Drives the Personalized
+  // Message cell: a persisted opener, or a SPECIFIC blocker — never the generic
+  // "Complete the required previous step first". Generation itself runs later via
+  // run-agent with output_mode: "personalized_opener".
+  const outreachHints = useMemo<Record<string, OutreachRowHint>>(() => {
+    const brainCtx = brainContextFromProfile((brain as { profile?: unknown } | null)?.profile ?? null);
+    const out: Record<string, OutreachRowHint> = {};
+    for (const r of items) {
+      const view = accountViews[r.id];
+      const icpSnap = view?.icp_snapshot ?? null;
+      if (!icpSnap) continue;
+      const snap = hydrateAccountResearchSnapshot(r);
+      const dm = view?.decision_makers.last_success?.primary_decision_maker ?? null;
+      const ctx = buildPersonalizationContext({
+        snapshot: snap, icp_snapshot: icpSnap, saved_icp: savedIcp, brain: brainCtx,
+        decision_maker: dm, why_relevant: buildWhyRelevant(icpSnap),
+      });
+      const eligibility = assessOpenerEligibility(ctx, icpSnap);
+      const persisted = (view?.outreach.last_success as { opener?: string } | null) ?? null;
+      out[r.id] = buildOutreachRowHint({ eligibility, persisted: persisted && 'opener' in persisted ? persisted as never : null, source_count: snap.source_count });
+    }
+    return out;
+  }, [items, accountViews, savedIcp, brain]);
 
   const filtered = useMemo(() => items.filter((r) => {
     if (onlyWithWebsite && !r.website) return false;
@@ -341,6 +370,7 @@ export default function LeadResultsView({ meta, conversationId }: Props) {
           selected={selected}
           rowActions={rowActions}
           accountViews={accountViews}
+          outreachHints={outreachHints}
           onToggle={toggle}
           onToggleAll={toggleAll}
           onOpen={setDrawerRow}
