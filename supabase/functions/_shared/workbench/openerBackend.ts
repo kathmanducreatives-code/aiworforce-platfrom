@@ -22,6 +22,10 @@
 //   model. Nothing is ever sent; approval is always required.
 
 import type { WorkbenchAccountState } from "./accountState.ts";
+import {
+  resolveVerifiedDecisionMakerForOutreach,
+  type DecisionMakerResolution,
+} from "./decisionMakerResolver.ts";
 
 // ---------------------------------------------------------------- output mode --
 
@@ -91,6 +95,12 @@ export interface PersonalizationContext {
   evidence: ContextEvidence[];
   icp_matched_criteria: string[];
   why_now: string | null;
+  /**
+   * How the person above was resolved, so eligibility can distinguish "nobody
+   * exists" from "stored person data is malformed", and so observability can
+   * report truthfully which storage location answered.
+   */
+  person_resolution: DecisionMakerResolution;
 }
 
 function str(v: unknown): string | null {
@@ -131,6 +141,12 @@ export interface BuildContextInput {
   industry: string | null;
   /** Persisted Workbench stage state — the source of research + person truth. */
   account: WorkbenchAccountState;
+  /**
+   * Legacy `raw.decision_makers`, read ONLY as a compatibility fallback for
+   * accounts whose decision-maker run predates the namespaced stage. See
+   * decisionMakerResolver.ts — acceptance rules live there, not here.
+   */
+  legacy_decision_makers?: unknown;
   brain_profile: unknown;
   icp_matched_criteria?: string[];
   /** Fresh timing statement, only when genuinely supported. */
@@ -146,7 +162,14 @@ export interface BuildContextInput {
  */
 export function buildPersonalizationContext(input: BuildContextInput): PersonalizationContext {
   const research = input.account.company_research.last_success;
-  const dm = input.account.decision_makers.last_success;
+
+  // ONE resolver decides who (if anyone) we may write to. It reads the
+  // namespaced stage first and falls back to the legacy projection only for
+  // accounts the namespace never answered for. See decisionMakerResolver.ts.
+  const person_resolution = resolveVerifiedDecisionMakerForOutreach({
+    workbenchDecisionMakers: input.account.decision_makers,
+    legacyDecisionMakers: input.legacy_decision_makers,
+  });
 
   const evidence: ContextEvidence[] = [];
 
@@ -178,17 +201,18 @@ export function buildPersonalizationContext(input: BuildContextInput): Personali
     });
   }
 
-  const decision_maker: OpenerDecisionMaker | null = dm && dm.primary_full_name
+  const resolved = person_resolution.person;
+  const decision_maker: OpenerDecisionMaker | null = resolved
     ? {
-      first_name: dm.primary_full_name.split(/\s+/)[0] ?? null,
-      full_name: dm.primary_full_name,
-      current_title: dm.primary_role_family ? dm.primary_role_family : null,
-      current_company_name: dm.primary_company_name,
-      role_family: dm.primary_role_family,
-      verification_status: dm.verified_count > 0 && dm.primary_verification_methods.length > 0
-        ? "verified"
-        : "unverified",
-      verification_methods: dm.primary_verification_methods,
+      first_name: resolved.first_name ?? null,
+      full_name: resolved.full_name,
+      // The legacy projection carries a real title; the namespaced projection
+      // does not, and role_family stands in for it there.
+      current_title: resolved.current_title ?? resolved.role_family ?? null,
+      current_company_name: resolved.current_company_name ?? null,
+      role_family: resolved.role_family ?? null,
+      verification_status: "verified",
+      verification_methods: resolved.verification_methods,
     }
     : null;
 
@@ -204,6 +228,7 @@ export function buildPersonalizationContext(input: BuildContextInput): Personali
     evidence,
     icp_matched_criteria: input.icp_matched_criteria ?? [],
     why_now: input.why_now ?? null,
+    person_resolution,
   };
 }
 
@@ -213,6 +238,7 @@ export type OpenerReasonCode =
   | "ready"
   | "downgraded_company_level"
   | "blocked_missing_verified_person"
+  | "blocked_person_contract_invalid"
   | "blocked_missing_company_brain"
   | "blocked_missing_company_research"
   | "blocked_icp_disqualified";
@@ -242,6 +268,20 @@ export function assessOpenerEligibility(
       personalization_depth: "generic_value_only",
       allowed_evidence_ids: [],
       missing_requirements: ["icp_disqualified"],
+    };
+  }
+
+  // Stored person data that claims a verification it cannot support is a
+  // DIFFERENT failure from nobody having been found — reporting it as "find a
+  // decision-maker" would send the user to re-run a search that already
+  // succeeded.
+  if (ctx.person_resolution.status === "contract_invalid") {
+    return {
+      status: "blocked",
+      reason_code: "blocked_person_contract_invalid",
+      personalization_depth: "none" as PersonalizationDepth,
+      allowed_evidence_ids: allowed,
+      missing_requirements: ["valid_decision_maker_record"],
     };
   }
 

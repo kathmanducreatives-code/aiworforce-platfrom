@@ -153,7 +153,38 @@ export const OUTREACH_BLOCK_COPY: Record<string, string> = {
   blocked_missing_person: 'Find a verified decision-maker first',
   blocked_missing_company_brain: 'Complete Company Brain before drafting',
   ready: 'Ready to draft',
+
+  // Canonical personalized-opener reason codes. The backend emits
+  // `blocked_missing_verified_person`; only the older `blocked_missing_person`
+  // was mapped, so the specific copy never reached the row.
+  blocked_missing_verified_person: 'Find a verified decision-maker first',
+  blocked_missing_company_research: 'Add usable company research first',
+  blocked_icp_disqualified: 'This account is excluded by your saved ICP',
+  blocked_person_contract_invalid: 'Decision-maker data could not be validated',
 };
+
+/**
+ * Non-blocked opener outcomes. Kept separate from the blockers above because
+ * these describe something that WAS attempted and did not finish, which is a
+ * different message to the user than an unmet prerequisite.
+ */
+export const OUTREACH_FAILURE_COPY: Record<string, string> = {
+  provider_not_configured: 'Outreach generation is unavailable',
+  provider_unavailable: 'Outreach generation is unavailable',
+  provider_timed_out: 'Outreach generation timed out',
+  failed_validation: 'Generated opener did not pass evidence and safety checks',
+  persistence_failed: 'Opener was generated but could not be saved',
+  opener_contract_error: 'Could not generate the opener',
+};
+
+/**
+ * Copy for any opener outcome. Falls back to a generic-but-honest line rather
+ * than naming a provider or persistence fault we have not established.
+ */
+export function outreachOutcomeCopy(reasonCode: string | null | undefined): string {
+  if (!reasonCode) return 'Could not generate the opener';
+  return OUTREACH_BLOCK_COPY[reasonCode] ?? OUTREACH_FAILURE_COPY[reasonCode] ?? 'Could not generate the opener';
+}
 
 /**
  * Never the bare "Complete the required previous step first" — that told the
