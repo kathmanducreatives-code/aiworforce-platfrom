@@ -329,7 +329,7 @@ export default function LeadTable({ rows, selected, rowActions, accountViews, ou
                             type="button"
                             onClick={(e) => { e.stopPropagation(); onOpen(r); }}
                             className="text-[10.5px] text-sky-300 hover:text-sky-200 focus:outline-none focus:ring-1 focus:ring-sky-400/60 rounded"
-                            aria-label={`View research for ${r.company ?? 'this company'}`}
+                            aria-label={`View research for ${r.company_name ?? 'this company'}`}
                           >
                             View research →
                           </button>
@@ -365,7 +365,7 @@ export default function LeadTable({ rows, selected, rowActions, accountViews, ou
                             {hint.source_count > 0 && ` · ${hint.source_count} verified source${hint.source_count === 1 ? '' : 's'}`}
                           </div>
                           <div className="flex items-center gap-2">
-                            <button type="button" onClick={(e) => { e.stopPropagation(); onOpen(r); }} className="text-[10.5px] text-sky-300 hover:text-sky-200 focus:outline-none rounded" aria-label={`Review opener for ${r.company ?? 'this company'}`}>Review</button>
+                            <button type="button" onClick={(e) => { e.stopPropagation(); onOpen(r); }} className="text-[10.5px] text-sky-300 hover:text-sky-200 focus:outline-none rounded" aria-label={`Review opener for ${r.company_name ?? 'this company'}`}>Review</button>
                             <button type="button" onClick={(e) => { e.stopPropagation(); void navigator.clipboard?.writeText(hint.opener ?? ''); }} className="text-[10.5px] text-[#9aa4af] hover:text-[#C9D1D9] focus:outline-none rounded" aria-label="Copy opener">Copy</button>
                           </div>
                           <div className="text-[9.5px] text-[#7D8590]">{OPENER_APPROVAL_NOTICE}</div>
