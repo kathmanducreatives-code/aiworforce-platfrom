@@ -72,11 +72,22 @@ Deno.test("find_decision_makers timed_out is distinct and retryable", () => {
   assert(isRetryableStatus(a.status));
 });
 
-Deno.test("find_decision_makers succeeded → recipient detail", () => {
+Deno.test("find_decision_makers succeeded → recipient detail (legacy alias shape)", () => {
+  // A displayable decision-maker needs a contact link: decidePersistence rejects
+  // invalid_profile_url, so a verified person always has one. Legacy name/title
+  // aliases still map through the display adapter.
   const a = deriveRowAction("find_decision_makers", { success: true, per_lead: [{}] },
-    { status: "succeeded", reason_code: "decision_maker_found", decision_makers: [{ name: "Jane Doe", title: "CEO" }] });
+    { status: "succeeded", reason_code: "decision_maker_found",
+      decision_makers: [{ name: "Jane Doe", title: "CEO", linkedinUrl: "https://www.linkedin.com/in/synthetic-jane" }] });
   assertEquals(a.status, "succeeded");
   assert(/Jane Doe · CEO/.test(a.detail ?? ""));
+});
+
+Deno.test("find_decision_makers: a person with NO contact link is a contract error", () => {
+  const a = deriveRowAction("find_decision_makers", { success: true, per_lead: [{}] },
+    { status: "succeeded", decision_makers: [{ name: "Jane Doe", title: "CEO" }] });
+  assertEquals(a.status, "failed");
+  assertEquals(a.reason_code, "decision_maker_display_contract_invalid");
 });
 
 Deno.test("generate_outreach blocked → 'complete the required previous step'", () => {

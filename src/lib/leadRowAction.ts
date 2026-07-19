@@ -7,6 +7,11 @@ import {
   type LeadOutcomeStatus,
   type RowDisplayStatus,
 } from './leadActionOutcome';
+import {
+  buildDecisionMakerRowView,
+  titleCompanyLine,
+  type DecisionMakerRowView,
+} from './decisionMakerDisplay';
 
 export interface RowAction {
   kind: LeadActionKind;
@@ -15,6 +20,11 @@ export interface RowAction {
   reason_code?: string;
   /** Row-specific extra context (e.g. the person found), appended to the copy. */
   detail?: string;
+  /**
+   * Structured decision-maker view. Components render THIS rather than parsing
+   * prose, so ranks 2 and 3 are no longer discarded.
+   */
+  decisionMakers?: DecisionMakerRowView;
 }
 
 /** Minimal shape of a run-agent lead_action response we depend on. */
@@ -51,6 +61,21 @@ export function deriveRowAction(
   const status = isOutcomeStatus(p.status) ? p.status : 'failed';
   const reason_code = typeof p.reason_code === 'string' ? p.reason_code : undefined;
 
+  if (kind === 'find_decision_makers') {
+    const view = buildDecisionMakerRowView(p);
+    // A "succeeded" payload with nothing displayable must NOT render as success:
+    // that is how the row printed "…found: undefined".
+    if (view.status === 'contract_error') {
+      return {
+        kind,
+        status: 'failed',
+        reason_code: view.contract_error_reason ?? 'decision_maker_display_contract_invalid',
+        decisionMakers: view,
+      };
+    }
+    return { kind, status, reason_code, detail: rowDetail(kind, status, p), decisionMakers: view };
+  }
+
   return { kind, status, reason_code, detail: rowDetail(kind, status, p) };
 }
 
@@ -59,9 +84,13 @@ function rowDetail(kind: LeadActionKind, status: LeadOutcomeStatus, p: Record<st
   if (status !== 'succeeded') return undefined;
 
   if (kind === 'find_decision_makers') {
-    const dms = Array.isArray(p.decision_makers) ? (p.decision_makers as Array<Record<string, unknown>>) : [];
-    const top = dms[0];
-    return top ? `${top.name}${top.title ? ` · ${top.title}` : ''}` : undefined;
+    // Canonical DTO only. Reading `top.name` here interpolated the literal
+    // string "undefined" whenever the payload used canonical field names.
+    const view = buildDecisionMakerRowView(p);
+    const dm = view.primary_decision_maker;
+    if (!dm) return undefined;
+    const line = titleCompanyLine(dm);
+    return line ? `${dm.full_name} · ${line}` : dm.full_name;
   }
   if (kind === 'research_company') {
     const lines = Array.isArray(p.summary_lines) ? (p.summary_lines as string[]) : [];
