@@ -12,7 +12,7 @@ import {
   titleCompanyLine,
   type DecisionMakerRowView,
 } from './decisionMakerDisplay';
-import { sanitizeSummary, outreachBlockCopy } from './companyResearchDisplay';
+import { sanitizeSummary, outreachBlockCopy, OUTREACH_FAILURE_COPY } from './companyResearchDisplay';
 
 export interface RowAction {
   kind: LeadActionKind;
@@ -112,6 +112,12 @@ export function rowActionCopy(a: RowAction): string {
   // A blocked draft must say WHICH prerequisite is missing.
   if (a.kind === 'generate_outreach' && a.status === 'blocked') {
     return outreachBlockCopy(a.reason_code);
+  }
+  // A non-blocked outreach outcome must still name what actually happened. The
+  // generic `failed` copy ("Provider or persistence failed") asserted a provider
+  // or persistence fault for outcomes that were neither.
+  if (a.kind === 'generate_outreach' && a.reason_code && OUTREACH_FAILURE_COPY[a.reason_code]) {
+    return OUTREACH_FAILURE_COPY[a.reason_code];
   }
   if (a.kind !== 'find_decision_makers') {
     if (a.status === 'succeeded') {

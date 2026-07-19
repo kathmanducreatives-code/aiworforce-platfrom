@@ -107,8 +107,45 @@ function classifyDecisionMakers(p: Record<string, unknown>): { status: LeadOutco
   return { status: "no_match", reason_code: "provider_no_results" };
 }
 
+/**
+ * The personalized-opener path (PR #71) already classifies itself: it emits a
+ * canonical `status` + `reason_code` pair. Re-deriving it here is what produced
+ * the 2026-07-19 batch in which four correctly-blocked leads all displayed
+ * "Provider or persistence failed" — none of their statuses matched a legacy
+ * `full_draft` branch, so every one fell through to the terminal `failed`.
+ *
+ * So: pass the opener's own verdict through untouched. Only the legacy
+ * full-draft vocabulary is translated below.
+ */
+const OPENER_STATUS_PASSTHROUGH: Record<string, LeadOutcomeStatus> = {
+  succeeded: "succeeded",
+  blocked: "blocked",
+  unavailable: "unavailable",
+  timed_out: "timed_out",
+  // `failed_validation` and `persistence_failed` are real failures, but they are
+  // NOT provider failures — the distinction is carried by reason_code, which the
+  // UI keys its copy on.
+  failed_validation: "failed",
+  persistence_failed: "failed",
+  failed: "failed",
+};
+
 function classifyOutreach(p: Record<string, unknown>): { status: LeadOutcomeStatus; reason_code: string } {
   const status = str(p.status);
+
+  // Opener mode is explicit in the payload — never inferred from shape.
+  if (str(p.output_mode) === "personalized_opener") {
+    const mapped = OPENER_STATUS_PASSTHROUGH[status ?? ""];
+    if (mapped) {
+      // Preserve the opener's own reason_code verbatim. It is the only thing
+      // that can tell the user WHICH prerequisite is missing.
+      return { status: mapped, reason_code: str(p.reason_code) || status || "opener_failed" };
+    }
+    // An unrecognised opener status is a contract problem, and saying so is more
+    // honest than blaming the provider.
+    return { status: "failed", reason_code: "opener_contract_error" };
+  }
+
   if (status === "draft_needs_approval") return { status: "succeeded", reason_code: "draft_ready_for_approval" };
   if (status === "blocked_draft_gate") {
     const reasons = Array.isArray(p.blocked_reasons) ? p.blocked_reasons.map(str) : [];
