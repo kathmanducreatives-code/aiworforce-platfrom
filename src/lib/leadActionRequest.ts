@@ -66,7 +66,15 @@ export interface BuildLeadActionArgs {
 export interface LeadActionRequestBody {
   workspace_id: string;
   plan_id?: string;
-  tool_input: { lead_action: LeadActionKind; lead_candidate_ids: string[] };
+  tool_input: {
+    lead_action: LeadActionKind;
+    lead_candidate_ids: string[];
+    /**
+     * EXPLICIT outreach output mode. The Workbench always asks for a short
+     * personalized opener; the backend never infers mode from the caller.
+     */
+    output_mode?: 'personalized_opener' | 'full_draft';
+  };
 }
 
 export type BuildLeadActionResult =
@@ -88,6 +96,10 @@ export function buildLeadActionRequest(args: BuildLeadActionArgs): BuildLeadActi
     workspace_id: args.workspaceId,
     tool_input: { lead_action: args.leadAction, lead_candidate_ids: ids },
   };
+  // Workbench outreach is ALWAYS a short opener, never a full email draft.
+  if (args.leadAction === 'generate_outreach') {
+    body.tool_input.output_mode = 'personalized_opener';
+  }
   if (args.planId) body.plan_id = args.planId;
   return { valid: true, body };
 }

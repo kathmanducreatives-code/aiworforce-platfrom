@@ -274,6 +274,8 @@ Deno.serve(async (req) => {
       const outcome = await executeLeadAction(leadAction, leadIds, {
         admin: supabase, workspace_id, plan_id: plan_id ?? null, task_id: task.id, agent_id: agent.id,
         agent_slug: execAgentSlug, agent_name: agent.name, user_id: taskUserId, runTool, toolCtx,
+        // EXPLICIT mode from the validated direct-action contract.
+        output_mode: directRequest.output_mode,
       });
       await supabase.from("tasks").update({
         status: outcome.needs_approval ? "awaiting_approval" : "complete",
