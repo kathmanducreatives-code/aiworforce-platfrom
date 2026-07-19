@@ -367,6 +367,9 @@ export async function executeLeadAction(action: LeadAction, leadIds: string[], c
         company_name: lead.company_name ?? null,
         industry: Array.isArray(lead.industries) ? (lead.industries[0] ?? null) : null,
         account: acctOpener,
+        // Compatibility fallback for accounts whose decision-maker run predates
+        // the namespaced stage — the resolver decides whether it is usable.
+        legacy_decision_makers: rawRow.decision_makers,
         brain_profile: brainRow?.profile ?? null,
         icp_matched_criteria: typeof rawRow.icp_fit_summary === "string" ? [rawRow.icp_fit_summary] : [],
         why_now: typeof rawRow.why_now === "string" ? rawRow.why_now : null,
