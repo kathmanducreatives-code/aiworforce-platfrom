@@ -16,6 +16,11 @@ import type { PeopleSearchContact } from "./decisionMakers.ts";
 import { evaluateDraftGate, buildDraftGateInputFromRaw } from "./draftGate.ts";
 import { runDecisionMakerAction, type LeadRecordLike } from "./decisionMaker/integration.ts";
 import { makePeopleSearchProvider } from "./decisionMaker/providerAdapter.ts";
+import {
+  readAccountState, applyStageUpdate, deriveGateFields, outreachPrerequisite,
+  nextBestAction, WORKBENCH_STATE_KEY,
+  type CompanyResearchState, type DecisionMakerState,
+} from "./workbench/accountState.ts";
 
 export type LeadAction = "research_company" | "find_decision_makers" | "generate_outreach";
 
@@ -61,6 +66,11 @@ export interface ExecCtx {
 
 function str(v: unknown): string | null {
   return typeof v === "string" && v.trim() ? v.trim() : null;
+}
+
+/** Injectable-friendly clock. Stage timestamps must be deterministic in tests. */
+function nowIso(): string {
+  return new Date().toISOString();
 }
 
 /** Map a lead_candidates DB row (with joined account) into a runner LeadRecord. */
@@ -165,7 +175,29 @@ export async function executeLeadAction(action: LeadAction, leadIds: string[], c
       const firecrawl: FirecrawlFn = async (url) => mapFirecrawlResult(await ctx.runTool("scrape_url", { url, extraction_goal: `Company research for ${lead.company_name ?? url}`, max_pages: 1 }, ctx.toolCtx));
       const res = await runCompanyEnrichment(lead, firecrawl);
       if (res.status !== "blocked") {
-        await patchLeadRaw(ctx, lead.lead_candidate_id, row.raw, { company_enrichment: res.enrichment });
+        // Record the stage in the account state as well, so a later action can
+        // read what research established without re-deriving it from prose.
+        const e = res.enrichment;
+        const evidence_urls = Array.isArray(e?.evidence_urls) ? e.evidence_urls : [];
+        const researchPayload: CompanyResearchState = {
+          summary: (e?.company_summary as string | undefined) ?? null,
+          evidence_urls,
+          missing_evidence: Array.isArray(e?.missing_evidence) ? e.missing_evidence : [],
+          confidence: (e?.confidence as string | undefined) ?? null,
+          // "Provider completed" is not enough: usable means we actually hold a
+          // summary backed by at least one source.
+          usable: !!e?.company_summary && evidence_urls.length > 0,
+        };
+        const merged = applyStageUpdate(
+          readAccountState(row.raw as Record<string, unknown>, lead.lead_candidate_id),
+          "company_research",
+          { status: res.status === "enriched" ? "succeeded" : "partial", reason_code: res.blocked_reason ?? null, payload: researchPayload },
+          nowIso(),
+        );
+        await patchLeadRaw(ctx, lead.lead_candidate_id, row.raw, {
+          company_enrichment: res.enrichment,
+          [WORKBENCH_STATE_KEY]: merged,
+        });
       }
       per_lead.push({ lead_candidate_id: lead.lead_candidate_id, company: lead.company_name, status: res.status, blocked_reason: res.blocked_reason, pages_fetched: res.pages_fetched, summary_lines: res.summary_lines });
 
@@ -232,10 +264,42 @@ export async function executeLeadAction(action: LeadAction, leadIds: string[], c
         persisted: d.persisted,
       }));
 
+      const topDm = res.decision_makers[0];
+      const dmPayload: DecisionMakerState = {
+        verified_count: res.verified_profile_count,
+        manual_review_count: res.manual_review_count,
+        primary_full_name: topDm?.full_name ?? null,
+        primary_linkedin_url: topDm?.linkedin_url ?? null,
+        primary_role_family: topDm?.role_family ?? null,
+        primary_company_name: topDm?.current_company_name ?? null,
+        primary_verification_methods: topDm?.verification_methods ?? [],
+        contact_id: topDm?.contact_id ?? null,
+      };
+      const dmMerged = applyStageUpdate(
+        readAccountState(row.raw as Record<string, unknown>, lead.lead_candidate_id),
+        "decision_makers",
+        { status: res.status === "succeeded" ? "succeeded" : (res.status as never), reason_code: res.reason_code, payload: dmPayload },
+        nowIso(),
+      );
+      // Record the provenance the draft gate reads. This does NOT lower the bar:
+      // employerVerification only reaches "verified" on an identifier match, and
+      // the person came from a provider run — so a verified decision-maker IS
+      // provider-backed person identity with a verified company association.
+      const gateFields = deriveGateFields(dmMerged);
+
       await patchLeadRaw(ctx, lead.lead_candidate_id, row.raw, {
         decision_makers: rawDecisionMakers,
         decision_maker_status: res.status,
         decision_maker_reason_code: res.reason_code,
+        [WORKBENCH_STATE_KEY]: dmMerged,
+        ...(gateFields.canonical_final_decision
+          ? {
+            canonical_final_decision: gateFields.canonical_final_decision,
+            contact_ready: gateFields.contact_ready,
+            provider_provenance: gateFields.provider_provenance,
+            evidence_url: gateFields.evidence_url,
+          }
+          : {}),
         // Array (not just counts) so the UI can still say who was dropped and why.
         decision_makers_rejected: (res.rejected_profiles as Array<Record<string, unknown>>).map((r) => ({
           name: r.full_name, title: r.current_title, linkedin_url: r.linkedin_url, reason: r.reason_code,
@@ -267,12 +331,38 @@ export async function executeLeadAction(action: LeadAction, leadIds: string[], c
       // Centralized draft gate — no outreach_drafts insert may bypass it. A draft
       // is allowed ONLY for a persisted, provider-verified, contact-ready lead whose
       // canonical decision is `contact`, and never when the mode forbids drafting.
+      // Overlay the provenance the Workbench stages established, so the gate
+      // evaluates the CURRENT account state rather than only sourcing-era fields.
+      const acct = readAccountState(row.raw as Record<string, unknown>, lead.lead_candidate_id);
+      const derived = deriveGateFields(acct);
+      const gateRaw = {
+        ...((row.raw ?? {}) as Record<string, unknown>),
+        ...(derived.canonical_final_decision
+          ? {
+            canonical_final_decision: derived.canonical_final_decision,
+            contact_ready: derived.contact_ready,
+            provider_provenance: derived.provider_provenance,
+            evidence_url: derived.evidence_url ?? (row.raw as Record<string, unknown>)?.evidence_url,
+            company: derived.company ?? (row.raw as Record<string, unknown>)?.company,
+          }
+          : {}),
+      };
       const gate = evaluateDraftGate(buildDraftGateInputFromRaw(
-        (row.raw ?? {}) as Record<string, unknown>,
+        gateRaw,
         { execution_mode: ctx.execution_mode, persisted_lead_candidate_id: lead.lead_candidate_id },
       ));
       if (!gate.allowed) {
-        per_lead.push({ lead_candidate_id: lead.lead_candidate_id, company: lead.company_name, status: "blocked_draft_gate", blocked_reasons: gate.blocked_reasons });
+        // Name the SPECIFIC missing prerequisite instead of "complete the
+        // required previous step first".
+        const prereq = outreachPrerequisite(acct);
+        per_lead.push({
+          lead_candidate_id: lead.lead_candidate_id, company: lead.company_name,
+          status: "blocked_draft_gate",
+          reason_code: prereq.reason,
+          message: prereq.message,
+          blocked_reasons: gate.blocked_reasons,
+          next_best_action: nextBestAction(acct),
+        });
         continue;
       }
       const res = runGenerateOutreach(lead);
